@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added (v0.04 planning)
+
+- Added a new `v0.04` follow-up plan in `plan.md` focused on removing the current vignette-like darkening, replacing the checkerboard-looking procedural surface, and moving the painting material toward a more photorealistic layered PBR workflow.
+- Recorded the code-grounded diagnosis that the current dark radial falloff comes from the procedural AO fallback and that the synthetic checker pattern comes from the periodic `sin/cos` procedural normal/height/roughness generators.
+- Captured web research sources in `FINDINGS.md` for museum/conservation lighting practice, RTI/photometric surface capture, and practical Three.js PBR guidance.
+- Updated `README.md` and `docs/HANDOFF.md` so the next follow-up scope is visible to contributors and reviewers.
+
 ### Added (v0.03 validation audit)
 
 - Re-ran a fresh-clone validation audit for the implemented v0.03 work. Documented that `npm run lint` and `npm run build` initially fail until `npm install` is run in a fresh checkout, then both commands pass cleanly aside from the already-known `@typescript-eslint` TypeScript-version warning and the current Dart Sass legacy JS API deprecation warning.

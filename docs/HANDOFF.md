@@ -1,6 +1,6 @@
 # FREYRAUM customer handoff guide
 
-This document supports presenting FREYRAUM to customers and onboarding new contributors. It includes the v0.01 architecture diagram, the controls surface, and the procedure for refreshing screenshots after visual changes.
+This document supports presenting FREYRAUM to customers and onboarding new contributors. It includes the v0.01 architecture diagram, the controls surface, the current reviewer focus for v0.03, and the next follow-up scope for v0.04.
 
 ## Architecture diagram
 
@@ -74,6 +74,28 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] WebGL fallback renders correctly (force-disable WebGL in the browser to verify).
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
+
+## v0.04 planning focus
+
+v0.04 is the next follow-up pass. It is **not implemented yet**. The current reviewer-visible issues driving that plan are:
+
+- a vignette-like darkening on the painting that reads like fake AO rather than real surface depth;
+- a checkerboard / synthetic woven pattern that makes the support-map detail look procedural instead of photorealistic.
+
+The current working diagnosis is:
+
+1. the radial darkening comes from the procedural AO fallback in `ProceduralTextureFactory.generateAO()`;
+2. the synthetic pattern comes from the periodic `sin/cos` procedural normal/height/roughness generation rather than authored/scanned surface data.
+
+The v0.04 plan in `plan.md` focuses on:
+
+1. removing the fake AO/vignette look,
+2. replacing the current fallback surface with a quieter non-obvious substrate,
+3. expanding the authored/scanned painting-texture contract,
+4. adding a more lifelike layered PBR response for matte vs varnished paintings,
+5. revalidating gallery-display vs inspection lighting after the new material lands.
+
+Relevant references and research notes are captured in `FINDINGS.md`.
 
 
 ## v0.03 review focus

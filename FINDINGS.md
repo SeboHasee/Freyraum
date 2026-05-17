@@ -1,5 +1,23 @@
 # FINDINGS
 
+## 2026-05-17 - v0.04 photorealism follow-up: artifact diagnosis and research
+
+- **The reported "dark spots / vignette" complaint matches the current procedural AO implementation.** `ProceduralTextureFactory.generateAO()` explicitly synthesizes a centre-bright / edge-dark radial mask ("Soft vignetted ambient-occlusion suggestion"). On a flat painting surface this reads less like real occlusion and more like a bug baked into the artwork, especially when no physical frame lip or recess justifies it.
+- **The reported checkerboard / unnatural pattern complaint matches the current periodic procedural support maps.** `generateNormal()`, `generateHeight()`, and `generateRoughness()` are built from layered `sin/cos` waves and cross terms. This gives a deterministic fallback but also creates visibly synthetic repetition that can look like a checkerboard or woven shader texture instead of irregular pigment, canvas, or varnish structure.
+- **Current v0.03 realism is still "procedural placeholder realism", not scan-grounded painting PBR.** The material is much better than v0.02/v0.01, but the remaining artifacts show that believable close-up painting surfaces likely need authored/scanned support maps or at least far quieter procedural fallback data.
+- **Museum/conservation sources separate faithful display light from relief-reveal inspection light.** Raking light is valuable for showing brushwork, deformation, and condition, but it is not the everyday "true appearance" presentation mode. This supports keeping `gallery-soft` as the main lane and `raking-inspection` as the technical lane rather than merging them.
+- **Cultural-heritage imaging sources point toward RTI / PTM / photometric surface capture when realism matters.** For future artwork packages, normal/specular/relief capture is a more credible direction than inventing stronger procedural weave.
+- **Web PBR guidance still supports the current architecture choice.** Using Three.js `MeshPhysicalMaterial` as the base is the right direction; the problem is not "PBR vs non-PBR" but that the current support maps are too synthetic and that the AO fallback is not physically justified for a flat painting.
+
+Research links captured for v0.04 planning:
+
+- Library of Congress — Digital Imaging Workflow for Treatment Documentation: https://www.loc.gov/preservation/resources/ImageDoc/index.html
+- CHS Open Source — Raking Light Photography: https://chsopensource.org/services/1-technical-photography-tp/raking-light-photography-rak/
+- Hamilton Kerr Institute — Lighting Techniques: https://www.hki.fitzmuseum.cam.ac.uk/about/services/photographicservices/lightingtechniques
+- Smithsonian MCI — Reflectance Transformation Imaging: https://mci.si.edu/reflectance-transformation-imaging
+- discoverthreejs — Physically Based Rendering: https://discoverthreejs.com/book/first-steps/physically-based-rendering/
+- Rami James — Physically Based Rendering in Three.js: https://www.ramijames.com/learn-threejs/building-blocks/physically-based-rendering
+
 ## 2026-05-17 - v0.03 fresh-clone revalidation audit
 
 - In a fresh checkout, `npm run lint` initially failed with `eslint: not found` because dependencies were not yet installed.

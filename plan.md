@@ -355,6 +355,158 @@ Reserved Future Pass:
 This order starts with the data model and local assets because later UI, thumbnails, accessibility labels, and documentation screenshots depend on stable artwork metadata.
 
 
+## v0.04 Follow-up Plan — Photorealistic PBR Painting Materials and Artifact Removal
+
+### v0.04 Planning Status
+
+v0.04 is **planned**, not implemented. The current v0.03 branch ships the new lighting profiles, parallax, self-shadow, and free inspection, but two visual issues remain visible in the current material system:
+
+- the painting can show dark radial falloff that reads like an unintended vignette;
+- the procedural support maps can show an artificial checkerboard / cross-hatch pattern that does not read as real canvas, pigment, or varnish at presentation distance.
+
+This v0.04 plan is the follow-up pass that turns the current "good procedural placeholder" material into a more believable, museum-grade painted-surface PBR pipeline.
+
+### v0.04 Goals
+
+- remove the current fake edge darkening from the painting surface unless it is backed by real capture data;
+- remove visibly periodic checkerboard / sinusoidal procedural texture cues from the artwork surface;
+- move the painting material closer to a real PBR layered-surface model: pigment/body, surface relief, and optional varnish/gloss response;
+- support photorealistic authored/scanned painting texture sets when available;
+- keep the default gallery view faithful and flattering, while preserving raking-light inspection as a separate mode;
+- preserve the current file:// customer preview workflow and WebGL production path.
+
+### v0.04 Non-Goals
+
+- replacing the entire renderer with WebGPU;
+- turning the customer-facing default view into an exaggerated technical inspection render;
+- baking shadows, vignettes, or lighting into the artwork albedo;
+- introducing a DCC-only workflow that prevents the repository from running without authored assets;
+- solving frame, wall, or room-material realism in the same pass unless directly required for painting credibility.
+
+### v0.04 Current Code Facts Driving The Plan
+
+| Area | Current code fact | Why v0.04 must change |
+| --- | --- | --- |
+| Edge darkening | `ProceduralTextureFactory.generateAO()` synthesizes a radial "soft vignetted ambient-occlusion suggestion" with darker edges and lighter centre | A flat painting surface should not receive a fake radial AO mask by default; this reads as a bug in the artwork itself |
+| Checkerboard / weave repetition | `generateNormal()`, `generateHeight()`, and `generateRoughness()` are driven by periodic `sin/cos` fields and cross-hatch style frequencies | The result is deterministic and cheap, but the repetition reads as synthetic instead of captured pigment/canvas structure |
+| Varnish response | Current material retune intentionally muted clearcoat/specular to avoid glossy-looking mistakes | v0.04 should reintroduce varnish only where physically justified, using masks / authored data instead of global gloss |
+| Procedural fallback role | v0.03 procedural maps are still the primary realism source for the shipped sample artworks | v0.04 should treat them as fallback scaffolding, not the final look target |
+| Inspection vs display | v0.03 already separates display lighting from raking inspection lighting | This is the correct structure and should be preserved while the material becomes more realistic |
+
+### v0.04 Research Basis
+
+The planning direction below is based on current web research and the code audit:
+
+- Museum/conservation imaging sources consistently treat **normal/even illumination** as the faithful default representation and **raking light** as an inspection/documentation mode for relief, deformation, and brushwork rather than the everyday presentation view. Sources consulted: Library of Congress digital treatment documentation, CHS Open Source raking-light guide, Hamilton Kerr Institute lighting guidance, and Smithsonian MCI RTI guidance.
+- Cultural-heritage imaging guidance repeatedly points toward **multi-image surface capture** (RTI / PTM / photometric approaches, normal/specular capture) when the goal is credible surface representation rather than stylized relief exaggeration.
+- Current Three.js PBR guidance supports using `MeshPhysicalMaterial` / physically based workflows for plausible roughness, specular, and optional clearcoat layering, but stresses that lighting should not be baked into albedo and that repeated low-quality maps will look synthetic at close range.
+
+Research URLs captured for implementation:
+
+- https://www.loc.gov/preservation/resources/ImageDoc/index.html
+- https://chsopensource.org/services/1-technical-photography-tp/raking-light-photography-rak/
+- https://www.hki.fitzmuseum.cam.ac.uk/about/services/photographicservices/lightingtechniques
+- https://mci.si.edu/reflectance-transformation-imaging
+- https://discoverthreejs.com/book/first-steps/physically-based-rendering/
+- https://www.ramijames.com/learn-threejs/building-blocks/physically-based-rendering
+
+### v0.04 Material / Surface Strategy
+
+- **Faithful display lane:** the main gallery profile should show the painting with believable matte/satin/varnished response but without any fake radial darkening, fake texture seams, or stylized checker patterns.
+- **Inspection lane:** the existing raking-light profile remains available, but it should reveal *captured or plausibly stochastic* relief rather than exposing procedural tiling artifacts.
+- **Layered response:** the material should treat the surface as layered: immutable albedo, macro relief, micro relief, roughness variation, and optional varnish clearcoat where supported by texture data.
+- **Author-first pipeline:** when authored/scanned support maps exist, they should drive the result. Procedural generation should become a fallback path that aims for "quiet neutral substrate", not a look-defining effect.
+
+### v0.04 Shader / Math-Space Assumptions
+
+- Albedo remains the source artwork and must stay lighting-free.
+- Normal, height, roughness, and varnish/specular support maps stay linear-space inputs.
+- Any new clearcoat / varnish mask must be interpreted as a surface-layer response, not as colour.
+- If photometric / RTI-derived normals are introduced later, they should still resolve into a tangent-space or otherwise explicitly documented basis before entering the current material pipeline.
+- No baked AO/vignette term may darken the painting uniformly from the edges inward unless a future authored map explicitly encodes a real physical cause.
+
+### v0.04 Proposed Modules / File Responsibilities
+
+- `src/materials/PaintingMaterial.ts`
+  - rework the surface response around pigment/body/varnish layering;
+  - make AO optional and data-driven rather than assumed;
+  - add support for clearcoat / clearcoat roughness / varnish masks where available.
+- `src/materials/PaintingTextureSet.ts`
+  - expand the authored-texture contract for future scanned/support-map sets;
+  - distinguish required vs optional maps more clearly.
+- `src/materials/ProceduralTextureFactory.ts`
+  - remove or neutralize the current vignette-style AO fallback;
+  - replace periodic checker-style procedural maps with quieter, non-obvious fallback textures.
+- `src/gallery/TextureManager.ts`
+  - support any new authored maps and packing rules needed by the v0.04 material contract.
+- `src/config/artworks.ts`
+  - carry per-artwork surface metadata for matte canvas / satin varnish / glossy varnish / paper-like cases when real assets arrive.
+- `src/config/quality.ts`
+  - keep explicit preset-level performance control for any new map reads or clearcoat path.
+- `src/lighting/LightProfile.ts` / `src/lighting/LightingSetup.ts`
+  - preserve the display-vs-inspection split and retune only if the new material response requires it.
+
+### v0.04 Resource Ownership / Async Boundaries
+
+- Authored/scanned texture sets should remain owned by the same loading/cache layers as existing maps; `PaintingMaterial` must continue not to dispose textures it does not own.
+- The procedural fallback path should remain deterministic and cacheable, but any new stochastic generation must still be stable per artwork and preset to avoid visible flicker across rebuilds.
+- Async artwork switching must continue to honour `artworkLoadToken`-style race protection so higher-fidelity map sets cannot apply to the wrong artwork during rapid navigation.
+
+### v0.04 Accessibility / Viewer Impact
+
+- Reduced-motion mode must continue to reduce animated surface motion cues without flattening the painting into a dead image.
+- The default gallery view should become *less distracting*, not more technical.
+- Inspection lighting and any debug/fidelity surfaces must remain opt-in and clearly separate from the customer-facing default experience.
+
+### v0.04 Fallback Behavior
+
+- If no authored/scanned support maps exist, the app must still run fully offline from `file://`.
+- The fallback material should bias toward subtle matte realism and low artifact visibility rather than trying to fake dramatic brush relief.
+- Battery preset should continue compiling out optional expensive paths.
+
+### v0.04 Performance Budgets
+
+- Balanced preset remains the production baseline for common laptops/tablets.
+- Any new clearcoat / varnish path must be cheap enough to leave balanced mode visually credible without forcing the whole experience into high preset.
+- Procedural fallback texture sizes should not grow beyond the current v0.03 memory footprint unless the visual gain is measurable in close-up review.
+- Close-up inspection should prefer higher-quality authored/scanned maps over simply increasing procedural frequency or shader iteration counts.
+
+### v0.04 Vertical Slices
+
+1. **Slice 1 — Artifact isolation**
+   - remove the synthetic radial AO/vignette look from the default painting path;
+   - document the exact visual before/after expectation with screenshot references.
+2. **Slice 2 — Quiet fallback surface**
+   - replace the current visibly periodic checker/cross-hatch fallback with a more stochastic, less obviously tiled substrate;
+   - ensure the fallback is believable at normal gallery distance.
+3. **Slice 3 — Authored/scanned texture contract**
+   - expand the map contract for real painting support maps (normal/height/roughness/specular/varnish-related data);
+   - document how a future artwork package plugs into the runtime.
+4. **Slice 4 — Layered PBR painting response**
+   - build a more lifelike pigment/body/varnish response on top of `MeshPhysicalMaterial`;
+   - allow matte and varnished artworks to diverge without global over-glossing.
+5. **Slice 5 — Lighting revalidation**
+   - re-check that default gallery lighting flatters the new material while inspection lighting still reveals relief without exposing fake patterns.
+6. **Slice 6 — Validation and handoff**
+   - refresh reviewer guidance, findings, and screenshot expectations for the new material quality bar.
+
+### v0.04 Acceptance Checks
+
+- [ ] No default-view dark radial falloff remains on the artwork unless explicitly authored.
+- [ ] No obvious checkerboard / cross-hatch procedural artifact is visible at normal viewing distance.
+- [ ] Default gallery view reads as a believable painted object, not a stylized shader demo.
+- [ ] Inspection lighting reveals surface detail without exposing repetitive fake texture structure.
+- [ ] Albedo-only debug comparison still shows that the source artwork colours are preserved.
+- [ ] `npm run lint` and `npm run build` pass after implementation.
+- [ ] Offline `file://` preview workflow remains intact.
+
+### v0.04 Known Risks / Reserved Future Boundaries
+
+- Real photorealism may ultimately require authored capture data (normal / roughness / specular / RTI-derived information) rather than purely procedural synthesis.
+- Clearcoat/varnish can quickly become more distracting than realistic if it is applied globally instead of with measured masks.
+- If authored scans are unavailable, v0.04 should prefer "quiet believable" over "aggressively detailed but fake".
+- RTI/PTM-style interactive relighting is a promising future direction but is explicitly out of scope for v0.04 implementation unless the asset pipeline changes dramatically.
+
 ## v0.03 Follow-up Plan — Technical Rendering System for Faithful Artworks, Modular Asset Swaps, Parallax Relief, and Free Inspection
 
 ### v0.03 Planning Status

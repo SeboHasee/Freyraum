@@ -70,6 +70,15 @@ Shipped system direction:
 - new "Beleuchtung" radio group in `PreferencesPanel` lets the visitor switch between the four lighting profiles; the choice is persisted to localStorage and mirrored to `data-lighting` on `<html>`;
 - `PAN_SAFETY_FACTOR=0.92` replaced with `INSPECTION_OVERSCROLL=0.5` so every artwork edge and corner is reachable at close zoom.
 
+## v0.04 planning
+
+v0.04 is the next material-quality follow-up. The current branch still shows two open visual issues that need a dedicated pass:
+
+- vignette-like dark radial darkening on the painting surface;
+- an unnatural checkerboard / repetitive procedural pattern in the surface detail.
+
+The new plan lives in [`plan.md`](./plan.md#v004-follow-up-plan--photorealistic-pbr-painting-materials-and-artifact-removal). Supporting diagnosis and online research are captured in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v004-photorealism-follow-up-artifact-diagnosis-and-research).
+
 ## Developer workflow
 
 Install dependencies:
