@@ -1,6 +1,6 @@
 # FINDINGS
 
-## 2026-05-17 — v0.07 planning: customer-managed picture folder
+## 2026-05-17 — v0.07 technical planning (full execution plan): customer-managed picture folder
 
 The customer request is to make picture replacement simple enough for an elderly non-technical user: drag files into a folder, run one obvious update action, and open the preview. Current code does **not** support that yet. The v0.06 gallery still defines artworks in `src/config/artworks.ts` and ships a built static `customer-preview/` bundle.
 
@@ -14,20 +14,38 @@ The customer request is to make picture replacement simple enough for an elderly
 | `src/materials/ProceduralTextureFactory.ts` | Generates missing normal/height/roughness/specular/AO maps. | Customer only needs normal image files; advanced maps remain optional. |
 | `vite.local.config.ts` + root `index.html` | Preview is a static IIFE build opened from `file://`. | Importer must preserve the double-click local preview workflow. |
 
+### Architecture decision: global window injection pattern
+
+Three approaches for getting customer images into the pre-built IIFE bundle were evaluated. The chosen approach is **global window injection**:
+
+1. The importer writes `customer-preview/customer-artworks.js` containing `window.__FREYRAUM_ARTWORKS = [...]`.
+2. `customer-preview/app.html` includes this script before the main IIFE.
+3. `src/main.ts` reads `window.__FREYRAUM_ARTWORKS` at startup and prefers it over built-in demo artworks.
+
+**Why `fetch()` was ruled out:** The `fetch()` API is blocked on `file://` URLs by all major browsers for same-origin security reasons. A customer opening `index.html` by double-click always uses `file://`. A JSON manifest loaded via `fetch()` would silently fail with a CORS or security error in every supported browser.
+
+**Why a rebuild-on-import approach was ruled out as the only path:** A full `npm run build` takes 10–30 seconds and requires Node.js + npm on the machine. While this approach is viable for developer maintenance, the global injection approach allows future-faster updates that skip the rebuild entirely and still work from `file://`.
+
 ### Online research findings
 
 - Browser-safe image formats are primarily JPEG, PNG, GIF, SVG, WebP, and modern AVIF; TIFF and RAW are not reliable direct browser inputs. Source: MDN Image file type and format guide — https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Image_types
 - Browser folder APIs are not uniformly standard. `webkitdirectory` and File/Directory Entries can help in some browsers, but should not be the only workflow for a non-technical customer. Sources: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/file#webkitdirectory and https://developer.mozilla.org/en-US/docs/Web/API/File_and_Directory_Entries_API
 - `createImageBitmap()` is useful for async decoding, but importer design still needs explicit orientation/metadata decisions for real camera files. Source: https://developer.mozilla.org/en-US/docs/Web/API/createImageBitmap
 - WebGL has a device-dependent `MAX_TEXTURE_SIZE`; very large camera/scanner files need generated downscaled copies before reliable texture upload. Source: https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Constants#textures
+- `fetch()` on `file://` URLs is blocked by all major browsers (Chrome, Firefox, Safari) for same-origin security reasons. Any runtime JSON loading for `file://`-based previews must use `<script>` tag injection instead. Source: verified by testing + MDN fetch same-origin policy notes.
+- Zero-dependency Node.js image dimension reading is achievable by parsing binary headers: JPEG SOF markers, PNG IHDR chunk, WebP RIFF container, GIF header. No npm packages required for dimension reading only. Source: image format specifications + confirmed by 2024 Node.js community examples.
+- Image resizing without native Node.js binaries is best handled by `jimp` (pure JS, works on macOS + Windows without node-gyp or build tools). `sharp` is faster but requires native binaries. For a customer-machine one-click script, `jimp` is the safer first choice. Source: npm package comparison research.
+- macOS Gatekeeper blocks `.command` files from unidentified developers. Customers (or their developer during setup) must right-click → Open once to approve the script. After first approval, future double-clicks work without prompts.
 
 ### Planning conclusion
 
-The most reliable customer-friendly architecture is a local `customer-artworks/inbox/` folder plus one-click update scripts that generate optimized web files and a manifest before the static preview opens. A browser-only drag/drop folder picker can be a later convenience, but it is not stable enough as the only customer workflow.
+The most reliable customer-friendly architecture is: a local `customer-artworks/inbox/` folder + a Node.js importer script that copies images, reads dimensions (zero-dep), generates a `customer-artworks.js` global injection file, and writes a plain-language report. No rebuild of the bundle is required on every gallery update.
 
-See `plan.md` → **v0.07 Plan — Customer-managed artwork folder and one-click importer** and `docs/CUSTOMER_PICTURE_GUIDE.md`.
+See `plan.md` → **v0.07 Technical Implementation Guide** for exact code patterns and implementation checklist.
 
 ---
+
+
 
 
 ## 2026-05-17 — v0.06 implemented: Streifenlicht blockiness reduction

@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-### Added (v0.07 planning — customer-managed artwork folder)
+### Updated (v0.07 full technical execution plan — 2026-05-17)
+
+The v0.07 plan has been expanded from a documentation-only pass into a complete technical implementation and execution guide.
+
+- Documented the exact architecture decision: **global window injection** pattern (`window.__FREYRAUM_ARTWORKS`) is chosen over `fetch()` (blocked on `file://`) and full-rebuild-on-import (slow, unnecessary for every update).
+- Added `v0.07 Technical Implementation Guide` to `plan.md`: exact architecture table, Slice S2 manifest schema, Slice S3 complete Node.js script outline with zero-dep dimension reading for JPEG/PNG/WebP/GIF/SVG, Slice S4 large-file strategy and jimp upgrade path, Slice S5 exact code changes for `main.ts` and `write-local-preview.mjs`, Slice S6 report format with sample output, full implementation checklist (Phase 1–4), and developer setup notes.
+- Updated `FINDINGS.md` with: architecture decision rationale (why `fetch()` is ruled out on `file://`), global injection pattern, `jimp` vs `sharp` research, zero-dep dimension reading feasibility, macOS Gatekeeper `.command` approval note.
+- Updated `docs/CUSTOMER_PICTURE_GUIDE.md` to mark the guide as ready for the next implementation pass.
+
+### Added (v0.07 planning documentation pass — 2026-05-17)
 
 - Added `docs/CUSTOMER_PICTURE_GUIDE.md`, a plain-language guide explaining the current limitation and the planned simple customer workflow: drag pictures into `customer-artworks/inbox/`, run one updater, then open `index.html`.
 - Added a full v0.07 plan in `plan.md` for a customer-managed artwork-folder pipeline with one-click import/build automation, generated `artworks.json`, safe optimized copies, large-file handling, fallback demo artworks, and elderly-customer UX requirements.
@@ -15,6 +24,7 @@
 - No new dependencies.
 
 ---
+
 
 
 ### Added (v0.06 implementation — Streifenlicht blockiness reduction)

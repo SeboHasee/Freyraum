@@ -20,17 +20,18 @@ Today, the safe customer process is:
 3. Send that folder to the developer / maintainer.
 4. The maintainer adds them to the gallery and rebuilds the preview.
 
-### What should be built next
+### What will be built in v0.07 (implementation plan is complete)
 
-The planned v0.07 workflow is:
+The v0.07 technical implementation plan is fully written in `plan.md`. Once implemented, the workflow will be:
 
 1. Open the FREYRAUM project folder.
 2. Open `customer-artworks/inbox/`.
 3. Drag your pictures into that folder.
-4. Double-click one simple update file, for example `Update Gallery`.
+4. Double-click `Update Gallery` (macOS: `Update Gallery.command`, Windows: `Update Gallery.bat`).
 5. Double-click `index.html` to view the finished gallery.
 
 No code editing. No terminal. No metadata typing required.
+
 
 ## Recommended customer folder
 
@@ -158,4 +159,12 @@ Needs attention:
 
 ## Developer note
 
-The current source of truth is still `src/config/artworks.ts`. This guide documents the desired customer-facing workflow and the immediate manual workaround. The implementation plan is recorded in `plan.md` under **v0.07 Plan — Customer-managed artwork folder and one-click importer**.
+The current source of truth is still `src/config/artworks.ts`. This guide documents the desired customer-facing workflow and the immediate manual workaround. The full technical implementation plan (including architecture decision, exact code changes, script outline, and Phase 1–4 implementation checklist) is recorded in `plan.md` under **v0.07 Technical Implementation Guide**.
+
+Key implementation notes for the developer:
+- The chosen architecture is **global window injection** (`window.__FREYRAUM_ARTWORKS`): no rebuild needed, works from `file://`.
+- `src/main.ts` reads `window.__FREYRAUM_ARTWORKS` and prefers it over demo artworks.
+- `scripts/import-artworks.mjs` copies images and generates `customer-preview/customer-artworks.js`.
+- `scripts/write-local-preview.mjs` injects the script tag into `app.html`.
+- No new npm dependencies are required for Phase 1 (zero-dep dimension reading); `jimp` is optional for future Phase 4 resize support.
+

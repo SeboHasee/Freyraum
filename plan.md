@@ -4,9 +4,9 @@
 
 ### v0.07 Planning Status
 
-**Planned — documentation and research pass written (2026-05-17).** The current v0.06 app is not yet customer-manageable for artwork replacement: `src/config/artworks.ts` embeds placeholder SVG data URIs in TypeScript, and the customer preview is a built `customer-preview/` bundle. A non-technical customer cannot safely add real pictures by dragging files into a folder yet.
+**Full technical implementation plan ready (2026-05-17).** The current v0.06 app is not yet customer-manageable for artwork replacement: `src/config/artworks.ts` embeds placeholder SVG data URIs in TypeScript, and the customer preview is a built `customer-preview/` bundle. A non-technical customer cannot safely add real pictures by dragging files into a folder yet.
 
-This plan designs the next implementation pass: a customer-managed artwork folder with one-click import/build automation, so an elderly non-technical customer can maintain the pictures without touching code, terminal commands, TypeScript, or build tooling.
+This plan has been expanded from a documentation-only pass into a complete technical execution plan: exact architecture decisions, per-slice implementation guides, code patterns, integration approach, and developer instructions, so the next developer session can implement the feature end-to-end.
 
 ### v0.07 Current Code Findings
 
@@ -171,6 +171,546 @@ Authoritative/browser-platform findings used for this plan:
 - Windows/macOS double-click scripts need careful quoting for spaces in paths.
 - Very old computers may still struggle with many 4096 px images; importer should allow a lower cap.
 - Customer may delete generated folders accidentally; updater should recreate them.
+
+---
+
+## v0.07 Technical Implementation Guide
+
+This section is the complete developer-facing execution guide. Every architectural decision is documented here so the developer can implement v0.07 end-to-end without guessing.
+
+### v0.07 Architecture Decision: How the app loads customer images
+
+**Problem:** The gallery preview is a pre-built IIFE bundle opened from `file://`. A customer drags images into a folder. How does the running bundle pick them up?
+
+Three options were evaluated:
+
+| Option | Description | Works from file:// | Requires rebuild | Customer UX |
+|--------|-------------|---------------------|-------------------|-------------|
+| A: Rebuild bundle | Importer regenerates artworks, then full `npm run build` bakes them in | ✅ | ✅ every time | Slow (seconds), needs Node.js |
+| B: `fetch('artworks.json')` at startup | Runtime JSON fetch | ❌ blocked by browsers on file:// | ❌ | Would need local server |
+| C: Global window injection | Importer writes `customer-artworks.js` with `window.__FREYRAUM_ARTWORKS`; app.html includes it | ✅ | ❌ no rebuild | Fast (under 1 second) |
+
+**Decision: Option C — global window injection.**
+
+Reason: Option B is disqualified because `fetch()` is blocked by all major browsers on `file://` URLs for security. Option A works but requires a full rebuild (10–30 seconds) on every update. Option C requires no rebuild, works from `file://` by standard script loading, and the customer sees the update immediately after double-clicking the updater.
+
+**How Option C works:**
+
+1. `scripts/import-artworks.mjs` scans `customer-artworks/inbox/`, copies images to `customer-preview/images/`, and writes `customer-preview/customer-artworks.js` containing:
+   ```js
+   window.__FREYRAUM_ARTWORKS = [ /* Artwork[] JSON */ ];
+   ```
+2. `scripts/write-local-preview.mjs` is updated to inject `<script src="./customer-artworks.js"></script>` into `customer-preview/app.html` just before the main IIFE bundle tag.
+3. `src/main.ts` reads `(window as any).__FREYRAUM_ARTWORKS` at startup; if it is a non-empty array, it is used instead of the built-in demo artworks. The TypeScript type is `Artwork[] | undefined`.
+4. If the customer has not yet run the importer, `window.__FREYRAUM_ARTWORKS` is `undefined` (the script tag will 404 silently or be absent), and the built-in demo artworks load as normal.
+
+**Fallback path:** If `customer-artworks.js` does not exist yet, the app.html `<script src="./customer-artworks.js">` will fail silently (a missing optional script does not throw in HTML). As a safer alternative, `write-local-preview.mjs` can emit a stub `customer-preview/customer-artworks.js` that sets `window.__FREYRAUM_ARTWORKS = []` so no 404 occurs. The app reads `[]` as no artworks → falls back to demo artworks. Both approaches work; the stub is cleaner.
+
+---
+
+### v0.07 Slice S2 — Manifest contract: `artworks.json` and `customer-artworks.js`
+
+The importer produces two outputs for every update run:
+
+**`customer-artworks/artworks.json`** — Human-readable manifest. The customer or developer can inspect it. Not loaded by the app directly. Structure matches the `Artwork` TypeScript interface from `src/config/artworks.ts`.
+
+```jsonc
+[
+  {
+    "id": "01-sunset-at-lake",
+    "title": "Sunset At Lake",
+    "subtitle": "Artwork 01",
+    "description": "Imported artwork",
+    "year": 2025,
+    "medium": "Photograph · 3024 × 4032",
+    "image": "./images/01-sunset-at-lake.jpg",
+    "dimensions": { "width": 3024, "height": 4032 },
+    "alt": "Sunset At Lake",
+    "credit": "Customer",
+    "tags": [],
+    "surfaceProfile": "matte-canvas"
+  }
+]
+```
+
+**`customer-preview/customer-artworks.js`** — App-injectable runtime file. Paths must be relative to `customer-preview/`:
+
+```js
+window.__FREYRAUM_ARTWORKS = [
+  {
+    "id": "01-sunset-at-lake",
+    "title": "Sunset At Lake",
+    "subtitle": "Artwork 01",
+    "description": "Imported artwork",
+    "year": 2025,
+    "medium": "Photograph · 3024 × 4032",
+    "image": "./images/01-sunset-at-lake.jpg",
+    "dimensions": { "width": 3024, "height": 4032 },
+    "alt": "Sunset At Lake",
+    "credit": "Customer",
+    "tags": [],
+    "surfaceProfile": "matte-canvas"
+  }
+];
+```
+
+**Title generation from filename:**
+```
+01-sunset-at-lake.jpg  →  "Sunset At Lake"
+02-portrait of maria.PNG  →  "Portrait Of Maria"
+003_forest_path.webp  →  "Forest Path"
+```
+Algorithm: strip leading digits and separators (`-`, `_`, spaces), strip extension, split on remaining separators, capitalize each word.
+
+**ID generation from filename:**
+```
+01-sunset-at-lake.jpg  →  "01-sunset-at-lake"
+IMG_8847.JPG  →  "img-8847"
+```
+Algorithm: strip extension, lowercase, replace non-alphanumeric with `-`, collapse repeated `-`.
+
+**`medium` generation:**
+```
+Portrait · 3024 × 4032   (height > width by >10%)
+Landscape · 3024 × 2016  (width > height by >10%)
+Square · 2048 × 2048     (ratio within 10%)
+Photograph · W × H       (default prefix)
+```
+
+**`surfaceProfile` default:** `'matte-canvas'` for all auto-imported artwork unless overridden in a future metadata sidecar.
+
+---
+
+### v0.07 Slice S3 — `scripts/import-artworks.mjs`: exact implementation guide
+
+**File:** `scripts/import-artworks.mjs`  
+**Runtime:** Node.js 18+ (ES modules, `node:fs`, `node:path`).  
+**No new npm dependencies required** for the first version (dimension reading is zero-dep header parsing). Optional resize via `jimp` (pure-JS, no native binaries).
+
+#### Supported extensions
+
+```js
+const SAFE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.avif']);
+const RISKY_EXTENSIONS = new Set(['.heic', '.heif', '.tif', '.tiff', '.bmp']);
+const RAW_EXTENSIONS = new Set(['.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2', '.raw']);
+```
+
+Safe extensions are imported normally. Risky extensions: copy as-is but emit a warning in the report. RAW extensions: skip entirely with a clear message.
+
+#### Zero-dependency image dimension reading
+
+Parse headers directly from a `Buffer` using `fs.readFileSync()`:
+
+```js
+function readImageDimensions(filePath) {
+  const buf = fs.readFileSync(filePath);
+  // JPEG: look for SOF0 (0xFFC0) or SOF2 (0xFFC2) marker
+  if (buf[0] === 0xFF && buf[1] === 0xD8) {
+    let i = 2;
+    while (i < buf.length - 4) {
+      if (buf[i] !== 0xFF) break;
+      const marker = buf[i + 1];
+      const segLen = buf.readUInt16BE(i + 2);
+      if (marker === 0xC0 || marker === 0xC2 || marker === 0xC1 || marker === 0xC3) {
+        return { width: buf.readUInt16BE(i + 7), height: buf.readUInt16BE(i + 5) };
+      }
+      i += 2 + segLen;
+    }
+    throw new Error('JPEG SOF marker not found');
+  }
+  // PNG: width at offset 16, height at offset 20 (big-endian uint32)
+  if (buf[0] === 0x89 && buf.toString('ascii', 1, 4) === 'PNG') {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  }
+  // WebP: RIFF + WEBP container
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') {
+    const chunk = buf.toString('ascii', 12, 16);
+    if (chunk === 'VP8X') return { width: 1 + buf.readUIntLE(24, 3), height: 1 + buf.readUIntLE(27, 3) };
+    if (chunk === 'VP8 ') return { width: buf.readUInt16LE(26) & 0x3FFF, height: buf.readUInt16LE(28) & 0x3FFF };
+    if (chunk === 'VP8L') {
+      const b0 = buf[21], b1 = buf[22], b2 = buf[23];
+      return { width: 1 + (buf[20] | ((b0 & 0x3F) << 8)), height: 1 + (((b0 >> 6) | (b1 << 2) | ((b2 & 0x0F) << 10))) };
+    }
+  }
+  // GIF: width at offset 6, height at offset 8 (little-endian uint16)
+  if (buf.toString('ascii', 0, 3) === 'GIF') {
+    return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
+  }
+  // SVG: return 0×0 with a flag; runtime will treat as vector (no cap needed)
+  if (buf.toString('utf8', 0, 5).trimStart().startsWith('<svg') ||
+      buf.toString('utf8', 0, 100).includes('<svg')) {
+    return { width: 0, height: 0, isSVG: true };
+  }
+  // AVIF / others: fall back — cannot reliably parse without a library
+  throw new Error(`Cannot read dimensions for ${path.basename(filePath)} without a library`);
+}
+```
+
+#### Complete script outline
+
+```js
+import { readdirSync, mkdirSync, cpSync, writeFileSync, existsSync, renameSync } from 'node:fs';
+import { join, extname, basename, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(fileURLToPath(import.meta.url), '..', '..');
+const INBOX = join(ROOT, 'customer-artworks', 'inbox');
+const PROCESSED = join(ROOT, 'customer-artworks', 'processed');
+const MANIFEST_JSON = join(ROOT, 'customer-artworks', 'artworks.json');
+const MANIFEST_BACKUP = join(ROOT, 'customer-artworks', 'artworks.json.bak');
+const PREVIEW_IMAGES = join(ROOT, 'customer-preview', 'images');
+const PREVIEW_JS = join(ROOT, 'customer-preview', 'customer-artworks.js');
+const REPORT_FILE = join(ROOT, 'customer-artworks', 'last-import-report.txt');
+
+// 1. Ensure folders exist
+mkdirSync(INBOX, { recursive: true });
+mkdirSync(PROCESSED, { recursive: true });
+mkdirSync(PREVIEW_IMAGES, { recursive: true });
+
+// 2. Scan inbox
+const files = readdirSync(INBOX)
+  .filter(f => !f.startsWith('.'))
+  .sort();
+
+// 3. Process each file
+const artworks = [];
+const imported = [];
+const warnings = [];
+const skipped = [];
+
+for (const [i, filename] of files.entries()) {
+  const srcPath = join(INBOX, filename);
+  const ext = extname(filename).toLowerCase();
+  const artworkIndex = String(i + 1).padStart(2, '0');
+
+  if (RAW_EXTENSIONS.has(ext)) {
+    skipped.push(`${filename} — camera RAW format, cannot display in browser`);
+    continue;
+  }
+  if (!SAFE_EXTENSIONS.has(ext) && !RISKY_EXTENSIONS.has(ext)) {
+    skipped.push(`${filename} — unknown format`);
+    continue;
+  }
+
+  let dims = { width: 0, height: 0 };
+  try {
+    dims = readImageDimensions(srcPath);
+  } catch (e) {
+    warnings.push(`${filename} — could not read dimensions: ${e.message}. Skipping.`);
+    continue;
+  }
+
+  const id = normalizeId(basename(filename, ext));
+  const title = generateTitle(basename(filename, ext));
+  const destFilename = id + ext;
+  const destPath = join(PREVIEW_IMAGES, destFilename);
+
+  // Copy to preview/images
+  cpSync(srcPath, destPath);
+
+  if (RISKY_EXTENSIONS.has(ext)) {
+    warnings.push(`${filename} — format may not display in all browsers. Export as JPG if it does not appear.`);
+  }
+
+  artworks.push({
+    id,
+    title,
+    subtitle: `Artwork ${artworkIndex}`,
+    description: 'Imported artwork',
+    year: new Date().getFullYear(),
+    medium: generateMedium(dims, ext),
+    image: `./images/${destFilename}`,
+    dimensions: { width: dims.width, height: dims.height },
+    alt: title,
+    credit: 'Customer',
+    tags: [],
+    surfaceProfile: 'matte-canvas',
+  });
+
+  imported.push(filename);
+}
+
+// 4. Back up previous manifest, write new one
+if (existsSync(MANIFEST_JSON)) {
+  renameSync(MANIFEST_JSON, MANIFEST_BACKUP);
+}
+writeFileSync(MANIFEST_JSON, JSON.stringify(artworks, null, 2), 'utf8');
+
+// 5. Write customer-artworks.js for the preview (global injection)
+const js = `// Auto-generated by FREYRAUM import-artworks — do not edit manually\nwindow.__FREYRAUM_ARTWORKS = ${JSON.stringify(artworks, null, 2)};\n`;
+writeFileSync(PREVIEW_JS, js, 'utf8');
+
+// 6. Write plain-language report
+const reportLines = [
+  `Gallery update finished — ${new Date().toLocaleString()}`,
+  '',
+  `Imported (${imported.length}):`,
+  ...imported.map(f => `  ✓ ${f}`),
+];
+if (warnings.length) {
+  reportLines.push('', `Needs attention (${warnings.length}):`, ...warnings.map(w => `  ⚠ ${w}`));
+}
+if (skipped.length) {
+  reportLines.push('', `Skipped (${skipped.length}):`, ...skipped.map(s => `  ✗ ${s}`));
+}
+if (imported.length === 0 && warnings.length === 0) {
+  reportLines.push('', 'No valid image files found in customer-artworks/inbox/');
+  reportLines.push('Put your pictures in that folder and run Update Gallery again.');
+}
+const report = reportLines.join('\n');
+writeFileSync(REPORT_FILE, report, 'utf8');
+console.log(report);
+```
+
+---
+
+### v0.07 Slice S4 — Large-file and format hardening
+
+#### Large-image strategy (first version — copy-only, no resize)
+
+For the first implementation version, the importer **copies** images without resizing. Rationale:
+- Avoids the complexity of adding `jimp` or `sharp` as a dependency in the first pass.
+- Most phone/camera JPEG files are 3–25 MB and typically 3000–8000 px; Three.js `TextureLoader` + WebGL handles these well up to `MAX_TEXTURE_SIZE` on modern devices.
+- The `ProceduralTextureFactory` is already responsible for procedural PBR maps, not image resizing.
+
+**Future S4 upgrade path (optional, when resize is needed):**
+
+Add `jimp` as a devDependency (pure JS, no native binaries, works on macOS + Windows without build tools):
+
+```
+npm install --save-dev jimp
+```
+
+In the importer, after copying, check if `width > MAX_LONG_EDGE || height > MAX_LONG_EDGE` and if so use jimp to downscale to `MAX_LONG_EDGE = 4096`:
+
+```js
+import Jimp from 'jimp';
+
+async function processImage(srcPath, destPath, dims, maxLongEdge = 4096) {
+  const maxDim = Math.max(dims.width, dims.height);
+  if (maxDim > maxLongEdge) {
+    const image = await Jimp.read(srcPath);
+    const scale = maxLongEdge / maxDim;
+    await image
+      .resize(Math.round(dims.width * scale), Math.round(dims.height * scale))
+      .writeAsync(destPath);
+    return { width: Math.round(dims.width * scale), height: Math.round(dims.height * scale) };
+  } else {
+    cpSync(srcPath, destPath);
+    return dims;
+  }
+}
+```
+
+Jimp supports JPEG, PNG, BMP, TIFF, GIF. For WebP resize, a WebP-specific jimp plugin or sharp (if native binaries are available) is needed.
+
+**Runtime WebGL texture-size guard (app side):**
+
+In `src/gallery/TextureManager.ts`, after `init(renderer)` reads `maxAnisotropy`, also read and store `maxTextureSize`:
+
+```ts
+init(renderer: THREE.WebGLRenderer): void {
+  this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  this.maxTextureSize = renderer.capabilities.maxTextureSize; // e.g. 16384 on modern GPU
+}
+```
+
+Before loading a customer image, log a warning if the declared dimensions exceed `maxTextureSize`. The texture will still load (WebGL silently clamps), but logging helps debugging.
+
+---
+
+### v0.07 Slice S5 — App integration: exact code changes
+
+#### Change 1: `src/main.ts`
+
+Add customer artwork loading just before the gallery is initialized. The `artworks` variable already comes from `src/config/artworks`. Add a check:
+
+```ts
+// At the top of main(), after const preferences = new PreferencesStore():
+const injected = (window as any).__FREYRAUM_ARTWORKS as typeof artworks | undefined;
+const activeArtworks = Array.isArray(injected) && injected.length > 0 ? injected : artworks;
+```
+
+Then replace every reference to `artworks` in `main()` with `activeArtworks`. There are at least these usage sites to check:
+- `TextureManager.preload(activeArtworks.map(a => a.image))`
+- `new GalleryManager(activeArtworks, ...)`
+- `new Timeline(activeArtworks, ...)`
+- `new InfoPanel(activeArtworks[0], ...)` etc.
+
+Search the file for `artworks` (the imported constant) and replace with `activeArtworks` in the `main()` function body. The import line itself remains unchanged.
+
+**Important:** The `Artwork` interface does not change. The injected data must match that shape exactly, which is guaranteed because the importer outputs the same JSON structure.
+
+#### Change 2: `scripts/write-local-preview.mjs`
+
+Inject the customer artworks script tag into `app.html` and also write a stub `customer-artworks.js` so no 404 occurs:
+
+```js
+const html = `<!DOCTYPE html>
+<html lang="de">
+<head>
+  ...existing head...
+</head>
+<body>
+  <div id="app"></div>
+  <!-- Customer artwork injection (generated by import-artworks.mjs) -->
+  <script src="./customer-artworks.js"></script>
+  <script src="./freyraum-gallery.js"></script>
+</body>
+</html>
+`;
+
+// Also write a stub customer-artworks.js if it does not exist yet
+const stubPath = 'customer-preview/customer-artworks.js';
+if (!existsSync(stubPath)) {
+  writeFileSync(stubPath, '// No customer artworks imported yet\nwindow.__FREYRAUM_ARTWORKS = [];\n');
+}
+```
+
+The `existsSync` guard means that a real imported `customer-artworks.js` from a previous `import-artworks.mjs` run is not overwritten by the stub on rebuild.
+
+#### Change 3: `customer-artworks/inbox/.gitkeep`
+
+Create an empty `.gitkeep` file in `customer-artworks/inbox/` and add `customer-artworks/inbox/*` (but not `.gitkeep`) to `.gitignore`. This ensures the folder exists in the repo but customer images are not committed.
+
+Similarly add `customer-preview/images/` and `customer-preview/customer-artworks.js` to `.gitignore` so generated files are not committed.
+
+#### Change 4: `Update Gallery.command` (macOS) and `Update Gallery.bat` (Windows)
+
+**`Update Gallery.command`** — macOS double-click shell script:
+```sh
+#!/bin/bash
+# FREYRAUM — Update Gallery
+# Double-click this file to import your pictures.
+cd "$(dirname "$0")"
+if ! command -v node &> /dev/null; then
+    osascript -e 'display alert "Node.js not found" message "Please install Node.js from https://nodejs.org and try again."'
+    exit 1
+fi
+node scripts/import-artworks.mjs
+if [ $? -eq 0 ]; then
+    open customer-artworks/last-import-report.txt 2>/dev/null || true
+fi
+```
+After creation, run `chmod +x "Update Gallery.command"` so macOS can execute it.
+
+**`Update Gallery.bat`** — Windows double-click batch file:
+```bat
+@echo off
+cd /d "%~dp0"
+where node >nul 2>nul
+if %errorlevel% neq 0 (
+    echo Node.js not found. Please install it from https://nodejs.org
+    pause
+    exit /b 1
+)
+node scripts/import-artworks.mjs
+if %errorlevel% equ 0 (
+    start notepad customer-artworks\last-import-report.txt
+) else (
+    echo An error occurred. Please contact your support person.
+    pause
+)
+```
+
+**Important macOS note:** When a `.command` file is first run by double-clicking in Finder, macOS Gatekeeper will block it with "cannot be opened because it is from an unidentified developer". The customer (or the developer during setup) must right-click → Open → Open to approve it once. Document this in the guide. After the first approval, future double-clicks work normally.
+
+---
+
+### v0.07 Slice S6 — Report and UX
+
+The plain-language update report is written to `customer-artworks/last-import-report.txt`. The `Update Gallery` scripts open this file automatically after a successful run.
+
+Sample report (success):
+```
+Gallery update finished — 17.5.2026, 14:32:01
+
+Imported (3):
+  ✓ 01-sunset.jpg
+  ✓ 02-forest.png
+  ✓ 03-portrait.jpg
+
+Open index.html to view the gallery.
+```
+
+Sample report (with warnings):
+```
+Gallery update finished — 17.5.2026, 14:32:01
+
+Imported (2):
+  ✓ 01-sunset.jpg
+  ✓ 02-forest.png
+
+Needs attention (1):
+  ⚠ 03-iphone.heic — format may not display in all browsers. Export as JPG if it does not appear.
+
+Skipped (1):
+  ✗ raw-photo.cr2 — camera RAW format, cannot display in browser
+
+Open index.html to view the gallery.
+```
+
+The report line `Open index.html to view the gallery.` should always be at the bottom when at least one artwork was imported successfully.
+
+---
+
+### v0.07 Full Implementation Checklist
+
+Developer task list in implementation order:
+
+#### Phase 1 — Script and folder structure (no app changes yet, testable standalone)
+- [ ] Create `customer-artworks/inbox/` with `.gitkeep`
+- [ ] Create `customer-artworks/processed/` with `.gitkeep`
+- [ ] Add `customer-artworks/inbox/*`, `!customer-artworks/inbox/.gitkeep`, `customer-artworks/processed/*`, `!customer-artworks/processed/.gitkeep`, `customer-preview/images/`, `customer-preview/customer-artworks.js` to `.gitignore`
+- [ ] Write `scripts/import-artworks.mjs` (scan, copy, dimension-read, generate manifest + JS + report)
+- [ ] Write `Update Gallery.command` and `Update Gallery.bat`
+- [ ] Run `chmod +x "Update Gallery.command"`
+- [ ] Test: drop real images into `customer-artworks/inbox/`, run `node scripts/import-artworks.mjs`, verify `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` are correct
+
+#### Phase 2 — App integration (visible result in preview)
+- [ ] Update `src/main.ts`: read `window.__FREYRAUM_ARTWORKS`, prefer it over built-in artworks
+- [ ] Update `scripts/write-local-preview.mjs`: inject `<script src="./customer-artworks.js">` into `app.html` + write stub if not present
+- [ ] Run `npm run build` to rebuild with the new `main.ts` changes
+- [ ] Test: run importer, open `index.html` (or `customer-preview/app.html`), verify customer images appear in gallery
+
+#### Phase 3 — Polish and edge cases
+- [ ] Test portrait, landscape, square, ultrawide images — verify no stretching
+- [ ] Test large images (e.g. 6000×4000 JPEG) — verify load and display without crash
+- [ ] Test empty inbox — verify demo artworks appear
+- [ ] Test all risky formats — verify warnings appear, no crash
+- [ ] Test report opens automatically after double-click on Mac and Windows
+- [ ] Test Gatekeeper approval flow on macOS (document in guide)
+- [ ] Update `docs/CUSTOMER_PICTURE_GUIDE.md` to reflect completed implementation
+- [ ] Update `CHANGELOG.md`, `FINDINGS.md`, `README.md`
+
+#### Phase 4 — Optional future improvements (not required for v0.07)
+- [ ] Add `jimp` for image downscaling (long-edge cap 4096 px)
+- [ ] Add optional `artworks-metadata.txt` sidecar for custom titles/descriptions
+- [ ] Add per-artwork `surfaceProfile` override in the sidecar
+- [ ] Add thumbnail generation for timeline previews
+- [ ] Add in-app Preferences Panel option to scan a different folder
+
+---
+
+### v0.07 Developer Setup Notes
+
+**What the customer needs installed:**
+- Only Node.js (https://nodejs.org, LTS version). The developer installs this once during setup, and the customer never touches it again.
+- No `npm install` required for the v0.07 script (zero npm dependencies in Phase 1). If `jimp` is added in Phase 4, the developer runs `npm install` once on the customer machine.
+
+**First-time developer setup on customer machine:**
+1. Install Node.js LTS.
+2. Clone or copy the FREYRAUM project folder to the customer's computer.
+3. Run `npm install` in the project folder (sets up the dev tools; customers do not need to do this again).
+4. Run `npm run build` once to generate `customer-preview/`.
+5. On macOS: right-click `Update Gallery.command` → Open → Open (Gatekeeper approval, once only).
+6. From then on the customer only uses: drag images → double-click `Update Gallery` → double-click `index.html`.
+
+**Testing the importer:**
+```sh
+node scripts/import-artworks.mjs
+# Then open customer-preview/app.html in a browser, or double-click index.html
+```
 
 ---
 
