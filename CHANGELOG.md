@@ -12,6 +12,10 @@
 - Updated repository documentation with a reproduction-first plan using
   `?debug=info`, albedo-only (`a`), shadow-only (`s`), quality comparison, and
   lighting-profile comparison.
+- Updated the v0.10 analysis after customer clarification that the artifact is
+  visible as **little spots**. Ranking now prioritizes:
+  self-shadow × procedural height micro-noise and specular/clearcoat
+  micro-glints, with parallax/z-fighting moved lower.
 
 ### Fixed (v0.09 — actual uploaded image on 3D painting — 2026-05-17)
 

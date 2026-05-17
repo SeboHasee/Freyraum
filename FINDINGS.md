@@ -10,6 +10,11 @@ URL returned `HTTP 404` from this sandbox, so the screenshot could not be
 inspected directly here. The plan therefore records the code-audit conclusions
 and requires reproduction before changing shader defaults.
 
+Customer follow-up clarified the shape: the artifact looks like **little spots**.
+That shifts the primary suspects away from broad edge-smear/z-fighting and
+toward high-frequency shading interactions (self-shadow micro-occlusion and/or
+specular-clearcoat micro-glints).
+
 ### Code-audit conclusion
 
 The strongest suspects are high-only rendering paths:
@@ -22,6 +27,10 @@ The strongest suspects are high-only rendering paths:
   edge pixels and affects albedo directly.
 - `src/materials/PaintingMaterial.ts`: self-shadow still runs only on Hoch and
   can create dark local artifacts if the height march/PCF path is the culprit.
+- `src/materials/ProceduralTextureFactory.ts`: `generateHeight()` contains a
+  high-frequency micro component that can feed tiny blockers into self-shadow on
+  Hoch; `generateSpecular()` uses deterministic Gaussian blobs that can present
+  as bright spot-like glints with clearcoat/specular enabled.
 - `src/gallery/ArtworkMesh.ts`: the artwork plane is only about `0.005` world
   units in front of the frame face, so edge-local flicker may be depth precision
   or z-fighting.
@@ -33,7 +42,9 @@ The strongest suspects are high-only rendering paths:
 Use `?debug=info` and compare the same camera position under Hoch vs Ausgewogen,
 `gallery-soft` vs `raking-inspection`, albedo-only (`a`) vs normal shading, and
 shadow-only (`s`) vs normal shading. Only fix the confirmed cause; do not reduce
-all high-quality effects blindly.
+all high-quality effects blindly. Additionally classify spots as dark vs bright:
+dark spots imply self-shadow/height interaction, bright spots imply
+specular/clearcoat/bloom interaction.
 
 ---
 

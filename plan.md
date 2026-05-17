@@ -4,21 +4,20 @@
 
 ### Status
 
-**Planned 2026-05-17.** A new customer report says that on the German **Hoch**
-quality preset — the highest graphics mode — occasional strange close-up
-artifacts appear on the painting. The attached GitHub image URL could not be
-downloaded from this sandbox (`HTTP 404`), so the image analysis below is based
-on the report text and the code audit, not direct pixel inspection. Treat the
-next pass as a targeted high-preset rendering investigation before changing
-visual defaults.
+**Planned 2026-05-17 (updated same day).** The customer resent the close-up and
+clarified the artifact shape as **"little spots"** on the painting in **Hoch**
+mode. The GitHub attachment URL still returns `HTTP 404` from this sandbox, so
+the analysis still cannot inspect pixels directly here, but the new "spots"
+description significantly narrows likely root causes.
 
 ### Reported symptom
 
-- User-visible issue: occasional artifacts in close-up viewing.
+- User-visible issue: occasional **small spot-like artifacts** in close-up view.
 - Setting: **Performance / Qualität = Hoch**.
-- Unknown until reproduced: whether the artifact is a dark stain, blocky
-  self-shadow, edge smear, z-fighting at the frame boundary, bloom halo, or
-  texture fallback.
+- New clue from customer: the artifact looks like little spots (not broad
+  streaks or full-frame corruption).
+- Most likely visual classes now: dark micro-occlusion speckles, bright
+  micro-glints, or high-frequency procedural map speckle.
 - First diagnostic requirement: reproduce with `?debug=info`, then compare:
   - Hoch vs Ausgewogen
   - `gallery-soft` vs `raking-inspection`
@@ -86,6 +85,21 @@ Most suspicious high-only boundaries:
    - If the close-up artifact is bright, shiny, or halo-like rather than dark,
      inspect clearcoat, specular map, and bloom before self-shadow.
 
+#### `src/materials/ProceduralTextureFactory.ts`
+
+New spot-focused suspects from procedural fallback map generation:
+
+1. **Height micro-noise + self-shadow interaction**
+   - `generateHeight()` mixes macro/mid noise plus a high-frequency micro term
+     (`x * 0.55`, `y * 0.55`, amplitude ~16).
+   - In Hoch, this height map is used by parallax and self-shadow, so tiny local
+     peaks can become small dark spot artifacts under certain light directions.
+
+2. **Specular blob field**
+   - `generateSpecular()` seeds Gaussian blobs over a low baseline.
+   - In Hoch (higher specular strength + clearcoat), small bright spots can read
+     as artifacts if blob response is too punchy under raking light.
+
 #### `src/gallery/ArtworkMesh.ts`
 
 Possible geometry boundary:
@@ -111,11 +125,11 @@ Possible non-shader boundaries:
 
 | Rank | Hypothesis | Why it matches | How to disprove quickly |
 |------|------------|----------------|--------------------------|
-| 1 | Parallax `pUV` clamping / edge smear | Hoch-only, close-up-visible, affects albedo directly | In debug mode press `a`; if artifact remains in albedo-only on Hoch, compare with parallax temporarily disabled |
-| 2 | Self-shadow residual artifact | Hoch-only and already a known historical artifact class | Press `s`; if the pattern appears in shadow-only, tune bias/softness/scale/filter |
-| 3 | Inspection-only PCF / 2048 procedural maps | Happens only under Streiflicht + Hoch | Switch lighting to gallery-soft; if gone, isolate inspection path |
-| 4 | Clearcoat/specular/bloom highlight | Hoch-only shiny path | Disable clearcoat/bloom in a local test; if gone, retune highlight path |
-| 5 | Frame/artwork z-fighting | Edge flicker/close-up symptom | Increase plane offset in a local test; if gone, make z spacing explicit |
+| 1 | Self-shadow × procedural height micro-noise | "Little spots" strongly matches high-frequency height blockers in Hoch-only self-shadow path | Press `s`; if spots map to shadow-only, retune bias/softness and reduce micro contribution for shadow path |
+| 2 | Specular/clearcoat micro-glints from procedural specular blobs | Spot-like bright artifacts under Hoch-only clearcoat/specular | In debug mode press `a`; if spots vanish there, test clearcoat/specular off |
+| 3 | Inspection-only PCF / 2048 procedural map interaction | Streiflicht + Hoch can exaggerate tiny map features | Switch lighting to gallery-soft; if gone, isolate inspection-only paths |
+| 4 | Parallax `pUV` clamping / edge smear | Still plausible, but usually looks like edge warp more than isolated spots | Compare with parallax disabled while holding camera/static image |
+| 5 | Frame/artwork z-fighting | Usually edge flicker bands, weakest match for "little spots" | Move camera off edge region and increase z gap in a local test |
 
 ### Implementation Plan (vertical slices)
 
@@ -127,6 +141,8 @@ Possible non-shader boundaries:
   - Hoch + albedo-only (`a`)
   - Hoch + shadow-only (`s`)
   - Ausgewogen normal
+- Record whether spots are **dark**, **bright**, or both (this directly splits
+  self-shadow from clearcoat/specular causes).
 - Record lighting profile, quality preset, diagnostics snapshot, browser/GPU, and
   whether `fallbackUsed` is false.
 - Classify the artifact as one of: albedo/UV, shadow, highlight/bloom, geometry
@@ -138,10 +154,12 @@ Possible non-shader boundaries:
   exposing confusing customer UI:
   - parallax off/on
   - self-shadow off/on
+  - procedural micro-height contribution off/on (debug scalar)
   - clearcoat/specular off/on
   - bloom off/on
 - Keep logs concise but explicit: active debug toggles, quality, lighting,
-  parallax enabled, self-shadow enabled, shadow filter enabled, map sizes.
+  parallax enabled, self-shadow enabled, shadow filter enabled, map sizes,
+  and spot classification (dark/bright).
 
 #### Slice S3 — Fix the confirmed cause only
 
@@ -152,10 +170,15 @@ Possible non-shader boundaries:
 - If **self-shadow** is confirmed:
   - retune high-preset bias/softness/max-occlusion/profile scale before adding
     more texture reads.
+  - consider decoupling self-shadow height from full micro-noise to avoid
+    dark speckle while preserving overall relief.
   - keep gallery-display profiles softer than inspection.
+- If **specular/clearcoat spots** are confirmed:
+  - reduce high-preset specular punch and/or clamp procedural specular blob
+    response so highlights remain smooth at close zoom.
 - If **inspection PCF / procedural resolution** is confirmed:
   - constrain the inspection-only path, not the normal gallery display path.
-- If **clearcoat/specular/bloom** is confirmed:
+- If **clearcoat/specular/bloom** is confirmed more generally:
   - lower Hoch highlight contribution or gate it by surface profile.
 - If **z-fighting** is confirmed:
   - increase the artwork-plane/frame depth separation with a documented constant.
@@ -173,7 +196,7 @@ Possible non-shader boundaries:
 
 ### Acceptance checks
 
-- The reported close-up artifact no longer appears in Hoch.
+- The reported little-spot close-up artifact no longer appears in Hoch.
 - No regression to customer image display from v0.09.
 - No crop, stretch, or destructive image manipulation.
 - Balanced and battery visual output remain stable unless the confirmed root
