@@ -49,6 +49,14 @@ interface EmbeddedArtworkOptions {
   horizonPercent?: number;
 }
 
+const escapeXml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+
 const embeddedArtwork = ({
   title,
   width,
@@ -68,6 +76,7 @@ const embeddedArtwork = ({
   const broadStrokeWidth = maxDimension * 0.012;
   const fineStrokeWidth = maxDimension * 0.005;
   const circleRadius = minDimension * 0.11;
+  const safeTitle = escapeXml(title);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
@@ -88,7 +97,7 @@ const embeddedArtwork = ({
   <path d="M${width * 0.08} ${height * 0.2} C ${width * 0.28} ${height * 0.08}, ${width * 0.5} ${height * 0.1}, ${width * 0.78} ${height * 0.24}" fill="none" stroke="#ffffff" stroke-width="${broadStrokeWidth}" stroke-linecap="round" opacity="0.32"/>
   <path d="M${width * 0.16} ${height * 0.82} C ${width * 0.36} ${height * 0.72}, ${width * 0.54} ${height * 0.9}, ${width * 0.86} ${height * 0.72}" fill="none" stroke="#11181d" stroke-width="${fineStrokeWidth}" stroke-linecap="round" opacity="0.18"/>
   <circle cx="${width * 0.72}" cy="${height * 0.26}" r="${circleRadius}" fill="#ffffff" opacity="0.16"/>
-  <text x="${signatureX}" y="${signatureY}" fill="#11181d" opacity="0.28" font-size="${signatureSize}" font-family="Inter, Arial, sans-serif" letter-spacing="${signatureSpacing}">${title}</text>
+  <text x="${signatureX}" y="${signatureY}" fill="#11181d" opacity="0.28" font-size="${signatureSize}" font-family="Inter, Arial, sans-serif" letter-spacing="${signatureSpacing}">${safeTitle}</text>
 </svg>`;
 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;

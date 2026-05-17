@@ -43,11 +43,11 @@ function writeStored(prefs: Preferences): void {
 }
 
 function detectSystemReducedMotion(): boolean {
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
 }
 
 function detectSystemHighContrast(): boolean {
-  return window.matchMedia?.('(prefers-contrast: more)').matches ?? false;
+  return window.matchMedia?.('(prefers-contrast: more)')?.matches ?? false;
 }
 
 export class PreferencesStore {

@@ -107,10 +107,10 @@ export class Timeline {
         break;
       case 'Enter':
       case ' ': {
-        // Native button activation handles Enter; for Space we let the click fire.
-        // Prevent page scroll on Space when the button is focused.
+        // Native <button> dispatches click for Enter and Space automatically,
+        // so we only need to prevent the page from scrolling on Space. The
+        // click handler will fire select() once via the synthetic click.
         if (event.key === ' ') event.preventDefault();
-        this.select(index);
         break;
       }
     }

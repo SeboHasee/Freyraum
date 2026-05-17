@@ -1,4 +1,4 @@
-import type { QualityPresetId } from '../config/quality';
+import type { QualityPresetId, QualityPreset } from '../config/quality';
 import { QUALITY_PRESETS } from '../config/quality';
 import type { PreferencesStore } from '../utils/preferences';
 
@@ -59,7 +59,7 @@ export class PreferencesPanel {
   private renderPanel(): void {
     const { reducedMotion, contrastMode, quality } = this.prefs.current;
 
-    const qualityOptions = (Object.values(QUALITY_PRESETS) as { id: QualityPresetId; label: string; description: string }[])
+    const qualityOptions = (Object.values(QUALITY_PRESETS) as QualityPreset[])
       .map(
         (preset) => `
           <label class="prefs__radio">
