@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Added (v0.05 implementation — soft self-shadow filtering)
+
+- **Replaced the binary self-shadow GLSL break loop** in `src/materials/PaintingMaterial.ts` with smooth weighted accumulation: `smoothstep(0, softness, sampleH - wantedH - bias)` per step, reciprocal-distance weighted, normalised, clamped to `uShadowMaxOcclusion`, then multiplied by `strength × profileScale × grazeMask`.
+- **Added a near-horizon `grazeMask`** (`smoothstep(0.05, 0.20, tsLight.z)`) so the self-shadow fades out smoothly as light approaches grazing, eliminating the previous hard `_tsLight.z > 0.05` cutoff edge.
+- **Added 4 new uniforms** to `PaintingMaterial`: `uShadowBias`, `uShadowSoftness`, `uShadowMaxOcclusion`, `uShadowProfileScale`.
+- **Added `PaintingMaterial.setShadowProfileScale(scale)`** (uniform-only, no recompile) and **`PaintingMaterial.setShadowDebug(enabled)`** (toggles `PAINTING_DEBUG_SHADOW`).
+- **Added `PAINTING_DEBUG_SHADOW` define path** in the fragment shader. When enabled, the self-shadow value is stashed in `indirectDiffuse` and all other lighting terms are zeroed, producing a clean greyscale visualisation of the shadow mask only.
+- **Extended `QualityPreset`** (`src/config/quality.ts`) with `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius` for all three presets. Lowered high-preset `selfShadowStrength` from 0.55 to 0.30. `selfShadowFilterRadius` is wired through the type system but kept at `0.0` (PCF filter slot reserved for later).
+- **Wired `src/main.ts`** to call `setShadowProfileScale(0.5)` for `display`/`demo` light profiles and `1.0` for `inspection`, via the existing `getLightProfile()` lookup. Added an `s`/`S` debug key (behind `?debug=1`) that toggles `setShadowDebug()` alongside the existing `a`/`A` albedo-only key.
+- **Updated `plan.md`, `FINDINGS.md`, `README.md`, `docs/HANDOFF.md`** to mark v0.05 as implemented and document the new behaviour, effective values, and the four enhancement slots that remain open (S4 PCF filter; per-profile shadow scale on `LightProfile`; animated profile-scale fade; authored height drop-in).
+
+### Validation (v0.05)
+
+- `npm run lint` — clean.
+- `npm run build` — typecheck + Vite preview + preview-HTML emitter all pass; only the pre-existing Sass legacy-JS-API deprecation warning is emitted.
+- Customer-preview IIFE regenerated (`customer-preview/freyraum-gallery.js` ≈ 558 KB / 142 KB gzip).
+- No new npm dependencies.
+
 ### Updated (v0.05 plan — full technical execution guide)
 
 - **Rewrote v0.05 plan in `plan.md`** from a diagnosis stub into a 7-slice, file-by-file, line-by-line technical execution guide for fixing self-shadow stain artifacts.

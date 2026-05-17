@@ -87,26 +87,25 @@ Shipped material-quality improvements:
 
 Validation: `npm run lint` and `npm run build` pass after `npm install`. The only output is the known TypeScript parser version warning and Dart Sass legacy JS API deprecation warning.
 
-## v0.05 planning
+## v0.05 status — implemented
 
-v0.05 is the next planned rendering-quality pass. It targets the remaining dark, light-angle-dependent spots (stains) that appear after v0.04. The v0.05 plan has been upgraded from an initial diagnosis stub to a **full technical execution guide** — see [`plan.md`](./plan.md#v005-plan--soft-self-shadow-filtering-and-stain-artifact-removal).
+v0.05 (soft self-shadow filtering) is **shipped**. The binary height-field break loop in `PaintingMaterial.ts` is gone; the shader now accumulates a smooth occlusion value that is bias-deadzoned, distance-weighted, clamped to a max-occlusion cap, and per-profile scaled. Stain-like dark blobs on `gallery-soft` are removed; `raking-inspection` shows soft local relief gradients.
 
-### Root cause (confirmed code location)
+See [`plan.md`](./plan.md#v005-plan--soft-self-shadow-filtering-and-stain-artifact-removal) (status header at top of section) and the implementation entry in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v005-self-shadow-soft-filtering--implemented).
 
-`src/materials/PaintingMaterial.ts` — `PAINTING_USE_SELFSHADOW` block — binary height-field blocker test: the first step where any height sample exceeds the horizon sets `_shadow = 1 - 0.55` and breaks. No bias, no softness, no distance weighting, no max-occlusion cap. Broad procedural height regions trip this immediately and create solid dark patches.
+### What you can verify in the running app
 
-### What the plan specifies (implementation-ready)
+- `gallery-soft`, `museum-neutral`, `dramatic-demo`: no moving dark blobs on any artwork.
+- `raking-inspection`: soft surface gradients only.
+- Append `?debug=1` to the preview URL and press **`s`** for a shadow-only greyscale overlay, or **`a`** for the albedo-only fidelity check.
+- High preset only: balanced and battery have self-shadow disabled.
 
-| Slice | Files | Change |
-|-------|-------|--------|
-| S2 | `src/config/quality.ts` | Add `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius`; lower high-preset strength 0.55 → 0.30 |
-| S3 | `src/materials/PaintingMaterial.ts` | Replace binary GLSL loop with smooth accumulation; add 4 new uniforms; add `setShadowProfileScale()` and `setShadowDebug()` |
-| S4 | `src/materials/PaintingMaterial.ts` | Optional 3-ray PCF-like filter (controlled by `selfShadowFilterRadius`) |
-| S5 | `src/main.ts` | Call `setShadowProfileScale(0.5)` for display profiles, `1.0` for inspection on profile switch |
-| S6 | `src/main.ts` | Add `s`/`S` debug key (behind `?debug=1`) for shadow-only greyscale visualisation |
-| S7 | all docs | Validation, screenshots, acceptance checks |
+### Enhancement slots reserved for later
 
-Supporting diagnosis is in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v005-self-shadow-stain-artifact--detailed-technical-diagnosis).
+- **3-ray PCF lateral filter** (S4). `selfShadowFilterRadius` is part of `QualityPreset`; default `0.0` keeps the single-march path.
+- **Per-profile `shadowProfileScale` on `LightProfile`** — currently derived from `displayIntent`.
+- **Animated profile-scale fade** — current switch is instant.
+- **Authored height-map drop-in** — works today without any shader change.
 
 ## Developer workflow
 

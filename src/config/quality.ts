@@ -59,6 +59,28 @@ export interface QualityPreset {
   /** Self-shadow darkening scalar (0..1). */
   selfShadowStrength: number;
 
+  // ── v0.05 self-shadow soft-filtering fields ──────────────────────────────
+  /**
+   * Height deadzone applied before a sample is counted as a blocker. Prevents
+   * self-shadow acne on broad height regions. Typical: 0.02..0.05.
+   */
+  selfShadowBias: number;
+  /**
+   * Smoothstep width used to convert the height-excess into a soft blocker
+   * weight. Larger = softer penumbra. Typical: 0.05..0.15.
+   */
+  selfShadowSoftness: number;
+  /**
+   * Hard cap on accumulated occlusion (0..1) before strength is applied. Keeps
+   * broad height plateaus from looking like solid stains. Typical: 0.2..0.4.
+   */
+  selfShadowMaxOcclusion: number;
+  /**
+   * Optional lateral PCF-like filter radius in UV space. 0 disables filtering
+   * (single-march path). Enables a 3-ray fan when > 0. Typical: 0.0 or 0.0025.
+   */
+  selfShadowFilterRadius: number;
+
   // ── v0.04 clearcoat / varnish fields ─────────────────────────────────────
   /** Whether the Three.js clearcoat BxDF is enabled. Disabled on balanced/battery. */
   clearcoatEnabled: boolean;
@@ -96,7 +118,14 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     parallaxScale: 0.04,
     selfShadowEnabled: true,
     selfShadowSteps: 8,
-    selfShadowStrength: 0.55,
+    // v0.05: lowered from 0.55. Combined with the new soft accumulation,
+    // max-occlusion cap, and display-profile scale, this reads as surface
+    // texture rather than a stain on gallery-soft / museum-neutral profiles.
+    selfShadowStrength: 0.3,
+    selfShadowBias: 0.03,
+    selfShadowSoftness: 0.1,
+    selfShadowMaxOcclusion: 0.28,
+    selfShadowFilterRadius: 0.0,
     clearcoatEnabled: true,
     clearcoatStrength: 0.12,
     clearcoatRoughnessValue: 0.35,
@@ -127,6 +156,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     selfShadowEnabled: false,
     selfShadowSteps: 0,
     selfShadowStrength: 0.0,
+    selfShadowBias: 0.03,
+    selfShadowSoftness: 0.1,
+    selfShadowMaxOcclusion: 0.28,
+    selfShadowFilterRadius: 0.0,
     clearcoatEnabled: false,
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.35,
@@ -157,6 +190,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     selfShadowEnabled: false,
     selfShadowSteps: 0,
     selfShadowStrength: 0.0,
+    selfShadowBias: 0.03,
+    selfShadowSoftness: 0.1,
+    selfShadowMaxOcclusion: 0.28,
+    selfShadowFilterRadius: 0.0,
     clearcoatEnabled: false,
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.0,

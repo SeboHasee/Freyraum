@@ -66,6 +66,11 @@ export interface PaintingUniforms {
   uParallaxSteps: { value: number };
   uShadowSteps: { value: number };
   uShadowStrength: { value: number };
+  // v0.05 soft self-shadow controls.
+  uShadowBias: { value: number };
+  uShadowSoftness: { value: number };
+  uShadowMaxOcclusion: { value: number };
+  uShadowProfileScale: { value: number };
   uKeyLightDir: { value: THREE.Vector3 };
   uAlbedoOnly: { value: number };
 }
@@ -80,6 +85,7 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
   private parallaxEnabledFlag = false;
   private selfShadowEnabledFlag = false;
   private albedoOnlyEnabled = false;
+  private shadowDebugEnabled = false;
   private reducedMotion = false;
 
   constructor(preset: QualityPreset) {
@@ -107,6 +113,13 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
       uParallaxSteps: { value: preset.parallaxSteps },
       uShadowSteps: { value: preset.selfShadowSteps },
       uShadowStrength: { value: preset.selfShadowStrength },
+      uShadowBias: { value: preset.selfShadowBias },
+      uShadowSoftness: { value: preset.selfShadowSoftness },
+      uShadowMaxOcclusion: { value: preset.selfShadowMaxOcclusion },
+      // Profile scale is owned by main.ts via setShadowProfileScale().
+      // Defaults to 0.5 (display intent) so the shader never reads as a stain
+      // even before main.ts wires it.
+      uShadowProfileScale: { value: 0.5 },
       uKeyLightDir: { value: new THREE.Vector3(0, 0, 1) },
       uAlbedoOnly: { value: 0 },
     };
@@ -130,6 +143,7 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
       if (this.parallaxActive()) defines.push('#define PAINTING_USE_PARALLAX');
       if (this.selfShadowActive()) defines.push('#define PAINTING_USE_SELFSHADOW');
       if (this.albedoOnlyEnabled) defines.push('#define PAINTING_DEBUG_ALBEDO_ONLY');
+      if (this.shadowDebugEnabled) defines.push('#define PAINTING_DEBUG_SHADOW');
 
       let frag = shader.fragmentShader;
 
@@ -145,6 +159,10 @@ uniform float uParallaxScale;
 uniform float uParallaxSteps;
 uniform float uShadowSteps;
 uniform float uShadowStrength;
+uniform float uShadowBias;
+uniform float uShadowSoftness;
+uniform float uShadowMaxOcclusion;
+uniform float uShadowProfileScale;
 uniform vec3  uKeyLightDir;
 uniform float uAlbedoOnly;
 `;
@@ -258,7 +276,10 @@ ${LIGHTS_END_TOKEN}
             dot(uKeyLightDir, vBitangent),
             dot(uKeyLightDir, vNormal)
         ));
-        if (_tsLight.z > 0.05) {
+        // Smoothly fade the whole effect out below the horizon so changing
+        // light angles do not produce a hard cutoff edge.
+        float _grazeMask = smoothstep(0.05, 0.20, _tsLight.z);
+        if (_grazeMask > 0.0) {
             float _shStep = 1.0 / max(uShadowSteps, 1.0);
             #ifdef PAINTING_USE_PARALLAX
                 vec2 _shUV = pUV;
@@ -266,23 +287,42 @@ ${LIGHTS_END_TOKEN}
                 vec2 _shUV = vMapUv;
             #endif
             float _curH = texture2D(bumpMap, _shUV).r;
-            float _shadow = 1.0;
             // March towards the light projection in UV space. Scale chosen
             // so 8 steps cover roughly the same UV distance as parallax.
             vec2 _shDelta = (_tsLight.xy / max(abs(_tsLight.z), 0.2)) * (uParallaxScale * _shStep);
+
+            // v0.05: smooth weighted accumulation. Each step contributes
+            // smoothstep(excess) instead of a binary break, weighted by an
+            // inverse-distance fall-off so far steps cannot dominate. The
+            // result is clamped to uShadowMaxOcclusion, preventing broad
+            // height plateaus from forming solid dark patches ("stains").
+            float _occlusion = 0.0;
+            float _totalWeight = 0.0;
             for (int _j = 0; _j < 16; _j++) {
                 if (float(_j) >= uShadowSteps) break;
-                _shUV += _shDelta;
-                _shUV = clamp(_shUV, 0.001, 0.999);
-                float _sampleH = texture2D(bumpMap, _shUV).r;
+                vec2 _stepUV = clamp(_shUV + _shDelta * float(_j + 1), 0.001, 0.999);
+                float _sampleH = texture2D(bumpMap, _stepUV).r;
                 float _wantedH = _curH + (_tsLight.z * _shStep * float(_j + 1));
-                if (_sampleH > _wantedH) {
-                    _shadow = 1.0 - uShadowStrength;
-                    break;
-                }
+                float _excess = _sampleH - _wantedH - uShadowBias;
+                float _softBlocker = smoothstep(0.0, max(uShadowSoftness, 0.001), _excess);
+                float _distW = 1.0 / (float(_j) + 1.0);
+                _occlusion   += _softBlocker * _distW;
+                _totalWeight += _distW;
             }
+            _occlusion = (_totalWeight > 0.0) ? (_occlusion / _totalWeight) : 0.0;
+            _occlusion = clamp(_occlusion, 0.0, uShadowMaxOcclusion);
+            float _shadow = 1.0 - uShadowStrength * _occlusion * uShadowProfileScale * _grazeMask;
+            #ifdef PAINTING_DEBUG_SHADOW
+                // Stash the greyscale mask in indirectDiffuse so the debug
+                // override below can pick it up unambiguously.
+                reflectedLight.indirectDiffuse = vec3(_shadow);
+            #endif
             reflectedLight.directDiffuse  *= _shadow;
             reflectedLight.directSpecular *= _shadow;
+        } else {
+            #ifdef PAINTING_DEBUG_SHADOW
+                reflectedLight.indirectDiffuse = vec3(1.0);
+            #endif
         }
     }
 #endif
@@ -303,6 +343,19 @@ ${LIGHTS_END_TOKEN}
     reflectedLight.directDiffuse  = vec3(0.0);
     reflectedLight.directSpecular = vec3(0.0);
     reflectedLight.indirectDiffuse  = diffuseColor.rgb;
+    reflectedLight.indirectSpecular = vec3(0.0);
+#endif
+
+#ifdef PAINTING_DEBUG_SHADOW
+    // v0.05: greyscale self-shadow visualisation. White = unshadowed, black =
+    // maximum attenuation. The shadow value was stashed into indirectDiffuse
+    // by the self-shadow block above. When the self-shadow block is compiled
+    // out, this falls back to fully white (no shadow).
+    #ifndef PAINTING_USE_SELFSHADOW
+        reflectedLight.indirectDiffuse = vec3(1.0);
+    #endif
+    reflectedLight.directDiffuse   = vec3(0.0);
+    reflectedLight.directSpecular  = vec3(0.0);
     reflectedLight.indirectSpecular = vec3(0.0);
 #endif
 `;
@@ -346,6 +399,9 @@ ${LIGHTS_END_TOKEN}
     this.paintingUniforms.uParallaxSteps.value = preset.parallaxSteps;
     this.paintingUniforms.uShadowSteps.value = preset.selfShadowSteps;
     this.paintingUniforms.uShadowStrength.value = preset.selfShadowStrength;
+    this.paintingUniforms.uShadowBias.value = preset.selfShadowBias;
+    this.paintingUniforms.uShadowSoftness.value = preset.selfShadowSoftness;
+    this.paintingUniforms.uShadowMaxOcclusion.value = preset.selfShadowMaxOcclusion;
 
     if (!preset.detailNormalEnabled || preset.detailNormalStrength <= 0) {
       this.paintingUniforms.tDetailNormal.value = null;
@@ -499,6 +555,30 @@ ${LIGHTS_END_TOKEN}
     if (this.albedoOnlyEnabled === enabled) return;
     this.albedoOnlyEnabled = enabled;
     this.paintingUniforms.uAlbedoOnly.value = enabled ? 1 : 0;
+    this.needsUpdate = true;
+  }
+
+  /**
+   * v0.05: per-profile dimming of the self-shadow contribution. Museum-style
+   * `display` profiles call this with 0.5; `inspection` (raking) profiles
+   * call this with 1.0. The shader multiplies the accumulated occlusion by
+   * this scalar, so changing it is a uniform update and does not recompile.
+   *
+   * Open for enhancement: future profiles can carry their own scale value
+   * via `LightProfile.shadowProfileScale` and main.ts can read it here.
+   */
+  setShadowProfileScale(scale: number): void {
+    this.paintingUniforms.uShadowProfileScale.value = Math.max(0, Math.min(2, scale));
+  }
+
+  /**
+   * v0.05: enables the shadow-only debug overlay. Renders the self-shadow
+   * mask as greyscale (white = unshadowed, black = full attenuation). This
+   * recompiles the shader because it toggles a `#define`.
+   */
+  setShadowDebug(enabled: boolean): void {
+    if (this.shadowDebugEnabled === enabled) return;
+    this.shadowDebugEnabled = enabled;
     this.needsUpdate = true;
   }
 

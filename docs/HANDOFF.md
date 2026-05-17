@@ -75,33 +75,42 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
-## v0.05 planning focus
+## v0.05 review focus — implemented
 
-v0.05 is **planned, not implemented yet**. The v0.05 plan in `plan.md` has been upgraded to a full technical execution guide. This section gives a handoff-level summary for customers and reviewers.
+v0.05 is **implemented**. The v0.05 plan in `plan.md` documents the full design history; the section below is the handoff-level summary of what shipped.
 
-### What will change (code-level summary)
+### What changed (code-level)
 
 | File | Change |
 |------|--------|
-| `src/config/quality.ts` | Add `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius` to `QualityPreset`. Lower high-preset `selfShadowStrength` from 0.55 to 0.30. |
-| `src/materials/PaintingMaterial.ts` | Add 4 new uniforms (`uShadowBias`, `uShadowSoftness`, `uShadowMaxOcclusion`, `uShadowProfileScale`). Replace binary GLSL break loop with smooth weighted accumulation. Add `setShadowProfileScale()` and `setShadowDebug()` methods. |
-| `src/main.ts` | Call `setShadowProfileScale(0.5/1.0)` on profile switch. Add `s`/`S` debug key (behind `?debug=1`) for shadow-only visualisation. |
+| `src/config/quality.ts` | Added `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius` to `QualityPreset` for all 3 presets. Lowered high-preset `selfShadowStrength` 0.55 → 0.30. |
+| `src/materials/PaintingMaterial.ts` | Added 4 new uniforms (`uShadowBias`, `uShadowSoftness`, `uShadowMaxOcclusion`, `uShadowProfileScale`). Replaced binary GLSL break loop with smooth weighted accumulation + `grazeMask`. Added `setShadowProfileScale()` (uniform-only) and `setShadowDebug()` (recompile). Added `PAINTING_DEBUG_SHADOW` greyscale overlay. |
+| `src/main.ts` | Calls `setShadowProfileScale(0.5 for display/demo, 1.0 for inspection)` in `applyPreferences()`. Adds `s`/`S` debug key (behind `?debug=1`) for shadow-only visualisation. |
 
-No new npm dependencies. No changes to HTML, CSS, or the build pipeline.
+No new npm dependencies. No changes to HTML, CSS, or build pipeline.
 
-### What the user will see
+### What the user sees
 
-- **Before (v0.04):** dark stain-like spots that move with light direction and artwork angle, looking like dirt on the painting.
-- **After (v0.05):** either no visible self-shadow (gallery-soft display), or soft gradient-shaded surface relief (inspection mode) — in both cases reading as natural texture, not stains.
+- **gallery-soft / museum-neutral / dramatic-demo:** no more dark stain-like blobs on the painting surface. Max darkening from the self-shadow path is now ≈ 4.2 % of direct light (was up to 55 %).
+- **raking-inspection:** soft surface relief gradients reveal canvas weave and brush relief without hard blotches. Max darkening ≈ 8.4 %.
+- **balanced / battery presets:** unchanged — self-shadow stays disabled.
 
-### Reviewer checklist (post-implementation)
+### Reviewer checklist
 
 - [ ] `gallery-soft` has no moving stain-like dark blobs on any artwork.
 - [ ] `raking-inspection` shows soft local relief gradients, not hard blotches.
 - [ ] `?debug=1` + `s` key overlays a smooth greyscale shadow visualisation — no solid black patches.
 - [ ] `?debug=1` + `a` key still shows unmodified source artwork colours.
 - [ ] Balanced and battery presets are unaffected (self-shadow disabled).
-- [ ] `npm run lint` and `npm run build` pass.
+- [x] `npm run lint` passes.
+- [x] `npm run build` passes.
+
+### Enhancement slots reserved (not yet enabled)
+
+- **S4 3-ray PCF lateral filter.** `selfShadowFilterRadius` is part of `QualityPreset` and defaults to `0.0`; turning it on later is a preset value change.
+- **Per-profile `shadowProfileScale` on `LightProfile`.** Currently derived from `displayIntent`.
+- **Animated profile-scale fade.** Current switch is instant.
+- **Authored height-map drop-in.** Already works without any shader change.
 
 ## v0.04 review focus
 

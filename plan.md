@@ -1007,7 +1007,11 @@ Implementation-relevant URLs:
 
 ### v0.05 Status
 
-**Planned, not yet implemented.** This plan supersedes the initial diagnosis stub written on 2026-05-17. It is now a full technical execution guide: every slice includes exact file paths, the specific TypeScript interface additions, the complete GLSL replacement, and cross-file wiring instructions. The plan is intentionally written so a developer can open the relevant file, find the relevant block, and make the change without searching.
+**Implemented (2026-05-17).** Slices S2, S3, S5, S6 are shipped. S4 (optional PCF lateral filter) was designed but intentionally kept inactive: `selfShadowFilterRadius` is part of `QualityPreset` and defaults to `0.0`, so the single-march path runs and the PCF code is not compiled. The hook is in the plan; switching it on later is a quality-preset value change plus the documented GLSL chunk.
+
+Validation: `npm run lint` and `npm run build` pass with only the pre-existing TypeScript parser and Sass legacy-JS-API deprecation warnings. Customer-preview IIFE was regenerated. Lighting profile scaling: `display`/`demo` → 0.5, `inspection` → 1.0. New debug key: `s`/`S` (behind `?debug=1`) toggles the shadow-only greyscale overlay.
+
+Original execution guide preserved below for reference. Treat it as the historical design record; live behaviour is in the code.
 
 ---
 

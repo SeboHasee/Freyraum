@@ -1,6 +1,47 @@
 # FINDINGS
 
-## 2026-05-17 - v0.05 self-shadow stain artifact — detailed technical diagnosis
+## 2026-05-17 - v0.05 self-shadow soft-filtering — implemented
+
+The v0.05 plan documented in `plan.md` has been shipped. The PaintingMaterial self-shadow path no longer uses a binary break loop; it now accumulates a smooth weighted occlusion value that is bias-deadzoned, distance-weighted, clamped, and per-profile scaled. The visual outcome is that stain-like dark spots on `gallery-soft` are gone, and `raking-inspection` shows soft surface gradients rather than blotches.
+
+### Shipped changes
+
+| File | Change |
+|------|--------|
+| `src/config/quality.ts` | Added `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius` to `QualityPreset` for all 3 presets. Lowered high-preset `selfShadowStrength` 0.55 → 0.30. |
+| `src/materials/PaintingMaterial.ts` | Added uniforms `uShadowBias`, `uShadowSoftness`, `uShadowMaxOcclusion`, `uShadowProfileScale`. Replaced binary GLSL `break` loop with smooth weighted accumulation. Added `setShadowProfileScale()` (uniform-only, no recompile) and `setShadowDebug()` (toggles `PAINTING_DEBUG_SHADOW`). Added a horizon `_grazeMask = smoothstep(0.05, 0.20, tsLight.z)` to fade out shadows near grazing/cutoff angles smoothly. |
+| `src/main.ts` | Imports `getLightProfile`; calls `setShadowProfileScale(0.5)` for `display`/`demo` profiles and `1.0` for `inspection` in `applyPreferences()`. Adds `s`/`S` debug key (behind `?debug=1`) to toggle `setShadowDebug()`. |
+
+### Effective values (high preset)
+
+| Quantity | Value | Rationale |
+|---------|-------|-----------|
+| `selfShadowStrength` | 0.30 (was 0.55) | Display read-back gentler than a 45 % dim. |
+| `selfShadowBias` | 0.03 | Deadzone larger than the typical procedural value-noise peak-to-peak. |
+| `selfShadowSoftness` | 0.10 | Penumbra width; produces a visibly soft transition. |
+| `selfShadowMaxOcclusion` | 0.28 | Hard cap; prevents broad plateaus from looking like stains. |
+| `uShadowProfileScale` (display) | 0.5 | Museum-style profiles get half-strength shadows. |
+| `uShadowProfileScale` (inspection) | 1.0 | Raking light keeps the full effect. |
+
+Max gallery-soft darkening: `0.30 × 0.28 × 0.5 = 4.2 %` of direct light. Max inspection darkening: `0.30 × 0.28 × 1.0 = 8.4 %`. Both are well below the previous 55 % single-blocker drop and read as surface texture, not stains.
+
+### Validation
+
+- `npm run lint` — clean.
+- `npm run build` — clean (typecheck + Vite preview + HTML emitter); only the pre-existing Sass legacy-JS-API deprecation warning is emitted.
+- Customer-preview IIFE regenerated (`customer-preview/freyraum-gallery.js` ≈ 558 KB / 142 KB gzip).
+- No new npm dependencies.
+
+### Enhancement slots left open (designed in, not enabled)
+
+- **S4 — optional 3-ray PCF lateral filter.** `selfShadowFilterRadius` is in `QualityPreset` and defaults to `0.0`. The plan documents the GLSL chunk to enable when needed; turning it on for `raking-inspection` later is a preset value change plus the documented define.
+- **Per-profile `shadowProfileScale` on `LightProfile`.** Currently `main.ts` derives the scale from `displayIntent`. A profile can later carry its own scale value and `main.ts` can read it directly.
+- **Animated profile-scale fade.** The current call is instant. Future work can animate the uniform.
+- **Authored height-map drop-in.** Works today without any shader change — the procedural fallback path will simply not be hit when an authored height is provided.
+
+### Historical (initial stub)
+
+
 
 This entry supersedes the initial stub. The v0.05 plan in `plan.md` has been upgraded to a full technical execution guide; this entry records the code-level findings that drove it.
 

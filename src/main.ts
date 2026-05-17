@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 import { artworks } from './config/artworks';
 import { getQualityPreset } from './config/quality';
+import { getLightProfile } from './lighting/LightProfile';
 import { RendererManager } from './core/RendererManager';
 import { SceneManager } from './core/SceneManager';
 import { PostProcessing } from './core/PostProcessing';
@@ -139,6 +140,13 @@ async function main(): Promise<void> {
     lightingSetup.setAnimated(!reducedMotion);
     lightingSetup.setProfile(lighting);
 
+    // v0.05: self-shadow profile scale. Museum-style display profiles dim
+    // the self-shadow contribution to 50%; inspection (raking) profiles get
+    // the full effect, since revealing relief is the whole point.
+    const lightProfile = getLightProfile(lighting);
+    const shadowScale = lightProfile.displayIntent === 'inspection' ? 1.0 : 0.5;
+    artworkMesh.material.setShadowProfileScale(shadowScale);
+
     const preset = getQualityPreset(quality);
     rendererManager.applyPreset(preset);
     postProcessing.applyPreset(preset);
@@ -159,6 +167,7 @@ async function main(): Promise<void> {
   // avoid confusing public visitors.
   const debugUrl = new URLSearchParams(window.location.search).get('debug') === '1';
   let albedoOnly = false;
+  let shadowDebug = false;
   const handleDebugKey = (event: KeyboardEvent): void => {
     if (!debugUrl) return;
     if (event.key === 'a' || event.key === 'A') {
@@ -166,12 +175,20 @@ async function main(): Promise<void> {
       artworkMesh.material.setAlbedoOnly(albedoOnly);
       // eslint-disable-next-line no-console
       console.info(`[freyraum debug] albedo-only ${albedoOnly ? 'ON' : 'OFF'}`);
+    } else if (event.key === 's' || event.key === 'S') {
+      // v0.05: shadow-only greyscale visualisation. Lets reviewers isolate
+      // the self-shadow contribution from albedo/lighting when diagnosing
+      // stain-like artefacts.
+      shadowDebug = !shadowDebug;
+      artworkMesh.material.setShadowDebug(shadowDebug);
+      // eslint-disable-next-line no-console
+      console.info(`[freyraum debug] shadow-only ${shadowDebug ? 'ON' : 'OFF'}`);
     }
   };
   if (debugUrl) {
     window.addEventListener('keydown', handleDebugKey);
     // eslint-disable-next-line no-console
-    console.info('[freyraum debug] press "a" to toggle albedo-only shading');
+    console.info('[freyraum debug] press "a" for albedo-only, "s" for shadow-only');
   }
   let previousQuality = preferences.current.quality;
   const unsubscribePreferences = preferences.subscribe(() => {
