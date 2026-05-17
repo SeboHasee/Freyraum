@@ -146,6 +146,20 @@ A developer can also append `?debug=info` to the gallery URL and run:
 
 Look for `fallbackUsed: true` in the `show-artwork-complete` entries.
 
+**I see strange artifacts only when quality is set to Hoch.**
+This is now tracked as the v0.10 rendering audit. Please send your support
+person:
+
+1. a screenshot,
+2. the selected quality setting,
+3. the selected lighting setting,
+4. whether the artifact disappears when quality is changed to **Ausgewogen**,
+5. whether it changes when the URL uses `?debug=info` and the developer presses
+   `a` (albedo-only) or `s` (shadow-only).
+
+This helps distinguish image-content issues from high-quality shader effects
+such as parallax, self-shadow, clearcoat, bloom, or frame-edge depth artifacts.
+
 ## Debug / support tools (developer use)
 
 If something goes wrong inside the running gallery, a developer can

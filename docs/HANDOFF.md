@@ -1,10 +1,9 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current priority: v0.09.** Customer validation confirmed v0.08
-fixed the central 3D painting aspect ratio, but the actual uploaded image can
-still fall back to the generated placeholder on the 3D painting. See `plan.md`
-→ "v0.09 — Actual Customer Image on the 3D Painting" for the current plan.
+contributors. **Current priority: v0.10.** Customer validation now reports
+occasional close-up artifacts on the **Hoch** quality preset. See `plan.md`
+→ "v0.10 — High-Quality Rendering Artifact Audit" for the current plan.
 
 ## Architecture diagram
 
@@ -49,8 +48,16 @@ Acceptance checklist:
 
 If a future image still triggers the fallback, follow the diagnostics flow in
 `docs/CUSTOMER_PICTURE_GUIDE.md` → "Debug / support tools".
-The planned fix is an importer-generated exact `data:image/...` source for the
-3D albedo so WebGL no longer depends on local `file://` image upload behavior.
+
+## Current rendering follow-up
+
+v0.10 is a planned investigation for occasional close-up artifacts on the
+**Hoch** quality preset. The first pass should reproduce the exact view with
+`?debug=info`, then compare Hoch vs Ausgewogen, `gallery-soft` vs
+`raking-inspection`, albedo-only (`a`) vs normal shading, and shadow-only (`s`)
+vs normal shading. Do not reduce high-quality effects until the artifact is
+classified as parallax/UV, self-shadow, inspection PCF, clearcoat/bloom, or
+frame-depth related.
 
 ## Controls surface
 

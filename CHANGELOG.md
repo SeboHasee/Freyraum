@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Planned (v0.10 — Hoch quality close-up artifact audit — 2026-05-17)
+
+- Added a v0.10 investigation plan after a customer report of occasional
+  close-up artifacts on the **Hoch** quality preset.
+- Audited the high-only rendering paths and ranked likely causes: parallax UV
+  clamping, self-shadow/inspection PCF, clearcoat/specular/bloom, and possible
+  frame/artwork depth precision at the edge.
+- Updated repository documentation with a reproduction-first plan using
+  `?debug=info`, albedo-only (`a`), shadow-only (`s`), quality comparison, and
+  lighting-profile comparison.
+
 ### Fixed (v0.09 — actual uploaded image on 3D painting — 2026-05-17)
 
 The central 3D painting now shows the actual customer-uploaded image instead of

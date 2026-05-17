@@ -1,5 +1,42 @@
 # FINDINGS
 
+## 2026-05-17 — v0.10: planned — Hoch quality close-up artifact audit
+
+### Customer-observed behavior
+
+The customer reports occasional strange artifacts in close-up view when the
+quality / performance setting is **Hoch**. The attached GitHub user-attachment
+URL returned `HTTP 404` from this sandbox, so the screenshot could not be
+inspected directly here. The plan therefore records the code-audit conclusions
+and requires reproduction before changing shader defaults.
+
+### Code-audit conclusion
+
+The strongest suspects are high-only rendering paths:
+
+- `src/config/quality.ts`: Hoch enables parallax, self-shadow, clearcoat, higher
+  normal/detail strengths, 1024/2048 procedural maps, max anisotropy, and the
+  highest pixel-ratio cap. Balanced disables parallax and self-shadow.
+- `src/materials/PaintingMaterial.ts`: parallax creates shifted `pUV` coordinates
+  and clamps them to `[0.001, 0.999]`; at close zoom this can smear or duplicate
+  edge pixels and affects albedo directly.
+- `src/materials/PaintingMaterial.ts`: self-shadow still runs only on Hoch and
+  can create dark local artifacts if the height march/PCF path is the culprit.
+- `src/gallery/ArtworkMesh.ts`: the artwork plane is only about `0.005` world
+  units in front of the frame face, so edge-local flicker may be depth precision
+  or z-fighting.
+- `src/core/PostProcessing.ts`: bloom/high pixel ratio can make bright highlight
+  artifacts more visible.
+
+### Required next validation
+
+Use `?debug=info` and compare the same camera position under Hoch vs Ausgewogen,
+`gallery-soft` vs `raking-inspection`, albedo-only (`a`) vs normal shading, and
+shadow-only (`s`) vs normal shading. Only fix the confirmed cause; do not reduce
+all high-quality effects blindly.
+
+---
+
 ## 2026-05-17 — v0.09: implemented — uploaded image now on 3D painting
 
 ### What changed

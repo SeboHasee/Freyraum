@@ -24,26 +24,19 @@ The importer scans the inbox, reads each file's dimensions, copies preview-ready
 files into the preview folder, generates metadata, and writes the runtime file
 the gallery actually reads.
 
-## Current v0.09 issue: timeline image works, 3D painting still shows placeholder
+## Current v0.10 issue: occasional Hoch quality close-up artifacts
 
-Customer validation after v0.08 found an important remaining issue:
+Customer validation now reports occasional strange artifacts in close-up view
+when the quality / performance setting is **Hoch**. This is separate from the
+v0.09 uploaded-image fix: first confirm that the image is not a fallback
+(`fallbackUsed: false`) and that `webglImageSource` is correct.
 
-- the timeline can show the uploaded image,
-- the central 3D painting can now have the correct aspect ratio,
-- but the central 3D painting may still show the generated placeholder instead
-  of the actual uploaded image.
-
-This means the manifest dimensions and timeline DOM image path are working, but
-the WebGL albedo texture path is still not reliable for local files in every
-browser. Online research confirms that WebGL texture upload is stricter than
-normal DOM image display: an image can be visible in `<img>` and still fail as a
-WebGL texture because of origin-clean / local-file / format restrictions.
-
-The v0.09 plan in `/home/runner/work/Freyraum/Freyraum/plan.md` proposes the
-reliable fix: the importer should add an exact base64 `data:image/...` field
-(`webglImage`) for the 3D painting albedo. This does not crop, stretch, resize,
-or recompress the picture; it only encodes the original bytes into the generated
-gallery data so WebGL no longer has to upload from a `file://` image path.
+The v0.10 plan in `/home/runner/work/Freyraum/Freyraum/plan.md` requires a
+reproduction-first audit. Compare the same view under Hoch vs Ausgewogen,
+`gallery-soft` vs `raking-inspection`, albedo-only (`a`) vs normal shading, and
+shadow-only (`s`) vs normal shading. The likely code boundaries are high-only
+parallax UV offset, self-shadow / inspection PCF, clearcoat/specular/bloom, or a
+frame-edge depth precision issue.
 
 ## Folder and file roles
 

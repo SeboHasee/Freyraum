@@ -46,10 +46,11 @@ gallery). The previous manifest is backed up to `artworks.json.bak` so a bad
 import can be recovered manually. If the inbox is empty, the built-in demo
 artworks load instead.
 
-Current critical follow-up: v0.08 fixed the central 3D painting aspect ratio,
-but customer validation showed the actual uploaded image can still fall back to
-the generated placeholder on the 3D painting. Treat that as the v0.09 priority
-bug. The plan is documented in [`plan.md`](./plan.md#v009--actual-customer-image-on-the-3d-painting-planned).
+Current rendering follow-up: customer validation now reports occasional close-up
+artifacts on the **Hoch** quality preset. The v0.10 plan audits the high-only
+shader/render paths and starts with reproduction via `?debug=info`, albedo-only
+(`a`), shadow-only (`s`), and quality/lighting comparisons before changing code.
+See [`plan.md`](./plan.md#v010--high-quality-rendering-artifact-audit-planned).
 
 For the full architecture see
 [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).

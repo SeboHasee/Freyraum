@@ -1,5 +1,197 @@
 # FREYRAUM Plan
 
+## v0.10 — High-Quality Rendering Artifact Audit (Planned)
+
+### Status
+
+**Planned 2026-05-17.** A new customer report says that on the German **Hoch**
+quality preset — the highest graphics mode — occasional strange close-up
+artifacts appear on the painting. The attached GitHub image URL could not be
+downloaded from this sandbox (`HTTP 404`), so the image analysis below is based
+on the report text and the code audit, not direct pixel inspection. Treat the
+next pass as a targeted high-preset rendering investigation before changing
+visual defaults.
+
+### Reported symptom
+
+- User-visible issue: occasional artifacts in close-up viewing.
+- Setting: **Performance / Qualität = Hoch**.
+- Unknown until reproduced: whether the artifact is a dark stain, blocky
+  self-shadow, edge smear, z-fighting at the frame boundary, bloom halo, or
+  texture fallback.
+- First diagnostic requirement: reproduce with `?debug=info`, then compare:
+  - Hoch vs Ausgewogen
+  - `gallery-soft` vs `raking-inspection`
+  - debug key `a` (albedo-only) vs normal shading
+  - debug key `s` (shadow-only) vs normal shading
+
+### Code audit findings
+
+The report points strongly at **high-only shader paths**, because the balanced
+and battery presets compile out most of the expensive painting effects.
+
+#### `src/config/quality.ts`
+
+High preset uniquely enables or maximizes:
+
+- `pixelRatioCap: 1.8`
+- `artworkSegments: 240`
+- `normalStrength: 0.7`
+- `detailNormalStrength: 0.6`
+- `proceduralTileSize: 1024`
+- `proceduralInspectionTileSize: 2048`
+- `parallaxEnabled: true`
+- `parallaxSteps: 12`
+- `parallaxScale: 0.04`
+- `selfShadowEnabled: true`
+- `selfShadowSteps: 8`
+- `selfShadowStrength: 0.3`
+- `selfShadowFilterRadius: 0.002`
+- `clearcoatEnabled: true`
+
+Balanced disables parallax and self-shadow, uses lower map resolution, and has
+no clearcoat. Therefore a Hoch-only artifact should first be isolated to one of:
+parallax UV offset, self-shadow, detail normal, clearcoat/specular, high pixel
+ratio, or inspection-only 2048 procedural textures.
+
+#### `src/materials/PaintingMaterial.ts`
+
+Most suspicious high-only boundaries:
+
+1. **Parallax UV edge clamping**
+   - `PAINTING_USE_PARALLAX` offsets `pUV` and clamps it to `[0.001, 0.999]`.
+   - The shifted `pUV` is then used for albedo and most supporting maps.
+   - At close zoom, especially near picture borders or high-contrast image
+     details, this can read as smeared / duplicated edge pixels or local texture
+     warping. Balanced cannot show this because parallax is disabled there.
+
+2. **Self-shadow height march**
+   - `PAINTING_USE_SELFSHADOW` samples `bumpMap` along the tangent-space
+     key-light direction and attenuates direct diffuse/specular.
+   - v0.05/v0.06 already reduced stain/block artifacts, but Hoch still enables
+     the effect and `raking-inspection` scales it to full strength.
+   - If the close-up shows dark patches, repeating shadows, or square-ish
+     occlusion, this remains a prime suspect.
+
+3. **Inspection PCF filter / map uplift**
+   - `PAINTING_USE_SHADOW_FILTER` is compiled only when the active light profile
+     has `displayIntent === 'inspection'`.
+   - `GalleryManager` also raises normal/detailNormal/height procedural maps to
+     2048 only in inspection mode on high.
+   - If the user was in **Streiflicht**, reproduce with and without inspection
+     mode before changing gallery defaults.
+
+4. **Clearcoat/specular glints**
+   - Hoch enables clearcoat and specular maps; balanced does not.
+   - If the close-up artifact is bright, shiny, or halo-like rather than dark,
+     inspect clearcoat, specular map, and bloom before self-shadow.
+
+#### `src/gallery/ArtworkMesh.ts`
+
+Possible geometry boundary:
+
+- The artwork plane is placed at `z = 0.095`.
+- The frame box depth is `0.18`, so its front face is at about `z = 0.09`.
+- The gap is only `0.005` world units. If the artifact is located at the frame /
+  artwork edge and flickers with camera angle, z-fighting or depth precision is
+  plausible even though the shader paths above are more likely for Hoch-only
+  surface artifacts.
+
+#### `src/core/PostProcessing.ts` and `src/core/RendererManager.ts`
+
+Possible non-shader boundaries:
+
+- Hoch uses the highest pixel ratio cap, making tiny shader or depth artifacts
+  more visible.
+- Bloom remains enabled, though current values are modest. If the artifact is a
+  bright halo, compare with bloom disabled or lowered before touching texture
+  generation.
+
+### Root-cause hypothesis ranking
+
+| Rank | Hypothesis | Why it matches | How to disprove quickly |
+|------|------------|----------------|--------------------------|
+| 1 | Parallax `pUV` clamping / edge smear | Hoch-only, close-up-visible, affects albedo directly | In debug mode press `a`; if artifact remains in albedo-only on Hoch, compare with parallax temporarily disabled |
+| 2 | Self-shadow residual artifact | Hoch-only and already a known historical artifact class | Press `s`; if the pattern appears in shadow-only, tune bias/softness/scale/filter |
+| 3 | Inspection-only PCF / 2048 procedural maps | Happens only under Streiflicht + Hoch | Switch lighting to gallery-soft; if gone, isolate inspection path |
+| 4 | Clearcoat/specular/bloom highlight | Hoch-only shiny path | Disable clearcoat/bloom in a local test; if gone, retune highlight path |
+| 5 | Frame/artwork z-fighting | Edge flicker/close-up symptom | Increase plane offset in a local test; if gone, make z spacing explicit |
+
+### Implementation Plan (vertical slices)
+
+#### Slice S1 — Reproduction and diagnostic classification
+
+- Reproduce the customer scenario with Hoch quality and close-up zoom.
+- Capture at least four states for the same artwork/camera position:
+  - normal Hoch
+  - Hoch + albedo-only (`a`)
+  - Hoch + shadow-only (`s`)
+  - Ausgewogen normal
+- Record lighting profile, quality preset, diagnostics snapshot, browser/GPU, and
+  whether `fallbackUsed` is false.
+- Classify the artifact as one of: albedo/UV, shadow, highlight/bloom, geometry
+  edge/depth, or texture-load fallback.
+
+#### Slice S2 — Safe debug controls for isolation
+
+- Add temporary or debug-only toggles for the high-only contributors, without
+  exposing confusing customer UI:
+  - parallax off/on
+  - self-shadow off/on
+  - clearcoat/specular off/on
+  - bloom off/on
+- Keep logs concise but explicit: active debug toggles, quality, lighting,
+  parallax enabled, self-shadow enabled, shadow filter enabled, map sizes.
+
+#### Slice S3 — Fix the confirmed cause only
+
+- If **parallax edge smear** is confirmed:
+  - make parallax fade out near UV borders or keep albedo on original `vMapUv`
+    while using `pUV` only for height/normal effects.
+  - preserve the no-crop/no-stretch rule.
+- If **self-shadow** is confirmed:
+  - retune high-preset bias/softness/max-occlusion/profile scale before adding
+    more texture reads.
+  - keep gallery-display profiles softer than inspection.
+- If **inspection PCF / procedural resolution** is confirmed:
+  - constrain the inspection-only path, not the normal gallery display path.
+- If **clearcoat/specular/bloom** is confirmed:
+  - lower Hoch highlight contribution or gate it by surface profile.
+- If **z-fighting** is confirmed:
+  - increase the artwork-plane/frame depth separation with a documented constant.
+
+#### Slice S4 — Validation
+
+- Validate Hoch, Ausgewogen, and Akkusparend presets.
+- Validate all lighting profiles.
+- Validate built-in demo artworks and customer imported images.
+- Confirm `fallbackUsed: false` and correct `webglImageSource` for customer
+  images so the new artifact is not confused with the old placeholder issue.
+- Run the existing repository checks after any code change:
+  - `npm run lint`
+  - `npm run build`
+
+### Acceptance checks
+
+- The reported close-up artifact no longer appears in Hoch.
+- No regression to customer image display from v0.09.
+- No crop, stretch, or destructive image manipulation.
+- Balanced and battery visual output remain stable unless the confirmed root
+  cause also affects them.
+- Debug diagnostics identify which high-only feature is active when a screenshot
+  is taken.
+
+### Risks / reserved future boundaries
+
+- The current sandbox could not inspect the attached screenshot directly, so
+  visual classification must be confirmed by reproduction.
+- Tuning parallax or self-shadow can reduce the premium relief effect if applied
+  too broadly.
+- Adding permanent customer-facing debug UI is out of scope; use hidden debug
+  controls and diagnostics for support.
+- WebGPU is not involved unless the customer explicitly opted into the
+  experimental backend.
+
 ## v0.09 — Actual Customer Image on the 3D Painting (Implemented)
 
 ### Status
