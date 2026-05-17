@@ -2,7 +2,33 @@
 
 ## Unreleased
 
-### Added
+### Added (v0.02 implementation)
+
+- **`PaintingMaterial`** (`src/materials/PaintingMaterial.ts`) — extends `MeshPhysicalMaterial` and combines native Three.js features (`map`, `normalMap`, `roughnessMap`, `specularIntensityMap`, `bumpMap`, `aoMap`) with a minimal `onBeforeCompile` injection that does tangent-space detail-normal blending, an explicit `perturbNormalArb` after-pass so `normalMap` and bump coexist correctly, and a grazing-light boost gated by `PAINTING_USE_GRAZING_BOOST`. Reduced-motion mode flattens the detail contribution via the `uReducedMotionScalar` uniform without corrupting the normal basis.
+- **`ProceduralTextureFactory`** (`src/materials/ProceduralTextureFactory.ts`) — deterministic procedural generators for albedo, base normal, detail normal, height/bump, roughness, specular (with Gaussian varnish-pooling blobs), and AO maps. Outputs are `DataTexture` instances with mipmaps and `RepeatWrapping`.
+- **`PaintingTextureSet`** contract (`src/materials/PaintingTextureSet.ts`) — typed map roles, colour-space hints, and resolved-texture shape. `Artwork.textureSet?` is now optional metadata on every artwork.
+- **Role-aware `TextureManager`** (`src/gallery/TextureManager.ts`) — `loadForRole(url, role)` correctly sets `LinearSRGBColorSpace` for non-albedo maps and applies a per-preset anisotropy divisor; `preloadTextureSet(set)` loads a full `PaintingTextureSet` in parallel.
+- **`LightProfile` system** (`src/lighting/LightProfile.ts`) — four named profiles: `gallery-soft` (default, animated), `raking-inspection` (reveals canvas relief, still), `museum-neutral` (5500 K dual-key, still), `dramatic-demo` (warm-cool contrast, animated). Includes `kelvinToColor` Tanner-Helland approximation. `LightingSetup` reuses spotlight pool across profile switches.
+- **`FrameBudgetMonitor`** (`src/utils/FrameBudgetMonitor.ts`) — rolling 60-frame window, EMA smoothing, cooldown for navigation/preset spikes, clamps pathological frames at 250 ms so tab-switches do not poison the rolling average.
+- **`AdaptiveQualityController`** (`src/utils/AdaptiveQualityController.ts`) — one-way `high → balanced → battery` downgrade path with post-downgrade hold-off, ignores cooldown windows, and self-suspends as soon as the user makes a manual preset choice.
+- **`RenderBackend` / `WebGPUPrototype`** (`src/rendering/`) — opt-in (`?backend=webgpu` query or `localStorage.freyraum.backend = 'webgpu'`) experimental WebGPU adapter probe. Loaded via dynamic import so the WebGPU module is never parsed in unsupported browsers; failures always fall back silently to WebGL. Returns a serializable probe-result shape independent of the browser's DOM WebGPU types.
+- **Extended `QualityPreset`** (`src/config/quality.ts`) — adds `shaderVariant`, `normalStrength`, `detailNormalStrength`, `bumpStrength`, `specularStrength`, `anisotropyDivisor`, `aoEnabled`, `grazingBoostEnabled`, `detailNormalEnabled` fields. Existing presets (`high`, `balanced`, `battery`) populate all fields with non-breaking defaults.
+- **Aspect-ratio-aware detail tiling** — `PaintingMaterial.applyTextures(textures, tilingPerWorldUnit, preset)` receives a per-artwork `uDetailTiling` derived from the artwork's world-space dimensions, so canvas weave stays at uniform physical density on portrait, square, landscape, and ultrawide artworks (no stretched weave on 7:3 ultrawide).
+- **`uv1` AO support** — `ArtworkMesh.makeArtworkGeometry` clones `uv` into `uv1` after `PlaneGeometry` construction so Three.js ≥ 0.152's `aoMap` path works.
+- **Lifecycle guardrails** — `GalleryManager.showArtwork` is async with an `artworkLoadToken` counter so rapid navigation cannot apply a stale texture set. Adaptive controller automatically suspends when the user changes the preset manually.
+
+### Changed (v0.02)
+
+- `ArtworkMesh` now owns a `PaintingMaterial` instead of an inline `MeshPhysicalMaterial`. The inline async normal-texture load from `CanvasMaterial.loadNormalTexture` is replaced by the procedural factory applying a fresh, deterministic per-artwork normal map.
+- `GalleryManager` constructor now accepts an optional `ProceduralTextureFactory` (defaults to a new instance) and exposes `proceduralFactory` for shutdown disposal.
+- `main.ts` now wires `FrameBudgetMonitor`, `AdaptiveQualityController`, and the WebGPU probe into the boot path. The animation loop samples the frame budget every frame and feeds adaptive decisions back through `preferences.setQuality(...)` so the UI stays consistent. Manual preset changes are now distinguished from adaptive-driven changes via a `previousQuality` comparison.
+- `LightingSetup` constructor signature accepts an optional `LightProfileId`. The default profile reproduces v0.01 visuals.
+
+### Removed (v0.02)
+
+- The lazy `CanvasMaterial.loadNormalTexture()` call from `ArtworkMesh`. Procedural normal maps are now generated synchronously by `ProceduralTextureFactory.generate(id, 'normal')`, eliminating a small async race during artwork construction. `CanvasMaterial` is still used for the frame material and may be retired in a future pass.
+
+### Earlier "Unreleased" entries (v0.02 planning, kept for traceability)
 
 - Replaced the v0.02 high-level plan in `plan.md` with a code-grounded final implementation plan: exact TypeScript interfaces for `PaintingTextureSet`, `PaintingMaterial`, `LightProfile`, `FrameBudgetMonitor`, `RenderBackend`, and `WebGPUPrototype`; GLSL injection patterns for Three.js 0.166; procedural texture generation algorithms; `QualityPreset` field additions; and changes to `ArtworkMesh`, `TextureManager`, `GalleryManager`, `LightingSetup`, and `main.ts`.
 - Updated `FINDINGS.md` with codebase analysis findings from the v0.02 planning pass.

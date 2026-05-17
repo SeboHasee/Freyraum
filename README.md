@@ -33,19 +33,22 @@ The customer preview is built as a classic browser script, not a Vite module ent
 - WebGL is required; if unavailable a localized fallback screen is shown
 
 
-## v0.02 implementation plan
+## v0.02 implementation
 
-The v0.02 technical plan is finalised and audit-corrected in [`plan.md`](./plan.md#v002-scope--advanced-painting-material-shaders--experimental-webgpu).
+v0.02 is **implemented** in this branch. See [`plan.md`](./plan.md#v002-implementation-status-this-session) for the per-slice status table, [`CHANGELOG.md`](./CHANGELOG.md) for the full list of additions, and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v002-implementation-findings) for implementation notes.
 
-Final scope:
+Final scope (all shipped except where noted):
 
-- New `PaintingMaterial` class extending `MeshPhysicalMaterial` via `onBeforeCompile` with albedo, normal, detail-normal, height/bump, roughness, specular, and AO support
-- `ProceduralTextureFactory` generating deterministic fallback maps (canvas weave, brush relief, roughness, specular) so development can proceed before scanned assets exist
-- `LightProfile` system in `LightingSetup` with four named profiles: `gallery-soft`, `raking-inspection`, `museum-neutral`, `dramatic-demo`
-- `QualityPreset` extended with shader-variant fields; battery preset compiles out expensive paths via `#define`
-- `FrameBudgetMonitor` for rolling 1s/5s/30s FPS measurement and adaptive quality guardrails
-- Experimental `WebGPUPrototype` probe behind dynamic import and explicit opt-in (`?backend=webgpu`) — never required for the customer preview
-- Final audit guardrails added for shader-space correctness, async artwork-load races, texture ownership/disposal, validation matrix, and risk register
+- ✅ New `PaintingMaterial` class extending `MeshPhysicalMaterial` — native Three.js features for albedo / base normal / roughness / specular / AO, with minimal `onBeforeCompile` injection for tangent-space detail-normal blending, bump-after-normalMap, and a grazing-light boost
+- ✅ `ProceduralTextureFactory` generates deterministic fallback maps (canvas weave, detail weave, brush relief, roughness, specular with Gaussian varnish blobs, AO) keyed by `artwork.id`
+- ✅ `LightProfile` system in `LightingSetup` with four named profiles: `gallery-soft` (default, animated), `raking-inspection`, `museum-neutral` (5500 K dual-key), `dramatic-demo`
+- ✅ `QualityPreset` extended with `shaderVariant`, `normalStrength`, `detailNormalStrength`, `bumpStrength`, `specularStrength`, `anisotropyDivisor`, `aoEnabled`, `grazingBoostEnabled`, `detailNormalEnabled`
+- ✅ `FrameBudgetMonitor` with rolling 60-frame window, EMA, and navigation/preset cooldowns
+- ✅ `AdaptiveQualityController` — one-way `high → balanced → battery` downgrade with hold-off and automatic suspension on manual preset change
+- ✅ Experimental `WebGPUPrototype` probe behind dynamic import and explicit opt-in (`?backend=webgpu` or `localStorage.freyraum.backend = 'webgpu'`)
+- ✅ Aspect-ratio-aware detail-normal tiling so portrait, square, landscape, and ultrawide artworks all show square canvas weave at uniform physical density
+- ✅ Async artwork-load race protection via `artworkLoadToken` in `GalleryManager`
+- ⏸ Real authored asset integration is deferred until scanned/painted assets are provided. The `Artwork.textureSet?` field is in place and requires no code changes to consume authored maps.
 - Performance targets: 60 FPS on mid-range discrete GPUs (balanced preset), 25 FPS minimum on old integrated GPUs (battery preset)
 
 ## Developer workflow

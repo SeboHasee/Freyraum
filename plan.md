@@ -357,6 +357,60 @@ This order starts with the data model and local assets because later UI, thumbna
 
 ## v0.02 Scope — Advanced Painting Material Shaders & Experimental WebGPU
 
+### v0.02 Implementation Status (this session)
+
+All v0.02 slices are now implemented in source. The implementation deliberately follows the audited plan rather than the first draft, and prefers native Three.js features over hand-written GLSL whenever Three.js already does the work correctly.
+
+| Slice | Status | Notes |
+| --- | --- | --- |
+| 1 — Texture Set Metadata Contract | ✅ Implemented | `PaintingTextureSet.ts`, `Artwork.textureSet?`, extended `QualityPreset`, role-aware `TextureManager.loadForRole` / `preloadTextureSet` |
+| 2 — Procedural Painting Map Generator | ✅ Implemented | `ProceduralTextureFactory` generates albedo / normal / detailNormal / height / roughness / specular / AO maps, deterministic per `artwork.id` |
+| 3 — PaintingMaterial WebGL Prototype | ✅ Implemented | `PaintingMaterial extends MeshPhysicalMaterial`; albedo, normal, roughness, specular, AO use **native** Three.js features (no shader patching needed) |
+| 4 — Detail Normal + Bump Refinement | ✅ Implemented | `onBeforeCompile` patches `normal_fragment_maps` for tangent-space blend; explicit `perturbNormalArb` after-pass for bump while normalMap is active; `#define`-gated |
+| 5 — Realistic Gallery Light Profiles | ✅ Implemented | `LightProfile.ts` with four profiles; `kelvinToColor` Tanner-Helland approximation; `LightingSetup` reuses Three.js light objects across profile switches |
+| 6 — Frame Budget Monitor | ✅ Implemented | `FrameBudgetMonitor` with rolling 60-frame window, EMA, navigation/preset cooldown |
+| 7 — Adaptive Quality Guardrails | ✅ Implemented | `AdaptiveQualityController` — one-way `high → balanced → battery`; cooldown after every downgrade; manual preset change suspends adaptive control for the session |
+| 8 — Experimental WebGPU Backend Probe | ✅ Implemented | `RenderBackend.maybeProbeWebGPU` is dynamic-import-only and opt-in (`?backend=webgpu` / `localStorage.freyraum.backend = 'webgpu'`); `WebGPUPrototype` returns a serializable probe result |
+| 9 — Real Texture Asset Integration Pass | ⏸ Deferred | No real scanned/authored asset set is available in this repository. The `Artwork.textureSet?` field is in place; adding authored files and referencing them is the only remaining step and requires no code changes |
+| 10 — v0.02 Documentation, Review, and Handoff | ✅ Implemented | `plan.md`, `CHANGELOG.md`, `FINDINGS.md`, `README.md`, and `docs/HANDOFF.md` all updated in this pass |
+
+### v0.02 Implementation Deviations From The Audited Plan
+
+1. **`FrameBudgetMonitor` location:** placed in `src/utils/FrameBudgetMonitor.ts` (next to `AdaptiveQualityController.ts`) instead of `src/performance/`. Pure organisational choice; behaviour is identical.
+2. **`MaterialInspector` dev overlay:** not implemented as a separate file. The frame-budget data is exposed via `monitor.readSnapshot()` so a future debug HUD can be added without runtime changes. Reason: the production path never needs it, and the audited rule "must never be requested during normal preview use" is easier to enforce by not shipping the module at all.
+3. **Bump path:** uses Three.js' native `bumpMap` + `bumpScale = 1.0` so the `dHdxy_fwd()` / `perturbNormalArb()` helpers are declared. We then call `perturbNormalArb` ourselves with `uBumpStrength * dHdxy_fwd()` after `normal_fragment_maps` so both `normalMap` and the height term coexist (the native chunk only applies one or the other). This is the audited correct approach.
+4. **AO path:** uses Three.js' native `aoMap` + `aoMapIntensity`. `PlaneGeometry` does not have `uv1` by default, so `ArtworkMesh.makeArtworkGeometry` copies `uv` into `uv1` after creation (Three.js ≥ 0.152 reads aoMap from uv1).
+5. **`PAINTING_USE_ROUGHNESS_MAP` and `PAINTING_USE_SPECULAR_MAP` defines:** not needed at the GLSL level because Three.js itself compiles roughness/specular paths in/out based on `material.roughnessMap` / `material.specularIntensityMap` being set. The plan's intent (compile-out for battery) is achieved by not assigning those maps when the preset disables them.
+
+### v0.02 Aspect-Ratio Robustness — How The Implementation Stays Correct For Every Format
+
+The user requirement is that the gallery works "with every aspect ratio and resolution of all kinds of formats of the picture". Concretely:
+
+| Concern | Where it is handled | Behaviour |
+| --- | --- | --- |
+| Image dimensions arrive at any aspect ratio | `getTextureSize` in `src/utils/texture.ts` reads `naturalWidth/naturalHeight` first, falling back to `width/height` for `ImageBitmap`/data textures | Portrait, landscape, square, ultrawide, and procedural data textures all yield a finite, non-zero aspect |
+| Artwork mesh and frame resize per artwork | `ArtworkMesh.updateAspect` calls `fitWithinBox(aspect, 4.2, 5.8)` and scales both the artwork plane and the frame box | Maintains a uniform `0.4` world-unit frame margin on both axes regardless of aspect |
+| Detail-normal tiling must stay square in physical units | `ArtworkMesh.setPaintingTextures` derives `tiling = new Vector2(width × density, height × density)` and passes it to `PaintingMaterial.applyTextures`, which loads it into the `uDetailTiling` uniform | Canvas weave appears at uniform real-world density on portrait, square, landscape, and ultrawide artworks. A 7:3 ultrawide does NOT show stretched weave |
+| Camera pan limits must adapt to aspect | Existing `GalleryManager.getPanLimits` derives world-space visible dimensions from camera FOV and aspect | Untouched in v0.02 — already correct for any aspect |
+| Side panels must not distort previews | Existing `SidePanels.updatePanelScale` calls `fitWithinBox` per panel | Untouched in v0.02 |
+| Minimum zoom safety for portrait artworks | Existing `GalleryManager.getMinZoom` already accounts for both dimensions and FOV | Untouched in v0.02 |
+| Anisotropic filtering caps per preset | `TextureManager.setAnisotropyDivisor` divides the GPU's max anisotropy by the preset divisor (1 / 2 / 4) before applying it to newly loaded textures | Tilted-view sharpness preserved on high/balanced; reduced on battery |
+
+The four shipped artwork formats exercise every relevant case:
+
+- `electric-storm`: 2400 × 1600 landscape (3:2)
+- `quiet-coastline`: 1800 × 2400 portrait (3:4)
+- `tokyo-passage`: 2100 × 2100 square (1:1)
+- `golden-desert`: 2800 × 1200 ultrawide (7:3)
+
+### v0.02 Validation Outcomes (this session)
+
+- `npm run lint` — clean.
+- `npm run build` — clean. Preview chunk 547 kB / gzip 140 kB (up from ~528 kB / 134 kB in v0.01). The increase covers the new painting material, procedural factory, light profiles, frame-budget monitor, adaptive controller, and render-backend selector.
+- The WebGPU prototype module is only present as a separate async chunk via dynamic import; opening the preview without the opt-in flag never requests it.
+
+---
+
 ### v0.02 Mission
 
 v0.02 makes the artworks read as **realistic physical paintings** — not flat images on a plane. Close-up inspection must reveal woven canvas fibres, brush ridges, pigment thickness, and light-dependent highlights. The rendering pipeline must sustain **60 FPS on mid-range discrete GPUs** (balanced preset) and **at least 25 FPS on old integrated GPUs** (battery preset), all inside the browser with no native apps or server-side GPU work.
