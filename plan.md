@@ -359,9 +359,62 @@ This order starts with the data model and local assets because later UI, thumbna
 
 ### v0.03 Planning Status
 
-v0.03 is **finalized as an execution plan** — all code-level changes, file locations, method signatures, type additions, and GLSL injection points are specified below in the `v0.03 Execution Plan — File-Level Code Changes` section. A developer can open any target file, locate the exact symbol, and apply the described change without having to interpret architectural intent.
+v0.03 is **implemented**. All nine slices below have been executed against the codebase, the bundle builds cleanly (`npm run lint` + `npm run build`), and the customer preview bundle (`customer-preview/freyraum-gallery.js`) contains the new shader features. See the `v0.03 Implementation Outcome` subsection (immediately below) for the as-built deviations from the original plan, the issues found and fixed during implementation, and the validation evidence. The detailed execution plan that follows is retained verbatim as the historical record of the design intent.
 
-The plan was finalized after a full read of all 12 source files it touches. Every change is grounded in the actual current state of the codebase.
+### v0.03 Implementation Outcome
+
+**Validation evidence**
+
+- `npm run lint` — clean.
+- `npm run build` — clean. Bundle: `customer-preview/freyraum-gallery.js` ≈ 552 KB (gzip ≈ 141 KB), CSS ≈ 15.4 KB (gzip ≈ 3.4 KB). Bundle growth from v0.02 (~528 KB) is the parallax + self-shadow shader code and the new lighting/debug UI strings.
+- Built bundle contains all v0.03 shader gates: `PAINTING_USE_PARALLAX`, `PAINTING_USE_SELFSHADOW`, `PAINTING_DEBUG_ALBEDO_ONLY`, `uKeyLightDir`. Counted 11 occurrences in the production bundle.
+
+**Issues found in the original plan and the fixes applied**
+
+1. *Self-shadow GLSL identifier did not exist.* The plan's Slice 5 referenced `geometryLightDirection` as if it were a Three.js fragment-shader local. Three.js does not provide that name; only `vViewPosition`, `vNormal`, `vTangent`, and `vBitangent` are reliably available. **Fix:** Added a uniform `uKeyLightDir` carrying the **view-space** direction toward the primary key light, computed once per frame in `main.ts` via `keyLightWorld.transformDirection(camera.matrixWorldInverse)`. The shader projects it onto `(vTangent, vBitangent, vNormal)` to obtain the tangent-space light direction used by the march. This is also the math-space contract documented at the top of `PaintingMaterial.ts`.
+2. *Parallax + bump double-counting.* The plan's Slice 4 left `bumpStrength = 0.035` on the high preset while also enabling parallax — the same height field would have driven both UV offsetting *and* normal perturbation, producing exaggerated relief that contradicts the plan's own "single source of truth per preset" rule. **Fix:** When `parallaxEnabled` is true on a preset, `bumpStrength = 0.0`. The high preset relies on parallax for depth; the balanced preset uses bump only (`bumpStrength = 0.025`); battery uses neither.
+3. *Spot target ownership.* The plan repositioned spot lights closer to the artwork but did not specify that `THREE.SpotLight.target` defaults to a detached `Object3D` at `(0,0,0)` that is NOT in the scene graph. When animating the spot position the cone still pointed at world origin but the un-parented target was a footgun for future maintenance. **Fix:** `LightingSetup` now creates a single shared `spotTarget` object, adds it to the scene, and assigns it to every spotlight. `dispose()` removes it.
+4. *Reduced-motion ambient knob.* The plan's reduced-motion handling already existed in v0.02 via `uReducedMotionScalar`. The new self-shadow path could fight with that. **Decision:** Self-shadow is **not** scaled by reduced-motion (shadows are not motion); only the existing detail-normal and grazing-boost paths are. This matches the plan's accessibility intent and keeps shadows truthful to the relief.
+5. *Albedo-only fidelity comparison surface.* The plan called for an inspection/QA toggle but did not specify a UI surface (and exposing it as a public control would confuse visitors). **Decision:** Gated behind `?debug=1` URL parameter, then activated by pressing the `a` key. A `console.info` line announces availability on page load when the parameter is present. The lighting profile selector (a legitimate viewer choice) is exposed in `PreferencesPanel` under a new "Beleuchtung" group.
+6. *Texture cache invalidation on preset change.* The plan added `tileSize` to `ProceduralTextureFactory.generate()` but the existing cache was keyed by `${id}::${role}`, which would have returned stale low-resolution textures after switching to a higher preset. **Fix:** Cache key now includes `tileSize` so each effective resolution is generated and cached independently. `disposeAll()` continues to free every entry.
+
+**Per-slice as-built summary**
+
+| Slice | Files touched | Net effect |
+|------:|--------------|------------|
+| 1 — Surface contract + fidelity instrumentation | `config/artworks.ts`, `config/quality.ts`, `materials/PaintingMaterial.ts` | Added `SurfaceProfile`/`SurfacePhysics` types; seven new quality preset fields; `uAlbedoOnly` uniform with `setAlbedoOnly()` method gated by `PAINTING_DEBUG_ALBEDO_ONLY`. |
+| 2 — Matte-first material retune | `materials/PaintingMaterial.ts`, `materials/ProceduralTextureFactory.ts` | `clearcoat 0.04→0.0`, `specularIntensity 1.0→0.3`, `uLightGrazingBoost 0.6→0.25`. Procedural roughness range `[60..220]→[140..240]`. Specular baseline `12→6`, peak blob `200→90`. |
+| 3 — Resolution-aware procedural fallback | `materials/ProceduralTextureFactory.ts`, `gallery/GalleryManager.ts` | `generate(id, role, tileSize?)`; cache keyed by tileSize; `GalleryManager` passes `preset.proceduralTileSize` (1024 / 512 / 256 per preset). |
+| 4 — Parallax relief | `gallery/ArtworkMesh.ts`, `materials/PaintingMaterial.ts` | `geo.computeTangents()` in `makeArtworkGeometry`; new `map_fragment` injection performs a 12-step tangent-space steep parallax march producing `pUV`; the replaced `normal_fragment_maps` chunk samples the normal at `pUV` when parallax is active. |
+| 5 — Self-shadow | `materials/PaintingMaterial.ts`, `lighting/LightingSetup.ts`, `main.ts` | View-space `uKeyLightDir` uniform; 8-step height march modulates `directDiffuse` and `directSpecular` only (never multiplies albedo); `LightingSetup.getKeyLightWorldDir()` exposes the world-space direction; `main.ts` transforms it into view space per frame. |
+| 6 — Museum lighting | `lighting/LightProfile.ts`, `lighting/LightingSetup.ts`, `ui/PreferencesPanel.ts`, `utils/preferences.ts` | `gallery-soft` key {-10,5,7}→{-3,5,4}; `raking-inspection` key {-7,0.5,1.3}→{-6,0,1.5}, ambient 0.4→0.3; new `displayIntent` field on `LightProfile`; shared `spotTarget` at origin; `lighting` field added to `Preferences` (persisted); new "Beleuchtung" radio group in `PreferencesPanel`. |
+| 7 — Free edge/corner inspection | `gallery/GalleryManager.ts` | `PAN_SAFETY_FACTOR = 0.92` removed; `INSPECTION_OVERSCROLL = 0.5` added; `getPanLimits` formula now `(artworkSize − visibleSize) * 0.5 + INSPECTION_OVERSCROLL`. |
+| 8 — Performance hardening | `config/quality.ts` | Tuned per-preset step counts baked in: high `parallaxSteps=12`, `selfShadowSteps=8`; balanced/battery `parallaxSteps=0`, `selfShadowSteps=0`. |
+| 9 — Documentation | `plan.md`, `CHANGELOG.md`, `FINDINGS.md`, `README.md`, `docs/HANDOFF.md` | Status updated to "implemented"; as-built deviations and validation evidence recorded; reviewer guidance for `?debug=1` and lighting profile UI added. |
+
+**Files modified, in execution order**
+
+1. `src/config/artworks.ts` — Slice 1 types
+2. `src/config/quality.ts` — Slice 1 preset fields + Slice 2 + Slice 8 values
+3. `src/materials/ProceduralTextureFactory.ts` — Slice 2 + Slice 3
+4. `src/materials/PaintingMaterial.ts` — Slices 1, 2, 4, 5 (parallax + self-shadow + albedo-only)
+5. `src/gallery/ArtworkMesh.ts` — Slice 4 (`computeTangents`)
+6. `src/gallery/GalleryManager.ts` — Slice 3 + Slice 7
+7. `src/lighting/LightProfile.ts` — Slice 6 (positions + `displayIntent`)
+8. `src/lighting/LightingSetup.ts` — Slice 6 (spotTarget, `getKeyLightWorldDir`)
+9. `src/utils/preferences.ts` — Slice 6 (lighting preference)
+10. `src/ui/PreferencesPanel.ts` — Slice 6 (lighting selector UI)
+11. `src/main.ts` — Slice 5 (per-frame uKeyLightDir wiring) + Slice 6 (lighting profile change propagation) + debug toggle
+
+**Acceptance criteria revisited**
+
+- *Picture fidelity preserved:* Shader logic guarantees albedo path is unchanged when `uReducedMotionScalar` is 1.0; the `?debug=1` + `a` toggle now lets reviewers compare albedo-only and shaded renders side-by-side without recompilation.
+- *Detail visibility during pan/zoom:* Achieved through (a) parallax UV offset on high preset reacting to view direction in tangent space, (b) repositioned key light at 45° still casts microshadows, and (c) lifting `PAN_SAFETY_FACTOR` so every corner is reachable at maximum zoom.
+- *Museum-quality default:* `gallery-soft` is the default profile (preserved from v0.02), no longer dramatically side-lit, ambient kept at 1.5 for flattering fill, decay 1.8 for soft falloff.
+- *Raking inspection on demand:* `raking-inspection` profile is now one click away in the preferences panel and produces a near-horizontal key for relief reveal.
+- *Performance:* Parallax (12 iterations) + self-shadow (8 iterations) run only on the `high` preset; balanced and battery presets pay zero shader cost for these paths via `#define` gating.
+
+---
 
 ### v0.03 Execution Plan — File-Level Code Changes
 

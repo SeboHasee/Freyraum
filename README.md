@@ -52,23 +52,23 @@ Final scope (all shipped except where noted):
 - ⏸ Real authored asset integration is deferred until scanned/painted assets are provided. The `Artwork.textureSet?` field is in place and requires no code changes to consume authored maps.
 - Performance targets: 60 FPS on mid-range discrete GPUs (balanced preset), 25 FPS minimum on old integrated GPUs (battery preset)
 
-## v0.03 follow-up plan
+## v0.03 implementation
 
-v0.03 is **planned and finalized as a code-execution plan** — not yet implemented. Every slice has exact file targets, type additions, method signatures, constant values, and shader injection points documented in `plan.md`.
+v0.03 is **implemented** in this branch. See [`plan.md`](./plan.md#v003-implementation-outcome) for the as-built outcome (including issues found and fixed during implementation), [`CHANGELOG.md`](./CHANGELOG.md) for the full list of additions, and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-implementation-findings) for the technical notes.
 
-Planned system direction:
+Shipped system direction:
 
-- keep the original artwork image as immutable albedo content;
-- add `SurfaceProfile` / `SurfacePhysics` types + `surfaceProfile?` / `surfacePhysics?` to `Artwork` so future picture swaps need metadata/assets only;
-- retune `PaintingMaterial` constructor defaults to matte-first (`clearcoat: 0`, `specularIntensity: 0.3`, `uLightGrazingBoost: 0.25`);
-- parametrise `ProceduralTextureFactory.generate()` with `tileSize` and drive it from a new `proceduralTileSize` preset field (1024 / 512 / 256 px per tier);
-- add tangent-space steep parallax UV offset injected before `map_fragment`, gated by `PAINTING_USE_PARALLAX` (`high` preset only);
-- add short direct-light self-shadow march modulating `directDiffuse`/`directSpecular`, gated by `PAINTING_USE_SELFSHADOW` (`high` preset only);
-- reposition `gallery-soft` key from `{x:-10,y:5,z:7}` (~68° from vertical) to `{x:-3,y:5,z:4}` (~45° from vertical) — museum-appropriate, asymmetric enough to show relief during pan/zoom;
-- reduce `raking-inspection` ambient to `0.3` and move key to near-horizontal `{x:-6,y:0,z:1.5}` for maximum surface-reveal contrast;
-- replace `PAN_SAFETY_FACTOR=0.92` with `INSPECTION_OVERSCROLL=0.5` so every artwork edge and corner is reachable at close zoom.
-
-See [`plan.md`](./plan.md#v003-follow-up-plan--technical-rendering-system-for-faithful-artworks-modular-asset-swaps-parallax-relief-and-free-inspection) and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-execution-plan-finalization) for the full execution plan, code-level observations, and findings.
+- the original artwork image stays the immutable albedo content; `?debug=1` + the `a` key now toggle an albedo-only render so reviewers can verify shader fidelity at any time;
+- `SurfaceProfile` / `SurfacePhysics` types + optional `surfaceProfile?` / `surfacePhysics?` on every `Artwork` (no breaking change to existing entries);
+- `PaintingMaterial` constructor defaults retuned for matte-first: `clearcoat: 0`, `specularIntensity: 0.3`, `uLightGrazingBoost: 0.25`;
+- `ProceduralTextureFactory.generate(id, role, tileSize)` parametrised; cache keyed by tileSize; preset-driven tile sizes (high `1024`, balanced `512`, battery `256`);
+- tangent-space steep parallax UV offset injected before `map_fragment`, gated by `PAINTING_USE_PARALLAX` (high preset, 12 march iterations); when active, bump perturbation is disabled so the same height field is not double-counted;
+- short direct-light self-shadow march modulating `directDiffuse`/`directSpecular` only (never albedo), gated by `PAINTING_USE_SELFSHADOW` (high preset, 8 march iterations); driven by a `uKeyLightDir` view-space uniform updated from `LightingSetup.getKeyLightWorldDir()` each frame;
+- `gallery-soft` key repositioned to `{x:-3,y:5,z:4}` (~45° from vertical) — flattering museum default that still reveals surface relief during pan/zoom;
+- `raking-inspection` key at strictly horizontal `{x:-6,y:0,z:1.5}` with ambient `0.3` — maximum surface-reveal contrast;
+- explicit shared `SpotLight.target` anchored at world origin, added to the scene (closes a latent bug introduced by the closer key positions);
+- new "Beleuchtung" radio group in `PreferencesPanel` lets the visitor switch between the four lighting profiles; the choice is persisted to localStorage and mirrored to `data-lighting` on `<html>`;
+- `PAN_SAFETY_FACTOR=0.92` replaced with `INSPECTION_OVERSCROLL=0.5` so every artwork edge and corner is reachable at close zoom.
 
 ## Developer workflow
 

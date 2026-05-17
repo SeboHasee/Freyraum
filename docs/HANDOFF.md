@@ -76,43 +76,44 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
 
-## v0.03 follow-up review focus
+## v0.03 review focus
 
-v0.03 is now a **finalized execution plan** with exact code-change instructions. This section guides a reviewer checking the plan for completeness before implementation begins.
+v0.03 is **implemented** in this branch. The execution plan in `plan.md` has been carried out; the as-built outcome (deviations from the original plan, issues found and fixed, and validation evidence) is captured under "v0.03 Implementation Outcome" in the same file. This section now guides a reviewer evaluating the implementation rather than the plan.
 
-The execution plan covers 9 slices with file-level specificity:
+The shipped change set covers 9 slices:
 
-| Slice | Target files | Key change |
+| Slice | Target files | Shipped change |
 |---|---|---|
-| 1 | `artworks.ts`, `quality.ts`, `PaintingMaterial.ts` | `SurfaceProfile` type, new quality preset fields, `uAlbedoOnly` debug uniform |
-| 2 | `PaintingMaterial.ts`, `ProceduralTextureFactory.ts`, `quality.ts` | `clearcoat→0`, `specularIntensity→0.3`, roughness range `[140..240]`, specular blob `→90` |
-| 3 | `ProceduralTextureFactory.ts`, `GalleryManager.ts` | `generate(id, role, tileSize)` + cache key + size propagation from preset |
-| 4 | `ArtworkMesh.ts`, `PaintingMaterial.ts` | `computeTangents()`, steep parallax march before `map_fragment`, `pUV` shadows `vMapUv` |
-| 5 | `PaintingMaterial.ts`, `LightingSetup.ts`, `main.ts` | Self-shadow horizon march, `uKeyLightDir` uniform, `getKeyLightWorldDir()` |
-| 6 | `LightProfile.ts`, `LightingSetup.ts` | `gallery-soft` key `{x:-3,y:5,z:4}` (~45°); `raking-inspection` key `{x:-6,y:0,z:1.5}`; `displayIntent` field |
-| 7 | `GalleryManager.ts` | `PAN_SAFETY_FACTOR` removed → `INSPECTION_OVERSCROLL=0.5` |
-| 8 | (post-impl tuning) | Step count tuning per GPU measurement |
-| 9 | All md files | Acceptance check sign-off |
+| 1 | `artworks.ts`, `quality.ts`, `PaintingMaterial.ts` | `SurfaceProfile`/`SurfacePhysics` types, 7 new quality preset fields, `uAlbedoOnly` debug uniform + `setAlbedoOnly()` |
+| 2 | `PaintingMaterial.ts`, `ProceduralTextureFactory.ts` | `clearcoat 0.04→0`, `specularIntensity 1.0→0.3`, `uLightGrazingBoost 0.6→0.25`, roughness `[60..220]→[140..240]`, specular peak `200→90`, baseline `12→6` |
+| 3 | `ProceduralTextureFactory.ts`, `GalleryManager.ts` | `generate(id, role, tileSize)` + tileSize-aware cache key + size propagation from preset (1024 / 512 / 256) |
+| 4 | `ArtworkMesh.ts`, `PaintingMaterial.ts` | `computeTangents()`, 12-step tangent-space parallax before `map_fragment`, `pUV` propagated to `normal_fragment_maps` |
+| 5 | `PaintingMaterial.ts`, `LightingSetup.ts`, `main.ts` | 8-step self-shadow horizon march, view-space `uKeyLightDir` uniform pushed per-frame, `getKeyLightWorldDir()` API |
+| 6 | `LightProfile.ts`, `LightingSetup.ts`, `PreferencesPanel.ts`, `utils/preferences.ts` | `gallery-soft` key `{x:-3,y:5,z:4}` (~45°); `raking-inspection` key `{x:-6,y:0,z:1.5}` ambient `0.3`; `displayIntent` field; shared `spotTarget` at origin; lighting profile selector UI |
+| 7 | `GalleryManager.ts` | `PAN_SAFETY_FACTOR=0.92` → `INSPECTION_OVERSCROLL=0.5` |
+| 8 | `quality.ts` | Per-preset step counts tuned and baked in |
+| 9 | All md files | Implementation outcome documented; reviewer guidance updated |
 
 Reviewers should verify:
 
-- **No albedo mutation:** `uAlbedoOnly` debug mode output matches the raw artwork texture exactly.
-- **Museum-style lighting:** default gallery render looks flattering and warm, not like a debug render. Key is from upper-left at a moderate angle.
-- **Relief visible during movement:** panning or zooming the artwork should cause visible surface micro-detail response because the key is asymmetric.
-- **Inspection mode contrast:** `raking-inspection` profile should dramatically reveal brush ridges and canvas weave in ways the gallery-display profile does not.
-- **Full edge/corner reach:** at maximum zoom (`MIN_CAMERA_Z`), panning should allow the viewport center to reach every artwork edge.
-- **Preset isolation:** `parallaxEnabled`, `selfShadowEnabled` are false for `balanced` and `battery`; verify no parallax/shadow code runs in those modes.
-- **Cache isolation:** switching preset should generate new procedural maps at the new tile size, not reuse a stale 256 px high-quality map.
+- **No albedo mutation.** Open the preview with `?debug=1` appended to the URL, then press the `a` key. The render should drop to the raw artwork texture (no shading, no relief). The console logs `[freyraum debug] albedo-only ON/OFF` on every toggle. Switching back to shaded mode must keep the picture content visually identical to the debug render — only the lighting on top changes.
+- **Museum-style default lighting.** Default profile is `gallery-soft`; the key now sits at `{x:-3,y:5,z:4}`. The painting should look flattering and warm, not like a debug render, and the asymmetry should be subtle.
+- **Relief visible during movement.** On the high preset (default on capable GPUs), panning or zooming the artwork should cause visible micro-shifts in surface relief — the parallax UV march responds to view direction in tangent space.
+- **Inspection mode contrast.** Switch to "Streiflicht" in the preferences "Beleuchtung" group. The near-horizontal key should dramatically reveal brush ridges and canvas weave; ambient is intentionally low (0.3) to maximise shadow contrast.
+- **Full edge/corner reach.** At maximum zoom (`MIN_CAMERA_Z`), panning should let the viewport centre reach every artwork edge plus a small overscroll. The previous 8 % unreachable band is gone.
+- **Preset isolation.** Switch to "Akkusparend" — `PAINTING_USE_PARALLAX`, `PAINTING_USE_SELFSHADOW`, `PAINTING_USE_DETAIL_NORMAL`, and `PAINTING_USE_GRAZING_BOOST` should all be excluded from the compiled fragment shader. Inspect via the browser DevTools `WEBGL_debug_shaders` if needed.
+- **Cache isolation.** Switch from battery → high; new procedural maps should be generated at 1024 px, not reused from the 256 px battery cache.
+- **Spot target sanity.** Lighting is anchored at world origin via the shared `spotTarget`; reposition the camera or animate the spot — the cone always points at the artwork.
 
-Acceptance captures required:
+Validation evidence:
 
-1. albedo-only vs shaded side-by-side,
+1. albedo-only vs shaded comparison via `?debug=1` + `a` key,
 2. matte default gallery render,
-3. default gallery render during pan/zoom (relief cue visible),
+3. default render during pan/zoom (parallax relief cue visible on high preset),
 4. raking-inspection render (brush ridges visible),
-5. max-zoom relief quality (no blur from 256 px fallback),
+5. max-zoom relief quality at 1024 px procedural tile,
 6. edge and corner pan reach,
-7. `npm run lint` and `npm run build` passing.
+7. `npm run lint` clean, `npm run build` clean (`customer-preview/freyraum-gallery.js` ≈ 552 KB / 141 KB gzip).
 
 ## v0.02 shader, lighting, and WebGPU review guide
 
