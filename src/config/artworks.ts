@@ -12,6 +12,25 @@
 
 import type { PaintingTextureSet } from '../materials/PaintingTextureSet';
 
+/**
+ * v0.03 surface character for the painting pipeline. Drives default relief
+ * and parallax depth choices when an artwork does not supply explicit
+ * `surfacePhysics`. Optional; defaults to `'matte-canvas'` at runtime.
+ */
+export type SurfaceProfile =
+  | 'matte-canvas'
+  | 'satin-canvas'
+  | 'varnished-oil'
+  | 'paper'
+  | 'procedural-fallback';
+
+export interface SurfacePhysics {
+  /** Multiplier on relief amplitude from all maps (normal/bump/height). 1.0 = default. */
+  reliefScale?: number;
+  /** Multiplier on parallax depth. 1.0 = default. */
+  parallaxDepthScale?: number;
+}
+
 export interface ArtworkDimensions {
   /** Pixel width of the rendered artwork asset. */
   width: number;
@@ -47,6 +66,10 @@ export interface Artwork {
    * procedural factory at runtime. Reserved for future scanned assets.
    */
   textureSet?: PaintingTextureSet;
+  /** v0.03: Surface character. Defaults to 'matte-canvas'. */
+  surfaceProfile?: SurfaceProfile;
+  /** v0.03: Optional physical-scale modifiers for relief and parallax depth. */
+  surfacePhysics?: SurfacePhysics;
 }
 
 interface EmbeddedArtworkOptions {

@@ -1,5 +1,7 @@
 import type { QualityPresetId } from '../config/quality';
 import { DEFAULT_QUALITY_PRESET, QUALITY_PRESETS } from '../config/quality';
+import type { LightProfileId } from '../lighting/LightProfile';
+import { DEFAULT_LIGHT_PROFILE, LIGHT_PROFILES } from '../lighting/LightProfile';
 
 /**
  * Central user-preference store for accessibility and performance choices.
@@ -16,6 +18,8 @@ export interface Preferences {
   highContrast: boolean;
   contrastMode: ContrastMode;
   quality: QualityPresetId;
+  /** v0.03: artistic lighting profile (display vs. inspection). */
+  lighting: LightProfileId;
 }
 
 export type PreferenceListener = (prefs: Preferences) => void;
@@ -63,6 +67,11 @@ export class PreferencesStore {
         ? (stored.quality as QualityPresetId)
         : DEFAULT_QUALITY_PRESET;
 
+    const lighting: LightProfileId =
+      stored.lighting && stored.lighting in LIGHT_PROFILES
+        ? (stored.lighting as LightProfileId)
+        : DEFAULT_LIGHT_PROFILE;
+
     const contrastMode: ContrastMode = stored.contrastMode === 'high' ? 'high' : 'auto';
 
     this.prefs = {
@@ -70,6 +79,7 @@ export class PreferencesStore {
       highContrast: contrastMode === 'high' ? true : detectSystemHighContrast(),
       contrastMode,
       quality,
+      lighting,
     };
 
     this.motionMedia?.addEventListener?.('change', this.handleSystemMotionChange);
@@ -114,6 +124,12 @@ export class PreferencesStore {
     this.emit();
   }
 
+  setLighting(id: LightProfileId): void {
+    if (!(id in LIGHT_PROFILES)) return;
+    this.prefs.lighting = id;
+    this.emit();
+  }
+
   subscribe(listener: PreferenceListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -130,6 +146,7 @@ export class PreferencesStore {
     root.dataset['motion'] = this.prefs.reducedMotion ? 'reduced' : 'full';
     root.dataset['contrast'] = this.prefs.highContrast ? 'high' : 'auto';
     root.dataset['quality'] = this.prefs.quality;
+    root.dataset['lighting'] = this.prefs.lighting;
   }
 
   dispose(): void {

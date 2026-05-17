@@ -63,6 +63,10 @@ export class ArtworkMesh {
     if (uv && !geo.getAttribute('uv1')) {
       geo.setAttribute('uv1', uv.clone());
     }
+    // v0.03: tangents are required for the tangent-space parallax march.
+    // Three.js will populate vTangent/vBitangent varyings only when the
+    // geometry has a tangent attribute AND the material uses a normalMap.
+    geo.computeTangents();
     return geo;
   }
 

@@ -48,6 +48,13 @@ export interface LightProfile {
    * still so the painting can be examined.
    */
   animateAllowed: boolean;
+  /**
+   * v0.03: declares the artistic purpose of this profile so callers can
+   * pick the right one without coupling to its id. `display` profiles are
+   * museum-style — flattering, picture-first. `inspection` profiles use
+   * raking angles to maximise relief reveal at the cost of mood.
+   */
+  displayIntent: 'display' | 'inspection' | 'demo';
 }
 
 export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
@@ -61,7 +68,11 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
       {
         kelvin: 3200,
         intensity: 150,
-        position: { x: -10, y: 5, z: 7 },
+        // v0.03: was {x:-10, y:5, z:7} (~68° from vertical — theatrical
+        // side-lighting). Repositioned to ~45° from vertical: museum-
+        // appropriate flattering key that still has enough horizontal
+        // offset to reveal surface relief during pan/zoom.
+        position: { x: -3, y: 5, z: 4 },
         angle: 0.42,
         penumbra: 0.9,
         decay: 1.8,
@@ -74,24 +85,30 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
       decay: 2.0,
     },
     animateAllowed: true,
+    displayIntent: 'display',
   },
   'raking-inspection': {
     id: 'raking-inspection',
     label: 'Streiflicht',
-    description: 'Steep grazing angle reveals canvas weave and brush relief.',
-    ambientIntensity: 0.4,
+    description: 'Near-horizontal grazing light reveals canvas weave and brush relief.',
+    // v0.03: was 0.4. Lower ambient maximises shadow contrast for the
+    // relief reveal that is this profile's only purpose.
+    ambientIntensity: 0.3,
     ambientKelvin: 4000,
     keys: [
       {
         kelvin: 3500,
         intensity: 220,
-        position: { x: -7, y: 0.5, z: 1.3 },
+        // v0.03: was {x:-7, y:0.5, z:1.3}. Now strictly horizontal at
+        // y=0, z=1.5, x=-6 → maximum raking angle for relief reveal.
+        position: { x: -6, y: 0, z: 1.5 },
         angle: 0.34,
         penumbra: 0.55,
         decay: 1.6,
       },
     ],
     animateAllowed: false,
+    displayIntent: 'inspection',
   },
   'museum-neutral': {
     id: 'museum-neutral',
@@ -118,6 +135,7 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
       },
     ],
     animateAllowed: false,
+    displayIntent: 'display',
   },
   'dramatic-demo': {
     id: 'dramatic-demo',
@@ -142,6 +160,7 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
       decay: 2.0,
     },
     animateAllowed: true,
+    displayIntent: 'demo',
   },
 };
 

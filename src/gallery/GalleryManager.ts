@@ -15,7 +15,12 @@ const DEFAULT_CAMERA_Z = 7;
 const MAX_CAMERA_Z = 8.5;
 const MIN_CAMERA_Z = 1.2;
 const MIN_VISIBLE_ARTWORK_FRACTION = 0.28;
-const PAN_SAFETY_FACTOR = 0.92;
+/**
+ * v0.03: replaces `PAN_SAFETY_FACTOR = 0.92`. Allows the viewport centre to
+ * reach the artwork edge plus a small overscroll margin so every corner is
+ * inspectable at maximum zoom.
+ */
+const INSPECTION_OVERSCROLL = 0.5;
 
 /** Roles that can be filled in by the procedural factory when no authored map exists. */
 const PROCEDURAL_ROLES: PaintingMapRole[] = [
@@ -156,7 +161,7 @@ export class GalleryManager {
       if (authored[role]) {
         resolved[role] = authored[role];
       } else if (this.shouldFillRole(role, preset)) {
-        resolved[role] = this.procedural.generate(artwork.id, role);
+        resolved[role] = this.procedural.generate(artwork.id, role, preset.proceduralTileSize);
       }
     }
 
@@ -317,9 +322,11 @@ export class GalleryManager {
     const visibleHeight = 2 * this.clampZoom(zoom) * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
     const visibleWidth = visibleHeight * this.camera.aspect;
 
+    // v0.03: allow viewport centre to reach the artwork edge plus an explicit
+    // overscroll margin so every corner is reachable during close inspection.
     return {
-      x: Math.max(0, ((this.artworkMesh.artworkWidth - visibleWidth) * 0.5) * PAN_SAFETY_FACTOR),
-      y: Math.max(0, ((this.artworkMesh.artworkHeight - visibleHeight) * 0.5) * PAN_SAFETY_FACTOR),
+      x: Math.max(0, (this.artworkMesh.artworkWidth - visibleWidth) * 0.5 + INSPECTION_OVERSCROLL),
+      y: Math.max(0, (this.artworkMesh.artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL),
     };
   }
 

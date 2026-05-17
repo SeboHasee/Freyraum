@@ -17,34 +17,42 @@ import type { PaintingMapRole } from './PaintingTextureSet';
 export class ProceduralTextureFactory {
   private readonly cache = new Map<string, THREE.Texture>();
 
-  /** Returns (and caches) the procedural texture for an artwork+role. */
-  generate(artworkId: string, role: PaintingMapRole): THREE.Texture {
-    const cacheKey = `${artworkId}::${role}`;
+  /**
+   * Returns (and caches) the procedural texture for an artwork+role.
+   * v0.03: `tileSize` is part of the cache key so a preset change re-generates
+   * the maps at the new resolution instead of returning a stale tile.
+   */
+  generate(artworkId: string, role: PaintingMapRole, tileSize?: number): THREE.Texture {
+    const effectiveSize = Math.max(64, tileSize ?? 256);
+    const cacheKey = `${artworkId}::${role}::${effectiveSize}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
     const seed = this.hash(artworkId);
+    // Roughness/specular need less resolution than the geometry-carrying maps.
+    const smallSize = Math.max(64, Math.floor(effectiveSize / 2));
+
     let tex: THREE.Texture;
     switch (role) {
       case 'normal':
-        tex = this.generateNormal(seed, 256, 14, 6, 3, 0.42);
+        tex = this.generateNormal(seed, effectiveSize, 14, 6, 3, 0.42);
         break;
       case 'detailNormal':
-        tex = this.generateNormal(seed * 7 + 13, 256, 18, 7, 2.5, 1.1);
+        tex = this.generateNormal(seed * 7 + 13, effectiveSize, 18, 7, 2.5, 1.1);
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
         break;
       case 'height':
-        tex = this.generateHeight(seed);
+        tex = this.generateHeight(seed, effectiveSize);
         break;
       case 'roughness':
-        tex = this.generateRoughness(seed);
+        tex = this.generateRoughness(seed, smallSize);
         break;
       case 'specular':
-        tex = this.generateSpecular(seed);
+        tex = this.generateSpecular(seed, smallSize);
         break;
       case 'ao':
-        tex = this.generateAO(seed);
+        tex = this.generateAO(seed, effectiveSize);
         break;
       case 'albedo':
       default:
@@ -100,8 +108,7 @@ export class ProceduralTextureFactory {
   }
 
   /** Grayscale R-channel height. Horizontal brush strokes + cross-hatch + tooth grain. */
-  private generateHeight(seed: number): THREE.Texture {
-    const size = 256;
+  private generateHeight(seed: number, size: number): THREE.Texture {
     const data = new Uint8Array(size * size * 4);
     const o1 = (seed % 64) * 0.05;
     const o2 = (seed % 32) * 0.07;
@@ -123,9 +130,12 @@ export class ProceduralTextureFactory {
     return this.makeDataTexture(data, size, size, false);
   }
 
-  /** Low-frequency varnish-style roughness in the [60..220] range. */
-  private generateRoughness(seed: number): THREE.Texture {
-    const size = 128;
+  /**
+   * Matte-canvas roughness in the [140..240] range (v0.03 retune).
+   * Previous v0.02 range [60..220] occasionally landed in semi-gloss territory,
+   * which conflicted with the matte-first goal.
+   */
+  private generateRoughness(seed: number, size: number): THREE.Texture {
     const data = new Uint8Array(size * size * 4);
     const o = ((seed % 50) / 50) * 0.8;
 
@@ -135,7 +145,7 @@ export class ProceduralTextureFactory {
         const n1 = (Math.sin(x * 0.09 + o) * Math.cos(y * 0.07)) * 0.5 + 0.5;
         const n2 = (Math.sin(x * 0.21 + 1.3) * Math.cos(y * 0.18 + 0.7)) * 0.5 + 0.5;
         const combined = n1 * 0.7 + n2 * 0.3;
-        const r = this.clamp8(60 + combined * 160);
+        const r = this.clamp8(140 + combined * 100);
         data[idx + 0] = r;
         data[idx + 1] = r;
         data[idx + 2] = r;
@@ -146,20 +156,22 @@ export class ProceduralTextureFactory {
     return this.makeDataTexture(data, size, size, false);
   }
 
-  /** Mostly dark specular with a handful of Gaussian "varnish pooling" blobs. */
-  private generateSpecular(seed: number): THREE.Texture {
-    const size = 128;
+  /**
+   * Subtle specular variation (v0.03 retune): baseline ~6 with gentle blobs
+   * peaking at ~90 instead of dominating Gaussian highlights. Keeps the
+   * painting matte by default while still letting varnish patches catch
+   * grazing light.
+   */
+  private generateSpecular(seed: number, size: number): THREE.Texture {
     const data = new Uint8Array(size * size * 4);
 
-    // Baseline near-zero specular response.
     for (let i = 0; i < size * size; i += 1) {
-      data[i * 4 + 0] = 12;
-      data[i * 4 + 1] = 12;
-      data[i * 4 + 2] = 12;
+      data[i * 4 + 0] = 6;
+      data[i * 4 + 1] = 6;
+      data[i * 4 + 2] = 6;
       data[i * 4 + 3] = 255;
     }
 
-    // Sparse Gaussian blobs at hash-determined positions.
     const blobCount = 4 + (seed % 4);
     for (let b = 0; b < blobCount; b += 1) {
       const cx = ((seed * (b + 7)) % size);
@@ -171,7 +183,7 @@ export class ProceduralTextureFactory {
           const dx = x - cx;
           const dy = y - cy;
           const distSq = dx * dx + dy * dy;
-          const blob = Math.exp(-distSq / (radius * radius)) * 200;
+          const blob = Math.exp(-distSq / (radius * radius)) * 90;
           const idx = (y * size + x) * 4;
           const r = this.clamp8(data[idx] + blob);
           data[idx + 0] = r;
@@ -185,8 +197,7 @@ export class ProceduralTextureFactory {
   }
 
   /** Soft vignetted ambient-occlusion suggestion (darker edges, lighter centre). */
-  private generateAO(seed: number): THREE.Texture {
-    const size = 256;
+  private generateAO(seed: number, size: number): THREE.Texture {
     const data = new Uint8Array(size * size * 4);
     const o = ((seed % 64) / 64) * 0.4;
     const half = size / 2;

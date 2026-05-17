@@ -1,5 +1,7 @@
 import type { QualityPresetId, QualityPreset } from '../config/quality';
 import { QUALITY_PRESETS } from '../config/quality';
+import type { LightProfileId, LightProfile } from '../lighting/LightProfile';
+import { LIGHT_PROFILES } from '../lighting/LightProfile';
 import type { PreferencesStore } from '../utils/preferences';
 
 /**
@@ -57,7 +59,7 @@ export class PreferencesPanel {
   }
 
   private renderPanel(): void {
-    const { reducedMotion, contrastMode, quality } = this.prefs.current;
+    const { reducedMotion, contrastMode, quality, lighting } = this.prefs.current;
 
     const qualityOptions = (Object.values(QUALITY_PRESETS) as QualityPreset[])
       .map(
@@ -69,6 +71,22 @@ export class PreferencesPanel {
             <span class="prefs__radio-label">
               <span class="prefs__radio-title">${preset.label}</span>
               <span class="prefs__radio-desc">${preset.description}</span>
+            </span>
+          </label>
+        `
+      )
+      .join('');
+
+    const lightingOptions = (Object.values(LIGHT_PROFILES) as LightProfile[])
+      .map(
+        (profile) => `
+          <label class="prefs__radio">
+            <input type="radio" name="freyraum-lighting" value="${profile.id}" ${
+              lighting === profile.id ? 'checked' : ''
+            } />
+            <span class="prefs__radio-label">
+              <span class="prefs__radio-title">${profile.label}</span>
+              <span class="prefs__radio-desc">${profile.description}</span>
             </span>
           </label>
         `
@@ -93,6 +111,10 @@ export class PreferencesPanel {
           <span class="prefs__toggle-desc">Stärkere Lesbarkeit über allen Werken.</span>
         </span>
       </label>
+      <fieldset class="prefs__group">
+        <legend class="prefs__legend">Beleuchtung</legend>
+        ${lightingOptions}
+      </fieldset>
       <h2 class="prefs__heading">Performance</h2>
       <fieldset class="prefs__group">
         <legend class="prefs__legend">Qualitätsstufe</legend>
@@ -112,6 +134,14 @@ export class PreferencesPanel {
       input.addEventListener('change', () => {
         if (input.checked) {
           this.prefs.setQuality(input.value as QualityPresetId);
+        }
+      });
+    });
+
+    this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-lighting"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        if (input.checked) {
+          this.prefs.setLighting(input.value as LightProfileId);
         }
       });
     });

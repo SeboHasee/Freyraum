@@ -3,7 +3,7 @@ import type { QualityPreset, PaintingShaderVariant } from '../config/quality';
 import type { ResolvedPaintingTextures } from './PaintingTextureSet';
 
 /**
- * Realistic painting material for the v0.02 gallery.
+ * Realistic painting material for the v0.02 / v0.03 gallery.
  *
  * Strategy (audited): rely on native Three.js `MeshPhysicalMaterial` features
  * for everything Three.js already does correctly:
@@ -18,21 +18,37 @@ import type { ResolvedPaintingTextures } from './PaintingTextureSet';
  * onBeforeCompile is used only for the things Three.js does NOT natively
  * support:
  *
- * 1. Detail-normal blending: combine the base and detail normals in
- *    **tangent space** before Three.js multiplies by the TBN matrix. This is
- *    the audited correctness fix from plan.md §Injection 2.
- * 2. Bump perturbation: when both `normalMap` and `bumpMap` are present,
- *    Three.js' built-in path only applies the normal map. We manually call
- *    `perturbNormalArb(-vViewPosition, normal, dHdxy_fwd(), faceDirection)`
- *    after normal_fragment_maps so both effects coexist correctly.
- * 3. Grazing-light boost: a custom (1 - NdotV)^3 mask added to direct
- *    specular response after `lights_fragment_end`.
+ * 1. **v0.03 parallax UV offset** (`PAINTING_USE_PARALLAX`): tangent-space
+ *    steep parallax march that produces a `pUV` variable used by all
+ *    subsequent map samples (albedo, normal, AO, etc.). Height convention:
+ *    `bumpMap.r = 0.0 → deepest recess`, `1.0 → highest peak`.
+ * 2. Detail-normal blending in **tangent space** before TBN multiply.
+ * 3. Bump perturbation when both normalMap and bumpMap are present.
+ * 4. Grazing-light boost: a custom (1 - NdotV)^3 mask added to direct
+ *    specular response.
+ * 5. **v0.03 direct-light self-shadow** (`PAINTING_USE_SELFSHADOW`): short
+ *    height-march along the tangent-space key-light direction; modulates
+ *    `directDiffuse` and `directSpecular` ONLY — never multiplies albedo,
+ *    so picture fidelity is preserved.
+ * 6. **v0.03 albedo-only debug** (`PAINTING_DEBUG_ALBEDO_ONLY`): replaces all
+ *    shading with the raw albedo texture so reviewers can verify the shader
+ *    does not change the original picture's essence.
  *
  * `#define` compile-out flags ensure battery mode pays zero cost for the
- * detail/bump/AO/grazing paths.
+ * optional paths.
+ *
+ * Math-space contract:
+ *   - vTangent / vBitangent / vNormal varyings: VIEW space (Three.js default).
+ *   - uKeyLightDir: VIEW space, supplied per-frame by main.ts.
+ *   - pUV: clamped to [0.001, 0.999] to avoid sampling artwork borders.
+ *
+ * Resource ownership: textures are owned by TextureManager /
+ * ProceduralTextureFactory. This material never disposes textures it
+ * references.
  */
 
 const HEADER_TOKEN = '#include <common>';
+const MAP_FRAGMENT_TOKEN = '#include <map_fragment>';
 const NORMAL_MAPS_TOKEN = '#include <normal_fragment_maps>';
 const LIGHTS_END_TOKEN = '#include <lights_fragment_end>';
 
@@ -43,6 +59,13 @@ export interface PaintingUniforms {
   uLightGrazingBoost: { value: number };
   uReducedMotionScalar: { value: number };
   tDetailNormal: { value: THREE.Texture | null };
+  // v0.03
+  uParallaxScale: { value: number };
+  uParallaxSteps: { value: number };
+  uShadowSteps: { value: number };
+  uShadowStrength: { value: number };
+  uKeyLightDir: { value: THREE.Vector3 };
+  uAlbedoOnly: { value: number };
 }
 
 export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
@@ -52,36 +75,49 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
   private hasBump = false;
   private hasAO = false;
   private grazingEnabled = false;
+  private parallaxEnabledFlag = false;
+  private selfShadowEnabledFlag = false;
+  private albedoOnlyEnabled = false;
   private reducedMotion = false;
 
   constructor(preset: QualityPreset) {
     super({
       roughness: 0.88,
       metalness: 0,
-      clearcoat: 0.04,
-      specularIntensity: 1.0,
+      // v0.03 matte-first retune: was 0.04. Default reads as rough painted
+      // surface, not varnished oil.
+      clearcoat: 0.0,
+      // v0.03 matte-first retune: was 1.0. Specular intensity map (when
+      // present) controls the dynamic range, but the base term is muted.
+      specularIntensity: 0.3,
     });
 
     this.paintingUniforms = {
       uDetailNormalStrength: { value: preset.detailNormalStrength },
       uDetailTiling: { value: new THREE.Vector2(8, 8) },
       uBumpStrength: { value: preset.bumpStrength },
-      uLightGrazingBoost: { value: 0.6 },
+      // v0.03 matte-first retune: was 0.6. Lower grazing boost keeps the
+      // matte canvas look stable under side-lit profiles.
+      uLightGrazingBoost: { value: 0.25 },
       uReducedMotionScalar: { value: 1.0 },
       tDetailNormal: { value: null },
+      uParallaxScale: { value: preset.parallaxEnabled ? preset.parallaxScale : 0.0 },
+      uParallaxSteps: { value: preset.parallaxSteps },
+      uShadowSteps: { value: preset.selfShadowSteps },
+      uShadowStrength: { value: preset.selfShadowStrength },
+      uKeyLightDir: { value: new THREE.Vector3(0, 0, 1) },
+      uAlbedoOnly: { value: 0 },
     };
 
     this.currentVariant = preset.shaderVariant;
     this.normalScale.set(preset.normalStrength, preset.normalStrength);
     this.grazingEnabled = preset.grazingBoostEnabled;
+    this.parallaxEnabledFlag = preset.parallaxEnabled;
+    this.selfShadowEnabledFlag = preset.selfShadowEnabled;
 
     this.onBeforeCompile = (shader) => {
-      // Merge our uniforms into the shader's uniform map.
       Object.assign(shader.uniforms, this.paintingUniforms);
 
-      // ── Defines ────────────────────────────────────────────────────────
-      // onBeforeCompile is called every time the material recompiles, so we
-      // re-derive defines from the current state.
       const defines: string[] = [];
       if (this.detailNormalActive()) defines.push('#define PAINTING_USE_DETAIL_NORMAL');
       if (this.hasBump && this.paintingUniforms.uBumpStrength.value > 0) {
@@ -89,11 +125,13 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
       }
       if (this.hasAO) defines.push('#define PAINTING_USE_AO');
       if (this.grazingEnabled) defines.push('#define PAINTING_USE_GRAZING_BOOST');
+      if (this.parallaxActive()) defines.push('#define PAINTING_USE_PARALLAX');
+      if (this.selfShadowActive()) defines.push('#define PAINTING_USE_SELFSHADOW');
+      if (this.albedoOnlyEnabled) defines.push('#define PAINTING_DEBUG_ALBEDO_ONLY');
 
-      // ── Fragment-shader injections ────────────────────────────────────
       let frag = shader.fragmentShader;
 
-      // 1) Uniform declarations at the very top of fragment shader main scope.
+      // 1) Uniform declarations.
       const uniformBlock = /* glsl */ `
 uniform float uDetailNormalStrength;
 uniform float uBumpStrength;
@@ -101,84 +139,177 @@ uniform float uLightGrazingBoost;
 uniform float uReducedMotionScalar;
 uniform vec2  uDetailTiling;
 uniform sampler2D tDetailNormal;
+uniform float uParallaxScale;
+uniform float uParallaxSteps;
+uniform float uShadowSteps;
+uniform float uShadowStrength;
+uniform vec3  uKeyLightDir;
+uniform float uAlbedoOnly;
 `;
       frag = frag.replace(HEADER_TOKEN, `${HEADER_TOKEN}\n${uniformBlock}`);
 
-      // 2) Replace `normal_fragment_maps` with our tangent-space blend +
-      //    optional bump perturbation. This is the correctness-critical fix.
+      // 2) Parallax march before map_fragment. Produces `pUV` which is then
+      //    used by the replaced map_fragment and normal_fragment_maps so all
+      //    surface samples agree on the same offset UV.
       //
-      //    We keep Three.js' object-space and view-space branches intact and
-      //    only replace the tangent-space branch (which is the only one the
-      //    gallery ever uses, since we always supply a tangent-space normal).
+      //    vTangent / vBitangent are populated by Three.js when the geometry
+      //    has a tangent attribute (we call geo.computeTangents() in
+      //    ArtworkMesh) AND the material uses a normalMap (always true here).
+      //    They are in VIEW space, matching vViewPosition and vNormal.
+      const parallaxChunk = /* glsl */ `
+#ifdef PAINTING_USE_PARALLAX
+    vec3 _tsViewDir = normalize(vec3(
+        dot(vViewPosition, vTangent.xyz),
+        dot(vViewPosition, vBitangent),
+        dot(vViewPosition, vNormal)
+    ));
+    vec2 pUV = vMapUv;
+    float _stepSize = 1.0 / max(uParallaxSteps, 1.0);
+    float _layerH = 0.0;
+    // tsViewDir points FROM surface TOWARDS camera, so we march in -xy.
+    vec2 _uvDelta = (-_tsViewDir.xy / max(abs(_tsViewDir.z), 0.2)) * (uParallaxScale * _stepSize);
+    for (int _i = 0; _i < 16; _i++) {
+        if (float(_i) >= uParallaxSteps) break;
+        _layerH += _stepSize;
+        pUV += _uvDelta;
+        float _h = texture2D(bumpMap, pUV).r;
+        if (_h >= _layerH) break;
+    }
+    pUV = clamp(pUV, 0.001, 0.999);
+#else
+    vec2 pUV = vMapUv;
+#endif
+
+#ifdef USE_MAP
+    vec4 sampledDiffuseColor = texture2D( map, pUV );
+    #ifdef DECODE_VIDEO_TEXTURE
+        sampledDiffuseColor = vec4( mix( pow( sampledDiffuseColor.rgb * 0.9478672986 + vec3( 0.0521327014 ), vec3( 2.4 ) ), sampledDiffuseColor.rgb * 0.0773993808, vec3( lessThanEqual( sampledDiffuseColor.rgb, vec3( 0.04045 ) ) ) ), sampledDiffuseColor.w );
+    #endif
+    diffuseColor *= sampledDiffuseColor;
+#endif
+`;
+      frag = frag.replace(MAP_FRAGMENT_TOKEN, parallaxChunk);
+
+      // 3) Replace `normal_fragment_maps` with tangent-space blend + bump.
+      //    When parallax is active we sample the normal at `pUV` so the
+      //    surface lighting follows the offset; otherwise we use vNormalMapUv
+      //    as before (which equals vMapUv for our geometry).
       const blendedNormalChunk = /* glsl */ `
 #ifdef USE_NORMALMAP_OBJECTSPACE
 
-	normal = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
-	#ifdef FLIP_SIDED
-		normal = - normal;
-	#endif
-	#ifdef DOUBLE_SIDED
-		normal = normal * faceDirection;
-	#endif
-	normal = normalize( normalMatrix * normal );
+    normal = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
+    #ifdef FLIP_SIDED
+        normal = - normal;
+    #endif
+    #ifdef DOUBLE_SIDED
+        normal = normal * faceDirection;
+    #endif
+    normal = normalize( normalMatrix * normal );
 
 #elif defined( USE_NORMALMAP_TANGENTSPACE )
 
-	vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
+    #ifdef PAINTING_USE_PARALLAX
+        vec2 _normalUV = pUV;
+    #else
+        vec2 _normalUV = vNormalMapUv;
+    #endif
 
-	#ifdef PAINTING_USE_DETAIL_NORMAL
-		// Sample the detail normal in tangent space at higher tiling.
-		vec3 detailN = texture2D( tDetailNormal, vNormalMapUv * uDetailTiling ).xyz * 2.0 - 1.0;
-		// Whiteout-style blend: keep base XY, add detail XY scaled by strength,
-		// renormalise. uReducedMotionScalar lets accessibility mode flatten
-		// the detail contribution without corrupting the normal basis.
-		mapN.xy += detailN.xy * uDetailNormalStrength * uReducedMotionScalar;
-		mapN = normalize( mapN );
-	#endif
+    vec3 mapN = texture2D( normalMap, _normalUV ).xyz * 2.0 - 1.0;
 
-	mapN.xy *= normalScale;
-	normal = normalize( tbn * mapN );
+    #ifdef PAINTING_USE_DETAIL_NORMAL
+        vec3 detailN = texture2D( tDetailNormal, _normalUV * uDetailTiling ).xyz * 2.0 - 1.0;
+        mapN.xy += detailN.xy * uDetailNormalStrength * uReducedMotionScalar;
+        mapN = normalize( mapN );
+    #endif
+
+    mapN.xy *= normalScale;
+    normal = normalize( tbn * mapN );
 
 #elif defined( USE_BUMPMAP )
 
-	normal = perturbNormalArb( - vViewPosition, normal, dHdxy_fwd(), faceDirection );
+    normal = perturbNormalArb( - vViewPosition, normal, dHdxy_fwd(), faceDirection );
 
 #endif
 
 #ifdef PAINTING_USE_BUMP
-	// Both normalMap and bumpMap are present: Three.js' built-in path skips
-	// the bump term, so we apply it ourselves on top of the (possibly
-	// detail-blended) view-space normal. uBumpStrength scales the height
-	// derivatives — bumpScale on the material is left at 1.0.
-	vec2 paintDH = dHdxy_fwd() * uBumpStrength;
-	normal = perturbNormalArb( - vViewPosition, normal, paintDH, faceDirection );
+    vec2 paintDH = dHdxy_fwd() * uBumpStrength;
+    normal = perturbNormalArb( - vViewPosition, normal, paintDH, faceDirection );
 #endif
 `;
       frag = frag.replace(NORMAL_MAPS_TOKEN, blendedNormalChunk);
 
-      // 3) AO multiplier (Three.js already handles aoMap when material.aoMap
-      //    is set — we just guard with our define so it's a no-op for battery).
-      //    No injection needed; the native aomap_fragment runs.
-
-      // 4) Grazing-light boost — apply after all lights are accumulated.
-      const grazingChunk = /* glsl */ `
+      // 4) Lights end: self-shadow + grazing boost + albedo-only override.
+      //    Order matters:
+      //      a. Self-shadow attenuates direct light (must run before grazing
+      //         so the grazing boost sees the attenuated specular).
+      //      b. Grazing boost.
+      //      c. Albedo-only debug — overrides everything when enabled.
+      const lightsEndChunk = /* glsl */ `
 ${LIGHTS_END_TOKEN}
+
+#ifdef PAINTING_USE_SELFSHADOW
+    {
+        // uKeyLightDir is supplied per-frame in view space, pointing FROM
+        // surface TOWARDS the light source.
+        vec3 _tsLight = normalize(vec3(
+            dot(uKeyLightDir, vTangent.xyz),
+            dot(uKeyLightDir, vBitangent),
+            dot(uKeyLightDir, vNormal)
+        ));
+        if (_tsLight.z > 0.05) {
+            float _shStep = 1.0 / max(uShadowSteps, 1.0);
+            #ifdef PAINTING_USE_PARALLAX
+                vec2 _shUV = pUV;
+            #else
+                vec2 _shUV = vMapUv;
+            #endif
+            float _curH = texture2D(bumpMap, _shUV).r;
+            float _shadow = 1.0;
+            // March towards the light projection in UV space. Scale chosen
+            // so 8 steps cover roughly the same UV distance as parallax.
+            vec2 _shDelta = (_tsLight.xy / max(abs(_tsLight.z), 0.2)) * (uParallaxScale * _shStep);
+            for (int _j = 0; _j < 16; _j++) {
+                if (float(_j) >= uShadowSteps) break;
+                _shUV += _shDelta;
+                _shUV = clamp(_shUV, 0.001, 0.999);
+                float _sampleH = texture2D(bumpMap, _shUV).r;
+                float _wantedH = _curH + (_tsLight.z * _shStep * float(_j + 1));
+                if (_sampleH > _wantedH) {
+                    _shadow = 1.0 - uShadowStrength;
+                    break;
+                }
+            }
+            reflectedLight.directDiffuse  *= _shadow;
+            reflectedLight.directSpecular *= _shadow;
+        }
+    }
+#endif
+
 #ifdef PAINTING_USE_GRAZING_BOOST
-	{
-		float NdotV = abs( dot( normal, normalize( vViewPosition ) ) );
-		float grazingMask = pow( 1.0 - NdotV, 3.0 );
-		reflectedLight.directSpecular *= ( 1.0 + grazingMask * uLightGrazingBoost * uReducedMotionScalar );
-	}
+    {
+        float NdotV = abs( dot( normal, normalize( vViewPosition ) ) );
+        float grazingMask = pow( 1.0 - NdotV, 3.0 );
+        reflectedLight.directSpecular *= ( 1.0 + grazingMask * uLightGrazingBoost * uReducedMotionScalar );
+    }
+#endif
+
+#ifdef PAINTING_DEBUG_ALBEDO_ONLY
+    // Strip all shading so reviewers can verify the shader is not
+    // re-interpreting the picture. Uses indirectDiffuse so tone mapping and
+    // colour-space conversion still run normally (the post-pipeline expects
+    // a linear value here).
+    reflectedLight.directDiffuse  = vec3(0.0);
+    reflectedLight.directSpecular = vec3(0.0);
+    reflectedLight.indirectDiffuse  = diffuseColor.rgb;
+    reflectedLight.indirectSpecular = vec3(0.0);
 #endif
 `;
-      frag = frag.replace(LIGHTS_END_TOKEN, grazingChunk);
+      frag = frag.replace(LIGHTS_END_TOKEN, lightsEndChunk);
 
-      // 5) Prepend defines so they apply globally.
       shader.fragmentShader = defines.join('\n') + '\n' + frag;
     };
   }
 
-  /** True when the detail-normal path should be compiled in. */
   private detailNormalActive(): boolean {
     return (
       this.hasDetailNormal &&
@@ -187,16 +318,23 @@ ${LIGHTS_END_TOKEN}
     );
   }
 
-  /**
-   * Applies a {@link QualityPreset}. Updates uniforms and recompiles the
-   * shader only when the defines actually change. Texture assignment is
-   * handled by {@link applyTextures}.
-   */
+  private parallaxActive(): boolean {
+    return this.parallaxEnabledFlag && !!this.bumpMap && this.paintingUniforms.uParallaxScale.value > 0;
+  }
+
+  private selfShadowActive(): boolean {
+    return this.selfShadowEnabledFlag && !!this.bumpMap && this.paintingUniforms.uShadowStrength.value > 0;
+  }
+
   applyPreset(preset: QualityPreset): void {
     this.normalScale.set(preset.normalStrength, preset.normalStrength);
 
     this.paintingUniforms.uDetailNormalStrength.value = preset.detailNormalStrength;
     this.paintingUniforms.uBumpStrength.value = preset.bumpStrength;
+    this.paintingUniforms.uParallaxScale.value = preset.parallaxEnabled ? preset.parallaxScale : 0.0;
+    this.paintingUniforms.uParallaxSteps.value = preset.parallaxSteps;
+    this.paintingUniforms.uShadowSteps.value = preset.selfShadowSteps;
+    this.paintingUniforms.uShadowStrength.value = preset.selfShadowStrength;
 
     if (!preset.detailNormalEnabled || preset.detailNormalStrength <= 0) {
       this.paintingUniforms.tDetailNormal.value = null;
@@ -215,25 +353,32 @@ ${LIGHTS_END_TOKEN}
       !!this.paintingUniforms.tDetailNormal.value;
     const wantsBump = preset.bumpStrength > 0 && !!this.bumpMap;
     const wantsGrazing = preset.grazingBoostEnabled;
+    const wantsParallax = preset.parallaxEnabled && !!this.bumpMap && preset.parallaxScale > 0;
+    const wantsSelfShadow = preset.selfShadowEnabled && !!this.bumpMap && preset.selfShadowStrength > 0;
 
     const definesChanged =
       wantsAO !== this.hasAO ||
       wantsDetail !== this.detailNormalActive() ||
       wantsBump !== this.hasBump ||
       wantsGrazing !== this.grazingEnabled ||
+      wantsParallax !== this.parallaxEnabledFlag ||
+      wantsSelfShadow !== this.selfShadowEnabledFlag ||
       preset.shaderVariant !== this.currentVariant;
 
     this.hasAO = wantsAO;
     this.hasDetailNormal = wantsDetail;
     this.hasBump = wantsBump;
     this.grazingEnabled = wantsGrazing;
+    this.parallaxEnabledFlag = wantsParallax;
+    this.selfShadowEnabledFlag = wantsSelfShadow;
     this.currentVariant = preset.shaderVariant;
 
-    // aoMapIntensity is a native uniform; toggle by setting `aoMap` reference.
     if (!wantsAO) {
       this.aoMap = null;
     }
-    if (!wantsBump) {
+    if (!wantsBump && !wantsParallax && !wantsSelfShadow) {
+      // bumpMap doubles as the height field for parallax/self-shadow, so we
+      // only release it when no path needs it.
       this.bumpMap = null;
     }
 
@@ -242,15 +387,6 @@ ${LIGHTS_END_TOKEN}
     }
   }
 
-  /**
-   * Applies resolved painting textures. Textures are owned by the caller
-   * (TextureManager / ProceduralTextureFactory); this material only holds
-   * references and never disposes them.
-   *
-   * `tilingPerWorldUnit` controls how dense the detail-normal weave appears.
-   * Pass the artwork's world-space size so the canvas tooth stays at a
-   * consistent physical density regardless of aspect ratio.
-   */
   applyTextures(
     textures: ResolvedPaintingTextures,
     tilingPerWorldUnit: THREE.Vector2,
@@ -261,42 +397,62 @@ ${LIGHTS_END_TOKEN}
     this.normalMap = textures.normal ?? null;
 
     this.roughnessMap = preset.shaderVariant === 'painting-battery' ? null : (textures.roughness ?? null);
-    if (this.roughnessMap) this.roughness = 1.0; // map drives the value
+    if (this.roughnessMap) this.roughness = 1.0;
 
     this.specularIntensityMap = preset.specularStrength > 0 ? (textures.specular ?? null) : null;
-    this.specularIntensity = preset.specularStrength > 0 ? preset.specularStrength : 1.0;
+    this.specularIntensity = preset.specularStrength > 0 ? preset.specularStrength : 0.3;
 
     this.paintingUniforms.tDetailNormal.value =
       preset.detailNormalEnabled && preset.detailNormalStrength > 0 ? (textures.detailNormal ?? null) : null;
     this.paintingUniforms.uDetailTiling.value.copy(tilingPerWorldUnit);
 
-    // Height -> bumpMap so Three.js declares the dHdxy_fwd helpers we call
-    // explicitly from our injection.
-    this.bumpMap = textures.height ?? null;
+    // Height map drives parallax (v0.03), self-shadow (v0.03), AND the bump
+    // perturbation path. We keep it bound whenever ANY of those three paths
+    // is requested by the preset.
+    const needsHeight =
+      preset.bumpStrength > 0 ||
+      (preset.parallaxEnabled && preset.parallaxScale > 0) ||
+      preset.selfShadowEnabled;
+    this.bumpMap = needsHeight ? (textures.height ?? null) : null;
     this.bumpScale = 1.0;
 
     this.aoMap = textures.ao ?? null;
     this.aoMapIntensity = 1.0;
 
-    // Re-evaluate defines and trigger recompile if necessary.
     this.applyPreset(preset);
   }
 
-  /** Drives the accessibility flattening hook (1.0 = full, 0.0 = flat). */
   setReducedMotion(reducedMotion: boolean): void {
     if (this.reducedMotion === reducedMotion) return;
     this.reducedMotion = reducedMotion;
     this.paintingUniforms.uReducedMotionScalar.value = reducedMotion ? 0.0 : 1.0;
-    // Detail-normal define flips when scalar reaches 0 — trigger recompile.
     this.needsUpdate = true;
   }
 
-  /** Current shader variant id, exposed for debug overlays. */
+  /**
+   * v0.03: assigns the key-light direction in VIEW space, called per-frame
+   * by main.ts. The shader uses it to march the height field for the
+   * self-shadow approximation.
+   */
+  setKeyLightDirView(dir: THREE.Vector3): void {
+    this.paintingUniforms.uKeyLightDir.value.copy(dir);
+  }
+
+  /**
+   * v0.03: enables the albedo-only debug render, which strips all shading
+   * and shows only the raw artwork texture. Used for fidelity QA.
+   */
+  setAlbedoOnly(enabled: boolean): void {
+    if (this.albedoOnlyEnabled === enabled) return;
+    this.albedoOnlyEnabled = enabled;
+    this.paintingUniforms.uAlbedoOnly.value = enabled ? 1 : 0;
+    this.needsUpdate = true;
+  }
+
   get shaderVariant(): PaintingShaderVariant {
     return this.currentVariant;
   }
 
-  /** List of currently active map roles. Useful for the debug overlay. */
   activeMaps(): string[] {
     const active: string[] = ['albedo'];
     if (this.normalMap) active.push('normal');

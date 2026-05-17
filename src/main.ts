@@ -1,5 +1,7 @@
 import './styles/main.scss';
 
+import * as THREE from 'three';
+
 import { artworks } from './config/artworks';
 import { getQualityPreset } from './config/quality';
 import { RendererManager } from './core/RendererManager';
@@ -28,6 +30,9 @@ import { isWebGLAvailable } from './utils/webgl';
 import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
+
+const KEY_LIGHT_WORLD = new THREE.Vector3();
+const KEY_LIGHT_VIEW = new THREE.Vector3();
 
 async function main(): Promise<void> {
   const app = document.getElementById('app');
@@ -129,9 +134,10 @@ async function main(): Promise<void> {
 
   // Apply current preferences to all subsystems.
   const applyPreferences = (manual: boolean): void => {
-    const { reducedMotion, quality } = preferences.current;
+    const { reducedMotion, quality, lighting } = preferences.current;
     galleryManager.setReducedMotion(reducedMotion);
     lightingSetup.setAnimated(!reducedMotion);
+    lightingSetup.setProfile(lighting);
 
     const preset = getQualityPreset(quality);
     rendererManager.applyPreset(preset);
@@ -146,6 +152,27 @@ async function main(): Promise<void> {
     }
   };
   applyPreferences(false);
+
+  // v0.03: hidden albedo-only debug toggle via `?debug=1`. When enabled,
+  // pressing 'a' on the keyboard strips all shading so reviewers can verify
+  // the shader preserves the picture's fidelity. Not exposed in normal UI to
+  // avoid confusing public visitors.
+  const debugUrl = new URLSearchParams(window.location.search).get('debug') === '1';
+  let albedoOnly = false;
+  const handleDebugKey = (event: KeyboardEvent): void => {
+    if (!debugUrl) return;
+    if (event.key === 'a' || event.key === 'A') {
+      albedoOnly = !albedoOnly;
+      artworkMesh.material.setAlbedoOnly(albedoOnly);
+      // eslint-disable-next-line no-console
+      console.info(`[freyraum debug] albedo-only ${albedoOnly ? 'ON' : 'OFF'}`);
+    }
+  };
+  if (debugUrl) {
+    window.addEventListener('keydown', handleDebugKey);
+    // eslint-disable-next-line no-console
+    console.info('[freyraum debug] press "a" to toggle albedo-only shading');
+  }
   let previousQuality = preferences.current.quality;
   const unsubscribePreferences = preferences.subscribe(() => {
     const next = preferences.current.quality;
@@ -185,6 +212,15 @@ async function main(): Promise<void> {
     }
     lightingSetup.update(now);
     galleryManager.update();
+
+    // v0.03: feed view-space key-light direction into PaintingMaterial so
+    // the self-shadow march in tangent space can run. The camera's
+    // matrixWorldInverse upper-left transforms world directions to view.
+    sceneManager.camera.updateMatrixWorld();
+    lightingSetup.getKeyLightWorldDir(KEY_LIGHT_WORLD);
+    KEY_LIGHT_VIEW.copy(KEY_LIGHT_WORLD).transformDirection(sceneManager.camera.matrixWorldInverse);
+    artworkMesh.material.setKeyLightDirView(KEY_LIGHT_VIEW);
+
     postProcessing.render();
   };
 
@@ -194,6 +230,9 @@ async function main(): Promise<void> {
   window.addEventListener('beforeunload', () => {
     cancelAnimationFrame(rafId);
     unsubscribePreferences();
+    if (debugUrl) {
+      window.removeEventListener('keydown', handleDebugKey);
+    }
     preferences.dispose();
     mouseInteraction.dispose();
     zoomPan.dispose();

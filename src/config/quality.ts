@@ -42,6 +42,22 @@ export interface QualityPreset {
   grazingBoostEnabled: boolean;
   /** Whether the detail normal path is enabled at all. */
   detailNormalEnabled: boolean;
+
+  // ── v0.03 procedural fallback and parallax fields ────────────────────────
+  /** Target pixel size for procedurally generated support maps. */
+  proceduralTileSize: number;
+  /** Whether parallax occlusion UV offset is compiled into the fragment shader. */
+  parallaxEnabled: boolean;
+  /** Number of height-field march steps for parallax UV offset. */
+  parallaxSteps: number;
+  /** Parallax depth (UV-space height-scale). 0 disables. */
+  parallaxScale: number;
+  /** Whether direct-light self-shadow approximation is compiled in. */
+  selfShadowEnabled: boolean;
+  /** Number of height-field steps for the self-shadow horizon march. */
+  selfShadowSteps: number;
+  /** Self-shadow darkening scalar (0..1). */
+  selfShadowStrength: number;
 }
 
 export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
@@ -50,40 +66,56 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     label: 'Hoch',
     description: 'Volle Detailtiefe für moderne dedizierte GPUs.',
     pixelRatioCap: 1.8,
-    bloomStrength: 0.12,
-    bloomRadius: 0.4,
-    bloomThreshold: 1.1,
+    bloomStrength: 0.08,
+    bloomRadius: 0.36,
+    bloomThreshold: 1.2,
     shadows: true,
     artworkSegments: 240,
     shaderVariant: 'painting-high',
-    normalStrength: 0.45,
-    detailNormalStrength: 0.55,
-    bumpStrength: 0.012,
-    specularStrength: 0.55,
+    normalStrength: 0.7,
+    detailNormalStrength: 0.6,
+    // v0.03: parallax handles depth on high; bump is disabled to prevent
+    // double-stacking relief amplitude (single source of truth per preset).
+    bumpStrength: 0.0,
+    specularStrength: 0.4,
     anisotropyDivisor: 1,
     aoEnabled: true,
     grazingBoostEnabled: true,
     detailNormalEnabled: true,
+    proceduralTileSize: 1024,
+    parallaxEnabled: true,
+    parallaxSteps: 12,
+    parallaxScale: 0.04,
+    selfShadowEnabled: true,
+    selfShadowSteps: 8,
+    selfShadowStrength: 0.55,
   },
   balanced: {
     id: 'balanced',
     label: 'Ausgewogen',
     description: 'Empfohlen für die meisten Laptops und Tablets.',
     pixelRatioCap: 1.4,
-    bloomStrength: 0.08,
-    bloomRadius: 0.34,
-    bloomThreshold: 1.15,
+    bloomStrength: 0.06,
+    bloomRadius: 0.3,
+    bloomThreshold: 1.25,
     shadows: true,
     artworkSegments: 120,
     shaderVariant: 'painting-balanced',
-    normalStrength: 0.35,
+    normalStrength: 0.45,
     detailNormalStrength: 0.4,
-    bumpStrength: 0.0,
-    specularStrength: 0.35,
+    bumpStrength: 0.025,
+    specularStrength: 0.3,
     anisotropyDivisor: 2,
     aoEnabled: false,
     grazingBoostEnabled: true,
     detailNormalEnabled: true,
+    proceduralTileSize: 512,
+    parallaxEnabled: false,
+    parallaxSteps: 0,
+    parallaxScale: 0.0,
+    selfShadowEnabled: false,
+    selfShadowSteps: 0,
+    selfShadowStrength: 0.0,
   },
   battery: {
     id: 'battery',
@@ -96,7 +128,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     shadows: false,
     artworkSegments: 48,
     shaderVariant: 'painting-battery',
-    normalStrength: 0.22,
+    normalStrength: 0.25,
     detailNormalStrength: 0.0,
     bumpStrength: 0.0,
     specularStrength: 0.0,
@@ -104,6 +136,13 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     aoEnabled: false,
     grazingBoostEnabled: false,
     detailNormalEnabled: false,
+    proceduralTileSize: 256,
+    parallaxEnabled: false,
+    parallaxSteps: 0,
+    parallaxScale: 0.0,
+    selfShadowEnabled: false,
+    selfShadowSteps: 0,
+    selfShadowStrength: 0.0,
   },
 };
 
