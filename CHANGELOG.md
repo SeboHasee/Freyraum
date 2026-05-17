@@ -2,20 +2,20 @@
 
 ## Unreleased
 
-### Planned (v0.10 — Hoch quality close-up artifact audit — 2026-05-17)
+### Planned (v0.10 — spot artifact coding plan — 2026-05-17)
 
-- Added a v0.10 investigation plan after a customer report of occasional
-  close-up artifacts on the **Hoch** quality preset.
-- Audited the high-only rendering paths and ranked likely causes: parallax UV
-  clamping, self-shadow/inspection PCF, clearcoat/specular/bloom, and possible
-  frame/artwork depth precision at the edge.
-- Updated repository documentation with a reproduction-first plan using
-  `?debug=info`, albedo-only (`a`), shadow-only (`s`), quality comparison, and
-  lighting-profile comparison.
-- Updated the v0.10 analysis after customer clarification that the artifact is
-  visible as **little spots**. Ranking now prioritizes:
-  self-shadow × procedural height micro-noise and specular/clearcoat
-  micro-glints, with parallax/z-fighting moved lower.
+- Deep source audit identified two root causes for "little spots" in Hoch mode.
+  **Primary:** `generateHeight()` micro-noise amplitude too high for the
+  self-shadow march step size, creating stochastic dark speckle.
+  **Secondary:** `generateSpecular()` blob peak too high for Hoch close-up under
+  clearcoat/raking light, creating bright spots.
+- Coding plan in `plan.md` specifies exact line-level changes with before/after
+  values and supporting math:
+  - `ProceduralTextureFactory.ts` ~line 156: `* 16` → `* 3`
+  - `ProceduralTextureFactory.ts` ~line 220: `* 90` → `* 50`
+  - `quality.ts` Hoch `selfShadowBias`: `0.03` → `0.05`
+  - `quality.ts` Hoch `specularStrength`: `0.4` → `0.28`
+- No GLSL shader changes. No new API. Balanced/battery unaffected.
 
 ### Fixed (v0.09 — actual uploaded image on 3D painting — 2026-05-17)
 

@@ -1,50 +1,54 @@
 # FINDINGS
 
-## 2026-05-17 — v0.10: planned — Hoch quality close-up artifact audit
+## 2026-05-17 — v0.10: planned — spot artifact coding plan
 
 ### Customer-observed behavior
 
-The customer reports occasional strange artifacts in close-up view when the
-quality / performance setting is **Hoch**. The attached GitHub user-attachment
-URL returned `HTTP 404` from this sandbox, so the screenshot could not be
-inspected directly here. The plan therefore records the code-audit conclusions
-and requires reproduction before changing shader defaults.
+Customer reports **little spots** visible at close-up zoom with **Hoch** quality
+preset. Balanced and battery do not reproduce the artifact. The screenshot URL
+returns `HTTP 404` from this sandbox; the analysis is code-derived.
 
-Customer follow-up clarified the shape: the artifact looks like **little spots**.
-That shifts the primary suspects away from broad edge-smear/z-fighting and
-toward high-frequency shading interactions (self-shadow micro-occlusion and/or
-specular-clearcoat micro-glints).
+### Root causes identified (code-derived with math)
 
-### Code-audit conclusion
+Full analysis in `plan.md` v0.10. Short summary:
 
-The strongest suspects are high-only rendering paths:
+**Cause 1 (primary) — Height micro-noise creates stochastic shadow blockers**
 
-- `src/config/quality.ts`: Hoch enables parallax, self-shadow, clearcoat, higher
-  normal/detail strengths, 1024/2048 procedural maps, max anisotropy, and the
-  highest pixel-ratio cap. Balanced disables parallax and self-shadow.
-- `src/materials/PaintingMaterial.ts`: parallax creates shifted `pUV` coordinates
-  and clamps them to `[0.001, 0.999]`; at close zoom this can smear or duplicate
-  edge pixels and affects albedo directly.
-- `src/materials/PaintingMaterial.ts`: self-shadow still runs only on Hoch and
-  can create dark local artifacts if the height march/PCF path is the culprit.
-- `src/materials/ProceduralTextureFactory.ts`: `generateHeight()` contains a
-  high-frequency micro component that can feed tiny blockers into self-shadow on
-  Hoch; `generateSpecular()` uses deterministic Gaussian blobs that can present
-  as bright spot-like glints with clearcoat/specular enabled.
-- `src/gallery/ArtworkMesh.ts`: the artwork plane is only about `0.005` world
-  units in front of the frame face, so edge-local flicker may be depth precision
-  or z-fighting.
-- `src/core/PostProcessing.ts`: bloom/high pixel ratio can make bright highlight
-  artifacts more visible.
+`ProceduralTextureFactory.generateHeight()` line 156:
 
-### Required next validation
+```ts
+const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31) * 16;
+```
 
-Use `?debug=info` and compare the same camera position under Hoch vs Ausgewogen,
-`gallery-soft` vs `raking-inspection`, albedo-only (`a`) vs normal shading, and
-shadow-only (`s`) vs normal shading. Only fix the confirmed cause; do not reduce
-all high-quality effects blindly. Additionally classify spots as dark vs bright:
-dark spots imply self-shadow/height interaction, bright spots imply
-specular/clearcoat/bloom interaction.
+Frequency 0.55 at 1024 px → period ≈ 1.8 px (near Nyquist). The self-shadow
+march in `PaintingMaterial.ts` jumps ~5 pixels per step at 8 steps. Each step
+lands at a statistically independent micro-noise height. Pixels whose `_curH`
+sampled a micro-noise trough have all subsequent march samples appearing as
+blockers → **dark spot**. Current bias `0.03` is only half the micro amplitude
+`16/255 ≈ 0.063`, so micro-noise blockers are not suppressed.
+
+**Cause 2 (secondary) — Specular blob peak too high for Hoch close-up**
+
+`generateSpecular()` line 220:
+```ts
+const blob = Math.exp(-distSq / (radius * radius)) * 90;
+```
+
+With `specularStrength: 0.4` and clearcoat in Hoch, blob centers contribute
+`(90/255) × 0.4 ≈ 14%` specular intensity — visible as bright spots at close
+zoom under raking light.
+
+### Planned fixes (four lines changed across two files)
+
+| File | Line | Before | After | Reason |
+|------|------|--------|-------|--------|
+| `ProceduralTextureFactory.ts` | ~156 | `* 16` | `* 3` | max micro = 0.012 < bias 0.03, kills shadow speckle |
+| `ProceduralTextureFactory.ts` | ~220 | `* 90` | `* 50` | blob peak drops from 14% to 7.8% specular |
+| `quality.ts` Hoch | `selfShadowBias` | `0.03` | `0.05` | ×4 headroom over new micro amplitude |
+| `quality.ts` Hoch | `specularStrength` | `0.4` | `0.28` | combined blob contribution drops to 5.5% |
+
+No GLSL shader changes. No new API. No schema changes. Balanced/battery
+unaffected.
 
 ---
 
