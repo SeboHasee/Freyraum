@@ -54,15 +54,20 @@ Final scope (all shipped except where noted):
 
 ## v0.03 follow-up plan
 
-v0.03 is planned, not yet implemented. It will address the latest visual QA feedback:
+v0.03 is planned, not yet implemented. The plan is now more technical and implementation-oriented.
 
-- preserve the original artwork image as the unmodified visual source;
-- retune the material toward rough matte canvas instead of a shiny/varnished look;
-- make bump/height/detail maps visibly respond to raking light;
-- increase or redesign procedural relief detail so it remains crisp at maximum zoom;
-- loosen close-up pan limits so every edge and corner can be inspected freely.
+Planned system direction:
 
-See [`plan.md`](./plan.md#v003-follow-up-plan--faithful-painting-inspection-rough-matte-surface-high-resolution-relief-and-free-edge-navigation) and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-follow-up-visual-qa-findings) for the full follow-up plan and audit findings.
+- keep the original artwork image as immutable albedo content;
+- make the artwork pipeline modular so future pictures can be swapped without code changes;
+- stop relying on the resolutions of the current sample artworks;
+- compute quality from authored map availability, surface profile, preset tier, and effective on-screen texel density;
+- retune the default surface toward rough matte canvas instead of glossy varnish;
+- add a high-end tangent-space parallax relief path with direct-light self-shadow approximation for inspection mode;
+- preserve cheaper fallback paths for balanced and battery presets;
+- replace conservative close-up pan limits with explicit inspection bounds that allow edge/corner inspection.
+
+See [`plan.md`](./plan.md#v003-follow-up-plan--technical-rendering-system-for-faithful-artworks-modular-asset-swaps-parallax-relief-and-free-inspection) and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-technical-rendering-follow-up-findings) for the full architecture and findings.
 
 ## Developer workflow
 

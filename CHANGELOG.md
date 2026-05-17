@@ -4,9 +4,9 @@
 
 ### Added (v0.03 planning)
 
-- Added a v0.03 follow-up plan in `plan.md` focused on preserving the original artwork's visual essence, reducing unwanted shininess, improving matte roughness, making bump/height/detail maps visibly respond to light, preserving high-resolution relief at maximum zoom, and freeing pan limits for edge/corner inspection.
-- Added v0.03 findings in `FINDINGS.md` documenting the likely v0.02 causes of the reported visual issues: specular/clearcoat/grazing response, low procedural map resolution, subtle bump strength, and conservative pan limits.
-- Updated `README.md` and `docs/HANDOFF.md` with v0.03 planning status and reviewer acceptance checks.
+- Expanded the v0.03 plan in `plan.md` into a more technical rendering architecture: modular artwork surface contracts, resolution-independent asset selection, preset-based shader tiers, tangent-space parallax occlusion mapping strategy, direct-light self-shadow approximation, matte-first material retuning, and explicit module/file responsibilities.
+- Reworked v0.03 findings in `FINDINGS.md` to document the current code-level constraints and the proposed technical direction for modular asset swaps, effective texel-density handling, parallax-style relief, self-shadowing, and inspection camera bounds.
+- Updated `README.md` and `docs/HANDOFF.md` so the v0.03 summary and reviewer guidance now reflect the more coding-oriented architecture and acceptance criteria.
 
 ### Added (v0.02 implementation)
 

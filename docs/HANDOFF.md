@@ -78,15 +78,27 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 
 ## v0.03 follow-up review focus
 
-v0.03 is currently a plan, not an implemented runtime change. Reviewers should use it to guide the next implementation pass after v0.02:
+v0.03 is currently a plan, not an implemented runtime change. The review focus is now more technical and should guide the next implementation pass after v0.02.
 
-- **Fidelity:** the source artwork image must remain the stable albedo reference; lighting/material response must not change the picture's essence.
-- **Matte surface:** default gallery view should read as rough canvas/dry paint, not shiny plastic or wet varnish.
-- **Visible relief:** bump/height/detail maps should be clearly visible in an inspection/raking-light mode.
-- **High zoom:** relief detail should remain crisp at maximum zoom without obvious 256 px tile blur or repetition.
-- **Free inspection:** close-up pan should allow reaching every edge and corner while preserving reset/escape controls.
+Reviewers should verify that the plan covers:
 
-Acceptance for v0.03 should include albedo-only comparison screenshots, matte-default screenshots, raking-light screenshots, max-zoom relief screenshots, and edge/corner navigation checks for portrait, square, landscape, and ultrawide artworks.
+- **Picture fidelity:** the source artwork remains immutable albedo content; lighting/shading must not reinterpret the image.
+- **Modular asset swaps:** future artworks can be replaced by metadata/assets only, regardless of source resolution or aspect ratio.
+- **Resolution-independent quality:** support-map selection is driven by authored roles, preset tier, and effective texel density rather than assumptions about current sample files.
+- **Matte-first response:** default gallery mode should read as rough painted surface, not glossy varnish.
+- **Parallax relief:** the high/inspection path is explicitly planned as tangent-space parallax occlusion style UV offset, not vague "more bump".
+- **Self-shadowing:** direct light should show relief/self-shadow cues without darkening the artwork texture itself.
+- **Free inspection:** close-up pan bounds should allow direct edge/corner inspection.
+
+Acceptance for v0.03 should include:
+
+1. albedo-only vs shaded comparison captures,
+2. matte-default captures,
+3. inspection/raking-light captures,
+4. max-zoom relief captures,
+5. edge/corner inspection captures,
+6. validation notes for arbitrary aspect ratios and arbitrary source resolutions,
+7. preset-specific notes for high / balanced / battery fallback behaviour.
 
 ## v0.02 shader, lighting, and WebGPU review guide
 
