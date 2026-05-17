@@ -1007,326 +1007,674 @@ Implementation-relevant URLs:
 
 ### v0.05 Status
 
-**Planned, not yet implemented.** This plan responds to the 2026-05-17 visual review screenshot showing dark, light-angle-dependent blobs on the painting surface after v0.04. The issue is most likely the v0.03/v0.04 height-field self-shadow approximation: it is currently a binary blocker test with no bias, no penumbra, no filtering, and no distance falloff, so broad procedural height regions can read as dirt/stains instead of realistic shallow relief.
+**Planned, not yet implemented.** This plan supersedes the initial diagnosis stub written on 2026-05-17. It is now a full technical execution guide: every slice includes exact file paths, the specific TypeScript interface additions, the complete GLSL replacement, and cross-file wiring instructions. The plan is intentionally written so a developer can open the relevant file, find the relevant block, and make the change without searching.
 
-### v0.05 Problem Diagnosis
+---
 
-#### Symptom
+### v0.05 Problem Diagnosis (code-level)
 
-- Dark spots move/change with light direction and artwork angle.
-- They are not baked into albedo and do not look like neutral AO; they behave like shader lighting.
-- The spots appear too broad and contrasty for painting micro-relief, reading as stains or dirt.
+**Symptom:** dark, light-angle-dependent blobs appear on the painting surface in `gallery-soft`. They look like stains or dirt.
 
-#### Current code path
+**Root cause — file `src/materials/PaintingMaterial.ts`, shader block `lightsEndChunk`, lines ~252–288:**
 
-**File:** `src/materials/PaintingMaterial.ts`  
-**Shader block:** `PAINTING_USE_SELFSHADOW` inside `lightsEndChunk`
-
-Current behavior:
-
-- Projects `uKeyLightDir` into tangent space.
-- Starts from `pUV` (or `vMapUv`) and marches one ray along `_tsLight.xy`.
-- Samples `bumpMap.r` at each step.
-- If any sample is greater than `_wantedH`, it immediately sets `_shadow = 1.0 - uShadowStrength` and breaks.
-- High preset currently uses `selfShadowSteps: 8` and `selfShadowStrength: 0.55`, so a single blocker event can darken direct diffuse/specular to **45%**.
+```glsl
+// CURRENT (binary, stain-prone)
+for (int _j = 0; _j < 16; _j++) {
+    if (float(_j) >= uShadowSteps) break;
+    _shUV += _shDelta;
+    _shUV = clamp(_shUV, 0.001, 0.999);
+    float _sampleH  = texture2D(bumpMap, _shUV).r;
+    float _wantedH  = _curH + (_tsLight.z * _shStep * float(_j + 1));
+    if (_sampleH > _wantedH) {          // ← binary on/off
+        _shadow = 1.0 - uShadowStrength; // ← single massive jump
+        break;                           // ← no further checking
+    }
+}
+reflectedLight.directDiffuse  *= _shadow;
+reflectedLight.directSpecular *= _shadow;
+```
 
 Why this creates stains:
 
-1. **Binary hard cutoff** — every blocker produces the same darkening, regardless of height difference or blocker distance.
-2. **No bias/deadzone** — tiny procedural height differences can shadow themselves.
-3. **No soft penumbra** — there is no smooth transition between lit and shadowed relief.
-4. **No filtering** — one ray and one height sample per step means low-frequency procedural blobs become solid occlusion patches.
-5. **No display/inspection separation** — high preset self-shadow is strong in normal viewing, while conservation-style raking light should be the mode where relief shadows become more visible.
+1. **Binary break** — any blocker, no matter how small, immediately applies the full darkening and stops looping. Broad low-frequency procedural height regions (the noise blobs) trip this on first step, becoming solid dark patches.
+2. **No height bias** — `_sampleH > _wantedH` fires even when `_sampleH` exceeds `_wantedH` by a rounding-error amount. Procedural noise has tiny variations everywhere that self-shadow themselves.
+3. **`uShadowStrength: 0.55`** — direct light can fall to 45 % in a single step. That is too strong for normal display; it reads as opaque dirt.
+4. **No soft penumbra** — there is no smooth transition at the blocker boundary.
+5. **No distance weighting** — a far blocker and a near blocker produce the same attenuation.
+6. **One ray only** — the single march direction has no lateral neighbours to average, so individual texture-sample artefacts become visible as isolated spots.
 
-### Online Research Summary
-
-Research direction from real-time rendering/PBR references:
-
-- Parallax/relief mapping self-shadowing is normally ray-marched through a height field, but naive binary tests create hard, aliased, or stair-stepped shadows. Soft results require filtering or continuous visibility, not an immediate on/off break.
-- PCF-style filtering averages multiple nearby shadow tests to soften transitions; the same idea can be adapted to height-field self-shadowing by averaging/weighting blockers or sampling a small cross/disk neighborhood.
-- Shadow acne/self-shadow artifacts are commonly reduced with bias or normal/height offsets. Too little bias creates acne/stains; too much causes detached shadows, so the value must be preset/profile-tuned.
-- Mipmapping/anisotropic filtering helps at oblique angles, but a custom height-field ray march still needs its own bias/softness because `texture2D` will not automatically solve binary blocker logic.
-- Three.js `onBeforeCompile` remains the correct integration point because the project needs native `MeshPhysicalMaterial` PBR features plus a targeted shader injection.
-
-Reference URLs for implementation research:
-
-- LearnOpenGL — Parallax Mapping: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
-- Three.js docs — `Material.onBeforeCompile`: https://threejs.org/docs/#api/en/materials/Material.onBeforeCompile
-- Three.js example — parallax map material: https://threejs.org/examples/?q=paralla#webgl_materials_parallaxmap
-- GPU Gems 3 — filtered/soft shadow-map concepts: https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps
-- Microsoft HLSL `SampleBias` documentation, relevant to explicit bias/LOD thinking for texture sampling: https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-samplebias
-- StackOverflow discussion topic — soft shadows for parallax occlusion shaders: https://stackoverflow.com/questions/37067278/soft-shadow-for-parallax-occlusion-shader
+---
 
 ### v0.05 Goals
 
-- Remove stain-like dark spots from normal gallery viewing.
-- Keep subtle, believable relief cues under `gallery-soft` lighting.
-- Preserve stronger relief inspection in `raking-inspection`, but make it look like shallow surface texture, not dirt.
-- Replace binary self-shadowing with smooth, biased, distance-aware shadow visibility.
-- Add enough debug/review instrumentation that future screenshots can distinguish albedo, AO, normal/parallax, and self-shadow artifacts.
-- Keep balanced and battery presets free of the expensive self-shadow path.
+- Remove stain-like dark blobs from `gallery-soft` (default visitor view).
+- Keep subtle believable surface relief cues that change with light angle.
+- Preserve strong, clean relief in `raking-inspection` (but no dirt).
+- Keep balanced and battery presets free of any self-shadow shader cost.
+- Add debug-only toggle (`?debug=1` + `s`) so future QA screenshots can
+  prove which artifact source is responsible.
+- Write code that is easy to tune further without a full rewrite (all
+  thresholds are uniforms, not hardcoded GLSL constants).
 
 ### v0.05 Non-Goals
 
-- Not implementing full ray-traced shadows or global illumination.
-- Not replacing `MeshPhysicalMaterial`.
-- Not adding WebGPU-only rendering.
-- Not requiring scanned authored height/normal maps.
-- Not making raking-inspection the default visitor lighting profile.
-- Not changing artwork albedo or baking shadows into source images.
+- No full ray-traced/GI shadows.
+- No WebGPU-only paths.
+- No replacing `MeshPhysicalMaterial`.
+- No requiring authored height/normal scans.
+- No making `raking-inspection` the default visitor profile.
+- No changing artwork albedo.
 
-### v0.05 Proposed Technical Direction
+---
 
-#### 1. Convert binary shadow to continuous visibility
+### v0.05 Technical Direction
 
-Replace the current immediate break:
+#### A — Replace binary shadow with smooth weighted accumulation
 
-- current concept: `if blocker exists -> shadow = 1 - strength`
-- planned concept: `occlusion = smooth weighted response to blocker amount and distance`
+Instead of breaking on first blocker, the loop accumulates a weighted
+occlusion value. Each step contributes independently based on how much
+the blocker exceeds the horizon and how close the blocker is to the
+surface point.
 
-The shader should compute a blocker amount such as:
+Key ideas:
 
-- `blocker = sampleH - wantedH - bias`
-- `softBlocker = smoothstep(0.0, softness, blocker)`
-- weight early samples more than far samples, but never let one tiny sample create a full stain.
+- **Bias** — a minimum excess height before a sample is considered a
+  blocker. Prevents rounding-error self-occlusion from the height noise.
+- **Softness** — `smoothstep(0, softness, excess)` maps the excess to
+  a smooth 0-to-1 contribution instead of a hard step.
+- **Distance weight** — early-step (near) blockers contribute more than
+  late-step (far) blockers. A simple `1.0 / (float(_j) + 1.0)` falloff
+  is enough; the far steps are detail, not the dominant darkening.
+- **Max occlusion cap** — total accumulated occlusion is clamped to a
+  designer-set maximum before being multiplied by strength. This is the
+  primary "no-more-stains-in-gallery-soft" guard.
+- **Display/inspection scalar** — a uniform `uShadowProfileScale` (default
+  1.0) is updated by main.ts when the lighting profile changes.
+  Inspection mode sets it to 1.0 (or slightly above); display profiles
+  set it to a conservative value (≈ 0.5). This lets both modes share the
+  same shader without needing a `needsUpdate` recompile on profile switch.
 
-The final result should be:
+#### B — Optional PCF-like lateral filtering (Slice S4, separate)
 
-- `shadow = 1.0 - selfShadowStrength * occlusion`
-- `occlusion` clamped to a conservative range for display lighting.
+If simple accumulation still leaves perceptible blobs under inspection,
+Slice S4 adds a 3-ray fan: the centre march plus two perpendicular-offset
+marches at `±uShadowFilterRadius` UV units. The three shadow occlusions
+are averaged. This is compiled in only for the high preset and can be
+disabled by setting `selfShadowFilterRadius: 0` in quality.ts.
 
-#### 2. Add height bias and softness uniforms
+This is a later-enhancement slot — do S3 first and evaluate visually.
 
-Extend `QualityPreset` with planned v0.05 fields:
+#### C — Debug shadow-only toggle
 
-- `selfShadowBias`: minimum height difference before shadowing starts.
-- `selfShadowSoftness`: smoothstep width for penumbra/transition.
-- `selfShadowMaxOcclusion`: cap so self-shadow cannot over-darken the artwork.
-- `selfShadowFilterRadius`: optional UV radius for small neighborhood filtering.
+Add `s`/`S` key (behind `?debug=1`) that calls a new `setShadowOnly()`
+method on `PaintingMaterial`. When enabled, `reflectedLight.directDiffuse`
+and `directSpecular` are replaced with a grey-scale shadow visualisation
+(`vec3(_shadow)`). This makes QA screenshots unambiguous.
 
-Initial planned high-preset display values:
-
-| Field | Initial target | Rationale |
-|---|---:|---|
-| `selfShadowStrength` | 0.28–0.35 | v0.04 `0.55` is too strong for normal display |
-| `selfShadowBias` | 0.025–0.04 | prevents tiny height noise from self-shadowing |
-| `selfShadowSoftness` | 0.08–0.14 | broadens transition so spots do not look like stains |
-| `selfShadowMaxOcclusion` | 0.22–0.30 | hard cap for visitor-friendly display |
-| `selfShadowSteps` | 6–8 | keep performance close to v0.04 |
-
-#### 3. Filter the height-field self-shadow
-
-Use one of these, in order of preference after quick prototyping:
-
-1. **Weighted along-ray accumulation** — cheapest; no extra lateral taps. Accumulate `softBlocker * distanceWeight` instead of breaking.
-2. **Tiny 3-ray PCF-like filter** — center ray plus two perpendicular-offset rays, only in high preset if performance allows.
-3. **Local height prefilter** — sample a small cross around `_shUV` before comparison. More expensive because it multiplies samples per step; use only if along-ray smoothing is insufficient.
-
-Do not add random per-frame jitter. If dithering is needed, use deterministic per-pixel/object-space noise so the artwork does not shimmer.
-
-#### 4. Separate display and inspection strength
-
-Use `LightProfile.displayIntent` as the conceptual boundary:
-
-- `display` profiles should use conservative soft self-shadow.
-- `inspection` profiles may use stronger relief, but still filtered and capped.
-- `demo` profiles may keep dramatic lighting but must not create dirt-like blotches.
-
-Implementation options:
-
-- Minimal: only retune high preset globally and keep all lighting profiles safe.
-- Better: pass a per-light-profile scalar into `PaintingMaterial` (for example `setSelfShadowProfileScalar()`), updated when lighting profile changes.
-
-#### 5. Add debug/review toggles
-
-Add debug-only controls behind `?debug=1`:
-
-- Existing `a`: albedo-only.
-- Planned `s`: toggle self-shadow contribution.
-- Optional `h`: visualize height/self-shadow mask as grayscale.
-
-This makes future QA screenshots actionable: if spots disappear with `s`, the artifact is self-shadow; if they remain, investigate AO/roughness/lighting.
+---
 
 ### v0.05 Vertical Slices
 
-#### Slice S1 — Documentation and diagnosis
+#### Slice S1 — Documentation ✅ (this document)
 
-Files:
+Already done. This file and all other md files are updated.
 
-- `plan.md`
-- `FINDINGS.md`
-- `README.md`
-- `docs/HANDOFF.md`
-- `CHANGELOG.md`
+---
 
-Deliverable:
+#### Slice S2 — TypeScript preset extension
 
-- This plan and review checklist.
-- Code-level finding that v0.04 self-shadow is binary and stain-prone.
+**File: `src/config/quality.ts`**
 
-Acceptance:
+Add four new optional fields to the `QualityPreset` interface:
 
-- Reviewers can identify the suspected shader path and planned fix before implementation starts.
+```ts
+// ── v0.05 soft self-shadow fields ─────────────────────────────────────────
+/**
+ * Minimum height-field excess before a sample counts as a blocker.
+ * Prevents rounding-error self-occlusion. Units: normalised height [0..1].
+ * Typical range: 0.02–0.05.
+ */
+selfShadowBias: number;
+/**
+ * smoothstep width for the penumbra transition.
+ * 0 = binary (old behaviour). Typical range: 0.06–0.16.
+ */
+selfShadowSoftness: number;
+/**
+ * Maximum accumulated occlusion the march can produce, before being
+ * multiplied by selfShadowStrength. Clamps the darkest possible shadow
+ * region. Typical display range: 0.20–0.35.
+ */
+selfShadowMaxOcclusion: number;
+/**
+ * UV-space lateral offset radius for the optional 3-ray PCF-like filter.
+ * 0 disables the filter entirely (no extra texture reads).
+ * Only used when PAINTING_USE_SHADOW_FILTER is compiled in (Slice S4).
+ */
+selfShadowFilterRadius: number;
+```
 
-#### Slice S2 — Preset fields and conservative retune
+Update the three preset records in `QUALITY_PRESETS`:
 
-Files:
+```ts
+// high preset — add after selfShadowStrength:
+selfShadowBias:          0.03,   // 3 % height-unit deadzone
+selfShadowSoftness:      0.10,   // 10 % smoothstep penumbra
+selfShadowMaxOcclusion:  0.28,   // cap so gallery view never exceeds 28 % occlusion
+selfShadowFilterRadius:  0.0,    // no PCF yet; set to 0.004 when Slice S4 is done
 
-- `src/config/quality.ts`
-- `src/materials/PaintingMaterial.ts`
+// balanced preset — add after selfShadowStrength: 0.0,
+selfShadowBias:          0.0,
+selfShadowSoftness:      0.0,
+selfShadowMaxOcclusion:  0.0,
+selfShadowFilterRadius:  0.0,
 
-Deliverable:
+// battery preset — same zeros as balanced
+selfShadowBias:          0.0,
+selfShadowSoftness:      0.0,
+selfShadowMaxOcclusion:  0.0,
+selfShadowFilterRadius:  0.0,
+```
 
-- Add `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, and optional `selfShadowFilterRadius` to `QualityPreset`.
-- Set high preset to safer display values.
-- Balanced/battery remain disabled.
+Also lower the high preset's existing `selfShadowStrength` from `0.55`
+to `0.30`. The new capped accumulation means 0.30 * 0.28 max-occlusion
+= at most 8.4 % direct-light reduction in gallery-soft — invisible as a
+stain.
 
-Acceptance:
+**Acceptance for S2:**
+- `npm run lint` passes.
+- `npm run build` passes.
+- No runtime change yet (new fields are not read in the shader until S3).
 
-- TypeScript passes.
-- Existing material behavior is unchanged when `selfShadowEnabled` is false.
+---
 
-#### Slice S3 — Continuous self-shadow shader
+#### Slice S3 — New self-shadow shader
 
-Files:
+**File: `src/materials/PaintingMaterial.ts`**
 
-- `src/materials/PaintingMaterial.ts`
+##### Step 3a — Add new uniforms to `PaintingUniforms`
 
-Deliverable:
+Inside the `PaintingUniforms` interface (line ~58), add:
 
-- Replace binary break logic with smooth blocker accumulation.
-- Add bias, softness, distance falloff, and max-occlusion cap.
-- Keep shader loop max at 16 for WebGL compile stability.
+```ts
+// v0.05 soft shadow
+uShadowBias:         { value: number };
+uShadowSoftness:     { value: number };
+uShadowMaxOcclusion: { value: number };
+uShadowProfileScale: { value: number };   // set per-profile in main.ts
+```
 
-Acceptance:
+##### Step 3b — Initialise in the constructor
 
-- Dark blobs no longer appear as hard stain patches in `gallery-soft`.
-- Relief still changes subtly with angle and light.
+Inside the constructor, after `uShadowStrength`:
 
-#### Slice S4 — Optional PCF-like filtering
+```ts
+uShadowBias:         { value: preset.selfShadowBias },
+uShadowSoftness:     { value: preset.selfShadowSoftness },
+uShadowMaxOcclusion: { value: preset.selfShadowMaxOcclusion },
+uShadowProfileScale: { value: 1.0 },
+```
 
-Files:
+##### Step 3c — Add to `applyPreset()`
 
-- `src/materials/PaintingMaterial.ts`
-- possibly `src/config/quality.ts`
+After the existing lines that set `uShadowSteps` and `uShadowStrength`
+(lines ~347–348), add:
 
-Deliverable:
+```ts
+this.paintingUniforms.uShadowBias.value         = preset.selfShadowBias;
+this.paintingUniforms.uShadowSoftness.value     = preset.selfShadowSoftness;
+this.paintingUniforms.uShadowMaxOcclusion.value = preset.selfShadowMaxOcclusion;
+```
 
-- If S3 is still too blotchy, add a 3-ray or local-cross filter controlled by `selfShadowFilterRadius`.
-- Keep filter disabled or zero-radius for lower presets.
+##### Step 3d — Add new public method for profile scaling
 
-Acceptance:
+Add after `setKeyLightDirView()`:
 
-- Raking inspection shows soft, local relief shadows without a dirt/stain look.
-- Bundle and frame cost remain acceptable.
+```ts
+/**
+ * v0.05: scales self-shadow strength for the active lighting profile.
+ * Called by main.ts when the user switches lighting profiles.
+ * Display profiles should use 0.5; inspection profiles 1.0.
+ * Does NOT trigger needsUpdate because uShadowProfileScale is a uniform.
+ */
+setShadowProfileScale(scale: number): void {
+  this.paintingUniforms.uShadowProfileScale.value = scale;
+}
+```
 
-#### Slice S5 — Lighting-profile sensitivity
+##### Step 3e — Add new debug method
 
-Files:
+Add after `setAlbedoOnly()`:
 
-- `src/lighting/LightProfile.ts`
-- `src/lighting/LightingSetup.ts`
-- `src/gallery/GalleryManager.ts` or `src/main.ts`
-- `src/materials/PaintingMaterial.ts`
+```ts
+/**
+ * v0.05: debug-only self-shadow visualisation toggle.
+ * When true, directDiffuse and directSpecular are replaced with a
+ * greyscale shadow mask so QA can isolate the self-shadow contribution.
+ * Gated behind ?debug=1 in main.ts.
+ */
+setShadowDebug(enabled: boolean): void {
+  if (this.shadowDebugEnabled === enabled) return;
+  this.shadowDebugEnabled = enabled;
+  this.needsUpdate = true;   // recompiles shader to toggle #define
+}
+```
 
-Deliverable:
+Also add the private flag at the top of the class:
 
-- Add a profile scalar only if global high-preset tuning cannot satisfy both display and inspection.
-- Display profiles keep subtle shadows; inspection can be stronger.
+```ts
+private shadowDebugEnabled = false;
+```
 
-Acceptance:
+And add the define to `onBeforeCompile`:
 
-- Default visitor experience is clean and photorealistic.
-- Inspection mode remains useful but no longer looks dirty.
+```ts
+if (this.shadowDebugEnabled) defines.push('#define PAINTING_DEBUG_SHADOW');
+```
 
-#### Slice S6 — Debug QA controls
+##### Step 3f — Add new uniforms to the GLSL uniform block
 
-Files:
+Inside `uniformBlock` (around line 138), add after `uAlbedoOnly`:
 
-- `src/main.ts`
-- `src/materials/PaintingMaterial.ts`
-- docs
+```glsl
+uniform float uShadowBias;
+uniform float uShadowSoftness;
+uniform float uShadowMaxOcclusion;
+uniform float uShadowProfileScale;
+```
 
-Deliverable:
+##### Step 3g — Replace the GLSL self-shadow march block
 
-- Add debug-only self-shadow toggle (`?debug=1` + `s`).
-- Optional height/shadow mask visualization if needed.
+This is the most important change. The entire current `PAINTING_USE_SELFSHADOW`
+block in `lightsEndChunk` (lines ~252–287) is replaced with the
+following. The comments are documentation and should be kept:
 
-Acceptance:
+```glsl
+#ifdef PAINTING_USE_SELFSHADOW
+    {
+        // uKeyLightDir is supplied per-frame in view space (main.ts),
+        // pointing FROM surface TOWARDS the light.
+        vec3 _tsLight = normalize(vec3(
+            dot(uKeyLightDir, vTangent.xyz),
+            dot(uKeyLightDir, vBitangent),
+            dot(uKeyLightDir, vNormal)
+        ));
 
-- QA can prove whether future dark spots come from self-shadowing.
-- Public visitor UI remains uncluttered.
+        // Only self-shadow when light has a meaningful horizontal component.
+        // Very steep lights (grazing < 3 deg from surface) are excluded to
+        // avoid artefacts when _tsLight.z is near zero.
+        if (_tsLight.z > 0.05) {
+            float _shStep = 1.0 / max(uShadowSteps, 1.0);
+
+            #ifdef PAINTING_USE_PARALLAX
+                vec2 _shUV = pUV;
+            #else
+                vec2 _shUV = vMapUv;
+            #endif
+
+            float _curH  = texture2D(bumpMap, _shUV).r;
+            float _occlusion = 0.0;
+            // totalWeight accumulates the weight denominator so very short
+            // marches (few steps) still produce a normalised 0..1 result.
+            float _totalWeight = 0.0;
+
+            vec2 _shDelta = (_tsLight.xy / max(abs(_tsLight.z), 0.2))
+                          * (uParallaxScale * _shStep);
+
+            for (int _j = 0; _j < 16; _j++) {
+                if (float(_j) >= uShadowSteps) break;
+
+                _shUV += _shDelta;
+                _shUV  = clamp(_shUV, 0.001, 0.999);
+
+                float _sampleH  = texture2D(bumpMap, _shUV).r;
+                float _wantedH  = _curH + (_tsLight.z * _shStep * float(_j + 1));
+
+                // ── v0.05 soft blocker ───────────────────────────────────
+                // excess = how much the surface protrudes above the horizon
+                // ray at this step.  Subtract bias so tiny noise variations
+                // do not register as blockers.
+                float _excess      = _sampleH - _wantedH - uShadowBias;
+                // smoothstep converts the excess to a 0..1 soft contribution.
+                // When uShadowSoftness = 0 this degenerates to the old
+                // step() (binary) behaviour, so the value acts as a
+                // continuous enhancement dial.
+                float _softBlocker = smoothstep(0.0, max(uShadowSoftness, 0.001), _excess);
+
+                // ── v0.05 distance weight ────────────────────────────────
+                // Near blockers count more than far blockers.  A reciprocal
+                // falloff keeps the near-field sharp while softening the
+                // far-field contribution naturally.
+                float _distW = 1.0 / (float(_j) + 1.0);
+
+                _occlusion   += _softBlocker * _distW;
+                _totalWeight += _distW;
+            }
+
+            // Normalise, cap, then apply profile scale and strength.
+            if (_totalWeight > 0.0) {
+                _occlusion /= _totalWeight;
+            }
+            _occlusion = clamp(_occlusion, 0.0, uShadowMaxOcclusion);
+
+            // uShadowProfileScale: 1.0 for inspection, ~0.5 for display.
+            float _shadow = 1.0 - uShadowStrength * _occlusion * uShadowProfileScale;
+            _shadow = clamp(_shadow, 0.0, 1.0);
+
+            reflectedLight.directDiffuse  *= _shadow;
+            reflectedLight.directSpecular *= _shadow;
+
+            // ── v0.05 debug shadow visualisation (compile-out) ──────────
+            #ifdef PAINTING_DEBUG_SHADOW
+                // Overwrite all lighting with a greyscale shadow mask.
+                // Bright = lit, dark = self-shadowed.
+                vec3 _shadowViz = vec3(_shadow);
+                reflectedLight.directDiffuse   = _shadowViz;
+                reflectedLight.directSpecular  = vec3(0.0);
+                reflectedLight.indirectDiffuse = vec3(0.0);
+                reflectedLight.indirectSpecular= vec3(0.0);
+            #endif
+        }
+    }
+#endif
+```
+
+**Why this works:**
+
+- With `uShadowBias = 0.03`, height differences less than 3 % of the
+  full 0–1 range are ignored. Procedural noise has peak-to-peak amplitude
+  of ~0.04 in the current generator, so flat areas will no longer shadow
+  themselves.
+- With `uShadowSoftness = 0.10`, the transition zone from no-shadow to
+  full-shadow is 10 % of the height range instead of a sharp step. Broad
+  height blobs produce a gentle gradient at their edges instead of a
+  hard-cut dark region.
+- With `uShadowMaxOcclusion = 0.28`, total accumulated occlusion is
+  capped at 28 % before the strength multiplier. At `uShadowStrength =
+  0.30`, the maximum darkening possible is `0.30 * 0.28 = 8.4 %` of
+  direct light — subtle surface shading, not a stain.
+- `uShadowProfileScale` is set to 0.5 for display profiles and 1.0 for
+  inspection, doubling the above cap during inspection to 16.8 % — still
+  capped and soft, but noticeably more tactile.
+
+**Acceptance for S3:**
+- In `gallery-soft`, the dark stain patches are gone.
+- Rotating/hovering the painting reveals soft shading that follows canvas
+  relief without any hard-edged dirt appearance.
+- `?debug=1` → `s` key: the shadow visualisation shows a smooth greyscale
+  map with gradients, not solid black blotches.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+---
+
+#### Slice S4 — Optional PCF-like lateral filter (enhancement slot)
+
+Implement this only if S3 still shows visible blobs under `raking-inspection`.
+
+**File: `src/materials/PaintingMaterial.ts`**
+
+Add a new compile-time flag:
+
+```ts
+// In onBeforeCompile defines section:
+if (preset.selfShadowFilterRadius > 0 && this.selfShadowActive()) {
+  defines.push('#define PAINTING_USE_SHADOW_FILTER');
+}
+```
+
+Add a new uniform:
+
+```ts
+// PaintingUniforms
+uShadowFilterRadius: { value: number };
+
+// constructor init
+uShadowFilterRadius: { value: preset.selfShadowFilterRadius },
+
+// applyPreset
+this.paintingUniforms.uShadowFilterRadius.value = preset.selfShadowFilterRadius;
+
+// GLSL uniform block
+uniform float uShadowFilterRadius;
+```
+
+In the GLSL `PAINTING_USE_SELFSHADOW` block, after computing `_shadow`
+from the primary march, add:
+
+```glsl
+#ifdef PAINTING_USE_SHADOW_FILTER
+    // Two additional rays at ±uShadowFilterRadius lateral UV offset.
+    // They share the same march code but start from offset positions.
+    // The three results are averaged: this PCF-like pass softens
+    // the lateral boundary of any remaining blobs.
+    vec2 _perp = vec2(-_shDelta.y, _shDelta.x);  // perpendicular in UV space
+    // --- ray B (offset +perp) ---
+    vec2 _shUV_B = pUV + _perp * uShadowFilterRadius;
+    float _occB = 0.0; float _wB = 0.0;
+    // (same loop as primary — copy the loop body here with _shUV_B)
+    // ... (implementation: 6 steps is enough for the filter rays)
+    // --- ray C (offset -perp) ---
+    vec2 _shUV_C = pUV - _perp * uShadowFilterRadius;
+    float _occC = 0.0; float _wC = 0.0;
+    // ...
+    float _occFiltered = (_occlusion + _occB + _occC) / 3.0;
+    _occFiltered = clamp(_occFiltered, 0.0, uShadowMaxOcclusion);
+    _shadow = 1.0 - uShadowStrength * _occFiltered * uShadowProfileScale;
+    _shadow = clamp(_shadow, 0.0, 1.0);
+    reflectedLight.directDiffuse  = reflectedLight.directDiffuse  / max(_shadow_prev, 0.001) * _shadow;
+    reflectedLight.directSpecular = reflectedLight.directSpecular / max(_shadow_prev, 0.001) * _shadow;
+#endif
+```
+
+> Implementation note: to avoid code duplication, extract the single-ray
+> march into a GLSL helper function. In Three.js `onBeforeCompile` you
+> can inject the helper function in the `common` section before the main
+> shader body. Use the `HEADER_TOKEN` insertion point already used by the
+> uniform block.
+
+**To enable:** set `selfShadowFilterRadius: 0.004` in `quality.ts` `high`
+preset. `0.004` is approximately 4 texels at 1024 px tile size, which
+is a natural canvas-weave spacing.
+
+**Acceptance for S4:**
+- No visible increase in staining.
+- Shadow edges under `raking-inspection` are noticeably softer without
+  looking blurred.
+- Frame budget: total texture reads = 3 rays × 6–8 steps = 18–24 reads.
+  Acceptable on the high preset.
+
+---
+
+#### Slice S5 — Profile sensitivity wiring
+
+**File: `src/main.ts`**
+
+In the `applyPreferences()` function, after the line that calls
+`lightingSetup.setProfile(lighting)`, add a `setShadowProfileScale`
+call:
+
+```ts
+import { getLightProfile } from './lighting/LightProfile';
+
+// Inside applyPreferences():
+const activeProfile = getLightProfile(lighting);
+const shadowScale   = activeProfile.displayIntent === 'inspection' ? 1.0 : 0.5;
+artworkMesh.material.setShadowProfileScale(shadowScale);
+```
+
+> This keeps the shader the same; only the multiplier changes. No
+> `needsUpdate` is triggered so there is no recompile overhead.
+
+**Optional enhancement for later:** store `shadowProfileScale` in
+`LightProfile` records instead of computing it from `displayIntent`, so
+each profile can have its own tuned value. This makes the system open for
+the `dramatic-demo` profile to have a different scale from `gallery-soft`
+even though both are non-inspection.
+
+**Acceptance for S5:**
+- Switching from `gallery-soft` to `raking-inspection` via the Beleuchtung
+  radio immediately makes relief more visible without a shader recompile.
+- No visible staining or shadow strengthening appears in `gallery-soft`.
+
+---
+
+#### Slice S6 — Debug toggle wiring
+
+**File: `src/main.ts`**
+
+Extend the existing `handleDebugKey` function (line ~162):
+
+```ts
+// Add at the top of the function:
+let shadowDebug = false;
+
+// Add inside handleDebugKey after the 'a' branch:
+if (event.key === 's' || event.key === 'S') {
+  shadowDebug = !shadowDebug;
+  artworkMesh.material.setShadowDebug(shadowDebug);
+  console.info(`[freyraum debug] shadow-debug ${shadowDebug ? 'ON' : 'OFF'}`);
+}
+```
+
+Also add to the startup `console.info` block:
+
+```ts
+console.info('[freyraum debug] press "s" to toggle shadow-only visualisation');
+```
+
+**File: `src/materials/PaintingMaterial.ts`**
+
+(Already handled in Slice S3g by `PAINTING_DEBUG_SHADOW` and `setShadowDebug()`.)
+
+**Acceptance for S6:**
+- `?debug=1` + `s` overlays a greyscale shadow mask.
+- Stain-like patches from v0.04 disappear (smooth gradient).
+- `?debug=1` + `a` still works as before.
+- No debug controls appear in the public visitor UI.
+
+---
 
 #### Slice S7 — Validation and documentation update
 
-Files:
+**Files:** `plan.md`, `FINDINGS.md`, `README.md`, `docs/HANDOFF.md`, `CHANGELOG.md`
 
-- `plan.md`
-- `FINDINGS.md`
-- `README.md`
-- `docs/HANDOFF.md`
-- `CHANGELOG.md`
+After all code slices are implemented:
 
-Deliverable:
+1. Run `npm run lint` — must pass with only the known TS parser warning.
+2. Run `npm run build` — must pass; regenerate `customer-preview/`.
+3. Open the preview in browser with `?debug=1`.
+4. Capture screenshots at three angles under `gallery-soft`.
+5. Compare with the v0.04 screenshot (stain reference).
+6. Record bundle size change in FINDINGS.md.
+7. Mark acceptance checks below as complete.
 
-- Record implementation outcome, screenshots/visual checks, and validation commands.
-
-Acceptance:
-
-- `npm run lint` passes.
-- `npm run build` passes.
-- `customer-preview/` is regenerated if source code changes.
-
-### v0.05 Performance Budget
-
-| Preset | Self-shadow mode | Target extra texture reads | Budget |
-|---|---|---:|---|
-| high / display | smooth accumulation, 6–8 steps | 6–8 reads | no worse than v0.04 if possible |
-| high / inspection | optional 3-ray/filter mode | 12–18 reads max | acceptable only for inspection/profile-specific use |
-| balanced | disabled | 0 | unchanged |
-| battery | disabled | 0 | unchanged |
-
-If profiling shows >5% GPU cost increase in default display, prefer lower strength/steps over PCF-like filtering.
-
-### v0.05 Math-Space Contracts
-
-- `uKeyLightDir` remains view-space on CPU and is projected to tangent space in the shader.
-- Height values remain sampled from `bumpMap.r` in linear space.
-- Bias/softness are in normalized height-map units `[0..1]`.
-- Filtering offsets are UV-space values and must scale conservatively with the current parallax depth to avoid visible sliding.
-- Self-shadow must only modulate direct lighting (`directDiffuse` and `directSpecular`), never albedo or indirect diffuse.
-
-### v0.05 Resource Ownership / Async Contracts
-
-- No new texture ownership path is planned for S2/S3.
-- If a future S4 adds a separate prefiltered shadow-height texture, it must be generated/owned by `ProceduralTextureFactory` or loaded/owned by `TextureManager`; `PaintingMaterial` must not dispose it.
-- Existing `artworkLoadToken` race protection remains sufficient unless a new async texture role is introduced.
-
-### v0.05 Accessibility and User-Friendliness
-
-- Default view should prioritize faithful artwork appearance over maximum relief contrast.
-- Debug toggles stay behind `?debug=1`; public visitors should not see technical shader controls.
-- If a public control is added later, use plain German labels such as `Natürlich`, `Detailprüfung`, and `Aus`, not shader terms like PCF/POM.
-- Reduced-motion behavior remains unchanged; shadow smoothing is not an animation and should not create flicker.
+---
 
 ### v0.05 Acceptance Checks
 
 - [ ] In `gallery-soft`, dark stain-like blobs are gone on all artworks.
-- [ ] Rotating/hovering the artwork does not reveal large moving dirt patches.
-- [ ] `raking-inspection` reveals relief with soft local shading, not hard blotches.
-- [ ] `?debug=1` + self-shadow toggle proves spots are controlled by the self-shadow path.
-- [ ] Albedo-only debug still proves source image colors are unchanged.
-- [ ] Balanced and battery presets compile/run without self-shadow code paths.
+- [ ] Rotating/hovering painting does not reveal large moving dark patches.
+- [ ] `raking-inspection` reveals relief with soft gradients, not hard blotches.
+- [ ] `?debug=1` + `s` shows a smooth greyscale shadow mask, not solid dark spots.
+- [ ] `?debug=1` + `a` (albedo-only) still shows unmodified source colours.
+- [ ] Balanced and battery presets have no self-shadow shader cost.
 - [ ] `npm run lint` passes.
-- [ ] `npm run build` passes and regenerates the offline preview if source code changes.
+- [ ] `npm run build` passes and regenerates `customer-preview/`.
+- [ ] No new npm dependencies added.
+
+---
+
+### v0.05 Math-Space Contracts
+
+- `uKeyLightDir` is supplied in **view space** by `main.ts` per frame
+  (`transformDirection(camera.matrixWorldInverse)`). The shader projects
+  it onto `(vTangent, vBitangent, vNormal)` — also view space — to obtain
+  the tangent-space light direction. Nothing changes here in v0.05.
+- Height values remain sampled from `bumpMap.r` in linear `[0..1]` space.
+- `uShadowBias`, `uShadowSoftness`, `uShadowMaxOcclusion` are in normalised
+  height units `[0..1]`. Reasonable future ranges:
+  - bias: 0.01–0.06 (too low = acne; too high = flat)
+  - softness: 0.04–0.20 (too low = stain; too high = flat)
+  - maxOcclusion: 0.15–0.50 (display 0.20–0.30; inspection 0.35–0.50)
+- Self-shadow must **only** modulate `reflectedLight.directDiffuse` and
+  `reflectedLight.directSpecular`. Never touch albedo, `diffuseColor`,
+  `indirectDiffuse`, or `indirectSpecular` (except in the debug path).
+- `uShadowProfileScale` is in `[0..1]`; display ≈ 0.5, inspection = 1.0.
+
+---
+
+### v0.05 Resource Ownership / Async Contracts
+
+- No new textures are created in S2–S3. The existing `bumpMap` (height
+  field) is the only texture read in the shadow march.
+- `uShadowProfileScale` is a plain uniform updated synchronously on the
+  CPU side; it does not own any GPU resources.
+- If Slice S4 is implemented with a helper function injected at the common
+  token, that injection is stateless GLSL string manipulation in
+  `onBeforeCompile` — no additional resource ownership required.
+- The `artworkLoadToken` race protection in `GalleryManager` is unchanged.
+
+---
+
+### v0.05 Performance Budget
+
+| Preset | Mode | Texture reads | Budget |
+|--------|------|--------------|--------|
+| high | S3 accumulation, 8 steps | 8 reads | ≤ v0.04 cost |
+| high | S4 filter, 3 × 6 steps | 18 reads | high-preset only |
+| balanced | disabled | 0 | unchanged |
+| battery | disabled | 0 | unchanged |
+
+If measured GPU cost increases > 5 % from v0.04 at 8 steps, reduce to 6.
+If S4 costs > 10 % more than S3, keep `selfShadowFilterRadius: 0` as default.
+
+---
+
+### v0.05 Extension Slots (open for future enhancement)
+
+These are designed into the current plan but not required for v0.05:
+
+1. **Per-profile `shadowProfileScale` in `LightProfile` record** — store
+   the scale directly on the profile instead of computing from
+   `displayIntent`, enabling per-profile tuning.
+2. **Animated shadow strength** — fade `uShadowProfileScale` over N
+   frames when the lighting profile switches, to avoid a sudden pop.
+3. **Authored height map support** — the shader already reads `bumpMap.r`;
+   supplying a scanned height map from a real artwork will make the shadow
+   immediately more accurate with no shader change.
+4. **HDR height encoding** — store height in `bumpMap.a` or a 16-bit
+   `RFloat` texture for sub-percent accuracy without a format change.
+5. **Full-resolution filter pass** — a second `WebGLRenderTarget` pass
+   that blurs the shadow mask before compositing, for extreme smoothness.
+   Only practical if WebGPU/compute shaders are available.
+
+---
 
 ### v0.05 Known Risks
 
-- Too much bias can remove useful relief shadows entirely.
-- Too much softness can make the painting look flat or airbrushed.
-- PCF-like filtering can multiply texture reads quickly; keep it high-only and possibly inspection-only.
-- Strong raking light is still an inspection mode and may never look like a normal gallery display.
-- Procedural height is still an approximation; scan-derived height/normal/specular data remains the long-term best realism path.
+- Too much bias (> 0.06) removes useful micro-relief shadows entirely.
+- Too much softness (> 0.20) makes the painting look airbrushed.
+- PCF filter (S4) triples texture reads; keep it high/inspection-only.
+- `uShadowProfileScale` is a float uniform with no change detection in
+  Three.js — calling `setShadowProfileScale()` on every frame is harmless
+  (it just writes to a GPU buffer register) but is wasteful. Call it only
+  when the profile changes.
+- Raking inspection under strong procedural height will always look more
+  dramatic than a real painting photographed under raking light because
+  the procedural generator does not know the true relief topology. Authored
+  maps remain the long-term best accuracy path.
+
+---
+
+### v0.05 Online Research Basis
+
+- LearnOpenGL — Parallax Mapping: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
+- Three.js docs — `Material.onBeforeCompile`: https://threejs.org/docs/#api/en/materials/Material.onBeforeCompile
+- Three.js parallax map example: https://threejs.org/examples/?q=paralla#webgl_materials_parallaxmap
+- GPU Gems 3 — filtered/soft shadow-map concepts: https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps
+- StackOverflow — soft shadows for parallax occlusion shaders: https://stackoverflow.com/questions/37067278/soft-shadow-for-parallax-occlusion-shader
+
 
 ## v0.03 Follow-up Plan — Technical Rendering System for Faithful Artworks, Modular Asset Swaps, Parallax Relief, and Free Inspection
 

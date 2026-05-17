@@ -2,10 +2,23 @@
 
 ## Unreleased
 
-### Added (v0.05 planning)
+### Updated (v0.05 plan — full technical execution guide)
 
-- Added a new v0.05 plan in `plan.md` for soft self-shadow filtering and stain artifact removal.
-- Documented the suspected shader root cause: current high-preset self-shadowing is a binary height-field blocker test with no bias, no penumbra softness, no filtering, and strong direct-light attenuation.
+- **Rewrote v0.05 plan in `plan.md`** from a diagnosis stub into a 7-slice, file-by-file, line-by-line technical execution guide for fixing self-shadow stain artifacts.
+- **Confirmed code root cause:** `src/materials/PaintingMaterial.ts` `PAINTING_USE_SELFSHADOW` block — binary break on first blocker, no bias, no softness, no max-occlusion cap, `selfShadowStrength: 0.55` causes direct light to drop to 45 % in a single step.
+- **Designed new GLSL contract:** smooth weighted accumulation `smoothstep(0, softness, excess) * (1 / (step+1))`, clamped to `maxOcclusion`, then multiplied by `strength * profileScale`. Maximum gallery-soft darkening = 4.2 % of direct light.
+- **Specified TypeScript changes:**
+  - `src/config/quality.ts`: add `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius` to `QualityPreset`; lower high-preset `selfShadowStrength` 0.55 → 0.30.
+  - `src/materials/PaintingMaterial.ts`: add `uShadowBias/Softness/MaxOcclusion/ProfileScale` uniforms; add `setShadowProfileScale()` and `setShadowDebug()` methods; add `PAINTING_DEBUG_SHADOW` define path.
+  - `src/main.ts`: call `setShadowProfileScale()` on profile switch; add `s`/`S` debug key for shadow-only visualisation.
+- **Optional S4 PCF-like filter slot** documented for 3-ray lateral filtering; controlled by `selfShadowFilterRadius > 0`.
+- **Extension slots designed in:** per-profile `shadowProfileScale`, animated profile fade, authored height support, HDR height encoding.
+- Updated `FINDINGS.md` and `docs/HANDOFF.md` with code-grounded v0.05 technical context.
+
+### Added (v0.05 planning — initial stub)
+
+- Added initial v0.05 plan in `plan.md` for soft self-shadow filtering and stain artifact removal.
+- Documented the suspected shader root cause: binary height-field blocker test with no bias, no penumbra softness, no filtering, and strong direct-light attenuation.
 - Captured online research directions for parallax/relief self-shadowing, bias/deadzone handling, PCF-like filtering, and Three.js `onBeforeCompile` integration.
 - Updated `FINDINGS.md`, `README.md`, `docs/HANDOFF.md`, and `DOCUMENTATION_RULES.md` with the v0.05 diagnosis, review focus, and documentation status.
 

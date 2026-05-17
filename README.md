@@ -89,18 +89,24 @@ Validation: `npm run lint` and `npm run build` pass after `npm install`. The onl
 
 ## v0.05 planning
 
-v0.05 is the next planned rendering-quality pass. It targets the remaining dark, light-angle-dependent spots that can appear after v0.04. The current diagnosis points to the high-preset self-shadow shader: it uses a binary height-field blocker test with no bias, no softness, and no filtering, so broad height regions can look like dirt or stains.
+v0.05 is the next planned rendering-quality pass. It targets the remaining dark, light-angle-dependent spots (stains) that appear after v0.04. The v0.05 plan has been upgraded from an initial diagnosis stub to a **full technical execution guide** — see [`plan.md`](./plan.md#v005-plan--soft-self-shadow-filtering-and-stain-artifact-removal).
 
-The new [`plan.md`](./plan.md#v005-plan--soft-self-shadow-filtering-and-stain-artifact-removal) section proposes:
+### Root cause (confirmed code location)
 
-- smooth continuous self-shadow visibility instead of hard on/off blocker darkening;
-- height bias/deadzone to prevent self-shadow acne;
-- penumbra softness and max-occlusion caps;
-- optional PCF-like filtering for inspection mode if simple smoothing is not enough;
-- debug-only self-shadow toggles behind `?debug=1` so future screenshots can isolate the artifact source;
-- documentation and validation steps for reviewer handoff.
+`src/materials/PaintingMaterial.ts` — `PAINTING_USE_SELFSHADOW` block — binary height-field blocker test: the first step where any height sample exceeds the horizon sets `_shadow = 1 - 0.55` and breaks. No bias, no softness, no distance weighting, no max-occlusion cap. Broad procedural height regions trip this immediately and create solid dark patches.
 
-Supporting diagnosis and research links are documented in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v005-self-shadow-stain-artifact-diagnosis-and-research).
+### What the plan specifies (implementation-ready)
+
+| Slice | Files | Change |
+|-------|-------|--------|
+| S2 | `src/config/quality.ts` | Add `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius`; lower high-preset strength 0.55 → 0.30 |
+| S3 | `src/materials/PaintingMaterial.ts` | Replace binary GLSL loop with smooth accumulation; add 4 new uniforms; add `setShadowProfileScale()` and `setShadowDebug()` |
+| S4 | `src/materials/PaintingMaterial.ts` | Optional 3-ray PCF-like filter (controlled by `selfShadowFilterRadius`) |
+| S5 | `src/main.ts` | Call `setShadowProfileScale(0.5)` for display profiles, `1.0` for inspection on profile switch |
+| S6 | `src/main.ts` | Add `s`/`S` debug key (behind `?debug=1`) for shadow-only greyscale visualisation |
+| S7 | all docs | Validation, screenshots, acceptance checks |
+
+Supporting diagnosis is in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v005-self-shadow-stain-artifact--detailed-technical-diagnosis).
 
 ## Developer workflow
 

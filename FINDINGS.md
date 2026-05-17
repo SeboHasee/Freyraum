@@ -1,22 +1,61 @@
 # FINDINGS
 
-## 2026-05-17 - v0.05 self-shadow stain artifact diagnosis and research
+## 2026-05-17 - v0.05 self-shadow stain artifact — detailed technical diagnosis
 
-- **The new dark spots match the height-field self-shadow path, not albedo or neutral AO.** The reported spots change with light and artwork angle, and the current shader only creates such angle-dependent blotches in `PaintingMaterial.ts` under `PAINTING_USE_SELFSHADOW`.
-- **Current self-shadow is binary and strong.** The shader marches one ray through `bumpMap.r`; on the first blocker it sets `_shadow = 1.0 - uShadowStrength` and breaks. With high preset `selfShadowStrength: 0.55`, a single blocker event reduces direct lighting to 45%, which can read as dirt.
-- **There is no height bias/deadzone.** Tiny or broad procedural height differences can self-shadow immediately. Real-time shadowing literature normally uses bias/offsets to reduce self-shadow acne-like artifacts.
-- **There is no soft penumbra or filtering.** The current logic has no `smoothstep`, no blocker-distance weighting, no PCF-like neighborhood average, and no max-occlusion cap. This explains broad stain-like patches under grazing or angled viewing.
-- **Research direction:** parallax/relief self-shadowing should use continuous visibility, bias, and/or PCF-style filtering rather than a hard on/off test. Soft shadow-map concepts such as PCF/VSM and height-field/POM examples support averaging or smoothing blocker tests.
-- **v0.05 plan created:** `plan.md` now defines v0.05 as a planned pass to add self-shadow bias, softness, max occlusion, optional PCF-like filtering, lighting-profile sensitivity, and debug toggles.
+This entry supersedes the initial stub. The v0.05 plan in `plan.md` has been upgraded to a full technical execution guide; this entry records the code-level findings that drove it.
 
-Research URLs recorded for v0.05:
+### Code-level root cause (confirmed)
+
+**File:** `src/materials/PaintingMaterial.ts`  
+**Block:** `PAINTING_USE_SELFSHADOW` inside `lightsEndChunk` (lines ≈ 252–288)
+
+The shader marches one ray through the height field toward the key light. On the first step where `_sampleH > _wantedH` it immediately sets `_shadow = 1.0 - uShadowStrength` and breaks. With the current high preset value of `selfShadowStrength: 0.55`, this means a single height-field step that fires reduces direct diffuse and direct specular to **45 %** of their unoccluded values.
+
+Full issue table:
+
+| Issue | Code evidence | Visual consequence |
+|-------|--------------|-------------------|
+| Binary hard cutoff | `if (_sampleH > _wantedH) { _shadow = 1.0 - uShadowStrength; break; }` | Any blocker → same massive darkening |
+| No bias/deadzone | Comparison is `>` with no offset | Procedural height noise (peak-to-peak ≈ 0.04) self-shadows trivially |
+| No penumbra softness | No `smoothstep` anywhere in the shadow loop | Transition from lit to shadowed is a hard step — reads as a sharp stain edge |
+| No distance weighting | All loop steps produce the same `_shadow = 1 - strength` | Far and near blockers are equally damaging |
+| No max-occlusion cap | Shadow can always reach `1 - 0.55 = 0.45` from a single blocker | Cannot restrict gallery-display max darkening |
+| Strength too high for display | `selfShadowStrength: 0.55` in the high preset | 55 % dampening is excessive for a normal gallery view |
+
+### v0.05 technical execution plan (summary)
+
+The v0.05 plan in `plan.md` now specifies, file-by-file and line-by-line:
+
+1. **S2 — `src/config/quality.ts`:** Add `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius` to `QualityPreset`. Lower high-preset `selfShadowStrength` from 0.55 → 0.30.
+2. **S3 — `src/materials/PaintingMaterial.ts`:**
+   - New uniforms: `uShadowBias`, `uShadowSoftness`, `uShadowMaxOcclusion`, `uShadowProfileScale`.
+   - New method `setShadowProfileScale(scale: number)` — called by `main.ts` on profile switch.
+   - New method `setShadowDebug(enabled: boolean)` — compiles `PAINTING_DEBUG_SHADOW`.
+   - Replace binary GLSL loop with accumulation loop using `smoothstep(0, softness, excess)`, reciprocal distance weighting, and `clamp(occlusion, 0, maxOcclusion)`.
+3. **S4 (optional) — 3-ray PCF-like filter** gated by `selfShadowFilterRadius > 0` and `PAINTING_USE_SHADOW_FILTER` define.
+4. **S5 — `src/main.ts`:** Call `setShadowProfileScale(0.5)` for display profiles and `setShadowProfileScale(1.0)` for inspection profiles in `applyPreferences()`.
+5. **S6 — `src/main.ts`:** Add `s`/`S` debug key (alongside existing `a`) to call `setShadowDebug()`.
+
+### New GLSL contract (v0.05 target)
+
+```
+occlusion = Σ( smoothstep(0, softness, sampleH - wantedH - bias) * (1 / (step + 1)) )
+occlusion /= totalWeight
+occlusion  = clamp(occlusion, 0, maxOcclusion)
+shadow     = 1 - strength * occlusion * profileScale
+```
+
+With high-preset defaults (bias=0.03, softness=0.10, maxOcc=0.28, strength=0.30, profileScale=0.5):
+- Maximum display darkening: `0.30 × 0.28 × 0.5 = 4.2 %` of direct light — subtle texture, not a stain.
+- Inspection: `0.30 × 0.28 × 1.0 = 8.4 %` — soft relief.
+
+Research URLs:
 
 - LearnOpenGL — Parallax Mapping: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
 - Three.js docs — `Material.onBeforeCompile`: https://threejs.org/docs/#api/en/materials/Material.onBeforeCompile
 - Three.js parallax map example: https://threejs.org/examples/?q=paralla#webgl_materials_parallaxmap
 - GPU Gems 3 — filtered/soft shadow-map concepts: https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps
-- Microsoft HLSL `SampleBias`: https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-samplebias
-- StackOverflow topic — soft shadows for parallax occlusion shaders: https://stackoverflow.com/questions/37067278/soft-shadow-for-parallax-occlusion-shader
+- StackOverflow — soft shadows for parallax occlusion shaders: https://stackoverflow.com/questions/37067278/soft-shadow-for-parallax-occlusion-shader
 
 ## 2026-05-17 - v0.04 implementation findings
 

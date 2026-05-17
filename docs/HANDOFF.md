@@ -77,33 +77,31 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 
 ## v0.05 planning focus
 
-v0.05 is **planned, not implemented yet**. It addresses the latest visual review: dark spots that move with light direction / artwork angle and look like stains. Current diagnosis points to `PaintingMaterial.ts` self-shadow logic, not albedo or AO.
+v0.05 is **planned, not implemented yet**. The v0.05 plan in `plan.md` has been upgraded to a full technical execution guide. This section gives a handoff-level summary for customers and reviewers.
 
-### Suspected root cause
+### What will change (code-level summary)
 
-| Area | Current behavior | Why it looks wrong |
-|---|---|---|
-| Self-shadow blocker test | First height blocker sets `_shadow = 1.0 - uShadowStrength` and breaks | One tiny/broad blocker can create a full dark patch |
-| Bias | No height bias/deadzone | Height noise can shadow itself |
-| Softness | No smooth transition | Shadows read as hard dirt spots |
-| Filtering | One ray, no PCF-like neighborhood | Broad value-noise regions become blotches |
-| Strength | High preset uses `selfShadowStrength: 0.55` | Direct light can drop to 45%, too strong for normal display |
+| File | Change |
+|------|--------|
+| `src/config/quality.ts` | Add `selfShadowBias`, `selfShadowSoftness`, `selfShadowMaxOcclusion`, `selfShadowFilterRadius` to `QualityPreset`. Lower high-preset `selfShadowStrength` from 0.55 to 0.30. |
+| `src/materials/PaintingMaterial.ts` | Add 4 new uniforms (`uShadowBias`, `uShadowSoftness`, `uShadowMaxOcclusion`, `uShadowProfileScale`). Replace binary GLSL break loop with smooth weighted accumulation. Add `setShadowProfileScale()` and `setShadowDebug()` methods. |
+| `src/main.ts` | Call `setShadowProfileScale(0.5/1.0)` on profile switch. Add `s`/`S` debug key (behind `?debug=1`) for shadow-only visualisation. |
 
-### v0.05 implementation direction
+No new npm dependencies. No changes to HTML, CSS, or the build pipeline.
 
-- Add self-shadow bias, softness, max-occlusion, and optional filter-radius preset fields.
-- Replace binary break logic with smooth blocker accumulation and distance weighting.
-- Keep default gallery display conservative; reserve stronger relief for `raking-inspection` if needed.
-- Add debug-only self-shadow toggle behind `?debug=1` for future artifact isolation.
-- Keep balanced and battery presets free of self-shadow cost.
+### What the user will see
 
-### Visual review checklist for the future implementation
+- **Before (v0.04):** dark stain-like spots that move with light direction and artwork angle, looking like dirt on the painting.
+- **After (v0.05):** either no visible self-shadow (gallery-soft display), or soft gradient-shaded surface relief (inspection mode) — in both cases reading as natural texture, not stains.
 
-- [ ] `gallery-soft` has no moving stain-like dark blobs.
-- [ ] `raking-inspection` shows soft local relief, not hard blotches.
-- [ ] Self-shadow debug toggle proves the artifact source is controlled.
-- [ ] Albedo-only debug still proves source artwork color fidelity.
-- [ ] `npm run lint` and `npm run build` pass after source changes.
+### Reviewer checklist (post-implementation)
+
+- [ ] `gallery-soft` has no moving stain-like dark blobs on any artwork.
+- [ ] `raking-inspection` shows soft local relief gradients, not hard blotches.
+- [ ] `?debug=1` + `s` key overlays a smooth greyscale shadow visualisation — no solid black patches.
+- [ ] `?debug=1` + `a` key still shows unmodified source artwork colours.
+- [ ] Balanced and battery presets are unaffected (self-shadow disabled).
+- [ ] `npm run lint` and `npm run build` pass.
 
 ## v0.04 review focus
 
