@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Planned (v0.09 — actual uploaded image on 3D painting — 2026-05-17)
+
+- Added a full v0.09 plan to `plan.md` after customer validation showed v0.08
+  fixed the 3D painting aspect ratio but not the actual albedo image upload path.
+- Documented the updated failure boundary: timeline DOM `<img>` displays the
+  uploaded picture, `ArtworkMesh` sizes correctly from manifest dimensions, but
+  the WebGL texture path can still fall back to the generated placeholder.
+- Added online research findings to `FINDINGS.md` covering Three.js
+  `TextureLoader`, CORS/origin-clean image rules, WebGL image texture security,
+  `createImageBitmap`, and local user-image loading patterns.
+- Planned the v0.09 technical direction: importer-generated exact base64
+  `data:image/...` source (`webglImage`) for the central 3D painting albedo so
+  WebGL no longer depends on `file://` image upload behavior.
+- Updated customer/support docs to mark the remaining issue as v0.09 work rather
+  than a completed v0.08 success state.
+
 ### Documentation (v0.08 deep implementation notes pass — 2026-05-17)
 
 - **`plan.md`**: added "Deep Implementation Notes & Execution Plan" section to the
@@ -16,7 +32,8 @@
   zero/negative aspect, CORS https, cache key collisions, rapid navigation),
   (6) coding advice for future PRs in this area, (7) browser/API stability
   boundaries, (8) resource ownership & disposal contract, (9) validation
-  checklist (all green), and (10) parked future work for v0.09.
+  checklist later superseded by the v0.09 customer finding, and (10) parked
+  future work for v0.09.
 - **`FINDINGS.md`**: documented the follow-up validation pass; all resolutions,
   all image kinds, timeline behaviour, and effect application confirmed.
 - **`docs/HANDOFF.md`**: marked v0.08 as shipped; added link to the Deep
@@ -27,12 +44,15 @@
 
 ### Fixed (v0.08 — customer artwork 3D rendering — 2026-05-17)
 
-Critical fix: imported customer images now render on the central 3D painting with
-correct aspect ratios. Root cause was `TextureManager` setting `crossOrigin =
-'anonymous'` on the `THREE.TextureLoader` used for all textures — in `file://`
-protocol this caused every local image to be treated as a failed CORS request,
-silently substituting a 1600 × 1100 gradient fallback while the DOM Timeline
-continued to display the images correctly.
+Critical partial fix: imported customer images now drive the central 3D painting
+aspect ratio correctly, and one confirmed local-file `crossOrigin` failure mode
+was removed. Later customer validation showed the actual albedo bytes can still
+fall back to the placeholder in the affected `file://` WebGL path; that remaining
+issue is tracked as v0.09 above. The v0.08 root cause was `TextureManager`
+setting `crossOrigin = 'anonymous'` on the `THREE.TextureLoader` used for all
+textures — in `file://` protocol this caused local images to be treated as failed
+CORS requests, silently substituting a 1600 × 1100 gradient fallback while the DOM
+Timeline continued to display the images correctly.
 
 - **`src/gallery/TextureManager.ts`**: replaced the single shared
   `THREE.TextureLoader` with two loaders — `externalLoader` (with

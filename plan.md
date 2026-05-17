@@ -1,11 +1,372 @@
 # FREYRAUM Plan
 
+## v0.09 — Actual Customer Image on the 3D Painting (Planned)
+
+### Status
+
+**Planned 2026-05-17 after customer validation.** v0.08 fixed the 3D painting
+aspect ratio, but the reported customer preview still shows the generated
+placeholder on the central 3D painting. That means v0.08 solved the frame sizing
+path but did not fully solve the WebGL albedo-byte path on the affected browser /
+file workflow.
+
+This plan is intentionally first-class because the customer-facing requirement is
+not "correct frame with any texture"; it is:
+
+1. the exact uploaded picture is visible on the central 3D painting,
+2. the image is not stretched, cropped, downsampled, recoloured, or destructively
+   rewritten by the importer,
+3. the painting effects remain applied on top of the real image,
+4. the timeline and 3D painting agree on the selected artwork and aspect ratio,
+5. fallback use is impossible to miss in diagnostics.
+
+---
+
+### Observed Behavior
+
+- Timeline thumbnails show the uploaded customer image.
+- The 3D painting now has the correct aspect ratio after v0.08.
+- The central 3D painting still shows the generated placeholder / fallback
+  instead of the actual uploaded image.
+
+This narrows the active failure boundary to **WebGL texture byte delivery**:
+the manifest dimensions are trusted correctly, the timeline DOM path can decode
+the file, and the 3D mesh uses the correct geometry, but `TextureManager` still
+does not end up with an uploadable albedo texture for the customer image.
+
+---
+
+### Online Research Findings
+
+Research performed 2026-05-17 for Three.js / WebGL local image texture failures:
+
+| Source | Finding | Relevance to FREYRAUM |
+|--------|---------|------------------------|
+| Three.js TextureLoader docs — <https://threejs.org/docs/#api/en/loaders/TextureLoader> | `TextureLoader` loads through browser image primitives and resolves after image decode, but WebGL upload still depends on the browser's image/security rules. | A successful DOM `<img>` path does not prove a WebGL-safe texture path. |
+| MDN CORS-enabled images — <https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image> | Images used in canvas/WebGL must be origin-clean. Cross-origin or local-file edge cases can taint the image or prevent pixel access. | The customer preview uses `file://` / relative local files, the exact class of URL where browser behavior differs. |
+| WebGL Fundamentals: Cross-origin images — <https://webglfundamentals.org/webgl/lessons/webgl-cors-permission.html> | WebGL has stricter security rules for images than normal DOM display. Images can display in HTML but still fail as WebGL textures. | Explains why the timeline can show the picture while the 3D painting cannot. |
+| MDN `createImageBitmap()` — <https://developer.mozilla.org/en-US/docs/Web/API/createImageBitmap> | `createImageBitmap` can decode `Blob`/`File` sources and has options such as `imageOrientation`, but browser support and SVG/exotic formats vary. | Useful for a later importer/runtime path, but not the simplest guaranteed offline file-preview fix. |
+| General Three.js local texture guidance from community references | Reliable local user-file texture workflows generally use `FileReader.readAsDataURL(file)` or `URL.createObjectURL(file)` rather than passing `file://` paths directly to `TextureLoader`. | Since FREYRAUM's customer workflow is a static double-click preview, the closest non-interactive equivalent is importer-generated data URLs. |
+
+Research conclusion: v0.08's "no crossOrigin for local paths" is necessary but
+not sufficient for every browser's `file://` + WebGL pipeline. The reliable v0.09
+path should avoid asking WebGL to upload from a local file path at all. The
+importer should provide an origin-clean albedo source for the 3D painting.
+
+---
+
+### Root Cause Hypothesis for v0.09
+
+The remaining placeholder means one of these is still true on the affected
+machine/browser:
+
+1. `THREE.TextureLoader` cannot fetch or decode the relative `./images/...` URL
+   from `file://` even though DOM `<img>` can display it.
+2. The loader callback succeeds, but the browser rejects the later WebGL
+   `texImage2D` upload because the local-file image is not considered
+   origin-clean.
+3. The image format is displayed by DOM but not accepted by WebGL upload on that
+   browser (HEIC/HEIF/TIFF/BMP/SVG variants are especially likely).
+4. The image exceeds the GPU's `MAX_TEXTURE_SIZE`, causing upload failure even
+   though layout and DOM preview work.
+5. The fallback cache entry was created once and remains active for the same
+   `role::url` key, so subsequent navigation keeps showing placeholder until the
+   page reloads.
+
+The most likely common cause is (1) or (2): local-file WebGL texture upload is
+less reliable than DOM image display.
+
+---
+
+### v0.09 Goals
+
+- Make the central 3D painting use the **actual uploaded image bytes**.
+- Preserve the original image pixels: no crop, no stretch, no destructive edit,
+  no automatic colour manipulation by the importer.
+- Keep aspect from manifest dimensions and use the same dimensions in the
+  timeline and 3D painting.
+- Keep all existing painting effects: detail normal, height/parallax, bump,
+  roughness, specular, AO, varnish, self-shadow, inspection PCF, and lighting.
+- Preserve the one-click customer workflow (`Update Gallery` then `index.html`).
+- Keep diagnostics simple: if fallback is used, the user/support person sees a
+  clear error telling exactly which URL/source failed and what source was tried.
+- Avoid adding a server requirement for customers.
+
+### v0.09 Non-Goals
+
+- No full CMS or upload server.
+- No mandatory local development server for customers.
+- No image editor UI.
+- No destructive resizing or recompression in v0.09's default path.
+- No promise that browser-unsupported formats (especially HEIC/HEIF/TIFF/BMP)
+  display everywhere without conversion; these remain "accepted with warning" or
+  are promoted to "convert to JPG/PNG for guaranteed 3D painting" if testing
+  confirms they are unreliable.
+
+---
+
+### Proposed Technical Direction
+
+#### Primary fix — importer-generated exact data URLs for albedo
+
+Add an importer-generated, origin-clean texture source that does not depend on
+`file://` image fetching:
+
+```json
+{
+  "image": "./images/customer-work.jpg",
+  "webglImage": "data:image/jpeg;base64,...",
+  "dimensions": { "width": 720, "height": 907 }
+}
+```
+
+Important contract:
+
+- `image` stays as the human-readable / file-copy path for reports and optional
+  DOM use.
+- `webglImage` contains the exact original image bytes base64 encoded.
+- No crop, no scaling, no canvas draw, no recompression in the default path.
+- Runtime albedo loading uses `webglImage ?? image`.
+- Timeline may use `image` or `webglImage`; 3D painting must use the source that
+  is proven uploadable.
+
+Why data URLs:
+
+- They are same-document and origin-clean.
+- They work from a static `file://` page.
+- They match the online research recommendation for local user-file texture
+  workflows (`FileReader.readAsDataURL`) but move that work into the existing
+  `Update Gallery` importer so the customer still does not use a browser upload
+  control.
+- They preserve bytes exactly; base64 is a transport encoding, not an image edit.
+
+Trade-off:
+
+- `customer-preview/customer-artworks.js` can become large. This is acceptable
+  for v0.09 reliability because the project prioritizes "the customer sees the
+  actual picture" over bundle size. A future v0.10 can add optional optimization
+  or split manifests if needed.
+
+#### Runtime selection
+
+Extend the validated artwork model with an optional `webglImage` field:
+
+- `sanitizeInjectedArtworks()` accepts `webglImage` only when it is a non-empty
+  `data:image/...;base64,...` string.
+- `GalleryManager.showArtwork()` loads the albedo from
+  `artwork.webglImage ?? artwork.image`.
+- `Timeline` can continue using `artwork.image` so the thumbnails remain normal
+  file URLs, or it can switch to the same source later if timeline failures are
+  observed.
+- Diagnostics always log both:
+  - `displayImageUrl`
+  - `webglImageSource: 'embedded-data-url' | 'file-url'`
+
+#### TextureManager hardening
+
+Add a dedicated data-URL path:
+
+- Classify URLs as `data-uri`, `local-relative`, `file-url`, `blob-url`,
+  `external-http`.
+- For `data-uri`, never set `crossOrigin`, and add source-length diagnostics
+  (not full data URL logs).
+- If `loadForRole()` falls back, remove stale fallback state when a later retry
+  succeeds.
+- Add `clear(url, role?)` or `invalidate(url, role?)` so support/debug code can
+  retry a texture without a page reload.
+
+#### Format policy
+
+For v0.09 reliability:
+
+- Guaranteed 3D painting formats: JPG/JPEG, PNG, WebP, GIF first frame, AVIF
+  where the browser supports AVIF.
+- SVG: keep accepted, but document that complex SVG may need raster conversion
+  to PNG if the browser cannot upload it as a WebGL texture.
+- HEIC/HEIF/TIFF/BMP: keep warnings; if testing shows these are the customer
+  case, report "convert to JPG/PNG for guaranteed 3D painting" clearly.
+- RAW: continue skipping.
+
+#### No-stretch / no-crop guarantee
+
+The no-stretch/no-crop guarantee is enforced in two places:
+
+1. `ArtworkMesh.updateAspect()` continues to use `artwork.dimensions`.
+2. The painting material samples the full albedo texture over the full plane UV
+   range. Do not use `object-fit: cover` logic, cropped UVs, canvas draw crops,
+   or center-crop transforms for the 3D path.
+
+The frame may resize around the picture and shader effects may alter lighting,
+relief, varnish, and shadow response, but the albedo image itself must stay a
+full-frame representation of the uploaded picture.
+
+---
+
+### Proposed Files / Modules
+
+| File | Planned v0.09 change |
+|------|----------------------|
+| `src/config/artworks.ts` | Extend `Artwork` with optional `webglImage?: string`. |
+| `src/main.ts` | Validate `webglImage` as data URL; include in sanitized artwork object. |
+| `src/gallery/GalleryManager.ts` | Use `artwork.webglImage ?? artwork.image` for central 3D albedo loading and fallback checks. |
+| `src/gallery/TextureManager.ts` | Improve URL classification, data-URL diagnostics, stale fallback invalidation/retry hooks. |
+| `src/timeline/Timeline.ts` | No required change unless timeline should also use `webglImage`; keep file URL for readability unless failure appears. |
+| `scripts/import-artworks.mjs` | Base64-encode each imported image into `webglImage` in `customer-artworks.js` and optionally `artworks.json` with clear size notes. |
+| `docs/*.md`, `README.md`, `CHANGELOG.md`, `FINDINGS.md` | Document v0.09 status, online findings, accepted/guaranteed formats, and troubleshooting. |
+
+---
+
+### Vertical Slices
+
+#### Slice S1 — Documentation and reproducible diagnosis
+
+- Record the customer-observed v0.08 failure: correct aspect, placeholder
+  albedo.
+- Document online research findings and the new v0.09 hypothesis.
+- Add diagnostics checklist:
+  - confirm `show-artwork-complete.fallbackUsed`
+  - confirm `texture load-start.urlType`
+  - confirm whether `webglImage` exists after importer
+  - confirm image format and dimensions
+
+#### Slice S2 — Manifest contract
+
+- Add optional `webglImage` to `Artwork`.
+- Keep `image` required for customer readability and existing timeline behavior.
+- Validate `webglImage` strictly as a data URL to avoid arbitrary scriptable
+  content.
+- Make `webglImage` runtime-only and JSON-serializable.
+
+#### Slice S3 — Importer exact-byte embedding
+
+- Read imported image bytes with `readFileSync`.
+- Base64 encode those exact bytes.
+- Use MIME type from extension (`image/jpeg`, `image/png`, `image/webp`,
+  `image/gif`, `image/svg+xml`, `image/avif`).
+- Write `webglImage` into `customer-preview/customer-artworks.js`.
+- Add report line: "3D painting source embedded for reliable offline WebGL."
+- Do not scale, crop, rotate, recompress, or draw to canvas in this slice.
+
+#### Slice S4 — Runtime albedo source selection
+
+- `GalleryManager` resolves:
+  - `const albedoUrl = artwork.webglImage ?? artwork.image`
+  - diagnostics: source kind, byte/data length, fallback state.
+- Use that same URL for `TextureManager.get()` and `isFallback()`.
+- Keep `artwork.image` in user-facing report logs so support can map back to the
+  real file name.
+
+#### Slice S5 — Texture fallback hardening
+
+- Add URL classifier helper in `TextureManager`.
+- Prevent full data URLs from being printed into logs; log `dataUrlBytes` and
+  MIME prefix only.
+- Clear `fallbackKeys` on successful load for the same cache key.
+- Add optional retry/invalidate method for support.
+
+#### Slice S6 — Validation with customer-like images
+
+Use a test import set that covers:
+
+- 720 × 907 portrait JPG
+- 719 × 991 portrait JPG
+- 4724 × 4724 square PNG
+- landscape JPG
+- ultrawide PNG/WebP
+- simple SVG
+- animated GIF
+- AVIF if browser supports it
+
+Acceptance for each supported raster:
+
+- Timeline shows the picture.
+- 3D painting shows the actual picture, not placeholder.
+- `fallbackUsed === false` for central albedo.
+- `aspectSource === 'manifest'`.
+- Frame shape matches source dimensions.
+- Albedo debug mode shows the raw picture full-frame.
+- Normal/height/detail/roughness/specular/AO/varnish effects remain visible
+  when quality profile enables them.
+
+---
+
+### Performance / Size Budget
+
+- Data URLs increase `customer-preview/customer-artworks.js`.
+- v0.09 reliability target: support at least the reported 4724 × 4724 PNG and
+  two portrait JPGs in the static preview.
+- If a single manifest exceeds practical browser parse time, v0.10 may add:
+  - optional lossless or high-quality generated display copy,
+  - local server helper,
+  - split per-artwork JS files,
+  - or a user-controlled "optimize for preview" mode.
+- v0.09 should not introduce automatic resizing unless the user explicitly asks,
+  because the current requirement says not to edit the pictures.
+
+---
+
+### Accessibility Impact
+
+- No control changes expected.
+- If a fallback occurs, customer-facing report text should be plain language:
+  "The big 3D painting could not use this image format. Convert it to JPG or PNG
+  and run Update Gallery again."
+- Diagnostics remain developer/support-only unless a clear runtime error overlay
+  is added later.
+
+---
+
+### Fallback Behavior
+
+Fallback should remain as an emergency path, but no longer silently pass
+acceptance:
+
+- If `webglImage` exists and still falls back, log `error` or high-visibility
+  `warn`.
+- Include file name, format, dimensions, source kind, and likely reason.
+- Do not declare gallery update successful if every imported image falls back on
+  the 3D painting.
+- Keep generated placeholder only so the app remains usable, never as a success
+  state.
+
+---
+
+### Acceptance Checks
+
+| # | Check | Expected |
+|---|-------|----------|
+| 1 | Import customer JPG/PNG set | Report says images imported and embedded for 3D painting |
+| 2 | Open `index.html` from file system | Gallery loads without server |
+| 3 | Timeline thumbnail | Shows uploaded picture |
+| 4 | Central 3D painting | Shows exact uploaded picture, not placeholder |
+| 5 | Aspect | Manifest-driven, no stretch/crop |
+| 6 | Effects | Detail/height/shadow/varnish effects apply over real albedo |
+| 7 | Diagnostics | `fallbackUsed: false`, `webglImageSource: embedded-data-url` |
+| 8 | Unsupported/risky format | Friendly report warning; no silent success |
+| 9 | Build/lint | Existing commands pass |
+
+---
+
+### Risks and Reserved Future Work
+
+- Large data URLs can make the generated JS file heavy.
+- SVG and HEIC/HEIF/TIFF/BMP remain browser-dependent as WebGL textures.
+- EXIF orientation may still differ between DOM and WebGL in some browsers. If
+  observed, v0.10 should add an orientation policy that preserves visual
+  representation without cropping.
+- Optional image optimization is explicitly deferred because v0.09 must first
+  preserve exact uploaded image bytes.
+
+---
+
 ## v0.08 — Customer Image 3D Rendering Fix (Critical)
 
 ### Status
 
-**Implemented 2026-05-17.** Customer images now render on the central 3D painting
-with correct aspect ratios. Three targeted code changes fix the root cause.
+**Implemented 2026-05-17, now known partial after customer validation.** v0.08
+fixed the central 3D painting aspect ratio and removed one confirmed local-file
+`crossOrigin` failure mode, but v0.09 is required because the actual uploaded
+image can still fall back to the generated placeholder on the 3D painting.
 
 ---
 

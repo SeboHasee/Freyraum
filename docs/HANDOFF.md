@@ -1,9 +1,10 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **v0.08 is shipped:** imported customer images now render on the
-central 3D painting with correct aspect ratios. See `plan.md` → "v0.08 — Deep
-Implementation Notes & Execution Plan" for the technical reference.
+contributors. **Current priority: v0.09.** Customer validation confirmed v0.08
+fixed the central 3D painting aspect ratio, but the actual uploaded image can
+still fall back to the generated placeholder on the 3D painting. See `plan.md`
+→ "v0.09 — Actual Customer Image on the 3D Painting" for the current plan.
 
 ## Architecture diagram
 
@@ -21,10 +22,10 @@ The diagram captures four horizontal layers and two cross-cutting systems:
 
 ## Customer picture replacement status
 
-v0.07 (customer-managed import workflow) and v0.08 (customer images on the
-central 3D painting) are both shipped. Imported customer images appear in the
-timeline **and** on the central 3D painting with the correct aspect ratio for
-every supported image kind and every supported resolution.
+v0.07 (customer-managed import workflow) is shipped. v0.08 fixed the 3D painting
+aspect ratio, but v0.09 is still required before the customer-image workflow is
+fully accepted: the central 3D painting must show the actual uploaded image
+bytes, not the generated placeholder.
 
 Customer-facing and maintainer guides:
 
@@ -38,11 +39,11 @@ Current intended workflow:
 3. The updater generates image copies, `artworks.json`, and `customer-artworks.js`.
 4. Customer double-clicks root `index.html` as before.
 
-Critical acceptance requirement (now met):
+Critical acceptance requirement (current status):
 
 - each imported image is visible in the timeline ✅
-- each imported image renders on the central 3D painting ✅
 - the central 3D painting frame matches the imported dimensions/aspect ratio ✅
+- each imported image renders on the central 3D painting with the actual uploaded picture bytes ⏳ v0.09
 - diagnostics make fallback texture usage obvious (`show-artwork-fallback` warn) ✅
 
 If a future image still triggers the fallback, follow the diagnostics flow in
@@ -55,12 +56,10 @@ Cross-cutting reliability addition from the latest pass:
 - `?debug=1` / `?debug=verbose` enable deeper diagnostics for support and engineering sessions
 - recent session diagnostics are available in DevTools via `window.__FREYRAUM_DIAGNOSTICS__`
 
-Important handoff note: v0.08 is shipped. Both the timeline thumbnails and the
-central 3D painting use the manifest dimensions as the authoritative aspect
-source, so all supported image kinds (JPG, PNG, WebP, GIF, SVG, AVIF) and all
-common aspect ratios (ultrawide, landscape, square, portrait, tall portrait)
-render correctly. The full all-resolutions matrix is in `plan.md` → "v0.08 —
-Deep Implementation Notes & Execution Plan" §3.
+Important handoff note: if the timeline works and the central 3D frame shape is
+correct but the central image is still a placeholder, this is the v0.09 issue.
+The planned fix is an importer-generated exact `data:image/...` source for the
+3D albedo so WebGL no longer depends on local `file://` image upload behavior.
 
 ## Controls surface
 

@@ -123,22 +123,26 @@ support person. The report is written in plain language and they can
 read it without seeing the gallery.
 
 **My pictures show in the timeline, but not on the big 3D painting.**
-This issue is fixed in v0.08 and is the default behaviour after this build.
-Both the timeline thumbnails and the central 3D painting now use your
-manifest dimensions to lay out the image, so portrait, landscape, square,
-and ultrawide pictures all appear correctly in both places after running
-`Update Gallery`.
+This is the current v0.09 follow-up. v0.08 fixed the shape of the big 3D
+painting, but on some browsers the actual image file can still fail to upload
+into WebGL, so the big painting shows a generated placeholder.
 
-If you still see a gradient placeholder instead of your picture after the fix,
-this means the WebGL texture upload failed for that specific image. This can
-happen if the image file is corrupt, or if it is larger than the GPU's texture
-size limit (very rare on modern hardware). To diagnose:
+The planned v0.09 fix is to let the `Update Gallery` button embed the exact
+uploaded image bytes into the gallery data for the 3D painting. That keeps the
+picture un-cropped, un-stretched, and un-recompressed, while avoiding the
+browser's unreliable local-file texture upload path.
+
+Until v0.09 is implemented, if you still see a gradient placeholder instead of
+your picture:
 
 1. Open the gallery in a browser.
 2. Open the browser console (F12 → Console tab).
 3. Look for any lines that say `show-artwork-fallback` or `load-fallback`.
 4. Send the console output and `customer-artworks/last-import-report.txt` to
    your support person.
+
+If the picture is HEIC, HEIF, TIFF, BMP, or a complex SVG, converting it to JPG
+or PNG is the safest temporary workaround.
 
 A developer can also append `?debug=info` to the gallery URL and run
 `window.__FREYRAUM_DIAGNOSTICS__.snapshot()` in the browser console to get

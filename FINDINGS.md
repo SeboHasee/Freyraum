@@ -1,5 +1,78 @@
 # FINDINGS
 
+## 2026-05-17 — v0.09: aspect fixed, actual uploaded image still falls back on 3D painting
+
+### Customer-observed behavior
+
+After v0.08, the central 3D painting now has the correct aspect ratio, but the
+actual uploaded image still does not appear on the 3D painting. The user still
+sees the generated placeholder/fallback texture.
+
+This means the manifest/aspect path is fixed, but the WebGL albedo-byte path is
+still unreliable in the customer preview environment.
+
+### Current failure boundary
+
+- Timeline uses DOM `<img>` and can display the uploaded file.
+- 3D painting uses `TextureManager` / Three.js / WebGL texture upload.
+- `ArtworkMesh` receives manifest dimensions and sizes the frame correctly.
+- The remaining failure is therefore between "URL exists / image can display in
+  DOM" and "image bytes are accepted as a WebGL texture".
+
+### Online research findings
+
+Research on Three.js / WebGL local image texture failures found:
+
+- Three.js `TextureLoader` uses browser image loading primitives. It can load a
+  URL that later still fails during WebGL texture upload if the browser considers
+  the image not origin-clean or not uploadable.
+  Source: <https://threejs.org/docs/#api/en/loaders/TextureLoader>
+- MDN documents that images used with canvas/WebGL are subject to CORS /
+  origin-clean rules; normal image display is not the same as pixel access.
+  Source: <https://developer.mozilla.org/en-US/docs/Web/HTML/CORS_enabled_image>
+- WebGL Fundamentals documents the same practical issue: cross-origin/local
+  image rules are stricter for WebGL textures than for DOM display.
+  Source: <https://webglfundamentals.org/webgl/lessons/webgl-cors-permission.html>
+- `createImageBitmap()` can decode `Blob`/`File` sources and has orientation
+  options, but it is not the simplest static `file://` customer workflow fix and
+  still varies by browser/format.
+  Source: <https://developer.mozilla.org/en-US/docs/Web/API/createImageBitmap>
+- Community guidance for local user images in Three.js commonly recommends
+  `FileReader.readAsDataURL()` or `URL.createObjectURL(file)` rather than direct
+  `file://` paths. For FREYRAUM's non-interactive static preview, the importer
+  equivalent is to write exact image bytes as a data URL into the generated
+  manifest.
+
+### v0.09 technical conclusion
+
+v0.08's two-loader fix is necessary but not sufficient for every local
+`file://` + WebGL setup. The v0.09 plan should avoid WebGL upload from local file
+paths entirely by having the importer write an exact base64 `data:image/...`
+source for the 3D albedo (`webglImage`), while keeping the human-readable file
+path for reports and optional timeline display.
+
+This preserves the user's requirement:
+
+- no crop
+- no stretch
+- no destructive edit
+- no recompression
+- central 3D painting shows the actual uploaded picture bytes
+- effects are applied on top of that real albedo texture
+
+### Planned acceptance requirement
+
+Do not accept v0.09 unless the reported imported images render on the central 3D
+painting with:
+
+- `fallbackUsed: false`
+- `aspectSource: 'manifest'`
+- source kind `embedded-data-url` (or equivalent origin-clean source)
+- full-frame image mapping with no UV crop
+- painting effects still active according to the selected quality/light profile
+
+---
+
 ## 2026-05-17 — v0.08: customer images on 3D paintings — root cause confirmed and fixed
 
 ### Root cause
