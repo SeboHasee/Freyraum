@@ -85,6 +85,8 @@ window.__FREYRAUM_DIAGNOSTICS__.getEntries();
 window.__FREYRAUM_DIAGNOSTICS__.snapshot();
 window.__FREYRAUM_DIAGNOSTICS__.print('info');
 window.__FREYRAUM_DIAGNOSTICS__.setMode('verbose');
+window.__FREYRAUM_DIAGNOSTICS__.summarize();
+window.__FREYRAUM_DIAGNOSTICS__.exportJson();
 ```
 
 The diagnostics system currently records boot events, renderer/backend probe status, preference/storage issues, texture fallbacks, gallery navigation/load state, adaptive quality downgrades, and uncaught runtime errors.

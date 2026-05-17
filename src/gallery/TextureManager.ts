@@ -75,9 +75,7 @@ export class TextureManager {
   async preload(urls: string[]): Promise<void> {
     this.diagnostics.info('preload', `Preloading ${urls.length} albedo texture(s)`, {
       count: urls.length,
-      urlTypes: urls.map((u) =>
-        u.startsWith('data:') ? `data-uri:${u.slice(5, u.indexOf(';'))}` : u.startsWith('http') ? 'http' : 'local'
-      ),
+      urlTypes: urls.map((u) => this.compactUrlType(u)),
     });
     await Promise.all(urls.map((url) => this.load(url)));
   }
@@ -98,16 +96,13 @@ export class TextureManager {
     // data URIs, relative paths, and file:// URLs must NOT use crossOrigin or
     // the browser cannot supply CORS headers, marking the image as tainted and
     // preventing WebGL from uploading the texture.
-    const isDataUri = url.startsWith('data:');
     const isExternal = /^https?:\/\//i.test(url);
     const loader = isExternal ? this.externalLoader : this.localLoader;
-    const urlType = isDataUri ? 'data-uri' : isExternal ? 'external-http' : 'local-relative';
+    const urlType = this.classifyUrlType(url);
 
     // v0.09: never log the full data URL — it can be many megabytes. Log only
     // the MIME prefix and byte count so diagnostics are readable.
-    const urlForLog = isDataUri
-      ? `[data-uri:${url.slice(5, url.indexOf(';'))}:${url.length}bytes]`
-      : url;
+    const urlForLog = this.redactUrlForLog(url);
 
     this.diagnostics.debug('load-start', `Starting ${role} texture load`, {
       url: urlForLog,
@@ -192,9 +187,7 @@ export class TextureManager {
     const tex = this.cache.get(cacheKey);
     if (!tex) {
       this.diagnostics.debug('cache-miss', 'Albedo cache miss — texture not preloaded for this URL', {
-        url: url.startsWith('data:')
-          ? `[data-uri:${url.slice(5, url.indexOf(';'))}:${url.length}bytes]`
-          : url,
+        url: this.redactUrlForLog(url),
         cacheSize: this.cache.size,
       });
     }
@@ -279,5 +272,37 @@ export class TextureManager {
       result = (result * 31 + value.charCodeAt(i)) >>> 0;
     }
     return result;
+  }
+
+  /**
+   * Keeps URL classification consistent across preload/load/get diagnostics.
+   * We intentionally distinguish data URIs because they must never be printed
+   * in full (can be many MB of base64 payload).
+   */
+  private classifyUrlType(url: string): 'data-uri' | 'external-http' | 'local-relative' {
+    if (url.startsWith('data:')) return 'data-uri';
+    if (/^https?:\/\//i.test(url)) return 'external-http';
+    return 'local-relative';
+  }
+
+  /** Compact URL-type label used in preload summary logs. */
+  private compactUrlType(url: string): string {
+    const type = this.classifyUrlType(url);
+    if (type === 'external-http') return 'http';
+    if (type === 'local-relative') return 'local';
+    return `data-uri:${this.dataUriMime(url)}`;
+  }
+
+  /** Redacts data URLs to avoid logging large base64 payloads. */
+  private redactUrlForLog(url: string): string {
+    if (this.classifyUrlType(url) !== 'data-uri') return url;
+    return `[data-uri:${this.dataUriMime(url)}:${url.length}bytes]`;
+  }
+
+  /** Extracts MIME from data URI (fallback: unknown). */
+  private dataUriMime(url: string): string {
+    const semicolon = url.indexOf(';');
+    if (semicolon <= 5) return 'unknown';
+    return url.slice(5, semicolon);
   }
 }

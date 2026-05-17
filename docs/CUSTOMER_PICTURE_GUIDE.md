@@ -123,17 +123,11 @@ support person. The report is written in plain language and they can
 read it without seeing the gallery.
 
 **My pictures show in the timeline, but not on the big 3D painting.**
-This is the current v0.09 follow-up. v0.08 fixed the shape of the big 3D
-painting, but on some browsers the actual image file can still fail to upload
-into WebGL, so the big painting shows a generated placeholder.
+v0.09 is implemented: `Update Gallery` now embeds the exact uploaded image bytes
+into the gallery data for the 3D painting (`webglImage`), which avoids the
+unreliable local-file WebGL upload path.
 
-The planned v0.09 fix is to let the `Update Gallery` button embed the exact
-uploaded image bytes into the gallery data for the 3D painting. That keeps the
-picture un-cropped, un-stretched, and un-recompressed, while avoiding the
-browser's unreliable local-file texture upload path.
-
-Until v0.09 is implemented, if you still see a gradient placeholder instead of
-your picture:
+If you still see a gradient placeholder instead of your picture:
 
 1. Open the gallery in a browser.
 2. Open the browser console (F12 → Console tab).
@@ -144,10 +138,13 @@ your picture:
 If the picture is HEIC, HEIF, TIFF, BMP, or a complex SVG, converting it to JPG
 or PNG is the safest temporary workaround.
 
-A developer can also append `?debug=info` to the gallery URL and run
-`window.__FREYRAUM_DIAGNOSTICS__.snapshot()` in the browser console to get
-a full structured report. Look for `fallbackUsed: true` in the
-`show-artwork-complete` entries.
+A developer can also append `?debug=info` to the gallery URL and run:
+
+- `window.__FREYRAUM_DIAGNOSTICS__.snapshot()` for the full structured report
+- `window.__FREYRAUM_DIAGNOSTICS__.summarize()` for a compact event summary
+- `window.__FREYRAUM_DIAGNOSTICS__.exportJson()` to copy/paste full JSON logs
+
+Look for `fallbackUsed: true` in the `show-artwork-complete` entries.
 
 ## Debug / support tools (developer use)
 
