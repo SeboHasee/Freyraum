@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CanvasMaterial } from '../materials/CanvasMaterial';
+import { fitWithinBox, getTextureSize } from '../utils/texture';
 
 export class ArtworkMesh {
   readonly group: THREE.Group;
@@ -9,6 +10,8 @@ export class ArtworkMesh {
   private readonly frameMaterial: THREE.MeshPhysicalMaterial;
   private readonly canvasMaterial: CanvasMaterial;
   private _artworkAspect = 1;
+  private _artworkWidth = 4;
+  private _artworkHeight = 5.7;
 
   constructor(scene: THREE.Scene) {
     this.canvasMaterial = new CanvasMaterial();
@@ -31,7 +34,6 @@ export class ArtworkMesh {
 
     scene.add(this.group);
 
-    // Load normal texture asynchronously and apply when ready
     this.canvasMaterial.loadNormalTexture().then((normalTex) => {
       this.artworkMaterial.normalMap = normalTex;
       this.artworkMaterial.normalScale.set(0.12, 0.12);
@@ -40,41 +42,17 @@ export class ArtworkMesh {
   }
 
   updateAspect(texture: THREE.Texture): void {
-    const img = texture.image as HTMLImageElement | ImageBitmap;
-    let imgW = 1;
-    let imgH = 1;
+    const { aspect } = getTextureSize(texture);
+    this._artworkAspect = aspect;
 
-    if ('naturalWidth' in img) {
-      imgW = img.naturalWidth || img.width || 1;
-      imgH = img.naturalHeight || img.height || 1;
-    } else {
-      imgW = img.width || 1;
-      imgH = img.height || 1;
-    }
+    const { width, height } = fitWithinBox(aspect, 4.2, 5.8);
+    this._artworkWidth = width;
+    this._artworkHeight = height;
 
-    const imageAspect = imgW / imgH;
-    this._artworkAspect = imageAspect;
+    this.artworkMesh.scale.set(width / 4.0, height / 5.7, 1);
 
-    const maxW = 4.2;
-    const maxH = 5.8;
-
-    let w: number;
-    let h: number;
-
-    if (imageAspect >= maxW / maxH) {
-      w = maxW;
-      h = maxW / imageAspect;
-    } else {
-      h = maxH;
-      w = maxH * imageAspect;
-    }
-
-    // Update artwork geometry scale
-    this.artworkMesh.scale.set(w / 4.0, h / 5.7, 1);
-
-    // Update frame to match
-    const frameW = w + 0.4;
-    const frameH = h + 0.4;
+    const frameW = width + 0.4;
+    const frameH = height + 0.4;
     this.frameMesh.scale.set(frameW / 4.4, frameH / 6.2, 1);
   }
 
@@ -86,6 +64,14 @@ export class ArtworkMesh {
 
   get artworkAspect(): number {
     return this._artworkAspect;
+  }
+
+  get artworkWidth(): number {
+    return this._artworkWidth;
+  }
+
+  get artworkHeight(): number {
+    return this._artworkHeight;
   }
 
   dispose(): void {

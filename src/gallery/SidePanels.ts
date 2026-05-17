@@ -1,13 +1,16 @@
 import * as THREE from 'three';
+import { fitWithinBox, getTextureSize } from '../utils/texture';
 
 export class SidePanels {
   readonly leftPanel: THREE.Mesh;
   readonly rightPanel: THREE.Mesh;
   private readonly leftMaterial: THREE.MeshBasicMaterial;
   private readonly rightMaterial: THREE.MeshBasicMaterial;
+  private readonly maxPreviewWidth = 2.1;
+  private readonly maxPreviewHeight = 2.9;
 
   constructor(scene: THREE.Scene) {
-    const geo = new THREE.PlaneGeometry(2.1, 2.9);
+    const geo = new THREE.PlaneGeometry(1, 1);
 
     this.leftMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
@@ -34,10 +37,12 @@ export class SidePanels {
     if (prevTexture) {
       this.leftMaterial.map = prevTexture;
       this.leftMaterial.needsUpdate = true;
+      this.updatePanelScale(this.leftPanel, prevTexture);
     }
     if (nextTexture) {
       this.rightMaterial.map = nextTexture;
       this.rightMaterial.needsUpdate = true;
+      this.updatePanelScale(this.rightPanel, nextTexture);
     }
   }
 
@@ -50,5 +55,11 @@ export class SidePanels {
     this.rightPanel.geometry.dispose();
     this.leftMaterial.dispose();
     this.rightMaterial.dispose();
+  }
+
+  private updatePanelScale(panel: THREE.Mesh, texture: THREE.Texture): void {
+    const { aspect } = getTextureSize(texture);
+    const { width, height } = fitWithinBox(aspect, this.maxPreviewWidth, this.maxPreviewHeight);
+    panel.scale.set(width, height, 1);
   }
 }

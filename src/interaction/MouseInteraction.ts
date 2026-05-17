@@ -19,12 +19,12 @@ export class MouseInteraction {
 
   private handleMouseMove = (e: MouseEvent): void => {
     if (this.isDragging) return;
-    if (this.galleryManager.targetZoom > 5) return;
 
     const normalizedX = (e.clientX / window.innerWidth) * 2 - 1;
     const normalizedY = (e.clientY / window.innerHeight) * 2 - 1;
+    const hoverScale = this.galleryManager.getHoverRotationScale();
 
-    this.galleryManager.setHoverTarget(normalizedX * 0.16, normalizedY * 0.08);
+    this.galleryManager.setHoverTarget(normalizedX * hoverScale.x, normalizedY * hoverScale.y);
   };
 
   private handleClick = (e: MouseEvent): void => {

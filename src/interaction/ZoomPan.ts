@@ -1,5 +1,4 @@
 import { GalleryManager } from '../gallery/GalleryManager';
-import { clamp } from '../utils/math';
 import { MouseInteraction } from './MouseInteraction';
 
 export class ZoomPan {
@@ -26,11 +25,7 @@ export class ZoomPan {
   }
 
   private handleWheel = (e: WheelEvent): void => {
-    this.galleryManager.targetZoom = clamp(
-      this.galleryManager.targetZoom + e.deltaY * 0.0045,
-      -2,
-      9
-    );
+    this.galleryManager.addZoomDelta(e.deltaY * 0.0045);
   };
 
   private handleMouseDown = (e: MouseEvent): void => {
@@ -39,32 +34,26 @@ export class ZoomPan {
     this.lastX = e.clientX;
     this.lastY = e.clientY;
     this.mouseInteraction.setDragging(true);
-    this.canvas.style.cursor = 'grabbing';
+    this.canvas.style.cursor = this.galleryManager.canPan() ? 'grabbing' : 'grab';
   };
 
   private handleMouseMove = (e: MouseEvent): void => {
     if (!this.isDragging) return;
-    if (this.galleryManager.targetZoom > 5) return;
 
     const dx = e.clientX - this.lastX;
     const dy = e.clientY - this.lastY;
     this.lastX = e.clientX;
     this.lastY = e.clientY;
 
-    const aspect = this.galleryManager.artworkAspect;
-    const panLimitX = 8 * (aspect > 1 ? 1.5 : 1);
-    const panLimitY = 12 * (aspect < 1 ? 2.0 : 1);
+    if (this.galleryManager.canPan()) {
+      this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
+      return;
+    }
 
-    this.galleryManager.targetPanX = clamp(
-      this.galleryManager.targetPanX + dx * 0.004,
-      -panLimitX,
-      panLimitX
-    );
-    this.galleryManager.targetPanY = clamp(
-      this.galleryManager.targetPanY - dy * 0.004,
-      -panLimitY,
-      panLimitY
-    );
+    const hoverScale = this.galleryManager.getHoverRotationScale();
+    const normalizedX = (e.clientX / window.innerWidth) * 2 - 1;
+    const normalizedY = (e.clientY / window.innerHeight) * 2 - 1;
+    this.galleryManager.setHoverTarget(normalizedX * hoverScale.x, normalizedY * hoverScale.y);
   };
 
   private handleMouseUp = (): void => {

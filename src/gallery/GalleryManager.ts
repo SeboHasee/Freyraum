@@ -7,6 +7,12 @@ import { clamp } from '../utils/math';
 
 export type NavigationCallback = (index: number) => void;
 
+const DEFAULT_CAMERA_Z = 7;
+const MAX_CAMERA_Z = 8.5;
+const MIN_CAMERA_Z = 1.2;
+const MIN_VISIBLE_ARTWORK_FRACTION = 0.28;
+const PAN_SAFETY_FACTOR = 0.92;
+
 export class GalleryManager {
   private currentIndex = 0;
   private readonly artworkMesh: ArtworkMesh;
@@ -15,11 +21,10 @@ export class GalleryManager {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly raycaster = new THREE.Raycaster();
 
-  // Transition state
   private targetX = 0;
   private targetY = 0;
-  zoom = 7;
-  targetZoom = 7;
+  zoom = DEFAULT_CAMERA_Z;
+  targetZoom = DEFAULT_CAMERA_Z;
   panX = 0;
   panY = 0;
   targetPanX = 0;
@@ -45,6 +50,32 @@ export class GalleryManager {
     this.showArtwork(0);
   }
 
+  addZoomDelta(delta: number): void {
+    this.targetZoom = this.clampZoom(this.targetZoom + delta);
+    this.clampPanTargets();
+  }
+
+  setPanOffset(deltaX: number, deltaY: number): void {
+    const { x, y } = this.getPanLimits(this.targetZoom);
+    this.targetPanX = clamp(this.targetPanX + deltaX, -x, x);
+    this.targetPanY = clamp(this.targetPanY + deltaY, -y, y);
+  }
+
+  canPan(): boolean {
+    const { x, y } = this.getPanLimits(this.targetZoom);
+    return x > 0.01 || y > 0.01;
+  }
+
+  getHoverRotationScale(): { x: number; y: number } {
+    const zoomRange = Math.max(0.001, MAX_CAMERA_Z - this.getMinZoom());
+    const zoomProgress = (this.clampZoom(this.targetZoom) - this.getMinZoom()) / zoomRange;
+
+    return {
+      x: 0.03 + zoomProgress * 0.13,
+      y: 0.018 + zoomProgress * 0.062,
+    };
+  }
+
   private showArtwork(index: number): void {
     const artwork = artworks[index];
     const texture = this.textureManager.get(artwork.image);
@@ -52,12 +83,15 @@ export class GalleryManager {
       this.artworkMesh.setTexture(texture);
     }
 
-    // Update side panels
     const prevIndex = (index - 1 + artworks.length) % artworks.length;
     const nextIndex = (index + 1) % artworks.length;
     const prevTexture = this.textureManager.get(artworks[prevIndex].image) ?? null;
     const nextTexture = this.textureManager.get(artworks[nextIndex].image) ?? null;
     this.sidePanels.updateTextures(prevTexture, nextTexture);
+
+    this.targetZoom = this.clampZoom(this.targetZoom);
+    this.zoom = this.clampZoom(this.zoom);
+    this.clampPanTargets();
   }
 
   navigate(direction: 1 | -1): void {
@@ -67,7 +101,6 @@ export class GalleryManager {
       artworks.length - 1
     );
 
-    // Transition: slide from direction
     this.artworkMesh.group.position.x = direction * 3.2;
     this.artworkMesh.group.rotation.y = direction * 0.32;
     this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
@@ -75,11 +108,7 @@ export class GalleryManager {
     this.currentIndex = newIndex;
     this.showArtwork(newIndex);
 
-    // Reset pan and zoom on navigation
-    this.targetPanX = 0;
-    this.targetPanY = 0;
-    this.targetZoom = 7;
-
+    this.resetView();
     this.onNavigateCallback?.(this.currentIndex);
   }
 
@@ -94,16 +123,10 @@ export class GalleryManager {
     this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
 
     this.showArtwork(index);
-
-    this.targetPanX = 0;
-    this.targetPanY = 0;
-    this.targetZoom = 7;
-
+    this.resetView();
     this.onNavigateCallback?.(this.currentIndex);
   }
 
-  // x is horizontal mouse offset → drives rotation.y (yaw)
-  // y is vertical mouse offset  → drives rotation.x (pitch)
   setHoverTarget(x: number, y: number): void {
     this.targetY = x;
     this.targetX = y;
@@ -142,25 +165,64 @@ export class GalleryManager {
   update(): void {
     const group = this.artworkMesh.group;
 
-    // Lerp group rotation back to targets
+    this.targetZoom = this.clampZoom(this.targetZoom);
+    this.clampPanTargets();
+
     group.rotation.x += (this.targetX - group.rotation.x) * 0.05;
     group.rotation.y += (this.targetY - group.rotation.y) * 0.05;
 
-    // Lerp transition position/scale back to origin
     group.position.x += (0 - group.position.x) * 0.06;
     group.position.y += (0 - group.position.y) * 0.06;
     group.scale.x += (1 - group.scale.x) * 0.06;
     group.scale.y += (1 - group.scale.y) * 0.06;
     group.scale.z += (1 - group.scale.z) * 0.06;
 
-    // Camera zoom
     this.zoom += (this.targetZoom - this.zoom) * 0.08;
     this.camera.position.z += (this.zoom - this.camera.position.z) * 0.08;
 
-    // Camera pan
     this.panX += (this.targetPanX - this.panX) * 0.08;
     this.panY += (this.targetPanY - this.panY) * 0.08;
     this.camera.position.x += (this.panX - this.camera.position.x) * 0.08;
     this.camera.position.y += (this.panY - this.camera.position.y) * 0.08;
+  }
+
+  private resetView(): void {
+    this.targetPanX = 0;
+    this.targetPanY = 0;
+    this.targetZoom = this.clampZoom(DEFAULT_CAMERA_Z);
+    this.targetX = 0;
+    this.targetY = 0;
+  }
+
+  private clampZoom(value: number): number {
+    return clamp(value, this.getMinZoom(), MAX_CAMERA_Z);
+  }
+
+  private clampPanTargets(): void {
+    const limits = this.getPanLimits(this.targetZoom);
+    this.targetPanX = clamp(this.targetPanX, -limits.x, limits.x);
+    this.targetPanY = clamp(this.targetPanY, -limits.y, limits.y);
+  }
+
+  private getPanLimits(zoom: number): { x: number; y: number } {
+    const visibleHeight = 2 * this.clampZoom(zoom) * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+    const visibleWidth = visibleHeight * this.camera.aspect;
+
+    return {
+      x: Math.max(0, ((this.artworkMesh.artworkWidth - visibleWidth) * 0.5) * PAN_SAFETY_FACTOR),
+      y: Math.max(0, ((this.artworkMesh.artworkHeight - visibleHeight) * 0.5) * PAN_SAFETY_FACTOR),
+    };
+  }
+
+  private getMinZoom(): number {
+    const requiredVisibleHeight = Math.max(
+      this.artworkMesh.artworkHeight * MIN_VISIBLE_ARTWORK_FRACTION,
+      (this.artworkMesh.artworkWidth * MIN_VISIBLE_ARTWORK_FRACTION) / this.camera.aspect
+    );
+
+    const fittedDistance = requiredVisibleHeight /
+      (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)));
+
+    return clamp(Math.max(MIN_CAMERA_Z, fittedDistance), MIN_CAMERA_Z, DEFAULT_CAMERA_Z);
   }
 }

@@ -1,11 +1,12 @@
 import { GalleryManager } from '../gallery/GalleryManager';
-import { clamp } from '../utils/math';
 
 export class TouchInteraction {
   private readonly canvas: HTMLCanvasElement;
   private readonly galleryManager: GalleryManager;
   private touchStartX = 0;
   private touchStartY = 0;
+  private lastTouchX = 0;
+  private lastTouchY = 0;
   private lastTouchDist = 0;
   private isSwiping = false;
 
@@ -20,9 +21,12 @@ export class TouchInteraction {
 
   private handleTouchStart = (e: TouchEvent): void => {
     if (e.touches.length === 1) {
-      this.touchStartX = e.touches[0].clientX;
-      this.touchStartY = e.touches[0].clientY;
-      this.isSwiping = true;
+      const touch = e.touches[0];
+      this.touchStartX = touch.clientX;
+      this.touchStartY = touch.clientY;
+      this.lastTouchX = touch.clientX;
+      this.lastTouchY = touch.clientY;
+      this.isSwiping = !this.galleryManager.canPan();
     } else if (e.touches.length === 2) {
       this.isSwiping = false;
       this.lastTouchDist = this.getTouchDist(e);
@@ -34,11 +38,21 @@ export class TouchInteraction {
       const dist = this.getTouchDist(e);
       const delta = this.lastTouchDist - dist;
       this.lastTouchDist = dist;
-      this.galleryManager.targetZoom = clamp(
-        this.galleryManager.targetZoom + delta * 0.02,
-        -2,
-        9
-      );
+      this.galleryManager.addZoomDelta(delta * 0.02);
+      return;
+    }
+
+    if (e.touches.length !== 1) return;
+
+    const touch = e.touches[0];
+    const dx = touch.clientX - this.lastTouchX;
+    const dy = touch.clientY - this.lastTouchY;
+    this.lastTouchX = touch.clientX;
+    this.lastTouchY = touch.clientY;
+
+    if (this.galleryManager.canPan()) {
+      this.isSwiping = false;
+      this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
     }
   };
 
