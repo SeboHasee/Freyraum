@@ -147,8 +147,8 @@ A developer can also append `?debug=info` to the gallery URL and run:
 Look for `fallbackUsed: true` in the `show-artwork-complete` entries.
 
 **I see strange artifacts only when quality is set to Hoch.**
-This is now tracked as the v0.10 rendering audit. Please send your support
-person:
+This was addressed in v0.10 by retuning the Hoch procedural surface maps and
+shadow/specular values. Please send your support person:
 
 1. a screenshot,
 2. the selected quality setting,
@@ -158,7 +158,14 @@ person:
    `a` (albedo-only) or `s` (shadow-only).
 
 This helps distinguish image-content issues from high-quality shader effects
-such as parallax, self-shadow, clearcoat, bloom, or frame-edge depth artifacts.
+if a new artifact appears.
+
+**Very tall pictures look too close when I reset the view.**
+This was also addressed in v0.10. Reset view now uses the framed picture
+dimensions, so very vertical pictures should start farther away and show the
+whole framed artwork. If it still looks too close, send a screenshot and the
+`show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`, and
+`maxZoom`.
 
 ## Debug / support tools (developer use)
 

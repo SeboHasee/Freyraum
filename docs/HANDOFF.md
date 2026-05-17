@@ -1,9 +1,9 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current priority: v0.10.** Customer validation now reports
-occasional close-up artifacts on the **Hoch** quality preset. See `plan.md`
-→ "v0.10 — High-Quality Rendering Artifact Audit" for the current plan.
+contributors. **Current priority: v0.10 validation.** The Hoch close-up spot
+artifact fix and very-vertical-picture reset zoom fix are implemented. See
+`plan.md` → "v0.10 — Spot Artifact Fix and Portrait Reset Framing" for details.
 
 ## Architecture diagram
 
@@ -51,13 +51,15 @@ If a future image still triggers the fallback, follow the diagnostics flow in
 
 ## Current rendering follow-up
 
-v0.10 is a planned investigation for occasional close-up artifacts on the
-**Hoch** quality preset. The first pass should reproduce the exact view with
-`?debug=info`, then compare Hoch vs Ausgewogen, `gallery-soft` vs
-`raking-inspection`, albedo-only (`a`) vs normal shading, and shadow-only (`s`)
-vs normal shading. Do not reduce high-quality effects until the artifact is
-classified as parallax/UV, self-shadow, inspection PCF, clearcoat/bloom, or
-frame-depth related.
+v0.10 is implemented for occasional close-up spot artifacts on the **Hoch**
+quality preset. The fix reduces procedural height micro-noise, lowers Hoch
+specular blob strength, increases Hoch self-shadow bias, and keeps diagnostics
+explicit about the active reset/shadow/specular values.
+
+Very vertical portraits now reset farther away: reset zoom is computed from the
+framed artwork dimensions and camera aspect/FOV after async artwork aspect
+loading. Validate with `?debug=info`; `show-artwork-complete` logs `resetZoom`,
+`minZoom`, `maxZoom`, `specularStrength`, and `selfShadowBias`.
 
 ## Controls surface
 
@@ -68,7 +70,7 @@ frame-depth related.
 | Touch swipe (not zoomed) | Navigate artworks | Threshold 50 px. |
 | ← / → | Navigate artworks | Disabled in inputs and inside the timeline (timeline owns its own arrows). |
 | `+` / `-` | Zoom in / out | Shares the same clamping as wheel zoom. |
-| `0` or `R` | Reset view | Restores zoom, pan, and hover rotation to default. |
+| `0` or `R` | Reset view | Restores pan/hover and uses aspect-aware reset zoom so very vertical pictures fit. |
 | `F` | Toggle fullscreen | Mirrors the on-screen Fullscreen button. |
 | Timeline thumbnail buttons | Select artwork | Real `<button>` elements. Roving tabindex. Home / End jump to first / last. |
 | Settings (gear) | Open preferences | Reduced motion, high contrast, quality preset. Persisted in `localStorage`. |
@@ -86,8 +88,8 @@ frame-depth related.
 
 | Preset | Pixel ratio cap | Bloom | Shadows | Geometry segments |
 | --- | --- | --- | --- | --- |
-| High | 1.8 | 0.12 | yes | 240 |
-| Balanced (default) | 1.4 | 0.08 | yes | 120 |
+| High | 1.8 | 0.08 | yes | 240 |
+| Balanced (default) | 1.4 | 0.06 | yes | 120 |
 | Battery / iGPU | 1.0 | off | no | 48 |
 
 ## Refreshing customer-handoff screenshots
@@ -115,6 +117,7 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Reduced motion mode is visually distinct (no swoop on artwork change, no spinner rotation).
 - [ ] High contrast mode keeps every control legible.
 - [ ] Zoom and pan are clamped on every artwork format (portrait, square, landscape, ultrawide).
+- [ ] Very vertical portraits reset far enough away to show the full framed artwork.
 - [ ] WebGL fallback renders correctly (force-disable WebGL in the browser to verify).
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.

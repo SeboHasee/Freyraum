@@ -24,19 +24,18 @@ The importer scans the inbox, reads each file's dimensions, copies preview-ready
 files into the preview folder, generates metadata, and writes the runtime file
 the gallery actually reads.
 
-## Current v0.10 issue: occasional Hoch quality close-up artifacts
+## Current v0.10 rendering fix: Hoch close-up spots and portrait reset zoom
 
-Customer validation now reports occasional strange artifacts in close-up view
-when the quality / performance setting is **Hoch**. This is separate from the
-v0.09 uploaded-image fix: first confirm that the image is not a fallback
+v0.10 is implemented for occasional strange artifacts in close-up view when the
+quality / performance setting is **Hoch**. This is separate from the v0.09
+uploaded-image fix: still confirm that the image is not a fallback
 (`fallbackUsed: false`) and that `webglImageSource` is correct.
 
-The v0.10 plan in `/home/runner/work/Freyraum/Freyraum/plan.md` requires a
-reproduction-first audit. Compare the same view under Hoch vs Ausgewogen,
-`gallery-soft` vs `raking-inspection`, albedo-only (`a`) vs normal shading, and
-shadow-only (`s`) vs normal shading. The likely code boundaries are high-only
-parallax UV offset, self-shadow / inspection PCF, clearcoat/specular/bloom, or a
-frame-edge depth precision issue.
+The implemented fix reduces procedural height micro-noise and specular blob
+peaks, raises Hoch self-shadow bias, lowers Hoch specular strength, and computes
+reset zoom from the framed artwork dimensions. For support, use `?debug=info`
+and inspect `show-artwork-complete` for `resetZoom`, `minZoom`, `maxZoom`,
+`specularStrength`, `selfShadowBias`, `fallbackUsed`, and `webglImageSource`.
 
 ## Folder and file roles
 

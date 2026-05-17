@@ -1,15 +1,16 @@
 # FREYRAUM Plan
 
-## v0.10 — Spot Artifact Fix (Planned)
+## v0.10 — Spot Artifact Fix and Portrait Reset Framing (Implemented)
 
 ### Status
 
-**Planned 2026-05-17 (coding plan updated same day).** Customer clarified the
-artifact as **"little spots"**. Full source audit of `PaintingMaterial.ts`,
-`ProceduralTextureFactory.ts`, and `quality.ts` has identified the root causes
-with exact line numbers and calculated the minimal code changes required. The
-GitHub attachment still returns `HTTP 404` so no pixel analysis is possible;
-all findings below are derived from code and math alone.
+**Implemented 2026-05-17.** Customer clarified the artifact as **"little
+spots"** in Hoch mode and also requested that very vertical pictures start far
+enough away. The source audit identified two procedural-map causes and one
+framing issue. The fix is now implemented in `ProceduralTextureFactory.ts`,
+`quality.ts`, and `GalleryManager.ts`. The GitHub attachment still returns
+`HTTP 404` from this sandbox, so the visual symptom analysis remains
+code-derived, but lint/build validation passes.
 
 ---
 
@@ -17,7 +18,10 @@ all findings below are derived from code and math alone.
 
 - Occasional **small spot-like artifacts** visible at close-up zoom.
 - Setting: **Performance / Qualität = Hoch** only (not Ausgewogen or Akkusparend).
-- Expected fix: spots gone at Hoch. No regression on Ausgewogen/Akkusparend.
+- Very vertical/portrait pictures could reset slightly too close because the
+  old reset zoom used a fixed `DEFAULT_CAMERA_Z = 7`.
+- Expected fix: spots gone at Hoch, portrait reset view fits the full framed
+  artwork, no regression on Ausgewogen/Akkusparend.
 - Reproduction tools: `?debug=info`, debug key `s` (shadow-only), key `a`
   (albedo-only).
 
@@ -28,7 +32,7 @@ all findings below are derived from code and math alone.
 #### Cause 1 (PRIMARY) — Height micro-noise produces stochastic shadow blockers
 
 **File:** `src/materials/ProceduralTextureFactory.ts`, line 156  
-**Current code:**
+**Original code:**
 
 ```ts
 // generateHeight(), line 154-156
@@ -94,7 +98,7 @@ for (let b = 0; b < blobCount; b += 1) {
   const blob = Math.exp(-distSq / (radius * radius)) * 90; // ← peak 90/255 = 35% above baseline
 ```
 
-At Hoch preset: `specularStrength = 0.4`, clearcoat enabled. Blob peak
+Originally at Hoch preset: `specularStrength = 0.4`, clearcoat enabled. Blob peak
 contribution to specular intensity: `(90/255) × 0.4 ≈ 14%` above the baseline
 6/255. Under raking inspection light these become visible bright spots at the
 blob centers (14–32 px blobs at 512 px = easily visible at close zoom).
@@ -119,11 +123,11 @@ position, amplifying the stochastic variance from Cause 1. Not a separate cause
 
 ---
 
-### Exact code changes (minimal, targeted)
+### Code changes implemented
 
 #### Change 1 — `src/materials/ProceduralTextureFactory.ts` — Reduce micro amplitude
 
-**Line 156, `generateHeight()`.** Reduce micro amplitude from `* 16` to `* 3`.
+**Line 156, `generateHeight()`.** Reduced micro amplitude from `* 16` to `* 3`.
 
 ```ts
 // BEFORE:
@@ -149,7 +153,7 @@ logic needed.
 
 #### Change 2 — `src/config/quality.ts` — Tighten Hoch self-shadow bias
 
-**Line 139 (approximately), `QUALITY_PRESETS.high`.** Raise `selfShadowBias`
+**Line 139 (approximately), `QUALITY_PRESETS.high`.** Raised `selfShadowBias`
 from `0.03` to `0.05`.
 
 ```ts
@@ -171,7 +175,7 @@ have `selfShadowEnabled: false` anyway).
 
 #### Change 3 — `src/materials/ProceduralTextureFactory.ts` — Reduce specular blob peak
 
-**Line 220, `generateSpecular()`.** Reduce Gaussian blob peak from `* 90` to
+**Line 220, `generateSpecular()`.** Reduced Gaussian blob peak from `* 90` to
 `* 50`.
 
 ```ts
@@ -189,7 +193,7 @@ close-up zoom. The blobs are still there — they are not removed.
 
 #### Change 4 — `src/config/quality.ts` — Lower Hoch specularStrength slightly
 
-**`QUALITY_PRESETS.high`.** Lower `specularStrength` from `0.4` to `0.28`.
+**`QUALITY_PRESETS.high`.** Lowered `specularStrength` from `0.4` to `0.28`.
 
 ```ts
 // BEFORE:
@@ -204,6 +208,29 @@ specularStrength: 0.28,
 texture but not as artifact-level spots. The base specular material response
 `specularIntensity: 0.3` (in the material constructor, unchanged) is unaffected.
 This is a uniform-only change, no shader recompile.
+
+#### Change 5 — `src/gallery/GalleryManager.ts` — Aspect-aware reset zoom for very vertical pictures
+
+The fixed `DEFAULT_CAMERA_Z = 7` reset distance was too close for very vertical
+artworks. `ArtworkMesh.updateAspect()` fits portrait pictures into a maximum
+artwork height of `5.8`, then adds a frame (`+0.4` height). With the 40° camera
+FOV, a fully framed portrait needs roughly:
+
+```
+visibleHeight = (5.8 + 0.4) * 1.04 = 6.448
+distance = visibleHeight / (2 * tan(20°)) ≈ 8.86
+```
+
+The implemented fix:
+
+- raises `MAX_CAMERA_Z` from `8.5` to `9.25`;
+- adds `RESET_VIEW_FRAME_MARGIN = 1.04`;
+- adds `getResetZoom()` using `max(frameHeight, frameWidth / camera.aspect)`;
+- changes `resetView()` to use `getResetZoom()` instead of fixed `7`;
+- adds `pendingResetAfterArtworkLoad` so first load and navigation reset again
+  after the async artwork texture/aspect update has completed;
+- logs `resetZoom`, `minZoom`, `maxZoom`, `specularStrength`, and
+  `selfShadowBias` in diagnostics.
 
 ---
 
@@ -223,12 +250,12 @@ This is a uniform-only change, no shader recompile.
 
 ---
 
-### Implementation Plan (vertical slices)
+### Implemented vertical slices
 
-#### Slice S1 — Apply the four targeted changes
+#### Slice S1 — Apply targeted artifact changes
 
-All changes are in two files and are purely numeric/data. No new logic, no new
-API, no schema changes.
+Completed. Four numeric/data changes were made. No new public API, no schema
+changes, and no GLSL changes.
 
 **`src/materials/ProceduralTextureFactory.ts`**:
 
@@ -240,23 +267,22 @@ API, no schema changes.
 3. `selfShadowBias: 0.03` → `selfShadowBias: 0.05`
 4. `specularStrength: 0.4` → `specularStrength: 0.28`
 
-After each edit: verify `npm run lint` and `npm run build` still pass (no TS
-errors expected — these are numeric literal changes only).
+Validation passes with the known TypeScript parser and Sass warnings.
 
-#### Slice S2 — Verify diagnostic logging covers the fix
+#### Slice S2 — Aspect-aware portrait reset zoom
 
-Check that existing Diagnostics entries for `show-artwork-complete` log:
-- `selfShadowBias` (or relevant shadow params) — if not already logged, add
-  `selfShadowBias: preset.selfShadowBias` to the `show-artwork-complete`
-  diagnostics object in `GalleryManager.ts`.
-- No other diagnostic changes required.
+Completed. `GalleryManager` now computes reset distance from framed artwork
+dimensions after the current artwork aspect has loaded, so tall portraits start
+far enough away.
 
-This slice is conditional: if the existing log already shows the preset
-parameters, skip it.
+#### Slice S3 — Diagnostic logging
 
-#### Slice S3 — Validation
+Completed. Diagnostics now include `selfShadowBias`, `specularStrength`,
+`resetZoom`, `minZoom`, and `maxZoom`.
 
-After the code changes:
+#### Slice S4 — Validation
+
+Completed:
 
 1. **Build check:**
    ```
@@ -267,8 +293,9 @@ After the code changes:
    - Load with `?debug=info`, Hoch preset, close-up zoom → no spots visible
    - Press `s` (shadow-only debug) → smooth gradient, no speckle
    - Press `a` (albedo-only debug) → clean picture, no marks
-   - Switch to Ausgewogen → unchanged appearance vs before the fix
-   - Switch to raking-inspection + Hoch → relief visible, no shadow speckle
+    - Switch to Ausgewogen → unchanged appearance vs before the fix
+    - Switch to raking-inspection + Hoch → relief visible, no shadow speckle
+    - Open a very vertical portrait → reset view shows the full framed artwork
 3. **Customer image check:** confirm `fallbackUsed: false` and
    `webglImageSource: 'embedded-data-url'` still logged (v0.09 unchanged).
 
@@ -279,8 +306,9 @@ After the code changes:
 - Dark spot speckle gone at Hoch under gallery-soft and raking-inspection.
 - Bright specular spots at blob centers not visible at close-up zoom.
 - Normal/detail normal/parallax relief still visible and pleasant under Hoch.
+- Very vertical pictures reset far enough away to show the full framed artwork.
 - Ausgewogen and Akkusparend presets: no visual change.
-- `npm run lint` and `npm run build` pass.
+- `npm run lint` and `npm run build` pass (only known TypeScript parser and Sass warnings).
 - No regression to v0.09 customer image display.
 
 ---

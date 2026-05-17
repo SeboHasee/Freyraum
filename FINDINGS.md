@@ -1,12 +1,17 @@
 # FINDINGS
 
-## 2026-05-17 — v0.10: planned — spot artifact coding plan
+## 2026-05-17 — v0.10: implemented — spot artifacts and portrait reset zoom
 
 ### Customer-observed behavior
 
 Customer reports **little spots** visible at close-up zoom with **Hoch** quality
 preset. Balanced and battery do not reproduce the artifact. The screenshot URL
 returns `HTTP 404` from this sandbox; the analysis is code-derived.
+
+The customer also requested that especially very vertical pictures start far
+enough away. The old reset view used fixed `DEFAULT_CAMERA_Z = 7`, which could
+clip a fully framed portrait (`5.8` artwork height + `0.4` frame height) on the
+initial/reset view.
 
 ### Root causes identified (code-derived with math)
 
@@ -38,7 +43,7 @@ With `specularStrength: 0.4` and clearcoat in Hoch, blob centers contribute
 `(90/255) × 0.4 ≈ 14%` specular intensity — visible as bright spots at close
 zoom under raking light.
 
-### Planned fixes (four lines changed across two files)
+### Fix implemented
 
 | File | Line | Before | After | Reason |
 |------|------|--------|-------|--------|
@@ -47,8 +52,20 @@ zoom under raking light.
 | `quality.ts` Hoch | `selfShadowBias` | `0.03` | `0.05` | ×4 headroom over new micro amplitude |
 | `quality.ts` Hoch | `specularStrength` | `0.4` | `0.28` | combined blob contribution drops to 5.5% |
 
-No GLSL shader changes. No new API. No schema changes. Balanced/battery
-unaffected.
+Additional portrait/framing fix:
+
+- `GalleryManager.ts`: `MAX_CAMERA_Z` raised from `8.5` to `9.25`.
+- `GalleryManager.ts`: reset view now uses `getResetZoom()` based on framed
+  artwork dimensions (`artworkWidth + 0.4`, `artworkHeight + 0.4`) and camera
+  aspect/FOV, with a `1.04` safety margin.
+- `GalleryManager.ts`: first load and navigation set `pendingResetAfterArtworkLoad`
+  so reset zoom is recomputed after async artwork texture/aspect loading.
+- Diagnostics now include `resetZoom`, `minZoom`, `maxZoom`,
+  `specularStrength`, and `selfShadowBias`.
+
+No GLSL shader changes. No new public API. No schema changes. Balanced/battery
+unaffected by the spot tuning. Validation: `npm run lint` and `npm run build`
+pass with only the known TypeScript parser and Sass warnings.
 
 ---
 

@@ -46,11 +46,11 @@ gallery). The previous manifest is backed up to `artworks.json.bak` so a bad
 import can be recovered manually. If the inbox is empty, the built-in demo
 artworks load instead.
 
-Current rendering follow-up: customer validation now reports occasional close-up
-artifacts on the **Hoch** quality preset. The v0.10 plan audits the high-only
-shader/render paths and starts with reproduction via `?debug=info`, albedo-only
-(`a`), shadow-only (`s`), and quality/lighting comparisons before changing code.
-See [`plan.md`](./plan.md#v010--high-quality-rendering-artifact-audit-planned).
+Current rendering follow-up: v0.10 is implemented for occasional close-up spot
+artifacts on the **Hoch** quality preset and for reset framing on very vertical
+pictures. The fix retunes procedural height/specular inputs, Hoch shadow/specular
+strengths, and computes reset zoom from framed artwork dimensions. See
+[`plan.md`](./plan.md#v010--spot-artifact-fix-and-portrait-reset-framing-implemented).
 
 For the full architecture see
 [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).

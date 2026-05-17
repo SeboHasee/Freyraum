@@ -2,20 +2,27 @@
 
 ## Unreleased
 
-### Planned (v0.10 — spot artifact coding plan — 2026-05-17)
+### Fixed (v0.10 — spot artifacts and portrait reset zoom — 2026-05-17)
 
 - Deep source audit identified two root causes for "little spots" in Hoch mode.
   **Primary:** `generateHeight()` micro-noise amplitude too high for the
   self-shadow march step size, creating stochastic dark speckle.
   **Secondary:** `generateSpecular()` blob peak too high for Hoch close-up under
   clearcoat/raking light, creating bright spots.
-- Coding plan in `plan.md` specifies exact line-level changes with before/after
-  values and supporting math:
+- Implemented exact line-level changes from `plan.md`:
   - `ProceduralTextureFactory.ts` ~line 156: `* 16` → `* 3`
   - `ProceduralTextureFactory.ts` ~line 220: `* 90` → `* 50`
   - `quality.ts` Hoch `selfShadowBias`: `0.03` → `0.05`
   - `quality.ts` Hoch `specularStrength`: `0.4` → `0.28`
-- No GLSL shader changes. No new API. Balanced/battery unaffected.
+- Fixed reset framing for very vertical pictures: `GalleryManager` now computes
+  reset zoom from the framed artwork dimensions and camera aspect/FOV, raises
+  max zoom-out distance to `9.25`, and recomputes reset zoom after async artwork
+  aspect loading on first load/navigation.
+- Diagnostics now log `resetZoom`, `minZoom`, `maxZoom`, `specularStrength`,
+  and `selfShadowBias`.
+- No GLSL shader changes. No new public API. Balanced/battery unaffected by the
+  spot tuning.
+- Validation: `npm run lint` and `npm run build` pass with only known warnings.
 
 ### Fixed (v0.09 — actual uploaded image on 3D painting — 2026-05-17)
 
