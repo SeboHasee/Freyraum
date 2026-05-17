@@ -5,37 +5,108 @@ export interface Artwork {
   image: string;
 }
 
+interface EmbeddedArtworkOptions {
+  title: string;
+  width: number;
+  height: number;
+  background: string;
+  accent: string;
+  secondary: string;
+  horizon?: number;
+}
+
+const embeddedArtwork = ({
+  title,
+  width,
+  height,
+  background,
+  accent,
+  secondary,
+  horizon = 58,
+}: EmbeddedArtworkOptions): string => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${background}"/>
+      <stop offset="0.52" stop-color="${secondary}"/>
+      <stop offset="1" stop-color="${accent}"/>
+    </linearGradient>
+    <radialGradient id="light" cx="30%" cy="18%" r="75%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.72"/>
+      <stop offset="0.36" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#bg)"/>
+  <rect width="100%" height="100%" fill="url(#light)"/>
+  <path d="M0 ${height * (horizon / 100)} C ${width * 0.18} ${height * 0.47}, ${width * 0.36} ${height * 0.66}, ${width * 0.55} ${height * 0.54} S ${width * 0.82} ${height * 0.38}, ${width} ${height * 0.5} L ${width} ${height} L 0 ${height} Z" fill="#ffffff" opacity="0.16"/>
+  <path d="M${width * 0.08} ${height * 0.2} C ${width * 0.28} ${height * 0.08}, ${width * 0.5} ${height * 0.1}, ${width * 0.78} ${height * 0.24}" fill="none" stroke="#ffffff" stroke-width="${Math.max(width, height) * 0.012}" stroke-linecap="round" opacity="0.32"/>
+  <path d="M${width * 0.16} ${height * 0.82} C ${width * 0.36} ${height * 0.72}, ${width * 0.54} ${height * 0.9}, ${width * 0.86} ${height * 0.72}" fill="none" stroke="#11181d" stroke-width="${Math.max(width, height) * 0.005}" stroke-linecap="round" opacity="0.18"/>
+  <circle cx="${width * 0.72}" cy="${height * 0.26}" r="${Math.min(width, height) * 0.11}" fill="#ffffff" opacity="0.16"/>
+  <text x="${width * 0.06}" y="${height * 0.92}" fill="#11181d" opacity="0.28" font-size="${Math.max(width, height) * 0.035}" font-family="Inter, Arial, sans-serif" letter-spacing="${Math.max(width, height) * 0.004}">${title}</text>
+</svg>`;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
+
 export const artworks: Artwork[] = [
   {
     title: 'Electric Storm',
     subtitle: 'Artwork 01',
     description:
       'Eine ruhige immersive digitale Kunstpräsentation mit realistischer Materialität und hochwertiger Lichtführung.',
-    image:
-      'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?q=80&w=2400&auto=format&fit=crop',
+    image: embeddedArtwork({
+      title: 'Electric Storm',
+      width: 2400,
+      height: 1600,
+      background: '#dfe5e9',
+      secondary: '#9fb0ba',
+      accent: '#c8b690',
+      horizon: 54,
+    }),
   },
   {
     title: 'Quiet Coastline',
     subtitle: 'Artwork 02',
     description:
       'Minimalistische Küstenkomposition mit fein ausgearbeiteter Materialstruktur.',
-    image:
-      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=2400&auto=format&fit=crop',
+    image: embeddedArtwork({
+      title: 'Quiet Coastline',
+      width: 1800,
+      height: 2400,
+      background: '#eef1f3',
+      secondary: '#c9d4d8',
+      accent: '#a6b4ae',
+      horizon: 62,
+    }),
   },
   {
     title: 'Tokyo Passage',
     subtitle: 'Artwork 03',
-    description:
-      'Cinematische urbane Perspektiven mit dramatischem Streiflicht.',
-    image:
-      'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?q=80&w=2400&auto=format&fit=crop',
+    description: 'Cinematische urbane Perspektiven mit dramatischem Streiflicht.',
+    image: embeddedArtwork({
+      title: 'Tokyo Passage',
+      width: 2100,
+      height: 2100,
+      background: '#e8e3da',
+      secondary: '#b8c1c5',
+      accent: '#8b9497',
+      horizon: 48,
+    }),
   },
   {
     title: 'Golden Desert',
     subtitle: 'Artwork 04',
     description:
       'Atmosphärische Lichtstimmung kombiniert mit realistischer Leinwandstruktur.',
-    image:
-      'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop',
+    image: embeddedArtwork({
+      title: 'Golden Desert',
+      width: 2800,
+      height: 1200,
+      background: '#f0ece4',
+      secondary: '#d8c7a5',
+      accent: '#a98f6d',
+      horizon: 57,
+    }),
   },
 ];

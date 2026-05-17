@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
+    "dev": "vite --open /app.html",
+    "build": "tsc && vite build --config vite.local.config.ts && node scripts/write-local-preview.mjs",
+    "preview": "vite preview --outDir customer-preview --open /app.html",
     "lint": "eslint src --ext ts",
     "format": "prettier --write src"
   },

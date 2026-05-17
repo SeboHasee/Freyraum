@@ -6,21 +6,43 @@ export class CanvasMaterial {
   async loadNormalTexture(): Promise<THREE.Texture> {
     if (this.normalTexture) return this.normalTexture;
 
-    const loader = new THREE.TextureLoader();
-    const texture = await new Promise<THREE.Texture>((resolve, reject) => {
-      loader.load(
-        'https://threejs.org/examples/textures/water/Water_1_M_Normal.jpg',
-        (tex) => {
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.wrapT = THREE.RepeatWrapping;
-          tex.repeat.set(18, 18);
-          this.normalTexture = tex;
-          resolve(tex);
-        },
-        undefined,
-        reject
-      );
-    });
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      const texture = new THREE.Texture();
+      this.normalTexture = texture;
+      return texture;
+    }
+
+    const imageData = ctx.createImageData(canvas.width, canvas.height);
+    const data = imageData.data;
+
+    for (let y = 0; y < canvas.height; y += 1) {
+      for (let x = 0; x < canvas.width; x += 1) {
+        const fiberX = Math.sin(x * 0.42) * 10;
+        const fiberY = Math.cos(y * 0.38) * 10;
+        const weave = Math.sin((x + y) * 0.11) * 4;
+        const value = fiberX + fiberY + weave;
+        const index = (y * canvas.width + x) * 4;
+
+        data[index] = 128 + value;
+        data[index + 1] = 128 - value;
+        data[index + 2] = 255;
+        data[index + 3] = 255;
+      }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(18, 18);
+    texture.needsUpdate = true;
+    this.normalTexture = texture;
 
     return texture;
   }
