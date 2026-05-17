@@ -102,6 +102,7 @@ async function main(): Promise<void> {
   const frameBudget = new FrameBudgetMonitor({ budgetMs: 16.7 });
   const adaptiveQuality = new AdaptiveQualityController(preferences.current.quality);
   galleryManager.setFrameBudgetMarker(() => frameBudget.markNavigation());
+  let adaptiveQualityWriteInFlight = false;
 
   // Experimental WebGPU probe (opt-in, dynamic import, fire-and-forget).
   void maybeProbeWebGPU();
@@ -148,7 +149,7 @@ async function main(): Promise<void> {
   let previousQuality = preferences.current.quality;
   const unsubscribePreferences = preferences.subscribe(() => {
     const next = preferences.current.quality;
-    const manual = next !== previousQuality;
+    const manual = next !== previousQuality && !adaptiveQualityWriteInFlight;
     previousQuality = next;
     applyPreferences(manual);
   });
@@ -175,7 +176,12 @@ async function main(): Promise<void> {
     if (downgrade && downgrade !== preferences.current.quality) {
       // Adaptive downgrade: drive the preference store so listeners pick it up
       // and the user sees the change in the PreferencesPanel.
-      preferences.setQuality(downgrade);
+      adaptiveQualityWriteInFlight = true;
+      try {
+        preferences.setQuality(downgrade);
+      } finally {
+        adaptiveQualityWriteInFlight = false;
+      }
     }
     lightingSetup.update(now);
     galleryManager.update();

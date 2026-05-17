@@ -45,9 +45,10 @@ Final scope (all shipped except where noted):
 - ✅ `QualityPreset` extended with `shaderVariant`, `normalStrength`, `detailNormalStrength`, `bumpStrength`, `specularStrength`, `anisotropyDivisor`, `aoEnabled`, `grazingBoostEnabled`, `detailNormalEnabled`
 - ✅ `FrameBudgetMonitor` with rolling 60-frame window, EMA, and navigation/preset cooldowns
 - ✅ `AdaptiveQualityController` — one-way `high → balanced → battery` downgrade with hold-off and automatic suspension on manual preset change
-- ✅ Experimental `WebGPUPrototype` probe behind dynamic import and explicit opt-in (`?backend=webgpu` or `localStorage.freyraum.backend = 'webgpu'`)
+- ✅ Experimental WebGPU probe behind explicit opt-in (`?backend=webgpu` or `localStorage.freyraum.backend = 'webgpu'`), loaded from the separate runtime module `public/webgpu-probe.js` so it stays out of the main `file://` IIFE preview bundle
 - ✅ Aspect-ratio-aware detail-normal tiling so portrait, square, landscape, and ultrawide artworks all show square canvas weave at uniform physical density
 - ✅ Async artwork-load race protection via `artworkLoadToken` in `GalleryManager`
+- ✅ Quality preset switches rebuild the currently visible artwork immediately, so `battery` mode actually removes optional map work on the active painting without requiring navigation
 - ⏸ Real authored asset integration is deferred until scanned/painted assets are provided. The `Artwork.textureSet?` field is in place and requires no code changes to consume authored maps.
 - Performance targets: 60 FPS on mid-range discrete GPUs (balanced preset), 25 FPS minimum on old integrated GPUs (battery preset)
 

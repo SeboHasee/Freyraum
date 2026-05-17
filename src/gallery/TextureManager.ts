@@ -25,9 +25,14 @@ export class TextureManager {
     this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   }
 
-  /** Updates the anisotropy cap. Affects only textures loaded after this call. */
+  /** Updates the anisotropy cap and reapplies it to already-cached textures. */
   setAnisotropyDivisor(divisor: number): void {
     this.anisotropyDivisor = Math.max(1, divisor);
+    const anisotropy = Math.max(1, Math.floor(this.maxAnisotropy / this.anisotropyDivisor));
+    this.cache.forEach((texture) => {
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
+    });
   }
 
   async preload(urls: string[]): Promise<void> {

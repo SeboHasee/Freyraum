@@ -370,7 +370,7 @@ All v0.02 slices are now implemented in source. The implementation deliberately 
 | 5 — Realistic Gallery Light Profiles | ✅ Implemented | `LightProfile.ts` with four profiles; `kelvinToColor` Tanner-Helland approximation; `LightingSetup` reuses Three.js light objects across profile switches |
 | 6 — Frame Budget Monitor | ✅ Implemented | `FrameBudgetMonitor` with rolling 60-frame window, EMA, navigation/preset cooldown |
 | 7 — Adaptive Quality Guardrails | ✅ Implemented | `AdaptiveQualityController` — one-way `high → balanced → battery`; cooldown after every downgrade; manual preset change suspends adaptive control for the session |
-| 8 — Experimental WebGPU Backend Probe | ✅ Implemented | `RenderBackend.maybeProbeWebGPU` is dynamic-import-only and opt-in (`?backend=webgpu` / `localStorage.freyraum.backend = 'webgpu'`); `WebGPUPrototype` returns a serializable probe result |
+| 8 — Experimental WebGPU Backend Probe | ✅ Implemented | `RenderBackend.maybeProbeWebGPU` is opt-in (`?backend=webgpu` / `localStorage.freyraum.backend = 'webgpu'`) and loads the copied public module `webgpu-probe.js` only at runtime; the probe returns a serializable result and stays out of the main IIFE preview bundle |
 | 9 — Real Texture Asset Integration Pass | ⏸ Deferred | No real scanned/authored asset set is available in this repository. The `Artwork.textureSet?` field is in place; adding authored files and referencing them is the only remaining step and requires no code changes |
 | 10 — v0.02 Documentation, Review, and Handoff | ✅ Implemented | `plan.md`, `CHANGELOG.md`, `FINDINGS.md`, `README.md`, and `docs/HANDOFF.md` all updated in this pass |
 
@@ -381,6 +381,8 @@ All v0.02 slices are now implemented in source. The implementation deliberately 
 3. **Bump path:** uses Three.js' native `bumpMap` + `bumpScale = 1.0` so the `dHdxy_fwd()` / `perturbNormalArb()` helpers are declared. We then call `perturbNormalArb` ourselves with `uBumpStrength * dHdxy_fwd()` after `normal_fragment_maps` so both `normalMap` and the height term coexist (the native chunk only applies one or the other). This is the audited correct approach.
 4. **AO path:** uses Three.js' native `aoMap` + `aoMapIntensity`. `PlaneGeometry` does not have `uv1` by default, so `ArtworkMesh.makeArtworkGeometry` copies `uv` into `uv1` after creation (Three.js ≥ 0.152 reads aoMap from uv1).
 5. **`PAINTING_USE_ROUGHNESS_MAP` and `PAINTING_USE_SPECULAR_MAP` defines:** not needed at the GLSL level because Three.js itself compiles roughness/specular paths in/out based on `material.roughnessMap` / `material.specularIntensityMap` being set. The plan's intent (compile-out for battery) is achieved by not assigning those maps when the preset disables them.
+6. **WebGPU probe loading:** the first implementation attempt used a source-level TS dynamic import, but the file-based customer preview is built as a single IIFE. The corrected implementation moves the probe to `public/webgpu-probe.js` and imports it by runtime URL only when the user opts in, which keeps the probe code out of the main preview bundle.
+7. **Preset transition hardening:** `GalleryManager.applyPreset()` now rebuilds the current artwork immediately so `battery` mode truly removes optional map work on the active painting, and `main.ts` uses an explicit `adaptiveQualityWriteInFlight` guard so the controller does not suspend itself on its own downgrade.
 
 ### v0.02 Aspect-Ratio Robustness — How The Implementation Stays Correct For Every Format
 
@@ -394,7 +396,7 @@ The user requirement is that the gallery works "with every aspect ratio and reso
 | Camera pan limits must adapt to aspect | Existing `GalleryManager.getPanLimits` derives world-space visible dimensions from camera FOV and aspect | Untouched in v0.02 — already correct for any aspect |
 | Side panels must not distort previews | Existing `SidePanels.updatePanelScale` calls `fitWithinBox` per panel | Untouched in v0.02 |
 | Minimum zoom safety for portrait artworks | Existing `GalleryManager.getMinZoom` already accounts for both dimensions and FOV | Untouched in v0.02 |
-| Anisotropic filtering caps per preset | `TextureManager.setAnisotropyDivisor` divides the GPU's max anisotropy by the preset divisor (1 / 2 / 4) before applying it to newly loaded textures | Tilted-view sharpness preserved on high/balanced; reduced on battery |
+| Anisotropic filtering caps per preset | `TextureManager.setAnisotropyDivisor` divides the GPU's max anisotropy by the preset divisor (1 / 2 / 4) and reapplies the new cap to cached textures immediately | Tilted-view sharpness preserved on high/balanced; reduced on battery without needing a fresh load |
 
 The four shipped artwork formats exercise every relevant case:
 
@@ -406,8 +408,8 @@ The four shipped artwork formats exercise every relevant case:
 ### v0.02 Validation Outcomes (this session)
 
 - `npm run lint` — clean.
-- `npm run build` — clean. Preview chunk 547 kB / gzip 140 kB (up from ~528 kB / 134 kB in v0.01). The increase covers the new painting material, procedural factory, light profiles, frame-budget monitor, adaptive controller, and render-backend selector.
-- The WebGPU prototype module is only present as a separate async chunk via dynamic import; opening the preview without the opt-in flag never requests it.
+- `npm run build` — clean. Preview output: `freyraum-gallery.js` 546.50 kB / gzip 139.68 kB, `style.css` 15.36 kB / gzip 3.42 kB, `webgpu-probe.js` 2.32 kB. The increase covers the new painting material, procedural factory, light profiles, frame-budget monitor, adaptive controller, and render-backend selector.
+- The WebGPU probe code is no longer part of the main IIFE bundle. The main preview script contains only a runtime `import(new URL('./webgpu-probe.js', window.location.href).toString())` call; the probe implementation itself lives in the copied public module and is requested only when the user opts in.
 
 ---
 
@@ -860,16 +862,17 @@ export async function getBackendInfo(): Promise<RenderBackendInfo>;
 
 `detectBackend()` reads `?backend=webgpu` query param or `localStorage.getItem('freyraum.backend')` and only returns `'webgpu-experimental'` when both the flag is set AND `navigator.gpu !== undefined`. Otherwise it always returns `'webgl'`.
 
-#### New file `src/rendering/WebGPUPrototype.ts`
+#### New runtime module `public/webgpu-probe.js`
 
-Dynamic-import target so unsupported browsers never parse the module.
+Runtime-import target so unsupported browsers never parse the module and the
+main `file://` IIFE preview bundle never contains the probe implementation.
 
 ```typescript
 /**
  * @experimental — never imported by the production WebGL path.
- * Imported only via dynamic import when backend === 'webgpu-experimental'.
+ * Imported only via runtime import when backend === 'webgpu-experimental'.
  */
-export async function initWebGPUPrototype(canvas: HTMLCanvasElement): Promise<WebGPUProbeResult>;
+export async function initWebGPUPrototype(): Promise<WebGPUProbeResult>;
 
 export interface SerializedGPUAdapterInfo {
   vendor?: string;
@@ -952,8 +955,9 @@ Renders an absolutely positioned panel showing: active preset, shader variant, a
 // 1. Before RendererManager construction — detect backend:
 const backendId = await detectBackend();
 if (backendId === 'webgpu-experimental') {
-  const { initWebGPUPrototype } = await import('./rendering/WebGPUPrototype');
-  const result = await initWebGPUPrototype(document.createElement('canvas'));
+  const probeUrl = new URL('./webgpu-probe.js', window.location.href).toString();
+  const { initWebGPUPrototype } = await import(/* @vite-ignore */ probeUrl);
+  const result = await initWebGPUPrototype();
   if (!result.fallbackToWebGL) {
     // future: hand off to WebGPU full path
     console.info('[WebGPU] probe result:', result);
@@ -1289,11 +1293,11 @@ This gives visually correct warm (3200 K) to cool daylight (6500 K) tints for ea
 
 ### v0.02 Experimental WebGPU Strategy
 
-See `src/rendering/RenderBackend.ts` and `src/rendering/WebGPUPrototype.ts` in §TypeScript Contract.
+See `src/rendering/RenderBackend.ts` and `public/webgpu-probe.js` in §TypeScript Contract.
 
 Key constraints:
 - `detectBackend()` must never call `navigator.gpu.requestAdapter()` — adapter requests can trigger browser permission prompts or errors. The detection is purely `navigator.gpu !== undefined`.
-- The actual `requestAdapter()` call lives inside `WebGPUPrototype.initWebGPUPrototype()` which is only invoked after the user has explicitly opted in via query param or `localStorage`.
+- The actual `requestAdapter()` call lives inside `initWebGPUPrototype()` in `public/webgpu-probe.js`, which is only invoked after the user has explicitly opted in via query param or `localStorage`.
 - In v0.02 the WebGPU path is **informational only**: it probes, logs, and falls back to WebGL. No customer-facing work renders through WebGPU in v0.02.
 - After the probe result is logged to console, the normal WebGL `RendererManager` boot continues unchanged.
 
@@ -1479,14 +1483,14 @@ Goal: introduce the WebGPU probe without touching the production WebGL path.
 
 Files changed:
 - `src/rendering/RenderBackend.ts` — new; `detectBackend`, `getBackendInfo`.
-- `src/rendering/WebGPUPrototype.ts` — new; `initWebGPUPrototype`, `WebGPUProbeResult`.
+- `public/webgpu-probe.js` — new runtime-only experimental module; `initWebGPUPrototype`, `WebGPUProbeResult`.
 - `src/main.ts` — add backend detection before `RendererManager` construction; conditional dynamic import.
 
 Acceptance checks:
 - Without `?backend=webgpu`, `detectBackend()` always returns `'webgl'` regardless of browser support.
 - With `?backend=webgpu` on a supporting browser, probe runs and logs adapter info to console.
 - Any WebGPU failure falls back to the normal WebGL boot — no blank screen, no broken UI.
-- `npm run build` customer preview never imports `WebGPUPrototype` eagerly.
+- `npm run build` customer preview keeps the probe implementation out of `freyraum-gallery.js`; only the runtime import of `webgpu-probe.js` remains in the main bundle.
 
 #### Slice 9 — Real Texture Asset Integration Pass
 

@@ -198,6 +198,16 @@ ${LIGHTS_END_TOKEN}
     this.paintingUniforms.uDetailNormalStrength.value = preset.detailNormalStrength;
     this.paintingUniforms.uBumpStrength.value = preset.bumpStrength;
 
+    if (!preset.detailNormalEnabled || preset.detailNormalStrength <= 0) {
+      this.paintingUniforms.tDetailNormal.value = null;
+    }
+    if (preset.shaderVariant === 'painting-battery') {
+      this.roughnessMap = null;
+    }
+    if (preset.specularStrength <= 0) {
+      this.specularIntensityMap = null;
+    }
+
     const wantsAO = preset.aoEnabled && !!this.aoMap;
     const wantsDetail =
       preset.detailNormalEnabled &&
@@ -250,13 +260,14 @@ ${LIGHTS_END_TOKEN}
 
     this.normalMap = textures.normal ?? null;
 
-    this.roughnessMap = textures.roughness ?? null;
+    this.roughnessMap = preset.shaderVariant === 'painting-battery' ? null : (textures.roughness ?? null);
     if (this.roughnessMap) this.roughness = 1.0; // map drives the value
 
-    this.specularIntensityMap = textures.specular ?? null;
+    this.specularIntensityMap = preset.specularStrength > 0 ? (textures.specular ?? null) : null;
     this.specularIntensity = preset.specularStrength > 0 ? preset.specularStrength : 1.0;
 
-    this.paintingUniforms.tDetailNormal.value = textures.detailNormal ?? null;
+    this.paintingUniforms.tDetailNormal.value =
+      preset.detailNormalEnabled && preset.detailNormalStrength > 0 ? (textures.detailNormal ?? null) : null;
     this.paintingUniforms.uDetailTiling.value.copy(tilingPerWorldUnit);
 
     // Height -> bumpMap so Three.js declares the dHdxy_fwd helpers we call

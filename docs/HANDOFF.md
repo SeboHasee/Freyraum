@@ -92,7 +92,7 @@ v0.02 is **implemented** in this branch. Future reviewers should evaluate two in
 
 **Lane 2 — Experimental WebGPU probe (shipped):**
 - Activated by `?backend=webgpu` query param or `localStorage.setItem('freyraum.backend', 'webgpu')`
-- `RenderBackend.maybeProbeWebGPU()` uses dynamic import so `WebGPUPrototype.ts` is never parsed in unsupported browsers and never fetched in the default customer preview
+- `RenderBackend.maybeProbeWebGPU()` loads `customer-preview/webgpu-probe.js` via runtime `import()` only when the user opts in. This is intentionally implemented as a copied public module because the main customer preview is emitted as a single IIFE for `file://`, so Rollup code splitting is not the right tool for keeping the probe out of the normal bundle
 - `initWebGPUPrototype()` returns a serializable `WebGPUProbeResult` (`supported`, `adapterInfo`, `limits`, `unsupportedFeatures`, `fallbackToWebGL`) and never throws
 - Never used to render the gallery; clearly labelled experimental
 
@@ -123,10 +123,12 @@ v0.02 is **implemented** in this branch. Future reviewers should evaluate two in
 2. Apply artificial GPU load (browser DevTools → Performance → Slow CPU 6× throttle is a useful proxy).
 3. After roughly 4 s of sustained under-budget frames outside the navigation cooldown, the preset should automatically downgrade to `balanced`. The preferences popover reflects the change.
 4. Once the user manually changes the preset back, the controller suspends for the rest of the session.
+5. Sanity-check that the controller does **not** suspend itself on its own automatic downgrade: if sustained pressure continues after the hold-off, it may still downgrade once more from `balanced` to `battery`.
 
 **Audit-critical release blockers — verified in this implementation:**
 - No stale auxiliary maps after rapid navigation across all artworks (token guard)
 - No visible texture/material leak after repeated navigation and preset switching (textures owned by `TextureManager` + `ProceduralTextureFactory`, only those classes dispose them)
+- Switching presets updates the currently visible artwork immediately; `battery` mode does not leave stale roughness/specular/detail work attached until the next navigation
 - Reduced-motion mode flattens the detail-normal contribution via `uReducedMotionScalar` without corrupting the normal basis, and freezes light animation
 - WebGPU probe failure always returns cleanly to the normal WebGL preview path (probe is fire-and-forget, never participates in rendering)
 

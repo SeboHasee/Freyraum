@@ -75,9 +75,15 @@ export class GalleryManager {
 
   /** Receives preset changes from the preference store. */
   applyPreset(preset: QualityPreset): void {
+    const hadPreset = this.currentPreset !== null;
     this.currentPreset = preset;
     this.textureManager.setAnisotropyDivisor(preset.anisotropyDivisor);
-    // ArtworkMesh.applyPreset is already called from main.ts; no re-fetch here.
+    // Rebuild the current artwork's map set so preset-specific roles
+    // (detailNormal, height, roughness, specular, AO) are added/removed
+    // immediately on quality changes.
+    if (hadPreset && this.textureManager.get(artworks[this.currentIndex].image)) {
+      void this.showArtwork(this.currentIndex);
+    }
   }
 
   async init(): Promise<void> {

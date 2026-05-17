@@ -5,9 +5,11 @@
  * informational probe activated only by an explicit query flag or
  * `localStorage` value AND only when `navigator.gpu` is present.
  *
- * The probe is loaded via dynamic import (see {@link maybeProbeWebGPU}) so
- * the WebGPU module is never parsed in unsupported browsers and never blocks
- * the normal preview path.
+ * The customer preview is emitted as a single IIFE bundle for `file://` use,
+ * so Rollup-based code splitting is intentionally unavailable. To keep the
+ * experimental WebGPU code out of the main preview bundle, the probe lives as
+ * a copied public module (`/public/webgpu-probe.js`) that is imported only at
+ * runtime when the user explicitly opts in.
  */
 
 export type BackendId = 'webgl' | 'webgpu-experimental';
@@ -70,15 +72,22 @@ export async function getBackendInfo(): Promise<RenderBackendInfo> {
  * Optionally probes WebGPU when the user has opted in. Returns `null` for
  * the normal WebGL path so callers can safely ignore the result.
  *
- * The WebGPU prototype module is loaded via dynamic import so it is never
- * parsed in unsupported browsers and never bundled into the main chunk.
+ * The WebGPU prototype module is loaded from the copied public file
+ * `customer-preview/webgpu-probe.js`, so it is never parsed or bundled into
+ * the main IIFE preview bundle.
  */
 export async function maybeProbeWebGPU(): Promise<unknown | null> {
   const backendId = await detectBackend();
   if (backendId !== 'webgpu-experimental') return null;
 
   try {
-    const mod = await import('./WebGPUPrototype');
+    const probeUrl = new URL('./webgpu-probe.js', window.location.href).toString();
+    const mod = (await import(/* @vite-ignore */ probeUrl)) as {
+      initWebGPUPrototype?: () => Promise<unknown>;
+    };
+    if (typeof mod.initWebGPUPrototype !== 'function') {
+      throw new Error('webgpu-probe.js does not export initWebGPUPrototype()');
+    }
     return await mod.initWebGPUPrototype();
   } catch (err) {
     // Probe is informational only — never break the preview if it fails.
