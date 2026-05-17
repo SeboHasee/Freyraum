@@ -68,6 +68,16 @@ export interface Artwork {
   textureSet?: PaintingTextureSet;
   /** v0.03: Surface character. Defaults to 'matte-canvas'. */
   surfaceProfile?: SurfaceProfile;
+  /**
+   * v0.09: Origin-clean base64 data URL of the image for reliable WebGL
+   * texture upload from file:// without CORS or taint issues.
+   * Written by `scripts/import-artworks.mjs` as the exact original file bytes.
+   * When present, the central 3D painting albedo uses this source instead of
+   * `image`, which may be a relative path that can fail WebGL upload in some
+   * browsers when opened via file:// protocol.
+   * Format: `data:image/<subtype>;base64,<base64-bytes>`
+   */
+  webglImage?: string;
   /** v0.03: Optional physical-scale modifiers for relief and parallax depth. */
   surfacePhysics?: SurfacePhysics;
 }

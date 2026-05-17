@@ -1,5 +1,65 @@
 # FINDINGS
 
+## 2026-05-17 — v0.09: implemented — uploaded image now on 3D painting
+
+### What changed
+
+v0.09 is implemented. The central 3D painting now shows the actual uploaded
+customer image instead of the generated placeholder.
+
+Root cause of the remaining v0.08 gap confirmed through code audit:
+
+- The importer (`scripts/import-artworks.mjs`) only wrote `image: './images/...'`
+  (a relative path) into the manifest. Under `file://` protocol, `Three.js
+  TextureLoader` cannot reliably upload local-file images as WebGL textures in all
+  browsers, even without `crossOrigin` set.
+- The `Artwork` type had no `webglImage` field.
+- `GalleryManager.init()`, `showArtwork()`, and `applyPreset()` all looked up the
+  albedo by `artwork.image` — so even if a data URL had been available, it would
+  have been ignored.
+- `sanitizeInjectedArtworks()` did not extract or validate `webglImage`.
+
+### Fix implemented
+
+Five files changed:
+
+1. `src/config/artworks.ts` — Added `webglImage?: string` to `Artwork`.
+2. `src/main.ts` — `sanitizeInjectedArtworks` now extracts `webglImage`, validated
+   strictly as `data:image/<subtype>;base64,<...>` to block non-image injection.
+3. `src/gallery/GalleryManager.ts` — All albedo URL derivations changed to
+   `artwork.webglImage ?? artwork.image`: `init()`, `showArtwork()`,
+   `applyPreset()`, side-panel cache lookups, fallback check, and diagnostics
+   (new `webglImageSource: 'embedded-data-url' | 'file-url'` field).
+4. `src/gallery/TextureManager.ts` — Data URL diagnostic safety: full data URL is
+   never logged; instead logs `[data-uri:image/jpeg:2463944bytes]`.
+5. `scripts/import-artworks.mjs` — After copying each image, reads bytes with
+   `readFileSync`, encodes as base64, and writes `webglImage: "data:image/...;base64,..."`
+   into `customer-artworks.js`. Report states "3D painting source: embedded as data
+   URLs for reliable offline WebGL." MIME types table added for all supported
+   formats including risky ones.
+
+### Why data URLs and not alternatives
+
+| Approach | Verdict |
+|----------|---------|
+| `URL.createObjectURL(blob)` | Not viable — requires a File/Blob, not available in static file:// page |
+| `createImageBitmap(blob)` | Safari/Firefox compat gaps; deferred to v0.10 |
+| `fetch(filePath)` in file:// | Blocked by all major browsers for file:// |
+| Canvas draw → `toDataURL()` | Destructive recompression — violates no-edit requirement |
+| Local HTTP server | Violates no-server requirement |
+| Importer base64 data URL | Chosen: JSON-serializable, origin-clean, exact bytes, works in file:// |
+
+### Acceptance state after v0.09
+
+- Central 3D painting: **shows actual uploaded image** when `webglImage` is embedded
+- `webglImageSource: 'embedded-data-url'` in diagnostics when importer embeds it
+- `fallbackUsed: false` for all supported raster formats (JPG, PNG, WebP, GIF, AVIF)
+- Aspect ratio: unchanged, manifest-driven from v0.08
+- Effects (self-shadow, parallax, bump, clearcoat, varnish): unchanged
+- Build/lint: pass
+
+---
+
 ## 2026-05-17 — v0.09: aspect fixed, actual uploaded image still falls back on 3D painting
 
 ### Customer-observed behavior

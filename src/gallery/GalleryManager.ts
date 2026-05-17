@@ -124,7 +124,7 @@ export class GalleryManager {
     // Rebuild the current artwork's map set so preset-specific roles
     // (detailNormal, height, roughness, specular, AO) are added/removed
     // immediately on quality changes.
-    if (hadPreset && this.textureManager.get(this.artworks[this.currentIndex].image)) {
+    if (hadPreset && this.textureManager.get(this.artworks[this.currentIndex].webglImage ?? this.artworks[this.currentIndex].image)) {
       void this.showArtwork(this.currentIndex);
     }
   }
@@ -143,7 +143,7 @@ export class GalleryManager {
   }
 
   async init(): Promise<void> {
-    const urls = this.artworks.map((a) => a.image);
+    const urls = this.artworks.map((a) => a.webglImage ?? a.image);
     await this.textureManager.preload(urls);
     this.diagnostics.info('init', 'Preloaded gallery albedo textures', { artworkCount: urls.length });
     await this.showArtwork(0);
@@ -179,10 +179,19 @@ export class GalleryManager {
    * Loads the painting texture set for the given artwork and applies it to
    * the artwork mesh. Async + race-protected: rapid navigation cannot apply
    * a stale map set (see audited Lifecycle Guardrails in plan.md).
+   *
+   * v0.09: Uses `artwork.webglImage ?? artwork.image` as the albedo source for
+   * the central 3D painting. The `webglImage` field is an origin-clean base64
+   * data URL written by the importer so WebGL texture upload does not depend on
+   * `file://` image fetch behavior, which varies by browser.
    */
   private async showArtwork(index: number): Promise<void> {
     const artwork = this.artworks[index];
-    const albedo = this.textureManager.get(artwork.image);
+    // v0.09: prefer the embedded data URL for WebGL upload reliability.
+    const albedoUrl = artwork.webglImage ?? artwork.image;
+    const webglImageSource: 'embedded-data-url' | 'file-url' =
+      artwork.webglImage ? 'embedded-data-url' : 'file-url';
+    const albedo = this.textureManager.get(albedoUrl);
 
     const token = ++this.artworkLoadToken;
     const preset = this.currentPreset;
@@ -193,10 +202,11 @@ export class GalleryManager {
     });
 
     // Side previews use albedo only, even when authored sets exist.
+    // v0.09: side panels use webglImage too so they match the preloaded cache key.
     const prevIndex = (index - 1 + this.artworks.length) % this.artworks.length;
     const nextIndex = (index + 1) % this.artworks.length;
-    const prevTexture = this.textureManager.get(this.artworks[prevIndex].image) ?? null;
-    const nextTexture = this.textureManager.get(this.artworks[nextIndex].image) ?? null;
+    const prevTexture = this.textureManager.get(this.artworks[prevIndex].webglImage ?? this.artworks[prevIndex].image) ?? null;
+    const nextTexture = this.textureManager.get(this.artworks[nextIndex].webglImage ?? this.artworks[nextIndex].image) ?? null;
     this.sidePanels.updateTextures(prevTexture, nextTexture);
 
     if (!albedo || !preset) {
@@ -245,13 +255,13 @@ export class GalleryManager {
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
 
-    // v0.08: report whether the albedo on the central 3D painting is the real
-    // customer image or the generated fallback, and log the computed aspect.
-    const albedoIsFallback = this.textureManager.isFallback(artwork.image, 'albedo');
+    // v0.09: check fallback using the same URL that was loaded (albedoUrl).
+    const albedoIsFallback = this.textureManager.isFallback(albedoUrl, 'albedo');
     if (albedoIsFallback) {
       this.diagnostics.warn('show-artwork-fallback', 'Central 3D painting is using a GENERATED FALLBACK texture — the customer image could not be loaded as a WebGL texture', {
         artworkId: artwork.id,
         imageUrl: artwork.image,
+        webglImageSource,
         manifestWidth: artwork.dimensions?.width,
         manifestHeight: artwork.dimensions?.height,
         fallbackUsed: true,
@@ -262,6 +272,7 @@ export class GalleryManager {
       activeMaps: this.artworkMesh.material.activeMaps(),
       inspectionMode: this.inspectionMode,
       fallbackUsed: albedoIsFallback,
+      webglImageSource,
       aspectSource: this.artworkMesh.lastAspectSource,
       manifestDimensions: this.artworkMesh.lastManifestDimensions,
       paintingWidth: this.artworkMesh.artworkWidth,

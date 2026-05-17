@@ -2,7 +2,48 @@
 
 ## Unreleased
 
-### Planned (v0.09 — actual uploaded image on 3D painting — 2026-05-17)
+### Fixed (v0.09 — actual uploaded image on 3D painting — 2026-05-17)
+
+The central 3D painting now shows the actual customer-uploaded image instead of
+the generated placeholder. Root cause was that the importer only wrote a relative
+file path (`./images/...`) into the manifest — `Three.js TextureLoader` cannot
+reliably upload local-file images as WebGL textures in all browsers when opened
+via `file://`, even without `crossOrigin` set.
+
+- **`scripts/import-artworks.mjs`**: after copying each image, reads the file
+  bytes with `readFileSync`, encodes them as base64, and writes `webglImage:
+  "data:image/<mime>;base64,<bytes>"` into `customer-artworks.js`. The exact
+  original bytes are preserved — no crop, no scale, no recompression. A MIME
+  type lookup table is added for all supported extensions. The import report
+  states "3D painting source: embedded as data URLs for reliable offline WebGL."
+- **`src/config/artworks.ts`**: added optional `webglImage?: string` to the
+  `Artwork` interface.
+- **`src/main.ts`**: `sanitizeInjectedArtworks()` now extracts `webglImage` from
+  injected artwork objects. Only strings that match `data:image/...;base64,...`
+  are accepted to block non-image content injection.
+- **`src/gallery/GalleryManager.ts`**: all albedo URL derivations updated to
+  `artwork.webglImage ?? artwork.image`: `init()` preload, `showArtwork()`
+  cache lookup, `applyPreset()` cache presence check, side-panel lookups,
+  fallback check. Diagnostics now include `webglImageSource:
+  'embedded-data-url' | 'file-url'` in every `show-artwork-complete` log entry.
+- **`src/gallery/TextureManager.ts`**: data URL diagnostic safety — full data
+  URLs are never serialized into log entries. Instead logs
+  `[data-uri:image/jpeg:2463944bytes]` showing only MIME type and byte count.
+
+### Documentation (v0.09 — 2026-05-17)
+
+- **`plan.md`**: replaced the v0.09 planning section with a full
+  implementation and execution plan covering: code audit findings, detailed
+  per-file change specs with code excerpts, analysis of alternative approaches
+  (createObjectURL, createImageBitmap, fetch, canvas, server), security rationale
+  for the data URL regex in the sanitizer, cache key consistency requirement,
+  performance / size budget, and acceptance checks.
+- **`FINDINGS.md`**: added v0.09 implemented section documenting what changed,
+  why data URLs were chosen over alternatives, and the updated acceptance state.
+- **`docs/HANDOFF.md`**: updated customer picture replacement status to mark
+  v0.09 as implemented; updated acceptance checklist.
+
+### Planned (v0.09 planning pass — 2026-05-17)
 
 - Added a full v0.09 plan to `plan.md` after customer validation showed v0.08
   fixed the 3D painting aspect ratio but not the actual albedo image upload path.

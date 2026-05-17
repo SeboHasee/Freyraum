@@ -47,6 +47,22 @@ const RAW_EXTENSIONS = new Set([
   '.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2', '.raw', '.pef', '.srw',
 ]);
 
+/** MIME types for data URL encoding. */
+const MIME_TYPES = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.avif': 'image/avif',
+  '.heic': 'image/heic',
+  '.heif': 'image/heif',
+  '.tif': 'image/tiff',
+  '.tiff': 'image/tiff',
+  '.bmp': 'image/bmp',
+};
+
 // -------- Helpers --------
 
 /**
@@ -280,6 +296,18 @@ inboxEntries.forEach((filename, i) => {
     return;
   }
 
+  // v0.09: embed exact image bytes as a base64 data URL so the 3D painting
+  // can load the texture reliably from file:// without CORS / taint issues.
+  // No crop, no scale, no recompression — the exact original bytes are encoded.
+  let webglImage = '';
+  try {
+    const imgBytes = readFileSync(destPath);
+    const mime = MIME_TYPES[ext] || 'application/octet-stream';
+    webglImage = `data:${mime};base64,${imgBytes.toString('base64')}`;
+  } catch (err) {
+    warnings.push(`${filename} — could not embed 3D painting source (${err.message}). The 3D painting will try a file path fallback.`);
+  }
+
   if (RISKY_EXTENSIONS.has(ext)) {
     warnings.push(
       `${filename} — format may not display in all browsers. Export as JPG if it does not appear.`
@@ -294,6 +322,7 @@ inboxEntries.forEach((filename, i) => {
     year: new Date().getFullYear(),
     medium: generateMedium(dims.width, dims.height),
     image: `./images/${destFilename}`,
+    ...(webglImage ? { webglImage } : {}),
     dimensions: { width: dims.width, height: dims.height },
     alt: title,
     credit: 'Customer',
@@ -329,6 +358,8 @@ lines.push('');
 if (imported.length > 0) {
   lines.push(`Imported (${imported.length}):`);
   imported.forEach((f) => lines.push(`  ✓ ${f}`));
+  lines.push('');
+  lines.push('  3D painting source: images embedded as data URLs for reliable offline WebGL.');
 }
 if (warnings.length > 0) {
   if (lines[lines.length - 1] !== '') lines.push('');

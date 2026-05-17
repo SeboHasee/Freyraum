@@ -23,9 +23,8 @@ The diagram captures four horizontal layers and two cross-cutting systems:
 ## Customer picture replacement status
 
 v0.07 (customer-managed import workflow) is shipped. v0.08 fixed the 3D painting
-aspect ratio, but v0.09 is still required before the customer-image workflow is
-fully accepted: the central 3D painting must show the actual uploaded image
-bytes, not the generated placeholder.
+aspect ratio. v0.09 is now implemented: the central 3D painting shows the actual
+uploaded image bytes, not the generated placeholder.
 
 Customer-facing and maintainer guides:
 
@@ -36,28 +35,20 @@ Current intended workflow:
 
 1. Customer drags pictures into `customer-artworks/inbox/`.
 2. Customer double-clicks `Update Gallery`.
-3. The updater generates image copies, `artworks.json`, and `customer-artworks.js`.
+3. The updater generates image copies, `artworks.json`, and `customer-artworks.js`
+   (including `webglImage` data URLs for reliable 3D painting texture upload).
 4. Customer double-clicks root `index.html` as before.
 
-Critical acceptance requirement (current status):
+Acceptance checklist:
 
 - each imported image is visible in the timeline ✅
 - the central 3D painting frame matches the imported dimensions/aspect ratio ✅
-- each imported image renders on the central 3D painting with the actual uploaded picture bytes ⏳ v0.09
+- each imported image renders on the central 3D painting with the actual uploaded picture bytes ✅ v0.09
+- `webglImageSource: 'embedded-data-url'` in `show-artwork-complete` diagnostics ✅ v0.09
 - diagnostics make fallback texture usage obvious (`show-artwork-fallback` warn) ✅
 
 If a future image still triggers the fallback, follow the diagnostics flow in
 `docs/CUSTOMER_PICTURE_GUIDE.md` → "Debug / support tools".
-
-Cross-cutting reliability addition from the latest pass:
-
-- the preview now ships with a centralized diagnostics system
-- default console output stays low-noise (`warn` / `error`)
-- `?debug=1` / `?debug=verbose` enable deeper diagnostics for support and engineering sessions
-- recent session diagnostics are available in DevTools via `window.__FREYRAUM_DIAGNOSTICS__`
-
-Important handoff note: if the timeline works and the central 3D frame shape is
-correct but the central image is still a placeholder, this is the v0.09 issue.
 The planned fix is an importer-generated exact `data:image/...` source for the
 3D albedo so WebGL no longer depends on local `file://` image upload behavior.
 

@@ -78,6 +78,13 @@ function sanitizeInjectedArtworks(
     const tags: readonly string[] = Array.isArray(tagsValue)
       ? tagsValue.filter((t): t is string => typeof t === 'string')
       : [];
+    // v0.09: accept webglImage only when it is a well-formed data URL so
+    // arbitrary script or blob content cannot be injected via the manifest.
+    const webglImageRaw = typeof a['webglImage'] === 'string' ? (a['webglImage'] as string) : '';
+    const webglImage: string | undefined =
+      /^data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/]/.test(webglImageRaw)
+        ? webglImageRaw
+        : undefined;
     out.push({
       id,
       title,
@@ -89,6 +96,7 @@ function sanitizeInjectedArtworks(
           : new Date().getFullYear(),
       medium: typeof a['medium'] === 'string' ? (a['medium'] as string) : '',
       image,
+      ...(webglImage ? { webglImage } : {}),
       dimensions: { width, height },
       alt: typeof a['alt'] === 'string' ? (a['alt'] as string) : title,
       credit: typeof a['credit'] === 'string' ? (a['credit'] as string) : '',

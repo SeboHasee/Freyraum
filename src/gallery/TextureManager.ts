@@ -92,12 +92,19 @@ export class TextureManager {
     // data URIs, relative paths, and file:// URLs must NOT use crossOrigin or
     // the browser cannot supply CORS headers, marking the image as tainted and
     // preventing WebGL from uploading the texture.
+    const isDataUri = url.startsWith('data:');
     const isExternal = /^https?:\/\//i.test(url);
     const loader = isExternal ? this.externalLoader : this.localLoader;
-    const urlType = url.startsWith('data:') ? 'data-uri' : isExternal ? 'external-http' : 'local-relative';
+    const urlType = isDataUri ? 'data-uri' : isExternal ? 'external-http' : 'local-relative';
+
+    // v0.09: never log the full data URL — it can be many megabytes. Log only
+    // the MIME prefix and byte count so diagnostics are readable.
+    const urlForLog = isDataUri
+      ? `[data-uri:${url.slice(5, url.indexOf(';'))}:${url.length}bytes]`
+      : url;
 
     this.diagnostics.debug('load-start', `Starting ${role} texture load`, {
-      url,
+      url: urlForLog,
       urlType,
       role,
       crossOrigin: isExternal ? 'anonymous' : 'none',
@@ -113,7 +120,7 @@ export class TextureManager {
           const w = 'naturalWidth' in img ? (img.naturalWidth || img.width || 0) : (img.width || 0);
           const h = 'naturalHeight' in img ? (img.naturalHeight || img.height || 0) : (img.height || 0);
           this.diagnostics.info('load-success', `Loaded ${role} texture`, {
-            url,
+            url: urlForLog,
             urlType,
             width: w,
             height: h,
@@ -124,7 +131,7 @@ export class TextureManager {
         undefined,
         (error) => {
           this.diagnostics.warn('load-fallback', `Failed to load ${role} texture — creating generated fallback`, {
-            url,
+            url: urlForLog,
             urlType,
             role,
             errorMessage: error instanceof Error ? error.message : String(error),
