@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Added (v0.07 planning — customer-managed artwork folder)
+
+- Added `docs/CUSTOMER_PICTURE_GUIDE.md`, a plain-language guide explaining the current limitation and the planned simple customer workflow: drag pictures into `customer-artworks/inbox/`, run one updater, then open `index.html`.
+- Added a full v0.07 plan in `plan.md` for a customer-managed artwork-folder pipeline with one-click import/build automation, generated `artworks.json`, safe optimized copies, large-file handling, fallback demo artworks, and elderly-customer UX requirements.
+- Documented online research findings for browser image format support, folder import limitations, EXIF/orientation caveats, and WebGL texture-size limits.
+- Updated `README.md`, `FINDINGS.md`, `docs/HANDOFF.md`, and `DOCUMENTATION_RULES.md` to reference the new guide and plan.
+
+### Validation (v0.07 planning docs)
+
+- Documentation-only change. No runtime code changed.
+- No new dependencies.
+
+---
+
+
 ### Added (v0.06 implementation — Streifenlicht blockiness reduction)
 
 Three vertical slices shipped against `src/`; root causes RC-1/RC-2/RC-3 from the v0.06 plan were verified in code before implementation and fixed below.

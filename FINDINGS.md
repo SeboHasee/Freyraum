@@ -1,5 +1,35 @@
 # FINDINGS
 
+## 2026-05-17 — v0.07 planning: customer-managed picture folder
+
+The customer request is to make picture replacement simple enough for an elderly non-technical user: drag files into a folder, run one obvious update action, and open the preview. Current code does **not** support that yet. The v0.06 gallery still defines artworks in `src/config/artworks.ts` and ships a built static `customer-preview/` bundle.
+
+### Current code findings
+
+| File | Finding | Impact |
+|------|---------|--------|
+| `src/config/artworks.ts` | Four artworks are hardcoded and use embedded SVG `data:` images. | Customer cannot replace pictures without developer work. |
+| `Artwork` interface | Metadata shape is already CMS-like (`id`, title, dimensions, alt, tags, optional material fields). | Good target for generated `artworks.json`. |
+| `src/gallery/TextureManager.ts` | Uses `THREE.TextureLoader` for image URLs. | Static generated image files can be loaded once the manifest points to them. |
+| `src/materials/ProceduralTextureFactory.ts` | Generates missing normal/height/roughness/specular/AO maps. | Customer only needs normal image files; advanced maps remain optional. |
+| `vite.local.config.ts` + root `index.html` | Preview is a static IIFE build opened from `file://`. | Importer must preserve the double-click local preview workflow. |
+
+### Online research findings
+
+- Browser-safe image formats are primarily JPEG, PNG, GIF, SVG, WebP, and modern AVIF; TIFF and RAW are not reliable direct browser inputs. Source: MDN Image file type and format guide — https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Image_types
+- Browser folder APIs are not uniformly standard. `webkitdirectory` and File/Directory Entries can help in some browsers, but should not be the only workflow for a non-technical customer. Sources: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/file#webkitdirectory and https://developer.mozilla.org/en-US/docs/Web/API/File_and_Directory_Entries_API
+- `createImageBitmap()` is useful for async decoding, but importer design still needs explicit orientation/metadata decisions for real camera files. Source: https://developer.mozilla.org/en-US/docs/Web/API/createImageBitmap
+- WebGL has a device-dependent `MAX_TEXTURE_SIZE`; very large camera/scanner files need generated downscaled copies before reliable texture upload. Source: https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Constants#textures
+
+### Planning conclusion
+
+The most reliable customer-friendly architecture is a local `customer-artworks/inbox/` folder plus one-click update scripts that generate optimized web files and a manifest before the static preview opens. A browser-only drag/drop folder picker can be a later convenience, but it is not stable enough as the only customer workflow.
+
+See `plan.md` → **v0.07 Plan — Customer-managed artwork folder and one-click importer** and `docs/CUSTOMER_PICTURE_GUIDE.md`.
+
+---
+
+
 ## 2026-05-17 — v0.06 implemented: Streifenlicht blockiness reduction
 
 All three vertical slices (S2 anisotropy, S3 inspection tile-size uplift, S4 lateral PCF self-shadow) have shipped against `src/`. `npm run lint` and `npm run build` pass; bundle is now ≈ 562 KB (gzip ≈ 143 KB), up ~9 KB from v0.05. Detailed implementation outcome (per-slice changes, the four issues found in the original plan and their fixes, acceptance results) is in `plan.md` → "v0.06 Implementation Outcome".

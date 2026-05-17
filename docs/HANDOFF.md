@@ -15,6 +15,24 @@ The diagram captures four horizontal layers and two cross-cutting systems:
 - **Accessibility & preferences** — `utils/preferences.ts` + `utils/webgl.ts` + system media queries.
 - **Quality presets** — `config/quality.ts` subscribed by renderer, post-processing, lighting, and the artwork mesh.
 
+
+## Customer picture replacement status
+
+The current v0.06 preview is **not yet** ready for direct customer-managed picture replacement. Artworks are still defined in `src/config/artworks.ts` and the preview is rebuilt into `customer-preview/`.
+
+New customer-facing guide:
+
+- [`docs/CUSTOMER_PICTURE_GUIDE.md`](./CUSTOMER_PICTURE_GUIDE.md)
+
+Planned v0.07 direction:
+
+1. Customer drags pictures into `customer-artworks/inbox/`.
+2. Customer double-clicks `Update Gallery`.
+3. The updater generates optimized images + `artworks.json`.
+4. Customer double-clicks root `index.html` as before.
+
+Important handoff note: until v0.07 is implemented, customers should send picture folders to a maintainer/developer instead of editing source files.
+
 ## Controls surface
 
 | Surface | Action | Notes |

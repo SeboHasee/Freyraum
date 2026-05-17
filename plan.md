@@ -1,5 +1,179 @@
 # FREYRAUM Plan
 
+## v0.07 Plan — Customer-managed artwork folder and one-click importer
+
+### v0.07 Planning Status
+
+**Planned — documentation and research pass written (2026-05-17).** The current v0.06 app is not yet customer-manageable for artwork replacement: `src/config/artworks.ts` embeds placeholder SVG data URIs in TypeScript, and the customer preview is a built `customer-preview/` bundle. A non-technical customer cannot safely add real pictures by dragging files into a folder yet.
+
+This plan designs the next implementation pass: a customer-managed artwork folder with one-click import/build automation, so an elderly non-technical customer can maintain the pictures without touching code, terminal commands, TypeScript, or build tooling.
+
+### v0.07 Current Code Findings
+
+| Finding | Current source | Impact |
+|---------|----------------|--------|
+| Artwork content is hardcoded | `src/config/artworks.ts` exports `artworks` and currently builds four embedded SVG `data:` images. | Real customer images require developer edits today. |
+| Metadata is already structured | `Artwork` has `id`, `title`, `subtitle`, `description`, `year`, `medium`, `image`, `dimensions`, `alt`, `credit`, `tags`, `textureSet?`, `surfaceProfile?`, `surfacePhysics?`. | Good target schema for an auto-generated manifest. |
+| Texture loader supports file paths | `TextureManager` uses `THREE.TextureLoader`; `PaintingTextureSet` URLs may be relative paths or data URIs. | Imported images can become normal static files if copied into the built preview. |
+| Preview is static/offline | `vite.local.config.ts` emits one IIFE bundle into `customer-preview/`; root `index.html` redirects to `customer-preview/app.html`. | Customer workflow must preserve the double-click `file://` preview. |
+| Procedural maps fill missing material maps | `ProceduralTextureFactory` fills normal/height/roughness/specular/AO/varnish gaps. | Customers only need simple picture files; advanced PBR maps can stay optional. |
+
+### v0.07 Online Research Findings
+
+Authoritative/browser-platform findings used for this plan:
+
+- MDN image format guide: common browser-safe formats include JPEG, PNG, GIF, SVG, WebP, and modern AVIF; TIFF and camera RAW are not reliable as direct browser images. Source: https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Image_types
+- MDN File and Directory Entries API: recursive folder reading is useful but non-standard and browser-dependent. Source: https://developer.mozilla.org/en-US/docs/Web/API/File_and_Directory_Entries_API
+- MDN `<input type="file">` / `webkitdirectory`: folder selection can work in Chromium/Safari-style browsers but is not a universal standard, so a pure in-browser folder picker cannot be the only customer workflow. Source: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/file#webkitdirectory
+- MDN `createImageBitmap()`: async image decode is available, but orientation and browser behavior must be handled carefully for imported photos. Source: https://developer.mozilla.org/en-US/docs/Web/API/createImageBitmap
+- MDN WebGL constants: WebGL has a device-dependent `MAX_TEXTURE_SIZE`; very large camera/scanner images must be downscaled before use as reliable WebGL textures. Source: https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Constants#textures
+
+**Conclusion:** for an elderly non-technical customer, the safest architecture is not a browser-only drag-and-drop importer. The most reliable workflow is a local folder plus a one-click desktop/script updater that processes files before the static preview opens. Browser drag-and-drop can be added later as a convenience, but should not be the only path.
+
+### v0.07 Goals
+
+- Customer can manage the gallery by adding/removing images in one folder.
+- No TypeScript editing, no terminal, no package manager, no developer tools.
+- Accept common image files and preserve all aspect ratios.
+- Preserve originals and generate optimized preview copies.
+- Keep the existing one-click `index.html` → `customer-preview/app.html` preview.
+- Generate metadata automatically when the customer provides only image files.
+- Show friendly warnings for formats that browsers may not display directly.
+
+### v0.07 Non-Goals
+
+- No full CMS, login, remote upload server, or cloud dependency.
+- No requirement for customers to author normal/height/roughness/PBR maps.
+- No manual metadata entry as a blocker for the first version.
+- No destructive edits to original customer files.
+- No promise that every proprietary RAW/HEIC/TIFF file displays in every browser without conversion.
+
+### v0.07 Proposed Customer Workflow
+
+1. Customer opens the FREYRAUM folder.
+2. Customer opens `customer-artworks/inbox/`.
+3. Customer drags image files into that folder.
+4. Customer double-clicks `Update Gallery` (`.command` on macOS, `.bat` on Windows, or a clearly named helper app/script).
+5. The updater creates optimized files and `customer-artworks/artworks.json`.
+6. Customer double-clicks root `index.html` to view the updated gallery.
+
+### v0.07 Proposed Files / Modules
+
+| File / Folder | Purpose |
+|---------------|---------|
+| `customer-artworks/inbox/` | Customer-managed input folder. Only place the customer needs to touch. |
+| `customer-artworks/processed/` | Generated optimized image copies for preview/runtime. |
+| `customer-artworks/artworks.json` | Generated manifest consumed by the app. |
+| `scripts/import-artworks.mjs` | Node-based importer: scan, validate, read dimensions, copy/convert/resize where available, write manifest, write report. |
+| `scripts/update-gallery.mjs` | Friendly wrapper that runs import and preview build. |
+| `Update Gallery.bat` | Windows double-click entry point. |
+| `Update Gallery.command` | macOS double-click entry point. |
+| `src/config/artworks.ts` | Keep built-in fallback/demo artworks. Add loader bridge to generated manifest in implementation pass. |
+| `src/config/customerArtworks.ts` | Proposed typed adapter for generated manifest (if JSON import is used at build time). |
+| `docs/CUSTOMER_PICTURE_GUIDE.md` | Simple customer instructions. Added in this documentation pass. |
+
+### v0.07 Vertical Slices
+
+#### Slice S1 — Documentation and customer guide
+
+**Status: done in this documentation pass.**
+
+- Add `docs/CUSTOMER_PICTURE_GUIDE.md`.
+- Document current limitation: v0.06 still requires developer edits.
+- Document planned customer workflow and safe image advice.
+- Update all markdown files with this plan and research findings.
+
+#### Slice S2 — Manifest contract
+
+- Define `customer-artworks/artworks.json` schema using the existing `Artwork` shape as the target.
+- Required generated fields: `id`, `title`, `subtitle`, `description`, `year`, `medium`, `image`, `dimensions`, `alt`, `credit`, `tags`, `surfaceProfile`.
+- Optional future fields: `textureSet`, `surfacePhysics`, sort order override, custom title override.
+- Add strict validation and friendly error messages.
+
+#### Slice S3 — One-click importer
+
+- Add a Node script that scans `customer-artworks/inbox/`.
+- Accept common browser-safe extensions first: `.jpg`, `.jpeg`, `.png`, `.webp`, `.avif`, `.gif`, `.svg`.
+- Detect risky extensions and warn: `.heic`, `.heif`, `.tif`, `.tiff`, RAW camera extensions.
+- Read dimensions automatically.
+- Normalize IDs from filenames.
+- Generate title/alt/medium fallback text from filenames and dimensions.
+- Preserve source files untouched.
+
+#### Slice S4 — Large-file and format hardening
+
+- Generate safe preview copies instead of loading huge originals directly.
+- Default long-edge cap: 4096 px for broad WebGL reliability; keep optional high-detail cap behind a setting.
+- Query/document `MAX_TEXTURE_SIZE` at runtime and downshift quality if needed.
+- Generate thumbnails/side-preview copies separately.
+- Handle EXIF orientation consistently or document the chosen browser/library limitation.
+
+#### Slice S5 — App integration
+
+- Load generated customer manifest when present.
+- Fall back to built-in demo artworks when no customer manifest exists.
+- Keep `ProceduralTextureFactory` fallbacks for all missing material maps.
+- Ensure portrait, landscape, square, and ultrawide images preserve aspect ratio in main artwork, side panels, timeline, zoom/pan limits, and material tiling.
+
+#### Slice S6 — Elderly-customer UX polish
+
+- Add a plain-language update report after import.
+- Add big success/failure messages: `Gallery updated successfully` / `These files need attention`.
+- Avoid scary stack traces for customer-facing failures.
+- Keep a backup copy of the previous manifest before replacing it.
+- Document exactly which folder the customer can edit and which generated folders they should not touch.
+
+### v0.07 Performance Budget
+
+| Asset path | Budget / behavior |
+|------------|-------------------|
+| Original customer files | Preserve untouched; can be very large. |
+| Runtime main images | Generate/copy optimized web-safe files; default max long edge 4096 px unless future testing permits higher. |
+| Thumbnails / side previews | Generate smaller files to avoid loading full-size images for side panels. |
+| GPU texture upload | Must stay below device `MAX_TEXTURE_SIZE`; runtime should fail gracefully if an image exceeds limits. |
+| Initial load | Do not preload unlimited huge originals. Preload optimized runtime copies only. |
+
+### v0.07 Accessibility Impact
+
+- Auto-generate usable alt text from title/filename, but allow future simple overrides.
+- Keep keyboard navigation and existing controls unchanged.
+- Provide large, plain-language instructions in the guide.
+- Avoid requiring terminal or code-editor access.
+
+### v0.07 Fallback Behaviour
+
+- If no customer files exist, keep built-in demo artworks.
+- If one file fails, import the rest and report the failed file.
+- If a file format is unsupported, show a friendly conversion recommendation.
+- If dimensions cannot be read, skip the file and report it.
+- If generated manifest is invalid, keep the previous valid manifest.
+
+### v0.07 Browser / API Stability Boundaries
+
+- Do not rely only on browser folder drag-and-drop because folder APIs are browser-dependent.
+- Treat HEIC/HEIF, TIFF, and RAW as input risks unless a conversion tool is added.
+- Treat `createImageBitmap()` as useful but not a complete metadata/orientation solution by itself.
+- Treat WebGL `MAX_TEXTURE_SIZE` as device-dependent; never assume all customer images can become GPU textures at original resolution.
+
+### v0.07 Acceptance Checks
+
+1. A non-technical tester can replace artworks by copying files into `customer-artworks/inbox/` and double-clicking the updater.
+2. Portrait, square, landscape, and ultrawide images display without stretching.
+3. Large phone/camera images are optimized before runtime.
+4. Unsupported/risky files produce friendly warnings, not crashes.
+5. Root `index.html` still opens the preview by double-click.
+6. Built-in demo artworks still load if no customer manifest exists.
+7. All markdown docs describe the final customer workflow after implementation.
+
+### v0.07 Known Risks
+
+- Image conversion without new dependencies is limited. True HEIC/TIFF/RAW conversion may require platform tools or npm/WASM dependencies.
+- Windows/macOS double-click scripts need careful quoting for spaces in paths.
+- Very old computers may still struggle with many 4096 px images; importer should allow a lower cap.
+- Customer may delete generated folders accidentally; updater should recreate them.
+
+---
+
 ## Documentation Rule
 
 For this repository, every meaningful implementation must update the markdown documentation together with the code.
