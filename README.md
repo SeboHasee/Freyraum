@@ -32,6 +32,19 @@ The customer preview is built as a classic browser script, not a Vite module ent
 - Timeline thumbnails: real keyboard-accessible buttons with roving tabindex (Arrow / Home / End / Enter / Space)
 - WebGL is required; if unavailable a localized fallback screen is shown
 
+
+## v0.02 planning focus
+
+The next planned technical milestone is v0.02: advanced painting-material rendering and experimental WebGPU exploration. The detailed implementation plan lives in [`plan.md`](./plan.md#v002-scope--advanced-painting-material-shaders--experimental-webgpu).
+
+Planned focus areas:
+
+- realistic canvas/pigment material response using albedo, normal, detail-normal, bump/height, roughness, specular, and optional ambient-occlusion maps
+- realistic light profiles that reveal surface texture without washing out artwork color
+- WebGL production path with quality-dependent shader variants
+- experimental WebGPU backend probe behind explicit opt-in and dynamic import
+- performance targets: 60 FPS on mid-range discrete GPUs, at least 25 FPS on old integrated GPUs using battery mode
+
 ## Developer workflow
 
 Install dependencies:

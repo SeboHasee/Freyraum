@@ -75,12 +75,38 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
+
+## v0.02 shader and WebGPU review preparation
+
+v0.02 is planned as a technical rendering pass, not a customer-facing content-system pass. Future reviewers should evaluate it in two lanes:
+
+1. **Stable WebGL material realism** — realistic painting surface response using texture sets (albedo, normal, detail normal, height/bump, roughness, specular, optional AO), physically plausible light profiles, and quality-dependent shader variants.
+2. **Experimental WebGPU probe** — isolated backend detection/prototype work that must never block the existing WebGL preview.
+
+Expected v0.02 review artifacts:
+
+- close-up screenshots under `museum-neutral` and `raking-inspection` light profiles
+- side-by-side procedural fallback vs authored/scanned texture maps where available
+- FPS notes for high, balanced, and battery presets
+- clear browser/device notes for any WebGPU test
+- documentation of map color spaces: albedo as sRGB; normal/detail/height/roughness/specular/AO as linear data
+
+Performance acceptance targets for future implementation:
+
+| Device class | Target | Notes |
+| --- | --- | --- |
+| Mid-range discrete GPU | 60 FPS | Balanced preset, post-processing enabled, detail normal enabled. |
+| High-end discrete GPU | 60 FPS | High preset, high-DPI capped, full material stack. |
+| Old integrated GPU | 25 FPS minimum | Battery preset, reduced texture reads, no AO/grazing boost. |
+
+WebGPU must remain labeled experimental until it reaches feature parity, graceful fallback, and browser support maturity.
+
 ## Reserved future-pass items
 
 The following items are intentionally not implemented in v0.01:
 
 - Automated CI screenshot capture.
 - Hosted CMS / remote asset CDN.
-- WebGPU / VR rendering path.
+- WebGPU production renderer parity and VR path after the v0.02 experimental probe.
 - Multilingual content pipeline and i18n.
 - Analytics, telemetry, and persisted view positions.

@@ -4,6 +4,10 @@
 
 ### Added
 
+- Added a detailed v0.02 technical implementation plan in `plan.md` for realistic painting material shaders, normal/detail/bump/specular/roughness maps, performance budgets, and experimental WebGPU.
+- Documented v0.02 shader/WebGPU findings and constraints in `FINDINGS.md`.
+- Updated handoff documentation with v0.02 material-realism, benchmark, and WebGPU review expectations.
+
 - Structured artwork metadata model (`Artwork.id`, `year`, `medium`, `dimensions`, `alt`, `credit`, `tags`) in `src/config/artworks.ts` to prepare for future CMS integration
 - `PreferencesStore` (`src/utils/preferences.ts`) with reduced-motion and high-contrast modes plus quality-preset persistence in `localStorage`
 - Quality preset definitions (`src/config/quality.ts`) for `high` / `balanced` / `battery` modes, applied to renderer pixel ratio, bloom, shadows, and artwork geometry segments

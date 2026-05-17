@@ -354,14 +354,418 @@ Reserved Future Pass:
 
 This order starts with the data model and local assets because later UI, thumbnails, accessibility labels, and documentation screenshots depend on stable artwork metadata.
 
+
+## v0.02 Scope — Advanced Painting Material Shaders & Experimental WebGPU
+
+### v0.02 Mission
+
+v0.02 focuses on making the artworks read as **realistic physical paintings** rather than flat images on a plane. The goal is a web-only rendering pipeline that combines believable canvas/paper texture, layered pigment, bump/normal detail, specular response, and realistic light interaction while preserving predictable performance across a wide GPU range.
+
+Primary targets:
+
+- **Visual target:** close-up inspection should show woven canvas fibers, brush ridges, pigment thickness, fine detail noise, subtle edge lift, and light-dependent highlights.
+- **Lighting target:** spotlights and fill lights should visibly respond to artwork surface detail through normal, bump, roughness, specular, and optional ambient-occlusion maps.
+- **Performance target:** sustain **60 FPS on mid-range discrete GPUs** at the balanced/default preset and at least **25 FPS on old low-end integrated GPUs** using the battery preset.
+- **Platform target:** all web-based, with WebGL 2 as the production path and an experimental WebGPU path behind feature detection and explicit opt-in.
+- **Accessibility target:** shader motion and glints must respect reduced-motion and high-contrast preferences; visual realism must not make controls illegible.
+
+### v0.02 Non-Goals
+
+- Do not replace Three.js as the primary renderer in production.
+- Do not require native apps, browser extensions, server-side rendering, or offline GPU tools at runtime.
+- Do not make WebGPU mandatory; WebGL must remain the reliable customer-demo path.
+- Do not add a CMS or remote asset service in v0.02.
+- Do not ship generated texture assets without documenting their source, compression settings, and regeneration path.
+
+### v0.02 Architectural Direction
+
+v0.02 should introduce a layered material system rather than placing all logic inside `ArtworkMesh`.
+
+Planned modules:
+
+- `src/materials/PaintingMaterial.ts`
+  - WebGL production material factory.
+  - Extends or wraps `THREE.MeshPhysicalMaterial` through `onBeforeCompile` only where physically based defaults are not enough.
+  - Accepts color/albedo, normal, detail-normal, bump/height, roughness, specular, and ambient-occlusion maps.
+- `src/materials/PaintingTextureSet.ts`
+  - Typed texture-set model for each artwork.
+  - Defines required and optional maps, scale factors, UV tiling, mip policy, and compression metadata.
+- `src/materials/ProceduralTextureFactory.ts`
+  - Generates lightweight fallback texture maps in-browser for local/offline preview when real maps are missing.
+  - Must be deterministic per artwork id so screenshots remain stable.
+- `src/rendering/RenderBackend.ts`
+  - Backend abstraction with `webgl` as stable default and `webgpu-experimental` as opt-in future path.
+- `src/rendering/WebGPUPrototype.ts`
+  - Experimental WebGPU capability check and prototype renderer/material path.
+  - Must not block WebGL initialization or customer preview.
+- `src/performance/FrameBudgetMonitor.ts`
+  - Rolling FPS and GPU-cost proxy measurement.
+  - Drives optional adaptive quality in development first, then production once stable.
+- `src/debug/MaterialInspector.ts`
+  - Development-only panel for toggling maps, inspecting roughness/specular values, and freezing light angles.
+
+### v0.02 Material Model
+
+Each artwork should be represented by a texture set, not a single image.
+
+Required maps for final v0.02 quality:
+
+- **Albedo / base color:** final painting image, color-managed as sRGB.
+- **Normal map:** mid-frequency canvas and brush direction response, tangent-space, linear color.
+- **Detail normal map:** high-frequency weave and micro paint grain, tiled with independent scale.
+- **Height / bump map:** grayscale relief for brush ridges and canvas tooth; used for bump perturbation and optional parallax-lite at close zoom.
+- **Roughness map:** controls matte varnish, dry paint, and shinier pigment variation.
+- **Specular map:** subtle reflectivity differences for varnished or thick pigment regions.
+- **Ambient-occlusion map:** optional close-range crease/depth grounding, especially near thick strokes and canvas weave.
+
+Material uniforms and metadata:
+
+- `uCanvasNormalStrength`
+- `uDetailNormalStrength`
+- `uBumpStrength`
+- `uSpecularStrength`
+- `uRoughnessFloor`
+- `uRoughnessCeiling`
+- `uVarnishStrength`
+- `uDetailTiling`
+- `uLightGrazingBoost`
+- `uCloseInspectionMix`
+- `uReducedMotionScalar`
+
+Implementation rule: every uniform must be connected to a quality preset, artwork metadata, or user preference. Avoid unowned magic numbers inside shaders.
+
+### v0.02 Lighting Model
+
+The current light rig should evolve from "pleasant gallery light" to a controllable physical inspection rig.
+
+Implementation targets:
+
+- Add named light profiles:
+  - `gallery-soft`: current premium balanced presentation.
+  - `raking-inspection`: low-angle light to reveal texture relief.
+  - `museum-neutral`: flatter conservation-style light for accurate color review.
+  - `dramatic-demo`: customer presentation mode with stronger highlight movement.
+- Add per-profile intensity, angle, color temperature, and motion settings.
+- Support reduced-motion by freezing any moving highlight profile.
+- Keep light motion slow and subtle; never use fast animated shimmer on artwork surfaces.
+- Ensure specular response is visible only at plausible grazing angles, not uniformly across the painting.
+- Clamp highlight intensity so albedo remains readable and bloom does not wash out bright works.
+
+### v0.02 WebGL Shader Strategy
+
+Production WebGL path should be conservative and incremental.
+
+Preferred approach:
+
+1. Start from `MeshPhysicalMaterial` for physically based lighting, tone mapping, clearcoat, and renderer compatibility.
+2. Use `onBeforeCompile` to inject only the missing painting-specific detail blending:
+   - combine base normal map + detail normal map
+   - apply bump/height perturbation with quality-dependent strength
+   - modulate roughness/specular from maps and preset scalars
+   - optionally add close-inspection grazing-light enhancement
+3. Keep shader chunks compatible with Three.js `0.166.x` unless upgrading Three.js is explicitly planned and documented.
+4. Use defines for quality tiers so battery mode compiles out expensive detail paths rather than only setting strengths to zero.
+5. Avoid dynamic branching in fragment shader hot paths where a compile-time define can be used instead.
+
+Required shader variants:
+
+| Variant | Intended preset | Features |
+| --- | --- | --- |
+| `painting-high` | high | base normal + detail normal + bump + roughness + specular + AO + grazing boost |
+| `painting-balanced` | balanced | base normal + detail normal + roughness + specular; bump lower strength; AO optional |
+| `painting-battery` | battery / old iGPU | base normal only, low texture resolution, no AO, no grazing boost, reduced bloom/shadows |
+
+### v0.02 Experimental WebGPU Strategy
+
+WebGPU work must be isolated, measurable, and reversible.
+
+Implementation targets:
+
+- Add `isWebGPUAvailable()` feature detection using `navigator.gpu` without requesting an adapter during normal WebGL boot unless the user explicitly selects WebGPU experimental mode.
+- Add `webgpu-experimental` as a hidden/dev quality/backend option, not a customer default.
+- Prototype one artwork material path in WebGPU before attempting full parity.
+- Keep WebGPU code behind dynamic import so unsupported browsers do not pay parse/initialization cost.
+- Document all browser support caveats in `FINDINGS.md` and `docs/HANDOFF.md`.
+- If Three.js WebGPURenderer is used, pin the compatible Three.js examples import path and document any API instability.
+- If a custom WebGPU pass is used, keep it limited to material preview or offscreen experimentation until parity is proven.
+
+Acceptance for WebGPU in v0.02:
+
+- WebGL path remains unchanged and production-ready if WebGPU is unsupported.
+- WebGPU mode can be enabled manually in development.
+- WebGPU failure falls back to WebGL without blank screen or broken UI.
+- WebGPU prototype reports at least frame timing, adapter info when allowed, selected limits, and unsupported feature reasons.
+
+### v0.02 Performance Budgets
+
+Performance must be treated as a first-class implementation requirement.
+
+Frame targets:
+
+| Device class | Target | Required preset behavior |
+| --- | --- | --- |
+| Mid-range discrete GPU | 60 FPS at 1440p | balanced preset, post-processing enabled, detail normal enabled |
+| High-end discrete GPU | 60 FPS at 4K or high-DPI capped | high preset, full detail stack, controlled bloom |
+| Old integrated GPU | 25 FPS minimum at 720p–1080p | battery preset, no AO/grazing boost, lower pixel ratio, fewer segments |
+
+Initial budgets:
+
+- Balanced fragment texture reads should target no more than 5–6 lookups per fragment for artwork material.
+- Battery fragment texture reads should target no more than 2–3 lookups per fragment.
+- Artwork geometry should stay tied to quality presets; do not increase segments globally without measurement.
+- Texture memory for all loaded artwork material maps should be budgeted before implementation; avoid loading high-resolution auxiliary maps for inactive/side-preview works.
+- Use mipmaps and anisotropy carefully; high anisotropy helps oblique viewing but can be expensive on older GPUs.
+- Disable or lower bloom when material highlights already provide realistic specular response.
+
+Measurement plan:
+
+- Add a `FrameBudgetMonitor` that records rolling 1s, 5s, and 30s FPS averages.
+- Record approximate active texture count and selected shader variant in development logs.
+- Create a manual performance test matrix for:
+  - first load
+  - idle front view
+  - zoomed close inspection
+  - panning while zoomed
+  - rapid artwork navigation
+  - fullscreen presentation
+  - reduced-motion + battery preset
+- Add performance findings to `FINDINGS.md` after every shader slice.
+
+### v0.02 Texture Asset Pipeline
+
+v0.02 should plan for real texture maps but still keep the local preview robust.
+
+Implementation targets:
+
+- Define a texture naming convention:
+  - `{artworkId}-albedo.webp`
+  - `{artworkId}-normal.webp` or `.png` if precision requires it
+  - `{artworkId}-detail-normal.webp/png`
+  - `{artworkId}-height.webp/png`
+  - `{artworkId}-roughness.webp`
+  - `{artworkId}-specular.webp`
+  - `{artworkId}-ao.webp`
+- Add metadata fields for map paths and scale factors without requiring every map at first.
+- Load maps lazily by role:
+  - current artwork: full selected preset map set
+  - adjacent side previews: albedo only or albedo + low normal
+  - timeline: thumbnail/albedo only
+- Keep procedural fallback maps for offline development and missing asset safety.
+- Document every map's intended color space:
+  - albedo: sRGB
+  - normal/detail/height/roughness/specular/AO: linear/no color transform
+- Prefer GPU-compressed textures only after measuring browser support and build complexity.
+
+### v0.02 Vertical Slices
+
+#### Slice 1 — Texture Set Metadata Contract
+
+Goal: extend artwork metadata for realistic painting maps without requiring the final maps immediately.
+
+Implementation targets:
+
+- Add `PaintingTextureSet` types for albedo, normal, detail normal, bump/height, roughness, specular, and AO.
+- Add per-map color-space and resolution metadata.
+- Add material tuning fields for strength/tiling defaults.
+- Update `TextureManager` or add `PaintingTextureManager` for role-aware map loading.
+- Keep existing v0.01 artworks working through procedural fallback maps.
+
+Acceptance checks:
+
+- TypeScript prevents invalid map roles or missing required albedo.
+- Existing preview still loads with fallback maps.
+- Documentation explains which maps are required for final realism and which are optional.
+
+#### Slice 2 — Procedural Painting Map Generator
+
+Goal: create believable fallback normal/detail/bump/roughness/specular maps so the material system can be developed before final scanned assets exist.
+
+Implementation targets:
+
+- Generate deterministic canvas weave normal maps per artwork id.
+- Generate brush-stroke height noise using layered directional noise or canvas-based procedural strokes.
+- Generate roughness/specular variation that follows plausible pigment/varnish patterns.
+- Cache generated textures and dispose them correctly.
+- Keep generation cheap enough for local preview startup.
+
+Acceptance checks:
+
+- Close-up view reveals canvas tooth and subtle brush relief.
+- Generated maps do not create distracting repeating patterns at normal viewing distance.
+- Battery preset can skip detail generation or use lower resolution.
+
+#### Slice 3 — PaintingMaterial WebGL Prototype
+
+Goal: replace the current simple physical material with a painting-aware material while preserving existing interactions.
+
+Implementation targets:
+
+- Introduce `PaintingMaterial` factory around `MeshPhysicalMaterial`.
+- Wire albedo, normal, roughness, and specular maps first.
+- Add quality-dependent defines for high/balanced/battery shader variants.
+- Preserve current tone mapping, color management, and disposal behavior.
+- Add development toggles to disable each map for comparison.
+
+Acceptance checks:
+
+- Lighting visibly responds to normal/roughness/specular maps.
+- No visible regression in artwork aspect fitting, zoom, pan, or timeline navigation.
+- Battery preset remains visually acceptable and measurably cheaper.
+
+#### Slice 4 — Detail Normal + Bump / Height Refinement
+
+Goal: make close-up inspection look like real paint on canvas.
+
+Implementation targets:
+
+- Blend base normal and detail normal with stable tangent-space math.
+- Add bump/height perturbation that scales with zoom/inspection distance.
+- Reduce high-frequency detail at distance to avoid shimmer/aliasing.
+- Use mipmap-aware tiling and clamp extreme normal strengths.
+- Respect reduced-motion by avoiding animated surface shimmer.
+
+Acceptance checks:
+
+- Detail is visible when zoomed in but not noisy at default framing.
+- Grazing light reveals texture without washing out the painting.
+- Low-end preset disables or heavily reduces the expensive detail path.
+
+#### Slice 5 — Realistic Gallery Light Profiles
+
+Goal: make material relief readable through physically plausible light direction and intensity.
+
+Implementation targets:
+
+- Add typed light profiles with angle, color temperature, intensity, and motion flags.
+- Add raking inspection light mode for texture review.
+- Integrate light profile selection with presentation/fullscreen UI only if it stays uncluttered.
+- Clamp bloom and exposure for highlight-heavy profiles.
+
+Acceptance checks:
+
+- Raking light reveals bump/normal relief clearly.
+- Museum-neutral profile preserves color and reduces dramatic highlights.
+- Reduced-motion freezes moving light profiles.
+
+#### Slice 6 — Frame Budget Monitor + Manual Benchmark Overlay
+
+Goal: make the FPS requirements measurable before adding adaptive quality.
+
+Implementation targets:
+
+- Add rolling FPS monitor with 1s/5s/30s averages.
+- Add dev-only overlay showing preset, backend, pixel ratio, shader variant, active map count, and FPS.
+- Keep overlay disabled in customer preview unless explicitly enabled by query parameter/local setting.
+- Document benchmark procedure in `docs/HANDOFF.md`.
+
+Acceptance checks:
+
+- Mid-range test can confirm 60 FPS target manually.
+- Low-end/iGPU test can confirm 25 FPS target manually.
+- Findings record device/browser/preset results.
+
+#### Slice 7 — Adaptive Quality Guardrails
+
+Goal: protect weaker GPUs from falling below the minimum target.
+
+Implementation targets:
+
+- Add optional adaptive downgrade from high → balanced → battery based on sustained low FPS.
+- Never downgrade immediately during loading or short navigation spikes.
+- Notify the user unobtrusively if quality is reduced automatically.
+- Allow manual override through preferences.
+
+Acceptance checks:
+
+- Sustained low FPS triggers safe downgrade.
+- Quality switch does not reset artwork, zoom, pan, fullscreen, or accessibility state.
+- Manual preset selection can disable automatic changes.
+
+#### Slice 8 — Experimental WebGPU Backend Probe
+
+Goal: introduce WebGPU experimentation without risking the production WebGL preview.
+
+Implementation targets:
+
+- Add WebGPU feature detection and backend metadata.
+- Add dynamic import for WebGPU prototype code.
+- Implement a minimal material-preview path for one artwork or offscreen render target.
+- Log adapter limits and unsupported reasons in development mode.
+- Fall back to WebGL on any failure.
+
+Acceptance checks:
+
+- Unsupported browsers continue with WebGL and no UI breakage.
+- Supported browsers can manually enable WebGPU experimental mode.
+- WebGPU code path is clearly labeled experimental in UI/docs.
+
+#### Slice 9 — Real Texture Asset Integration Pass
+
+Goal: replace procedural fallback maps for at least one artwork with real authored/scanned maps.
+
+Implementation targets:
+
+- Add one complete texture set for a representative artwork.
+- Compare procedural vs authored maps under all light profiles.
+- Document asset size, compression, color-space decisions, and visual differences.
+- Ensure preview build remains local/offline safe.
+
+Acceptance checks:
+
+- Authored maps produce visibly more realistic paint relief than fallback maps.
+- File size remains acceptable for local preview.
+- Side previews and timeline do not load unnecessary heavy maps.
+
+#### Slice 10 — v0.02 Documentation, Review, and Handoff
+
+Goal: make shader and WebGPU decisions reviewable and reproducible.
+
+Implementation targets:
+
+- Update `docs/HANDOFF.md` with shader controls, benchmark procedure, and WebGPU caveats.
+- Add material architecture diagram or extend existing `docs/assets/architecture.svg`.
+- Add screenshot guidance for close-up material comparison: neutral light, raking light, high contrast, battery mode.
+- Record benchmark and browser findings in `FINDINGS.md`.
+
+Acceptance checks:
+
+- A future contributor can implement or review the material path from docs alone.
+- Customer-facing handoff clearly distinguishes stable WebGL from experimental WebGPU.
+- Markdown docs and changelog reflect actual shipped shader slices.
+
+### Recommended v0.02 Execution Order
+
+1. Slice 1 — Texture Set Metadata Contract
+2. Slice 2 — Procedural Painting Map Generator
+3. Slice 3 — PaintingMaterial WebGL Prototype
+4. Slice 4 — Detail Normal + Bump / Height Refinement
+5. Slice 5 — Realistic Gallery Light Profiles
+6. Slice 6 — Frame Budget Monitor + Manual Benchmark Overlay
+7. Slice 7 — Adaptive Quality Guardrails
+8. Slice 8 — Experimental WebGPU Backend Probe
+9. Slice 9 — Real Texture Asset Integration Pass
+10. Slice 10 — v0.02 Documentation, Review, and Handoff
+
+This order keeps the stable WebGL material path ahead of WebGPU experimentation. WebGPU should not begin until the texture-set contract, material behavior, lighting model, and measurement tools are clear enough to compare against.
+
+### v0.02 Acceptance Summary
+
+v0.02 is complete only when:
+
+- realistic painting texture is visible in close-up through normal/detail/bump/specular/roughness response
+- lighting profiles produce believable and controllable surface highlights
+- balanced preset sustains the 60 FPS target on a mid-range discrete GPU test machine
+- battery preset sustains at least 25 FPS on an old integrated GPU test machine or clearly documents the closest measured result and remaining bottleneck
+- WebGPU path is isolated, optional, documented, and never required for customer preview
+- all markdown docs include implementation results, findings, and remaining risks
+
 ## Reserved Future Pass After v0.01
 
-- advanced canvas shader refinement
 - content management integration
 - multilingual content pipeline
 - audio narration and accessibility audio layer
 - analytics and multi-gallery support
-- experimental WebGPU / VR path
+- WebGPU production renderer parity and VR path after the v0.02 experimental probe
 
 ## Verification Notes
 

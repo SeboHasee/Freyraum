@@ -28,3 +28,17 @@ Always document meaningful repository work for future development.
 - plans should distinguish implemented items from future items
 - changelog entries should be concise but specific
 - findings should capture reusable technical knowledge for later contributors
+
+## Additional rule for technical planning documents
+
+When adding future implementation plans for rendering, performance, shaders, WebGPU, asset pipelines, or other high-risk architecture work, document:
+
+- goals and non-goals
+- proposed modules/files
+- implementation order as vertical slices
+- performance budgets and measurement strategy
+- accessibility impact
+- fallback behavior
+- acceptance checks
+- known risks and reserved future-pass boundaries
+
