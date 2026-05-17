@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { artworks } from '../config/artworks';
+import type { Artwork } from '../config/artworks';
 import { ArtworkMesh } from './ArtworkMesh';
 import { SidePanels } from './SidePanels';
 import { TextureManager } from './TextureManager';
@@ -47,6 +47,7 @@ const INSPECTION_ROLES: readonly PaintingMapRole[] = ['normal', 'detailNormal', 
 
 export class GalleryManager {
   private readonly diagnostics = createScopedDiagnostics('gallery');
+  private readonly artworks: readonly Artwork[];
   private currentIndex = 0;
   private readonly artworkMesh: ArtworkMesh;
   private readonly sidePanels: SidePanels;
@@ -86,12 +87,14 @@ export class GalleryManager {
   private onNavigateCallback: NavigationCallback | null = null;
 
   constructor(
+    artworks: readonly Artwork[],
     artworkMesh: ArtworkMesh,
     sidePanels: SidePanels,
     textureManager: TextureManager,
     camera: THREE.PerspectiveCamera,
     procedural?: ProceduralTextureFactory
   ) {
+    this.artworks = artworks;
     this.artworkMesh = artworkMesh;
     this.sidePanels = sidePanels;
     this.textureManager = textureManager;
@@ -121,7 +124,7 @@ export class GalleryManager {
     // Rebuild the current artwork's map set so preset-specific roles
     // (detailNormal, height, roughness, specular, AO) are added/removed
     // immediately on quality changes.
-    if (hadPreset && this.textureManager.get(artworks[this.currentIndex].image)) {
+    if (hadPreset && this.textureManager.get(this.artworks[this.currentIndex].image)) {
       void this.showArtwork(this.currentIndex);
     }
   }
@@ -140,7 +143,7 @@ export class GalleryManager {
   }
 
   async init(): Promise<void> {
-    const urls = artworks.map((a) => a.image);
+    const urls = this.artworks.map((a) => a.image);
     await this.textureManager.preload(urls);
     this.diagnostics.info('init', 'Preloaded gallery albedo textures', { artworkCount: urls.length });
     await this.showArtwork(0);
@@ -178,7 +181,7 @@ export class GalleryManager {
    * a stale map set (see audited Lifecycle Guardrails in plan.md).
    */
   private async showArtwork(index: number): Promise<void> {
-    const artwork = artworks[index];
+    const artwork = this.artworks[index];
     const albedo = this.textureManager.get(artwork.image);
 
     const token = ++this.artworkLoadToken;
@@ -190,10 +193,10 @@ export class GalleryManager {
     });
 
     // Side previews use albedo only, even when authored sets exist.
-    const prevIndex = (index - 1 + artworks.length) % artworks.length;
-    const nextIndex = (index + 1) % artworks.length;
-    const prevTexture = this.textureManager.get(artworks[prevIndex].image) ?? null;
-    const nextTexture = this.textureManager.get(artworks[nextIndex].image) ?? null;
+    const prevIndex = (index - 1 + this.artworks.length) % this.artworks.length;
+    const nextIndex = (index + 1) % this.artworks.length;
+    const prevTexture = this.textureManager.get(this.artworks[prevIndex].image) ?? null;
+    const nextTexture = this.textureManager.get(this.artworks[nextIndex].image) ?? null;
     this.sidePanels.updateTextures(prevTexture, nextTexture);
 
     if (!albedo || !preset) {
@@ -274,9 +277,9 @@ export class GalleryManager {
 
   navigate(direction: 1 | -1): void {
     const newIndex = clamp(
-      (this.currentIndex + direction + artworks.length) % artworks.length,
+      (this.currentIndex + direction + this.artworks.length) % this.artworks.length,
       0,
-      artworks.length - 1
+      this.artworks.length - 1
     );
 
     if (!this.reducedMotion) {

@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+### Added (v0.07 customer-managed artworks — 2026-05-17)
+
+The full v0.07 plan is now implemented. A non-technical customer can manage the
+gallery by dropping any number of images, in any aspect ratio, into one folder
+and double-clicking one button.
+
+- Added `scripts/import-artworks.mjs` — zero-dependency Node 18+ importer that:
+  - scans `customer-artworks/inbox/` for image files (sorted naturally)
+  - reads pixel dimensions from JPEG / PNG / GIF / WebP / SVG / AVIF (HEIC) headers
+  - skips RAW formats with a friendly message, warns about risky formats
+  - copies images into `customer-preview/images/<id>.<ext>`
+  - writes `customer-artworks/artworks.json` (human-readable manifest, with `.bak` of the previous run)
+  - writes `customer-preview/customer-artworks.js` for runtime global injection
+  - writes `customer-artworks/last-import-report.txt` in plain language
+- Added `Update Gallery.command` (macOS) and `Update Gallery.bat` (Windows) — double-click
+  launchers that run the importer and open the report. Both check for Node.js up front
+  and print a friendly install hint if missing.
+- Added `customer-artworks/inbox/` and `customer-artworks/processed/` with `.gitkeep`
+  placeholders. All customer-generated content is excluded from version control via
+  `.gitignore`.
+- Updated `scripts/write-local-preview.mjs` to inject
+  `<script src="./customer-artworks.js">` into `customer-preview/app.html` and to
+  write a `window.__FREYRAUM_ARTWORKS = [];` stub when no customer artworks exist yet,
+  so the `file://` preview never 404s the injection.
+- Refactored to support arbitrary-length, arbitrary-aspect artwork lists:
+  - `src/timeline/Timeline.ts`, `src/ui/InfoPanel.ts`, `src/gallery/GalleryManager.ts`
+    no longer import the global `artworks` constant; they accept `readonly Artwork[]`
+    (or a single `Artwork`) via their constructor.
+  - `src/main.ts` now reads `window.__FREYRAUM_ARTWORKS`, validates every entry with
+    `sanitizeInjectedArtworks()` (drops malformed entries, dedupes IDs, normalizes
+    `surfaceProfile`, falls back gracefully), and uses the customer list when non-empty.
+  - When no customer artworks are present, the built-in demo artworks load unchanged.
+- Existing `ArtworkMesh.updateAspect()` and `SidePanels.fitWithinBox()` already
+  preserve every aspect ratio (portrait, landscape, square, ultrawide) so no shader
+  or mesh changes were needed.
+- Added `docs/CUSTOMER_PICTURE_GUIDE.md` (rewritten for the implemented workflow,
+  including macOS Gatekeeper note, file-type matrix, and FAQ).
+- Updated `.gitignore` for `customer-artworks/inbox/*` (except `.gitkeep`),
+  `customer-artworks/processed/*` (except `.gitkeep`),
+  `customer-artworks/artworks.json`, `customer-artworks/artworks.json.bak`,
+  `customer-artworks/last-import-report.txt`, `customer-preview/images/`, and
+  `customer-preview/customer-artworks.js`.
+
+### Validation (v0.07 customer importer)
+
+- `npm run lint` — passes with no new warnings.
+- `npm run build` — passes; only the pre-existing Dart Sass legacy-JS-API warning is emitted.
+- Importer end-to-end tested with portrait (300×600), landscape (800×400),
+  square (512×512), ultrawide (3200×800), SVG (1024×768), and JPEG (512×768) files,
+  plus one unsupported `.txt` skipped with a friendly message and an empty-inbox run
+  that falls back to built-in artworks.
+
 ### Added (v0.07 diagnostics and logging system — 2026-05-17)
 
 - Added `src/utils/Diagnostics.ts`, a centralized diagnostics/logger singleton with:

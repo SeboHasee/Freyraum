@@ -1,170 +1,137 @@
-# Customer picture guide — how to add your own pictures
+# FREYRAUM — Customer Picture Guide
 
-This guide is written for a non-technical customer. The goal for the next implementation pass is:
+Welcome! This guide explains how to put your pictures into the FREYRAUM gallery.
 
-> Put picture files into one folder, double-click the preview, and the gallery updates automatically.
+You do **not** need to use a code editor, the terminal, or any technical tool.
+You only ever touch one folder and one button.
 
-## Very short answer
+## What you need (one-time)
 
-### What works today
+1. **Node.js** (free): install the LTS version from <https://nodejs.org>.
+2. The **FREYRAUM** folder (this folder).
 
-The current v0.06 preview does **not yet** have a customer drag-and-drop artwork folder. The pictures are still defined by the developer in `src/config/artworks.ts`, and the local preview is rebuilt into `customer-preview/`.
+Your support person sets these up once. After that, you only do the steps below.
 
-Today, the safe customer process is:
+## How to update your gallery
 
-1. Put your picture files in one normal folder on your computer.
-2. Name them clearly, for example:
-   - `01-mountain.jpg`
-   - `02-sea.png`
-   - `03-city.webp`
-3. Send that folder to the developer / maintainer.
-4. The maintainer adds them to the gallery and rebuilds the preview.
+1. Open the FREYRAUM folder.
+2. Open the folder called **`customer-artworks`**, then the folder called **`inbox`**.
+3. Drag your pictures into the **inbox** folder.
+   - You can put in as many pictures as you want.
+   - Any size or shape works: portrait, landscape, square, very wide, etc.
+4. Go back to the FREYRAUM folder and double-click **`Update Gallery`**:
+   - On macOS: `Update Gallery.command`
+   - On Windows: `Update Gallery.bat`
+5. A short report opens automatically when the update is done.
+6. Double-click **`index.html`** (in the FREYRAUM folder) to view the updated gallery.
 
-### What will be built in v0.07 (implementation plan is complete)
+That's the whole workflow.
 
-The v0.07 technical implementation plan is fully written in `plan.md`. Once implemented, the workflow will be:
+## Which file types work best
 
-1. Open the FREYRAUM project folder.
-2. Open `customer-artworks/inbox/`.
-3. Drag your pictures into that folder.
-4. Double-click `Update Gallery` (macOS: `Update Gallery.command`, Windows: `Update Gallery.bat`).
-5. Double-click `index.html` to view the finished gallery.
+Best (always works): **JPG**, **PNG**, **WebP**, **GIF**, **SVG**, **AVIF**.
 
-No code editing. No terminal. No metadata typing required.
+May not show in all browsers (warning, but copied anyway): **HEIC**, **HEIF**, **TIFF**, **BMP**.
 
+Cannot show in any browser (skipped with a clear message): **camera RAW** files
+(`.cr2`, `.cr3`, `.nef`, `.arw`, `.dng`, `.orf`, `.rw2`, `.raw`, `.pef`, `.srw`).
 
-## Recommended customer folder
+If you only have HEIC pictures from your iPhone, ask your support person to convert them
+to JPG, or change your iPhone setting to take JPG photos.
 
-Planned folder:
+## How the gallery picks titles
 
-```text
-customer-artworks/
-  inbox/
-    01-picture.jpg
-    02-picture.png
-    03-picture.webp
-  processed/
-    ...automatically generated safe web files...
-  artworks.json
-```
+If your picture is named like this:
 
-The customer should only touch:
+| File name                   | Gallery title       |
+| --------------------------- | ------------------- |
+| `01-sunset-at-the-lake.jpg` | Sunset At The Lake  |
+| `02_forest path.png`        | Forest Path         |
+| `IMG_8847.JPG`              | Img 8847            |
 
-```text
-customer-artworks/inbox/
-```
+Numbers and underscores are removed; the rest of the file name becomes the title.
 
-Everything else should be generated.
+If you want a specific order, start the file names with numbers (`01-`, `02-`, `03-`).
 
-## Which image files should customers use?
+## What the "Update Gallery" button actually does
 
-Best choices:
+It runs a small script that:
 
-- `.jpg` / `.jpeg` — best for photos and scans
-- `.png` — best for graphics or transparent images
-- `.webp` — good modern web format
-- `.avif` — good modern web format, but older devices may be less reliable
+1. Looks in **`customer-artworks/inbox/`** for your pictures.
+2. Reads each picture's size (width × height) and creates a friendly title.
+3. Copies a working copy into **`customer-preview/images/`**.
+4. Writes a list of all imported pictures into:
+   - `customer-artworks/artworks.json` (human-readable)
+   - `customer-preview/customer-artworks.js` (used by the gallery)
+5. Writes a plain-language report to `customer-artworks/last-import-report.txt`.
 
-Risky formats:
+Your original picture files are never changed or deleted.
 
-- `.heic` / `.heif` — common from iPhones, but not reliable in every browser
-- `.tif` / `.tiff` — often not displayed directly by browsers
-- camera RAW files like `.cr2`, `.nef`, `.arw`, `.dng` — not suitable for direct browser viewing
+## First-time on macOS (Gatekeeper)
 
-Planned automation should detect risky files and show a friendly message such as:
+The first time you double-click `Update Gallery.command`, macOS may say
+"cannot be opened because it is from an unidentified developer".
 
-> This file type may not work in all browsers. Please export it as JPG or PNG.
+Right-click (or Ctrl-click) the file → **Open** → **Open** again.
+After this one-time approval, normal double-click works from then on.
 
-## Picture size rules for customers
+## What you should not touch
 
-Customers should not need to resize manually. The planned automation should do it.
+These are managed by the **Update Gallery** button. If you delete them by accident,
+the button will recreate them on the next run:
 
-Still, these are good practical rules:
+- `customer-artworks/artworks.json`
+- `customer-artworks/artworks.json.bak`
+- `customer-artworks/processed/`
+- `customer-artworks/last-import-report.txt`
+- `customer-preview/images/`
+- `customer-preview/customer-artworks.js`
 
-- Normal photos from phones or cameras are OK.
-- Very large images are OK as input, but the updater should create smaller safe web copies.
-- The original file should stay untouched.
-- The gallery should use optimized copies for speed.
+You only need to touch **`customer-artworks/inbox/`**.
 
-Planned generated sizes:
+## What happens if I do nothing
 
-- main gallery image: max 4096 px on the long side by default
-- thumbnail / side preview: smaller generated copy
-- optional high-detail copy: only if needed for inspection mode
+If you have not added any pictures yet, the gallery still opens and shows
+the built-in demo artworks. As soon as you put pictures in the inbox and
+run `Update Gallery`, the demos are replaced by your own pictures.
 
-## File naming for customers
+## Common questions
 
-Simple is best:
+**Can I add more than four pictures?**
+Yes. There is no limit. The timeline at the bottom of the gallery shows
+every picture and scrolls if needed.
 
-```text
-01-sunset.jpg
-02-forest.jpg
-03-portrait-of-maria.png
-```
+**Can I mix portrait and landscape and ultrawide pictures?**
+Yes. Each picture keeps its own shape; the gallery does not stretch or
+crop your pictures.
 
-Avoid:
+**My picture is huge (50 MB, 8000 pixels wide). Will it work?**
+Most modern computers and browsers handle that. Very old computers may
+struggle. If a picture does not appear, try exporting it at around
+4000 pixels on the longest edge.
 
-```text
-IMG_8847 final FINAL 2 copy (new).HEIC
-```
+**My picture is HEIC and does not show. What do I do?**
+Open the picture in Preview (macOS) or Photos (Windows), then export
+it as JPG. Replace the file in the inbox with the JPG copy and run
+`Update Gallery` again.
 
-The planned updater should still accept messy names, but clean names make the order easier to understand.
+**I see scary messages in the report. What do I do?**
+Send the report (`customer-artworks/last-import-report.txt`) to your
+support person. The report is written in plain language and they can
+read it without seeing the gallery.
 
-## How titles should work
+## Debug / support tools (developer use)
 
-The planned automation should create titles automatically from filenames:
+If something goes wrong inside the running gallery, a developer can
+collect a diagnostic report by appending `?debug=info` (or
+`?debug=verbose`) to the preview URL and then opening the browser
+console. The runtime keeps a leveled, deduplicated session log; a full
+snapshot is available via `window.__FREYRAUM_DIAGNOSTICS__.snapshot()`.
 
-```text
-01-sunset-at-lake.jpg → Sunset At Lake
-```
+Normal customer sessions stay quiet — only warnings and errors are
+shown in the console by default.
 
-Later, if needed, a simple optional text file can override titles:
+## For developers
 
-```text
-01-sunset-at-lake.jpg | Sunset at Lake | 2025 | Anna Example
-```
-
-But the first version should work without any text file.
-
-## What the gallery should do automatically
-
-The planned v0.07 importer should:
-
-- find all image files in `customer-artworks/inbox/`
-- ignore hidden system files like `.DS_Store`
-- sort files by filename
-- generate safe web copies
-- read image width and height
-- keep portrait, landscape, square, and ultrawide aspect ratios correct
-- create German-friendly fallback metadata
-- write an `artworks.json` manifest
-- preserve the original files
-- show clear warnings for unsupported formats
-- never require the customer to edit TypeScript
-
-## If something goes wrong
-
-The customer-friendly updater should write a simple report:
-
-```text
-Gallery update finished.
-
-Imported:
-- 01-sunset.jpg
-- 02-forest.png
-
-Needs attention:
-- 03-iphone.heic — please export as JPG if it does not show.
-```
-
-## Developer note
-
-The current source of truth is still `src/config/artworks.ts`. This guide documents the desired customer-facing workflow and the immediate manual workaround. The full technical implementation plan (including architecture decision, exact code changes, script outline, and Phase 1–4 implementation checklist) is recorded in `plan.md` under **v0.07 Technical Implementation Guide**.
-
-Key implementation notes for the developer:
-- The chosen architecture is **global window injection** (`window.__FREYRAUM_ARTWORKS`): no rebuild needed, works from `file://`.
-- `src/main.ts` reads `window.__FREYRAUM_ARTWORKS` and prefers it over demo artworks.
-- `scripts/import-artworks.mjs` copies images and generates `customer-preview/customer-artworks.js`.
-- `scripts/write-local-preview.mjs` injects the script tag into `app.html`.
-- No new npm dependencies are required for Phase 1 (zero-dep dimension reading); `jimp` is optional for future Phase 4 resize support.
-
+See `plan.md` (section "v0.07 Technical Implementation Guide") for the
+full architecture, file layout, and code references.

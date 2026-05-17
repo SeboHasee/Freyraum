@@ -1,4 +1,4 @@
-import { artworks, type Artwork } from '../config/artworks';
+import { type Artwork } from '../config/artworks';
 
 export class InfoPanel {
   private readonly el: HTMLElement;
@@ -8,7 +8,7 @@ export class InfoPanel {
   private readonly description: HTMLElement;
   private readonly credit: HTMLElement;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, initialArtwork: Artwork) {
     this.el = document.createElement('section');
     this.el.className = 'info-panel';
     this.el.setAttribute('aria-live', 'polite');
@@ -32,7 +32,7 @@ export class InfoPanel {
     this.el.append(this.eyebrow, this.title, this.meta, this.description, this.credit);
     container.appendChild(this.el);
 
-    this.update(artworks[0]);
+    this.update(initialArtwork);
   }
 
   update(artwork: Artwork, animate = false): void {

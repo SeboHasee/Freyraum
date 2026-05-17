@@ -20,19 +20,32 @@ The customer preview is built as a classic browser script, not a Vite module ent
 
 ## Adding your own pictures
 
-Short version: **not customer-automated yet in v0.06.** Today the demo artworks are still defined by a developer in `src/config/artworks.ts`, then rebuilt into the static `customer-preview/` folder.
+**v0.07 implemented (2026-05-17).** A non-technical customer can manage the
+gallery by dragging any number of images, in any aspect ratio, into one folder
+and double-clicking one button. No code editing, no terminal.
 
-A plain-language customer guide has been added here:
+Customer guide: [`docs/CUSTOMER_PICTURE_GUIDE.md`](./docs/CUSTOMER_PICTURE_GUIDE.md)
 
-- [`docs/CUSTOMER_PICTURE_GUIDE.md`](./docs/CUSTOMER_PICTURE_GUIDE.md)
-
-The planned v0.07 workflow is intentionally simple:
+Quick workflow:
 
 1. Put image files into `customer-artworks/inbox/`.
-2. Double-click `Update Gallery`.
+   - Best: JPG, PNG, WebP, GIF, SVG, AVIF.
+   - Risky (warning, still copied): HEIC, HEIF, TIFF, BMP.
+   - Skipped with a friendly message: camera RAW formats.
+2. Double-click `Update Gallery` (`.command` on macOS, `.bat` on Windows).
+   - A plain-language report opens automatically.
 3. Double-click `index.html` to view the updated gallery.
 
-The v0.07 implementation plan is in [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer). It covers common formats, large images, aspect ratios, generated metadata, optimized copies, and friendly warnings for risky files like HEIC/TIFF/RAW.
+Behind the scenes, `scripts/import-artworks.mjs` reads each picture's pixel
+dimensions, copies it to `customer-preview/images/`, and writes both
+`customer-artworks/artworks.json` (human-readable manifest) and
+`customer-preview/customer-artworks.js` (runtime injection consumed by the
+gallery). The previous manifest is backed up to `artworks.json.bak` so a bad
+import can be recovered manually. If the inbox is empty, the built-in demo
+artworks load instead.
+
+For the full architecture see
+[`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).
 
 ## Diagnostics and debugging
 

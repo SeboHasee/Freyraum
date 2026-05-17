@@ -4,3 +4,16 @@ dist/
 .env.local
 *.log
 .DS_Store
+
+# v0.07: customer-managed artwork content. Originals and generated files
+# stay local on the customer machine; only the empty inbox/processed
+# folders are committed (via .gitkeep).
+customer-artworks/inbox/*
+!customer-artworks/inbox/.gitkeep
+customer-artworks/processed/*
+!customer-artworks/processed/.gitkeep
+customer-artworks/artworks.json
+customer-artworks/artworks.json.bak
+customer-artworks/last-import-report.txt
+customer-preview/images/
+customer-preview/customer-artworks.js

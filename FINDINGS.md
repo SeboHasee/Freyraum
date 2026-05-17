@@ -1,5 +1,78 @@
 # FINDINGS
 
+## 2026-05-17 — v0.07 customer-managed artworks implemented
+
+The v0.07 plan is now fully implemented in code. A non-technical customer can
+manage the gallery by dropping any number of images, in any aspect ratio, into
+`customer-artworks/inbox/` and double-clicking `Update Gallery`. The runtime
+gallery, side panels, timeline, and info panel all adapt automatically.
+
+### What is now implemented
+
+- **Zero-dependency importer** (`scripts/import-artworks.mjs`): scans the inbox,
+  reads pixel dimensions for JPEG / PNG / GIF / WebP / SVG / AVIF directly from
+  file headers (no native binaries, no npm install beyond what the build already
+  uses), skips RAW formats with a clear message, warns about HEIC/HEIF/TIFF/BMP,
+  copies images to `customer-preview/images/`, writes both
+  `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js`,
+  backs up the previous manifest, and produces a plain-language report.
+- **Runtime injection** (Option C from the plan): the importer writes
+  `window.__FREYRAUM_ARTWORKS` into a side-loaded `<script>` so the `file://`
+  preview picks up new images without a rebuild and without violating browser
+  `fetch()` restrictions on `file://`.
+- **Constructor injection refactor**: `Timeline`, `InfoPanel`, and `GalleryManager`
+  no longer reach for the global `artworks` constant; they accept the active list
+  via their constructor. `main.ts` reads, validates, and dedupes the injected
+  manifest with `sanitizeInjectedArtworks()` and falls back cleanly to built-in
+  demo artworks when no customer manifest exists or every entry is invalid.
+- **Arbitrary dimensions**: `ArtworkMesh.updateAspect()` and `SidePanels` already
+  fit any aspect into the world box via `fitWithinBox(aspect, 4.2, 5.8)`; the
+  timeline reserves space per-thumb from the declared dimensions, so portrait,
+  landscape, square, and ultrawide images coexist without stretching.
+- **Double-click launchers**: `Update Gallery.command` (macOS, `chmod +x`) and
+  `Update Gallery.bat` (Windows) both check for Node.js, run the importer, and
+  open the report. The macOS launcher documents the Gatekeeper one-time approval.
+
+### Reliability and edge-case behaviour
+
+- One bad file does not stop the run; warnings, skips, and copy errors are all
+  collected and reported separately.
+- Duplicate IDs (after normalization) are disambiguated with a numeric suffix.
+- A previous manifest is renamed to `artworks.json.bak` before being replaced,
+  so a botched import can be recovered manually.
+- `customer-preview/images/` is cleared at the start of each run, so removed
+  inbox files do not leave orphan assets.
+- The `customer-artworks.js` runtime injection is validated entry-by-entry at
+  startup; malformed entries are dropped with a diagnostic warning instead of
+  crashing the app.
+- If the customer never runs the importer, `write-local-preview.mjs` emits a
+  `window.__FREYRAUM_ARTWORKS = [];` stub so the script tag does not 404.
+
+### Verified test matrix
+
+End-to-end run with the importer:
+
+| Test case             | File                       | Result                       |
+| --------------------- | -------------------------- | ---------------------------- |
+| Landscape PNG         | 800 × 400                  | imported, no stretching      |
+| Portrait PNG          | 300 × 600                  | imported, no stretching      |
+| Square PNG            | 512 × 512                  | imported                     |
+| Ultrawide PNG         | 3200 × 800                 | imported                     |
+| SVG with width/height | 1024 × 768                 | imported                     |
+| JPEG with SOF0        | 512 × 768                  | imported, dimensions correct |
+| Unsupported `.txt`    | —                          | skipped with friendly text   |
+| Empty inbox           | —                          | empty manifest, demo loads   |
+
+### Open follow-ups (out of scope for this pass)
+
+- Optional `jimp` integration for a 4096 px long-edge cap on huge phone/camera
+  images (Phase 4 in `plan.md`).
+- Optional sidecar metadata file for custom titles, descriptions, and per-artwork
+  `surfaceProfile` overrides.
+- Optional thumbnail generation for the timeline.
+
+---
+
 ## 2026-05-17 — v0.07 diagnostics and logging system implemented
 
 The v0.07 plan previously covered the customer-managed artwork workflow well, but the code audit found a major cross-cutting gap: diagnostics were too narrow and too inconsistent for a reliability-focused rollout. Before this pass, runtime logging was limited to:

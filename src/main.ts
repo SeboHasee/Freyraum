@@ -2,7 +2,7 @@ import './styles/main.scss';
 
 import * as THREE from 'three';
 
-import { artworks } from './config/artworks';
+import { artworks as builtInArtworks, type Artwork } from './config/artworks';
 import { getQualityPreset } from './config/quality';
 import { getLightProfile } from './lighting/LightProfile';
 import { RendererManager } from './core/RendererManager';
@@ -36,6 +36,82 @@ import { getDiagnostics } from './utils/Diagnostics';
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
 
+/**
+ * v0.07: validates `window.__FREYRAUM_ARTWORKS` and returns a clean
+ * `Artwork[]` or `null`. Each entry is validated for the minimal field set
+ * required by the gallery; anything malformed is dropped with a diagnostic
+ * note rather than crashing the runtime. This keeps the customer preview
+ * resilient even if the import script writes a partially valid manifest.
+ */
+function sanitizeInjectedArtworks(
+  raw: unknown,
+  diagnostics: ReturnType<typeof getDiagnostics>
+): readonly Artwork[] | null {
+  if (raw === undefined || raw === null) return null;
+  if (!Array.isArray(raw)) {
+    diagnostics.warn('boot', 'artworks-injected-invalid', 'Ignoring injected artworks: not an array', {
+      typeOf: typeof raw,
+    });
+    return null;
+  }
+  const out: Artwork[] = [];
+  const seenIds = new Set<string>();
+  let rejected = 0;
+  for (const candidate of raw) {
+    if (!candidate || typeof candidate !== 'object') {
+      rejected++;
+      continue;
+    }
+    const a = candidate as Record<string, unknown>;
+    const id = typeof a['id'] === 'string' ? (a['id'] as string).trim() : '';
+    const image = typeof a['image'] === 'string' ? (a['image'] as string).trim() : '';
+    const dims = a['dimensions'] as { width?: unknown; height?: unknown } | undefined;
+    const width = typeof dims?.width === 'number' && Number.isFinite(dims.width) ? dims.width : 0;
+    const height = typeof dims?.height === 'number' && Number.isFinite(dims.height) ? dims.height : 0;
+    if (!id || !image || width <= 0 || height <= 0 || seenIds.has(id)) {
+      rejected++;
+      continue;
+    }
+    seenIds.add(id);
+    const title = typeof a['title'] === 'string' && a['title'] ? (a['title'] as string) : id;
+    const tagsValue = a['tags'];
+    const tags: readonly string[] = Array.isArray(tagsValue)
+      ? tagsValue.filter((t): t is string => typeof t === 'string')
+      : [];
+    out.push({
+      id,
+      title,
+      subtitle: typeof a['subtitle'] === 'string' ? (a['subtitle'] as string) : '',
+      description: typeof a['description'] === 'string' ? (a['description'] as string) : '',
+      year:
+        typeof a['year'] === 'number' && Number.isFinite(a['year'])
+          ? (a['year'] as number)
+          : new Date().getFullYear(),
+      medium: typeof a['medium'] === 'string' ? (a['medium'] as string) : '',
+      image,
+      dimensions: { width, height },
+      alt: typeof a['alt'] === 'string' ? (a['alt'] as string) : title,
+      credit: typeof a['credit'] === 'string' ? (a['credit'] as string) : '',
+      tags,
+      surfaceProfile:
+        a['surfaceProfile'] === 'satin-canvas' ||
+        a['surfaceProfile'] === 'varnished-oil' ||
+        a['surfaceProfile'] === 'paper' ||
+        a['surfaceProfile'] === 'procedural-fallback' ||
+        a['surfaceProfile'] === 'matte-canvas'
+          ? (a['surfaceProfile'] as Artwork['surfaceProfile'])
+          : 'matte-canvas',
+    });
+  }
+  if (rejected > 0) {
+    diagnostics.warn('boot', 'artworks-injected-rejected', 'Some injected artworks were rejected', {
+      rejected,
+      accepted: out.length,
+    });
+  }
+  return out;
+}
+
 async function main(): Promise<void> {
   const diagnostics = getDiagnostics();
   diagnostics.installGlobalHandlers();
@@ -51,6 +127,18 @@ async function main(): Promise<void> {
   // screen and loading overlay both react to motion/contrast settings.
   const preferences = new PreferencesStore();
   diagnostics.debug('boot', 'preferences-ready', 'Preferences store created', preferences.current);
+
+  // v0.07: customer-managed artworks injected at runtime by
+  // `scripts/import-artworks.mjs` via `customer-preview/customer-artworks.js`
+  // (Option C: global window injection, see plan.md v0.07).
+  const injected = (window as unknown as { __FREYRAUM_ARTWORKS?: unknown }).__FREYRAUM_ARTWORKS;
+  const customerArtworks = sanitizeInjectedArtworks(injected, diagnostics);
+  const artworks: readonly Artwork[] =
+    customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
+  diagnostics.info('boot', 'artworks-source', 'Artwork source resolved', {
+    source: customerArtworks && customerArtworks.length > 0 ? 'customer' : 'built-in',
+    count: artworks.length,
+  });
 
   if (!isWebGLAvailable()) {
     diagnostics.error('boot', 'webgl-unavailable', 'WebGL is not available in the current browser');
@@ -103,6 +191,7 @@ async function main(): Promise<void> {
 
   // Gallery manager
   const galleryManager = new GalleryManager(
+    artworks,
     artworkMesh,
     sidePanels,
     textureManager,
@@ -131,13 +220,13 @@ async function main(): Promise<void> {
 
   // UI
   const topbar = new Topbar(app);
-  const infoPanel = new InfoPanel(app);
+  const infoPanel = new InfoPanel(app, artworks[0]);
   const navControls = new NavigationControls(app);
   const zoomControls = new ZoomControls(app, galleryManager);
   const fullscreenButton = new FullscreenButton(app, document.documentElement);
   const preferencesPanel = new PreferencesPanel(app, preferences);
   const hintText = new HintText(app);
-  const timeline = new Timeline(app);
+  const timeline = new Timeline(app, artworks);
 
   // Interaction
   const canvas = rendererManager.renderer.domElement;

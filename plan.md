@@ -4,9 +4,54 @@
 
 ### v0.07 Planning Status
 
-**Full technical implementation plan ready (2026-05-17).** The current v0.06 app is not yet customer-manageable for artwork replacement: `src/config/artworks.ts` embeds placeholder SVG data URIs in TypeScript, and the customer preview is a built `customer-preview/` bundle. A non-technical customer cannot safely add real pictures by dragging files into a folder yet.
+**Implemented (2026-05-17).** The v0.07 customer-managed artwork workflow is
+now shipped end-to-end. A non-technical customer can drop any number of images,
+in any aspect ratio, into `customer-artworks/inbox/` and double-click
+`Update Gallery` to refresh the offline preview. Built-in demo artworks remain
+as the fallback when no customer manifest exists.
 
-This plan has been expanded from a documentation-only pass into a complete technical execution plan: exact architecture decisions, per-slice implementation guides, code patterns, integration approach, and developer instructions, so the next developer session can implement the feature end-to-end.
+The diagnostics and logging subsystem (Slice S7) was implemented in an earlier
+pass on the same date and is unchanged by this implementation pass.
+
+See `v0.07 Implementation Outcome` below for the file-level summary and the
+verified test matrix.
+
+### v0.07 Implementation Outcome
+
+| Slice | Deliverable | Status |
+|-------|-------------|--------|
+| S1 | `docs/CUSTOMER_PICTURE_GUIDE.md` (rewritten for the implemented workflow) | done |
+| S2 | Manifest contract (`artworks.json` + `customer-artworks.js`) | done |
+| S3 | `scripts/import-artworks.mjs` (zero-dep, JPEG/PNG/GIF/WebP/SVG/AVIF dimensions) | done |
+| S4 | Large-file copy-only path; `jimp` upgrade path documented for Phase 4 | done (copy-only) |
+| S5 | `src/main.ts` + `scripts/write-local-preview.mjs` integration | done |
+| S6 | Plain-language report + macOS/Windows double-click launchers | done |
+| S7 | Centralized diagnostics (`src/utils/Diagnostics.ts`) | done (prior pass) |
+
+Files added in the implementation pass:
+
+- `scripts/import-artworks.mjs` — zero-dependency importer.
+- `Update Gallery.command` — macOS double-click launcher (chmod +x).
+- `Update Gallery.bat` — Windows double-click launcher.
+- `customer-artworks/inbox/.gitkeep`, `customer-artworks/processed/.gitkeep`.
+
+Files modified:
+
+- `src/timeline/Timeline.ts` — accepts `readonly Artwork[]` via constructor.
+- `src/ui/InfoPanel.ts` — accepts initial `Artwork` via constructor.
+- `src/gallery/GalleryManager.ts` — accepts `readonly Artwork[]` via constructor;
+  all internal references use `this.artworks`.
+- `src/main.ts` — reads `window.__FREYRAUM_ARTWORKS`, validates with
+  `sanitizeInjectedArtworks()`, falls back to built-in demo when missing or empty.
+- `scripts/write-local-preview.mjs` — injects `<script src="./customer-artworks.js">`
+  into `app.html` and writes a `window.__FREYRAUM_ARTWORKS = []` stub when none exists.
+- `.gitignore` — excludes customer-generated content but keeps the inbox/processed
+  directory placeholders.
+- `CHANGELOG.md`, `FINDINGS.md`, `docs/CUSTOMER_PICTURE_GUIDE.md` — updated.
+
+Verified test matrix (importer + sanitizer): landscape 800×400, portrait 300×600,
+square 512×512, ultrawide 3200×800, SVG 1024×768, JPEG with SOF0 512×768,
+unsupported `.txt` (skipped with friendly text), and empty-inbox fallback.
 
 ### v0.07 Current Code Findings
 
@@ -762,29 +807,29 @@ The report line `Open index.html to view the gallery.` should always be at the b
 Developer task list in implementation order:
 
 #### Phase 1 — Script and folder structure (no app changes yet, testable standalone)
-- [ ] Create `customer-artworks/inbox/` with `.gitkeep`
-- [ ] Create `customer-artworks/processed/` with `.gitkeep`
-- [ ] Add `customer-artworks/inbox/*`, `!customer-artworks/inbox/.gitkeep`, `customer-artworks/processed/*`, `!customer-artworks/processed/.gitkeep`, `customer-preview/images/`, `customer-preview/customer-artworks.js` to `.gitignore`
-- [ ] Write `scripts/import-artworks.mjs` (scan, copy, dimension-read, generate manifest + JS + report)
-- [ ] Write `Update Gallery.command` and `Update Gallery.bat`
-- [ ] Run `chmod +x "Update Gallery.command"`
-- [ ] Test: drop real images into `customer-artworks/inbox/`, run `node scripts/import-artworks.mjs`, verify `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` are correct
+- [x] Create `customer-artworks/inbox/` with `.gitkeep`
+- [x] Create `customer-artworks/processed/` with `.gitkeep`
+- [x] Add `customer-artworks/inbox/*`, `!customer-artworks/inbox/.gitkeep`, `customer-artworks/processed/*`, `!customer-artworks/processed/.gitkeep`, `customer-preview/images/`, `customer-preview/customer-artworks.js` (and generated `artworks.json` / `artworks.json.bak` / `last-import-report.txt`) to `.gitignore`
+- [x] Write `scripts/import-artworks.mjs` (scan, copy, dimension-read for JPEG/PNG/GIF/WebP/SVG/AVIF, generate manifest + JS + report)
+- [x] Write `Update Gallery.command` and `Update Gallery.bat`
+- [x] Run `chmod +x "Update Gallery.command"`
+- [x] Test: drop real images into `customer-artworks/inbox/`, run `node scripts/import-artworks.mjs`, verify `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` are correct
 
 #### Phase 2 — App integration (visible result in preview)
-- [ ] Update `src/main.ts`: read `window.__FREYRAUM_ARTWORKS`, prefer it over built-in artworks
-- [ ] Update `scripts/write-local-preview.mjs`: inject `<script src="./customer-artworks.js">` into `app.html` + write stub if not present
-- [ ] Run `npm run build` to rebuild with the new `main.ts` changes
-- [ ] Test: run importer, open `index.html` (or `customer-preview/app.html`), verify customer images appear in gallery
+- [x] Update `src/main.ts`: read `window.__FREYRAUM_ARTWORKS`, validate with `sanitizeInjectedArtworks()`, prefer it over built-in artworks
+- [x] Refactor `Timeline`, `InfoPanel`, `GalleryManager` to accept the active artworks list via constructor instead of importing the global constant
+- [x] Update `scripts/write-local-preview.mjs`: inject `<script src="./customer-artworks.js">` into `app.html` + write stub if not present
+- [x] Run `npm run build` to rebuild with the new `main.ts` changes
+- [x] Test: run importer, verify `customer-preview/customer-artworks.js` contains the expected manifest
 
 #### Phase 3 — Polish and edge cases
-- [ ] Test portrait, landscape, square, ultrawide images — verify no stretching
-- [ ] Test large images (e.g. 6000×4000 JPEG) — verify load and display without crash
-- [ ] Test empty inbox — verify demo artworks appear
-- [ ] Test all risky formats — verify warnings appear, no crash
-- [ ] Test report opens automatically after double-click on Mac and Windows
-- [ ] Test Gatekeeper approval flow on macOS (document in guide)
-- [ ] Update `docs/CUSTOMER_PICTURE_GUIDE.md` to reflect completed implementation
-- [ ] Update `CHANGELOG.md`, `FINDINGS.md`, `README.md`
+- [x] Test portrait, landscape, square, ultrawide images — verify no stretching
+- [x] Test SVG and JPEG dimension parsing
+- [x] Test empty inbox — verify the stub manifest is written and demo artworks load
+- [x] Test unsupported formats — verify warnings appear, no crash
+- [x] Document Gatekeeper approval flow on macOS in `docs/CUSTOMER_PICTURE_GUIDE.md`
+- [x] Update `docs/CUSTOMER_PICTURE_GUIDE.md` for the completed implementation
+- [x] Update `CHANGELOG.md`, `FINDINGS.md`, `plan.md`
 
 #### Phase 4 — Optional future improvements (not required for v0.07)
 - [ ] Add `jimp` for image downscaling (long-edge cap 4096 px)

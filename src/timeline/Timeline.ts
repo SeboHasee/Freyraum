@@ -1,4 +1,4 @@
-import { artworks } from '../config/artworks';
+import type { Artwork } from '../config/artworks';
 
 /**
  * Timeline navigation strip.
@@ -19,7 +19,7 @@ export class Timeline {
   private currentIndex = 0;
   private onSelectCallback: ((index: number) => void) | null = null;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, artworks: readonly Artwork[]) {
     this.el = document.createElement('nav');
     this.el.className = 'timeline';
     this.el.setAttribute('aria-label', 'Werke der Ausstellung');
