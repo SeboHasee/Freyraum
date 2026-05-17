@@ -1,11 +1,16 @@
 /**
- * Structured artwork metadata model for v0.01.
+ * Structured artwork metadata model for v0.01 / v0.02.
  *
  * v0.01 keeps a local static data source as the canonical content store.
  * Required fields will map 1:1 to a future CMS schema. Optional CMS-only
  * fields (slug, locale, translations) are reserved for future passes and
  * intentionally not modeled here.
+ *
+ * v0.02 adds an optional `textureSet` for authored PBR maps. The procedural
+ * factory provides fallbacks whenever a slot in the texture set is missing.
  */
+
+import type { PaintingTextureSet } from '../materials/PaintingTextureSet';
 
 export interface ArtworkDimensions {
   /** Pixel width of the rendered artwork asset. */
@@ -37,6 +42,11 @@ export interface Artwork {
   credit: string;
   /** Tag list for future filtering / CMS taxonomies. */
   tags: readonly string[];
+  /**
+   * Optional authored PBR map set. Any missing role is filled by the
+   * procedural factory at runtime. Reserved for future scanned assets.
+   */
+  textureSet?: PaintingTextureSet;
 }
 
 interface EmbeddedArtworkOptions {

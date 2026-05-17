@@ -25,6 +25,9 @@ import { KeyboardNav } from './interaction/KeyboardNav';
 import { TouchInteraction } from './interaction/TouchInteraction';
 import { PreferencesStore } from './utils/preferences';
 import { isWebGLAvailable } from './utils/webgl';
+import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
+import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
+import { maybeProbeWebGPU } from './rendering/RenderBackend';
 
 async function main(): Promise<void> {
   const app = document.getElementById('app');
@@ -73,6 +76,7 @@ async function main(): Promise<void> {
   // Texture & lighting
   const textureManager = new TextureManager();
   textureManager.init(rendererManager.renderer);
+  textureManager.setAnisotropyDivisor(initialPreset.anisotropyDivisor);
 
   const lightingSetup = new LightingSetup(sceneManager.scene, initialPreset);
 
@@ -87,11 +91,20 @@ async function main(): Promise<void> {
     textureManager,
     sceneManager.camera
   );
+  galleryManager.applyPreset(initialPreset);
 
   await galleryManager.init();
 
   loadingOverlay.classList.add('is-hidden');
   window.setTimeout(() => loadingOverlay.remove(), 700);
+
+  // Frame budget + adaptive quality (v0.02)
+  const frameBudget = new FrameBudgetMonitor({ budgetMs: 16.7 });
+  const adaptiveQuality = new AdaptiveQualityController(preferences.current.quality);
+  galleryManager.setFrameBudgetMarker(() => frameBudget.markNavigation());
+
+  // Experimental WebGPU probe (opt-in, dynamic import, fire-and-forget).
+  void maybeProbeWebGPU();
 
   // UI
   const topbar = new Topbar(app);
@@ -114,7 +127,7 @@ async function main(): Promise<void> {
   const touchInteraction = new TouchInteraction(canvas, galleryManager);
 
   // Apply current preferences to all subsystems.
-  const applyPreferences = (): void => {
+  const applyPreferences = (manual: boolean): void => {
     const { reducedMotion, quality } = preferences.current;
     galleryManager.setReducedMotion(reducedMotion);
     lightingSetup.setAnimated(!reducedMotion);
@@ -124,9 +137,21 @@ async function main(): Promise<void> {
     postProcessing.applyPreset(preset);
     lightingSetup.applyPreset(preset);
     artworkMesh.applyPreset(preset);
+    galleryManager.applyPreset(preset);
+
+    frameBudget.markPresetChange();
+    if (manual) {
+      adaptiveQuality.notifyManualPreset(quality);
+    }
   };
-  applyPreferences();
-  const unsubscribePreferences = preferences.subscribe(applyPreferences);
+  applyPreferences(false);
+  let previousQuality = preferences.current.quality;
+  const unsubscribePreferences = preferences.subscribe(() => {
+    const next = preferences.current.quality;
+    const manual = next !== previousQuality;
+    previousQuality = next;
+    applyPreferences(manual);
+  });
 
   // Navigation callbacks
   const handleNavigate = (index: number): void => {
@@ -145,6 +170,13 @@ async function main(): Promise<void> {
   let rafId: number;
   const animate = (now: number): void => {
     rafId = requestAnimationFrame(animate);
+    const sample = frameBudget.sample(now);
+    const downgrade = adaptiveQuality.evaluate(sample, frameBudget);
+    if (downgrade && downgrade !== preferences.current.quality) {
+      // Adaptive downgrade: drive the preference store so listeners pick it up
+      // and the user sees the change in the PreferencesPanel.
+      preferences.setQuality(downgrade);
+    }
     lightingSetup.update(now);
     galleryManager.update();
     postProcessing.render();
@@ -172,6 +204,7 @@ async function main(): Promise<void> {
     artworkMesh.dispose();
     sidePanels.dispose();
     textureManager.dispose();
+    galleryManager.proceduralFactory.disposeAll();
     lightingSetup.dispose();
     postProcessing.dispose();
     sceneManager.dispose();

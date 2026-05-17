@@ -1,9 +1,21 @@
 import * as THREE from 'three';
+import type { PaintingMapRole, PaintingTextureSet, ResolvedPaintingTextures } from '../materials/PaintingTextureSet';
 
+/**
+ * Texture manager owns network-loaded textures and is solely responsible for
+ * disposing them. Material classes may reference these textures but must
+ * never dispose them.
+ *
+ * v0.02 adds:
+ * - `loadForRole(url, role)` — applies the correct colour space per role.
+ * - `preloadTextureSet(set, divisor)` — loads a full painting texture set.
+ * - per-preset anisotropy cap via `setAnisotropyDivisor(divisor)`.
+ */
 export class TextureManager {
   private readonly cache = new Map<string, THREE.Texture>();
   private readonly loader = new THREE.TextureLoader();
   private maxAnisotropy = 1;
+  private anisotropyDivisor = 1;
 
   constructor() {
     this.loader.setCrossOrigin('anonymous');
@@ -13,35 +25,77 @@ export class TextureManager {
     this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
   }
 
+  /** Updates the anisotropy cap. Affects only textures loaded after this call. */
+  setAnisotropyDivisor(divisor: number): void {
+    this.anisotropyDivisor = Math.max(1, divisor);
+  }
+
   async preload(urls: string[]): Promise<void> {
     await Promise.all(urls.map((url) => this.load(url)));
   }
 
+  /** Default loader: treats the texture as an sRGB albedo / preview image. */
   load(url: string): Promise<THREE.Texture> {
-    if (this.cache.has(url)) {
-      return Promise.resolve(this.cache.get(url)!);
+    return this.loadForRole(url, 'albedo');
+  }
+
+  /** Role-aware loader. Sets colour space and wrapping appropriate to the role. */
+  loadForRole(url: string, role: PaintingMapRole): Promise<THREE.Texture> {
+    const cacheKey = `${role}::${url}`;
+    if (this.cache.has(cacheKey)) {
+      return Promise.resolve(this.cache.get(cacheKey)!);
     }
 
     return new Promise((resolve) => {
       this.loader.load(
         url,
         (texture) => {
-          this.prepareTexture(texture);
-          this.cache.set(url, texture);
+          this.prepareTexture(texture, role);
+          this.cache.set(cacheKey, texture);
           resolve(texture);
         },
         undefined,
         () => {
           const fallback = this.createFallbackTexture(url);
-          this.cache.set(url, fallback);
+          this.cache.set(cacheKey, fallback);
           resolve(fallback);
         }
       );
     });
   }
 
+  /**
+   * Loads a {@link PaintingTextureSet}. Missing roles are returned as undefined
+   * so the caller (typically GalleryManager) can fall back to procedural maps.
+   */
+  async preloadTextureSet(set: PaintingTextureSet | undefined): Promise<Partial<ResolvedPaintingTextures>> {
+    if (!set) return {};
+
+    const roles: PaintingMapRole[] = [
+      'albedo',
+      'normal',
+      'detailNormal',
+      'height',
+      'roughness',
+      'specular',
+      'ao',
+    ];
+
+    const results: Partial<ResolvedPaintingTextures> = {};
+    await Promise.all(
+      roles.map(async (role) => {
+        const entry = set[role];
+        if (!entry) return;
+        const tex = await this.loadForRole(entry.url, role);
+        results[role] = tex;
+      })
+    );
+    return results;
+  }
+
+  /** Backwards-compatible getter — returns the default-role (`albedo`) cache entry. */
   get(url: string): THREE.Texture | undefined {
-    return this.cache.get(url);
+    return this.cache.get(`albedo::${url}`);
   }
 
   dispose(): void {
@@ -49,9 +103,21 @@ export class TextureManager {
     this.cache.clear();
   }
 
-  private prepareTexture(texture: THREE.Texture): void {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = this.maxAnisotropy;
+  private prepareTexture(texture: THREE.Texture, role: PaintingMapRole): void {
+    if (role === 'albedo') {
+      texture.colorSpace = THREE.SRGBColorSpace;
+    } else {
+      // All non-albedo maps carry linear data (normals, heights, masks).
+      texture.colorSpace = THREE.LinearSRGBColorSpace;
+    }
+
+    if (role === 'detailNormal') {
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+    }
+
+    const anisotropy = Math.max(1, Math.floor(this.maxAnisotropy / this.anisotropyDivisor));
+    texture.anisotropy = anisotropy;
     texture.needsUpdate = true;
   }
 
@@ -90,7 +156,7 @@ export class TextureManager {
     }
 
     const texture = new THREE.CanvasTexture(canvas);
-    this.prepareTexture(texture);
+    this.prepareTexture(texture, 'albedo');
     return texture;
   }
 

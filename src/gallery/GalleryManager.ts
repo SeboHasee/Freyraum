@@ -3,9 +3,13 @@ import { artworks } from '../config/artworks';
 import { ArtworkMesh } from './ArtworkMesh';
 import { SidePanels } from './SidePanels';
 import { TextureManager } from './TextureManager';
+import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory';
 import { clamp } from '../utils/math';
+import type { QualityPreset } from '../config/quality';
+import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/PaintingTextureSet';
 
 export type NavigationCallback = (index: number) => void;
+export type FrameBudgetMarker = () => void;
 
 const DEFAULT_CAMERA_Z = 7;
 const MAX_CAMERA_Z = 8.5;
@@ -13,14 +17,31 @@ const MIN_CAMERA_Z = 1.2;
 const MIN_VISIBLE_ARTWORK_FRACTION = 0.28;
 const PAN_SAFETY_FACTOR = 0.92;
 
+/** Roles that can be filled in by the procedural factory when no authored map exists. */
+const PROCEDURAL_ROLES: PaintingMapRole[] = [
+  'normal',
+  'detailNormal',
+  'height',
+  'roughness',
+  'specular',
+  'ao',
+];
+
 export class GalleryManager {
   private currentIndex = 0;
   private readonly artworkMesh: ArtworkMesh;
   private readonly sidePanels: SidePanels;
   private readonly textureManager: TextureManager;
+  private readonly procedural: ProceduralTextureFactory;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly raycaster = new THREE.Raycaster();
   private reducedMotion = false;
+  /** Latest active quality preset. Maintained via `applyPreset`. */
+  private currentPreset: QualityPreset | null = null;
+  /** Cancellation token for async artwork loads (audited guard). */
+  private artworkLoadToken = 0;
+  /** Optional callback used to mark navigation events for FrameBudgetMonitor. */
+  private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
 
   private targetX = 0;
   private targetY = 0;
@@ -37,18 +58,32 @@ export class GalleryManager {
     artworkMesh: ArtworkMesh,
     sidePanels: SidePanels,
     textureManager: TextureManager,
-    camera: THREE.PerspectiveCamera
+    camera: THREE.PerspectiveCamera,
+    procedural?: ProceduralTextureFactory
   ) {
     this.artworkMesh = artworkMesh;
     this.sidePanels = sidePanels;
     this.textureManager = textureManager;
     this.camera = camera;
+    this.procedural = procedural ?? new ProceduralTextureFactory();
+  }
+
+  /** Allows main.ts to call `frameBudget.markNavigation()` on every navigation. */
+  setFrameBudgetMarker(marker: FrameBudgetMarker | null): void {
+    this.frameBudgetNavigationMarker = marker;
+  }
+
+  /** Receives preset changes from the preference store. */
+  applyPreset(preset: QualityPreset): void {
+    this.currentPreset = preset;
+    this.textureManager.setAnisotropyDivisor(preset.anisotropyDivisor);
+    // ArtworkMesh.applyPreset is already called from main.ts; no re-fetch here.
   }
 
   async init(): Promise<void> {
     const urls = artworks.map((a) => a.image);
     await this.textureManager.preload(urls);
-    this.showArtwork(0);
+    await this.showArtwork(0);
   }
 
   addZoomDelta(delta: number): void {
@@ -77,22 +112,73 @@ export class GalleryManager {
     };
   }
 
-  private showArtwork(index: number): void {
+  /**
+   * Loads the painting texture set for the given artwork and applies it to
+   * the artwork mesh. Async + race-protected: rapid navigation cannot apply
+   * a stale map set (see audited Lifecycle Guardrails in plan.md).
+   */
+  private async showArtwork(index: number): Promise<void> {
     const artwork = artworks[index];
-    const texture = this.textureManager.get(artwork.image);
-    if (texture) {
-      this.artworkMesh.setTexture(texture);
-    }
+    const albedo = this.textureManager.get(artwork.image);
 
+    const token = ++this.artworkLoadToken;
+    const preset = this.currentPreset;
+
+    // Side previews use albedo only, even when authored sets exist.
     const prevIndex = (index - 1 + artworks.length) % artworks.length;
     const nextIndex = (index + 1) % artworks.length;
     const prevTexture = this.textureManager.get(artworks[prevIndex].image) ?? null;
     const nextTexture = this.textureManager.get(artworks[nextIndex].image) ?? null;
     this.sidePanels.updateTextures(prevTexture, nextTexture);
 
+    if (!albedo || !preset) {
+      // Albedo preload should have populated the cache; if not, give up.
+      return;
+    }
+
+    // Load any authored maps for this artwork in parallel.
+    const authored = await this.textureManager.preloadTextureSet(artwork.textureSet);
+
+    // Audited guard: discard stale loads.
+    if (token !== this.artworkLoadToken) return;
+
+    // Fill in missing roles from the procedural factory.
+    const resolved: ResolvedPaintingTextures = {
+      albedo: authored.albedo ?? albedo,
+    };
+    for (const role of PROCEDURAL_ROLES) {
+      if (authored[role]) {
+        resolved[role] = authored[role];
+      } else if (this.shouldFillRole(role, preset)) {
+        resolved[role] = this.procedural.generate(artwork.id, role);
+      }
+    }
+
+    this.artworkMesh.setPaintingTextures(resolved, preset);
+
     this.targetZoom = this.clampZoom(this.targetZoom);
     this.zoom = this.clampZoom(this.zoom);
     this.clampPanTargets();
+  }
+
+  /** Selects which procedural fallback roles to generate for the active preset. */
+  private shouldFillRole(role: PaintingMapRole, preset: QualityPreset): boolean {
+    switch (role) {
+      case 'normal':
+        return true;
+      case 'detailNormal':
+        return preset.detailNormalEnabled && preset.detailNormalStrength > 0;
+      case 'height':
+        return preset.bumpStrength > 0;
+      case 'roughness':
+        return preset.shaderVariant !== 'painting-battery';
+      case 'specular':
+        return preset.specularStrength > 0;
+      case 'ao':
+        return preset.aoEnabled;
+      default:
+        return false;
+    }
   }
 
   navigate(direction: 1 | -1): void {
@@ -109,7 +195,8 @@ export class GalleryManager {
     }
 
     this.currentIndex = newIndex;
-    this.showArtwork(newIndex);
+    void this.showArtwork(newIndex);
+    this.frameBudgetNavigationMarker?.();
 
     this.resetView();
     this.onNavigateCallback?.(this.currentIndex);
@@ -127,13 +214,15 @@ export class GalleryManager {
       this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
     }
 
-    this.showArtwork(index);
+    void this.showArtwork(index);
+    this.frameBudgetNavigationMarker?.();
     this.resetView();
     this.onNavigateCallback?.(this.currentIndex);
   }
 
   setReducedMotion(value: boolean): void {
     this.reducedMotion = value;
+    this.artworkMesh.material.setReducedMotion(value);
   }
 
   setHoverTarget(x: number, y: number): void {
@@ -151,6 +240,11 @@ export class GalleryManager {
 
   get artworkAspect(): number {
     return this.artworkMesh.artworkAspect;
+  }
+
+  /** Read-only accessor for the procedural factory (used in dispose). */
+  get proceduralFactory(): ProceduralTextureFactory {
+    return this.procedural;
   }
 
   handlePanelClick(event: MouseEvent, canvas: HTMLCanvasElement): void {
