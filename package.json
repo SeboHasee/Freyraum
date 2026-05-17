@@ -1,0 +1,29 @@
+{
+  "name": "freyraum",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --open app.html",
+    "build": "npm run build:typecheck && npm run build:preview && npm run build:preview-html",
+    "preview": "vite preview --outDir customer-preview --open app.html",
+    "lint": "eslint src --ext ts",
+    "format": "prettier --write src",
+    "build:typecheck": "tsc",
+    "build:preview": "vite build --config vite.local.config.ts",
+    "build:preview-html": "node scripts/write-local-preview.mjs"
+  },
+  "dependencies": {
+    "three": "^0.166.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.166.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "sass": "^1.75.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0"
+  }
+}

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="FREYRAUM — lokale Kundenvorschau" />
+  <meta http-equiv="refresh" content="0; url=./customer-preview/app.html" />
+  <title>freyraum — lokale Vorschau wird geöffnet</title>
+  <style>
+    :root {
+      --bg1: #eef1f3;
+      --bg2: #d8dee3;
+      --bg3: #bcc5cc;
+      --text: #12171b;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top, var(--bg1) 0%, var(--bg2) 45%, var(--bg3) 100%);
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }
+
+    main {
+      width: min(680px, 100%);
+      padding: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      border-radius: 32px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(24px);
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: clamp(2rem, 6vw, 4rem);
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+
+    p {
+      margin: 0 0 24px;
+      color: #20272d;
+      font-size: 1rem;
+      line-height: 1.8;
+      font-weight: 500;
+    }
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 52px;
+      padding: 0 22px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.88);
+      color: #151b20;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 14px 45px rgba(0, 0, 0, 0.08);
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 8px;
+      background: rgba(18, 23, 27, 0.08);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>freyraum</h1>
+    <p>
+      Die lokale Kundenvorschau wird geöffnet. Falls keine automatische Weiterleitung erfolgt,
+      klicken Sie auf den Button unten.
+    </p>
+    <p>
+      Hinweis: Diese Datei öffnet <code>customer-preview/app.html</code>, eine statisch gebaute Version,
+      die ohne lokalen Entwicklungsserver per Doppelklick funktioniert.
+    </p>
+    <a href="./customer-preview/app.html">FREYRAUM Vorschau öffnen →</a>
+  </main>
+</body>
+</html>
