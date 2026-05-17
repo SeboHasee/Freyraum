@@ -102,6 +102,8 @@ export class GalleryManager {
     this.onNavigateCallback?.(this.currentIndex);
   }
 
+  // x is horizontal mouse offset → drives rotation.y (yaw)
+  // y is vertical mouse offset  → drives rotation.x (pitch)
   setHoverTarget(x: number, y: number): void {
     this.targetY = x;
     this.targetX = y;
