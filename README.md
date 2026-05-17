@@ -54,7 +54,7 @@ Final scope (all shipped except where noted):
 
 ## v0.03 implementation
 
-v0.03 is **implemented** in this branch. See [`plan.md`](./plan.md#v003-implementation-outcome) for the as-built outcome (including issues found and fixed during implementation), [`CHANGELOG.md`](./CHANGELOG.md) for the full list of additions, and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-implementation-findings) for the technical notes.
+v0.03 is **implemented** in this branch. See [`plan.md`](./plan.md#v003-implementation-outcome) for the as-built outcome (including issues found and fixed during implementation), [`CHANGELOG.md`](./CHANGELOG.md) for the full list of additions, and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-implementation-findings) for the technical notes. A fresh-clone revalidation audit on 2026-05-17 reconfirmed that after `npm install`, both `npm run lint` and `npm run build` still pass for the shipped v0.03 branch.
 
 Shipped system direction:
 

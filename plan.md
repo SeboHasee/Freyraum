@@ -367,7 +367,8 @@ v0.03 is **implemented**. All nine slices below have been executed against the c
 
 - `npm run lint` — clean.
 - `npm run build` — clean. Bundle: `customer-preview/freyraum-gallery.js` ≈ 552 KB (gzip ≈ 141 KB), CSS ≈ 15.4 KB (gzip ≈ 3.4 KB). Bundle growth from v0.02 (~528 KB) is the parallax + self-shadow shader code and the new lighting/debug UI strings.
-- Built bundle contains all v0.03 shader gates: `PAINTING_USE_PARALLAX`, `PAINTING_USE_SELFSHADOW`, `PAINTING_DEBUG_ALBEDO_ONLY`, `uKeyLightDir`. Counted 11 occurrences in the production bundle.
+- Fresh-clone revalidation (2026-05-17): before `npm install`, `npm run lint` failed with `eslint: not found` and `npm run build` failed because required packages like `three` were missing from `node_modules`; after `npm install`, both commands passed. Non-blocking warnings observed: the existing `@typescript-eslint` TypeScript-version warning and the current Dart Sass legacy JS API deprecation warning during `vite build`.
+- Built bundle contains all v0.03 shader gates: `PAINTING_USE_PARALLAX`, `PAINTING_USE_SELFSHADOW`, `PAINTING_DEBUG_ALBEDO_ONLY`, `uKeyLightDir`. Counted 12 occurrences in the production bundle during the fresh-clone revalidation audit.
 
 **Issues found in the original plan and the fixes applied**
 

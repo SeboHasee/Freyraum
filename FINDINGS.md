@@ -1,5 +1,13 @@
 # FINDINGS
 
+## 2026-05-17 - v0.03 fresh-clone revalidation audit
+
+- In a fresh checkout, `npm run lint` initially failed with `eslint: not found` because dependencies were not yet installed.
+- In the same fresh checkout, `npm run build` initially failed before `npm install` because required packages such as `three` were missing from `node_modules`.
+- After `npm install`, `npm run lint` passed successfully. The only output was the already-known `@typescript-eslint` warning that the current TypeScript version (`5.9.3`) is outside the parser's officially supported range; this is non-blocking.
+- After `npm install`, `npm run build` passed successfully and regenerated the preview bundle. The build emitted the current non-blocking Dart Sass legacy JS API deprecation warning.
+- Re-checking the generated bundle showed the v0.03 shader gates and uniforms (`PAINTING_USE_PARALLAX`, `PAINTING_USE_SELFSHADOW`, `PAINTING_DEBUG_ALBEDO_ONLY`, `uKeyLightDir`) now appear **12** times in `customer-preview/freyraum-gallery.js`. Earlier documentation that said 11 was stale and has been corrected.
+
 ## 2026-05-17 - v0.03 implementation findings
 
 - **`geometryLightDirection` is not a Three.js built-in.** The v0.03 plan referenced this identifier inside Slice 5, presumably borrowed from a different engine. Three.js' fragment-shader chunks expose `vViewPosition`, `vNormal`, `vTangent`, and `vBitangent` (the latter two only when `USE_TANGENT` is defined, which happens automatically when the geometry has a tangent attribute *and* the material uses a normal map). For directional information the only correct path is to push a uniform from CPU side. The implementation now uses `uKeyLightDir` in **view space**, transformed each frame in `main.ts` via `worldDir.transformDirection(camera.matrixWorldInverse)` so it matches the space of `vTangent`/`vBitangent`/`vNormal`. Math-space contract is documented at the top of `PaintingMaterial.ts`.

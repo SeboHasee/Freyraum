@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added (v0.03 validation audit)
+
+- Re-ran a fresh-clone validation audit for the implemented v0.03 work. Documented that `npm run lint` and `npm run build` initially fail until `npm install` is run in a fresh checkout, then both commands pass cleanly aside from the already-known `@typescript-eslint` TypeScript-version warning and the current Dart Sass legacy JS API deprecation warning.
+- Corrected the `plan.md` validation note that counted built-bundle shader-gate occurrences: the current production bundle contains **12** occurrences of `PAINTING_USE_PARALLAX`, `PAINTING_USE_SELFSHADOW`, `PAINTING_DEBUG_ALBEDO_ONLY`, and `uKeyLightDir`, not 11.
+- Synced `README.md`, `FINDINGS.md`, and `docs/HANDOFF.md` with the fresh-clone audit so reviewer guidance now reflects the latest revalidation pass.
+
 ### Added (v0.03 implementation)
 
 - **Matte-first painting material.** `PaintingMaterial` retuned for museum-quality default: `clearcoat 0.04→0.0`, `specularIntensity 1.0→0.3`, `uLightGrazingBoost 0.6→0.25`. Procedural roughness output range shifted from `[60..220]` to `[140..240]`; procedural specular baseline lowered from `12→6` and Gaussian blob peak lowered from `200→90` so varnish patches read as subtle highlights instead of dominant specular reflections.

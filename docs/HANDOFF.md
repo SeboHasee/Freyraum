@@ -115,6 +115,8 @@ Validation evidence:
 6. edge and corner pan reach,
 7. `npm run lint` clean, `npm run build` clean (`customer-preview/freyraum-gallery.js` ≈ 552 KB / 141 KB gzip).
 
+Fresh-clone audit note: in a brand-new checkout you must run `npm install` before the validation commands. The latest revalidation pass confirmed that after dependency installation both commands succeed; the current non-blocking outputs are the known `@typescript-eslint` TypeScript-version warning during lint and the Dart Sass legacy JS API deprecation warning during build.
+
 ## v0.02 shader, lighting, and WebGPU review guide
 
 v0.02 is **implemented** in this branch. Future reviewers should evaluate two independent lanes:
