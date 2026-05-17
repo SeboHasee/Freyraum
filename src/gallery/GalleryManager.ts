@@ -13,9 +13,10 @@ export type NavigationCallback = (index: number) => void;
 export type FrameBudgetMarker = () => void;
 
 const DEFAULT_CAMERA_Z = 7;
-const MAX_CAMERA_Z = 8.5;
+const MAX_CAMERA_Z = 9.25;
 const MIN_CAMERA_Z = 1.2;
 const MIN_VISIBLE_ARTWORK_FRACTION = 0.28;
+const RESET_VIEW_FRAME_MARGIN = 1.04;
 /**
  * v0.03: replaces `PAN_SAFETY_FACTOR = 0.92`. Allows the viewport centre to
  * reach the artwork edge plus a small overscroll margin so every corner is
@@ -72,6 +73,7 @@ export class GalleryManager {
    * stale-texture risk during rapid profile toggles.
    */
   private inspectionMode = false;
+  private pendingResetAfterArtworkLoad = false;
   /** Optional callback used to mark navigation events for FrameBudgetMonitor. */
   private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
 
@@ -120,6 +122,8 @@ export class GalleryManager {
       anisotropy: this.textureManager.getEffectiveAnisotropy(),
       proceduralTileSize: preset.proceduralTileSize,
       proceduralInspectionTileSize: preset.proceduralInspectionTileSize,
+      specularStrength: preset.specularStrength,
+      selfShadowBias: preset.selfShadowBias,
     });
     // Rebuild the current artwork's map set so preset-specific roles
     // (detailNormal, height, roughness, specular, AO) are added/removed
@@ -159,6 +163,7 @@ export class GalleryManager {
     const urls = this.artworks.map((a) => a.webglImage ?? a.image);
     await this.textureManager.preload(urls);
     this.diagnostics.info('init', 'Preload complete — showing first artwork', { artworkCount: urls.length });
+    this.pendingResetAfterArtworkLoad = true;
     await this.showArtwork(0);
   }
 
@@ -317,10 +322,20 @@ export class GalleryManager {
       paintingWidth: this.artworkMesh.artworkWidth,
       paintingHeight: this.artworkMesh.artworkHeight,
       paintingAspect: this.artworkMesh.artworkAspect,
+      resetZoom: this.getResetZoom(),
+      minZoom: this.getMinZoom(),
+      maxZoom: MAX_CAMERA_Z,
+      specularStrength: preset.specularStrength,
+      selfShadowBias: preset.selfShadowBias,
     });
 
-    this.targetZoom = this.clampZoom(this.targetZoom);
-    this.zoom = this.clampZoom(this.zoom);
+    if (this.pendingResetAfterArtworkLoad) {
+      this.pendingResetAfterArtworkLoad = false;
+      this.resetView();
+    } else {
+      this.targetZoom = this.clampZoom(this.targetZoom);
+      this.zoom = this.clampZoom(this.zoom);
+    }
     this.clampPanTargets();
   }
 
@@ -367,6 +382,7 @@ export class GalleryManager {
     }
 
     this.currentIndex = newIndex;
+    this.pendingResetAfterArtworkLoad = true;
     void this.showArtwork(newIndex);
     this.frameBudgetNavigationMarker?.();
 
@@ -388,6 +404,7 @@ export class GalleryManager {
     });
 
     this.currentIndex = index;
+    this.pendingResetAfterArtworkLoad = true;
 
     if (!this.reducedMotion) {
       this.artworkMesh.group.position.x = (diff > 0 ? 1 : -1) * 3.2;
@@ -473,7 +490,7 @@ export class GalleryManager {
   resetView(): void {
     this.targetPanX = 0;
     this.targetPanY = 0;
-    this.targetZoom = this.clampZoom(DEFAULT_CAMERA_Z);
+    this.targetZoom = this.getResetZoom();
     this.targetX = 0;
     this.targetY = 0;
   }
@@ -510,5 +527,15 @@ export class GalleryManager {
       (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)));
 
     return clamp(Math.max(MIN_CAMERA_Z, fittedDistance), MIN_CAMERA_Z, DEFAULT_CAMERA_Z);
+  }
+
+  private getResetZoom(): number {
+    const frameWidth = this.artworkMesh.artworkWidth + 0.4;
+    const frameHeight = this.artworkMesh.artworkHeight + 0.4;
+    const requiredVisibleHeight = Math.max(frameHeight, frameWidth / this.camera.aspect) * RESET_VIEW_FRAME_MARGIN;
+    const fittedDistance = requiredVisibleHeight /
+      (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)));
+
+    return clamp(Math.max(DEFAULT_CAMERA_Z, fittedDistance), MIN_CAMERA_Z, MAX_CAMERA_Z);
   }
 }

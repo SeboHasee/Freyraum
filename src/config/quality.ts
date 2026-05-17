@@ -119,7 +119,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.03: parallax handles depth on high; bump is disabled to prevent
     // double-stacking relief amplitude (single source of truth per preset).
     bumpStrength: 0.0,
-    specularStrength: 0.4,
+    specularStrength: 0.28,
     anisotropyDivisor: 1,
     aoEnabled: true,
     grazingBoostEnabled: true,
@@ -135,7 +135,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // max-occlusion cap, and display-profile scale, this reads as surface
     // texture rather than a stain on gallery-soft / museum-neutral profiles.
     selfShadowStrength: 0.3,
-    selfShadowBias: 0.03,
+    selfShadowBias: 0.05,
     selfShadowSoftness: 0.1,
     selfShadowMaxOcclusion: 0.28,
     // v0.06: lateral PCF radius. 0 on gallery-style profiles (single ray);
