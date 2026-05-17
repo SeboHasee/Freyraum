@@ -20,9 +20,9 @@ const html = `<!DOCTYPE html>
 `;
 
 const bundlePath = 'customer-preview/freyraum-gallery.js';
-const secureRandom = `function freyraumSecureRandom(){const cryptoApi=globalThis.crypto;if(cryptoApi&&cryptoApi.getRandomValues){const values=new Uint32Array(1);cryptoApi.getRandomValues(values);return values[0]/4294967296}const now=Date.now();const perf=globalThis.performance&&globalThis.performance.now?globalThis.performance.now():0;return (Math.sin(now+perf)*10000)%1}\n`;
+const secureRandom = `function freyraumPseudoRandom(){const cryptoApi=globalThis.crypto;if(cryptoApi&&cryptoApi.getRandomValues){const values=new Uint32Array(1);cryptoApi.getRandomValues(values);return values[0]/4294967296}const now=Date.now();const perf=globalThis.performance&&globalThis.performance.now?globalThis.performance.now():0;return (Math.sin(now+perf)*10000)%1}\n`;
 const bundle = readFileSync(bundlePath, 'utf8')
-  .replaceAll('Math.random()', 'freyraumSecureRandom()');
+  .replaceAll('Math.random()', 'freyraumPseudoRandom()');
 
 writeFileSync(bundlePath, secureRandom + bundle);
 writeFileSync('customer-preview/app.html', html);

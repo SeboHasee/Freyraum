@@ -44,6 +44,6 @@
 
 - `npm run build` generates `customer-preview/freyraum-gallery.js`, `customer-preview/style.css`, and `customer-preview/app.html`.
 - `customer-preview/app.html` uses a classic script tag and relative paths, so it is safe for local `file://` opening.
-- The build pipeline is split into `build:typecheck`, `build:preview`, and `build:preview-html` for easier debugging.
+- The build pipeline is split into `build:typecheck`, `build:preview`, and `build:preview-html` for easier debugging. The main `npm run build` chain intentionally uses `&&`, so `build:preview-html` only runs after type checking and preview bundling succeed.
 - A headless Chromium smoke test against `file:///home/runner/work/Freyraum/Freyraum/customer-preview/app.html` produced a non-blank screenshot at `/tmp/freyraum-local-preview-offline.png`.
 - `npm run lint` passes; it only prints a known TypeScript parser support warning from the current dependency versions.
