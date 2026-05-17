@@ -1680,6 +1680,320 @@ These are designed into the current plan but not required for v0.05:
 - StackOverflow — soft shadows for parallax occlusion shaders: https://stackoverflow.com/questions/37067278/soft-shadow-for-parallax-occlusion-shader
 
 
+## v0.06 Plan — Streifenlicht Blockiness Reduction for Procedural Relief and Self-Shadow
+
+### v0.06 Planning Status
+
+**Planned (2026-05-17).** This pass addresses the new artifact visible under the `Streifenlicht` / `raking-inspection` profile at sharp viewing angles: blocky relief shading, mip-stepped texture detail, and hard-edged self-shadow transitions. The intent is to keep the dramatic inspection mode useful while removing visibly synthetic square/block artefacts.
+
+This is a planning-only section. No code has shipped yet for v0.06.
+
+---
+
+### v0.06 Problem Diagnosis (code-level)
+
+**Symptom:** under `raking-inspection` and sharp camera angles, the painting surface shows visibly blocky texture detail and shadow transitions. The issue reads like low shadow-map resolution or bad mip bias, but in the current codebase the main contributors are the painting support textures and the shader's self-shadow path.
+
+**Primary code-level causes**
+
+1. **Procedural textures currently lack anisotropic filtering**
+   - `src/gallery/TextureManager.ts` applies anisotropy to loaded/authored textures.
+   - `src/materials/ProceduralTextureFactory.ts` sets mipmaps and linear filters on `DataTexture`, but does **not** set `anisotropy`.
+   - Result: under steep view angles, procedurally generated `normal`, `detailNormal`, and `height` maps alias and collapse into coarse mip levels sooner than authored textures.
+
+2. **The optional self-shadow smoothing hook exists but is disabled**
+   - `src/config/quality.ts` already exposes `selfShadowFilterRadius`.
+   - High preset keeps it at `0.0`, so the current path remains single-ray.
+   - Result: raking-light self-shadow still reveals texel/march stepping on hard relief transitions.
+
+3. **High preset procedural support-map resolution is still inspection-limited**
+   - `proceduralTileSize` is `1024` on `high`.
+   - That is acceptable for gallery display, but under extreme relief inspection the height/normal maps can become visibly coarse.
+
+4. **The artifact is mostly internal painting shading, not only scene shadowing**
+   - The visible blockiness comes from `bumpMap` / procedural support-map sampling and the height-field self-shadow march in `PaintingMaterial.ts`.
+   - Increasing ordinary light shadow-map resolution alone will not fully solve the issue.
+
+---
+
+### v0.06 Goals
+
+- Reduce blocky relief shading under `raking-inspection` / `Streifenlicht`.
+- Preserve the softer gallery-display appearance introduced in v0.05.
+- Improve sharp-angle filtering for procedural texture maps without changing authored image content.
+- Keep the fix scoped to the inspection/high-quality path where the artifact is visible.
+- Reuse existing v0.05 hooks where possible instead of introducing a second shadow system.
+- Keep the offline `file://` preview workflow unchanged.
+
+### v0.06 Non-Goals
+
+- No full replacement of the painting material.
+- No global blur of artwork albedo.
+- No new third-party dependencies.
+- No WebGPU-only implementation.
+- No change to balanced/battery preset shader cost unless strictly necessary.
+- No claim that this replaces authored scanned relief data as the long-term best-quality path.
+
+---
+
+### v0.06 Technical Direction
+
+#### A — Bring procedural textures to parity with authored textures for angular filtering
+
+Extend the procedural texture pipeline so generated `DataTexture` maps can receive the same renderer-derived anisotropy budget as authored textures. This should be treated as the first fix because it attacks the most likely source of sharp-angle mip stepping without changing shadow math.
+
+Design constraints:
+
+- anisotropy must be derived from `renderer.capabilities.getMaxAnisotropy()`
+- the existing quality-preset divisor model should still control the cap
+- procedural texture ownership remains in `ProceduralTextureFactory`
+
+#### B — Add an inspection-only higher-resolution support-map path
+
+Keep gallery/default behaviour conservative, but allow `raking-inspection` on the high preset to request a larger effective tile size for geometry-carrying procedural maps:
+
+- `normal`
+- `detailNormal`
+- `height`
+
+Roughness/specular/AO do not need the same uplift because they are not the main source of the visible block stepping.
+
+#### C — Activate the reserved self-shadow filter path only where it helps
+
+Use the existing `selfShadowFilterRadius` extension slot from v0.05, but scope it narrowly:
+
+- enabled only for `high`
+- enabled only for inspection intent
+- kept off for gallery-display profiles by default
+
+This keeps the gallery path crisp and cheap while smoothing the remaining lateral stepping under `Streifenlicht`.
+
+#### D — Separate “inspection enhancement” from “default presentation”
+
+The fix must respect the v0.03/v0.05 lighting intent split:
+
+- gallery / display = flattering, stable, non-distracting
+- inspection / raking = more revealing, but still believable
+
+Any added resolution/filtering knobs should therefore be profile-aware rather than globally stronger.
+
+---
+
+### v0.06 Proposed Modules / Files
+
+- `src/materials/ProceduralTextureFactory.ts`
+  - procedural texture sampling quality
+  - anisotropy application for generated `DataTexture`
+  - optional higher effective size for inspection-sensitive roles
+- `src/gallery/GalleryManager.ts`
+  - wiring of inspection-aware effective procedural resolution
+- `src/config/quality.ts`
+  - preset fields for inspection-only filtering/resolution controls
+- `src/materials/PaintingMaterial.ts`
+  - activation of optional self-shadow lateral filtering
+  - inspection-only smoothing path
+- `src/main.ts`
+  - profile-aware toggles / scale handoff if required
+
+---
+
+### v0.06 Vertical Slices
+
+#### Slice S1 — Documentation and baseline capture
+
+- Record this issue and the intended fix strategy in `plan.md`.
+- Preserve the v0.05 diagnosis as historical context; v0.06 specifically targets the remaining sharp-angle / mip / blockiness issue.
+- Capture screenshot references for:
+  - `gallery-soft`
+  - `raking-inspection`
+  - sharp-angle close-up
+
+**Acceptance for S1:**
+- Plan clearly distinguishes display-mode behaviour from inspection-mode behaviour.
+- Plan identifies whether each proposed fix targets texture filtering, resolution, or self-shadow.
+
+---
+
+#### Slice S2 — Procedural texture anisotropy support
+
+**Files:** `src/materials/ProceduralTextureFactory.ts`, `src/gallery/GalleryManager.ts` or another renderer-owned wiring surface
+
+Implementation direction:
+
+- add a way for the procedural factory to learn the renderer anisotropy cap
+- apply preset-scaled anisotropy to generated textures in the same spirit as `TextureManager`
+- reapply the value to cached procedural textures when the preset changes
+
+Why this slice is first:
+
+- it is the highest-return quality fix
+- it improves sharp-angle filtering without changing the shading look
+- it reduces the chance that later shadow tuning is compensating for a sampler problem
+
+**Acceptance for S2:**
+- Procedural `DataTexture` maps have non-zero anisotropy on capable GPUs.
+- Switching presets updates the cap consistently for authored and procedural textures.
+- `npm run lint` passes.
+- `npm run build` passes.
+
+---
+
+#### Slice S3 — Inspection-only support-map resolution uplift
+
+**Files:** `src/config/quality.ts`, `src/gallery/GalleryManager.ts`, `src/materials/ProceduralTextureFactory.ts`
+
+Implementation direction:
+
+- add an inspection-only multiplier or explicit tile-size override for procedural relief maps
+- apply it only to geometry-carrying roles (`normal`, `detailNormal`, `height`)
+- keep the cache key resolution-aware so switching modes never returns stale low-resolution textures
+
+Suggested starting range:
+
+- high display: keep `1024`
+- high inspection: test `2048` effective size
+- balanced/battery: unchanged
+
+**Acceptance for S3:**
+- `raking-inspection` visibly reduces blockiness on relief detail.
+- Gallery display quality and load time remain effectively unchanged.
+- Cache invalidation remains correct when switching lighting/profile states.
+
+---
+
+#### Slice S4 — Enable the reserved self-shadow filter for inspection
+
+**Files:** `src/config/quality.ts`, `src/materials/PaintingMaterial.ts`, `src/main.ts`
+
+Implementation direction:
+
+- use the reserved `selfShadowFilterRadius` hook from v0.05
+- enable it only when the active profile has inspection intent
+- keep the default display path on the current cheaper single-ray route
+- slightly retune inspection-only bias / softness if the higher-resolution maps expose new marching edges
+
+Target outcome:
+
+- preserve tactile raking-light readability
+- remove remaining hard-edged march stepping
+- avoid softening gallery profiles
+
+**Acceptance for S4:**
+- `raking-inspection` shadow transitions look smoother at sharp angles.
+- `gallery-soft` remains free from new blur or over-darkening.
+- GPU cost stays within the high-preset budget only.
+
+---
+
+#### Slice S5 — Validation, comparison, and documentation sync
+
+**Files:** `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `docs/HANDOFF.md`
+
+After implementation:
+
+1. Run `npm run lint`
+2. Run `npm run build`
+3. Compare before/after screenshots under `raking-inspection`
+4. Confirm that authored textures still behave correctly
+5. Record bundle-size and visual-quality observations
+
+**Acceptance for S5:**
+- All repo docs reflect the shipped v0.06 behaviour.
+- Findings clearly state whether anisotropy, resolution, or shadow filtering delivered the biggest win.
+
+---
+
+### v0.06 Acceptance Checks
+
+- [ ] Under `raking-inspection`, the painting no longer shows obvious blocky mip steps at sharp angles.
+- [ ] Procedural relief maps filter more smoothly under steep viewing angles.
+- [ ] Gallery-display profiles do not become blurrier or darker.
+- [ ] The fix is scoped to high/inspection where appropriate.
+- [ ] Cached procedural textures remain resolution-correct after preset/profile changes.
+- [ ] `npm run lint` passes.
+- [ ] `npm run build` passes and regenerates `customer-preview/`.
+- [ ] No new npm dependencies are added.
+
+---
+
+### v0.06 Performance Budget
+
+| Path | Expected change | Constraint |
+|------|-----------------|------------|
+| Procedural anisotropy | higher texture sampling quality | acceptable on current high preset |
+| Inspection relief maps 1024 → 2048 | higher GPU memory + generation cost | inspection/high only |
+| Optional shadow filter | more height-map reads | inspection/high only |
+| Balanced / battery | unchanged | no new heavy path by default |
+
+If the combined uplift is too expensive, prioritise in this order:
+
+1. procedural anisotropy
+2. inspection-only higher relief-map resolution
+3. inspection-only self-shadow filter
+
+---
+
+### v0.06 Accessibility / UX Impact
+
+- No new mandatory UI controls are required.
+- The default visitor-facing gallery presentation should remain unchanged.
+- The sharper, more technical inspection path remains opt-in via the existing lighting selection.
+- If mode switching causes a visible texture-resolution pop, consider a later fade/cross-blend pass; this is not required for v0.06.
+
+---
+
+### v0.06 Fallback Behaviour
+
+- If anisotropy support is low or unavailable on a device, procedural textures should continue using mipmaps + linear filtering with no functional break.
+- If higher inspection resolution is too expensive, keep display resolution and ship only anisotropy + filter activation.
+- If the shadow filter cost is too high, keep `selfShadowFilterRadius = 0` and ship only the texture-quality improvements.
+
+---
+
+### v0.06 Shader / Math-Space Assumptions
+
+- `bumpMap` remains the height source for the self-shadow march.
+- Height, normal, and detail-normal improvements should not change albedo colour space.
+- Any added filter radius remains in UV space and must stay resolution-aware when higher inspection tile sizes are used.
+- Profile-aware inspection tuning should continue using the existing light-profile/display-intent split rather than introducing a second lighting model.
+
+---
+
+### v0.06 Resource Ownership / Async Boundaries
+
+- `TextureManager` continues to own authored textures.
+- `ProceduralTextureFactory` continues to own generated textures and must remain solely responsible for disposing them.
+- Any new anisotropy/preset update API for procedural textures must not create duplicate cache entries for the same logical texture unless resolution actually changes.
+- Existing `artworkLoadToken` race protection in `GalleryManager` must remain the guard against stale async texture assignment.
+
+---
+
+### v0.06 Browser / API Stability Boundaries
+
+- Stay within existing Three.js / WebGL APIs already used by the project.
+- No dependency on WebGPU, compute passes, or browser-specific mip-bias extensions.
+- Keep the preview compatible with the committed single-bundle `file://` workflow.
+
+---
+
+### v0.06 Known Risks
+
+- Raising inspection resolution too aggressively can increase memory usage and generation stalls.
+- Strong anisotropy on large generated textures may expose repeating procedural patterns more clearly.
+- Inspection-only shadow filtering can hide true relief cues if softness and radius are overtuned.
+- Mixing profile-aware resolution changes with cached procedural textures can reintroduce stale-texture bugs if keys are not fully resolution-specific.
+
+---
+
+### v0.06 Recommended Execution Order
+
+1. Ship procedural anisotropy support.
+2. Re-evaluate the artifact under `raking-inspection`.
+3. Add inspection-only relief-map resolution uplift if blockiness remains.
+4. Enable inspection-only self-shadow filtering only if the remaining artefact is still shadow-step related.
+5. Document measured cost and final chosen scope.
+
+
 ## v0.03 Follow-up Plan — Technical Rendering System for Faithful Artworks, Modular Asset Swaps, Parallax Relief, and Free Inspection
 
 ### v0.03 Planning Status
