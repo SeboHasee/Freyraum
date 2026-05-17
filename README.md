@@ -54,22 +54,21 @@ Final scope (all shipped except where noted):
 
 ## v0.03 follow-up plan
 
-v0.03 is planned, not yet implemented. The plan is now more technical and implementation-oriented.
+v0.03 is **planned and finalized as a code-execution plan** — not yet implemented. Every slice has exact file targets, type additions, method signatures, constant values, and shader injection points documented in `plan.md`.
 
 Planned system direction:
 
 - keep the original artwork image as immutable albedo content;
-- make the artwork pipeline modular so future pictures can be swapped without code changes;
-- stop relying on the resolutions of the current sample artworks;
-- compute quality from authored map availability, surface profile, preset tier, and effective on-screen texel density;
-- retune the default surface toward rough matte canvas instead of glossy varnish;
-- use museum-style default lighting with artistic key/fill placement that still reveals detail;
-- add a high-end tangent-space parallax relief path with direct-light self-shadow approximation for inspection mode;
-- separate flattering display lighting from shallower raking inspection lighting;
-- preserve cheaper fallback paths for balanced and battery presets;
-- replace conservative close-up pan limits with explicit inspection bounds that allow edge/corner inspection.
+- add `SurfaceProfile` / `SurfacePhysics` types + `surfaceProfile?` / `surfacePhysics?` to `Artwork` so future picture swaps need metadata/assets only;
+- retune `PaintingMaterial` constructor defaults to matte-first (`clearcoat: 0`, `specularIntensity: 0.3`, `uLightGrazingBoost: 0.25`);
+- parametrise `ProceduralTextureFactory.generate()` with `tileSize` and drive it from a new `proceduralTileSize` preset field (1024 / 512 / 256 px per tier);
+- add tangent-space steep parallax UV offset injected before `map_fragment`, gated by `PAINTING_USE_PARALLAX` (`high` preset only);
+- add short direct-light self-shadow march modulating `directDiffuse`/`directSpecular`, gated by `PAINTING_USE_SELFSHADOW` (`high` preset only);
+- reposition `gallery-soft` key from `{x:-10,y:5,z:7}` (~68° from vertical) to `{x:-3,y:5,z:4}` (~45° from vertical) — museum-appropriate, asymmetric enough to show relief during pan/zoom;
+- reduce `raking-inspection` ambient to `0.3` and move key to near-horizontal `{x:-6,y:0,z:1.5}` for maximum surface-reveal contrast;
+- replace `PAN_SAFETY_FACTOR=0.92` with `INSPECTION_OVERSCROLL=0.5` so every artwork edge and corner is reachable at close zoom.
 
-See [`plan.md`](./plan.md#v003-follow-up-plan--technical-rendering-system-for-faithful-artworks-modular-asset-swaps-parallax-relief-and-free-inspection) and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-technical-rendering-and-lighting-follow-up-findings) for the full architecture and findings.
+See [`plan.md`](./plan.md#v003-follow-up-plan--technical-rendering-system-for-faithful-artworks-modular-asset-swaps-parallax-relief-and-free-inspection) and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-execution-plan-finalization) for the full execution plan, code-level observations, and findings.
 
 ## Developer workflow
 

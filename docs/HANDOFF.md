@@ -78,30 +78,41 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 
 ## v0.03 follow-up review focus
 
-v0.03 is currently a plan, not an implemented runtime change. The review focus is now more technical and should guide the next implementation pass after v0.02.
+v0.03 is now a **finalized execution plan** with exact code-change instructions. This section guides a reviewer checking the plan for completeness before implementation begins.
 
-Reviewers should verify that the plan covers:
+The execution plan covers 9 slices with file-level specificity:
 
-- **Picture fidelity:** the source artwork remains immutable albedo content; lighting/shading must not reinterpret the image.
-- **Modular asset swaps:** future artworks can be replaced by metadata/assets only, regardless of source resolution or aspect ratio.
-- **Resolution-independent quality:** support-map selection is driven by authored roles, preset tier, and effective texel density rather than assumptions about current sample files.
-- **Matte-first response:** default gallery mode should read as rough painted surface, not glossy varnish.
-- **Museum-style display lighting:** the default light should follow an artistic gallery composition (warm key + restrained fill, glare-aware placement) rather than a generic debug spotlight.
-- **Motion-visible detail:** the display light should still be positioned so relief cues remain visible while the user pans/zooms the artwork.
-- **Parallax relief:** the high/inspection path is explicitly planned as tangent-space parallax occlusion style UV offset, not vague "more bump".
-- **Self-shadowing:** direct light should show relief/self-shadow cues without darkening the artwork texture itself.
-- **Free inspection:** close-up pan bounds should allow direct edge/corner inspection.
+| Slice | Target files | Key change |
+|---|---|---|
+| 1 | `artworks.ts`, `quality.ts`, `PaintingMaterial.ts` | `SurfaceProfile` type, new quality preset fields, `uAlbedoOnly` debug uniform |
+| 2 | `PaintingMaterial.ts`, `ProceduralTextureFactory.ts`, `quality.ts` | `clearcoat→0`, `specularIntensity→0.3`, roughness range `[140..240]`, specular blob `→90` |
+| 3 | `ProceduralTextureFactory.ts`, `GalleryManager.ts` | `generate(id, role, tileSize)` + cache key + size propagation from preset |
+| 4 | `ArtworkMesh.ts`, `PaintingMaterial.ts` | `computeTangents()`, steep parallax march before `map_fragment`, `pUV` shadows `vMapUv` |
+| 5 | `PaintingMaterial.ts`, `LightingSetup.ts`, `main.ts` | Self-shadow horizon march, `uKeyLightDir` uniform, `getKeyLightWorldDir()` |
+| 6 | `LightProfile.ts`, `LightingSetup.ts` | `gallery-soft` key `{x:-3,y:5,z:4}` (~45°); `raking-inspection` key `{x:-6,y:0,z:1.5}`; `displayIntent` field |
+| 7 | `GalleryManager.ts` | `PAN_SAFETY_FACTOR` removed → `INSPECTION_OVERSCROLL=0.5` |
+| 8 | (post-impl tuning) | Step count tuning per GPU measurement |
+| 9 | All md files | Acceptance check sign-off |
 
-Acceptance for v0.03 should include:
+Reviewers should verify:
 
-1. albedo-only vs shaded comparison captures,
-2. matte-default captures,
-3. default gallery-light captures showing artistic but detail-visible lighting,
-4. inspection/raking-light captures,
-5. max-zoom relief captures,
-6. edge/corner inspection captures,
-7. validation notes for arbitrary aspect ratios and arbitrary source resolutions,
-8. preset-specific notes for high / balanced / battery fallback behaviour.
+- **No albedo mutation:** `uAlbedoOnly` debug mode output matches the raw artwork texture exactly.
+- **Museum-style lighting:** default gallery render looks flattering and warm, not like a debug render. Key is from upper-left at a moderate angle.
+- **Relief visible during movement:** panning or zooming the artwork should cause visible surface micro-detail response because the key is asymmetric.
+- **Inspection mode contrast:** `raking-inspection` profile should dramatically reveal brush ridges and canvas weave in ways the gallery-display profile does not.
+- **Full edge/corner reach:** at maximum zoom (`MIN_CAMERA_Z`), panning should allow the viewport center to reach every artwork edge.
+- **Preset isolation:** `parallaxEnabled`, `selfShadowEnabled` are false for `balanced` and `battery`; verify no parallax/shadow code runs in those modes.
+- **Cache isolation:** switching preset should generate new procedural maps at the new tile size, not reuse a stale 256 px high-quality map.
+
+Acceptance captures required:
+
+1. albedo-only vs shaded side-by-side,
+2. matte default gallery render,
+3. default gallery render during pan/zoom (relief cue visible),
+4. raking-inspection render (brush ridges visible),
+5. max-zoom relief quality (no blur from 256 px fallback),
+6. edge and corner pan reach,
+7. `npm run lint` and `npm run build` passing.
 
 ## v0.02 shader, lighting, and WebGPU review guide
 

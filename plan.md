@@ -359,7 +359,517 @@ This order starts with the data model and local assets because later UI, thumbna
 
 ### v0.03 Planning Status
 
-v0.03 is a follow-up implementation plan, not yet implemented. It responds to the latest rendering QA feedback and turns it into a concrete coding plan.
+v0.03 is **finalized as an execution plan** — all code-level changes, file locations, method signatures, type additions, and GLSL injection points are specified below in the `v0.03 Execution Plan — File-Level Code Changes` section. A developer can open any target file, locate the exact symbol, and apply the described change without having to interpret architectural intent.
+
+The plan was finalized after a full read of all 12 source files it touches. Every change is grounded in the actual current state of the codebase.
+
+### v0.03 Execution Plan — File-Level Code Changes
+
+This section specifies the exact code changes required for each vertical slice. References like "line N" point to the current state of the file at the time this plan was finalized. Always verify against the current file before editing.
+
+---
+
+#### Slice 1 — Surface contract and fidelity instrumentation
+
+**`src/config/artworks.ts`**
+
+Add before the `Artwork` interface:
+
+```typescript
+export type SurfaceProfile =
+  | 'matte-canvas'
+  | 'satin-canvas'
+  | 'varnished-oil'
+  | 'paper'
+  | 'procedural-fallback';
+
+export interface SurfacePhysics {
+  /** Multiplier on relief amplitude from all maps (normal/bump/height). 1.0 = default. */
+  reliefScale?: number;
+  /** Multiplier on parallax depth. 1.0 = default. */
+  parallaxDepthScale?: number;
+}
+```
+
+Add to the `Artwork` interface (both fields optional so existing artworks need no change):
+
+```typescript
+/** Surface character for material pipeline decisions. Defaults to 'matte-canvas'. */
+surfaceProfile?: SurfaceProfile;
+/** Optional physical-scale modifiers for relief and parallax depth. */
+surfacePhysics?: SurfacePhysics;
+```
+
+No changes to the `artworks` array — all existing items default to `matte-canvas` at runtime.
+
+---
+
+**`src/config/quality.ts`**
+
+Add the following fields to the `QualityPreset` interface (after existing v0.02 fields):
+
+```typescript
+/** Target pixel size for procedurally generated support maps (normal, height, roughness). */
+proceduralTileSize: number;
+/** Whether parallax occlusion UV offset is compiled into the fragment shader. */
+parallaxEnabled: boolean;
+/** Number of height-field march steps for parallax UV offset (high only). */
+parallaxSteps: number;
+/** Whether direct-light self-shadow approximation is compiled in (high only). */
+selfShadowEnabled: boolean;
+/** Number of height-field steps for the self-shadow horizon march (high only). */
+selfShadowSteps: number;
+```
+
+Assign values in `QUALITY_PRESETS`:
+
+```
+high:     proceduralTileSize: 1024, parallaxEnabled: true,  parallaxSteps: 12, selfShadowEnabled: true,  selfShadowSteps: 8
+balanced: proceduralTileSize: 512,  parallaxEnabled: false, parallaxSteps: 0,  selfShadowEnabled: false, selfShadowSteps: 0
+battery:  proceduralTileSize: 256,  parallaxEnabled: false, parallaxSteps: 0,  selfShadowEnabled: false, selfShadowSteps: 0
+```
+
+Also increase `bumpStrength` in `high` from `0.012` → `0.035` and `normalStrength` from `0.45` → `0.65`.
+
+---
+
+**`src/materials/PaintingMaterial.ts`**
+
+Add `uAlbedoOnly` to `PaintingUniforms`:
+
+```typescript
+uAlbedoOnly: { value: number }; // 0 = normal render, 1 = albedo-only debug strip
+```
+
+Initialise in `constructor` with `{ value: 0 }`.
+
+Add `PAINTING_DEBUG_ALBEDO_ONLY` define to the defines array when `this.albedoOnlyEnabled`.
+
+In the `onBeforeCompile` uniform block, add:
+
+```glsl
+uniform float uAlbedoOnly;
+```
+
+Inject before `lights_fragment_end`:
+
+```glsl
+#ifdef PAINTING_DEBUG_ALBEDO_ONLY
+  reflectedLight.directDiffuse  = vec3(0.0);
+  reflectedLight.directSpecular = vec3(0.0);
+  reflectedLight.indirectDiffuse  = diffuseColor.rgb;
+  reflectedLight.indirectSpecular = vec3(0.0);
+#endif
+```
+
+Add public method:
+
+```typescript
+setAlbedoOnly(enabled: boolean): void {
+  if (this.albedoOnlyEnabled === enabled) return;
+  this.albedoOnlyEnabled = enabled;
+  this.uAlbedoOnly.value = enabled ? 1 : 0;
+  this.needsUpdate = true;
+}
+```
+
+---
+
+#### Slice 2 — Matte-first material retune
+
+**`src/materials/PaintingMaterial.ts`**
+
+In the `super()` call in the constructor, change:
+
+- `clearcoat: 0.04` → `clearcoat: 0.0`
+- `specularIntensity: 1.0` → `specularIntensity: 0.3`
+
+In `paintingUniforms` initialisation, change:
+
+- `uLightGrazingBoost: { value: 0.6 }` → `uLightGrazingBoost: { value: 0.25 }`
+
+---
+
+**`src/materials/ProceduralTextureFactory.ts`**
+
+In `generateRoughness`: change output range from `[60..220]` to `[140..240]` to make the fallback surface feel matte rather than semi-glossy:
+
+```typescript
+// old: const r = this.clamp8(60 + combined * 160);
+const r = this.clamp8(140 + combined * 100);
+```
+
+In `generateSpecular`: lower the blob peak intensity from `200` to `90` and reduce the baseline from `12` to `6` so specular blobs are subtle rather than dominant:
+
+```typescript
+// Baseline
+data[i * 4 + 0] = 6; // was 12
+
+// Blob peak
+const blob = Math.exp(-distSq / (radius * radius)) * 90; // was 200
+```
+
+---
+
+**`src/config/quality.ts`**
+
+Also lower `specularStrength` in `high` preset from `0.55` → `0.4` so even the authored/procedural specular map contribution is more muted.
+
+---
+
+#### Slice 3 — Resolution-aware procedural fallback system
+
+**`src/materials/ProceduralTextureFactory.ts`**
+
+Change the `generate` signature to accept an optional `tileSize` parameter:
+
+```typescript
+generate(artworkId: string, role: PaintingMapRole, tileSize?: number): THREE.Texture
+```
+
+Change the cache key to incorporate tile size:
+
+```typescript
+const effectiveSize = tileSize ?? 256;
+const cacheKey = `${artworkId}::${role}::${effectiveSize}`;
+```
+
+Pass `effectiveSize` as the `size` parameter to all private generators. Each generator currently hard-codes its own size constant — refactor `generateNormal`, `generateHeight`, `generateRoughness`, `generateSpecular`, and `generateAO` to accept a `size: number` parameter instead of hard-coding `256` or `128`.
+
+For `normal` and `detailNormal`, the existing `generateNormal(seed, size, ...)` already takes a `size` argument, so only the call site needs to change from `256` to `effectiveSize`.
+
+For `height` (currently `size = 256` inside `generateHeight`), `roughness` (currently `size = 128`), and `specular` (currently `size = 128`): parametrise with `Math.max(64, Math.floor(effectiveSize / 2))` for roughness and specular (they need less resolution than the relief maps), and `effectiveSize` for height.
+
+---
+
+**`src/gallery/GalleryManager.ts`**
+
+In `showArtwork`, change the procedural fallback call:
+
+```typescript
+// old:
+resolved[role] = this.procedural.generate(artwork.id, role);
+
+// new:
+resolved[role] = this.procedural.generate(artwork.id, role, preset.proceduralTileSize);
+```
+
+---
+
+#### Slice 4 — High-preset parallax relief path
+
+**`src/gallery/ArtworkMesh.ts`**
+
+In `makeArtworkGeometry`, add tangent computation after the uv1 copy:
+
+```typescript
+geo.computeTangents(); // required for tangent-space parallax
+```
+
+This makes `tangent` available as an attribute in the vertex shader, which Three.js passes as `vTangent` (via its built-in tangent chunk) when the material has a `normalMap`.
+
+---
+
+**`src/materials/PaintingMaterial.ts`**
+
+Add to `PaintingUniforms`:
+
+```typescript
+uParallaxScale: { value: number }; // height offset multiplier, e.g. 0.04
+uParallaxSteps: { value: number }; // march iterations, e.g. 12
+```
+
+Initialise: `{ value: preset.parallaxEnabled ? 0.04 : 0.0 }`, `{ value: preset.parallaxSteps }`.
+
+Add `PAINTING_USE_PARALLAX` define when `this.parallaxActive()`.
+
+In `applyPreset`, add:
+
+```typescript
+this.paintingUniforms.uParallaxScale.value = preset.parallaxEnabled ? 0.04 : 0.0;
+this.paintingUniforms.uParallaxSteps.value = preset.parallaxSteps;
+const wantsParallax = preset.parallaxEnabled && !!this.bumpMap;
+```
+
+Include `wantsParallax` in `definesChanged` comparison.
+
+In the `onBeforeCompile` uniform block, add:
+
+```glsl
+uniform float uParallaxScale;
+uniform float uParallaxSteps;
+```
+
+Add a new injection token constant:
+
+```typescript
+const MAP_FRAGMENT_TOKEN = '#include <map_fragment>';
+```
+
+Inject before `map_fragment`:
+
+```glsl
+#ifdef PAINTING_USE_PARALLAX
+  // Steep parallax: march the height field in tangent space.
+  // vTangent and vBitangent are supplied by Three.js when computeTangents() is called.
+  vec3 tsViewDir = normalize(vec3(
+    dot(vViewPosition, vTangent.xyz),
+    dot(vViewPosition, vBitangent),
+    dot(vViewPosition, geometryNormal)
+  ));
+  vec2 pUV = vMapUv;
+  float stepSize    = 1.0 / uParallaxSteps;
+  float layerHeight = 0.0;
+  vec2  uvDelta     = (tsViewDir.xy / max(tsViewDir.z, 0.2)) * uParallaxScale / uParallaxSteps;
+  for (int i = 0; i < 16; i++) {
+    if (float(i) >= uParallaxSteps) break;
+    layerHeight += stepSize;
+    pUV -= uvDelta;
+    float h = texture2D(bumpMap, pUV).r;
+    if (h >= layerHeight) break;
+  }
+  pUV = clamp(pUV, 0.001, 0.999);
+#else
+  vec2 pUV = vMapUv;
+#endif
+```
+
+Replace the `map_fragment` chunk so the albedo sample reads from `pUV`:
+
+```glsl
+// Replace: #include <map_fragment>
+// With a copy of Three.js map_fragment that swaps vMapUv -> pUV:
+#ifdef USE_MAP
+  vec4 sampledDiffuseColor = texture2D( map, pUV );
+  #ifdef DECODE_VIDEO_TEXTURE
+    sampledDiffuseColor = vec4( mix( pow( sampledDiffuseColor.rgb * 0.9478672986 + vec3( 0.0521327014 ), vec3( 2.4 ) ), sampledDiffuseColor.rgb * 0.0773993808, vec3( lessThanEqual( sampledDiffuseColor.rgb, vec3( 0.04045 ) ) ) ), sampledDiffuseColor.w );
+  #endif
+  diffuseColor *= sampledDiffuseColor;
+#endif
+```
+
+Also update the `normal_fragment_maps` injection to use `pUV` instead of `vNormalMapUv` for the base normal sample.
+
+Height convention documented: `0.0 = deepest recess`, `1.0 = highest peak`. All procedural height maps must follow this convention. Authored maps must declare their convention in `PaintingTextureMapEntry`.
+
+---
+
+#### Slice 5 — Direct-light self-shadow approximation
+
+**`src/materials/PaintingMaterial.ts`**
+
+Add to `PaintingUniforms`:
+
+```typescript
+uShadowSteps:    { value: number }; // march iterations, e.g. 8
+uShadowStrength: { value: number }; // shadow darkening scalar, e.g. 0.55
+```
+
+Add `PAINTING_USE_SELFSHADOW` define when `preset.selfShadowEnabled && !!this.bumpMap`.
+
+In the `onBeforeCompile` uniform block, add:
+
+```glsl
+uniform float uShadowSteps;
+uniform float uShadowStrength;
+```
+
+Inject before `lights_fragment_end` (after the parallax block, before the grazing-boost block):
+
+```glsl
+#ifdef PAINTING_USE_SELFSHADOW
+  {
+    // Approximate direct-light self-shadow using the primary light direction.
+    // Light direction in tangent space from the first directional/spot light term.
+    // Note: Three.js accumulates lights; we use the geometric normal as a proxy
+    // for the light direction since the exact tangent-space L is not directly
+    // available after lights_fragment_end. A coarser but stable approximation:
+    // use the blinn-phong half-vector direction as the march direction.
+    vec3 tsLightDir = normalize(vec3(
+      dot(geometryLightDirection, vTangent.xyz),
+      dot(geometryLightDirection, vBitangent),
+      dot(geometryLightDirection, geometryNormal)
+    ));
+    vec2 shadowUV = pUV;
+    float shadowFactor = 1.0;
+    float shadowStep = 1.0 / uShadowSteps;
+    float currentLayerH = texture2D(bumpMap, shadowUV).r;
+    vec2 shadowDelta = tsLightDir.xy / max(tsLightDir.z, 0.2) * shadowStep * 0.035;
+    for (int i = 0; i < 8; i++) {
+      if (float(i) >= uShadowSteps) break;
+      shadowUV += shadowDelta;
+      shadowUV = clamp(shadowUV, 0.001, 0.999);
+      float h = texture2D(bumpMap, shadowUV).r;
+      if (h > currentLayerH + shadowStep * float(i + 1)) {
+        shadowFactor = 1.0 - uShadowStrength;
+        break;
+      }
+    }
+    reflectedLight.directDiffuse  *= shadowFactor;
+    reflectedLight.directSpecular *= shadowFactor;
+  }
+#endif
+```
+
+Note: `geometryLightDirection` is not a built-in Three.js variable. The correct implementation approach is to inject a uniform `uKeyLightDir` (a world-space direction vector set from `LightingSetup`) and transform it into tangent space in the shader. Add to `LightingSetup`:
+
+```typescript
+/** Exposes the primary key light direction as a uniform so PaintingMaterial can use it for self-shadow. */
+getKeyLightWorldDir(): THREE.Vector3 {
+  const primary = this.spots[0];
+  if (!primary) return new THREE.Vector3(0, 1, 0);
+  return primary.position.clone().negate().normalize();
+}
+```
+
+And add `uKeyLightDir: { value: THREE.Vector3 }` to `PaintingUniforms`, updated each frame from `LightingSetup.getKeyLightWorldDir()` in `main.ts`.
+
+---
+
+#### Slice 6 — Museum-style display lighting and inspection controls
+
+**`src/lighting/LightProfile.ts`**
+
+Add `displayIntent` to the `LightProfile` interface (informational, not used in rendering logic):
+
+```typescript
+/** Artistic intent of this profile, for documentation and UI labelling. */
+displayIntent?: 'gallery-display' | 'neutral-review' | 'relief-inspection' | 'dramatic-demo';
+```
+
+Update `gallery-soft` profile values:
+
+```typescript
+'gallery-soft': {
+  id: 'gallery-soft',
+  label: 'Galerie weich',
+  description: 'Museum-style warm key at ~45° from ceiling, slight upper-left offset. Flattering yet asymmetric enough to reveal surface detail during pan/zoom.',
+  displayIntent: 'gallery-display',
+  ambientIntensity: 1.5,
+  ambientKelvin: 4000,
+  keys: [
+    {
+      kelvin: 3200,
+      intensity: 165,
+      position: { x: -3, y: 5, z: 4 }, // ~45° from vertical, LEFT of artwork center
+      angle: 0.38,
+      penumbra: 0.85,
+      decay: 1.8,
+    },
+  ],
+  accent: {
+    kelvin: 4500,
+    intensity: 10,
+    position: { x: 3, y: 1, z: 5 }, // low right fill, glare-safe
+    decay: 2.0,
+  },
+  animateAllowed: true,
+},
+```
+
+Rationale for `gallery-soft` position change: the current key at `{ x: -10, y: 5, z: 7 }` is approximately **68° from vertical** (very dramatic, theatrical side-lighting). The new position `{ x: -3, y: 5, z: 4 }` is approximately **45° from vertical**, which is a practical compromise — flattering and gallery-like while still providing enough asymmetry to reveal relief detail when the viewer pans or zooms.
+
+Update `raking-inspection` for cleaner low-angle grazing:
+
+```typescript
+'raking-inspection': {
+  id: 'raking-inspection',
+  label: 'Streiflicht',
+  description: 'Near-horizontal raking light from the left. Reveals canvas weave, brush ridges, impasto relief, and self-shadow cues.',
+  displayIntent: 'relief-inspection',
+  ambientIntensity: 0.3,  // reduce fill so micro-shadows remain visible
+  ambientKelvin: 4000,
+  keys: [
+    {
+      kelvin: 3500,
+      intensity: 200,
+      position: { x: -6, y: 0, z: 1.5 }, // near-horizontal, almost parallel to painting
+      angle: 0.30,
+      penumbra: 0.45,
+      decay: 1.6,
+    },
+  ],
+  animateAllowed: false,
+},
+```
+
+Also add `displayIntent` to the other two profiles:
+
+- `museum-neutral`: `displayIntent: 'neutral-review'`
+- `dramatic-demo`: `displayIntent: 'dramatic-demo'`
+
+---
+
+**`src/lighting/LightingSetup.ts`**
+
+In `applyKeyLight`, explicitly set the SpotLight `target` position and add it to the scene so the aim is deterministic regardless of scene transforms:
+
+```typescript
+spot.target.position.set(0, 0, 0);
+if (!spot.target.parent) this.scene.add(spot.target);
+```
+
+This ensures all profiles aim at the artwork center (world origin).
+
+Add the public `getKeyLightWorldDir()` method described in Slice 5.
+
+---
+
+#### Slice 7 — Free edge/corner inspection camera
+
+**`src/gallery/GalleryManager.ts`**
+
+Replace the `PAN_SAFETY_FACTOR` constant and `getPanLimits` method:
+
+Remove:
+```typescript
+const PAN_SAFETY_FACTOR = 0.92;
+```
+
+Add:
+```typescript
+/** World-unit overscroll margin past artwork edge allowed in inspection mode. */
+const INSPECTION_OVERSCROLL = 0.5;
+```
+
+Replace `getPanLimits`:
+
+```typescript
+private getPanLimits(zoom: number): { x: number; y: number } {
+  const visibleHeight = 2 * this.clampZoom(zoom) * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+  const visibleWidth = visibleHeight * this.camera.aspect;
+
+  // Allow panning so every edge and corner is reachable at the current zoom.
+  // The viewport center must be able to reach the artwork edge + an explicit
+  // overscroll margin. This replaces the old PAN_SAFETY_FACTOR = 0.92.
+  return {
+    x: Math.max(0, (this.artworkMesh.artworkWidth  - visibleWidth)  * 0.5 + INSPECTION_OVERSCROLL),
+    y: Math.max(0, (this.artworkMesh.artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL),
+  };
+}
+```
+
+---
+
+#### Slice 8 — Preset/performance hardening
+
+After implementing Slices 4 and 5, measure frame time impact:
+
+- If `high` parallax with 12 steps exceeds the 16 ms budget on a mid-range discrete GPU, reduce `parallaxSteps` to 8.
+- If `high` self-shadow with 8 steps causes visible shimmer on high-frequency height tiles, reduce `uShadowSteps` to 4 and increase `uShadowStrength` slightly to compensate.
+- Ensure `balanced` and `battery` paths skip both defines completely.
+- Document final tuned values in `FINDINGS.md` with a tested GPU profile note.
+
+---
+
+#### Slice 9 — Documentation and validation handoff
+
+- Update all acceptance checks in `plan.md` from `[ ]` to `[x]` as slices are completed.
+- Add a validation note to `FINDINGS.md` covering: GPU tested, final sample counts, texture memory cost per preset, any visual regressions caught.
+- Run `npm run lint`, `npm run build`, and visually inspect the `customer-preview/app.html` output at high/balanced/battery presets.
+- Verify the `raking-inspection` profile shows brush ridges/self-shadow cues at close zoom.
+- Verify `gallery-soft` shows visible relief change during pan movement.
+- Verify no albedo colour change is visible in the albedo-only debug mode vs normal render.
 
 Required outcomes:
 

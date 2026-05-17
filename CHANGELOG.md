@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added (v0.03 plan finalized as execution plan)
+
+- Replaced the v0.03 "planning status" header in `plan.md` with a full implementation-ready execution plan. Every slice now has exact file locations, type additions, method signatures, constant changes, shader injection tokens, GLSL code blocks, and rationale for each decision. A developer can open any target file and apply changes directly without interpreting architectural intent.
+- The nine slices and their specific code targets:
+  - **Slice 1 — Surface contract + fidelity**: `SurfaceProfile` and `SurfacePhysics` types added to `artworks.ts`; `uAlbedoOnly` uniform + `setAlbedoOnly()` added to `PaintingMaterial`; new quality preset fields `proceduralTileSize`, `parallaxEnabled`, `parallaxSteps`, `selfShadowEnabled`, `selfShadowSteps`.
+  - **Slice 2 — Matte-first retune**: `clearcoat 0.04→0.0`, `specularIntensity 1.0→0.3`, `uLightGrazingBoost 0.6→0.25`; roughness procedural range shifted to `[140..240]`; specular blob peak `200→90`.
+  - **Slice 3 — Resolution-aware procedural**: `generate()` gains `tileSize?` parameter; cache key extended; generators parametrised; `GalleryManager` passes `preset.proceduralTileSize`.
+  - **Slice 4 — Parallax relief**: tangent computation added to `ArtworkMesh.makeArtworkGeometry`; steep parallax march injected before `map_fragment`; `pUV` variable shadows `vMapUv` for all map reads; gate: `PAINTING_USE_PARALLAX`.
+  - **Slice 5 — Self-shadow**: short height-march along tangent-space key-light direction; `uKeyLightDir` uniform updated from `LightingSetup.getKeyLightWorldDir()` each frame; modulates `directDiffuse`/`directSpecular` only; gate: `PAINTING_USE_SELFSHADOW`.
+  - **Slice 6 — Museum lighting**: `gallery-soft` key repositioned from `{x:-10,y:5,z:7}` (~68° from vertical) to `{x:-3,y:5,z:4}` (~45° from vertical, flattering + detail-revealing); `raking-inspection` key moved to near-horizontal `{x:-6,y:0,z:1.5}`; ambient reduced to 0.3; `displayIntent` field added to `LightProfile`; SpotLight target explicitly set to world origin.
+  - **Slice 7 — Free inspection camera**: `PAN_SAFETY_FACTOR=0.92` removed; `INSPECTION_OVERSCROLL=0.5` replaces it; `getPanLimits` now uses `artworkEdge + overscroll` so every corner is reachable.
+  - **Slice 8 — Performance hardening**: post-implementation tuning of parallax step counts and shadow step counts per preset.
+  - **Slice 9 — Documentation handoff**: acceptance check completion, FINDINGS update with GPU profile and texture memory cost.
+
 ### Added (v0.03 planning)
 
 - Expanded the v0.03 plan in `plan.md` into a more technical rendering architecture: modular artwork surface contracts, resolution-independent asset selection, preset-based shader tiers, museum-style display lighting, tangent-space parallax occlusion mapping strategy, direct-light self-shadow approximation, matte-first material retuning, and explicit module/file responsibilities.
