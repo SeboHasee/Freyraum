@@ -143,9 +143,19 @@ async function main(): Promise<void> {
   const customerArtworks = sanitizeInjectedArtworks(injected, diagnostics);
   const artworks: readonly Artwork[] =
     customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
+  const artworkManifest = artworks.map((a) => ({
+    id: a.id,
+    hasWebglImage: !!a.webglImage,
+    webglImageSource: a.webglImage ? 'embedded-data-url' : 'file-url',
+    dimensions: a.dimensions,
+    surfaceProfile: a.surfaceProfile ?? 'matte-canvas',
+  }));
   diagnostics.info('boot', 'artworks-source', 'Artwork source resolved', {
     source: customerArtworks && customerArtworks.length > 0 ? 'customer' : 'built-in',
     count: artworks.length,
+    artworks: artworkManifest,
+    withWebglImage: artworkManifest.filter((a) => a.hasWebglImage).length,
+    withoutWebglImage: artworkManifest.filter((a) => !a.hasWebglImage).length,
   });
 
   if (!isWebGLAvailable()) {

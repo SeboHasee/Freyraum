@@ -26,6 +26,14 @@ export interface DiagnosticsPublicApi {
   clear(): void;
   print(level?: DiagnosticLevel): void;
   snapshot(): DiagnosticsSnapshot;
+  /** Returns all entries as a formatted JSON string. Useful for copy-paste bug reports. */
+  exportJson(): string;
+  /**
+   * Prints a compact summary to the console: one line per scope+event, with
+   * counts and the last message. Useful for a quick orientation in a verbose
+   * session without scrolling through hundreds of individual entries.
+   */
+  summarize(): void;
 }
 
 declare global {
@@ -35,7 +43,7 @@ declare global {
 }
 
 const STORAGE_KEY = 'freyraum.diagnostics.mode';
-const MAX_ENTRIES = 300;
+const MAX_ENTRIES = 500;
 const DEDUPE_WINDOW_MS = 2_500;
 
 const LEVEL_RANK: Record<DiagnosticLevel, number> = {
@@ -202,6 +210,44 @@ class Diagnostics {
     }
   }
 
+  exportJson(): string {
+    return JSON.stringify(this.snapshot(), null, 2);
+  }
+
+  summarize(): void {
+    // Group by scope+event, track count, last message, and worst level.
+    type Summary = { count: number; level: DiagnosticLevel; lastMessage: string; lastMs: number };
+    const groups = new Map<string, Summary>();
+    for (const entry of this.entries) {
+      const key = `[${entry.scope}] ${entry.event}`;
+      const existing = groups.get(key);
+      if (existing) {
+        existing.count += entry.repeatCount;
+        existing.lastMessage = entry.message;
+        existing.lastMs = entry.relativeMs;
+        if (LEVEL_RANK[entry.level] > LEVEL_RANK[existing.level]) {
+          existing.level = entry.level;
+        }
+      } else {
+        groups.set(key, {
+          count: entry.repeatCount,
+          level: entry.level,
+          lastMessage: entry.message,
+          lastMs: entry.relativeMs,
+        });
+      }
+    }
+    console.group('[freyraum] Diagnostics summary');
+    for (const [key, s] of groups) {
+      const label = `${key} (×${s.count}, last +${s.lastMs}ms) — ${s.lastMessage}`;
+      if (s.level === 'error') console.error(label);
+      else if (s.level === 'warn') console.warn(label);
+      else if (s.level === 'info') console.info(label);
+      else console.debug(label);
+    }
+    console.groupEnd();
+  }
+
   private publicApi(): DiagnosticsPublicApi {
     return {
       getMode: () => this.getMode(),
@@ -210,6 +256,8 @@ class Diagnostics {
       clear: () => this.clear(),
       print: (level) => this.print(level),
       snapshot: () => this.snapshot(),
+      exportJson: () => this.exportJson(),
+      summarize: () => this.summarize(),
     };
   }
 
@@ -250,31 +298,25 @@ class Diagnostics {
   }
 
   private printEntry(entry: DiagnosticEntry): void {
-    const prefix = `[freyraum][${entry.scope}][${entry.level}] ${entry.message}`;
-    const payload: Record<string, unknown> = {
-      event: entry.event,
-      atMs: entry.relativeMs,
-    };
-    if (entry.repeatCount > 1) {
-      payload['repeats'] = entry.repeatCount;
-    }
-    if (entry.data !== undefined) {
-      payload['data'] = entry.data;
-    }
+    const prefix = `[freyraum][${entry.scope}][${entry.level}] +${entry.relativeMs}ms ${entry.message}`;
+    const meta: Record<string, unknown> = { event: entry.event };
+    if (entry.repeatCount > 1) meta['repeats'] = entry.repeatCount;
 
-    switch (entry.level) {
-      case 'debug':
-        console.debug(prefix, payload);
-        break;
-      case 'info':
-        console.info(prefix, payload);
-        break;
-      case 'warn':
-        console.warn(prefix, payload);
-        break;
-      case 'error':
-        console.error(prefix, payload);
-        break;
+    const hasData = entry.data !== undefined;
+    const logFn =
+      entry.level === 'error' ? console.error
+      : entry.level === 'warn' ? console.warn
+      : entry.level === 'info' ? console.info
+      : console.debug;
+
+    if (hasData) {
+      // Use a collapsed group so the message is visible at a glance but the
+      // full payload expands on demand. This keeps the console readable.
+      console.groupCollapsed(prefix, meta);
+      logFn('data:', entry.data);
+      console.groupEnd();
+    } else {
+      logFn(prefix, meta);
     }
   }
 }

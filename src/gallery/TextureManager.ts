@@ -73,6 +73,12 @@ export class TextureManager {
   }
 
   async preload(urls: string[]): Promise<void> {
+    this.diagnostics.info('preload', `Preloading ${urls.length} albedo texture(s)`, {
+      count: urls.length,
+      urlTypes: urls.map((u) =>
+        u.startsWith('data:') ? `data-uri:${u.slice(5, u.indexOf(';'))}` : u.startsWith('http') ? 'http' : 'local'
+      ),
+    });
     await Promise.all(urls.map((url) => this.load(url)));
   }
 
@@ -163,6 +169,11 @@ export class TextureManager {
       'varnish',
     ];
 
+    const rolesPresent = roles.filter((r) => !!set[r]);
+    this.diagnostics.debug('preload-texture-set', `Loading authored texture set (${rolesPresent.length} role(s))`, {
+      roles: rolesPresent,
+    });
+
     const results: Partial<ResolvedPaintingTextures> = {};
     await Promise.all(
       roles.map(async (role) => {
@@ -177,7 +188,17 @@ export class TextureManager {
 
   /** Backwards-compatible getter — returns the default-role (`albedo`) cache entry. */
   get(url: string): THREE.Texture | undefined {
-    return this.cache.get(`albedo::${url}`);
+    const cacheKey = `albedo::${url}`;
+    const tex = this.cache.get(cacheKey);
+    if (!tex) {
+      this.diagnostics.debug('cache-miss', 'Albedo cache miss — texture not preloaded for this URL', {
+        url: url.startsWith('data:')
+          ? `[data-uri:${url.slice(5, url.indexOf(';'))}:${url.length}bytes]`
+          : url,
+        cacheSize: this.cache.size,
+      });
+    }
+    return tex;
   }
 
   /**

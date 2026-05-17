@@ -143,9 +143,22 @@ export class GalleryManager {
   }
 
   async init(): Promise<void> {
+    const artworkSources = this.artworks.map((a) => ({
+      id: a.id,
+      source: a.webglImage ? 'embedded-data-url' : 'file-url',
+      urlType: a.webglImage
+        ? `data-uri:${a.webglImage.slice(5, a.webglImage.indexOf(';'))}`
+        : 'local-relative',
+      hasWebglImage: !!a.webglImage,
+      dimensions: a.dimensions,
+    }));
+    this.diagnostics.info('init', 'Starting gallery init — preloading albedo textures', {
+      artworkCount: artworkSources.length,
+      artworks: artworkSources,
+    });
     const urls = this.artworks.map((a) => a.webglImage ?? a.image);
     await this.textureManager.preload(urls);
-    this.diagnostics.info('init', 'Preloaded gallery albedo textures', { artworkCount: urls.length });
+    this.diagnostics.info('init', 'Preload complete — showing first artwork', { artworkCount: urls.length });
     await this.showArtwork(0);
   }
 
@@ -199,6 +212,13 @@ export class GalleryManager {
       index,
       artworkId: artwork.id,
       token,
+      hasWebglImage: !!artwork.webglImage,
+      webglImageSource,
+      albedoUrlType: albedoUrl.startsWith('data:')
+        ? `data-uri:${albedoUrl.slice(5, albedoUrl.indexOf(';'))}`
+        : 'local-relative',
+      dimensions: artwork.dimensions,
+      surfaceProfile: artwork.surfaceProfile ?? 'matte-canvas',
     });
 
     // Side previews use albedo only, even when authored sets exist.
@@ -214,6 +234,10 @@ export class GalleryManager {
         artworkId: artwork.id,
         hasAlbedo: !!albedo,
         hasPreset: !!preset,
+        webglImageSource,
+        albedoUrlType: albedoUrl.startsWith('data:')
+          ? `data-uri:${albedoUrl.slice(5, albedoUrl.indexOf(';'))}`
+          : 'local-relative',
       });
       // Albedo preload should have populated the cache; if not, give up.
       return;
@@ -254,6 +278,21 @@ export class GalleryManager {
 
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
+
+    // Log the full resolved texture map so support can see which roles are
+    // authored vs procedurally generated vs absent at a glance.
+    const resolvedSummary: Record<string, string> = { albedo: authored.albedo ? 'authored' : 'preloaded' };
+    for (const role of PROCEDURAL_ROLES) {
+      if (authored[role]) resolvedSummary[role] = 'authored';
+      else if (resolved[role]) resolvedSummary[role] = 'procedural';
+      else resolvedSummary[role] = 'absent';
+    }
+    this.diagnostics.debug('show-artwork-maps', 'Resolved texture map for artwork', {
+      artworkId: artwork.id,
+      maps: resolvedSummary,
+      shaderVariant: preset.shaderVariant,
+      inspectionMode: this.inspectionMode,
+    });
 
     // v0.09: check fallback using the same URL that was loaded (albedoUrl).
     const albedoIsFallback = this.textureManager.isFallback(albedoUrl, 'albedo');
@@ -306,11 +345,20 @@ export class GalleryManager {
   }
 
   navigate(direction: 1 | -1): void {
+    const fromIndex = this.currentIndex;
     const newIndex = clamp(
       (this.currentIndex + direction + this.artworks.length) % this.artworks.length,
       0,
       this.artworks.length - 1
     );
+
+    this.diagnostics.info('navigate', `Navigate ${direction > 0 ? 'forward' : 'back'}`, {
+      fromIndex,
+      toIndex: newIndex,
+      fromArtworkId: this.artworks[fromIndex]?.id,
+      toArtworkId: this.artworks[newIndex]?.id,
+      direction,
+    });
 
     if (!this.reducedMotion) {
       this.artworkMesh.group.position.x = direction * 3.2;
@@ -330,6 +378,15 @@ export class GalleryManager {
     if (index === this.currentIndex) return;
     const direction = index > this.currentIndex ? 1 : -1;
     const diff = index - this.currentIndex;
+
+    this.diagnostics.info('navigate', 'goTo direct navigation', {
+      fromIndex: this.currentIndex,
+      toIndex: index,
+      fromArtworkId: this.artworks[this.currentIndex]?.id,
+      toArtworkId: this.artworks[index]?.id,
+      diff,
+    });
+
     this.currentIndex = index;
 
     if (!this.reducedMotion) {
