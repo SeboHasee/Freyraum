@@ -366,6 +366,7 @@ Required outcomes:
 - the shader must **not alter the original picture's essence**;
 - the default surface must read **rougher, more matte, and less shiny**;
 - relief must be visibly driven by **light direction and view angle**;
+- lighting must be positioned **artistically like a museum/gallery display** while still revealing surface detail;
 - close inspection must keep **high-frequency detail at max zoom**;
 - movement must allow **free edge/corner inspection** when zoomed in;
 - artworks must be **fully swappable** in the future without code changes and without assuming current source resolutions.
@@ -380,7 +381,8 @@ The implementation must stay modular, work for arbitrary aspect ratios and arbit
 4. Make the texture/material pipeline resolution-agnostic so future artwork swaps require metadata and assets only, not code edits.
 5. Keep relief quality stable at maximum zoom through a texel-density-driven asset strategy rather than assumptions about today's image sizes.
 6. Allow free close-up inspection of edges and corners while preserving reset/recovery behaviour and accessibility controls.
-7. Keep WebGL as the production renderer; keep expensive features behind preset-dependent fallbacks.
+7. Use a museum-style lighting composition that is flattering in the default view, glare-aware, and still strong enough to reveal detail during pan/zoom movement.
+8. Keep WebGL as the production renderer; keep expensive features behind preset-dependent fallbacks.
 
 ### v0.03 Non-Goals
 
@@ -401,6 +403,7 @@ The implementation must stay modular, work for arbitrary aspect ratios and arbit
 | Asset modularity | `Artwork.textureSet?` already exists, but v0.02 still assumes simple fallback generation keyed to the current art set | Future asset swaps need a fully explicit contract and selection strategy that is resolution-agnostic |
 | Pan limits | `GalleryManager.getPanLimits()` uses a conservative `PAN_SAFETY_FACTOR = 0.92` | This prevents true edge/corner inspection when zoomed in |
 | Fidelity checks | There is no explicit debug/fidelity lane for comparing albedo-only vs shaded output | The team needs a measurable way to ensure the shader does not change the picture's essence |
+| Lighting composition | `gallery-soft` is artistic but currently only loosely defined as a warm upper-left key; there is no explicit 30°-style gallery target or motion-visibility requirement | v0.03 should define default display lighting separately from relief-reveal inspection lighting |
 
 ### v0.03 Technical Rendering Architecture
 
@@ -509,6 +512,68 @@ The planned v0.03 high/inspection path should add:
 - Self-shadow sampling must use the same height convention as the parallax march.
 - UV shifts must be clamped or early-aborted to avoid sampling outside safe borders unless the texture role explicitly supports repeat wrapping.
 
+### v0.03 Lighting Composition Strategy
+
+The lighting plan must satisfy two goals at once:
+
+1. **Artistic display lighting** — the artwork should look like a premium museum/gallery presentation, not a technical debug render.
+2. **Relief visibility** — the viewer must still perceive brush/canvas/parallax detail, especially while panning and zooming the artwork.
+
+#### Museum-style default lighting target
+
+Based on common gallery-lighting guidance, the default profile should be designed around a **primary key light roughly 30° from vertical** aimed at the artwork center to minimize glare while keeping modelling on the surface. The digital goal is to emulate a high-quality warm-white museum spotlight rather than a flat front-on flood.
+
+Planned artistic target:
+
+- primary key: warm white look approximating **3000–3500 K** museum LED presentation;
+- key placement: above and offset laterally, aimed near artwork center at about **30° from vertical**;
+- fill/accent: low-energy secondary fill so shadows do not crush dark paint regions;
+- glare control: no front-on symmetric specular blast in the normal viewing cone;
+- default profile remains tasteful first, technical second.
+
+#### Detail-reveal / movement visibility target
+
+The default light should still be asymmetric enough that surface response changes are visible during pan/zoom motion and close inspection. The viewer must see changing relief cues from:
+
+- parallax UV shift as the view angle changes;
+- detail-normal / bump response as the camera moves;
+- soft direct-light self-shadow cues under shallow angles.
+
+To guarantee this, v0.03 should explicitly separate two lighting lanes:
+
+- **Display lane (`gallery-soft` successor):** artistic museum-style key + subtle fill, optimized for beauty and stable viewing.
+- **Inspection lane (`raking-inspection` successor):** much shallower grazing light, optimized for revealing brush ridges, canvas weave, and self-shadowing.
+
+#### Inspection / raking-light target
+
+For relief inspection, the light should move to a much shallower angle than the default display profile, closer to conservation/documentation-style raking light. This mode should:
+
+- use a low-angle key nearly parallel to the artwork plane;
+- reduce ambient fill so micro-shadowing remains visible;
+- stay still in reduced-motion mode and normally stay still for reproducible review;
+- be exposed through a reviewer/debug toggle, not hidden in code only.
+
+#### Lighting contract implications for implementation
+
+`LightProfile` / `LightingSetup` should evolve from generic presets into a more explicit composition model:
+
+- `displayIntent: 'gallery-display' | 'neutral-review' | 'relief-inspection' | 'dramatic-demo'`
+- target key angle semantics (`displayAngleFromVerticalDeg`, `inspectionGrazingAngleDeg` or equivalent)
+- clear distinction between key, fill, and accent roles
+- motion policy (`none`, `subtle-display-drift`) so animated movement never destroys relief readability
+- a review-safe default that keeps the artwork flattering but not flat
+
+#### Online reference summary informing the plan
+
+The lighting targets above are informed by general gallery/museum guidance collected during this session:
+
+- a **~30° display angle** is commonly recommended for paintings to reduce glare and avoid harsh reflected hotspots;
+- **warm white 3000–3500 K** lighting is commonly used for paintings in galleries;
+- **high CRI (90–95+)** is preferred in real installations for faithful colour rendering;
+- **raking light** is used when the goal is to reveal texture, brushwork, impasto, and surface relief rather than provide the most neutral display view.
+
+These references are artistic and planning inputs for the renderer; the WebGL implementation will approximate the visual result rather than simulate fixture hardware properties literally.
+
 ### v0.03 Material Response Retuning
 
 The default material target should be matte-first.
@@ -586,7 +651,7 @@ Replace that with a mathematically explicit inspection range:
 | Resolution-aware asset selection | `src/gallery/TextureManager.ts`, `src/utils/texture.ts` | Compute source size, effective texel density, map selection, anisotropy strategy |
 | Procedural fallback generator | `src/materials/ProceduralTextureFactory.ts` | Multi-layer, preset-aware, resolution-aware procedural normal/height/roughness/specular generation |
 | Material core | `src/materials/PaintingMaterial.ts` | Matte-first defaults, preset ladder, parallax path, self-shadow approximation, fidelity/debug switches |
-| Lighting integration | `src/lighting/LightProfile.ts`, `src/lighting/LightingSetup.ts` | Inspection light mode, stable raking light, preset-safe intensity ranges |
+| Lighting integration | `src/lighting/LightProfile.ts`, `src/lighting/LightingSetup.ts` | Museum-style display composition, inspection/raking light, motion policy, preset-safe intensity ranges |
 | Inspection controls | settings/debug UI files | Albedo-only / shaded / inspection mode toggles for QA |
 | Camera movement | `src/gallery/GalleryManager.ts`, `src/interaction/ZoomPan.ts`, `src/interaction/TouchInteraction.ts`, `src/interaction/KeyboardNav.ts` | Inspection pan bounds, overscroll behaviour, edge/corner reachability |
 | Documentation | `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `docs/HANDOFF.md` | Keep architecture, findings, and acceptance guidance current |
@@ -631,9 +696,11 @@ Replace that with a mathematically explicit inspection range:
    - Add short light-direction march / horizon test for parallax relief.
    - Acceptance: raking light shows relief and self-shadow cues in inspection mode.
 
-6. **Slice 6 — Inspection light and review controls**
+6. **Slice 6 — Museum-style display lighting and inspection controls**
+   - Retune the default profile around an explicit gallery-style key/fill composition.
+   - Ensure the default light remains flattering while pan/zoom motion still reveals relief cues.
    - Expose raking light and fidelity toggles in a safe UI/debug lane.
-   - Acceptance: reviewers can validate fidelity, relief, and gloss behaviour reproducibly.
+   - Acceptance: reviewers can validate fidelity, artistic display quality, relief visibility, and gloss behaviour reproducibly.
 
 7. **Slice 7 — Free edge/corner inspection camera**
    - Replace conservative pan clamp with explicit inspection bounds.
@@ -660,6 +727,8 @@ Replace that with a mathematically explicit inspection range:
 - [ ] Albedo-only comparison confirms the shader does not change the original picture's essence.
 - [ ] Default material reads matte/rough, not glossy.
 - [ ] Relief responds to both light angle and view angle.
+- [ ] Default display lighting feels museum-like and artistic rather than purely technical.
+- [ ] Default display lighting is positioned so surface cues remain visible during pan/zoom movement.
 - [ ] High/inspection preset delivers visible parallax-style depth.
 - [ ] Self-shadow cues appear under raking light without crushing the artwork.
 - [ ] Relief quality remains stable at maximum zoom.

@@ -63,11 +63,13 @@ Planned system direction:
 - stop relying on the resolutions of the current sample artworks;
 - compute quality from authored map availability, surface profile, preset tier, and effective on-screen texel density;
 - retune the default surface toward rough matte canvas instead of glossy varnish;
+- use museum-style default lighting with artistic key/fill placement that still reveals detail;
 - add a high-end tangent-space parallax relief path with direct-light self-shadow approximation for inspection mode;
+- separate flattering display lighting from shallower raking inspection lighting;
 - preserve cheaper fallback paths for balanced and battery presets;
 - replace conservative close-up pan limits with explicit inspection bounds that allow edge/corner inspection.
 
-See [`plan.md`](./plan.md#v003-follow-up-plan--technical-rendering-system-for-faithful-artworks-modular-asset-swaps-parallax-relief-and-free-inspection) and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-technical-rendering-follow-up-findings) for the full architecture and findings.
+See [`plan.md`](./plan.md#v003-follow-up-plan--technical-rendering-system-for-faithful-artworks-modular-asset-swaps-parallax-relief-and-free-inspection) and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-technical-rendering-and-lighting-follow-up-findings) for the full architecture and findings.
 
 ## Developer workflow
 

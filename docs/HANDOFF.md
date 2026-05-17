@@ -86,6 +86,8 @@ Reviewers should verify that the plan covers:
 - **Modular asset swaps:** future artworks can be replaced by metadata/assets only, regardless of source resolution or aspect ratio.
 - **Resolution-independent quality:** support-map selection is driven by authored roles, preset tier, and effective texel density rather than assumptions about current sample files.
 - **Matte-first response:** default gallery mode should read as rough painted surface, not glossy varnish.
+- **Museum-style display lighting:** the default light should follow an artistic gallery composition (warm key + restrained fill, glare-aware placement) rather than a generic debug spotlight.
+- **Motion-visible detail:** the display light should still be positioned so relief cues remain visible while the user pans/zooms the artwork.
 - **Parallax relief:** the high/inspection path is explicitly planned as tangent-space parallax occlusion style UV offset, not vague "more bump".
 - **Self-shadowing:** direct light should show relief/self-shadow cues without darkening the artwork texture itself.
 - **Free inspection:** close-up pan bounds should allow direct edge/corner inspection.
@@ -94,11 +96,12 @@ Acceptance for v0.03 should include:
 
 1. albedo-only vs shaded comparison captures,
 2. matte-default captures,
-3. inspection/raking-light captures,
-4. max-zoom relief captures,
-5. edge/corner inspection captures,
-6. validation notes for arbitrary aspect ratios and arbitrary source resolutions,
-7. preset-specific notes for high / balanced / battery fallback behaviour.
+3. default gallery-light captures showing artistic but detail-visible lighting,
+4. inspection/raking-light captures,
+5. max-zoom relief captures,
+6. edge/corner inspection captures,
+7. validation notes for arbitrary aspect ratios and arbitrary source resolutions,
+8. preset-specific notes for high / balanced / battery fallback behaviour.
 
 ## v0.02 shader, lighting, and WebGPU review guide
 
