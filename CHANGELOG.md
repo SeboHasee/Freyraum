@@ -4,9 +4,9 @@
 
 ### Added
 
-- Added a detailed v0.02 technical implementation plan in `plan.md` for realistic painting material shaders, normal/detail/bump/specular/roughness maps, performance budgets, and experimental WebGPU.
-- Documented v0.02 shader/WebGPU findings and constraints in `FINDINGS.md`.
-- Updated handoff documentation with v0.02 material-realism, benchmark, and WebGPU review expectations.
+- Replaced the v0.02 high-level plan in `plan.md` with a code-grounded final implementation plan: exact TypeScript interfaces for `PaintingTextureSet`, `PaintingMaterial`, `LightProfile`, `FrameBudgetMonitor`, `RenderBackend`, and `WebGPUPrototype`; GLSL injection patterns for Three.js 0.166; procedural texture generation algorithms; `QualityPreset` field additions; and changes to `ArtworkMesh`, `TextureManager`, `GalleryManager`, `LightingSetup`, and `main.ts`.
+- Updated `FINDINGS.md` with codebase analysis findings from the v0.02 planning pass.
+- Updated `docs/HANDOFF.md` with v0.02 shader controls, light profile descriptions, WebGPU probe instructions, and benchmark procedure.
 
 - Structured artwork metadata model (`Artwork.id`, `year`, `medium`, `dimensions`, `alt`, `credit`, `tags`) in `src/config/artworks.ts` to prepare for future CMS integration
 - `PreferencesStore` (`src/utils/preferences.ts`) with reduced-motion and high-contrast modes plus quality-preset persistence in `localStorage`

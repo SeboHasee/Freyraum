@@ -33,17 +33,19 @@ The customer preview is built as a classic browser script, not a Vite module ent
 - WebGL is required; if unavailable a localized fallback screen is shown
 
 
-## v0.02 planning focus
+## v0.02 implementation plan
 
-The next planned technical milestone is v0.02: advanced painting-material rendering and experimental WebGPU exploration. The detailed implementation plan lives in [`plan.md`](./plan.md#v002-scope--advanced-painting-material-shaders--experimental-webgpu).
+The v0.02 technical plan is finalised in [`plan.md`](./plan.md#v002-scope--advanced-painting-material-shaders--experimental-webgpu) and ready for coding.
 
-Planned focus areas:
+Scope:
 
-- realistic canvas/pigment material response using albedo, normal, detail-normal, bump/height, roughness, specular, and optional ambient-occlusion maps
-- realistic light profiles that reveal surface texture without washing out artwork color
-- WebGL production path with quality-dependent shader variants
-- experimental WebGPU backend probe behind explicit opt-in and dynamic import
-- performance targets: 60 FPS on mid-range discrete GPUs, at least 25 FPS on old integrated GPUs using battery mode
+- New `PaintingMaterial` class extending `MeshPhysicalMaterial` via `onBeforeCompile` with albedo, normal, detail-normal, height/bump, roughness, specular, and AO map support
+- `ProceduralTextureFactory` generating deterministic fallback maps (canvas weave, brush relief, roughness, specular) so development can proceed without scanned assets
+- `LightProfile` system in `LightingSetup` with four named profiles: `gallery-soft`, `raking-inspection`, `museum-neutral`, `dramatic-demo`
+- `QualityPreset` extended with shader-variant fields; battery preset compiles out detail-normal, bump, AO, and grazing-boost paths via `#define`
+- `FrameBudgetMonitor` for rolling 1s/5s/30s FPS measurement and adaptive quality guardrails
+- Experimental `WebGPUPrototype` probe behind dynamic import and explicit opt-in (`?backend=webgpu`) — never required for the customer preview
+- Performance targets: 60 FPS on mid-range discrete GPUs (balanced preset), 25 FPS minimum on old integrated GPUs (battery preset)
 
 ## Developer workflow
 

@@ -359,405 +359,1044 @@ This order starts with the data model and local assets because later UI, thumbna
 
 ### v0.02 Mission
 
-v0.02 focuses on making the artworks read as **realistic physical paintings** rather than flat images on a plane. The goal is a web-only rendering pipeline that combines believable canvas/paper texture, layered pigment, bump/normal detail, specular response, and realistic light interaction while preserving predictable performance across a wide GPU range.
-
-Primary targets:
-
-- **Visual target:** close-up inspection should show woven canvas fibers, brush ridges, pigment thickness, fine detail noise, subtle edge lift, and light-dependent highlights.
-- **Lighting target:** spotlights and fill lights should visibly respond to artwork surface detail through normal, bump, roughness, specular, and optional ambient-occlusion maps.
-- **Performance target:** sustain **60 FPS on mid-range discrete GPUs** at the balanced/default preset and at least **25 FPS on old low-end integrated GPUs** using the battery preset.
-- **Platform target:** all web-based, with WebGL 2 as the production path and an experimental WebGPU path behind feature detection and explicit opt-in.
-- **Accessibility target:** shader motion and glints must respect reduced-motion and high-contrast preferences; visual realism must not make controls illegible.
+v0.02 makes the artworks read as **realistic physical paintings** — not flat images on a plane. Close-up inspection must reveal woven canvas fibres, brush ridges, pigment thickness, and light-dependent highlights. The rendering pipeline must sustain **60 FPS on mid-range discrete GPUs** (balanced preset) and **at least 25 FPS on old integrated GPUs** (battery preset), all inside the browser with no native apps or server-side GPU work.
 
 ### v0.02 Non-Goals
 
-- Do not replace Three.js as the primary renderer in production.
-- Do not require native apps, browser extensions, server-side rendering, or offline GPU tools at runtime.
-- Do not make WebGPU mandatory; WebGL must remain the reliable customer-demo path.
-- Do not add a CMS or remote asset service in v0.02.
-- Do not ship generated texture assets without documenting their source, compression settings, and regeneration path.
+- Do not replace Three.js as the production renderer.
+- Do not make WebGPU mandatory; WebGL must remain the customer-demo path.
+- Do not add a CMS or remote asset service.
+- Do not add new npm dependencies unless strictly required and security-checked first.
+- Do not ship texture assets without documenting their source, format, and regeneration path.
 
-### v0.02 Architectural Direction
+---
 
-v0.02 should introduce a layered material system rather than placing all logic inside `ArtworkMesh`.
+### v0.02 Codebase Baseline
 
-Planned modules:
+The following is the exact state of every file that v0.02 must build on. Future implementors must read these files before touching anything.
 
-- `src/materials/PaintingMaterial.ts`
-  - WebGL production material factory.
-  - Extends or wraps `THREE.MeshPhysicalMaterial` through `onBeforeCompile` only where physically based defaults are not enough.
-  - Accepts color/albedo, normal, detail-normal, bump/height, roughness, specular, and ambient-occlusion maps.
-- `src/materials/PaintingTextureSet.ts`
-  - Typed texture-set model for each artwork.
-  - Defines required and optional maps, scale factors, UV tiling, mip policy, and compression metadata.
-- `src/materials/ProceduralTextureFactory.ts`
-  - Generates lightweight fallback texture maps in-browser for local/offline preview when real maps are missing.
-  - Must be deterministic per artwork id so screenshots remain stable.
-- `src/rendering/RenderBackend.ts`
-  - Backend abstraction with `webgl` as stable default and `webgpu-experimental` as opt-in future path.
-- `src/rendering/WebGPUPrototype.ts`
-  - Experimental WebGPU capability check and prototype renderer/material path.
-  - Must not block WebGL initialization or customer preview.
-- `src/performance/FrameBudgetMonitor.ts`
-  - Rolling FPS and GPU-cost proxy measurement.
-  - Drives optional adaptive quality in development first, then production once stable.
-- `src/debug/MaterialInspector.ts`
-  - Development-only panel for toggling maps, inspecting roughness/specular values, and freezing light angles.
+**`src/materials/CanvasMaterial.ts`**
+- Currently generates a single 128×128 sinusoidal normal map (canvas weave only).
+- `loadNormalTexture()` is `async` but the result is cached after the first call.
+- Applied to `artworkMaterial` in `ArtworkMesh` via `.normalMap` / `.normalScale.set(0.12, 0.12)`.
+- No detail normal, no bump, no specular map, no roughness map, no AO map exist yet.
+- The class is the primary v0.02 extension point — it becomes or is replaced by `PaintingMaterial`.
 
-### v0.02 Material Model
+**`src/gallery/ArtworkMesh.ts`**
+- Creates a `THREE.MeshPhysicalMaterial` inline with `roughness: 0.88`, `metalness: 0`, `clearcoat: 0.04`.
+- The only map wired today is the normal map loaded from `CanvasMaterial`.
+- `applyPreset(preset)` only rebuilds geometry when `artworkSegments` changes.
+- All other material properties are static after construction.
+- The inline `MeshPhysicalMaterial` must be replaced by the new `PaintingMaterial` factory.
 
-Each artwork should be represented by a texture set, not a single image.
+**`src/gallery/TextureManager.ts`**
+- Uses a single `THREE.TextureLoader` and caches by URL string.
+- **Critical issue:** `prepareTexture()` sets `colorSpace = THREE.SRGBColorSpace` for every texture.
+  Normal, detail-normal, height, roughness, specular, and AO maps must use `THREE.LinearSRGBColorSpace` (or `THREE.NoColorSpace` for data textures in Three.js 0.166). Only albedo maps should use `SRGBColorSpace`.
+- Anisotropy is always set to `maxAnisotropy`. v0.02 must cap this per preset.
+- There is no role awareness (albedo vs. non-albedo) — this must be added.
 
-Required maps for final v0.02 quality:
+**`src/lighting/LightingSetup.ts`**
+- Single `AmbientLight(0xffffff, 1.5)`, `SpotLight(0xffffff, 150)`, and `PointLight(0xffffff, 8, 30)`.
+- The spotlight oscillates `position.x` by `Math.sin(time * 0.0002) * 0.6` — very slow, correct.
+- `applyPreset` only toggles `castShadow`. Angle, colour, and intensity are hardcoded.
+- A `LightProfile` system must be added without breaking current behaviour.
 
-- **Albedo / base color:** final painting image, color-managed as sRGB.
-- **Normal map:** mid-frequency canvas and brush direction response, tangent-space, linear color.
-- **Detail normal map:** high-frequency weave and micro paint grain, tiled with independent scale.
-- **Height / bump map:** grayscale relief for brush ridges and canvas tooth; used for bump perturbation and optional parallax-lite at close zoom.
-- **Roughness map:** controls matte varnish, dry paint, and shinier pigment variation.
-- **Specular map:** subtle reflectivity differences for varnished or thick pigment regions.
-- **Ambient-occlusion map:** optional close-range crease/depth grounding, especially near thick strokes and canvas weave.
+**`src/config/quality.ts`**
+- `QualityPreset` fields today: `id`, `label`, `description`, `pixelRatioCap`, `bloomStrength`, `bloomRadius`, `bloomThreshold`, `shadows`, `artworkSegments`.
+- v0.02 must add shader-level fields to this interface — see §TypeScript Contract below.
 
-Material uniforms and metadata:
+**`src/config/artworks.ts`**
+- `Artwork` interface fields today: `id`, `title`, `subtitle`, `description`, `year`, `medium`, `image`, `dimensions`, `alt`, `credit`, `tags`.
+- `image` is currently a data-URI SVG. v0.02 adds an optional `textureSet` field alongside `image`.
 
-- `uCanvasNormalStrength`
-- `uDetailNormalStrength`
-- `uBumpStrength`
-- `uSpecularStrength`
-- `uRoughnessFloor`
-- `uRoughnessCeiling`
-- `uVarnishStrength`
-- `uDetailTiling`
-- `uLightGrazingBoost`
-- `uCloseInspectionMix`
-- `uReducedMotionScalar`
+**`src/main.ts`**
+- The animation loop is a plain `requestAnimationFrame` calling `lightingSetup.update(now)`, `galleryManager.update()`, `postProcessing.render()`.
+- `FrameBudgetMonitor` must be wired here to receive `now` timestamps.
+- Preferences subscription already calls `applyPreset` on all subsystems — any new material system must follow the same pattern.
 
-Implementation rule: every uniform must be connected to a quality preset, artwork metadata, or user preference. Avoid unowned magic numbers inside shaders.
+---
 
-### v0.02 Lighting Model
+### v0.02 TypeScript Contract
 
-The current light rig should evolve from "pleasant gallery light" to a controllable physical inspection rig.
+All new types must be defined before implementation begins. These are the normative type definitions.
 
-Implementation targets:
+#### Addition to `src/config/artworks.ts`
 
-- Add named light profiles:
-  - `gallery-soft`: current premium balanced presentation.
-  - `raking-inspection`: low-angle light to reveal texture relief.
-  - `museum-neutral`: flatter conservation-style light for accurate color review.
-  - `dramatic-demo`: customer presentation mode with stronger highlight movement.
-- Add per-profile intensity, angle, color temperature, and motion settings.
-- Support reduced-motion by freezing any moving highlight profile.
-- Keep light motion slow and subtle; never use fast animated shimmer on artwork surfaces.
-- Ensure specular response is visible only at plausible grazing angles, not uniformly across the painting.
-- Clamp highlight intensity so albedo remains readable and bloom does not wash out bright works.
+```typescript
+// ─── New types added at the top of artworks.ts ───────────────────────────────
 
-### v0.02 WebGL Shader Strategy
+export type TextureColorSpace = 'srgb' | 'linear';
 
-Production WebGL path should be conservative and incremental.
+export interface PaintingTextureMapEntry {
+  /** Path relative to /public or a data URI for offline preview. */
+  url: string;
+  /** sRGB only for albedo; all other maps must be linear. */
+  colorSpace: TextureColorSpace;
+  /** Native pixel dimensions — used for mip budget calculations. */
+  resolution?: { width: number; height: number };
+}
 
-Preferred approach:
+export interface PaintingTextureSet {
+  /** Overrides artwork.image when present. Color space: sRGB. */
+  albedo?: PaintingTextureMapEntry;
+  /** Tangent-space canvas/brush normal. Color space: linear. */
+  normal?: PaintingTextureMapEntry;
+  /** High-frequency weave + grain detail normal. Color space: linear. Tiled. */
+  detailNormal?: PaintingTextureMapEntry;
+  /** Grayscale R-channel bump/height relief. Color space: linear. */
+  height?: PaintingTextureMapEntry;
+  /** Grayscale R-channel roughness variation. Color space: linear. */
+  roughness?: PaintingTextureMapEntry;
+  /** Grayscale R-channel specular variation. Color space: linear. */
+  specular?: PaintingTextureMapEntry;
+  /** Grayscale R-channel ambient occlusion. Color space: linear. */
+  ao?: PaintingTextureMapEntry;
+  /** UV repeat factor for detailNormal. Default 18. */
+  detailTiling?: number;
+  /** Per-artwork overrides for shader uniforms (override quality defaults). */
+  normalStrengthOverride?: number;
+  detailNormalStrengthOverride?: number;
+  bumpStrengthOverride?: number;
+}
 
-1. Start from `MeshPhysicalMaterial` for physically based lighting, tone mapping, clearcoat, and renderer compatibility.
-2. Use `onBeforeCompile` to inject only the missing painting-specific detail blending:
-   - combine base normal map + detail normal map
-   - apply bump/height perturbation with quality-dependent strength
-   - modulate roughness/specular from maps and preset scalars
-   - optionally add close-inspection grazing-light enhancement
-3. Keep shader chunks compatible with Three.js `0.166.x` unless upgrading Three.js is explicitly planned and documented.
-4. Use defines for quality tiers so battery mode compiles out expensive detail paths rather than only setting strengths to zero.
-5. Avoid dynamic branching in fragment shader hot paths where a compile-time define can be used instead.
+// ─── Extended Artwork interface ───────────────────────────────────────────────
 
-Required shader variants:
+export interface Artwork {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  year: number;
+  medium: string;
+  image: string;
+  dimensions: ArtworkDimensions;
+  alt: string;
+  credit: string;
+  tags: readonly string[];
+  /** Optional painting texture set. When absent, procedural fallback maps are used. */
+  textureSet?: PaintingTextureSet;
+}
+```
 
-| Variant | Intended preset | Features |
+#### Additions to `src/config/quality.ts`
+
+```typescript
+// ─── New fields added to QualityPreset interface ──────────────────────────────
+
+export interface QualityPreset {
+  // (all existing fields kept unchanged)
+  id: QualityPresetId;
+  label: string;
+  description: string;
+  pixelRatioCap: number;
+  bloomStrength: number;
+  bloomRadius: number;
+  bloomThreshold: number;
+  shadows: boolean;
+  artworkSegments: number;
+
+  // ─── v0.02 additions ──────────────────────────────────────────────────────
+  /** Shader variant compiled into the painting material for this preset. */
+  shaderVariant: 'painting-high' | 'painting-balanced' | 'painting-battery';
+  /** Base canvas/brush normal strength (uCanvasNormalStrength). */
+  normalStrength: number;
+  /** Detail normal blend weight (uDetailNormalStrength). 0 disables detail normal entirely. */
+  detailNormalStrength: number;
+  /** Bump perturbation scale (uBumpStrength). 0 disables bump. */
+  bumpStrength: number;
+  /** Specular map boost scale (uSpecularStrength). */
+  specularStrength: number;
+  /** Anisotropy divisor: actual anisotropy = maxAnisotropy / divisor. */
+  anisotropyDivisor: number;
+  /** Enable ambient-occlusion map lookup. Battery always false. */
+  aoEnabled: boolean;
+  /** Enable grazing-light enhancement. Battery always false. */
+  grazingBoostEnabled: boolean;
+  /** Enable detail normal map. Battery always false. */
+  detailNormalEnabled: boolean;
+}
+
+// ─── Updated QUALITY_PRESETS values ──────────────────────────────────────────
+
+high: {
+  // ... existing fields ...
+  shaderVariant: 'painting-high',
+  normalStrength: 0.45,
+  detailNormalStrength: 0.28,
+  bumpStrength: 0.14,
+  specularStrength: 0.12,
+  anisotropyDivisor: 1,
+  aoEnabled: true,
+  grazingBoostEnabled: true,
+  detailNormalEnabled: true,
+},
+balanced: {
+  // ... existing fields ...
+  shaderVariant: 'painting-balanced',
+  normalStrength: 0.32,
+  detailNormalStrength: 0.18,
+  bumpStrength: 0.06,
+  specularStrength: 0.08,
+  anisotropyDivisor: 2,
+  aoEnabled: false,
+  grazingBoostEnabled: false,
+  detailNormalEnabled: true,
+},
+battery: {
+  // ... existing fields ...
+  shaderVariant: 'painting-battery',
+  normalStrength: 0.16,
+  detailNormalStrength: 0.0,
+  bumpStrength: 0.0,
+  specularStrength: 0.03,
+  anisotropyDivisor: 4,
+  aoEnabled: false,
+  grazingBoostEnabled: false,
+  detailNormalEnabled: false,
+},
+```
+
+#### New file `src/materials/PaintingTextureSet.ts`
+
+Re-exports `PaintingTextureSet` and `PaintingTextureMapEntry` from `artworks.ts` plus adds a typed map-role enum so `TextureManager` and `PaintingMaterial` share the same vocabulary:
+
+```typescript
+export type PaintingMapRole =
+  | 'albedo'
+  | 'normal'
+  | 'detailNormal'
+  | 'height'
+  | 'roughness'
+  | 'specular'
+  | 'ao';
+
+export { PaintingTextureSet, PaintingTextureMapEntry } from '../config/artworks';
+```
+
+#### New file `src/materials/PaintingMaterial.ts`
+
+```typescript
+import * as THREE from 'three';
+import type { QualityPreset } from '../config/quality';
+import type { PaintingTextureSet } from './PaintingTextureSet';
+
+export interface PaintingMaterialParams {
+  preset: QualityPreset;
+  textureSet: ResolvedPaintingTextures;  // see below
+  reducedMotion?: boolean;
+}
+
+/** Resolved textures after loading; null means map absent/procedural. */
+export interface ResolvedPaintingTextures {
+  albedo: THREE.Texture | null;
+  normal: THREE.Texture | null;
+  detailNormal: THREE.Texture | null;
+  height: THREE.Texture | null;
+  roughness: THREE.Texture | null;
+  specular: THREE.Texture | null;
+  ao: THREE.Texture | null;
+}
+
+export type PaintingMaterialUniforms = {
+  uCanvasNormalStrength: THREE.IUniform<number>;
+  uDetailNormalStrength: THREE.IUniform<number>;
+  uBumpStrength: THREE.IUniform<number>;
+  uSpecularStrength: THREE.IUniform<number>;
+  uRoughnessFloor: THREE.IUniform<number>;
+  uRoughnessCeiling: THREE.IUniform<number>;
+  uVarnishStrength: THREE.IUniform<number>;
+  uDetailTiling: THREE.IUniform<number>;
+  uLightGrazingBoost: THREE.IUniform<number>;
+  uCloseInspectionMix: THREE.IUniform<number>;
+  uReducedMotionScalar: THREE.IUniform<number>;
+  tDetailNormal: THREE.IUniform<THREE.Texture | null>;
+  tHeight: THREE.IUniform<THREE.Texture | null>;
+  tRoughness: THREE.IUniform<THREE.Texture | null>;
+  tSpecular: THREE.IUniform<THREE.Texture | null>;
+  tAO: THREE.IUniform<THREE.Texture | null>;
+};
+
+export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
+  readonly paintingUniforms: PaintingMaterialUniforms;
+  private _variant: string;
+
+  constructor(params: PaintingMaterialParams) { /* ... */ }
+  applyPreset(preset: QualityPreset): void { /* ... */ }
+  applyTextures(textures: ResolvedPaintingTextures): void { /* ... */ }
+  setReducedMotion(value: boolean): void { /* ... */ }
+  setDetailTiling(tiling: number): void { /* ... */ }
+}
+```
+
+`PaintingMaterial` extends `THREE.MeshPhysicalMaterial` and injects shader code in `onBeforeCompile`. See §Shader Implementation Plan for the exact GLSL.
+
+#### Changes to `src/gallery/ArtworkMesh.ts`
+
+- Replace `private readonly artworkMaterial: THREE.MeshPhysicalMaterial` with `private artworkMaterial: PaintingMaterial`.
+- Replace the inline `new THREE.MeshPhysicalMaterial(...)` constructor call with `new PaintingMaterial(...)`.
+- Add `setMaps(textures: ResolvedPaintingTextures): void` public method that calls `artworkMaterial.applyTextures(textures)`.
+- `applyPreset` must also call `this.artworkMaterial.applyPreset(preset)`.
+- Remove the `CanvasMaterial` dependency once `PaintingMaterial` subsumes it.
+
+#### Changes to `src/gallery/TextureManager.ts`
+
+- Add `loadForRole(url: string, role: PaintingMapRole): Promise<THREE.Texture>`.
+- `loadForRole` sets `colorSpace` based on role: `albedo` → `THREE.SRGBColorSpace`; all others → `THREE.LinearSRGBColorSpace`.
+- Cap `texture.anisotropy = Math.ceil(this.maxAnisotropy / anisotropyDivisor)` where `anisotropyDivisor` is passed from the active preset.
+- Add `preloadTextureSet(set: PaintingTextureSet, divisor: number): Promise<ResolvedPaintingTextures>` which calls `loadForRole` for every defined entry and returns a `ResolvedPaintingTextures` object.
+- Keep `preload(urls)` and `load(url)` unchanged for backward compatibility.
+- Keep the fallback `createFallbackTexture` for the albedo role.
+
+#### Changes to `src/gallery/GalleryManager.ts`
+
+- Accept `PaintingTextureManager` (or extended `TextureManager`) in the constructor.
+- In `showArtwork(index)`, after loading the albedo, call `textureManager.preloadTextureSet(artwork.textureSet ?? {})` and pass the result to `artworkMesh.setMaps(resolvedTextures)`.
+- `init()` stays the same public API; internally it will now also trigger map preloading.
+
+#### New file `src/lighting/LightProfile.ts`
+
+```typescript
+export type LightProfileId =
+  | 'gallery-soft'
+  | 'raking-inspection'
+  | 'museum-neutral'
+  | 'dramatic-demo';
+
+export interface LightProfile {
+  id: LightProfileId;
+  label: string;
+  /** SpotLight position [x, y, z] */
+  spotPosition: [number, number, number];
+  /** SpotLight angle in radians */
+  spotAngle: number;
+  /** SpotLight penumbra 0–1 */
+  spotPenumbra: number;
+  /** SpotLight intensity */
+  spotIntensity: number;
+  /** AmbientLight intensity */
+  ambientIntensity: number;
+  /** Colour temperature in Kelvin (converted to THREE.Color on load) */
+  colorTemperatureK: number;
+  /** X-axis oscillation amplitude (0 = static; respect reduced-motion) */
+  motionAmplitude: number;
+  /** Oscillation angular frequency (radians per millisecond) */
+  motionFrequency: number;
+}
+
+export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
+  'gallery-soft': {
+    id: 'gallery-soft',
+    label: 'Galerie',
+    spotPosition: [-10, 5, 7],
+    spotAngle: 0.42,
+    spotPenumbra: 0.9,
+    spotIntensity: 150,
+    ambientIntensity: 1.5,
+    colorTemperatureK: 4200,
+    motionAmplitude: 0.6,
+    motionFrequency: 0.0002,
+  },
+  'raking-inspection': {
+    id: 'raking-inspection',
+    label: 'Streiflicht',
+    spotPosition: [-14, 1, 5],
+    spotAngle: 0.22,
+    spotPenumbra: 0.5,
+    spotIntensity: 280,
+    ambientIntensity: 0.6,
+    colorTemperatureK: 5600,
+    motionAmplitude: 0.0,
+    motionFrequency: 0.0,
+  },
+  'museum-neutral': {
+    id: 'museum-neutral',
+    label: 'Museumsneutral',
+    spotPosition: [0, 8, 8],
+    spotAngle: 0.55,
+    spotPenumbra: 0.95,
+    spotIntensity: 100,
+    ambientIntensity: 2.2,
+    colorTemperatureK: 3200,
+    motionAmplitude: 0.0,
+    motionFrequency: 0.0,
+  },
+  'dramatic-demo': {
+    id: 'dramatic-demo',
+    label: 'Dramatisch',
+    spotPosition: [-8, 4, 6],
+    spotAngle: 0.35,
+    spotPenumbra: 0.7,
+    spotIntensity: 220,
+    ambientIntensity: 0.9,
+    colorTemperatureK: 4800,
+    motionAmplitude: 1.2,
+    motionFrequency: 0.0003,
+  },
+};
+```
+
+#### Changes to `src/lighting/LightingSetup.ts`
+
+- Add `private activeProfile: LightProfile` field, default `gallery-soft`.
+- Add `setProfile(id: LightProfileId): void` — applies the profile to spotlight position, angle, penumbra, intensity, and ambient intensity.
+- `update(time)` uses `activeProfile.motionAmplitude` and `activeProfile.motionFrequency` so static profiles do not oscillate.
+- A helper `kelvinToColor(K: number): THREE.Color` converts colour temperature (using the McCamy or Krystek approximation) to an `RGB` `THREE.Color`.
+- `applyPreset` continues to toggle `castShadow` and does not change the profile.
+
+#### New file `src/materials/ProceduralTextureFactory.ts`
+
+Generates deterministic fallback maps using `HTMLCanvasElement` + `CanvasRenderingContext2D`. All maps are generated synchronously to keep startup simple; they are cached by `artworkId + role`.
+
+Maps generated per call:
+
+| Role | Resolution | Algorithm |
 | --- | --- | --- |
-| `painting-high` | high | base normal + detail normal + bump + roughness + specular + AO + grazing boost |
-| `painting-balanced` | balanced | base normal + detail normal + roughness + specular; bump lower strength; AO optional |
-| `painting-battery` | battery / old iGPU | base normal only, low texture resolution, no AO, no grazing boost, reduced bloom/shadows |
+| `normal` | 256 × 256 | Warp-domain sinusoidal weave + FBM-like layering using `sin(x * 0.42 + offset) * sin(y * 0.38)` with 3 octaves; pack into RG (tangent-space XY, B = 255). |
+| `detailNormal` | 256 × 256 | Higher frequency weave (0.8–1.2 Hz range), 4 octaves; independent UV scale so it tiles at 18× and blends subtly at gallery distance. |
+| `height` | 256 × 256 | Layered brush-stroke height: dominant strokes from `Math.abs(sin(y * 0.12 + hash * 0.8)) * 90`; secondary cross-strokes; final value packed to R grayscale 0–255. |
+| `roughness` | 128 × 128 | Low-frequency Perlin-like noise (simulated with `sin(x*0.09)*cos(y*0.07)` layered 2 octaves) remapped to [60, 220] range to represent dry-paint (rough) to lightly varnished (smooth) variation. |
+| `specular` | 128 × 128 | Very low frequency, very subtle — mostly uniform at 12/255 with sparse high-value pixels representing thick varnished pigment. Gaussian blob centered at a hash-determined position. |
+| `ao` | 128 × 128 | Not procedurally generated; returns a flat 128/255 grey fallback so the AO uniform has no effect until a real map is supplied. |
+
+```typescript
+export class ProceduralTextureFactory {
+  private readonly cache = new Map<string, THREE.Texture>();
+
+  generate(artworkId: string, role: PaintingMapRole): THREE.Texture;
+  disposeAll(): void;
+  private getCacheKey(artworkId: string, role: PaintingMapRole): string;
+  private buildNormal(id: string): THREE.Texture;
+  private buildDetailNormal(id: string): THREE.Texture;
+  private buildHeight(id: string): THREE.Texture;
+  private buildRoughness(id: string): THREE.Texture;
+  private buildSpecular(id: string): THREE.Texture;
+  private buildAOFallback(): THREE.Texture;
+  private hash(value: string): number;  // same djb2-style hash as TextureManager
+}
+```
+
+#### New file `src/rendering/RenderBackend.ts`
+
+Thin abstraction that `main.ts` uses to decide whether to initialise `WebGLRenderer` (default) or the experimental WebGPU path.
+
+```typescript
+export type BackendId = 'webgl' | 'webgpu-experimental';
+
+export interface RenderBackendInfo {
+  backendId: BackendId;
+  adapterLabel?: string;
+  unsupportedReason?: string;
+}
+
+export async function detectBackend(): Promise<BackendId>;
+export async function getBackendInfo(): Promise<RenderBackendInfo>;
+```
+
+`detectBackend()` reads `?backend=webgpu` query param or `localStorage.getItem('freyraum.backend')` and only returns `'webgpu-experimental'` when both the flag is set AND `navigator.gpu !== undefined`. Otherwise it always returns `'webgl'`.
+
+#### New file `src/rendering/WebGPUPrototype.ts`
+
+Dynamic-import target so unsupported browsers never parse the module.
+
+```typescript
+/**
+ * @experimental — never imported by the production WebGL path.
+ * Imported only via dynamic import when backend === 'webgpu-experimental'.
+ */
+export async function initWebGPUPrototype(canvas: HTMLCanvasElement): Promise<WebGPUProbeResult>;
+
+export interface WebGPUProbeResult {
+  supported: boolean;
+  adapterInfo?: GPUAdapterInfo;
+  limits?: Partial<GPUSupportedLimits>;
+  unsupportedFeatures: string[];
+  frameTimingMs?: number;  // filled after one test frame
+  fallbackToWebGL: boolean;
+}
+```
+
+This module uses `navigator.gpu.requestAdapter()`, requests a device, renders one test frame to an offscreen canvas, and returns metrics. Any exception sets `fallbackToWebGL: true`. The caller in `main.ts` falls back to the normal `RendererManager` path if `fallbackToWebGL` is true.
+
+#### New file `src/performance/FrameBudgetMonitor.ts`
+
+```typescript
+export type FpsWindowKey = '1s' | '5s' | '30s';
+
+export interface FrameSample {
+  timestamp: number;    // performance.now()
+  frameDeltaMs: number; // elapsed since previous sample
+}
+
+export class FrameBudgetMonitor {
+  /** Call once per animation frame with the rAF timestamp. */
+  tick(now: number): void;
+
+  /** Rolling FPS for the given window. Returns 0 if window is not yet full. */
+  getFps(window: FpsWindowKey): number;
+
+  /**
+   * Fires cb when rolling 5s FPS drops below threshold for at least
+   * minConsecutiveDropMs without being interrupted by navigation events.
+   */
+  onSlowFrames(threshold: number, minConsecutiveDropMs: number, cb: () => void): () => void;
+
+  /** Marks a navigation event — resets slow-frame accumulator to avoid spurious downgrades. */
+  markNavigation(): void;
+
+  /** Returns a summary string for the dev overlay. */
+  summary(): string;
+}
+```
+
+The monitor is created in `main.ts` and `tick(now)` is called at the top of the `animate` loop. Its `onSlowFrames` callback is wired to `PreferencesStore.setQuality` only after the `FrameBudgetMonitor` returns data for a full 5s window, preventing spurious downgrades during startup.
+
+#### New file `src/debug/MaterialInspector.ts`
+
+```typescript
+/**
+ * Development-only overlay.
+ * Only constructed when the URL contains '?debug=material'.
+ * Never bundled into the production customer preview.
+ */
+export class MaterialInspector {
+  constructor(
+    app: HTMLElement,
+    artworkMesh: ArtworkMesh,
+    lightingSetup: LightingSetup,
+    frameBudget: FrameBudgetMonitor
+  );
+
+  dispose(): void;
+}
+```
+
+Renders an absolutely positioned panel showing: active preset, shader variant, active map list, FPS (all three windows), pixel ratio, anisotropy cap, and buttons to toggle each texture map individually. Fully hidden and not imported in non-debug builds.
+
+#### Changes to `src/main.ts`
+
+```typescript
+// 1. Before RendererManager construction — detect backend:
+const backendId = await detectBackend();
+if (backendId === 'webgpu-experimental') {
+  const { initWebGPUPrototype } = await import('./rendering/WebGPUPrototype');
+  const result = await initWebGPUPrototype(document.createElement('canvas'));
+  if (!result.fallbackToWebGL) {
+    // future: hand off to WebGPU full path
+    console.info('[WebGPU] probe result:', result);
+  }
+  // for now always continue with WebGL; the probe is informational only
+}
+
+// 2. Create FrameBudgetMonitor after renderer:
+const frameBudget = new FrameBudgetMonitor();
+
+// 3. In animate loop — add tick at the top:
+const animate = (now: number): void => {
+  rafId = requestAnimationFrame(animate);
+  frameBudget.tick(now);          // <-- new
+  lightingSetup.update(now);
+  galleryManager.update();
+  postProcessing.render();
+};
+
+// 4. Adaptive quality — wired after a full 5s window:
+frameBudget.onSlowFrames(28, 6000, () => {
+  const current = preferences.current.quality;
+  if (current === 'high')        preferences.setQuality('balanced');
+  else if (current === 'balanced') preferences.setQuality('battery');
+  // battery already at floor — no further downgrade
+});
+
+// 5. MaterialInspector — dev only:
+if (new URLSearchParams(location.search).get('debug') === 'material') {
+  const { MaterialInspector } = await import('./debug/MaterialInspector');
+  new MaterialInspector(app, artworkMesh, lightingSetup, frameBudget);
+}
+```
+
+---
+
+### v0.02 Shader Implementation Plan
+
+This section is the normative reference for `PaintingMaterial.onBeforeCompile`. All GLSL is for Three.js `0.166.x` chunk names — verify chunk names against `node_modules/three/src/renderers/shaders/ShaderChunk/` before coding.
+
+#### Inject point strategy
+
+Three.js `MeshPhysicalMaterial` fragment shader includes these chunks in order (relevant subset):
+
+```
+#include <map_fragment>            — samples albedo (map)
+#include <roughnessmap_fragment>   — samples roughnessMap, sets roughnessFactor
+#include <metalnessmap_fragment>   — samples metalnessMap, sets metalnessFactor
+#include <normal_fragment_begin>   — declares 'normal' from geometry data
+#include <normal_fragment_maps>    — applies normalMap (sets normal in view space)
+#include <clearcoat_normal_fragment_maps>
+#include <emissivemap_fragment>
+#include <lights_physical_fragment> — PBR lighting integration
+#include <aomap_fragment>          — applies aoMap, multiplies diffuse colour
+```
+
+Our injections use `shader.fragmentShader = shader.fragmentShader.replace(...)`.
+
+#### Uniform declarations (injected into fragmentShader before first `#include`)
+
+```glsl
+uniform float uCanvasNormalStrength;
+uniform float uDetailNormalStrength;
+uniform float uBumpStrength;
+uniform float uSpecularStrength;
+uniform float uRoughnessFloor;
+uniform float uRoughnessCeiling;
+uniform float uVarnishStrength;
+uniform float uDetailTiling;
+uniform float uLightGrazingBoost;
+uniform float uCloseInspectionMix;
+uniform float uReducedMotionScalar;
+uniform sampler2D tDetailNormal;
+uniform sampler2D tHeight;
+uniform sampler2D tRoughness;
+uniform sampler2D tSpecular;
+uniform sampler2D tAO;
+```
+
+All injected via `shader.uniforms = { ...THREE.UniformsUtils.clone(shader.uniforms), ...this.paintingUniforms }`.
+
+#### Injection 1 — After `#include <roughnessmap_fragment>`: roughness and specular map override
+
+```glsl
+// ─── PAINTING: roughness map override ───────────────────────────────────────
+#ifdef PAINTING_USE_ROUGHNESS_MAP
+  float paintRoughSample = texture2D(tRoughness, vMapUv).r;
+  roughnessFactor = mix(uRoughnessFloor, uRoughnessCeiling, paintRoughSample);
+#endif
+
+// ─── PAINTING: specular variation ───────────────────────────────────────────
+#ifdef PAINTING_USE_SPECULAR_MAP
+  float paintSpecSample = texture2D(tSpecular, vMapUv).r;
+  // Boost reflectance by up to uSpecularStrength for varnished/thick areas.
+  // In Three.js PBR, specular reflectance for dielectrics scales with 'specularIntensity'.
+  // We modulate it here by patching the physical fragment after roughness is resolved.
+  specularColor = mix(specularColor, specularColor * (1.0 + paintSpecSample * uSpecularStrength), uVarnishStrength);
+#endif
+```
+
+Note: `specularColor` is available in `lights_physical_fragment` context. If the injection point is before that chunk, use `specularIntensityFactor` instead. Verify against `three/src/renderers/shaders/ShaderLib/meshphysical.glsl.js` at 0.166.
+
+#### Injection 2 — After `#include <normal_fragment_maps>`: detail normal blend and bump
+
+```glsl
+// ─── PAINTING: detail normal blend ──────────────────────────────────────────
+#ifdef PAINTING_USE_DETAIL_NORMAL
+  vec4 detailNormalTexel = texture2D(tDetailNormal, vMapUv * uDetailTiling);
+  // Unpack tangent-space detail normal
+  vec3 detailN = normalize(detailNormalTexel.xyz * 2.0 - 1.0);
+  // Reoriented Normal Mapping (RNM) blend keeps both normals in tangent space
+  // before the TBN matrix is applied:
+  //   n = normalize( vec3(n1.xy + n2.xy, n1.z) )
+  // At this point 'normal' is already in view space (Three.js applies TBN in
+  // normal_fragment_maps). We therefore apply a simpler weighted overlay:
+  normal = normalize(
+    normal + (detailN * uDetailNormalStrength * uReducedMotionScalar)
+  );
+#endif
+
+// ─── PAINTING: bump/height perturbation ─────────────────────────────────────
+#ifdef PAINTING_USE_BUMP
+  float bumpH  = texture2D(tHeight, vMapUv).r;
+  float bumpDx = dFdx(bumpH) * uBumpStrength;
+  float bumpDy = dFdy(bumpH) * uBumpStrength;
+  normal = normalize(normal + vec3(bumpDx, bumpDy, 0.0));
+#endif
+```
+
+Note on `uReducedMotionScalar`: setting it to 0.0 via `PreferencesStore` effectively disables the detail-normal blend contribution, making the painting look flatter and calmer. This is the accessibility hook.
+
+#### Injection 3 — After `#include <aomap_fragment>`: custom AO and grazing-light boost
+
+```glsl
+// ─── PAINTING: custom AO map ─────────────────────────────────────────────────
+#ifdef PAINTING_USE_AO
+  float paintAO = texture2D(tAO, vMapUv).r;
+  reflectedLight.indirectDiffuse *= paintAO;
+#endif
+
+// ─── PAINTING: grazing-light boost ──────────────────────────────────────────
+#ifdef PAINTING_USE_GRAZING_BOOST
+  // NdotV — angle between view and normal.
+  // A grazing angle (near 90°) should show more surface texture catch-light.
+  float NdotV = abs(dot(normal, normalize(vViewPosition)));
+  float grazingMask = pow(1.0 - NdotV, 3.0);  // stronger at near-90°
+  reflectedLight.directSpecular *= (1.0 + grazingMask * uLightGrazingBoost);
+#endif
+```
+
+#### Compile-time `#define` strategy
+
+`onBeforeCompile` sets `#define` flags based on the active preset and available maps, then prepends them to the fragment shader:
+
+```typescript
+const defines: string[] = [];
+if (preset.detailNormalEnabled && textures.detailNormal) defines.push('#define PAINTING_USE_DETAIL_NORMAL');
+if (preset.bumpStrength > 0 && textures.height)          defines.push('#define PAINTING_USE_BUMP');
+if (textures.roughness)                                   defines.push('#define PAINTING_USE_ROUGHNESS_MAP');
+if (textures.specular)                                    defines.push('#define PAINTING_USE_SPECULAR_MAP');
+if (preset.aoEnabled && textures.ao)                      defines.push('#define PAINTING_USE_AO');
+if (preset.grazingBoostEnabled)                           defines.push('#define PAINTING_USE_GRAZING_BOOST');
+
+shader.fragmentShader = defines.join('\n') + '\n' + shader.fragmentShader;
+```
+
+This ensures battery mode never executes expensive texture reads for detail/bump/AO even when the maps exist in memory.
+
+**Important:** changing defines requires `material.needsUpdate = true` and may trigger a full shader recompile. Only call `applyPreset` when the preset actually changes. Cache the last applied variant id.
+
+---
+
+### v0.02 Procedural Map Generation — Detail Specification
+
+`ProceduralTextureFactory` replaces the current 128×128 normal map in `CanvasMaterial` with five higher-quality maps.
+
+#### Normal map (256 × 256, wrapS/wrapT = RepeatWrapping, repeat = 4 × 4)
+
+```typescript
+// Pseudo-code — implementation may vary; visual result matters more than exact formula.
+for (let y = 0; y < 256; y++) {
+  for (let x = 0; x < 256; x++) {
+    const h = this.hash(artworkId);
+    const offset = (h % 100) / 100.0;
+    const oct1 = Math.sin(x * 0.42 + offset) * Math.cos(y * 0.38) * 14;
+    const oct2 = Math.sin(x * 0.19 + offset * 2) * Math.cos(y * 0.22) * 6;
+    const weave = Math.sin((x + y) * 0.11) * 3;
+    const v = oct1 + oct2 + weave;
+    R[i] = clamp(128 + v, 0, 255);
+    G[i] = clamp(128 - v, 0, 255);
+    B[i] = 255;
+  }
+}
+```
+
+Result maps to a tangent-space normal (0,0,1) at rest with subtle XY variation that catches raking light.
+
+#### Detail normal map (256 × 256, wrapS/wrapT = RepeatWrapping, repeat = 18 × 18)
+
+Higher frequency than base normal — represents individual canvas threads.
+
+```typescript
+// 4 octaves of fine weave noise; repeat tiling chosen so threads are ~2 px wide
+// at normal viewing distance, giving canvas-tooth appearance.
+const oct1 = Math.sin(x * 1.1) * Math.cos(y * 0.9) * 18;
+const oct2 = Math.sin(x * 2.3 + 0.7) * Math.cos(y * 2.1) * 7;
+const oct3 = Math.cos(x * 4.1) * Math.sin(y * 3.8) * 2.5;
+const oct4 = Math.sin((x - y) * 5.5) * 1.0;
+```
+
+#### Height / bump map (256 × 256, repeat = 4 × 4)
+
+Grayscale R channel:
+
+```typescript
+// Dominant horizontal brush strokes
+const stroke = Math.abs(Math.sin(y * 0.12 + (hash % 64) * 0.05)) * 80;
+// Secondary cross-hatch
+const cross = Math.abs(Math.sin(x * 0.09 + (hash % 32) * 0.07)) * 30;
+// Canvas tooth grain
+const tooth = Math.sin(x * 1.4) * Math.sin(y * 1.6) * 12;
+const h = clamp(stroke + cross + tooth, 0, 255);
+```
+
+#### Roughness map (128 × 128, repeat = 6 × 6)
+
+Low-frequency Perlin-like variation between [60, 220] (0 = perfectly smooth, 255 = fully rough):
+
+```typescript
+// 2-octave smooth noise; low frequency so it reads as varnish pooling
+const n1 = (Math.sin(x * 0.09) * Math.cos(y * 0.07)) * 0.5 + 0.5;
+const n2 = (Math.sin(x * 0.21 + 1.3) * Math.cos(y * 0.18 + 0.7)) * 0.5 + 0.5;
+const combined = n1 * 0.7 + n2 * 0.3;
+R[i] = Math.round(60 + combined * 160);
+```
+
+#### Specular map (128 × 128, repeat = 6 × 6)
+
+Mostly dark (no specular), sparse bright pixels:
+
+```typescript
+// Baseline near-zero: 12 / 255
+// Gaussian blobs at hash-determined positions to represent varnish pooling
+const dist = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
+const blob = Math.exp(-dist * dist / (radius * radius)) * 200;
+R[i] = Math.round(Math.min(12 + blob, 255));
+```
+
+---
+
+### v0.02 Lighting Model — Full Specification
+
+See `src/lighting/LightProfile.ts` (§TypeScript Contract) for the type definition and four named profiles.
+
+**Colour temperature conversion** — implemented as `kelvinToColor(K): THREE.Color`:
+
+```
+T = K / 100
+if T <= 66:
+  R = 255
+  G = 99.4708025861 * ln(T) - 161.1195681661
+  B = T <= 19 ? 0 : 138.5177312231 * ln(T - 10) - 305.0447927307
+else:
+  R = 329.698727446 * (T - 60)^(-0.1332047592)
+  G = 288.1221695283 * (T - 60)^(-0.0755148492)
+  B = 255
+Clamp each channel to [0, 255]; divide by 255 for Three.Color.
+```
+
+This gives visually correct warm (3200 K) to cool daylight (6500 K) tints for each profile.
+
+**Profile application in `LightingSetup.setProfile(id)`:**
+
+1. Call `kelvinToColor(profile.colorTemperatureK)` to get the colour.
+2. Set `spotlight.color`, `spotlight.position`, `spotlight.angle`, `spotlight.penumbra`, `spotlight.intensity`.
+3. Set `ambientLight.intensity`.
+4. Store `profile` as `activeProfile`.
+5. The `update(time)` method checks `activeProfile.motionAmplitude === 0` to skip oscillation.
+
+---
 
 ### v0.02 Experimental WebGPU Strategy
 
-WebGPU work must be isolated, measurable, and reversible.
+See `src/rendering/RenderBackend.ts` and `src/rendering/WebGPUPrototype.ts` in §TypeScript Contract.
 
-Implementation targets:
+Key constraints:
+- `detectBackend()` must never call `navigator.gpu.requestAdapter()` — adapter requests can trigger browser permission prompts or errors. The detection is purely `navigator.gpu !== undefined`.
+- The actual `requestAdapter()` call lives inside `WebGPUPrototype.initWebGPUPrototype()` which is only invoked after the user has explicitly opted in via query param or `localStorage`.
+- In v0.02 the WebGPU path is **informational only**: it probes, logs, and falls back to WebGL. No customer-facing work renders through WebGPU in v0.02.
+- After the probe result is logged to console, the normal WebGL `RendererManager` boot continues unchanged.
 
-- Add `isWebGPUAvailable()` feature detection using `navigator.gpu` without requesting an adapter during normal WebGL boot unless the user explicitly selects WebGPU experimental mode.
-- Add `webgpu-experimental` as a hidden/dev quality/backend option, not a customer default.
-- Prototype one artwork material path in WebGPU before attempting full parity.
-- Keep WebGPU code behind dynamic import so unsupported browsers do not pay parse/initialization cost.
-- Document all browser support caveats in `FINDINGS.md` and `docs/HANDOFF.md`.
-- If Three.js WebGPURenderer is used, pin the compatible Three.js examples import path and document any API instability.
-- If a custom WebGPU pass is used, keep it limited to material preview or offscreen experimentation until parity is proven.
-
-Acceptance for WebGPU in v0.02:
-
-- WebGL path remains unchanged and production-ready if WebGPU is unsupported.
-- WebGPU mode can be enabled manually in development.
-- WebGPU failure falls back to WebGL without blank screen or broken UI.
-- WebGPU prototype reports at least frame timing, adapter info when allowed, selected limits, and unsupported feature reasons.
+---
 
 ### v0.02 Performance Budgets
 
-Performance must be treated as a first-class implementation requirement.
-
 Frame targets:
 
-| Device class | Target | Required preset behavior |
+| Device class | Target | Required preset |
 | --- | --- | --- |
-| Mid-range discrete GPU | 60 FPS at 1440p | balanced preset, post-processing enabled, detail normal enabled |
-| High-end discrete GPU | 60 FPS at 4K or high-DPI capped | high preset, full detail stack, controlled bloom |
-| Old integrated GPU | 25 FPS minimum at 720p–1080p | battery preset, no AO/grazing boost, lower pixel ratio, fewer segments |
+| Mid-range discrete GPU (e.g. GTX 1660, RX 580) | 60 FPS at 1440p | balanced |
+| High-end discrete GPU (e.g. RTX 3070, RX 6700) | 60 FPS at 4K capped 1.8 DPR | high |
+| Old integrated GPU (e.g. Intel HD 620, Iris 640) | 25 FPS minimum at 1080p | battery |
 
-Initial budgets:
+Texture read budget per fragment:
 
-- Balanced fragment texture reads should target no more than 5–6 lookups per fragment for artwork material.
-- Battery fragment texture reads should target no more than 2–3 lookups per fragment.
-- Artwork geometry should stay tied to quality presets; do not increase segments globally without measurement.
-- Texture memory for all loaded artwork material maps should be budgeted before implementation; avoid loading high-resolution auxiliary maps for inactive/side-preview works.
-- Use mipmaps and anisotropy carefully; high anisotropy helps oblique viewing but can be expensive on older GPUs.
-- Disable or lower bloom when material highlights already provide realistic specular response.
+| Preset | Max texture reads (artwork material) |
+| --- | --- |
+| high | 7 (albedo + normal + detailNormal + height + roughness + specular + AO) |
+| balanced | 5 (albedo + normal + detailNormal + roughness + specular) |
+| battery | 2 (albedo + normal only) |
 
-Measurement plan:
+Additional rules:
+- Adjacent side-preview artworks load albedo only — no auxiliary maps until the artwork is the active centre piece.
+- Timeline thumbnails use albedo only and cap anisotropy at 1.
+- `PreferencesStore.setQuality` triggers full `applyPreset` on all subsystems including `PaintingMaterial`. Shader recompile is expected and acceptable on preset change; it must not interrupt the animation loop visibly (use `requestAnimationFrame` timing to defer heavy work when needed).
+- Bloom should be disabled or set to `bloomStrength = 0` for high preset when `uSpecularStrength > 0.1` because the specular highlight already provides the sheen effect. This avoids double-brightening varnished areas.
 
-- Add a `FrameBudgetMonitor` that records rolling 1s, 5s, and 30s FPS averages.
-- Record approximate active texture count and selected shader variant in development logs.
-- Create a manual performance test matrix for:
-  - first load
-  - idle front view
-  - zoomed close inspection
-  - panning while zoomed
-  - rapid artwork navigation
-  - fullscreen presentation
-  - reduced-motion + battery preset
-- Add performance findings to `FINDINGS.md` after every shader slice.
+---
 
 ### v0.02 Texture Asset Pipeline
 
-v0.02 should plan for real texture maps but still keep the local preview robust.
+File naming convention under `public/assets/artworks/{artworkId}/`:
 
-Implementation targets:
+```
+{artworkId}-albedo.webp          — sRGB, full resolution
+{artworkId}-normal.webp          — linear, 1024×1024 recommended
+{artworkId}-detail-normal.webp   — linear, 512×512 at minimum
+{artworkId}-height.webp          — linear grayscale R, 512×512
+{artworkId}-roughness.webp       — linear grayscale R, 512×512
+{artworkId}-specular.webp        — linear grayscale R, 256×256
+{artworkId}-ao.webp              — linear grayscale R, 512×512
+```
 
-- Define a texture naming convention:
-  - `{artworkId}-albedo.webp`
-  - `{artworkId}-normal.webp` or `.png` if precision requires it
-  - `{artworkId}-detail-normal.webp/png`
-  - `{artworkId}-height.webp/png`
-  - `{artworkId}-roughness.webp`
-  - `{artworkId}-specular.webp`
-  - `{artworkId}-ao.webp`
-- Add metadata fields for map paths and scale factors without requiring every map at first.
-- Load maps lazily by role:
-  - current artwork: full selected preset map set
-  - adjacent side previews: albedo only or albedo + low normal
-  - timeline: thumbnail/albedo only
-- Keep procedural fallback maps for offline development and missing asset safety.
-- Document every map's intended color space:
-  - albedo: sRGB
-  - normal/detail/height/roughness/specular/AO: linear/no color transform
-- Prefer GPU-compressed textures only after measuring browser support and build complexity.
+Loading rules:
+- All map loads go through `TextureManager.loadForRole(url, role)`.
+- Role determines color space: `albedo → SRGBColorSpace`, all others → `LinearSRGBColorSpace`.
+- Anisotropy cap per preset: `maxAnisotropy / anisotropyDivisor`, minimum 1.
+- Active artwork: load full preset-appropriate map set.
+- Side previews: albedo only.
+- Timeline: albedo only, scaled to thumbnail size.
+- Fallback: `ProceduralTextureFactory.generate(artworkId, role)` whenever a URL is absent or fails.
+
+---
 
 ### v0.02 Vertical Slices
 
 #### Slice 1 — Texture Set Metadata Contract
 
-Goal: extend artwork metadata for realistic painting maps without requiring the final maps immediately.
+Goal: extend `Artwork` and `QualityPreset` with v0.02 fields so TypeScript catches invalid usage before any shader code is written.
 
-Implementation targets:
-
-- Add `PaintingTextureSet` types for albedo, normal, detail normal, bump/height, roughness, specular, and AO.
-- Add per-map color-space and resolution metadata.
-- Add material tuning fields for strength/tiling defaults.
-- Update `TextureManager` or add `PaintingTextureManager` for role-aware map loading.
-- Keep existing v0.01 artworks working through procedural fallback maps.
+Files changed:
+- `src/config/artworks.ts` — add `PaintingTextureMapEntry`, `PaintingTextureSet`, extend `Artwork` with `textureSet?`.
+- `src/materials/PaintingTextureSet.ts` — new; re-export and add `PaintingMapRole`.
+- `src/config/quality.ts` — add `shaderVariant`, `normalStrength`, `detailNormalStrength`, `bumpStrength`, `specularStrength`, `anisotropyDivisor`, `aoEnabled`, `grazingBoostEnabled`, `detailNormalEnabled` to `QualityPreset`; update all three preset objects.
+- `src/gallery/TextureManager.ts` — add `loadForRole(url, role)` and `preloadTextureSet(set, divisor)`.
 
 Acceptance checks:
-
-- TypeScript prevents invalid map roles or missing required albedo.
-- Existing preview still loads with fallback maps.
-- Documentation explains which maps are required for final realism and which are optional.
+- `npm run build` clean with zero new TypeScript errors.
+- All four existing artwork entries in `artworks.ts` continue to work (no `textureSet` required).
+- `loadForRole` correctly sets `LinearSRGBColorSpace` for a `'normal'` role and `SRGBColorSpace` for `'albedo'`.
 
 #### Slice 2 — Procedural Painting Map Generator
 
-Goal: create believable fallback normal/detail/bump/roughness/specular maps so the material system can be developed before final scanned assets exist.
+Goal: create believable fallback maps so the material shader can be developed and reviewed before final scanned assets exist.
 
-Implementation targets:
-
-- Generate deterministic canvas weave normal maps per artwork id.
-- Generate brush-stroke height noise using layered directional noise or canvas-based procedural strokes.
-- Generate roughness/specular variation that follows plausible pigment/varnish patterns.
-- Cache generated textures and dispose them correctly.
-- Keep generation cheap enough for local preview startup.
+Files changed:
+- `src/materials/ProceduralTextureFactory.ts` — new; implements all five map generators from §Procedural Map Generation.
 
 Acceptance checks:
-
-- Close-up view reveals canvas tooth and subtle brush relief.
-- Generated maps do not create distracting repeating patterns at normal viewing distance.
-- Battery preset can skip detail generation or use lower resolution.
+- Calling `factory.generate('electric-storm', 'normal')` twice returns the cached instance.
+- Close-up inspection in `npm run dev` reveals canvas tooth and brush relief in the normal map.
+- Battery preset skips detail normal generation (factory still creates it; the caller simply does not pass it to `PaintingMaterial`).
+- Maps disposed cleanly via `disposeAll()`.
 
 #### Slice 3 — PaintingMaterial WebGL Prototype
 
-Goal: replace the current simple physical material with a painting-aware material while preserving existing interactions.
+Goal: replace inline `MeshPhysicalMaterial` in `ArtworkMesh` with `PaintingMaterial`, wiring albedo, base-normal, roughness, and specular maps first.
 
-Implementation targets:
-
-- Introduce `PaintingMaterial` factory around `MeshPhysicalMaterial`.
-- Wire albedo, normal, roughness, and specular maps first.
-- Add quality-dependent defines for high/balanced/battery shader variants.
-- Preserve current tone mapping, color management, and disposal behavior.
-- Add development toggles to disable each map for comparison.
+Files changed:
+- `src/materials/PaintingMaterial.ts` — new; full class with `onBeforeCompile`, uniforms, and `applyPreset`.
+- `src/gallery/ArtworkMesh.ts` — replace inline material, add `setMaps(textures)` and `applyPreset` delegation.
+- `src/gallery/GalleryManager.ts` — call `textureManager.preloadTextureSet` in `showArtwork`; pass result to `artworkMesh.setMaps`.
+- `src/materials/CanvasMaterial.ts` — deprecate; functionality moved into `ProceduralTextureFactory` and `PaintingMaterial`.
 
 Acceptance checks:
+- Lighting visibly responds to base normal map under raking inspection light.
+- Roughness map variation visible under directional light.
+- No regression in zoom, pan, aspect ratio, or timeline navigation.
+- `npm run lint` and `npm run build` clean.
 
-- Lighting visibly responds to normal/roughness/specular maps.
-- No visible regression in artwork aspect fitting, zoom, pan, or timeline navigation.
-- Battery preset remains visually acceptable and measurably cheaper.
+#### Slice 4 — Detail Normal + Bump Height Refinement
 
-#### Slice 4 — Detail Normal + Bump / Height Refinement
+Goal: make close-up inspection reveal canvas tooth and brush relief.
 
-Goal: make close-up inspection look like real paint on canvas.
-
-Implementation targets:
-
-- Blend base normal and detail normal with stable tangent-space math.
-- Add bump/height perturbation that scales with zoom/inspection distance.
-- Reduce high-frequency detail at distance to avoid shimmer/aliasing.
-- Use mipmap-aware tiling and clamp extreme normal strengths.
-- Respect reduced-motion by avoiding animated surface shimmer.
+Files changed:
+- `src/materials/PaintingMaterial.ts` — add `PAINTING_USE_DETAIL_NORMAL` and `PAINTING_USE_BUMP` injection points from §Shader Implementation Plan.
+- `src/gallery/ArtworkMesh.ts` — pass `detailNormal` and `height` textures from `ResolvedPaintingTextures`.
 
 Acceptance checks:
-
-- Detail is visible when zoomed in but not noisy at default framing.
-- Grazing light reveals texture without washing out the painting.
-- Low-end preset disables or heavily reduces the expensive detail path.
+- Zoomed-in view shows canvas fibre detail not present at gallery distance.
+- Battery preset produces measurably fewer texture reads (verify by commenting out detail defines and checking FPS in dev tools).
+- `uReducedMotionScalar` set to 0 flattens the detail normal blend — confirm by toggling reduced-motion in preferences.
 
 #### Slice 5 — Realistic Gallery Light Profiles
 
-Goal: make material relief readable through physically plausible light direction and intensity.
+Goal: make the material relief visible through physically correct light direction and intensity.
 
-Implementation targets:
-
-- Add typed light profiles with angle, color temperature, intensity, and motion flags.
-- Add raking inspection light mode for texture review.
-- Integrate light profile selection with presentation/fullscreen UI only if it stays uncluttered.
-- Clamp bloom and exposure for highlight-heavy profiles.
+Files changed:
+- `src/lighting/LightProfile.ts` — new; `LightProfileId`, `LightProfile`, `LIGHT_PROFILES`, `kelvinToColor`.
+- `src/lighting/LightingSetup.ts` — add `setProfile(id)`, update `update(time)` to use `activeProfile.motionAmplitude`, call `kelvinToColor`.
 
 Acceptance checks:
+- `raking-inspection` profile clearly reveals bump and normal relief.
+- `museum-neutral` flattens highlights and shows true colour.
+- All profiles respect `setAnimated(false)` for reduced-motion mode.
+- No regression in shadow toggle from `applyPreset`.
 
-- Raking light reveals bump/normal relief clearly.
-- Museum-neutral profile preserves color and reduces dramatic highlights.
-- Reduced-motion freezes moving light profiles.
+#### Slice 6 — Frame Budget Monitor + Dev Overlay
 
-#### Slice 6 — Frame Budget Monitor + Manual Benchmark Overlay
+Goal: make the 60/25 FPS targets measurable before adding adaptive quality.
 
-Goal: make the FPS requirements measurable before adding adaptive quality.
-
-Implementation targets:
-
-- Add rolling FPS monitor with 1s/5s/30s averages.
-- Add dev-only overlay showing preset, backend, pixel ratio, shader variant, active map count, and FPS.
-- Keep overlay disabled in customer preview unless explicitly enabled by query parameter/local setting.
-- Document benchmark procedure in `docs/HANDOFF.md`.
+Files changed:
+- `src/performance/FrameBudgetMonitor.ts` — new; rolling FPS windows, `onSlowFrames`, `markNavigation`, `summary`.
+- `src/debug/MaterialInspector.ts` — new; dev overlay (only when `?debug=material` is present).
+- `src/main.ts` — wire `frameBudget.tick(now)` in the animation loop; conditional `MaterialInspector` construction.
 
 Acceptance checks:
-
-- Mid-range test can confirm 60 FPS target manually.
-- Low-end/iGPU test can confirm 25 FPS target manually.
-- Findings record device/browser/preset results.
+- `frameBudget.getFps('5s')` returns a reasonable FPS after 5 seconds of animation.
+- Dev overlay visible with `?debug=material` query param.
+- Overlay hidden in `npm run build` customer preview (guard in `main.ts`).
 
 #### Slice 7 — Adaptive Quality Guardrails
 
-Goal: protect weaker GPUs from falling below the minimum target.
+Goal: protect weaker GPUs from falling and staying below 25 FPS without requiring manual intervention.
 
-Implementation targets:
-
-- Add optional adaptive downgrade from high → balanced → battery based on sustained low FPS.
-- Never downgrade immediately during loading or short navigation spikes.
-- Notify the user unobtrusively if quality is reduced automatically.
-- Allow manual override through preferences.
+Files changed:
+- `src/main.ts` — wire `frameBudget.onSlowFrames(28, 6000, downgradeQuality)` after the FPS window fills.
+- `src/performance/FrameBudgetMonitor.ts` — add `markNavigation()` to reset slow-frame accumulator.
+- `src/gallery/GalleryManager.ts` — call `frameBudget.markNavigation()` in `navigate()` and `goTo()`.
 
 Acceptance checks:
-
-- Sustained low FPS triggers safe downgrade.
-- Quality switch does not reset artwork, zoom, pan, fullscreen, or accessibility state.
-- Manual preset selection can disable automatic changes.
+- Sustained < 28 FPS for 6 seconds triggers a quality downgrade.
+- Downgrade from balanced → battery does not reset artwork, zoom, pan, fullscreen, or accessibility state.
+- Manual quality selection in `PreferencesPanel` disables automatic downgrade for the current session (set a `manualOverride` flag in `PreferencesStore`).
 
 #### Slice 8 — Experimental WebGPU Backend Probe
 
-Goal: introduce WebGPU experimentation without risking the production WebGL preview.
+Goal: introduce the WebGPU probe without touching the production WebGL path.
 
-Implementation targets:
-
-- Add WebGPU feature detection and backend metadata.
-- Add dynamic import for WebGPU prototype code.
-- Implement a minimal material-preview path for one artwork or offscreen render target.
-- Log adapter limits and unsupported reasons in development mode.
-- Fall back to WebGL on any failure.
+Files changed:
+- `src/rendering/RenderBackend.ts` — new; `detectBackend`, `getBackendInfo`.
+- `src/rendering/WebGPUPrototype.ts` — new; `initWebGPUPrototype`, `WebGPUProbeResult`.
+- `src/main.ts` — add backend detection before `RendererManager` construction; conditional dynamic import.
 
 Acceptance checks:
-
-- Unsupported browsers continue with WebGL and no UI breakage.
-- Supported browsers can manually enable WebGPU experimental mode.
-- WebGPU code path is clearly labeled experimental in UI/docs.
+- Without `?backend=webgpu`, `detectBackend()` always returns `'webgl'` regardless of browser support.
+- With `?backend=webgpu` on a supporting browser, probe runs and logs adapter info to console.
+- Any WebGPU failure falls back to the normal WebGL boot — no blank screen, no broken UI.
+- `npm run build` customer preview never imports `WebGPUPrototype` eagerly.
 
 #### Slice 9 — Real Texture Asset Integration Pass
 
-Goal: replace procedural fallback maps for at least one artwork with real authored/scanned maps.
+Goal: integrate one complete real or authored texture set and compare it against procedural fallbacks.
 
-Implementation targets:
-
-- Add one complete texture set for a representative artwork.
-- Compare procedural vs authored maps under all light profiles.
-- Document asset size, compression, color-space decisions, and visual differences.
-- Ensure preview build remains local/offline safe.
+Files changed:
+- `public/assets/artworks/electric-storm/` — add one artwork's texture set (albedo, normal, height, roughness, specular; AO optional).
+- `src/config/artworks.ts` — add `textureSet` field to the `electric-storm` artwork entry pointing to the new files.
 
 Acceptance checks:
-
-- Authored maps produce visibly more realistic paint relief than fallback maps.
-- File size remains acceptable for local preview.
-- Side previews and timeline do not load unnecessary heavy maps.
+- Authored normal/height maps produce visibly more realistic paint relief than procedural fallbacks under raking light.
+- Preview build remains local and offline safe (all assets are in `public/`).
+- File sizes documented in `FINDINGS.md` with compression decisions.
 
 #### Slice 10 — v0.02 Documentation, Review, and Handoff
 
-Goal: make shader and WebGPU decisions reviewable and reproducible.
+Goal: make all shader and WebGPU decisions reviewable and reproducible for future contributors.
 
-Implementation targets:
-
-- Update `docs/HANDOFF.md` with shader controls, benchmark procedure, and WebGPU caveats.
-- Add material architecture diagram or extend existing `docs/assets/architecture.svg`.
-- Add screenshot guidance for close-up material comparison: neutral light, raking light, high contrast, battery mode.
-- Record benchmark and browser findings in `FINDINGS.md`.
+Files changed:
+- `docs/HANDOFF.md` — add shader controls, benchmark procedure, light profile descriptions, WebGPU probe instructions.
+- `docs/assets/architecture.svg` — extend with v0.02 material system, light profiles, FrameBudgetMonitor, and WebGPU probe paths.
+- `plan.md` — mark each slice as implemented and add per-slice findings.
+- `FINDINGS.md` — add per-slice benchmark and visual notes.
+- `CHANGELOG.md` — add v0.02 dated entry.
 
 Acceptance checks:
+- A future contributor can understand the full material, lighting, and WebGPU pipeline from docs alone.
+- Customer-facing handoff clearly marks WebGL as stable and WebGPU as experimental.
 
-- A future contributor can implement or review the material path from docs alone.
-- Customer-facing handoff clearly distinguishes stable WebGL from experimental WebGPU.
-- Markdown docs and changelog reflect actual shipped shader slices.
+---
 
 ### Recommended v0.02 Execution Order
 
-1. Slice 1 — Texture Set Metadata Contract
-2. Slice 2 — Procedural Painting Map Generator
-3. Slice 3 — PaintingMaterial WebGL Prototype
-4. Slice 4 — Detail Normal + Bump / Height Refinement
-5. Slice 5 — Realistic Gallery Light Profiles
-6. Slice 6 — Frame Budget Monitor + Manual Benchmark Overlay
-7. Slice 7 — Adaptive Quality Guardrails
-8. Slice 8 — Experimental WebGPU Backend Probe
-9. Slice 9 — Real Texture Asset Integration Pass
-10. Slice 10 — v0.02 Documentation, Review, and Handoff
+1. Slice 1 — Texture Set Metadata Contract *(TypeScript foundation; all later slices depend on it)*
+2. Slice 2 — Procedural Painting Map Generator *(enables shader development without real assets)*
+3. Slice 3 — PaintingMaterial WebGL Prototype *(first visual result; validates shader injection approach)*
+4. Slice 5 — Realistic Gallery Light Profiles *(needed to see the material working; low risk)*
+5. Slice 4 — Detail Normal + Bump Refinement *(builds on Slice 3; requires good lighting to evaluate)*
+6. Slice 6 — Frame Budget Monitor + Dev Overlay *(measure before guardrails)*
+7. Slice 7 — Adaptive Quality Guardrails *(depends on Slice 6 data)*
+8. Slice 8 — Experimental WebGPU Backend Probe *(isolated; can run in parallel after Slice 3)*
+9. Slice 9 — Real Texture Asset Integration Pass *(requires full material stack from Slice 4)*
+10. Slice 10 — Documentation, Review, and Handoff
 
-This order keeps the stable WebGL material path ahead of WebGPU experimentation. WebGPU should not begin until the texture-set contract, material behavior, lighting model, and measurement tools are clear enough to compare against.
+---
 
 ### v0.02 Acceptance Summary
 
-v0.02 is complete only when:
+v0.02 is complete when:
 
-- realistic painting texture is visible in close-up through normal/detail/bump/specular/roughness response
-- lighting profiles produce believable and controllable surface highlights
-- balanced preset sustains the 60 FPS target on a mid-range discrete GPU test machine
-- battery preset sustains at least 25 FPS on an old integrated GPU test machine or clearly documents the closest measured result and remaining bottleneck
-- WebGPU path is isolated, optional, documented, and never required for customer preview
-- all markdown docs include implementation results, findings, and remaining risks
+- Realistic painting texture is visible in close-up: canvas tooth, brush relief, roughness variation, and specular catch-light all respond to the active light profile.
+- `raking-inspection` profile clearly reveals surface detail not visible under `gallery-soft`.
+- Balanced preset sustains 60 FPS on a mid-range discrete GPU test machine (documented with device + browser + OS in `FINDINGS.md`).
+- Battery preset sustains at least 25 FPS on an old integrated GPU test machine (same documentation requirement).
+- WebGPU probe runs, logs adapter info, and falls back to WebGL on unsupported browsers without UI breakage.
+- All markdown files updated: `CHANGELOG.md`, `FINDINGS.md`, `README.md`, `docs/HANDOFF.md`, `plan.md`.
+
 
 ## Reserved Future Pass After v0.01
 

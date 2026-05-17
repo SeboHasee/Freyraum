@@ -76,30 +76,43 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
 
-## v0.02 shader and WebGPU review preparation
+## v0.02 shader, lighting, and WebGPU review guide
 
-v0.02 is planned as a technical rendering pass, not a customer-facing content-system pass. Future reviewers should evaluate it in two lanes:
+v0.02 is a technical rendering pass with a finalised implementation plan. Future reviewers should evaluate two independent lanes:
 
-1. **Stable WebGL material realism** — realistic painting surface response using texture sets (albedo, normal, detail normal, height/bump, roughness, specular, optional AO), physically plausible light profiles, and quality-dependent shader variants.
-2. **Experimental WebGPU probe** — isolated backend detection/prototype work that must never block the existing WebGL preview.
+**Lane 1 — Stable WebGL material realism:**
+- `PaintingMaterial` (`src/materials/PaintingMaterial.ts`) extends `MeshPhysicalMaterial` via `onBeforeCompile`
+- Shader variants: `painting-high` (7 texture reads), `painting-balanced` (5 reads), `painting-battery` (2 reads)
+- Compile-time `#define` flags: `PAINTING_USE_DETAIL_NORMAL`, `PAINTING_USE_BUMP`, `PAINTING_USE_ROUGHNESS_MAP`, `PAINTING_USE_SPECULAR_MAP`, `PAINTING_USE_AO`, `PAINTING_USE_GRAZING_BOOST`
+- Four light profiles in `src/lighting/LightProfile.ts`: `gallery-soft`, `raking-inspection`, `museum-neutral`, `dramatic-demo`
 
-Expected v0.02 review artifacts:
+**Lane 2 — Experimental WebGPU probe:**
+- Activated by `?backend=webgpu` query param or `localStorage.setItem('freyraum.backend', 'webgpu-experimental')`
+- Runs `initWebGPUPrototype()` via dynamic import; logs adapter info; always falls back to WebGL
+- Never used in the customer preview; clearly labeled experimental
 
-- close-up screenshots under `museum-neutral` and `raking-inspection` light profiles
-- side-by-side procedural fallback vs authored/scanned texture maps where available
-- FPS notes for high, balanced, and battery presets
-- clear browser/device notes for any WebGPU test
-- documentation of map color spaces: albedo as sRGB; normal/detail/height/roughness/specular/AO as linear data
+**Benchmark procedure:**
+1. Build and open `customer-preview/app.html` locally.
+2. Add `?debug=material` to the URL to enable the `MaterialInspector` overlay.
+3. The overlay shows active preset, shader variant, active map count, pixel ratio, anisotropy, and rolling FPS (1s/5s/30s).
+4. Test at least: idle front view, zoomed close inspection, panning while zoomed, rapid navigation.
+5. Document device, browser, OS, and measured FPS for each preset in `FINDINGS.md`.
 
-Performance acceptance targets for future implementation:
+**Light profile comparison procedure:**
+1. Switch to `raking-inspection` profile — surface relief should be clearly visible.
+2. Switch to `museum-neutral` — flatter light, accurate colour, no dramatic highlights.
+3. Switch to `gallery-soft` — current default; subtle slow oscillation.
+4. Capture one close-up screenshot per profile under each test.
+
+**Performance acceptance targets:**
 
 | Device class | Target | Notes |
 | --- | --- | --- |
-| Mid-range discrete GPU | 60 FPS | Balanced preset, post-processing enabled, detail normal enabled. |
-| High-end discrete GPU | 60 FPS | High preset, high-DPI capped, full material stack. |
-| Old integrated GPU | 25 FPS minimum | Battery preset, reduced texture reads, no AO/grazing boost. |
+| Mid-range discrete GPU | 60 FPS | Balanced preset, post-processing on, detail normal on. |
+| High-end discrete GPU | 60 FPS | High preset, 1.8 DPR cap, full 7-map stack. |
+| Old integrated GPU | 25 FPS minimum | Battery preset, 2 texture reads, no AO/grazing/detail normal. |
 
-WebGPU must remain labeled experimental until it reaches feature parity, graceful fallback, and browser support maturity.
+WebGPU must remain labeled experimental and optional until full parity and graceful fallback are verified across browser engines.
 
 ## Reserved future-pass items
 
