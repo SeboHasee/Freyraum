@@ -128,7 +128,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     proceduralInspectionTileSize: 2048,
     parallaxEnabled: true,
     parallaxSteps: 12,
-    parallaxScale: 0.04,
+    parallaxScale: 0.012,
     selfShadowEnabled: true,
     selfShadowSteps: 8,
     // v0.05: lowered from 0.55. Combined with the new soft accumulation,

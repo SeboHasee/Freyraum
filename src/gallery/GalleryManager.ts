@@ -325,6 +325,8 @@ export class GalleryManager {
       resetZoom: this.getResetZoom(),
       minZoom: this.getMinZoom(),
       maxZoom: MAX_CAMERA_Z,
+      parallaxEnabled: preset.parallaxEnabled,
+      parallaxScale: preset.parallaxScale,
       specularStrength: preset.specularStrength,
       selfShadowBias: preset.selfShadowBias,
     });

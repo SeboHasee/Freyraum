@@ -21,8 +21,9 @@ import type { ResolvedPaintingTextures } from './PaintingTextureSet';
  * support:
  *
  * 1. **v0.03 parallax UV offset** (`PAINTING_USE_PARALLAX`): tangent-space
- *    steep parallax march that produces a `pUV` variable used by all
- *    subsequent map samples (albedo, normal, AO, etc.). Height convention:
+ *    steep parallax march that produces a `pUV` variable used by relief-only
+ *    samples (normal/self-shadow). The actual artwork albedo stays on `vMapUv`
+ *    so height-field recesses cannot duplicate or tear the picture. Height convention:
  *    `bumpMap.r = 0.0 → deepest recess`, `1.0 → highest peak`.
  * 2. Detail-normal blending in **tangent space** before TBN multiply.
  * 3. Bump perturbation when both normalMap and bumpMap are present.
@@ -42,7 +43,8 @@ import type { ResolvedPaintingTextures } from './PaintingTextureSet';
  * Math-space contract:
  *   - vTangent / vBitangent / vNormal varyings: VIEW space (Three.js default).
  *   - uKeyLightDir: VIEW space, supplied per-frame by main.ts.
- *   - pUV: clamped to [0.001, 0.999] to avoid sampling artwork borders.
+  *   - pUV: clamped to [0.001, 0.999] and only used for relief maps; albedo
+  *     remains on vMapUv to preserve picture fidelity.
  *
  * Resource ownership: textures are owned by TextureManager /
  * ProceduralTextureFactory. This material never disposes textures it
@@ -196,9 +198,10 @@ uniform float uAlbedoOnly;
 `;
       frag = frag.replace(HEADER_TOKEN, `${HEADER_TOKEN}\n${uniformBlock}`);
 
-      // 2) Parallax march before map_fragment. Produces `pUV` which is then
-      //    used by the replaced map_fragment and normal_fragment_maps so all
-      //    surface samples agree on the same offset UV.
+      // 2) Parallax march before map_fragment. Produces `pUV` for relief-only
+      //    samples. v0.10 follow-up: albedo intentionally remains on vMapUv.
+      //    Offsetting customer-image UVs by procedural height made recesses
+      //    look like crater/holes showing a displaced copy of the same picture.
       //
       //    vTangent / vBitangent are populated by Three.js when the geometry
       //    has a tangent attribute (we call geo.computeTangents() in
@@ -229,7 +232,7 @@ uniform float uAlbedoOnly;
 #endif
 
 #ifdef USE_MAP
-    vec4 sampledDiffuseColor = texture2D( map, pUV );
+    vec4 sampledDiffuseColor = texture2D( map, vMapUv );
     #ifdef DECODE_VIDEO_TEXTURE
         sampledDiffuseColor = vec4( mix( pow( sampledDiffuseColor.rgb * 0.9478672986 + vec3( 0.0521327014 ), vec3( 2.4 ) ), sampledDiffuseColor.rgb * 0.0773993808, vec3( lessThanEqual( sampledDiffuseColor.rgb, vec3( 0.04045 ) ) ) ), sampledDiffuseColor.w );
     #endif
