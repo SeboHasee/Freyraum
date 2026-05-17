@@ -7,8 +7,8 @@ export class CanvasMaterial {
     if (this.normalTexture) return this.normalTexture;
 
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
+    canvas.width = 128;
+    canvas.height = 128;
     const ctx = canvas.getContext('2d');
 
     if (!ctx) {

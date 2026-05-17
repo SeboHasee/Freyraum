@@ -13,6 +13,7 @@
 - Convert root `index.html` into a local one-click launcher.
 - Build the customer-ready static version into `customer-preview/`.
 - Use an IIFE/classic-script bundle for the customer preview because ES module bundles can be blocked or behave inconsistently when opened directly from `file://`.
+- Post-process the generated preview bundle to replace non-security `Math.random()` calls inherited from bundled dependencies with `crypto.getRandomValues`-backed randomness where available.
 - Commit `customer-preview/` so a downloaded ZIP can be opened locally without installing Node.js.
 
 ## How to Show the Website to a Customer
@@ -43,5 +44,6 @@
 
 - `npm run build` generates `customer-preview/freyraum-gallery.js`, `customer-preview/style.css`, and `customer-preview/app.html`.
 - `customer-preview/app.html` uses a classic script tag and relative paths, so it is safe for local `file://` opening.
+- The build pipeline is split into `build:typecheck`, `build:preview`, and `build:preview-html` for easier debugging.
 - A headless Chromium smoke test against `file:///home/runner/work/Freyraum/Freyraum/customer-preview/app.html` produced a non-blank screenshot at `/tmp/freyraum-local-preview-offline.png`.
 - `npm run lint` passes; it only prints a known TypeScript parser support warning from the current dependency versions.

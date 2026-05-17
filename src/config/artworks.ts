@@ -24,6 +24,17 @@ const embeddedArtwork = ({
   secondary,
   horizon = 58,
 }: EmbeddedArtworkOptions): string => {
+  const maxDimension = Math.max(width, height);
+  const minDimension = Math.min(width, height);
+  const horizonY = height * (horizon / 100);
+  const signatureX = width * 0.06;
+  const signatureY = height * 0.92;
+  const signatureSize = maxDimension * 0.035;
+  const signatureSpacing = maxDimension * 0.004;
+  const broadStrokeWidth = maxDimension * 0.012;
+  const fineStrokeWidth = maxDimension * 0.005;
+  const circleRadius = minDimension * 0.11;
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -39,11 +50,11 @@ const embeddedArtwork = ({
   </defs>
   <rect width="100%" height="100%" fill="url(#bg)"/>
   <rect width="100%" height="100%" fill="url(#light)"/>
-  <path d="M0 ${height * (horizon / 100)} C ${width * 0.18} ${height * 0.47}, ${width * 0.36} ${height * 0.66}, ${width * 0.55} ${height * 0.54} S ${width * 0.82} ${height * 0.38}, ${width} ${height * 0.5} L ${width} ${height} L 0 ${height} Z" fill="#ffffff" opacity="0.16"/>
-  <path d="M${width * 0.08} ${height * 0.2} C ${width * 0.28} ${height * 0.08}, ${width * 0.5} ${height * 0.1}, ${width * 0.78} ${height * 0.24}" fill="none" stroke="#ffffff" stroke-width="${Math.max(width, height) * 0.012}" stroke-linecap="round" opacity="0.32"/>
-  <path d="M${width * 0.16} ${height * 0.82} C ${width * 0.36} ${height * 0.72}, ${width * 0.54} ${height * 0.9}, ${width * 0.86} ${height * 0.72}" fill="none" stroke="#11181d" stroke-width="${Math.max(width, height) * 0.005}" stroke-linecap="round" opacity="0.18"/>
-  <circle cx="${width * 0.72}" cy="${height * 0.26}" r="${Math.min(width, height) * 0.11}" fill="#ffffff" opacity="0.16"/>
-  <text x="${width * 0.06}" y="${height * 0.92}" fill="#11181d" opacity="0.28" font-size="${Math.max(width, height) * 0.035}" font-family="Inter, Arial, sans-serif" letter-spacing="${Math.max(width, height) * 0.004}">${title}</text>
+  <path d="M0 ${horizonY} C ${width * 0.18} ${height * 0.47}, ${width * 0.36} ${height * 0.66}, ${width * 0.55} ${height * 0.54} S ${width * 0.82} ${height * 0.38}, ${width} ${height * 0.5} L ${width} ${height} L 0 ${height} Z" fill="#ffffff" opacity="0.16"/>
+  <path d="M${width * 0.08} ${height * 0.2} C ${width * 0.28} ${height * 0.08}, ${width * 0.5} ${height * 0.1}, ${width * 0.78} ${height * 0.24}" fill="none" stroke="#ffffff" stroke-width="${broadStrokeWidth}" stroke-linecap="round" opacity="0.32"/>
+  <path d="M${width * 0.16} ${height * 0.82} C ${width * 0.36} ${height * 0.72}, ${width * 0.54} ${height * 0.9}, ${width * 0.86} ${height * 0.72}" fill="none" stroke="#11181d" stroke-width="${fineStrokeWidth}" stroke-linecap="round" opacity="0.18"/>
+  <circle cx="${width * 0.72}" cy="${height * 0.26}" r="${circleRadius}" fill="#ffffff" opacity="0.16"/>
+  <text x="${signatureX}" y="${signatureY}" fill="#11181d" opacity="0.28" font-size="${signatureSize}" font-family="Inter, Arial, sans-serif" letter-spacing="${signatureSpacing}">${title}</text>
 </svg>`;
 
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;

@@ -38,6 +38,14 @@ Build the local customer preview:
 npm run build
 ```
 
+The build is split into smaller scripts for debugging:
+
+```bash
+npm run build:typecheck
+npm run build:preview
+npm run build:preview-html
+```
+
 Lint source files:
 
 ```bash

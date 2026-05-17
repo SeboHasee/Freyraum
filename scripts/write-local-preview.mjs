@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 const html = `<!DOCTYPE html>
 <html lang="de">
@@ -19,4 +19,10 @@ const html = `<!DOCTYPE html>
 </html>
 `;
 
+const bundlePath = 'customer-preview/freyraum-gallery.js';
+const secureRandom = `function freyraumSecureRandom(){const cryptoApi=globalThis.crypto;if(cryptoApi&&cryptoApi.getRandomValues){const values=new Uint32Array(1);cryptoApi.getRandomValues(values);return values[0]/4294967296}return Date.now()%1000000/1000000}\n`;
+const bundle = readFileSync(bundlePath, 'utf8')
+  .replaceAll('Math.random()', 'freyraumSecureRandom()');
+
+writeFileSync(bundlePath, secureRandom + bundle);
 writeFileSync('customer-preview/app.html', html);

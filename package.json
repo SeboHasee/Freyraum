@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --open /app.html",
-    "build": "tsc && vite build --config vite.local.config.ts && node scripts/write-local-preview.mjs",
+    "build": "npm run build:typecheck && npm run build:preview && npm run build:preview-html",
     "preview": "vite preview --outDir customer-preview --open /app.html",
     "lint": "eslint src --ext ts",
-    "format": "prettier --write src"
+    "format": "prettier --write src",
+    "build:typecheck": "tsc",
+    "build:preview": "vite build --config vite.local.config.ts",
+    "build:preview-html": "node scripts/write-local-preview.mjs"
   },
   "dependencies": {
     "three": "^0.166.1"
