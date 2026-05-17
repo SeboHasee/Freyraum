@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Added (v0.07 diagnostics and logging system — 2026-05-17)
+
+- Added `src/utils/Diagnostics.ts`, a centralized diagnostics/logger singleton with:
+  - modes: `default`, `info`, `verbose`
+  - levels: `debug`, `info`, `warn`, `error`
+  - ring-buffered session history (300 entries)
+  - short-window deduplication with repeat counts
+  - structured metadata serialization
+  - global error / unhandled-rejection capture
+  - global developer API on `window.__FREYRAUM_DIAGNOSTICS__`
+- Replaced ad hoc runtime logging with structured diagnostics in:
+  - `src/main.ts`
+  - `src/rendering/RenderBackend.ts`
+  - `src/gallery/TextureManager.ts`
+  - `src/gallery/GalleryManager.ts`
+  - `src/utils/AdaptiveQualityController.ts`
+  - `src/utils/preferences.ts`
+- Kept normal console output intentionally low-noise (`warn` / `error` only) while enabling deeper logs through `?debug=1` / `?debug=verbose`.
+- Updated `plan.md`, `FINDINGS.md`, `README.md`, `docs/HANDOFF.md`, and `DOCUMENTATION_RULES.md` to document the new diagnostics architecture and reliability guidance.
+
+### Validation (v0.07 diagnostics)
+
+- `npm run lint` — passes; only the pre-existing `@typescript-eslint` TypeScript-version support warning is emitted.
+- `npm run build` — passes; only the pre-existing Dart Sass legacy-JS-API warning is emitted.
+
 ### Updated (v0.07 full technical execution plan — 2026-05-17)
 
 The v0.07 plan has been expanded from a documentation-only pass into a complete technical implementation and execution guide.

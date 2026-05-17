@@ -5,6 +5,7 @@ import { SidePanels } from './SidePanels';
 import { TextureManager } from './TextureManager';
 import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory';
 import { clamp } from '../utils/math';
+import { createScopedDiagnostics } from '../utils/Diagnostics';
 import type { QualityPreset } from '../config/quality';
 import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/PaintingTextureSet';
 
@@ -45,6 +46,7 @@ const PROCEDURAL_ROLES: PaintingMapRole[] = [
 const INSPECTION_ROLES: readonly PaintingMapRole[] = ['normal', 'detailNormal', 'height'];
 
 export class GalleryManager {
+  private readonly diagnostics = createScopedDiagnostics('gallery');
   private currentIndex = 0;
   private readonly artworkMesh: ArtworkMesh;
   private readonly sidePanels: SidePanels;
@@ -110,6 +112,12 @@ export class GalleryManager {
     // v0.06: mirror the per-preset anisotropy cap on the procedural factory
     // so DataTexture maps match authored textures at steep view angles.
     this.procedural.setAnisotropy(this.textureManager.getEffectiveAnisotropy());
+    this.diagnostics.debug('preset-applied', 'Applied gallery quality preset', {
+      shaderVariant: preset.shaderVariant,
+      anisotropy: this.textureManager.getEffectiveAnisotropy(),
+      proceduralTileSize: preset.proceduralTileSize,
+      proceduralInspectionTileSize: preset.proceduralInspectionTileSize,
+    });
     // Rebuild the current artwork's map set so preset-specific roles
     // (detailNormal, height, roughness, specular, AO) are added/removed
     // immediately on quality changes.
@@ -127,12 +135,14 @@ export class GalleryManager {
   setInspectionMode(on: boolean): void {
     if (on === this.inspectionMode) return;
     this.inspectionMode = on;
+    this.diagnostics.info('inspection-mode', `Inspection mode ${on ? 'enabled' : 'disabled'}`);
     if (this.currentPreset) void this.showArtwork(this.currentIndex);
   }
 
   async init(): Promise<void> {
     const urls = artworks.map((a) => a.image);
     await this.textureManager.preload(urls);
+    this.diagnostics.info('init', 'Preloaded gallery albedo textures', { artworkCount: urls.length });
     await this.showArtwork(0);
   }
 
@@ -173,6 +183,11 @@ export class GalleryManager {
 
     const token = ++this.artworkLoadToken;
     const preset = this.currentPreset;
+    this.diagnostics.debug('show-artwork', 'Preparing artwork render state', {
+      index,
+      artworkId: artwork.id,
+      token,
+    });
 
     // Side previews use albedo only, even when authored sets exist.
     const prevIndex = (index - 1 + artworks.length) % artworks.length;
@@ -182,6 +197,11 @@ export class GalleryManager {
     this.sidePanels.updateTextures(prevTexture, nextTexture);
 
     if (!albedo || !preset) {
+      this.diagnostics.warn('show-artwork-missing-state', 'Cannot render artwork because preset or albedo texture is missing', {
+        artworkId: artwork.id,
+        hasAlbedo: !!albedo,
+        hasPreset: !!preset,
+      });
       // Albedo preload should have populated the cache; if not, give up.
       return;
     }
@@ -190,7 +210,14 @@ export class GalleryManager {
     const authored = await this.textureManager.preloadTextureSet(artwork.textureSet);
 
     // Audited guard: discard stale loads.
-    if (token !== this.artworkLoadToken) return;
+    if (token !== this.artworkLoadToken) {
+      this.diagnostics.debug('stale-load', 'Discarded stale artwork load', {
+        artworkId: artwork.id,
+        token,
+        latestToken: this.artworkLoadToken,
+      });
+      return;
+    }
 
     // Fill in missing roles from the procedural factory.
     const resolved: ResolvedPaintingTextures = {
@@ -214,6 +241,11 @@ export class GalleryManager {
 
     this.artworkMesh.setPaintingTextures(resolved, preset);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
+    this.diagnostics.info('show-artwork-complete', 'Artwork is ready', {
+      artworkId: artwork.id,
+      activeMaps: this.artworkMesh.material.activeMaps(),
+      inspectionMode: this.inspectionMode,
+    });
 
     this.targetZoom = this.clampZoom(this.targetZoom);
     this.zoom = this.clampZoom(this.zoom);

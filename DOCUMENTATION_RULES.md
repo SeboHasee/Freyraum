@@ -44,8 +44,10 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - shader/math-space assumptions when shader code or rendering equations are planned
 - resource ownership, disposal boundaries, and async race handling for texture/material pipelines
 - browser/API stability boundaries for experimental features and debug-only tooling
+- diagnostics/logging design: log levels, signal-to-noise boundaries, retention/buffering strategy, and developer activation path
 
 ## Latest documentation pass
 
+- 2026-05-17: v0.07 diagnostics/logging pass added a centralized runtime diagnostics system and updated the planning rules so future high-risk work must document diagnostics/logging architecture, signal-to-noise boundaries, and activation paths.
 - 2026-05-17: v0.07 customer-picture workflow planning documentation added. This pass added `docs/CUSTOMER_PICTURE_GUIDE.md` and updated every repository markdown file with current limitations, online research findings, and the planned customer-managed artwork-folder importer.
 - 2026-05-17: v0.05 planning documentation added for self-shadow smoothing/stain artifact removal. This pass updated every repository markdown file to keep plan, findings, changelog, README, handoff, and documentation policy status aligned.

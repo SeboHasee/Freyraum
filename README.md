@@ -34,6 +34,41 @@ The planned v0.07 workflow is intentionally simple:
 
 The v0.07 implementation plan is in [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer). It covers common formats, large images, aspect ratios, generated metadata, optimized copies, and friendly warnings for risky files like HEIC/TIFF/RAW.
 
+## Diagnostics and debugging
+
+The preview now includes a centralized diagnostics system designed to be useful for future debugging without flooding normal customer sessions.
+
+### Normal behavior
+
+- Default console output is intentionally quiet.
+- Only real warnings and errors are printed during normal use.
+- Recent diagnostics are still kept in memory for later inspection.
+
+### Enable deeper diagnostics
+
+- `?debug=1` or `?debug=info` — readable subsystem logs
+- `?debug=verbose` — deeper engineering logs
+
+Examples:
+
+```text
+index.html?debug=1
+customer-preview/app.html?debug=verbose
+```
+
+### DevTools diagnostics API
+
+In the browser console:
+
+```js
+window.__FREYRAUM_DIAGNOSTICS__.getEntries();
+window.__FREYRAUM_DIAGNOSTICS__.snapshot();
+window.__FREYRAUM_DIAGNOSTICS__.print('info');
+window.__FREYRAUM_DIAGNOSTICS__.setMode('verbose');
+```
+
+The diagnostics system currently records boot events, renderer/backend probe status, preference/storage issues, texture fallbacks, gallery navigation/load state, adaptive quality downgrades, and uncaught runtime errors.
+
 
 ## Current interaction behavior
 

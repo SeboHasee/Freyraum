@@ -1,5 +1,56 @@
 # FINDINGS
 
+## 2026-05-17 — v0.07 diagnostics and logging system implemented
+
+The v0.07 plan previously covered the customer-managed artwork workflow well, but the code audit found a major cross-cutting gap: diagnostics were too narrow and too inconsistent for a reliability-focused rollout. Before this pass, runtime logging was limited to:
+
+- hidden `?debug=1` shader toggles in `src/main.ts`
+- one direct `console.warn()` in `src/rendering/RenderBackend.ts`
+- almost no structured visibility into boot, preferences, gallery loads, texture fallbacks, adaptive quality, or uncaught runtime errors
+
+### What is now implemented
+
+- Added `src/utils/Diagnostics.ts`, a centralized diagnostics singleton with:
+  - levels: `debug`, `info`, `warn`, `error`
+  - modes: `default`, `info`, `verbose`
+  - ring buffer of the latest 300 entries
+  - short-window deduplication with repeat counts
+  - structured metadata serialization (including `Error`)
+  - global `window` API: `window.__FREYRAUM_DIAGNOSTICS__`
+  - global capture of uncaught `error` and `unhandledrejection`
+- Updated runtime integration:
+  - `src/main.ts` now logs boot, preference application, gallery-ready state, debug toggle state, adaptive downgrades, shutdown, and fatal startup failures
+  - `src/rendering/RenderBackend.ts` now logs backend detection and WebGPU probe start/success/failure through the diagnostics utility
+  - `src/gallery/TextureManager.ts` now logs renderer texture capabilities and generated fallback-texture use
+  - `src/gallery/GalleryManager.ts` now logs preset application, inspection-mode changes, artwork load start, stale async load discards, and final active-map summary
+  - `src/utils/AdaptiveQualityController.ts` now logs downgrade requests and manual-suspension state
+  - `src/utils/preferences.ts` now logs storage read/write failures
+
+### Reliability design decisions
+
+- **Normal customer sessions stay quiet.** Default console output only shows `warn` / `error`.
+- **Debugging is opt-in.** `?debug=1` / `?debug=info` enables info logs; `?debug=verbose` enables debug logs.
+- **History is still retained.** Even when console output is quiet, recent diagnostics remain available in memory through `window.__FREYRAUM_DIAGNOSTICS__`.
+- **Noise is controlled.** Repeated identical events inside a short time window update a repeat count instead of printing endlessly.
+
+### Practical debug workflow
+
+1. Open the preview normally: customer sees only real warnings/errors.
+2. Re-open with `?debug=1` for readable subsystem logs.
+3. Re-open with `?debug=verbose` for deeper engineering detail.
+4. In DevTools console, inspect:
+   - `window.__FREYRAUM_DIAGNOSTICS__.getEntries()`
+   - `window.__FREYRAUM_DIAGNOSTICS__.snapshot()`
+   - `window.__FREYRAUM_DIAGNOSTICS__.print('info')`
+
+### Validation
+
+- `npm run lint` — passes (only the known TypeScript parser support warning)
+- `npm run build` — passes (only the known Dart Sass legacy JS API warning)
+- Preview bundle size increase from diagnostics pass: ~562 KB → ~569 KB (gzip ~143 KB → ~146 KB), acceptable for the current risk budget
+
+---
+
 ## 2026-05-17 — v0.07 technical planning (full execution plan): customer-managed picture folder
 
 The customer request is to make picture replacement simple enough for an elderly non-technical user: drag files into a folder, run one obvious update action, and open the preview. Current code does **not** support that yet. The v0.06 gallery still defines artworks in `src/config/artworks.ts` and ships a built static `customer-preview/` bundle.

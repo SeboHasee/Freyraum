@@ -31,6 +31,13 @@ Planned v0.07 direction:
 3. The updater generates optimized images + `artworks.json`.
 4. Customer double-clicks root `index.html` as before.
 
+Cross-cutting reliability addition from the latest pass:
+
+- the preview now ships with a centralized diagnostics system
+- default console output stays low-noise (`warn` / `error`)
+- `?debug=1` / `?debug=verbose` enable deeper diagnostics for support and engineering sessions
+- recent session diagnostics are available in DevTools via `window.__FREYRAUM_DIAGNOSTICS__`
+
 Important handoff note: until v0.07 is implemented, customers should send picture folders to a maintainer/developer instead of editing source files.
 
 ## Controls surface
@@ -92,6 +99,9 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] WebGL fallback renders correctly (force-disable WebGL in the browser to verify).
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
+- [ ] Default console output is readable and not spammy during normal preview use.
+- [ ] `?debug=1` exposes useful subsystem logs; `?debug=verbose` exposes deeper engineering logs.
+- [ ] `window.__FREYRAUM_DIAGNOSTICS__.snapshot()` returns a readable session log during a debug run.
 
 ## v0.06 — Implemented: Streifenlicht blockiness reduction
 

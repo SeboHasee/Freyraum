@@ -17,6 +17,7 @@ This plan has been expanded from a documentation-only pass into a complete techn
 | Texture loader supports file paths | `TextureManager` uses `THREE.TextureLoader`; `PaintingTextureSet` URLs may be relative paths or data URIs. | Imported images can become normal static files if copied into the built preview. |
 | Preview is static/offline | `vite.local.config.ts` emits one IIFE bundle into `customer-preview/`; root `index.html` redirects to `customer-preview/app.html`. | Customer workflow must preserve the double-click `file://` preview. |
 | Procedural maps fill missing material maps | `ProceduralTextureFactory` fills normal/height/roughness/specular/AO/varnish gaps. | Customers only need simple picture files; advanced PBR maps can stay optional. |
+| Debug logging is ad hoc | `src/main.ts` has hidden `?debug=1` key toggles and `RenderBackend.ts` uses one direct `console.warn()`. | Current diagnostics are too narrow and inconsistent for future debugging/reliability work. |
 
 ### v0.07 Online Research Findings
 
@@ -39,6 +40,7 @@ Authoritative/browser-platform findings used for this plan:
 - Keep the existing one-click `index.html` → `customer-preview/app.html` preview.
 - Generate metadata automatically when the customer provides only image files.
 - Show friendly warnings for formats that browsers may not display directly.
+- Add a deep but readable diagnostics system with leveled output, ring-buffered history, and low-noise console behavior.
 
 ### v0.07 Non-Goals
 
@@ -70,6 +72,7 @@ Authoritative/browser-platform findings used for this plan:
 | `Update Gallery.command` | macOS double-click entry point. |
 | `src/config/artworks.ts` | Keep built-in fallback/demo artworks. Add loader bridge to generated manifest in implementation pass. |
 | `src/config/customerArtworks.ts` | Proposed typed adapter for generated manifest (if JSON import is used at build time). |
+| `src/utils/Diagnostics.ts` | Central diagnostics logger: levels, dedupe, ring buffer, global error capture, window debug API. |
 | `docs/CUSTOMER_PICTURE_GUIDE.md` | Simple customer instructions. Added in this documentation pass. |
 
 ### v0.07 Vertical Slices
@@ -123,6 +126,17 @@ Authoritative/browser-platform findings used for this plan:
 - Keep a backup copy of the previous manifest before replacing it.
 - Document exactly which folder the customer can edit and which generated folders they should not touch.
 
+#### Slice S7 — Diagnostics, debugging, and reliability instrumentation
+
+**Status: implemented in this diagnostics pass (2026-05-17).**
+
+- Replace ad hoc `console.*` calls with one centralized diagnostics utility.
+- Default console output must stay minimal (`warn` / `error` only), while debug sessions can opt into `info` or `verbose`.
+- Keep a ring-buffered in-memory history for later inspection without flooding the console.
+- Capture uncaught errors and unhandled promise rejections globally.
+- Add subsystem-scoped diagnostics for boot, renderer/backend probe, preferences, texture loading, gallery navigation/load, and adaptive quality.
+- Expose a safe developer API on `window.__FREYRAUM_DIAGNOSTICS__` so future bug reports can dump a readable session log.
+
 ### v0.07 Performance Budget
 
 | Asset path | Budget / behavior |
@@ -164,6 +178,9 @@ Authoritative/browser-platform findings used for this plan:
 5. Root `index.html` still opens the preview by double-click.
 6. Built-in demo artworks still load if no customer manifest exists.
 7. All markdown docs describe the final customer workflow after implementation.
+8. Default runtime console output stays readable and low-noise during normal customer use.
+9. `?debug=1` and `?debug=verbose` enable progressively deeper diagnostics without code edits.
+10. A developer can inspect the current diagnostics buffer through `window.__FREYRAUM_DIAGNOSTICS__`.
 
 ### v0.07 Known Risks
 
@@ -205,6 +222,92 @@ Reason: Option B is disqualified because `fetch()` is blocked by all major brows
 4. If the customer has not yet run the importer, `window.__FREYRAUM_ARTWORKS` is `undefined` (the script tag will 404 silently or be absent), and the built-in demo artworks load as normal.
 
 **Fallback path:** If `customer-artworks.js` does not exist yet, the app.html `<script src="./customer-artworks.js">` will fail silently (a missing optional script does not throw in HTML). As a safer alternative, `write-local-preview.mjs` can emit a stub `customer-preview/customer-artworks.js` that sets `window.__FREYRAUM_ARTWORKS = []` so no 404 occurs. The app reads `[]` as no artworks → falls back to demo artworks. Both approaches work; the stub is cleaner.
+
+---
+
+### v0.07 Diagnostics and logging architecture
+
+The customer-managed import pipeline is only half of reliability. The other half is being able to diagnose failures quickly without drowning the console in noise.
+
+**Current problem:** logging is scattered and inconsistent. `main.ts` contains a hidden `?debug=1` key toggle for shader-only inspection, `RenderBackend.ts` logs one direct `console.warn()`, and most other critical runtime paths are silent. This is not enough for future debugging, performance audits, customer-machine issue reports, or importer rollout support.
+
+**Decision:** add one centralized diagnostics utility in `src/utils/Diagnostics.ts` and make all major subsystems log through it.
+
+#### Diagnostics goals
+
+- Keep normal customer sessions quiet and professional.
+- Keep enough history in memory to inspect failures after they happen.
+- Make debug sessions opt-in through URL/localStorage, not hard-coded console spam.
+- Use stable scopes and event names so future contributors can grep and compare sessions.
+- Deduplicate repeated noise (for example repeated storage failures or repeated fallback image loads).
+
+#### Diagnostics modes
+
+| Mode | Activation | Console threshold | Intended use |
+|------|------------|-------------------|--------------|
+| `default` | no query, no storage override | `warn` / `error` | normal customer preview |
+| `info` | `?debug=1` or `?debug=info` | `info` | developer repro / support session |
+| `verbose` | `?debug=verbose` | `debug` | deeper engineering diagnostics |
+
+The diagnostics utility should also persist the chosen mode in `localStorage` so a developer can leave a machine in `info` or `verbose` mode temporarily without editing code.
+
+#### Diagnostics data model
+
+Every entry should contain:
+
+- timestamp
+- relative session time in ms
+- level (`debug` / `info` / `warn` / `error`)
+- scope (`boot`, `gallery`, `texture`, `backend`, `quality`, `preferences`, etc.)
+- stable event key
+- short readable message
+- optional structured metadata object
+- repeat count (for deduped entries)
+
+Keep a ring buffer of the latest ~300 entries only. This is deep enough for diagnosis but small enough to stay readable and cheap.
+
+#### Global diagnostics API
+
+Expose a small API for support/debug sessions:
+
+```ts
+window.__FREYRAUM_DIAGNOSTICS__.getEntries()
+window.__FREYRAUM_DIAGNOSTICS__.print('info')
+window.__FREYRAUM_DIAGNOSTICS__.snapshot()
+window.__FREYRAUM_DIAGNOSTICS__.clear()
+window.__FREYRAUM_DIAGNOSTICS__.setMode('verbose')
+```
+
+This API must be read-only with respect to application state except for diagnostics mode and buffer reset.
+
+#### Required runtime integration points
+
+| Scope | Required events |
+|-------|-----------------|
+| `boot` | startup, missing `#app`, WebGL unavailable, renderer init failure, gallery ready, shutdown, fatal startup failure |
+| `preferences` | storage read/write failure, applied preference set |
+| `backend` | backend detection, WebGPU probe start/success/failure |
+| `texture` | renderer capabilities, texture fallback generation, repeated load failures |
+| `gallery` | preset apply, inspection-mode change, artwork load start, stale async load discard, artwork ready |
+| `quality` | adaptive downgrade request, manual override suspension |
+| `window` | uncaught error, unhandled rejection |
+
+#### Reliability rules for diagnostics
+
+- Diagnostics must never throw.
+- Diagnostics must never block rendering or interaction.
+- Diagnostics metadata must be serializable; `Error` objects should be normalized.
+- Default mode must not spam per-frame or per-pointer-move events.
+- Repeated identical warnings within a short window must increment a repeat counter instead of printing every occurrence.
+- The diagnostics system itself must be disposable-free and singleton-safe; it should survive for the lifetime of the page.
+
+#### Logging style guide
+
+- Prefer one sentence messages.
+- Keep the scope and event stable; change the message only for readability.
+- Include metadata only when it helps future debugging (IDs, counts, active preset, current artwork, dimensions, timing).
+- Never log per-frame values in `default` or `info` mode.
+- Never log user-content blobs or huge objects; summarize them instead.
 
 ---
 

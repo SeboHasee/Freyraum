@@ -31,19 +31,29 @@ import { isWebGLAvailable } from './utils/webgl';
 import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
+import { getDiagnostics } from './utils/Diagnostics';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
 
 async function main(): Promise<void> {
+  const diagnostics = getDiagnostics();
+  diagnostics.installGlobalHandlers();
+  diagnostics.info('boot', 'startup', 'Starting FREYRAUM runtime');
+
   const app = document.getElementById('app');
-  if (!app) return;
+  if (!app) {
+    diagnostics.error('boot', 'missing-app-root', 'Missing #app root element');
+    return;
+  }
 
   // Preferences must apply before WebGL bootstrapping so the fallback
   // screen and loading overlay both react to motion/contrast settings.
   const preferences = new PreferencesStore();
+  diagnostics.debug('boot', 'preferences-ready', 'Preferences store created', preferences.current);
 
   if (!isWebGLAvailable()) {
+    diagnostics.error('boot', 'webgl-unavailable', 'WebGL is not available in the current browser');
     showFallbackScreen(app, 'WebGL ist im aktuellen Browser nicht verfügbar.');
     return;
   }
@@ -66,6 +76,7 @@ async function main(): Promise<void> {
   try {
     rendererManager = new RendererManager(app, initialPreset);
   } catch (err) {
+    diagnostics.error('renderer', 'init-failed', 'RendererManager initialization failed', err);
     loadingOverlay.remove();
     showFallbackScreen(app, err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.');
     return;
@@ -100,6 +111,11 @@ async function main(): Promise<void> {
   galleryManager.applyPreset(initialPreset);
 
   await galleryManager.init();
+  diagnostics.info('boot', 'gallery-ready', 'Gallery initialized', {
+    artworkCount: artworks.length,
+    quality: preferences.current.quality,
+    lighting: preferences.current.lighting,
+  });
 
   loadingOverlay.classList.add('is-hidden');
   window.setTimeout(() => loadingOverlay.remove(), 700);
@@ -172,6 +188,13 @@ async function main(): Promise<void> {
     if (manual) {
       adaptiveQuality.notifyManualPreset(quality);
     }
+    diagnostics.debug('preferences', 'applied', 'Applied current preferences', {
+      manual,
+      reducedMotion,
+      quality,
+      lighting,
+      inspection: isInspection,
+    });
   };
   applyPreferences(false);
 
@@ -179,30 +202,29 @@ async function main(): Promise<void> {
   // pressing 'a' on the keyboard strips all shading so reviewers can verify
   // the shader preserves the picture's fidelity. Not exposed in normal UI to
   // avoid confusing public visitors.
-  const debugUrl = new URLSearchParams(window.location.search).get('debug') === '1';
+  const debugEnabled = getDiagnostics().getMode() !== 'default';
   let albedoOnly = false;
   let shadowDebug = false;
   const handleDebugKey = (event: KeyboardEvent): void => {
-    if (!debugUrl) return;
+    if (!debugEnabled) return;
     if (event.key === 'a' || event.key === 'A') {
       albedoOnly = !albedoOnly;
       artworkMesh.material.setAlbedoOnly(albedoOnly);
-      // eslint-disable-next-line no-console
-      console.info(`[freyraum debug] albedo-only ${albedoOnly ? 'ON' : 'OFF'}`);
+      diagnostics.info('debug', 'albedo-toggle', `Albedo-only ${albedoOnly ? 'ON' : 'OFF'}`);
     } else if (event.key === 's' || event.key === 'S') {
       // v0.05: shadow-only greyscale visualisation. Lets reviewers isolate
       // the self-shadow contribution from albedo/lighting when diagnosing
       // stain-like artefacts.
       shadowDebug = !shadowDebug;
       artworkMesh.material.setShadowDebug(shadowDebug);
-      // eslint-disable-next-line no-console
-      console.info(`[freyraum debug] shadow-only ${shadowDebug ? 'ON' : 'OFF'}`);
+      diagnostics.info('debug', 'shadow-toggle', `Shadow-only ${shadowDebug ? 'ON' : 'OFF'}`);
     }
   };
-  if (debugUrl) {
+  if (debugEnabled) {
     window.addEventListener('keydown', handleDebugKey);
-    // eslint-disable-next-line no-console
-    console.info('[freyraum debug] press "a" for albedo-only, "s" for shadow-only');
+    diagnostics.info('debug', 'controls', 'Debug controls active: press "a" for albedo-only, "s" for shadow-only', {
+      mode: diagnostics.getMode(),
+    });
   }
   let previousQuality = preferences.current.quality;
   const unsubscribePreferences = preferences.subscribe(() => {
@@ -216,6 +238,11 @@ async function main(): Promise<void> {
   const handleNavigate = (index: number): void => {
     infoPanel.update(artworks[index], true);
     timeline.setActive(index);
+    diagnostics.info('gallery', 'navigate', 'Artwork changed', {
+      index,
+      artworkId: artworks[index]?.id,
+      title: artworks[index]?.title,
+    });
   };
 
   galleryManager.onNavigate(handleNavigate);
@@ -232,6 +259,12 @@ async function main(): Promise<void> {
     const sample = frameBudget.sample(now);
     const downgrade = adaptiveQuality.evaluate(sample, frameBudget);
     if (downgrade && downgrade !== preferences.current.quality) {
+      diagnostics.warn('quality', 'adaptive-downgrade', 'Adaptive quality downgrade triggered', {
+        from: preferences.current.quality,
+        to: downgrade,
+        rollingFps: Math.round(sample.rollingFps * 10) / 10,
+        rollingMs: Math.round(sample.rollingMs * 10) / 10,
+      });
       // Adaptive downgrade: drive the preference store so listeners pick it up
       // and the user sees the change in the PreferencesPanel.
       adaptiveQualityWriteInFlight = true;
@@ -261,9 +294,10 @@ async function main(): Promise<void> {
   window.addEventListener('beforeunload', () => {
     cancelAnimationFrame(rafId);
     unsubscribePreferences();
-    if (debugUrl) {
+    if (debugEnabled) {
       window.removeEventListener('keydown', handleDebugKey);
     }
+    diagnostics.info('boot', 'shutdown', 'Disposing FREYRAUM runtime');
     preferences.dispose();
     mouseInteraction.dispose();
     zoomPan.dispose();
@@ -289,7 +323,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(err);
+  getDiagnostics().error('boot', 'startup-failed', 'Fatal startup failure', err);
   const app = document.getElementById('app');
   if (app) {
     showFallbackScreen(app, err instanceof Error ? err.message : 'Unbekannter Fehler beim Initialisieren.');

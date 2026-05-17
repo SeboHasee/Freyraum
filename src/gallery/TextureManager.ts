@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { PaintingMapRole, PaintingTextureSet, ResolvedPaintingTextures } from '../materials/PaintingTextureSet';
+import { createScopedDiagnostics } from '../utils/Diagnostics';
 
 /**
  * Texture manager owns network-loaded textures and is solely responsible for
@@ -12,6 +13,7 @@ import type { PaintingMapRole, PaintingTextureSet, ResolvedPaintingTextures } fr
  * - per-preset anisotropy cap via `setAnisotropyDivisor(divisor)`.
  */
 export class TextureManager {
+  private readonly diagnostics = createScopedDiagnostics('texture');
   private readonly cache = new Map<string, THREE.Texture>();
   private readonly loader = new THREE.TextureLoader();
   private maxAnisotropy = 1;
@@ -23,6 +25,10 @@ export class TextureManager {
 
   init(renderer: THREE.WebGLRenderer): void {
     this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+    this.diagnostics.info('capabilities', 'Texture manager initialized', {
+      maxAnisotropy: this.maxAnisotropy,
+      maxTextureSize: renderer.capabilities.maxTextureSize,
+    });
   }
 
   /** Updates the anisotropy cap and reapplies it to already-cached textures. */
@@ -67,12 +73,14 @@ export class TextureManager {
         (texture) => {
           this.prepareTexture(texture, role);
           this.cache.set(cacheKey, texture);
+          this.diagnostics.debug('load-success', `Loaded ${role} texture`, { url });
           resolve(texture);
         },
         undefined,
         () => {
           const fallback = this.createFallbackTexture(url);
           this.cache.set(cacheKey, fallback);
+          this.diagnostics.warn('load-fallback', `Falling back to generated ${role} texture`, { url });
           resolve(fallback);
         }
       );

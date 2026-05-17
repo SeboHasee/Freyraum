@@ -1,5 +1,6 @@
 import type { QualityPresetId } from '../config/quality';
 import type { FrameBudgetMonitor, FrameBudgetSample } from './FrameBudgetMonitor';
+import { createScopedDiagnostics } from './Diagnostics';
 
 /**
  * Adaptive quality controller for v0.02.
@@ -28,6 +29,7 @@ const DOWNGRADE_PATH: Record<QualityPresetId, QualityPresetId | null> = {
 };
 
 export class AdaptiveQualityController {
+  private readonly diagnostics = createScopedDiagnostics('quality');
   private current: QualityPresetId;
   private suspended = false;
   /** Hold-off after a downgrade so the next decision has a clean window. */
@@ -51,6 +53,13 @@ export class AdaptiveQualityController {
     const next = DOWNGRADE_PATH[this.current];
     if (!next) return null;
 
+    this.diagnostics.warn('downgrade', 'Adaptive quality controller requested a downgrade', {
+      from: this.current,
+      to: next,
+      rollingMs: Math.round(sample.rollingMs * 10) / 10,
+      rollingFps: Math.round(sample.rollingFps * 10) / 10,
+      emaMs: Math.round(sample.emaMs * 10) / 10,
+    });
     this.current = next;
     this.holdOffUntil = now + this.holdOffMs;
     monitor.markPresetChange();
@@ -62,6 +71,7 @@ export class AdaptiveQualityController {
     this.current = id;
     // A manual change is the user re-claiming control. Suspend until next session.
     this.suspended = true;
+    this.diagnostics.info('manual-override', 'Adaptive quality suspended after manual preset change', { preset: id });
   }
 
   /** True when the controller has been suspended by a manual override. */

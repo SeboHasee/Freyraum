@@ -12,6 +12,8 @@
  * runtime when the user explicitly opts in.
  */
 
+import { createScopedDiagnostics } from '../utils/Diagnostics';
+
 export type BackendId = 'webgl' | 'webgpu-experimental';
 
 export interface RenderBackendInfo {
@@ -21,6 +23,7 @@ export interface RenderBackendInfo {
 }
 
 const STORAGE_KEY = 'freyraum.backend';
+const diagnostics = createScopedDiagnostics('backend');
 
 function readQueryFlag(): boolean {
   try {
@@ -53,6 +56,7 @@ function hasNavigatorGPU(): boolean {
  */
 export async function detectBackend(): Promise<BackendId> {
   const optedIn = readQueryFlag() || readStorageFlag();
+  diagnostics.debug('detect', 'Evaluating render backend', { optedIn, hasNavigatorGPU: hasNavigatorGPU() });
   if (optedIn && hasNavigatorGPU()) return 'webgpu-experimental';
   return 'webgl';
 }
@@ -81,6 +85,7 @@ export async function maybeProbeWebGPU(): Promise<unknown | null> {
   if (backendId !== 'webgpu-experimental') return null;
 
   try {
+    diagnostics.info('probe-start', 'Starting WebGPU probe');
     const probeUrl = new URL('./webgpu-probe.js', window.location.href).toString();
     const mod = (await import(/* @vite-ignore */ probeUrl)) as {
       initWebGPUPrototype?: () => Promise<unknown>;
@@ -88,12 +93,11 @@ export async function maybeProbeWebGPU(): Promise<unknown | null> {
     if (typeof mod.initWebGPUPrototype !== 'function') {
       throw new Error('webgpu-probe.js does not export initWebGPUPrototype()');
     }
-    return await mod.initWebGPUPrototype();
+    const result = await mod.initWebGPUPrototype();
+    diagnostics.info('probe-success', 'WebGPU probe completed successfully');
+    return result;
   } catch (err) {
-    // Probe is informational only — never break the preview if it fails.
-    if (typeof console !== 'undefined') {
-      console.warn('[freyraum] WebGPU probe failed; staying on WebGL', err);
-    }
+    diagnostics.warn('probe-failed', 'WebGPU probe failed; staying on WebGL', err);
     return null;
   }
 }

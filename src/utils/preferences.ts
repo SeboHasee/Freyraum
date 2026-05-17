@@ -2,6 +2,7 @@ import type { QualityPresetId } from '../config/quality';
 import { DEFAULT_QUALITY_PRESET, QUALITY_PRESETS } from '../config/quality';
 import type { LightProfileId } from '../lighting/LightProfile';
 import { DEFAULT_LIGHT_PROFILE, LIGHT_PROFILES } from '../lighting/LightProfile';
+import { createScopedDiagnostics } from './Diagnostics';
 
 /**
  * Central user-preference store for accessibility and performance choices.
@@ -25,6 +26,7 @@ export interface Preferences {
 export type PreferenceListener = (prefs: Preferences) => void;
 
 const STORAGE_KEY = 'freyraum.preferences.v1';
+const diagnostics = createScopedDiagnostics('preferences');
 
 function readStored(): Partial<Preferences> {
   try {
@@ -33,7 +35,7 @@ function readStored(): Partial<Preferences> {
     const parsed = JSON.parse(raw) as Partial<Preferences>;
     if (parsed && typeof parsed === 'object') return parsed;
   } catch {
-    /* localStorage unavailable (file:// in some browsers); fall back to defaults */
+    diagnostics.warn('storage-read-failed', 'Could not read stored preferences; falling back to defaults');
   }
   return {};
 }
@@ -42,7 +44,7 @@ function writeStored(prefs: Preferences): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
   } catch {
-    /* ignore storage errors */
+    diagnostics.warn('storage-write-failed', 'Could not persist preferences to localStorage');
   }
 }
 
