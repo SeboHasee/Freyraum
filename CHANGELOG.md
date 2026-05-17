@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### Fixed (v0.08 — customer artwork 3D rendering — 2026-05-17)
+
+Critical fix: imported customer images now render on the central 3D painting with
+correct aspect ratios. Root cause was `TextureManager` setting `crossOrigin =
+'anonymous'` on the `THREE.TextureLoader` used for all textures — in `file://`
+protocol this caused every local image to be treated as a failed CORS request,
+silently substituting a 1600 × 1100 gradient fallback while the DOM Timeline
+continued to display the images correctly.
+
+- **`src/gallery/TextureManager.ts`**: replaced the single shared
+  `THREE.TextureLoader` with two loaders — `externalLoader` (with
+  `setCrossOrigin('anonymous')`) for actual `https?://` URLs, `localLoader` (no
+  `crossOrigin`) for data URIs, relative paths, and `file://` resources. The URL
+  type is detected per-load so both paths share the same cache key and anisotropy
+  management. Added `isFallback(url, role)` and a `fallbackKeys` set so callers
+  can detect silent fallback use. Added verbose diagnostics: load-start (with URL
+  type and crossOrigin mode), load-success (with pixel dimensions), and
+  load-failure (with browser error message).
+- **`src/gallery/ArtworkMesh.ts`**: `updateAspect()` now accepts optional
+  `manifestDimensions: { width, height }` and uses these as the primary source
+  of truth for the 3D plane and frame aspect ratio. Texture metadata remains a
+  safe fallback for built-in data-URI artworks. `setPaintingTextures()` updated to
+  accept and forward `manifestDimensions`. New read-only getters `lastAspectSource`
+  and `lastManifestDimensions` expose what was used for diagnostics.
+- **`src/gallery/GalleryManager.ts`**: `showArtwork()` now passes
+  `artwork.dimensions` to `setPaintingTextures()`. After each texture load it
+  calls `isFallback()` and emits a high-visibility `warn` log when the central
+  3D painting uses the fallback. The `show-artwork-complete` info log now includes
+  `fallbackUsed`, `aspectSource`, `manifestDimensions`, `paintingWidth`,
+  `paintingHeight`, and `paintingAspect`.
+- **`plan.md`**: v0.08 section rewritten as a full technical implementation plan
+  with root cause analysis, code snippets, logging table, acceptance checks, and
+  changed-files summary.
+- **`FINDINGS.md`**: v0.08 findings updated with confirmed root cause, applied fix
+  summary, and build validation result.
+
 ### Planned fix (v0.08 critical customer artwork rendering — 2026-05-17)
 
 - Added a critical plan to `plan.md` for the case where imported customer images

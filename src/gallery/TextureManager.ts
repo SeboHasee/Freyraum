@@ -15,12 +15,33 @@ import { createScopedDiagnostics } from '../utils/Diagnostics';
 export class TextureManager {
   private readonly diagnostics = createScopedDiagnostics('texture');
   private readonly cache = new Map<string, THREE.Texture>();
-  private readonly loader = new THREE.TextureLoader();
+  /**
+   * v0.08: Loader used only for external HTTP(S) URLs. Setting crossOrigin
+   * 'anonymous' is required there to avoid tainted-canvas WebGL errors when
+   * loading from a different origin, but must NOT be set for local/relative
+   * paths or data URIs — in file:// protocol the browser cannot fulfill a
+   * CORS request for local files, causing the texture upload to fail silently
+   * and the fallback gradient to appear instead.
+   */
+  private readonly externalLoader = new THREE.TextureLoader();
+  /**
+   * v0.08: Loader used for relative paths, data URIs, and file:// resources.
+   * No crossOrigin attribute is set so the browser treats the image as
+   * same-origin and the WebGL texture upload succeeds.
+   */
+  private readonly localLoader = new THREE.TextureLoader();
   private maxAnisotropy = 1;
   private anisotropyDivisor = 1;
+  /**
+   * v0.08: tracks which cache keys resolved to the generated fallback texture
+   * rather than the real customer image. Used by GalleryManager to emit a
+   * diagnostic warning when the central 3D painting falls back.
+   */
+  private readonly fallbackKeys = new Set<string>();
 
   constructor() {
-    this.loader.setCrossOrigin('anonymous');
+    this.externalLoader.setCrossOrigin('anonymous');
+    // localLoader intentionally has no crossOrigin set.
   }
 
   init(renderer: THREE.WebGLRenderer): void {
@@ -67,20 +88,50 @@ export class TextureManager {
       return Promise.resolve(this.cache.get(cacheKey)!);
     }
 
+    // v0.08: only external HTTP(S) URLs need crossOrigin='anonymous'.
+    // data URIs, relative paths, and file:// URLs must NOT use crossOrigin or
+    // the browser cannot supply CORS headers, marking the image as tainted and
+    // preventing WebGL from uploading the texture.
+    const isExternal = /^https?:\/\//i.test(url);
+    const loader = isExternal ? this.externalLoader : this.localLoader;
+    const urlType = url.startsWith('data:') ? 'data-uri' : isExternal ? 'external-http' : 'local-relative';
+
+    this.diagnostics.debug('load-start', `Starting ${role} texture load`, {
+      url,
+      urlType,
+      role,
+      crossOrigin: isExternal ? 'anonymous' : 'none',
+    });
+
     return new Promise((resolve) => {
-      this.loader.load(
+      loader.load(
         url,
         (texture) => {
           this.prepareTexture(texture, role);
           this.cache.set(cacheKey, texture);
-          this.diagnostics.debug('load-success', `Loaded ${role} texture`, { url });
+          const img = texture.image as HTMLImageElement | ImageBitmap | { width?: number; height?: number };
+          const w = 'naturalWidth' in img ? (img.naturalWidth || img.width || 0) : (img.width || 0);
+          const h = 'naturalHeight' in img ? (img.naturalHeight || img.height || 0) : (img.height || 0);
+          this.diagnostics.info('load-success', `Loaded ${role} texture`, {
+            url,
+            urlType,
+            width: w,
+            height: h,
+            fallbackUsed: false,
+          });
           resolve(texture);
         },
         undefined,
-        () => {
+        (error) => {
+          this.diagnostics.warn('load-fallback', `Failed to load ${role} texture — creating generated fallback`, {
+            url,
+            urlType,
+            role,
+            errorMessage: error instanceof Error ? error.message : String(error),
+          });
           const fallback = this.createFallbackTexture(url);
           this.cache.set(cacheKey, fallback);
-          this.diagnostics.warn('load-fallback', `Falling back to generated ${role} texture`, { url });
+          this.fallbackKeys.add(cacheKey);
           resolve(fallback);
         }
       );
@@ -120,6 +171,16 @@ export class TextureManager {
   /** Backwards-compatible getter — returns the default-role (`albedo`) cache entry. */
   get(url: string): THREE.Texture | undefined {
     return this.cache.get(`albedo::${url}`);
+  }
+
+  /**
+   * v0.08: returns true if the cached texture for this URL+role is a
+   * generated fallback (i.e. the real image failed to load). Used by
+   * GalleryManager to emit a high-visibility diagnostic when the central
+   * 3D painting silently falls back to the generated gradient.
+   */
+  isFallback(url: string, role: PaintingMapRole = 'albedo'): boolean {
+    return this.fallbackKeys.has(`${role}::${url}`);
   }
 
   dispose(): void {

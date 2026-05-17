@@ -32,6 +32,10 @@ export class ArtworkMesh {
   private readonly scene: THREE.Scene;
   /** Density coefficient for detail-normal tiling (tiles per world unit). */
   private readonly detailTilesPerWorldUnit = 2.0;
+  /** v0.08: records how the last updateAspect() derived its aspect ratio. */
+  private _lastAspectSource: 'manifest' | 'texture' = 'texture';
+  /** v0.08: the manifest dimensions used in the last updateAspect() call, if any. */
+  private _lastManifestDimensions: { width: number; height: number } | null = null;
 
   constructor(scene: THREE.Scene, preset: QualityPreset) {
     this.scene = scene;
@@ -85,14 +89,37 @@ export class ArtworkMesh {
   }
 
   /**
-   * Resizes both the artwork mesh and the frame to match the texture's aspect
+   * Resizes both the artwork mesh and the frame to match the artwork's aspect
    * ratio. Works for every aspect (portrait, landscape, square, ultrawide).
    *
    * Frame thickness is added uniformly (0.4 world units on each axis) so the
    * frame margin is visually consistent for any aspect.
+   *
+   * v0.08: `manifestDimensions` is the primary source of truth when provided.
+   * It comes from the artwork manifest written by the importer at import time
+   * and is always correct regardless of whether the WebGL texture upload
+   * succeeded. Falling back to texture image metadata is kept as a safe
+   * default for built-in data-URI artworks that do not declare dimensions.
    */
-  updateAspect(texture: THREE.Texture): void {
-    const { aspect } = getTextureSize(texture);
+  updateAspect(texture: THREE.Texture, manifestDimensions?: { width: number; height: number }): void {
+    let aspect: number;
+    let aspectSource: 'manifest' | 'texture';
+
+    if (
+      manifestDimensions &&
+      Number.isFinite(manifestDimensions.width) &&
+      manifestDimensions.width > 0 &&
+      Number.isFinite(manifestDimensions.height) &&
+      manifestDimensions.height > 0
+    ) {
+      aspect = manifestDimensions.width / manifestDimensions.height;
+      aspectSource = 'manifest';
+    } else {
+      const texSize = getTextureSize(texture);
+      aspect = texSize.aspect;
+      aspectSource = 'texture';
+    }
+
     this._artworkAspect = aspect;
 
     const { width, height } = fitWithinBox(aspect, 4.2, 5.8);
@@ -104,6 +131,10 @@ export class ArtworkMesh {
     const frameW = width + 0.4;
     const frameH = height + 0.4;
     this.frameMesh.scale.set(frameW / 4.4, frameH / 6.2, 1);
+
+    // v0.08: expose aspect computation for diagnostics in GalleryManager.
+    this._lastAspectSource = aspectSource;
+    this._lastManifestDimensions = manifestDimensions ?? null;
   }
 
   /**
@@ -112,9 +143,19 @@ export class ArtworkMesh {
    *
    * `textures.albedo` is mandatory; all other roles are optional and the
    * material/shader compiles them out when missing.
+   *
+   * v0.08: `manifestDimensions` from the artwork manifest is passed through
+   * to `updateAspect()` so the 3D frame uses the declared pixel dimensions as
+   * the primary aspect source, not the loaded texture metadata. This ensures
+   * correct aspect ratios even when the WebGL texture upload fails and a
+   * fallback gradient is substituted.
    */
-  setPaintingTextures(textures: ResolvedPaintingTextures, preset: QualityPreset): void {
-    this.updateAspect(textures.albedo);
+  setPaintingTextures(
+    textures: ResolvedPaintingTextures,
+    preset: QualityPreset,
+    manifestDimensions?: { width: number; height: number }
+  ): void {
+    this.updateAspect(textures.albedo, manifestDimensions);
 
     // Aspect-aware detail-normal tiling. We keep tiles square in world space:
     // U axis uses the artwork width, V axis uses the artwork height. Without
@@ -142,6 +183,16 @@ export class ArtworkMesh {
 
   get artworkHeight(): number {
     return this._artworkHeight;
+  }
+
+  /** v0.08: 'manifest' when aspect came from the declared artwork dimensions, 'texture' when derived from the loaded image. */
+  get lastAspectSource(): 'manifest' | 'texture' {
+    return this._lastAspectSource;
+  }
+
+  /** v0.08: the manifest dimensions that were used for aspect, or null. */
+  get lastManifestDimensions(): { width: number; height: number } | null {
+    return this._lastManifestDimensions;
   }
 
   dispose(): void {

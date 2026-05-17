@@ -242,12 +242,31 @@ export class GalleryManager {
       }
     }
 
-    this.artworkMesh.setPaintingTextures(resolved, preset);
+    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
+
+    // v0.08: report whether the albedo on the central 3D painting is the real
+    // customer image or the generated fallback, and log the computed aspect.
+    const albedoIsFallback = this.textureManager.isFallback(artwork.image, 'albedo');
+    if (albedoIsFallback) {
+      this.diagnostics.warn('show-artwork-fallback', 'Central 3D painting is using a GENERATED FALLBACK texture — the customer image could not be loaded as a WebGL texture', {
+        artworkId: artwork.id,
+        imageUrl: artwork.image,
+        manifestWidth: artwork.dimensions?.width,
+        manifestHeight: artwork.dimensions?.height,
+        fallbackUsed: true,
+      });
+    }
     this.diagnostics.info('show-artwork-complete', 'Artwork is ready', {
       artworkId: artwork.id,
       activeMaps: this.artworkMesh.material.activeMaps(),
       inspectionMode: this.inspectionMode,
+      fallbackUsed: albedoIsFallback,
+      aspectSource: this.artworkMesh.lastAspectSource,
+      manifestDimensions: this.artworkMesh.lastManifestDimensions,
+      paintingWidth: this.artworkMesh.artworkWidth,
+      paintingHeight: this.artworkMesh.artworkHeight,
+      paintingAspect: this.artworkMesh.artworkAspect,
     });
 
     this.targetZoom = this.clampZoom(this.targetZoom);

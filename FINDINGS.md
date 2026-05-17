@@ -1,6 +1,55 @@
 # FINDINGS
 
-## 2026-05-17 — Critical v0.08 finding: timeline works, 3D painting does not
+## 2026-05-17 — v0.08: customer images on 3D paintings — root cause confirmed and fixed
+
+### Root cause
+
+`TextureManager` called `this.loader.setCrossOrigin('anonymous')` on a single,
+globally shared `THREE.TextureLoader`. In the customer-preview, all artwork images
+are loaded from `file://` or relative paths. When `crossOrigin = 'anonymous'` is
+set, the browser treats every local-file load as a CORS request, cannot get
+`Access-Control-Allow-Origin` headers from a local file, marks the image as
+tainted, and WebGL refuses to upload it. The `THREE.TextureLoader` error callback
+fired, `TextureManager` silently created a 1600 × 1100 gradient fallback, and the
+3D painting showed that fallback.
+
+The Timeline was unaffected because it uses plain `<img>` elements with no
+`crossOrigin` attribute — DOM display works without CORS.
+
+The aspect ratio mismatch was a secondary effect: `ArtworkMesh.updateAspect()`
+read aspect from the *loaded texture's* pixel dimensions. The fallback is always
+1600 × 1100 (landscape), so portrait and square artworks always appeared as
+landscape frames.
+
+### Fix applied
+
+Three surgical changes:
+
+1. **`TextureManager`**: two loaders — `externalLoader` (with
+   `setCrossOrigin('anonymous')`) for actual `https?://` URLs, `localLoader` (no
+   crossOrigin) for data URIs, relative paths, and `file://` resources. A new
+   `fallbackKeys` set and `isFallback(url, role)` method make fallback use
+   queryable. Verbose diagnostics log URL type, load success with pixel dimensions,
+   and load failure with the browser error message.
+
+2. **`ArtworkMesh`**: `updateAspect()` now accepts optional `manifestDimensions`
+   and uses them as the primary aspect source. `setPaintingTextures()` forwards the
+   dimensions parameter. New getters `lastAspectSource` and `lastManifestDimensions`
+   expose what was used for diagnostics.
+
+3. **`GalleryManager`**: passes `artwork.dimensions` to `setPaintingTextures()`.
+   Calls `isFallback()` after load and emits a high-visibility warn if the central
+   3D painting is using a fallback texture. The `show-artwork-complete` diagnostic
+   now includes `fallbackUsed`, `aspectSource`, `manifestDimensions`,
+   `paintingWidth`, `paintingHeight`, and `paintingAspect`.
+
+### Build validation
+
+`npm run lint && npm run build` — exit 0, only expected TS-parser and Sass deprecation warnings.
+
+---
+
+## 2026-05-17 — v0.08 pre-fix finding: timeline works, 3D painting does not (original observation)
 
 Customer import produced valid manifest entries and the timeline displayed the
 images, but the actual 3D painting did not show the imported artwork and did not
@@ -11,7 +60,7 @@ match the imported aspect ratios.
 This is the main customer-image feature path. The import is not complete unless
 the central 3D painting uses the customer image and the customer image dimensions.
 
-### Likely failure area
+### Likely failure area (now confirmed)
 
 - The timeline loads images through DOM `<img>` elements.
 - The 3D painting loads images through Three.js `TextureLoader` in `TextureManager`.
@@ -23,9 +72,9 @@ the central 3D painting uses the customer image and the customer image dimension
 
 ### Plan created
 
-`plan.md` now contains **v0.08 Critical Plan — Imported images must render on the
-actual 3D paintings**, including a detailed logging plan and acceptance checks
-for the reported images: `720 × 907`, `719 × 991`, and `4724 × 4724`.
+`plan.md` now contains the full **v0.08** technical implementation plan including
+root cause analysis, code-level fix details, logging structure, and acceptance
+checks for the reported images: `720 × 907`, `719 × 991`, and `4724 × 4724`.
 
 ---
 

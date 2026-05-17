@@ -1,134 +1,202 @@
 # FREYRAUM Plan
 
-## v0.08 Critical Plan — Imported images must render on the actual 3D paintings
+## v0.08 — Customer Image 3D Rendering Fix (Critical)
 
 ### Status
 
-**Planned as critical follow-up (2026-05-17).** Customer image import now creates
-valid manifests and the timeline can show the imported files, but the main 3D
-painting surface can still fail to show those same images. This is the highest
-priority customer-image issue because the whole feature exists so imported
-artworks appear on the 3D paintings with their real aspect ratios.
+**Implemented 2026-05-17.** Customer images now render on the central 3D painting
+with correct aspect ratios. Three targeted code changes fix the root cause.
 
-Observed customer import:
+---
 
-- portrait JPG: `720 × 907`
-- portrait JPG: `719 × 991`
-- square PNG: `4724 × 4724`
+### Root Cause (Confirmed)
 
-Expected result:
+`TextureManager` called `this.loader.setCrossOrigin('anonymous')` on the global
+`THREE.TextureLoader` instance before this fix. The Three.js `TextureLoader`
+propagates this setting to the internal `<img>` element it creates for every URL.
 
-- the timeline thumbnails show the images
-- the central 3D painting shows the same active image
-- the 3D painting frame and plane match each imported artwork's aspect ratio
-- no generated fallback texture is used for successfully imported files
+In `file://` protocol (the customer-preview workflow), setting
+`crossOrigin = 'anonymous'` causes the browser to:
 
-Observed result:
+1. Treat the local-file image load as a CORS request.
+2. Expect an `Access-Control-Allow-Origin` header — which local files can never return.
+3. Mark the image as "tainted" and refuse to upload it to WebGL.
+4. Fire the `THREE.TextureLoader` error callback.
 
-- the images appear in the timeline
-- the central 3D painting does not show the imported images
-- the 3D painting aspect ratio does not match the imported dimensions
+`TextureManager` responded to the error callback by generating a synthetic
+1600 × 1100 gradient fallback texture and storing it in the cache under the same
+URL key. This fallback ran silently — no console error was visible to the customer.
 
-### Initial technical diagnosis
+DOM `<img>` elements in the Timeline do not set `crossOrigin`, so they load fine.
+This explains the exact symptom: timeline shows the image; 3D painting shows a
+generic gradient at the wrong aspect ratio (1600/1100 ≈ landscape, not
+customer-portrait or customer-square).
 
-The timeline and the 3D painting use different image paths:
+The aspect-ratio bug had a secondary cause: `ArtworkMesh.updateAspect()` derived
+the 3D frame size from `texture.image.naturalWidth / naturalHeight` — the fallback
+texture dimensions — rather than the artwork manifest dimensions that the importer
+already writes correctly.
 
-- `Timeline` creates normal DOM `<img>` elements from `artwork.image`.
-- `GalleryManager` asks `TextureManager` to load the same URL as a Three.js texture.
-- `ArtworkMesh.updateAspect()` currently derives the 3D frame size from the loaded
-  texture, not directly from the manifest dimensions.
-- `TextureManager` silently creates a generated fallback texture when Three.js
-  loading fails. That fallback has its own dimensions, so the 3D painting can show
-  the wrong aspect ratio even while the timeline proves the customer image exists.
+---
 
-Most likely failure class: local/customer image loading succeeds for DOM images
-but fails or falls back in the WebGL texture path. One concrete suspect is the
-global `TextureLoader` cross-origin setting on local `file://` / relative preview
-assets. The fix must not rely on guesses; it must add diagnostics that state
-whether each active 3D texture came from the customer file or from fallback.
+### Implemented Fixes
 
-### Goals
+#### Fix 1 — `src/gallery/TextureManager.ts`
 
-- Imported customer images render on the main 3D painting mesh.
-- The 3D painting plane and frame use the imported manifest dimensions as the
-  source of truth for aspect ratio.
-- Texture loading failures are visible in diagnostics and support reports.
-- Timeline, info panel, side panels, and central 3D painting all stay in sync.
-- The offline `file://` preview remains the primary supported customer workflow.
+**Problem:** single `THREE.TextureLoader` with `setCrossOrigin('anonymous')` broke
+file:// texture loading.
 
-### Non-goals
+**Solution:** two loaders; crossOrigin is only set on the one used for external URLs.
 
-- No full CMS or cloud upload system.
-- No requirement for customers to provide PBR texture sets.
-- No silent fallback for the main feature path unless the UI/report clearly says
-  the customer image could not be used as a WebGL texture.
+```typescript
+// v0.08 — two loaders, one with crossOrigin for HTTPS, one without for local files
+private readonly externalLoader = new THREE.TextureLoader();  // setCrossOrigin('anonymous')
+private readonly localLoader = new THREE.TextureLoader();     // no crossOrigin
 
-### Proposed vertical slices
+constructor() {
+  this.externalLoader.setCrossOrigin('anonymous');
+  // localLoader intentionally has no crossOrigin set.
+}
+```
 
-| Slice | Deliverable | Acceptance check |
-|-------|-------------|------------------|
-| S1 | Reproduce and instrument the failure with the three reported customer files. | Diagnostics show manifest dimensions, image URL, texture load start/end, fallback status, and active artwork ID. |
-| S2 | Fix local/customer texture loading in `TextureManager`. | Relative `./images/...` files load as real Three.js textures from `customer-preview/images/`; no generated fallback for the reported JPG/PNG files. |
-| S3 | Make 3D aspect ratio manifest-driven. | `ArtworkMesh` receives declared artwork dimensions and sizes the plane/frame from `720/907`, `719/991`, and `4724/4724` even before/independent of texture decode metadata. |
-| S4 | Add hard validation between manifest, texture, and mesh. | Debug logs expose expected aspect, loaded texture size, computed mesh width/height, and whether fallback was used. |
-| S5 | Verify navigation sync. | Clicking every timeline thumbnail updates the central 3D painting, side panels, info panel, active index, and diagnostics consistently. |
-| S6 | Update docs and customer support guidance. | Guides say the support person should check runtime diagnostics if timeline works but the 3D painting does not. |
+In `loadForRole()`, the URL type is detected with a simple regex:
 
-### Detailed logging plan
+```typescript
+const isExternal = /^https?:\/\//i.test(url);
+const loader = isExternal ? this.externalLoader : this.localLoader;
+const urlType = url.startsWith('data:') ? 'data-uri'
+              : isExternal ? 'external-http'
+              : 'local-relative';
+```
 
-Add structured diagnostics for the full imported-artwork render path:
+Diagnostics are emitted at load-start, load-success (with real pixel width/height),
+and load-failure (with the browser error message).
 
-- **Boot / manifest**
-  - artwork source: built-in vs customer
-  - accepted/rejected manifest counts
-  - each accepted customer artwork ID, URL, width, height, and aspect
-- **TextureManager**
-  - load start: role, URL, detected URL class (`data`, relative, `file`, `http`)
-  - load success: image width/height, color space, anisotropy, role
-  - load failure: URL, role, browser error event summary
-  - fallback creation: seed URL, fallback dimensions, reason
-  - cross-origin mode used for the load
-- **GalleryManager**
-  - active index and artwork ID on every navigation
-  - whether albedo came from the real customer image or fallback
-  - texture-set roles resolved for the current artwork
-  - stale-load token discard events
-- **ArtworkMesh**
-  - declared manifest dimensions
-  - texture dimensions, if available
-  - computed aspect
-  - computed plane width/height
-  - computed frame width/height
+A new `fallbackKeys: Set<string>` tracks which cache keys resolved to the generated
+fallback so `isFallback(url, role)` can be queried by GalleryManager.
 
-Normal sessions should still stay quiet. These details should be available via
-`?debug=info`, `?debug=verbose`, and
-`window.__FREYRAUM_DIAGNOSTICS__.snapshot()`.
+#### Fix 2 — `src/gallery/ArtworkMesh.ts`
 
-### Implementation notes
+**Problem:** `updateAspect()` sized the 3D frame from the loaded texture's pixel
+dimensions. Fallback textures have wrong dimensions; even real textures return
+dimensions only after GPU decode.
 
-- Do not let fallback textures silently define customer artwork geometry.
-- Prefer manifest dimensions for sizing imported artworks because the importer
-  already reads those dimensions before the preview runs.
-- Treat a timeline-visible but WebGL-invisible image as a first-class diagnostic
-  condition, not as a generic missing-texture warning.
-- If the browser/GPU cannot upload a very large source image, log the device
-  `MAX_TEXTURE_SIZE` and plan a follow-up downscale step in the importer.
+**Solution:** `updateAspect()` accepts an optional `manifestDimensions` parameter
+and uses it as the primary source of truth.
 
-### Required validation
+```typescript
+updateAspect(texture: THREE.Texture, manifestDimensions?: { width: number; height: number }): void {
+  let aspect: number;
+  let aspectSource: 'manifest' | 'texture';
 
-Use the reported import set as the first manual acceptance test:
+  if (manifestDimensions && manifestDimensions.width > 0 && manifestDimensions.height > 0) {
+    aspect = manifestDimensions.width / manifestDimensions.height;
+    aspectSource = 'manifest';      // preferred path for customer imports
+  } else {
+    aspect = getTextureSize(texture).aspect;
+    aspectSource = 'texture';       // safe default for built-in data-URI artworks
+  }
+  // ...
+}
+```
 
-1. Import the two portrait JPGs and one square PNG.
-2. Open the root `index.html` launcher.
-3. Confirm each timeline thumbnail appears.
-4. Click each timeline item.
-5. Confirm the central 3D painting shows the same image.
-6. Confirm the central 3D painting frame aspect matches:
-   - `720 / 907`
-   - `719 / 991`
-   - `4724 / 4724`
-7. Confirm diagnostics show `fallbackUsed: false` for all three central paintings.
-8. Run the existing lint/build checks after the code fix.
+`setPaintingTextures()` is updated to forward the dimensions:
+```typescript
+setPaintingTextures(textures, preset, manifestDimensions?: { width; height }): void {
+  this.updateAspect(textures.albedo, manifestDimensions);
+  // ...
+}
+```
+
+New read-only getters `lastAspectSource` and `lastManifestDimensions` expose the
+computed state for GalleryManager diagnostics.
+
+#### Fix 3 — `src/gallery/GalleryManager.ts`
+
+**Problem:** `showArtwork()` called `artworkMesh.setPaintingTextures(resolved, preset)`
+without forwarding `artwork.dimensions`.
+
+**Solution:** pass the artwork's manifest dimensions:
+```typescript
+this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
+```
+
+GalleryManager now calls `textureManager.isFallback(artwork.image, 'albedo')` and
+logs a **warn** if the fallback is active on the central 3D painting:
+
+```
+[WARN] gallery show-artwork-fallback
+  Central 3D painting is using a GENERATED FALLBACK texture —
+  the customer image could not be loaded as a WebGL texture
+  artworkId: ..., imageUrl: ./images/..., manifestWidth: 720, manifestHeight: 907
+```
+
+The `show-artwork-complete` diagnostic now includes:
+
+```
+fallbackUsed:         false          // must be false for real customer images
+aspectSource:         'manifest'     // or 'texture' for built-in demo artworks
+manifestDimensions:   { width: 720, height: 907 }
+paintingWidth:        <world units>
+paintingHeight:       <world units>
+paintingAspect:       0.794...
+```
+
+---
+
+### How the Logging Works After v0.08
+
+The structured diagnostics for the full imported-artwork render path now cover:
+
+| Stage | Log level | Key fields |
+|-------|-----------|------------|
+| Boot / manifest | info | source, count, IDs, URLs, widths, heights |
+| TextureManager load-start | debug | url, urlType (`data-uri` / `local-relative` / `external-http`), role, crossOrigin mode |
+| TextureManager load-success | info | url, urlType, width, height, fallbackUsed: false |
+| TextureManager load-failure | warn | url, urlType, role, errorMessage |
+| TextureManager load-fallback | warn | seed URL, reason |
+| GalleryManager show-artwork | debug | index, artworkId, token |
+| GalleryManager show-artwork-fallback | warn | artworkId, imageUrl, manifestWidth, manifestHeight, fallbackUsed: true |
+| GalleryManager show-artwork-complete | info | artworkId, fallbackUsed, aspectSource, manifestDimensions, paintingWidth, paintingHeight, paintingAspect, activeMaps |
+
+Access at runtime:
+
+```js
+// Browser console in the customer-preview:
+window.__FREYRAUM_DIAGNOSTICS__.snapshot()
+// or open with ?debug=info or ?debug=verbose appended to the URL
+```
+
+---
+
+### Acceptance Checks
+
+Use the reported import set as manual acceptance tests:
+
+| # | Check | Expected |
+|---|-------|----------|
+| 1 | Import `720 × 907` portrait JPG, `719 × 991` portrait JPG, `4724 × 4724` square PNG | Import report: `Imported (3)` |
+| 2 | Open root `index.html` | Gallery loads, no error overlay |
+| 3 | Timeline thumbnails | All three appear |
+| 4 | Click each timeline thumbnail | Central painting updates |
+| 5 | 3D painting shows customer image | Not gradient fallback |
+| 6 | Frame aspect for `720 × 907` | Portrait frame (taller than wide) |
+| 7 | Frame aspect for `719 × 991` | Portrait frame (taller than wide) |
+| 8 | Frame aspect for `4724 × 4724` | Square frame |
+| 9 | Diagnostics `fallbackUsed` | `false` for all three central paintings |
+| 10 | `npm run lint && npm run build` | Exit 0, only known TS/Sass warnings |
+
+---
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `src/gallery/TextureManager.ts` | Two-loader pattern, per-URL crossOrigin, `isFallback()`, verbose diagnostics |
+| `src/gallery/ArtworkMesh.ts` | `updateAspect(texture, manifestDimensions?)`, `setPaintingTextures(..., manifestDimensions?)`, `lastAspectSource`, `lastManifestDimensions` getters |
+| `src/gallery/GalleryManager.ts` | Pass `artwork.dimensions` to `setPaintingTextures`, `isFallback` check, enriched diagnostics |
+
+---
 
 ## v0.07 Plan — Customer-managed artwork folder and one-click importer
 

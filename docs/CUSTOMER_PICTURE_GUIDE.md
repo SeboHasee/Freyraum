@@ -123,14 +123,25 @@ support person. The report is written in plain language and they can
 read it without seeing the gallery.
 
 **My pictures show in the timeline, but not on the big 3D painting.**
-This is not your fault. Send your support person:
+This issue is now fixed in v0.08. After running `Update Gallery` and opening
+the gallery with the latest build, all imported images should appear on the 3D
+painting with correct aspect ratios.
 
-- `customer-artworks/last-import-report.txt`
-- `customer-artworks/artworks.json`
-- a note saying which picture is visible in the timeline but missing on the 3D painting
+If you still see a gradient placeholder instead of your picture after the fix,
+this means the WebGL texture upload failed for that specific image. This can
+happen if the image file is corrupt, or if it is larger than the GPU's texture
+size limit (very rare on modern hardware). To diagnose:
 
-The support person should use the v0.08 plan in `plan.md` to check the WebGL
-texture-loading diagnostics.
+1. Open the gallery in a browser.
+2. Open the browser console (F12 → Console tab).
+3. Look for any lines that say `show-artwork-fallback` or `load-fallback`.
+4. Send the console output and `customer-artworks/last-import-report.txt` to
+   your support person.
+
+A developer can also append `?debug=info` to the gallery URL and run
+`window.__FREYRAUM_DIAGNOSTICS__.snapshot()` in the browser console to get
+a full structured report. Look for `fallbackUsed: true` in the
+`show-artwork-complete` entries.
 
 ## Debug / support tools (developer use)
 
