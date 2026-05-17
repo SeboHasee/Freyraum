@@ -1,28 +1,33 @@
 import * as THREE from 'three';
 import { CanvasMaterial } from '../materials/CanvasMaterial';
 import { fitWithinBox, getTextureSize } from '../utils/texture';
+import type { QualityPreset } from '../config/quality';
 
 export class ArtworkMesh {
   readonly group: THREE.Group;
   private readonly frameMesh: THREE.Mesh;
-  private readonly artworkMesh: THREE.Mesh;
+  private artworkMesh: THREE.Mesh;
   private readonly artworkMaterial: THREE.MeshPhysicalMaterial;
   private readonly frameMaterial: THREE.MeshPhysicalMaterial;
   private readonly canvasMaterial: CanvasMaterial;
   private _artworkAspect = 1;
   private _artworkWidth = 4;
   private _artworkHeight = 5.7;
+  private currentSegments: number;
+  private readonly scene: THREE.Scene;
 
-  constructor(scene: THREE.Scene) {
+  constructor(scene: THREE.Scene, preset: QualityPreset) {
+    this.scene = scene;
     this.canvasMaterial = new CanvasMaterial();
     this.group = new THREE.Group();
+    this.currentSegments = preset.artworkSegments;
 
     const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.18);
     this.frameMaterial = this.canvasMaterial.createFrameMaterial();
     this.frameMesh = new THREE.Mesh(frameGeo, this.frameMaterial);
     this.group.add(this.frameMesh);
 
-    const artGeo = new THREE.PlaneGeometry(4, 5.7, 240, 240);
+    const artGeo = new THREE.PlaneGeometry(4, 5.7, this.currentSegments, this.currentSegments);
     this.artworkMaterial = new THREE.MeshPhysicalMaterial({
       roughness: 0.88,
       metalness: 0,
@@ -39,6 +44,18 @@ export class ArtworkMesh {
       this.artworkMaterial.normalScale.set(0.12, 0.12);
       this.artworkMaterial.needsUpdate = true;
     });
+  }
+
+  applyPreset(preset: QualityPreset): void {
+    if (preset.artworkSegments === this.currentSegments) return;
+    this.currentSegments = preset.artworkSegments;
+
+    const oldGeo = this.artworkMesh.geometry;
+    const newGeo = new THREE.PlaneGeometry(4, 5.7, this.currentSegments, this.currentSegments);
+    this.artworkMesh.geometry = newGeo;
+    oldGeo.dispose();
+    // Re-apply current scale to the new geometry.
+    this.artworkMesh.scale.set(this._artworkWidth / 4.0, this._artworkHeight / 5.7, 1);
   }
 
   updateAspect(texture: THREE.Texture): void {
@@ -75,6 +92,7 @@ export class ArtworkMesh {
   }
 
   dispose(): void {
+    this.scene.remove(this.group);
     this.frameMesh.geometry.dispose();
     this.artworkMesh.geometry.dispose();
     this.frameMaterial.dispose();

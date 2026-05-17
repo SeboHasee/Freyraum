@@ -20,6 +20,7 @@ export class GalleryManager {
   private readonly textureManager: TextureManager;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly raycaster = new THREE.Raycaster();
+  private reducedMotion = false;
 
   private targetX = 0;
   private targetY = 0;
@@ -101,9 +102,11 @@ export class GalleryManager {
       artworks.length - 1
     );
 
-    this.artworkMesh.group.position.x = direction * 3.2;
-    this.artworkMesh.group.rotation.y = direction * 0.32;
-    this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
+    if (!this.reducedMotion) {
+      this.artworkMesh.group.position.x = direction * 3.2;
+      this.artworkMesh.group.rotation.y = direction * 0.32;
+      this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
+    }
 
     this.currentIndex = newIndex;
     this.showArtwork(newIndex);
@@ -118,13 +121,19 @@ export class GalleryManager {
     const diff = index - this.currentIndex;
     this.currentIndex = index;
 
-    this.artworkMesh.group.position.x = (diff > 0 ? 1 : -1) * 3.2;
-    this.artworkMesh.group.rotation.y = direction * 0.32;
-    this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
+    if (!this.reducedMotion) {
+      this.artworkMesh.group.position.x = (diff > 0 ? 1 : -1) * 3.2;
+      this.artworkMesh.group.rotation.y = direction * 0.32;
+      this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
+    }
 
     this.showArtwork(index);
     this.resetView();
     this.onNavigateCallback?.(this.currentIndex);
+  }
+
+  setReducedMotion(value: boolean): void {
+    this.reducedMotion = value;
   }
 
   setHoverTarget(x: number, y: number): void {
@@ -186,7 +195,7 @@ export class GalleryManager {
     this.camera.position.y += (this.panY - this.camera.position.y) * 0.08;
   }
 
-  private resetView(): void {
+  resetView(): void {
     this.targetPanX = 0;
     this.targetPanY = 0;
     this.targetZoom = this.clampZoom(DEFAULT_CAMERA_Z);

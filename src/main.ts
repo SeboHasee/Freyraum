@@ -1,6 +1,7 @@
 import './styles/main.scss';
 
 import { artworks } from './config/artworks';
+import { getQualityPreset } from './config/quality';
 import { RendererManager } from './core/RendererManager';
 import { SceneManager } from './core/SceneManager';
 import { PostProcessing } from './core/PostProcessing';
@@ -13,40 +14,70 @@ import { Topbar } from './ui/Topbar';
 import { InfoPanel } from './ui/InfoPanel';
 import { NavigationControls } from './ui/NavigationControls';
 import { HintText } from './ui/HintText';
+import { ZoomControls } from './ui/ZoomControls';
+import { FullscreenButton } from './ui/FullscreenButton';
+import { PreferencesPanel } from './ui/PreferencesPanel';
+import { showFallbackScreen } from './ui/FallbackScreen';
 import { Timeline } from './timeline/Timeline';
 import { MouseInteraction } from './interaction/MouseInteraction';
 import { ZoomPan } from './interaction/ZoomPan';
 import { KeyboardNav } from './interaction/KeyboardNav';
 import { TouchInteraction } from './interaction/TouchInteraction';
+import { PreferencesStore } from './utils/preferences';
+import { isWebGLAvailable } from './utils/webgl';
 
 async function main(): Promise<void> {
-  const app = document.getElementById('app')!;
+  const app = document.getElementById('app');
+  if (!app) return;
+
+  // Preferences must apply before WebGL bootstrapping so the fallback
+  // screen and loading overlay both react to motion/contrast settings.
+  const preferences = new PreferencesStore();
+
+  if (!isWebGLAvailable()) {
+    showFallbackScreen(app, 'WebGL ist im aktuellen Browser nicht verfügbar.');
+    return;
+  }
 
   // Loading overlay
   const loadingOverlay = document.createElement('div');
   loadingOverlay.className = 'loading-overlay';
+  loadingOverlay.setAttribute('role', 'status');
+  loadingOverlay.setAttribute('aria-label', 'Galerie wird geladen');
   const spinner = document.createElement('div');
   spinner.className = 'loading-spinner';
+  spinner.setAttribute('aria-hidden', 'true');
   loadingOverlay.appendChild(spinner);
   app.appendChild(loadingOverlay);
 
   // Core setup
-  const rendererManager = new RendererManager(app);
+  const initialPreset = getQualityPreset(preferences.current.quality);
+
+  let rendererManager: RendererManager;
+  try {
+    rendererManager = new RendererManager(app, initialPreset);
+  } catch (err) {
+    loadingOverlay.remove();
+    showFallbackScreen(app, err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.');
+    return;
+  }
+
   const sceneManager = new SceneManager();
   const postProcessing = new PostProcessing(
     rendererManager.renderer,
     sceneManager.scene,
-    sceneManager.camera
+    sceneManager.camera,
+    initialPreset
   );
 
   // Texture & lighting
   const textureManager = new TextureManager();
   textureManager.init(rendererManager.renderer);
 
-  const lightingSetup = new LightingSetup(sceneManager.scene);
+  const lightingSetup = new LightingSetup(sceneManager.scene, initialPreset);
 
   // Gallery objects
-  const artworkMesh = new ArtworkMesh(sceneManager.scene);
+  const artworkMesh = new ArtworkMesh(sceneManager.scene, initialPreset);
   const sidePanels = new SidePanels(sceneManager.scene);
 
   // Gallery manager
@@ -57,26 +88,45 @@ async function main(): Promise<void> {
     sceneManager.camera
   );
 
-  // Load all artworks
   await galleryManager.init();
 
-  // Hide loading overlay
   loadingOverlay.classList.add('is-hidden');
-  setTimeout(() => loadingOverlay.remove(), 700);
+  window.setTimeout(() => loadingOverlay.remove(), 700);
 
   // UI
   const topbar = new Topbar(app);
   const infoPanel = new InfoPanel(app);
   const navControls = new NavigationControls(app);
+  const zoomControls = new ZoomControls(app, galleryManager);
+  const fullscreenButton = new FullscreenButton(app, document.documentElement);
+  const preferencesPanel = new PreferencesPanel(app, preferences);
   const hintText = new HintText(app);
   const timeline = new Timeline(app);
 
   // Interaction
   const canvas = rendererManager.renderer.domElement;
+  canvas.setAttribute('aria-label', 'Interaktive Galerie');
+  canvas.setAttribute('role', 'img');
+
   const mouseInteraction = new MouseInteraction(canvas, galleryManager);
   const zoomPan = new ZoomPan(canvas, galleryManager, mouseInteraction);
   const keyboardNav = new KeyboardNav(galleryManager);
   const touchInteraction = new TouchInteraction(canvas, galleryManager);
+
+  // Apply current preferences to all subsystems.
+  const applyPreferences = (): void => {
+    const { reducedMotion, quality } = preferences.current;
+    galleryManager.setReducedMotion(reducedMotion);
+    lightingSetup.setAnimated(!reducedMotion);
+
+    const preset = getQualityPreset(quality);
+    rendererManager.applyPreset(preset);
+    postProcessing.applyPreset(preset);
+    lightingSetup.applyPreset(preset);
+    artworkMesh.applyPreset(preset);
+  };
+  applyPreferences();
+  const unsubscribePreferences = preferences.subscribe(applyPreferences);
 
   // Navigation callbacks
   const handleNavigate = (index: number): void => {
@@ -105,6 +155,8 @@ async function main(): Promise<void> {
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {
     cancelAnimationFrame(rafId);
+    unsubscribePreferences();
+    preferences.dispose();
     mouseInteraction.dispose();
     zoomPan.dispose();
     keyboardNav.dispose();
@@ -112,6 +164,9 @@ async function main(): Promise<void> {
     topbar.dispose();
     infoPanel.dispose();
     navControls.dispose();
+    zoomControls.dispose();
+    fullscreenButton.dispose();
+    preferencesPanel.dispose();
     hintText.dispose();
     timeline.dispose();
     artworkMesh.dispose();
@@ -124,4 +179,10 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error(err);
+  const app = document.getElementById('app');
+  if (app) {
+    showFallbackScreen(app, err instanceof Error ? err.message : 'Unbekannter Fehler beim Initialisieren.');
+  }
+});

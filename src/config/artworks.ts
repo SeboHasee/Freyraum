@@ -1,8 +1,42 @@
+/**
+ * Structured artwork metadata model for v0.01.
+ *
+ * v0.01 keeps a local static data source as the canonical content store.
+ * Required fields will map 1:1 to a future CMS schema. Optional CMS-only
+ * fields (slug, locale, translations) are reserved for future passes and
+ * intentionally not modeled here.
+ */
+
+export interface ArtworkDimensions {
+  /** Pixel width of the rendered artwork asset. */
+  width: number;
+  /** Pixel height of the rendered artwork asset. */
+  height: number;
+}
+
 export interface Artwork {
+  /** Stable, URL-safe identifier. Required for CMS interop. */
+  id: string;
+  /** Display title shown in the info panel. */
   title: string;
+  /** Short eyebrow label shown above the title. */
   subtitle: string;
+  /** Long-form description, plain text. */
   description: string;
+  /** Year of creation, used by the info panel and timeline. */
+  year: number;
+  /** Medium, e.g. "Digital painting · 2400×1600". */
+  medium: string;
+  /** Image asset reference. Local data URI or relative path. */
   image: string;
+  /** Native pixel dimensions of the image asset. */
+  dimensions: ArtworkDimensions;
+  /** Alt text for assistive technology and image-only views. */
+  alt: string;
+  /** Credit string (artist, studio, or rights holder). */
+  credit: string;
+  /** Tag list for future filtering / CMS taxonomies. */
+  tags: readonly string[];
 }
 
 interface EmbeddedArtworkOptions {
@@ -60,12 +94,15 @@ const embeddedArtwork = ({
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 };
 
-export const artworks: Artwork[] = [
+export const artworks: readonly Artwork[] = [
   {
+    id: 'electric-storm',
     title: 'Electric Storm',
     subtitle: 'Artwork 01',
     description:
       'Eine ruhige immersive digitale Kunstpräsentation mit realistischer Materialität und hochwertiger Lichtführung.',
+    year: 2025,
+    medium: 'Digital painting · 2400 × 1600',
     image: embeddedArtwork({
       title: 'Electric Storm',
       width: 2400,
@@ -75,12 +112,19 @@ export const artworks: Artwork[] = [
       accent: '#c8b690',
       horizonPercent: 54,
     }),
+    dimensions: { width: 2400, height: 1600 },
+    alt: 'Abstrakte Landschaft mit weichen Wolken über einem warm getönten Horizont.',
+    credit: 'Freyraum Studio',
+    tags: ['landscape', 'soft-light', 'warm'],
   },
   {
+    id: 'quiet-coastline',
     title: 'Quiet Coastline',
     subtitle: 'Artwork 02',
     description:
       'Minimalistische Küstenkomposition mit fein ausgearbeiteter Materialstruktur.',
+    year: 2025,
+    medium: 'Digital painting · 1800 × 2400',
     image: embeddedArtwork({
       title: 'Quiet Coastline',
       width: 1800,
@@ -90,11 +134,18 @@ export const artworks: Artwork[] = [
       accent: '#a6b4ae',
       horizonPercent: 62,
     }),
+    dimensions: { width: 1800, height: 2400 },
+    alt: 'Hochformatige minimalistische Küstenszene in gedämpften Grautönen.',
+    credit: 'Freyraum Studio',
+    tags: ['portrait', 'coast', 'minimal'],
   },
   {
+    id: 'tokyo-passage',
     title: 'Tokyo Passage',
     subtitle: 'Artwork 03',
     description: 'Cinematische urbane Perspektiven mit dramatischem Streiflicht.',
+    year: 2025,
+    medium: 'Digital painting · 2100 × 2100',
     image: embeddedArtwork({
       title: 'Tokyo Passage',
       width: 2100,
@@ -104,12 +155,19 @@ export const artworks: Artwork[] = [
       accent: '#8b9497',
       horizonPercent: 48,
     }),
+    dimensions: { width: 2100, height: 2100 },
+    alt: 'Quadratische urbane Szene mit dramatischem Streiflicht in kühlen Tönen.',
+    credit: 'Freyraum Studio',
+    tags: ['square', 'urban', 'cinematic'],
   },
   {
+    id: 'golden-desert',
     title: 'Golden Desert',
     subtitle: 'Artwork 04',
     description:
       'Atmosphärische Lichtstimmung kombiniert mit realistischer Leinwandstruktur.',
+    year: 2025,
+    medium: 'Digital painting · 2800 × 1200',
     image: embeddedArtwork({
       title: 'Golden Desert',
       width: 2800,
@@ -119,5 +177,9 @@ export const artworks: Artwork[] = [
       accent: '#a98f6d',
       horizonPercent: 57,
     }),
+    dimensions: { width: 2800, height: 1200 },
+    alt: 'Ultra-breite Wüstenkomposition in goldenen und sandfarbenen Tönen.',
+    credit: 'Freyraum Studio',
+    tags: ['ultrawide', 'desert', 'warm'],
   },
 ];

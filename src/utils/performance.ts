@@ -1,5 +1,5 @@
-export function getOptimalPixelRatio(): number {
-  return Math.min(window.devicePixelRatio, 1.8);
+export function getOptimalPixelRatio(cap = 1.8): number {
+  return Math.min(window.devicePixelRatio, cap);
 }
 
 export function isMobileDevice(): boolean {
