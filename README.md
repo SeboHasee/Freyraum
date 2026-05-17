@@ -64,7 +64,7 @@ npm run lint
 
 This repository now follows a documentation-first rule for future development.
 
-- [`plan.md`](./plan.md) — current plan, implemented work, and next-step scope
+- [`plan.md`](./plan.md) — current plan, implemented work, v0.01 vertical slices, and reserved future-pass scope
 - [`CHANGELOG.md`](./CHANGELOG.md) — shipped changes by version/date
 - [`FINDINGS.md`](./FINDINGS.md) — technical findings, caveats, and validation notes
 - [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md) — required documentation process for future work

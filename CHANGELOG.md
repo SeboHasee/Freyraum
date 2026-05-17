@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## Unreleased
+
+### Changed
+
+- expanded the v0.01 remaining scope into a technical vertical-slice implementation and execution plan
+- documented recommended v0.01 execution order and reserved future-pass boundaries
+- added findings for CMS-readiness, local assets, accessibility, WebGL fallback, performance presets, presentation mode, and customer handoff planning
+
 ## v0.01 - 2026-05-17
 
 ### Added

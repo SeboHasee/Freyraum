@@ -21,6 +21,14 @@
 - Aspect-ratio-preserving scaling is the minimum acceptable solution for the current preview rail.
 - Future refinement may still improve perceived balance by adding framed preview containers or elegant crop rules for extreme formats.
 
+## 2026-05-17 - v0.01 execution planning
+
+- The remaining v0.01 work should be planned as vertical slices, not horizontal refactors.
+- The structured artwork metadata model should be implemented before final assets, thumbnails, accessibility labels, and screenshots because those later slices depend on stable content fields.
+- WebGL fallback, quality presets, fullscreen mode, and documentation screenshots are all suitable v0.01 slices, but each should stay narrowly scoped and reserve larger systems for future passes.
+- A future CMS should not be implemented in v0.01; v0.01 should only prepare a local static metadata model that can later map to CMS fields.
+- Documentation screenshots and architecture diagrams should be treated as a customer handoff slice, not as incidental polish.
+
 ## Validation notes
 
 - `npm run build` succeeded after the current interaction and documentation changes.
