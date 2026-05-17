@@ -158,6 +158,7 @@ export const artworks: readonly Artwork[] = [
     alt: 'Abstrakte Landschaft mit weichen Wolken über einem warm getönten Horizont.',
     credit: 'Freyraum Studio',
     tags: ['landscape', 'soft-light', 'warm'],
+    surfaceProfile: 'matte-canvas',
   },
   {
     id: 'quiet-coastline',
@@ -180,6 +181,7 @@ export const artworks: readonly Artwork[] = [
     alt: 'Hochformatige minimalistische Küstenszene in gedämpften Grautönen.',
     credit: 'Freyraum Studio',
     tags: ['portrait', 'coast', 'minimal'],
+    surfaceProfile: 'matte-canvas',
   },
   {
     id: 'tokyo-passage',
@@ -201,6 +203,7 @@ export const artworks: readonly Artwork[] = [
     alt: 'Quadratische urbane Szene mit dramatischem Streiflicht in kühlen Tönen.',
     credit: 'Freyraum Studio',
     tags: ['square', 'urban', 'cinematic'],
+    surfaceProfile: 'satin-canvas',
   },
   {
     id: 'golden-desert',
@@ -223,5 +226,6 @@ export const artworks: readonly Artwork[] = [
     alt: 'Ultra-breite Wüstenkomposition in goldenen und sandfarbenen Tönen.',
     credit: 'Freyraum Studio',
     tags: ['ultrawide', 'desert', 'warm'],
+    surfaceProfile: 'matte-canvas',
   },
 ];

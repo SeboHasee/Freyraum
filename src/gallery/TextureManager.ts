@@ -84,6 +84,7 @@ export class TextureManager {
       'roughness',
       'specular',
       'ao',
+      'varnish',
     ];
 
     const results: Partial<ResolvedPaintingTextures> = {};

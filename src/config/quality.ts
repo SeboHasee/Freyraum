@@ -58,6 +58,14 @@ export interface QualityPreset {
   selfShadowSteps: number;
   /** Self-shadow darkening scalar (0..1). */
   selfShadowStrength: number;
+
+  // ── v0.04 clearcoat / varnish fields ─────────────────────────────────────
+  /** Whether the Three.js clearcoat BxDF is enabled. Disabled on balanced/battery. */
+  clearcoatEnabled: boolean;
+  /** Base clearcoat intensity used when no authored varnish map is present. */
+  clearcoatStrength: number;
+  /** Clearcoat roughness; lower values read glossier, higher values read satin. */
+  clearcoatRoughnessValue: number;
 }
 
 export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
@@ -89,6 +97,9 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     selfShadowEnabled: true,
     selfShadowSteps: 8,
     selfShadowStrength: 0.55,
+    clearcoatEnabled: true,
+    clearcoatStrength: 0.12,
+    clearcoatRoughnessValue: 0.35,
   },
   balanced: {
     id: 'balanced',
@@ -116,6 +127,9 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     selfShadowEnabled: false,
     selfShadowSteps: 0,
     selfShadowStrength: 0.0,
+    clearcoatEnabled: false,
+    clearcoatStrength: 0.0,
+    clearcoatRoughnessValue: 0.35,
   },
   battery: {
     id: 'battery',
@@ -143,6 +157,9 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     selfShadowEnabled: false,
     selfShadowSteps: 0,
     selfShadowStrength: 0.0,
+    clearcoatEnabled: false,
+    clearcoatStrength: 0.0,
+    clearcoatRoughnessValue: 0.0,
   },
 };
 

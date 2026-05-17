@@ -19,7 +19,8 @@ export type PaintingMapRole =
   | 'height'
   | 'roughness'
   | 'specular'
-  | 'ao';
+  | 'ao'
+  | 'varnish';
 
 export interface PaintingTextureMapEntry {
   /** Path relative to /public or a data URI for offline preview. */
@@ -48,6 +49,8 @@ export interface PaintingTextureSet {
   specular?: PaintingTextureMapEntry;
   /** Optional baked AO (linear). */
   ao?: PaintingTextureMapEntry;
+  /** Grayscale R-channel clearcoat / varnish intensity mask (linear). */
+  varnish?: PaintingTextureMapEntry;
 }
 
 /** Resolved (loaded) painting textures, ready for the material to consume. */
@@ -59,4 +62,5 @@ export interface ResolvedPaintingTextures {
   roughness?: THREE.Texture;
   specular?: THREE.Texture;
   ao?: THREE.Texture;
+  varnish?: THREE.Texture;
 }

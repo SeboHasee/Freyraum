@@ -54,6 +54,9 @@ export class ProceduralTextureFactory {
       case 'ao':
         tex = this.generateAO(seed, effectiveSize);
         break;
+      case 'varnish':
+        tex = this.generateVarnish(seed, smallSize);
+        break;
       case 'albedo':
       default:
         tex = this.generateAlbedo(seed);
@@ -82,23 +85,29 @@ export class ProceduralTextureFactory {
     size: number,
     oct1Amp: number,
     oct2Amp: number,
-    weaveAmp: number,
+    _weaveAmp: number,
     freqScale: number
   ): THREE.Texture {
     const data = new Uint8Array(size * size * 4);
-    const offset = ((seed % 100) / 100) * Math.PI * 2;
+    const f1 = 0.055 * freqScale;
+    const f2 = 0.14 * freqScale;
 
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
 
-        const oct1 = Math.sin(x * 0.42 * freqScale + offset) * Math.cos(y * 0.38 * freqScale) * oct1Amp;
-        const oct2 = Math.sin(x * 0.19 * freqScale + offset * 2) * Math.cos(y * 0.22 * freqScale) * oct2Amp;
-        const weave = Math.sin((x + y) * 0.11 * freqScale) * weaveAmp;
-        const v = oct1 + oct2 + weave;
+        const h1 = this.valueNoise2d(x * f1, y * f1, seed);
+        const h1x = this.valueNoise2d((x + 1) * f1, y * f1, seed);
+        const h1y = this.valueNoise2d(x * f1, (y + 1) * f1, seed);
+        const h2 = this.valueNoise2d(x * f2, y * f2, seed + 17);
+        const h2x = this.valueNoise2d((x + 1) * f2, y * f2, seed + 17);
+        const h2y = this.valueNoise2d(x * f2, (y + 1) * f2, seed + 17);
 
-        data[idx + 0] = this.clamp8(128 + v);
-        data[idx + 1] = this.clamp8(128 - v);
+        const gx = (h1x - h1) * oct1Amp + (h2x - h2) * oct2Amp;
+        const gy = (h1y - h1) * oct1Amp + (h2y - h2) * oct2Amp;
+
+        data[idx + 0] = this.clamp8(128 + gx * 28);
+        data[idx + 1] = this.clamp8(128 + gy * 28);
         data[idx + 2] = 255;
         data[idx + 3] = 255;
       }
@@ -110,16 +119,14 @@ export class ProceduralTextureFactory {
   /** Grayscale R-channel height. Horizontal brush strokes + cross-hatch + tooth grain. */
   private generateHeight(seed: number, size: number): THREE.Texture {
     const data = new Uint8Array(size * size * 4);
-    const o1 = (seed % 64) * 0.05;
-    const o2 = (seed % 32) * 0.07;
 
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
-        const stroke = Math.abs(Math.sin(y * 0.12 + o1)) * 80;
-        const cross = Math.abs(Math.sin(x * 0.09 + o2)) * 30;
-        const tooth = Math.sin(x * 1.4) * Math.sin(y * 1.6) * 12;
-        const h = this.clamp8(stroke + cross + tooth);
+        const macro = this.valueNoise2d(x * 0.04, y * 0.04, seed) * 90;
+        const mid = this.valueNoise2d(x * 0.12, y * 0.09, seed + 7) * 40;
+        const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31) * 16;
+        const h = this.clamp8(macro + mid + micro);
         data[idx + 0] = h;
         data[idx + 1] = h;
         data[idx + 2] = h;
@@ -137,14 +144,13 @@ export class ProceduralTextureFactory {
    */
   private generateRoughness(seed: number, size: number): THREE.Texture {
     const data = new Uint8Array(size * size * 4);
-    const o = ((seed % 50) / 50) * 0.8;
 
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
-        const n1 = (Math.sin(x * 0.09 + o) * Math.cos(y * 0.07)) * 0.5 + 0.5;
-        const n2 = (Math.sin(x * 0.21 + 1.3) * Math.cos(y * 0.18 + 0.7)) * 0.5 + 0.5;
-        const combined = n1 * 0.7 + n2 * 0.3;
+        const lo = this.valueNoise2d(x * 0.07, y * 0.07, seed + 3);
+        const hi = this.valueNoise2d(x * 0.24, y * 0.24, seed + 19);
+        const combined = lo * 0.65 + hi * 0.35;
         const r = this.clamp8(140 + combined * 100);
         data[idx + 0] = r;
         data[idx + 1] = r;
@@ -196,21 +202,35 @@ export class ProceduralTextureFactory {
     return this.makeDataTexture(data, size, size, false);
   }
 
-  /** Soft vignetted ambient-occlusion suggestion (darker edges, lighter centre). */
+  /** Neutral AO fallback. No fake vignette — authored AO may still add real occlusion. */
   private generateAO(seed: number, size: number): THREE.Texture {
     const data = new Uint8Array(size * size * 4);
-    const o = ((seed % 64) / 64) * 0.4;
-    const half = size / 2;
 
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
-        const nx = (x - half) / half;
-        const ny = (y - half) / half;
-        const r2 = nx * nx + ny * ny;
-        const vignette = 1 - Math.min(1, r2 * 0.55);
-        const fine = Math.sin(x * 0.13 + o) * Math.cos(y * 0.11) * 0.05;
-        const v = this.clamp8((vignette + fine) * 255);
+        const grain = this.valueNoise2d(x * 0.11, y * 0.11, seed) * 18;
+        const v = this.clamp8(237 + grain);
+        data[idx + 0] = v;
+        data[idx + 1] = v;
+        data[idx + 2] = v;
+        data[idx + 3] = 255;
+      }
+    }
+
+    return this.makeDataTexture(data, size, size, false);
+  }
+
+  /** Subtle deterministic clearcoat fallback mask for future varnished authored profiles. */
+  private generateVarnish(seed: number, size: number): THREE.Texture {
+    const data = new Uint8Array(size * size * 4);
+
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const idx = (y * size + x) * 4;
+        const lo = this.valueNoise2d(x * 0.035, y * 0.035, seed + 101);
+        const hi = this.valueNoise2d(x * 0.18, y * 0.18, seed + 149);
+        const v = this.clamp8((lo * 0.75 + hi * 0.25) * 85);
         data[idx + 0] = v;
         data[idx + 1] = v;
         data[idx + 2] = v;
@@ -277,5 +297,36 @@ export class ProceduralTextureFactory {
       result = (result * 31 + value.charCodeAt(i)) >>> 0;
     }
     return result || 1;
+  }
+
+  private valueNoise2d(x: number, y: number, seed: number): number {
+    const xi = Math.floor(x) | 0;
+    const yi = Math.floor(y) | 0;
+    const xf = x - Math.floor(x);
+    const yf = y - Math.floor(y);
+
+    const ux = xf * xf * (3 - 2 * xf);
+    const uy = yf * yf * (3 - 2 * yf);
+
+    const h00 = this.latticeHash(xi, yi, seed);
+    const h10 = this.latticeHash(xi + 1, yi, seed);
+    const h01 = this.latticeHash(xi, yi + 1, seed);
+    const h11 = this.latticeHash(xi + 1, yi + 1, seed);
+
+    return (
+      h00 * (1 - ux) * (1 - uy) +
+      h10 * ux * (1 - uy) +
+      h01 * (1 - ux) * uy +
+      h11 * ux * uy
+    );
+  }
+
+  private latticeHash(ix: number, iy: number, seed: number): number {
+    let h = (seed * 1664525 + ix * 1013904223) >>> 0;
+    h = (h ^ (iy * 1540483477)) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    h = Math.imul(h, 0x45d9f3b) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return (h >>> 0) / 0xffffffff;
   }
 }

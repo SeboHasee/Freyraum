@@ -30,6 +30,7 @@ const PROCEDURAL_ROLES: PaintingMapRole[] = [
   'roughness',
   'specular',
   'ao',
+  'varnish',
 ];
 
 export class GalleryManager {
@@ -166,6 +167,7 @@ export class GalleryManager {
     }
 
     this.artworkMesh.setPaintingTextures(resolved, preset);
+    this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
 
     this.targetZoom = this.clampZoom(this.targetZoom);
     this.zoom = this.clampZoom(this.zoom);
@@ -180,7 +182,7 @@ export class GalleryManager {
       case 'detailNormal':
         return preset.detailNormalEnabled && preset.detailNormalStrength > 0;
       case 'height':
-        return preset.bumpStrength > 0;
+        return preset.bumpStrength > 0 || (preset.parallaxEnabled && preset.parallaxScale > 0) || preset.selfShadowEnabled;
       case 'roughness':
         return preset.shaderVariant !== 'painting-battery';
       case 'specular':
