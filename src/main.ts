@@ -32,7 +32,7 @@ async function main(): Promise<void> {
 
   // Core setup
   const rendererManager = new RendererManager(app);
-  const sceneManager = new SceneManager(rendererManager);
+  const sceneManager = new SceneManager();
   const postProcessing = new PostProcessing(
     rendererManager.renderer,
     sceneManager.scene,

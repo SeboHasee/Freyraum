@@ -10,8 +10,6 @@ export class MouseInteraction {
     this.galleryManager = galleryManager;
 
     this.canvas.addEventListener('mousemove', this.handleMouseMove);
-    this.canvas.addEventListener('mousedown', this.handleMouseDown);
-    this.canvas.addEventListener('mouseup', this.handleMouseUp);
     this.canvas.addEventListener('click', this.handleClick);
   }
 
@@ -29,14 +27,6 @@ export class MouseInteraction {
     this.galleryManager.setHoverTarget(normalizedX * 0.16, normalizedY * 0.08);
   };
 
-  private handleMouseDown = (): void => {
-    // handled by ZoomPan
-  };
-
-  private handleMouseUp = (): void => {
-    // handled by ZoomPan
-  };
-
   private handleClick = (e: MouseEvent): void => {
     if (!this.isDragging) {
       this.galleryManager.handlePanelClick(e, this.canvas);
@@ -45,8 +35,6 @@ export class MouseInteraction {
 
   dispose(): void {
     this.canvas.removeEventListener('mousemove', this.handleMouseMove);
-    this.canvas.removeEventListener('mousedown', this.handleMouseDown);
-    this.canvas.removeEventListener('mouseup', this.handleMouseUp);
     this.canvas.removeEventListener('click', this.handleClick);
   }
 }
