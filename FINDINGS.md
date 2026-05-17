@@ -1,5 +1,32 @@
 # FINDINGS
 
+## 2026-05-17 — v0.06 planning: Streifenlicht blockiness root-cause analysis
+
+Three root causes confirmed in source code for the blocky relief artefact under `raking-inspection` at steep camera angles. Full technical execution plan (4 slices, S1–S4) written in `plan.md`. No code has shipped yet for v0.06.
+
+### Confirmed root causes
+
+| # | File | Root cause |
+|---|------|------------|
+| RC-1 | `src/materials/ProceduralTextureFactory.ts` — `makeDataTexture()` | `anisotropy` is never set on generated `DataTexture` objects (defaults to `1`). Authored textures receive anisotropy via `TextureManager.setAnisotropyDivisor()`. |
+| RC-2 | `src/config/quality.ts` | `selfShadowFilterRadius: 0.0` on all presets. The `PAINTING_USE_SHADOW_FILTER` GLSL define and `uShadowFilterRadius` uniform do not yet exist in `PaintingMaterial.ts`. |
+| RC-3 | `src/config/quality.ts` | `proceduralTileSize: 1024` on high preset. At maximum inspection zoom the texel grid is visible. Secondary contributor — evaluate after RC-1/RC-2 fixes. |
+
+### Planned fixes (S2–S4 in plan.md)
+
+- **S2:** Add `setAnisotropy(value)` to `ProceduralTextureFactory`; expose `getEffectiveAnisotropy()` on `TextureManager`; wire in `GalleryManager.applyPreset()`.
+- **S3:** Add `proceduralInspectionTileSize` to `QualityPreset`; add `setInspectionMode(on)` to `GalleryManager`; wire from `main.ts` on profile switch.
+- **S4:** Add `uShadowFilterRadius` uniform + `PAINTING_USE_SHADOW_FILTER` GLSL lateral PCF chunk to `PaintingMaterial`; add `setShadowFilterRadius(radius, enabled)` method; wire from `main.ts` for inspection-only activation.
+
+### Key numbers (S4 cost)
+
+| Path | Self-shadow texture reads | Notes |
+|------|---------------------------|-------|
+| Gallery (S2+S3 only) | 8 steps × 1 ray = 8 | Identical to v0.05 |
+| Inspection (S4 enabled, high) | 8 steps × 3 rays = 24 | One-time recompile on profile switch |
+
+---
+
 ## 2026-05-17 - v0.05 self-shadow soft-filtering — implemented
 
 The v0.05 plan documented in `plan.md` has been shipped. The PaintingMaterial self-shadow path no longer uses a binary break loop; it now accumulates a smooth weighted occlusion value that is bias-deadzoned, distance-weighted, clamped, and per-profile scaled. The visual outcome is that stain-like dark spots on `gallery-soft` are gone, and `raking-inspection` shows soft surface gradients rather than blotches.

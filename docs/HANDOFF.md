@@ -75,6 +75,19 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
+## v0.06 — Pending: Streifenlicht blockiness reduction
+
+Three root causes confirmed; full technical plan written in `plan.md`. No code shipped yet.
+
+| Slice | Description | Status |
+|-------|-------------|--------|
+| S1 | Documentation and baseline | ✅ done |
+| S2 | Procedural anisotropy (`ProceduralTextureFactory.setAnisotropy()`) | pending |
+| S3 | Inspection-resolution uplift (`setInspectionMode()`, `proceduralInspectionTileSize`) | pending |
+| S4 | Lateral self-shadow PCF filter (`PAINTING_USE_SHADOW_FILTER` GLSL path) | pending |
+
+Recommended execution order: S2 → evaluate → S3 (if needed) → S4 (if needed).
+
 ## v0.05 review focus — implemented
 
 v0.05 is **implemented**. The v0.05 plan in `plan.md` documents the full design history; the section below is the handoff-level summary of what shipped.

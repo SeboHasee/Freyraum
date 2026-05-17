@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Planned (v0.06 — Streifenlicht blockiness reduction)
+
+Full technical execution plan documented in `plan.md` with exact code snippets for each slice. No code has shipped yet.
+
+- **S2 — Procedural anisotropy fix.**
+  - `src/gallery/TextureManager.ts`: Add `getEffectiveAnisotropy()` getter.
+  - `src/materials/ProceduralTextureFactory.ts`: Add `private currentAnisotropy = 1` field + `setAnisotropy(value: number)` public method; apply stored value in `generate()` after `cache.set()`.
+  - `src/gallery/GalleryManager.ts`: Call `procedural.setAnisotropy(textureManager.getEffectiveAnisotropy())` in `applyPreset()` immediately after `setAnisotropyDivisor()`.
+
+- **S3 — Inspection-only relief-map resolution uplift.**
+  - `src/config/quality.ts`: Add `proceduralInspectionTileSize: number` to `QualityPreset`; set `2048` on high, `0` on balanced/battery.
+  - `src/gallery/GalleryManager.ts`: Add `private inspectionMode = false` field + `setInspectionMode(on: boolean)` method. In `showArtwork()`, pass `proceduralInspectionTileSize` for `normal`/`detailNormal`/`height` roles when `inspectionMode = true`, `proceduralTileSize` otherwise.
+  - `src/main.ts`: Call `galleryManager.setInspectionMode(profile.displayIntent === 'inspection')` on profile switch.
+
+- **S4 — Lateral self-shadow PCF filter (inspection-only).**
+  - `src/config/quality.ts`: Add `selfShadowFilterEnabled: boolean` to `QualityPreset` (always `false` in presets, toggled at runtime); update high-preset `selfShadowFilterRadius` from `0.0` to `0.002`.
+  - `src/materials/PaintingMaterial.ts`: Add `uShadowFilterRadius` uniform + `private shadowFilterEnabled = false` field + `setShadowFilterRadius(radius, enabled)` method + `#define PAINTING_USE_SHADOW_FILTER` compile guard + 3-ray lateral GLSL filter chunk inserted after `_occlusion = clamp(...)`.
+  - `src/main.ts`: Call `paintingMaterial.setShadowFilterRadius(radius, isInspection && radius > 0)` on profile switch.
+
+---
+
 ### Added (v0.05 implementation — soft self-shadow filtering)
 
 - **Replaced the binary self-shadow GLSL break loop** in `src/materials/PaintingMaterial.ts` with smooth weighted accumulation: `smoothstep(0, softness, sampleH - wantedH - bias)` per step, reciprocal-distance weighted, normalised, clamped to `uShadowMaxOcclusion`, then multiplied by `strength × profileScale × grazeMask`.

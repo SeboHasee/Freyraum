@@ -1680,120 +1680,78 @@ These are designed into the current plan but not required for v0.05:
 - StackOverflow — soft shadows for parallax occlusion shaders: https://stackoverflow.com/questions/37067278/soft-shadow-for-parallax-occlusion-shader
 
 
-## v0.06 Plan — Streifenlicht Blockiness Reduction for Procedural Relief and Self-Shadow
+## v0.06 Plan — Streifenlicht Blockiness Reduction: Procedural Anisotropy, Inspection Resolution Uplift, and Shadow PCF Filter
 
 ### v0.06 Planning Status
 
-**Planned (2026-05-17).** This pass addresses the new artifact visible under the `Streifenlicht` / `raking-inspection` profile at sharp viewing angles: blocky relief shading, mip-stepped texture detail, and hard-edged self-shadow transitions. The intent is to keep the dramatic inspection mode useful while removing visibly synthetic square/block artefacts.
-
-This is a planning-only section. No code has shipped yet for v0.06.
+**Planned — full technical execution guide written (2026-05-17).** This pass targets the visible blockiness under `Streifenlicht` / `raking-inspection` at steep camera angles: coarse mip-stepping on procedural relief maps, and hard lateral edges in the self-shadow march. Three root causes have been confirmed in source code. No code has shipped yet for v0.06.
 
 ---
 
-### v0.06 Problem Diagnosis (code-level)
+### v0.06 Root-Cause Analysis (code-level)
 
-**Symptom:** under `raking-inspection` and sharp camera angles, the painting surface shows visibly blocky texture detail and shadow transitions. The issue reads like low shadow-map resolution or bad mip bias, but in the current codebase the main contributors are the painting support textures and the shader's self-shadow path.
+#### RC-1 — Procedural `DataTexture` maps have zero anisotropy
 
-**Primary code-level causes**
+**File:** `src/materials/ProceduralTextureFactory.ts`, method `makeDataTexture()` (lines 263–286)
 
-1. **Procedural textures currently lack anisotropic filtering**
-   - `src/gallery/TextureManager.ts` applies anisotropy to loaded/authored textures.
-   - `src/materials/ProceduralTextureFactory.ts` sets mipmaps and linear filters on `DataTexture`, but does **not** set `anisotropy`.
-   - Result: under steep view angles, procedurally generated `normal`, `detailNormal`, and `height` maps alias and collapse into coarse mip levels sooner than authored textures.
+`makeDataTexture()` sets `minFilter = LinearMipMapLinearFilter` and `generateMipmaps = true` but never touches `anisotropy`. The property therefore defaults to `1`, meaning a single mip is used at steep view angles. In contrast, authored textures loaded by `TextureManager.setAnisotropyDivisor()` (lines 29–36) already receive the renderer-derived cap. The mismatch is most visible on `normal` and `detailNormal` under raking light.
 
-2. **The optional self-shadow smoothing hook exists but is disabled**
-   - `src/config/quality.ts` already exposes `selfShadowFilterRadius`.
-   - High preset keeps it at `0.0`, so the current path remains single-ray.
-   - Result: raking-light self-shadow still reveals texel/march stepping on hard relief transitions.
+```ts
+// ProceduralTextureFactory.makeDataTexture() — current state (lines 279-284)
+tex.minFilter = THREE.LinearMipMapLinearFilter;
+tex.magFilter = THREE.LinearFilter;
+tex.generateMipmaps = true;
+tex.needsUpdate = true;
+// tex.anisotropy  ← NEVER SET. Defaults to 1.
+```
 
-3. **High preset procedural support-map resolution is still inspection-limited**
-   - `proceduralTileSize` is `1024` on `high`.
-   - That is acceptable for gallery display, but under extreme relief inspection the height/normal maps can become visibly coarse.
+#### RC-2 — `selfShadowFilterRadius` is reserved in TypeScript but zero on all presets; the GLSL hook does not exist yet
 
-4. **The artifact is mostly internal painting shading, not only scene shadowing**
-   - The visible blockiness comes from `bumpMap` / procedural support-map sampling and the height-field self-shadow march in `PaintingMaterial.ts`.
-   - Increasing ordinary light shadow-map resolution alone will not fully solve the issue.
+**File:** `src/config/quality.ts` — `selfShadowFilterRadius: 0.0` on every preset
+
+The slot was designed in v0.05 but the corresponding GLSL define (`PAINTING_USE_SHADOW_FILTER`) and the uniform (`uShadowFilterRadius`) have not been added to `PaintingMaterial.ts`. The current self-shadow loop is single-ray only, so each height-field step produces a hard lateral edge under raking light.
+
+```ts
+// quality.ts — high preset (current)
+selfShadowFilterRadius: 0.0,  // slot reserved in v0.05; activate in v0.06 S4
+```
+
+#### RC-3 — Inspection mode uses the same procedural tile size as gallery display
+
+**File:** `src/config/quality.ts` — `proceduralTileSize: 1024` on high preset
+
+At maximum zoom, a 1024×1024 height/normal map shows texel-level blocks in the relief. Authored scanned maps bypass this because they are photo-sourced at higher resolution; the procedural fallback does not have this advantage.
+
+**Secondary contributor.** Ship RC-1 and RC-2 first and re-evaluate before adding memory overhead from resolution uplift.
 
 ---
 
 ### v0.06 Goals
 
-- Reduce blocky relief shading under `raking-inspection` / `Streifenlicht`.
-- Preserve the softer gallery-display appearance introduced in v0.05.
-- Improve sharp-angle filtering for procedural texture maps without changing authored image content.
-- Keep the fix scoped to the inspection/high-quality path where the artifact is visible.
-- Reuse existing v0.05 hooks where possible instead of introducing a second shadow system.
-- Keep the offline `file://` preview workflow unchanged.
+- Bring procedural `DataTexture` anisotropy to parity with authored textures.
+- Activate the lateral self-shadow PCF filter under `raking-inspection` only.
+- Provide an optional inspection-resolution uplift for geometry-carrying procedural maps.
+- Keep balanced/battery paths and gallery-display profiles unchanged.
 
 ### v0.06 Non-Goals
 
-- No full replacement of the painting material.
-- No global blur of artwork albedo.
-- No new third-party dependencies.
-- No WebGPU-only implementation.
-- No change to balanced/battery preset shader cost unless strictly necessary.
-- No claim that this replaces authored scanned relief data as the long-term best-quality path.
+- No new rendering pipeline or shadow-map system.
+- No changes to the albedo colour pipeline.
+- No new third-party npm dependencies.
+- No WebGPU or compute-shader features.
 
 ---
 
-### v0.06 Technical Direction
+### v0.06 Modules
 
-#### A — Bring procedural textures to parity with authored textures for angular filtering
-
-Extend the procedural texture pipeline so generated `DataTexture` maps can receive the same renderer-derived anisotropy budget as authored textures. This should be treated as the first fix because it attacks the most likely source of sharp-angle mip stepping without changing shadow math.
-
-Design constraints:
-
-- anisotropy must be derived from `renderer.capabilities.getMaxAnisotropy()`
-- the existing quality-preset divisor model should still control the cap
-- procedural texture ownership remains in `ProceduralTextureFactory`
-
-#### B — Add an inspection-only higher-resolution support-map path
-
-Keep gallery/default behaviour conservative, but allow `raking-inspection` on the high preset to request a larger effective tile size for geometry-carrying procedural maps:
-
-- `normal`
-- `detailNormal`
-- `height`
-
-Roughness/specular/AO do not need the same uplift because they are not the main source of the visible block stepping.
-
-#### C — Activate the reserved self-shadow filter path only where it helps
-
-Use the existing `selfShadowFilterRadius` extension slot from v0.05, but scope it narrowly:
-
-- enabled only for `high`
-- enabled only for inspection intent
-- kept off for gallery-display profiles by default
-
-This keeps the gallery path crisp and cheap while smoothing the remaining lateral stepping under `Streifenlicht`.
-
-#### D — Separate “inspection enhancement” from “default presentation”
-
-The fix must respect the v0.03/v0.05 lighting intent split:
-
-- gallery / display = flattering, stable, non-distracting
-- inspection / raking = more revealing, but still believable
-
-Any added resolution/filtering knobs should therefore be profile-aware rather than globally stronger.
-
----
-
-### v0.06 Proposed Modules / Files
-
-- `src/materials/ProceduralTextureFactory.ts`
-  - procedural texture sampling quality
-  - anisotropy application for generated `DataTexture`
-  - optional higher effective size for inspection-sensitive roles
-- `src/gallery/GalleryManager.ts`
-  - wiring of inspection-aware effective procedural resolution
-- `src/config/quality.ts`
-  - preset fields for inspection-only filtering/resolution controls
-- `src/materials/PaintingMaterial.ts`
-  - activation of optional self-shadow lateral filtering
-  - inspection-only smoothing path
-- `src/main.ts`
-  - profile-aware toggles / scale handoff if required
+| File | v0.06 Change |
+|------|-------------|
+| `src/gallery/TextureManager.ts` | Expose `getEffectiveAnisotropy()` getter |
+| `src/materials/ProceduralTextureFactory.ts` | Add `setAnisotropy(value)` + apply to new and cached textures |
+| `src/gallery/GalleryManager.ts` | Call `setAnisotropy` on preset change; add `setInspectionMode(on)` |
+| `src/config/quality.ts` | Add `proceduralInspectionTileSize`, `selfShadowFilterEnabled` fields |
+| `src/materials/PaintingMaterial.ts` | Add `uShadowFilterRadius` uniform + `PAINTING_USE_SHADOW_FILTER` GLSL path + `setShadowFilterRadius()` |
+| `src/main.ts` | Call `setInspectionMode()` + `setShadowFilterRadius()` on light-profile switch |
 
 ---
 
@@ -1801,198 +1759,433 @@ Any added resolution/filtering knobs should therefore be profile-aware rather th
 
 #### Slice S1 — Documentation and baseline capture
 
-- Record this issue and the intended fix strategy in `plan.md`.
-- Preserve the v0.05 diagnosis as historical context; v0.06 specifically targets the remaining sharp-angle / mip / blockiness issue.
-- Capture screenshot references for:
-  - `gallery-soft`
-  - `raking-inspection`
-  - sharp-angle close-up
-
-**Acceptance for S1:**
-- Plan clearly distinguishes display-mode behaviour from inspection-mode behaviour.
-- Plan identifies whether each proposed fix targets texture filtering, resolution, or self-shadow.
+**Status: done** (this plan document).
 
 ---
 
 #### Slice S2 — Procedural texture anisotropy support
 
-**Files:** `src/materials/ProceduralTextureFactory.ts`, `src/gallery/GalleryManager.ts` or another renderer-owned wiring surface
+**Problem:** `ProceduralTextureFactory.makeDataTexture()` never sets `anisotropy`. At steep view angles, procedural maps alias into coarse mip levels while authored textures remain sharp.
 
-Implementation direction:
+**Files changed:** `src/gallery/TextureManager.ts`, `src/materials/ProceduralTextureFactory.ts`, `src/gallery/GalleryManager.ts`
 
-- add a way for the procedural factory to learn the renderer anisotropy cap
-- apply preset-scaled anisotropy to generated textures in the same spirit as `TextureManager`
-- reapply the value to cached procedural textures when the preset changes
+---
 
-Why this slice is first:
+**Step 2a — Expose effective anisotropy from `TextureManager`**
 
-- it is the highest-return quality fix
-- it improves sharp-angle filtering without changing the shading look
-- it reduces the chance that later shadow tuning is compensating for a sampler problem
+Add one public getter after the existing `setAnisotropyDivisor()` method (line 36):
 
-**Acceptance for S2:**
-- Procedural `DataTexture` maps have non-zero anisotropy on capable GPUs.
-- Switching presets updates the cap consistently for authored and procedural textures.
-- `npm run lint` passes.
-- `npm run build` passes.
+```ts
+// src/gallery/TextureManager.ts  — add after setAnisotropyDivisor()
+/** Returns the per-texture anisotropy currently applied to all cached textures. */
+getEffectiveAnisotropy(): number {
+  return Math.max(1, Math.floor(this.maxAnisotropy / this.anisotropyDivisor));
+}
+```
+
+No other changes to `TextureManager`.
+
+---
+
+**Step 2b — Add `currentAnisotropy` field and `setAnisotropy()` to `ProceduralTextureFactory`**
+
+Add after `private readonly cache = new Map<string, THREE.Texture>();` (line 18):
+
+```ts
+// src/materials/ProceduralTextureFactory.ts  — new field
+private currentAnisotropy = 1;
+```
+
+Add after the existing `disposeAll()` method (line 74):
+
+```ts
+// src/materials/ProceduralTextureFactory.ts  — new public method
+/**
+ * Applies `value` to every generated texture already in the cache, and
+ * stores it so future generate() calls apply it to new textures immediately.
+ * Call whenever quality preset changes — same timing as
+ * TextureManager.setAnisotropyDivisor().
+ */
+setAnisotropy(value: number): void {
+  const a = Math.max(1, value | 0);
+  if (a === this.currentAnisotropy) return;
+  this.currentAnisotropy = a;
+  this.cache.forEach((tex) => {
+    tex.anisotropy = a;
+    tex.needsUpdate = true;
+  });
+}
+```
+
+Apply to newly generated textures. In `generate()`, add one line immediately after `this.cache.set(cacheKey, tex)` (currently line 67):
+
+```ts
+// src/materials/ProceduralTextureFactory.ts  — generate(), after cache.set()
+tex.anisotropy = this.currentAnisotropy;
+```
+
+---
+
+**Step 2c — Wire into `GalleryManager.applyPreset()`**
+
+In `src/gallery/GalleryManager.ts`, `applyPreset()` currently reads (lines 83–93):
+
+```ts
+applyPreset(preset: QualityPreset): void {
+  const hadPreset = this.currentPreset !== null;
+  this.currentPreset = preset;
+  this.textureManager.setAnisotropyDivisor(preset.anisotropyDivisor);
+  // ...
+}
+```
+
+Add one line immediately after `setAnisotropyDivisor`:
+
+```ts
+// NEW ↓
+this.procedural.setAnisotropy(this.textureManager.getEffectiveAnisotropy());
+```
+
+No other changes to `GalleryManager` for S2.
+
+**S2 Acceptance:**
+- Procedural `DataTexture` maps have `anisotropy > 1` on capable GPUs.
+- Switching quality preset updates the cap consistently for authored and procedural textures.
+- No new textures are allocated (existing cached textures are mutated in-place).
+- `npm run lint` and `npm run build` pass.
 
 ---
 
 #### Slice S3 — Inspection-only support-map resolution uplift
 
-**Files:** `src/config/quality.ts`, `src/gallery/GalleryManager.ts`, `src/materials/ProceduralTextureFactory.ts`
+**Problem:** High-preset procedural `normal`, `detailNormal`, and `height` maps are 1024×1024. At maximum zoom under raking light the texel grid is visible as square blocks.
 
-Implementation direction:
+**Pre-condition:** Ship S2 first. Evaluate the artefact after S2 before committing to S3. S3 adds ≈48 MB GPU memory per artwork (3 roles × 2048×2048 RGBA = 16 MB each).
 
-- add an inspection-only multiplier or explicit tile-size override for procedural relief maps
-- apply it only to geometry-carrying roles (`normal`, `detailNormal`, `height`)
-- keep the cache key resolution-aware so switching modes never returns stale low-resolution textures
-
-Suggested starting range:
-
-- high display: keep `1024`
-- high inspection: test `2048` effective size
-- balanced/battery: unchanged
-
-**Acceptance for S3:**
-- `raking-inspection` visibly reduces blockiness on relief detail.
-- Gallery display quality and load time remain effectively unchanged.
-- Cache invalidation remains correct when switching lighting/profile states.
+**Files changed:** `src/config/quality.ts`, `src/gallery/GalleryManager.ts`, `src/main.ts`
 
 ---
 
-#### Slice S4 — Enable the reserved self-shadow filter for inspection
+**Step 3a — Add `proceduralInspectionTileSize` to `QualityPreset`**
 
-**Files:** `src/config/quality.ts`, `src/materials/PaintingMaterial.ts`, `src/main.ts`
+In `src/config/quality.ts`, add one field to the `QualityPreset` interface after `proceduralTileSize`:
 
-Implementation direction:
+```ts
+/**
+ * Tile size for geometry-carrying procedural maps (normal, detailNormal,
+ * height) when the inspection light profile is active.
+ * 0 means no uplift — use proceduralTileSize instead.
+ */
+proceduralInspectionTileSize: number;
+```
 
-- use the reserved `selfShadowFilterRadius` hook from v0.05
-- enable it only when the active profile has inspection intent
-- keep the default display path on the current cheaper single-ray route
-- slightly retune inspection-only bias / softness if the higher-resolution maps expose new marching edges
+Set values in the three preset objects:
 
-Target outcome:
+```ts
+// high preset
+proceduralInspectionTileSize: 2048,
 
-- preserve tactile raking-light readability
-- remove remaining hard-edged march stepping
-- avoid softening gallery profiles
+// balanced preset
+proceduralInspectionTileSize: 0,   // no uplift
 
-**Acceptance for S4:**
-- `raking-inspection` shadow transitions look smoother at sharp angles.
-- `gallery-soft` remains free from new blur or over-darkening.
-- GPU cost stays within the high-preset budget only.
-
----
-
-#### Slice S5 — Validation, comparison, and documentation sync
-
-**Files:** `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `docs/HANDOFF.md`
-
-After implementation:
-
-1. Run `npm run lint`
-2. Run `npm run build`
-3. Compare before/after screenshots under `raking-inspection`
-4. Confirm that authored textures still behave correctly
-5. Record bundle-size and visual-quality observations
-
-**Acceptance for S5:**
-- All repo docs reflect the shipped v0.06 behaviour.
-- Findings clearly state whether anisotropy, resolution, or shadow filtering delivered the biggest win.
+// battery preset
+proceduralInspectionTileSize: 0,   // no uplift
+```
 
 ---
 
-### v0.06 Acceptance Checks
+**Step 3b — Add `inspectionMode` flag and `setInspectionMode()` to `GalleryManager`**
 
-- [ ] Under `raking-inspection`, the painting no longer shows obvious blocky mip steps at sharp angles.
-- [ ] Procedural relief maps filter more smoothly under steep viewing angles.
-- [ ] Gallery-display profiles do not become blurrier or darker.
-- [ ] The fix is scoped to high/inspection where appropriate.
-- [ ] Cached procedural textures remain resolution-correct after preset/profile changes.
-- [ ] `npm run lint` passes.
-- [ ] `npm run build` passes and regenerates `customer-preview/`.
-- [ ] No new npm dependencies are added.
+Add after `private artworkLoadToken = 0;` (line 48):
+
+```ts
+// src/gallery/GalleryManager.ts  — new field
+private inspectionMode = false;
+```
+
+Add after the existing `applyPreset()` method:
+
+```ts
+// src/gallery/GalleryManager.ts  — new public method
+/**
+ * Switches the procedural texture tile size for geometry-carrying roles
+ * between the standard gallery size and the higher inspection size.
+ * Re-generates the current artwork's map set immediately if the mode changes.
+ */
+setInspectionMode(on: boolean): void {
+  if (on === this.inspectionMode) return;
+  this.inspectionMode = on;
+  if (this.currentPreset) void this.showArtwork(this.currentIndex);
+}
+```
+
+Update `showArtwork()` to pass the per-role tile size. The `PROCEDURAL_ROLES` loop currently uses `preset.proceduralTileSize` for all roles. Replace with:
+
+```ts
+// src/gallery/GalleryManager.ts  — showArtwork(), before PROCEDURAL_ROLES loop
+const INSPECTION_ROLES: readonly PaintingMapRole[] = ['normal', 'detailNormal', 'height'];
+
+// inside the loop body — replace the single generate() call:
+const isInspectionRole = (INSPECTION_ROLES as string[]).includes(role);
+const inspSize = preset.proceduralInspectionTileSize;
+const tileSize = (this.inspectionMode && isInspectionRole && inspSize > 0)
+  ? inspSize
+  : preset.proceduralTileSize;
+resolved[role] = this.procedural.generate(artwork.id, role, tileSize);
+```
+
+The `ProceduralTextureFactory` cache key is `${artworkId}::${role}::${effectiveSize}`, so 1024-resolution and 2048-resolution textures are stored independently — no stale-texture risk.
+
+---
+
+**Step 3c — Wire `setInspectionMode` from `main.ts`**
+
+In `src/main.ts`, locate `applyPreferences()` where `setShadowProfileScale` is already called. Add immediately after:
+
+```ts
+// src/main.ts  — add alongside setShadowProfileScale
+galleryManager.setInspectionMode(profile.displayIntent === 'inspection');
+```
+
+**S3 Acceptance:**
+- Under `raking-inspection`, procedural `normal`/`detailNormal`/`height` maps are 2048×2048 on high preset.
+- Under `gallery-soft`, the same maps are 1024×1024 (no regression).
+- Profile toggle does not stale-serve the wrong resolution (cache key includes size).
+- `npm run lint` and `npm run build` pass.
+
+---
+
+#### Slice S4 — Lateral self-shadow PCF filter (inspection-only)
+
+**Problem:** The v0.05 smooth accumulation improved the depth direction but not the lateral width of shadow edges. Under raking light, each height-march step still reads as a hard lateral stripe.
+
+**Pre-condition:** Ship S2 (and optionally S3) before S4. S4 triples the self-shadow texture reads at high preset (8 steps × 3 rays = 24 reads) and should only be active under inspection profiles.
+
+**Files changed:** `src/config/quality.ts`, `src/materials/PaintingMaterial.ts`, `src/main.ts`
+
+---
+
+**Step 4a — Add `selfShadowFilterEnabled` and update `selfShadowFilterRadius` in `QualityPreset`**
+
+Add one field to the `QualityPreset` interface in `src/config/quality.ts`, after `selfShadowFilterRadius`:
+
+```ts
+/**
+ * Whether PAINTING_USE_SHADOW_FILTER is compiled in. Enabling triggers a
+ * material recompile. Driven at runtime by main.ts via
+ * PaintingMaterial.setShadowFilterRadius() — keep false in preset objects.
+ */
+selfShadowFilterEnabled: boolean;
+```
+
+Set `selfShadowFilterEnabled: false` on all three presets (runtime toggle only via `setShadowFilterRadius()`).
+
+Update `selfShadowFilterRadius` on high preset from `0.0` to `0.002`:
+
+```ts
+// quality.ts — high preset
+selfShadowFilterRadius: 0.002,   // was 0.0; used when main.ts enables S4
+```
+
+---
+
+**Step 4b — Extend `PaintingMaterial`**
+
+**(i) Add to `PaintingUniforms` interface** (after `uShadowProfileScale`):
+
+```ts
+// src/materials/PaintingMaterial.ts  — PaintingUniforms interface
+uShadowFilterRadius: { value: number };
+```
+
+**(ii) Add instance field** after `shadowDebugEnabled = false` (line 88):
+
+```ts
+private shadowFilterEnabled = false;
+```
+
+**(iii) Initialize in constructor** (in the `paintingUniforms` literal after `uShadowProfileScale`):
+
+```ts
+uShadowFilterRadius: { value: preset.selfShadowFilterRadius },
+```
+
+**(iv) Add `setShadowFilterRadius()` method** after the existing `setShadowDebug()`:
+
+```ts
+/**
+ * Enables or disables the lateral PCF-like self-shadow filter.
+ * `radius` is in UV space (typical 0.001..0.004).
+ * Changing `enabled` triggers a full shader recompile via `needsUpdate = true`.
+ * Call from main.ts when the light profile switches to/from inspection.
+ */
+setShadowFilterRadius(radius: number, enabled: boolean): void {
+  this.paintingUniforms.uShadowFilterRadius.value = radius;
+  if (enabled !== this.shadowFilterEnabled) {
+    this.shadowFilterEnabled = enabled;
+    this.needsUpdate = true;
+  }
+}
+```
+
+**(v) Register the define in `onBeforeCompile`** — add after the `PAINTING_DEBUG_SHADOW` conditional:
+
+```ts
+if (this.shadowFilterEnabled && this.paintingUniforms.uShadowFilterRadius.value > 0) {
+  defines.push('#define PAINTING_USE_SHADOW_FILTER');
+}
+```
+
+**(vi) Declare the uniform in the GLSL `uniformBlock` string** — add after `uniform float uShadowProfileScale;`:
+
+```glsl
+uniform float uShadowFilterRadius;
+```
+
+**(vii) Add the GLSL filter chunk.** In the `lightsEndChunk` string, inside `#ifdef PAINTING_USE_SELFSHADOW`, insert after `_occlusion = clamp(_occlusion, 0.0, uShadowMaxOcclusion);` and before `float _shadow = ...`:
+
+```glsl
+#ifdef PAINTING_USE_SHADOW_FILTER
+    {
+        // Two companion rays perpendicular to the primary march direction.
+        // Blending three rays removes lateral texel-step hard edges without
+        // raising the overall darkening envelope.
+        // _shDelta is the per-step UV offset already computed in the march above.
+        float _dLen = length(_shDelta);
+        vec2 _latDir = (_dLen > 0.0001)
+            ? vec2(-_shDelta.y, _shDelta.x) * (uShadowFilterRadius / _dLen)
+            : vec2(uShadowFilterRadius, 0.0);
+        float _oL = 0.0, _oR = 0.0, _wL = 0.0, _wR = 0.0;
+        for (int _k = 0; _k < 16; _k++) {
+            if (float(_k) >= uShadowSteps) break;
+            float _fi  = float(_k + 1);
+            float _wk  = 1.0 / _fi;
+            float _wH  = _curH + _tsLight.z * _shStep * _fi;
+            vec2  _bo  = _shDelta * _fi;
+            float _exL = texture2D(bumpMap, clamp(_shUV + _bo - _latDir, 0.001, 0.999)).r
+                         - _wH - uShadowBias;
+            float _exR = texture2D(bumpMap, clamp(_shUV + _bo + _latDir, 0.001, 0.999)).r
+                         - _wH - uShadowBias;
+            _oL += smoothstep(0.0, max(uShadowSoftness, 0.001), _exL) * _wk;
+            _oR += smoothstep(0.0, max(uShadowSoftness, 0.001), _exR) * _wk;
+            _wL += _wk; _wR += _wk;
+        }
+        float _lOcc = clamp((_wL > 0.0) ? _oL / _wL : 0.0, 0.0, uShadowMaxOcclusion);
+        float _rOcc = clamp((_wR > 0.0) ? _oR / _wR : 0.0, 0.0, uShadowMaxOcclusion);
+        _occlusion = (_occlusion + _lOcc + _rOcc) / 3.0;
+    }
+#endif
+```
+
+**(viii) Update `applyPreset()`** — add after `uShadowMaxOcclusion` assignment:
+
+```ts
+this.paintingUniforms.uShadowFilterRadius.value = preset.selfShadowFilterRadius;
+```
+
+The `shadowFilterEnabled` flag is only toggled via `setShadowFilterRadius()` from `main.ts`, so the existing `definesChanged` check in `applyPreset()` does not need to change.
+
+---
+
+**Step 4c — Wire from `main.ts`**
+
+In `src/main.ts`, in the same block as the existing `setShadowProfileScale` call:
+
+```ts
+// src/main.ts  — add alongside setShadowProfileScale
+const isInspection = profile.displayIntent === 'inspection';
+paintingMaterial.setShadowFilterRadius(
+  isInspection ? activePreset.selfShadowFilterRadius : 0.0,
+  isInspection && activePreset.selfShadowFilterRadius > 0
+);
+```
+
+Behaviour:
+- Gallery profiles: `enabled = false`. The `PAINTING_USE_SHADOW_FILTER` define is absent after first load; no runtime recompile cost.
+- Inspection profile: `enabled = true` on first switch → one-time shader recompile. Subsequent same-profile loads are zero extra cost.
+
+**S4 Acceptance:**
+- Under `raking-inspection`, the shadow loop runs 3 rays × 8 steps = 24 texture reads (was 8).
+- Under `gallery-soft`, the single-ray path is compiled in; performance identical to v0.05.
+- `_occlusion` after averaging ≤ `uShadowMaxOcclusion`. Max gallery darkening unchanged at 4.2 %; max inspection darkening unchanged at 8.4 %.
+- `setShadowDebug()` still renders the correct shadow-mask greyscale with filter active.
+- `npm run lint` and `npm run build` pass.
 
 ---
 
 ### v0.06 Performance Budget
 
-| Path | Expected change | Constraint |
-|------|-----------------|------------|
-| Procedural anisotropy | higher texture sampling quality | acceptable on current high preset |
-| Inspection relief maps 1024 → 2048 | higher GPU memory + generation cost | inspection/high only |
-| Optional shadow filter | more height-map reads | inspection/high only |
-| Balanced / battery | unchanged | no new heavy path by default |
+| Path | Self-shadow texture reads | Notes |
+|------|---------------------------|-------|
+| Gallery (S2 + S3 only) | 8 steps × 1 ray = **8** | Identical to v0.05 |
+| Inspection (S4 on, high) | 8 steps × 3 rays = **24** | Only when `displayIntent === 'inspection'` |
+| S3 memory uplift per artwork | ≈48 MB RGBA GPU | 3 roles × 2048² × 4 bytes; only when inspectionMode |
 
-If the combined uplift is too expensive, prioritise in this order:
-
-1. procedural anisotropy
-2. inspection-only higher relief-map resolution
-3. inspection-only self-shadow filter
+The memory cost is an acceptable trade-off for the inspection path; the user has explicitly navigated to a close-up relief view.
 
 ---
 
-### v0.06 Accessibility / UX Impact
+### v0.06 Global Acceptance Checks
 
-- No new mandatory UI controls are required.
-- The default visitor-facing gallery presentation should remain unchanged.
-- The sharper, more technical inspection path remains opt-in via the existing lighting selection.
-- If mode switching causes a visible texture-resolution pop, consider a later fade/cross-blend pass; this is not required for v0.06.
+1. `npm run lint` — no new errors.
+2. `npm run build` — clean; only pre-existing Sass deprecation warning.
+3. Shadow debug key `s`/`S` (behind `?debug=1`) shows correct shadow mask under both gallery and inspection profiles, with and without the PCF filter active.
+4. Gallery display: no visual regression on `gallery-soft` or `museum-neutral`.
+5. Inspection: visibly smoother relief shading under `raking-inspection` without new smearing artefacts.
+6. Preset toggle: switching `balanced → high` in inspection mode re-applies anisotropy and triggers inspection-resolution uplift.
+7. Race guard: rapid profile switches do not apply stale textures — existing `artworkLoadToken` guard in `GalleryManager` is unchanged.
 
 ---
 
 ### v0.06 Fallback Behaviour
 
-- If anisotropy support is low or unavailable on a device, procedural textures should continue using mipmaps + linear filtering with no functional break.
-- If higher inspection resolution is too expensive, keep display resolution and ship only anisotropy + filter activation.
-- If the shadow filter cost is too high, keep `selfShadowFilterRadius = 0` and ship only the texture-quality improvements.
+- If `getMaxAnisotropy()` returns `1`, `setAnisotropy(1)` is a no-op on cached textures; procedural maps render cleanly without error.
+- If S3 memory cost is too high, set `proceduralInspectionTileSize: 0` on high preset — no code revert needed.
+- If S4 filter cost is too high on a target device, call `setShadowFilterRadius(0, false)` from `main.ts` to omit the define and return to the S2/S3 single-ray baseline.
 
 ---
 
 ### v0.06 Shader / Math-Space Assumptions
 
-- `bumpMap` remains the height source for the self-shadow march.
-- Height, normal, and detail-normal improvements should not change albedo colour space.
-- Any added filter radius remains in UV space and must stay resolution-aware when higher inspection tile sizes are used.
-- Profile-aware inspection tuning should continue using the existing light-profile/display-intent split rather than introducing a second lighting model.
+- `bumpMap.r = 0.0` → deepest recess; `1.0` → highest peak. Unchanged from v0.05.
+- `_shDelta` is the tangent-space light direction projected onto UV, scaled by `uParallaxScale / uShadowSteps`. No change in S4.
+- The lateral PCF offset `_latDir` at `uShadowFilterRadius = 0.002`: one march step is `0.04 / 8 = 0.005` UV, larger than `0.002`. No inter-step overlap and no sampling outside `[0.001, 0.999]`.
+- Height maps remain single-channel (R channel of RGBA) for all procedural and authored paths.
 
 ---
 
 ### v0.06 Resource Ownership / Async Boundaries
 
-- `TextureManager` continues to own authored textures.
-- `ProceduralTextureFactory` continues to own generated textures and must remain solely responsible for disposing them.
-- Any new anisotropy/preset update API for procedural textures must not create duplicate cache entries for the same logical texture unless resolution actually changes.
-- Existing `artworkLoadToken` race protection in `GalleryManager` must remain the guard against stale async texture assignment.
+- `TextureManager` owns all authored textures. `ProceduralTextureFactory` owns all generated textures. No change.
+- `setAnisotropy()` and `setInspectionMode()` mutate cached texture properties in-place. No new ownership transfer or deferred disposal.
+- S3 dual-size cache: both sizes remain alive simultaneously. A future `pruneSizeBelow(threshold)` on `ProceduralTextureFactory` can reclaim the lower-res entry — out of scope for v0.06.
+- The `artworkLoadToken` race guard in `GalleryManager` remains the sole async guard for artwork loads.
 
 ---
 
 ### v0.06 Browser / API Stability Boundaries
 
-- Stay within existing Three.js / WebGL APIs already used by the project.
-- No dependency on WebGPU, compute passes, or browser-specific mip-bias extensions.
-- Keep the preview compatible with the committed single-bundle `file://` workflow.
+- `THREE.Texture.anisotropy` is stable since Three.js r119+; already used by `TextureManager`.
+- All GLSL changes use `texture2D()` and standard GLSL 1.0 — no extensions, no WebGL2-only syntax.
+- No new npm dependencies.
 
 ---
 
 ### v0.06 Known Risks
 
-- Raising inspection resolution too aggressively can increase memory usage and generation stalls.
-- Strong anisotropy on large generated textures may expose repeating procedural patterns more clearly.
-- Inspection-only shadow filtering can hide true relief cues if softness and radius are overtuned.
-- Mixing profile-aware resolution changes with cached procedural textures can reintroduce stale-texture bugs if keys are not fully resolution-specific.
+1. S3 memory uplift may cause a generation stall on first inspection-mode switch on slow CPUs. Mitigate by capping `proceduralInspectionTileSize ≤ 2048`.
+2. S4 triples per-fragment self-shadow texture reads. Profile on mid-range mobile before shipping to balanced preset.
+3. Strong anisotropy on tiling procedural maps may make pattern repetition more visible at glancing angles. Evaluate on wide landscape paintings.
+4. Dual-size S3 cache doubles procedural GPU memory footprint on high+inspection. Acceptable for desktop; revisit for mobile.
 
 ---
 
 ### v0.06 Recommended Execution Order
 
-1. Ship procedural anisotropy support.
-2. Re-evaluate the artifact under `raking-inspection`.
-3. Add inspection-only relief-map resolution uplift if blockiness remains.
-4. Enable inspection-only self-shadow filtering only if the remaining artefact is still shadow-step related.
-5. Document measured cost and final chosen scope.
-
+1. **S2** — Ship anisotropy fix. Re-evaluate blockiness under `raking-inspection`.
+2. If blockiness persists: **S3** — Add inspection tile size uplift. Re-evaluate.
+3. If lateral shadow stepping persists: **S4** — Activate lateral PCF filter.
+4. After each shipped slice: update `FINDINGS.md`, `CHANGELOG.md`, `docs/HANDOFF.md`.
 
 ## v0.03 Follow-up Plan — Technical Rendering System for Faithful Artworks, Modular Asset Swaps, Parallax Relief, and Free Inspection
 
