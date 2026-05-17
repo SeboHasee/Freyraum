@@ -1,11 +1,42 @@
 # FINDINGS
 
+## 2026-05-17 — Critical v0.08 finding: timeline works, 3D painting does not
+
+Customer import produced valid manifest entries and the timeline displayed the
+images, but the actual 3D painting did not show the imported artwork and did not
+match the imported aspect ratios.
+
+### Why this matters
+
+This is the main customer-image feature path. The import is not complete unless
+the central 3D painting uses the customer image and the customer image dimensions.
+
+### Likely failure area
+
+- The timeline loads images through DOM `<img>` elements.
+- The 3D painting loads images through Three.js `TextureLoader` in `TextureManager`.
+- `TextureManager` currently creates a generated fallback texture when loading
+  fails, and that fallback can hide the real failure.
+- `ArtworkMesh.updateAspect()` currently sizes from the loaded texture. If the
+  loaded texture is fallback, the 3D painting gets the fallback aspect instead
+  of the imported artwork aspect.
+
+### Plan created
+
+`plan.md` now contains **v0.08 Critical Plan — Imported images must render on the
+actual 3D paintings**, including a detailed logging plan and acceptance checks
+for the reported images: `720 × 907`, `719 × 991`, and `4724 × 4724`.
+
+---
+
 ## 2026-05-17 — v0.07 customer-managed artworks implemented
 
-The v0.07 plan is now fully implemented in code. A non-technical customer can
-manage the gallery by dropping any number of images, in any aspect ratio, into
-`customer-artworks/inbox/` and double-clicking `Update Gallery`. The runtime
-gallery, side panels, timeline, and info panel all adapt automatically.
+The v0.07 importer and runtime injection path are implemented in code. A
+non-technical customer can manage the gallery by dropping images into
+`customer-artworks/inbox/` and double-clicking `Update Gallery`. A later customer
+report showed that the timeline can display imported files while the central 3D
+painting still fails to show them; that critical acceptance gap is now tracked in
+the v0.08 plan above.
 
 ### What is now implemented
 
@@ -25,10 +56,11 @@ gallery, side panels, timeline, and info panel all adapt automatically.
   via their constructor. `main.ts` reads, validates, and dedupes the injected
   manifest with `sanitizeInjectedArtworks()` and falls back cleanly to built-in
   demo artworks when no customer manifest exists or every entry is invalid.
-- **Arbitrary dimensions**: `ArtworkMesh.updateAspect()` and `SidePanels` already
-  fit any aspect into the world box via `fitWithinBox(aspect, 4.2, 5.8)`; the
-  timeline reserves space per-thumb from the declared dimensions, so portrait,
-  landscape, square, and ultrawide images coexist without stretching.
+- **Arbitrary dimensions intended path**: `ArtworkMesh.updateAspect()` and
+  `SidePanels` fit any aspect into the world box via `fitWithinBox(aspect, 4.2,
+  5.8)`, and the timeline reserves space per-thumb from declared dimensions.
+  v0.08 must harden this path so the central 3D painting uses the imported
+  manifest dimensions and not fallback texture dimensions.
 - **Double-click launchers**: `Update Gallery.command` (macOS, `chmod +x`) and
   `Update Gallery.bat` (Windows) both check for Node.js, run the importer, and
   open the report. The macOS launcher documents the Gatekeeper one-time approval.

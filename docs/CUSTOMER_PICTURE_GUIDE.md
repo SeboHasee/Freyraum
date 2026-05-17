@@ -103,7 +103,9 @@ every picture and scrolls if needed.
 
 **Can I mix portrait and landscape and ultrawide pictures?**
 Yes. Each picture keeps its own shape; the gallery does not stretch or
-crop your pictures.
+crop your pictures. If the timeline shape looks right but the big 3D painting
+shape looks wrong, send the files listed in the troubleshooting question below
+to your support person.
 
 **My picture is huge (50 MB, 8000 pixels wide). Will it work?**
 Most modern computers and browsers handle that. Very old computers may
@@ -119,6 +121,16 @@ it as JPG. Replace the file in the inbox with the JPG copy and run
 Send the report (`customer-artworks/last-import-report.txt`) to your
 support person. The report is written in plain language and they can
 read it without seeing the gallery.
+
+**My pictures show in the timeline, but not on the big 3D painting.**
+This is not your fault. Send your support person:
+
+- `customer-artworks/last-import-report.txt`
+- `customer-artworks/artworks.json`
+- a note saying which picture is visible in the timeline but missing on the 3D painting
+
+The support person should use the v0.08 plan in `plan.md` to check the WebGL
+texture-loading diagnostics.
 
 ## Debug / support tools (developer use)
 

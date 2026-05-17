@@ -207,6 +207,26 @@ If it is present there but missing in the browser, the likely reasons are:
 - the source image is too large for that machine/browser
 - the file is corrupted
 
+### Critical case: timeline works, 3D painting does not
+
+If the image appears in the timeline but not on the central 3D painting, the
+importer and DOM image path probably worked. The failure is likely in the
+Three.js/WebGL texture-loading path used by the 3D painting.
+
+For v0.08 this is the highest-priority image-maintenance bug. The planned fix is
+documented in `plan.md` under **v0.08 Critical Plan — Imported images must render
+on the actual 3D paintings**.
+
+Support should collect:
+
+- `customer-artworks/last-import-report.txt`
+- `customer-artworks/artworks.json`
+- `customer-preview/customer-artworks.js`
+- a debug diagnostics snapshot from `window.__FREYRAUM_DIAGNOSTICS__.snapshot()`
+
+The important diagnostic question is whether the central painting used the real
+customer image texture or silently used a generated fallback texture.
+
 ### For developer-level debugging
 
 Use:

@@ -1,6 +1,9 @@
 # FREYRAUM customer handoff guide
 
-This document supports presenting FREYRAUM to customers and onboarding new contributors. It includes the v0.01 architecture diagram, the controls surface, the current reviewer focus for v0.03, and the next follow-up scope for v0.04.
+This document supports presenting FREYRAUM to customers and onboarding new
+contributors. The current handoff priority is the v0.08 customer-artwork
+rendering fix: imported images must appear on the central 3D painting, not only
+in the timeline.
 
 ## Architecture diagram
 
@@ -18,18 +21,30 @@ The diagram captures four horizontal layers and two cross-cutting systems:
 
 ## Customer picture replacement status
 
-The current v0.06 preview is **not yet** ready for direct customer-managed picture replacement. Artworks are still defined in `src/config/artworks.ts` and the preview is rebuilt into `customer-preview/`.
+The v0.07 customer-managed import workflow exists, but there is now a critical
+v0.08 follow-up: imported images can appear in the timeline while failing to
+appear on the central 3D painting. Do not call customer picture replacement
+fully accepted until the central 3D painting renders the imported image and
+matches the imported aspect ratio.
 
-New customer-facing guide:
+Customer-facing and maintainer guides:
 
 - [`docs/CUSTOMER_PICTURE_GUIDE.md`](./CUSTOMER_PICTURE_GUIDE.md)
+- [`docs/IMAGE_MAINTENANCE_GUIDE.md`](./IMAGE_MAINTENANCE_GUIDE.md)
 
-Planned v0.07 direction:
+Current intended workflow:
 
 1. Customer drags pictures into `customer-artworks/inbox/`.
 2. Customer double-clicks `Update Gallery`.
-3. The updater generates optimized images + `artworks.json`.
+3. The updater generates image copies, `artworks.json`, and `customer-artworks.js`.
 4. Customer double-clicks root `index.html` as before.
+
+Critical acceptance requirement:
+
+- each imported image must be visible in the timeline
+- each imported image must render on the central 3D painting
+- the central 3D painting frame must match the imported dimensions/aspect ratio
+- diagnostics must make fallback texture usage obvious
 
 Cross-cutting reliability addition from the latest pass:
 
@@ -38,7 +53,9 @@ Cross-cutting reliability addition from the latest pass:
 - `?debug=1` / `?debug=verbose` enable deeper diagnostics for support and engineering sessions
 - recent session diagnostics are available in DevTools via `window.__FREYRAUM_DIAGNOSTICS__`
 
-Important handoff note: until v0.07 is implemented, customers should send picture folders to a maintainer/developer instead of editing source files.
+Important handoff note: if the timeline works but the central 3D painting does
+not, follow the v0.08 critical plan in `plan.md` before presenting the image
+maintenance workflow as complete.
 
 ## Controls surface
 

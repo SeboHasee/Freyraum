@@ -2,11 +2,24 @@
 
 ## Unreleased
 
+### Planned fix (v0.08 critical customer artwork rendering — 2026-05-17)
+
+- Added a critical plan to `plan.md` for the case where imported customer images
+  appear in the timeline but not on the central 3D painting.
+- Documented the likely failure boundary between DOM thumbnail loading and
+  Three.js/WebGL texture loading.
+- Added planned diagnostics for manifest dimensions, texture load success/failure,
+  fallback texture usage, and computed 3D painting/frame aspect ratios.
+- Marked the acceptance requirement: imported images must appear on the central
+  3D painting with `fallbackUsed: false` and correct dimensions-derived aspect.
+
 ### Added (v0.07 customer-managed artworks — 2026-05-17)
 
-The full v0.07 plan is now implemented. A non-technical customer can manage the
-gallery by dropping any number of images, in any aspect ratio, into one folder
-and double-clicking one button.
+The v0.07 importer and runtime injection path are implemented. A non-technical
+customer can generate a customer artwork manifest by dropping images into one
+folder and double-clicking one button. Final acceptance of the customer artwork
+feature now depends on the v0.08 critical follow-up above: imported images must
+also render on the central 3D painting with correct aspect ratios.
 
 - Added `scripts/import-artworks.mjs` — zero-dependency Node 18+ importer that:
   - scans `customer-artworks/inbox/` for image files (sorted naturally)
@@ -34,9 +47,10 @@ and double-clicking one button.
     `sanitizeInjectedArtworks()` (drops malformed entries, dedupes IDs, normalizes
     `surfaceProfile`, falls back gracefully), and uses the customer list when non-empty.
   - When no customer artworks are present, the built-in demo artworks load unchanged.
-- Existing `ArtworkMesh.updateAspect()` and `SidePanels.fitWithinBox()` already
-  preserve every aspect ratio (portrait, landscape, square, ultrawide) so no shader
-  or mesh changes were needed.
+- Existing `ArtworkMesh.updateAspect()` and `SidePanels.fitWithinBox()` are the
+  intended aspect-ratio path for portrait, landscape, square, and ultrawide
+  artworks. v0.08 must ensure the central 3D painting uses real imported textures
+  and manifest dimensions instead of generated fallback texture dimensions.
 - Added `docs/CUSTOMER_PICTURE_GUIDE.md` (rewritten for the implemented workflow,
   including macOS Gatekeeper note, file-type matrix, and FAQ).
 - Updated `.gitignore` for `customer-artworks/inbox/*` (except `.gitkeep`),

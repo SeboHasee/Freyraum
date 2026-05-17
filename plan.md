@@ -1,20 +1,152 @@
 # FREYRAUM Plan
 
+## v0.08 Critical Plan — Imported images must render on the actual 3D paintings
+
+### Status
+
+**Planned as critical follow-up (2026-05-17).** Customer image import now creates
+valid manifests and the timeline can show the imported files, but the main 3D
+painting surface can still fail to show those same images. This is the highest
+priority customer-image issue because the whole feature exists so imported
+artworks appear on the 3D paintings with their real aspect ratios.
+
+Observed customer import:
+
+- portrait JPG: `720 × 907`
+- portrait JPG: `719 × 991`
+- square PNG: `4724 × 4724`
+
+Expected result:
+
+- the timeline thumbnails show the images
+- the central 3D painting shows the same active image
+- the 3D painting frame and plane match each imported artwork's aspect ratio
+- no generated fallback texture is used for successfully imported files
+
+Observed result:
+
+- the images appear in the timeline
+- the central 3D painting does not show the imported images
+- the 3D painting aspect ratio does not match the imported dimensions
+
+### Initial technical diagnosis
+
+The timeline and the 3D painting use different image paths:
+
+- `Timeline` creates normal DOM `<img>` elements from `artwork.image`.
+- `GalleryManager` asks `TextureManager` to load the same URL as a Three.js texture.
+- `ArtworkMesh.updateAspect()` currently derives the 3D frame size from the loaded
+  texture, not directly from the manifest dimensions.
+- `TextureManager` silently creates a generated fallback texture when Three.js
+  loading fails. That fallback has its own dimensions, so the 3D painting can show
+  the wrong aspect ratio even while the timeline proves the customer image exists.
+
+Most likely failure class: local/customer image loading succeeds for DOM images
+but fails or falls back in the WebGL texture path. One concrete suspect is the
+global `TextureLoader` cross-origin setting on local `file://` / relative preview
+assets. The fix must not rely on guesses; it must add diagnostics that state
+whether each active 3D texture came from the customer file or from fallback.
+
+### Goals
+
+- Imported customer images render on the main 3D painting mesh.
+- The 3D painting plane and frame use the imported manifest dimensions as the
+  source of truth for aspect ratio.
+- Texture loading failures are visible in diagnostics and support reports.
+- Timeline, info panel, side panels, and central 3D painting all stay in sync.
+- The offline `file://` preview remains the primary supported customer workflow.
+
+### Non-goals
+
+- No full CMS or cloud upload system.
+- No requirement for customers to provide PBR texture sets.
+- No silent fallback for the main feature path unless the UI/report clearly says
+  the customer image could not be used as a WebGL texture.
+
+### Proposed vertical slices
+
+| Slice | Deliverable | Acceptance check |
+|-------|-------------|------------------|
+| S1 | Reproduce and instrument the failure with the three reported customer files. | Diagnostics show manifest dimensions, image URL, texture load start/end, fallback status, and active artwork ID. |
+| S2 | Fix local/customer texture loading in `TextureManager`. | Relative `./images/...` files load as real Three.js textures from `customer-preview/images/`; no generated fallback for the reported JPG/PNG files. |
+| S3 | Make 3D aspect ratio manifest-driven. | `ArtworkMesh` receives declared artwork dimensions and sizes the plane/frame from `720/907`, `719/991`, and `4724/4724` even before/independent of texture decode metadata. |
+| S4 | Add hard validation between manifest, texture, and mesh. | Debug logs expose expected aspect, loaded texture size, computed mesh width/height, and whether fallback was used. |
+| S5 | Verify navigation sync. | Clicking every timeline thumbnail updates the central 3D painting, side panels, info panel, active index, and diagnostics consistently. |
+| S6 | Update docs and customer support guidance. | Guides say the support person should check runtime diagnostics if timeline works but the 3D painting does not. |
+
+### Detailed logging plan
+
+Add structured diagnostics for the full imported-artwork render path:
+
+- **Boot / manifest**
+  - artwork source: built-in vs customer
+  - accepted/rejected manifest counts
+  - each accepted customer artwork ID, URL, width, height, and aspect
+- **TextureManager**
+  - load start: role, URL, detected URL class (`data`, relative, `file`, `http`)
+  - load success: image width/height, color space, anisotropy, role
+  - load failure: URL, role, browser error event summary
+  - fallback creation: seed URL, fallback dimensions, reason
+  - cross-origin mode used for the load
+- **GalleryManager**
+  - active index and artwork ID on every navigation
+  - whether albedo came from the real customer image or fallback
+  - texture-set roles resolved for the current artwork
+  - stale-load token discard events
+- **ArtworkMesh**
+  - declared manifest dimensions
+  - texture dimensions, if available
+  - computed aspect
+  - computed plane width/height
+  - computed frame width/height
+
+Normal sessions should still stay quiet. These details should be available via
+`?debug=info`, `?debug=verbose`, and
+`window.__FREYRAUM_DIAGNOSTICS__.snapshot()`.
+
+### Implementation notes
+
+- Do not let fallback textures silently define customer artwork geometry.
+- Prefer manifest dimensions for sizing imported artworks because the importer
+  already reads those dimensions before the preview runs.
+- Treat a timeline-visible but WebGL-invisible image as a first-class diagnostic
+  condition, not as a generic missing-texture warning.
+- If the browser/GPU cannot upload a very large source image, log the device
+  `MAX_TEXTURE_SIZE` and plan a follow-up downscale step in the importer.
+
+### Required validation
+
+Use the reported import set as the first manual acceptance test:
+
+1. Import the two portrait JPGs and one square PNG.
+2. Open the root `index.html` launcher.
+3. Confirm each timeline thumbnail appears.
+4. Click each timeline item.
+5. Confirm the central 3D painting shows the same image.
+6. Confirm the central 3D painting frame aspect matches:
+   - `720 / 907`
+   - `719 / 991`
+   - `4724 / 4724`
+7. Confirm diagnostics show `fallbackUsed: false` for all three central paintings.
+8. Run the existing lint/build checks after the code fix.
+
 ## v0.07 Plan — Customer-managed artwork folder and one-click importer
 
 ### v0.07 Planning Status
 
-**Implemented (2026-05-17).** The v0.07 customer-managed artwork workflow is
-now shipped end-to-end. A non-technical customer can drop any number of images,
-in any aspect ratio, into `customer-artworks/inbox/` and double-click
-`Update Gallery` to refresh the offline preview. Built-in demo artworks remain
-as the fallback when no customer manifest exists.
+**Implemented with critical follow-up required (2026-05-17).** The v0.07
+customer-managed artwork workflow can generate manifests and timeline thumbnails.
+A non-technical customer can drop images into `customer-artworks/inbox/` and
+double-click `Update Gallery` to refresh the offline preview. However, v0.08 is
+required before this workflow is accepted as complete, because customer images
+must also render on the central 3D painting with correct aspect ratios.
 
 The diagnostics and logging subsystem (Slice S7) was implemented in an earlier
 pass on the same date and is unchanged by this implementation pass.
 
-See `v0.07 Implementation Outcome` below for the file-level summary and the
-verified test matrix.
+See `v0.07 Implementation Outcome` below for the file-level summary and importer
+test matrix. See the v0.08 critical plan above for the remaining 3D rendering
+acceptance work.
 
 ### v0.07 Implementation Outcome
 
