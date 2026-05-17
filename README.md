@@ -87,24 +87,48 @@ Shipped material-quality improvements:
 
 Validation: `npm run lint` and `npm run build` pass after `npm install`. The only output is the known TypeScript parser version warning and Dart Sass legacy JS API deprecation warning.
 
+## v0.06 status — implemented
+
+v0.06 (Streifenlicht blockiness reduction) is **shipped**. Three vertical slices targeted the visible blockiness under `raking-inspection` at steep angles:
+
+- **S2 — Procedural texture anisotropy.** Procedural `DataTexture` maps now carry the same per-preset anisotropy cap as authored textures (`TextureManager.getEffectiveAnisotropy()`), so they no longer alias into coarse mips at steep view angles.
+- **S3 — Inspection-only relief-map resolution uplift.** Under `raking-inspection` on the high preset, the geometry-carrying procedural maps (`normal`, `detailNormal`, `height`) are generated at `proceduralInspectionTileSize = 2048` instead of the gallery `proceduralTileSize = 1024`. Balanced/battery presets opt out (`proceduralInspectionTileSize = 0`).
+- **S4 — Lateral self-shadow PCF filter (inspection-only).** A new `#define PAINTING_USE_SHADOW_FILTER` GLSL path adds two perpendicular companion rays to the existing self-shadow march. Activated only when the active light profile's `displayIntent === 'inspection'`. Gallery profiles pay zero extra cost (the define is absent).
+
+The 3-ray average preserves the v0.05 darkening envelope (max 4.2 % gallery / 8.4 % inspection) because each ray is clamped to `uShadowMaxOcclusion` before averaging. Bundle size moved from ~552 KB to ~562 KB (gzip 143 KB).
+
+See [`plan.md`](./plan.md#v006-plan--streifenlicht-blockiness-reduction-procedural-anisotropy-inspection-resolution-uplift-and-shadow-pcf-filter) for the full execution plan and the **v0.06 Implementation Outcome** subsection for as-built deviations, and the implementation entry in [`FINDINGS.md`](./FINDINGS.md#2026-05-17--v006-implemented-streifenlicht-blockiness-reduction).
+
+### What you can verify in the running app
+
+- Under `raking-inspection` on high preset: surface relief reads as smooth gradients without the previous lateral texel stripes; procedural maps remain sharp at maximum zoom.
+- Under `gallery-soft`, `museum-neutral`, `dramatic-demo`: visually identical to v0.05 (no extra shader cost, no extra memory).
+- Switching `balanced → high` while in inspection mode re-applies the anisotropy cap to both authored and procedural textures and triggers the inspection tile-size uplift.
+- The `?debug=1` + `s` shadow-only overlay still renders correctly with the PCF filter active.
+
+### Enhancement slots reserved for later
+
+- **`ProceduralTextureFactory.pruneSizeBelow(threshold)`** to reclaim the 1024-resolution cache entries once an artwork has been inspected (today both sizes coexist in the cache).
+- **Per-profile `LightProfile.shadowFilterRadius`** so future profiles can carry their own PCF radius rather than reading the active preset.
+
 ## v0.05 status — implemented
 
 v0.05 (soft self-shadow filtering) is **shipped**. The binary height-field break loop in `PaintingMaterial.ts` is gone; the shader now accumulates a smooth occlusion value that is bias-deadzoned, distance-weighted, clamped to a max-occlusion cap, and per-profile scaled. Stain-like dark blobs on `gallery-soft` are removed; `raking-inspection` shows soft local relief gradients.
 
 See [`plan.md`](./plan.md#v005-plan--soft-self-shadow-filtering-and-stain-artifact-removal) (status header at top of section) and the implementation entry in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v005-self-shadow-soft-filtering--implemented).
 
-### What you can verify in the running app
+### What you can verify in the running app (v0.05)
 
 - `gallery-soft`, `museum-neutral`, `dramatic-demo`: no moving dark blobs on any artwork.
 - `raking-inspection`: soft surface gradients only.
 - Append `?debug=1` to the preview URL and press **`s`** for a shadow-only greyscale overlay, or **`a`** for the albedo-only fidelity check.
 - High preset only: balanced and battery have self-shadow disabled.
 
-### Enhancement slots reserved for later
+### v0.05 enhancement slots — superseded
 
-- **3-ray PCF lateral filter** (S4). `selfShadowFilterRadius` is part of `QualityPreset`; default `0.0` keeps the single-march path.
-- **Per-profile `shadowProfileScale` on `LightProfile`** — currently derived from `displayIntent`.
-- **Animated profile-scale fade** — current switch is instant.
+- **3-ray PCF lateral filter** — shipped in v0.06 S4 (inspection-only).
+- **Per-profile `shadowProfileScale` on `LightProfile`** — still derived from `displayIntent`; open for future.
+- **Animated profile-scale fade** — still instant; open for future.
 - **Authored height-map drop-in** — works today without any shader change.
 
 ## Developer workflow

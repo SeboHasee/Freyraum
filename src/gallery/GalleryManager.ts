@@ -33,6 +33,17 @@ const PROCEDURAL_ROLES: PaintingMapRole[] = [
   'varnish',
 ];
 
+/**
+ * v0.06: roles whose procedural texel grid is visible under raking light at
+ * maximum zoom. When `inspectionMode` is true and the active preset declares
+ * a non-zero `proceduralInspectionTileSize`, these roles are regenerated at
+ * that higher resolution instead of the gallery `proceduralTileSize`.
+ *
+ * The other procedural roles (`roughness`, `specular`, `ao`, `varnish`)
+ * carry no geometry signal, so they do not benefit from a resolution uplift.
+ */
+const INSPECTION_ROLES: readonly PaintingMapRole[] = ['normal', 'detailNormal', 'height'];
+
 export class GalleryManager {
   private currentIndex = 0;
   private readonly artworkMesh: ArtworkMesh;
@@ -46,6 +57,18 @@ export class GalleryManager {
   private currentPreset: QualityPreset | null = null;
   /** Cancellation token for async artwork loads (audited guard). */
   private artworkLoadToken = 0;
+  /**
+   * v0.06: when true, geometry-carrying procedural roles (see
+   * `INSPECTION_ROLES`) are generated at `preset.proceduralInspectionTileSize`
+   * instead of `preset.proceduralTileSize`. Driven by `main.ts` from the
+   * active light profile's `displayIntent === 'inspection'`.
+   *
+   * Toggling the mode re-runs `showArtwork()` for the current index so the
+   * new size takes effect immediately. The factory's cache key includes the
+   * effective tile size, so both resolutions can coexist without
+   * stale-texture risk during rapid profile toggles.
+   */
+  private inspectionMode = false;
   /** Optional callback used to mark navigation events for FrameBudgetMonitor. */
   private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
 
@@ -84,12 +107,27 @@ export class GalleryManager {
     const hadPreset = this.currentPreset !== null;
     this.currentPreset = preset;
     this.textureManager.setAnisotropyDivisor(preset.anisotropyDivisor);
+    // v0.06: mirror the per-preset anisotropy cap on the procedural factory
+    // so DataTexture maps match authored textures at steep view angles.
+    this.procedural.setAnisotropy(this.textureManager.getEffectiveAnisotropy());
     // Rebuild the current artwork's map set so preset-specific roles
     // (detailNormal, height, roughness, specular, AO) are added/removed
     // immediately on quality changes.
     if (hadPreset && this.textureManager.get(artworks[this.currentIndex].image)) {
       void this.showArtwork(this.currentIndex);
     }
+  }
+
+  /**
+   * v0.06: switches the procedural texture tile size for geometry-carrying
+   * roles between the standard gallery size and the higher inspection size.
+   * Re-generates the current artwork's map set immediately if the mode
+   * changes; otherwise a no-op.
+   */
+  setInspectionMode(on: boolean): void {
+    if (on === this.inspectionMode) return;
+    this.inspectionMode = on;
+    if (this.currentPreset) void this.showArtwork(this.currentIndex);
   }
 
   async init(): Promise<void> {
@@ -162,7 +200,15 @@ export class GalleryManager {
       if (authored[role]) {
         resolved[role] = authored[role];
       } else if (this.shouldFillRole(role, preset)) {
-        resolved[role] = this.procedural.generate(artwork.id, role, preset.proceduralTileSize);
+        // v0.06: geometry-carrying roles use the higher inspection tile size
+        // when the inspection light profile is active AND the preset opts in
+        // (proceduralInspectionTileSize > 0). Gallery profiles and presets
+        // without an inspection size fall through to proceduralTileSize.
+        const inspSize = preset.proceduralInspectionTileSize;
+        const useInspection =
+          this.inspectionMode && inspSize > 0 && (INSPECTION_ROLES as readonly string[]).includes(role);
+        const tileSize = useInspection ? inspSize : preset.proceduralTileSize;
+        resolved[role] = this.procedural.generate(artwork.id, role, tileSize);
       }
     }
 

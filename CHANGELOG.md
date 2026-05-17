@@ -2,24 +2,30 @@
 
 ## Unreleased
 
-### Planned (v0.06 — Streifenlicht blockiness reduction)
+### Added (v0.06 implementation — Streifenlicht blockiness reduction)
 
-Full technical execution plan documented in `plan.md` with exact code snippets for each slice. No code has shipped yet.
+Three vertical slices shipped against `src/`; root causes RC-1/RC-2/RC-3 from the v0.06 plan were verified in code before implementation and fixed below.
 
-- **S2 — Procedural anisotropy fix.**
-  - `src/gallery/TextureManager.ts`: Add `getEffectiveAnisotropy()` getter.
-  - `src/materials/ProceduralTextureFactory.ts`: Add `private currentAnisotropy = 1` field + `setAnisotropy(value: number)` public method; apply stored value in `generate()` after `cache.set()`.
-  - `src/gallery/GalleryManager.ts`: Call `procedural.setAnisotropy(textureManager.getEffectiveAnisotropy())` in `applyPreset()` immediately after `setAnisotropyDivisor()`.
+- **S2 — Procedural texture anisotropy.**
+  - `src/gallery/TextureManager.ts`: New `getEffectiveAnisotropy()` getter; `setAnisotropyDivisor()` now delegates to it.
+  - `src/materials/ProceduralTextureFactory.ts`: New `currentAnisotropy` field (default 1) + `setAnisotropy(value)` method that mutates every cached `DataTexture` in place; `generate()` applies the stored cap to newly created textures.
+  - `src/gallery/GalleryManager.ts`: `applyPreset()` now calls `procedural.setAnisotropy(textureManager.getEffectiveAnisotropy())` so authored and procedural textures share the same per-preset cap.
 
 - **S3 — Inspection-only relief-map resolution uplift.**
-  - `src/config/quality.ts`: Add `proceduralInspectionTileSize: number` to `QualityPreset`; set `2048` on high, `0` on balanced/battery.
-  - `src/gallery/GalleryManager.ts`: Add `private inspectionMode = false` field + `setInspectionMode(on: boolean)` method. In `showArtwork()`, pass `proceduralInspectionTileSize` for `normal`/`detailNormal`/`height` roles when `inspectionMode = true`, `proceduralTileSize` otherwise.
-  - `src/main.ts`: Call `galleryManager.setInspectionMode(profile.displayIntent === 'inspection')` on profile switch.
+  - `src/config/quality.ts`: New `QualityPreset.proceduralInspectionTileSize` field — high=`2048`, balanced=`0`, battery=`0`.
+  - `src/gallery/GalleryManager.ts`: New `inspectionMode` field + `setInspectionMode(on)` method that re-runs `showArtwork()` when toggled. Module-scope `INSPECTION_ROLES = ['normal','detailNormal','height']` (matches the style of `PROCEDURAL_ROLES`). `showArtwork()` picks `proceduralInspectionTileSize` for inspection roles when `inspectionMode && inspSize > 0`, `proceduralTileSize` otherwise. The factory cache key already includes the effective tile size, so 1024- and 2048-resolution entries coexist without stale-texture risk.
+  - `src/main.ts`: `applyPreferences()` calls `galleryManager.setInspectionMode(lightProfile.displayIntent === 'inspection')`.
 
 - **S4 — Lateral self-shadow PCF filter (inspection-only).**
-  - `src/config/quality.ts`: Add `selfShadowFilterEnabled: boolean` to `QualityPreset` (always `false` in presets, toggled at runtime); update high-preset `selfShadowFilterRadius` from `0.0` to `0.002`.
-  - `src/materials/PaintingMaterial.ts`: Add `uShadowFilterRadius` uniform + `private shadowFilterEnabled = false` field + `setShadowFilterRadius(radius, enabled)` method + `#define PAINTING_USE_SHADOW_FILTER` compile guard + 3-ray lateral GLSL filter chunk inserted after `_occlusion = clamp(...)`.
-  - `src/main.ts`: Call `paintingMaterial.setShadowFilterRadius(radius, isInspection && radius > 0)` on profile switch.
+  - `src/config/quality.ts`: High-preset `selfShadowFilterRadius` raised from `0.0` to `0.002` (balanced/battery stay `0.0`). The `selfShadowFilterEnabled` field proposed in the original plan was **not added** — see the plan's "Issues found in the original plan" section; the runtime gate in `main.ts` makes a preset-level boolean dead, and `selfShadowFilterRadius = 0` already disables the path on a preset.
+  - `src/materials/PaintingMaterial.ts`: New `uShadowFilterRadius` uniform + `shadowFilterEnabled` instance flag + `setShadowFilterRadius(radius, enabled)` method that writes the uniform unconditionally and only triggers `needsUpdate = true` when the enable flag changes (recompile only on toggle). New GLSL block guarded by `#define PAINTING_USE_SHADOW_FILTER`, inserted inside the existing `#ifdef PAINTING_USE_SELFSHADOW` after the primary-ray `_occlusion` clamp: two companion rays perpendicular to `_shDelta`, each accumulated with the same reciprocal-distance weighting as the primary ray and clamped to `uShadowMaxOcclusion` before the 3-way average. The define is gated on `shadowFilterEnabled && selfShadowActive() && uShadowFilterRadius > 0` so it is never compiled in without the self-shadow path that hosts it.
+  - `src/main.ts`: `applyPreferences()` calls `paintingMaterial.setShadowFilterRadius(isInspection ? preset.selfShadowFilterRadius : 0, isInspection && preset.selfShadowFilterRadius > 0)`.
+
+### Validation (v0.06)
+
+- `npm run lint` — clean.
+- `npm run build` — typecheck + Vite preview + preview-HTML emitter all pass; only the pre-existing Dart Sass legacy-JS-API deprecation warning is emitted. Bundle: `customer-preview/freyraum-gallery.js` ≈ 562 KB (gzip ≈ 143 KB), up ~9 KB from v0.05 (new GLSL chunk + uniform plumbing).
+- Self-shadow texture reads: gallery profile = 8 (unchanged from v0.05); inspection profile = 24 (1 primary ray + 2 lateral rays × 8 steps). Memory uplift on inspection mode on high preset: ≈48 MB GPU per inspected artwork (3 roles × (2048² − 1024²) × 4 bytes).
 
 ---
 

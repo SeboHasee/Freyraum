@@ -28,11 +28,21 @@ export class TextureManager {
   /** Updates the anisotropy cap and reapplies it to already-cached textures. */
   setAnisotropyDivisor(divisor: number): void {
     this.anisotropyDivisor = Math.max(1, divisor);
-    const anisotropy = Math.max(1, Math.floor(this.maxAnisotropy / this.anisotropyDivisor));
+    const anisotropy = this.getEffectiveAnisotropy();
     this.cache.forEach((texture) => {
       texture.anisotropy = anisotropy;
       texture.needsUpdate = true;
     });
+  }
+
+  /**
+   * v0.06: returns the per-texture anisotropy currently applied to all cached
+   * textures. Exposed so `ProceduralTextureFactory` can mirror the same cap on
+   * its `DataTexture` cache (otherwise procedural maps default to anisotropy=1
+   * and alias into coarse mips under raking light at steep angles).
+   */
+  getEffectiveAnisotropy(): number {
+    return Math.max(1, Math.floor(this.maxAnisotropy / this.anisotropyDivisor));
   }
 
   async preload(urls: string[]): Promise<void> {

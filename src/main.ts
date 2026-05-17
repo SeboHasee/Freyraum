@@ -154,6 +154,20 @@ async function main(): Promise<void> {
     artworkMesh.applyPreset(preset);
     galleryManager.applyPreset(preset);
 
+    // v0.06: inspection-mode wiring. Drives two cost-gated features that
+    // should only run under raking-light inspection profiles:
+    //   1. Procedural tile-size uplift for geometry-carrying maps (S3).
+    //   2. Lateral PCF self-shadow filter (S4).
+    // Gallery-style profiles get the standard tile size and the single-ray
+    // shadow path — identical to v0.05 — so the museum-display experience
+    // is unchanged.
+    const isInspection = lightProfile.displayIntent === 'inspection';
+    galleryManager.setInspectionMode(isInspection);
+    artworkMesh.material.setShadowFilterRadius(
+      isInspection ? preset.selfShadowFilterRadius : 0,
+      isInspection && preset.selfShadowFilterRadius > 0
+    );
+
     frameBudget.markPresetChange();
     if (manual) {
       adaptiveQuality.notifyManualPreset(quality);

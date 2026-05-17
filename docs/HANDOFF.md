@@ -75,18 +75,59 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
-## v0.06 — Pending: Streifenlicht blockiness reduction
+## v0.06 — Implemented: Streifenlicht blockiness reduction
 
-Three root causes confirmed; full technical plan written in `plan.md`. No code shipped yet.
+v0.06 is **implemented**. Three vertical slices shipped, addressing the three confirmed root causes documented during the v0.06 planning pass. Full per-slice details and as-built deviations are in `plan.md` → "v0.06 Implementation Outcome".
 
 | Slice | Description | Status |
 |-------|-------------|--------|
 | S1 | Documentation and baseline | ✅ done |
-| S2 | Procedural anisotropy (`ProceduralTextureFactory.setAnisotropy()`) | pending |
-| S3 | Inspection-resolution uplift (`setInspectionMode()`, `proceduralInspectionTileSize`) | pending |
-| S4 | Lateral self-shadow PCF filter (`PAINTING_USE_SHADOW_FILTER` GLSL path) | pending |
+| S2 | Procedural anisotropy (`ProceduralTextureFactory.setAnisotropy()` + `TextureManager.getEffectiveAnisotropy()`) | ✅ shipped |
+| S3 | Inspection-resolution uplift (`setInspectionMode()`, `proceduralInspectionTileSize`) | ✅ shipped |
+| S4 | Lateral self-shadow PCF filter (`PAINTING_USE_SHADOW_FILTER` GLSL path) | ✅ shipped |
 
-Recommended execution order: S2 → evaluate → S3 (if needed) → S4 (if needed).
+### What changed (code-level)
+
+| File | Change |
+|------|--------|
+| `src/gallery/TextureManager.ts` | New `getEffectiveAnisotropy()` getter; `setAnisotropyDivisor()` delegates to it. |
+| `src/materials/ProceduralTextureFactory.ts` | New `currentAnisotropy` field + `setAnisotropy(value)` method that mutates cached `DataTexture` entries in place; `generate()` applies the stored cap on new textures. |
+| `src/config/quality.ts` | New `proceduralInspectionTileSize` field (high=2048, balanced/battery=0). High-preset `selfShadowFilterRadius` raised from `0.0` to `0.002`. The original plan's `selfShadowFilterEnabled` boolean was intentionally **not** added — the runtime gate in `main.ts` makes it dead. |
+| `src/gallery/GalleryManager.ts` | New `inspectionMode` field + `setInspectionMode(on)` method; `applyPreset()` mirrors anisotropy onto the procedural factory; `showArtwork()` picks `proceduralInspectionTileSize` for `normal`/`detailNormal`/`height` when in inspection mode and the preset opts in. |
+| `src/materials/PaintingMaterial.ts` | New `uShadowFilterRadius` uniform + `shadowFilterEnabled` field + `setShadowFilterRadius(radius, enabled)` method (recompile only on enable-flag change). New GLSL block guarded by `#define PAINTING_USE_SHADOW_FILTER`, inserted inside the existing `#ifdef PAINTING_USE_SELFSHADOW` after the primary-ray `_occlusion` clamp: two perpendicular companion rays, each clamped to `uShadowMaxOcclusion` before the 3-way average. The define is gated on `shadowFilterEnabled && selfShadowActive() && radius > 0`. |
+| `src/main.ts` | `applyPreferences()` calls `galleryManager.setInspectionMode(isInspection)` and `paintingMaterial.setShadowFilterRadius(...)` alongside the existing `setShadowProfileScale()`. |
+
+No new npm dependencies. No changes to HTML, CSS, or build pipeline.
+
+### What the user sees
+
+- **gallery-soft / museum-neutral / dramatic-demo:** identical to v0.05 — the PCF define is absent and the procedural tile size is unchanged.
+- **raking-inspection on high preset:** sharper procedural relief at zoom (anisotropic filtering at the GPU cap), no visible texel grid at maximum zoom (2048-resolution tiles), and smooth lateral shadow edges instead of hard texel-step stripes.
+- **balanced / battery:** unchanged. Self-shadow remains disabled; inspection tile-size uplift is opted out (`proceduralInspectionTileSize = 0`).
+
+### Reviewer checklist
+
+- [ ] `gallery-soft` is visually identical to v0.05.
+- [ ] `raking-inspection` on high preset shows smoother relief without hard lateral shadow stripes.
+- [ ] `raking-inspection` on high preset shows no visible texel grid at maximum zoom.
+- [ ] Switching `balanced → high` while in `raking-inspection` re-applies anisotropy and regenerates `normal`/`detailNormal`/`height` at 2048 px.
+- [ ] `?debug=1` + `s` shadow-only overlay still renders correctly with the PCF filter active.
+- [ ] `?debug=1` + `a` albedo-only still shows unmodified source artwork colours.
+- [x] `npm run lint` passes.
+- [x] `npm run build` passes; bundle ≈ 562 KB (gzip ≈ 143 KB).
+
+### Performance budget
+
+| Path | Self-shadow texture reads | Memory uplift per artwork |
+|------|---------------------------|----------------------------|
+| Gallery profiles (any preset) | 8 (single ray × 8 steps) — unchanged from v0.05 | 0 |
+| Inspection profile, high preset | 24 (1 primary + 2 lateral rays × 8 steps) | ≈48 MB GPU (3 roles × (2048² − 1024²) × 4 bytes) |
+| Inspection profile, balanced/battery | 0 (self-shadow disabled on these presets) | 0 |
+
+### Enhancement slots reserved (not yet enabled)
+
+- **`ProceduralTextureFactory.pruneSizeBelow(threshold)`** to reclaim 1024-resolution cache entries after inspection mode has been entered. Today both sizes coexist in the cache.
+- **Per-profile `LightProfile.shadowFilterRadius`** so future profiles can carry their own PCF radius rather than reading the active preset.
 
 ## v0.05 review focus — implemented
 

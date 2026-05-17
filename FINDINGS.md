@@ -1,29 +1,39 @@
 # FINDINGS
 
-## 2026-05-17 — v0.06 planning: Streifenlicht blockiness root-cause analysis
+## 2026-05-17 — v0.06 implemented: Streifenlicht blockiness reduction
 
-Three root causes confirmed in source code for the blocky relief artefact under `raking-inspection` at steep camera angles. Full technical execution plan (4 slices, S1–S4) written in `plan.md`. No code has shipped yet for v0.06.
+All three vertical slices (S2 anisotropy, S3 inspection tile-size uplift, S4 lateral PCF self-shadow) have shipped against `src/`. `npm run lint` and `npm run build` pass; bundle is now ≈ 562 KB (gzip ≈ 143 KB), up ~9 KB from v0.05. Detailed implementation outcome (per-slice changes, the four issues found in the original plan and their fixes, acceptance results) is in `plan.md` → "v0.06 Implementation Outcome".
 
-### Confirmed root causes
+### Shipped changes
 
-| # | File | Root cause |
-|---|------|------------|
-| RC-1 | `src/materials/ProceduralTextureFactory.ts` — `makeDataTexture()` | `anisotropy` is never set on generated `DataTexture` objects (defaults to `1`). Authored textures receive anisotropy via `TextureManager.setAnisotropyDivisor()`. |
-| RC-2 | `src/config/quality.ts` | `selfShadowFilterRadius: 0.0` on all presets. The `PAINTING_USE_SHADOW_FILTER` GLSL define and `uShadowFilterRadius` uniform do not yet exist in `PaintingMaterial.ts`. |
-| RC-3 | `src/config/quality.ts` | `proceduralTileSize: 1024` on high preset. At maximum inspection zoom the texel grid is visible. Secondary contributor — evaluate after RC-1/RC-2 fixes. |
+| File | Change |
+|------|--------|
+| `src/gallery/TextureManager.ts` | New `getEffectiveAnisotropy()` getter; `setAnisotropyDivisor()` delegates to it. |
+| `src/materials/ProceduralTextureFactory.ts` | New `currentAnisotropy` field (default 1) + `setAnisotropy(value)` method that mutates every cached `DataTexture` in place; `generate()` applies the stored cap to newly created textures. |
+| `src/gallery/GalleryManager.ts` | `applyPreset()` mirrors `getEffectiveAnisotropy()` onto the procedural factory. New `inspectionMode` field + `setInspectionMode(on)` that re-runs `showArtwork()` on toggle. Module-scope `INSPECTION_ROLES = ['normal','detailNormal','height']`. `showArtwork()` picks `proceduralInspectionTileSize` per role when `inspectionMode && inspSize > 0`. |
+| `src/config/quality.ts` | New `proceduralInspectionTileSize` field — high=`2048`, balanced/battery=`0`. High-preset `selfShadowFilterRadius` `0.0` → `0.002`. The `selfShadowFilterEnabled` boolean from the original plan was intentionally **not added** (the runtime gate in `main.ts` makes it dead — see plan §"Issues found in the original plan"). |
+| `src/materials/PaintingMaterial.ts` | New `uShadowFilterRadius` uniform + `shadowFilterEnabled` flag + `setShadowFilterRadius(radius, enabled)` method (recompile only on enable-flag change). New GLSL block guarded by `#define PAINTING_USE_SHADOW_FILTER`, inserted inside the `#ifdef PAINTING_USE_SELFSHADOW` after the primary-ray `_occlusion` clamp: two perpendicular companion rays, each accumulated with the same reciprocal-distance weighting and clamped to `uShadowMaxOcclusion` before the 3-way average. The define is gated on `shadowFilterEnabled && selfShadowActive() && radius > 0`. |
+| `src/main.ts` | `applyPreferences()` calls `galleryManager.setInspectionMode(isInspection)` and `paintingMaterial.setShadowFilterRadius(isInspection ? preset.selfShadowFilterRadius : 0, isInspection && preset.selfShadowFilterRadius > 0)` alongside the existing `setShadowProfileScale()`. |
 
-### Planned fixes (S2–S4 in plan.md)
+### Validation
 
-- **S2:** Add `setAnisotropy(value)` to `ProceduralTextureFactory`; expose `getEffectiveAnisotropy()` on `TextureManager`; wire in `GalleryManager.applyPreset()`.
-- **S3:** Add `proceduralInspectionTileSize` to `QualityPreset`; add `setInspectionMode(on)` to `GalleryManager`; wire from `main.ts` on profile switch.
-- **S4:** Add `uShadowFilterRadius` uniform + `PAINTING_USE_SHADOW_FILTER` GLSL lateral PCF chunk to `PaintingMaterial`; add `setShadowFilterRadius(radius, enabled)` method; wire from `main.ts` for inspection-only activation.
+- `npm run lint` — clean.
+- `npm run build` — clean. Bundle: 562 KB / gzip 143 KB. Only pre-existing Dart Sass legacy-JS-API deprecation warning is emitted.
+- Self-shadow texture reads: gallery profile = 8 (unchanged); inspection profile = 24. `_occlusion` after the 3-ray average is at most `uShadowMaxOcclusion`, so the v0.05 darkening envelope (4.2 % gallery / 8.4 % inspection) is preserved.
+- Inspection memory uplift on high preset: ≈48 MB GPU per inspected artwork; 1024- and 2048-resolution entries coexist in the factory cache so a gallery-mode toggle does not pay the regeneration cost again.
 
-### Key numbers (S4 cost)
+### Confirmed root causes (recorded during analysis, all now fixed)
 
-| Path | Self-shadow texture reads | Notes |
-|------|---------------------------|-------|
-| Gallery (S2+S3 only) | 8 steps × 1 ray = 8 | Identical to v0.05 |
-| Inspection (S4 enabled, high) | 8 steps × 3 rays = 24 | One-time recompile on profile switch |
+| # | File | Root cause | Resolved by |
+|---|------|------------|-------------|
+| RC-1 | `src/materials/ProceduralTextureFactory.ts` | `anisotropy` never set on generated `DataTexture` objects (defaults to 1). | S2 |
+| RC-2 | `src/materials/PaintingMaterial.ts` + `src/config/quality.ts` | `selfShadowFilterRadius` reserved in TS but the `PAINTING_USE_SHADOW_FILTER` GLSL define and `uShadowFilterRadius` uniform did not exist. | S4 |
+| RC-3 | `src/config/quality.ts` | `proceduralTileSize: 1024` used for both gallery and inspection on high preset. | S3 |
+
+### Open follow-ups (deferred, out of scope for v0.06)
+
+- `ProceduralTextureFactory.pruneSizeBelow(threshold)` to reclaim the 1024-resolution cache entry once inspection mode has been entered on an artwork. The plan documents this as future work; current S3 keeps both sizes alive simultaneously, which is correct for desktop and acceptable for the v0.06 risk budget.
+- Per-profile `LightProfile.shadowFilterRadius` so future profiles can carry their own PCF radius rather than reading the active preset value. Today `main.ts` hard-binds the inspection radius to `preset.selfShadowFilterRadius`.
 
 ---
 

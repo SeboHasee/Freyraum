@@ -71,6 +71,14 @@ export interface PaintingUniforms {
   uShadowSoftness: { value: number };
   uShadowMaxOcclusion: { value: number };
   uShadowProfileScale: { value: number };
+  /**
+   * v0.06: UV-space radius of the lateral PCF-like self-shadow filter. `0`
+   * disables filtering (single-march path). Activated at runtime by
+   * `setShadowFilterRadius()` only when the active light profile is an
+   * inspection profile, so gallery viewing never pays the extra texture
+   * reads.
+   */
+  uShadowFilterRadius: { value: number };
   uKeyLightDir: { value: THREE.Vector3 };
   uAlbedoOnly: { value: number };
 }
@@ -86,6 +94,13 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
   private selfShadowEnabledFlag = false;
   private albedoOnlyEnabled = false;
   private shadowDebugEnabled = false;
+  /**
+   * v0.06: gates the `#define PAINTING_USE_SHADOW_FILTER` define. Toggled
+   * exclusively via `setShadowFilterRadius()` from main.ts on light-profile
+   * change. Compiling the define in adds 2 lateral rays × N steps texture
+   * reads per fragment, so it must stay off on gallery-style profiles.
+   */
+  private shadowFilterEnabled = false;
   private reducedMotion = false;
 
   constructor(preset: QualityPreset) {
@@ -120,6 +135,7 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
       // Defaults to 0.5 (display intent) so the shader never reads as a stain
       // even before main.ts wires it.
       uShadowProfileScale: { value: 0.5 },
+      uShadowFilterRadius: { value: preset.selfShadowFilterRadius },
       uKeyLightDir: { value: new THREE.Vector3(0, 0, 1) },
       uAlbedoOnly: { value: 0 },
     };
@@ -144,6 +160,17 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
       if (this.selfShadowActive()) defines.push('#define PAINTING_USE_SELFSHADOW');
       if (this.albedoOnlyEnabled) defines.push('#define PAINTING_DEBUG_ALBEDO_ONLY');
       if (this.shadowDebugEnabled) defines.push('#define PAINTING_DEBUG_SHADOW');
+      // v0.06: gate the lateral PCF self-shadow path. Two compile-time
+      // conditions must hold: the runtime flag set by main.ts, and a
+      // non-zero radius (a zero radius would degenerate to the single-ray
+      // path with extra work, so we just skip the define entirely).
+      if (
+        this.shadowFilterEnabled &&
+        this.selfShadowActive() &&
+        this.paintingUniforms.uShadowFilterRadius.value > 0
+      ) {
+        defines.push('#define PAINTING_USE_SHADOW_FILTER');
+      }
 
       let frag = shader.fragmentShader;
 
@@ -163,6 +190,7 @@ uniform float uShadowBias;
 uniform float uShadowSoftness;
 uniform float uShadowMaxOcclusion;
 uniform float uShadowProfileScale;
+uniform float uShadowFilterRadius;
 uniform vec3  uKeyLightDir;
 uniform float uAlbedoOnly;
 `;
@@ -311,6 +339,39 @@ ${LIGHTS_END_TOKEN}
             }
             _occlusion = (_totalWeight > 0.0) ? (_occlusion / _totalWeight) : 0.0;
             _occlusion = clamp(_occlusion, 0.0, uShadowMaxOcclusion);
+
+            #ifdef PAINTING_USE_SHADOW_FILTER
+                {
+                    // v0.06: two companion rays perpendicular to the primary
+                    // march direction. Averaging three rays removes lateral
+                    // texel-step hard edges under raking light without raising
+                    // the overall darkening envelope (each ray is clamped to
+                    // uShadowMaxOcclusion before averaging).
+                    float _dLen = length(_shDelta);
+                    vec2 _latDir = (_dLen > 0.0001)
+                        ? vec2(-_shDelta.y, _shDelta.x) * (uShadowFilterRadius / _dLen)
+                        : vec2(uShadowFilterRadius, 0.0);
+                    float _oL = 0.0, _oR = 0.0, _wTot = 0.0;
+                    for (int _k = 0; _k < 16; _k++) {
+                        if (float(_k) >= uShadowSteps) break;
+                        float _fi  = float(_k + 1);
+                        float _wk  = 1.0 / _fi;
+                        float _wH  = _curH + _tsLight.z * _shStep * _fi;
+                        vec2  _bo  = _shDelta * _fi;
+                        float _exL = texture2D(bumpMap, clamp(_shUV + _bo - _latDir, 0.001, 0.999)).r
+                                     - _wH - uShadowBias;
+                        float _exR = texture2D(bumpMap, clamp(_shUV + _bo + _latDir, 0.001, 0.999)).r
+                                     - _wH - uShadowBias;
+                        _oL   += smoothstep(0.0, max(uShadowSoftness, 0.001), _exL) * _wk;
+                        _oR   += smoothstep(0.0, max(uShadowSoftness, 0.001), _exR) * _wk;
+                        _wTot += _wk;
+                    }
+                    float _lOcc = clamp((_wTot > 0.0) ? _oL / _wTot : 0.0, 0.0, uShadowMaxOcclusion);
+                    float _rOcc = clamp((_wTot > 0.0) ? _oR / _wTot : 0.0, 0.0, uShadowMaxOcclusion);
+                    _occlusion = (_occlusion + _lOcc + _rOcc) / 3.0;
+                }
+            #endif
+
             float _shadow = 1.0 - uShadowStrength * _occlusion * uShadowProfileScale * _grazeMask;
             #ifdef PAINTING_DEBUG_SHADOW
                 // Stash the greyscale mask in indirectDiffuse so the debug
@@ -402,6 +463,11 @@ ${LIGHTS_END_TOKEN}
     this.paintingUniforms.uShadowBias.value = preset.selfShadowBias;
     this.paintingUniforms.uShadowSoftness.value = preset.selfShadowSoftness;
     this.paintingUniforms.uShadowMaxOcclusion.value = preset.selfShadowMaxOcclusion;
+    // v0.06: keep the uniform in sync with the preset. The enable flag is
+    // owned by main.ts (driven from the light profile's displayIntent) and
+    // toggled via setShadowFilterRadius(), so applyPreset only writes the
+    // numeric radius.
+    this.paintingUniforms.uShadowFilterRadius.value = preset.selfShadowFilterRadius;
 
     if (!preset.detailNormalEnabled || preset.detailNormalStrength <= 0) {
       this.paintingUniforms.tDetailNormal.value = null;
@@ -580,6 +646,28 @@ ${LIGHTS_END_TOKEN}
     if (this.shadowDebugEnabled === enabled) return;
     this.shadowDebugEnabled = enabled;
     this.needsUpdate = true;
+  }
+
+  /**
+   * v0.06: enables or disables the lateral PCF-like self-shadow filter.
+   * `radius` is in UV space (typical 0.001..0.004 — must stay well below
+   * `parallaxScale / shadowSteps` to avoid lateral overlap between steps).
+   *
+   * Changing `enabled` triggers a full shader recompile via
+   * `needsUpdate = true` because it adds/removes the
+   * `#define PAINTING_USE_SHADOW_FILTER` define. Changing only `radius`
+   * while `enabled` is unchanged is a cheap uniform write.
+   *
+   * Call from main.ts on light-profile change:
+   *   inspection profile → setShadowFilterRadius(preset.selfShadowFilterRadius, true)
+   *   gallery profile    → setShadowFilterRadius(0, false)
+   */
+  setShadowFilterRadius(radius: number, enabled: boolean): void {
+    this.paintingUniforms.uShadowFilterRadius.value = Math.max(0, radius);
+    if (enabled !== this.shadowFilterEnabled) {
+      this.shadowFilterEnabled = enabled;
+      this.needsUpdate = true;
+    }
   }
 
   get shaderVariant(): PaintingShaderVariant {

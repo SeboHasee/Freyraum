@@ -46,6 +46,18 @@ export interface QualityPreset {
   // ── v0.03 procedural fallback and parallax fields ────────────────────────
   /** Target pixel size for procedurally generated support maps. */
   proceduralTileSize: number;
+  /**
+   * v0.06: Tile size for geometry-carrying procedural maps (`normal`,
+   * `detailNormal`, `height`) when the active light profile's
+   * `displayIntent === 'inspection'`. `0` disables the uplift and uses
+   * `proceduralTileSize` for every role (gallery-style profiles).
+   *
+   * Memory cost on high preset: 3 roles × (2048² − 1024²) × 4 bytes ≈ 48 MB
+   * GPU per inspected artwork. The lower-res entries stay alive in the
+   * factory cache so a gallery-mode toggle does not pay the regeneration
+   * cost again.
+   */
+  proceduralInspectionTileSize: number;
   /** Whether parallax occlusion UV offset is compiled into the fragment shader. */
   parallaxEnabled: boolean;
   /** Number of height-field march steps for parallax UV offset. */
@@ -113,6 +125,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     grazingBoostEnabled: true,
     detailNormalEnabled: true,
     proceduralTileSize: 1024,
+    proceduralInspectionTileSize: 2048,
     parallaxEnabled: true,
     parallaxSteps: 12,
     parallaxScale: 0.04,
@@ -125,7 +138,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     selfShadowBias: 0.03,
     selfShadowSoftness: 0.1,
     selfShadowMaxOcclusion: 0.28,
-    selfShadowFilterRadius: 0.0,
+    // v0.06: lateral PCF radius. 0 on gallery-style profiles (single ray);
+    // main.ts activates the 3-ray fan only when `displayIntent === 'inspection'`
+    // by calling `setShadowFilterRadius(0.002, true)`.
+    selfShadowFilterRadius: 0.002,
     clearcoatEnabled: true,
     clearcoatStrength: 0.12,
     clearcoatRoughnessValue: 0.35,
@@ -150,6 +166,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     grazingBoostEnabled: true,
     detailNormalEnabled: true,
     proceduralTileSize: 512,
+    proceduralInspectionTileSize: 0,
     parallaxEnabled: false,
     parallaxSteps: 0,
     parallaxScale: 0.0,
@@ -184,6 +201,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     grazingBoostEnabled: false,
     detailNormalEnabled: false,
     proceduralTileSize: 256,
+    proceduralInspectionTileSize: 0,
     parallaxEnabled: false,
     parallaxSteps: 0,
     parallaxScale: 0.0,

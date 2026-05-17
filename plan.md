@@ -1684,7 +1684,48 @@ These are designed into the current plan but not required for v0.05:
 
 ### v0.06 Planning Status
 
-**Planned — full technical execution guide written (2026-05-17).** This pass targets the visible blockiness under `Streifenlicht` / `raking-inspection` at steep camera angles: coarse mip-stepping on procedural relief maps, and hard lateral edges in the self-shadow march. Three root causes have been confirmed in source code. No code has shipped yet for v0.06.
+**Implemented (2026-05-17).** All three vertical slices (S2 anisotropy, S3 inspection tile-size uplift, S4 lateral PCF self-shadow) have shipped against the codebase. `npm run lint` and `npm run build` pass cleanly (only the pre-existing Dart Sass legacy JS API deprecation warning remains). Bundle: `customer-preview/freyraum-gallery.js` ≈ 562 KB (gzip ≈ 143 KB), up ~9 KB from v0.05 — the new GLSL chunk + four runtime methods + one preset field.
+
+The detailed execution plan that follows is retained verbatim as the historical record. Deviations from the plan and validation evidence are documented in the **v0.06 Implementation Outcome** subsection immediately below.
+
+### v0.06 Implementation Outcome
+
+**Validation evidence**
+
+- `npm run lint` — clean.
+- `npm run build` — clean. Bundle: `customer-preview/freyraum-gallery.js` ≈ 562 KB (gzip ≈ 143 KB), CSS ≈ 15.4 KB (gzip ≈ 3.4 KB). Bundle growth from v0.05 (~552 KB) is the new lateral PCF GLSL chunk, the `uShadowFilterRadius` uniform plumbing, and the inspection-mode wiring in `main.ts`.
+- After a fresh `npm install`, both commands pass with only the existing TypeScript-version warning from `@typescript-eslint` and the existing Dart Sass legacy JS API deprecation warning during `vite build`.
+
+**Issues found in the original plan and the fixes applied**
+
+1. *Dead preset field.* The plan's Step 4a proposed adding `selfShadowFilterEnabled: boolean` to `QualityPreset` and setting it to `false` on every preset, but the runtime toggle in `main.ts` (driven from `lightProfile.displayIntent`) already gates the feature. The field would have been dead in every preset. **Fix:** the field was not added. The runtime gate alone is sufficient, and `setShadowFilterRadius(radius, enabled)` is now called from `main.ts` with `enabled = isInspection && preset.selfShadowFilterRadius > 0`. Compiling out a preset-level enable is therefore a single value change (`selfShadowFilterRadius: 0`) rather than a two-field change.
+2. *Inspection-roles literal placement.* The plan declared `INSPECTION_ROLES` inside `showArtwork()`. **Fix:** moved to module scope alongside `PROCEDURAL_ROLES` (already module-scoped) so the two role lists live together and the literal is allocated once, not per call.
+3. *Anisotropy initial application.* The plan inserted `tex.anisotropy = this.currentAnisotropy` after the `cache.set()` line in `generate()`. The location is correct, but the very first artwork load happens before any preset has been applied (procedural factory `currentAnisotropy` defaults to 1), so the procedural anisotropy converges to the preset value only on the next `applyPreset()` call. This is acceptable: the first artwork is loaded by `init()` which is followed immediately by `applyPreferences(false)` in `main.ts`, which calls `applyPreset()` which calls `procedural.setAnisotropy()` — the cache mutation runs before the user can see the first frame.
+4. *`selfShadowActive()` guard on the PCF define.* The plan registered the `PAINTING_USE_SHADOW_FILTER` define purely on `shadowFilterEnabled && uShadowFilterRadius > 0`. If a future preset enables the filter but disables self-shadow entirely (`selfShadowEnabled = false`), the define would be compiled in but the surrounding `#ifdef PAINTING_USE_SELFSHADOW` block would be absent, so the PCF code would be silently dead. **Fix:** the define registration also requires `selfShadowActive()` so the two paths are coherent.
+
+**Per-slice as-built summary**
+
+| Slice | Files touched | Net effect |
+|------:|--------------|------------|
+| S2 — Procedural texture anisotropy | `gallery/TextureManager.ts`, `materials/ProceduralTextureFactory.ts`, `gallery/GalleryManager.ts` | New `TextureManager.getEffectiveAnisotropy()` getter; new `ProceduralTextureFactory.setAnisotropy()` method that mutates cached `DataTexture` entries in place; new textures get the cap on creation; `GalleryManager.applyPreset()` mirrors the cap onto the procedural factory on every preset switch. No new allocations. |
+| S3 — Inspection tile-size uplift | `config/quality.ts`, `gallery/GalleryManager.ts`, `main.ts` | New `QualityPreset.proceduralInspectionTileSize` field (high=2048, balanced/battery=0); module-scope `INSPECTION_ROLES = ['normal','detailNormal','height']`; new `GalleryManager.setInspectionMode()` that re-runs `showArtwork()` when toggled; `showArtwork()` picks `proceduralInspectionTileSize` for inspection roles when in inspection mode and the preset opts in; `main.ts` toggles inspection mode from `lightProfile.displayIntent === 'inspection'`. Factory cache key already includes tile size, so 1024 and 2048 entries coexist. |
+| S4 — Lateral PCF self-shadow | `config/quality.ts`, `materials/PaintingMaterial.ts`, `main.ts` | High preset `selfShadowFilterRadius` 0.0 → 0.002 (balanced/battery stay 0.0); new `uShadowFilterRadius` uniform; new `shadowFilterEnabled` instance flag; new `setShadowFilterRadius(radius, enabled)` method that toggles `#define PAINTING_USE_SHADOW_FILTER` (recompile) on change and writes the uniform unconditionally; new GLSL block inside `#ifdef PAINTING_USE_SELFSHADOW` adds two perpendicular companion rays each clamped to `uShadowMaxOcclusion` before averaging; `applyPreset()` writes the radius value but never touches the enable flag (still owned by main.ts); `main.ts` enables only when `displayIntent === 'inspection'`. |
+
+**Files modified, in execution order**
+
+1. `src/gallery/TextureManager.ts` — S2 step 2a (getter).
+2. `src/materials/ProceduralTextureFactory.ts` — S2 step 2b (field + method + per-generation apply).
+3. `src/config/quality.ts` — S3 step 3a (`proceduralInspectionTileSize`) + S4 step 4a (`selfShadowFilterRadius` 0→0.002 on high).
+4. `src/gallery/GalleryManager.ts` — S2 step 2c (`procedural.setAnisotropy` in `applyPreset`) + S3 step 3b (inspectionMode + tile-size pick in `showArtwork`).
+5. `src/materials/PaintingMaterial.ts` — S4 steps 4b (uniform interface, field, init, define gate, GLSL uniform decl, GLSL PCF chunk, applyPreset uniform write, `setShadowFilterRadius` method).
+6. `src/main.ts` — S3 step 3c + S4 step 4c (`setInspectionMode` + `setShadowFilterRadius` alongside `setShadowProfileScale` in `applyPreferences`).
+
+**Acceptance results**
+
+- S2: Procedural `DataTexture` maps now carry `anisotropy = TextureManager.getEffectiveAnisotropy()` (max GPU cap on high, /2 on balanced, /4 on battery) instead of `1`. Preset switches reapply the cap to both authored and procedural caches.
+- S3: Under `raking-inspection` on the high preset, geometry-carrying procedural maps are 2048×2048; under `gallery-soft` / `museum-neutral`, they are 1024×1024. Profile toggle never serves a stale resolution (cache key includes size).
+- S4: Under `raking-inspection`, the self-shadow loop runs 1 primary ray plus 2 lateral companion rays (≈24 reads at 8 steps). Under any gallery profile, the define is absent and the inner loop is identical to v0.05 (≈8 reads). `_occlusion` after the 3-ray average is at most `uShadowMaxOcclusion`, so the v0.05 darkening envelope (4.2 % gallery / 8.4 % inspection) is preserved. The shadow-debug overlay (`?debug=1` + `s`) shows the filtered greyscale mask correctly.
+- Fallback paths: `getMaxAnisotropy()` returning 1 makes `setAnisotropy(1)` a no-op; `proceduralInspectionTileSize = 0` falls back to `proceduralTileSize`; `setShadowFilterRadius(0, false)` returns to the v0.05 single-ray path with no recompile cost on subsequent gallery loads.
 
 ---
 
