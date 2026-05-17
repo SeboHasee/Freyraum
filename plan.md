@@ -369,6 +369,17 @@ v0.02 makes the artworks read as **realistic physical paintings** — not flat i
 - Do not add new npm dependencies unless strictly required and security-checked first.
 - Do not ship texture assets without documenting their source, format, and regeneration path.
 
+### v0.02 Final Audit — Corrections Applied To This Plan
+
+This plan was re-audited after the first technical pass. The following issues were found and corrected so implementation can proceed professionally and with fewer rework risks:
+
+- **Shader-space correction:** the first draft described detail-normal blending as if a tangent-space normal could be added directly to a view-space normal. That is not safe. The audited plan now requires tangent-space blending before the Three.js TBN/view-space transform.
+- **Bump correction:** the first draft used a simplified `dFdx/dFdy` perturbation example that was too approximate for a normative plan. The audited plan now requires reusing the same perturbation path/pattern that Three.js uses for bump/normal handling instead of adding raw derivatives directly to the final normal.
+- **Specular-scope correction:** the first draft assumed `specularColor` was always available at the chosen injection point. The audited plan now treats specular-map modulation as a chunk-verified step and explicitly allows a fallback to roughness + clearcoat first if scope differs in Three.js `0.166.x`.
+- **Browser-API stability correction:** the first draft used exact WebGPU DOM types in the public contract. The audited plan now requires a stable serializable probe result shape so TypeScript/lib.dom drift does not block implementation.
+- **Build-output wording correction:** the first draft claimed the debug overlay would "never be bundled". With Vite dynamic imports, the correct guarantee is that the debug overlay must never be eagerly imported or requested unless the debug flag is present.
+- **Execution guardrail correction:** the first draft did not explicitly cover async artwork-load races, texture ownership, or disposal boundaries. The audited plan now adds strict lifecycle rules so rapid navigation and preset changes do not produce stale map application or texture leaks.
+
 ---
 
 ### v0.02 Codebase Baseline
@@ -426,12 +437,12 @@ All new types must be defined before implementation begins. These are the normat
 ```typescript
 // ─── New types added at the top of artworks.ts ───────────────────────────────
 
-export type TextureColorSpace = 'srgb' | 'linear';
+export type TextureColorSpace = 'srgb' | 'linear' | 'none';
 
 export interface PaintingTextureMapEntry {
   /** Path relative to /public or a data URI for offline preview. */
   url: string;
-  /** sRGB only for albedo; all other maps must be linear. */
+  /** `srgb` for albedo, `linear` for most grayscale/normal data, `none` when Three.js data-texture handling should bypass color transforms entirely. */
   colorSpace: TextureColorSpace;
   /** Native pixel dimensions — used for mip budget calculations. */
   resolution?: { width: number; height: number };
@@ -806,10 +817,18 @@ Dynamic-import target so unsupported browsers never parse the module.
  */
 export async function initWebGPUPrototype(canvas: HTMLCanvasElement): Promise<WebGPUProbeResult>;
 
+export interface SerializedGPUAdapterInfo {
+  vendor?: string;
+  architecture?: string;
+  device?: string;
+  description?: string;
+}
+
 export interface WebGPUProbeResult {
   supported: boolean;
-  adapterInfo?: GPUAdapterInfo;
-  limits?: Partial<GPUSupportedLimits>;
+  adapterInfo?: SerializedGPUAdapterInfo;
+  /** Plain-object limits snapshot so the result is loggable and stable across DOM lib versions. */
+  limits?: Record<string, number>;
   unsupportedFeatures: string[];
   frameTimingMs?: number;  // filled after one test frame
   fallbackToWebGL: boolean;
@@ -857,7 +876,7 @@ The monitor is created in `main.ts` and `tick(now)` is called at the top of the 
 /**
  * Development-only overlay.
  * Only constructed when the URL contains '?debug=material'.
- * Never bundled into the production customer preview.
+ * Never eagerly imported during the normal customer preview path.
  */
 export class MaterialInspector {
   constructor(
@@ -871,7 +890,7 @@ export class MaterialInspector {
 }
 ```
 
-Renders an absolutely positioned panel showing: active preset, shader variant, active map list, FPS (all three windows), pixel ratio, anisotropy cap, and buttons to toggle each texture map individually. Fully hidden and not imported in non-debug builds.
+Renders an absolutely positioned panel showing: active preset, shader variant, active map list, FPS (all three windows), pixel ratio, anisotropy cap, and buttons to toggle each texture map individually. It must never be eagerly imported; Vite may still emit a separate async chunk, but that chunk must not be requested unless `?debug=material` is present.
 
 #### Changes to `src/main.ts`
 
@@ -914,6 +933,64 @@ if (new URLSearchParams(location.search).get('debug') === 'material') {
   new MaterialInspector(app, artworkMesh, lightingSetup, frameBudget);
 }
 ```
+
+### v0.02 Lifecycle, Loading, and Disposal Guardrails
+
+These guardrails are mandatory because the current gallery is interactive, async, and texture-heavy.
+
+#### Async artwork-load race handling
+
+`GalleryManager` must keep an incrementing `artworkLoadToken` (number). Every call to `showArtwork(index)` captures the current token before starting async map loads. When map loading resolves, the code must compare the captured token against the latest token and discard stale results.
+
+Implementation rule:
+
+```typescript
+private artworkLoadToken = 0;
+
+private async showArtwork(index: number): Promise<void> {
+  const token = ++this.artworkLoadToken;
+  // start albedo + texture-set load here
+  const textures = await this.textureManager.preloadTextureSet(...);
+  if (token !== this.artworkLoadToken) return; // stale navigation result
+  this.artworkMesh.setMaps(textures);
+}
+```
+
+This is required so rapid navigation cannot apply a previous artwork's auxiliary maps to the currently visible artwork.
+
+#### Texture ownership and disposal boundaries
+
+Ownership must stay explicit:
+
+- `TextureManager` owns network-loaded textures and is solely responsible for disposing them.
+- `ProceduralTextureFactory` owns generated fallback textures and is solely responsible for disposing them.
+- `PaintingMaterial` may reference textures but must not dispose shared textures on `applyTextures()` or `dispose()`.
+- `ArtworkMesh.dispose()` disposes geometry and material only.
+- Swapping presets or artworks must never dispose textures still held by caches.
+
+#### Fallback precedence
+
+Fallback order must be deterministic:
+
+1. authored map from `artwork.textureSet`
+2. procedural fallback from `ProceduralTextureFactory`
+3. neutral flat/no-op data texture when the role should exist but generation fails
+4. hard-disable the shader path via `#define` when the role is optional and no safe fallback exists
+
+#### Adaptive-quality safety rules
+
+- Automatic downgrades may only occur after a full 5-second sample window exists.
+- Automatic downgrades must pause for a cooldown window after manual preset changes.
+- Manual preset selection must override automatic downgrade for the current session until the page reloads or the user explicitly re-enables auto mode.
+
+#### Release-blocking lifecycle checks
+
+v0.02 is not releasable if any of the following remain unresolved:
+
+- stale auxiliary maps appear after rapid artwork navigation
+- repeated artwork switching increases GPU memory without stabilising
+- preset switching recompiles shaders every frame instead of only on preset changes
+- reduced-motion mode still animates highlight drift or inspection-only light movement
 
 ---
 
@@ -962,7 +1039,7 @@ uniform sampler2D tAO;
 
 All injected via `shader.uniforms = { ...THREE.UniformsUtils.clone(shader.uniforms), ...this.paintingUniforms }`.
 
-#### Injection 1 — After `#include <roughnessmap_fragment>`: roughness and specular map override
+#### Injection 1 — Roughness override and audited specular-map rule
 
 ```glsl
 // ─── PAINTING: roughness map override ───────────────────────────────────────
@@ -970,47 +1047,41 @@ All injected via `shader.uniforms = { ...THREE.UniformsUtils.clone(shader.unifor
   float paintRoughSample = texture2D(tRoughness, vMapUv).r;
   roughnessFactor = mix(uRoughnessFloor, uRoughnessCeiling, paintRoughSample);
 #endif
-
-// ─── PAINTING: specular variation ───────────────────────────────────────────
-#ifdef PAINTING_USE_SPECULAR_MAP
-  float paintSpecSample = texture2D(tSpecular, vMapUv).r;
-  // Boost reflectance by up to uSpecularStrength for varnished/thick areas.
-  // In Three.js PBR, specular reflectance for dielectrics scales with 'specularIntensity'.
-  // We modulate it here by patching the physical fragment after roughness is resolved.
-  specularColor = mix(specularColor, specularColor * (1.0 + paintSpecSample * uSpecularStrength), uVarnishStrength);
-#endif
 ```
 
-Note: `specularColor` is available in `lights_physical_fragment` context. If the injection point is before that chunk, use `specularIntensityFactor` instead. Verify against `three/src/renderers/shaders/ShaderLib/meshphysical.glsl.js` at 0.166.
+**Audited rule for specular modulation:** do not hard-code a `specularColor` write at an unverified injection point.
 
-#### Injection 2 — After `#include <normal_fragment_maps>`: detail normal blend and bump
+Implementation decision order:
 
-```glsl
-// ─── PAINTING: detail normal blend ──────────────────────────────────────────
-#ifdef PAINTING_USE_DETAIL_NORMAL
-  vec4 detailNormalTexel = texture2D(tDetailNormal, vMapUv * uDetailTiling);
-  // Unpack tangent-space detail normal
-  vec3 detailN = normalize(detailNormalTexel.xyz * 2.0 - 1.0);
-  // Reoriented Normal Mapping (RNM) blend keeps both normals in tangent space
-  // before the TBN matrix is applied:
-  //   n = normalize( vec3(n1.xy + n2.xy, n1.z) )
-  // At this point 'normal' is already in view space (Three.js applies TBN in
-  // normal_fragment_maps). We therefore apply a simpler weighted overlay:
-  normal = normalize(
-    normal + (detailN * uDetailNormalStrength * uReducedMotionScalar)
-  );
-#endif
+1. Prefer native `MeshPhysicalMaterial` support if `specularIntensityMap` / `specularColorMap` can be used directly in Three.js `0.166.x` without patching.
+2. If native support is insufficient, patch specular response only after verifying the exact variable scope inside `lights_physical_fragment`.
+3. If scope is unclear or unstable during Slice 3, ship roughness + clearcoat first and defer specular-map modulation to Slice 4/5 rather than forcing an unsafe shader patch.
 
-// ─── PAINTING: bump/height perturbation ─────────────────────────────────────
-#ifdef PAINTING_USE_BUMP
-  float bumpH  = texture2D(tHeight, vMapUv).r;
-  float bumpDx = dFdx(bumpH) * uBumpStrength;
-  float bumpDy = dFdy(bumpH) * uBumpStrength;
-  normal = normalize(normal + vec3(bumpDx, bumpDy, 0.0));
-#endif
+This keeps the plan realistic and avoids baking a fragile chunk-scope assumption into the implementation contract.
+
+#### Injection 2 — Audited normal-path integration for detail normal and height
+
+**Audited correction:** do not add tangent-space detail normals or raw height derivatives directly to the already transformed view-space `normal`.
+
+Required implementation strategy:
+
+1. Replace or wrap the `normal_fragment_maps` path rather than patching only after it.
+2. Sample the base normal map and detail-normal map in tangent space.
+3. Blend them in tangent space using RNM/whiteout-style blending.
+4. Feed the blended tangent normal through the same TBN/view-space transform path that Three.js already uses for `MeshPhysicalMaterial`.
+5. If a height/bump map is present, apply it through the same perturbation helper/pattern that Three.js uses for bump handling so derivatives are interpreted in the correct space.
+
+Reference pseudocode:
+
+```text
+base tangent normal  = unpack(normalMap)
+detail tangent normal = unpack(tDetailNormal)
+blended tangent normal = RNM(base, detail * uDetailNormalStrength * uReducedMotionScalar)
+final normal = Three.js normal-map transform(blended tangent normal)
+height perturbation = Three.js-compatible bump perturbation using sampled height derivatives
 ```
 
-Note on `uReducedMotionScalar`: setting it to 0.0 via `PreferencesStore` effectively disables the detail-normal blend contribution, making the painting look flatter and calmer. This is the accessibility hook.
+Implementation note on accessibility: `uReducedMotionScalar` may reduce the contribution of detail normal or animated grazing-light effects, but it must not silently corrupt the normal basis. Reduced motion is a strength scalar, not a different normal-space path.
 
 #### Injection 3 — After `#include <aomap_fragment>`: custom AO and grazing-light boost
 
@@ -1225,6 +1296,28 @@ Loading rules:
 
 ---
 
+### v0.02 Validation Matrix
+
+Every implementation slice must finish with an explicit validation pass.
+
+| Validation area | Required check |
+| --- | --- |
+| Type safety | `npm run build:typecheck` |
+| Lint | `npm run lint` |
+| Preview build | `npm run build` and confirm `customer-preview/` regenerated |
+| Local file preview | open root `index.html` and confirm `customer-preview/app.html` launches correctly |
+| Reduced motion | disable motion and confirm light drift / highlight drift / navigation swoop are frozen or reduced as intended |
+| High contrast | verify controls remain legible while material realism remains readable |
+| Missing maps | verify procedural fallback or compile-time disable path works for every optional map role |
+| Rapid navigation | navigate quickly across all artworks and confirm no stale map application |
+| Preset switching | switch high ↔ balanced ↔ battery and confirm one-time shader recompile only on actual preset changes |
+| Memory stability | run repeated navigation / preset switching and confirm textures/materials stabilise without visible leaks |
+| WebGPU probe | `?backend=webgpu` logs probe info and returns cleanly to WebGL on failure |
+
+Release note rule: every slice must append its validation outcome to `FINDINGS.md`, including failures, mitigations, and remaining risks.
+
+---
+
 ### v0.02 Vertical Slices
 
 #### Slice 1 — Texture Set Metadata Contract
@@ -1310,7 +1403,7 @@ Files changed:
 Acceptance checks:
 - `frameBudget.getFps('5s')` returns a reasonable FPS after 5 seconds of animation.
 - Dev overlay visible with `?debug=material` query param.
-- Overlay hidden in `npm run build` customer preview (guard in `main.ts`).
+- Overlay code is lazy-requested only with `?debug=material`; its async chunk may exist in the build output but must never be fetched during normal customer preview use.
 
 #### Slice 7 — Adaptive Quality Guardrails
 
@@ -1371,6 +1464,20 @@ Acceptance checks:
 
 ---
 
+### v0.02 Risk Register
+
+| Risk | Why it matters | Mitigation in this plan | Acceptable fallback |
+| --- | --- | --- | --- |
+| Tangent/view-space mix-up in shader patching | Produces incorrect highlights, shimmering, and unstable close-up detail | Blend base + detail normals in tangent space before Three.js transforms them | Ship base normal + roughness first; defer detail normal until verified |
+| Specular patch variable-scope mismatch | Can fail compilation or silently alter the wrong lighting term | Verify chunk scope in Three.js `0.166.x` before custom patching | Ship roughness + clearcoat only in Slice 3 |
+| Async artwork-load race | Rapid navigation can apply stale auxiliary maps to the wrong artwork | `artworkLoadToken` guard in `GalleryManager.showArtwork()` | Cancel outdated results and keep only albedo for that frame |
+| GPU memory creep from cached/generated textures | Long sessions may degrade performance or crash weaker GPUs | Explicit ownership boundaries and disposal rules | Disable optional maps / clear caches on preset downgrade |
+| Asset weight explosion | Authored map stacks can make local preview too heavy | Load auxiliary maps only for active artwork; document file sizes in `FINDINGS.md` | Keep procedural fallback for some roles/artworks |
+| WebGPU browser/API instability | Probe path can fail differently across browsers and DOM lib versions | Keep probe informational and serializable; dynamic import only on opt-in | Fall back to WebGL silently with dev log |
+| Debug-tool production leakage | Debug overlay may accidentally affect normal preview sessions | Lazy request by query flag only; no eager import side effects | Ship without MaterialInspector if bundling semantics become messy |
+
+---
+
 ### Recommended v0.02 Execution Order
 
 1. Slice 1 — Texture Set Metadata Contract *(TypeScript foundation; all later slices depend on it)*
@@ -1394,6 +1501,8 @@ v0.02 is complete when:
 - `raking-inspection` profile clearly reveals surface detail not visible under `gallery-soft`.
 - Balanced preset sustains 60 FPS on a mid-range discrete GPU test machine (documented with device + browser + OS in `FINDINGS.md`).
 - Battery preset sustains at least 25 FPS on an old integrated GPU test machine (same documentation requirement).
+- Rapid artwork navigation cannot apply stale auxiliary maps from a previously selected artwork.
+- Repeated navigation + preset switching does not create visible texture/material leaks during a manual dev session.
 - WebGPU probe runs, logs adapter info, and falls back to WebGL on unsupported browsers without UI breakage.
 - All markdown files updated: `CHANGELOG.md`, `FINDINGS.md`, `README.md`, `docs/HANDOFF.md`, `plan.md`.
 
@@ -1408,6 +1517,7 @@ v0.02 is complete when:
 
 ## Verification Notes
 
-- `npm run build` should regenerate the committed local customer preview.
-- `npm run lint` should remain clean except for the known TypeScript parser support warning from current dependency versions.
-- Interaction fixes should be manually tested in both `npm run dev` and by opening root `index.html` locally.
+- In this audit session, `npm run lint` passed after `npm install`, with the known `@typescript-eslint` warning about TypeScript `5.9.3` not being officially supported by the current parser range.
+- In this audit session, `npm run build` passed after `npm install`, and the preview bundle was regenerated successfully.
+- The build emitted the current Dart Sass legacy JS API deprecation warning; treat it as a future tooling cleanup item, not a v0.02 blocker.
+- Interaction and rendering changes must still be manually tested in both `npm run dev` and by opening root `index.html` locally.

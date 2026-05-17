@@ -85,16 +85,19 @@ v0.02 is a technical rendering pass with a finalised implementation plan. Future
 - Shader variants: `painting-high` (7 texture reads), `painting-balanced` (5 reads), `painting-battery` (2 reads)
 - Compile-time `#define` flags: `PAINTING_USE_DETAIL_NORMAL`, `PAINTING_USE_BUMP`, `PAINTING_USE_ROUGHNESS_MAP`, `PAINTING_USE_SPECULAR_MAP`, `PAINTING_USE_AO`, `PAINTING_USE_GRAZING_BOOST`
 - Four light profiles in `src/lighting/LightProfile.ts`: `gallery-soft`, `raking-inspection`, `museum-neutral`, `dramatic-demo`
+- Audited implementation rule: detail normals must be blended in tangent space before the Three.js normal transform; do not add tangent-space detail normals directly to the final view-space normal
+- Audited implementation rule: `PaintingMaterial` must not own cached textures; texture ownership stays in `TextureManager` / `ProceduralTextureFactory`
+- Audited implementation rule: rapid artwork navigation must be protected by an artwork-load token (or equivalent cancellation guard) so stale maps cannot be applied
 
 **Lane 2 — Experimental WebGPU probe:**
 - Activated by `?backend=webgpu` query param or `localStorage.setItem('freyraum.backend', 'webgpu-experimental')`
-- Runs `initWebGPUPrototype()` via dynamic import; logs adapter info; always falls back to WebGL
+- Runs `initWebGPUPrototype()` via dynamic import; logs adapter info using a serializable probe-result shape; always falls back to WebGL
 - Never used in the customer preview; clearly labeled experimental
 
 **Benchmark procedure:**
 1. Build and open `customer-preview/app.html` locally.
 2. Add `?debug=material` to the URL to enable the `MaterialInspector` overlay.
-3. The overlay shows active preset, shader variant, active map count, pixel ratio, anisotropy, and rolling FPS (1s/5s/30s).
+3. The overlay shows active preset, shader variant, active map count, pixel ratio, anisotropy, and rolling FPS (1s/5s/30s). The overlay may exist as an async debug chunk in the build, but it must never be requested during normal preview use.
 4. Test at least: idle front view, zoomed close inspection, panning while zoomed, rapid navigation.
 5. Document device, browser, OS, and measured FPS for each preset in `FINDINGS.md`.
 
@@ -103,6 +106,13 @@ v0.02 is a technical rendering pass with a finalised implementation plan. Future
 2. Switch to `museum-neutral` — flatter light, accurate colour, no dramatic highlights.
 3. Switch to `gallery-soft` — current default; subtle slow oscillation.
 4. Capture one close-up screenshot per profile under each test.
+
+
+**Audit-critical release blockers:**
+- No stale auxiliary maps after rapid navigation across all artworks
+- No visible texture/material leak after repeated navigation and preset switching
+- Reduced-motion mode freezes or meaningfully reduces highlight drift and inspection-light motion
+- WebGPU probe failure always returns cleanly to the normal WebGL preview path
 
 **Performance acceptance targets:**
 

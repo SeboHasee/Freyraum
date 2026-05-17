@@ -41,4 +41,7 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - fallback behavior
 - acceptance checks
 - known risks and reserved future-pass boundaries
+- shader/math-space assumptions when shader code or rendering equations are planned
+- resource ownership, disposal boundaries, and async race handling for texture/material pipelines
+- browser/API stability boundaries for experimental features and debug-only tooling
 

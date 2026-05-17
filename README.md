@@ -35,16 +35,17 @@ The customer preview is built as a classic browser script, not a Vite module ent
 
 ## v0.02 implementation plan
 
-The v0.02 technical plan is finalised in [`plan.md`](./plan.md#v002-scope--advanced-painting-material-shaders--experimental-webgpu) and ready for coding.
+The v0.02 technical plan is finalised and audit-corrected in [`plan.md`](./plan.md#v002-scope--advanced-painting-material-shaders--experimental-webgpu).
 
-Scope:
+Final scope:
 
-- New `PaintingMaterial` class extending `MeshPhysicalMaterial` via `onBeforeCompile` with albedo, normal, detail-normal, height/bump, roughness, specular, and AO map support
-- `ProceduralTextureFactory` generating deterministic fallback maps (canvas weave, brush relief, roughness, specular) so development can proceed without scanned assets
+- New `PaintingMaterial` class extending `MeshPhysicalMaterial` via `onBeforeCompile` with albedo, normal, detail-normal, height/bump, roughness, specular, and AO support
+- `ProceduralTextureFactory` generating deterministic fallback maps (canvas weave, brush relief, roughness, specular) so development can proceed before scanned assets exist
 - `LightProfile` system in `LightingSetup` with four named profiles: `gallery-soft`, `raking-inspection`, `museum-neutral`, `dramatic-demo`
-- `QualityPreset` extended with shader-variant fields; battery preset compiles out detail-normal, bump, AO, and grazing-boost paths via `#define`
+- `QualityPreset` extended with shader-variant fields; battery preset compiles out expensive paths via `#define`
 - `FrameBudgetMonitor` for rolling 1s/5s/30s FPS measurement and adaptive quality guardrails
 - Experimental `WebGPUPrototype` probe behind dynamic import and explicit opt-in (`?backend=webgpu`) — never required for the customer preview
+- Final audit guardrails added for shader-space correctness, async artwork-load races, texture ownership/disposal, validation matrix, and risk register
 - Performance targets: 60 FPS on mid-range discrete GPUs (balanced preset), 25 FPS minimum on old integrated GPUs (battery preset)
 
 ## Developer workflow
