@@ -147,8 +147,9 @@ A developer can also append `?debug=info` to the gallery URL and run:
 Look for `fallbackUsed: true` in the `show-artwork-complete` entries.
 
 **I see strange artifacts only when quality is set to Hoch.**
-This was addressed in v0.10 by retuning the Hoch procedural surface maps and
-shadow/specular values. Please send your support person:
+This was addressed in v0.10 by retuning the Hoch procedural surface maps,
+making parallax relief-only so it cannot shift the actual picture, and lowering
+shadow/specular/parallax values. Please send your support person:
 
 1. a screenshot,
 2. the selected quality setting,
@@ -159,6 +160,10 @@ shadow/specular values. Please send your support person:
 
 This helps distinguish image-content issues from high-quality shader effects
 if a new artifact appears.
+
+If the artifact looks like a hole with the same picture behind it, include the
+`show-artwork-complete` diagnostics entry and check `parallaxScale`; v0.10
+expects Hoch to use the reduced value `0.012`.
 
 **Very tall pictures look too close when I reset the view.**
 This was also addressed in v0.10. Reset view now uses the framed picture

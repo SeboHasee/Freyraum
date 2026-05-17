@@ -1,5 +1,43 @@
 # FINDINGS
 
+## 2026-05-17 — v0.10 follow-up: implemented — parallax hole artifacts
+
+### Customer-observed behavior
+
+After the first v0.10 spot fix, the customer reported **more artifacts** that
+looked like **holes**, with the same picture visible behind them. The customer
+suspected the parallax effect.
+
+### Root cause identified
+
+The suspicion was correct. In `PaintingMaterial.ts`, the parallax shader
+computed `pUV` from procedural height and then sampled the real artwork albedo
+with that shifted UV:
+
+```glsl
+vec4 sampledDiffuseColor = texture2D( map, pUV );
+```
+
+Because the height map is procedural and unrelated to the actual photo content,
+deep/recessed height areas displaced the image locally. This can look like a
+crater or hole showing a second, offset copy of the same picture behind the
+surface.
+
+### Fix implemented
+
+- `PaintingMaterial.ts`: albedo now samples stable `vMapUv`.
+- `PaintingMaterial.ts`: parallax `pUV` remains available only for relief maps
+  (normal/self-shadow), preserving picture fidelity.
+- `quality.ts`: Hoch `parallaxScale` reduced from `0.04` to `0.012`.
+- `GalleryManager.ts`: diagnostics now log `parallaxEnabled` and
+  `parallaxScale` in `show-artwork-complete`.
+- Preview bundle regenerated.
+
+Validation: `npm run lint` and `npm run build` pass with only the known
+TypeScript parser and Sass warnings.
+
+---
+
 ## 2026-05-17 — v0.10: implemented — spot artifacts and portrait reset zoom
 
 ### Customer-observed behavior

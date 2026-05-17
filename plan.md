@@ -1,5 +1,45 @@
 # FREYRAUM Plan
 
+## v0.10 Follow-up — Parallax Hole Artifact Fix (Implemented)
+
+### Status
+
+**Implemented 2026-05-17.** After the first v0.10 pass, the customer reported
+stronger artifacts that looked like holes with the same picture visible behind
+them. The customer suspected parallax, and the shader audit confirmed that the
+actual albedo image was being sampled with parallax-shifted UVs.
+
+### Root cause
+
+`PaintingMaterial.ts` computed `pUV` from the procedural height map and used it
+for the real artwork image:
+
+```glsl
+vec4 sampledDiffuseColor = texture2D( map, pUV );
+```
+
+That is unsafe for customer photos because the procedural height field is not
+content-aware. A recess in the generated height map shifts the image locally,
+so the viewer sees an offset copy of the same picture. Visually this reads as a
+depth hole or torn surface.
+
+### Fix implemented
+
+- Albedo sampling now uses stable `vMapUv`.
+- Parallax `pUV` is kept relief-only for normal/self-shadow sampling.
+- Hoch `parallaxScale` reduced from `0.04` to `0.012` to make relief movement
+  subtle.
+- `show-artwork-complete` diagnostics now include `parallaxEnabled` and
+  `parallaxScale`.
+- `npm run lint` and `npm run build` pass.
+
+### Acceptance checks
+
+- Hoch close-up: no crater/hole artifacts or duplicated picture patches.
+- Albedo-only debug (`a`): always shows the unshifted customer picture.
+- Shadow-only debug (`s`): relief/shadow still visible but subtler.
+- Ausgewogen/Akkusparend: unchanged because parallax is disabled there.
+
 ## v0.10 — Spot Artifact Fix and Portrait Reset Framing (Implemented)
 
 ### Status

@@ -46,11 +46,12 @@ gallery). The previous manifest is backed up to `artworks.json.bak` so a bad
 import can be recovered manually. If the inbox is empty, the built-in demo
 artworks load instead.
 
-Current rendering follow-up: v0.10 is implemented for occasional close-up spot
-artifacts on the **Hoch** quality preset and for reset framing on very vertical
-pictures. The fix retunes procedural height/specular inputs, Hoch shadow/specular
-strengths, and computes reset zoom from framed artwork dimensions. See
-[`plan.md`](./plan.md#v010--spot-artifact-fix-and-portrait-reset-framing-implemented).
+Current rendering follow-up: v0.10 is implemented for Hoch close-up spots,
+parallax hole artifacts, and reset framing on very vertical pictures. The fix
+keeps the real picture on stable UVs, makes parallax relief-only/subtler,
+retunes Hoch shadow/specular values, and computes reset zoom from framed artwork
+dimensions. See
+[`plan.md`](./plan.md#v010-follow-up--parallax-hole-artifact-fix-implemented).
 
 For the full architecture see
 [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).

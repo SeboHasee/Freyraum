@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Fixed (v0.10 follow-up — parallax hole artifacts — 2026-05-17)
+
+- Fixed the newly reported crater/hole artifacts in Hoch mode. Root cause:
+  `PaintingMaterial` used parallax-shifted `pUV` for the actual albedo image,
+  so procedural height recesses could show a displaced copy of the same picture,
+  reading like holes with image content behind them.
+- Albedo sampling now stays on the original `vMapUv`; parallax `pUV` is kept
+  relief-only for normal/self-shadow sampling so the customer picture remains
+  spatially stable.
+- Hoch `parallaxScale` lowered from `0.04` to `0.012` to keep relief movement
+  subtle and prevent crater-like offsets.
+- Diagnostics now include `parallaxEnabled` and `parallaxScale` in
+  `show-artwork-complete`.
+- Validation: `npm run lint` and `npm run build` pass with only known warnings.
+
 ### Fixed (v0.10 — spot artifacts and portrait reset zoom — 2026-05-17)
 
 - Deep source audit identified two root causes for "little spots" in Hoch mode.

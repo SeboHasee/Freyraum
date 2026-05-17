@@ -52,6 +52,7 @@ When adding future implementation plans for rendering, performance, shaders, Web
 ## Latest documentation pass
 
 - 2026-05-17: v0.10 implemented the Hoch close-up spot artifact fix and very-vertical-picture reset zoom fix. Documentation now records the procedural height/specular retune, aspect-aware reset zoom math, diagnostics fields, validation results, and remaining manual visual checks.
+- 2026-05-17: v0.10 follow-up implemented the parallax hole artifact fix. Documentation now records that albedo must stay on stable artwork UVs while parallax remains relief-only, plus the reduced Hoch parallax scale and new diagnostics.
 - 2026-05-17: v0.09 follow-up plan added after customer validation showed that v0.08 fixed the central 3D painting aspect ratio but the actual uploaded image can still fall back to the placeholder. Documentation now records online WebGL/CORS/local-file texture research and points future implementation toward importer-generated exact data URLs for 3D albedo reliability.
 - 2026-05-17: v0.08 critical customer-artwork rendering plan added after a report that imported images appeared in the timeline but not on the central 3D painting. All markdown files now point future work toward fixing the WebGL texture path, manifest-driven 3D aspect ratios, and detailed diagnostics.
 - 2026-05-17: v0.07 diagnostics/logging pass added a centralized runtime diagnostics system and updated the planning rules so future high-risk work must document diagnostics/logging architecture, signal-to-noise boundaries, and activation paths.

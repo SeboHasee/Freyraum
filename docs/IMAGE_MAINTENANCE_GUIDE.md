@@ -27,15 +27,18 @@ the gallery actually reads.
 ## Current v0.10 rendering fix: Hoch close-up spots and portrait reset zoom
 
 v0.10 is implemented for occasional strange artifacts in close-up view when the
-quality / performance setting is **Hoch**. This is separate from the v0.09
+quality / performance setting is **Hoch**, including the parallax follow-up for
+hole-like duplicated-picture patches. This is separate from the v0.09
 uploaded-image fix: still confirm that the image is not a fallback
 (`fallbackUsed: false`) and that `webglImageSource` is correct.
 
 The implemented fix reduces procedural height micro-noise and specular blob
-peaks, raises Hoch self-shadow bias, lowers Hoch specular strength, and computes
-reset zoom from the framed artwork dimensions. For support, use `?debug=info`
-and inspect `show-artwork-complete` for `resetZoom`, `minZoom`, `maxZoom`,
-`specularStrength`, `selfShadowBias`, `fallbackUsed`, and `webglImageSource`.
+peaks, keeps albedo on stable UVs instead of parallax-shifted UVs, reduces Hoch
+parallax scale, raises Hoch self-shadow bias, lowers Hoch specular strength, and
+computes reset zoom from the framed artwork dimensions. For support, use
+`?debug=info` and inspect `show-artwork-complete` for `resetZoom`, `minZoom`,
+`maxZoom`, `parallaxScale`, `specularStrength`, `selfShadowBias`,
+`fallbackUsed`, and `webglImageSource`.
 
 ## Folder and file roles
 

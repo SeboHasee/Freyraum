@@ -2,8 +2,9 @@
 
 This document supports presenting FREYRAUM to customers and onboarding new
 contributors. **Current priority: v0.10 validation.** The Hoch close-up spot
-artifact fix and very-vertical-picture reset zoom fix are implemented. See
-`plan.md` → "v0.10 — Spot Artifact Fix and Portrait Reset Framing" for details.
+artifact fix, parallax hole fix, and very-vertical-picture reset zoom fix are
+implemented. See `plan.md` → "v0.10 Follow-up — Parallax Hole Artifact Fix" and
+"v0.10 — Spot Artifact Fix and Portrait Reset Framing" for details.
 
 ## Architecture diagram
 
@@ -56,10 +57,15 @@ quality preset. The fix reduces procedural height micro-noise, lowers Hoch
 specular blob strength, increases Hoch self-shadow bias, and keeps diagnostics
 explicit about the active reset/shadow/specular values.
 
+The parallax follow-up is also implemented: the actual artwork image now samples
+stable `vMapUv`, while parallax `pUV` is relief-only for normal/self-shadow.
+Hoch `parallaxScale` is reduced to `0.012`, preventing crater-like duplicated
+picture patches while retaining subtle depth.
+
 Very vertical portraits now reset farther away: reset zoom is computed from the
 framed artwork dimensions and camera aspect/FOV after async artwork aspect
 loading. Validate with `?debug=info`; `show-artwork-complete` logs `resetZoom`,
-`minZoom`, `maxZoom`, `specularStrength`, and `selfShadowBias`.
+`minZoom`, `maxZoom`, `parallaxScale`, `specularStrength`, and `selfShadowBias`.
 
 ## Controls surface
 
