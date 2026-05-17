@@ -355,6 +355,175 @@ Reserved Future Pass:
 This order starts with the data model and local assets because later UI, thumbnails, accessibility labels, and documentation screenshots depend on stable artwork metadata.
 
 
+## v0.03 Follow-up Plan — Faithful Painting Inspection, Rough Matte Surface, High-Resolution Relief, and Free Edge Navigation
+
+### v0.03 Planning Status
+
+v0.03 is a follow-up plan, not yet implemented. It responds to the latest visual QA feedback:
+
+- the shader must **not change the essence of the original picture**;
+- the current material can read as **too shiny / not rough enough**;
+- bump/height/detail maps are not visible enough under light at close inspection;
+- procedural relief must stay **super high resolution** at maximum zoom;
+- zoomed navigation must allow free inspection up to every edge of the artwork.
+
+The v0.03 work should be implemented in vertical slices so every slice produces a testable customer-preview increment.
+
+### v0.03 Goals
+
+1. Preserve the source artwork's identity: colour, value range, composition, and brush/pixel content must remain recognisably unchanged.
+2. Move the default painting material toward a rough, matte, physically plausible surface; highlights should be rare, broad, and low-energy unless an authored varnish/specular map explicitly asks otherwise.
+3. Make surface relief legible from light direction without turning the image into a synthetic embossed effect.
+4. Keep relief/detail crisp at maximum zoom by using higher-resolution authored/procedural map strategies and zoom-aware tiling/detail blending.
+5. Allow free close-up inspection to the artwork edges and corners without unsafe camera clipping or losing the artwork from view.
+6. Keep WebGL as the production path and preserve reduced-motion/high-contrast accessibility behaviour.
+
+### v0.03 Non-Goals
+
+- Do not recolour, stylize, posterize, sharpen, or otherwise reinterpret the original albedo image.
+- Do not introduce mandatory WebGPU rendering.
+- Do not require real scanned texture assets before the procedural fallback path is improved.
+- Do not remove adaptive quality; instead, make high-detail relief degrade predictably by preset.
+- Do not create unbounded pan/zoom that can permanently disorient the user or hide the artwork entirely.
+
+### Current v0.02 Audit Findings Driving v0.03
+
+| Finding | Current cause | v0.03 implication |
+| --- | --- | --- |
+| Source-picture essence can feel altered by lighting | `PaintingMaterial` uses bloom, clearcoat `0.04`, specular maps, and grazing boost; these affect perceived contrast even though albedo is not directly modified | Add a fidelity/neutral inspection mode and lower default specular/clearcoat/grazing response |
+| Surface is too shiny | High preset has `specularStrength: 0.55`, `uLightGrazingBoost: 0.6`, roughness map range can dip to `60/255`, and bloom is still enabled | Retune roughness/specular ranges toward matte canvas and make varnish opt-in/authored rather than procedural default |
+| Bump/height is not visible enough | Height map is 256 px, bump strength is `0.012`, balanced disables bump entirely, and current lighting may not provide enough raking contrast | Add a dedicated inspection/raking-light path plus stronger but controlled height derivatives in high/inspection modes |
+| Detail may not survive max zoom | Procedural normal/detail/height maps are 256 px and only texture-filtered; there is no zoom-aware microdetail octave | Introduce larger procedural maps, multi-octave high-frequency detail, and/or shader-side procedural microdetail that remains stable under zoom |
+| Edge inspection is too limited | `PAN_SAFETY_FACTOR = 0.92` and limits are based on keeping a safety margin rather than allowing the viewport center to reach near edges | Replace pan limits with an inspection model that allows edges/corners to be centered or nearly centered while keeping escape/reset controls |
+
+### v0.03 Shader / Material Fidelity Rules
+
+- Treat the original artwork image as immutable albedo content. The shader may add surface response but must not encode colour grading, hue shifts, contrast curves, or synthetic pigment colour into the albedo path.
+- Keep albedo in `SRGBColorSpace`; all normals, heights, roughness, specular masks, and AO remain linear data.
+- Lower default `clearcoat`, `specularIntensity`, and grazing boost; prefer high roughness and wide/soft highlights for canvas and dry paint.
+- Make varnish/specular pooling opt-in per artwork or per inspection profile. Procedural varnish should not be the default if it makes every picture look glossy.
+- Add a debug/fidelity acceptance view that can compare: original albedo-only, matte material, and inspection-relief material.
+- Avoid view-space normal hacks. Continue blending detail normals in tangent space before the TBN transform.
+
+### v0.03 High-Resolution Relief Strategy
+
+- Increase procedural fallback map sizes for high/inspection quality:
+  - base normal: target 1024 px tile;
+  - detail normal / canvas tooth: target 1024–2048 px tile;
+  - height/bump: target 1024 px or multi-tile octave stack;
+  - roughness/specular: at least 512 px, with matte-biased values.
+- Add deterministic multi-octave detail so maximum zoom reveals fine tooth and brush ridges instead of magnified 256 px texture patterns.
+- Keep mipmaps and anisotropic filtering enabled; document GPU memory impact per preset.
+- Consider a zoom-aware detail scalar: at normal view, keep relief subtle; at close inspection, reveal microdetail without changing albedo.
+- Acceptance check: at max zoom, the viewer should still see stable fine relief, not blurred low-resolution procedural tiles or obvious repetition.
+
+### v0.03 Roughness / Shininess Retuning
+
+- Change default material target from semi-varnished to matte canvas:
+  - roughness floor should stay high, with no broad low-roughness pools unless authored;
+  - specular strength should be low by default;
+  - clearcoat should be near zero by default;
+  - grazing boost should be weaker or available only in an inspection/debug mode.
+- Rebalance procedural roughness generation so values concentrate in a rough/matte range.
+- Rebalance procedural specular generation so it mostly suppresses highlights; if a varnish look is desired later, add an explicit `finish: 'matte' | 'satin' | 'varnished'` artwork/material metadata field.
+- Acceptance check: the artwork should look like pigment/canvas under gallery light, not like glossy plastic or wet varnish.
+
+### v0.03 Lighting / Bump Visibility Strategy
+
+- Add a user-facing or reviewer-facing inspection light mode that uses raking light to reveal relief without changing the default gallery mood.
+- Make the raking/inspection profile easy to toggle during QA, not only from console.
+- Ensure bump/height visibility is tested with all four current artwork aspect ratios.
+- Keep reduced-motion mode still: no animated light movement when reduced motion is enabled.
+- Acceptance check: switching to inspection light should reveal canvas tooth and brush relief from directional light while albedo identity remains intact.
+
+### v0.03 Free Edge Inspection Strategy
+
+- Replace the current fixed pan safety model with a close-inspection navigation model:
+  - allow the viewport center to travel near or to each artwork edge/corner at high zoom;
+  - keep a small configurable overscroll margin so users can inspect borders without losing orientation;
+  - preserve reset (`0` / `R`) as the escape hatch;
+  - keep keyboard/touch/mouse parity.
+- Pan limits should be derived from visible world width/height, artwork width/height, zoom level, and an explicit inspection margin rather than a single conservative `PAN_SAFETY_FACTOR`.
+- Acceptance check: at maximum zoom, every edge and corner of portrait, landscape, square, and ultrawide artworks can be inspected directly.
+
+### v0.03 Proposed Modules / File Changes
+
+| Area | Files likely touched | Purpose |
+| --- | --- | --- |
+| Material retuning | `src/config/quality.ts`, `src/materials/PaintingMaterial.ts`, `src/materials/ProceduralTextureFactory.ts` | Reduce shine, increase matte roughness, tune relief strengths, add high-res maps |
+| Inspection lighting | `src/lighting/LightProfile.ts`, `src/lighting/LightingSetup.ts`, UI settings file(s) | Expose raking/inspection mode for QA and customer close-up inspection |
+| Free edge navigation | `src/gallery/GalleryManager.ts`, `src/interaction/ZoomPan.ts`, `src/interaction/TouchInteraction.ts`, `src/interaction/KeyboardNav.ts` | Loosen pan limits while maintaining reset and safe bounds |
+| Fidelity/debug checks | optional `src/debug/*` or settings panel extension | Albedo-only / matte / inspection comparison without shipping intrusive UI |
+| Documentation | `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `docs/HANDOFF.md` | Keep findings, acceptance checks, and validation procedures current |
+
+### v0.03 Vertical Slices
+
+1. **Slice 1 — Fidelity baseline and acceptance harness**
+   - Add a reviewer-visible way to compare albedo-only vs current material vs matte target.
+   - Document screenshots/checkpoints for each current artwork.
+   - Acceptance: source picture colours/composition are visibly unchanged in matte mode.
+
+2. **Slice 2 — Matte material retune**
+   - Lower clearcoat/specular/grazing defaults.
+   - Bias procedural roughness toward rough canvas.
+   - Make varnish/specular pooling opt-in or much subtler.
+   - Acceptance: default gallery view is no longer noticeably shiny.
+
+3. **Slice 3 — Visible high-resolution relief**
+   - Increase procedural map resolution and add multi-octave detail for high/inspection quality.
+   - Tune bump/detail strengths so light reveals relief at close zoom.
+   - Acceptance: max zoom remains detailed and does not show blurry 256 px artifacts.
+
+4. **Slice 4 — Inspection/raking light mode**
+   - Expose a still raking-light profile through UI or reviewer/debug controls.
+   - Keep default gallery light tasteful and not overly harsh.
+   - Acceptance: bump/height/detail maps become clearly visible from light direction in inspection mode.
+
+5. **Slice 5 — Free edge/corner pan model**
+   - Replace conservative pan safety with an inspection-focused bound model.
+   - Validate mouse drag, wheel zoom, touch pan/pinch, keyboard reset, and all aspect ratios.
+   - Acceptance: every edge/corner is reachable at max zoom.
+
+6. **Slice 6 — Performance and adaptive-quality pass**
+   - Measure GPU cost of larger maps and extra relief octaves.
+   - Define preset-specific texture sizes and shader paths.
+   - Acceptance: balanced remains the default customer preset; battery still avoids expensive relief.
+
+7. **Slice 7 — Handoff documentation and final validation**
+   - Update all markdown docs, validation notes, and customer review steps.
+   - Acceptance: reviewers have clear checks for fidelity, roughness, relief, zoom detail, and edge inspection.
+
+### v0.03 Performance Budgets
+
+| Preset | Target behaviour | Budget notes |
+| --- | --- | --- |
+| High / inspection | Highest relief detail, larger maps, raking inspection available | Accept higher GPU memory, but still avoid frame collapse on modern discrete GPUs |
+| Balanced | Matte faithful material, moderate detail, no excessive shader reads | Preserve 60 FPS target on mid-range discrete GPUs |
+| Battery | Albedo + low-cost normal only, no expensive high-res relief stack | Preserve old integrated GPU fallback and avoid thermal load |
+
+### v0.03 Accessibility / Fallback Requirements
+
+- Reduced-motion mode must keep inspection light still and must not animate relief/light direction.
+- High-contrast UI must remain readable with any new inspection controls.
+- Keyboard reset must remain available if free panning disorients the user.
+- If high-resolution procedural maps exceed device capability, fall back to balanced map sizes without changing the original albedo.
+- WebGL remains required; WebGPU stays experimental and unrelated to v0.03 acceptance.
+
+### v0.03 Validation Checklist
+
+- [ ] Albedo-only comparison confirms the source picture essence is preserved.
+- [ ] Default material is visibly rougher and less shiny than v0.02.
+- [ ] Raking/inspection light reveals bump/height/detail maps clearly.
+- [ ] Max zoom still shows fine stable relief detail.
+- [ ] No obvious procedural tiling/repetition at close inspection.
+- [ ] All four current aspect ratios allow edge and corner inspection.
+- [ ] Reduced motion disables light movement.
+- [ ] `npm run lint` passes.
+- [ ] `npm run build` passes and preview output is inspected.
+- [ ] Bundle and texture-memory impact are documented in `FINDINGS.md`.
+
+---
+
 ## v0.02 Scope — Advanced Painting Material Shaders & Experimental WebGPU
 
 ### v0.02 Implementation Status (this session)

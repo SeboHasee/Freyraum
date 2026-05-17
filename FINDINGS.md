@@ -143,6 +143,15 @@ Three.js' `normal_fragment_maps` chunk is structured as `if (USE_NORMALMAP_OBJEC
 - After `npm install`, `npm run build` passed successfully and regenerated the local preview. The build emitted the current Dart Sass legacy JS API deprecation warning.
 - `npm install` reported 2 moderate vulnerabilities in the dependency tree. No dependencies were changed in this audit pass, but the toolchain should be reviewed in a future dependency-maintenance slice.
 
+## 2026-05-17 - v0.03 follow-up visual QA findings
+
+- The original picture's essence must be treated as a hard invariant. v0.02 correctly keeps the albedo texture as the source image, but lighting, bloom, specular maps, clearcoat, and grazing boosts can still change perceived contrast and material character. v0.03 should therefore add explicit albedo-only / matte / inspection comparison checks.
+- The current default can read too shiny for rough canvas or dry paint. The relevant v0.02 contributors are `clearcoat: 0.04`, high-preset `specularStrength: 0.55`, `uLightGrazingBoost: 0.6`, low roughness values from procedural roughness, and sparse procedural specular blobs. v0.03 should retune toward matte-first rendering and make varnish an explicit opt-in finish.
+- Bump and height relief may be technically active but not perceptually visible enough. The current high preset uses `bumpStrength: 0.012`, balanced disables bump, and the procedural height map is 256 px. v0.03 should add a clear raking/inspection light path and higher-resolution relief maps before assuming the shader itself is broken.
+- Max-zoom relief needs a higher-resolution strategy than v0.02's 256 px procedural normal/detail/height maps. Mipmaps and anisotropy are necessary but not sufficient if the source procedural tile is too low resolution. v0.03 should target larger procedural maps and/or stable multi-octave shader-side detail.
+- The current pan model is intentionally conservative. `PAN_SAFETY_FACTOR = 0.92` keeps the artwork safely framed, but it prevents free edge/corner inspection at high zoom. v0.03 should replace this with an inspection-focused pan model that allows reaching every edge while preserving reset and safe escape behaviour.
+- No external research was needed for this planning update because the requested changes are directly grounded in the current Three.js/WebGL implementation and existing repository documentation. Future implementation may still research Three.js material tuning, derivative-based bump mapping, and GPU texture-memory limits before changing runtime code.
+
 ## Validation notes
 
 - This audit pass changed markdown documentation only; no runtime source files or dependencies were modified.

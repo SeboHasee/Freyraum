@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added (v0.03 planning)
+
+- Added a v0.03 follow-up plan in `plan.md` focused on preserving the original artwork's visual essence, reducing unwanted shininess, improving matte roughness, making bump/height/detail maps visibly respond to light, preserving high-resolution relief at maximum zoom, and freeing pan limits for edge/corner inspection.
+- Added v0.03 findings in `FINDINGS.md` documenting the likely v0.02 causes of the reported visual issues: specular/clearcoat/grazing response, low procedural map resolution, subtle bump strength, and conservative pan limits.
+- Updated `README.md` and `docs/HANDOFF.md` with v0.03 planning status and reviewer acceptance checks.
+
 ### Added (v0.02 implementation)
 
 - **`PaintingMaterial`** (`src/materials/PaintingMaterial.ts`) — extends `MeshPhysicalMaterial` and combines native Three.js features (`map`, `normalMap`, `roughnessMap`, `specularIntensityMap`, `bumpMap`, `aoMap`) with a minimal `onBeforeCompile` injection that does tangent-space detail-normal blending, an explicit `perturbNormalArb` after-pass so `normalMap` and bump coexist correctly, and a grazing-light boost gated by `PAINTING_USE_GRAZING_BOOST`. Reduced-motion mode flattens the detail contribution via the `uReducedMotionScalar` uniform without corrupting the normal basis.

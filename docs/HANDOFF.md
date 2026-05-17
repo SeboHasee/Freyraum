@@ -76,6 +76,18 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
 
+## v0.03 follow-up review focus
+
+v0.03 is currently a plan, not an implemented runtime change. Reviewers should use it to guide the next implementation pass after v0.02:
+
+- **Fidelity:** the source artwork image must remain the stable albedo reference; lighting/material response must not change the picture's essence.
+- **Matte surface:** default gallery view should read as rough canvas/dry paint, not shiny plastic or wet varnish.
+- **Visible relief:** bump/height/detail maps should be clearly visible in an inspection/raking-light mode.
+- **High zoom:** relief detail should remain crisp at maximum zoom without obvious 256 px tile blur or repetition.
+- **Free inspection:** close-up pan should allow reaching every edge and corner while preserving reset/escape controls.
+
+Acceptance for v0.03 should include albedo-only comparison screenshots, matte-default screenshots, raking-light screenshots, max-zoom relief screenshots, and edge/corner navigation checks for portrait, square, landscape, and ultrawide artworks.
+
 ## v0.02 shader, lighting, and WebGPU review guide
 
 v0.02 is **implemented** in this branch. Future reviewers should evaluate two independent lanes:

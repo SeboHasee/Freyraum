@@ -52,6 +52,18 @@ Final scope (all shipped except where noted):
 - ⏸ Real authored asset integration is deferred until scanned/painted assets are provided. The `Artwork.textureSet?` field is in place and requires no code changes to consume authored maps.
 - Performance targets: 60 FPS on mid-range discrete GPUs (balanced preset), 25 FPS minimum on old integrated GPUs (battery preset)
 
+## v0.03 follow-up plan
+
+v0.03 is planned, not yet implemented. It will address the latest visual QA feedback:
+
+- preserve the original artwork image as the unmodified visual source;
+- retune the material toward rough matte canvas instead of a shiny/varnished look;
+- make bump/height/detail maps visibly respond to raking light;
+- increase or redesign procedural relief detail so it remains crisp at maximum zoom;
+- loosen close-up pan limits so every edge and corner can be inspected freely.
+
+See [`plan.md`](./plan.md#v003-follow-up-plan--faithful-painting-inspection-rough-matte-surface-high-resolution-relief-and-free-edge-navigation) and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v003-follow-up-visual-qa-findings) for the full follow-up plan and audit findings.
+
 ## Developer workflow
 
 Install dependencies:
