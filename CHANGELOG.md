@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added (v0.04 implementation)
+
+- **Photorealistic procedural fallback pass.** Replaced the v0.03 `sin/cos` procedural normal, height, and roughness generators with deterministic value-noise maps so raking light no longer exposes checkerboard, cross-hatch, horizontal-band, or vertical-band artifacts.
+- **Neutral AO fallback.** Removed the procedural AO radial vignette and replaced it with near-white neutral occlusion plus subtle value-noise grain. Default/high-preset paintings no longer get fake dark edges from fallback AO.
+- **Clearcoat / varnish pipeline.** Added `clearcoatEnabled`, `clearcoatStrength`, and `clearcoatRoughnessValue` to quality presets; high enables subtle clearcoat, balanced and battery disable it.
+- **Authored varnish map contract.** Added optional `varnish` role to `PaintingMapRole`, `PaintingTextureSet`, `ResolvedPaintingTextures`, and `TextureManager.preloadTextureSet()`.
+- **Surface-profile wiring.** `PaintingMaterial.applySurfaceProfile()` now applies per-artwork matte/satin/varnish behavior, and `GalleryManager` calls it after race-protected artwork loads.
+- **Artwork metadata update.** All four artworks now declare `surfaceProfile`; `tokyo-passage` is `satin-canvas`, the others are `matte-canvas`.
+- **User-friendly surface labels.** `InfoPanel` now adds German material labels such as `Matte Leinwand` and `Satinierte Leinwand` to the artwork metadata line.
+- **High-preset height fallback fix.** Procedural height maps are generated whenever bump, parallax, or self-shadow needs them, so high-preset parallax/self-shadow no longer depends on authored maps.
+- Regenerated `customer-preview/freyraum-gallery.js` for the one-click local preview.
+- Updated `plan.md`, `FINDINGS.md`, `README.md`, and `docs/HANDOFF.md` with implementation outcome, review notes, and validation evidence.
+
 ### Updated (v0.04 plan — full technical execution guide)
 
 - **Rewrote v0.04 plan in `plan.md`** from a high-level strategy into an 11-slice, file-by-file technical execution guide. The new plan documents exact method names, line numbers, before/after code snippets, TypeScript constraints, and per-slice acceptance checks.

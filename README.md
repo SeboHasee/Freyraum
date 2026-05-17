@@ -70,24 +70,22 @@ Shipped system direction:
 - new "Beleuchtung" radio group in `PreferencesPanel` lets the visitor switch between the four lighting profiles; the choice is persisted to localStorage and mirrored to `data-lighting` on `<html>`;
 - `PAN_SAFETY_FACTOR=0.92` replaced with `INSPECTION_OVERSCROLL=0.5` so every artwork edge and corner is reachable at close zoom.
 
-## v0.04 planning
+## v0.04 implementation
 
-v0.04 is the next material-quality follow-up. The current branch still shows two open visual issues that need a dedicated pass:
+v0.04 is **implemented** in this branch. See [`plan.md`](./plan.md#v004-implementation-outcome) for the as-built outcome and [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v004-implementation-findings) for implementation notes.
 
-- vignette-like dark radial darkening on the painting surface;
-- an unnatural checkerboard / repetitive procedural pattern in the surface detail.
+Shipped material-quality improvements:
 
-The v0.04 plan in [`plan.md`](./plan.md#v004-implementation-and-execution-plan--photorealistic-pbr-painting-materials-and-artifact-removal) is now a **full file-by-file technical execution guide** — not a high-level strategy. It contains:
+- procedural AO no longer creates fake radial darkening at the artwork edges;
+- procedural normal, height, and roughness maps now use deterministic value noise instead of visible `sin/cos` checkerboard and cross-hatch patterns;
+- high preset now has preset-gated clearcoat support for subtle satin/varnish response;
+- `PaintingTextureSet` supports a future authored `varnish` map role;
+- all built-in artworks define a `surfaceProfile`; `tokyo-passage` uses `satin-canvas`, the others use `matte-canvas`;
+- the info panel now shows a user-friendly German surface label such as `Matte Leinwand` or `Satinierte Leinwand`;
+- high-preset parallax/self-shadow now always receives a fallback height map when needed;
+- the committed `customer-preview/` bundle was regenerated for the one-click `file://` workflow.
 
-- exact diagnoses with file names, method names, and line numbers for each visual bug;
-- before/after code for every fix (value-noise replacement for the sin/cos generators, AO vignette removal);
-- the complete `valueNoise2d()` + `latticeHash()` algorithm (no new npm dependency);
-- the clearcoat/varnish pipeline design (`QualityPreset` extension, `'varnish'` map role, `applySurfaceProfile()` method);
-- a performance contract table by preset;
-- an 11-file change summary;
-- acceptance checks with step-by-step validation instructions.
-
-Supporting code-level diagnosis and research are captured in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v004-plan-elevated-to-full-technical-execution-guide-code-audit).
+Validation: `npm run lint` and `npm run build` pass after `npm install`. The only output is the known TypeScript parser version warning and Dart Sass legacy JS API deprecation warning.
 
 ## Developer workflow
 

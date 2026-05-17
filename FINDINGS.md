@@ -1,5 +1,16 @@
 # FINDINGS
 
+## 2026-05-17 - v0.04 implementation findings
+
+- **The fake AO vignette is removed in code.** `ProceduralTextureFactory.generateAO()` now emits a neutral near-white AO texture (`237 + valueNoise * 18`) instead of computing `vignette = 1 - min(1, r2 * 0.55)`. This keeps the AO slot available while preventing procedural edge darkening on flat paintings.
+- **The procedural checkerboard source is removed in code.** `generateNormal()`, `generateHeight()`, and `generateRoughness()` now use deterministic smoothstep value noise. No `sin/cos` periodic fields remain in those three map generators.
+- **The noise path is dependency-free and deterministic.** `valueNoise2d()` interpolates integer lattice hashes from `latticeHash()` using `Math.imul` and unsigned bit mixing. The seed is derived from the existing artwork hash, so procedural maps stay stable across rebuilds and preset switches.
+- **Clearcoat is now preset-gated.** `QualityPreset` gained `clearcoatEnabled`, `clearcoatStrength`, and `clearcoatRoughnessValue`; only high enables clearcoat. Balanced and battery keep the material matte and avoid the clearcoat cost.
+- **Surface profiles are now functional metadata, not placeholders.** All built-in artworks set `surfaceProfile`, `GalleryManager` calls `PaintingMaterial.applySurfaceProfile()` after the race-protected load, and `InfoPanel` exposes a readable German surface label.
+- **The authored map contract now supports future varnish scans.** `PaintingTextureSet`, `PaintingMapRole`, `ResolvedPaintingTextures`, and `TextureManager.preloadTextureSet()` support a `varnish` role that maps to Three.js `clearcoatMap`.
+- **A high-preset height fallback gap was fixed.** `GalleryManager.shouldFillRole('height')` now generates a procedural height map whenever bump, parallax, or self-shadow needs it. This is required for reliable high-preset inspection without authored maps.
+- **Validation evidence:** after `npm install`, `npm run lint` passes with only the known TypeScript parser warning; `npm run build` passes with only the known Sass legacy JS API warning. The regenerated preview bundle is ≈ 555.05 KB (gzip ≈ 141.43 KB).
+
 ## 2026-05-17 - v0.04 plan elevated to full technical execution guide (code audit)
 
 The v0.04 section in `plan.md` has been rewritten from a high-level strategy into a file-by-file, function-by-function implementation guide. The following code-level findings drove the rewrite.
@@ -55,7 +66,7 @@ Research links captured for v0.04 planning:
 - CHS Open Source — Raking Light Photography: https://chsopensource.org/services/1-technical-photography-tp/raking-light-photography-rak/
 - Hamilton Kerr Institute — Lighting Techniques: https://www.hki.fitzmuseum.cam.ac.uk/about/services/photographicservices/lightingtechniques
 - Smithsonian MCI — Reflectance Transformation Imaging: https://mci.si.edu/reflectance-transformation-imaging
-- discoverthreejs — Physically Built Rendering: https://discoverthreejs.com/book/first-steps/physically-based-rendering/
+- discoverthreejs — Physically Based Rendering: https://discoverthreejs.com/book/first-steps/physically-based-rendering/
 - Three.js MeshPhysicalMaterial clearcoatMap: https://threejs.org/docs/#api/en/materials/MeshPhysicalMaterial.clearcoatMap
 - Rami James — Physically Based Rendering in Three.js: https://www.ramijames.com/learn-threejs/building-blocks/physically-based-rendering
 

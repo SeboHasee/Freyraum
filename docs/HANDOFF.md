@@ -75,33 +75,37 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
-## v0.04 planning focus
+## v0.04 review focus
 
-v0.04 is the next follow-up pass. It is **not implemented yet**. The v0.04 plan in `plan.md` is now a full **file-by-file technical execution guide** — not just a strategy document.
+v0.04 is **implemented**. Reviewers should evaluate the material-quality pass rather than the former plan.
 
-### Diagnosed issues (code-grounded)
+### What changed
 
-| # | Symptom | File | Method | Line(s) | Root cause |
-|---|---------|------|--------|---------|-----------|
-| 1 | Dark edges / vignette | `ProceduralTextureFactory.ts` | `generateAO()` | 207–213 | `vignette = 1 - min(1, r2 * 0.55)` — radial gradient applied as AO mask on a flat surface |
-| 2 | Checkerboard / cross-hatch | `ProceduralTextureFactory.ts` | `generateHeight()` | 119–121 | `Math.abs(sin(y*0.12))` + `Math.abs(sin(x*0.09))` = perfect H+V banding |
-| 2 | Checkerboard / cross-hatch | `ProceduralTextureFactory.ts` | `generateNormal()` | 95–98 | `sin(x*0.42f)*cos(y*0.38f)` octaves = visible 2D lattice |
-| 2 | Checkerboard / cross-hatch | `ProceduralTextureFactory.ts` | `generateRoughness()` | 145–148 | `sin×cos` at lower amplitude — periodic |
-| 3 | No surface-specific gloss | `PaintingMaterial.ts` / `artworks.ts` | constructor / artwork array | 89 / all | `clearcoat: 0.0` hard-coded; `surfaceProfile` field exists but is never set and never read |
+| Area | Shipped change | Reviewer expectation |
+|---|---|---|
+| Fake AO vignette | `generateAO()` now outputs neutral near-white AO with subtle deterministic noise | High preset should not darken painting corners by default |
+| Checkerboard / cross-hatch | `generateNormal()`, `generateHeight()`, and `generateRoughness()` now use value noise instead of periodic `sin/cos` fields | Raking light should reveal irregular surface detail, not a grid |
+| Varnish / clearcoat | `QualityPreset` gained clearcoat controls and `PaintingMaterial.applySurfaceProfile()` | High preset can show subtle satin response; balanced/battery stay matte and cheaper |
+| Texture contract | `PaintingTextureSet` gained optional `varnish` map role | Future scanned support-map packages can drive per-pixel varnish |
+| Artwork metadata | All four artworks set `surfaceProfile` | Info panel and material response agree on surface character |
+| User-facing metadata | `InfoPanel` shows German surface labels | Visitors understand the material style without shader/debug terminology |
+| Parallax height fallback | High preset generates height fallback whenever parallax/self-shadow needs it | Inspection detail works without authored maps |
 
-### v0.04 execution plan scope
+### Validation evidence
 
-11 files changed, no new npm dependencies, no GLSL changes:
+- `npm run lint` passes with the known TypeScript parser warning only.
+- `npm run build` passes with the known Sass legacy JS API warning only.
+- `customer-preview/freyraum-gallery.js` was regenerated (≈ 555.05 KB / 141.43 KB gzip).
+- No new dependencies were added.
+- Offline `file://` preview workflow remains unchanged.
 
-1. `ProceduralTextureFactory.ts` — 5 changes: fix `generateAO()`, `generateHeight()`, `generateNormal()`, `generateRoughness()`, add `valueNoise2d()` + `latticeHash()`.
-2. `quality.ts` — add `clearcoatEnabled`, `clearcoatStrength`, `clearcoatRoughnessValue` to `QualityPreset` and all three presets.
-3. `PaintingTextureSet.ts` — add `'varnish'` to `PaintingMapRole`, `PaintingTextureSet`, `ResolvedPaintingTextures`.
-4. `PaintingMaterial.ts` — wire clearcoat in `applyTextures()` and `applyPreset()`, add `applySurfaceProfile()`, update `activeMaps()`, import `SurfaceProfile`.
-5. `TextureManager.ts` — add `'varnish'` to preload roles.
-6. `GalleryManager.ts` — call `applySurfaceProfile()` after artwork load.
-7. `artworks.ts` — set `surfaceProfile` on all four artwork entries.
+### Visual review checklist
 
-Full slice-by-slice instructions (with before/after code snippets, TypeScript notes, and per-slice acceptance checks) are in [`plan.md`](./plan.md#v004-implementation-and-execution-plan--photorealistic-pbr-painting-materials-and-artifact-removal). Code-level findings are in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v004-plan-elevated-to-full-technical-execution-guide-code-audit).
+- [ ] Default `gallery-soft` view has no procedural dark radial falloff at artwork edges.
+- [ ] `raking-inspection` shows stochastic surface relief, not checkerboard or perfect H/V bands.
+- [ ] `tokyo-passage` shows a subtle satin response on high preset and returns to matte in balanced/battery.
+- [ ] Info panel surface labels read naturally in German.
+- [ ] `?debug=1` + `a` albedo-only comparison still proves source artwork colour fidelity.
 
 
 ## v0.03 review focus

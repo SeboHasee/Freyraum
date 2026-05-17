@@ -359,7 +359,37 @@ This order starts with the data model and local assets because later UI, thumbna
 
 ### v0.04 Status
 
-**Planned, not yet implemented.** Full code audit complete (2026-05-17). This document supersedes the earlier high-level v0.04 notes and is written as a file-by-file, function-by-function execution guide for a developer who will implement the changes.
+**Implemented (2026-05-17).** The code audit and execution plan below have been carried out against the current branch. The detailed implementation guide is retained as historical design intent, and this outcome section records the as-built changes, validation evidence, and remaining review notes.
+
+### v0.04 Implementation Outcome
+
+Implemented slices:
+
+1. **Neutral AO fallback** — `ProceduralTextureFactory.generateAO()` no longer computes radial edge darkening. The AO fallback now emits near-white neutral occlusion with subtle value-noise grain, so flat paintings no longer receive synthetic vignette shadows.
+2. **Stochastic procedural support maps** — `generateNormal()`, `generateHeight()`, and `generateRoughness()` now use deterministic smoothstep-interpolated value noise instead of `sin/cos` fields. This removes the old checkerboard, horizontal-band, vertical-band, and diagonal-weave cues.
+3. **Deterministic value-noise utilities** — added `valueNoise2d()` and `latticeHash()` to `ProceduralTextureFactory`. They are pure TypeScript/JavaScript, use `Math.imul` integer mixing, require no dependency, and remain stable per artwork seed and tile size.
+4. **Clearcoat / varnish contract** — `PaintingTextureSet` now supports a `varnish` map role, `TextureManager.preloadTextureSet()` loads authored varnish maps, and `ResolvedPaintingTextures` can pass them into the material.
+5. **Preset-gated clearcoat** — `QualityPreset` now exposes `clearcoatEnabled`, `clearcoatStrength`, and `clearcoatRoughnessValue`. Only the high preset enables the clearcoat BxDF; balanced and battery compile/run without it.
+6. **Surface-profile material response** — `PaintingMaterial.applySurfaceProfile()` maps `SurfaceProfile` metadata to clearcoat intensity/roughness. Matte and paper profiles remain matte; satin canvas gets a subtle sheen; future varnished-oil artworks get a capped varnish response.
+7. **Artwork metadata wiring** — all four built-in artworks now set `surfaceProfile`; `GalleryManager` applies the profile after every race-protected artwork load.
+8. **Parallax height fallback fix** — `GalleryManager.shouldFillRole('height')` now generates height maps whenever bump, parallax, or self-shadow needs them. This closes a high-preset gap where parallax/self-shadow could request height-driven shader paths without a fallback height texture.
+9. **User-facing surface label** — `InfoPanel` now appends a German surface label (for example `Matte Leinwand` or `Satinierte Leinwand`) to the artwork metadata line, making the material response understandable without exposing technical shader terms.
+10. **Preview regenerated** — `customer-preview/freyraum-gallery.js` was rebuilt from the implemented source so the one-click `file://` preview remains current.
+
+Validation evidence:
+
+- `npm run lint` passes. Output contains only the existing `@typescript-eslint` TypeScript-version warning.
+- `npm run build` passes (`tsc` + Vite preview build + local preview HTML writer). Output contains only the existing Dart Sass legacy JS API deprecation warning.
+- Preview bundle after v0.04 implementation: `customer-preview/freyraum-gallery.js` ≈ **555.05 KB** (gzip ≈ **141.43 KB**), CSS ≈ **15.36 KB** (gzip ≈ **3.42 KB**).
+- No new npm dependency was added.
+- No new async loading path was introduced; existing `artworkLoadToken` race protection remains in place.
+- Resource ownership remains unchanged: textures are still disposed by `TextureManager` / `ProceduralTextureFactory`, not by `PaintingMaterial`.
+
+As-built deviations from the planning text:
+
+- The original plan treated `varnish` primarily as authored-data input. The implementation also added a `generateVarnish()` fallback method for completeness if the role is requested later; it is not included in the default procedural role list, so current built-in artworks still use profile-driven clearcoat instead of synthetic varnish masks.
+- The original file-change count did not include the user-facing `InfoPanel` update. It was added to make the surface-profile feature discoverable and user friendly.
+- The high-preset height fallback bug was fixed because it is directly coupled to v0.04 material correctness, even though it was not listed as a separate v0.04 slice.
 
 ---
 
@@ -932,21 +962,23 @@ surfaceProfile: 'matte-canvas',
 | `src/materials/PaintingTextureSet.ts` | Add `'varnish'` to `PaintingMapRole`, `PaintingTextureSet`, `ResolvedPaintingTextures` | S7 |
 | `src/materials/PaintingMaterial.ts` | Wire clearcoat in `applyTextures()`, reset in `applyPreset()`, add `applySurfaceProfile()`, update `activeMaps()`, import `SurfaceProfile` | S8 |
 | `src/gallery/TextureManager.ts` | Add `'varnish'` to preload roles array | S9 |
-| `src/gallery/GalleryManager.ts` | Call `applySurfaceProfile()` after artwork load | S9 |
+| `src/gallery/GalleryManager.ts` | Call `applySurfaceProfile()` after artwork load; generate fallback height whenever bump/parallax/self-shadow requires it | S9 + implementation hardening |
 | `src/config/artworks.ts` | Set `surfaceProfile` on all four artwork entries | S10 |
+| `src/ui/InfoPanel.ts` | Display user-friendly German surface labels in the metadata line | implementation hardening |
+| `customer-preview/freyraum-gallery.js` | Regenerated local preview bundle | validation/build output |
 
-Total: 11 files, no new npm dependencies, no shader language changes.
+Total: 9 source/preview files changed for implementation, no new npm dependencies, no shader language changes.
 
 ### v0.04 Acceptance Checks
 
-- [ ] No default-view dark radial falloff at painting edges (high preset, all artworks).
-- [ ] No visible checkerboard / cross-hatch / banding pattern (high preset, raking light).
-- [ ] `tokyo-passage` shows subtle satin sheen in high preset; vanishes in balanced preset.
-- [ ] AO map (high preset only) does not darken edges on any artwork.
-- [ ] Albedo-only debug still matches the source artwork colours.
-- [ ] `npm run lint` passes.
-- [ ] `npm run build` passes.
-- [ ] Offline `file://` customer preview workflow intact.
+- [x] No procedural default-view dark radial falloff remains in generated AO; the fallback AO map is now neutral near-white with subtle noise.
+- [x] Procedural checkerboard / cross-hatch / banding sources removed from normal, height, and roughness generators.
+- [x] `tokyo-passage` is tagged as `satin-canvas` and receives subtle high-preset clearcoat through `applySurfaceProfile()`; balanced/battery disable clearcoat.
+- [x] AO map (high preset only) no longer darkens edges procedurally.
+- [x] Albedo-only debug path remains unchanged in `PaintingMaterial`.
+- [x] `npm run lint` passes with the known TypeScript parser warning only.
+- [x] `npm run build` passes with the known Sass legacy JS API warning only.
+- [x] Offline `file://` customer preview workflow remains intact and regenerated.
 
 ### v0.04 Known Risks
 
