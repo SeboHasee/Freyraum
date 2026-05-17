@@ -46,10 +46,12 @@ gallery). The previous manifest is backed up to `artworks.json.bak` so a bad
 import can be recovered manually. If the inbox is empty, the built-in demo
 artworks load instead.
 
-Current critical follow-up: v0.08 fixed the central 3D painting aspect ratio,
-but customer validation showed the actual uploaded image can still fall back to
-the generated placeholder on the 3D painting. Treat that as the v0.09 priority
-bug. The plan is documented in [`plan.md`](./plan.md#v009--actual-customer-image-on-the-3d-painting-planned).
+Current rendering follow-up: v0.10 is implemented for Hoch close-up spots,
+parallax hole artifacts, and reset framing on very vertical pictures. The fix
+keeps the real picture on stable UVs, makes parallax relief-only/subtler,
+retunes Hoch shadow/specular values, and computes reset zoom from framed artwork
+dimensions. See
+[`plan.md`](./plan.md#v010-follow-up--parallax-hole-artifact-fix-implemented).
 
 For the full architecture see
 [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).

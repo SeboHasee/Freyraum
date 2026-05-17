@@ -1,5 +1,112 @@
 # FINDINGS
 
+## 2026-05-17 — v0.10 follow-up: implemented — parallax hole artifacts
+
+### Customer-observed behavior
+
+After the first v0.10 spot fix, the customer reported **more artifacts** that
+looked like **holes**, with the same picture visible behind them. The customer
+suspected the parallax effect.
+
+### Root cause identified
+
+The suspicion was correct. In `PaintingMaterial.ts`, the parallax shader
+computed `pUV` from procedural height and then sampled the real artwork albedo
+with that shifted UV:
+
+```glsl
+vec4 sampledDiffuseColor = texture2D( map, pUV );
+```
+
+Because the height map is procedural and unrelated to the actual photo content,
+deep/recessed height areas displaced the image locally. This can look like a
+crater or hole showing a second, offset copy of the same picture behind the
+surface.
+
+### Fix implemented
+
+- `PaintingMaterial.ts`: albedo now samples stable `vMapUv`.
+- `PaintingMaterial.ts`: parallax `pUV` remains available only for relief maps
+  (normal/self-shadow), preserving picture fidelity.
+- `quality.ts`: Hoch `parallaxScale` reduced from `0.04` to `0.012`.
+- `GalleryManager.ts`: diagnostics now log `parallaxEnabled` and
+  `parallaxScale` in `show-artwork-complete`.
+- Preview bundle regenerated.
+
+Validation: `npm run lint` and `npm run build` pass with only the known
+TypeScript parser and Sass warnings.
+
+---
+
+## 2026-05-17 — v0.10: implemented — spot artifacts and portrait reset zoom
+
+### Customer-observed behavior
+
+Customer reports **little spots** visible at close-up zoom with **Hoch** quality
+preset. Balanced and battery do not reproduce the artifact. The screenshot URL
+returns `HTTP 404` from this sandbox; the analysis is code-derived.
+
+The customer also requested that especially very vertical pictures start far
+enough away. The old reset view used fixed `DEFAULT_CAMERA_Z = 7`, which could
+clip a fully framed portrait (`5.8` artwork height + `0.4` frame height) on the
+initial/reset view.
+
+### Root causes identified (code-derived with math)
+
+Full analysis in `plan.md` v0.10. Short summary:
+
+**Cause 1 (primary) — Height micro-noise creates stochastic shadow blockers**
+
+`ProceduralTextureFactory.generateHeight()` line 156:
+
+```ts
+const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31) * 16;
+```
+
+Frequency 0.55 at 1024 px → period ≈ 1.8 px (near Nyquist). The self-shadow
+march in `PaintingMaterial.ts` jumps ~5 pixels per step at 8 steps. Each step
+lands at a statistically independent micro-noise height. Pixels whose `_curH`
+sampled a micro-noise trough have all subsequent march samples appearing as
+blockers → **dark spot**. Current bias `0.03` is only half the micro amplitude
+`16/255 ≈ 0.063`, so micro-noise blockers are not suppressed.
+
+**Cause 2 (secondary) — Specular blob peak too high for Hoch close-up**
+
+`generateSpecular()` line 220:
+```ts
+const blob = Math.exp(-distSq / (radius * radius)) * 90;
+```
+
+With `specularStrength: 0.4` and clearcoat in Hoch, blob centers contribute
+`(90/255) × 0.4 ≈ 14%` specular intensity — visible as bright spots at close
+zoom under raking light.
+
+### Fix implemented
+
+| File | Line | Before | After | Reason |
+|------|------|--------|-------|--------|
+| `ProceduralTextureFactory.ts` | ~156 | `* 16` | `* 3` | max micro = 0.012 < bias 0.03, kills shadow speckle |
+| `ProceduralTextureFactory.ts` | ~220 | `* 90` | `* 50` | blob peak drops from 14% to 7.8% specular |
+| `quality.ts` Hoch | `selfShadowBias` | `0.03` | `0.05` | ×4 headroom over new micro amplitude |
+| `quality.ts` Hoch | `specularStrength` | `0.4` | `0.28` | combined blob contribution drops to 5.5% |
+
+Additional portrait/framing fix:
+
+- `GalleryManager.ts`: `MAX_CAMERA_Z` raised from `8.5` to `9.25`.
+- `GalleryManager.ts`: reset view now uses `getResetZoom()` based on framed
+  artwork dimensions (`artworkWidth + 0.4`, `artworkHeight + 0.4`) and camera
+  aspect/FOV, with a `1.04` safety margin.
+- `GalleryManager.ts`: first load and navigation set `pendingResetAfterArtworkLoad`
+  so reset zoom is recomputed after async artwork texture/aspect loading.
+- Diagnostics now include `resetZoom`, `minZoom`, `maxZoom`,
+  `specularStrength`, and `selfShadowBias`.
+
+No GLSL shader changes. No new public API. No schema changes. Balanced/battery
+unaffected by the spot tuning. Validation: `npm run lint` and `npm run build`
+pass with only the known TypeScript parser and Sass warnings.
+
+---
+
 ## 2026-05-17 — v0.09: implemented — uploaded image now on 3D painting
 
 ### What changed

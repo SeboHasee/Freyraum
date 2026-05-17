@@ -24,26 +24,21 @@ The importer scans the inbox, reads each file's dimensions, copies preview-ready
 files into the preview folder, generates metadata, and writes the runtime file
 the gallery actually reads.
 
-## Current v0.09 issue: timeline image works, 3D painting still shows placeholder
+## Current v0.10 rendering fix: Hoch close-up spots and portrait reset zoom
 
-Customer validation after v0.08 found an important remaining issue:
+v0.10 is implemented for occasional strange artifacts in close-up view when the
+quality / performance setting is **Hoch**, including the parallax follow-up for
+hole-like duplicated-picture patches. This is separate from the v0.09
+uploaded-image fix: still confirm that the image is not a fallback
+(`fallbackUsed: false`) and that `webglImageSource` is correct.
 
-- the timeline can show the uploaded image,
-- the central 3D painting can now have the correct aspect ratio,
-- but the central 3D painting may still show the generated placeholder instead
-  of the actual uploaded image.
-
-This means the manifest dimensions and timeline DOM image path are working, but
-the WebGL albedo texture path is still not reliable for local files in every
-browser. Online research confirms that WebGL texture upload is stricter than
-normal DOM image display: an image can be visible in `<img>` and still fail as a
-WebGL texture because of origin-clean / local-file / format restrictions.
-
-The v0.09 plan in `/home/runner/work/Freyraum/Freyraum/plan.md` proposes the
-reliable fix: the importer should add an exact base64 `data:image/...` field
-(`webglImage`) for the 3D painting albedo. This does not crop, stretch, resize,
-or recompress the picture; it only encodes the original bytes into the generated
-gallery data so WebGL no longer has to upload from a `file://` image path.
+The implemented fix reduces procedural height micro-noise and specular blob
+peaks, keeps albedo on stable UVs instead of parallax-shifted UVs, reduces Hoch
+parallax scale, raises Hoch self-shadow bias, lowers Hoch specular strength, and
+computes reset zoom from the framed artwork dimensions. For support, use
+`?debug=info` and inspect `show-artwork-complete` for `resetZoom`, `minZoom`,
+`maxZoom`, `parallaxScale`, `specularStrength`, `selfShadowBias`,
+`fallbackUsed`, and `webglImageSource`.
 
 ## Folder and file roles
 

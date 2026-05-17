@@ -153,7 +153,7 @@ export class ProceduralTextureFactory {
         const idx = (y * size + x) * 4;
         const macro = this.valueNoise2d(x * 0.04, y * 0.04, seed) * 90;
         const mid = this.valueNoise2d(x * 0.12, y * 0.09, seed + 7) * 40;
-        const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31) * 16;
+        const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31) * 3;
         const h = this.clamp8(macro + mid + micro);
         data[idx + 0] = h;
         data[idx + 1] = h;
@@ -191,8 +191,8 @@ export class ProceduralTextureFactory {
   }
 
   /**
-   * Subtle specular variation (v0.03 retune): baseline ~6 with gentle blobs
-   * peaking at ~90 instead of dominating Gaussian highlights. Keeps the
+   * Subtle specular variation (v0.10 retune): baseline ~6 with gentle blobs
+   * peaking at ~50 instead of dominating Gaussian highlights. Keeps the
    * painting matte by default while still letting varnish patches catch
    * grazing light.
    */
@@ -217,7 +217,7 @@ export class ProceduralTextureFactory {
           const dx = x - cx;
           const dy = y - cy;
           const distSq = dx * dx + dy * dy;
-          const blob = Math.exp(-distSq / (radius * radius)) * 90;
+          const blob = Math.exp(-distSq / (radius * radius)) * 50;
           const idx = (y * size + x) * 4;
           const r = this.clamp8(data[idx] + blob);
           data[idx + 0] = r;

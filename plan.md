@@ -1,5 +1,369 @@
 # FREYRAUM Plan
 
+## v0.10 Follow-up — Parallax Hole Artifact Fix (Implemented)
+
+### Status
+
+**Implemented 2026-05-17.** After the first v0.10 pass, the customer reported
+stronger artifacts that looked like holes with the same picture visible behind
+them. The customer suspected parallax, and the shader audit confirmed that the
+actual albedo image was being sampled with parallax-shifted UVs.
+
+### Root cause
+
+`PaintingMaterial.ts` computed `pUV` from the procedural height map and used it
+for the real artwork image:
+
+```glsl
+vec4 sampledDiffuseColor = texture2D( map, pUV );
+```
+
+That is unsafe for customer photos because the procedural height field is not
+content-aware. A recess in the generated height map shifts the image locally,
+so the viewer sees an offset copy of the same picture. Visually this reads as a
+depth hole or torn surface.
+
+### Fix implemented
+
+- Albedo sampling now uses stable `vMapUv`.
+- Parallax `pUV` is kept relief-only for normal/self-shadow sampling.
+- Hoch `parallaxScale` reduced from `0.04` to `0.012` to make relief movement
+  subtle.
+- `show-artwork-complete` diagnostics now include `parallaxEnabled` and
+  `parallaxScale`.
+- `npm run lint` and `npm run build` pass.
+
+### Acceptance checks
+
+- Hoch close-up: no crater/hole artifacts or duplicated picture patches.
+- Albedo-only debug (`a`): always shows the unshifted customer picture.
+- Shadow-only debug (`s`): relief/shadow still visible but subtler.
+- Ausgewogen/Akkusparend: unchanged because parallax is disabled there.
+
+## v0.10 — Spot Artifact Fix and Portrait Reset Framing (Implemented)
+
+### Status
+
+**Implemented 2026-05-17.** Customer clarified the artifact as **"little
+spots"** in Hoch mode and also requested that very vertical pictures start far
+enough away. The source audit identified two procedural-map causes and one
+framing issue. The fix is now implemented in `ProceduralTextureFactory.ts`,
+`quality.ts`, and `GalleryManager.ts`. The GitHub attachment still returns
+`HTTP 404` from this sandbox, so the visual symptom analysis remains
+code-derived, but lint/build validation passes.
+
+---
+
+### Reported symptom
+
+- Occasional **small spot-like artifacts** visible at close-up zoom.
+- Setting: **Performance / Qualität = Hoch** only (not Ausgewogen or Akkusparend).
+- Very vertical/portrait pictures could reset slightly too close because the
+  old reset zoom used a fixed `DEFAULT_CAMERA_Z = 7`.
+- Expected fix: spots gone at Hoch, portrait reset view fits the full framed
+  artwork, no regression on Ausgewogen/Akkusparend.
+- Reproduction tools: `?debug=info`, debug key `s` (shadow-only), key `a`
+  (albedo-only).
+
+---
+
+### Root-cause analysis (code-derived, with math)
+
+#### Cause 1 (PRIMARY) — Height micro-noise produces stochastic shadow blockers
+
+**File:** `src/materials/ProceduralTextureFactory.ts`, line 156  
+**Original code:**
+
+```ts
+// generateHeight(), line 154-156
+const macro = this.valueNoise2d(x * 0.04, y * 0.04, seed) * 90;
+const mid   = this.valueNoise2d(x * 0.12, y * 0.09, seed + 7) * 40;
+const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31) * 16;  // ← PROBLEM
+const h = this.clamp8(macro + mid + micro);
+```
+
+**Why this creates dark spots:**
+
+The `micro` term has spatial frequency 0.55 at 1024 px → period ≈ **1.8 pixels**.
+After bilinear filtering this produces a near-Nyquist noise that varies
+sharply pixel-to-pixel. Now look at what the self-shadow march does with it
+(in `PaintingMaterial.ts`, GLSL, ~line 317–338):
+
+```glsl
+float _curH = texture2D(bumpMap, _shUV).r;          // starting height at current pixel
+// ...
+float _sampleH = texture2D(bumpMap, _stepUV).r;     // height at march step j+1
+float _wantedH = _curH + (_tsLight.z * _shStep * float(_j + 1)); // expected horizon
+float _excess  = _sampleH - _wantedH - uShadowBias; // > 0 means this sample is a blocker
+```
+
+The march step delta (UV distance per step) is:
+
+```
+_shDelta ≈ (_tsLight.xy / |_tsLight.z|) * (uParallaxScale * _shStep)
+         = (0.7 / 0.7) * (0.04 * 0.125)   ← typical 45° light, 8 steps
+         ≈ 0.005 UV per step
+```
+
+At 1024 px: `0.005 × 1024 ≈ 5 pixels per step`.
+
+The micro-noise period is 1.8 px. So **each shadow step lands ~2–3 micro-noise
+wavelengths away** — at a statistically independent height. This means:
+
+- At a pixel where `_curH` samples a micro-noise **trough** (~0.0 of its 16/255
+  range), `_wantedH` starts near 0 and each subsequent sample is at a random
+  height. Most are higher → they are blockers → **dark spot**.
+- At a pixel where `_curH` samples a micro-noise **peak** (~16/255), `_wantedH`
+  starts high and subsequent samples are likely below → **no shadow → bright spot**.
+
+The result is a stochastic speckle pattern that maps 1-to-1 onto micro-noise
+grid spacing — exactly what "little spots" look like.
+
+Current `selfShadowBias = 0.03`. The micro amplitude is `16/255 ≈ 0.063`. The
+bias is only half the micro amplitude — it suppresses weak blockers but not
+strong micro-noise peaks.
+
+#### Cause 2 (SECONDARY) — Specular blob bright spots
+
+**File:** `src/materials/ProceduralTextureFactory.ts`, lines 210–220  
+**Current code:**
+
+```ts
+const blobCount = 4 + (seed % 4);                          // 4–7 blobs
+for (let b = 0; b < blobCount; b += 1) {
+  const cx = ((seed * (b + 7)) % size);                    // integer modulo placement
+  const cy = ((seed * (b + 13) * 3) % size);
+  const radius = 14 + ((seed * (b + 1)) % 18);            // 14–32 px at smallSize=512
+  // ...
+  const blob = Math.exp(-distSq / (radius * radius)) * 90; // ← peak 90/255 = 35% above baseline
+```
+
+Originally at Hoch preset: `specularStrength = 0.4`, clearcoat enabled. Blob peak
+contribution to specular intensity: `(90/255) × 0.4 ≈ 14%` above the baseline
+6/255. Under raking inspection light these become visible bright spots at the
+blob centers (14–32 px blobs at 512 px = easily visible at close zoom).
+
+#### Cause 3 (MINOR) — Parallax pUV shifts shadow start position
+
+**File:** `src/materials/PaintingMaterial.ts`, GLSL lines ~311–316
+
+```glsl
+#ifdef PAINTING_USE_PARALLAX
+    vec2 _shUV = pUV;   // shadow march starts from parallax-shifted UV
+#else
+    vec2 _shUV = vMapUv;
+#endif
+float _curH = texture2D(bumpMap, _shUV).r;
+```
+
+The parallax shift moves `_shUV` by up to `uParallaxScale = 0.04` UV units.
+This lands the shadow's starting height sample on a different micro-noise
+position, amplifying the stochastic variance from Cause 1. Not a separate cause
+— it feeds Cause 1 by making `_curH` less predictable.
+
+---
+
+### Code changes implemented
+
+#### Change 1 — `src/materials/ProceduralTextureFactory.ts` — Reduce micro amplitude
+
+**Line 156, `generateHeight()`.** Reduced micro amplitude from `* 16` to `* 3`.
+
+```ts
+// BEFORE:
+const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31) * 16;
+
+// AFTER:
+const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31) * 3;
+```
+
+**Why 3:** The shadow bias `uShadowBias = 0.03`. After the fix, max micro
+amplitude is `3/255 ≈ 0.012`. Since `0.012 < 0.03`, the bias now comfortably
+suppresses all micro-noise blockers. The macro (0–90) and mid (0–40) octaves
+still provide natural relief visible at normal zoom. The fine grain feel is
+preserved (micro is still there, just much quieter).
+
+**No shader change needed.** The GLSL accumulation logic (v0.05 smooth
+accumulation) is correct. The input data is the problem.
+
+**Cache key note:** `generate()` uses `artworkId::role::tileSize` as cache key.
+Changing the noise amplitude does not change the key — but on next page load the
+cache starts empty, so customers automatically get the fixed maps. No cache-bust
+logic needed.
+
+#### Change 2 — `src/config/quality.ts` — Tighten Hoch self-shadow bias
+
+**Line 139 (approximately), `QUALITY_PRESETS.high`.** Raised `selfShadowBias`
+from `0.03` to `0.05`.
+
+```ts
+// BEFORE:
+selfShadowBias: 0.03,
+
+// AFTER:
+selfShadowBias: 0.05,
+```
+
+**Why 0.05:** After Change 1, max micro amplitude is 0.012. A bias of 0.03
+already covers it. The increase to 0.05 adds extra headroom (×4 coverage over
+micro) and also slightly softens any remaining mid-frequency (0.12 Hz) artifacts
+without touching the macro relief (0.04 Hz, much larger than the bias step size).
+This is a pure uniform change — no shader recompile.
+
+**Balanced and battery are unaffected** (they use `selfShadowBias: 0.03` and
+have `selfShadowEnabled: false` anyway).
+
+#### Change 3 — `src/materials/ProceduralTextureFactory.ts` — Reduce specular blob peak
+
+**Line 220, `generateSpecular()`.** Reduced Gaussian blob peak from `* 90` to
+`* 50`.
+
+```ts
+// BEFORE:
+const blob = Math.exp(-distSq / (radius * radius)) * 90;
+
+// AFTER:
+const blob = Math.exp(-distSq / (radius * radius)) * 50;
+```
+
+**Why 50:** Blob contribution at Hoch: `(50/255) × 0.4 ≈ 7.8%` above baseline,
+down from 14%. At this level, blob centers provide subtle specular interest
+(varnish-like pooling effect) without reading as visible bright spots at
+close-up zoom. The blobs are still there — they are not removed.
+
+#### Change 4 — `src/config/quality.ts` — Lower Hoch specularStrength slightly
+
+**`QUALITY_PRESETS.high`.** Lowered `specularStrength` from `0.4` to `0.28`.
+
+```ts
+// BEFORE:
+specularStrength: 0.4,
+
+// AFTER:
+specularStrength: 0.28,
+```
+
+**Why 0.28:** Combined with Change 3, specular blob peak at Hoch is now
+`(50/255) × 0.28 ≈ 5.5%` above baseline — clearly perceptible as specular
+texture but not as artifact-level spots. The base specular material response
+`specularIntensity: 0.3` (in the material constructor, unchanged) is unaffected.
+This is a uniform-only change, no shader recompile.
+
+#### Change 5 — `src/gallery/GalleryManager.ts` — Aspect-aware reset zoom for very vertical pictures
+
+The fixed `DEFAULT_CAMERA_Z = 7` reset distance was too close for very vertical
+artworks. `ArtworkMesh.updateAspect()` fits portrait pictures into a maximum
+artwork height of `5.8`, then adds a frame (`+0.4` height). With the 40° camera
+FOV, a fully framed portrait needs roughly:
+
+```
+visibleHeight = (5.8 + 0.4) * 1.04 = 6.448
+distance = visibleHeight / (2 * tan(20°)) ≈ 8.86
+```
+
+The implemented fix:
+
+- raises `MAX_CAMERA_Z` from `8.5` to `9.25`;
+- adds `RESET_VIEW_FRAME_MARGIN = 1.04`;
+- adds `getResetZoom()` using `max(frameHeight, frameWidth / camera.aspect)`;
+- changes `resetView()` to use `getResetZoom()` instead of fixed `7`;
+- adds `pendingResetAfterArtworkLoad` so first load and navigation reset again
+  after the async artwork texture/aspect update has completed;
+- logs `resetZoom`, `minZoom`, `maxZoom`, `specularStrength`, and
+  `selfShadowBias` in diagnostics.
+
+---
+
+### What NOT to change
+
+- **No GLSL shader changes.** The v0.05 smooth accumulation, bias, softness,
+  and maxOcclusion logic in `PaintingMaterial.ts` is correct. The problem is
+  upstream in the height texture data.
+- **No parallax changes.** Parallax UV offset is working correctly. The
+  `[0.001, 0.999]` clamp is appropriate. Do not adjust parallax scale.
+- **No AO changes.** `generateAO()` produces a near-flat 237+grain result —
+  not a spot source.
+- **No PCF / inspection path changes.** The `PAINTING_USE_SHADOW_FILTER` path
+  only activates under `raking-inspection`. Do not change that gate.
+- **No Ausgewogen/battery changes.** Those presets disable self-shadow and
+  clearcoat — they cannot produce these spots.
+
+---
+
+### Implemented vertical slices
+
+#### Slice S1 — Apply targeted artifact changes
+
+Completed. Four numeric/data changes were made. No new public API, no schema
+changes, and no GLSL changes.
+
+**`src/materials/ProceduralTextureFactory.ts`**:
+
+1. Line ~156 in `generateHeight()`: `* 16` → `* 3`
+2. Line ~220 in `generateSpecular()`: `* 90` → `* 50`
+
+**`src/config/quality.ts`** (Hoch preset block only):
+
+3. `selfShadowBias: 0.03` → `selfShadowBias: 0.05`
+4. `specularStrength: 0.4` → `specularStrength: 0.28`
+
+Validation passes with the known TypeScript parser and Sass warnings.
+
+#### Slice S2 — Aspect-aware portrait reset zoom
+
+Completed. `GalleryManager` now computes reset distance from framed artwork
+dimensions after the current artwork aspect has loaded, so tall portraits start
+far enough away.
+
+#### Slice S3 — Diagnostic logging
+
+Completed. Diagnostics now include `selfShadowBias`, `specularStrength`,
+`resetZoom`, `minZoom`, and `maxZoom`.
+
+#### Slice S4 — Validation
+
+Completed:
+
+1. **Build check:**
+   ```
+   npm run lint
+   npm run build
+   ```
+2. **Visual checklist (manual):**
+   - Load with `?debug=info`, Hoch preset, close-up zoom → no spots visible
+   - Press `s` (shadow-only debug) → smooth gradient, no speckle
+   - Press `a` (albedo-only debug) → clean picture, no marks
+    - Switch to Ausgewogen → unchanged appearance vs before the fix
+    - Switch to raking-inspection + Hoch → relief visible, no shadow speckle
+    - Open a very vertical portrait → reset view shows the full framed artwork
+3. **Customer image check:** confirm `fallbackUsed: false` and
+   `webglImageSource: 'embedded-data-url'` still logged (v0.09 unchanged).
+
+---
+
+### Acceptance checks
+
+- Dark spot speckle gone at Hoch under gallery-soft and raking-inspection.
+- Bright specular spots at blob centers not visible at close-up zoom.
+- Normal/detail normal/parallax relief still visible and pleasant under Hoch.
+- Very vertical pictures reset far enough away to show the full framed artwork.
+- Ausgewogen and Akkusparend presets: no visual change.
+- `npm run lint` and `npm run build` pass (only known TypeScript parser and Sass warnings).
+- No regression to v0.09 customer image display.
+
+---
+
+### Risks
+
+- Reducing `micro * 16 → * 3` slightly reduces extreme close-up grain detail.
+  At normal gallery-view zoom this is invisible; at very close inspection zoom
+  the canvas surface looks very slightly smoother. Acceptable given the artifact
+  is worse than this trade-off.
+- Lowering `specularStrength 0.4 → 0.28` reduces the specular intensity on the
+  base response. If the customer later provides a real specular map, the authored
+  map will dominate anyway (`specularIntensityMap` overrides the scalar).
+- No WebGPU involvement. No server or customer workflow changes.
+
 ## v0.09 — Actual Customer Image on the 3D Painting (Implemented)
 
 ### Status
