@@ -42,10 +42,10 @@ export class GalleryManager {
   async init(): Promise<void> {
     const urls = artworks.map((a) => a.image);
     await this.textureManager.preload(urls);
-    this.showArtwork(0, false);
+    this.showArtwork(0);
   }
 
-  private showArtwork(index: number, _animate: boolean = true): void {
+  private showArtwork(index: number): void {
     const artwork = artworks[index];
     const texture = this.textureManager.get(artwork.image);
     if (texture) {

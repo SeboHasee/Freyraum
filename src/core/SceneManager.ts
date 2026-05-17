@@ -5,7 +5,7 @@ export class SceneManager {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
 
-  constructor(_rendererManager: RendererManager) {
+  constructor(_rendererManager?: RendererManager) {
     this.scene = new THREE.Scene();
 
     this.camera = new THREE.PerspectiveCamera(
