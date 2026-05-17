@@ -18,6 +18,14 @@ The customer preview is built as a classic browser script, not a Vite module ent
 
 > Note: The current customer preview uses embedded placeholder artwork, so the initial demo can open offline. Replace these placeholders with final local artwork assets before a real customer presentation.
 
+## Current interaction behavior
+
+- mouse wheel / pinch: zoom with dynamic safety limits
+- mouse drag / one-finger touch while zoomed: pan within artwork bounds
+- mouse move: subtle artwork hover reaction at every zoom level
+- left/right arrows and side previews: navigate artworks
+- touch swipe when not zoomed in: navigate artworks
+
 ## Developer workflow
 
 Install dependencies:
@@ -54,4 +62,9 @@ npm run lint
 
 ## Documentation
 
-See [`plan.md`](./plan.md) for findings, the local-preview fix, and the future customer-showcase plan.
+This repository now follows a documentation-first rule for future development.
+
+- [`plan.md`](./plan.md) — current plan, implemented work, and next-step scope
+- [`CHANGELOG.md`](./CHANGELOG.md) — shipped changes by version/date
+- [`FINDINGS.md`](./FINDINGS.md) — technical findings, caveats, and validation notes
+- [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md) — required documentation process for future work

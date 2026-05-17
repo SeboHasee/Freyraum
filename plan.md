@@ -1,49 +1,98 @@
-# FREYRAUM Local Customer Preview Plan
+# FREYRAUM Plan
+
+## Documentation Rule
+
+For this repository, every meaningful implementation must update the markdown documentation together with the code.
+
+Minimum documentation updates for future work:
+
+- update `plan.md` with current scope, findings, implemented items, and remaining items
+- update `CHANGELOG.md` with a dated summary of shipped changes
+- update `FINDINGS.md` with important technical observations and limitations
+- update `README.md` when user-facing setup, controls, or workflow changes
+- update `DOCUMENTATION_RULES.md` when the documentation process itself changes
+
+## Current Baseline
+
+- Root `index.html` is the one-click local launcher.
+- `customer-preview/app.html` is the committed local customer preview.
+- `app.html` is the Vite development entry.
+- The local preview is built as a classic IIFE bundle so it works from `file://`.
+- Demo artwork is currently embedded placeholder content for offline preview stability.
 
 ## Findings
 
-- The previous root `index.html` was a Vite development entry.
-- It referenced `/src/main.ts`, which is TypeScript source code and requires Vite to transform imports, SCSS, and TypeScript before the browser can run it.
-- When opened directly with a double click (`file://`), the browser cannot resolve the Vite `/src/main.ts` entry or bare module imports such as `three`, so the page appears blank.
-- The application itself is not the issue; the problem is the distribution method.
+### Local Preview Findings
 
-## Immediate Fix
+- A Vite dev entry cannot be opened directly from `file://` because the browser cannot execute the raw TypeScript/module graph.
+- A committed preview build is required if the customer should be able to launch the demo with one click.
+- Relative script/style paths and a classic script bundle are the safest local preview format.
 
-- Keep the Vite/TypeScript source application in `app.html` for development and production builds.
-- Convert root `index.html` into a local one-click launcher.
-- Build the customer-ready static version into `customer-preview/`.
-- Use an IIFE/classic-script bundle for the customer preview because ES module bundles can be blocked or behave inconsistently when opened directly from `file://`.
-- Post-process the generated preview bundle to replace non-security `Math.random()` calls inherited from bundled dependencies with `crypto.getRandomValues`-backed randomness where available.
-- Commit `customer-preview/` so a downloaded ZIP can be opened locally without installing Node.js.
+### Interaction Findings
 
-## How to Show the Website to a Customer
+- Previous zoom limits allowed the camera to move too close to the artwork plane.
+- Previous pan limits were hardcoded and did not respond to aspect ratio or current zoom level.
+- Portrait artworks therefore hit vertical inspection limits too early, while extreme zoom could reveal empty space.
+- The side preview meshes used a fixed geometry size, which stretched non-square artwork ratios.
+- Touch interaction only supported swipe navigation and pinch zoom; it did not support one-finger pan while zoomed in.
 
-1. Download or copy the repository folder.
-2. Double-click `index.html` in the repository root.
-3. The browser opens `customer-preview/app.html` automatically.
-4. If the redirect is blocked, click the visible “FREYRAUM Vorschau öffnen” button.
+## Implemented Now
 
-## Important Notes
+### Local Preview Foundation
 
-- The preview works without a local web server because it uses a classic `<script src="./freyraum-gallery.js">` bundle instead of a browser ES module entry.
-- The customer preview no longer depends on remote demo images. Artwork placeholders are embedded as SVG data URIs so the first customer demo can open offline.
-- Future customer/offline demos should replace the embedded placeholders with optimized local brand-approved artwork assets in `src/assets/` or `public/assets/`.
-- WebGL support is required. Very old browsers or disabled GPU acceleration can still prevent the 3D scene from rendering.
+- Added a one-click local launcher in root `index.html`.
+- Added committed static preview output in `customer-preview/`.
+- Added a separate Vite development entry in `app.html`.
+- Added `vite.local.config.ts` and preview HTML generation.
+- Replaced remote preview dependencies with embedded placeholder artwork and procedural material input for reliable offline demos.
 
-## Future Implementation Plan
+### Interaction & Gallery Fixes
 
-- Replace embedded SVG placeholders with final local optimized artwork assets for the customer presentation.
-- Add compressed texture variants for production delivery.
-- Add a small preflight screen that checks WebGL support and shows a friendly fallback message.
-- Add quality presets for integrated GPUs and battery-saving devices.
-- Add CMS-ready data loading while keeping a local JSON fallback for demos.
-- Add a deployment target such as GitHub Pages or Netlify for customer links.
-- Add automated visual smoke testing for the customer preview build.
+- Added shared texture sizing helpers in `src/utils/texture.ts`.
+- Main artwork sizing now stores fitted artwork width/height after aspect-ratio preservation.
+- Zoom is now clamped dynamically so the camera cannot move through or unrealistically inside the artwork.
+- Pan is now clamped from real artwork dimensions, camera FOV, viewport aspect ratio, and current zoom level.
+- Mouse hover rotation now stays available at every zoom level, with reduced intensity during deeper zoom.
+- Mouse drag now pans when panning is possible and falls back to subtle rotation behavior when not.
+- Touch interaction now supports one-finger panning when zoomed in and swipe navigation when not zoomed in.
+- Side preview panels now preserve aspect ratio instead of stretching textures.
+
+## v0.01 Scope
+
+### v0.01 Implemented
+
+- local one-click customer preview
+- offline-safe placeholder artwork setup
+- dynamic zoom clamp
+- dynamic pan clamp
+- touch pan while zoomed
+- aspect-ratio-safe side previews
+- documentation baseline for changelog, findings, and rules
+
+### v0.01 Still Open But Realistic In One Pass With Claude 4.7 Or GPT 5.5
+
+- replace placeholder artworks with final local optimized assets
+- add reduced-motion mode and higher-contrast overlay treatment
+- add explicit zoom UI controls and reset-view control
+- add focus styles and keyboard-accessible timeline selection
+- add a lightweight WebGL support fallback screen
+- add quality presets for integrated GPU / battery-saving mode
+- add timeline thumbnail aspect-ratio handling and loading states
+- add fullscreen toggle and presentation mode polish
+- add structured artwork metadata model for future CMS integration
+- add documentation screenshots or architecture diagrams for customer handoff
+
+## Future Phases After v0.01
+
+- advanced canvas shader refinement
+- content management integration
+- multilingual content pipeline
+- audio narration and accessibility audio layer
+- analytics and multi-gallery support
+- experimental WebGPU / VR path
 
 ## Verification Notes
 
-- `npm run build` generates `customer-preview/freyraum-gallery.js`, `customer-preview/style.css`, and `customer-preview/app.html`.
-- `customer-preview/app.html` uses a classic script tag and relative paths, so it is safe for local `file://` opening.
-- The build pipeline is split into `build:typecheck`, `build:preview`, and `build:preview-html` for easier debugging. The main `npm run build` chain intentionally uses `&&`, so `build:preview-html` only runs after type checking and preview bundling succeed.
-- A headless Chromium smoke test against `file:///home/runner/work/Freyraum/Freyraum/customer-preview/app.html` produced a non-blank screenshot at `/tmp/freyraum-local-preview-offline.png`.
-- `npm run lint` passes; it only prints a known TypeScript parser support warning from the current dependency versions.
+- `npm run build` should regenerate the committed local customer preview.
+- `npm run lint` should remain clean except for the known TypeScript parser support warning from current dependency versions.
+- Interaction fixes should be manually tested in both `npm run dev` and by opening root `index.html` locally.
