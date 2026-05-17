@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --open /app.html",
+    "dev": "vite --open app.html",
     "build": "npm run build:typecheck && npm run build:preview && npm run build:preview-html",
-    "preview": "vite preview --outDir customer-preview --open /app.html",
+    "preview": "vite preview --outDir customer-preview --open app.html",
     "lint": "eslint src --ext ts",
     "format": "prettier --write src",
     "build:typecheck": "tsc",

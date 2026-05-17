@@ -7,6 +7,7 @@ export class CanvasMaterial {
     if (this.normalTexture) return this.normalTexture;
 
     const canvas = document.createElement('canvas');
+    // 128×128 keeps procedural generation cheap while repeating cleanly across the artwork surface.
     canvas.width = 128;
     canvas.height = 128;
     const ctx = canvas.getContext('2d');

@@ -3,8 +3,8 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   base: './',
   build: {
-    outDir: 'customer-preview',
-    target: 'esnext',
+    outDir: 'dist',
+    target: 'es2018',
     minify: 'esbuild',
     rollupOptions: {
       input: 'app.html',

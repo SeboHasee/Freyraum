@@ -12,7 +12,7 @@ interface EmbeddedArtworkOptions {
   background: string;
   accent: string;
   secondary: string;
-  horizon?: number;
+  horizonPercent?: number;
 }
 
 const embeddedArtwork = ({
@@ -22,11 +22,11 @@ const embeddedArtwork = ({
   background,
   accent,
   secondary,
-  horizon = 58,
+  horizonPercent = 58,
 }: EmbeddedArtworkOptions): string => {
   const maxDimension = Math.max(width, height);
   const minDimension = Math.min(width, height);
-  const horizonY = height * (horizon / 100);
+  const horizonY = height * (horizonPercent / 100);
   const signatureX = width * 0.06;
   const signatureY = height * 0.92;
   const signatureSize = maxDimension * 0.035;
@@ -73,7 +73,7 @@ export const artworks: Artwork[] = [
       background: '#dfe5e9',
       secondary: '#9fb0ba',
       accent: '#c8b690',
-      horizon: 54,
+      horizonPercent: 54,
     }),
   },
   {
@@ -88,7 +88,7 @@ export const artworks: Artwork[] = [
       background: '#eef1f3',
       secondary: '#c9d4d8',
       accent: '#a6b4ae',
-      horizon: 62,
+      horizonPercent: 62,
     }),
   },
   {
@@ -102,7 +102,7 @@ export const artworks: Artwork[] = [
       background: '#e8e3da',
       secondary: '#b8c1c5',
       accent: '#8b9497',
-      horizon: 48,
+      horizonPercent: 48,
     }),
   },
   {
@@ -117,7 +117,7 @@ export const artworks: Artwork[] = [
       background: '#f0ece4',
       secondary: '#d8c7a5',
       accent: '#a98f6d',
-      horizon: 57,
+      horizonPercent: 57,
     }),
   },
 ];
