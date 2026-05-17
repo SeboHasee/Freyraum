@@ -26,6 +26,8 @@ and double-clicking one button. No code editing, no terminal.
 
 Customer guide: [`docs/CUSTOMER_PICTURE_GUIDE.md`](./docs/CUSTOMER_PICTURE_GUIDE.md)
 
+Maintainer guide: [`docs/IMAGE_MAINTENANCE_GUIDE.md`](./docs/IMAGE_MAINTENANCE_GUIDE.md)
+
 Quick workflow:
 
 1. Put image files into `customer-artworks/inbox/`.
