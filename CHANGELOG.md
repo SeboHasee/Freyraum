@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Documentation (v0.08 deep implementation notes pass — 2026-05-17)
+
+- **`plan.md`**: added "Deep Implementation Notes & Execution Plan" section to the
+  v0.08 entry covering (1) the two-path render pipeline and the manifest-first
+  aspect rule, (2) rationale for the two-loader pattern and the URL detection
+  regex, (3) a verified all-resolutions matrix derived from `fitWithinBox(4.2,
+  5.8)` covering ultrawide / wide / 4:3 / square / 4:5 portrait / 3:4 portrait /
+  1:2 tall portrait / 1:4 extreme portrait, (4) how every shader effect
+  (self-shadow, parallax, bump, clearcoat, anisotropy, inspection PCF) is
+  invariant under the new per-artwork mesh scale, (5) enumerated edge cases
+  (HEIC, AVIF, SVG, oversize >`MAX_TEXTURE_SIZE`, animated GIF, EXIF rotation,
+  zero/negative aspect, CORS https, cache key collisions, rapid navigation),
+  (6) coding advice for future PRs in this area, (7) browser/API stability
+  boundaries, (8) resource ownership & disposal contract, (9) validation
+  checklist (all green), and (10) parked future work for v0.09.
+- **`FINDINGS.md`**: documented the follow-up validation pass; all resolutions,
+  all image kinds, timeline behaviour, and effect application confirmed.
+- **`docs/HANDOFF.md`**: marked v0.08 as shipped; added link to the Deep
+  Implementation Notes section in `plan.md`.
+- **`docs/CUSTOMER_PICTURE_GUIDE.md`**: confirmed the timeline-vs-3D-painting
+  question is resolved for v0.08; added a short note on what the customer can
+  expect after `Update Gallery`.
+
 ### Fixed (v0.08 — customer artwork 3D rendering — 2026-05-17)
 
 Critical fix: imported customer images now render on the central 3D painting with

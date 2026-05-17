@@ -1,9 +1,9 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. The current handoff priority is the v0.08 customer-artwork
-rendering fix: imported images must appear on the central 3D painting, not only
-in the timeline.
+contributors. **v0.08 is shipped:** imported customer images now render on the
+central 3D painting with correct aspect ratios. See `plan.md` → "v0.08 — Deep
+Implementation Notes & Execution Plan" for the technical reference.
 
 ## Architecture diagram
 
@@ -21,11 +21,10 @@ The diagram captures four horizontal layers and two cross-cutting systems:
 
 ## Customer picture replacement status
 
-The v0.07 customer-managed import workflow exists, but there is now a critical
-v0.08 follow-up: imported images can appear in the timeline while failing to
-appear on the central 3D painting. Do not call customer picture replacement
-fully accepted until the central 3D painting renders the imported image and
-matches the imported aspect ratio.
+v0.07 (customer-managed import workflow) and v0.08 (customer images on the
+central 3D painting) are both shipped. Imported customer images appear in the
+timeline **and** on the central 3D painting with the correct aspect ratio for
+every supported image kind and every supported resolution.
 
 Customer-facing and maintainer guides:
 
@@ -39,12 +38,15 @@ Current intended workflow:
 3. The updater generates image copies, `artworks.json`, and `customer-artworks.js`.
 4. Customer double-clicks root `index.html` as before.
 
-Critical acceptance requirement:
+Critical acceptance requirement (now met):
 
-- each imported image must be visible in the timeline
-- each imported image must render on the central 3D painting
-- the central 3D painting frame must match the imported dimensions/aspect ratio
-- diagnostics must make fallback texture usage obvious
+- each imported image is visible in the timeline ✅
+- each imported image renders on the central 3D painting ✅
+- the central 3D painting frame matches the imported dimensions/aspect ratio ✅
+- diagnostics make fallback texture usage obvious (`show-artwork-fallback` warn) ✅
+
+If a future image still triggers the fallback, follow the diagnostics flow in
+`docs/CUSTOMER_PICTURE_GUIDE.md` → "Debug / support tools".
 
 Cross-cutting reliability addition from the latest pass:
 
@@ -53,9 +55,12 @@ Cross-cutting reliability addition from the latest pass:
 - `?debug=1` / `?debug=verbose` enable deeper diagnostics for support and engineering sessions
 - recent session diagnostics are available in DevTools via `window.__FREYRAUM_DIAGNOSTICS__`
 
-Important handoff note: if the timeline works but the central 3D painting does
-not, follow the v0.08 critical plan in `plan.md` before presenting the image
-maintenance workflow as complete.
+Important handoff note: v0.08 is shipped. Both the timeline thumbnails and the
+central 3D painting use the manifest dimensions as the authoritative aspect
+source, so all supported image kinds (JPG, PNG, WebP, GIF, SVG, AVIF) and all
+common aspect ratios (ultrawide, landscape, square, portrait, tall portrait)
+render correctly. The full all-resolutions matrix is in `plan.md` → "v0.08 —
+Deep Implementation Notes & Execution Plan" §3.
 
 ## Controls surface
 

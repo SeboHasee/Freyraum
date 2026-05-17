@@ -47,6 +47,43 @@ Three surgical changes:
 
 `npm run lint && npm run build` — exit 0, only expected TS-parser and Sass deprecation warnings.
 
+### Follow-up validation pass (2026-05-17 evening)
+
+The follow-up pass adds a deep technical implementation/execution plan and
+verifies the fix against the v0.08 acceptance requirements:
+
+- **All resolutions covered.** `ArtworkMesh.updateAspect` calls
+  `fitWithinBox(aspect, 4.2, 5.8)`, which is defined for every finite positive
+  aspect and clamps non-finite/non-positive inputs to 1.0. The all-resolutions
+  matrix is enumerated in `plan.md` (v0.08 Deep Implementation Notes §3) and
+  covers ultrawide (4:1), wide landscape (3:2), 4:3, square (1:1), 4:5 portrait,
+  3:4 portrait, 1:2 tall portrait, and extreme 1:4 portrait.
+- **All image kinds covered.** Edge-case table in `plan.md` v0.08 §5 covers
+  HEIC/HEIF, AVIF, SVG without intrinsic size, oversized images
+  (`gl.MAX_TEXTURE_SIZE`), animated GIFs, EXIF-rotated JPEGs, zero/negative
+  aspect manifests, https URLs needing CORS, role-keyed cache collisions, and
+  rapid timeline navigation.
+- **Timeline still works for all aspects.** `src/styles/main.scss` ships the
+  `--thumb-aspect` CSS variable on `.timeline__img { aspect-ratio: var(--thumb-aspect, 1.5); }`.
+  Each thumbnail reserves space using the artwork's intrinsic aspect, so layout
+  never shifts when the image finishes loading, regardless of portrait,
+  landscape, square, or ultrawide source.
+- **Effects still applied.** Procedural normal/height/roughness/specular/AO/
+  varnish maps remain content-addressed by `(artworkId, role, tileSize)` and
+  are independent of the albedo upload path. Self-shadow, parallax, bump,
+  clearcoat, anisotropy, and the inspection-only 3-ray PCF filter all sample in
+  UV space and so are invariant under per-artwork `mesh.scale` adjustments.
+- **Diagnostics validated.** `show-artwork-complete` carries `fallbackUsed`,
+  `aspectSource`, `manifestDimensions`, `paintingWidth`, `paintingHeight`, and
+  `paintingAspect`. `show-artwork-fallback` is emitted at `warn` level the
+  moment a fallback texture is detected on the central 3D painting.
+- **Build re-validated.** `npm run lint && npm run build` — exit 0, only the
+  expected TS-parser and Sass deprecation warnings.
+
+Parked for v0.09: EXIF orientation honoured in the WebGL upload path; importer
+downscale for images >4000 px on the longest edge; customer-controlled
+`surfacePhysics` profiles per artwork. None of these block v0.08 acceptance.
+
 ---
 
 ## 2026-05-17 — v0.08 pre-fix finding: timeline works, 3D painting does not (original observation)

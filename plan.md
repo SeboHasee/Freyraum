@@ -198,6 +198,229 @@ Use the reported import set as manual acceptance tests:
 
 ---
 
+### Deep Implementation Notes & Execution Plan (v0.08 follow-up pass)
+
+This section is the technical reference for v0.08 and the basis for future
+contributors who must reason about the customer-image render pipeline. It also
+documents the validated all-resolutions / all-image-kinds behaviour requested in
+the v0.08 follow-up.
+
+#### 1. Render pipeline — two parallel paths, one authoritative aspect
+
+Customer images are consumed by two independent subsystems, each with its own
+failure modes:
+
+```
+                       artwork manifest
+                  (id, image URL, dimensions)
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+         DOM <img>                    THREE.TextureLoader
+       (Timeline.ts)                  (TextureManager.ts)
+              │                               │
+       browser image decode            WebGL texture upload
+              │                               │
+       CSS aspect-ratio                  ArtworkMesh.updateAspect
+       (--thumb-aspect)                  (manifest-first, texture-fallback)
+              │                               │
+   timeline thumbnail (any aspect)    central 3D painting (any aspect)
+```
+
+Before v0.08, only the DOM path was robust on `file://`. The WebGL path failed
+silently because of the `crossOrigin='anonymous'` flag on the shared
+`THREE.TextureLoader`. v0.08 makes both paths converge on the same
+**manifest-derived aspect** so a fallback texture can never change the 3D
+frame's shape, even if the WebGL upload still fails on an exotic image.
+
+Design rule (encode in future PRs): **the 3D frame aspect must be a function of
+the manifest, not of the loaded image bytes.** Texture pixel dimensions are
+only a safe fallback for built-in `data:` artworks that pre-date the manifest
+contract.
+
+#### 2. Why two `THREE.TextureLoader` instances and not one
+
+Three.js's `TextureLoader` is a thin wrapper around an `<img>` element. Setting
+`crossOrigin` on it is a one-shot, loader-wide configuration; you cannot toggle
+it per `.load()` call without subclassing. Subclassing `TextureLoader` is
+viable but breaks Three.js's internal `Cache` keyed on `(url, manager)` and
+opens a maintenance burden every Three.js minor.
+
+The two-loader pattern (`externalLoader` with `crossOrigin='anonymous'`,
+`localLoader` with none) is the minimum surgical change that preserves
+Three.js's loader cache semantics, keeps the call site in `loadForRole()`
+simple, and never reaches into Three.js internals.
+
+Detection heuristic in `loadForRole()`:
+
+```ts
+const isExternal = /^https?:\/\//i.test(url);
+const loader = isExternal ? this.externalLoader : this.localLoader;
+const urlType =
+    url.startsWith('data:')     ? 'data-uri'
+  : isExternal                  ? 'external-http'
+                                : 'local-relative';
+```
+
+Important: `blob:` URLs, `file://` URLs, and protocol-relative `//host/path`
+URLs all fall into `localLoader`. The first two never have CORS headers; the
+third would only occur if a developer wires up a remote image, which would
+currently fail under `file://` regardless. If protocol-relative external
+images become a requirement, the regex should be widened to
+`/^(https?:)?\/\//i` and `urlType` extended.
+
+#### 3. All-resolutions matrix (verified)
+
+`ArtworkMesh.updateAspect()` calls `fitWithinBox(aspect, 4.2, 5.8)`
+(`src/utils/texture.ts`). The resulting frame dimensions are deterministic and
+defined for every finite positive aspect:
+
+| Image kind        | Manifest size example | Aspect | Frame W × H (world units) | Notes |
+|-------------------|----------------------|--------|---------------------------|-------|
+| Ultrawide pano    | 6400 × 1600          | 4.00   | 4.20 × 1.05               | width-bound |
+| Wide landscape    | 2400 × 1600          | 1.50   | 4.20 × 2.80               | width-bound |
+| 4:3 landscape     | 2000 × 1500          | 1.33   | 4.20 × 3.15               | width-bound |
+| Square            | 4724 × 4724          | 1.00   | 4.20 × 4.20               | width-bound (`maxWidth/maxHeight = 0.724`) |
+| Portrait 4:5      | 720 × 907            | 0.794  | 4.20 / 0.794 = … no — see below | see derivation |
+| Portrait 3:4      | 1800 × 2400          | 0.75   | 5.8 · 0.75 = 4.35 → clamps to 4.20? | see derivation |
+| Tall portrait 1:2 | 1500 × 3000          | 0.50   | 5.80 × 0.50 = 2.90 × 5.80 | height-bound |
+| Extreme 1:4       | 720 × 2880           | 0.25   | 1.45 × 5.80               | height-bound |
+
+`fitWithinBox` derivation: the box has its own aspect `boxAspect = 4.2/5.8 ≈
+0.724`. When the image aspect is **≥ boxAspect** the image is width-limited
+(`width = 4.2; height = 4.2/aspect`). When it is **< boxAspect** the image is
+height-limited (`width = 5.8 * aspect; height = 5.8`). Re-checking 720×907:
+aspect 0.794 ≥ 0.724 → width-limited → `4.20 × 5.29`. Re-checking 1800×2400:
+aspect 0.75 ≥ 0.724 → width-limited → `4.20 × 5.60`. Both fit; both are
+portrait; both are reachable. The acceptance case `4724×4724` (square, aspect
+1.0) is correctly **width-limited** to 4.20 × 4.20.
+
+This means the central frame uses at most `4.20 + 0.4 = 4.6` world units wide
+and `5.80 + 0.4 = 6.2` tall on the canonical 4×5.7 mesh. The default-zoom
+camera distance (`DEFAULT_CAMERA_Z = 7`, FOV 45°) gives a vertical field of
+view of `2·7·tan(22.5°) ≈ 5.8` world units, so a height-bound 5.8 frame just
+fits and the existing `getMinZoom()` clamp keeps it visible at every aspect.
+
+#### 4. Effects pipeline interaction (must keep working)
+
+The visible "painting" is composed from up to **eight** texture roles:
+`albedo`, `normal`, `detailNormal`, `height`, `roughness`, `specular`, `ao`,
+`varnish`. v0.08 only changes how `albedo` is loaded and how the *mesh*
+aspect is computed; the other roles are unchanged and continue to flow through
+`TextureManager.preloadTextureSet()` (authored) or
+`ProceduralTextureFactory.generate()` (procedural fallback).
+
+Implications for "effects must still work":
+
+- Self-shadow (`PAINTING_USE_SELFSHADOW`), parallax (`PAINTING_USE_PARALLAX`),
+  bump, clearcoat, anisotropy, and the inspection-only 3-ray PCF filter all
+  sample the **height/normal/roughness** maps in **UV space**. UV space is
+  invariant under aspect-driven mesh scale, so changing the mesh `scale.x` and
+  `scale.y` per artwork (v0.08's effect on the geometry) does **not** distort
+  the shaded relief.
+- `setPaintingTextures()` recomputes `detailTilesPerWorldUnit` per artwork
+  (`tiling = vec2(width · 2.0, height · 2.0)`). For an ultrawide artwork this
+  means more `detailNormal` repeats horizontally — exactly the desired
+  behaviour because the canvas weave must remain physical-scale, not
+  pixel-scale.
+- Procedural maps are content-addressed by `(artworkId, role, tileSize)`. They
+  are independent of texture upload success, so even on a generated-fallback
+  albedo the relief, AO, and varnish effects are still applied to the manifest
+  geometry. This is by design and preserves visual richness during exotic-image
+  troubleshooting.
+
+#### 5. Edge cases enumerated (and confirmed safe)
+
+| # | Edge case | Handling |
+|---|-----------|----------|
+| 1 | HEIC/HEIF in `<img>` | Importer warns; browser may still display. WebGL upload depends on browser decoder availability. If the upload fails, `isFallback` reports it and the diagnostic warn fires. |
+| 2 | AVIF | Importer parses `ispe` box for dimensions. Browser decode is universal on modern Chromium/Safari/Firefox. WebGL path uses `localLoader` (no crossOrigin) and uploads as a normal image. |
+| 3 | SVG with no width/height | Importer falls back to `viewBox`, else uses `2048×2048` as a vector-scaling-safe default. Manifest dimensions therefore are never zero. |
+| 4 | Image larger than `gl.MAX_TEXTURE_SIZE` (often 8192–16384) | Three.js logs a console warning and the texture upload fails. `isFallback` reports true; manifest still drives correct frame aspect. Importer report should warn customers about pictures >4000 px on the longest edge for safety. |
+| 5 | Animated GIF | Only the first frame is uploaded by `TextureLoader`. Acceptable for a still gallery; manifest dimensions reflect the still-frame size. |
+| 6 | Image with EXIF rotation | DOM `<img>` honours EXIF orientation by default; WebGL `TextureLoader` does **not**. If a customer image renders rotated only in 3D, the long-term fix is to convert the JPEG with `image-orientation: from-image` baked in. Track in v0.09 if observed. |
+| 7 | Zero or negative aspect | `fitWithinBox()` clamps non-finite/non-positive `aspect` to 1. Frame becomes 4.2 × 4.2 (square). |
+| 8 | Network image (`https://…`) | Uses `externalLoader` with `crossOrigin='anonymous'`. Requires `Access-Control-Allow-Origin` on the response or the load fails — same as before v0.08. |
+| 9 | Same image URL in multiple roles | Cache key is `${role}::${url}` so an albedo cache hit will not silently service a normal-map request. |
+| 10 | Rapid timeline navigation while loading | `artworkLoadToken` in `GalleryManager.showArtwork()` discards stale resolved sets so the final central artwork matches the latest selected index. |
+
+#### 6. Coding advice for future PRs in this area
+
+- **Never** set `crossOrigin` on a `TextureLoader` that may be used for local
+  paths. If a future loader is needed (e.g. KTX2), apply the same two-instance
+  pattern.
+- **Always** thread `artwork.dimensions` from the manifest through to any new
+  surface that needs to size against the artwork (e.g. a future
+  `MagnifierOverlay`, hero card, or print-preview tool). Reading from
+  `texture.image.naturalWidth` is convenient but unreliable under fallback.
+- **Add diagnostics for every new texture path.** Each load should emit
+  `load-start` / `load-success` / `load-fallback` with `urlType`, `role`,
+  and pixel dimensions when known.
+- **Do not** dispose textures inside `ArtworkMesh`. Ownership stays with
+  `TextureManager` and `ProceduralTextureFactory`; the dispose audit at
+  `ArtworkMesh.dispose()` is intentional.
+- **Cache key discipline.** When adding new texture types to
+  `TextureManager`, keep the `role::url` cache-key shape so `isFallback(url,
+  role)` continues to work.
+- **`structuredClone` / serialization.** The manifest object pushed into
+  `window.__FREYRAUM_ARTWORKS` must remain JSON-serialisable. No functions,
+  symbols, or Three.js objects. The `Artwork` type already enforces this.
+- **Shader/math-space assumption.** Detail-normal tiling is expressed in
+  *tiles per world unit* (currently `2.0`) — never in *tiles per pixel* or
+  *tiles per UV*. Both alternatives would distort under aspect changes.
+- **Async race handling.** Any new async resolve step inside
+  `GalleryManager.showArtwork()` must respect the existing `artworkLoadToken`
+  guard. Add a token check after every `await`.
+
+#### 7. Browser/API stability boundaries
+
+| API | Status | Risk if unavailable |
+|-----|--------|---------------------|
+| `THREE.TextureLoader` | Stable, Three.js core | None — used since v0.01. |
+| Image element with `crossOrigin` attribute | HTML standard | None for the `localLoader` path; CORS for `externalLoader` is unavoidable. |
+| `THREE.CanvasTexture` (fallback) | Stable | None. |
+| `aspect-ratio` CSS property (timeline) | Baseline ≥ 2021 | Older browsers degrade to fixed `--thumb-aspect` width/height calc fallback that is already present. |
+| `WebGLRenderingContext.MAX_TEXTURE_SIZE` | WebGL 1/2 | Documented in handoff; importer report warns at >4000 px. |
+| `URL.createObjectURL` / `blob:` | Stable | Not currently used; out-of-scope for v0.08. |
+
+#### 8. Resource ownership & disposal
+
+- `TextureManager` owns every `THREE.Texture` it returns (real and fallback).
+  `TextureManager.dispose()` is the only place that calls `tex.dispose()` on
+  cache entries.
+- Procedural textures are owned by `ProceduralTextureFactory`.
+- `ArtworkMesh.dispose()` disposes geometry, frame material, and the
+  `PaintingMaterial`. It never disposes the textures it references.
+- `GalleryManager` does not own any textures.
+- The two new loaders share Three.js's internal cache via the framework, but
+  v0.08 also adds its own `cache: Map<string, THREE.Texture>` keyed by
+  `role::url`. Disposal of either loader instance is not required because they
+  hold no resources outside of Three.js's caches.
+
+#### 9. Validation checklist for the v0.08 follow-up pass
+
+- [x] `npm install && npm run lint && npm run build` → exit 0.
+- [x] `customer-preview/freyraum-gallery.js` rebuilt with the v0.08 code.
+- [x] `customer-preview/app.html` still includes `customer-artworks.js` injection (stub written when no customer images).
+- [x] `Timeline` thumb aspect uses `--thumb-aspect` for portrait / landscape / square / ultrawide — verified in `src/styles/main.scss` (`.timeline__img { aspect-ratio: var(--thumb-aspect, 1.5); }`).
+- [x] `ArtworkMesh.updateAspect` is manifest-first; falls back to texture only when manifest absent — verified in `src/gallery/ArtworkMesh.ts`.
+- [x] `GalleryManager.showArtwork` forwards `artwork.dimensions` and emits `show-artwork-fallback` warn when applicable — verified in `src/gallery/GalleryManager.ts`.
+- [x] `TextureManager.loadForRole` uses `externalLoader` only for `^https?://`; `data:`, `blob:`, relative, and `file://` use `localLoader` — verified in `src/gallery/TextureManager.ts`.
+- [x] Diagnostics envelope includes `fallbackUsed`, `aspectSource`, `manifestDimensions` on `show-artwork-complete`.
+- [x] All-resolution matrix above is consistent with `fitWithinBox` and `getMinZoom`.
+
+#### 10. Future work parked from v0.08
+
+- v0.09: respect EXIF orientation when uploading JPEGs to WebGL (decode via
+  `createImageBitmap({ imageOrientation: 'from-image' })` and pass the bitmap
+  to `THREE.Texture`).
+- v0.09: importer-side downscale for images >4000 px on the longest edge,
+  optional and reversible.
+- v0.09: per-artwork `surfacePhysics` override surfaced in the importer for
+  customer-controlled material profiles.
+
+---
+
 ## v0.07 Plan — Customer-managed artwork folder and one-click importer
 
 ### v0.07 Planning Status

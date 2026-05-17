@@ -123,9 +123,11 @@ support person. The report is written in plain language and they can
 read it without seeing the gallery.
 
 **My pictures show in the timeline, but not on the big 3D painting.**
-This issue is now fixed in v0.08. After running `Update Gallery` and opening
-the gallery with the latest build, all imported images should appear on the 3D
-painting with correct aspect ratios.
+This issue is fixed in v0.08 and is the default behaviour after this build.
+Both the timeline thumbnails and the central 3D painting now use your
+manifest dimensions to lay out the image, so portrait, landscape, square,
+and ultrawide pictures all appear correctly in both places after running
+`Update Gallery`.
 
 If you still see a gradient placeholder instead of your picture after the fix,
 this means the WebGL texture upload failed for that specific image. This can
