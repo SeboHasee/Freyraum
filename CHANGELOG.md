@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added (v0.05 planning)
+
+- Added a new v0.05 plan in `plan.md` for soft self-shadow filtering and stain artifact removal.
+- Documented the suspected shader root cause: current high-preset self-shadowing is a binary height-field blocker test with no bias, no penumbra softness, no filtering, and strong direct-light attenuation.
+- Captured online research directions for parallax/relief self-shadowing, bias/deadzone handling, PCF-like filtering, and Three.js `onBeforeCompile` integration.
+- Updated `FINDINGS.md`, `README.md`, `docs/HANDOFF.md`, and `DOCUMENTATION_RULES.md` with the v0.05 diagnosis, review focus, and documentation status.
+
 ### Added (v0.04 implementation)
 
 - **Photorealistic procedural fallback pass.** Replaced the v0.03 `sin/cos` procedural normal, height, and roughness generators with deterministic value-noise maps so raking light no longer exposes checkerboard, cross-hatch, horizontal-band, or vertical-band artifacts.

@@ -45,3 +45,6 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - resource ownership, disposal boundaries, and async race handling for texture/material pipelines
 - browser/API stability boundaries for experimental features and debug-only tooling
 
+## Latest documentation pass
+
+- 2026-05-17: v0.05 planning documentation added for self-shadow smoothing/stain artifact removal. This pass updated every repository markdown file to keep plan, findings, changelog, README, handoff, and documentation policy status aligned.

@@ -87,6 +87,21 @@ Shipped material-quality improvements:
 
 Validation: `npm run lint` and `npm run build` pass after `npm install`. The only output is the known TypeScript parser version warning and Dart Sass legacy JS API deprecation warning.
 
+## v0.05 planning
+
+v0.05 is the next planned rendering-quality pass. It targets the remaining dark, light-angle-dependent spots that can appear after v0.04. The current diagnosis points to the high-preset self-shadow shader: it uses a binary height-field blocker test with no bias, no softness, and no filtering, so broad height regions can look like dirt or stains.
+
+The new [`plan.md`](./plan.md#v005-plan--soft-self-shadow-filtering-and-stain-artifact-removal) section proposes:
+
+- smooth continuous self-shadow visibility instead of hard on/off blocker darkening;
+- height bias/deadzone to prevent self-shadow acne;
+- penumbra softness and max-occlusion caps;
+- optional PCF-like filtering for inspection mode if simple smoothing is not enough;
+- debug-only self-shadow toggles behind `?debug=1` so future screenshots can isolate the artifact source;
+- documentation and validation steps for reviewer handoff.
+
+Supporting diagnosis and research links are documented in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v005-self-shadow-stain-artifact-diagnosis-and-research).
+
 ## Developer workflow
 
 Install dependencies:

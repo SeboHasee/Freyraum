@@ -1,5 +1,23 @@
 # FINDINGS
 
+## 2026-05-17 - v0.05 self-shadow stain artifact diagnosis and research
+
+- **The new dark spots match the height-field self-shadow path, not albedo or neutral AO.** The reported spots change with light and artwork angle, and the current shader only creates such angle-dependent blotches in `PaintingMaterial.ts` under `PAINTING_USE_SELFSHADOW`.
+- **Current self-shadow is binary and strong.** The shader marches one ray through `bumpMap.r`; on the first blocker it sets `_shadow = 1.0 - uShadowStrength` and breaks. With high preset `selfShadowStrength: 0.55`, a single blocker event reduces direct lighting to 45%, which can read as dirt.
+- **There is no height bias/deadzone.** Tiny or broad procedural height differences can self-shadow immediately. Real-time shadowing literature normally uses bias/offsets to reduce self-shadow acne-like artifacts.
+- **There is no soft penumbra or filtering.** The current logic has no `smoothstep`, no blocker-distance weighting, no PCF-like neighborhood average, and no max-occlusion cap. This explains broad stain-like patches under grazing or angled viewing.
+- **Research direction:** parallax/relief self-shadowing should use continuous visibility, bias, and/or PCF-style filtering rather than a hard on/off test. Soft shadow-map concepts such as PCF/VSM and height-field/POM examples support averaging or smoothing blocker tests.
+- **v0.05 plan created:** `plan.md` now defines v0.05 as a planned pass to add self-shadow bias, softness, max occlusion, optional PCF-like filtering, lighting-profile sensitivity, and debug toggles.
+
+Research URLs recorded for v0.05:
+
+- LearnOpenGL — Parallax Mapping: https://learnopengl.com/Advanced-Lighting/Parallax-Mapping
+- Three.js docs — `Material.onBeforeCompile`: https://threejs.org/docs/#api/en/materials/Material.onBeforeCompile
+- Three.js parallax map example: https://threejs.org/examples/?q=paralla#webgl_materials_parallaxmap
+- GPU Gems 3 — filtered/soft shadow-map concepts: https://developer.nvidia.com/gpugems/gpugems3/part-ii-light-and-shadows/chapter-8-summed-area-variance-shadow-maps
+- Microsoft HLSL `SampleBias`: https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-samplebias
+- StackOverflow topic — soft shadows for parallax occlusion shaders: https://stackoverflow.com/questions/37067278/soft-shadow-for-parallax-occlusion-shader
+
 ## 2026-05-17 - v0.04 implementation findings
 
 - **The fake AO vignette is removed in code.** `ProceduralTextureFactory.generateAO()` now emits a neutral near-white AO texture (`237 + valueNoise * 18`) instead of computing `vignette = 1 - min(1, r2 * 0.55)`. This keeps the AO slot available while preventing procedural edge darkening on flat paintings.

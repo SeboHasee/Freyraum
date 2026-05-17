@@ -75,6 +75,36 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 - [ ] Quality preset switching takes effect without resetting artwork selection.
 - [ ] Fullscreen toggle and Escape exit both update the on-screen state.
 
+## v0.05 planning focus
+
+v0.05 is **planned, not implemented yet**. It addresses the latest visual review: dark spots that move with light direction / artwork angle and look like stains. Current diagnosis points to `PaintingMaterial.ts` self-shadow logic, not albedo or AO.
+
+### Suspected root cause
+
+| Area | Current behavior | Why it looks wrong |
+|---|---|---|
+| Self-shadow blocker test | First height blocker sets `_shadow = 1.0 - uShadowStrength` and breaks | One tiny/broad blocker can create a full dark patch |
+| Bias | No height bias/deadzone | Height noise can shadow itself |
+| Softness | No smooth transition | Shadows read as hard dirt spots |
+| Filtering | One ray, no PCF-like neighborhood | Broad value-noise regions become blotches |
+| Strength | High preset uses `selfShadowStrength: 0.55` | Direct light can drop to 45%, too strong for normal display |
+
+### v0.05 implementation direction
+
+- Add self-shadow bias, softness, max-occlusion, and optional filter-radius preset fields.
+- Replace binary break logic with smooth blocker accumulation and distance weighting.
+- Keep default gallery display conservative; reserve stronger relief for `raking-inspection` if needed.
+- Add debug-only self-shadow toggle behind `?debug=1` for future artifact isolation.
+- Keep balanced and battery presets free of self-shadow cost.
+
+### Visual review checklist for the future implementation
+
+- [ ] `gallery-soft` has no moving stain-like dark blobs.
+- [ ] `raking-inspection` shows soft local relief, not hard blotches.
+- [ ] Self-shadow debug toggle proves the artifact source is controlled.
+- [ ] Albedo-only debug still proves source artwork color fidelity.
+- [ ] `npm run lint` and `npm run build` pass after source changes.
+
 ## v0.04 review focus
 
 v0.04 is **implemented**. Reviewers should evaluate the material-quality pass rather than the former plan.
