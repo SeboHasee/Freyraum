@@ -355,157 +355,620 @@ Reserved Future Pass:
 This order starts with the data model and local assets because later UI, thumbnails, accessibility labels, and documentation screenshots depend on stable artwork metadata.
 
 
-## v0.04 Follow-up Plan — Photorealistic PBR Painting Materials and Artifact Removal
+## v0.04 Implementation and Execution Plan — Photorealistic PBR Painting Materials and Artifact Removal
 
-### v0.04 Planning Status
+### v0.04 Status
 
-v0.04 is **planned**, not implemented. The current v0.03 branch ships the new lighting profiles, parallax, self-shadow, and free inspection, but two visual issues remain visible in the current material system:
+**Planned, not yet implemented.** Full code audit complete (2026-05-17). This document supersedes the earlier high-level v0.04 notes and is written as a file-by-file, function-by-function execution guide for a developer who will implement the changes.
 
-- the painting can show dark radial falloff that reads like an unintended vignette;
-- the procedural support maps can show an artificial checkerboard / cross-hatch pattern that does not read as real canvas, pigment, or varnish at presentation distance.
+---
 
-This v0.04 plan is the follow-up pass that turns the current "good procedural placeholder" material into a more believable, museum-grade painted-surface PBR pipeline.
+### v0.04 Code Audit — Exact Diagnosed Issues
+
+#### Bug 1 — Fake vignette edge-darkening
+
+**File:** `src/materials/ProceduralTextureFactory.ts`
+**Method:** `generateAO(seed, size)` **Lines 200–222**
+
+```ts
+const nx = (x - half) / half;
+const ny = (y - half) / half;
+const r2 = nx * nx + ny * ny;
+const vignette = 1 - Math.min(1, r2 * 0.55);   // ← THE BUG
+const fine = Math.sin(x * 0.13 + o) * Math.cos(y * 0.11) * 0.05;
+const v = this.clamp8((vignette + fine) * 255);
+```
+
+`vignette` evaluates to ~1.0 at the texture centre and ~0.45 at the corners, producing a centre-bright / edge-dark gradient. This is applied as the `aoMap` uniform (`aoMapIntensity = 1.0`, `PaintingMaterial.ts:420`). On a flat vertical painting surface there is no physical occlusion at the edges — the darkening reads as a content error burned into the artwork.
+
+**Active path:** `quality.ts` high preset `aoEnabled: true` (line 82) → `GalleryManager` fills `textures.ao` via `procedural.generate(id, 'ao', tileSize)` → `PaintingMaterial.applyTextures()` line 419 sets `this.aoMap = textures.ao`.
+
+#### Bug 2 — Checkerboard / cross-hatch from periodic procedural generators
+
+**File:** `src/materials/ProceduralTextureFactory.ts`
+
+**`generateNormal()` lines 95–101:**
+```ts
+const oct1 = Math.sin(x * 0.42 * freqScale + offset) * Math.cos(y * 0.38 * freqScale) * oct1Amp;
+const oct2 = Math.sin(x * 0.19 * freqScale + offset * 2) * Math.cos(y * 0.22 * freqScale) * oct2Amp;
+const weave = Math.sin((x + y) * 0.11 * freqScale) * weaveAmp;
+```
+Two `sin × cos` octaves at fixed harmonics (0.42×0.38, 0.19×0.22) plus a diagonal `sin((x+y)*0.11)` weave. These combine into a deterministic 2D lattice that tiles visibly at every resolution, giving the appearance of a woven grid rather than actual canvas fibre.
+
+**`generateHeight()` lines 119–121:**
+```ts
+const stroke = Math.abs(Math.sin(y * 0.12 + o1)) * 80;  // horizontal bands
+const cross  = Math.abs(Math.sin(x * 0.09 + o2)) * 30;  // vertical bands
+const tooth  = Math.sin(x * 1.4) * Math.sin(y * 1.6) * 12;
+```
+`Math.abs(sin(...))` on a single frequency creates half-period arches that are visually obvious — the brush-stroke channel (`stroke`) shows as horizontal banding and the cross-hatch (`cross`) as vertical banding. Under raking-light inspection this reads as a perfect grid, not an oil-paint impasto surface.
+
+**`generateRoughness()` lines 145–148:**
+```ts
+const n1 = (Math.sin(x * 0.09 + o) * Math.cos(y * 0.07)) * 0.5 + 0.5;
+const n2 = (Math.sin(x * 0.21 + 1.3) * Math.cos(y * 0.18 + 0.7)) * 0.5 + 0.5;
+```
+Two additional `sin × cos` products — less visually dominant than height but still periodic and will show on close inspection.
+
+#### Gap 1 — `SurfaceProfile` declared but never wired to the material
+
+**File:** `src/config/artworks.ts` — `SurfaceProfile` type ('matte-canvas' | 'satin-canvas' | 'varnished-oil' | 'paper' | 'procedural-fallback') is defined. The `Artwork.surfaceProfile` optional field exists in the interface (line 69) but **none of the four artworks in the `artworks` array set it**.
+
+**File:** `src/materials/PaintingMaterial.ts` — constructor line 89 hard-codes `clearcoat: 0.0`. There is no code path that reads `surfaceProfile` and adjusts the clearcoat response.
+
+#### Gap 2 — No varnish map role in the texture contract
+
+**File:** `src/materials/PaintingTextureSet.ts` — `PaintingMapRole` union does not include a clearcoat / varnish channel. `Three.js 0.166` `MeshPhysicalMaterial` natively supports `clearcoatMap` (a grayscale mask for per-pixel clearcoat intensity), but there is no slot for it in the authored-map pipeline.
+
+#### Gap 3 — No clearcoat fields in `QualityPreset`
+
+**File:** `src/config/quality.ts` — The `QualityPreset` interface has no `clearcoatEnabled`, `clearcoatStrength`, or `clearcoatRoughnessValue` fields. Clearcoat adds a second specular integration pass (~5–8% GPU) and must be preset-gated.
+
+---
 
 ### v0.04 Goals
 
-- remove the current fake edge darkening from the painting surface unless it is backed by real capture data;
-- remove visibly periodic checkerboard / sinusoidal procedural texture cues from the artwork surface;
-- move the painting material closer to a real PBR layered-surface model: pigment/body, surface relief, and optional varnish/gloss response;
-- support photorealistic authored/scanned painting texture sets when available;
-- keep the default gallery view faithful and flattering, while preserving raking-light inspection as a separate mode;
-- preserve the current file:// customer preview workflow and WebGL production path.
+- Eliminate the fake AO vignette from the procedural high-preset path.
+- Replace all `sin/cos`-periodic procedural generators with value-noise generators that produce aperiodic, non-repeating surface detail.
+- Wire the existing `SurfaceProfile` field from `artworks.ts` through to `PaintingMaterial` so matte canvas, satin canvas, and varnished oil diverge in their specular/clearcoat response.
+- Add a `'varnish'` map role to the texture contract to support future authored clearcoat masks.
+- Extend `QualityPreset` with preset-gated clearcoat control fields.
+- Keep the offline `file://` preview workflow and WebGL production path intact.
+- `npm run lint` and `npm run build` must pass after every slice.
 
 ### v0.04 Non-Goals
 
-- replacing the entire renderer with WebGPU;
-- turning the customer-facing default view into an exaggerated technical inspection render;
-- baking shadows, vignettes, or lighting into the artwork albedo;
-- introducing a DCC-only workflow that prevents the repository from running without authored assets;
-- solving frame, wall, or room-material realism in the same pass unless directly required for painting credibility.
+- Not replacing the WebGL renderer with WebGPU.
+- Not baking lighting, shadows, or vignettes into the albedo.
+- Not requiring authored maps to run (fully offline procedural fallback remains).
+- Not implementing RTI / photometric relighting.
+- Not changing frame, wall, or room materials in this pass.
 
-### v0.04 Current Code Facts Driving The Plan
+### v0.04 Performance Contracts
 
-| Area | Current code fact | Why v0.04 must change |
-| --- | --- | --- |
-| Edge darkening | `ProceduralTextureFactory.generateAO()` synthesizes a radial "soft vignetted ambient-occlusion suggestion" with darker edges and lighter centre | A flat painting surface should not receive a fake radial AO mask by default; this reads as a bug in the artwork itself |
-| Checkerboard / weave repetition | `generateNormal()`, `generateHeight()`, and `generateRoughness()` are driven by periodic `sin/cos` fields and cross-hatch style frequencies | The result is deterministic and cheap, but the repetition reads as synthetic instead of captured pigment/canvas structure |
-| Varnish response | Current material retune intentionally muted clearcoat/specular to avoid glossy-looking mistakes | v0.04 should reintroduce varnish only where physically justified, using masks / authored data instead of global gloss |
-| Procedural fallback role | v0.03 procedural maps are still the primary realism source for the shipped sample artworks | v0.04 should treat them as fallback scaffolding, not the final look target |
-| Inspection vs display | v0.03 already separates display lighting from raking inspection lighting | This is the correct structure and should be preserved while the material becomes more realistic |
+| Preset | Clearcoat BxDF | AO map | Procedural tile size | Expected GPU delta vs v0.03 |
+|--------|---------------|--------|----------------------|-----------------------------|
+| high | enabled (`clearcoatEnabled: true`) | enabled (`aoEnabled: true`) | 1024 px | < +4% |
+| balanced | disabled | disabled | 512 px | 0 delta |
+| battery | disabled | disabled | 256 px | 0 delta |
 
-### v0.04 Research Basis
+### v0.04 Math-Space Contracts
 
-The planning direction below is based on current web research and the code audit:
+- All procedural maps remain 8-bit RGBA linear-space outputs (`makeDataTexture(data, size, size, false)`). No colour-space change.
+- Albedo (`map`) continues to carry sRGB source data and must not be modified.
+- Normal maps encode tangent-space `(Nx, Ny, Nz)` packed to `[0..1]` as before.
+- Value-noise output range `[0..1]` maps into the existing map ranges (`140–240` for roughness, `128 ± delta` for normals) via the same `clamp8()` arithmetic — no downstream contract change.
+- The new `latticeHash()` function uses only `Math.imul`, bit shifts, and unsigned-right-shift coercions. `Math.imul` is ES2016 and is within the project's current TypeScript target.
 
-- Museum/conservation imaging sources consistently treat **normal/even illumination** as the faithful default representation and **raking light** as an inspection/documentation mode for relief, deformation, and brushwork rather than the everyday presentation view. Sources consulted: Library of Congress digital treatment documentation, CHS Open Source raking-light guide, Hamilton Kerr Institute lighting guidance, and Smithsonian MCI RTI guidance.
-- Cultural-heritage imaging guidance repeatedly points toward **multi-image surface capture** (RTI / PTM / photometric approaches, normal/specular capture) when the goal is credible surface representation rather than stylized relief exaggeration.
-- Current Three.js PBR guidance supports using `MeshPhysicalMaterial` / physically based workflows for plausible roughness, specular, and optional clearcoat layering, but stresses that lighting should not be baked into albedo and that repeated low-quality maps will look synthetic at close range.
+### v0.04 Resource Ownership / Async Contracts
 
-Research URLs captured for implementation:
+- `PaintingMaterial` must not dispose textures it does not own (existing rule, unchanged).
+- Procedural maps remain deterministic and cache-keyed by `artworkId::role::tileSize` — `valueNoise2d` is seeded by the existing `hash(artworkId)` so the same artwork always produces the same map.
+- Async artwork switching continues to honour `artworkLoadToken` — no new async paths are introduced in this plan.
 
-- https://www.loc.gov/preservation/resources/ImageDoc/index.html
-- https://chsopensource.org/services/1-technical-photography-tp/raking-light-photography-rak/
-- https://www.hki.fitzmuseum.cam.ac.uk/about/services/photographicservices/lightingtechniques
-- https://mci.si.edu/reflectance-transformation-imaging
-- https://discoverthreejs.com/book/first-steps/physically-based-rendering/
-- https://www.ramijames.com/learn-threejs/building-blocks/physically-based-rendering
+---
 
-### v0.04 Material / Surface Strategy
+### v0.04 Vertical Slices — File-Level Execution Guide
 
-- **Faithful display lane:** the main gallery profile should show the painting with believable matte/satin/varnished response but without any fake radial darkening, fake texture seams, or stylized checker patterns.
-- **Inspection lane:** the existing raking-light profile remains available, but it should reveal *captured or plausibly stochastic* relief rather than exposing procedural tiling artifacts.
-- **Layered response:** the material should treat the surface as layered: immutable albedo, macro relief, micro relief, roughness variation, and optional varnish clearcoat where supported by texture data.
-- **Author-first pipeline:** when authored/scanned support maps exist, they should drive the result. Procedural generation should become a fallback path that aims for "quiet neutral substrate", not a look-defining effect.
+---
 
-### v0.04 Shader / Math-Space Assumptions
+#### Slice S1 — Fix: neutralize the AO vignette
 
-- Albedo remains the source artwork and must stay lighting-free.
-- Normal, height, roughness, and varnish/specular support maps stay linear-space inputs.
-- Any new clearcoat / varnish mask must be interpreted as a surface-layer response, not as colour.
-- If photometric / RTI-derived normals are introduced later, they should still resolve into a tangent-space or otherwise explicitly documented basis before entering the current material pipeline.
-- No baked AO/vignette term may darken the painting uniformly from the edges inward unless a future authored map explicitly encodes a real physical cause.
+**File to edit:** `src/materials/ProceduralTextureFactory.ts`
+**Method:** `private generateAO(seed: number, size: number): THREE.Texture` (lines 200–222)
 
-### v0.04 Proposed Modules / File Responsibilities
+**Current broken lines (207–214):**
+```ts
+const half = size / 2;
+for (let y = 0; y < size; y += 1) {
+  for (let x = 0; x < size; x += 1) {
+    const idx = (y * size + x) * 4;
+    const nx = (x - half) / half;
+    const ny = (y - half) / half;
+    const r2 = nx * nx + ny * ny;
+    const vignette = 1 - Math.min(1, r2 * 0.55);   // produces fake radial darkening
+    const fine = Math.sin(x * 0.13 + o) * Math.cos(y * 0.11) * 0.05;
+    const v = this.clamp8((vignette + fine) * 255);
+```
 
-- `src/materials/PaintingMaterial.ts`
-  - rework the surface response around pigment/body/varnish layering;
-  - make AO optional and data-driven rather than assumed;
-  - add support for clearcoat / clearcoat roughness / varnish masks where available.
-- `src/materials/PaintingTextureSet.ts`
-  - expand the authored-texture contract for future scanned/support-map sets;
-  - distinguish required vs optional maps more clearly.
-- `src/materials/ProceduralTextureFactory.ts`
-  - remove or neutralize the current vignette-style AO fallback;
-  - replace periodic checker-style procedural maps with quieter, non-obvious fallback textures.
-- `src/gallery/TextureManager.ts`
-  - support any new authored maps and packing rules needed by the v0.04 material contract.
-- `src/config/artworks.ts`
-  - carry per-artwork surface metadata for matte canvas / satin varnish / glossy varnish / paper-like cases when real assets arrive.
-- `src/config/quality.ts`
-  - keep explicit preset-level performance control for any new map reads or clearcoat path.
-- `src/lighting/LightProfile.ts` / `src/lighting/LightingSetup.ts`
-  - preserve the display-vs-inspection split and retune only if the new material response requires it.
+**Replacement logic:**
+- Remove `half`, `nx`, `ny`, `r2`, `vignette`, and the `fine` sin-term.
+- Replace with a flat neutral value `242` (≈ 0.95, near-white = near-zero occlusion) plus subtle value-noise grain (±9 units) to avoid a dead-flat look:
 
-### v0.04 Resource Ownership / Async Boundaries
+```ts
+const grain = this.valueNoise2d(x * 0.11, y * 0.11, seed) * 18;
+const v = this.clamp8(237 + grain);
+```
 
-- Authored/scanned texture sets should remain owned by the same loading/cache layers as existing maps; `PaintingMaterial` must continue not to dispose textures it does not own.
-- The procedural fallback path should remain deterministic and cacheable, but any new stochastic generation must still be stable per artwork and preset to avoid visible flicker across rebuilds.
-- Async artwork switching must continue to honour `artworkLoadToken`-style race protection so higher-fidelity map sets cannot apply to the wrong artwork during rapid navigation.
+Also remove `const o = ((seed % 64) / 64) * 0.4;` (line 203) — it was only used for the sin fine-detail term which is now gone.
 
-### v0.04 Accessibility / Viewer Impact
+**Expected visual result:** The painting edges will be as bright as the centre. AO will only darken surfaces when an authored/scanned AO map is loaded. The high-preset procedural fallback path will show zero vignette.
 
-- Reduced-motion mode must continue to reduce animated surface motion cues without flattening the painting into a dead image.
-- The default gallery view should become *less distracting*, not more technical.
-- Inspection lighting and any debug/fidelity surfaces must remain opt-in and clearly separate from the customer-facing default experience.
+---
 
-### v0.04 Fallback Behavior
+#### Slice S2 — Fix: replace `generateHeight()` sin-bands with value noise
 
-- If no authored/scanned support maps exist, the app must still run fully offline from `file://`.
-- The fallback material should bias toward subtle matte realism and low artifact visibility rather than trying to fake dramatic brush relief.
-- Battery preset should continue compiling out optional expensive paths.
+**File to edit:** `src/materials/ProceduralTextureFactory.ts`
+**Method:** `private generateHeight(seed: number, size: number): THREE.Texture` (lines 111–131)
 
-### v0.04 Performance Budgets
+**Remove lines 113–121:**
+```ts
+const o1 = (seed % 64) * 0.05;
+const o2 = (seed % 32) * 0.07;
+// inside the loop:
+const stroke = Math.abs(Math.sin(y * 0.12 + o1)) * 80;
+const cross  = Math.abs(Math.sin(x * 0.09 + o2)) * 30;
+const tooth  = Math.sin(x * 1.4) * Math.sin(y * 1.6) * 12;
+const h = this.clamp8(stroke + cross + tooth);
+```
 
-- Balanced preset remains the production baseline for common laptops/tablets.
-- Any new clearcoat / varnish path must be cheap enough to leave balanced mode visually credible without forcing the whole experience into high preset.
-- Procedural fallback texture sizes should not grow beyond the current v0.03 memory footprint unless the visual gain is measurable in close-up review.
-- Close-up inspection should prefer higher-quality authored/scanned maps over simply increasing procedural frequency or shader iteration counts.
+**Replacement (inside the y/x loop):**
+```ts
+// Multi-octave value noise — no sin/cos periodicity.
+// Three frequency bands mimic macro canvas undulation, mid-frequency
+// brushstroke ridges, and high-frequency tooth/impasto texture.
+const macro = this.valueNoise2d(x * 0.04, y * 0.04, seed)       * 90;
+const mid   = this.valueNoise2d(x * 0.12, y * 0.09, seed +  7)  * 40;
+const micro = this.valueNoise2d(x * 0.55, y * 0.55, seed + 31)  * 16;
+const h = this.clamp8(macro + mid + micro);
+```
 
-### v0.04 Vertical Slices
+Remove `o1` and `o2` variable declarations above the loop — they are no longer needed.
 
-1. **Slice 1 — Artifact isolation**
-   - remove the synthetic radial AO/vignette look from the default painting path;
-   - document the exact visual before/after expectation with screenshot references.
-2. **Slice 2 — Quiet fallback surface**
-   - replace the current visibly periodic checker/cross-hatch fallback with a more stochastic, less obviously tiled substrate;
-   - ensure the fallback is believable at normal gallery distance.
-3. **Slice 3 — Authored/scanned texture contract**
-   - expand the map contract for real painting support maps (normal/height/roughness/specular/varnish-related data);
-   - document how a future artwork package plugs into the runtime.
-4. **Slice 4 — Layered PBR painting response**
-   - build a more lifelike pigment/body/varnish response on top of `MeshPhysicalMaterial`;
-   - allow matte and varnished artworks to diverge without global over-glossing.
-5. **Slice 5 — Lighting revalidation**
-   - re-check that default gallery lighting flatters the new material while inspection lighting still reveals relief without exposing fake patterns.
-6. **Slice 6 — Validation and handoff**
-   - refresh reviewer guidance, findings, and screenshot expectations for the new material quality bar.
+**Expected visual result:** Height map shows irregular undulations that read like real canvas+brush texture under raking light. No horizontal or vertical banding. The three frequency octaves together span the [0, 146] range on average, leaving a realistic dynamic range for the parallax march.
+
+---
+
+#### Slice S3 — Fix: replace `generateNormal()` sin×cos lattice with value-noise gradients
+
+**File to edit:** `src/materials/ProceduralTextureFactory.ts`
+**Method:** `private generateNormal(seed, size, oct1Amp, oct2Amp, weaveAmp, freqScale)` (lines 80–108)
+
+**Remove lines 89–103 (inner loop body):**
+```ts
+const offset = ((seed % 100) / 100) * Math.PI * 2;
+// inside loop:
+const oct1  = Math.sin(x * 0.42 * freqScale + offset) * Math.cos(y * 0.38 * freqScale) * oct1Amp;
+const oct2  = Math.sin(x * 0.19 * freqScale + offset * 2) * Math.cos(y * 0.22 * freqScale) * oct2Amp;
+const weave = Math.sin((x + y) * 0.11 * freqScale) * weaveAmp;
+const v = oct1 + oct2 + weave;
+data[idx + 0] = this.clamp8(128 + v);
+data[idx + 1] = this.clamp8(128 - v);
+```
+
+**Replacement — finite-difference gradient of multi-octave value noise:**
+
+Finite differences on a value-noise field produce a proper gradient (normal map) with no periodicity. The `+1` neighbour samples are computed per pixel; this is acceptable because the texture is generated once and cached.
+
+```ts
+// Finite-difference gradient from two value-noise octaves.
+// freqScale drives how many texture-space cycles fit across the tile;
+// oct1Amp / oct2Amp control the macro vs fine relief contribution.
+const f1 = 0.055 * freqScale;
+const f2 = 0.14  * freqScale;
+
+// Octave 1 — three sample points for finite difference
+const h1_00 = this.valueNoise2d(x * f1,       y * f1,       seed);
+const h1_10 = this.valueNoise2d((x + 1) * f1, y * f1,       seed);
+const h1_01 = this.valueNoise2d(x * f1,       (y + 1) * f1, seed);
+
+// Octave 2 (finer detail) — uses seed offset to decorrelate from octave 1
+const h2_00 = this.valueNoise2d(x * f2,       y * f2,       seed + 17);
+const h2_10 = this.valueNoise2d((x + 1) * f2, y * f2,       seed + 17);
+const h2_01 = this.valueNoise2d(x * f2,       (y + 1) * f2, seed + 17);
+
+// Gradient: gx = dH/dx,  gy = dH/dy
+const gx = (h1_10 - h1_00) * oct1Amp + (h2_10 - h2_00) * oct2Amp;
+const gy = (h1_01 - h1_00) * oct1Amp + (h2_01 - h2_00) * oct2Amp;
+
+// Pack into tangent-space normal (R=Nx, G=Ny, B=255 flat base)
+data[idx + 0] = this.clamp8(128 + gx * 28);   // Nx
+data[idx + 1] = this.clamp8(128 + gy * 28);   // Ny
+data[idx + 2] = 255;                            // Nz
+data[idx + 3] = 255;
+```
+
+Remove `const offset = ...` above the loop — it is no longer needed.
+
+**Note on call sites:** The method signature is unchanged. Both call sites in `generate()` (line 38 for `'normal'` and line 41 for `'detailNormal'`) continue to pass the same amp and freqScale parameters; only the internal math changes. The `weaveAmp` parameter becomes unused — keep it in the signature for now to avoid a call-site diff and add a TypeScript `_weaveAmp` rename later if desired.
+
+---
+
+#### Slice S4 — Fix: replace `generateRoughness()` sin×cos with value noise
+
+**File to edit:** `src/materials/ProceduralTextureFactory.ts`
+**Method:** `private generateRoughness(seed: number, size: number): THREE.Texture` (lines 138–157)
+
+**Remove lines 140–148:**
+```ts
+const o = ((seed % 50) / 50) * 0.8;
+// inside loop:
+const n1 = (Math.sin(x * 0.09 + o) * Math.cos(y * 0.07)) * 0.5 + 0.5;
+const n2 = (Math.sin(x * 0.21 + 1.3) * Math.cos(y * 0.18 + 0.7)) * 0.5 + 0.5;
+const combined = n1 * 0.7 + n2 * 0.3;
+const r = this.clamp8(140 + combined * 100);
+```
+
+**Replacement:**
+```ts
+// Two value-noise octaves maintain the same output range [140..240]
+// (matte canvas roughness range from v0.03) without any periodicity.
+const lo = this.valueNoise2d(x * 0.07, y * 0.07, seed +  3);
+const hi = this.valueNoise2d(x * 0.24, y * 0.24, seed + 19);
+const combined = lo * 0.65 + hi * 0.35;  // weighted blend, range 0..1
+const r = this.clamp8(140 + combined * 100);
+```
+
+Remove `const o = ...` above the loop.
+
+---
+
+#### Slice S5 — Add: `valueNoise2d()` and `latticeHash()` private helpers
+
+**File to edit:** `src/materials/ProceduralTextureFactory.ts`
+**Location:** Add immediately after the existing `private hash(value: string)` method (after line 279).
+
+```typescript
+/**
+ * Smoothstep-interpolated 2D value noise. Returns [0..1].
+ *
+ * Uses integer lattice positions + bit-mixing hash — no sin/cos,
+ * no external libraries, fully deterministic given the same seed.
+ *
+ * @param x   Continuous x coordinate (caller chooses scale/frequency).
+ * @param y   Continuous y coordinate.
+ * @param s   Integer seed (pass artworkHash + an octave-specific constant
+ *            to keep octaves statistically independent).
+ */
+private valueNoise2d(x: number, y: number, s: number): number {
+  const xi = Math.floor(x) | 0;
+  const yi = Math.floor(y) | 0;
+  const xf = x - Math.floor(x);
+  const yf = y - Math.floor(y);
+
+  // Smoothstep fade curves — eliminates lattice-boundary discontinuities.
+  const ux = xf * xf * (3 - 2 * xf);
+  const uy = yf * yf * (3 - 2 * yf);
+
+  // Hash the four surrounding integer lattice corners to [0..1].
+  const h00 = this.latticeHash(xi,     yi,     s);
+  const h10 = this.latticeHash(xi + 1, yi,     s);
+  const h01 = this.latticeHash(xi,     yi + 1, s);
+  const h11 = this.latticeHash(xi + 1, yi + 1, s);
+
+  // Bilinear interpolation with smoothstep weights.
+  return h00 * (1 - ux) * (1 - uy)
+       + h10 * ux       * (1 - uy)
+       + h01 * (1 - ux) * uy
+       + h11 * ux       * uy;
+}
+
+/**
+ * Maps integer lattice coordinates (ix, iy) + seed to a float in [0..1].
+ *
+ * Uses a cascade of multiply-xor mix operations (LCG + Murmur-style)
+ * to give good avalanche without external dependencies.
+ * Math.imul is ES2016 — within the project's TypeScript target.
+ */
+private latticeHash(ix: number, iy: number, seed: number): number {
+  let h = (seed * 1664525 + ix * 1013904223) >>> 0;
+  h = (h ^ (iy * 1540483477)) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  h = Math.imul(h, 0x45d9f3b) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return (h >>> 0) / 0xffffffff;
+}
+```
+
+**TypeScript note:** `Math.imul` is typed in `lib.es2015.core.d.ts` and is unconditionally available in the current `tsconfig.json` target. No `lib` change needed.
+
+---
+
+#### Slice S6 — Extend `QualityPreset` with clearcoat fields
+
+**File to edit:** `src/config/quality.ts`
+**Location:** After the last v0.03 field (`selfShadowStrength: number`, line 60).
+
+Add to the `QualityPreset` interface:
+```typescript
+// ── v0.04 clearcoat / varnish fields ──────────────────────────────────────
+/**
+ * Whether the Three.js clearcoat BxDF is enabled.
+ * Adds a second specular integration pass (~5-8% GPU cost).
+ * Disabled on balanced and battery presets.
+ */
+clearcoatEnabled: boolean;
+/**
+ * Base clearcoat intensity used when no authored varnish map is present.
+ * Range 0..1. For 'varnished-oil' the applySurfaceProfile() method
+ * scales this by 1.6 (capped at 0.2); for 'satin-canvas' by 0.4.
+ */
+clearcoatStrength: number;
+/**
+ * Clearcoat roughness: 0 = mirror-like varnish, 1 = rough satin.
+ * Value 0.35 approximates a typical oil varnish at room temperature.
+ */
+clearcoatRoughnessValue: number;
+```
+
+Add the three fields to each preset object in `QUALITY_PRESETS`:
+
+```typescript
+high: {
+  // ... existing fields unchanged ...
+  clearcoatEnabled: true,
+  clearcoatStrength: 0.12,
+  clearcoatRoughnessValue: 0.35,
+},
+balanced: {
+  // ... existing fields unchanged ...
+  clearcoatEnabled: false,
+  clearcoatStrength: 0.0,
+  clearcoatRoughnessValue: 0.35,
+},
+battery: {
+  // ... existing fields unchanged ...
+  clearcoatEnabled: false,
+  clearcoatStrength: 0.0,
+  clearcoatRoughnessValue: 0.0,
+},
+```
+
+---
+
+#### Slice S7 — Add `'varnish'` map role to the texture contract
+
+**File to edit:** `src/materials/PaintingTextureSet.ts`
+
+1. Add `'varnish'` to the `PaintingMapRole` union (line 16):
+```typescript
+export type PaintingMapRole =
+  | 'albedo'
+  | 'normal'
+  | 'detailNormal'
+  | 'height'
+  | 'roughness'
+  | 'specular'
+  | 'ao'
+  | 'varnish';   // v0.04: grayscale R-channel clearcoat intensity mask (linear)
+```
+
+2. Add `varnish` to `PaintingTextureSet` (after the `ao` field):
+```typescript
+/**
+ * Grayscale R-channel clearcoat / varnish intensity mask (linear).
+ * 1.0 = fully varnished (max clearcoat), 0.0 = unvarnished matte.
+ * Optional. When absent, clearcoat falls back to the per-artwork
+ * SurfaceProfile base value from applySurfaceProfile().
+ */
+varnish?: PaintingTextureMapEntry;
+```
+
+3. Add `varnish` to `ResolvedPaintingTextures` (after the `ao` field):
+```typescript
+varnish?: THREE.Texture;
+```
+
+---
+
+#### Slice S8 — Wire clearcoat / varnish into `PaintingMaterial`
+
+**File to edit:** `src/materials/PaintingMaterial.ts`
+
+**Step A — Modify `applyTextures()` (line 390):**
+Add after the existing `this.aoMap = textures.ao ?? null;` (line 419) and before `this.applyPreset(preset)` (line 422):
+```typescript
+// v0.04: clearcoat / varnish mask.
+// Three.js MeshPhysicalMaterial.clearcoatMap accepts a grayscale texture
+// that modulates the per-pixel clearcoat intensity. We set clearcoat only
+// when the preset enables it to avoid the extra BxDF cost on balanced/battery.
+this.clearcoatMap = preset.clearcoatEnabled ? (textures.varnish ?? null) : null;
+this.clearcoat = preset.clearcoatEnabled
+  ? (textures.varnish ? preset.clearcoatStrength : 0.0)
+  : 0.0;
+this.clearcoatRoughness = preset.clearcoatRoughnessValue;
+```
+
+**Step B — Modify `applyPreset()` (line 329):**
+Add a clearcoat reset block at the top of `applyPreset()` (before the normalScale line):
+```typescript
+// v0.04: disable clearcoat on preset downgrade.
+if (!preset.clearcoatEnabled) {
+  this.clearcoat = 0.0;
+  this.clearcoatMap = null;
+}
+```
+
+**Step C — Add `applySurfaceProfile()` method (new, add after `applyPreset()`):**
+```typescript
+/**
+ * v0.04: applies per-artwork surface character overrides for clearcoat.
+ *
+ * Called by GalleryManager after applyTextures(). Reads the artwork's
+ * SurfaceProfile and adjusts clearcoat intensity and roughness. When an
+ * authored varnish map is already bound (clearcoatMap != null) this method
+ * only adjusts roughness, not intensity, because the map already provides
+ * per-pixel control.
+ *
+ * This method is a no-op when clearcoatEnabled is false on the preset.
+ */
+applySurfaceProfile(profile: SurfaceProfile | undefined, preset: QualityPreset): void {
+  if (!preset.clearcoatEnabled) return;
+  switch (profile) {
+    case 'varnished-oil':
+      // Moderate clearcoat even without an authored map — historical oil
+      // paintings carry a varnish layer regardless of whether we have a
+      // per-pixel mask for it.
+      if (!this.clearcoatMap) this.clearcoat = Math.min(preset.clearcoatStrength * 1.6, 0.20);
+      this.clearcoatRoughness = 0.22;
+      break;
+    case 'satin-canvas':
+      // Light sizing / sizing residue gives satin canvas a subtle sheen.
+      if (!this.clearcoatMap) this.clearcoat = preset.clearcoatStrength * 0.4;
+      this.clearcoatRoughness = 0.50;
+      break;
+    case 'matte-canvas':
+    case 'paper':
+    case 'procedural-fallback':
+    default:
+      if (!this.clearcoatMap) this.clearcoat = 0.0;
+      this.clearcoatRoughness = preset.clearcoatRoughnessValue;
+      break;
+  }
+}
+```
+
+**Step D — Add `'varnish'` to `activeMaps()`** (line 457):
+```typescript
+if (this.clearcoatMap) active.push('varnish');
+```
+
+**Step E — Import `SurfaceProfile` type:**
+Add to the import block at the top of `PaintingMaterial.ts`:
+```typescript
+import type { SurfaceProfile } from '../config/artworks';
+```
+
+---
+
+#### Slice S9 — Wire varnish into `TextureManager` and `GalleryManager`
+
+**File to edit:** `src/gallery/TextureManager.ts`
+**Method:** `preloadTextureSet()` (line 76)
+
+Add `'varnish'` to the `roles` array (line 79):
+```typescript
+const roles: PaintingMapRole[] = [
+  'albedo', 'normal', 'detailNormal', 'height',
+  'roughness', 'specular', 'ao',
+  'varnish',  // v0.04
+];
+```
+
+**File to edit:** `src/gallery/GalleryManager.ts`
+
+Locate the artwork load completion callback where `artworkMesh.setPaintingTextures(resolved, preset)` is called. Add immediately after that call:
+```typescript
+// v0.04: per-artwork surface profile drives clearcoat response.
+this.artworkMesh.material.applySurfaceProfile(
+  artwork.surfaceProfile,
+  this.currentPreset!
+);
+```
+
+The variable `artwork` is already in scope at that point (it is the `artworks[token]` entry captured at the top of the navigateTo load flow).
+
+---
+
+#### Slice S10 — Set `surfaceProfile` on all four artworks
+
+**File to edit:** `src/config/artworks.ts`
+
+Add `surfaceProfile` to each artwork entry in the `artworks` array. Based on the medium descriptions:
+
+```typescript
+// electric-storm — soft landscape, matte digital painting
+surfaceProfile: 'matte-canvas',
+
+// quiet-coastline — minimal coastal, matte
+surfaceProfile: 'matte-canvas',
+
+// tokyo-passage — urban cinematic, slight sheen (sizing/varnish plausible)
+surfaceProfile: 'satin-canvas',
+
+// golden-desert — warm desert, matte
+surfaceProfile: 'matte-canvas',
+```
+
+---
+
+#### Slice S11 — Validation checklist (run after all slices)
+
+1. `npm run lint` — must pass with no new errors.
+2. `npm run build` — must pass. TypeScript strict mode must not reject the new `applySurfaceProfile` import or the `Math.imul` call.
+3. Open `customer-preview/app.html` from `file://` — no network requests, all four artworks display.
+4. Switch to **high** preset. Navigate to each artwork. Verify:
+   - No dark radial falloff at the painting edges (Bug 1 fixed).
+   - No visible horizontal or vertical banding under normal display lighting (Bug 2 fixed).
+5. Switch to `raking-inspection` lighting profile. Verify:
+   - Surface detail is stochastic / non-repeating — no grid, no cross-hatch.
+6. Verify **tokyo-passage** in high preset shows a subtle satin sheen (clearcoat from `'satin-canvas'` profile).
+7. Switch from **high** to **balanced** → clearcoat must deactivate (flat matte).
+8. Enable albedo-only debug mode (`?debug=1` + `a` key in dev server) — verify artwork colours are unchanged.
+9. Verify the bundle `customer-preview/freyraum-gallery.js` contains the `PAINTING_USE_PARALLAX` and `PAINTING_USE_SELFSHADOW` strings (existing shader gates must still be present).
+
+---
+
+### v0.04 File Change Summary
+
+| File | What changes | Slice(s) |
+|------|-------------|----------|
+| `src/materials/ProceduralTextureFactory.ts` | Fix `generateAO()` — remove vignette formula | S1 |
+| `src/materials/ProceduralTextureFactory.ts` | Fix `generateHeight()` — replace sin-bands with value noise | S2 |
+| `src/materials/ProceduralTextureFactory.ts` | Fix `generateNormal()` — replace sin×cos lattice with FD gradient | S3 |
+| `src/materials/ProceduralTextureFactory.ts` | Fix `generateRoughness()` — replace sin×cos with value noise | S4 |
+| `src/materials/ProceduralTextureFactory.ts` | Add `valueNoise2d()` + `latticeHash()` private helpers | S5 |
+| `src/config/quality.ts` | Add `clearcoatEnabled`, `clearcoatStrength`, `clearcoatRoughnessValue` to interface and all three presets | S6 |
+| `src/materials/PaintingTextureSet.ts` | Add `'varnish'` to `PaintingMapRole`, `PaintingTextureSet`, `ResolvedPaintingTextures` | S7 |
+| `src/materials/PaintingMaterial.ts` | Wire clearcoat in `applyTextures()`, reset in `applyPreset()`, add `applySurfaceProfile()`, update `activeMaps()`, import `SurfaceProfile` | S8 |
+| `src/gallery/TextureManager.ts` | Add `'varnish'` to preload roles array | S9 |
+| `src/gallery/GalleryManager.ts` | Call `applySurfaceProfile()` after artwork load | S9 |
+| `src/config/artworks.ts` | Set `surfaceProfile` on all four artwork entries | S10 |
+
+Total: 11 files, no new npm dependencies, no shader language changes.
 
 ### v0.04 Acceptance Checks
 
-- [ ] No default-view dark radial falloff remains on the artwork unless explicitly authored.
-- [ ] No obvious checkerboard / cross-hatch procedural artifact is visible at normal viewing distance.
-- [ ] Default gallery view reads as a believable painted object, not a stylized shader demo.
-- [ ] Inspection lighting reveals surface detail without exposing repetitive fake texture structure.
-- [ ] Albedo-only debug comparison still shows that the source artwork colours are preserved.
-- [ ] `npm run lint` and `npm run build` pass after implementation.
-- [ ] Offline `file://` preview workflow remains intact.
+- [ ] No default-view dark radial falloff at painting edges (high preset, all artworks).
+- [ ] No visible checkerboard / cross-hatch / banding pattern (high preset, raking light).
+- [ ] `tokyo-passage` shows subtle satin sheen in high preset; vanishes in balanced preset.
+- [ ] AO map (high preset only) does not darken edges on any artwork.
+- [ ] Albedo-only debug still matches the source artwork colours.
+- [ ] `npm run lint` passes.
+- [ ] `npm run build` passes.
+- [ ] Offline `file://` customer preview workflow intact.
 
-### v0.04 Known Risks / Reserved Future Boundaries
+### v0.04 Known Risks
 
-- Real photorealism may ultimately require authored capture data (normal / roughness / specular / RTI-derived information) rather than purely procedural synthesis.
-- Clearcoat/varnish can quickly become more distracting than realistic if it is applied globally instead of with measured masks.
-- If authored scans are unavailable, v0.04 should prefer "quiet believable" over "aggressively detailed but fake".
-- RTI/PTM-style interactive relighting is a promising future direction but is explicitly out of scope for v0.04 implementation unless the asset pipeline changes dramatically.
+- `Math.imul` with `>>>` coercion produces correct `Uint32` arithmetic in V8 and SpiderMonkey. If a future TS compile target changes unsigned-shift semantics the `latticeHash` must be audited.
+- Three.js `MeshPhysicalMaterial.clearcoatMap` requires `USE_CLEARCOATMAP` to be compiled into the shader; setting `this.clearcoatMap = ...` triggers `needsUpdate = true` automatically — but if `applyPreset()` clears the map without also setting `needsUpdate`, the shader may retain a stale compiled state. Verify that setting `clearcoatMap = null` always triggers a recompile.
+- A very high `clearcoatStrength` on `'varnished-oil'` artworks can look plastic if the environment map (IBL) is not calibrated. Keep the cap at `0.20` and recheck under all three lighting profiles.
+- RTI/PTM-style interactive relighting remains out of scope for v0.04.
+
+### v0.04 Research Basis
+
+Direction grounded in:
+- Three.js 0.166 `MeshPhysicalMaterial` clearcoat API documentation.
+- Library of Congress digital preservation imaging guidance (normal/even vs raking illumination as default vs inspection modes).
+- Smithsonian MCI RTI guidance (photometric surface capture as the credible normal-map source for paintings).
+- CHS raking-light photography guide (raking light = documentation tool, not presentation default).
+- Hamilton Kerr Institute lighting technique guidance.
+
+Implementation-relevant URLs:
+- https://discoverthreejs.com/book/first-steps/physically-based-rendering/
+- https://threejs.org/docs/#api/en/materials/MeshPhysicalMaterial.clearcoatMap
+- https://mci.si.edu/reflectance-transformation-imaging
+- https://www.loc.gov/preservation/resources/ImageDoc/index.html
 
 ## v0.03 Follow-up Plan — Technical Rendering System for Faithful Artworks, Modular Asset Swaps, Parallax Relief, and Free Inspection
 

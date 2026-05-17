@@ -1,6 +1,46 @@
 # FINDINGS
 
-## 2026-05-17 - v0.04 photorealism follow-up: artifact diagnosis and research
+## 2026-05-17 - v0.04 plan elevated to full technical execution guide (code audit)
+
+The v0.04 section in `plan.md` has been rewritten from a high-level strategy into a file-by-file, function-by-function implementation guide. The following code-level findings drove the rewrite.
+
+### Bug 1 — Fake AO vignette (confirmed code location)
+
+`src/materials/ProceduralTextureFactory.ts`, `generateAO()`, lines 207–213:
+```ts
+const vignette = 1 - Math.min(1, r2 * 0.55);
+```
+`r2` is the squared normalized distance from the texture centre `(0,0)`. At the corners `r2 ≈ 2`, so `vignette ≈ 0`. At the centre `r2 = 0`, so `vignette = 1.0`. The result is a flat painting that is ~55 % darker at its corners than its centre — visible as the reported "dark spots" / vignette. The fix is to replace the vignette formula with a flat neutral value (`≈0.95`) plus value-noise grain. This eliminates all synthetic edge darkening while preserving the texture slot for future authored AO maps.
+
+Active path: `quality.ts high.aoEnabled = true` → `GalleryManager` → `procedural.generate(id, 'ao', 1024)` → `PaintingMaterial.applyTextures()` binds result as `aoMap` at intensity `1.0`.
+
+### Bug 2 — Periodic checkerboard / cross-hatch pattern (confirmed code location)
+
+`generateHeight()` lines 119–121: `Math.abs(Math.sin(y * 0.12)) * 80` = horizontal bands; `Math.abs(Math.sin(x * 0.09)) * 30` = vertical bands. At 1024 px tile size with `RepeatWrapping` the combined result is a clearly visible half-wave grid when the painting is examined under raking light. `Math.abs(sin)` folds the sinusoid into a sawtooth of half-period arches — exactly what brush-stroke channels should NOT look like.
+
+`generateNormal()` lines 95–98: two `sin(x*0.42*f)*cos(y*0.38*f)` octaves and a `sin((x+y)*0.11*f)` diagonal weave create a deterministic 2D lattice that repeats visibly at every resolution.
+
+`generateRoughness()` lines 145–148: same pattern at lower amplitudes.
+
+Fix: all three functions replaced with multi-octave value noise (smoothstep-interpolated integer lattice hash). The new `valueNoise2d()` + `latticeHash()` helpers are pure JS, no external dependency, seeded by the existing `hash(artworkId)`.
+
+### Gap 1 — SurfaceProfile and clearcoat not wired
+
+`artworks.ts` defines `SurfaceProfile` and every `Artwork` has `surfaceProfile?: SurfaceProfile`, but none of the four artwork entries set it. `PaintingMaterial` constructor hard-codes `clearcoat: 0.0` and never reads `surfaceProfile`. `quality.ts` has no clearcoat fields. Fix: add `clearcoatEnabled`, `clearcoatStrength`, `clearcoatRoughnessValue` to `QualityPreset`; add `applySurfaceProfile()` to `PaintingMaterial`; set `surfaceProfile` on all four artworks in `artworks.ts`; call `applySurfaceProfile()` in `GalleryManager` after artwork load.
+
+### Gap 2 — No varnish map role in the texture contract
+
+`PaintingMapRole` and `PaintingTextureSet` do not include a `'varnish'` slot. Three.js 0.166 `MeshPhysicalMaterial.clearcoatMap` accepts a grayscale texture for per-pixel clearcoat intensity. Fix: add `'varnish'` to the role union, the set interface, and the resolved-textures interface. `TextureManager.preloadTextureSet()` will automatically pick it up when added to the roles array.
+
+### Noise algorithm (new, validated)
+
+The `valueNoise2d(x, y, seed)` implementation uses smoothstep fade curves and bilinear interpolation from `latticeHash(ix, iy, seed)`. The hash function is a cascade of LCG multiply + XOR + Murmur-style mix using `Math.imul` (ES2016). Constants: 1664525, 1013904223, 1540483477, 0x45d9f3b. These are standard constants used in WebGL procedural noise implementations and produce good avalanche without any sin/cos dependency.
+
+### File change count
+
+11 files changed, no new npm dependencies, no changes to GLSL. See v0.04 section in `plan.md` for slice-by-slice execution instructions.
+
+## 2026-05-17 - v0.04 photorealism follow-up: initial artifact diagnosis and research
 
 - **The reported "dark spots / vignette" complaint matches the current procedural AO implementation.** `ProceduralTextureFactory.generateAO()` explicitly synthesizes a centre-bright / edge-dark radial mask ("Soft vignetted ambient-occlusion suggestion"). On a flat painting surface this reads less like real occlusion and more like a bug baked into the artwork, especially when no physical frame lip or recess justifies it.
 - **The reported checkerboard / unnatural pattern complaint matches the current periodic procedural support maps.** `generateNormal()`, `generateHeight()`, and `generateRoughness()` are built from layered `sin/cos` waves and cross terms. This gives a deterministic fallback but also creates visibly synthetic repetition that can look like a checkerboard or woven shader texture instead of irregular pigment, canvas, or varnish structure.
@@ -15,7 +55,8 @@ Research links captured for v0.04 planning:
 - CHS Open Source — Raking Light Photography: https://chsopensource.org/services/1-technical-photography-tp/raking-light-photography-rak/
 - Hamilton Kerr Institute — Lighting Techniques: https://www.hki.fitzmuseum.cam.ac.uk/about/services/photographicservices/lightingtechniques
 - Smithsonian MCI — Reflectance Transformation Imaging: https://mci.si.edu/reflectance-transformation-imaging
-- discoverthreejs — Physically Based Rendering: https://discoverthreejs.com/book/first-steps/physically-based-rendering/
+- discoverthreejs — Physically Built Rendering: https://discoverthreejs.com/book/first-steps/physically-based-rendering/
+- Three.js MeshPhysicalMaterial clearcoatMap: https://threejs.org/docs/#api/en/materials/MeshPhysicalMaterial.clearcoatMap
 - Rami James — Physically Based Rendering in Three.js: https://www.ramijames.com/learn-threejs/building-blocks/physically-based-rendering
 
 ## 2026-05-17 - v0.03 fresh-clone revalidation audit

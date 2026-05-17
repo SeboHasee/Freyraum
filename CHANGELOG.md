@@ -2,7 +2,19 @@
 
 ## Unreleased
 
-### Added (v0.04 planning)
+### Updated (v0.04 plan — full technical execution guide)
+
+- **Rewrote v0.04 plan in `plan.md`** from a high-level strategy into an 11-slice, file-by-file technical execution guide. The new plan documents exact method names, line numbers, before/after code snippets, TypeScript constraints, and per-slice acceptance checks.
+- **Confirmed Bug 1 root cause:** `ProceduralTextureFactory.generateAO()` line 211 `const vignette = 1 - Math.min(1, r2 * 0.55)` — a radial formula that evaluates to ~0 at texture corners and 1.0 at centre, producing fake edge darkening that is visible on the painting surface.
+- **Confirmed Bug 2 root cause:** `generateHeight()` lines 119–120 use `Math.abs(Math.sin(y*0.12))` and `Math.abs(Math.sin(x*0.09))` creating perfect horizontal and vertical banding. `generateNormal()` lines 95–98 use `sin×cos` products at fixed harmonics creating a visible 2D grid. `generateRoughness()` lines 145–148 same pattern at lower amplitude.
+- **Designed value-noise replacement:** `valueNoise2d(x, y, seed)` using smoothstep-interpolated 2D integer lattice hash (`latticeHash()` with LCG/Murmur-style constants and `Math.imul`). No external dependency, seeded per-artwork, fully deterministic.
+- **Designed clearcoat / varnish pipeline:** `QualityPreset` gains `clearcoatEnabled` / `clearcoatStrength` / `clearcoatRoughnessValue`; `PaintingTextureSet` gains `'varnish'` map role; `PaintingMaterial` gains `applySurfaceProfile()` that reads the per-artwork `SurfaceProfile` and sets Three.js native clearcoat properties; `GalleryManager` calls `applySurfaceProfile()` after every artwork load.
+- **Documented 11-file change scope with no new npm dependencies and no GLSL changes.**
+- Updated `FINDINGS.md` with code-grounded diagnosis including exact line numbers for every diagnosed issue.
+- Updated `docs/HANDOFF.md` v0.04 section with implementation-level summary.
+- Updated `README.md` v0.04 section with reference to the new execution plan.
+
+### Added (v0.04 planning — initial)
 
 - Added a new `v0.04` follow-up plan in `plan.md` focused on removing the current vignette-like darkening, replacing the checkerboard-looking procedural surface, and moving the painting material toward a more photorealistic layered PBR workflow.
 - Recorded the code-grounded diagnosis that the current dark radial falloff comes from the procedural AO fallback and that the synthetic checker pattern comes from the periodic `sin/cos` procedural normal/height/roughness generators.

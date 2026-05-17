@@ -77,25 +77,31 @@ Use this checklist when reviewing a v0.01 release candidate or future PR that to
 
 ## v0.04 planning focus
 
-v0.04 is the next follow-up pass. It is **not implemented yet**. The current reviewer-visible issues driving that plan are:
+v0.04 is the next follow-up pass. It is **not implemented yet**. The v0.04 plan in `plan.md` is now a full **file-by-file technical execution guide** — not just a strategy document.
 
-- a vignette-like darkening on the painting that reads like fake AO rather than real surface depth;
-- a checkerboard / synthetic woven pattern that makes the support-map detail look procedural instead of photorealistic.
+### Diagnosed issues (code-grounded)
 
-The current working diagnosis is:
+| # | Symptom | File | Method | Line(s) | Root cause |
+|---|---------|------|--------|---------|-----------|
+| 1 | Dark edges / vignette | `ProceduralTextureFactory.ts` | `generateAO()` | 207–213 | `vignette = 1 - min(1, r2 * 0.55)` — radial gradient applied as AO mask on a flat surface |
+| 2 | Checkerboard / cross-hatch | `ProceduralTextureFactory.ts` | `generateHeight()` | 119–121 | `Math.abs(sin(y*0.12))` + `Math.abs(sin(x*0.09))` = perfect H+V banding |
+| 2 | Checkerboard / cross-hatch | `ProceduralTextureFactory.ts` | `generateNormal()` | 95–98 | `sin(x*0.42f)*cos(y*0.38f)` octaves = visible 2D lattice |
+| 2 | Checkerboard / cross-hatch | `ProceduralTextureFactory.ts` | `generateRoughness()` | 145–148 | `sin×cos` at lower amplitude — periodic |
+| 3 | No surface-specific gloss | `PaintingMaterial.ts` / `artworks.ts` | constructor / artwork array | 89 / all | `clearcoat: 0.0` hard-coded; `surfaceProfile` field exists but is never set and never read |
 
-1. the radial darkening comes from the procedural AO fallback in `ProceduralTextureFactory.generateAO()`;
-2. the synthetic pattern comes from the periodic `sin/cos` procedural normal/height/roughness generation rather than authored/scanned surface data.
+### v0.04 execution plan scope
 
-The v0.04 plan in `plan.md` focuses on:
+11 files changed, no new npm dependencies, no GLSL changes:
 
-1. removing the fake AO/vignette look,
-2. replacing the current fallback surface with a quieter non-obvious substrate,
-3. expanding the authored/scanned painting-texture contract,
-4. adding a more lifelike layered PBR response for matte vs varnished paintings,
-5. revalidating gallery-display vs inspection lighting after the new material lands.
+1. `ProceduralTextureFactory.ts` — 5 changes: fix `generateAO()`, `generateHeight()`, `generateNormal()`, `generateRoughness()`, add `valueNoise2d()` + `latticeHash()`.
+2. `quality.ts` — add `clearcoatEnabled`, `clearcoatStrength`, `clearcoatRoughnessValue` to `QualityPreset` and all three presets.
+3. `PaintingTextureSet.ts` — add `'varnish'` to `PaintingMapRole`, `PaintingTextureSet`, `ResolvedPaintingTextures`.
+4. `PaintingMaterial.ts` — wire clearcoat in `applyTextures()` and `applyPreset()`, add `applySurfaceProfile()`, update `activeMaps()`, import `SurfaceProfile`.
+5. `TextureManager.ts` — add `'varnish'` to preload roles.
+6. `GalleryManager.ts` — call `applySurfaceProfile()` after artwork load.
+7. `artworks.ts` — set `surfaceProfile` on all four artwork entries.
 
-Relevant references and research notes are captured in `FINDINGS.md`.
+Full slice-by-slice instructions (with before/after code snippets, TypeScript notes, and per-slice acceptance checks) are in [`plan.md`](./plan.md#v004-implementation-and-execution-plan--photorealistic-pbr-painting-materials-and-artifact-removal). Code-level findings are in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v004-plan-elevated-to-full-technical-execution-guide-code-audit).
 
 
 ## v0.03 review focus

@@ -77,7 +77,17 @@ v0.04 is the next material-quality follow-up. The current branch still shows two
 - vignette-like dark radial darkening on the painting surface;
 - an unnatural checkerboard / repetitive procedural pattern in the surface detail.
 
-The new plan lives in [`plan.md`](./plan.md#v004-follow-up-plan--photorealistic-pbr-painting-materials-and-artifact-removal). Supporting diagnosis and online research are captured in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v004-photorealism-follow-up-artifact-diagnosis-and-research).
+The v0.04 plan in [`plan.md`](./plan.md#v004-implementation-and-execution-plan--photorealistic-pbr-painting-materials-and-artifact-removal) is now a **full file-by-file technical execution guide** — not a high-level strategy. It contains:
+
+- exact diagnoses with file names, method names, and line numbers for each visual bug;
+- before/after code for every fix (value-noise replacement for the sin/cos generators, AO vignette removal);
+- the complete `valueNoise2d()` + `latticeHash()` algorithm (no new npm dependency);
+- the clearcoat/varnish pipeline design (`QualityPreset` extension, `'varnish'` map role, `applySurfaceProfile()` method);
+- a performance contract table by preset;
+- an 11-file change summary;
+- acceptance checks with step-by-step validation instructions.
+
+Supporting code-level diagnosis and research are captured in [`FINDINGS.md`](./FINDINGS.md#2026-05-17---v004-plan-elevated-to-full-technical-execution-guide-code-audit).
 
 ## Developer workflow
 
