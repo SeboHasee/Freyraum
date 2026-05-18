@@ -494,7 +494,7 @@ Add one timeline debug event only in non-default diagnostics mode:
 - optional tiny helper file only if the viewport metrics type/provider should be shared cleanly
 - `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`
 
-### Acceptance checks for v0.12
+### Acceptance checks
 
 - A very tall portrait opens with the whole framed artwork visible in the standard/reset view.
 - Zoom-out controls, wheel, and pinch can move farther back than the reset/default fit.
@@ -1586,7 +1586,7 @@ depth hole or torn surface.
   `parallaxScale`.
 - `npm run lint` and `npm run build` pass.
 
-### Acceptance checks for v0.12
+### Acceptance checks
 
 - Hoch close-up: no crater/hole artifacts or duplicated picture patches.
 - Albedo-only debug (`a`): always shows the unshifted customer picture.
