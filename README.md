@@ -57,11 +57,11 @@ For the full architecture see
 [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).
 
 
-## Responsive phones/tablets — v0.11 technical coding plan
+## Responsive phones/tablets — v0.11 final technical coding plan
 
-A technical coding plan for v0.11 was added on 2026-05-18. Desktop web remains the primary design. The plan documents 7 concrete bugs found in the codebase (passive touch listeners preventing pinch ownership, `RendererManager.resize()` never called on resize, duplicate touch/mouse events, missing safe-area CSS, viewport-fit, HintText desktop-only copy, preferences panel overflow) and maps every implementation slice to exact TypeScript interfaces, CSS patterns, and code examples.
+A final research-backed technical coding plan for v0.11 was added on 2026-05-18. Desktop web remains the primary design. The plan documents 7 concrete bugs found in the codebase (passive touch listeners preventing pinch ownership, `RendererManager.resize()` never called on resize, duplicate touch/mouse events, missing safe-area CSS, viewport-fit, HintText desktop-only copy, preferences panel overflow), validates the proposed fixes against current official web guidance, and maps every implementation slice to exact TypeScript interfaces, CSS patterns, and code examples.
 
-Key planned changes: new `src/utils/device.ts` with `DeviceCapabilities`/`LayoutTier`, new `src/interaction/CanvasInteraction.ts` replacing the three interaction managers, `viewport-fit=cover` + safe-area CSS variables + `100dvh`, 4-tier SCSS breakpoint system, compact info-panel mode, and mobile quality startup heuristic. See [`plan.md`](./plan.md#v011-plan--responsive-phones-tablets-touch-controls-and-gesture-compatibility-technical-coding-plan) and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v011-technical-coding-plan-responsive-phonestablets-touch-gestures-and-compatibility).
+Key planned changes: new `src/utils/device.ts` with `DeviceCapabilities`/`LayoutTier`, new `src/interaction/CanvasInteraction.ts` replacing the three interaction managers, `viewport-fit=cover` + safe-area CSS variables + `100dvh`, 4-tier SCSS breakpoint system, compact info-panel mode, mobile quality startup heuristic, explicit WebGL context-loss handling, and a possible later `ResizeObserver` enhancement for high-DPI resize accuracy. See [`plan.md`](./plan.md#v011-plan--responsive-phones-tablets-touch-controls-and-gesture-compatibility-technical-coding-plan) and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v011-final-research-backed-technical-coding-plan-responsive-phonestablets-touch-gestures-and-compatibility).
 
 ## Diagnostics and debugging
 

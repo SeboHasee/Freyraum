@@ -6,9 +6,9 @@ artifact fix, parallax hole fix, and very-vertical-picture reset zoom fix are
 implemented. See `plan.md` → "v0.10 Follow-up — Parallax Hole Artifact Fix" and
 "v0.10 — Spot Artifact Fix and Portrait Reset Framing" for details.
 
-## v0.11 responsive/touch — technical coding plan (2026-05-18)
+## v0.11 responsive/touch — final technical coding plan (2026-05-18)
 
-The v0.11 plan was upgraded from goal documentation to a full technical coding plan with file-level action items. **Seven bugs were found and documented** in the current codebase:
+The v0.11 plan was upgraded from goal documentation to a full technical coding plan with file-level action items and a final online validation pass against official web guidance. **Seven bugs were found and documented** in the current codebase:
 
 1. `RendererManager.resize()` never called on window resize → Three.js framebuffer stays at startup size after orientation change.
 2. All touch listeners `{ passive: true }` → iOS Safari native pinch fights custom zoom.
@@ -22,7 +22,9 @@ The v0.11 plan was upgraded from goal documentation to a full technical coding p
 
 **Planned CSS changes:** `viewport-fit=cover` in viewport meta, `--safe-top/right/bottom/left` CSS variables, `100dvh` with fallback, 4-tier breakpoint system (phone-portrait, phone-landscape, tablet-portrait, tablet-landscape, desktop), `touch-action: none` on canvas, compact info-panel class, preferences panel `max-height` + `overflow-y: auto`.
 
-See `plan.md` → "v0.11 Plan" and `FINDINGS.md` → "2026-05-18 — v0.11 technical coding plan" before starting implementation.
+**Additional validated concerns:** 320 px reflow/browser zoom behavior, WebGL context-loss recovery, high-DPI drawing-buffer resize accuracy, and keeping `touch-action: none` scoped only to the canvas.
+
+See `plan.md` → "v0.11 Plan" and `FINDINGS.md` → "2026-05-18 — v0.11 final research-backed technical coding plan" before starting implementation.
 
 ## Architecture diagram
 

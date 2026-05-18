@@ -4,9 +4,49 @@
 
 ### Status
 
-**Technical coding plan updated 2026-05-18.** No runtime code was changed in this pass. The previous planning pass documented goals and guidelines. This pass upgrades every slice to a concrete, code-level implementation plan based on a deep audit of the full source tree. Each slice now names the exact files, functions, interfaces, and TypeScript/CSS patterns to write.
+**Final research-validated technical coding plan updated 2026-05-18.** No runtime code was changed in this pass. The previous planning pass documented goals and guidelines. This pass upgrades every slice to a concrete, code-level implementation plan based on a deep audit of the full source tree and a final online validation pass against current official platform and accessibility guidance. Each slice now names the exact files, functions, interfaces, TypeScript/CSS patterns, confirmed browser/platform constraints, and follow-up enhancements to write.
 
 Desktop web remains the primary visual design. The goal is to harden the existing codebase for phones and tablets without disrupting existing desktop quality.
+
+---
+
+### Final online validation pass (2026-05-18)
+
+The current v0.11 direction was validated against current official guidance and remains broadly correct. The core plan is still the right implementation path.
+
+#### Assumptions now validated online
+
+- **Touch target sizing remains correct:** WCAG 2.2 SC 2.5.8 requires at least **24 × 24 CSS px** unless an exception applies; practical mobile UI guidance still favors larger controls. Our project target of **44–48 px** remains the right comfort target.
+- **Gesture fallbacks remain mandatory:** WCAG SC 2.5.1 still requires that multipoint/path gestures such as pinch or swipe are not the only path to complete a task. The existing FREYRAUM nav buttons, zoom controls, reset, timeline, and keyboard shortcuts remain an important strength and should stay first-class.
+- **Pointer cancellation remains important:** WCAG SC 2.5.2 still supports activation on the up-event rather than down-event. This validates keeping navigation activation on release/end rather than on initial touch.
+- **`viewport-fit=cover` + safe-area CSS is the right path:** current viewport guidance still supports `viewport-fit=cover` for edge-to-edge layouts, but only together with `env(safe-area-inset-*)` protection for essential UI.
+- **`dvh` / `svh` / `lvh` remain the right modern viewport units:** current guidance supports using dynamic viewport units with a fallback to legacy `vh`.
+- **Pointer Events remain the preferred unified API:** Pointer Events Level 3 is still the recommended cross-input model for mouse/touch/pen. Touch Events should only remain as a fallback for older Safari floors or edge-case compatibility.
+- **`touch-action` is still required, not just `preventDefault()`:** modern guidance still favors CSS gesture ownership through `touch-action`, with non-passive listeners only where the code truly needs to cancel the default behavior.
+- **High-DPI / context-loss handling should be part of mobile hardening:** current WebGL guidance still emphasizes correct drawing-buffer resizing on high-DPR screens and robust `webglcontextlost` / `webglcontextrestored` handling, especially on mobile memory pressure.
+
+#### Official / authoritative sources used for the validation
+
+- W3C WCAG 2.2 — SC 2.5.8 Target Size (Minimum): <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html>
+- W3C WCAG 2.1 — SC 2.5.1 Pointer Gestures: <https://www.w3.org/WAI/WCAG21/Understanding/pointer-gestures.html>
+- W3C WCAG 2.1 — SC 2.5.2 Pointer Cancellation: <https://www.w3.org/WAI/WCAG21/Understanding/pointer-cancellation.html>
+- W3C WCAG 2.1 — SC 1.4.10 Reflow: <https://www.w3.org/WAI/WCAG21/Understanding/reflow.html>
+- W3C Pointer Events Level 3: <https://www.w3.org/TR/pointerevents3/>
+- MDN — `touch-action`: <https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action>
+- MDN — viewport meta / `viewport-fit`: <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport>
+- MDN — CSS `env()` safe-area environment variables: <https://developer.mozilla.org/en-US/docs/Web/CSS/env>
+- MDN — WebGL best practices: <https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices>
+- Khronos WebGL Wiki — Handling High DPI: <https://wikis.khronos.org/webgl/HandlingHighDPI>
+- Khronos WebGL specification — context loss handling: <https://registry.khronos.org/webgl/specs/latest/1.0/>
+
+#### Net result of the validation
+
+The current v0.11 coding direction is confirmed, but the online validation highlights four additions that should now be treated as part of the plan rather than optional afterthoughts:
+
+1. **Context-loss handling must be explicitly planned** for mobile WebGL reliability.
+2. **Drawing-buffer resize accuracy must be validated on high-DPR devices** and not only with `window.resize`.
+3. **Reflow at 320 CSS px width and browser zoom must be tested explicitly** because fixed chrome and overlays remain a risk.
+4. **`touch-action` + listener-passivity rules must be documented together** because relying on only one of them is not robust enough.
 
 ---
 
@@ -181,6 +221,12 @@ window.addEventListener('resize', handleResize);
 
 **Note:** Do not add another `'resize'` listener inside `SceneManager` — it already has one. The debounced `handleResize` in `main.ts` only drives `rendererManager.resize()` and device-caps updates.
 
+#### Enhancement — optional `ResizeObserver` follow-up
+
+Online validation suggests that high-DPI canvas sizing is more robust when driven by actual element size changes, not only `window.resize`. A follow-up enhancement after the first v0.11 pass should consider a `ResizeObserver` on the renderer container/canvas so split-screen, browser UI shifts, or embedded layouts cannot silently desync CSS size and drawing-buffer size.
+
+**Recommendation:** keep the debounced `window.resize` fix as the first implementation because it is simple and low-risk, but document a second-step enhancement to evaluate `ResizeObserver` once the initial responsive pass is stable.
+
 #### Diagnostics
 
 Use the existing `createScopedDiagnostics('layout')` pattern. Log capabilities once on startup as `info` level:
@@ -247,6 +293,8 @@ canvas {
   touch-action: none;   // tell browser we handle gestures (see Slice 4)
 }
 ```
+
+**Important nuance from the validation:** `touch-action: none` is correct for the canvas only if all essential actions still have visible alternatives and browser zoom remains available elsewhere in the page. Do not extend `touch-action: none` to the entire document.
 
 #### Topbar safe-area
 
@@ -499,6 +547,8 @@ private onTouchMove = (e: TouchEvent): void => {
 };
 ```
 
+**Validated platform rule:** keep `touch-action` and the non-passive fallback together in the plan. Current browser guidance still warns against relying only on `preventDefault()`, while older Safari behavior means we also should not rely only on `touch-action`.
+
 #### Suppressing synthetic mouse events after touch (Bug 3 fix)
 
 When using the Touch Events fallback path, add `e.preventDefault()` on `touchstart` to suppress synthetic `mousedown`/`click` that the browser generates after touch:
@@ -647,7 +697,7 @@ export function suggestStartupQuality(): QualityPresetId {
   const area = window.innerWidth * window.innerHeight;
 
   // Thresholds (document here for reviewers):
-  // 600_000 px² ≈ a 775×775 viewport — typical small phone portrait (e.g. 390×844 = 329 160)
+  // 600_000 px² ≈ a 775×775 viewport — typical small phone portrait (e.g. 390×844 = 329,160)
   // 800_000 px² ≈ an 894×894 viewport — medium phone or low-end tablet
   const SMALL_PHONE_AREA = 600_000;
   const MEDIUM_DEVICE_AREA = 800_000;
@@ -725,6 +775,29 @@ resize(): void {
 }
 ```
 This is correct — `setPixelRatio` after `setSize` is the right order. No change needed here, only ensure it is called.
+
+#### Additional mobile/WebGL reliability item — context loss
+
+The online validation surfaced one important reliability gap not yet covered in the original v0.11 slices: **mobile WebGL context loss**.
+
+**Files likely touched:** `src/core/RendererManager.ts`, `src/main.ts`, docs, possibly `src/ui/FallbackScreen.ts`.
+
+Add a small, explicit plan item:
+
+```typescript
+canvas.addEventListener('webglcontextlost', (event) => {
+  event.preventDefault();
+  diagnostics.warn('render', 'context-lost', 'WebGL context lost', {});
+  // Pause render loop / show lightweight recovery state
+});
+
+canvas.addEventListener('webglcontextrestored', () => {
+  diagnostics.info('render', 'context-restored', 'WebGL context restored', {});
+  // Rebuild renderer-owned GPU resources or trigger full app recovery path
+});
+```
+
+**Recommendation:** at minimum log and surface a user-friendly recovery hint. A more complete second-step enhancement can decide whether FREYRAUM should rebuild all renderer resources automatically or do a controlled reload/re-init.
 
 ---
 
@@ -830,6 +903,8 @@ After implementing all slices, update every markdown file in the repository with
 }
 ```
 
+**Additional accessibility validation note:** hiding the timeline visually in short landscape must be tested with keyboard-only and screen reader flows, and must not become the only place where artwork switching is discoverable.
+
 ### Implementation order summary
 
 1. **Slice 1** — `src/utils/device.ts` + debounced resize in `main.ts` (fixes Bug 1 and 4).
@@ -853,6 +928,8 @@ After implementing all slices, update every markdown file in the repository with
 | `interaction` | `duplicate-suppressed` | `debug` | Synthetic mouse event suppressed after touch; verbose only |
 | `quality` | `mobile-startup` | `info` | When startup heuristic overrides default preset |
 | `quality` | `adaptive-downgrade` | `warn` | Already exists; ensure mobile context is logged |
+| `render` | `context-lost` | `warn` | WebGL context loss on mobile/tab background/memory pressure |
+| `render` | `context-restored` | `info` | Context successfully restored or recovery path triggered |
 
 ### Browser/API stability notes (updated from code audit)
 
@@ -862,6 +939,26 @@ After implementing all slices, update every markdown file in the repository with
 - **`100dvh`:** Supported in iOS 16+, Chrome 108+, Firefox 110+. Use with fallback: `height: 100vh; height: 100dvh;`.
 - **Safe-area `env()` variables:** Supported since iOS 11.2 and Chrome 69. Completely harmless fallback of `0px` on unsupported or non-notch devices.
 - **`prefers-color-scheme` and dark-mode:** Out of scope for v0.11 but the safe-area/responsive refactor should not block it in the future.
+
+### Additional potential problems and further enhancements
+
+The final online validation did not overturn the plan, but it did highlight some extra issues and enhancement opportunities that should now be tracked explicitly.
+
+#### Potential problems still to watch
+
+- **320 px reflow risk:** WCAG reflow expectations reinforce that fixed-position chrome and multi-panel overlays are still the main layout risk on very narrow phones and browser-zoomed states.
+- **Canvas drawing-buffer drift:** on high-DPR devices, CSS size and internal drawing-buffer size can diverge during orientation changes, split-screen, or browser chrome transitions if only a basic resize path is used.
+- **Context loss on mobile memory pressure:** current plan now includes this, but it remains a real runtime risk on older iPhones, Android WebView variants, and long-lived sessions.
+- **Gesture discoverability on small screens:** if short-height landscape hides or minimizes chrome aggressively, users still need obvious visible ways to navigate, reset, and open preferences.
+- **Fullscreen behavior variance:** browser fullscreen support differs across devices and should be treated as a graceful enhancement, not a guaranteed control path.
+
+#### Further enhancements worth considering after the first stable v0.11 pass
+
+- **`ResizeObserver` for renderer sizing** after the initial resize fix is shipped.
+- **Explicit context-loss recovery UX** rather than only logging and asking the user to refresh.
+- **Dedicated gesture help overlay** shown once on first coarse-pointer session, then remembered in preferences or local storage.
+- **Device test harness / debug panel** that prints layout tier, safe-area values, pointer mode, DPR, active preset, and last resize reason in one place for QA.
+- **Safe-area simulation styles** for desktop QA so contributors can verify notch/home-indicator spacing without always needing a physical device.
 
 ### Resource ownership — updated for v0.11
 
@@ -883,9 +980,11 @@ After implementing all slices, update every markdown file in the repository with
 - [ ] Bug 6 (prefs overflow) verified: prefs panel fits on 375 px wide phone.
 - [ ] Bug 7 (safe-area) verified: notch/home indicator do not obscure controls on iPhone.
 - [ ] All gestures have visible button alternatives.
+- [ ] 320 px width / browser-zoom reflow verified: no critical horizontal overflow or hidden actions.
 - [ ] Keyboard tab order and screen reader flow unchanged.
 - [ ] Desktop layout pixel-identical to pre-v0.11 except intentional safe-area/spacing adjustments.
 - [ ] Reduced motion and high contrast work in all responsive states.
+- [ ] WebGL context-loss behavior verified: graceful recovery path or clear recovery guidance exists.
 - [ ] `customer-preview/` regenerated if source output changes.
 
 ### Risks

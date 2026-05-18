@@ -2,13 +2,15 @@
 
 ## Unreleased
 
-### Documentation (v0.11 technical coding plan — 2026-05-18)
+### Documentation (v0.11 final research-backed technical coding plan — 2026-05-18)
 
 - Upgraded the v0.11 plan from a high-level goal document to a full technical coding plan with concrete TypeScript interfaces, code patterns, CSS snippets, and file-level action items.
 - Identified and documented **7 code-level bugs** found during deep source audit: `RendererManager.resize()` never called on window resize; all touch listeners passive preventing iOS pinch-own; `TouchInteraction`/`ZoomPan`/`MouseInteraction` coexisting without synthetic-mouse suppression; `isMobileDevice()` checking only width; `HintText` hardcoded desktop copy; preferences panel overflow on narrow phones; missing `viewport-fit=cover` and safe-area CSS.
 - Planned new `src/utils/device.ts` with `DeviceCapabilities` interface, `detectDeviceCapabilities()`, `LayoutTier` type, and `PointerPrimary` type.
 - Planned new `src/interaction/CanvasInteraction.ts` with Pointer Events primary path, Touch Events fallback, gesture state machine, non-passive pinch fix, synthetic-mouse suppression, `setPointerCapture`, and proper `dispose()`.
 - Documented all CSS changes: `viewport-fit=cover`, `env(safe-area-inset-*)` variables, `100dvh` with fallback, new 4-tier SCSS breakpoints, `touch-action: none` on canvas, compact info-panel mode, preferences panel `max-height` + `overflow-y: auto`.
+- Finalized the v0.11 plan with online validation against W3C WCAG 2.2/2.1, W3C Pointer Events Level 3, MDN viewport/touch-action/env guidance, MDN WebGL best practices, and Khronos WebGL High-DPI/context-loss guidance.
+- Added further validated risks/enhancements: explicit 320 px reflow testing, WebGL context-loss handling, optional `ResizeObserver` follow-up for drawing-buffer sizing, and caution that `touch-action: none` must stay scoped to the canvas.
 - Updated `FINDINGS.md` with detailed per-bug root cause, file references, and fix descriptions.
 - Updated all other markdown files to reference the technical plan pass.
 

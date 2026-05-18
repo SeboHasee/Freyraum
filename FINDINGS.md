@@ -1,10 +1,33 @@
 # FINDINGS
 
-## 2026-05-18 — v0.11 technical coding plan: responsive phones/tablets, touch, gestures, and compatibility
+## 2026-05-18 — v0.11 final research-backed technical coding plan: responsive phones/tablets, touch, gestures, and compatibility
 
 ### Scope of this pass
 
-Updated from documentation-only to full technical coding plan. Every v0.11 slice now maps to exact files, functions, TypeScript interfaces, CSS patterns, and concrete code suggestions. No runtime code was changed in this pass.
+Updated from a local code-audit plan to a final research-backed technical coding plan. Every v0.11 slice still maps to exact files, functions, TypeScript interfaces, CSS patterns, and concrete code suggestions, but the plan is now also validated against current official accessibility, input, viewport, and WebGL guidance. No runtime code was changed in this pass.
+
+### Online validation result
+
+The previous v0.11 direction was confirmed by current official guidance. The main outcome of the online validation was not a redesign of the plan, but four upgrades:
+
+1. treat **WebGL context loss/recovery** as part of mobile reliability, not a later nice-to-have;
+2. treat **high-DPI drawing-buffer sizing** as a first-class acceptance concern;
+3. treat **320 px reflow and browser zoom** as explicit test gates;
+4. treat **`touch-action` + listener passivity** as a combined browser-compatibility rule.
+
+### Official / authoritative sources used in the validation
+
+- W3C WCAG 2.2 — Target Size (Minimum): <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html>
+- W3C WCAG 2.1 — Pointer Gestures: <https://www.w3.org/WAI/WCAG21/Understanding/pointer-gestures.html>
+- W3C WCAG 2.1 — Pointer Cancellation: <https://www.w3.org/WAI/WCAG21/Understanding/pointer-cancellation.html>
+- W3C WCAG 2.1 — Reflow: <https://www.w3.org/WAI/WCAG21/Understanding/reflow.html>
+- W3C Pointer Events Level 3: <https://www.w3.org/TR/pointerevents3/>
+- MDN — `touch-action`: <https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action>
+- MDN — viewport meta / `viewport-fit`: <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport>
+- MDN — CSS `env()` environment variables: <https://developer.mozilla.org/en-US/docs/Web/CSS/env>
+- MDN — WebGL best practices: <https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices>
+- Khronos — Handling High DPI in WebGL: <https://wikis.khronos.org/webgl/HandlingHighDPI>
+- Khronos WebGL spec — context loss handling: <https://registry.khronos.org/webgl/specs/latest/1.0/>
 
 ### Code-level bugs found during technical audit (2026-05-18)
 
@@ -62,6 +85,14 @@ These were found by reading every relevant source file. Each entry records the f
 - All controls have `aria-label`, real semantic HTML, and `focus-visible` ring — strong accessibility baseline.
 - `FrameBudgetMonitor` clamps long frames (tab switch) and has navigation cooldown — thermal spikes will not trigger premature quality downgrades.
 
+### Additional risks and enhancements validated online
+
+- **Reflow remains a real risk** because FREYRAUM uses fixed-position chrome and overlay UI; the implementation must now explicitly test 320 px width / browser zoom behavior.
+- **`touch-action: none` belongs on the canvas only**, not the whole page. The page must not globally disable browser zoom.
+- **Context loss needs a documented recovery path**. Logging alone is not enough for a premium customer-facing gallery if memory pressure causes the WebGL context to drop.
+- **A `ResizeObserver` follow-up would improve resilience** after the first v0.11 shipping pass, especially for split-view or embedded layouts.
+- **Fullscreen should stay a graceful enhancement** because support and UX vary by device and browser.
+
 ### Updated technical conclusion
 
 This is a targeted hardening pass, not a redesign. The seven bugs listed above are actionable and have low-risk fixes. The positive baseline means most of the work is additive (new `device.ts`, new `CanvasInteraction.ts`, CSS variables, breakpoints) rather than replacing working code.
@@ -71,6 +102,7 @@ This is a targeted hardening pass, not a redesign. The seven bugs listed above a
 Documentation-only pass. Runtime changes will be in a follow-on implementation PR. That PR must:
 - Run `npm run lint` and `npm run build` and see only the existing known TS parser and Sass warnings.
 - Manually verify all QA matrix entries documented in `plan.md`.
+- Add explicit checks for 320 px reflow/browser zoom, high-DPI resize accuracy, and context-loss handling.
 - Regenerate `customer-preview/` if any source output changes.
 
 ---
