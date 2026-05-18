@@ -117,8 +117,10 @@ export function detectDeviceCapabilities(): DeviceCapabilities {
   let layoutTier: LayoutTier;
   if (w < 360) layoutTier = 'phone-small';
   else if (w < 600) layoutTier = 'phone-portrait';
-  else if (w < 900 && portrait) layoutTier = 'phone-landscape';   // tall narrow landscape
-  else if (w < 900) layoutTier = 'tablet-portrait';
+  // 600–899px where height >= width: still feels like portrait orientation (e.g. 768×1024 tablet portrait)
+  else if (w < 900 && portrait) layoutTier = 'tablet-portrait';
+  // 600–899px where width > height: short landscape phone or small landscape tablet
+  else if (w < 900) layoutTier = 'phone-landscape';
   else if (w < 1180) layoutTier = 'tablet-landscape';
   else layoutTier = 'desktop';
 
@@ -644,9 +646,16 @@ export function suggestStartupQuality(): QualityPresetId {
   const coarse = window.matchMedia('(pointer: coarse)').matches;
   const area = window.innerWidth * window.innerHeight;
 
-  // Phone-class device: coarse pointer, high DPR, or small viewport area
-  if (coarse && dpr >= 2 && area < 600_000) return 'battery';
-  if (coarse && area < 800_000) return 'balanced';
+  // Thresholds (document here for reviewers):
+  // 600_000 px² ≈ a 775×775 viewport — typical small phone portrait (e.g. 390×844 = 329 160)
+  // 800_000 px² ≈ an 894×894 viewport — medium phone or low-end tablet
+  const SMALL_PHONE_AREA = 600_000;
+  const MEDIUM_DEVICE_AREA = 800_000;
+
+  // High-DPR coarse-pointer phone: battery preset to avoid thermal throttling
+  if (coarse && dpr >= 2 && area < SMALL_PHONE_AREA) return 'battery';
+  // Other coarse-pointer devices (mid-range phones, older tablets): balanced
+  if (coarse && area < MEDIUM_DEVICE_AREA) return 'balanced';
   // Large tablet or desktop
   return 'balanced';  // keep default as balanced; user can raise to high
 }
@@ -801,7 +810,11 @@ After implementing all slices, update every markdown file in the repository with
 @media (max-height: 499px) {
   .info-panel        { display: none; }            // no room; artwork + controls only
   .topbar            { height: calc(48px + var(--safe-top)); }
-  .timeline          { display: none; }            // hidden in landscape, reachable via swipe
+  // Timeline: visually hidden but kept in the DOM so keyboard/screen-reader users
+  // can still tab to it. Use aria-hidden='false' and ensure keyboard navigation
+  // (Arrow keys, tab to thumbnails) still works before shipping.
+  .timeline          { visibility: hidden; position: absolute; pointer-events: none; }
+  // Alternative nav: swipe left/right on canvas; nav arrow buttons remain visible.
 }
 
 // Phase 3: tablet portrait — 600–899px
