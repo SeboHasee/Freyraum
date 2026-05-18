@@ -85,7 +85,10 @@ export class Timeline {
 
     container.appendChild(this.el);
     this.setActive(0);
-    window.requestAnimationFrame(() => this.centerThumb(0, 'auto'));
+    // Double RAF: first frame appends the element; second frame runs after the
+    // browser has performed layout so getBoundingClientRect() returns valid
+    // dimensions for the centering calculation.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => this.centerThumb(0, 'auto')));
   }
 
   private handleThumbKey = (event: KeyboardEvent): void => {

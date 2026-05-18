@@ -1949,9 +1949,7 @@ Completed:
 
 ---
 
-### Acceptance checks for v0.12
-
-- Dark spot speckle gone at Hoch under gallery-soft and raking-inspection.
+### Acceptance checks (v0.10 Hoch specular/shadow)
 - Bright specular spots at blob centers not visible at close-up zoom.
 - Normal/detail normal/parallax relief still visible and pleasant under Hoch.
 - Very vertical pictures reset far enough away to show the full framed artwork.
