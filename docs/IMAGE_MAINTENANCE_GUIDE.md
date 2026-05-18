@@ -20,7 +20,18 @@ The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs,
 
 Support checks after implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states. The QA matrix is documented in `plan.md`.
 
-## Current v0.12 status (zoom / tall-picture framing / timeline visibility)
+## Current v0.13 status (nav buttons, zoom range, pan range, icon centering)
+
+Implemented on 2026-05-18. This pass fixed four customer-reported bugs after the v0.12 zoom/framing/timeline pass:
+
+- left/right nav buttons were cut off by the timeline → fixed with explicit `bottom: calc(192px + var(--safe-bottom))` positioning and `--chrome-bottom` raised to 200px+;
+- zoom range was too narrow → `MIN_CAMERA_Z` lowered to 0.5, `MIN_OVERVIEW_CAMERA_Z` raised to 18.0, `OVERVIEW_HEADROOM_Z` raised to 3.5;
+- pan range too tight when zoomed in → `INSPECTION_OVERSCROLL` raised to 3.0 world units;
+- gear and fullscreen icons not centred → added icon span CSS to clear inline descender gap.
+
+Changed files: `src/gallery/GalleryManager.ts`, `src/styles/main.scss`.
+
+## Previous v0.12 status (zoom / tall-picture framing / timeline visibility)
 
 Implemented on 2026-05-18. This pass focused on three viewing issues rather
 than the import pipeline:
@@ -34,16 +45,6 @@ logic, `src/main.ts` for art-safe viewport measurement and resize/refit wiring,
 and `src/timeline/Timeline.ts` + `src/styles/main.scss` for active timeline
 visibility. The importer, generated manifests, and `webglImage` path are not
 part of this follow-up.
-
-The shipped implementation includes:
-
-- an injected **art-safe viewport metrics** model from `main.ts`;
-- separate **reset-fit** and **far overview** zoom distances;
-- shared viewport math for reset/min/pan/hover consistency;
-- timeline **headroom + scroll gutters + manual centering**;
-- reduced-motion-aware timeline auto-scrolling;
-- diagnostics for `show-artwork-complete`, `gallery/viewport-refit`,
-  `layout/art-viewport`, and non-default `timeline/center-active`.
 
 ## Quick overview
 

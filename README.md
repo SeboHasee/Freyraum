@@ -2,22 +2,26 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current status — v0.12 zoom and framing implemented
+## Current status — v0.13 nav/zoom/pan/icon fixes implemented
 
-**Implemented 2026-05-18.** The current build includes the v0.12 zoom/framing/timeline pass:
+**Implemented 2026-05-18.** The current build includes the v0.13 follow-up fix pass:
 
-- zoom-out now allows a noticeably farther overview distance beyond reset;
-- very tall / long vertical artworks fit against a measured art-safe viewport in the standard/reset view;
-- the selected timeline thumbnail remains fully visible and is not cut off by the timeline strip.
+- nav left/right buttons no longer overlap or are cut off by the timeline;
+- zoom-out now allows stepping back to a camera distance of 18+ world units (far overview);
+- zoom-in allows close detail inspection down to camera distance 0.5;
+- pan when zoomed in extends 3 world units past the artwork edge (more freedom to explore narrow artworks side to side);
+- gear settings icon and fullscreen icon are now precisely centred inside their circular buttons.
 
 What changed technically:
 
-- `GalleryManager` now uses **art-safe viewport metrics** instead of relying only on raw camera aspect;
-- **reset-fit zoom** and **far overview zoom** are separate bounds;
-- timeline visibility uses **CSS headroom + scroll gutters + transform-aware manual centering**;
-- programmatic timeline scrolling respects **reduced motion**.
+- `.nav-controls` bottom position raised to `calc(192px + safe-bottom)`, clearing the timeline by 15px; `--chrome-bottom` raised to keep zoom controls and art-fit math in sync;
+- `MIN_CAMERA_Z` lowered to `0.5`, `MIN_OVERVIEW_CAMERA_Z` raised to `18.0`, `OVERVIEW_HEADROOM_Z` raised to `3.5`;
+- `INSPECTION_OVERSCROLL` raised from `0.5` to `3.0` world units;
+- `.prefs__trigger-icon` and `.fullscreen-btn__icon` CSS rules added to clear inline descender gap.
 
-See [`plan.md`](./plan.md#v012--implemented-farther-zoom-out-full-tall-picture-default-fit-and-unclipped-active-timeline-selection-2026-05-18) for implementation details and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v012-implementation-pass-farther-zoom-out-tall-picture-fit-and-unclipped-timeline-selection) for findings, diagnostics, and validation status.
+See [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v013-implementation-pass-nav-layout-zoom-range-pan-range-and-icon-centering) for audit findings and validation notes.
+
+## Previous pass — v0.12 zoom and framing
 
 ## One-click local customer preview
 

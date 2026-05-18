@@ -72,7 +72,10 @@
 
   // Chrome spacing tokens (absorb safe-area into the spacing budget).
   --chrome-top:    max(72px, calc(56px + var(--safe-top)));
-  --chrome-bottom: max(168px, calc(148px + var(--safe-bottom)));
+  // v0.13: raised from max(168px, 148px+safe) to properly clear the timeline.
+  // Timeline height ≈ 149px at bottom: 28px → top edge ≈ 177px. Using 200px
+  // gives comfortable clearance and keeps zoom controls above the timeline too.
+  --chrome-bottom: max(200px, calc(180px + var(--safe-bottom)));
 }
 
 html,
@@ -268,7 +271,11 @@ button {
 // =============================================================================
 .nav-controls {
   position: fixed;
-  bottom: var(--chrome-bottom);
+  // v0.13: replaced `bottom: var(--chrome-bottom)` with an explicit calculation
+  // that places the nav buttons above the timeline rather than relying on
+  // --chrome-bottom alone. Timeline: bottom 28px, height ≈ 149px → top ≈ 177px.
+  // Using 192px gives 15px of safe clearance above the timeline's top edge.
+  bottom: calc(192px + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -392,6 +399,20 @@ button {
     transform: scale(1.05);
   }
 
+  // v0.13: icon spans must be flex containers with line-height cleared so the
+  // SVG sits exactly at the optical centre of the button. Without this the
+  // inline default leaves a fractional descender gap below the icon.
+  .fullscreen-btn__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+
+    svg {
+      display: block;
+    }
+  }
+
   .fullscreen-btn__exit {
     display: none;
   }
@@ -433,6 +454,19 @@ button {
   box-shadow: var(--shadow-soft);
   transition: background var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
+
+  // v0.13: same icon centering fix as fullscreen button — clear inline
+  // descender space so the gear icon sits at the optical centre.
+  .prefs__trigger-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+
+    svg {
+      display: block;
+    }
+  }
 
   &:hover {
     background: var(--glass-bg-strong);

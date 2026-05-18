@@ -11,13 +11,15 @@ v0.11 already implemented the main phone/tablet hardening pass: touch gestures, 
 
 ## Current viewing status
 
-The customer-facing **v0.12 viewing pass is implemented**:
+The customer-facing **v0.13 follow-up fixes are implemented**:
 
-- zoom-out goes farther than reset view,
-- very tall pictures are fitted against the actually usable artwork viewport,
-- and the selected picture in the bottom timeline stays fully visible.
+- the left and right navigation buttons no longer overlap or are cut off by the bottom timeline;
+- zoom-out goes much farther for wide overview shots;
+- zoom-in allows very close detail inspection;
+- panning when zoomed in extends further to the sides so narrow artworks can be fully explored;
+- the gear settings icon and fullscreen icon are precisely centred in their buttons.
 
-For support/debugging, the current build now logs:
+For support/debugging, the current build logs:
 
 - `show-artwork-complete` with reset/min/max zoom and usable viewport data,
 - `gallery/viewport-refit` when the browser viewport or chrome changes,
@@ -182,6 +184,9 @@ if a new artifact appears.
 If the artifact looks like a hole with the same picture behind it, include the
 `show-artwork-complete` diagnostics entry and check `parallaxScale`; v0.10
 expects Hoch to use the reduced value `0.012`.
+
+**The navigation buttons (left/right arrows) look cut off or hidden.**
+This was fixed in v0.13. If it still happens, send a screenshot and note the browser/device.
 
 **Very tall pictures look too close when I reset the view.**
 This was improved in v0.10 and hardened again in v0.12. Reset view now uses the

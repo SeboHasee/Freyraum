@@ -1,5 +1,60 @@
 # FREYRAUM Plan
 
+## v0.13 — Implemented: nav button layout, wider zoom range, more pan freedom, icon centering (2026-05-18)
+
+### Status
+
+**Implemented 2026-05-18.** Four customer-reported regressions and gaps fixed after the v0.12 zoom/framing/timeline pass. Runtime changes in `src/gallery/GalleryManager.ts` and `src/styles/main.scss`; `customer-preview/` rebuilt. Both `npm run lint` and `npm run build` pass.
+
+### Customer-observed problems
+
+- Left and right nav buttons were cut off by the timeline at the bottom.
+- Zoom-out did not go far enough for a true wide overview; zoom-in stopped before fine-detail inspection was comfortable.
+- When zoomed in close, panning side to side stopped too soon to explore narrow artworks.
+- The gear/settings icon and the fullscreen icon were not centred inside their circular buttons.
+
+### Root cause analysis
+
+#### Bug 1 — Nav buttons cut off by timeline
+
+- `--chrome-bottom: max(168px, 148px+safe)` placed nav button bottom edges at 168px from the viewport bottom.
+- After the v0.12 timeline-list padding increase (`padding: 16px 18px 8px`), the timeline's total rendered height became ≈149px.
+- The timeline sits at `bottom: calc(28px + var(--safe-bottom))`, so its top edge moved to ≈177px from the bottom.
+- Nav buttons (bottom edge 168px) were now 9px inside the timeline zone. With equal z-index, the later-appended timeline element appeared on top.
+
+#### Bug 2 — Zoom range too narrow
+
+- `MIN_CAMERA_Z = 1.2` prevented getting close enough for fine brushstroke inspection.
+- `MIN_OVERVIEW_CAMERA_Z = 10.75` and `OVERVIEW_HEADROOM_Z = 1.6` capped the far overview at roughly 12–13 world units, which is not far enough for a full environment overview.
+
+#### Bug 3 — Pan range too tight when zoomed in
+
+- `INSPECTION_OVERSCROLL = 0.5` allowed viewport centre to travel only 0.5 world units past the artwork edge. For narrow artworks at close zoom, this prevented full left/right exploration.
+
+#### Bug 4 — Icons not optically centred
+
+- `.prefs__trigger-icon` and `.fullscreen-btn__icon` spans had no explicit CSS. Default `display: inline` inside a flex button carries a fractional descender baseline offset that shifts inline content slightly downward, making the SVG appear off-centre inside the circular button.
+
+### What shipped
+
+- **`--chrome-bottom` raised** to `max(200px, 180px+safe)` so zoom controls (which use this token) also clear the timeline.
+- **`.nav-controls` re-positioned** to `bottom: calc(192px + var(--safe-bottom))` — 15px above the timeline's computed top edge.
+- **`MIN_CAMERA_Z`** lowered from `1.2` to `0.5`.
+- **`MIN_OVERVIEW_CAMERA_Z`** raised from `10.75` to `18.0`.
+- **`OVERVIEW_HEADROOM_Z`** raised from `1.6` to `3.5`.
+- **`INSPECTION_OVERSCROLL`** raised from `0.5` to `3.0`.
+- **Icon spans CSS** added: `.prefs__trigger-icon` and `.fullscreen-btn__icon` get `display: flex; align-items: center; justify-content: center; line-height: 0; svg { display: block }`.
+
+### Changed files
+
+- `src/gallery/GalleryManager.ts`
+- `src/styles/main.scss`
+- `customer-preview/freyraum-gallery.js`
+- `customer-preview/style.css`
+- all documentation markdown files
+
+---
+
 ## v0.12 — Implemented: farther zoom-out, full tall-picture default fit, and unclipped active timeline selection (2026-05-18)
 
 ### Status

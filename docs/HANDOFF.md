@@ -1,9 +1,28 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current status: v0.12 zoom/framing/timeline follow-up is
-implemented.** See the new v0.12 section immediately below, then the v0.11
-implemented section for the responsive/touch hardening summary.
+contributors. **Current status: v0.13 nav/zoom/pan/icon follow-up is
+implemented.** See the new v0.13 section immediately below, then v0.12 for the
+zoom/framing/timeline pass, then v0.11 for the responsive/touch hardening.
+
+## v0.13 nav/zoom/pan/icon fixes — Implemented (2026-05-18)
+
+Customer-reported bugs fixed after v0.12:
+
+1. left and right nav buttons were cut off by the bottom timeline strip;
+2. zoom range was not wide enough — users want to zoom in and out further;
+3. when zoomed in close, pan range was too tight to explore narrow artworks fully;
+4. gear/settings icon and fullscreen icon were not optically centred in their circles.
+
+**Root causes fixed:**
+
+- `--chrome-bottom` was `max(168px, ...)`. After the v0.12 timeline padding change the timeline top edge moved to ≈177px from the viewport bottom, placing nav buttons 9px inside the timeline zone. Updated to `max(200px, 180px+safe)`; nav-controls re-pointed to `bottom: calc(192px + var(--safe-bottom))`.
+- `MIN_CAMERA_Z = 1.2` stopped close inspection too early → lowered to `0.5`.
+- `MIN_OVERVIEW_CAMERA_Z = 10.75` + `OVERVIEW_HEADROOM_Z = 1.6` limited far overview → raised to `18.0` and `3.5` respectively.
+- `INSPECTION_OVERSCROLL = 0.5` limited side-to-side pan → raised to `3.0`.
+- `.prefs__trigger-icon` and `.fullscreen-btn__icon` spans had `display: inline` → added flex + `line-height: 0` + `svg { display: block }` to clear the descender gap.
+
+**Validation:** `npm run lint` and `npm run build` pass. `customer-preview/` rebuilt.
 
 ## v0.12 zoom/framing/timeline follow-up — Implemented (2026-05-18)
 

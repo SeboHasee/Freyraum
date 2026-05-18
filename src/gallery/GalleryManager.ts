@@ -34,9 +34,15 @@ interface ZoomBounds {
 }
 
 const DEFAULT_CAMERA_Z = 7;
-const MIN_OVERVIEW_CAMERA_Z = 10.75;
-const OVERVIEW_HEADROOM_Z = 1.6;
-const MIN_CAMERA_Z = 1.2;
+// v0.13: raised from 10.75 — lets users step back noticeably farther than the
+// reset/fit view for a wide overview of the gallery environment.
+const MIN_OVERVIEW_CAMERA_Z = 18.0;
+// v0.13: raised from 1.6 — extra headroom beyond the computed reset-fit zoom so
+// the far overview distance grows with tall artworks rather than staying flat.
+const OVERVIEW_HEADROOM_Z = 3.5;
+// v0.13: lowered from 1.2 — allows the camera to move very close for
+// fine-detail inspection without being stopped too early.
+const MIN_CAMERA_Z = 0.5;
 const MIN_VISIBLE_ARTWORK_FRACTION = 0.28;
 const RESET_VIEW_FRAME_MARGIN = 1.04;
 const MIN_USABLE_VIEWPORT_FRACTION = 0.35;
@@ -45,8 +51,11 @@ const RESET_REFIT_EPSILON = 0.25;
  * v0.03: replaces `PAN_SAFETY_FACTOR = 0.92`. Allows the viewport centre to
  * reach the artwork edge plus a small overscroll margin so every corner is
  * inspectable at maximum zoom.
+ * v0.13: raised from 0.5 to 3.0 — allows panning well past the artwork edge
+ * when zoomed in close, so narrow or elongated artworks can be fully explored
+ * side to side.
  */
-const INSPECTION_OVERSCROLL = 0.5;
+const INSPECTION_OVERSCROLL = 3.0;
 
 /** Roles that can be filled in by the procedural factory when no authored map exists. */
 const PROCEDURAL_ROLES: PaintingMapRole[] = [

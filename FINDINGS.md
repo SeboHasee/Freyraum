@@ -1,5 +1,45 @@
 # FINDINGS
 
+## 2026-05-18 — v0.13 implementation pass: nav layout, zoom range, pan range, and icon centering
+
+### Scope of this pass
+
+Customer-reported regressions and UX gaps identified after the v0.12 zoom/framing/timeline implementation. Four distinct issues were audited and fixed. Runtime changes landed in `src/gallery/GalleryManager.ts` and `src/styles/main.scss`; `customer-preview/` was rebuilt.
+
+### Code-level findings fixed
+
+- **Nav controls overlapping the timeline (regression from v0.12 timeline-headroom change).**
+  Root cause: `--chrome-bottom` was `max(168px, 148px+safe)` and `.nav-controls` used `bottom: var(--chrome-bottom)`. After the v0.12 timeline padding increase, the timeline's top edge moved to ≈177px from the viewport bottom, placing the nav buttons (bottom edge at 168px) 9px inside the timeline zone. Both elements shared `z-index: 100`; the timeline won the stacking context because it was appended later.
+  Fix: `.nav-controls` now uses `bottom: calc(192px + var(--safe-bottom))`, giving 15px of clearance above the timeline's top edge. `--chrome-bottom` raised to `max(200px, 180px+safe)` so the zoom controls (which use `--chrome-bottom`) also clear the timeline, and the JS art-viewport fallback floor stays consistent.
+
+- **Zoom range too narrow in both directions.**
+  Root cause: `MIN_CAMERA_Z = 1.2` stopped close inspection too early; `MIN_OVERVIEW_CAMERA_Z = 10.75` and `OVERVIEW_HEADROOM_Z = 1.6` limited the far overview.
+  Fix: `MIN_CAMERA_Z` → `0.5`, `MIN_OVERVIEW_CAMERA_Z` → `18.0`, `OVERVIEW_HEADROOM_Z` → `3.5`.
+
+- **Pan limit too tight when zoomed in close.**
+  Root cause: `INSPECTION_OVERSCROLL = 0.5` only allowed the viewport centre to reach 0.5 world units past the artwork edge, which feels cramped on narrow/elongated artworks at close zoom.
+  Fix: `INSPECTION_OVERSCROLL` → `3.0`.
+
+- **Gear icon and fullscreen icon not optically centred in their circular buttons.**
+  Root cause: `.prefs__trigger-icon` and `.fullscreen-btn__icon` spans had no explicit CSS, so they used `display: inline`. Even inside a `display: flex` button, inline elements carry a fractional descender baseline offset that shifts the SVG slightly downward from the visual centre of the circle.
+  Fix: Added explicit CSS rules for both icon spans with `display: flex; align-items: center; justify-content: center; line-height: 0; svg { display: block }`.
+
+### Implementation outcome
+
+- Nav controls sit clearly above the timeline with 15px of clearance.
+- Zoom-out now allows stepping back to a camera distance of at least 18 world units (+ extra headroom beyond tall-artwork fit). Zoom-in allows detail inspection at camera distance 0.5.
+- Pan limits extend 3.0 world units past the artwork edge in all four directions when zoomed close.
+- Gear and fullscreen icons are precisely centred in their buttons on all browsers.
+
+### Validation status
+
+- Baseline before changes: `npm run lint` ✅, `npm run build` ✅
+- Final after changes: `npm run lint` ✅, `npm run build` ✅
+- Known warnings remain unchanged: TypeScript parser support warning and Sass legacy JS API deprecation warning.
+- `customer-preview/freyraum-gallery.js` and `customer-preview/style.css` were regenerated.
+
+---
+
 ## 2026-05-18 — v0.12 implementation pass: farther zoom-out, tall-picture fit, and unclipped timeline selection
 
 ### Scope of this pass

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Implemented (v0.13 nav/zoom/pan/icon fixes — 2026-05-18)
+
+- **Nav controls no longer cut off by timeline.** `.nav-controls` bottom position changed from `bottom: var(--chrome-bottom)` (168px) to `bottom: calc(192px + var(--safe-bottom))`, placing the buttons 15px above the timeline's top edge. `--chrome-bottom` was updated from `max(168px, 148px+safe)` to `max(200px, 180px+safe)` to keep zoom controls and artwork fit measurements in sync.
+- **Wider zoom range both directions.** `MIN_CAMERA_Z` lowered from `1.2` to `0.5` (closer inspection); `MIN_OVERVIEW_CAMERA_Z` raised from `10.75` to `18.0` and `OVERVIEW_HEADROOM_Z` raised from `1.6` to `3.5` (farther overview).
+- **More horizontal pan room when zoomed in.** `INSPECTION_OVERSCROLL` raised from `0.5` to `3.0` world units, so narrow or elongated artworks can be panned well past the edge when close.
+- **Gear and fullscreen icons now optically centred.** Added `.prefs__trigger-icon` and `.fullscreen-btn__icon` CSS rules (`display: flex; align-items: center; justify-content: center; line-height: 0; svg { display: block }`) to eliminate the fractional inline descender gap that offset the icons downward inside their circular buttons.
+- Rebuilt `customer-preview/freyraum-gallery.js` and `customer-preview/style.css`.
+- Updated `plan.md`, `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` with v0.13 details.
+
 ### Implemented (v0.12 zoom/framing/timeline — 2026-05-18)
 
 - Added `ArtworkViewportMetrics` / `ViewportMetricsProvider` to `GalleryManager` so reset, min, pan, hover, and diagnostics math can use the measured art-safe viewport instead of only raw camera aspect.
