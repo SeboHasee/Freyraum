@@ -59,12 +59,27 @@
   --dur-slow: 0.6s;
 
   --font: 'Inter', system-ui, -apple-system, sans-serif;
+
+  // ---------------------------------------------------------------------------
+  // v0.11 — safe-area + chrome-spacing tokens
+  // ---------------------------------------------------------------------------
+  // Safe-area insets (0 on desktop and non-notch devices; populated on
+  // iPhone/iPad with notch/home indicator when viewport-fit=cover is set).
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+
+  // Chrome spacing tokens (absorb safe-area into the spacing budget).
+  --chrome-top:    max(72px, calc(56px + var(--safe-top)));
+  --chrome-bottom: max(168px, calc(148px + var(--safe-bottom)));
 }
 
 html,
 body {
   width: 100%;
-  height: 100%;
+  height: 100%;        // legacy fallback
+  height: 100dvh;      // dynamic viewport height — collapses with browser chrome
   overflow: hidden;
   background: radial-gradient(ellipse at center, var(--bg1) 0%, var(--bg3) 100%);
   font-family: var(--font);
@@ -85,6 +100,12 @@ canvas {
   inset: 0;
   width: 100% !important;
   height: 100% !important;
+  // v0.11 — own the gesture on the canvas. Browser will not run native
+  // scroll/zoom for touches that originate inside this element, which is
+  // exactly what FREYRAUM needs because the canvas handles its own
+  // pinch/pan/swipe. `touch-action: none` is scoped to the canvas only;
+  // surrounding UI still gets normal browser scrolling.
+  touch-action: none;
 }
 
 // -----------------------------------------------------------------------------
@@ -116,11 +137,11 @@ button {
   top: 0;
   left: 0;
   right: 0;
-  height: 72px;
+  height: calc(72px + var(--safe-top));
+  padding: var(--safe-top) calc(36px + var(--safe-right)) 0 calc(36px + var(--safe-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 36px;
   z-index: 100;
   pointer-events: none;
 }
@@ -153,9 +174,9 @@ button {
 // =============================================================================
 .info-panel {
   position: fixed;
-  bottom: 188px;
-  left: 36px;
-  width: min(520px, calc(100vw - 40px));
+  bottom: calc(var(--chrome-bottom) + 20px);
+  left: calc(36px + var(--safe-left));
+  width: min(520px, calc(100vw - 40px - var(--safe-left) - var(--safe-right)));
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -167,6 +188,33 @@ button {
   transition: opacity var(--dur-base) var(--ease-out),
     transform var(--dur-base) var(--ease-out);
   box-shadow: var(--shadow-soft);
+}
+
+// v0.11 — compact phone-portrait mode. Toggled by `InfoPanel.setCompact()`
+// from `main.ts` based on the detected layout tier. The compact mode fills
+// the horizontal space minus safe-area insets and clamps the title size
+// so it does not collide with the nav buttons on small phones.
+.info-panel--compact {
+  left: calc(12px + var(--safe-left));
+  right: calc(12px + var(--safe-right));
+  width: auto;
+  bottom: calc(var(--chrome-bottom) + 80px);
+  padding: 14px 18px 16px;
+  max-height: 32vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  pointer-events: auto;
+
+  .info-panel__title {
+    font-size: clamp(22px, 6vw, 34px);
+    margin-bottom: 8px;
+  }
+
+  .info-panel__description {
+    // Allow scroll inside the panel rather than truncating, so all
+    // information remains accessible (WCAG SC 1.4.10 Reflow).
+    margin-bottom: 8px;
+  }
 }
 
 .info-panel.is-transitioning {
@@ -220,7 +268,7 @@ button {
 // =============================================================================
 .nav-controls {
   position: fixed;
-  bottom: 168px;
+  bottom: calc(var(--chrome-bottom) + 0px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -263,8 +311,8 @@ button {
 // =============================================================================
 .zoom-controls {
   position: fixed;
-  bottom: 168px;
-  right: 36px;
+  bottom: calc(var(--chrome-bottom) + 0px);
+  right: calc(36px + var(--safe-right));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -281,6 +329,8 @@ button {
 .zoom-controls__btn {
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -317,10 +367,12 @@ button {
 // =============================================================================
 .fullscreen-btn {
   position: fixed;
-  top: 96px;
-  right: 36px;
+  top: calc(var(--chrome-top) + 24px);
+  right: calc(36px + var(--safe-right));
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
@@ -359,14 +411,16 @@ button {
 // =============================================================================
 .prefs {
   position: fixed;
-  top: 96px;
-  right: 90px;
+  top: calc(var(--chrome-top) + 24px);
+  right: calc(90px + var(--safe-right));
   z-index: 110;
 }
 
 .prefs__trigger {
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
@@ -394,7 +448,13 @@ button {
   position: absolute;
   top: 56px;
   right: 0;
-  width: 320px;
+  width: min(320px, calc(100vw - var(--safe-left) - var(--safe-right) - 24px));
+  // v0.11 — bound the panel by viewport height minus safe-areas + topbar,
+  // and let the content scroll inside the panel when the device is too
+  // short (very compact phones in landscape, foldables, split-screen).
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 120px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--glass-bg-strong);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -583,10 +643,10 @@ button {
 // =============================================================================
 .timeline {
   position: fixed;
-  bottom: 28px;
+  bottom: calc(28px + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%);
-  width: min(1180px, calc(100vw - 50px));
+  width: min(1180px, calc(100vw - 50px - var(--safe-left) - var(--safe-right)));
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -604,7 +664,10 @@ button {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+  // v0.11 — proximity snap on phones gives a satisfying scroll-to-item feel
+  // without fighting the existing `scrollIntoView({behavior:'smooth'})` calls.
   scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
   padding: 2px;
 
   &::-webkit-scrollbar {
@@ -726,8 +789,8 @@ button {
 // =============================================================================
 .hint-text {
   position: fixed;
-  bottom: 156px;
-  right: 96px;
+  bottom: calc(var(--chrome-bottom) - 12px);
+  right: calc(96px + var(--safe-right));
   font-size: 11px;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -786,13 +849,13 @@ button {
 }
 
 .fallback-screen__card {
-  width: min(540px, 100%);
+  width: min(540px, calc(100vw - var(--safe-left) - var(--safe-right) - 32px));
   background: var(--glass-bg-strong);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border-strong);
   border-radius: var(--radius-lg);
-  padding: 36px 40px;
+  padding: clamp(24px, 5vw, 40px);
   box-shadow: var(--shadow-medium);
 }
 
@@ -931,38 +994,116 @@ button {
 }
 
 // =============================================================================
-// Responsive adjustments
+// v0.11 — Device-capability mirror selectors
 // =============================================================================
-@media (max-width: 720px) {
-  .info-panel {
-    bottom: 196px;
-    left: 16px;
-    padding: 22px 22px 24px;
+// `applyDeviceCaps()` in `src/utils/device.ts` writes the following data
+// attributes onto <html>:
+//   data-layout-tier="phone-small|phone-portrait|phone-landscape|tablet-portrait|tablet-landscape|desktop"
+//   data-pointer-primary="fine|coarse|none"
+//   data-hover="true|false"
+//   data-orientation="portrait|landscape"
+//   data-short-height="true|false"
+// These let SCSS react to the capability model without re-running JS.
+
+// Hide the hover-only hint copy on coarse-pointer devices (it is wrong
+// for swipe/pinch users). The HintText runtime swaps the copy when the
+// pointer is coarse; this rule keeps it hidden on very small phones.
+:root[data-layout-tier='phone-small'] .hint-text,
+:root[data-layout-tier='phone-portrait'] .hint-text {
+  display: none;
+}
+
+// Hide secondary topbar badge on phones to free horizontal space.
+:root[data-layout-tier='phone-small'] .topbar__badge,
+:root[data-layout-tier='phone-portrait'] .topbar__badge {
+  display: none;
+}
+
+// =============================================================================
+// Responsive breakpoints (v0.11)
+// =============================================================================
+// phone-small:      <360px
+// phone-portrait:   360–599px portrait
+// phone-landscape:  height <500px (short landscape, foldable, split-screen)
+// tablet-portrait:  600–899px portrait
+// tablet-landscape: 900–1179px
+// desktop:          >=1180px
+
+// --- Phase 1: phone portrait (<600px wide) ----------------------------------
+@media (max-width: 599px) {
+  .topbar {
+    padding-left: calc(16px + var(--safe-left));
+    padding-right: calc(16px + var(--safe-right));
   }
 
   .nav-controls {
-    bottom: 176px;
+    gap: 12px;
   }
 
   .zoom-controls {
-    right: 16px;
-    bottom: 176px;
-  }
-
-  .fullscreen-btn,
-  .prefs {
-    top: 80px;
+    right: calc(16px + var(--safe-right));
   }
 
   .fullscreen-btn {
-    right: 16px;
+    right: calc(16px + var(--safe-right));
   }
 
   .prefs {
-    right: 70px;
+    right: calc(70px + var(--safe-right));
   }
 
+  .timeline__thumb {
+    width: 120px;
+    height: 76px;
+  }
+}
+
+// --- Phase 2: short-height landscape (phone landscape, foldable) ------------
+// Reduce chrome height so the artwork keeps visual primacy. The timeline
+// stays in the DOM (visibility: hidden + pointer-events: none) so keyboard
+// and screen-reader navigation still work; nav buttons remain as a visible
+// gesture alternative (WCAG SC 2.5.1).
+@media (max-height: 499px) {
   .topbar {
-    padding: 0 16px;
+    height: calc(48px + var(--safe-top));
+  }
+  .info-panel {
+    display: none;
+  }
+  .timeline {
+    visibility: hidden;
+    position: absolute;
+    pointer-events: none;
+  }
+  .hint-text {
+    display: none;
+  }
+}
+
+// --- Phase 3: tablet portrait (600–899px) -----------------------------------
+@media (min-width: 600px) and (max-width: 899px) {
+  .info-panel {
+    width: min(360px, calc(100vw - 80px - var(--safe-left) - var(--safe-right)));
+    left: calc(20px + var(--safe-left));
+  }
+  .prefs__panel {
+    width: min(300px, calc(100vw - 40px - var(--safe-left) - var(--safe-right)));
+  }
+}
+
+// --- Phase 4: tablet landscape (900–1179px) ---------------------------------
+@media (min-width: 900px) and (max-width: 1179px) {
+  .info-panel {
+    width: min(420px, 42vw);
+  }
+}
+
+// Legacy block kept as transitional safety net for narrow viewports that
+// don't hit the explicit phone-portrait breakpoint (e.g. iPad split view).
+@media (max-width: 720px) {
+  .info-panel:not(.info-panel--compact) {
+    bottom: calc(var(--chrome-bottom) + 28px);
+    left: calc(16px + var(--safe-left));
+    padding: 22px 22px 24px;
   }
 }

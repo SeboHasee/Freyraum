@@ -132,6 +132,17 @@ export class PreferencesStore {
     this.emit();
   }
 
+  /**
+   * v0.11 — returns `true` if the user has previously set a quality
+   * preference (i.e. localStorage holds an explicit `quality` value).
+   * Used by `main.ts` to decide whether to apply the mobile startup
+   * quality heuristic. Once the user has chosen, their choice is
+   * respected and the heuristic is not re-applied.
+   */
+  static hasStoredQuality(): boolean {
+    return readStored().quality !== undefined;
+  }
+
   subscribe(listener: PreferenceListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
