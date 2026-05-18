@@ -7,7 +7,7 @@ You only ever touch one folder and one button.
 
 ## Phone and tablet note
 
-A detailed responsive/touch improvement plan was added on 2026-05-18. The current gallery already has touch swipe, pinch zoom, on-screen navigation, zoom/reset controls, reduced motion, high contrast, and WebGL fallback behavior, but desktop is still the main polished design today. Future work is planned to improve phone/tablet safe areas, portrait/landscape layouts, touch target spacing, and gesture compatibility while keeping all current features.
+The v0.11 technical coding plan (added 2026-05-18) documents concrete improvements for phone and tablet users. The current gallery already works with touch (swipe, pinch zoom, on-screen buttons, zoom/reset, reduced motion, high contrast, WebGL fallback), but desktop is still the main polished design. Future work will fix 7 specific bugs found in the code — including safe-area support for notched iPhones, better pinch gesture ownership on iOS Safari, and a compact info-panel mode for portrait phones — while keeping all existing features.
 
 ## What you need (one-time)
 

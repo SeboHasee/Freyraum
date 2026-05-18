@@ -2,12 +2,15 @@
 
 ## Unreleased
 
-### Documentation (v0.11 responsive/touch planning — 2026-05-18)
+### Documentation (v0.11 technical coding plan — 2026-05-18)
 
-- Added a detailed v0.11 plan for responsive phones/tablets, touch controls, gestures, safe areas, dynamic viewport behavior, mobile accessibility, mobile WebGL budgets, diagnostics, fallbacks, and validation.
-- Documented online research findings for WCAG 2.2 touch-target sizing, pointer-gesture alternatives, Pointer Events vs. Touch Events compatibility, passive listeners, `touch-action`, safe-area insets, dynamic viewport units, and mobile WebGL performance.
-- Audited current FREYRAUM responsive/touch state: desktop-first layout, basic viewport metadata, passive touch gestures, existing accessible button fallbacks, reduced motion/high contrast, adaptive quality, and WebGL fallback.
-- Updated every repository markdown file so future implementation work has a consistent responsive/touch reference point.
+- Upgraded the v0.11 plan from a high-level goal document to a full technical coding plan with concrete TypeScript interfaces, code patterns, CSS snippets, and file-level action items.
+- Identified and documented **7 code-level bugs** found during deep source audit: `RendererManager.resize()` never called on window resize; all touch listeners passive preventing iOS pinch-own; `TouchInteraction`/`ZoomPan`/`MouseInteraction` coexisting without synthetic-mouse suppression; `isMobileDevice()` checking only width; `HintText` hardcoded desktop copy; preferences panel overflow on narrow phones; missing `viewport-fit=cover` and safe-area CSS.
+- Planned new `src/utils/device.ts` with `DeviceCapabilities` interface, `detectDeviceCapabilities()`, `LayoutTier` type, and `PointerPrimary` type.
+- Planned new `src/interaction/CanvasInteraction.ts` with Pointer Events primary path, Touch Events fallback, gesture state machine, non-passive pinch fix, synthetic-mouse suppression, `setPointerCapture`, and proper `dispose()`.
+- Documented all CSS changes: `viewport-fit=cover`, `env(safe-area-inset-*)` variables, `100dvh` with fallback, new 4-tier SCSS breakpoints, `touch-action: none` on canvas, compact info-panel mode, preferences panel `max-height` + `overflow-y: auto`.
+- Updated `FINDINGS.md` with detailed per-bug root cause, file references, and fix descriptions.
+- Updated all other markdown files to reference the technical plan pass.
 
 
 ### Fixed (v0.10 follow-up — parallax hole artifacts — 2026-05-17)

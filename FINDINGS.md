@@ -1,37 +1,77 @@
 # FINDINGS
 
-## 2026-05-18 — v0.11 planning: responsive phones/tablets, touch, gestures, and compatibility
+## 2026-05-18 — v0.11 technical coding plan: responsive phones/tablets, touch, gestures, and compatibility
 
 ### Scope of this pass
 
-Documentation and research only. No runtime behavior changed. The purpose is to prepare a careful implementation plan for making FREYRAUM responsive and usable on phones and tablets while keeping desktop web as the primary design.
+Updated from documentation-only to full technical coding plan. Every v0.11 slice now maps to exact files, functions, TypeScript interfaces, CSS patterns, and concrete code suggestions. No runtime code was changed in this pass.
 
-### Online findings recorded
+### Code-level bugs found during technical audit (2026-05-18)
 
-- WCAG 2.2 Target Size (Minimum) requires at least 24 × 24 CSS px targets unless an exception applies; mobile usability guidelines from Apple/Google/Microsoft converge around larger practical targets of roughly 40–48 CSS px.
-- WCAG pointer-gesture guidance means FREYRAUM must not require swipe, drag, or pinch as the only way to access a feature. The existing nav buttons, timeline buttons, zoom controls, reset button, and keyboard shortcuts are therefore important compatibility fallbacks.
-- Mobile viewport best practice is to keep `width=device-width, initial-scale=1` and avoid disabling user zoom. Safe areas and dynamic viewport changes should be handled in CSS/layout, not by preventing user scaling.
-- Pointer Events are the preferred long-term input model for mouse/pen/touch, but a Touch Events fallback remains useful for maximum older iOS Safari compatibility.
-- If custom canvas gestures must suppress native page behavior, event listeners must be non-passive only where `preventDefault()` is used. The current passive touch listeners are safe but may not fully own pinch/pan gestures on all browsers.
-- `touch-action` improves compatibility and performance in modern browsers, but older iOS Safari should not rely on it as the only gesture-control mechanism.
-- Mobile WebGL guidance supports the repository's existing direction: cap DPR, keep adaptive quality, gate expensive shader paths, react to resize/orientation, and keep a clear fallback screen.
+These were found by reading every relevant source file. Each entry records the file, the specific code, and the fix planned for v0.11.
 
-### Repository audit findings
+#### Bug 1 — RendererManager.resize() is never called on window resize (critical for mobile)
 
-- `index.html` and `app.html` already include basic mobile viewport metadata.
-- The SCSS has a desktop-first layout and only one narrow breakpoint at `max-width: 720px`; phone landscape, tablet portrait, safe areas, dynamic viewport height, and short-height states are not yet fully specified.
-- Current touch code supports one-finger swipe/pan and two-finger pinch, but is separate from mouse handling and uses passive touch listeners.
-- Current controls already provide strong fallbacks: navigation buttons, timeline buttons, zoom buttons, reset, fullscreen, keyboard shortcuts, reduced motion, high contrast, and WebGL fallback.
-- Most primary controls are near or above mobile-friendly target sizes; spacing and safe-area collision still need device validation.
-- The diagnostics system is ready to host a `responsive/layout` scope for viewport bucket, pointer capability, orientation, DPR cap, and adaptive quality events.
+- **File:** `src/core/SceneManager.ts`, `src/core/RendererManager.ts`, `src/main.ts`
+- **Problem:** `SceneManager` registers `window.addEventListener('resize', this.handleResize)` which only calls `camera.aspect` + `updateProjectionMatrix()`. The public `RendererManager.resize()` method (which calls `renderer.setSize()`) has no listener and is never invoked after startup. The canvas visually fills the viewport via `position: fixed; inset: 0; width: 100%` CSS, but Three.js internal render resolution is never updated. On mobile, rotating portrait→landscape leaves the framebuffer at the wrong dimensions.
+- **Fix:** Add a debounced `'resize'` listener in `main.ts` that calls `rendererManager.resize()`. Store the listener as a named function for cleanup.
 
-### Technical conclusion
+#### Bug 2 — All touch listeners are passive; pinch cannot prevent native zoom on iOS Safari (critical)
 
-The next implementation should be a responsive hardening pass, not a redesign. The main work is to add a device/layout capability layer, safe-area-aware CSS, mobile-specific layout states, unified pointer/touch gesture ownership, touch-target verification, mobile performance defaults, and a documented QA matrix. Existing desktop behavior and customer artwork reliability work should remain unchanged.
+- **File:** `src/interaction/TouchInteraction.ts` lines 17–19
+- **Problem:** All three listeners use `{ passive: true }`. On iOS Safari, when the user pinches, the browser fires its native page zoom alongside the custom `getTouchDist` calculation. The result is dual-zoom behavior or unwanted page-scale changes.
+- **Fix:** In the new `CanvasInteraction.ts`, register `touchmove` with `{ passive: false }` and call `e.preventDefault()` when `e.touches.length >= 2` (pinch) and when `state === 'panning'`.
+
+#### Bug 3 — TouchInteraction and ZoomPan/MouseInteraction coexist; touch fires synthetic mouse events (moderate risk)
+
+- **File:** `src/main.ts` lines 254–257 — four separate interaction managers on the same canvas
+- **Problem:** On iOS/Android, a touch tap fires `touchstart` → `touchend` → `mousemove` → `mousedown` → `click`. `ZoomPan.ts` has `mousedown` on canvas and `mousemove`/`mouseup` on window. `MouseInteraction.ts` has `click` on canvas. A touch tap can invoke both the touch swipe check and the mouse click/panel-click path. Currently mostly safe due to the >50 px swipe threshold, but fragile and will misbehave if any new code uses `mousedown` state.
+- **Fix:** Replace the three managers with `CanvasInteraction.ts`. Use Pointer Events (preferred) which do not generate synthetic mouse events; or for the Touch Events fallback path, call `e.preventDefault()` on `touchstart` to suppress synthetic mouse events.
+
+#### Bug 4 — isMobileDevice() only checks viewport width, misses pointer type and landscape phones
+
+- **File:** `src/utils/performance.ts` line 5–7
+- **Problem:** `window.innerWidth < 768` is false for landscape phones (e.g., iPhone 14 landscape = 844 px), touch laptops (full-width viewport, coarse pointer), and large tablets. The function name is misleading.
+- **Fix:** Replace with `detectDeviceCapabilities()` in new `src/utils/device.ts` using `matchMedia('(pointer: coarse)')` and `matchMedia('(hover: hover)')` alongside viewport dimensions.
+
+#### Bug 5 — HintText always shows desktop-only German copy, even on touch devices
+
+- **File:** `src/ui/HintText.ts` line 8
+- **Problem:** `'Scrollen zum Zoomen · Ziehen zum freien Bewegen.'` is only meaningful on a desktop with a scroll wheel. On a phone, there is no scrolling.
+- **Fix:** After Slice 1 sets `document.documentElement.dataset['pointerPrimary']`, `HintText.updateHint()` reads it and shows `'Wischen zum Navigieren · Zwei Finger zum Zoomen.'` for coarse pointer. Hide entirely on phone-portrait layout.
+
+#### Bug 6 — Preferences panel can overflow viewport on narrow phones (320–380 px wide)
+
+- **File:** `src/styles/main.scss` `.prefs__panel` rule (~line 393–408)
+- **Problem:** `width: 320px` is absolute. On a 375 px wide phone, the panel right-aligns to the screen edge and left-extends to ~55 px, which is fine. But on 320 px (iPhone SE 1st gen), the panel clips the left margin. On short landscape viewports (height ≈ 320 px), the panel may extend below the screen bottom.
+- **Fix:** `width: min(320px, calc(100vw - 24px))`, `max-height: calc(100dvh - 80px)`, `overflow-y: auto`.
+
+#### Bug 7 — No viewport-fit=cover, no safe-area CSS, no dvh units in app.html / main.scss
+
+- **Files:** `app.html` line 5, `src/styles/main.scss` `:root` block
+- **Problem:** Without `viewport-fit=cover`, the safe-area environment variables are not computed by browsers for notch devices. Without `env(safe-area-inset-*)` usage in CSS, the topbar and bottom timeline sit under hardware notches or home indicators on iPhone. Fixed `bottom: 168px` offsets for nav, zoom, and timeline do not account for the home indicator height (34 px on iPhone 14).
+- **Fix:** Add `viewport-fit=cover` to the viewport meta. Add `--safe-top/right/bottom/left` CSS variables that wrap `env(safe-area-inset-*, 0px)`. Apply to all fixed-position chrome elements.
+
+### Positive findings — existing code that is already solid for mobile
+
+- `GalleryManager.navigate()` and `resetView()` are stateless and safe to call from touch handlers.
+- `GalleryManager.canPan()` correctly gates pan vs. swipe — the touch swipe/pan split logic in `TouchInteraction.ts` is correct in principle; the passive-listener bug is the only real flaw.
+- `AdaptiveQualityController` has correct cooldown and manual-override behavior; it will work on mobile without modification.
+- `Diagnostics.ts` `createScopedDiagnostics(scope)` pattern makes it trivial to add a `layout` scope.
+- Timeline uses real `<button>` elements with roving tabindex — works on mobile screen readers.
+- All controls have `aria-label`, real semantic HTML, and `focus-visible` ring — strong accessibility baseline.
+- `FrameBudgetMonitor` clamps long frames (tab switch) and has navigation cooldown — thermal spikes will not trigger premature quality downgrades.
+
+### Updated technical conclusion
+
+This is a targeted hardening pass, not a redesign. The seven bugs listed above are actionable and have low-risk fixes. The positive baseline means most of the work is additive (new `device.ts`, new `CanvasInteraction.ts`, CSS variables, breakpoints) rather than replacing working code.
 
 ### Validation status
 
-Markdown-only validation for this planning pass: repository markdown files were updated. Runtime lint/build are not required for documentation-only changes, but the implementation PR must run `npm run lint` and `npm run build` and regenerate `customer-preview/` if source output changes.
+Documentation-only pass. Runtime changes will be in a follow-on implementation PR. That PR must:
+- Run `npm run lint` and `npm run build` and see only the existing known TS parser and Sass warnings.
+- Manually verify all QA matrix entries documented in `plan.md`.
+- Regenerate `customer-preview/` if any source output changes.
 
 ---
 

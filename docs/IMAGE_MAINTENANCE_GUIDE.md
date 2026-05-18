@@ -5,11 +5,18 @@ This guide explains how the image system works after the v0.07 importer update.
 It is meant for the person who maintains the project folder, supports the customer,
 or needs to understand why an image does or does not appear in the gallery.
 
-## Responsive and touch support planning
+## Responsive and touch support — technical status (v0.11)
 
-The 2026-05-18 v0.11 planning pass documents how to harden the gallery for phones and tablets without changing the customer artwork pipeline. The implementation should preserve `webglImage` data URL reliability, existing aspect-ratio handling, diagnostics, quality presets, and fallback behavior while adding safe-area-aware layouts, pointer/touch compatibility, and mobile WebGL safeguards.
+The v0.11 technical coding plan (2026-05-18) identifies 7 code-level bugs and maps every fix to specific source files. The customer artwork pipeline (`webglImage` data URLs, aspect-ratio handling, importer, diagnostics) is unaffected by the responsive changes. The implementation preserves all artwork reliability work from v0.07–v0.10 while adding:
 
-Support checks after a future responsive implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states.
+- `src/utils/device.ts` — device capability model and layout tier detection
+- `src/interaction/CanvasInteraction.ts` — unified Pointer Events + Touch Events (fixes passive-listener pinch bug and synthetic-mouse duplication)
+- `viewport-fit=cover` + safe-area CSS — controls no longer hidden under notch/home indicator
+- 4-tier SCSS breakpoints — proper phone portrait, phone landscape, tablet portrait, tablet landscape layout states
+- Compact info-panel mode on phones
+- Debounced resize coordinator — Three.js framebuffer updates correctly on orientation change
+
+Support checks after implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states. The QA matrix is documented in `plan.md`.
 
 ## Quick overview
 

@@ -57,11 +57,11 @@ For the full architecture see
 [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).
 
 
-## Responsive phones/tablets planning status
+## Responsive phones/tablets — v0.11 technical coding plan
 
-A v0.11 planning pass was added on 2026-05-18 for responsive phones, tablets, touch controls, and gesture compatibility. Desktop web remains the primary design, but future implementation should harden the existing gallery for phone/tablet portrait and landscape layouts, safe-area insets, touch/pen/mouse/keyboard input, accessible touch targets, optional gestures with button fallbacks, and mobile WebGL quality safeguards.
+A technical coding plan for v0.11 was added on 2026-05-18. Desktop web remains the primary design. The plan documents 7 concrete bugs found in the codebase (passive touch listeners preventing pinch ownership, `RendererManager.resize()` never called on resize, duplicate touch/mouse events, missing safe-area CSS, viewport-fit, HintText desktop-only copy, preferences panel overflow) and maps every implementation slice to exact TypeScript interfaces, CSS patterns, and code examples.
 
-Current baseline already includes basic viewport metadata, touch swipe/pinch support, zoom/reset buttons, keyboard navigation, reduced motion, high contrast, adaptive quality, and a WebGL fallback screen. The planned work is documented in [`plan.md`](./plan.md#v011-plan--responsive-phones-tablets-touch-controls-and-gesture-compatibility) and research/audit details are in [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v011-planning-responsive-phonestablets-touch-gestures-and-compatibility).
+Key planned changes: new `src/utils/device.ts` with `DeviceCapabilities`/`LayoutTier`, new `src/interaction/CanvasInteraction.ts` replacing the three interaction managers, `viewport-fit=cover` + safe-area CSS variables + `100dvh`, 4-tier SCSS breakpoint system, compact info-panel mode, and mobile quality startup heuristic. See [`plan.md`](./plan.md#v011-plan--responsive-phones-tablets-touch-controls-and-gesture-compatibility-technical-coding-plan) and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v011-technical-coding-plan-responsive-phonestablets-touch-gestures-and-compatibility).
 
 ## Diagnostics and debugging
 

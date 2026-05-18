@@ -6,11 +6,23 @@ artifact fix, parallax hole fix, and very-vertical-picture reset zoom fix are
 implemented. See `plan.md` → "v0.10 Follow-up — Parallax Hole Artifact Fix" and
 "v0.10 — Spot Artifact Fix and Portrait Reset Framing" for details.
 
-## v0.11 responsive/touch planning status
+## v0.11 responsive/touch — technical coding plan (2026-05-18)
 
-A planning-only pass was added on 2026-05-18 for phone/tablet responsiveness, touch controls, gestures, safe areas, accessibility, and mobile WebGL compatibility. Desktop remains the primary design direction, but the next implementation should make every current feature usable on phones and tablets through safe-area-aware layouts, touch-friendly controls, optional gestures with visible fallbacks, pointer/touch compatibility, and mobile quality safeguards.
+The v0.11 plan was upgraded from goal documentation to a full technical coding plan with file-level action items. **Seven bugs were found and documented** in the current codebase:
 
-See `plan.md` → "v0.11 Plan — Responsive Phones, Tablets, Touch Controls, and Gesture Compatibility" and `FINDINGS.md` → "2026-05-18 — v0.11 planning" before implementing responsive changes.
+1. `RendererManager.resize()` never called on window resize → Three.js framebuffer stays at startup size after orientation change.
+2. All touch listeners `{ passive: true }` → iOS Safari native pinch fights custom zoom.
+3. `TouchInteraction` + `ZoomPan` + `MouseInteraction` coexist → synthetic mouse events after touch may duplicate actions.
+4. `isMobileDevice()` checks only width, not pointer type.
+5. `HintText` hardcoded desktop-only copy shown on phones.
+6. `PreferencesPanel` popup can overflow screen on narrow phones.
+7. No `viewport-fit=cover`, no `env(safe-area-inset-*)` CSS — notch/home indicator collisions on iPhone.
+
+**Planned new files:** `src/utils/device.ts` (capability model), `src/interaction/CanvasInteraction.ts` (unified Pointer Events + Touch Events fallback with non-passive pinch).
+
+**Planned CSS changes:** `viewport-fit=cover` in viewport meta, `--safe-top/right/bottom/left` CSS variables, `100dvh` with fallback, 4-tier breakpoint system (phone-portrait, phone-landscape, tablet-portrait, tablet-landscape, desktop), `touch-action: none` on canvas, compact info-panel class, preferences panel `max-height` + `overflow-y: auto`.
+
+See `plan.md` → "v0.11 Plan" and `FINDINGS.md` → "2026-05-18 — v0.11 technical coding plan" before starting implementation.
 
 ## Architecture diagram
 
