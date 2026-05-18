@@ -1,5 +1,58 @@
 # FINDINGS
 
+## 2026-05-18 — v0.11 implementation pass (responsive phones/tablets, touch, gestures, WebGL reliability)
+
+### Scope of this pass
+
+The v0.11 technical coding plan has been executed. This entry records what shipped, the runtime behaviour now in place, and the constraints that remain for future passes. All bug references map to the seven bugs catalogued below in the previous (planning) entry.
+
+### Implementation outcome
+
+- **`src/utils/device.ts`** introduces a capability-based device model with `LayoutTier`, `PointerPrimary`, `Orientation`, and `DeviceCapabilities`. `applyDeviceCaps()` mirrors these to `<html>` data attributes so SCSS can react without re-running JS. Used by the resize coordinator in `main.ts`, by `HintText`, by `CanvasInteraction`, and by the new compact `InfoPanel` mode.
+- **`src/interaction/CanvasInteraction.ts`** replaces the three previous interaction classes (`MouseInteraction`, `ZoomPan`, `TouchInteraction`). It uses Pointer Events Level 3 when `window.PointerEvent` exists and falls back to non-passive Touch Events on legacy Safari. The gesture state machine has `idle / panning / pinching / swipe-candidate / cancelled`. The canvas owns the gesture via CSS `touch-action: none`; the Touch Events fallback path also calls `preventDefault()` to suppress synthetic mouse events (Bug 2 and Bug 3). Swipe navigation activates on the up-event (WCAG SC 2.5.2).
+- **Resize coordinator** in `main.ts` is a single debounced (120 ms) listener on `resize` and `orientationchange` that calls `rendererManager.resize()`, re-detects capabilities, re-applies the data attributes, toggles compact info-panel, and refreshes the hint copy. `SceneManager`'s existing camera-aspect listener stays; both are removed in the unload cleanup (Bug 1).
+- **`getOptimalPixelRatio`** now caps effective DPR to `1.5` on `(pointer: coarse)` devices regardless of the requested cap, to avoid thermal throttling on phones/tablets while keeping the perceived quality difference negligible.
+- **`suggestStartupQuality()`** is new and is only applied when `PreferencesStore.hasStoredQuality()` returns `false`. It returns `battery` for high-DPR small phones and `balanced` otherwise. User choice always wins after the first session.
+- **`RendererManager`** registers `webglcontextlost` (with `preventDefault()`) and `webglcontextrestored` handlers, exposes `isRenderPaused()`, and emits `render/context-lost` (`warn`) and `render/context-restored` (`info`) diagnostics. The animation loop short-circuits when paused so the `requestAnimationFrame` driver keeps ticking but Three.js draw calls are skipped until restoration.
+- **`main.scss`** introduces `--safe-top/right/bottom/left` wrappers around `env(safe-area-inset-*, 0px)`, `--chrome-top` and `--chrome-bottom` spacing tokens, `100dvh` body height with a `100%` fallback, and `touch-action: none` scoped to the canvas. All fixed-position chrome (topbar, info-panel, nav, zoom, fullscreen, prefs, timeline, hint, fallback card) now offsets against the safe-area variables. The single legacy `@media (max-width: 720px)` block was replaced by an explicit four-phase breakpoint set; `phone-portrait`/`phone-small` also hide the topbar badge and hint via the new device-capability mirror selectors.
+- **`InfoPanel.setCompact(boolean)`** toggles a new `.info-panel--compact` class that gives the panel full available width minus safe-area, raises it above the chrome, clamps the title, and allows internal scrolling to satisfy WCAG SC 1.4.10 Reflow.
+- **`HintText.updateHint()`** reads `data-pointer-primary` and renders the appropriate German copy. It is called from the constructor and from the resize coordinator after a pointer-type change.
+- **`FallbackScreen`** appends a coarse-pointer-only tip about private browsing and hardware acceleration; the technical reason is HTML-escaped and only shown when diagnostics mode is not `default`.
+
+### What was deliberately not changed
+
+- The three legacy interaction classes (`MouseInteraction.ts`, `ZoomPan.ts`, `TouchInteraction.ts`) remain on disk as dead code. They are no longer imported anywhere; the Vite build now transforms `46` modules instead of `47`. They are kept to make the v0.11 change reversible. A subsequent cleanup PR can delete them.
+- `isMobileDevice()` in `performance.ts` is marked `@deprecated` but still exported. No remaining callers exist in the repository, but the function is retained for safety because external preview snapshots may reference it.
+- `ResizeObserver` is not yet wired into `RendererManager`. The plan flagged this as a follow-up; the debounced `window.resize` + `orientationchange` path covers the FREYRAUM canvas (which always fills the viewport).
+- The WebGL context-loss recovery currently only logs and pauses rendering. No user-visible recovery overlay or retry button has been added yet; this remains a follow-up.
+
+### Validation
+
+- `npm install`, `npm run lint`, `npm run build` all pass cleanly with only the known pre-existing Sass legacy-API deprecation notice and the TypeScript parser version warning.
+- `tsc` (the typecheck step inside `npm run build`) reports zero errors.
+- The `customer-preview/` bundle was regenerated and committed.
+- Physical-device QA (iPhone, iPad, Android) and 320 px / browser-zoom reflow remain a customer-side acceptance step against the QA matrix in `plan.md`.
+
+### Diagnostics surface
+
+New scopes/events the runtime now emits:
+
+| Scope | Event | Level | Trigger |
+| --- | --- | --- | --- |
+| `layout` | `capabilities` | `info` | Startup |
+| `layout` | `resize` | `info` | After debounced resize/orientationchange |
+| `interaction` | `init` | `info` | `CanvasInteraction` constructor records backend choice |
+| `interaction` | `gesture-start` | `debug` | Pointer/touch down begins a gesture (verbose only) |
+| `interaction` | `gesture-cancel` | `debug` | Pointer cancellation |
+| `interaction` | `swipe` | `debug` | Swipe resolved on pointer up |
+| `quality` | `startup-suggestion` | `info` | When the heuristic overrides default preset |
+| `renderer` | `context-lost` | `warn` | WebGL context dropped |
+| `renderer` | `context-restored` | `info` | WebGL context restored |
+
+These complement the existing `boot/*`, `gallery/*`, `quality/adaptive-downgrade`, `preferences/*`, and `debug/*` events.
+
+---
+
 ## 2026-05-18 — v0.11 final research-backed technical coding plan: responsive phones/tablets, touch, gestures, and compatibility
 
 ### Scope of this pass

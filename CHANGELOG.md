@@ -2,6 +2,52 @@
 
 ## Unreleased
 
+### Added (v0.11 implementation — 2026-05-18)
+
+- New `src/utils/device.ts` module exporting `DeviceCapabilities`, `LayoutTier`, `PointerPrimary`, `Orientation`, `detectDeviceCapabilities()`, and `applyDeviceCaps()`. Capabilities are mirrored to `<html>` data attributes (`data-layout-tier`, `data-pointer-primary`, `data-hover`, `data-orientation`, `data-short-height`) so SCSS can react without re-running JS.
+- New `src/interaction/CanvasInteraction.ts` consolidates mouse/touch/wheel input. Pointer Events Level 3 is the primary path with `setPointerCapture` and `lostpointercapture` cleanup; non-passive Touch Events serve as a fallback for older Safari. The gesture state machine has explicit `idle`, `panning`, `pinching`, `swipe-candidate`, and `cancelled` states. Hover rotation is suppressed on coarse pointers.
+- New `suggestStartupQuality()` in `src/utils/performance.ts` returns `battery` for high-DPR small phones and `balanced` otherwise. `main.ts` only applies it on first run (when no quality is stored yet), so user choices are respected on every subsequent session.
+- New `PreferencesStore.hasStoredQuality()` static helper for the startup heuristic.
+- New `RendererManager.isRenderPaused()`; `RendererManager` now registers `webglcontextlost` (with `preventDefault()`) and `webglcontextrestored` listeners, emits diagnostics, and the render loop in `main.ts` short-circuits while the context is lost.
+- New `InfoPanel.setCompact(boolean)` method + `.info-panel--compact` SCSS rule for phone-portrait/phone-small layout tiers.
+- New `HintText.updateHint()` reads `<html data-pointer-primary>` and renders coarse-pointer-appropriate German copy (`"Wischen zum Navigieren · Zwei Finger zum Zoomen."`).
+- New diagnostics scopes/events: `layout/capabilities`, `layout/resize`, `interaction/init`, `interaction/gesture-start`, `interaction/gesture-cancel`, `interaction/swipe`, `quality/startup-suggestion`, `renderer/context-lost`, `renderer/context-restored`.
+- Safe-area CSS variables (`--safe-top/right/bottom/left`) and chrome-spacing tokens (`--chrome-top`, `--chrome-bottom`) added to `:root`, with `100dvh` body height and `touch-action: none` scoped to the canvas.
+- Four-phase responsive breakpoint set in `main.scss`: phone-portrait (<600), short-height landscape (<500h), tablet-portrait (600–899), tablet-landscape (900–1179), plus device-capability mirror selectors.
+
+### Changed (v0.11 — 2026-05-18)
+
+- `getOptimalPixelRatio()` now clamps to `1.5` on `(pointer: coarse)` devices irrespective of the requested cap, to avoid thermal throttling on mobile while keeping perceived quality similar.
+- `app.html`, `index.html`, `customer-preview/app.html`, and `scripts/write-local-preview.mjs` all use `viewport-fit=cover` so notch/safe-area insets are populated.
+- All fixed-position chrome (topbar, info-panel, nav, zoom controls, fullscreen button, prefs trigger, prefs panel, timeline, hint, fallback card) offset against the new safe-area variables.
+- `.prefs__panel` width is now `min(320px, 100vw - safe-area - 24px)` with `max-height: calc(100dvh - safe-area - 120px)` and `overflow-y: auto`, fixing the panel-overflow issue on narrow phones and short landscape viewports.
+- `.zoom-controls__btn`, `.fullscreen-btn`, and `.prefs__trigger` get `min-width: 44px; min-height: 44px;` to keep the WCAG comfort target.
+- `main.ts` introduces a single debounced (120 ms) `resize`+`orientationchange` listener that calls `rendererManager.resize()`, re-detects capabilities, re-applies them, toggles compact info-panel, and refreshes the hint copy. `SceneManager`'s existing camera-aspect listener is intentionally retained.
+- `FallbackScreen` shows a coarse-pointer-only tip about private browsing/hardware acceleration. The technical reason is now HTML-escaped and only rendered when diagnostics mode is not `default`.
+
+### Fixed (v0.11 — 2026-05-18)
+
+- **Bug 1 — `RendererManager.resize()` never called on window resize.** The renderer drawing-buffer is now resized through the new debounced coordinator in `main.ts`.
+- **Bug 2 — All touch listeners passive; iOS Safari native pinch always fired.** `CanvasInteraction` uses `touch-action: none` on the canvas, and the Touch Events fallback path is non-passive so `preventDefault()` can own pinch and pan gestures.
+- **Bug 3 — Synthetic mouse events duplicated tap actions.** Pointer Events do not emit a synthetic stream; the Touch Events fallback calls `preventDefault()` on `touchstart` and the shared `click` handler short-circuits when the most recent input was touch.
+- **Bug 4 — `isMobileDevice()` width-only heuristic was misleading.** Replaced by `detectDeviceCapabilities()`. The old function is retained but marked `@deprecated`.
+- **Bug 5 — HintText showed desktop-only copy on touch devices.** Now reads the data attribute and shows coarse-pointer copy or hides on small phones.
+- **Bug 6 — Preferences panel overflowed narrow phones / short landscape.** Fluid width with `min(...)` and bounded `max-height` with internal scrolling.
+- **Bug 7 — No `viewport-fit=cover` / safe-area / `dvh`.** Added across HTML, the preview generator, and SCSS.
+
+### Validation (v0.11)
+
+- `npm install`, `npm run lint`, `npm run build` all pass with only the pre-existing Sass legacy-API deprecation notice and the TypeScript parser version warning.
+- Vite now transforms 46 modules (down from 47) because the three superseded interaction files are no longer imported.
+- `customer-preview/` was regenerated and committed.
+
+### Known follow-ups (v0.11)
+
+- Delete the now-unused `src/interaction/{MouseInteraction,ZoomPan,TouchInteraction}.ts` files in a subsequent cleanup PR.
+- Add an explicit user-visible WebGL context-loss recovery hint (currently only logged + render paused).
+- Optional `ResizeObserver` integration in `RendererManager` for embedded/split-view scenarios.
+- Physical-device QA against iPhone, iPad, and Android per the QA matrix in `plan.md`.
+
 ### Documentation (v0.11 final research-backed technical coding plan — 2026-05-18)
 
 - Upgraded the v0.11 plan from a high-level goal document to a full technical coding plan with concrete TypeScript interfaces, code patterns, CSS snippets, and file-level action items.
