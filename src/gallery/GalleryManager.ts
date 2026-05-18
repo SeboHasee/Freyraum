@@ -631,6 +631,8 @@ export class GalleryManager {
     const raw = this.viewportMetricsProvider?.() ?? this.getDefaultViewportMetrics();
     const viewportW = Math.max(1, raw.viewportW);
     const viewportH = Math.max(1, raw.viewportH);
+    // Guard against transient/stale chrome measurements that would otherwise
+    // produce near-zero usable space and unstable camera-distance spikes.
     const usableW = clamp(raw.usableW, viewportW * MIN_USABLE_VIEWPORT_FRACTION, viewportW);
     const usableH = clamp(raw.usableH, viewportH * MIN_USABLE_VIEWPORT_FRACTION, viewportH);
     const usableFracX = clamp(raw.usableFracX || usableW / viewportW, MIN_USABLE_VIEWPORT_FRACTION, 1);

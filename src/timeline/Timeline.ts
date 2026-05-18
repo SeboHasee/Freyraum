@@ -168,6 +168,7 @@ export class Timeline {
     const delta =
       (thumbRect.left + thumbRect.width * 0.5) -
       (listRect.left + listRect.width * 0.5);
+    // Avoid tiny no-op scroll writes when the transformed thumb is already centered.
     if (Math.abs(delta) < 1) return;
 
     const targetLeft = this.listEl.scrollLeft + delta;

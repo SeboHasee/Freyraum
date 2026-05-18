@@ -36,6 +36,12 @@ import { suggestStartupQuality } from './utils/performance';
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
 
+/**
+ * Extracts the first numeric component from a computed CSS value or custom
+ * property. This keeps viewport measuring resilient when custom properties
+ * contain wrappers such as `max(...)`, `calc(...)`, or `env(...)`; invalid
+ * values fall back to 0.
+ */
 function parseCssNumeric(value: string): number {
   const parsed = Number.parseFloat(value);
   if (Number.isFinite(parsed)) return parsed;
@@ -262,6 +268,8 @@ async function main(): Promise<void> {
     const timelineRect = app.querySelector<HTMLElement>('.timeline')?.getBoundingClientRect();
     const navRect = app.querySelector<HTMLElement>('.nav-controls')?.getBoundingClientRect();
 
+    // Clamp to the visible viewport so a stale/transitioning fixed header rect
+    // cannot make the usable-artwork area negative during mobile chrome changes.
     const topbarOcclusion = topbarRect ? Math.max(0, Math.min(viewportH, topbarRect.bottom)) : 0;
     const bottomOcclusion = [timelineRect, navRect]
       .filter((rect): rect is DOMRect => !!rect)
