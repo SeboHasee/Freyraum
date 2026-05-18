@@ -1,5 +1,37 @@
 # FINDINGS
 
+## 2026-05-18 — v0.12 planning pass (farther zoom-out, tall-picture default fit, timeline active-thumb visibility)
+
+### Scope of this pass
+
+Documentation/planning only. No runtime code changed. This pass converts the latest customer report into a concrete implementation target for the next version.
+
+### Technical findings
+
+- **`src/gallery/GalleryManager.ts` couples reset framing and far zoom-out to the same ceiling.** `DEFAULT_CAMERA_Z = 7`, `MAX_CAMERA_Z = 9.25`, and `getResetZoom()` is clamped to `MAX_CAMERA_Z`. Result: tall artworks can consume most of the available far-distance budget just to fit, leaving too little extra room to zoom out farther.
+- **The reset-fit math uses the raw camera viewport, not the artwork-safe viewport.** `getResetZoom()` only compares framed artwork width/height against camera aspect and a small margin. It does not reserve space for the fixed top bar, bottom timeline/nav/zoom chrome, safe-area insets, or compact phone layouts. Tall portraits therefore have the highest risk of appearing "not fully shown" even though the math says they fit.
+- **The active timeline thumb is clipped by its own scroll container.** `.timeline__thumb.is-active` lifts the card with `translateY(-10px) scale(1.04)`, but `.timeline__list` simultaneously applies `overflow-y: hidden` and only `2px` padding. The selected card can therefore be visibly cut off.
+- **`scrollIntoView()` is not enough for the transformed active state.** `Timeline.setActive()` uses `scrollIntoView({ inline: 'center', block: 'nearest' })`, which centers the layout box but does not account for the active transform or any desired edge gutters.
+
+### Planned implementation direction
+
+- Separate three distances in `GalleryManager`: close inspection limit, default/reset fit distance, and a farther overview limit.
+- Compute reset/default fit against the usable artwork viewport after subtracting chrome and safe-area budget.
+- Add enough timeline headroom and scroll padding so the active thumbnail is fully readable and remains comfortably visible when selected by keyboard, click, or programmatic navigation.
+- Extend diagnostics so debug runs expose the new fit/zoom numbers for support.
+
+### Validation status
+
+Planning-only pass. The later implementation pass should validate at least:
+
+- tall portrait first view / reset view
+- farther manual zoom-out beyond reset
+- square / landscape regression checks
+- desktop + phone portrait + phone landscape + tablet portrait
+- active timeline thumb visibility while selecting via click, keyboard, and touch scroll
+
+---
+
 ## 2026-05-18 — v0.11 implementation pass (responsive phones/tablets, touch, gestures, WebGL reliability)
 
 ### Scope of this pass

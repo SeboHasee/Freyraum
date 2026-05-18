@@ -20,6 +20,20 @@ The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs,
 
 Support checks after implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states. The QA matrix is documented in `plan.md`.
 
+## Current v0.12 follow-up (zoom / tall-picture framing / timeline visibility)
+
+Planned on 2026-05-18. The next pass is focused on three viewing issues rather
+than the import pipeline:
+
+- allow a farther zoomed-out overview distance;
+- make the standard/reset view fully show very tall artworks;
+- keep the active timeline thumbnail fully visible instead of clipping it.
+
+The code audit points at `src/gallery/GalleryManager.ts` for the zoom/framing
+logic and `src/timeline/Timeline.ts` + `src/styles/main.scss` for the active
+timeline clipping. The importer, generated manifests, and `webglImage` path are
+not part of this follow-up.
+
 ## Quick overview
 
 The gallery is maintained through one input folder:

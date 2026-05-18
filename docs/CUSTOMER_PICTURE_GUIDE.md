@@ -7,7 +7,17 @@ You only ever touch one folder and one button.
 
 ## Phone and tablet note
 
-The v0.11 final technical coding plan (updated 2026-05-18) documents concrete improvements for phone and tablet users and validates them against current official web guidance. The current gallery already works with touch (swipe, pinch zoom, on-screen buttons, zoom/reset, reduced motion, high contrast, WebGL fallback), but desktop is still the main polished design. Future work will fix 7 specific bugs found in the code — including safe-area support for notched iPhones, better pinch gesture ownership on iOS Safari, compact info-panel mode for portrait phones, and more robust WebGL recovery behavior — while keeping all existing features.
+v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.
+
+## Current viewing follow-up
+
+One customer-facing follow-up is now planned as **v0.12**:
+
+- zoom-out should go farther than it does now,
+- very tall pictures should already be fully visible in the normal/reset view,
+- and the selected picture in the bottom timeline should stay fully visible.
+
+That work is documented for the next implementation pass; the current build may still show these limitations on some artworks/layouts.
 
 ## What you need (one-time)
 
@@ -175,6 +185,21 @@ dimensions, so very vertical pictures should start farther away and show the
 whole framed artwork. If it still looks too close, send a screenshot and the
 `show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`, and
 `maxZoom`.
+
+There is now also a tracked v0.12 follow-up because some especially tall / long
+vertical pictures can still feel too close in the standard view. If that
+happens, include:
+
+1. a screenshot of the first/reset view,
+2. whether more manual zoom-out is still needed,
+3. the `show-artwork-complete` diagnostics entry.
+
+**The selected timeline picture looks cut off.**
+This is also tracked for the next pass (v0.12). Please send:
+
+1. a screenshot showing the selected thumbnail,
+2. whether it happens after clicking, swiping, or using keyboard arrows,
+3. the browser/device used.
 
 ## Debug / support tools (developer use)
 

@@ -1,5 +1,142 @@
 # FREYRAUM Plan
 
+## v0.12 Plan — farther zoom-out, full tall-picture default fit, and unclipped active timeline selection (2026-05-18)
+
+### Status
+
+**Planning pass only.** No runtime code was changed in this pass. This section records the next implementation target derived from the customer report that (1) zoom-out still stops too early, (2) very tall pictures do not fully fit in the normal/reset view, and (3) the selected timeline picture can be cut off by the timeline chrome itself.
+
+### Customer-observed behavior
+
+- Users want to zoom out farther than the current limit allows.
+- Very tall / long vertical artworks can open too close in the default view, so the full framed picture is not visible until the user manually zooms out.
+- The selected artwork in the timeline is not always fully viewable; the active state can be cut off by the timeline strip.
+
+### Code audit findings
+
+#### Finding 1 — Far-zoom ceiling is hard-coded and tied to reset framing
+
+`src/gallery/GalleryManager.ts` currently uses:
+
+- `DEFAULT_CAMERA_Z = 7`
+- `MAX_CAMERA_Z = 9.25`
+- `getResetZoom()` clamped to `MAX_CAMERA_Z`
+- `addZoomDelta()` / pinch / wheel all clamped through `clampZoom()`
+
+This means the same static ceiling governs both:
+
+1. the default/reset "fit the artwork" distance, and
+2. the extra "step back and see the artwork from farther away" distance.
+
+That coupling is too rigid. A tall picture may already need most of the current `MAX_CAMERA_Z` budget just to fit, leaving no remaining "zoom out farther" headroom.
+
+#### Finding 2 — Reset/default fit math uses the full camera viewport, not the actually visible artwork area
+
+`getResetZoom()` fits against raw camera aspect only:
+
+- frame width = `artworkWidth + 0.4`
+- frame height = `artworkHeight + 0.4`
+- required visible size = `max(frameHeight, frameWidth / camera.aspect) * RESET_VIEW_FRAME_MARGIN`
+
+This ignores the effective space consumed by fixed chrome:
+
+- top bar / safe-area
+- bottom timeline / nav / zoom rail
+- compact info panel on smaller layouts
+
+So the math can say "fits in the viewport" while the customer still sees the artwork visually competing with or being covered by chrome. Tall artworks are the most sensitive case because vertical fit is the first thing to fail.
+
+#### Finding 3 — The active timeline thumb is visually lifted into an area that the scroller clips
+
+`src/styles/main.scss` currently combines:
+
+- `.timeline__thumb.is-active { transform: translateY(-10px) scale(1.04); }`
+- `.timeline__list { overflow-y: hidden; padding: 2px; }`
+
+The active thumbnail is intentionally raised for emphasis, but the scrolling list only reserves `2px` of inner padding while also clipping vertical overflow. That makes the selected thumb vulnerable to being cut off by its own scroll container.
+
+#### Finding 4 — `scrollIntoView()` centers the layout box, not the transformed visual box
+
+`src/timeline/Timeline.ts` uses:
+
+- `next.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })`
+
+This is good baseline behavior, but it does not account for:
+
+- the active-state transform (`translateY` / `scale`)
+- desired scroll gutters at the left/right edges
+- any extra safe viewing margin needed so the selected item reads as intentionally centered and fully visible
+
+### Goals
+
+1. Let users zoom out noticeably farther than today.
+2. Make the standard/reset view show the full framed artwork, including very tall portraits, without requiring manual zoom-out.
+3. Keep the selected timeline item fully visible and visually readable in every state.
+4. Preserve current zoom-in inspection behavior, pan bounds, and keyboard/touch alternatives.
+
+### Non-goals
+
+- No redesign of the artwork import pipeline.
+- No timeline feature redesign beyond fit/visibility/selection polish.
+- No broad visual restyle of the app chrome.
+
+### Proposed implementation slices
+
+#### Slice 1 — Separate "default fit" from "maximum zoom-out" in `src/gallery/GalleryManager.ts`
+
+- Replace the current single far-distance model with three clearly separated camera distances:
+  - nearest inspection limit
+  - default/reset fit distance
+  - far-overview limit
+- Keep reset centered on the new default fit distance instead of the absolute far limit.
+- Increase the far-overview limit enough that users can intentionally step back beyond the fitted view.
+- Update all zoom entry points (buttons, wheel, pinch, reset, initial artwork load) to use the new model consistently.
+
+#### Slice 2 — Fit against the usable artwork viewport, not the raw viewport
+
+- Add a single internal calculation in `GalleryManager` for the artwork-safe viewport budget.
+- Reserve vertical and horizontal space for fixed chrome and safe-area insets before computing the reset/default fit.
+- Ensure the fit model handles:
+  - desktop
+  - phone portrait
+  - phone landscape / short height
+  - tablet portrait / landscape
+- Re-run the fit after async artwork dimension updates and after viewport/layout changes so tall artworks stay correctly framed.
+
+#### Slice 3 — Make timeline selection fully visible in `src/timeline/Timeline.ts` and `src/styles/main.scss`
+
+- Reserve enough visual headroom for the lifted active thumbnail.
+- Remove the clipping condition that currently hides part of the active state.
+- Keep the active item centered with explicit scroll gutters rather than relying only on transformed geometry plus `scrollIntoView()`.
+- Verify that keyboard navigation, click selection, and touch scrolling still feel correct.
+
+#### Slice 4 — Diagnostics, QA, and documentation
+
+- Extend the existing gallery diagnostics so debug runs log the computed default fit distance, far-overview limit, and the usable artwork viewport budget.
+- Add a small timeline diagnostic/logging hook only if needed to verify active-thumb centering without spamming normal sessions.
+- Update `README.md`, `FINDINGS.md`, `CHANGELOG.md`, `docs/HANDOFF.md`, and support guides once implementation lands.
+
+### Acceptance checks
+
+- A very tall portrait opens/reset-fits with the entire framed artwork visible on first view.
+- Zoom-out controls and gestures can move farther back than the reset/default fit.
+- Existing normal/landscape/square artworks still feel correctly framed.
+- Pan limits still allow close inspection of every corner after zooming in.
+- The active timeline item is never vertically clipped.
+- Keyboard timeline navigation keeps the selected item visible near the center of the strip.
+- Touch scrolling of the timeline still works smoothly on phones/tablets.
+- `show-artwork-complete` diagnostics include the new fit/zoom values in debug mode.
+
+### Main files expected in the implementation pass
+
+- `src/gallery/GalleryManager.ts`
+- `src/timeline/Timeline.ts`
+- `src/styles/main.scss`
+- `src/main.ts` (only if resize/layout re-fit wiring is needed)
+- `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `docs/HANDOFF.md`, and support docs
+
+---
+
 ## v0.11 — Implemented (2026-05-18)
 
 ### Status

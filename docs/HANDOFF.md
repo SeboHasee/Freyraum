@@ -1,9 +1,29 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current priority: v0.11 — responsive/touch hardening is
-implemented.** See the "v0.11 responsive/touch — Implemented" section immediately
-below for the full status summary.
+contributors. **Current priority: v0.12 — zoom/framing/timeline follow-up is
+planned.** See the new v0.12 section immediately below for the current target,
+then the v0.11 implemented section for the already-shipped responsive/touch
+hardening summary.
+
+## v0.12 zoom/framing/timeline follow-up — Planned (2026-05-18)
+
+Current customer-facing follow-up after v0.11:
+
+1. users want to zoom out farther than the current ceiling allows;
+2. very tall artworks should fully fit in the normal/reset view without manual zoom-out;
+3. the selected timeline thumbnail should remain fully visible instead of being cut off.
+
+**Code-derived root causes:**
+
+- `src/gallery/GalleryManager.ts` currently ties the reset fit and the far zoom-out ceiling to the same hard-coded camera-distance range.
+- The reset-fit math uses the raw camera viewport and does not yet reserve enough "art-safe" space for fixed chrome and safe-area deductions, which hurts tall portraits first.
+- `src/styles/main.scss` raises the active timeline thumb (`translateY(-10px) scale(1.04)`) while `.timeline__list` clips vertical overflow, so the active item can be visibly cut off.
+- `src/timeline/Timeline.ts` uses `scrollIntoView()` only, which does not account for the transformed active geometry or explicit scroll gutters.
+
+**Planned implementation direction:** separate default fit from far overview zoom, compute the fit against the usable artwork viewport, and reserve enough timeline headroom/scroll padding so the selected item is fully readable on desktop and touch layouts.
+
+See `plan.md` → "v0.12 Plan — farther zoom-out, full tall-picture default fit, and unclipped active timeline selection" for the implementation plan and `FINDINGS.md` → "2026-05-18 — v0.12 planning pass" for the audit notes.
 
 ## v0.11 responsive/touch — Implemented (2026-05-18)
 
