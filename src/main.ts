@@ -36,7 +36,7 @@ import { suggestStartupQuality } from './utils/performance';
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
 
-function parseCssPx(value: string): number {
+function parseCssNumeric(value: string): number {
   const parsed = Number.parseFloat(value);
   if (Number.isFinite(parsed)) return parsed;
   const fallback = value.match(/-?\d+(?:\.\d+)?/);
@@ -253,10 +253,10 @@ async function main(): Promise<void> {
     const viewportW = Math.max(1, Math.round(visualViewport?.width ?? window.innerWidth));
     const viewportH = Math.max(1, Math.round(visualViewport?.height ?? window.innerHeight));
     const rootStyle = window.getComputedStyle(document.documentElement);
-    const safeLeft = parseCssPx(rootStyle.getPropertyValue('--safe-left'));
-    const safeRight = parseCssPx(rootStyle.getPropertyValue('--safe-right'));
-    const chromeTop = parseCssPx(rootStyle.getPropertyValue('--chrome-top'));
-    const chromeBottom = parseCssPx(rootStyle.getPropertyValue('--chrome-bottom'));
+    const safeLeft = parseCssNumeric(rootStyle.getPropertyValue('--safe-left'));
+    const safeRight = parseCssNumeric(rootStyle.getPropertyValue('--safe-right'));
+    const chromeTop = parseCssNumeric(rootStyle.getPropertyValue('--chrome-top'));
+    const chromeBottom = parseCssNumeric(rootStyle.getPropertyValue('--chrome-bottom'));
 
     const topbarRect = app.querySelector<HTMLElement>('.topbar')?.getBoundingClientRect();
     const timelineRect = app.querySelector<HTMLElement>('.timeline')?.getBoundingClientRect();

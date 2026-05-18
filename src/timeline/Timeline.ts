@@ -85,6 +85,7 @@ export class Timeline {
 
     container.appendChild(this.el);
     this.setActive(0);
+    window.requestAnimationFrame(() => this.centerThumb(0, 'auto'));
   }
 
   private handleThumbKey = (event: KeyboardEvent): void => {
@@ -183,7 +184,7 @@ export class Timeline {
   }
 
   private preferredScrollBehavior(): ScrollBehavior {
-    if (document.documentElement.dataset['motion'] === 'reduced') return 'auto';
+    if (document.documentElement.dataset.motion === 'reduced') return 'auto';
     try {
       return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     } catch {
