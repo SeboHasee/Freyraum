@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Documentation (v0.11 responsive/touch planning — 2026-05-18)
+
+- Added a detailed v0.11 plan for responsive phones/tablets, touch controls, gestures, safe areas, dynamic viewport behavior, mobile accessibility, mobile WebGL budgets, diagnostics, fallbacks, and validation.
+- Documented online research findings for WCAG 2.2 touch-target sizing, pointer-gesture alternatives, Pointer Events vs. Touch Events compatibility, passive listeners, `touch-action`, safe-area insets, dynamic viewport units, and mobile WebGL performance.
+- Audited current FREYRAUM responsive/touch state: desktop-first layout, basic viewport metadata, passive touch gestures, existing accessible button fallbacks, reduced motion/high contrast, adaptive quality, and WebGL fallback.
+- Updated every repository markdown file so future implementation work has a consistent responsive/touch reference point.
+
+
 ### Fixed (v0.10 follow-up — parallax hole artifacts — 2026-05-17)
 
 - Fixed the newly reported crater/hole artifacts in Hoch mode. Root cause:

@@ -5,6 +5,12 @@ This guide explains how the image system works after the v0.07 importer update.
 It is meant for the person who maintains the project folder, supports the customer,
 or needs to understand why an image does or does not appear in the gallery.
 
+## Responsive and touch support planning
+
+The 2026-05-18 v0.11 planning pass documents how to harden the gallery for phones and tablets without changing the customer artwork pipeline. The implementation should preserve `webglImage` data URL reliability, existing aspect-ratio handling, diagnostics, quality presets, and fallback behavior while adding safe-area-aware layouts, pointer/touch compatibility, and mobile WebGL safeguards.
+
+Support checks after a future responsive implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states.
+
 ## Quick overview
 
 The gallery is maintained through one input folder:

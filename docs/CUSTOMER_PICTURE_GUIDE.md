@@ -5,6 +5,10 @@ Welcome! This guide explains how to put your pictures into the FREYRAUM gallery.
 You do **not** need to use a code editor, the terminal, or any technical tool.
 You only ever touch one folder and one button.
 
+## Phone and tablet note
+
+A detailed responsive/touch improvement plan was added on 2026-05-18. The current gallery already has touch swipe, pinch zoom, on-screen navigation, zoom/reset controls, reduced motion, high contrast, and WebGL fallback behavior, but desktop is still the main polished design today. Future work is planned to improve phone/tablet safe areas, portrait/landscape layouts, touch target spacing, and gesture compatibility while keeping all current features.
+
 ## What you need (one-time)
 
 1. **Node.js** (free): install the LTS version from <https://nodejs.org>.

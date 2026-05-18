@@ -56,6 +56,13 @@ dimensions. See
 For the full architecture see
 [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).
 
+
+## Responsive phones/tablets planning status
+
+A v0.11 planning pass was added on 2026-05-18 for responsive phones, tablets, touch controls, and gesture compatibility. Desktop web remains the primary design, but future implementation should harden the existing gallery for phone/tablet portrait and landscape layouts, safe-area insets, touch/pen/mouse/keyboard input, accessible touch targets, optional gestures with button fallbacks, and mobile WebGL quality safeguards.
+
+Current baseline already includes basic viewport metadata, touch swipe/pinch support, zoom/reset buttons, keyboard navigation, reduced motion, high contrast, adaptive quality, and a WebGL fallback screen. The planned work is documented in [`plan.md`](./plan.md#v011-plan--responsive-phones-tablets-touch-controls-and-gesture-compatibility) and research/audit details are in [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v011-planning-responsive-phonestablets-touch-gestures-and-compatibility).
+
 ## Diagnostics and debugging
 
 The preview now includes a centralized diagnostics system designed to be useful for future debugging without flooding normal customer sessions.

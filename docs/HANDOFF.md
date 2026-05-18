@@ -6,7 +6,14 @@ artifact fix, parallax hole fix, and very-vertical-picture reset zoom fix are
 implemented. See `plan.md` → "v0.10 Follow-up — Parallax Hole Artifact Fix" and
 "v0.10 — Spot Artifact Fix and Portrait Reset Framing" for details.
 
+## v0.11 responsive/touch planning status
+
+A planning-only pass was added on 2026-05-18 for phone/tablet responsiveness, touch controls, gestures, safe areas, accessibility, and mobile WebGL compatibility. Desktop remains the primary design direction, but the next implementation should make every current feature usable on phones and tablets through safe-area-aware layouts, touch-friendly controls, optional gestures with visible fallbacks, pointer/touch compatibility, and mobile quality safeguards.
+
+See `plan.md` → "v0.11 Plan — Responsive Phones, Tablets, Touch Controls, and Gesture Compatibility" and `FINDINGS.md` → "2026-05-18 — v0.11 planning" before implementing responsive changes.
+
 ## Architecture diagram
+
 
 ![FREYRAUM v0.01 architecture](./assets/architecture.svg)
 

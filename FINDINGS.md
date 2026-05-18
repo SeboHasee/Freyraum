@@ -1,5 +1,40 @@
 # FINDINGS
 
+## 2026-05-18 — v0.11 planning: responsive phones/tablets, touch, gestures, and compatibility
+
+### Scope of this pass
+
+Documentation and research only. No runtime behavior changed. The purpose is to prepare a careful implementation plan for making FREYRAUM responsive and usable on phones and tablets while keeping desktop web as the primary design.
+
+### Online findings recorded
+
+- WCAG 2.2 Target Size (Minimum) requires at least 24 × 24 CSS px targets unless an exception applies; mobile usability guidelines from Apple/Google/Microsoft converge around larger practical targets of roughly 40–48 CSS px.
+- WCAG pointer-gesture guidance means FREYRAUM must not require swipe, drag, or pinch as the only way to access a feature. The existing nav buttons, timeline buttons, zoom controls, reset button, and keyboard shortcuts are therefore important compatibility fallbacks.
+- Mobile viewport best practice is to keep `width=device-width, initial-scale=1` and avoid disabling user zoom. Safe areas and dynamic viewport changes should be handled in CSS/layout, not by preventing user scaling.
+- Pointer Events are the preferred long-term input model for mouse/pen/touch, but a Touch Events fallback remains useful for maximum older iOS Safari compatibility.
+- If custom canvas gestures must suppress native page behavior, event listeners must be non-passive only where `preventDefault()` is used. The current passive touch listeners are safe but may not fully own pinch/pan gestures on all browsers.
+- `touch-action` improves compatibility and performance in modern browsers, but older iOS Safari should not rely on it as the only gesture-control mechanism.
+- Mobile WebGL guidance supports the repository's existing direction: cap DPR, keep adaptive quality, gate expensive shader paths, react to resize/orientation, and keep a clear fallback screen.
+
+### Repository audit findings
+
+- `index.html` and `app.html` already include basic mobile viewport metadata.
+- The SCSS has a desktop-first layout and only one narrow breakpoint at `max-width: 720px`; phone landscape, tablet portrait, safe areas, dynamic viewport height, and short-height states are not yet fully specified.
+- Current touch code supports one-finger swipe/pan and two-finger pinch, but is separate from mouse handling and uses passive touch listeners.
+- Current controls already provide strong fallbacks: navigation buttons, timeline buttons, zoom buttons, reset, fullscreen, keyboard shortcuts, reduced motion, high contrast, and WebGL fallback.
+- Most primary controls are near or above mobile-friendly target sizes; spacing and safe-area collision still need device validation.
+- The diagnostics system is ready to host a `responsive/layout` scope for viewport bucket, pointer capability, orientation, DPR cap, and adaptive quality events.
+
+### Technical conclusion
+
+The next implementation should be a responsive hardening pass, not a redesign. The main work is to add a device/layout capability layer, safe-area-aware CSS, mobile-specific layout states, unified pointer/touch gesture ownership, touch-target verification, mobile performance defaults, and a documented QA matrix. Existing desktop behavior and customer artwork reliability work should remain unchanged.
+
+### Validation status
+
+Markdown-only validation for this planning pass: repository markdown files were updated. Runtime lint/build are not required for documentation-only changes, but the implementation PR must run `npm run lint` and `npm run build` and regenerate `customer-preview/` if source output changes.
+
+---
+
 ## 2026-05-17 — v0.10 follow-up: implemented — parallax hole artifacts
 
 ### Customer-observed behavior

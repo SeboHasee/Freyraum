@@ -1,5 +1,254 @@
 # FREYRAUM Plan
 
+## v0.11 Plan — Responsive Phones, Tablets, Touch Controls, and Gesture Compatibility
+
+### Status
+
+**Planning/documentation pass added 2026-05-18.** This is an implementation plan only; no runtime code was changed in this pass. Desktop web remains the primary visual design target, but the next implementation should make the gallery usable, robust, and comfortable across phones, tablets, touch laptops, pens, mice, and keyboards.
+
+### Executive goal
+
+FREYRAUM should keep the premium desktop museum presentation while adapting its controls, layout, performance envelope, and accessibility behavior to small screens and coarse pointers. The phone/tablet experience should not feel like a separate stripped-down product: users must still be able to navigate artworks, read metadata, zoom, pan, reset, switch fullscreen, change preferences, use reduced motion/high contrast, and recover from WebGL/device limitations.
+
+### Online research summary used for this plan
+
+- **WCAG 2.2 target size:** interactive targets must meet at least 24 × 24 CSS px unless an exception applies; practical mobile UI targets should be closer to 44–48 CSS px for comfort and error reduction. Sources: W3C WCAG 2.2 Target Size (Minimum), Apple Human Interface Guidelines, Google Material accessibility touch-target guidance, Microsoft Fluent touch guidance.
+- **Pointer gestures:** WCAG pointer-gesture guidance says primary functionality must not require multipoint or path-based gestures. Pinch and swipe can be supported, but tap/button/keyboard alternatives must remain available.
+- **Pointer cancellation:** navigation/activation should happen on click/up/end rather than touchstart/down so accidental touches can be aborted.
+- **Viewport and safe areas:** keep `width=device-width, initial-scale=1`, avoid `user-scalable=no`, account for notches/home indicators with `env(safe-area-inset-*)`, and prefer modern dynamic viewport units (`dvh`, `svh`, `lvh`) where they improve behavior with mobile browser chrome.
+- **Touch/Pointer Events compatibility:** Pointer Events are now the preferred unified API for mouse/pen/touch, but older iOS Safari compatibility still benefits from Touch Events fallback. If the app must prevent browser scrolling/zoom on a canvas gesture, listeners must be non-passive where `preventDefault()` is called; `touch-action` alone is not sufficient for older iOS Safari.
+- **Canvas gesture compatibility:** custom pinch/drag on a full-screen canvas should define clear ownership of gestures, avoid fighting native page zoom unless necessary, and provide visible UI alternatives for every gesture.
+- **Mobile WebGL:** cap device pixel ratio, adapt quality based on frame budget/device class, reduce heavy shaders and large textures on constrained devices, update renderer/camera on resize/orientation changes, check WebGL support early, and dispose GPU resources consistently.
+
+### Current repository audit findings
+
+| Area | Current state | Responsive/touch risk |
+| --- | --- | --- |
+| Viewport | `index.html` and `app.html` use `width=device-width, initial-scale=1.0`. | Good baseline, but no `viewport-fit=cover`, no documented safe-area policy, and fixed UI may collide with notches/home indicators. |
+| Layout CSS | Desktop-first fixed chrome with one breakpoint at `max-width: 720px`. | Phone/tablet coverage is too shallow: info panel, timeline, nav, preferences, fullscreen, and zoom controls can overlap on short/tall/split-screen viewports. |
+| Canvas sizing | `canvas`, `html`, `body`, and `#app` use 100% fixed sizing. | Mobile browser chrome can change viewport height; dynamic viewport behavior is not yet explicitly handled. |
+| Touch input | `TouchInteraction` handles one-finger swipe/pan and two-finger pinch. | Listeners are passive and never prevent defaults; this is safe for page accessibility but may allow native browser gestures to fight custom canvas gestures. No pointer-event unification yet. |
+| Mouse input | `MouseInteraction` and `ZoomPan` are mouse-specific. | Touch laptops/stylus devices may duplicate or miss expected behavior unless pointer ownership is unified. |
+| Gesture alternatives | Navigation buttons, timeline buttons, zoom buttons, reset, keyboard shortcuts exist. | Strong accessibility baseline. Need ensure every mobile gesture has a visible/tappable alternative on small screens without overlap. |
+| Touch target sizes | Nav buttons are 64 px; zoom/fullscreen/preferences controls are 44 px; timeline thumbs are 150 × 95. | Mostly good; some controls are exactly 44 px and need spacing/safe-area verification on phones. |
+| Accessibility | Real buttons, focus-visible ring, `aria-live`, roving tabindex, reduced motion, high contrast, WebGL fallback. | Good foundation. Need mobile screen-reader labels/help text, orientation/reflow checks, and gesture instructions that do not rely only on hover/desktop hints. |
+| Performance | Pixel-ratio caps and adaptive quality exist; presets include battery mode. | Need phone/tablet default heuristics, thermal/dropped-frame diagnostics, and safe mobile budgets for high-quality shader paths. |
+| Diagnostics | Central diagnostics system exists and is documented. | Responsive implementation should add device/layout/input diagnostics without logging sensitive dimensions beyond generic viewport/pointer capability data. |
+
+### Goals
+
+1. Preserve the current desktop composition as the main art direction.
+2. Make the site usable on common phones and tablets in portrait and landscape.
+3. Support touch, pen, mouse, trackpad, and keyboard without duplicate input bugs.
+4. Keep all existing features: navigation, timeline, zoom/pan/reset, fullscreen, preferences, lighting, quality presets, diagnostics, fallback screen, customer artwork workflow, and debug toggles.
+5. Meet or exceed practical mobile touch-target guidance: aim for 44–48 CSS px targets and clear spacing.
+6. Keep gestures optional: swipe/pinch/drag are enhancements; visible buttons and keyboard alternatives remain primary fallbacks.
+7. Avoid disabling browser/page zoom globally.
+8. Keep WebGL reliable through conservative quality defaults and graceful fallback on weak devices.
+9. Document mobile validation so future contributors can repeat it.
+
+### Non-goals
+
+- Do not redesign FREYRAUM as a mobile-first product; desktop remains the main design.
+- Do not remove the high-end WebGL material/lighting work.
+- Do not add a heavy gesture library unless native Pointer/Touch Events prove insufficient.
+- Do not require a server for the customer preview; `file://` compatibility remains important.
+- Do not hide features permanently on mobile unless a control has an equivalent accessible path.
+
+### Proposed implementation order by vertical slices
+
+#### Slice 1 — Baseline responsive device model and diagnostics
+
+**Files likely touched:** `src/main.ts`, `src/utils/Diagnostics.ts`, possibly a small new `src/utils/device.ts` if needed.
+
+- Define one device/layout capability model based on viewport size, pointer precision (`pointer` / `any-pointer`), hover support (`hover` / `any-hover`), DPR, orientation, and WebGL capability.
+- Mirror safe, non-sensitive layout state to `<html>` data attributes such as `data-input-primary`, `data-hover`, `data-orientation`, and `data-layout-size`.
+- Log one concise `layout-capabilities` diagnostic during startup and on meaningful resize/orientation changes, deduped/throttled to avoid console spam.
+- Keep diagnostics default quiet; only detailed viewport/device fields appear in `?debug=info` or verbose snapshots.
+
+**Acceptance checks:** desktop attributes classify as fine pointer/hover; phone attributes classify as coarse pointer/no-hover; resize/orientation logs are throttled; normal console remains quiet.
+
+#### Slice 2 — Viewport, safe-area, and fixed chrome layout foundation
+
+**Files likely touched:** `app.html`, `index.html`, generated preview template/build output as appropriate, `src/styles/main.scss`.
+
+- Evaluate adding `viewport-fit=cover` while preserving zoomability and `width=device-width, initial-scale=1`.
+- Add CSS variables for safe-area insets and chrome spacing.
+- Replace fragile fixed offsets with safe-area-aware offsets for topbar, preferences, fullscreen, info panel, navigation, zoom rail, hint text, and timeline.
+- Use `100dvh` / `100svh` fallbacks carefully so full-screen canvas and overlays remain stable as mobile browser chrome expands/collapses.
+- Define breakpoint tiers for desktop, tablet landscape, tablet portrait, phone landscape, phone portrait, and short-height devices.
+
+**Acceptance checks:** no UI is hidden under a notch/home indicator; controls stay reachable on 320 px wide phones, 390–430 px modern phones, 768 px tablets, tablet landscape, and desktop; root launcher remains readable.
+
+#### Slice 3 — Mobile information architecture and overlap prevention
+
+**Files likely touched:** `src/styles/main.scss`, `src/ui/InfoPanel.ts`, `src/ui/HintText.ts`, possibly `src/ui/Topbar.ts`.
+
+- Keep the desktop info panel style on large screens.
+- On phones, transform metadata into a compact bottom sheet or collapsible card so it does not cover artwork controls or timeline.
+- Ensure long titles/descriptions wrap/clamp gracefully with access to full text through expansion or scroll inside the panel.
+- Hide or rewrite desktop-only hover hints on coarse-pointer devices; replace with concise touch instructions only when helpful.
+- Keep text readable at browser text zoom and with high contrast mode.
+
+**Acceptance checks:** no overlap between info panel, timeline, zoom rail, nav controls, and safe areas at small sizes; metadata remains readable and reachable; desktop appearance unchanged.
+
+#### Slice 4 — Unified pointer/touch gesture ownership
+
+**Files likely touched:** `src/interaction/TouchInteraction.ts`, `src/interaction/MouseInteraction.ts`, `src/interaction/ZoomPan.ts`, possibly new `src/interaction/PointerInteraction.ts`.
+
+- Prefer a unified Pointer Events path for modern browsers, with Touch Events fallback for older iOS Safari if required.
+- Define gesture states: idle, hover, single-pointer drag, pan, swipe candidate, pinch candidate, and cancelled.
+- Avoid duplicate handling when touch also generates mouse events.
+- Use `touch-action` on the canvas intentionally. If custom pinch/pan must own the gesture, use non-passive listeners only for the exact events that call `preventDefault()`.
+- Keep swipe navigation disabled while zoomed/pannable; keep pan bounded by existing `GalleryManager` rules.
+- Preserve panel click navigation and hover rotation on fine pointers; reduce or disable hover semantics on coarse pointers.
+
+**Acceptance checks:** one-finger swipe navigates only when not zoomed; one-finger drag pans only when zoomed; pinch zoom is smooth; controls still work if gestures fail; no accidental double navigation; Safari/Chrome mobile do not rubber-band or page-zoom unexpectedly during canvas gestures.
+
+#### Slice 5 — Touch-friendly controls and accessibility refinements
+
+**Files likely touched:** `src/styles/main.scss`, `src/ui/NavigationControls.ts`, `src/ui/ZoomControls.ts`, `src/ui/FullscreenButton.ts`, `src/ui/PreferencesPanel.ts`, `src/timeline/Timeline.ts`.
+
+- Enforce target and spacing rules: WCAG minimum 24 × 24 CSS px; project target 44–48 px for primary controls.
+- Expand hit areas with padding/min-size rather than shrinking visual affordances.
+- Ensure all controls have localized, clear accessible names and visible focus states.
+- Verify timeline thumbnails remain real buttons with roving tabindex and that active thumbnail scroll behavior respects reduced motion.
+- Make preferences usable on narrow screens: panel should fit viewport, scroll internally if needed, and avoid edge clipping.
+- Keep high contrast and reduced motion modes applied to all new responsive states.
+
+**Acceptance checks:** keyboard-only and screen-reader flows remain intact; every gesture has a button alternative; no control is smaller than 44 px unless exempt and separated enough; `prefers-reduced-motion` suppresses animated scroll/transition effects where appropriate.
+
+#### Slice 6 — Mobile/tablet WebGL quality and performance budget
+
+**Files likely touched:** `src/config/quality.ts`, `src/utils/performance.ts`, `src/utils/AdaptiveQualityController.ts`, `src/core/RendererManager.ts`, possibly `src/gallery/GalleryManager.ts`.
+
+- Keep existing quality presets but review startup defaults for coarse-pointer/mobile GPUs.
+- Cap DPR aggressively on phones/tablets while preserving desktop high quality.
+- Consider starting phones on `balanced` or `battery` based on DPR, viewport area, and early frame-budget samples, without overriding an explicit stored user preference.
+- Ensure resize/orientation updates both camera and renderer promptly; consider debouncing repeated mobile resize events.
+- Keep high-cost shader paths gated to high preset/inspection as currently designed.
+- Add diagnostics for adaptive downgrades, DPR cap, viewport area, and active preset.
+
+**Performance targets:** desktop remains 60 FPS target in balanced/high where possible; mobile balanced should aim for stable interaction and quick recovery from frame drops; battery must remain the safety path for weak/thermal-limited devices.
+
+#### Slice 7 — Fallbacks, no-WebGL, old-browser, and offline preview behavior
+
+**Files likely touched:** `src/ui/FallbackScreen.ts`, docs, generated preview if build output changes.
+
+- Keep WebGL availability check early and user-friendly.
+- Add fallback guidance that is understandable on mobile browsers, including hardware acceleration/private browsing notes if relevant.
+- Avoid feature detection that breaks `file://` preview.
+- Keep older iOS fallback path documented for Touch Events if Pointer Events are used.
+- Confirm data URL image handling from v0.09 remains unchanged and safe.
+
+**Acceptance checks:** no-WebGL fallback is readable on phones; file:// customer preview still opens; fallback copy does not mention developer-only jargon unless `?debug=info` is used.
+
+#### Slice 8 — Documentation, QA matrix, and release notes
+
+**Files likely touched:** all markdown docs required by `DOCUMENTATION_RULES.md`.
+
+- Update `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `docs/HANDOFF.md`, customer/support guides, and documentation policy status after implementation.
+- Maintain a device/browser QA matrix: iPhone Safari, iPad Safari, Android Chrome, Samsung Internet if available, desktop Chrome/Firefox/Safari/Edge, touch laptop, keyboard-only.
+- Record known limitations and deferred work rather than marking mobile complete prematurely.
+
+### Responsive layout proposal
+
+| Tier | Approximate condition | Main UI strategy |
+| --- | --- | --- |
+| Desktop primary | `min-width >= 1024px` and comfortable height | Keep current premium layout: topbar, left info panel, bottom timeline, floating controls. |
+| Tablet landscape | `768–1180px` wide landscape | Reduce chrome spacing, keep side/bottom controls, ensure timeline and info panel do not collide. |
+| Tablet portrait | `600–900px` wide portrait | Narrow info panel, center/stack controls, prefer larger vertical spacing and safe-area offsets. |
+| Phone landscape | short height + coarse pointer | Minimize text chrome, make controls compact but tappable, consider collapsible info. |
+| Phone portrait | `<600px` wide | Bottom-sheet/card metadata, safe-area timeline, thumb-friendly nav/zoom controls, no hover-only hints. |
+| Very small / embedded | `<360px` or very short height | Prioritize artwork, navigation, reset, preferences access, and fallback readability over decorative chrome. |
+
+### Accessibility requirements for implementation
+
+- Preserve semantic buttons and navigation landmarks.
+- Keep visible focus rings for keyboard and switch users.
+- Keep timeline roving tabindex and ensure it remains understandable on mobile screen readers.
+- Provide button alternatives for swipe and pinch.
+- Ensure text reflows without horizontal scrolling at common zoom levels.
+- Respect reduced motion in CSS transitions, JS scroll behavior, artwork navigation, and preference panel animation.
+- Respect high contrast in new responsive panels and controls.
+- Do not disable native browser zoom with `user-scalable=no`.
+- Avoid hover-only instructions or controls on coarse-pointer devices.
+
+### Gesture contract
+
+| Gesture/control | Expected behavior | Required fallback |
+| --- | --- | --- |
+| Tap nav arrows | Previous/next artwork | Keyboard arrows and timeline buttons. |
+| Swipe left/right on canvas while not zoomed | Previous/next artwork | Nav arrows and timeline buttons. |
+| Pinch on canvas | Zoom artwork | Zoom in/out buttons and `+`/`-` keys. |
+| One-finger drag while zoomed | Pan within bounds | Reset button and keyboard reset. |
+| Tap side panels / thumbnails | Navigate artwork | Nav arrows and timeline keyboard flow. |
+| Reset button | Reset zoom/pan | `0` / `R` keys. |
+| Fullscreen button | Enter/exit presentation | `F` key where keyboard exists; browser controls otherwise. |
+
+### Diagnostics/logging design
+
+- Add a `responsive` or `layout` diagnostics scope.
+- Log startup capabilities once: viewport bucket, orientation, DPR cap, pointer/hover capabilities, reduced motion/high contrast, selected quality.
+- Log orientation/resize changes only when bucket/orientation changes, not every pixel resize.
+- Log gesture conflicts only as warnings when an actual failure/cancellation happens repeatedly.
+- Never log full data URLs, filenames beyond existing sanitized artwork IDs, or sensitive user/device identifiers.
+
+### Browser/API stability boundaries
+
+- Pointer Events are preferred for modern browsers; Touch Events fallback should remain until the supported iOS Safari floor is clearly documented.
+- `touch-action` should be used, but implementation must not rely on it as the only prevention mechanism for older iOS Safari.
+- Dynamic viewport units should be layered with fallbacks because older browsers may not support all `dvh/svh/lvh` units.
+- Safe-area environment variables should be additive and harmless on devices without notches.
+- WebGPU remains experimental/opt-in and should not be part of this responsive compatibility requirement.
+
+### Resource ownership and async/race handling
+
+- Renderer/camera resize ownership stays split between `RendererManager.resize()` and `SceneManager.handleResize()`; the responsive pass should coordinate debounced calls without introducing duplicate listeners that leak.
+- Interaction managers own their event listeners and must remove all pointer/touch/mouse listeners in `dispose()`.
+- If pointer and touch fallbacks coexist, event suppression must prevent duplicate actions while preserving cleanup.
+- Existing `GalleryManager` artwork-load token/race protection remains the boundary for async artwork changes.
+- Texture/material disposal contracts from previous versions remain unchanged.
+
+### Validation matrix
+
+Minimum manual matrix for the implementation PR:
+
+| Device/browser class | Checks |
+| --- | --- |
+| Desktop Chrome/Edge/Firefox/Safari | Existing desktop design unchanged; wheel, mouse drag, hover, keyboard, fullscreen, preferences. |
+| iPhone Safari portrait/landscape | Safe areas, pinch, swipe, pan while zoomed, buttons, preferences, info panel, no unintended page zoom. |
+| iPad Safari portrait/landscape | Tablet layout, Apple Pencil/pointer if available, orientation resize, fullscreen behavior. |
+| Android Chrome portrait/landscape | Touch gestures, browser chrome resize, WebGL performance, fullscreen behavior. |
+| Samsung Internet if available | Touch and WebGL fallback/performance sanity. |
+| Touch laptop / Surface | Pointer unification, pen/touch/mouse switching, keyboard coexistence. |
+| Keyboard-only | Logical tab order, visible focus, timeline arrows, shortcuts. |
+| Reduced motion / high contrast | All responsive states remain legible and motion-safe. |
+| No WebGL / failed WebGL | Fallback card readable on mobile and desktop. |
+
+### Implementation acceptance checklist
+
+- [ ] Desktop layout visually matches the current design except intentional safe-area/responsive refactors.
+- [ ] All existing functions remain available on phones and tablets.
+- [ ] No primary action requires a multipoint/path gesture only.
+- [ ] Interactive targets meet project mobile target sizing or documented exceptions.
+- [ ] Phone portrait, phone landscape, tablet portrait, and tablet landscape have no overlapping critical controls.
+- [ ] Canvas gestures do not trigger duplicate mouse/touch navigation.
+- [ ] Browser/page zoom remains allowed.
+- [ ] Reduced motion and high contrast work in all responsive states.
+- [ ] Adaptive quality protects weak mobile GPUs without overwriting explicit user settings unexpectedly.
+- [ ] Diagnostics capture responsive state without noisy or sensitive logging.
+- [ ] `npm run lint` and `npm run build` pass after implementation.
+- [ ] `customer-preview/` is regenerated if source/runtime output changes.
+
+### Risks and reserved future passes
+
+- **iOS Safari gesture conflicts:** custom pinch/pan on a full-screen canvas can fight native gestures. Mitigate through explicit gesture ownership and careful non-passive listener use only where needed.
+- **Fixed chrome crowding:** phones with short landscape viewports may require collapsing nonessential text chrome rather than only shrinking spacing.
+- **Mobile GPU variance:** high preset may be too expensive on older phones. Keep adaptive downgrade and battery preset reliable.
+- **Testing limits:** emulators do not fully match physical touch latency, safe areas, thermal throttling, or Safari behavior; physical-device validation is still required before claiming completion.
+- **Documentation drift:** because this pass is planning-only, implementation must update this section with actual as-built behavior and validation results.
+
 ## v0.10 Follow-up — Parallax Hole Artifact Fix (Implemented)
 
 ### Status
