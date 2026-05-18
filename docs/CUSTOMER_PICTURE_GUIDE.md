@@ -11,13 +11,19 @@ v0.11 already implemented the main phone/tablet hardening pass: touch gestures, 
 
 ## Current viewing follow-up
 
-One customer-facing follow-up is now planned as **v0.12**:
+One customer-facing follow-up is now defined as the **v0.12 technical coding plan**:
 
 - zoom-out should go farther than it does now,
 - very tall pictures should already be fully visible in the normal/reset view,
 - and the selected picture in the bottom timeline should stay fully visible.
 
-That work is documented for the next implementation pass; the current build may still show these limitations on some artworks/layouts.
+The audited technical direction is to:
+
+- measure the actually usable artwork viewport,
+- let reset view and “zoom out even farther” be two different distances,
+- and fix the selected timeline picture with better spacing/centering logic.
+
+The current build may still show these limitations on some artworks/layouts until that implementation pass lands.
 
 ## What you need (one-time)
 
@@ -195,11 +201,15 @@ happens, include:
 3. the `show-artwork-complete` diagnostics entry.
 
 **The selected timeline picture looks cut off.**
-This is also tracked for the next pass (v0.12). Please send:
+This is also tracked in the v0.12 technical plan. Please send:
 
 1. a screenshot showing the selected thumbnail,
 2. whether it happens after clicking, swiping, or using keyboard arrows,
 3. the browser/device used.
+
+If a developer is helping you, they should also capture whether the issue still
+appears after the selected item is re-centered in the strip and whether reduced
+motion is enabled.
 
 ## Debug / support tools (developer use)
 

@@ -22,8 +22,8 @@ Support checks after implementation should include phone portrait, phone landsca
 
 ## Current v0.12 follow-up (zoom / tall-picture framing / timeline visibility)
 
-Planned on 2026-05-18. The next pass is focused on three viewing issues rather
-than the import pipeline:
+Audited and upgraded to a technical coding plan on 2026-05-18. The next pass is
+focused on three viewing issues rather than the import pipeline:
 
 - allow a farther zoomed-out overview distance;
 - make the standard/reset view fully show very tall artworks;
@@ -33,6 +33,14 @@ The code audit points at `src/gallery/GalleryManager.ts` for the zoom/framing
 logic and `src/timeline/Timeline.ts` + `src/styles/main.scss` for the active
 timeline clipping. The importer, generated manifests, and `webglImage` path are
 not part of this follow-up.
+
+The research-backed plan specifically calls for:
+
+- an injected **art-safe viewport metrics** model from `main.ts`,
+- separate **reset-fit** and **far overview** zoom distances,
+- shared viewport math for reset/min/pan consistency,
+- timeline **headroom + scroll gutters + manual centering**,
+- reduced-motion-aware timeline auto-scrolling.
 
 ## Quick overview
 

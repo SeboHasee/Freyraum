@@ -2,12 +2,12 @@
 
 ## Unreleased
 
-### Documentation (v0.12 planning — 2026-05-18)
+### Documentation (v0.12 final research-backed technical coding plan — 2026-05-18)
 
-- Added a new v0.12 planning section to `plan.md` for three customer-reported issues: zoom-out should go farther, very tall artworks must fully fit in the standard/reset view, and the selected timeline thumbnail must remain fully visible.
-- Documented the core root causes in `FINDINGS.md`: `GalleryManager` currently ties reset framing and far zoom-out to the same hard-coded camera ceiling; reset-fit math uses raw camera aspect instead of the artwork-safe viewport after chrome/safe-area deductions; `.timeline__thumb.is-active` is raised while `.timeline__list` clips vertical overflow; `scrollIntoView()` does not account for transformed active geometry.
-- Updated `README.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` so the current known limitation and next implementation target are visible outside the planning files.
-- Updated `DOCUMENTATION_RULES.md` latest-pass record for the new planning pass.
+- Rewrote the v0.12 section in `plan.md` from a short planning note into a full technical coding plan with exact files, code-level bugs, brainstormed solution options, recommended architecture, TypeScript interface suggestions, scroll/viewport formulas, diagnostics additions, and an implementation slice order.
+- Upgraded `FINDINGS.md` to record the audited source-level findings: reset-fit and far overview zoom are still coupled in `GalleryManager`; reset/min/pan math still uses raw camera aspect; `main.ts` lacks an explicit art-viewport metrics provider; timeline clipping is structural CSS; `Timeline.ts` needs dedicated manual centering logic; timeline auto-scrolling does not yet respect reduced motion.
+- Added the 2026 online validation result and official source list for `VisualViewport`, `ResizeObserver`, `scrollIntoView`, `scroll-padding`, `scroll-margin`, dynamic viewport units, WCAG Reflow, and WCAG Target Size.
+- Updated all repository markdown files so the v0.12 follow-up now clearly points to the audited technical coding plan rather than a generic future note.
 
 ### Added (v0.11 implementation — 2026-05-18)
 

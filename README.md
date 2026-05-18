@@ -4,13 +4,20 @@ A premium interactive digital museum installation built by a high-end creative t
 
 ## Current follow-up — v0.12 zoom and framing plan
 
-**Planned 2026-05-18.** The next pass targets three still-open customer-facing issues:
+**Research-backed technical coding plan updated 2026-05-18.** The next pass targets three still-open customer-facing issues:
 
 - zoom-out must allow a noticeably farther overview distance;
 - very tall / long vertical artworks must fully fit in the standard/reset view without forcing manual zoom-out;
 - the selected timeline thumbnail must remain fully visible and not be cut off by the timeline strip.
 
-See [`plan.md`](./plan.md#v012-plan--farther-zoom-out-full-tall-picture-default-fit-and-unclipped-active-timeline-selection-2026-05-18) for the execution plan and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v012-planning-pass-farther-zoom-out-tall-picture-default-fit-timeline-active-thumb-visibility) for the code-derived findings.
+The audited v0.12 direction is:
+
+- measure an **art-safe viewport** instead of relying only on raw camera aspect;
+- split **reset-fit zoom** from **far overview zoom** in `GalleryManager`;
+- use **CSS scroll gutters + manual centering** so the active timeline item stays fully visible;
+- respect **reduced motion** in programmatic timeline scrolling.
+
+See [`plan.md`](./plan.md#v012-plan--farther-zoom-out-full-tall-picture-default-fit-and-unclipped-active-timeline-selection-technical-coding-plan) for the technical coding plan and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v012-final-research-backed-technical-coding-plan-farther-zoom-out-tall-picture-fit-and-unclipped-timeline-selection) for the audited findings and online validation result.
 
 ## One-click local customer preview
 

@@ -1,34 +1,58 @@
 # FINDINGS
 
-## 2026-05-18 — v0.12 planning pass (farther zoom-out, tall-picture default fit, timeline active-thumb visibility)
+## 2026-05-18 — v0.12 final research-backed technical coding plan: farther zoom-out, tall-picture fit, and unclipped timeline selection
 
 ### Scope of this pass
 
-Documentation/planning only. No runtime code changed. This pass converts the latest customer report into a concrete implementation target for the next version.
+Updated the initial v0.12 note into a full technical coding plan. No runtime code changed. This pass combines a deeper source audit with a focused online validation pass for 2026 viewport/scroll best practices.
 
-### Technical findings
+### Online validation result
 
-- **`src/gallery/GalleryManager.ts` couples reset framing and far zoom-out to the same ceiling.** `DEFAULT_CAMERA_Z = 7`, `MAX_CAMERA_Z = 9.25`, and `getResetZoom()` is clamped to `MAX_CAMERA_Z`. Result: tall artworks can consume most of the available far-distance budget just to fit, leaving too little extra room to zoom out farther.
-- **The reset-fit math uses the raw camera viewport, not the artwork-safe viewport.** `getResetZoom()` only compares framed artwork width/height against camera aspect and a small margin. It does not reserve space for the fixed top bar, bottom timeline/nav/zoom chrome, safe-area insets, or compact phone layouts. Tall portraits therefore have the highest risk of appearing "not fully shown" even though the math says they fit.
-- **The active timeline thumb is clipped by its own scroll container.** `.timeline__thumb.is-active` lifts the card with `translateY(-10px) scale(1.04)`, but `.timeline__list` simultaneously applies `overflow-y: hidden` and only `2px` padding. The selected card can therefore be visibly cut off.
-- **`scrollIntoView()` is not enough for the transformed active state.** `Timeline.setActive()` uses `scrollIntoView({ inline: 'center', block: 'nearest' })`, which centers the layout box but does not account for the active transform or any desired edge gutters.
+The original v0.12 direction was confirmed, but the research materially improves the implementation detail:
 
-### Planned implementation direction
+1. use **measured art-safe viewport metrics**, not only raw camera aspect;
+2. treat **`visualViewport` + `ResizeObserver`** as first-class re-fit signals;
+3. combine **CSS scroll gutters (`scroll-padding` / `scroll-margin`) with manual centering** for the active timeline item;
+4. respect **reduced-motion** in timeline auto-centering.
 
-- Separate three distances in `GalleryManager`: close inspection limit, default/reset fit distance, and a farther overview limit.
-- Compute reset/default fit against the usable artwork viewport after subtracting chrome and safe-area budget.
-- Add enough timeline headroom and scroll padding so the active thumbnail is fully readable and remains comfortably visible when selected by keyboard, click, or programmatic navigation.
-- Extend diagnostics so debug runs expose the new fit/zoom numbers for support.
+### Official / authoritative sources used in the validation
+
+- MDN — VisualViewport API: <https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport>
+- MDN — ResizeObserver: <https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver>
+- MDN — `Element.scrollIntoView()`: <https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoView>
+- MDN — `scroll-padding`: <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-padding>
+- MDN — `scroll-margin`: <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-margin>
+- web.dev — large, small, and dynamic viewport units: <https://web.dev/blog/viewport-units>
+- WCAG 2.1 Reflow: <https://www.w3.org/WAI/WCAG21/Understanding/reflow.html>
+- WCAG 2.2 Target Size: <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html>
+
+### Code-level findings
+
+- **`GalleryManager` still couples reset framing and far overview zoom.** `DEFAULT_CAMERA_Z = 7`, `MAX_CAMERA_Z = 9.25`, `getResetZoom()` clamps to that ceiling, and `getHoverRotationScale()` also derives its range from the same max. A simple `MAX_CAMERA_Z` bump would therefore have side effects beyond just “zoom out farther”.
+- **`getResetZoom()`, `getMinZoom()`, and `getPanLimits()` all use raw camera aspect only.** They do not account for the art-safe viewport after top/bottom chrome, safe areas, and mobile browser UI changes are considered. This means any reset-only fix would leave the rest of the zoom/pan model internally inconsistent.
+- **`main.ts` has a strong resize coordinator now, but it still does not provide an explicit art-viewport measurement to `GalleryManager`.** The existing v0.11 coordinator is the correct place to wire that in.
+- **Timeline clipping is a structural CSS issue, not just a scrolling issue.** The active thumb is lifted upward while the scroll container clips vertical overflow and reserves almost no headroom.
+- **`Timeline.ts` needs a dedicated list field and centering helper.** Today the list element is local to the constructor and `setActive()` can only call `scrollIntoView()`.
+- **Timeline smooth scrolling currently ignores reduced motion.** This is a small but real accessibility gap in the current implementation.
+
+### Recommended technical direction
+
+- Inject a **viewport-metrics provider** into `GalleryManager` from `main.ts`.
+- Split zoom into **inspection floor**, **reset-fit**, and **far overview** distances.
+- Make reset, pan limits, and min-zoom all use the same viewport metrics model.
+- Keep the active timeline affordance, but fix it with **headroom + scroll gutters + manual centering** instead of removing the visual emphasis.
+- Add diagnostics for both the measured art-safe viewport and the new zoom bounds.
 
 ### Validation status
 
 Planning-only pass. The later implementation pass should validate at least:
 
-- tall portrait first view / reset view
+- tall portrait first/reset view
 - farther manual zoom-out beyond reset
-- square / landscape regression checks
-- desktop + phone portrait + phone landscape + tablet portrait
-- active timeline thumb visibility while selecting via click, keyboard, and touch scroll
+- resize/orientation/browser-chrome changes while staying on the same artwork
+- square and landscape regression checks
+- active timeline visibility for click, keyboard, direct navigation, and touch-scroll flows
+- reduced-motion timeline behavior
 
 ---
 
