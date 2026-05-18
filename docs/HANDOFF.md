@@ -1,10 +1,9 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current priority: v0.10 validation.** The Hoch close-up spot
-artifact fix, parallax hole fix, and very-vertical-picture reset zoom fix are
-implemented. See `plan.md` → "v0.10 Follow-up — Parallax Hole Artifact Fix" and
-"v0.10 — Spot Artifact Fix and Portrait Reset Framing" for details.
+contributors. **Current priority: v0.11 — responsive/touch hardening is
+implemented.** See the "v0.11 responsive/touch — Implemented" section immediately
+below for the full status summary.
 
 ## v0.11 responsive/touch — Implemented (2026-05-18)
 

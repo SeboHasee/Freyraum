@@ -268,7 +268,7 @@ button {
 // =============================================================================
 .nav-controls {
   position: fixed;
-  bottom: calc(var(--chrome-bottom) + 0px);
+  bottom: var(--chrome-bottom);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -311,7 +311,7 @@ button {
 // =============================================================================
 .zoom-controls {
   position: fixed;
-  bottom: calc(var(--chrome-bottom) + 0px);
+  bottom: var(--chrome-bottom);
   right: calc(36px + var(--safe-right));
   display: flex;
   flex-direction: column;

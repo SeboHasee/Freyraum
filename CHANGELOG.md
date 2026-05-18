@@ -40,6 +40,7 @@
 - `npm install`, `npm run lint`, `npm run build` all pass with only the pre-existing Sass legacy-API deprecation notice and the TypeScript parser version warning.
 - Vite now transforms 46 modules (down from 47) because the three superseded interaction files are no longer imported.
 - `customer-preview/` was regenerated and committed.
+- Post-implementation audit: cleaned two redundant `calc(var(--chrome-bottom) + 0px)` expressions in `main.scss` → simplified to `var(--chrome-bottom)` (no visual change; `.nav-controls` and `.zoom-controls`). Updated `docs/HANDOFF.md` priority headline from "v0.10 validation" to "v0.11 responsive/touch".
 
 ### Known follow-ups (v0.11)
 
