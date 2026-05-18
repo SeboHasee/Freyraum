@@ -47,6 +47,17 @@ export class InfoPanel {
     }
   }
 
+  /**
+   * v0.11 — toggle compact phone-portrait styling. Driven from
+   * `main.ts` based on `detectDeviceCapabilities().layoutTier`. The
+   * compact layout fills the available width minus safe-area insets and
+   * lets the description scroll inside the panel, keeping all info
+   * accessible (WCAG SC 1.4.10 Reflow) instead of being clipped.
+   */
+  setCompact(compact: boolean): void {
+    this.el.classList.toggle('info-panel--compact', compact);
+  }
+
   private setContent(artwork: Artwork): void {
     this.eyebrow.textContent = `${artwork.subtitle} · ${artwork.year}`;
     this.title.textContent = artwork.title;

@@ -1,12 +1,55 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current priority: v0.10 validation.** The Hoch close-up spot
-artifact fix, parallax hole fix, and very-vertical-picture reset zoom fix are
-implemented. See `plan.md` → "v0.10 Follow-up — Parallax Hole Artifact Fix" and
-"v0.10 — Spot Artifact Fix and Portrait Reset Framing" for details.
+contributors. **Current priority: v0.11 — responsive/touch hardening is
+implemented.** See the "v0.11 responsive/touch — Implemented" section immediately
+below for the full status summary.
+
+## v0.11 responsive/touch — Implemented (2026-05-18)
+
+The technical coding plan documented below was executed in full on 2026-05-18. All seven bugs are fixed; `npm run lint` and `npm run build` pass; `customer-preview/` is rebuilt and committed.
+
+**Shipped files:**
+
+- `src/utils/device.ts` — capability model with `DeviceCapabilities`, `LayoutTier`, `PointerPrimary`, `detectDeviceCapabilities()`, `applyDeviceCaps()`. Capabilities are mirrored to `<html>` data attributes so SCSS reacts without re-running JS.
+- `src/interaction/CanvasInteraction.ts` — Pointer Events Level 3 primary path (with `setPointerCapture`), non-passive Touch Events fallback for older Safari, gesture state machine, `touch-action: none` on canvas, hover-rotation suppression on coarse pointers, swipe activation on the up-event.
+- `src/main.ts` — debounced (`120 ms`) `resize` + `orientationchange` listener that resizes the renderer, re-detects capabilities, re-applies them, toggles compact info-panel, and refreshes the hint copy.
+- `src/core/RendererManager.ts` — `webglcontextlost` (with `preventDefault()`) and `webglcontextrestored` handlers + `isRenderPaused()`. The animation loop short-circuits while paused.
+- `src/utils/performance.ts` — DPR cap of 1.5 on coarse-pointer devices and `suggestStartupQuality()` heuristic.
+- `src/utils/preferences.ts` — `PreferencesStore.hasStoredQuality()` to make the heuristic first-run-only.
+- `src/ui/InfoPanel.ts` (`setCompact`) and `src/ui/HintText.ts` (`updateHint`) capability-aware.
+- `src/ui/FallbackScreen.ts` — coarse-pointer-only tip + HTML-escaped, diagnostic-mode-only reason.
+- `src/styles/main.scss` — safe-area variables, chrome-spacing tokens, `100dvh`, four-phase breakpoints, `touch-action: none` on canvas, compact info-panel, fluid prefs panel.
+- `app.html`, `index.html`, `customer-preview/app.html`, `scripts/write-local-preview.mjs` — `viewport-fit=cover`.
+
+**Diagnostics:** new `layout/capabilities`, `layout/resize`, `interaction/*`, `quality/startup-suggestion`, `renderer/context-lost`, `renderer/context-restored` events surface via the existing `window.__FREYRAUM_DIAGNOSTICS__` API.
+
+**Follow-up candidates:** delete the now-unused legacy interaction files; add a user-visible WebGL context-loss recovery hint; consider `ResizeObserver` for embedded/split-view scenarios; physical-device QA per the QA matrix in `plan.md`.
+
+See `plan.md` → "v0.11 — Implemented (2026-05-18)" and `FINDINGS.md` → "2026-05-18 — v0.11 implementation pass" for the full record.
+
+## v0.11 responsive/touch — final technical coding plan (2026-05-18)
+
+The v0.11 plan was upgraded from goal documentation to a full technical coding plan with file-level action items and a final online validation pass against official web guidance. **Seven bugs were found and documented** in the current codebase:
+
+1. `RendererManager.resize()` never called on window resize → Three.js framebuffer stays at startup size after orientation change.
+2. All touch listeners `{ passive: true }` → iOS Safari native pinch fights custom zoom.
+3. `TouchInteraction` + `ZoomPan` + `MouseInteraction` coexist → synthetic mouse events after touch may duplicate actions.
+4. `isMobileDevice()` checks only width, not pointer type.
+5. `HintText` hardcoded desktop-only copy shown on phones.
+6. `PreferencesPanel` popup can overflow screen on narrow phones.
+7. No `viewport-fit=cover`, no `env(safe-area-inset-*)` CSS — notch/home indicator collisions on iPhone.
+
+**Planned new files:** `src/utils/device.ts` (capability model), `src/interaction/CanvasInteraction.ts` (unified Pointer Events + Touch Events fallback with non-passive pinch).
+
+**Planned CSS changes:** `viewport-fit=cover` in viewport meta, `--safe-top/right/bottom/left` CSS variables, `100dvh` with fallback, 4-tier breakpoint system (phone-portrait, phone-landscape, tablet-portrait, tablet-landscape, desktop), `touch-action: none` on canvas, compact info-panel class, preferences panel `max-height` + `overflow-y: auto`.
+
+**Additional validated concerns:** 320 px reflow/browser zoom behavior, WebGL context-loss recovery, high-DPI drawing-buffer resize accuracy, and keeping `touch-action: none` scoped only to the canvas.
+
+See `plan.md` → "v0.11 Plan" and `FINDINGS.md` → "2026-05-18 — v0.11 final research-backed technical coding plan" before starting implementation.
 
 ## Architecture diagram
+
 
 ![FREYRAUM v0.01 architecture](./assets/architecture.svg)
 

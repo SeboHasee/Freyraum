@@ -1,5 +1,165 @@
 # FINDINGS
 
+## 2026-05-18 — v0.11 implementation pass (responsive phones/tablets, touch, gestures, WebGL reliability)
+
+### Scope of this pass
+
+The v0.11 technical coding plan has been executed. This entry records what shipped, the runtime behaviour now in place, and the constraints that remain for future passes. All bug references map to the seven bugs catalogued below in the previous (planning) entry.
+
+### Implementation outcome
+
+- **`src/utils/device.ts`** introduces a capability-based device model with `LayoutTier`, `PointerPrimary`, `Orientation`, and `DeviceCapabilities`. `applyDeviceCaps()` mirrors these to `<html>` data attributes so SCSS can react without re-running JS. Used by the resize coordinator in `main.ts`, by `HintText`, by `CanvasInteraction`, and by the new compact `InfoPanel` mode.
+- **`src/interaction/CanvasInteraction.ts`** replaces the three previous interaction classes (`MouseInteraction`, `ZoomPan`, `TouchInteraction`). It uses Pointer Events Level 3 when `window.PointerEvent` exists and falls back to non-passive Touch Events on legacy Safari. The gesture state machine has `idle / panning / pinching / swipe-candidate / cancelled`. The canvas owns the gesture via CSS `touch-action: none`; the Touch Events fallback path also calls `preventDefault()` to suppress synthetic mouse events (Bug 2 and Bug 3). Swipe navigation activates on the up-event (WCAG SC 2.5.2).
+- **Resize coordinator** in `main.ts` is a single debounced (120 ms) listener on `resize` and `orientationchange` that calls `rendererManager.resize()`, re-detects capabilities, re-applies the data attributes, toggles compact info-panel, and refreshes the hint copy. `SceneManager`'s existing camera-aspect listener stays; both are removed in the unload cleanup (Bug 1).
+- **`getOptimalPixelRatio`** now caps effective DPR to `1.5` on `(pointer: coarse)` devices regardless of the requested cap, to avoid thermal throttling on phones/tablets while keeping the perceived quality difference negligible.
+- **`suggestStartupQuality()`** is new and is only applied when `PreferencesStore.hasStoredQuality()` returns `false`. It returns `battery` for high-DPR small phones and `balanced` otherwise. User choice always wins after the first session.
+- **`RendererManager`** registers `webglcontextlost` (with `preventDefault()`) and `webglcontextrestored` handlers, exposes `isRenderPaused()`, and emits `render/context-lost` (`warn`) and `render/context-restored` (`info`) diagnostics. The animation loop short-circuits when paused so the `requestAnimationFrame` driver keeps ticking but Three.js draw calls are skipped until restoration.
+- **`main.scss`** introduces `--safe-top/right/bottom/left` wrappers around `env(safe-area-inset-*, 0px)`, `--chrome-top` and `--chrome-bottom` spacing tokens, `100dvh` body height with a `100%` fallback, and `touch-action: none` scoped to the canvas. All fixed-position chrome (topbar, info-panel, nav, zoom, fullscreen, prefs, timeline, hint, fallback card) now offsets against the safe-area variables. The single legacy `@media (max-width: 720px)` block was replaced by an explicit four-phase breakpoint set; `phone-portrait`/`phone-small` also hide the topbar badge and hint via the new device-capability mirror selectors.
+- **`InfoPanel.setCompact(boolean)`** toggles a new `.info-panel--compact` class that gives the panel full available width minus safe-area, raises it above the chrome, clamps the title, and allows internal scrolling to satisfy WCAG SC 1.4.10 Reflow.
+- **`HintText.updateHint()`** reads `data-pointer-primary` and renders the appropriate German copy. It is called from the constructor and from the resize coordinator after a pointer-type change.
+- **`FallbackScreen`** appends a coarse-pointer-only tip about private browsing and hardware acceleration; the technical reason is HTML-escaped and only shown when diagnostics mode is not `default`.
+
+### What was deliberately not changed
+
+- The three legacy interaction classes (`MouseInteraction.ts`, `ZoomPan.ts`, `TouchInteraction.ts`) remain on disk as dead code. They are no longer imported anywhere; the Vite build now transforms `46` modules instead of `47`. They are kept to make the v0.11 change reversible. A subsequent cleanup PR can delete them.
+- `isMobileDevice()` in `performance.ts` is marked `@deprecated` but still exported. No remaining callers exist in the repository, but the function is retained for safety because external preview snapshots may reference it.
+- `ResizeObserver` is not yet wired into `RendererManager`. The plan flagged this as a follow-up; the debounced `window.resize` + `orientationchange` path covers the FREYRAUM canvas (which always fills the viewport).
+- The WebGL context-loss recovery currently only logs and pauses rendering. No user-visible recovery overlay or retry button has been added yet; this remains a follow-up.
+
+### Validation
+
+- `npm install`, `npm run lint`, `npm run build` all pass cleanly with only the known pre-existing Sass legacy-API deprecation notice and the TypeScript parser version warning.
+- `tsc` (the typecheck step inside `npm run build`) reports zero errors.
+- The `customer-preview/` bundle was regenerated and committed.
+- Physical-device QA (iPhone, iPad, Android) and 320 px / browser-zoom reflow remain a customer-side acceptance step against the QA matrix in `plan.md`.
+
+### Diagnostics surface
+
+New scopes/events the runtime now emits:
+
+| Scope | Event | Level | Trigger |
+| --- | --- | --- | --- |
+| `layout` | `capabilities` | `info` | Startup |
+| `layout` | `resize` | `info` | After debounced resize/orientationchange |
+| `interaction` | `init` | `info` | `CanvasInteraction` constructor records backend choice |
+| `interaction` | `gesture-start` | `debug` | Pointer/touch down begins a gesture (verbose only) |
+| `interaction` | `gesture-cancel` | `debug` | Pointer cancellation |
+| `interaction` | `swipe` | `debug` | Swipe resolved on pointer up |
+| `quality` | `startup-suggestion` | `info` | When the heuristic overrides default preset |
+| `renderer` | `context-lost` | `warn` | WebGL context dropped |
+| `renderer` | `context-restored` | `info` | WebGL context restored |
+
+These complement the existing `boot/*`, `gallery/*`, `quality/adaptive-downgrade`, `preferences/*`, and `debug/*` events.
+
+---
+
+## 2026-05-18 — v0.11 final research-backed technical coding plan: responsive phones/tablets, touch, gestures, and compatibility
+
+### Scope of this pass
+
+Updated from a local code-audit plan to a final research-backed technical coding plan. Every v0.11 slice still maps to exact files, functions, TypeScript interfaces, CSS patterns, and concrete code suggestions, but the plan is now also validated against current official accessibility, input, viewport, and WebGL guidance. No runtime code was changed in this pass.
+
+### Online validation result
+
+The previous v0.11 direction was confirmed by current official guidance. The main outcome of the online validation was not a redesign of the plan, but four upgrades:
+
+1. treat **WebGL context loss/recovery** as part of mobile reliability, not a later nice-to-have;
+2. treat **high-DPI drawing-buffer sizing** as a first-class acceptance concern;
+3. treat **320 px reflow and browser zoom** as explicit test gates;
+4. treat **`touch-action` + listener passivity** as a combined browser-compatibility rule.
+
+### Official / authoritative sources used in the validation
+
+- W3C WCAG 2.2 — Target Size (Minimum): <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html>
+- W3C WCAG 2.1 — Pointer Gestures: <https://www.w3.org/WAI/WCAG21/Understanding/pointer-gestures.html>
+- W3C WCAG 2.1 — Pointer Cancellation: <https://www.w3.org/WAI/WCAG21/Understanding/pointer-cancellation.html>
+- W3C WCAG 2.1 — Reflow: <https://www.w3.org/WAI/WCAG21/Understanding/reflow.html>
+- W3C Pointer Events Level 3: <https://www.w3.org/TR/pointerevents3/>
+- MDN — `touch-action`: <https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action>
+- MDN — viewport meta / `viewport-fit`: <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport>
+- MDN — CSS `env()` environment variables: <https://developer.mozilla.org/en-US/docs/Web/CSS/env>
+- MDN — WebGL best practices: <https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices>
+- Khronos — Handling High DPI in WebGL: <https://wikis.khronos.org/webgl/HandlingHighDPI>
+- Khronos WebGL spec — context loss handling: <https://registry.khronos.org/webgl/specs/latest/1.0/>
+
+### Code-level bugs found during technical audit (2026-05-18)
+
+These were found by reading every relevant source file. Each entry records the file, the specific code, and the fix planned for v0.11.
+
+#### Bug 1 — RendererManager.resize() is never called on window resize (critical for mobile)
+
+- **File:** `src/core/SceneManager.ts`, `src/core/RendererManager.ts`, `src/main.ts`
+- **Problem:** `SceneManager` registers `window.addEventListener('resize', this.handleResize)` which only calls `camera.aspect` + `updateProjectionMatrix()`. The public `RendererManager.resize()` method (which calls `renderer.setSize()`) has no listener and is never invoked after startup. The canvas visually fills the viewport via `position: fixed; inset: 0; width: 100%` CSS, but Three.js internal render resolution is never updated. On mobile, rotating portrait→landscape leaves the framebuffer at the wrong dimensions.
+- **Fix:** Add a debounced `'resize'` listener in `main.ts` that calls `rendererManager.resize()`. Store the listener as a named function for cleanup.
+
+#### Bug 2 — All touch listeners are passive; pinch cannot prevent native zoom on iOS Safari (critical)
+
+- **File:** `src/interaction/TouchInteraction.ts` lines 17–19
+- **Problem:** All three listeners use `{ passive: true }`. On iOS Safari, when the user pinches, the browser fires its native page zoom alongside the custom `getTouchDist` calculation. The result is dual-zoom behavior or unwanted page-scale changes.
+- **Fix:** In the new `CanvasInteraction.ts`, register `touchmove` with `{ passive: false }` and call `e.preventDefault()` when `e.touches.length >= 2` (pinch) and when `state === 'panning'`.
+
+#### Bug 3 — TouchInteraction and ZoomPan/MouseInteraction coexist; touch fires synthetic mouse events (moderate risk)
+
+- **File:** `src/main.ts` lines 254–257 — four separate interaction managers on the same canvas
+- **Problem:** On iOS/Android, a touch tap fires `touchstart` → `touchend` → `mousemove` → `mousedown` → `click`. `ZoomPan.ts` has `mousedown` on canvas and `mousemove`/`mouseup` on window. `MouseInteraction.ts` has `click` on canvas. A touch tap can invoke both the touch swipe check and the mouse click/panel-click path. Currently mostly safe due to the >50 px swipe threshold, but fragile and will misbehave if any new code uses `mousedown` state.
+- **Fix:** Replace the three managers with `CanvasInteraction.ts`. Use Pointer Events (preferred) which do not generate synthetic mouse events; or for the Touch Events fallback path, call `e.preventDefault()` on `touchstart` to suppress synthetic mouse events.
+
+#### Bug 4 — isMobileDevice() only checks viewport width, misses pointer type and landscape phones
+
+- **File:** `src/utils/performance.ts` line 5–7
+- **Problem:** `window.innerWidth < 768` is false for landscape phones (e.g., iPhone 14 landscape = 844 px), touch laptops (full-width viewport, coarse pointer), and large tablets. The function name is misleading.
+- **Fix:** Replace with `detectDeviceCapabilities()` in new `src/utils/device.ts` using `matchMedia('(pointer: coarse)')` and `matchMedia('(hover: hover)')` alongside viewport dimensions.
+
+#### Bug 5 — HintText always shows desktop-only German copy, even on touch devices
+
+- **File:** `src/ui/HintText.ts` line 8
+- **Problem:** `'Scrollen zum Zoomen · Ziehen zum freien Bewegen.'` is only meaningful on a desktop with a scroll wheel. On a phone, there is no scrolling.
+- **Fix:** After Slice 1 sets `document.documentElement.dataset['pointerPrimary']`, `HintText.updateHint()` reads it and shows `'Wischen zum Navigieren · Zwei Finger zum Zoomen.'` for coarse pointer. Hide entirely on phone-portrait layout.
+
+#### Bug 6 — Preferences panel can overflow viewport on narrow phones (320–380 px wide)
+
+- **File:** `src/styles/main.scss` `.prefs__panel` rule (~line 393–408)
+- **Problem:** `width: 320px` is absolute. On a 375 px wide phone, the panel right-aligns to the screen edge and left-extends to ~55 px, which is fine. But on 320 px (iPhone SE 1st gen), the panel clips the left margin. On short landscape viewports (height ≈ 320 px), the panel may extend below the screen bottom.
+- **Fix:** `width: min(320px, calc(100vw - 24px))`, `max-height: calc(100dvh - 80px)`, `overflow-y: auto`.
+
+#### Bug 7 — No viewport-fit=cover, no safe-area CSS, no dvh units in app.html / main.scss
+
+- **Files:** `app.html` line 5, `src/styles/main.scss` `:root` block
+- **Problem:** Without `viewport-fit=cover`, the safe-area environment variables are not computed by browsers for notch devices. Without `env(safe-area-inset-*)` usage in CSS, the topbar and bottom timeline sit under hardware notches or home indicators on iPhone. Fixed `bottom: 168px` offsets for nav, zoom, and timeline do not account for the home indicator height (34 px on iPhone 14).
+- **Fix:** Add `viewport-fit=cover` to the viewport meta. Add `--safe-top/right/bottom/left` CSS variables that wrap `env(safe-area-inset-*, 0px)`. Apply to all fixed-position chrome elements.
+
+### Positive findings — existing code that is already solid for mobile
+
+- `GalleryManager.navigate()` and `resetView()` are stateless and safe to call from touch handlers.
+- `GalleryManager.canPan()` correctly gates pan vs. swipe — the touch swipe/pan split logic in `TouchInteraction.ts` is correct in principle; the passive-listener bug is the only real flaw.
+- `AdaptiveQualityController` has correct cooldown and manual-override behavior; it will work on mobile without modification.
+- `Diagnostics.ts` `createScopedDiagnostics(scope)` pattern makes it trivial to add a `layout` scope.
+- Timeline uses real `<button>` elements with roving tabindex — works on mobile screen readers.
+- All controls have `aria-label`, real semantic HTML, and `focus-visible` ring — strong accessibility baseline.
+- `FrameBudgetMonitor` clamps long frames (tab switch) and has navigation cooldown — thermal spikes will not trigger premature quality downgrades.
+
+### Additional risks and enhancements validated online
+
+- **Reflow remains a real risk** because FREYRAUM uses fixed-position chrome and overlay UI; the implementation must now explicitly test 320 px width / browser zoom behavior.
+- **`touch-action: none` belongs on the canvas only**, not the whole page. The page must not globally disable browser zoom.
+- **Context loss needs a documented recovery path**. Logging alone is not enough for a premium customer-facing gallery if memory pressure causes the WebGL context to drop.
+- **A `ResizeObserver` follow-up would improve resilience** after the first v0.11 shipping pass, especially for split-view or embedded layouts.
+- **Fullscreen should stay a graceful enhancement** because support and UX vary by device and browser.
+
+### Updated technical conclusion
+
+This is a targeted hardening pass, not a redesign. The seven bugs listed above are actionable and have low-risk fixes. The positive baseline means most of the work is additive (new `device.ts`, new `CanvasInteraction.ts`, CSS variables, breakpoints) rather than replacing working code.
+
+### Validation status
+
+Documentation-only pass. Runtime changes will be in a follow-on implementation PR. That PR must:
+- Run `npm run lint` and `npm run build` and see only the existing known TS parser and Sass warnings.
+- Manually verify all QA matrix entries documented in `plan.md`.
+- Add explicit checks for 320 px reflow/browser zoom, high-DPI resize accuracy, and context-loss handling.
+- Regenerate `customer-preview/` if any source output changes.
+
+---
+
 ## 2026-05-17 — v0.10 follow-up: implemented — parallax hole artifacts
 
 ### Customer-observed behavior

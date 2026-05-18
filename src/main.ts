@@ -22,16 +22,16 @@ import { FullscreenButton } from './ui/FullscreenButton';
 import { PreferencesPanel } from './ui/PreferencesPanel';
 import { showFallbackScreen } from './ui/FallbackScreen';
 import { Timeline } from './timeline/Timeline';
-import { MouseInteraction } from './interaction/MouseInteraction';
-import { ZoomPan } from './interaction/ZoomPan';
 import { KeyboardNav } from './interaction/KeyboardNav';
-import { TouchInteraction } from './interaction/TouchInteraction';
+import { CanvasInteraction } from './interaction/CanvasInteraction';
 import { PreferencesStore } from './utils/preferences';
 import { isWebGLAvailable } from './utils/webgl';
 import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
+import { detectDeviceCapabilities, applyDeviceCaps } from './utils/device';
+import { suggestStartupQuality } from './utils/performance';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
@@ -136,6 +136,40 @@ async function main(): Promise<void> {
   const preferences = new PreferencesStore();
   diagnostics.debug('boot', 'preferences-ready', 'Preferences store created', preferences.current);
 
+  // v0.11 — capability-based device detection. Mirrored to <html> data
+  // attributes so SCSS, HintText, and CanvasInteraction can react
+  // without re-running the detection. Logged once for diagnostics so
+  // bug reports always include the device tier.
+  const initialCaps = detectDeviceCapabilities();
+  applyDeviceCaps(initialCaps);
+  diagnostics.info('layout', 'capabilities', 'Device capabilities detected', {
+    tier: initialCaps.layoutTier,
+    pointer: initialCaps.pointerPrimary,
+    hover: initialCaps.hasHover,
+    orientation: initialCaps.orientation,
+    viewportW: initialCaps.viewportW,
+    viewportH: initialCaps.viewportH,
+    dpr: initialCaps.dpr,
+  });
+
+  // v0.11 — startup quality heuristic. Only applied when no stored
+  // preference exists, so user choices are always respected after the
+  // first session. Suggests `battery` on small high-DPR phones to avoid
+  // thermal throttling.
+  if (!PreferencesStore.hasStoredQuality()) {
+    const suggested = suggestStartupQuality();
+    if (suggested !== preferences.current.quality) {
+      diagnostics.info('quality', 'startup-suggestion', 'Applying startup quality heuristic', {
+        from: preferences.current.quality,
+        to: suggested,
+        tier: initialCaps.layoutTier,
+        pointer: initialCaps.pointerPrimary,
+        dpr: initialCaps.dpr,
+      });
+      preferences.setQuality(suggested);
+    }
+  }
+
   // v0.07: customer-managed artworks injected at runtime by
   // `scripts/import-artworks.mjs` via `customer-preview/customer-artworks.js`
   // (Option C: global window injection, see plan.md v0.07).
@@ -239,6 +273,11 @@ async function main(): Promise<void> {
   // UI
   const topbar = new Topbar(app);
   const infoPanel = new InfoPanel(app, artworks[0]);
+  // v0.11 — compact mode toggled by layout tier (re-evaluated on resize).
+  const applyCompactInfo = (tier: string): void => {
+    infoPanel.setCompact(tier === 'phone-portrait' || tier === 'phone-small');
+  };
+  applyCompactInfo(initialCaps.layoutTier);
   const navControls = new NavigationControls(app);
   const zoomControls = new ZoomControls(app, galleryManager);
   const fullscreenButton = new FullscreenButton(app, document.documentElement);
@@ -251,10 +290,36 @@ async function main(): Promise<void> {
   canvas.setAttribute('aria-label', 'Interaktive Galerie');
   canvas.setAttribute('role', 'img');
 
-  const mouseInteraction = new MouseInteraction(canvas, galleryManager);
-  const zoomPan = new ZoomPan(canvas, galleryManager, mouseInteraction);
+  // v0.11 — unified canvas interaction replaces MouseInteraction +
+  // ZoomPan + TouchInteraction. Uses Pointer Events when available and
+  // Touch Events as a fallback. Fixes Bug 2 (passive pinch) and Bug 3
+  // (duplicate synthetic mouse events after touch).
+  const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
   const keyboardNav = new KeyboardNav(galleryManager);
-  const touchInteraction = new TouchInteraction(canvas, galleryManager);
+
+  // v0.11 — debounced resize coordinator (fixes Bug 1: renderer.setSize
+  // was never called on resize). SceneManager keeps its own resize
+  // listener for camera.aspect — both run on every resize event and
+  // both are removed in the cleanup block.
+  let resizeDebounce: ReturnType<typeof setTimeout> | undefined;
+  const onResize = (): void => {
+    clearTimeout(resizeDebounce);
+    resizeDebounce = setTimeout(() => {
+      rendererManager.resize();
+      const newCaps = detectDeviceCapabilities();
+      applyDeviceCaps(newCaps);
+      applyCompactInfo(newCaps.layoutTier);
+      hintText.updateHint();
+      diagnostics.info('layout', 'resize', 'Viewport resized', {
+        tier: newCaps.layoutTier,
+        w: newCaps.viewportW,
+        h: newCaps.viewportH,
+        orientation: newCaps.orientation,
+      });
+    }, 120);
+  };
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
 
   // Apply current preferences to all subsystems.
   const applyPreferences = (manual: boolean): void => {
@@ -363,6 +428,10 @@ async function main(): Promise<void> {
   let rafId: number;
   const animate = (now: number): void => {
     rafId = requestAnimationFrame(animate);
+    // v0.11 — skip drawing while the WebGL context is lost on mobile.
+    // The render loop keeps requesting frames so that the moment the
+    // context is restored, the next tick can resume normally.
+    if (rendererManager.isRenderPaused()) return;
     const sample = frameBudget.sample(now);
     const downgrade = adaptiveQuality.evaluate(sample, frameBudget);
     if (downgrade && downgrade !== preferences.current.quality) {
@@ -404,12 +473,13 @@ async function main(): Promise<void> {
     if (debugEnabled) {
       window.removeEventListener('keydown', handleDebugKey);
     }
+    window.removeEventListener('resize', onResize);
+    window.removeEventListener('orientationchange', onResize);
+    clearTimeout(resizeDebounce);
     diagnostics.info('boot', 'shutdown', 'Disposing FREYRAUM runtime');
     preferences.dispose();
-    mouseInteraction.dispose();
-    zoomPan.dispose();
+    canvasInteraction.dispose();
     keyboardNav.dispose();
-    touchInteraction.dispose();
     topbar.dispose();
     infoPanel.dispose();
     navControls.dispose();

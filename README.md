@@ -56,6 +56,22 @@ dimensions. See
 For the full architecture see
 [`plan.md`](./plan.md#v007-plan--customer-managed-artwork-folder-and-one-click-importer).
 
+
+## Responsive phones/tablets — v0.11 (Implemented)
+
+**Implemented 2026-05-18.** Desktop web remains the primary visual design; v0.11 hardens the same codebase for phones and tablets without disrupting the desktop layout. The seven bugs documented in the planning pass are all addressed:
+
+- `RendererManager.resize()` is called by a single debounced `resize`+`orientationchange` listener in `main.ts`.
+- A unified `CanvasInteraction` class replaces the previous three interaction managers. It uses Pointer Events when available, with a non-passive Touch Events fallback for older Safari, and uses CSS `touch-action: none` to own canvas gestures so iOS Safari pinch no longer fights the in-app zoom.
+- New `src/utils/device.ts` mirrors capability data (`data-layout-tier`, `data-pointer-primary`, `data-hover`, `data-orientation`, `data-short-height`) to `<html>` so SCSS reacts without re-running JS. `isMobileDevice()` is deprecated.
+- `HintText` now reads `data-pointer-primary` and shows a coarse-pointer-appropriate German hint (or is hidden on small phones).
+- `InfoPanel.setCompact()` enables a scrollable compact layout on phone-portrait/phone-small (WCAG 1.4.10 Reflow).
+- Preferences panel uses a fluid `min()` width and `max-height` with internal scrolling so it never overflows the viewport.
+- Every HTML entry has `viewport-fit=cover`; the SCSS chrome (topbar, info-panel, nav, zoom, fullscreen, prefs, timeline, hint, fallback) honours `env(safe-area-inset-*)` via shared `--safe-*` and `--chrome-*` tokens; the body uses `100dvh`.
+- Mobile WebGL reliability: DPR is capped at 1.5 on coarse-pointer devices, a startup quality heuristic picks `battery` for high-DPR small phones (only on first run; user choice is otherwise respected), and `RendererManager` handles `webglcontextlost` / `webglcontextrestored` with diagnostics and a render pause.
+
+See [`plan.md`](./plan.md#v011--implemented-2026-05-18) for the implementation summary and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v011-implementation-pass-responsive-phonestablets-touch-gestures-webgl-reliability) for technical details.
+
 ## Diagnostics and debugging
 
 The preview now includes a centralized diagnostics system designed to be useful for future debugging without flooding normal customer sessions.
@@ -98,15 +114,16 @@ The diagnostics system currently records boot events, renderer/backend probe sta
 
 - mouse wheel / pinch: zoom with dynamic safety limits
 - mouse drag / one-finger touch while zoomed: pan within artwork bounds
-- mouse move: subtle artwork hover reaction at every zoom level
+- mouse move: subtle artwork hover reaction at every zoom level (suppressed on coarse-pointer devices)
 - left/right arrows and side previews: navigate artworks
-- touch swipe when not zoomed in: navigate artworks
+- touch swipe when not zoomed in: navigate artworks (activates on release, WCAG SC 2.5.2)
 - on-screen Zoom controls: zoom in, zoom out, reset view
 - `+` / `-` keys: zoom in / out · `0` or `R`: reset view · `F`: toggle fullscreen
 - on-screen Fullscreen button or `F` key: enter / exit presentation mode
 - Settings (gear) button: toggle reduced motion, high contrast, and choose a quality preset (high / balanced / battery); persisted in `localStorage`
 - Timeline thumbnails: real keyboard-accessible buttons with roving tabindex (Arrow / Home / End / Enter / Space)
-- WebGL is required; if unavailable a localized fallback screen is shown
+- WebGL is required; if unavailable a localized fallback screen is shown (with an extra private-browsing tip on touch devices)
+- Mobile WebGL context loss is handled automatically: rendering pauses on `webglcontextlost` and resumes on `webglcontextrestored`; events are logged via the diagnostics API
 
 
 ## v0.02 implementation

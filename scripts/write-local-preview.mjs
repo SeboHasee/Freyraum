@@ -4,7 +4,7 @@ const html = `<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="FREYRAUM — Immersive Digital Exhibition Platform" />
   <title>freyraum — immersive gallery</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
