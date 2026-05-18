@@ -11,12 +11,36 @@ import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/Pai
 
 export type NavigationCallback = (index: number) => void;
 export type FrameBudgetMarker = () => void;
+export type ViewportMetricsProvider = () => ArtworkViewportMetrics;
+
+export interface ArtworkViewportMetrics {
+  viewportW: number;
+  viewportH: number;
+  usableW: number;
+  usableH: number;
+  usableFracX: number;
+  usableFracY: number;
+  effectiveAspect: number;
+  occlusionTop: number;
+  occlusionRight: number;
+  occlusionBottom: number;
+  occlusionLeft: number;
+}
+
+interface ZoomBounds {
+  minInspectionZoom: number;
+  resetFitZoom: number;
+  maxOverviewZoom: number;
+}
 
 const DEFAULT_CAMERA_Z = 7;
-const MAX_CAMERA_Z = 9.25;
+const MIN_OVERVIEW_CAMERA_Z = 10.75;
+const OVERVIEW_HEADROOM_Z = 1.6;
 const MIN_CAMERA_Z = 1.2;
 const MIN_VISIBLE_ARTWORK_FRACTION = 0.28;
 const RESET_VIEW_FRAME_MARGIN = 1.04;
+const MIN_USABLE_VIEWPORT_FRACTION = 0.35;
+const RESET_REFIT_EPSILON = 0.25;
 /**
  * v0.03: replaces `PAN_SAFETY_FACTOR = 0.92`. Allows the viewport centre to
  * reach the artwork edge plus a small overscroll margin so every corner is
@@ -55,6 +79,7 @@ export class GalleryManager {
   private readonly textureManager: TextureManager;
   private readonly procedural: ProceduralTextureFactory;
   private readonly camera: THREE.PerspectiveCamera;
+  private readonly viewportMetricsProvider: ViewportMetricsProvider | null;
   private readonly raycaster = new THREE.Raycaster();
   private reducedMotion = false;
   /** Latest active quality preset. Maintained via `applyPreset`. */
@@ -74,6 +99,7 @@ export class GalleryManager {
    */
   private inspectionMode = false;
   private pendingResetAfterArtworkLoad = false;
+  private lastResetFitZoom = DEFAULT_CAMERA_Z;
   /** Optional callback used to mark navigation events for FrameBudgetMonitor. */
   private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
 
@@ -94,7 +120,8 @@ export class GalleryManager {
     sidePanels: SidePanels,
     textureManager: TextureManager,
     camera: THREE.PerspectiveCamera,
-    procedural?: ProceduralTextureFactory
+    procedural?: ProceduralTextureFactory,
+    viewportMetricsProvider?: ViewportMetricsProvider
   ) {
     this.artworks = artworks;
     this.artworkMesh = artworkMesh;
@@ -102,6 +129,7 @@ export class GalleryManager {
     this.textureManager = textureManager;
     this.camera = camera;
     this.procedural = procedural ?? new ProceduralTextureFactory();
+    this.viewportMetricsProvider = viewportMetricsProvider ?? null;
   }
 
   /** Allows main.ts to call `frameBudget.markNavigation()` on every navigation. */
@@ -184,8 +212,9 @@ export class GalleryManager {
   }
 
   getHoverRotationScale(): { x: number; y: number } {
-    const zoomRange = Math.max(0.001, MAX_CAMERA_Z - this.getMinZoom());
-    const zoomProgress = (this.clampZoom(this.targetZoom) - this.getMinZoom()) / zoomRange;
+    const bounds = this.getZoomBounds();
+    const zoomRange = Math.max(0.001, bounds.maxOverviewZoom - bounds.minInspectionZoom);
+    const zoomProgress = (this.clampZoom(this.targetZoom) - bounds.minInspectionZoom) / zoomRange;
 
     return {
       x: 0.03 + zoomProgress * 0.13,
@@ -311,6 +340,8 @@ export class GalleryManager {
         fallbackUsed: true,
       });
     }
+    const viewportMetrics = this.getViewportMetrics();
+    const zoomBounds = this.getZoomBounds(viewportMetrics);
     this.diagnostics.info('show-artwork-complete', 'Artwork is ready', {
       artworkId: artwork.id,
       activeMaps: this.artworkMesh.material.activeMaps(),
@@ -322,9 +353,20 @@ export class GalleryManager {
       paintingWidth: this.artworkMesh.artworkWidth,
       paintingHeight: this.artworkMesh.artworkHeight,
       paintingAspect: this.artworkMesh.artworkAspect,
-      resetZoom: this.getResetZoom(),
-      minZoom: this.getMinZoom(),
-      maxZoom: MAX_CAMERA_Z,
+      resetZoom: zoomBounds.resetFitZoom,
+      minZoom: zoomBounds.minInspectionZoom,
+      maxZoom: zoomBounds.maxOverviewZoom,
+      overviewHeadroom: zoomBounds.maxOverviewZoom - zoomBounds.resetFitZoom,
+      usableViewportWidth: viewportMetrics.usableW,
+      usableViewportHeight: viewportMetrics.usableH,
+      usableViewportFractionX: viewportMetrics.usableFracX,
+      usableViewportFractionY: viewportMetrics.usableFracY,
+      viewportOcclusion: {
+        top: viewportMetrics.occlusionTop,
+        right: viewportMetrics.occlusionRight,
+        bottom: viewportMetrics.occlusionBottom,
+        left: viewportMetrics.occlusionLeft,
+      },
       parallaxEnabled: preset.parallaxEnabled,
       parallaxScale: preset.parallaxScale,
       specularStrength: preset.specularStrength,
@@ -425,6 +467,30 @@ export class GalleryManager {
     this.artworkMesh.material.setReducedMotion(value);
   }
 
+  handleViewportMetricsChanged(): void {
+    const wasNearReset = Math.abs(this.targetZoom - this.lastResetFitZoom) <= RESET_REFIT_EPSILON;
+    const viewportMetrics = this.getViewportMetrics();
+    const bounds = this.getZoomBounds(viewportMetrics);
+
+    if (wasNearReset) {
+      this.targetZoom = bounds.resetFitZoom;
+    } else {
+      this.targetZoom = clamp(this.targetZoom, bounds.minInspectionZoom, bounds.maxOverviewZoom);
+    }
+    this.zoom = clamp(this.zoom, bounds.minInspectionZoom, bounds.maxOverviewZoom);
+    this.lastResetFitZoom = bounds.resetFitZoom;
+    this.clampPanTargets();
+
+    this.diagnostics.info('viewport-refit', 'Artwork viewport metrics changed', {
+      resetFitZoom: bounds.resetFitZoom,
+      minInspectionZoom: bounds.minInspectionZoom,
+      maxOverviewZoom: bounds.maxOverviewZoom,
+      overviewHeadroom: bounds.maxOverviewZoom - bounds.resetFitZoom,
+      wasNearReset,
+      viewport: viewportMetrics,
+    });
+  }
+
   setHoverTarget(x: number, y: number): void {
     this.targetY = x;
     this.targetX = y;
@@ -490,15 +556,18 @@ export class GalleryManager {
   }
 
   resetView(): void {
+    const bounds = this.getZoomBounds();
     this.targetPanX = 0;
     this.targetPanY = 0;
-    this.targetZoom = this.getResetZoom();
+    this.targetZoom = bounds.resetFitZoom;
+    this.lastResetFitZoom = bounds.resetFitZoom;
     this.targetX = 0;
     this.targetY = 0;
   }
 
   private clampZoom(value: number): number {
-    return clamp(value, this.getMinZoom(), MAX_CAMERA_Z);
+    const bounds = this.getZoomBounds();
+    return clamp(value, bounds.minInspectionZoom, bounds.maxOverviewZoom);
   }
 
   private clampPanTargets(): void {
@@ -508,8 +577,14 @@ export class GalleryManager {
   }
 
   private getPanLimits(zoom: number): { x: number; y: number } {
-    const visibleHeight = 2 * this.clampZoom(zoom) * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
-    const visibleWidth = visibleHeight * this.camera.aspect;
+    const metrics = this.getViewportMetrics();
+    const bounds = this.getZoomBounds(metrics);
+    const boundedZoom = clamp(zoom, bounds.minInspectionZoom, bounds.maxOverviewZoom);
+    const visibleHeight = 2 *
+      boundedZoom *
+      Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) *
+      metrics.usableFracY;
+    const visibleWidth = visibleHeight * metrics.effectiveAspect;
 
     // v0.03: allow viewport centre to reach the artwork edge plus an explicit
     // overscroll margin so every corner is reachable during close inspection.
@@ -519,25 +594,79 @@ export class GalleryManager {
     };
   }
 
-  private getMinZoom(): number {
-    const requiredVisibleHeight = Math.max(
-      this.artworkMesh.artworkHeight * MIN_VISIBLE_ARTWORK_FRACTION,
-      (this.artworkMesh.artworkWidth * MIN_VISIBLE_ARTWORK_FRACTION) / this.camera.aspect
-    );
+  private getZoomBounds(metrics = this.getViewportMetrics()): ZoomBounds {
+    const minInspectionZoom = this.getInspectionMinZoom(metrics);
+    const resetFitZoom = this.getResetFitZoom(metrics);
+    const maxOverviewZoom = Math.max(MIN_OVERVIEW_CAMERA_Z, resetFitZoom + OVERVIEW_HEADROOM_Z);
 
-    const fittedDistance = requiredVisibleHeight /
-      (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)));
-
-    return clamp(Math.max(MIN_CAMERA_Z, fittedDistance), MIN_CAMERA_Z, DEFAULT_CAMERA_Z);
+    return {
+      minInspectionZoom: clamp(minInspectionZoom, MIN_CAMERA_Z, resetFitZoom),
+      resetFitZoom: clamp(resetFitZoom, MIN_CAMERA_Z, maxOverviewZoom),
+      maxOverviewZoom,
+    };
   }
 
-  private getResetZoom(): number {
+  private getInspectionMinZoom(metrics: ArtworkViewportMetrics): number {
+    const fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+    const requiredHeight = this.artworkMesh.artworkHeight * MIN_VISIBLE_ARTWORK_FRACTION;
+    const requiredWidth = this.artworkMesh.artworkWidth * MIN_VISIBLE_ARTWORK_FRACTION;
+    const heightDistance = requiredHeight / (2 * fovTan * metrics.usableFracY);
+    const widthDistance = requiredWidth / (2 * fovTan * this.camera.aspect * metrics.usableFracX);
+
+    return clamp(Math.max(MIN_CAMERA_Z, heightDistance, widthDistance), MIN_CAMERA_Z, DEFAULT_CAMERA_Z);
+  }
+
+  private getResetFitZoom(metrics: ArtworkViewportMetrics): number {
     const frameWidth = this.artworkMesh.artworkWidth + 0.4;
     const frameHeight = this.artworkMesh.artworkHeight + 0.4;
-    const requiredVisibleHeight = Math.max(frameHeight, frameWidth / this.camera.aspect) * RESET_VIEW_FRAME_MARGIN;
-    const fittedDistance = requiredVisibleHeight /
-      (2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)));
+    const fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+    const heightDistance = (frameHeight * RESET_VIEW_FRAME_MARGIN) / (2 * fovTan * metrics.usableFracY);
+    const widthDistance = (frameWidth * RESET_VIEW_FRAME_MARGIN) /
+      (2 * fovTan * this.camera.aspect * metrics.usableFracX);
 
-    return clamp(Math.max(DEFAULT_CAMERA_Z, fittedDistance), MIN_CAMERA_Z, MAX_CAMERA_Z);
+    return Math.max(DEFAULT_CAMERA_Z, heightDistance, widthDistance);
+  }
+
+  private getViewportMetrics(): ArtworkViewportMetrics {
+    const raw = this.viewportMetricsProvider?.() ?? this.getDefaultViewportMetrics();
+    const viewportW = Math.max(1, raw.viewportW);
+    const viewportH = Math.max(1, raw.viewportH);
+    const usableW = clamp(raw.usableW, viewportW * MIN_USABLE_VIEWPORT_FRACTION, viewportW);
+    const usableH = clamp(raw.usableH, viewportH * MIN_USABLE_VIEWPORT_FRACTION, viewportH);
+    const usableFracX = clamp(raw.usableFracX || usableW / viewportW, MIN_USABLE_VIEWPORT_FRACTION, 1);
+    const usableFracY = clamp(raw.usableFracY || usableH / viewportH, MIN_USABLE_VIEWPORT_FRACTION, 1);
+
+    return {
+      viewportW,
+      viewportH,
+      usableW,
+      usableH,
+      usableFracX,
+      usableFracY,
+      effectiveAspect: Math.max(0.1, raw.effectiveAspect || usableW / usableH),
+      occlusionTop: Math.max(0, raw.occlusionTop),
+      occlusionRight: Math.max(0, raw.occlusionRight),
+      occlusionBottom: Math.max(0, raw.occlusionBottom),
+      occlusionLeft: Math.max(0, raw.occlusionLeft),
+    };
+  }
+
+  private getDefaultViewportMetrics(): ArtworkViewportMetrics {
+    const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1;
+    const viewportH = typeof window !== 'undefined' ? window.innerHeight : 1;
+
+    return {
+      viewportW,
+      viewportH,
+      usableW: viewportW,
+      usableH: viewportH,
+      usableFracX: 1,
+      usableFracY: 1,
+      effectiveAspect: viewportW / Math.max(1, viewportH),
+      occlusionTop: 0,
+      occlusionRight: 0,
+      occlusionBottom: 0,
+      occlusionLeft: 0,
+    };
   }
 }

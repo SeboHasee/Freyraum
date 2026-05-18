@@ -667,8 +667,11 @@ button {
   // v0.11 — proximity snap on phones gives a satisfying scroll-to-item feel
   // without fighting the existing `scrollIntoView({behavior:'smooth'})` calls.
   scroll-snap-type: x proximity;
+  // v0.12 — reserve visual headroom for the lifted active thumb and define
+  // horizontal gutters used by native scroll snapping and JS centering.
+  scroll-padding-inline: 32px;
   -webkit-overflow-scrolling: touch;
-  padding: 2px;
+  padding: 16px 18px 8px;
 
   &::-webkit-scrollbar {
     display: none;
@@ -678,6 +681,7 @@ button {
 .timeline__item {
   flex-shrink: 0;
   scroll-snap-align: center;
+  scroll-margin-inline: 32px;
 }
 
 .timeline__thumb {
@@ -694,6 +698,7 @@ button {
     border-color var(--dur-fast) var(--ease-out);
   border: 2px solid transparent;
   background: rgba(255, 255, 255, 0.5);
+  scroll-margin-inline: 32px;
 
   &.is-active {
     transform: translateY(-10px) scale(1.04);

@@ -12,7 +12,7 @@ import { LightingSetup } from './lighting/LightingSetup';
 import { TextureManager } from './gallery/TextureManager';
 import { ArtworkMesh } from './gallery/ArtworkMesh';
 import { SidePanels } from './gallery/SidePanels';
-import { GalleryManager } from './gallery/GalleryManager';
+import { GalleryManager, type ArtworkViewportMetrics } from './gallery/GalleryManager';
 import { Topbar } from './ui/Topbar';
 import { InfoPanel } from './ui/InfoPanel';
 import { NavigationControls } from './ui/NavigationControls';
@@ -35,6 +35,13 @@ import { suggestStartupQuality } from './utils/performance';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
+
+function parseCssPx(value: string): number {
+  const parsed = Number.parseFloat(value);
+  if (Number.isFinite(parsed)) return parsed;
+  const fallback = value.match(/-?\d+(?:\.\d+)?/);
+  return fallback ? Number.parseFloat(fallback[0]) : 0;
+}
 
 /**
  * v0.07: validates `window.__FREYRAUM_ARTWORKS` and returns a clean
@@ -241,25 +248,58 @@ async function main(): Promise<void> {
   const artworkMesh = new ArtworkMesh(sceneManager.scene, initialPreset);
   const sidePanels = new SidePanels(sceneManager.scene);
 
+  const measureArtworkViewport = (): ArtworkViewportMetrics => {
+    const visualViewport = window.visualViewport;
+    const viewportW = Math.max(1, Math.round(visualViewport?.width ?? window.innerWidth));
+    const viewportH = Math.max(1, Math.round(visualViewport?.height ?? window.innerHeight));
+    const rootStyle = window.getComputedStyle(document.documentElement);
+    const safeLeft = parseCssPx(rootStyle.getPropertyValue('--safe-left'));
+    const safeRight = parseCssPx(rootStyle.getPropertyValue('--safe-right'));
+    const chromeTop = parseCssPx(rootStyle.getPropertyValue('--chrome-top'));
+    const chromeBottom = parseCssPx(rootStyle.getPropertyValue('--chrome-bottom'));
+
+    const topbarRect = app.querySelector<HTMLElement>('.topbar')?.getBoundingClientRect();
+    const timelineRect = app.querySelector<HTMLElement>('.timeline')?.getBoundingClientRect();
+    const navRect = app.querySelector<HTMLElement>('.nav-controls')?.getBoundingClientRect();
+
+    const topbarOcclusion = topbarRect ? Math.max(0, Math.min(viewportH, topbarRect.bottom)) : 0;
+    const bottomOcclusion = [timelineRect, navRect]
+      .filter((rect): rect is DOMRect => !!rect)
+      .reduce((max, rect) => Math.max(max, viewportH - Math.max(0, rect.top)), 0);
+
+    const occlusionTop = Math.max(chromeTop, topbarOcclusion);
+    const occlusionBottom = Math.max(chromeBottom, bottomOcclusion);
+    const occlusionLeft = safeLeft;
+    const occlusionRight = safeRight;
+    const usableW = Math.max(1, viewportW - occlusionLeft - occlusionRight);
+    const usableH = Math.max(1, viewportH - occlusionTop - occlusionBottom);
+
+    return {
+      viewportW,
+      viewportH,
+      usableW,
+      usableH,
+      usableFracX: usableW / viewportW,
+      usableFracY: usableH / viewportH,
+      effectiveAspect: usableW / usableH,
+      occlusionTop,
+      occlusionRight,
+      occlusionBottom,
+      occlusionLeft,
+    };
+  };
+
   // Gallery manager
   const galleryManager = new GalleryManager(
     artworks,
     artworkMesh,
     sidePanels,
     textureManager,
-    sceneManager.camera
+    sceneManager.camera,
+    undefined,
+    measureArtworkViewport
   );
   galleryManager.applyPreset(initialPreset);
-
-  await galleryManager.init();
-  diagnostics.info('boot', 'gallery-ready', 'Gallery initialized', {
-    artworkCount: artworks.length,
-    quality: preferences.current.quality,
-    lighting: preferences.current.lighting,
-  });
-
-  loadingOverlay.classList.add('is-hidden');
-  window.setTimeout(() => loadingOverlay.remove(), 700);
 
   // Frame budget + adaptive quality (v0.02)
   const frameBudget = new FrameBudgetMonitor({ budgetMs: 16.7 });
@@ -284,6 +324,16 @@ async function main(): Promise<void> {
   const preferencesPanel = new PreferencesPanel(app, preferences);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
+
+  await galleryManager.init();
+  diagnostics.info('boot', 'gallery-ready', 'Gallery initialized', {
+    artworkCount: artworks.length,
+    quality: preferences.current.quality,
+    lighting: preferences.current.lighting,
+  });
+
+  loadingOverlay.classList.add('is-hidden');
+  window.setTimeout(() => loadingOverlay.remove(), 700);
 
   // Interaction
   const canvas = rendererManager.renderer.domElement;
@@ -310,16 +360,29 @@ async function main(): Promise<void> {
       applyDeviceCaps(newCaps);
       applyCompactInfo(newCaps.layoutTier);
       hintText.updateHint();
+      const artworkViewport = measureArtworkViewport();
+      galleryManager.handleViewportMetricsChanged();
       diagnostics.info('layout', 'resize', 'Viewport resized', {
         tier: newCaps.layoutTier,
         w: newCaps.viewportW,
         h: newCaps.viewportH,
         orientation: newCaps.orientation,
       });
+      diagnostics.info('layout', 'art-viewport', 'Artwork-safe viewport measured', artworkViewport);
     }, 120);
   };
   window.addEventListener('resize', onResize);
   window.addEventListener('orientationchange', onResize);
+  const visualViewport = window.visualViewport;
+  visualViewport?.addEventListener('resize', onResize);
+  visualViewport?.addEventListener('scroll', onResize);
+  const chromeObserver = typeof ResizeObserver === 'function'
+    ? new ResizeObserver(onResize)
+    : null;
+  for (const selector of ['.topbar', '.timeline', '.nav-controls', '.info-panel']) {
+    const el = app.querySelector(selector);
+    if (el) chromeObserver?.observe(el);
+  }
 
   // Apply current preferences to all subsystems.
   const applyPreferences = (manual: boolean): void => {
@@ -475,6 +538,9 @@ async function main(): Promise<void> {
     }
     window.removeEventListener('resize', onResize);
     window.removeEventListener('orientationchange', onResize);
+    visualViewport?.removeEventListener('resize', onResize);
+    visualViewport?.removeEventListener('scroll', onResize);
+    chromeObserver?.disconnect();
     clearTimeout(resizeDebounce);
     diagnostics.info('boot', 'shutdown', 'Disposing FREYRAUM runtime');
     preferences.dispose();
