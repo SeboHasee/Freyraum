@@ -1,30 +1,29 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current priority: v0.12 — zoom/framing/timeline follow-up is
-defined as a technical coding plan.** See the new v0.12 section immediately below for the current target,
-then the v0.11 implemented section for the already-shipped responsive/touch
-hardening summary.
+contributors. **Current status: v0.12 zoom/framing/timeline follow-up is
+implemented.** See the new v0.12 section immediately below, then the v0.11
+implemented section for the responsive/touch hardening summary.
 
-## v0.12 zoom/framing/timeline follow-up — Final technical coding plan (2026-05-18)
+## v0.12 zoom/framing/timeline follow-up — Implemented (2026-05-18)
 
-Current customer-facing follow-up after v0.11:
+Customer-facing issues fixed after v0.11:
 
 1. users want to zoom out farther than the current ceiling allows;
 2. very tall artworks should fully fit in the normal/reset view without manual zoom-out;
 3. the selected timeline thumbnail should remain fully visible instead of being cut off.
 
-**Audited root causes:**
+**Root causes fixed:**
 
-- `src/gallery/GalleryManager.ts` currently ties the reset fit and the far zoom-out ceiling to the same hard-coded camera-distance range.
-- `getResetZoom()`, `getMinZoom()`, and `getPanLimits()` still use raw camera aspect rather than a measured art-safe viewport.
-- `main.ts` has resize/orientation wiring already, but `GalleryManager` still lacks an injected viewport-metrics provider and explicit re-fit hook.
-- `src/styles/main.scss` raises the active timeline thumb (`translateY(-10px) scale(1.04)`) while `.timeline__list` clips vertical overflow, so the active item can be visibly cut off.
-- `src/timeline/Timeline.ts` uses `scrollIntoView()` only, which does not account for transformed active geometry, explicit scroll gutters, or reduced-motion behavior.
+- `src/gallery/GalleryManager.ts` no longer ties reset fit and far zoom-out to one hard-coded ceiling; it now uses explicit zoom bounds.
+- Reset, minimum, pan, hover, and diagnostics math now use measured art-safe viewport metrics instead of raw camera aspect only.
+- `src/main.ts` injects the viewport-metrics provider and listens to `window`, `visualViewport`, and `ResizeObserver` signals for refit.
+- `src/styles/main.scss` reserves timeline headroom/gutters so the lifted active thumb is not clipped.
+- `src/timeline/Timeline.ts` centers the transformed active thumbnail manually, adds `aria-current`, and honors reduced motion.
 
-**Research-validated implementation direction:** measure an art-safe viewport (with `visualViewport`/`ResizeObserver` support), split default fit from far overview zoom, keep reset/min/pan math on the same viewport model, and use CSS scroll gutters plus manual centering so the selected timeline item is fully readable on desktop and touch layouts.
+**Validation:** baseline and final `npm run lint` / `npm run build` pass. `customer-preview/` was rebuilt. Known warnings remain limited to the TypeScript parser support warning and Sass legacy JS API deprecation warning.
 
-See `plan.md` → "v0.12 Plan — farther zoom-out, full tall-picture default fit, and unclipped active timeline selection (Technical Coding Plan)" for the implementation plan and `FINDINGS.md` → "2026-05-18 — v0.12 final research-backed technical coding plan" for the audit notes and official sources.
+See `plan.md` → "v0.12 — Implemented" for implementation details and `FINDINGS.md` → "2026-05-18 — v0.12 implementation pass" for findings, diagnostics, and validation notes.
 
 ## v0.11 responsive/touch — Implemented (2026-05-18)
 

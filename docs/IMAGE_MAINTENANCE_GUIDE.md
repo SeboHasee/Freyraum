@@ -20,27 +20,30 @@ The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs,
 
 Support checks after implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states. The QA matrix is documented in `plan.md`.
 
-## Current v0.12 follow-up (zoom / tall-picture framing / timeline visibility)
+## Current v0.12 status (zoom / tall-picture framing / timeline visibility)
 
-Audited and upgraded to a technical coding plan on 2026-05-18. The next pass is
-focused on three viewing issues rather than the import pipeline:
+Implemented on 2026-05-18. This pass focused on three viewing issues rather
+than the import pipeline:
 
 - allow a farther zoomed-out overview distance;
 - make the standard/reset view fully show very tall artworks;
 - keep the active timeline thumbnail fully visible instead of clipping it.
 
-The code audit points at `src/gallery/GalleryManager.ts` for the zoom/framing
-logic and `src/timeline/Timeline.ts` + `src/styles/main.scss` for the active
-timeline clipping. The importer, generated manifests, and `webglImage` path are
-not part of this follow-up.
+The implementation changed `src/gallery/GalleryManager.ts` for zoom/framing
+logic, `src/main.ts` for art-safe viewport measurement and resize/refit wiring,
+and `src/timeline/Timeline.ts` + `src/styles/main.scss` for active timeline
+visibility. The importer, generated manifests, and `webglImage` path are not
+part of this follow-up.
 
-The research-backed plan specifically calls for:
+The shipped implementation includes:
 
-- an injected **art-safe viewport metrics** model from `main.ts`,
-- separate **reset-fit** and **far overview** zoom distances,
-- shared viewport math for reset/min/pan consistency,
-- timeline **headroom + scroll gutters + manual centering**,
-- reduced-motion-aware timeline auto-scrolling.
+- an injected **art-safe viewport metrics** model from `main.ts`;
+- separate **reset-fit** and **far overview** zoom distances;
+- shared viewport math for reset/min/pan/hover consistency;
+- timeline **headroom + scroll gutters + manual centering**;
+- reduced-motion-aware timeline auto-scrolling;
+- diagnostics for `show-artwork-complete`, `gallery/viewport-refit`,
+  `layout/art-viewport`, and non-default `timeline/center-active`.
 
 ## Quick overview
 

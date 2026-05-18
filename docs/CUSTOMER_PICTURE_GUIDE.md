@@ -9,21 +9,19 @@ You only ever touch one folder and one button.
 
 v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.
 
-## Current viewing follow-up
+## Current viewing status
 
-One customer-facing follow-up is now defined as the **v0.12 technical coding plan**:
+The customer-facing **v0.12 viewing pass is implemented**:
 
-- zoom-out should go farther than it does now,
-- very tall pictures should already be fully visible in the normal/reset view,
-- and the selected picture in the bottom timeline should stay fully visible.
+- zoom-out goes farther than reset view,
+- very tall pictures are fitted against the actually usable artwork viewport,
+- and the selected picture in the bottom timeline stays fully visible.
 
-The audited technical direction is to:
+For support/debugging, the current build now logs:
 
-- measure the actually usable artwork viewport,
-- let reset view and “zoom out even farther” be two different distances,
-- and fix the selected timeline picture with better spacing/centering logic.
-
-The current build may still show these limitations on some artworks/layouts until that implementation pass lands.
+- `show-artwork-complete` with reset/min/max zoom and usable viewport data,
+- `gallery/viewport-refit` when the browser viewport or chrome changes,
+- `layout/art-viewport` with measured art-safe viewport metrics.
 
 ## What you need (one-time)
 
@@ -186,30 +184,26 @@ If the artifact looks like a hole with the same picture behind it, include the
 expects Hoch to use the reduced value `0.012`.
 
 **Very tall pictures look too close when I reset the view.**
-This was also addressed in v0.10. Reset view now uses the framed picture
-dimensions, so very vertical pictures should start farther away and show the
-whole framed artwork. If it still looks too close, send a screenshot and the
-`show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`, and
-`maxZoom`.
-
-There is now also a tracked v0.12 follow-up because some especially tall / long
-vertical pictures can still feel too close in the standard view. If that
-happens, include:
+This was improved in v0.10 and hardened again in v0.12. Reset view now uses the
+framed picture dimensions **and** the measured art-safe viewport after fixed
+chrome is considered. If it still looks too close, include:
 
 1. a screenshot of the first/reset view,
 2. whether more manual zoom-out is still needed,
-3. the `show-artwork-complete` diagnostics entry.
+3. the `show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`,
+   `maxZoom`, `overviewHeadroom`, and the usable viewport fields.
 
 **The selected timeline picture looks cut off.**
-This is also tracked in the v0.12 technical plan. Please send:
+This should be fixed by v0.12. If it still happens, please send:
 
 1. a screenshot showing the selected thumbnail,
 2. whether it happens after clicking, swiping, or using keyboard arrows,
-3. the browser/device used.
+3. the browser/device used,
+4. whether reduced motion is enabled.
 
 If a developer is helping you, they should also capture whether the issue still
-appears after the selected item is re-centered in the strip and whether reduced
-motion is enabled.
+appears after the selected item is re-centered in the strip and look for a
+`timeline/center-active` entry in non-default diagnostics mode.
 
 ## Debug / support tools (developer use)
 

@@ -2,12 +2,20 @@
 
 ## Unreleased
 
+### Implemented (v0.12 zoom/framing/timeline — 2026-05-18)
+
+- Added `ArtworkViewportMetrics` / `ViewportMetricsProvider` to `GalleryManager` so reset, min, pan, hover, and diagnostics math can use the measured art-safe viewport instead of only raw camera aspect.
+- Split the old far zoom ceiling into explicit `ZoomBounds`: `minInspectionZoom`, `resetFitZoom`, and `maxOverviewZoom`. Reset now uses the fitted distance while zoom-out controls can continue to a farther overview distance.
+- Extended `main.ts` with `measureArtworkViewport()`, `visualViewport` listeners, and `ResizeObserver` coverage for fixed chrome. Viewport/chrome changes now call `galleryManager.handleViewportMetricsChanged()` and emit `layout/art-viewport` diagnostics.
+- Updated timeline selection so the active thumbnail keeps its lifted visual state without clipping: CSS headroom + scroll gutters in `main.scss`, transform-aware manual centering in `Timeline.ts`, `aria-current`, reduced-motion-aware scroll behavior, and non-default `timeline/center-active` diagnostics.
+- Extended `show-artwork-complete` diagnostics with reset/min/max zoom, overview headroom, usable viewport size/fractions, and viewport occlusion.
+- Rebuilt `customer-preview/freyraum-gallery.js` and `customer-preview/style.css`.
+- Updated `plan.md`, `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` with deep v0.12 implementation notes and validation status.
+
 ### Documentation (v0.12 final research-backed technical coding plan — 2026-05-18)
 
 - Rewrote the v0.12 section in `plan.md` from a short planning note into a full technical coding plan with exact files, code-level bugs, brainstormed solution options, recommended architecture, TypeScript interface suggestions, scroll/viewport formulas, diagnostics additions, and an implementation slice order.
-- Upgraded `FINDINGS.md` to record the audited source-level findings: reset-fit and far overview zoom are still coupled in `GalleryManager`; reset/min/pan math still uses raw camera aspect; `main.ts` lacks an explicit art-viewport metrics provider; timeline clipping is structural CSS; `Timeline.ts` needs dedicated manual centering logic; timeline auto-scrolling does not yet respect reduced motion.
 - Added the 2026 online validation result and official source list for `VisualViewport`, `ResizeObserver`, `scrollIntoView`, `scroll-padding`, `scroll-margin`, dynamic viewport units, WCAG Reflow, and WCAG Target Size.
-- Updated all repository markdown files so the v0.12 follow-up now clearly points to the audited technical coding plan rather than a generic future note.
 
 ### Added (v0.11 implementation — 2026-05-18)
 

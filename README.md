@@ -2,22 +2,22 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current follow-up — v0.12 zoom and framing plan
+## Current status — v0.12 zoom and framing implemented
 
-**Research-backed technical coding plan updated 2026-05-18.** The next pass targets three still-open customer-facing issues:
+**Implemented 2026-05-18.** The current build includes the v0.12 zoom/framing/timeline pass:
 
-- zoom-out must allow a noticeably farther overview distance;
-- very tall / long vertical artworks must fully fit in the standard/reset view without forcing manual zoom-out;
-- the selected timeline thumbnail must remain fully visible and not be cut off by the timeline strip.
+- zoom-out now allows a noticeably farther overview distance beyond reset;
+- very tall / long vertical artworks fit against a measured art-safe viewport in the standard/reset view;
+- the selected timeline thumbnail remains fully visible and is not cut off by the timeline strip.
 
-The audited v0.12 direction is:
+What changed technically:
 
-- measure an **art-safe viewport** instead of relying only on raw camera aspect;
-- split **reset-fit zoom** from **far overview zoom** in `GalleryManager`;
-- use **CSS scroll gutters + manual centering** so the active timeline item stays fully visible;
-- respect **reduced motion** in programmatic timeline scrolling.
+- `GalleryManager` now uses **art-safe viewport metrics** instead of relying only on raw camera aspect;
+- **reset-fit zoom** and **far overview zoom** are separate bounds;
+- timeline visibility uses **CSS headroom + scroll gutters + transform-aware manual centering**;
+- programmatic timeline scrolling respects **reduced motion**.
 
-See [`plan.md`](./plan.md#v012-plan--farther-zoom-out-full-tall-picture-default-fit-and-unclipped-active-timeline-selection-technical-coding-plan) for the technical coding plan and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v012-final-research-backed-technical-coding-plan-farther-zoom-out-tall-picture-fit-and-unclipped-timeline-selection) for the audited findings and online validation result.
+See [`plan.md`](./plan.md#v012--implemented-farther-zoom-out-full-tall-picture-default-fit-and-unclipped-active-timeline-selection-2026-05-18) for implementation details and [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v012-implementation-pass-farther-zoom-out-tall-picture-fit-and-unclipped-timeline-selection) for findings, diagnostics, and validation status.
 
 ## One-click local customer preview
 
