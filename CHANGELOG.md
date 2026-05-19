@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Documentation (v0.15 final documentation audit cleanup — 2026-05-19)
+
+- Final-cleaned the v0.15 documentation set so the plan, findings, README, handoff, and image/customer guides all point to the same final technical audit wording.
+- Added explicit repository-verification coverage to `plan.md` and `FINDINGS.md` so the v0.15 plan now states which code areas and markdown surfaces were re-checked.
+- Fixed remaining documentation inaccuracies, including stale README/HANDOFF references and the “9 hard-coded lerp lines” wording in `plan.md`.
+- Kept the v0.15 pass documentation-only; no runtime code changed.
+
 ### Documentation (v0.15 animation technical brainstorm — 2026-05-19)
 
 - Completely replaced the initial animation planning section in `plan.md` with a full technical brainstorm.

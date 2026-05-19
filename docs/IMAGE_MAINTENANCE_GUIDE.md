@@ -7,11 +7,12 @@ or needs to understand why an image does or does not appear in the gallery.
 
 ## Planned v0.15 animation refinement
 
-The v0.15 documentation pass (2026-05-19) plans smoother, longer, more elegant animation behavior. It is not implemented yet and does not affect the importer or image manifest pipeline.
+The final v0.15 documentation pass (2026-05-19) plans smoother, longer, more elegant animation behavior. It is not implemented yet and does not affect the importer or image manifest pipeline.
 
 Maintenance notes for the future implementation:
 
 - start from `plan.md` and `FINDINGS.md` v0.15 sections;
+- note that the current plan was re-verified against the full motion/interaction code paths and repository markdown;
 - preserve the existing customer image pipeline and v0.14.2 zoom/pan constants unless visual QA proves otherwise;
 - keep reduced-motion behavior and `prefers-reduced-motion` compatibility;
 - validate rapid navigation with imported customer images because animation retuning must not expose stale texture loads.

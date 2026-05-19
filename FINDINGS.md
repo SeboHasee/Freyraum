@@ -4,7 +4,7 @@
 
 ### Scope of this pass
 
-Full code audit of all motion surfaces in the FREYRAUM codebase. Identified a root bug in all WebGL animation paths, a timing bug in the InfoPanel DOM transition, and documented all specific code changes needed. No runtime code was changed in this pass.
+Final v0.15 documentation audit and repository-wide verification pass. Re-checked the animation plan against the current codebase, existing findings, repository markdown, and online sources. Identified a root bug in all WebGL animation paths, a timing bug in the InfoPanel DOM transition, and several documentation/cross-reference issues. No runtime code was changed in this pass.
 
 ---
 
@@ -20,6 +20,25 @@ Full code audit of all motion surfaces in the FREYRAUM codebase. Identified a ro
 | cubic-bezier.com / easing.net | `cubic-bezier(0.34, 1.56, 0.64, 1)` (current `--ease-spring`) overshoots; `cubic-bezier(0.16, 1, 0.3, 1)` = easeOutExpo does not. |
 | MDN `will-change` | Apply sparingly only just before animation; remove via `transitionend`. Not needed as a permanent class. |
 | web.dev animation guide | Confirmed: do not animate `top`, `left`, `width`, `height` — layout-triggering. All FREYRAUM DOM transitions are already correct. |
+
+---
+
+### Repository verification coverage
+
+This pass cross-checked the v0.15 plan against the current state of:
+
+- `src/main.ts` render-loop timing, loading overlay timing, resize/refit wiring
+- `src/gallery/*` motion ownership, zoom/pan/reset bounds, artwork/side-panel transform behavior
+- `src/timeline/Timeline.ts` active-thumb centering and reduced-motion scroll behavior
+- `src/ui/*` panel/controls timing surfaces, especially `InfoPanel.ts`
+- `src/interaction/CanvasInteraction.ts` gesture paths that must remain responsive after motion retuning
+- `src/lighting/*` ambient animation boundaries
+- `src/utils/*` frame-budget, startup-quality, math helper, diagnostics-adjacent utilities
+- `src/styles/main.scss` tokens, easing, reduced-motion coverage, and animated selectors
+- `package.json` validation commands (`npm run lint`, `npm run build`)
+- repository markdown files that describe current and planned runtime behavior
+
+Result: the technical recommendations in `plan.md` are consistent with the current source tree and with the current documentation set after the cleanup in this pass.
 
 ---
 
@@ -249,9 +268,16 @@ Before changing these tokens (or their aliases), all usages must be verified:
 
 ---
 
+### Documentation consistency issues fixed in this pass
+
+- `README.md` still described the older “animation enhancement plan” wording and linked to the old v0.15 heading anchor. It now points to the final v0.15 technical audit more cleanly.
+- `docs/HANDOFF.md` still referenced the earlier v0.15 heading and findings label. It now points at the final technical brainstorm / deep-audit wording.
+- `docs/CUSTOMER_PICTURE_GUIDE.md` and `docs/IMAGE_MAINTENANCE_GUIDE.md` still described the older lighter planning pass. They now reference the final v0.15 technical audit while keeping the customer workflow unchanged.
+
 ### Validation status
 
 - Documentation-only pass. No lint/build required.
+- Verified existing validation commands from `package.json`: `npm run lint` and `npm run build`.
 - See `plan.md` → "v0.15 — Planned" for implementation slices and acceptance checks.
 
 ---

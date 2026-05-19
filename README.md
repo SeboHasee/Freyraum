@@ -2,11 +2,11 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current planning status — v0.15 animation enhancement plan (2026-05-19)
+## Current planning status — v0.15 final technical animation audit (2026-05-19)
 
-**Current planning pass:** v0.15 is documented but not implemented yet.
+**Current planning pass:** v0.15 is documented in full technical detail but not implemented yet.
 
-The next planned enhancement is a smoother, longer, more elegant motion system for the gallery. The plan is based on 2026 web animation/accessibility/performance guidance and targets:
+The next planned enhancement is a smoother, longer, more elegant motion system for the gallery. The final documentation pass re-verified the plan against the current source tree, repository findings, and current web animation/accessibility/performance guidance. It targets:
 
 - semantic motion tokens for the modern art-gallery style;
 - frame-rate-independent WebGL camera/artwork smoothing;
@@ -15,7 +15,14 @@ The next planned enhancement is a smoother, longer, more elegant motion system f
 - preserved `prefers-reduced-motion` / in-app reduced-motion behavior;
 - diagnostics and QA checks for motion timing and frame budget.
 
-See [`plan.md`](./plan.md#v015--planned-smoother-longer-elegant-animation-system-research-pass-2026-05-19) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v015-research-pass-elegant-longer-animations) for the detailed plan and research findings.
+Key technical findings already documented for the future implementation:
+
+- all 13 `GalleryManager.update()` smoothing lines are currently frame-rate-dependent;
+- `InfoPanel.ts` swaps content too early (`200ms`) relative to the current CSS transition (`320ms`);
+- current `--ease-spring` overshoots and is too playful for the museum aesthetic;
+- the future pass should add semantic duration/easing tokens and keep reduced-motion as a hard boundary.
+
+See [`plan.md`](./plan.md) and [`FINDINGS.md`](./FINDINGS.md) for the full technical brainstorm, audit math, and source validation.
 
 ## Current runtime status — v0.14.2 implemented (2026-05-19)
 

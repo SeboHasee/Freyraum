@@ -4,7 +4,7 @@
 
 ### Status
 
-**Planned, not yet implemented.** This is the full technical audit and coding brainstorm pass. It replaces the initial planning section with precise file/line citations, calculated numbers, exact code changes, and validated research sources. No runtime code was changed in this pass.
+**Planned, not yet implemented.** This is the final documentation audit and coding brainstorm pass for v0.15. It verifies the plan against the current codebase, existing findings, repository markdown, and validated online sources. No runtime code was changed in this pass.
 
 ### Design goals (refined)
 
@@ -31,6 +31,27 @@ FREYRAUM should feel like a premium digital museum installation. Motion must be:
 | web.dev / Chrome DevTools layers panel | `will-change: transform, opacity` — apply sparingly, only just before animation, remove after |
 | easing.net / cubic-bezier.com | `cubic-bezier(0.16, 1, 0.3, 1)` = easeOutExpo; `cubic-bezier(0.76, 0, 0.24, 1)` = easeInOutQuart |
 | MDN View Transitions API | Progressive enhancement for DOM state transitions — note for future consideration |
+
+---
+
+### Repository verification scope for this pass
+
+The v0.15 plan was re-verified against the current repository structure and code paths that either drive motion directly or constrain how a motion pass can be implemented safely:
+
+- app bootstrap / render loop: `src/main.ts`
+- gallery motion, zoom, pan, reset-fit, diagnostics: `src/gallery/GalleryManager.ts`
+- artwork transform ownership and geometry boundaries: `src/gallery/ArtworkMesh.ts`
+- side preview panels and texture-swap behavior: `src/gallery/SidePanels.ts`
+- timeline selection, centering, reduced-motion scroll behavior: `src/timeline/Timeline.ts`
+- info panel, preferences panel, fullscreen/nav/zoom controls, hint text: `src/ui/*`
+- interaction inputs and gesture flow: `src/interaction/CanvasInteraction.ts`
+- lighting animation boundary: `src/lighting/LightingSetup.ts` and `src/lighting/LightProfile.ts`
+- frame pacing / startup quality / performance helpers: `src/utils/FrameBudgetMonitor.ts`, `src/utils/performance.ts`, `src/utils/math.ts`
+- style tokens, reduced-motion coverage, responsive behavior: `src/styles/main.scss`
+- build / validation scripts: `package.json`
+- repository markdown cross-references: `README.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `CHANGELOG.md`, `DOCUMENTATION_RULES.md`, `FINDINGS.md`
+
+This means the v0.15 plan is now aligned not only with the animation code itself but also with the surrounding interaction, accessibility, diagnostics, and documentation surfaces that the implementation will touch.
 
 ---
 
@@ -87,7 +108,7 @@ At 120 Hz (modern MacBook Pro, iPad ProMotion) the artwork arrives in ~400 ms �
 | Property | Current k | Current 95% settle @ 60Hz | Proposed λ | New 95% settle (any Hz) |
 |---|---|---|---|---|
 | Hover rotation X/Y | 0.05 | 973 ms | **12** | 250 ms — immediate |
-| Artwork position X/Y (nav) | 0.06 | 817 ms | **2.5** | 1200 ms — witnesable |
+| Artwork position X/Y (nav) | 0.06 | 817 ms | **2.5** | 1200 ms — witnessable |
 | Artwork scale (nav) | 0.06 | 817 ms | **3.0** | 1000 ms — smooth |
 | Camera zoom | 0.08 | 617 ms | **4.0** | 750 ms — responsive |
 | Camera pan X/Y | 0.08 | 617 ms | **5.0** | 600 ms — connected to input |
@@ -105,7 +126,7 @@ this.lastUpdateTime = now;
 if (dt === 0) return; // skip the very first tick
 ```
 
-4. Replace the 9 hard-coded lerp lines with smoothDamp calls:
+4. Replace all hard-coded smoothing lines in `update()` with `smoothDamp` calls (13 existing motion updates, plus the new `position.z` line if the depth-seed enhancement is adopted):
 
 ```typescript
 // In update() — replace all value += (target - value) * k  with:

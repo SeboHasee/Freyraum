@@ -1,21 +1,23 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current planning status: v0.15 animation enhancement is documented
-but not implemented. Current runtime status: v0.14.2 zoom/pan/reset-fit follow-up
-is implemented.**
+contributors. **Current planning status: v0.15 final technical animation audit is
+documented but not implemented. Current runtime status: v0.14.2 zoom/pan/reset-fit
+follow-up is implemented.**
 
-## v0.15 elegant animation enhancement — Planned (2026-05-19)
+## v0.15 elegant animation system — final technical audit (2026-05-19)
 
-The next documented pass should make animations smoother, longer, and more visible while preserving the premium modern-art style.
+The next documented implementation pass should make animations smoother, longer, and more visible while preserving the premium modern-art style.
 
-Implementation should start from `plan.md` → "v0.15 — Planned: smoother, longer, elegant animation system" and `FINDINGS.md` → "2026-05-19 — v0.15 research pass".
+Implementation should start from `plan.md` → "v0.15 — Planned: elegant animation system — full technical brainstorm" and `FINDINGS.md` → "2026-05-19 — v0.15 technical deep audit: elegant longer animations".
 
 Important constraints:
 
 - keep reduced motion as a hard requirement;
 - do not add a heavy animation dependency;
 - convert `GalleryManager.update()` smoothing to frame-rate-independent timing before final retuning;
+- fix the `InfoPanel.ts` 200ms content-swap timing bug before retuning panel durations;
+- replace overshooting `--ease-spring` uses on the timeline and prefs panel with a calmer gallery easing curve;
 - keep DOM animations on `transform`/`opacity` where possible;
 - preserve v0.14.2 zoom/pan constants unless visual QA proves they must change;
 - add only concise diagnostics for motion mode and intended settle timing.
