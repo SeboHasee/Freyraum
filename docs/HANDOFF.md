@@ -1,8 +1,22 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current runtime status: v0.14 zoom/pan/reset-fit follow-up is
+contributors. **Current runtime status: v0.14.2 zoom/pan/reset-fit follow-up is
 implemented.**
+
+## v0.14.2 vertical pan tightening — Implemented (2026-05-19)
+
+Follow-up after v0.14 customer feedback: top/bottom pan range should be more restrictive while left/right should stay unchanged.
+
+**Implemented code changes (`src/gallery/GalleryManager.ts`):**
+
+- replaced shared overscroll with axis-specific constants:
+  - `INSPECTION_OVERSCROLL_X = 1.2` (unchanged horizontal feel),
+  - `INSPECTION_OVERSCROLL_Y = 0.6` (tighter vertical feel);
+- `getPanLimits()` now applies separate X/Y overscroll values;
+- diagnostics now log `panOverscrollX` and `panOverscrollY`.
+
+**Validation:** `npm run lint` and `npm run build` pass.
 
 ## v0.14 zoom/pan/reset-fit tuning — Implemented (2026-05-19)
 

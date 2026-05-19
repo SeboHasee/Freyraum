@@ -9,14 +9,15 @@ You only ever touch one folder and one button.
 
 v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.
 
-## Current viewing status (v0.14 implemented)
+## Current viewing status (v0.14.2 implemented)
 
-The customer-facing **v0.14 follow-up is implemented**.
+The customer-facing **v0.14.2 follow-up is implemented**.
 
 What improved in the current build:
 
 - **Closer detail zoom:** close inspection now goes deeper, especially on medium and large artworks.
 - **Tighter panning:** edge movement is more controlled (less drifting away from the artwork when near reset view).
+- **More restrictive top/bottom panning:** vertical edge movement is intentionally tighter while left/right stays unchanged.
 - **Better vertical reset framing:** very tall artworks start farther away in default/reset view for a better first impression.
 
 Technical changes behind this behavior:
@@ -24,9 +25,10 @@ Technical changes behind this behavior:
 - `MIN_CAMERA_Z`: `0.5 → 0.2`
 - `MIN_VISIBLE_ARTWORK_FRACTION`: `0.28 → 0.12`
 - `INSPECTION_OVERSCROLL`: `3.0 → 1.2`
+- `INSPECTION_OVERSCROLL_X = 1.2` and `INSPECTION_OVERSCROLL_Y = 0.6` (v0.14.2 split)
 - New portrait reset constants: `PORTRAIT_ASPECT_THRESHOLD = 0.65`, `PORTRAIT_RESET_EXTRA_Z = 1.5`
 
-For support/debugging, `show-artwork-complete` now logs extra v0.14 tuning data (`closeZoomMinVisibleFraction`, `panOverscroll`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
+For support/debugging, `show-artwork-complete` now logs extra v0.14/v0.14.2 tuning data (`closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
 
 ## What you need (one-time)
 

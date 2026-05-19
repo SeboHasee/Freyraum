@@ -1,5 +1,26 @@
 # FREYRAUM Plan
 
+## v0.14.2 — Implemented: tighter top/bottom pan limits at close zoom (2026-05-19)
+
+### Status
+
+**Implemented 2026-05-19.** This pass addresses the follow-up request that vertical edge limits should be more restrictive while horizontal limits stay as they are.
+
+### Implementation
+
+- Replaced the single overscroll constant with split axis constants in `src/gallery/GalleryManager.ts`:
+  - `INSPECTION_OVERSCROLL_X = 1.2` (left/right unchanged)
+  - `INSPECTION_OVERSCROLL_Y = 0.6` (top/bottom tightened)
+- Updated `getPanLimits()` to apply `X` and `Y` overscroll independently.
+- Updated `show-artwork-complete` diagnostics to log `panOverscrollX` and `panOverscrollY`.
+
+### Outcome
+
+- Horizontal exploration remains unchanged.
+- Vertical panning is now intentionally tighter when zoomed in.
+
+---
+
 ## v0.14.1 — Implemented: importer launcher compatibility guard (2026-05-19)
 
 ### Status

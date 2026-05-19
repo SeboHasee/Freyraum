@@ -2,21 +2,22 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current status — v0.14 implemented (2026-05-19)
+## Current status — v0.14.2 implemented (2026-05-19)
 
-**Current build:** v0.14 is implemented.
+**Current build:** v0.14.2 is implemented.
 
-v0.14 runtime changes (in `src/gallery/GalleryManager.ts`):
+v0.14 / v0.14.2 runtime changes (in `src/gallery/GalleryManager.ts`):
 
 - deeper close inspection: `MIN_CAMERA_Z` `0.5 → 0.2` and `MIN_VISIBLE_ARTWORK_FRACTION` `0.28 → 0.12`;
 - tighter pan edge freedom: `INSPECTION_OVERSCROLL` `3.0 → 1.2`;
+- follow-up axis split: `INSPECTION_OVERSCROLL_X = 1.2` and `INSPECTION_OVERSCROLL_Y = 0.6` (top/bottom now more restrictive, left/right unchanged);
 - portrait-aware reset-fit boost: new `PORTRAIT_ASPECT_THRESHOLD = 0.65` and `PORTRAIT_RESET_EXTRA_Z = 1.5`, applied additively in `getResetFitZoom()`;
-- richer diagnostics in `show-artwork-complete`: `closeZoomMinVisibleFraction`, `panOverscroll`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`.
+- richer diagnostics in `show-artwork-complete`: `closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`.
 
 Outcome:
 
 - users can zoom closer for fine-detail inspection on medium/large artworks;
-- pan feels more controlled near reset view while still reaching edges at close zoom;
+- pan feels more controlled near reset view while still reaching edges at close zoom, with extra vertical restriction in v0.14.2;
 - large vertical artworks open farther away in reset/default view without pushing landscape/square artworks away.
 
 Validation for v0.14:

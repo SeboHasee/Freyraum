@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Implemented (v0.14.2 vertical pan tightening — 2026-05-19)
+
+- Kept horizontal close-pan behavior unchanged (`INSPECTION_OVERSCROLL_X = 1.2`) because left/right edge reach was already approved.
+- Tightened vertical close-pan behavior (`INSPECTION_OVERSCROLL_Y = 0.6`) so top/bottom movement is more restrictive when zoomed in.
+- `getPanLimits()` now uses axis-specific overscroll constants (`X` and `Y`) instead of one shared value.
+- `show-artwork-complete` diagnostics now logs `panOverscrollX` and `panOverscrollY`.
+- Updated all markdown files for this follow-up and rebuilt validation artifacts via normal build flow.
+
 ### Fixed (importer launcher compatibility / Node version guard — 2026-05-19)
 
 - Added `scripts/run-import-artworks.cjs` as a CommonJS launcher for the customer importer flow.

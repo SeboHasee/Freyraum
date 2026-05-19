@@ -62,8 +62,11 @@ const RESET_REFIT_EPSILON = 0.25;
  * side to side.
  * v0.14: tightened to 1.2 to retain edge reach while reducing drift when near
  * reset-fit where a flat additive overscroll can feel too loose.
+ * v0.14.2: split by axis so vertical pan can be tighter without reducing the
+ * approved horizontal edge reach.
  */
-const INSPECTION_OVERSCROLL = 1.2;
+const INSPECTION_OVERSCROLL_X = 1.2;
+const INSPECTION_OVERSCROLL_Y = 0.6;
 
 /** Roles that can be filled in by the procedural factory when no authored map exists. */
 const PROCEDURAL_ROLES: PaintingMapRole[] = [
@@ -377,7 +380,8 @@ export class GalleryManager {
       closeZoomMinVisibleFraction: MIN_VISIBLE_ARTWORK_FRACTION,
       maxZoom: zoomBounds.maxOverviewZoom,
       overviewHeadroom: zoomBounds.maxOverviewZoom - zoomBounds.resetFitZoom,
-      panOverscroll: INSPECTION_OVERSCROLL,
+      panOverscrollX: INSPECTION_OVERSCROLL_X,
+      panOverscrollY: INSPECTION_OVERSCROLL_Y,
       panLimitAtReset: {
         x: panLimitsAtReset.x,
         y: panLimitsAtReset.y,
@@ -616,8 +620,8 @@ export class GalleryManager {
     // v0.03: allow viewport centre to reach the artwork edge plus an explicit
     // overscroll margin so every corner is reachable during close inspection.
     return {
-      x: Math.max(0, (this.artworkMesh.artworkWidth - visibleWidth) * 0.5 + INSPECTION_OVERSCROLL),
-      y: Math.max(0, (this.artworkMesh.artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL),
+      x: Math.max(0, (this.artworkMesh.artworkWidth - visibleWidth) * 0.5 + INSPECTION_OVERSCROLL_X),
+      y: Math.max(0, (this.artworkMesh.artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL_Y),
     };
   }
 

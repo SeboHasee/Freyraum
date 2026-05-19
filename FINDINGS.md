@@ -1,5 +1,27 @@
 # FINDINGS
 
+## 2026-05-19 — v0.14.2 follow-up: tighter vertical pan limits
+
+### Scope of this pass
+
+Adjusted zoomed-in pan limits so top/bottom movement is more restrictive while preserving the already-approved left/right behavior.
+
+### Code-level findings fixed
+
+- **Issue:** vertical edge travel still felt too loose at close zoom.
+- **Root cause:** `getPanLimits()` used one shared additive overscroll constant for both axes.
+- **Fix:** split overscroll by axis in `src/gallery/GalleryManager.ts`:
+  - `INSPECTION_OVERSCROLL_X = 1.2` (unchanged horizontal)
+  - `INSPECTION_OVERSCROLL_Y = 0.6` (tighter vertical)
+- **Diagnostics:** `show-artwork-complete` now emits `panOverscrollX` and `panOverscrollY`.
+
+### Validation status
+
+- `npm run lint` ✅
+- `npm run build` ✅
+
+---
+
 ## 2026-05-19 — importer runtime compatibility fix (Node version guard)
 
 ### Scope of this pass

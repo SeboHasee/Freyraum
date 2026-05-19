@@ -20,28 +20,31 @@ The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs,
 
 Support checks after implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states. The QA matrix is documented in `plan.md`.
 
-## Current v0.14 status (close zoom, pan edges, large-vertical reset fit)
+## Current v0.14.2 status (close zoom, pan edges, large-vertical reset fit)
 
-Implemented on 2026-05-19 in `src/gallery/GalleryManager.ts`.
+Implemented on 2026-05-19 in `src/gallery/GalleryManager.ts` (including same-day v0.14.2 vertical pan follow-up).
 
 Shipped values:
 
 - `MIN_CAMERA_Z = 0.2` (was 0.5)
 - `MIN_VISIBLE_ARTWORK_FRACTION = 0.12` (was 0.28)
 - `INSPECTION_OVERSCROLL = 1.2` (was 3.0)
+- `INSPECTION_OVERSCROLL_X = 1.2` (left/right kept)
+- `INSPECTION_OVERSCROLL_Y = 0.6` (top/bottom tightened)
 - `PORTRAIT_ASPECT_THRESHOLD = 0.65` (new)
 - `PORTRAIT_RESET_EXTRA_Z = 1.5` (new)
 
 Behavior changes:
 
 - Close inspection can move substantially nearer on larger artworks.
-- Pan is less loose near reset-fit while still allowing corner inspection.
+- Pan is less loose near reset-fit while still allowing corner inspection; vertical pan is additionally tighter in v0.14.2.
 - Portrait artworks (aspect ratio below 0.65) receive an additive reset-distance boost, so they open farther away without globally changing non-portrait framing.
 
 Diagnostics additions in `show-artwork-complete`:
 
 - `closeZoomMinVisibleFraction`
-- `panOverscroll`
+- `panOverscrollX`
+- `panOverscrollY`
 - `panLimitAtReset`
 - `portraitResetApplied`
 - `portraitResetExtra`
