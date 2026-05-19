@@ -70,7 +70,9 @@ the ESM importer syntax).
 Behind the scenes, `Update Gallery` now launches
 `scripts/run-import-artworks.cjs`, which first checks Node.js major version and
 then runs `scripts/import-artworks.mjs`. This avoids raw syntax-crash stacks on
-older Node and writes a plain-language report instead.
+older Node and writes a plain-language report instead. The launcher avoids
+modern `node:` built-in module specifiers so even very old Node installations can
+reach that friendly version-check message.
 
 `scripts/import-artworks.mjs` reads each picture's pixel
 dimensions, copies it to `customer-preview/images/`, and writes both

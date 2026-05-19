@@ -10,6 +10,8 @@ Fixed a customer-facing updater failure where old Node.js versions crashed on ES
 
 - **Root cause:** `Update Gallery` launchers called `node scripts/import-artworks.mjs` directly. On old Node versions, parsing failed at `import { ... }` with `SyntaxError: Unexpected token {`.
 - **Fix:** Added `scripts/run-import-artworks.cjs` as a CommonJS compatibility launcher. It can run on old Node, checks `process.versions.node`, requires major version 18+, and only then executes `import-artworks.mjs`.
+- **Follow-up root cause:** the first launcher version used `require('node:child_process')`, which is unsupported in older Node versions. Those versions failed before the compatibility report could be written.
+- **Follow-up fix:** changed the launcher to use legacy built-in module names (`child_process`, `fs`, `path`) and avoided newer helper APIs where unnecessary, so old Node runtimes reach the intended Node 18+ report path.
 - **User-facing reliability improvement:** for unsupported Node versions, the launcher now writes `customer-artworks/last-import-report.txt` with a plain-language compatibility message, so the standard support/report path still works.
 - **Launcher wiring:** `Update Gallery.command` and `Update Gallery.bat` now call `scripts/run-import-artworks.cjs`.
 

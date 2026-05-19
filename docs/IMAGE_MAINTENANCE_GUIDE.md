@@ -90,6 +90,10 @@ That updater runs:
 - `/home/runner/work/Freyraum/Freyraum/scripts/run-import-artworks.cjs` (launcher)
 - which then runs `/home/runner/work/Freyraum/Freyraum/scripts/import-artworks.mjs`
 
+The launcher is deliberately written with legacy CommonJS built-in module names
+(`child_process`, `fs`, `path`), not newer `node:` specifiers, so old Node
+versions can still reach the Node 18+ compatibility report.
+
 The importer scans the inbox, reads each file's dimensions, copies preview-ready
 files into the preview folder, generates metadata, and writes the runtime file
 the gallery actually reads.

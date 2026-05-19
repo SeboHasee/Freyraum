@@ -21,6 +21,9 @@ This occurred because the launcher directly ran the ESM importer (`.mjs`) on an 
 
 - Added `scripts/run-import-artworks.cjs` (CommonJS launcher).
 - The launcher checks `process.versions.node` and requires Node.js major `>= 18`.
+- The launcher intentionally uses old-style built-in imports (`child_process`,
+  `fs`, `path`) rather than `node:` specifiers, because the whole point is to
+  run far enough on old Node versions to show the friendly compatibility report.
 - If Node is too old:
   - writes a plain-language error into `customer-artworks/last-import-report.txt`,
   - prints a clear compatibility message,

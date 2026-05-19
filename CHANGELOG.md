@@ -7,6 +7,7 @@
 - Added `scripts/run-import-artworks.cjs` as a CommonJS launcher for the customer importer flow.
 - `Update Gallery.command` and `Update Gallery.bat` now call the launcher instead of invoking `import-artworks.mjs` directly.
 - The launcher checks Node.js major version before loading ESM importer code and requires Node.js 18+.
+- Follow-up hardening: the launcher now uses legacy built-in module names (`child_process`, `fs`, `path`) instead of `node:` specifiers, so very old Node versions can reach the friendly version check/report instead of failing with `Cannot find module 'node:child_process'`.
 - On unsupported Node versions, it writes a plain-language compatibility error to `customer-artworks/last-import-report.txt` and exits with a clear message instead of showing a raw `Unexpected token {` stack trace.
 - Updated customer and maintainer documentation (`README.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`) with Node 18+ requirement and troubleshooting.
 

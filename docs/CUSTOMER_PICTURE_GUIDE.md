@@ -90,9 +90,12 @@ It runs a small script that:
 
 Your original picture files are never changed or deleted.
 
-## If you see "Unexpected token {" during Update Gallery
+## If you see a Node.js error during Update Gallery
 
-That error means your installed Node.js is too old.
+Errors like these mean your installed Node.js is too old:
+
+- `Unexpected token {`
+- `Cannot find module 'node:child_process'`
 
 Fix:
 
