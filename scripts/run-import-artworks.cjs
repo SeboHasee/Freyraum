@@ -48,7 +48,7 @@ function writeCompatibilityReport(message) {
   }
 }
 
-if (!isFinite(major) || major < requiredMajor) {
+if (isNaN(major) || major < requiredMajor) {
   const found = process.version || `v${process.versions.node}`;
   const message = `Node.js ${requiredMajor}+ is required for Update Gallery, but found ${found}.`;
   process.stderr.write(`${message}\n`);

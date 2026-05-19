@@ -33,7 +33,7 @@ This occurred because the launcher directly ran the ESM importer (`.mjs`) on an 
 - Updated:
   - `Update Gallery.bat`
   - `Update Gallery.command`
-  to run `scripts/run-import-artworks.cjs` instead of calling `.mjs` directly.
+  to run the wrapper (`scripts/run-import-artworks.cjs`) instead of calling the ESM importer directly.
 
 ### Outcome
 
