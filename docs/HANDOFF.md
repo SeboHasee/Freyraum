@@ -1,26 +1,28 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current runtime status: v0.13 nav/zoom/pan/icon follow-up is
-implemented; v0.14 tuning is planned.** See the new v0.14 planning section
-immediately below, then v0.13 for the last shipped pass, then v0.12 for the
-zoom/framing/timeline pass.
+contributors. **Current runtime status: v0.14 zoom/pan/reset-fit follow-up is
+implemented.**
 
-## v0.14 zoom/pan/reset-fit tuning — Technical plan ready (2026-05-19)
+## v0.14 zoom/pan/reset-fit tuning — Implemented (2026-05-19)
 
-Remaining customer-reported tuning requests after v0.13:
+v0.14 shipped three viewing adjustments requested after v0.13:
 
-1. zoom-in should go even closer;
-2. the current edge freedom is now a bit too loose and should be tightened;
-3. large vertical artworks should still open a little farther away in reset view.
+1. deeper close zoom;
+2. tighter edge freedom;
+3. farther reset/default view for strongly vertical artworks.
 
-**Technical audit result (see `plan.md` for full details with code and worked examples):**
+**Implemented code changes:**
 
-- On a medium–large artwork the effective close-zoom floor is `~1.06` (dominated by `MIN_VISIBLE_ARTWORK_FRACTION = 0.28`), not `0.5`. Both constants must be lowered together: proposed `MIN_CAMERA_Z = 0.2`, `MIN_VISIBLE_ARTWORK_FRACTION = 0.12` → new floor ~0.45.
-- Edge looseness: at reset zoom `INSPECTION_OVERSCROLL = 3.0` is the full pan allowance (the artwork-hidden-portion term is ~0). Proposed: `INSPECTION_OVERSCROLL = 1.2`.
-- Portrait reset: `DEFAULT_CAMERA_Z = 7` wins over `heightDistance ≈ 5.34`, so a margin-factor fix has no effect. Proposed: add `PORTRAIT_RESET_EXTRA_Z = 1.5` (new constant) after the `Math.max()` when `artworkAspect < PORTRAIT_ASPECT_THRESHOLD = 0.65` → portrait opens at 8.5.
+- `MIN_CAMERA_Z` `0.5 → 0.2`
+- `MIN_VISIBLE_ARTWORK_FRACTION` `0.28 → 0.12`
+- `INSPECTION_OVERSCROLL` `3.0 → 1.2`
+- new `PORTRAIT_ASPECT_THRESHOLD = 0.65`
+- new `PORTRAIT_RESET_EXTRA_Z = 1.5`
+- `getResetFitZoom()` now applies portrait-only additive headroom after base fit
+- `show-artwork-complete` diagnostics now includes v0.14 tuning fields
 
-No runtime code was changed in this documentation pass.
+**Validation:** `npm run lint` and `npm run build` pass. `customer-preview/` rebuilt.
 
 ## v0.13 nav/zoom/pan/icon fixes — Implemented (2026-05-18)
 

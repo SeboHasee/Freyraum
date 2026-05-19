@@ -20,15 +20,33 @@ The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs,
 
 Support checks after implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states. The QA matrix is documented in `plan.md`.
 
-## Planned v0.14 tuning status (close zoom, pan edges, large-vertical reset fit)
+## Current v0.14 status (close zoom, pan edges, large-vertical reset fit)
 
-Technical coding plan written 2026-05-19. No runtime code changed in this pass.
+Implemented on 2026-05-19 in `src/gallery/GalleryManager.ts`.
 
-Full plan with brainstormed options is in `plan.md`. Key findings from the source audit:
+Shipped values:
 
-- Close-zoom floor on a medium portrait is ~1.06, not 0.5 — `MIN_VISIBLE_ARTWORK_FRACTION = 0.28` dominates `MIN_CAMERA_Z = 0.5`. Proposed: lower both to `MIN_CAMERA_Z = 0.2` and `MIN_VISIBLE_ARTWORK_FRACTION = 0.12` → new floor ~0.45.
-- At reset zoom `INSPECTION_OVERSCROLL = 3.0` is the full allowance because artwork fills the viewport; `artworkWidth − visibleWidth ≈ 0`. Proposed: `INSPECTION_OVERSCROLL = 1.2`.
-- `DEFAULT_CAMERA_Z = 7` wins over `heightDistance ≈ 5.34` for a 3-unit portrait, so margin-factor fixes have no effect. Proposed: add `PORTRAIT_RESET_EXTRA_Z = 1.5` (new) after `Math.max()` when `artworkAspect < 0.65` (new `PORTRAIT_ASPECT_THRESHOLD`).
+- `MIN_CAMERA_Z = 0.2` (was 0.5)
+- `MIN_VISIBLE_ARTWORK_FRACTION = 0.12` (was 0.28)
+- `INSPECTION_OVERSCROLL = 1.2` (was 3.0)
+- `PORTRAIT_ASPECT_THRESHOLD = 0.65` (new)
+- `PORTRAIT_RESET_EXTRA_Z = 1.5` (new)
+
+Behavior changes:
+
+- Close inspection can move substantially nearer on larger artworks.
+- Pan is less loose near reset-fit while still allowing corner inspection.
+- Portrait artworks (aspect ratio below 0.65) receive an additive reset-distance boost, so they open farther away without globally changing non-portrait framing.
+
+Diagnostics additions in `show-artwork-complete`:
+
+- `closeZoomMinVisibleFraction`
+- `panOverscroll`
+- `panLimitAtReset`
+- `portraitResetApplied`
+- `portraitResetExtra`
+
+Validation: `npm run lint` and `npm run build` pass; preview rebuilt.
 
 ## Current v0.13 status (nav buttons, zoom range, pan range, icon centering)
 

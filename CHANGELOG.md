@@ -2,14 +2,14 @@
 
 ## Unreleased
 
-### Documentation (v0.14 technical coding plan upgrade — 2026-05-19)
+### Implemented (v0.14 zoom/pan/reset-fit follow-up — 2026-05-19)
 
-- Upgraded the v0.14 section in `plan.md` from a high-level note to a full technical coding plan.
-- Added exact current code for `getInspectionMinZoom()`, `getPanLimits()`, and `getResetFitZoom()` with worked numerical examples showing which constraint is the active floor.
-- Documented three brainstormed options (A/B/C) for each of the three issues, with pros/cons, and selected a recommended implementation per issue.
-- Published a complete constant-change table: `MIN_CAMERA_Z` 0.5→0.2, `MIN_VISIBLE_ARTWORK_FRACTION` 0.28→0.12, `INSPECTION_OVERSCROLL` 3.0→1.2, new `PORTRAIT_RESET_EXTRA_Z = 1.5`, new `PORTRAIT_ASPECT_THRESHOLD = 0.65`.
-- Added the exact `show-artwork-complete` diagnostics fields to add: `inspectionMinFraction`, `effectiveInspectionFloor`, `panOverscroll`, `panLimitAtReset`, `isPortraitReset`, `portraitResetExtra`.
-- Updated `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md` to reflect the upgraded plan.
+- **Deeper close zoom on medium/large artworks.** `MIN_CAMERA_Z` changed from `0.5` to `0.2` and `MIN_VISIBLE_ARTWORK_FRACTION` from `0.28` to `0.12`, lowering the practical close-inspection floor where fraction-driven limits previously dominated.
+- **Tighter edge pan behavior.** `INSPECTION_OVERSCROLL` reduced from `3.0` to `1.2`, reducing reset-proximate drift while preserving close-inspection edge reach.
+- **Portrait-aware reset-fit distance.** Added `PORTRAIT_ASPECT_THRESHOLD = 0.65` and `PORTRAIT_RESET_EXTRA_Z = 1.5`; `getResetFitZoom()` now adds portrait-only headroom after base fit computation.
+- **Expanded runtime diagnostics for v0.14 tuning.** `show-artwork-complete` now logs `closeZoomMinVisibleFraction`, `panOverscroll`, `panLimitAtReset`, `portraitResetApplied`, and `portraitResetExtra`.
+- Rebuilt `customer-preview/freyraum-gallery.js`.
+- Updated `plan.md`, `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` with implemented v0.14 details.
 
 ### Implemented (v0.13 nav/zoom/pan/icon fixes — 2026-05-18)
 

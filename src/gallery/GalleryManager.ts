@@ -40,11 +40,17 @@ const MIN_OVERVIEW_CAMERA_Z = 18.0;
 // v0.13: raised from 1.6 — extra headroom beyond the computed reset-fit zoom so
 // the far overview distance grows with tall artworks rather than staying flat.
 const OVERVIEW_HEADROOM_Z = 3.5;
-// v0.13: lowered from 1.2 — allows the camera to move very close for
-// fine-detail inspection without being stopped too early.
-const MIN_CAMERA_Z = 0.5;
-const MIN_VISIBLE_ARTWORK_FRACTION = 0.28;
+// v0.14: lowered from 0.5 and paired with a lower visible fraction guard so
+// close-inspection can move meaningfully nearer on medium and large artworks.
+const MIN_CAMERA_Z = 0.2;
+// v0.14: lowered from 0.28 to reduce the fraction-driven minimum zoom floor
+// that previously dominated on larger artworks.
+const MIN_VISIBLE_ARTWORK_FRACTION = 0.12;
 const RESET_VIEW_FRAME_MARGIN = 1.04;
+// v0.14: portrait-aware reset boost. Additive on top of the base reset-fit
+// distance so it still applies when DEFAULT_CAMERA_Z dominates.
+const PORTRAIT_ASPECT_THRESHOLD = 0.65;
+const PORTRAIT_RESET_EXTRA_Z = 1.5;
 const MIN_USABLE_VIEWPORT_FRACTION = 0.35;
 const RESET_REFIT_EPSILON = 0.25;
 /**
@@ -54,8 +60,10 @@ const RESET_REFIT_EPSILON = 0.25;
  * v0.13: raised from 0.5 to 3.0 — allows panning well past the artwork edge
  * when zoomed in close, so narrow or elongated artworks can be fully explored
  * side to side.
+ * v0.14: tightened to 1.2 to retain edge reach while reducing drift when near
+ * reset-fit where a flat additive overscroll can feel too loose.
  */
-const INSPECTION_OVERSCROLL = 3.0;
+const INSPECTION_OVERSCROLL = 1.2;
 
 /** Roles that can be filled in by the procedural factory when no authored map exists. */
 const PROCEDURAL_ROLES: PaintingMapRole[] = [
@@ -351,6 +359,8 @@ export class GalleryManager {
     }
     const viewportMetrics = this.getViewportMetrics();
     const zoomBounds = this.getZoomBounds(viewportMetrics);
+    const panLimitsAtReset = this.getPanLimits(zoomBounds.resetFitZoom);
+    const isPortraitReset = this.isPortraitResetArtwork();
     this.diagnostics.info('show-artwork-complete', 'Artwork is ready', {
       artworkId: artwork.id,
       activeMaps: this.artworkMesh.material.activeMaps(),
@@ -364,8 +374,16 @@ export class GalleryManager {
       paintingAspect: this.artworkMesh.artworkAspect,
       resetZoom: zoomBounds.resetFitZoom,
       minZoom: zoomBounds.minInspectionZoom,
+      closeZoomMinVisibleFraction: MIN_VISIBLE_ARTWORK_FRACTION,
       maxZoom: zoomBounds.maxOverviewZoom,
       overviewHeadroom: zoomBounds.maxOverviewZoom - zoomBounds.resetFitZoom,
+      panOverscroll: INSPECTION_OVERSCROLL,
+      panLimitAtReset: {
+        x: panLimitsAtReset.x,
+        y: panLimitsAtReset.y,
+      },
+      portraitResetApplied: isPortraitReset,
+      portraitResetExtra: isPortraitReset ? PORTRAIT_RESET_EXTRA_Z : 0,
       usableViewportWidth: viewportMetrics.usableW,
       usableViewportHeight: viewportMetrics.usableH,
       usableViewportFractionX: viewportMetrics.usableFracX,
@@ -633,7 +651,12 @@ export class GalleryManager {
     const widthDistance = (frameWidth * RESET_VIEW_FRAME_MARGIN) /
       (2 * fovTan * this.camera.aspect * metrics.usableFracX);
 
-    return Math.max(DEFAULT_CAMERA_Z, heightDistance, widthDistance);
+    const baseFitZoom = Math.max(DEFAULT_CAMERA_Z, heightDistance, widthDistance);
+    return this.isPortraitResetArtwork() ? baseFitZoom + PORTRAIT_RESET_EXTRA_Z : baseFitZoom;
+  }
+
+  private isPortraitResetArtwork(): boolean {
+    return this.artworkMesh.artworkAspect < PORTRAIT_ASPECT_THRESHOLD;
   }
 
   private getViewportMetrics(): ArtworkViewportMetrics {

@@ -2,33 +2,29 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current status — v0.13 implemented, v0.14 tuning planned
+## Current status — v0.14 implemented (2026-05-19)
 
-**Current build:** v0.13 is implemented.  
-**Next planned pass (v0.14):** deeper close zoom, slightly tighter edge limits, and a farther default/reset fit for large vertical artworks.
+**Current build:** v0.14 is implemented.
 
-The current build includes the v0.13 follow-up fix pass:
+v0.14 runtime changes (in `src/gallery/GalleryManager.ts`):
 
-- nav left/right buttons no longer overlap or are cut off by the timeline;
-- zoom-out now allows stepping back to a camera distance of 18+ world units (far overview);
-- zoom-in allows close detail inspection down to camera distance 0.5;
-- pan when zoomed in extends 3 world units past the artwork edge (more freedom to explore narrow artworks side to side);
-- gear settings icon and fullscreen icon are now precisely centred inside their circular buttons.
+- deeper close inspection: `MIN_CAMERA_Z` `0.5 → 0.2` and `MIN_VISIBLE_ARTWORK_FRACTION` `0.28 → 0.12`;
+- tighter pan edge freedom: `INSPECTION_OVERSCROLL` `3.0 → 1.2`;
+- portrait-aware reset-fit boost: new `PORTRAIT_ASPECT_THRESHOLD = 0.65` and `PORTRAIT_RESET_EXTRA_Z = 1.5`, applied additively in `getResetFitZoom()`;
+- richer diagnostics in `show-artwork-complete`: `closeZoomMinVisibleFraction`, `panOverscroll`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`.
 
-What changed technically:
+Outcome:
 
-- `.nav-controls` bottom position raised to `calc(192px + safe-bottom)`, clearing the timeline by 15px; `--chrome-bottom` raised to keep zoom controls and art-fit math in sync;
-- `MIN_CAMERA_Z` lowered to `0.5`, `MIN_OVERVIEW_CAMERA_Z` raised to `18.0`, `OVERVIEW_HEADROOM_Z` raised to `3.5`;
-- `INSPECTION_OVERSCROLL` raised from `0.5` to `3.0` world units;
-- `.prefs__trigger-icon` and `.fullscreen-btn__icon` CSS rules added to clear inline descender gap.
+- users can zoom closer for fine-detail inspection on medium/large artworks;
+- pan feels more controlled near reset view while still reaching edges at close zoom;
+- large vertical artworks open farther away in reset/default view without pushing landscape/square artworks away.
 
-The next planned tuning pass will:
+Validation for v0.14:
 
-- lower the effective close-zoom ceiling by tuning both `MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`;
-- tighten the current edge freedom by reducing or capping the overscroll added in `getPanLimits()`;
-- push large vertical artworks slightly farther away in reset view with a portrait-aware reset-fit boost instead of a global shift.
+- `npm run lint` ✅
+- `npm run build` ✅
 
-See [`plan.md`](./plan.md#v014--planned-deeper-close-zoom-tighter-edge-limits-and-more-generous-reset-fit-for-large-vertical-artworks-2026-05-19) for the new technical plan and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v014-planning-pass-deeper-close-zoom-tighter-pan-edges-farther-reset-fit-for-large-vertical-artworks) for the current source-audit findings.
+See [`plan.md`](./plan.md#v014--implemented-deeper-close-zoom-tighter-edge-limits-portrait-aware-reset-fit-2026-05-19) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v014-implementation-pass-deeper-close-zoom-tighter-pan-edges-portrait-reset-fit-boost) for full technical details.
 
 ## Previous pass — v0.12 zoom and framing
 

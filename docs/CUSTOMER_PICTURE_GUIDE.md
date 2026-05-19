@@ -9,31 +9,24 @@ You only ever touch one folder and one button.
 
 v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.
 
-## Current viewing status
+## Current viewing status (v0.14 implemented)
 
-The customer-facing **v0.13 follow-up fixes are implemented**:
+The customer-facing **v0.14 follow-up is implemented**.
 
-- the left and right navigation buttons no longer overlap or are cut off by the bottom timeline;
-- zoom-out goes much farther for wide overview shots;
-- zoom-in allows very close detail inspection;
-- panning when zoomed in extends further to the sides so narrow artworks can be fully explored;
-- the gear settings icon and fullscreen icon are precisely centred in their buttons.
+What improved in the current build:
 
-For support/debugging, the current build logs:
+- **Closer detail zoom:** close inspection now goes deeper, especially on medium and large artworks.
+- **Tighter panning:** edge movement is more controlled (less drifting away from the artwork when near reset view).
+- **Better vertical reset framing:** very tall artworks start farther away in default/reset view for a better first impression.
 
-- `show-artwork-complete` with reset/min/max zoom and usable viewport data,
-- `gallery/viewport-refit` when the browser viewport or chrome changes,
-- `layout/art-viewport` with measured art-safe viewport metrics.
+Technical changes behind this behavior:
 
-## Next planned viewing tuning (v0.14 — technical plan ready)
+- `MIN_CAMERA_Z`: `0.5 → 0.2`
+- `MIN_VISIBLE_ARTWORK_FRACTION`: `0.28 → 0.12`
+- `INSPECTION_OVERSCROLL`: `3.0 → 1.2`
+- New portrait reset constants: `PORTRAIT_ASPECT_THRESHOLD = 0.65`, `PORTRAIT_RESET_EXTRA_Z = 1.5`
 
-The next implementation pass has a complete technical plan ready in `plan.md`. The three changes that will ship:
-
-- **Closer zoom:** the close-zoom floor will drop from ~1.1 to ~0.45 camera units on a typical artwork. Two constants are being lowered together (`MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`) because the fraction-based guard is what actually limits close inspection on larger artworks.
-- **Tighter edge freedom:** pan freedom will be reduced from 3.0 to 1.2 world units past the artwork edge. At reset zoom the camera currently drifts the full 3.0 units because the artwork exactly fills the viewport; 1.2 is a more controlled allowance.
-- **Portrait reset farther away:** a new portrait-only constant adds 1.5 camera units to the reset distance when the artwork is taller than wide (aspect ratio below 0.65). Landscape and square artworks are unaffected.
-
-This is not yet implemented in the current build.
+For support/debugging, `show-artwork-complete` now logs extra v0.14 tuning data (`closeZoomMinVisibleFraction`, `panOverscroll`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
 
 ## What you need (one-time)
 
