@@ -3,16 +3,13 @@
 ## Unreleased
 
 
-### Documentation (v0.16 deep brainstorm — code-level performance audit with code samples — 2026-05-19)
+### Documentation (v0.16 final audited brainstorm — 2026-05-19)
 
-- Upgraded the v0.16 plan from a high-level audit into a code-sample-backed, file:line-anchored brainstorm with 12 numbered findings.
-- Each finding in `plan.md` now includes: exact file + line number, root cause, TypeScript or SCSS code sample, online validation source, and acceptance test.
-- Expanded online research sources table with direct MDN/three.js/web.dev URLs and specific guidance applied.
-- Added full GPU resource ownership map table covering every `dispose()` boundary in the codebase.
-- Added per-slice implementation order table with key change, files, and acceptance test.
-- Added device compatibility matrix (P0/P1 priorities) and full v0.16 QA matrix.
-- `FINDINGS.md` rewritten with complete code-level findings: file paths, line numbers, root causes, fix summaries, and validation sources for all 12 findings.
-- Updated `CHANGELOG.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md` to reflect the upgraded plan status.
+- Re-audited the full source tree against the already-upgraded v0.16 plan and confirmed the original 12 findings still stand.
+- Added 6 missed enhancements to the plan and findings: Page Lifecycle `freeze` / `resume`, `renderer.compileAsync()` shader pre-warm, optional `ImageBitmapLoader` raster path, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only Long Tasks API instrumentation, and CSS `contain` / internal `content-visibility`.
+- Expanded the online validation section and implementation-order tables to include the new enhancements and their boundaries.
+- Updated validation notes to record the current sandbox baseline failure (`eslint: not found`, `three` / related packages unavailable during `tsc`) so future implementers do not confuse environment issues with repo regressions.
+- Updated `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` to reflect the final v0.16 plan state.
 - No runtime code, generated preview bundle, dependencies, or quality preset behavior changed in this pass.
 
 ### Fixed (v0.15.1 reduced-motion fidelity hotfix — 2026-05-19)

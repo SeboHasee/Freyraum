@@ -4,7 +4,16 @@
 
 ### Status
 
-**Brainstorm / planning pass updated 2026-05-19.** The v0.16 section has been fully upgraded from a high-level audit into a concrete, code-sample-backed brainstorm. Every slice now contains the exact file+line where the problem lives, the root cause, a specific TypeScript or SCSS implementation proposal with inline code, an online validation source, and a precise acceptance test. No runtime code was changed in this pass.
+**Final planning update completed 2026-05-19.** The earlier v0.16 deep brainstorm was re-audited against the full current source tree and fresh online guidance. The original 12 file:line-backed findings remain valid. This final pass adds six researched enhancements that were missing from the previous version of the plan:
+
+1. **Page Lifecycle `freeze` / `resume`** as a stronger companion to `visibilitychange` for background suspension.
+2. **`renderer.compileAsync()` shader pre-warming** to avoid first-use compile hitches after boot or profile changes.
+3. **`ImageBitmapLoader` / `createImageBitmap`** as an optional raster path to reduce main-thread decode cost when not using KTX2.
+4. **`navigator.deviceMemory` / `navigator.hardwareConcurrency`** as progressive startup-quality hints beyond viewport area alone.
+5. **`PerformanceObserver` long-task instrumentation** for debug-only jank diagnostics.
+6. **CSS `contain` / internal `content-visibility`** for fixed glass chrome isolation without breaking blur visuals.
+
+No runtime code was changed in this pass.
 
 ### Design goal
 
@@ -27,6 +36,12 @@ FREYRAUM should keep the current high-end visual identity: real artwork albedo, 
 | KTX2 / Basis Universal in three.js — https://threejs.org/docs/#examples/en/loaders/KTX2Loader | `KTX2Loader` + `BasisTextureLoader` for GPU-compressed ASTC/ETC/BC delivery. Requires offline transcoding (toktx or basisu CLI). Reduces GPU bandwidth and memory by 4–6× vs. RGBA8. |
 | Glenn Fiedler — Fix Your Timestep — https://gafferongames.com/post/fix_your_timestep/ | Already applied in v0.15 via `smoothDamp`. The same principle applies to frame-budget EMA on resume: clamp `dt` to avoid poisoning the rolling window with a hidden-tab spike. |
 | MDN Pointer Events L3 — https://www.w3.org/TR/pointerevents3/ | Already applied in v0.11. For v0.16 the interaction hot path can eliminate unnecessary `Math.sqrt` by using squared distance for pinch deltas or a multiplicative zoom factor. |
+| web.dev Page Lifecycle — https://web.dev/page-lifecycle/ | Prefer `freeze` / `resume` in addition to `visibilitychange` for background suspension, battery savings, and cleaner resume semantics. |
+| three.js `WebGLRenderer.compileAsync()` — https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync | Pre-warm shader programs asynchronously during initialization or after expensive define changes to avoid first-interaction compile stutter. |
+| three.js `ImageBitmapLoader` — https://threejs.org/docs/#examples/en/loaders/ImageBitmapLoader | For non-compressed raster assets, use `ImageBitmapLoader` / `createImageBitmap` to shift decode work off the main thread where supported. |
+| MDN `Navigator.deviceMemory` / `Navigator.hardwareConcurrency` — https://developer.mozilla.org/en-US/docs/Web/API/Navigator/deviceMemory and https://developer.mozilla.org/en-US/docs/Web/API/Navigator/hardwareConcurrency | Use as progressive hints for startup quality and worker budgeting; never as hard requirements because support and precision vary. |
+| MDN `PerformanceLongTaskTiming` / web.dev optimize long tasks — https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming and https://web.dev/articles/optimize-long-tasks | Add debug-only long-task observation to correlate jank with resize/profile/import/texture-upload events. |
+| web.dev `content-visibility` | Use `content-visibility` only for internal/offscreen content, not the blur overlay root; use `contain: paint` or `contain: layout paint style` on fixed chrome to isolate layout/paint. |
 
 ---
 
@@ -594,6 +609,248 @@ rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
 
 ---
 
+#### Finding 13 — Page Lifecycle `freeze` / `resume` should complement `visibilitychange` (medium priority)
+
+**File:** `src/main.ts`
+
+The current plan adds `visibilitychange`, which is already a meaningful improvement over the status quo. Final research found that modern browsers also expose **Page Lifecycle** events (`freeze` and `resume`) which represent a stronger suspension boundary than mere visibility.
+
+**Why it matters here:** FREYRAUM already has a single main canvas, a persistent RAF loop, and explicit WebGL context-loss handling. That makes it a good fit for Page Lifecycle support:
+
+- `visibilitychange` catches most tab switches;
+- `freeze` catches the stronger “the page is being fully suspended now” transition;
+- `resume` gives a cleaner point to reset frame-budget and animation timestamps before normal RAF work resumes.
+
+**Proposal — keep `visibilitychange`, add Page Lifecycle when available:**
+```typescript
+let suspended = false;
+
+const suspendRuntime = (reason: 'hidden' | 'freeze'): void => {
+  suspended = true;
+  diagnostics.debug('render', 'suspend', 'Runtime suspended', { reason });
+};
+
+const resumeRuntime = (reason: 'visible' | 'resume'): void => {
+  suspended = false;
+  frameBudget.markNavigation();
+  galleryManager.resetTimestamp();
+  diagnostics.debug('render', 'resume', 'Runtime resumed', { reason });
+};
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') suspendRuntime('hidden');
+  else resumeRuntime('visible');
+});
+
+window.addEventListener('freeze', () => suspendRuntime('freeze'));
+window.addEventListener('resume', () => resumeRuntime('resume'));
+```
+
+**Validation source:** web.dev Page Lifecycle — use `freeze` / `resume` plus `visibilitychange` for full background lifecycle coverage.
+**Acceptance:** hidden/frozen pages do zero render work; resume path resets timing and frame-budget state before the first visible frame.
+
+---
+
+#### Finding 14 — Shader pre-warming with `renderer.compileAsync()` can remove first-use hitches (medium priority)
+
+**Files:** `src/main.ts`, `src/core/RendererManager.ts`, `src/materials/PaintingMaterial.ts`
+
+The current plan correctly defers define-changing work, but there is still a second source of hitching: the **first actual draw** of a new material/define combination can compile programs synchronously. three.js exposes `renderer.compileAsync()` specifically to pre-warm programs.
+
+**Why it fits this codebase:** FREYRAUM has a very small number of critical material variants:
+
+- one central `PaintingMaterial` with quality/profile-dependent defines,
+- a fixed `MeshPhysicalMaterial` frame path,
+- simple `MeshBasicMaterial` side panels,
+- bloom on/off through `EffectComposer`.
+
+That means async pre-warming has a high value-to-complexity ratio.
+
+**Proposal — compile after boot and after define-changing preference/profile changes:**
+```typescript
+// RendererManager.ts
+async prewarm(scene: THREE.Scene, camera: THREE.PerspectiveCamera): Promise<void> {
+  if (typeof this.renderer.compileAsync === 'function') {
+    await this.renderer.compileAsync(scene, camera);
+  } else {
+    this.renderer.compile(scene, camera);
+  }
+}
+
+// main.ts — after initial gallery boot and after deferred shader-define apply:
+void rendererManager.prewarm(sceneManager.scene, sceneManager.camera).catch((err) => {
+  diagnostics.debug('render', 'prewarm-failed', 'Shader prewarm failed; continuing normally', {
+    message: err instanceof Error ? err.message : String(err),
+  });
+});
+```
+
+**Validation source:** three.js `WebGLRenderer.compileAsync()` docs — explicitly intended to asynchronously precompile materials in a scene.
+**Acceptance:** first interaction after boot/profile change does not incur a shader-compile hitch on supported browsers; fallback to `compile()` remains safe.
+
+---
+
+#### Finding 15 — `ImageBitmapLoader` is a valid optional enhancement for non-KTX raster paths (medium priority)
+
+**Files:** `src/gallery/TextureManager.ts`, `scripts/import-artworks.mjs`
+
+The current texture plan already identifies KTX2/Basis as the future production path. Final research found a missing **intermediate enhancement** for the existing raster path: `TextureLoader` uses HTML image elements, while `ImageBitmapLoader` / `createImageBitmap` can shift decode work off the main thread on supporting browsers.
+
+**Why it matters here:** FREYRAUM currently loads:
+
+- customer albedo images (`customer-preview/images/*` or `webglImage` data URLs),
+- authored role maps when present,
+- procedural maps separately.
+
+KTX2 remains the end-state for scalable deployment, but `ImageBitmapLoader` can improve the interim PNG/JPEG/WebP path without changing the app’s visible behavior.
+
+**Proposal — keep existing `TextureLoader` as the compatibility baseline, add an optional `ImageBitmapLoader` path for browser-safe raster sources:**
+```typescript
+// TextureManager.ts — sketch only
+private readonly bitmapLoader = typeof createImageBitmap === 'function'
+  ? new THREE.ImageBitmapLoader()
+  : null;
+
+async loadForRole(url: string, role: PaintingMapRole): Promise<THREE.Texture> {
+  const useBitmapPath =
+    this.bitmapLoader &&
+    !url.startsWith('data:image/svg') &&
+    !/^file:\/\//i.test(url);
+
+  if (useBitmapPath) {
+    const bitmap = await this.bitmapLoader.loadAsync(url);
+    const texture = new THREE.Texture(bitmap);
+    this.prepareTexture(texture, role);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  // Existing TextureLoader path remains the fallback.
+  return this.loadViaTextureLoader(url, role);
+}
+```
+
+**Important boundary:** do **not** replace the local-file/data-URL compatibility path blindly. The customer preview’s `file://` and embedded-data-URL requirements remain higher priority than this optimization.
+
+**Validation source:** three.js `ImageBitmapLoader` docs — intended to leverage `createImageBitmap`; KTX2 still remains the preferred path for truly scalable production texture delivery.
+**Acceptance:** non-compressed raster decode can shift off the main thread where supported, while `file://` and embedded data-URL reliability remain unchanged.
+
+---
+
+#### Finding 16 — Startup quality can use `deviceMemory` / `hardwareConcurrency` as progressive hints (medium priority)
+
+**File:** `src/utils/performance.ts`
+
+The current `suggestStartupQuality()` heuristic uses viewport area, DPR, and pointer type. That is already a solid baseline. Final research found an additional progressive enhancement: use `navigator.deviceMemory` and `navigator.hardwareConcurrency` as *soft hints*.
+
+**Why it fits this codebase:** FREYRAUM already respects manual override and never auto-upgrades quality. That makes these signals safe to use **only** for first-run default selection.
+
+**Proposal — keep the existing viewport/DPR logic, but tighten the low-end default when both memory and CPU hints are weak:**
+```typescript
+export function suggestStartupQuality(): QualityPresetId {
+  const dpr = typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+    ? window.devicePixelRatio
+    : 1;
+  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+  const area = window.innerWidth * window.innerHeight;
+  const deviceMemory = typeof navigator.deviceMemory === 'number' ? navigator.deviceMemory : null;
+  const cores = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : null;
+  // Conservative first-run hints only. `navigator.deviceMemory` reports an
+  // approximate value in gigabytes, so the `_GB` suffix is intentional.
+  // These should stay documented constants because browser-exposed
+  // capability values are rounded and may evolve.
+  const LOW_END_DEVICE_MEMORY_GB = 4;
+  const LOW_END_CPU_CORES = 4;
+
+  const looksLowEnd =
+    (deviceMemory !== null && deviceMemory <= LOW_END_DEVICE_MEMORY_GB) ||
+    (cores !== null && cores <= LOW_END_CPU_CORES);
+
+  if (coarse && dpr >= 2 && looksLowEnd) return 'battery';
+  // Existing area-based rules continue below...
+}
+```
+
+**Boundary:** treat these APIs as hints only. They are rounded, privacy-limited, and not universally supported. Never override a stored user preference with them.
+
+**Why these thresholds:** `4 GB` and `4 cores` are intentionally conservative first-run defaults, not hard performance claims. They are chosen to catch the common low-end/shared-memory device class where FREYRAUM is most likely to benefit from starting in `battery` on coarse-pointer hardware. Keep them as named constants so future maintainers can retune them as the device baseline shifts.
+
+**Validation source:** browser guidance for `deviceMemory` / `hardwareConcurrency` — use as approximate capability hints, not exact hardware facts.
+**Acceptance:** first-run quality defaults become slightly more conservative on obviously low-end devices, with zero effect on stored preferences.
+
+---
+
+#### Finding 17 — Debug-only `PerformanceObserver` long-task diagnostics would strengthen the measurement-first plan (medium priority)
+
+**Files:** `src/main.ts`, `src/utils/Diagnostics.ts`
+
+The current plan adds renderer snapshots and frame-budget metrics. Final research found a complementary browser-native signal that the plan was missing: **Long Tasks API** via `PerformanceObserver`.
+
+**Why it matters here:** some jank sources are not visible from FPS alone:
+
+- shader compile,
+- synchronous texture upload,
+- large DOM reflow during orientation change,
+- heavy importer/bootstrap work,
+- preference-panel work and long synchronous handlers.
+
+`PerformanceObserver` on `longtask` entries gives a direct “something blocked the main thread for >50 ms” signal.
+
+**Proposal — debug-only observer, enabled only outside default diagnostics mode:**
+```typescript
+let longTaskObserver: PerformanceObserver | null = null;
+
+if (getDiagnostics().getMode() !== 'default' && 'PerformanceObserver' in window) {
+  longTaskObserver = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      diagnostics.warn('perf', 'long-task', 'Main-thread long task detected', {
+        durationMs: Math.round(entry.duration * 10) / 10,
+        startMs: Math.round(entry.startTime * 10) / 10,
+      });
+    }
+  });
+  longTaskObserver.observe({ type: 'longtask', buffered: true });
+}
+
+// cleanup
+longTaskObserver?.disconnect();
+```
+
+**Validation source:** MDN `PerformanceLongTaskTiming` / web.dev optimize long tasks — long tasks are main-thread blocks over 50 ms and are directly relevant to interaction jank.
+**Acceptance:** `?debug=info` and `?debug=verbose` can surface >50 ms stalls during resize, profile switches, or first texture uploads; default mode remains silent.
+
+---
+
+#### Finding 18 — `contain` / internal `content-visibility` can isolate fixed chrome without breaking glass blur (low-medium priority)
+
+**Files:** `src/styles/main.scss`, `src/ui/*`
+
+The current plan already adds CSS blur fallbacks. Final research found a further CSS-side optimization: fixed glass chrome can often safely use `contain: paint` or `contain: layout paint style`, and large internal scrollable content can use `content-visibility: auto` **inside** the panel, not on the blur root.
+
+**Why the distinction matters:** `content-visibility` on the overlay root can delay or break the visual blur relationship to the background. But FREYRAUM’s large fixed chrome elements (`.prefs__panel`, `.info-panel`, timeline region) are good candidates for paint/layout containment or internal lazy visibility.
+
+**Proposal — isolate paint/layout on fixed chrome roots and use `content-visibility` only for internal heavy content:**
+```scss
+.info-panel,
+.prefs__panel,
+.timeline {
+  contain: layout paint style;
+}
+
+.prefs__panel-inner,
+.info-panel__description {
+  content-visibility: auto;
+  contain-intrinsic-size: 240px;
+}
+```
+
+**Boundary:** do not apply `content-visibility` to the blur root itself until visually verified on Safari, because delayed rendering can produce an incorrect or popping blur appearance.
+
+**Validation source:** web.dev `content-visibility` guidance — apply to offscreen/internal content, not blindly to top-level visual surfaces; use containment for paint/layout isolation where appropriate.
+**Acceptance:** no visual change on modern browsers, but lower layout/paint scope for fixed chrome; Safari visual QA required.
+
+---
+
 ### Non-goals
 
 - Do not remove high-quality painting shader features from the `Hoch` preset.
@@ -602,6 +859,9 @@ rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
 - Do not add heavy runtime dependencies for profiling or animation.
 - Do not switch to WebGPU as the primary renderer until there is a proven WebGL fallback and browser support matrix.
 - Do not apply the CSS battery fallback in a way that makes the app look worse on any modern phone.
+- Do not replace the current customer-safe raster path with `ImageBitmapLoader` unless `file://`, SVG, and embedded data-URL behavior are explicitly verified.
+- Do not use `deviceMemory` / `hardwareConcurrency` as hard gates or override stored user preference with them.
+- Do not apply `content-visibility` to blur-overlay roots before Safari visual QA confirms that blur fidelity is preserved.
 
 ---
 
@@ -619,7 +879,13 @@ rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
 | 8 | Anisotropy guard | Add no-op guard in `setAnisotropyDivisor()` | `TextureManager.ts` | Switching to same preset twice triggers zero `needsUpdate = true` |
 | 9 | CSS quality fallback | `@supports` fallback + `[data-quality]` blur reduction; wire attribute in `RendererManager` | `main.scss`, `RendererManager.ts` | Battery preset: blur 8–12px; `@supports not (backdrop-filter)`: opaque fallback |
 | 10 | Import-time texture warnings | Per-image and gallery-total GPU memory estimate + console warnings | `scripts/import-artworks.mjs` | Large image (>2000×2000) triggers a visible `console.warn`; small images are silent |
-| 11 | Disposal ownership comments | JSDoc annotations on all `dispose()` methods documenting ownership boundaries | All affected files | Code review only; no runtime change |
+| 11 | Page Lifecycle support | Add `freeze` / `resume` alongside `visibilitychange` | `main.ts`, `GalleryManager.ts` | Frozen/hidden pages do zero work; resume resets frame-budget + animation timestamps |
+| 12 | Shader pre-warm | Add `renderer.compileAsync()` / `compile()` fallback after boot and define-changing profile switches | `RendererManager.ts`, `main.ts` | First post-boot / post-profile interaction avoids compile hitch on supported browsers |
+| 13 | ImageBitmap raster path | Add optional `ImageBitmapLoader` path while preserving `TextureLoader` fallback | `TextureManager.ts` | Main-thread decode cost drops for supported raster paths; `file://` / SVG / data-URL compatibility preserved |
+| 14 | Progressive startup heuristics | Add `deviceMemory` / `hardwareConcurrency` as soft hints only for first-run preset choice | `performance.ts` | Low-end first-run defaults become slightly more conservative; stored preference still wins |
+| 15 | Long-task diagnostics | Add debug-only `PerformanceObserver` for `longtask` entries | `main.ts`, `Diagnostics.ts` | `?debug=info` surfaces >50 ms stalls with concise logs |
+| 16 | CSS containment | Add `contain` on fixed chrome roots and internal `content-visibility` where visually safe | `main.scss` | No blur regression; smaller layout/paint scope in DevTools |
+| 17 | Disposal ownership comments | JSDoc annotations on all `dispose()` methods documenting ownership boundaries | All affected files | Code review only; no runtime change |
 
 ---
 
@@ -632,8 +898,10 @@ rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
 | Battery phone (`Akkusparend`) | ≤33 ms (30 fps) at DPR 1.0; CSS blur ≤ 12px; no context-loss loop |
 | Resize/orientation change | One coalesced resize application per 120 ms debounce window; DOM reads deferred to following RAF |
 | Hidden tab | Zero `postProcessing.render()` calls; zero `frameBudget.sample()` calls |
+| Frozen tab / lifecycle resume | No stale dt or long-task carry-over after `resume`; first visible frame remains under budget |
 | Texture memory | Import warning when single artwork > 48 MB GPU (≈2000×2000×4×1.33); gallery total warning when > 256 MB |
 | Adaptive quality | No false downgrade triggered by tab-switch resume, orientation change, or preference-panel open animation |
+| Long tasks | No debug-observed long task > 50 ms during normal navigation after warm-up; profile switches may log once before pre-warm is implemented |
 
 ---
 
@@ -648,6 +916,7 @@ rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
 | iPad Safari split view | P1 | Multiple ResizeObserver firings; verify debounce works |
 | Android Chrome high-DPR phone | P0 | Pinch zoom, DPR cap, thermal throttle test |
 | Android Chrome mid-range GPU | P1 | CSS blur cost; adaptive quality downgrade behaviour |
+| Android Chrome low-memory / 4-core class device | P1 | Verify `deviceMemory` / `hardwareConcurrency` startup heuristic stays conservative but not over-aggressive |
 | Windows laptop integrated GPU (battery) | P1 | `Akkusparend` preset; no bloom, DPR 1.0 |
 | Local `file://` customer preview | P0 | No CORS; webglImage data-URL path; must never break |
 | No-WebGL / private browsing | P0 | Fallback screen must still render correctly |
@@ -659,14 +928,19 @@ rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
 - Desktop 60 Hz and 120 Hz: verify motion timing unchanged after resize-coordinator refactor.
 - Mobile orientation change: no visible jank; one resize application logged.
 - Tab switch away and back: no false adaptive quality downgrade; motion resumes smoothly.
+- Freeze / resume capable browsers: no stale dt, no one-frame hitch on resume.
 - Open preferences panel on low-end: no >32 ms frame; `shader-define-deferred` logged.
+- After first boot and after lighting/profile define changes: `compileAsync` pre-warm completes before the first visible interaction frame where supported.
 - Battery preset active: `[data-quality="battery"]` on `<html>`; CSS blur reduced.
 - `@supports not (backdrop-filter)` simulated (DevTools rendering tab): opaque fallback visible.
+- Non-KTX raster path on supporting browsers: optional `ImageBitmapLoader` path does not break local-file or SVG handling.
 - Large image import (>3000px): console warning visible.
 - `?debug=info`: renderer snapshot logged every ~5 s.
+- `?debug=info` / `?debug=verbose`: long-task observer logs >50 ms stalls during forced test cases only.
 - All v0.15 motion QA cases: unchanged (no regression in smoothDamp, seeds, InfoPanel timing).
 - Reduced motion on/off: unchanged from v0.15.1.
 - All quality presets: switching produces no jank frame; anisotropy guard fires for same-preset re-apply.
+- First-run startup quality on supported low-end devices: `deviceMemory` / `hardwareConcurrency` can lower the default, but stored preference still wins.
 
 ---
 
@@ -681,9 +955,13 @@ rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
 
 ### Validation for this documentation pass
 
-- Documentation-only; no runtime TypeScript, SCSS, generated preview bundle, or dependency files were changed.
-- `git diff --check` passed — no whitespace errors.
-- Automated code review and CodeQL security scan passed (documentation-only changes are trivial for CodeQL).
+- Successful validation performed:
+  - documentation-only diff review across all 8 markdown files;
+  - `git diff --check` passed — no whitespace errors;
+  - automated code review passed;
+  - CodeQL security scan passed / skipped as trivial because only markdown changed.
+- No runtime TypeScript, SCSS, generated preview bundle, or dependency files were changed.
+- Baseline repo validation in this sandbox did **not** complete because dependencies are not installed: `npm run lint` failed with `eslint: not found`, and `npm run build` failed during `tsc` because `three` / related packages were unavailable. These failures were pre-existing environment issues, not caused by this documentation pass.
 
 ---
 ## v0.15 — Implemented: elegant animation system (2026-05-19)

@@ -52,6 +52,8 @@ When adding future implementation plans for rendering, performance, shaders, Web
 
 ## Latest documentation pass
 
+- 2026-05-19 (final): v0.16 received its final audit update. The plan was re-validated against the full current source tree and expanded with six missed researched enhancements: Page Lifecycle `freeze` / `resume`, `renderer.compileAsync()` shader pre-warm, optional `ImageBitmapLoader` raster decode path, `deviceMemory` / `hardwareConcurrency` startup hints, debug-only Long Tasks API instrumentation, and CSS `contain` / internal `content-visibility`. Validation notes now also record sandbox baseline failures caused by missing dependencies. No runtime code changed.
+
 - 2026-05-19 (updated): v0.16 deep brainstorm upgraded from high-level audit to code-sample-backed, file:line-anchored plan. 12 numbered findings with TypeScript/SCSS code samples, online validation sources, and acceptance tests. GPU resource ownership map added. Device compatibility matrix and QA matrix added. `FINDINGS.md` fully rewritten with code-level anchors. All other markdown updated. No runtime code changed. (Supersedes the 2026-05-19 entry below.)
 
 - 2026-05-19: v0.15.1 reduced-motion fidelity hotfix documented. `Reduzierte Bewegung` no longer reduces picture texture/shader fidelity. `PaintingMaterial` no longer gates detail-normal or grazing/specular strength by reduced-motion state, and `GalleryManager.setReducedMotion()` now controls motion only. Updated `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md`. Validated with `npm run lint` and `npm run build`.

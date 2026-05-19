@@ -68,7 +68,7 @@ The `animate` function only checks `rendererManager.isRenderPaused()` (WebGL con
 
 One `Math.sqrt` call per `pointermove` with two active pointers. Individual cost: ~1–3 ns on modern CPUs — negligible in isolation. The more impactful fix is the design: replace the linear additive zoom delta with a log-space multiplicative approach using squared distance, which eliminates the sqrt entirely and gives a more natural pinch feel (zoom is perceptually logarithmic). Also: `dispose()` has no idempotency guard (`CanvasInteraction.dispose()` is called via `beforeunload` but no `disposed` flag prevents double-removal if `dispose()` is ever called twice).
 
-**Fix:** track `lastPinchDistSq`; compute `logDelta = 0.5 * Math.log(lastDistSq / distSq)`; add `private disposed = false` guard. See `plan.md § Finding 4` for TypeScript sample with tuning note.
+**Fix:** track `lastPinchDistSq`; compute `logDelta = 0.5 * Math.log(distSq / lastDistSq)`; add `private disposed = false` guard. See `plan.md § Finding 4` for the final TypeScript sample with tuning note.
 
 **Validated against:** MDN Pointer Events L3 — squared distance for hot-path comparison is a documented optimization. Log-space zoom is standard in 2D mapping libraries (Leaflet, Mapbox GL JS).
 
@@ -128,7 +128,7 @@ The `ResizeObserver` callback fires synchronously before paint. Any layout read 
 
 Every glass surface uses `backdrop-filter: blur(16–26px)` with no fallback. On Android mid-range GPUs live blur is a compositor-promoted layer and can cost 2–5 ms per repaint. There is no CSS quality signal from the active preset.
 
-**Fix:** add `@supports not (backdrop-filter: blur(1px))` rule with opaque `glass-bg-strong` fallback; add `[data-quality='battery']` rule with reduced blur radii (8 px / 12 px); wire `document.documentElement.dataset['quality'] = preset.id` in `RendererManager.applyPreset()`. See `plan.md § Finding 9` for SCSS + TypeScript sample.
+**Fix:** add `@supports not (backdrop-filter: blur(1px))` rule with opaque `glass-bg-strong` fallback; add `[data-quality='battery']` rule with reduced blur radii (8 px / 12 px); wire `document.documentElement.dataset.quality = preset.id` in `RendererManager.applyPreset()`. See `plan.md § Finding 9` for SCSS + TypeScript sample.
 
 **Validated against:** MDN `@supports` — https://developer.mozilla.org/en-US/docs/Web/CSS/@supports. web.dev CSS animations guide confirms `backdrop-filter` cost scales with area × radius.
 
@@ -162,6 +162,92 @@ No imports. Tree-shaken out of the bundle. Zero runtime impact. Safe to remove i
 
 ---
 
+### Finding 13 — Page Lifecycle `freeze` / `resume` is the missing companion to `visibilitychange`
+
+**Files/lines:** `main.ts` render loop and future suspend/resume wiring
+
+The current v0.16 plan already adds `visibilitychange`. Final research found a missing stronger lifecycle boundary: **Page Lifecycle** `freeze` and `resume`.
+
+Why it matters in FREYRAUM:
+
+- one persistent RAF loop;
+- frame-budget state that should not absorb hidden/frozen gaps;
+- existing WebGL context-loss handling that already models paused rendering as a first-class state.
+
+**Fix:** keep `visibilitychange`, but add `freeze` / `resume` listeners as a companion suspend/resume path. On resume, call `frameBudget.markNavigation()` and `galleryManager.resetTimestamp()`.
+
+**Validated against:** web.dev Page Lifecycle guidance.
+
+---
+
+### Finding 14 — `renderer.compileAsync()` should be part of the plan for shader pre-warm
+
+**Files/lines:** `RendererManager.ts`, `main.ts`, `PaintingMaterial.ts`
+
+The current plan correctly defers define-changing operations. Final research found a second missed enhancement: **three.js shader pre-warming** with `renderer.compileAsync()`.
+
+This is a good fit because FREYRAUM has a very small number of material variants, so pre-warming the scene after boot or after deferred define changes should be predictable and high value.
+
+**Fix:** add a `RendererManager.prewarm(scene, camera)` wrapper that prefers `compileAsync()` and falls back to `compile()`.
+
+**Validated against:** three.js `WebGLRenderer.compileAsync()` documentation.
+
+---
+
+### Finding 15 — `ImageBitmapLoader` is a valid intermediate texture-path enhancement
+
+**Files/lines:** `TextureManager.ts`, `scripts/import-artworks.mjs`
+
+KTX2/Basis remains the long-term production answer. Final research found a missing intermediate improvement for the current raster path: `ImageBitmapLoader` / `createImageBitmap` can shift image decode work off the main thread on supporting browsers.
+
+This should remain **optional** and must not replace the current compatibility-safe `TextureLoader` path for local `file://`, SVG, or embedded data-URL workflows without explicit validation.
+
+**Fix:** add an optional `ImageBitmapLoader` path only for safe raster formats and keep the existing loader as fallback.
+
+**Validated against:** three.js `ImageBitmapLoader` docs and current guidance around off-main-thread image decode.
+
+---
+
+### Finding 16 — Startup quality can use `deviceMemory` / `hardwareConcurrency` as progressive hints
+
+**File/lines:** `performance.ts:52–68`
+
+The current heuristic already uses viewport area, DPR, and pointer type. Final research found a missing progressive enhancement: use `navigator.deviceMemory` and `navigator.hardwareConcurrency` as **soft hints only** for the first-run preset.
+
+Because FREYRAUM already respects stored preference and never auto-upgrades, this is a safe addition if it is limited to initial default selection.
+
+**Fix:** add a `looksLowEnd` branch that can bias first-run coarse-pointer devices toward `battery` when memory/CPU hints are weak.
+
+**Validated against:** current browser guidance for capability hints; must never be treated as exact hardware facts.
+
+---
+
+### Finding 17 — Long-task observation is missing from the measurement-first plan
+
+**Files/lines:** `main.ts`, `Diagnostics.ts`
+
+Frame budget and renderer snapshots are useful, but they do not directly reveal >50 ms main-thread stalls from resize, compile, or texture upload. Final research found that **Long Tasks API** via `PerformanceObserver` is a strong missing debug-only instrument.
+
+**Fix:** when diagnostics mode is not `default`, register a `PerformanceObserver` for `longtask` entries and log compact warnings via the existing diagnostics system.
+
+**Validated against:** MDN `PerformanceLongTaskTiming` and web.dev long-task guidance.
+
+---
+
+### Finding 18 — CSS `contain` / internal `content-visibility` can reduce chrome paint scope
+
+**Files/lines:** `main.scss`, `ui/*`
+
+The current plan adds blur fallbacks, but the final research pass found one more safe CSS-side enhancement: use `contain` on fixed chrome roots and `content-visibility` only for large internal content, not the blur root itself.
+
+This matters because applying `content-visibility` to the overlay root can break or pop the backdrop blur relationship, especially on Safari. Internal containment is the safer version.
+
+**Fix:** add `contain: layout paint style` to large fixed chrome surfaces and reserve `content-visibility: auto` for internal heavy content only.
+
+**Validated against:** web.dev `content-visibility` guidance for internal/offscreen content, not top-level visual surfaces.
+
+---
+
 ### GPU resource ownership map (for documentation and future lifecycle work)
 
 | Resource type | Owner class | Disposal method | Notes |
@@ -191,13 +277,20 @@ No imports. Tree-shaken out of the bundle. Zero runtime impact. Safe to remove i
 7. **Anisotropy guard** (`TextureManager.ts`) — prevents spurious texture re-uploads.
 8. **CSS quality fallback + `[data-quality]` attribute** (`main.scss`, `RendererManager.ts`) — CSS glass cost reduction for battery/unsupported devices.
 9. **Import-time texture size warning** (`scripts/import-artworks.mjs`) — proactive memory budget enforcement.
-10. **Disposal ownership JSDoc** (all affected files) — documentation for future lifecycle work.
+10. **Page Lifecycle support** (`main.ts`, `GalleryManager.ts`) — add `freeze` / `resume` alongside `visibilitychange`.
+11. **Shader pre-warm** (`RendererManager.ts`, `main.ts`) — add `compileAsync()` / `compile()` fallback after boot and deferred define changes.
+12. **Optional ImageBitmap raster path** (`TextureManager.ts`) — decode off the main thread where safe, keep the existing compatibility fallback.
+13. **Progressive startup heuristics** (`performance.ts`) — use `deviceMemory` / `hardwareConcurrency` as soft first-run hints only.
+14. **Long-task diagnostics** (`main.ts`, `Diagnostics.ts`) — debug-only `PerformanceObserver` instrumentation.
+15. **CSS containment** (`main.scss`) — add `contain` on fixed chrome and internal `content-visibility` where visually safe.
+16. **Disposal ownership JSDoc** (all affected files) — documentation for future lifecycle work.
 
 ---
 
 ### Validation status
 
 - Documentation-only audit; no runtime files changed in this pass.
+- Baseline repo validation in this sandbox did not complete because dependencies are not installed: `npm run lint` failed with `eslint: not found`, and `npm run build` failed during `tsc` because `three` / related packages were unavailable.
 - Future implementation must run `npm run lint` and `npm run build`, then perform the QA matrix in `plan.md § QA matrix for the v0.16 implementation pass`.
 
 ---

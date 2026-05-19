@@ -3,13 +3,13 @@
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
 
-## Current planning pass — v0.16 deep brainstorm: code-level performance audit (2026-05-19)
+## Current planning pass — v0.16 final audited brainstorm (2026-05-19)
 
-The v0.16 performance plan has been upgraded from a high-level audit to a **code-sample-backed, file:line-anchored brainstorm**. 12 numbered findings each contain: exact file + line location, root cause, TypeScript or SCSS implementation code sample, an online validation source (MDN / three.js docs / web.dev), and a precise acceptance test. No runtime code was changed in this pass.
+The v0.16 performance plan has now received its **final documentation update**. It is a code-sample-backed, file:line-anchored brainstorm validated against the current FREYRAUM source tree and fresh online guidance. The original 12 findings remain valid, and the final pass added six missed enhancements: Page Lifecycle `freeze` / `resume`, shader pre-warm via `renderer.compileAsync()`, optional `ImageBitmapLoader` for raster decode, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only long-task observation, and CSS `contain` / internal `content-visibility`.
 
-Key findings: three independent `window.resize` listeners cause redundant camera/composer updates on mobile orientation changes; `measureArtworkViewport()` re-queries DOM on every resize call; the render loop has no Page Visibility pause (can cause false adaptive quality downgrades on tab restore); pinch zoom can use a log-space sqrt-free approach; shader `#define` changes land synchronously in preference-change frames; `renderer.info` GPU stats are never exposed in diagnostics; `TextureManager.setAnisotropyDivisor()` marks all textures dirty even when the value is unchanged; CSS glass panels have no `@supports` fallback or quality-tier blur reduction.
+Key findings still start with the core repo issues: redundant resize listeners, DOM re-query/layout work in the resize path, missing hidden/frozen tab pause, interaction hot-path cleanup, define-change shader hitches, missing renderer diagnostics, texture re-upload guards, importer texture-memory warnings, and fixed-glass CSS cost controls.
 
-See [`plan.md § v0.16`](./plan.md#v016--brainstorm-deep-performance-and-compatibility-optimization-2026-05-19-updated) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19-updated--v016-deep-code-audit-file-level-findings-and-implementation-research) for complete details, code samples, and the full device compatibility + QA matrix.
+See [`plan.md § v0.16`](./plan.md#v016--brainstorm-deep-performance-and-compatibility-optimization-2026-05-19-updated) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19-updated--v016-deep-code-audit-file-level-findings-and-implementation-research) for the final audited plan, additional researched enhancements, and the full device compatibility + QA matrix.
 
 ## Current status — v0.15 elegant animation system implemented (2026-05-19)
 
