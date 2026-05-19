@@ -314,6 +314,36 @@ inboxEntries.forEach((filename, i) => {
     );
   }
 
+  // v0.16 — GPU texture memory warnings. Three.js uploads textures as
+  // RGBA8 with mipmaps; the on-GPU footprint is therefore
+  //   bytes ≈ width × height × 4 × (4 / 3)
+  // because the mip pyramid adds roughly one third on top of the base
+  // level. Phones throttle hard at ≥256 MB of texture memory and
+  // browsers cap individual textures around 4096–8192 px. We flag both
+  // cases here so the customer can downscale before the gallery ever
+  // tries to upload the image.
+  //
+  // Online validation:
+  //   - https://registry.khronos.org/webgl/specs/latest/1.0/ (texture limits)
+  //   - https://web.dev/articles/webgl-texturing-performance
+  const MAX_RECOMMENDED_DIMENSION = 4096;
+  const HIGH_GPU_MB_THRESHOLD = 64;
+  const VERY_HIGH_GPU_MB_THRESHOLD = 128;
+  const gpuMb = (dims.width * dims.height * 4 * 4) / 3 / (1024 * 1024);
+  if (dims.width > MAX_RECOMMENDED_DIMENSION || dims.height > MAX_RECOMMENDED_DIMENSION) {
+    warnings.push(
+      `${filename} — image is ${dims.width}×${dims.height}px. Many phones and tablets cap textures at 4096×4096; please downscale the longest side to 4096px or less for reliable display.`
+    );
+  } else if (gpuMb >= VERY_HIGH_GPU_MB_THRESHOLD) {
+    warnings.push(
+      `${filename} — at ${dims.width}×${dims.height}px this image needs about ${Math.round(gpuMb)} MB of GPU memory. Phones may run out of memory and skip the texture. Consider downscaling for the best experience.`
+    );
+  } else if (gpuMb >= HIGH_GPU_MB_THRESHOLD) {
+    warnings.push(
+      `${filename} — large image (${dims.width}×${dims.height}px, about ${Math.round(gpuMb)} MB on GPU). Performance may be reduced on low-end phones.`
+    );
+  }
+
   artworks.push({
     id,
     title,

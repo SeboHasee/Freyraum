@@ -14,16 +14,24 @@ export class SceneManager {
       100
     );
     this.camera.position.z = 7;
-
-    window.addEventListener('resize', this.handleResize);
   }
 
-  private handleResize = (): void => {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+  /**
+   * v0.16 — single resize coordinator.
+   *
+   * Before v0.16 this class owned its own `window.resize` listener that
+   * ran immediately (no debounce). On a mobile orientation change the
+   * browser fires multiple rapid resize events, each causing a redundant
+   * camera matrix rebuild before the debounced coordinator in `main.ts`
+   * could even run. The coordinator now debounces resize, schedules a
+   * single rAF, and calls this method once with the measured viewport.
+   */
+  updateAspect(width: number, height: number): void {
+    this.camera.aspect = width / Math.max(1, height);
     this.camera.updateProjectionMatrix();
-  };
+  }
 
   dispose(): void {
-    window.removeEventListener('resize', this.handleResize);
+    /* v0.16: no listeners owned by SceneManager. */
   }
 }

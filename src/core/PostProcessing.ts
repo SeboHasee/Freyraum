@@ -27,8 +27,6 @@ export class PostProcessing {
     );
     this.bloomPass.enabled = preset.bloomStrength > 0;
     this.composer.addPass(this.bloomPass);
-
-    window.addEventListener('resize', this.handleResize);
   }
 
   applyPreset(preset: QualityPreset): void {
@@ -38,16 +36,20 @@ export class PostProcessing {
     this.bloomPass.enabled = preset.bloomStrength > 0;
   }
 
-  private handleResize = (): void => {
-    this.composer.setSize(window.innerWidth, window.innerHeight);
-  };
+  /**
+   * v0.16 — single resize coordinator. Composer framebuffer reallocations
+   * are expensive on mobile GPUs; they now happen at most once per
+   * debounce window, driven from the resize coordinator in `main.ts`.
+   */
+  resize(width: number, height: number): void {
+    this.composer.setSize(Math.max(1, width), Math.max(1, height));
+  }
 
   render(): void {
     this.composer.render();
   }
 
   dispose(): void {
-    window.removeEventListener('resize', this.handleResize);
     this.composer.dispose();
   }
 }

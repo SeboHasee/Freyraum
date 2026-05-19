@@ -52,14 +52,36 @@ export class TextureManager {
     });
   }
 
-  /** Updates the anisotropy cap and reapplies it to already-cached textures. */
+  /**
+   * Updates the anisotropy cap and reapplies it to already-cached textures.
+   *
+   * v0.16 — no-op guard. If the requested divisor matches the currently
+   * active value we skip the cache walk entirely. Previously every
+   * quality-preset re-apply (e.g. opening the preferences panel and
+   * re-selecting the same preset) marked every cached texture as
+   * `needsUpdate = true`, forcing a GPU re-upload on the next draw.
+   */
   setAnisotropyDivisor(divisor: number): void {
-    this.anisotropyDivisor = Math.max(1, divisor);
+    const next = Math.max(1, divisor);
+    if (next === this.anisotropyDivisor) {
+      this.diagnostics.debug(
+        'anisotropy-noop',
+        'Anisotropy divisor unchanged; skipping cache walk',
+        { divisor: next, cacheSize: this.cache.size }
+      );
+      return;
+    }
+    this.anisotropyDivisor = next;
     const anisotropy = this.getEffectiveAnisotropy();
     this.cache.forEach((texture) => {
       texture.anisotropy = anisotropy;
       texture.needsUpdate = true;
     });
+    this.diagnostics.debug(
+      'anisotropy-applied',
+      'Anisotropy divisor changed; cache marked for re-upload',
+      { divisor: next, anisotropy, cacheSize: this.cache.size }
+    );
   }
 
   /**

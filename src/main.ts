@@ -254,6 +254,24 @@ async function main(): Promise<void> {
   const artworkMesh = new ArtworkMesh(sceneManager.scene, initialPreset);
   const sidePanels = new SidePanels(sceneManager.scene);
 
+  // v0.16 — cache DOM chrome refs once. Previously `measureArtworkViewport`
+  // called `app.querySelector` three times per measurement; on mobile
+  // orientation changes the resize listener fires repeatedly and each
+  // call walked the DOM tree. The chrome elements are created during
+  // boot (`Topbar`, `Timeline`, `NavigationControls`, `InfoPanel`) and
+  // never re-parented, so caching is safe.
+  const chromeRefs: {
+    topbar: HTMLElement | null;
+    timeline: HTMLElement | null;
+    navControls: HTMLElement | null;
+    infoPanel: HTMLElement | null;
+  } = {
+    topbar: null,
+    timeline: null,
+    navControls: null,
+    infoPanel: null,
+  };
+
   const measureArtworkViewport = (): ArtworkViewportMetrics => {
     const visualViewport = window.visualViewport;
     const viewportW = Math.max(1, Math.round(visualViewport?.width ?? window.innerWidth));
@@ -264,9 +282,9 @@ async function main(): Promise<void> {
     const chromeTop = parseCssNumeric(rootStyle.getPropertyValue('--chrome-top'));
     const chromeBottom = parseCssNumeric(rootStyle.getPropertyValue('--chrome-bottom'));
 
-    const topbarRect = app.querySelector<HTMLElement>('.topbar')?.getBoundingClientRect();
-    const timelineRect = app.querySelector<HTMLElement>('.timeline')?.getBoundingClientRect();
-    const navRect = app.querySelector<HTMLElement>('.nav-controls')?.getBoundingClientRect();
+    const topbarRect = chromeRefs.topbar?.getBoundingClientRect();
+    const timelineRect = chromeRefs.timeline?.getBoundingClientRect();
+    const navRect = chromeRefs.navControls?.getBoundingClientRect();
 
     // Clamp to the visible viewport so a stale/transitioning fixed header rect
     // cannot make the usable-artwork area negative during mobile chrome changes.
@@ -333,6 +351,14 @@ async function main(): Promise<void> {
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
 
+  // v0.16 — populate cached chrome refs now that all chrome elements are in
+  // the DOM. `measureArtworkViewport` reads from this object instead of
+  // doing `app.querySelector` per call.
+  chromeRefs.topbar = app.querySelector<HTMLElement>('.topbar');
+  chromeRefs.timeline = app.querySelector<HTMLElement>('.timeline');
+  chromeRefs.navControls = app.querySelector<HTMLElement>('.nav-controls');
+  chromeRefs.infoPanel = app.querySelector<HTMLElement>('.info-panel');
+
   await galleryManager.init();
   diagnostics.info('boot', 'gallery-ready', 'Gallery initialized', {
     artworkCount: artworks.length,
@@ -358,28 +384,66 @@ async function main(): Promise<void> {
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
   const keyboardNav = new KeyboardNav(galleryManager);
 
-  // v0.11 — debounced resize coordinator (fixes Bug 1: renderer.setSize
-  // was never called on resize). SceneManager keeps its own resize
-  // listener for camera.aspect — both run on every resize event and
-  // both are removed in the cleanup block.
+  // v0.16 — unified, RAF-deferred resize coordinator. Replaces the
+  // v0.11 design where SceneManager and PostProcessing each owned their
+  // own `window.resize` listener that ran synchronously (no debounce or
+  // RAF). On mobile orientation changes the browser fires many rapid
+  // resize events, so the v0.11 design re-allocated framebuffers and
+  // rebuilt camera matrices several times per orientation flip. The
+  // coordinator below:
+  //
+  //   1. Debounces all viewport-change sources (120 ms — empirically
+  //      enough to bridge the back-to-back resize/visualViewport storm).
+  //   2. Schedules the actual work in a single `requestAnimationFrame`
+  //      so DOM reads in `measureArtworkViewport` and `getBoundingClientRect`
+  //      observe stable post-layout values, and writes happen in the
+  //      same frame, avoiding forced layout thrash.
+  //   3. Forwards a measured `(width, height)` to every layer
+  //      (`RendererManager.resize`, `PostProcessing.resize`,
+  //      `SceneManager.updateAspect`) so all three agree on the same
+  //      viewport rectangle for the frame.
+  //
+  // Online validation:
+  //   - https://developer.mozilla.org/docs/Web/API/Window/resize_event
+  //   - https://developer.mozilla.org/docs/Web/API/ResizeObserver
+  //   - https://developer.mozilla.org/docs/Web/API/Window/requestAnimationFrame
   let resizeDebounce: ReturnType<typeof setTimeout> | undefined;
+  let resizeRafId = 0;
+  const runResize = (): void => {
+    resizeRafId = 0;
+    const visualViewport = window.visualViewport;
+    const measuredW = Math.max(
+      1,
+      Math.round(visualViewport?.width ?? window.innerWidth)
+    );
+    const measuredH = Math.max(
+      1,
+      Math.round(visualViewport?.height ?? window.innerHeight)
+    );
+    rendererManager.resize(measuredW, measuredH);
+    postProcessing.resize(measuredW, measuredH);
+    sceneManager.updateAspect(measuredW, measuredH);
+    const newCaps = detectDeviceCapabilities();
+    applyDeviceCaps(newCaps);
+    applyCompactInfo(newCaps.layoutTier);
+    hintText.updateHint();
+    const artworkViewport = measureArtworkViewport();
+    galleryManager.handleViewportMetricsChanged();
+    diagnostics.info('layout', 'resize', 'Viewport resized', {
+      tier: newCaps.layoutTier,
+      w: newCaps.viewportW,
+      h: newCaps.viewportH,
+      measuredW,
+      measuredH,
+      orientation: newCaps.orientation,
+    });
+    diagnostics.info('layout', 'art-viewport', 'Artwork-safe viewport measured', artworkViewport);
+  };
   const onResize = (): void => {
     clearTimeout(resizeDebounce);
     resizeDebounce = setTimeout(() => {
-      rendererManager.resize();
-      const newCaps = detectDeviceCapabilities();
-      applyDeviceCaps(newCaps);
-      applyCompactInfo(newCaps.layoutTier);
-      hintText.updateHint();
-      const artworkViewport = measureArtworkViewport();
-      galleryManager.handleViewportMetricsChanged();
-      diagnostics.info('layout', 'resize', 'Viewport resized', {
-        tier: newCaps.layoutTier,
-        w: newCaps.viewportW,
-        h: newCaps.viewportH,
-        orientation: newCaps.orientation,
-      });
-      diagnostics.info('layout', 'art-viewport', 'Artwork-safe viewport measured', artworkViewport);
+      if (resizeRafId !== 0) return;
+      resizeRafId = requestAnimationFrame(runResize);
     }, 120);
   };
   window.addEventListener('resize', onResize);
@@ -390,8 +454,7 @@ async function main(): Promise<void> {
   const chromeObserver = typeof ResizeObserver === 'function'
     ? new ResizeObserver(onResize)
     : null;
-  for (const selector of ['.topbar', '.timeline', '.nav-controls', '.info-panel']) {
-    const el = app.querySelector(selector);
+  for (const el of [chromeRefs.topbar, chromeRefs.timeline, chromeRefs.navControls, chromeRefs.infoPanel]) {
     if (el) chromeObserver?.observe(el);
   }
 
@@ -444,6 +507,107 @@ async function main(): Promise<void> {
   };
   applyPreferences(false);
 
+  // v0.16 — Page Visibility + Page Lifecycle integration.
+  //
+  // The render loop keeps requesting frames so RAF reschedules naturally,
+  // but `postProcessing.render()` and the per-frame light/material update
+  // are gated behind `pageInactive`. When the tab/window is hidden or
+  // frozen we skip the entire render pipeline and emit a single log entry.
+  // On resume we (a) clear the frame budget cooldown so the next sample
+  // is not classified as "below budget", (b) reset its `lastNow`
+  // baseline (handled implicitly by the 250 ms clamp inside
+  // `FrameBudgetMonitor.sample`), and (c) call `markNavigation()` so the
+  // brief catch-up spike does not trigger an adaptive quality downgrade.
+  //
+  // Online validation:
+  //   - https://developer.mozilla.org/docs/Web/API/Page_Visibility_API
+  //   - https://developer.chrome.com/articles/page-lifecycle-api
+  //   - https://wicg.github.io/page-lifecycle/
+  let pageInactive = false;
+  const suspendRuntime = (reason: string): void => {
+    if (pageInactive) return;
+    pageInactive = true;
+    diagnostics.info('lifecycle', 'suspend', `Runtime suspended (${reason})`, {
+      reason,
+      visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+    });
+  };
+  const resumeRuntime = (reason: string): void => {
+    if (!pageInactive) return;
+    pageInactive = false;
+    // Mark a cooldown so the immediate post-resume frame spike doesn't
+    // cause an adaptive quality downgrade.
+    frameBudget.markNavigation();
+    diagnostics.info('lifecycle', 'resume', `Runtime resumed (${reason})`, {
+      reason,
+      visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+    });
+  };
+  const onVisibilityChange = (): void => {
+    if (document.visibilityState === 'hidden') suspendRuntime('visibilitychange-hidden');
+    else if (document.visibilityState === 'visible') resumeRuntime('visibilitychange-visible');
+  };
+  // Page Lifecycle: 'freeze' fires before the browser may purge memory of a
+  // hidden tab; 'resume' fires when that tab becomes visible again. The
+  // events are non-standard on older browsers; the listeners are no-ops
+  // when the events never fire. We treat them as a stronger version of
+  // visibilitychange — if a freeze actually happens the GPU context may
+  // also be lost, and `RendererManager.isRenderPaused()` will keep the
+  // pipeline paused until it is restored.
+  const onPageFreeze = (): void => suspendRuntime('page-lifecycle-freeze');
+  const onPageResume = (): void => resumeRuntime('page-lifecycle-resume');
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('freeze', onPageFreeze as EventListener);
+  window.addEventListener('resume', onPageResume as EventListener);
+
+  // v0.16 — non-blocking shader pre-warm. After the gallery is initialised,
+  // ask three.js to compile every program the scene currently needs so
+  // the first interaction does not pay a JIT shader-compile cost. Failures
+  // are logged but never block the boot path.
+  void rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+
+  // v0.16 — debug-only Long Tasks observer. Reports any task that blocks
+  // the main thread for more than 50 ms (the Long Tasks API definition).
+  // Disabled outside diagnostics mode because the observer itself imposes
+  // a small cost and would spam normal users' consoles.
+  //
+  // Online validation:
+  //   - https://developer.mozilla.org/docs/Web/API/PerformanceLongTaskTiming
+  //   - https://w3c.github.io/longtasks/
+  let longTaskObserver: PerformanceObserver | null = null;
+  if (diagnostics.getMode() !== 'default' && typeof PerformanceObserver === 'function') {
+    try {
+      longTaskObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          diagnostics.warn('perf', 'long-task', 'Long task blocked the main thread', {
+            duration: Math.round(entry.duration),
+            startTime: Math.round(entry.startTime),
+            name: entry.name,
+          });
+        }
+      });
+      longTaskObserver.observe({ type: 'longtask', buffered: true });
+      diagnostics.info('perf', 'longtask-observer-active', 'Long Tasks API observer attached');
+    } catch (err) {
+      diagnostics.info('perf', 'longtask-unsupported', 'Long Tasks API not available', {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // v0.16 — periodic renderer-info snapshot for info/verbose diagnostics.
+  // Posts a `[renderer] snapshot` entry every 5 s containing draw calls,
+  // triangle count, geometry/texture/program counts, pixel ratio, and the
+  // active preset. Customer bug reports that include the diagnostics dump
+  // now contain a running GPU resource history.
+  let rendererSnapshotTimer: ReturnType<typeof setInterval> | undefined;
+  if (diagnostics.getMode() !== 'default') {
+    rendererSnapshotTimer = setInterval(() => {
+      if (pageInactive) return;
+      diagnostics.info('renderer', 'snapshot', 'Renderer info snapshot', rendererManager.getRendererSnapshot());
+    }, 5000);
+  }
+
   // v0.03: hidden albedo-only debug toggle via `?debug=1`. When enabled,
   // pressing 'a' on the keyboard strips all shading so reviewers can verify
   // the shader preserves the picture's fidelity. Not exposed in normal UI to
@@ -473,11 +637,50 @@ async function main(): Promise<void> {
     });
   }
   let previousQuality = preferences.current.quality;
+  // v0.16 — defer expensive shader-define / preset recomputation to an
+  // idle slot so a click on a preferences radio button does not stall the
+  // next paint. The very first apply (above) remains synchronous because
+  // the scene has not yet been shown. Subsequent applies coalesce: if
+  // multiple preference changes fire in quick succession, only the last
+  // applyPreferences call runs. Adaptive-quality downgrades use the same
+  // path so a downgrade never lands mid-frame.
+  //
+  // Online validation:
+  //   - https://developer.mozilla.org/docs/Web/API/Window/requestIdleCallback
+  //   - https://wicg.github.io/requestidlecallback/
+  type IdleCancelHandle = number;
+  type IdleScheduler = (cb: () => void) => IdleCancelHandle;
+  type IdleCanceller = (h: IdleCancelHandle) => void;
+  const scheduleIdle: IdleScheduler =
+    typeof (window as unknown as { requestIdleCallback?: unknown }).requestIdleCallback === 'function'
+      ? (cb): IdleCancelHandle =>
+          (
+            window as unknown as {
+              requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number;
+            }
+          ).requestIdleCallback(cb, { timeout: 200 })
+      : (cb): IdleCancelHandle => window.setTimeout(cb, 0);
+  const cancelIdle: IdleCanceller =
+    typeof (window as unknown as { cancelIdleCallback?: unknown }).cancelIdleCallback === 'function'
+      ? (h): void =>
+          (window as unknown as { cancelIdleCallback: (h: number) => void }).cancelIdleCallback(h)
+      : (h): void => window.clearTimeout(h);
+  let pendingApplyHandle: IdleCancelHandle | null = null;
   const unsubscribePreferences = preferences.subscribe(() => {
     const next = preferences.current.quality;
     const manual = next !== previousQuality && !adaptiveQualityWriteInFlight;
     previousQuality = next;
-    applyPreferences(manual);
+    if (pendingApplyHandle !== null) {
+      cancelIdle(pendingApplyHandle);
+    }
+    pendingApplyHandle = scheduleIdle(() => {
+      pendingApplyHandle = null;
+      applyPreferences(manual);
+      // After a preset change, a fresh batch of shader programs may have
+      // been requested. Pre-warm them so the next interaction does not
+      // stall on JIT compile.
+      void rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+    });
   });
 
   // Navigation callbacks
@@ -506,6 +709,11 @@ async function main(): Promise<void> {
     // The render loop keeps requesting frames so that the moment the
     // context is restored, the next tick can resume normally.
     if (rendererManager.isRenderPaused()) return;
+    // v0.16 — skip the render path while the page is hidden or frozen.
+    // The browser already throttles rAF to ~1 Hz for hidden tabs, but
+    // skipping the postprocessing composer + per-frame light/material
+    // updates avoids waking the GPU just to redraw an off-screen canvas.
+    if (pageInactive) return;
     const sample = frameBudget.sample(now);
     const downgrade = adaptiveQuality.evaluate(sample, frameBudget);
     if (downgrade && downgrade !== preferences.current.quality) {
@@ -545,6 +753,13 @@ async function main(): Promise<void> {
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {
     cancelAnimationFrame(rafId);
+    if (resizeRafId !== 0) cancelAnimationFrame(resizeRafId);
+    if (pendingApplyHandle !== null) cancelIdle(pendingApplyHandle);
+    longTaskObserver?.disconnect();
+    if (rendererSnapshotTimer !== undefined) clearInterval(rendererSnapshotTimer);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('freeze', onPageFreeze as EventListener);
+    window.removeEventListener('resume', onPageResume as EventListener);
     unsubscribePreferences();
     if (debugEnabled) {
       window.removeEventListener('keydown', handleDebugKey);
