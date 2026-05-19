@@ -18,7 +18,8 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const REPORT_FILE = path.join(ROOT, 'customer-artworks', 'last-import-report.txt');
 const requiredMajor = 18;
-const major = parseInt(process.versions.node.split('.')[0], 10);
+const nodeVersion = (process.versions && process.versions.node) || '0.0.0';
+const major = parseInt(nodeVersion.split('.')[0], 10);
 
 function ensureDirectory(dirPath) {
   if (fs.existsSync(dirPath)) return;
@@ -49,7 +50,7 @@ function writeCompatibilityReport(message) {
 }
 
 if (isNaN(major) || major < requiredMajor) {
-  const found = process.version || `v${process.versions.node}`;
+  const found = process.version || `v${nodeVersion}`;
   const message = `Node.js ${requiredMajor}+ is required for Update Gallery, but found ${found}.`;
   process.stderr.write(`${message}\n`);
   writeCompatibilityReport(message);
