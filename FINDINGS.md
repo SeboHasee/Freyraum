@@ -1,5 +1,33 @@
 # FINDINGS
 
+## 2026-05-19 (implementation completed) — v0.16.2 control-shell follow-up
+
+### Why v0.16.1 was not enough
+
+Removing `.prefs` and `.nav-controls` from the containment block fixed one real clipping boundary, but customer testing still reported:
+
+- the settings gear feeling/non-appearing "not working"
+- light all-sides clipping on the center nav buttons during hover
+
+That indicated the remaining problem was no longer the parent container. The residual visual cut-off came from scaling the same small glass/backdrop-filter surface that also defined the control's raster bounds.
+
+### Shipped follow-up fix
+
+- `.nav-btn` now uses a **72×72 transparent shell** with the visible **64px glass circle** drawn on `::before`.
+- `.prefs__trigger` now uses a **52×52 transparent shell** with the visible **44px glass circle** drawn on `::before`.
+- Hover/active scale now applies to the inset pseudo-element instead of relying on the smallest possible control box.
+- `.prefs__panel` top offset was adjusted to stay visually aligned with the new trigger shell.
+- `customer-preview/style.css` was rebuilt so the customer preview actually ships the fix.
+
+### Verification
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- Headless Chromium with SwiftShader-loaded WebGL preview:
+  - gallery UI loaded (no fallback screen)
+  - `.prefs__trigger` click changed `aria-expanded` `false → true`
+  - `.prefs__panel.hidden` changed `true → false`
+
 ## 2026-05-19 (implementation completed) — v0.16.1 UI containment regression hotfix
 
 ### Observed regressions

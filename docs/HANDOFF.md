@@ -5,6 +5,24 @@ contributors. **Current runtime status: v0.16 deep performance and
 compatibility pass is implemented (on top of the earlier v0.15 and v0.14.2
 passes).**
 
+## v0.16.2 implemented — follow-up UI fix (verified settings gear + stronger nav shell)
+
+Follow-up shipped on 2026-05-19 after customer feedback that v0.16.1 was only a partial fix:
+
+- **Settings gear now verified opening in the built preview.**
+- **Center left/right buttons now have extra visual shell space** so their hover state is no longer lightly clipped.
+
+Code locations:
+
+- `src/styles/main.scss`
+- rebuilt preview stylesheet: `customer-preview/style.css`
+
+Validation:
+
+- `npm run lint` ✅
+- `npm run build` ✅
+- Headless Chromium + SwiftShader verified that clicking `.prefs__trigger` opens `.prefs__panel`.
+
 ## v0.16.1 implemented — UI hotfix (settings + center nav hover clipping)
 
 Customer-reported regression fixed on 2026-05-19:

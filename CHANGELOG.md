@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Fixed (v0.16.2 control-shell follow-up — 2026-05-19)
+
+- Completed the settings/nav regression fix with a stronger CSS control-shell approach after the earlier containment-only fix proved incomplete in customer testing.
+- `.nav-btn` now uses a larger 72×72 transparent shell with the visible 64px glass circle rendered on `::before`; hover scale now has spare pixels and is no longer lightly clipped at the edge.
+- `.prefs__trigger` now uses a larger 52×52 transparent shell with the visible 44px glass circle rendered on `::before`; the gear control has a slightly larger hit area and no longer feels clipped.
+- `.prefs` and `.nav-controls` remain excluded from the containment block from v0.16.1.
+- Rebuilt `customer-preview/style.css` so the shipped preview matches the source fix.
+- Validation: `npm run lint` ✅, `npm run build` ✅, and headless Chromium + SwiftShader confirmed the real built preview opens the settings panel (`aria-expanded false→true`, `panel.hidden true→false`).
+
 ### Fixed (v0.16.1 UI containment regression hotfix — 2026-05-19)
 
 - Fixed a settings-popover regression where the gear/settings control appeared broken because the popover anchor (`.prefs`) was paint-contained; the absolute panel was clipped to the trigger box boundary.

@@ -6,6 +6,15 @@ It is meant for the person who maintains the project folder, supports the custom
 or needs to understand why an image does or does not appear in the gallery.
 
 
+## v0.16.2 implemented — control-shell follow-up (2026-05-19)
+
+Maintenance-relevant UI correction:
+
+- `src/styles/main.scss` now renders the visible nav/settings glass circles on inset `::before` pseudo-elements inside slightly larger transparent button shells.
+- This is a follow-up to v0.16.1: containment was part of the problem, but the smallest possible blurred control surface still produced residual edge clipping in customer testing.
+- `customer-preview/style.css` was rebuilt, so local/customer preview now includes the follow-up fix.
+- Image/import pipeline remains unaffected.
+
 ## v0.16.1 implemented — UI containment regression hotfix (2026-05-19)
 
 Maintenance-relevant UI correction:

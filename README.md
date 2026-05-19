@@ -3,25 +3,28 @@
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
 
-## Current status — v0.16.1 UI containment regression hotfix implemented (2026-05-19)
+## Current status — v0.16.2 control-shell follow-up fix implemented (2026-05-19)
 
-**Current build:** v0.16.1 fixes two customer-facing regressions introduced by the v0.16 CSS containment pass:
+**Current build:** v0.16.2 completes the settings/nav regression fix with a stronger control-shell approach:
 
-- **Settings button behavior restored.** The preferences popover anchor (`.prefs`) is no longer paint-contained, so the panel can render and receive pointer input outside the 44×44 trigger box.
-- **Center nav hover clipping fixed.** The nav container (`.nav-controls`) is no longer paint-contained, so hover scale on left/right buttons is no longer visually cut off.
+- **Settings gear verified working.** The preferences panel now opens in the built preview, and the gear button uses a slightly larger transparent shell around the visible 44px glass circle so the control no longer feels clipped at the edge.
+- **Center nav hover clipping eliminated more robustly.** The left/right center buttons now use a larger transparent outer shell with the visual glass circle drawn on `::before`, so hover scale has breathing room instead of being raster-clipped at the button edge.
 
 What changed in code:
 
-- `src/styles/main.scss`: removed `.prefs` and `.nav-controls` from the `contain: layout paint` block; kept containment on the remaining fixed chrome surfaces.
+- `src/styles/main.scss`: kept `.prefs` and `.nav-controls` out of paint containment, then upgraded `.prefs__trigger` and `.nav-btn` to shell-based controls with inset glass-circle pseudo-elements.
+- `customer-preview/style.css`: rebuilt so the shipped local preview matches the source fix.
 
-Validation for v0.16.1:
+Validation for v0.16.2:
 
-- Root-cause review against `main.scss` containment rules ✅
-- Focused regression scan of prefs/nav selectors ✅
-- `npm run lint` ⚠️ unavailable in this sandbox (`eslint: not found`)
-- `npm run build` ⚠️ unavailable in this sandbox (missing local dependencies such as `three`)
+- `npm run lint` ✅
+- `npm run build` ✅
+- Headless Chromium + SwiftShader verification ✅
+  - `.prefs__trigger` click toggles `aria-expanded` from `false` → `true`
+  - `.prefs__panel.hidden` changes from `true` → `false`
+  - rebuilt preview loads the real gallery UI (not fallback)
 
-All repository markdown files were updated for this hotfix.
+All repository markdown files were updated for this follow-up fix.
 
 ## Current status — v0.16 deep performance and compatibility pass implemented (2026-05-19)
 

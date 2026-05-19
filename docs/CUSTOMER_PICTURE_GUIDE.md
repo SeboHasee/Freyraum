@@ -6,6 +6,15 @@ You do **not** need to use a code editor, the terminal, or any technical tool.
 You only ever touch one folder and one button.
 
 
+## UI fix note (v0.16.2 follow-up implemented)
+
+We shipped one more small UI follow-up on 2026-05-19:
+
+- the settings gear has been verified working in the built preview
+- the center left/right navigation buttons now have a slightly larger invisible shell so hover effects are no longer cut off
+
+This still does not change your picture workflow or importer behavior.
+
 ## UI fix note (v0.16.1 implemented)
 
 On 2026-05-19 we shipped a small UI hotfix:

@@ -1,5 +1,35 @@
 # FREYRAUM Plan
 
+## v0.16.2 — Control-shell follow-up for settings + center nav (2026-05-19, implemented)
+
+### Status
+
+**Implementation completed 2026-05-19.** This follow-up closed the remaining customer-visible edge clipping after v0.16.1.
+
+### Scope
+
+- Make the settings gear reliably usable in the shipped preview.
+- Remove the last subtle all-sides hover clipping on center nav buttons.
+- Keep the previous containment fix, but stop relying on minimum-size blurred controls as the hover surface.
+
+### Implemented changes
+
+1. `src/styles/main.scss`
+   - `.nav-btn` now uses a 72×72 shell with a 64px inset glass `::before`
+   - `.prefs__trigger` now uses a 52×52 shell with a 44px inset glass `::before`
+   - `.prefs__panel` top offset adjusted to match the new trigger shell
+   - phone breakpoint spacing updated to preserve the old visible spacing
+2. `customer-preview/style.css`
+   - rebuilt from source so the preview actually includes the fix
+
+### Validation
+
+- `npm run lint` — pass
+- `npm run build` — pass
+- headless Chromium + SwiftShader:
+  - preview loads gallery UI
+  - settings trigger click opens preferences panel
+
 ## v0.16.1 — UI containment regression hotfix (2026-05-19, implemented)
 
 ### Status
