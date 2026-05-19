@@ -18,13 +18,13 @@ The previously planned `ImageBitmapLoader` raster path was explicitly deferred (
 
 ## Performance planning note (v0.16 final plan — historical)
 
-The v0.16 plan is now a code-sample-backed brainstorm with specific TypeScript and SCSS implementation proposals. It does **not** change how customers add pictures today. The planned work keeps picture quality intact.
+This section is retained as design history from the planning stage before implementation. v0.16 is now shipped; customer-facing behavior remains unchanged.
 
-One finding directly relevant to this guide: **import-time texture memory warnings.** The planned importer update will print a `console.warn` when a customer image exceeds 2000×2000 pixels (≈48 MB uncompressed GPU texture with mipmaps) or when the gallery total exceeds 256 MB GPU. This is a proactive safeguard; it does not change how pictures are imported.
+One finding directly relevant to this guide was **import-time texture memory warnings**. In the shipped implementation, warnings now trigger when a customer image exceeds 4096 px on a side, or when estimated GPU memory reaches ~64 MB (notice) / ~128 MB (strong warning). This is a proactive safeguard; it does not change how pictures are imported.
 
 The final v0.16 plan also explicitly keeps the current customer-safe image path as a hard boundary: future optimizations like `ImageBitmapLoader` or compressed deployment textures may be added later, but they must **not** break the existing offline `file://` preview or embedded `webglImage` behavior that customers already rely on.
 
-See `plan.md § Finding 10` and `FINDINGS.md § Finding 10` for the proposed importer code sample.
+See `plan.md § v0.16 implementation summary` and `FINDINGS.md § 2026-05-19 (implementation completed)` for the shipped importer behavior and rationale.
 
 ## Phone and tablet note
 

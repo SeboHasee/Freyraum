@@ -18,18 +18,18 @@ The v0.16 audit was implemented on 2026-05-19. From a maintenance and importer p
 
 ## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19, design history)
 
-The v0.16 plan has now received its final documentation update. The original 12 file:line-anchored findings remain valid, and the final pass added 6 researched enhancements. Maintenance-relevant priorities:
+This section is retained as design history from the final planning pass before implementation. v0.16 is now shipped; maintenance-relevant outcomes are listed in the implemented section above.
 
-- **Import-time texture memory warnings (new, `scripts/import-artworks.mjs`):** the planned importer update will print a visible `console.warn` when a customer image exceeds 2000×2000 pixels (≈48 MB GPU texture with mipmaps) or the gallery total exceeds 256 MB GPU. See `plan.md § Finding 10` for the exact JavaScript code sample.
+- **Import-time texture memory warnings (`scripts/import-artworks.mjs`):** shipped behavior warns when a customer image exceeds 4096 px on a side, or when estimated GPU memory exceeds ~64 MB / ~128 MB.
 - Preserve exact customer image rendering and the `webglImage` data-URL fallback for offline `file://` previews — explicitly documented as a non-goal in the plan.
-- `TextureManager.setAnisotropyDivisor()` will gain a no-op guard to prevent spurious GPU texture re-uploads on same-preset re-apply (Finding 7).
-- CSS glass panels will gain `@supports` and `[data-quality='battery']` fallbacks, plus containment where visually safe — no visible downgrade on modern devices (Findings 9 and 18).
+- `TextureManager.setAnisotropyDivisor()` now has a no-op guard to prevent spurious GPU texture re-uploads on same-preset re-apply.
+- CSS glass panels now include `@supports` and `[data-quality='battery']` fallbacks, plus containment where visually safe — no visible downgrade on modern devices.
 - Optional `ImageBitmapLoader` support is now documented as an **intermediate enhancement**, not a replacement for the current compatibility path (Finding 15).
-- Startup quality can optionally use `deviceMemory` / `hardwareConcurrency` as first-run hints only; stored preference still wins (Finding 16).
-- Debug-only Long Tasks API instrumentation is now part of the measurement-first plan (Finding 17).
+- Startup quality now optionally uses `deviceMemory` / `hardwareConcurrency` as first-run hints only; stored preference still wins.
+- Debug-only Long Tasks API instrumentation is now part of the runtime diagnostics surface.
 - All other resize, render-loop, shader-deferral, lifecycle, and pre-warm changes are runtime-transparent to the image pipeline.
 
-See `plan.md § v0.16` and `FINDINGS.md § 2026-05-19 (updated)` for complete details.
+See `plan.md § v0.16 implementation summary` and `FINDINGS.md § 2026-05-19 (implementation completed)` for complete details.
 
 ## Implemented v0.15 animation refinement
 

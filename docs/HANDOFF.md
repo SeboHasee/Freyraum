@@ -1,8 +1,9 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current runtime status: v0.15 elegant animation system is
-implemented, on top of the v0.14.2 zoom/pan/reset-fit follow-up.**
+contributors. **Current runtime status: v0.16 deep performance and
+compatibility pass is implemented (on top of the earlier v0.15 and v0.14.2
+passes).**
 
 
 ## v0.16 implemented — Deep performance and compatibility pass (2026-05-19)
@@ -25,9 +26,9 @@ Validated with `npm run lint`, `npm run build`, and `node -c scripts/import-artw
 
 ## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19 final, design history)
 
-The v0.16 plan is now the **final** audited brainstorm. The original 12 file:line-anchored findings still stand, and the final pass added 6 researched enhancements: Page Lifecycle `freeze` / `resume`, shader pre-warm with `renderer.compileAsync()`, optional `ImageBitmapLoader` raster path, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only Long Tasks API instrumentation, and CSS `contain` / internal `content-visibility`. No runtime code was changed.
+The v0.16 plan is now the **final** audited brainstorm. The original 12 file:line-anchored findings still stand, and the final pass added 6 researched enhancements: Page Lifecycle `freeze` / `resume`, shader pre-warm with `renderer.compileAsync()`, optional `ImageBitmapLoader` raster path, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only Long Tasks API instrumentation, and CSS `contain` / internal `content-visibility`. That particular pass was documentation-only (runtime implementation happened in the section above).
 
-Start future performance work from: `plan.md` → `v0.16 — Brainstorm: deep performance and compatibility optimization` and `FINDINGS.md` → `2026-05-19 (updated) — v0.16 deep code audit`.
+Start future performance work from: `plan.md` → `v0.16 — Deep performance and compatibility optimization (implemented)` and `FINDINGS.md` → `2026-05-19 (implementation completed) — v0.16 deep code audit`.
 
 **Priority order (all with code samples in plan.md):**
 1. Renderer info diagnostics (`RendererManager.ts`, `main.ts`) — establish measurement baseline.
