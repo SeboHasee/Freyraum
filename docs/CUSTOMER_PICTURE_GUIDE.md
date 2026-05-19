@@ -9,6 +9,13 @@ You only ever touch one folder and one button.
 
 v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.
 
+## Animation refinement (v0.15 implemented)
+
+The v0.15 elegant animation system is **implemented**. Artwork navigation now feels deliberate and consistent across 60 Hz, 90 Hz, and 120 Hz displays; the info panel no longer flickers when switching artworks; glass panels and timeline thumbnails no longer overshoot their landings. Reduced-motion preference (in-app and OS-level) is fully respected.
+
+v0.15.1 hotfix note: **Reduzierte Bewegung now changes movement only**. It does
+not lower picture texture/shader quality.
+
 ## Current viewing status (v0.14.2 implemented)
 
 The customer-facing **v0.14.2 follow-up is implemented**.

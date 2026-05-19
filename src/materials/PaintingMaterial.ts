@@ -269,7 +269,7 @@ uniform float uAlbedoOnly;
 
     #ifdef PAINTING_USE_DETAIL_NORMAL
         vec3 detailN = texture2D( tDetailNormal, _normalUV * uDetailTiling ).xyz * 2.0 - 1.0;
-        mapN.xy += detailN.xy * uDetailNormalStrength * uReducedMotionScalar;
+        mapN.xy += detailN.xy * uDetailNormalStrength;
         mapN = normalize( mapN );
     #endif
 
@@ -395,7 +395,7 @@ ${LIGHTS_END_TOKEN}
     {
         float NdotV = abs( dot( normal, normalize( vViewPosition ) ) );
         float grazingMask = pow( 1.0 - NdotV, 3.0 );
-        reflectedLight.directSpecular *= ( 1.0 + grazingMask * uLightGrazingBoost * uReducedMotionScalar );
+        reflectedLight.directSpecular *= ( 1.0 + grazingMask * uLightGrazingBoost );
     }
 #endif
 
@@ -432,8 +432,7 @@ ${LIGHTS_END_TOKEN}
   private detailNormalActive(): boolean {
     return (
       this.hasDetailNormal &&
-      this.paintingUniforms.uDetailNormalStrength.value > 0 &&
-      this.paintingUniforms.uReducedMotionScalar.value > 0
+      this.paintingUniforms.uDetailNormalStrength.value > 0
     );
   }
 
@@ -603,8 +602,11 @@ ${LIGHTS_END_TOKEN}
   setReducedMotion(reducedMotion: boolean): void {
     if (this.reducedMotion === reducedMotion) return;
     this.reducedMotion = reducedMotion;
-    this.paintingUniforms.uReducedMotionScalar.value = reducedMotion ? 0.0 : 1.0;
-    this.needsUpdate = true;
+    // v0.15.1 fix: reduced motion must not lower picture/shader fidelity.
+    // This flag is retained for API compatibility, but all fidelity paths
+    // (detail-normal and grazing/specular response) remain quality-preset
+    // controlled only.
+    this.paintingUniforms.uReducedMotionScalar.value = 1.0;
   }
 
   /**

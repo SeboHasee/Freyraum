@@ -341,7 +341,10 @@ async function main(): Promise<void> {
   });
 
   loadingOverlay.classList.add('is-hidden');
-  window.setTimeout(() => loadingOverlay.remove(), 700);
+  // v0.15 — matches --dur-reveal (0.9s) on `.loading-overlay` + 50 ms buffer
+  // so the overlay is fully transparent before it is removed from the DOM.
+  // Previous value was 700 ms (matching the old --dur-slow = 0.6s).
+  window.setTimeout(() => loadingOverlay.remove(), 950);
 
   // Interaction
   const canvas = rendererManager.renderer.domElement;
@@ -522,7 +525,9 @@ async function main(): Promise<void> {
       }
     }
     lightingSetup.update(now);
-    galleryManager.update();
+    // v0.15 — pass DOMHighResTimeStamp so GalleryManager.update() can
+    // compute a frame-rate-independent dt for exponential smoothing.
+    galleryManager.update(now);
 
     // v0.03: feed view-space key-light direction into PaintingMaterial so
     // the self-shadow march in tangent space can run. The camera's

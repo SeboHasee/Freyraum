@@ -2,7 +2,59 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current status — v0.14.2 implemented (2026-05-19)
+## Current status — v0.15 elegant animation system implemented (2026-05-19)
+
+**Current build:** v0.15 is implemented. v0.14.2 zoom/pan tuning is preserved unchanged.
+
+v0.15 ships a museum-elegant motion system on top of v0.14.2:
+
+- **frame-rate-independent smoothing**: new `smoothDamp(current, target, lambda, dt)` in `src/utils/math.ts`; all 13 prior per-frame lerps in `GalleryManager.update()` converted to lambda-based smoothing (+1 new line for the new `position.z` recession). Motion timing is now identical on 60 Hz, 90 Hz, 120 Hz, and 30 Hz screens;
+- **witnessable artwork entrances**: navigation seeds retuned (`position.x` ±3.2 → ±4.5, `rotation.y` ±0.32 rad → ±0.15 rad, `scale` 0.84 → 0.88, new `position.z` = -0.6 depth recession), settling over ~1200 ms with λ=2.5;
+- **fixed `InfoPanel` flicker**: content swap delay raised from 200 ms to 520 ms with an extra `requestAnimationFrame` before fade-in;
+- **semantic SCSS motion tokens**: `--ease-gallery-out`, `--ease-gallery-in-out`, `--dur-control`, `--dur-content`, `--dur-panel`, `--dur-timeline`, `--dur-reveal`; backward-compatible aliases for the old names; museum-overshoot easing (`--ease-spring`) preserved but no longer used on gallery surfaces;
+- **calmer reveals**: `.loading-overlay` fade extended to 0.9 s, removal timeout raised to 950 ms; spinner slowed from 0.8 s to 1.4 s per rotation;
+- **reduced motion preserved**: both `[data-motion='reduced']` and `@media (prefers-reduced-motion: reduce)` paths remain authoritative.
+- **v0.15.1 fidelity safeguard**: reduced motion no longer affects picture
+  texture/shader quality; quality remains controlled only by the selected
+  quality preset.
+
+Outcome:
+
+- artworks now arrive into the frame deliberately enough to be felt as a state change rather than a jump cut;
+- the same wall-clock timing applies regardless of display refresh rate;
+- info-panel text never flickers through a half-faded panel;
+- prefs panel and timeline thumb no longer overshoot their landings.
+
+Validation for v0.15:
+
+- `npm run lint` ✅
+- `npm run build` ✅ (`tsc` clean; preview bundles regenerated)
+
+See [`plan.md`](./plan.md#v015--implemented-elegant-animation-system-2026-05-19) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v015-implementation-pass-elegant-longer-animations) for full technical details.
+
+## Previous planning pass — v0.15 final technical animation audit (2026-05-19)
+
+**Current planning pass:** v0.15 has been implemented (see status block above). The historical audit narrative is preserved here for reference.
+
+The next planned enhancement is a smoother, longer, more elegant motion system for the gallery. The final documentation pass re-verified the plan against the current source tree, repository findings, and current web animation/accessibility/performance guidance. It targets:
+
+- semantic motion tokens for the modern art-gallery style;
+- frame-rate-independent WebGL camera/artwork smoothing;
+- artwork navigation transitions long enough to witness;
+- calmer info-panel, timeline, preferences, loading, and reset motion;
+- preserved `prefers-reduced-motion` / in-app reduced-motion behavior;
+- diagnostics and QA checks for motion timing and frame budget.
+
+Key technical findings already documented for the future implementation:
+
+- all 13 `GalleryManager.update()` smoothing lines are currently frame-rate-dependent;
+- `InfoPanel.ts` swaps content too early (`200ms`) relative to the current CSS transition (`320ms`);
+- current `--ease-spring` overshoots and is too playful for the museum aesthetic;
+- the future pass should add semantic duration/easing tokens and keep reduced-motion as a hard boundary.
+
+See [`plan.md`](./plan.md) and [`FINDINGS.md`](./FINDINGS.md) for the full technical brainstorm, audit math, and source validation.
+
+## Current runtime status — v0.14.2 implemented (2026-05-19)
 
 **Current build:** v0.14.2 is implemented.
 

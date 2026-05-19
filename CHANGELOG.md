@@ -2,6 +2,63 @@
 
 ## Unreleased
 
+### Fixed (v0.15.1 reduced-motion fidelity hotfix — 2026-05-19)
+
+- Fixed an unintended coupling where `Reduzierte Bewegung` also reduced
+  painting texture/shader fidelity.
+- `PaintingMaterial` no longer scales detail-normal blending or grazing/specular
+  response with reduced-motion state.
+- `detailNormalActive()` no longer depends on reduced-motion scalar, avoiding
+  reduced-motion-triggered shader-path degradation.
+- `GalleryManager.setReducedMotion()` now only controls motion behavior and no
+  longer forwards reduced-motion state into `PaintingMaterial`.
+- Result: reduced motion now changes motion only; visual fidelity remains tied
+  exclusively to the selected quality preset.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+
+### Implemented (v0.15 elegant animation system — 2026-05-19)
+
+- **Frame-rate-independent motion.** Added `smoothDamp(current, target, lambda, dt)` to `src/utils/math.ts`. Converted all 13 frame-rate-dependent per-frame lerps in `GalleryManager.update()` to lambda-driven smoothing (`α = 1 − exp(−λ·dt)`), plus a 14th line for the new `position.z` depth recession. Motion now settles in the same wall-clock time on 30/60/90/120 Hz displays.
+- **`GalleryManager.update(now: number)`.** Receives `DOMHighResTimeStamp` from the animate loop; clamps `dt` to ≤ 0.1 s to survive backgrounded tabs.
+- **Navigation entrance seeds retuned.** `NAV_SEED_POSITION_X = 4.5` (was 3.2), `NAV_SEED_POSITION_Z = -0.6` (new depth recession), `NAV_SEED_ROTATION_Y = 0.15` rad / ~9° (was 0.32 rad / ~18°), `NAV_SEED_SCALE = 0.88` (was 0.84). Applied in `navigate()` and `goTo()`.
+- **Lambda constants documented.** `LAMBDA_HOVER_ROTATION = 12`, `LAMBDA_NAV_POSITION = 2.5`, `LAMBDA_NAV_SCALE = 3.0`, `LAMBDA_CAMERA_ZOOM = 4.0`, `LAMBDA_CAMERA_PAN = 5.0`. Settle-time table: hover ≈ 250 ms, position ≈ 1200 ms, scale ≈ 1000 ms, zoom ≈ 750 ms, pan ≈ 600 ms.
+- **New diagnostics on `navigate` / `goTo`.** `motionMode` (`'full'` | `'reduced'`), `seedPositionX`, `seedPositionZ`, `settleTargetMs`.
+- **Fixed `InfoPanel.ts` content-swap timing bug.** `CONTENT_SWAP_DELAY_MS = 520` (was hardcoded 200 ms, shorter than the previous 320 ms CSS transition). Added `requestAnimationFrame` between `setContent()` and removing `is-transitioning` so layout is applied before fade-in.
+- **Semantic SCSS motion tokens.** New: `--ease-gallery-out` (easeOutExpo `cubic-bezier(0.16, 1, 0.3, 1)`), `--ease-gallery-in-out` (easeInOutQuart), `--dur-control` (0.18 s), `--dur-content` (0.5 s), `--dur-panel` (0.55 s), `--dur-timeline` (0.42 s), `--dur-reveal` (0.9 s). Backward-compat aliases preserved: `--dur-fast → --dur-control`, `--dur-base → --dur-content`, `--dur-slow → --dur-reveal`. `--ease-spring` preserved but no longer used on gallery surfaces.
+- **Retuned animated surfaces.** `.info-panel` transition → `--dur-content` + `--ease-gallery-out`; `.info-panel.is-transitioning` translateY 8 px → 16 px; `.timeline__thumb` transition → `--dur-timeline` + `--ease-gallery-out` (no more spring overshoot); `.prefs__panel` animation → `--dur-panel` + `--ease-gallery-out`; `@keyframes prefs-in` softened from `scale(0.94) translateY(-6px)` to `scale(0.96) translateY(-10px)`; `.loading-overlay` → `--dur-reveal` + `--ease-gallery-out`; `.loading-spinner` slowed from 0.8 s to 1.4 s.
+- **`main.ts` adjustments.** `loadingOverlay.remove()` timeout raised from 700 ms to 950 ms (matches `--dur-reveal: 0.9s` + 50 ms buffer). Animate loop calls `galleryManager.update(now)`.
+- **No new dependencies.** No reduced-motion regressions. v0.14.2 zoom/pan constants untouched.
+- **Validation:** `npm run lint` ✅, `npm run build` ✅, preview bundles rebuilt.
+
+### Documentation (v0.15 final documentation audit cleanup — 2026-05-19)
+
+- Final-cleaned the v0.15 documentation set so the plan, findings, README, handoff, and image/customer guides all point to the same final technical audit wording.
+- Added explicit repository-verification coverage to `plan.md` and `FINDINGS.md` so the v0.15 plan now states which code areas and markdown surfaces were re-checked.
+- Fixed remaining documentation inaccuracies, including stale README/HANDOFF references and the “9 hard-coded lerp lines” wording in `plan.md`.
+- Kept the v0.15 pass documentation-only; no runtime code changed.
+
+### Documentation (v0.15 animation technical brainstorm — 2026-05-19)
+
+- Completely replaced the initial animation planning section in `plan.md` with a full technical brainstorm.
+- Identified and documented a root bug: all 13 WebGL motion paths in `GalleryManager.update()` use frame-rate-dependent per-frame lerp (`value += (target - value) × k`), causing artwork navigation to take ~408ms on 120 Hz screens vs ~817ms on 60 Hz.
+- Specified the fix: add `smoothDamp(current, target, lambda, dt)` to `src/utils/math.ts` using the frame-rate-independent formula `1 − Math.exp(−lambda × dt)`.
+- Provided exact lambda values for each property (hover=12, nav position=2.5, nav scale=3.0, camera zoom=4.0, camera pan=5.0) with 95% settle times.
+- Identified and documented a timing bug in `InfoPanel.ts`: `setTimeout` delay of 200ms fires before the 320ms CSS transition completes, causing text to change while still partially visible.
+- Specified the SCSS redesign: new semantic tokens (`--dur-control`, `--dur-content`, `--dur-panel`, `--dur-timeline`, `--dur-reveal`), new easing curves (`--ease-gallery-out: cubic-bezier(0.16, 1, 0.3, 1)`, `--ease-gallery-in-out`), removal of overshoot `--ease-spring` from timeline/panel uses.
+- Documented all `var(--dur-base)` and `var(--dur-slow)` consumers to avoid silent regressions when aliases change.
+- Documented the loading overlay removal timeout in `main.ts` that must be raised from 700ms to 950ms after the `--dur-reveal` change.
+- Added specific navigation entrance seed values: `position.x ±4.5`, `rotation.y ±0.15`, scale `0.88`, new `position.z −0.6` depth recession.
+- Validated all findings against published sources: Stack Overflow #57851938, MDN, WCAG 2.2, web.dev, cubic-bezier.com.
+- No runtime code was changed in this documentation pass.
+
+### Documentation (v0.15 animation enhancement initial plan — 2026-05-19)
+
+- Added a detailed research-backed plan for smoother, longer, more elegant animations that fit the modern art-gallery style.
+- Documented 2026 guidance for accessible motion, `prefers-reduced-motion`, compositor-friendly animation, `requestAnimationFrame`, and duration ranges.
+- Audited current motion surfaces in `src/styles/main.scss`, `src/gallery/GalleryManager.ts`, `src/main.ts`, `src/lighting/LightingSetup.ts`, and `src/utils/preferences.ts`.
+- Planned a future implementation path for semantic motion tokens, frame-rate-independent WebGL smoothing, refined artwork navigation, smoother reset/zoom/pan, UI transition retuning, diagnostics, and reduced-motion safeguards.
+- No runtime code was changed in this documentation pass.
+
 ### Implemented (v0.14.2 vertical pan tightening — 2026-05-19)
 
 - Kept horizontal close-pan behavior unchanged (`INSPECTION_OVERSCROLL_X = 1.2`) because left/right edge reach was already approved.

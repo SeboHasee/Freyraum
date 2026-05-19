@@ -5,6 +5,21 @@ This guide explains how the image system works after the v0.07 importer update.
 It is meant for the person who maintains the project folder, supports the customer,
 or needs to understand why an image does or does not appear in the gallery.
 
+## Implemented v0.15 animation refinement
+
+The v0.15 elegant animation pass was implemented on 2026-05-19. It is independent from the importer / image-manifest pipeline and does not change customer behavior.
+
+Maintenance notes:
+
+- `src/utils/math.ts` now exports `smoothDamp` alongside `lerp` and `clamp`. Use `smoothDamp` for any new frame-rate-independent value smoothing; keep `lerp` for static interpolation.
+- All `GalleryManager.update()` motion paths now require `now: number` (a `DOMHighResTimeStamp`) — passed from the `requestAnimationFrame` callback in `src/main.ts`. Any future caller must pass `now`.
+- SCSS uses semantic motion tokens (`--dur-content`, `--dur-panel`, `--dur-timeline`, `--dur-reveal`, `--ease-gallery-out`). Backward-compatible aliases (`--dur-base`, `--dur-slow`, `--dur-fast`, `--ease-spring`) still exist for legacy consumers.
+- `InfoPanel.CONTENT_SWAP_DELAY_MS` must stay in sync with `--dur-content` in `main.scss`.
+- `loadingOverlay.remove()` timeout in `main.ts` must stay in sync with `--dur-reveal`.
+- Reduced-motion support is preserved via the existing `[data-motion='reduced']` and `@media (prefers-reduced-motion: reduce)` blocks; no token rename weakens these paths.
+- v0.15.1 hotfix: reduced motion must never be used as a shader-fidelity toggle.
+  Keep detail-normal/specular/grazing fidelity tied to quality presets only.
+
 ## Responsive and touch support — final technical status (v0.11)
 
 The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs, validates the proposed fixes against current official browser/accessibility guidance, and maps every fix to specific source files. The customer artwork pipeline (`webglImage` data URLs, aspect-ratio handling, importer, diagnostics) is unaffected by the responsive changes. The implementation preserves all artwork reliability work from v0.07–v0.10 while adding:
