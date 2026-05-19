@@ -10,7 +10,7 @@
 
 FREYRAUM should feel like a premium digital museum installation. Motion must be:
 
-- **witnesable**: artwork entrance, reset, and UI reveal animations must last long enough that the user perceives a smooth state change, not a jump;
+- **witnessable**: artwork entrance, reset, and UI reveal animations must last long enough that the user perceives a smooth state change, not a jump;
 - **quiet and museum-accurate**: no overshoot, no bounce, no aggressive yaw — a painting arriving on a gallery wall is a solemn event;
 - **art-first**: motion should guide attention toward the artwork and never distract from surface detail, lighting, or painting texture;
 - **frame-rate-neutral**: the same elegant timing on 60 Hz, 90 Hz, 120 Hz, and 30 Hz constrained mobile screens;
@@ -23,7 +23,7 @@ FREYRAUM should feel like a premium digital museum installation. Motion must be:
 
 | Source | What it validates |
 |---|---|
-| W3C WCAG 2.2 § SC 2.3.3 | All interaction-triggered non-essential animation must be disableable |
+| W3C WCAG 2.2 § SC 2.3.3 | All interaction-triggered non-essential animation must be disablable |
 | MDN `prefers-reduced-motion` | System-level motion signal; already integrated via `PreferencesStore` |
 | MDN CSS Animation Performance | Animate only `transform`/`opacity`; never `top`/`left`/`width` |
 | MDN `requestAnimationFrame` | Pass `DOMHighResTimeStamp now` — source for delta-time |
@@ -219,8 +219,8 @@ After extending `--dur-content` to 500ms (see SCSS plan below), the correct dela
 **Fixed implementation:**
 
 ```typescript
-// Matching constant — keep in sync with --dur-content in main.scss.
-private static readonly CONTENT_SWAP_DELAY_MS = 520; // 500ms transition + 20ms buffer
+// Matching constant — keep in sync with --dur-content (0.5s) in main.scss.
+private static readonly CONTENT_SWAP_DELAY_MS = 520; // --dur-content (500ms) + 20ms buffer
 
 update(artwork: Artwork, animate = false): void {
   if (animate) {

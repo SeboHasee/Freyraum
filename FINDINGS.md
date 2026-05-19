@@ -12,7 +12,7 @@ Full code audit of all motion surfaces in the FREYRAUM codebase. Identified a ro
 
 | Source | Finding |
 |---|---|
-| WCAG 2.2 § SC 2.3.3 | Non-essential interaction animation must be disableable. FREYRAUM already satisfies this via `PreferencesStore` + `[data-motion]` attribute. |
+| WCAG 2.2 § SC 2.3.3 | Non-essential interaction animation must be disablable. FREYRAUM already satisfies this via `PreferencesStore` + `[data-motion]` attribute. |
 | MDN `prefers-reduced-motion` | System preference signal; already integrated; confirmed `@media (prefers-reduced-motion: reduce)` block at main.scss:1007. |
 | MDN CSS Animation Performance | Only `transform` and `opacity` are compositor-promoted and GPU-accelerated. FREYRAUM's existing CSS is already on these. ✓ |
 | MDN `requestAnimationFrame` | `now` is a `DOMHighResTimeStamp` — use it as the source of delta-time for frame-rate-independent smoothing. |
