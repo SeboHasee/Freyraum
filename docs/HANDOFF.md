@@ -136,9 +136,11 @@ Current intended workflow:
 
 1. Customer drags pictures into `customer-artworks/inbox/`.
 2. Customer double-clicks `Update Gallery`.
-3. The updater generates image copies, `artworks.json`, and `customer-artworks.js`
+3. The updater (`scripts/run-import-artworks.cjs`) verifies Node.js version
+   first (requires 18+), then runs the ESM importer.
+4. The importer generates image copies, `artworks.json`, and `customer-artworks.js`
    (including `webglImage` data URLs for reliable 3D painting texture upload).
-4. Customer double-clicks root `index.html` as before.
+5. Customer double-clicks root `index.html` as before.
 
 Acceptance checklist:
 

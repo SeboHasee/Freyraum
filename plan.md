@@ -1,5 +1,45 @@
 # FREYRAUM Plan
 
+## v0.14.1 — Implemented: importer launcher compatibility guard (2026-05-19)
+
+### Status
+
+**Implemented 2026-05-19.** This pass fixes a customer updater runtime failure on old Node.js versions.
+
+### Problem
+
+Customer report on Windows:
+
+```text
+SyntaxError: Unexpected token {
+  at scripts/import-artworks.mjs:19
+```
+
+This occurred because the launcher directly ran the ESM importer (`.mjs`) on an unsupported Node runtime.
+
+### Implementation
+
+- Added `scripts/run-import-artworks.cjs` (CommonJS launcher).
+- The launcher checks `process.versions.node` and requires Node.js major `>= 18`.
+- If Node is too old:
+  - writes a plain-language error into `customer-artworks/last-import-report.txt`,
+  - prints a clear compatibility message,
+  - exits with non-zero status.
+- If Node is compatible:
+  - launches `scripts/import-artworks.mjs` via `spawnSync`.
+- Updated:
+  - `Update Gallery.bat`
+  - `Update Gallery.command`
+  to run `scripts/run-import-artworks.cjs` instead of calling `.mjs` directly.
+
+### Outcome
+
+- No more raw syntax crash for unsupported Node versions.
+- Customers/support still receive the normal text report with actionable fix guidance.
+- Existing importer behavior remains unchanged on supported Node.
+
+---
+
 ## v0.14 — Implemented: deeper close zoom, tighter edge limits, portrait-aware reset fit (2026-05-19)
 
 ### Status

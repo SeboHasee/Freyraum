@@ -30,7 +30,7 @@ For support/debugging, `show-artwork-complete` now logs extra v0.14 tuning data 
 
 ## What you need (one-time)
 
-1. **Node.js** (free): install the LTS version from <https://nodejs.org>.
+1. **Node.js** (free): install the LTS version from <https://nodejs.org> (**18 or newer**).
 2. The **FREYRAUM** folder (this folder).
 
 Your support person sets these up once. After that, you only do the steps below.
@@ -89,6 +89,20 @@ It runs a small script that:
 5. Writes a plain-language report to `customer-artworks/last-import-report.txt`.
 
 Your original picture files are never changed or deleted.
+
+## If you see "Unexpected token {" during Update Gallery
+
+That error means your installed Node.js is too old.
+
+Fix:
+
+1. Install/update Node.js LTS from <https://nodejs.org> (version 18+).
+2. Close and reopen the FREYRAUM folder window.
+3. Run **Update Gallery** again.
+
+The updater now writes a plain-language report for this case, so support can
+see the exact Node.js compatibility issue in
+`customer-artworks/last-import-report.txt`.
 
 ## First-time on macOS (Gatekeeper)
 

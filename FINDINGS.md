@@ -1,5 +1,26 @@
 # FINDINGS
 
+## 2026-05-19 — importer runtime compatibility fix (Node version guard)
+
+### Scope of this pass
+
+Fixed a customer-facing updater failure where old Node.js versions crashed on ES module syntax in `scripts/import-artworks.mjs` before a useful report could be shown.
+
+### Code-level findings fixed
+
+- **Root cause:** `Update Gallery` launchers called `node scripts/import-artworks.mjs` directly. On old Node versions, parsing failed at `import { ... }` with `SyntaxError: Unexpected token {`.
+- **Fix:** Added `scripts/run-import-artworks.cjs` as a CommonJS compatibility launcher. It can run on old Node, checks `process.versions.node`, requires major version 18+, and only then executes `import-artworks.mjs`.
+- **User-facing reliability improvement:** for unsupported Node versions, the launcher now writes `customer-artworks/last-import-report.txt` with a plain-language compatibility message, so the standard support/report path still works.
+- **Launcher wiring:** `Update Gallery.command` and `Update Gallery.bat` now call `scripts/run-import-artworks.cjs`.
+
+### Validation status
+
+- `npm run lint` ✅
+- `npm run build` ✅
+- Manual launcher smoke test on supported Node: ✅
+
+---
+
 ## 2026-05-19 — v0.14 implementation pass: deeper close zoom, tighter pan edges, portrait reset-fit boost
 
 ### Scope of this pass

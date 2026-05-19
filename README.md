@@ -64,7 +64,15 @@ Quick workflow:
    - A plain-language report opens automatically.
 3. Double-click `index.html` to view the updated gallery.
 
-Behind the scenes, `scripts/import-artworks.mjs` reads each picture's pixel
+Requirement: **Node.js LTS 18+** must be installed (older Node versions fail on
+the ESM importer syntax).
+
+Behind the scenes, `Update Gallery` now launches
+`scripts/run-import-artworks.cjs`, which first checks Node.js major version and
+then runs `scripts/import-artworks.mjs`. This avoids raw syntax-crash stacks on
+older Node and writes a plain-language report instead.
+
+`scripts/import-artworks.mjs` reads each picture's pixel
 dimensions, copies it to `customer-preview/images/`, and writes both
 `customer-artworks/artworks.json` (human-readable manifest) and
 `customer-preview/customer-artworks.js` (runtime injection consumed by the

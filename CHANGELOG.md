@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed (importer launcher compatibility / Node version guard — 2026-05-19)
+
+- Added `scripts/run-import-artworks.cjs` as a CommonJS launcher for the customer importer flow.
+- `Update Gallery.command` and `Update Gallery.bat` now call the launcher instead of invoking `import-artworks.mjs` directly.
+- The launcher checks Node.js major version before loading ESM importer code and requires Node.js 18+.
+- On unsupported Node versions, it writes a plain-language compatibility error to `customer-artworks/last-import-report.txt` and exits with a clear message instead of showing a raw `Unexpected token {` stack trace.
+- Updated customer and maintainer documentation (`README.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`) with Node 18+ requirement and troubleshooting.
+
 ### Implemented (v0.14 zoom/pan/reset-fit follow-up — 2026-05-19)
 
 - **Deeper close zoom on medium/large artworks.** `MIN_CAMERA_Z` changed from `0.5` to `0.2` and `MIN_VISIBLE_ARTWORK_FRACTION` from `0.28` to `0.12`, lowering the practical close-inspection floor where fraction-driven limits previously dominated.

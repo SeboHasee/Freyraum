@@ -87,7 +87,8 @@ The customer puts image files there and then runs:
 
 That updater runs:
 
-- `/home/runner/work/Freyraum/Freyraum/scripts/import-artworks.mjs`
+- `/home/runner/work/Freyraum/Freyraum/scripts/run-import-artworks.cjs` (launcher)
+- which then runs `/home/runner/work/Freyraum/Freyraum/scripts/import-artworks.mjs`
 
 The importer scans the inbox, reads each file's dimensions, copies preview-ready
 files into the preview folder, generates metadata, and writes the runtime file
@@ -138,8 +139,10 @@ computes reset zoom from the framed artwork dimensions. For support, use
 ## How the maintenance flow works
 
 1. Images are added to `customer-artworks/inbox/`.
-2. The updater launches `scripts/import-artworks.mjs`.
-3. The importer:
+2. The updater launches `scripts/run-import-artworks.cjs`.
+3. The launcher verifies Node.js major version (requires 18+). If Node is too old, it writes a plain-language compatibility error to `customer-artworks/last-import-report.txt` and exits cleanly.
+4. If Node is compatible, the launcher runs `scripts/import-artworks.mjs`.
+5. The importer:
    - scans the inbox
    - ignores hidden files
    - sorts files
@@ -150,10 +153,10 @@ computes reset zoom from the framed artwork dimensions. For support, use
    - writes `artworks.json`
    - writes `customer-artworks.js`
    - writes `last-import-report.txt`
-4. `customer-preview/app.html` loads `customer-artworks.js`.
-5. `src/main.ts` reads `window.__FREYRAUM_ARTWORKS`.
-6. The runtime validates the injected entries with `sanitizeInjectedArtworks()`.
-7. The validated list is passed into:
+6. `customer-preview/app.html` loads `customer-artworks.js`.
+7. `src/main.ts` reads `window.__FREYRAUM_ARTWORKS`.
+8. The runtime validates the injected entries with `sanitizeInjectedArtworks()`.
+9. The validated list is passed into:
    - `GalleryManager`
    - `Timeline`
    - `InfoPanel`
