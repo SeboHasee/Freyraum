@@ -1,5 +1,38 @@
 # FREYRAUM Plan
 
+## AI context engineering workflow (2026-05-19, implemented)
+
+### Status
+
+Documentation-only repository workflow update completed.
+
+### Scope
+
+- Add global Copilot/agent instructions.
+- Add reusable prompts for refactor, architecture, review, and autonomous work.
+- Add hard repository AI rules, architecture map, lessons learned, coding standards, and AI feedback-loop documentation.
+- Preserve the existing TypeScript/Vite/three.js runtime unchanged.
+
+### Implemented changes
+
+1. `.github/copilot-instructions.md`
+   - repository-specific context, architecture boundaries, validation, coding, and documentation expectations.
+2. `.github/prompts/`
+   - reusable prompt files for refactoring, architecture planning, review, and autonomous maintenance.
+3. `AI_RULES.md`
+   - hard constraints, forbidden patterns, required patterns, and validation rules.
+4. `ARCHITECTURE_MAP.md`
+   - source ownership map for runtime, rendering, gallery, materials, UI, utilities, scripts, and docs.
+5. `LESSONS_LEARNED.md`
+   - durable lessons from recent regressions and validation behavior.
+6. `docs/architecture/`, `docs/standards/`, `docs/lessons-learned/`, `docs/ai-feedback/`
+   - structured folders for future architecture, standards, lessons, and feedback-loop notes.
+
+### Validation
+
+- Documentation-only change; no runtime code changed.
+- Existing validation commands remain `npm run lint` and `npm run build` after `npm install`.
+
 ## v0.16.2 — Control-shell follow-up for settings + center nav (2026-05-19, implemented)
 
 ### Status

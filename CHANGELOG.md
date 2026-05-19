@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Documentation (AI context engineering workflow — 2026-05-19)
+
+- Added repository-level AI guidance: `.github/copilot-instructions.md`, reusable prompts under `.github/prompts/`, `AI_RULES.md`, `ARCHITECTURE_MAP.md`, and `LESSONS_LEARNED.md`.
+- Added docs folders for architecture, standards, lessons learned, and AI feedback so future agent work starts from repository structure and previous regressions.
+- Documented hard constraints around diagnostics, reduced motion, CSS containment, customer-preview rebuilds, injected artwork validation, and validation workflow.
+
 ### Fixed (v0.16.2 control-shell follow-up — 2026-05-19)
 
 - Completed the settings/nav regression fix with a stronger CSS control-shell approach after the earlier containment-only fix proved incomplete in customer testing.

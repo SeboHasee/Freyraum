@@ -26,6 +26,20 @@ Validation for v0.16.2:
 
 All repository markdown files were updated for this follow-up fix.
 
+## AI/context engineering workflow
+
+Repository guidance for future autonomous agent work now lives in:
+
+- `.github/copilot-instructions.md`
+- `.github/prompts/`
+- `AI_RULES.md`
+- `ARCHITECTURE_MAP.md`
+- `LESSONS_LEARNED.md`
+- `docs/ai-feedback/AI_FEEDBACK_LOOP.md`
+- `docs/standards/CODING_GUIDELINES.md`
+
+Use these files with `DOCUMENTATION_RULES.md`, `plan.md`, `FINDINGS.md`, and `CHANGELOG.md` before planning or implementing meaningful changes.
+
 ## Current status — v0.16 deep performance and compatibility pass implemented (2026-05-19)
 
 **Current build:** v0.16 is implemented on top of v0.15.1. Every actionable finding from the v0.16 audit is now in the runtime. No FREYRAUM fidelity surface (painting material, raking-light inspection, motion behaviour, reduced-motion rules, quality presets) is changed.

@@ -5,6 +5,20 @@ contributors. **Current runtime status: v0.16 deep performance and
 compatibility pass is implemented (on top of the earlier v0.15 and v0.14.2
 passes).**
 
+## AI/contributor context
+
+Before planning significant changes, read:
+
+- `ARCHITECTURE_MAP.md`
+- `AI_RULES.md`
+- `.github/copilot-instructions.md`
+- `.github/prompts/`
+- `LESSONS_LEARNED.md`
+- `DOCUMENTATION_RULES.md`
+- latest `plan.md`, `FINDINGS.md`, and `CHANGELOG.md` entries
+
+These files capture repository boundaries, validation expectations, durable lessons, and reusable AI review loops.
+
 ## v0.16.2 implemented — follow-up UI fix (verified settings gear + stronger nav shell)
 
 Follow-up shipped on 2026-05-19 after customer feedback that v0.16.1 was only a partial fix:

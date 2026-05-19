@@ -1,5 +1,33 @@
 # FINDINGS
 
+## 2026-05-19 — AI context engineering workflow
+
+### Finding
+
+The repository already had strong implementation-history documents (`plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `DOCUMENTATION_RULES.md`), but no dedicated AI instruction layer that summarized architecture boundaries, forbidden patterns, durable lessons, and reusable agent prompts.
+
+### Decision
+
+Add a lightweight context-engineering layer without changing runtime code:
+
+- `.github/copilot-instructions.md`
+- `.github/prompts/refactor.prompt.md`
+- `.github/prompts/architecture.prompt.md`
+- `.github/prompts/review.prompt.md`
+- `.github/prompts/autonomous-agent.prompt.md`
+- `AI_RULES.md`
+- `ARCHITECTURE_MAP.md`
+- `LESSONS_LEARNED.md`
+- `docs/architecture/README.md`
+- `docs/standards/CODING_GUIDELINES.md`
+- `docs/lessons-learned/README.md`
+- `docs/ai-feedback/AI_FEEDBACK_LOOP.md`
+
+### Validation status
+
+- Documentation-only change; no runtime behavior changed.
+- Future implementation work should still run the existing validation commands that apply to touched code.
+
 ## 2026-05-19 (implementation completed) — v0.16.2 control-shell follow-up
 
 ### Why v0.16.1 was not enough
