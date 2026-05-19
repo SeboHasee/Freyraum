@@ -4,6 +4,15 @@ This document supports presenting FREYRAUM to customers and onboarding new
 contributors. **Current runtime status: v0.15 elegant animation system is
 implemented, on top of the v0.14.2 zoom/pan/reset-fit follow-up.**
 
+
+## v0.16 performance audit — Planned (2026-05-19)
+
+A performance-focused audit is documented for the next implementation pass. It is intentionally measurement-first and fidelity-preserving: do not reduce `Hoch` visual quality, do not connect reduced motion to shader fidelity, and do not break the offline customer preview.
+
+Start future performance work from root `plan.md` → `v0.16 — Planned: performance audit and compatibility-safe optimization roadmap` and `FINDINGS.md` → `2026-05-19 — v0.16 performance audit and research-backed optimization plan`.
+
+Priority order: add renderer/frame diagnostics, consolidate resize/camera/composer updates, batch art-safe viewport measurement, add Page Visibility pause/resume, clean pinch hot paths, schedule expensive shader toggles, add texture-memory/import diagnostics, profile glass CSS paint cost, and document GPU resource ownership.
+
 ## v0.15 elegant animation system — Implemented (2026-05-19)
 
 v0.15 shipped on 2026-05-19 in `src/gallery/GalleryManager.ts`, `src/utils/math.ts`, `src/ui/InfoPanel.ts`, `src/styles/main.scss`, and `src/main.ts`:

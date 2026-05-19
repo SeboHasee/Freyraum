@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+
+### Documentation (v0.16 performance audit and optimization plan — 2026-05-19)
+
+- Added a complete research-backed performance audit and implementation roadmap to `plan.md`.
+- Documented WebGL/three.js/mobile performance findings in `FINDINGS.md`: resize consolidation, layout-read batching, visibility-aware render loop, pinch hot-path cleanup, shader-change scheduling, texture memory scalability, CSS paint profiling, and GPU resource ownership.
+- Updated README, handoff, customer guide, image maintenance guide, and documentation rules to point future performance work toward measurement-first optimization that preserves graphical fidelity.
+- No runtime code, generated preview bundle, dependencies, or quality preset behavior changed in this pass.
+
 ### Fixed (v0.15.1 reduced-motion fidelity hotfix — 2026-05-19)
 
 - Fixed an unintended coupling where `Reduzierte Bewegung` also reduced

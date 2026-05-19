@@ -5,6 +5,11 @@ Welcome! This guide explains how to put your pictures into the FREYRAUM gallery.
 You do **not** need to use a code editor, the terminal, or any technical tool.
 You only ever touch one folder and one button.
 
+
+## Performance planning note (v0.16 planned)
+
+The next documented technical pass is a performance audit/optimization roadmap. It does not change how customers add pictures today. The planned work keeps picture quality intact and focuses on smoother performance across more devices, better handling of very large images, and clearer support diagnostics for older or mobile hardware.
+
 ## Phone and tablet note
 
 v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.

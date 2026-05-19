@@ -1,5 +1,89 @@
 # FINDINGS
 
+## 2026-05-19 — v0.16 performance audit and research-backed optimization plan
+
+### Scope
+
+This was a documentation and planning pass for performance. No runtime code was changed. The audit covered the WebGL renderer, resize path, render loop, painting material pipeline, texture/import pipeline, adaptive quality utilities, interaction hot paths, CSS paint surfaces, and all repository markdown files.
+
+### Research summary
+
+Current WebGL/three.js/mobile guidance points to these priorities:
+
+- cap drawing-buffer resolution on high-DPR devices and expose quality choices rather than rendering every phone at native DPR;
+- dispose GPU resources explicitly because JavaScript garbage collection does not free WebGL buffers/textures/programs by itself;
+- avoid unnecessary sync GPU operations and avoid texture uploads during interactive frames;
+- use compressed textures such as KTX2/Basis for scalable production delivery when the deployment pipeline supports it;
+- keep CSS animation on `transform` and `opacity`, and profile paint-heavy effects like live blur;
+- batch DOM reads/writes around `ResizeObserver`, `visualViewport`, and resize callbacks;
+- pause or reset render-loop timing around hidden tabs because RAF is throttled/paused and timestamps jump on resume;
+- test WebGL performance and context-loss behavior on real devices, not only desktop emulation.
+
+### Current strengths
+
+- FREYRAUM already has quality presets with DPR caps, bloom/shadow/shader controls, and a first-run startup quality heuristic.
+- Coarse-pointer devices are capped more aggressively through `getOptimalPixelRatio()`.
+- WebGL context loss/restoration is handled by `RendererManager` and surfaced through diagnostics.
+- v0.15 fixed the main animation timing problem with frame-rate-independent smoothing.
+- Reduced motion is now correctly motion-only and no longer reduces shader fidelity.
+- The local customer preview is robust because imported images are embedded as `webglImage` data URLs for WebGL upload reliability.
+
+### Findings
+
+#### 1. Resize work is duplicated across managers
+
+- `src/core/SceneManager.ts` registers `window.resize` to update camera aspect.
+- `src/core/PostProcessing.ts` registers `window.resize` to update composer size.
+- `src/main.ts` also has a 120 ms debounced coordinator that handles renderer resize, device caps, compact info state, hint text, artwork viewport metrics, `visualViewport`, and `ResizeObserver` triggers.
+
+This is functionally safe, but future optimization should consolidate the actual work into one coalesced resize application. The goal is not fewer listeners for its own sake; the goal is deterministic ordering and fewer repeated layout/render-surface updates during orientation changes.
+
+#### 2. Artwork-safe viewport measurement can force layout during resize churn
+
+`src/main.ts` reads CSS custom properties and uses `getBoundingClientRect()` for `.topbar`, `.timeline`, and `.nav-controls` while handling resize-like signals. Because mobile browser chrome can trigger rapid `visualViewport` resize/scroll events, the next pass should cache element references and perform all DOM reads in one RAF-scheduled measurement phase.
+
+#### 3. Render loop lacks a Page Visibility pause
+
+The render loop already skips drawing while the WebGL context is lost, but it still schedules RAF normally when the page is hidden. Browsers throttle or pause RAF in hidden tabs, and the timestamp can jump on resume. A visibility pause/reset would reduce battery use and avoid resume spikes in frame-budget/adaptive-quality logic.
+
+#### 4. Pinch input path has avoidable math
+
+`CanvasInteraction` computes exact pinch distance with `Math.sqrt()` on every pointer/touch move. This is not the largest bottleneck, but it is an easy mobile hot-path cleanup. The future implementation must preserve the exact zoom feel.
+
+#### 5. Shader feature toggles can land in interaction frames
+
+`applyPreferences()` can change inspection self-shadow filtering by calling `PaintingMaterial.setShadowFilterRadius(...)`. This preserves important raking-light fidelity, but shader define changes can compile synchronously. The next pass should schedule/diagnose expensive shader changes instead of reducing fidelity.
+
+#### 6. Texture memory is the main future scalability risk
+
+Customer artworks can be large and are embedded for offline WebGL reliability. That is the right compatibility decision, but large galleries need import-time warnings, estimated texture memory diagnostics, and a future optional compressed texture pipeline for non-offline deployments. Do not remove the data-URL fallback.
+
+#### 7. CSS glass effects should be profiled, not blindly removed
+
+The glass UI is part of the premium visual identity. `backdrop-filter` can be expensive on constrained devices, so the plan is to profile and add capability-specific fallbacks only if necessary.
+
+#### 8. Resource ownership should be documented before lifecycle changes
+
+Renderer, composer, scene camera listeners, interaction listeners, procedural texture caches, artwork textures, and generated materials need a single disposal ownership map before future dynamic reload or asset-streaming work.
+
+### Recommended next implementation order
+
+1. Add performance diagnostics around renderer info, resize coalescing, and frame budget.
+2. Consolidate resize/camera/composer/renderer updates into the existing coordinator.
+3. Batch artwork-safe viewport measurement via cached element references and RAF.
+4. Add Page Visibility pause/resume with timing reset.
+5. Clean up pinch hot-path math and listener disposal idempotency.
+6. Defer expensive shader recompile work when the current frame is over budget.
+7. Add customer-image size/memory diagnostics and plan optional KTX2/Basis derivatives.
+8. Profile glass CSS paint cost and add fallbacks only for constrained devices.
+9. Document and harden GPU resource disposal boundaries.
+
+### Validation status
+
+- Documentation-only audit; no runtime files changed in this pass.
+- Future implementation must run `npm run lint` and `npm run build`, then perform physical-device QA for desktop, tablet, phone, reduced motion, high contrast, all quality presets, local `file://`, and no-WebGL fallback.
+
+---
 ## 2026-05-19 — v0.15.1 hotfix: reduced motion must not reduce shader fidelity
 
 ### User-reported issue

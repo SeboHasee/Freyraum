@@ -5,6 +5,19 @@ This guide explains how the image system works after the v0.07 importer update.
 It is meant for the person who maintains the project folder, supports the customer,
 or needs to understand why an image does or does not appear in the gallery.
 
+
+## Planned v0.16 performance audit / optimization roadmap
+
+The v0.16 documentation pass identifies the next performance work without changing the importer or runtime yet. Maintenance-relevant priorities:
+
+- preserve exact customer image rendering and the `webglImage` data-URL fallback for offline `file://` previews;
+- add diagnostics for large image dimensions and estimated texture memory before customers hit GPU limits;
+- consider optional future KTX2/Basis derivatives only as an enhancement for deployments that can support extra generated assets;
+- consolidate resize and viewport measurement before tuning visual quality;
+- document ownership/disposal of generated textures, procedural maps, materials, observers, and renderer resources before any dynamic reload work.
+
+See root `plan.md` v0.16 and `FINDINGS.md` v0.16 before implementing performance changes.
+
 ## Implemented v0.15 animation refinement
 
 The v0.15 elegant animation pass was implemented on 2026-05-19. It is independent from the importer / image-manifest pipeline and does not change customer behavior.

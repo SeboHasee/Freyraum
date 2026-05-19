@@ -2,6 +2,13 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
+
+## Current planning pass — v0.16 performance audit (2026-05-19)
+
+A complete performance audit and research-backed optimization plan has been documented. This pass did **not** change runtime code; it defines the next implementation roadmap for better frame stability and wider device compatibility while preserving FREYRAUM's graphical fidelity.
+
+The plan focuses on measurement-first improvements: resize coalescing, batched viewport measurement, visibility-aware render-loop pausing, mobile interaction hot-path cleanup, shader-change scheduling, texture-memory scalability, CSS paint profiling, and explicit GPU resource ownership. See [`plan.md`](./plan.md#v016--planned-performance-audit-and-compatibility-safe-optimization-roadmap-2026-05-19) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v016-performance-audit-and-research-backed-optimization-plan).
+
 ## Current status — v0.15 elegant animation system implemented (2026-05-19)
 
 **Current build:** v0.15 is implemented. v0.14.2 zoom/pan tuning is preserved unchanged.

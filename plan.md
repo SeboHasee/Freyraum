@@ -1,5 +1,165 @@
 # FREYRAUM Plan
 
+## v0.16 — Planned: performance audit and compatibility-safe optimization roadmap (2026-05-19)
+
+### Status
+
+**Planning / documentation pass completed 2026-05-19.** No runtime code was changed in this pass. The goal was to audit the current WebGL/three.js runtime, research current performance guidance, and create a future implementation plan that can improve frame stability and device compatibility **without reducing graphical fidelity**.
+
+### Design goal
+
+FREYRAUM should keep the current high-end visual identity: real artwork albedo, premium painting material relief, raking-light inspection, bloom where selected by quality preset, safe close zoom, and museum-elegant motion. Performance work should therefore remove avoidable CPU/GPU waste, improve scheduling, and add measurement before changing visible rendering. The plan below treats fidelity reduction as a fallback only for the existing user-selected `Ausgewogen` / `Akkusparend` presets, not as a hidden downgrade.
+
+### Online research sources used
+
+| Source | Guidance applied to FREYRAUM |
+|---|---|
+| MDN WebGL best practices | Delete/dispose GPU resources eagerly, avoid unnecessary sync/flush patterns, cap over-large drawing buffers, reduce per-frame work, and treat texture upload/memory as a first-class budget. |
+| three.js disposal guidance | Removing objects from a scene is not enough; geometries, materials, textures, render targets, composers, and renderer internals need explicit disposal paths. |
+| three.js / WebGL texture guidance | Large RGBA textures are expensive in GPU memory; mipmaps add roughly one-third memory but improve minification quality/performance; power-of-two and compressed textures are preferred when the asset pipeline can support them. |
+| KTX2 / Basis Universal guidance for three.js | KTX2/Basis offers GPU-compressed texture delivery across ASTC/ETC/BC/PVRTC-capable hardware and is the correct future path for large artwork sets, provided an offline fallback remains. |
+| MDN / web.dev CSS animation performance | Keep UI animation on `transform` and `opacity`, batch DOM reads/writes, and avoid expensive paint effects in hot interactive states. |
+| MDN `requestAnimationFrame` / Page Visibility API | RAF is throttled or paused in hidden tabs; timestamps can jump on resume. Render loops should pause or reset timing while hidden to avoid wasted battery and resume spikes. |
+| MDN / web.dev ResizeObserver guidance | Resize callbacks must stay lightweight, avoid recursive layout work, batch expensive measurement into RAF, and unobserve on disposal. |
+| Mobile WebGL guidance | High-DPR phones are fill-rate constrained; use DPR caps/adaptive quality, test on real devices, and handle context loss/recovery cleanly. |
+
+### Repository audit scope
+
+The audit covered the current source tree and documentation surfaces relevant to runtime performance:
+
+- bootstrap and render loop: `src/main.ts`
+- renderer/backend lifecycle: `src/core/RendererManager.ts`, `src/core/PostProcessing.ts`, `src/core/SceneManager.ts`, `src/rendering/RenderBackend.ts`
+- gallery transforms, zoom, pan, and diagnostics: `src/gallery/GalleryManager.ts`, `src/gallery/ArtworkMesh.ts`, `src/gallery/SidePanels.ts`, `src/gallery/TextureManager.ts`
+- painting shader/material pipeline: `src/materials/PaintingMaterial.ts`, `src/materials/ProceduralTextureFactory.ts`, `src/materials/PaintingTextureSet.ts`, `src/config/quality.ts`
+- interaction hot paths: `src/interaction/CanvasInteraction.ts`
+- adaptive quality and frame-budget code: `src/utils/FrameBudgetMonitor.ts`, `src/utils/AdaptiveQualityController.ts`, `src/utils/performance.ts`, `src/utils/device.ts`, `src/utils/Diagnostics.ts`
+- UI/CSS paint and layout surfaces: `src/styles/main.scss`, `src/ui/*`, `src/timeline/Timeline.ts`
+- customer/offline asset workflow: `scripts/import-artworks.mjs`, `scripts/write-local-preview.mjs`, `customer-preview/*`
+- markdown docs: `README.md`, `CHANGELOG.md`, `FINDINGS.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`
+
+### Key findings
+
+1. **Resize work is split across multiple listeners.** `SceneManager` and `PostProcessing` each register their own `window.resize` handler while `main.ts` also runs a debounced coordinator plus `visualViewport` and `ResizeObserver` triggers. This is correct functionally, but it duplicates resize scheduling and makes orientation changes more expensive than necessary.
+2. **Artwork-safe viewport measurement performs DOM queries and rect reads inside the resize path.** `main.ts` reads computed CSS variables and `getBoundingClientRect()` for topbar, timeline, and nav controls. The work is debounced, but it can still force layout during visual-viewport churn on mobile browsers.
+3. **The render loop continues to schedule RAF while the page is hidden.** `RendererManager.isRenderPaused()` handles WebGL context loss, but there is no Page Visibility pause/reset path. Hidden tabs may still cost battery and can resume with timing spikes.
+4. **Pinch zoom does square-root math on every pinch move.** `CanvasInteraction` computes exact pinch distance with `Math.sqrt()` for every pointer/touch movement. It is small but avoidable on the mobile input hot path.
+5. **Shader/material recompilation can happen synchronously on preference/profile changes.** `applyPreferences()` can toggle inspection self-shadow filtering through `PaintingMaterial.setShadowFilterRadius(...)`. This is visually important, but expensive shader work should be scheduled and measured so it does not land in the same frame as UI interaction.
+6. **Current quality presets already protect fidelity, but adaptive decisions need clearer budgets.** The code has `FrameBudgetMonitor`, `AdaptiveQualityController`, DPR caps, and startup quality heuristics. The next pass should connect these to explicit budgets and diagnostics before changing rendering defaults.
+7. **Texture memory is the largest future scalability risk.** Customer images can be large and are embedded as data URLs for local-file reliability. This is correct for compatibility, but future large galleries need import-time sizing budgets, optional compressed derivatives, and explicit GPU-memory diagnostics.
+8. **GPU resource disposal exists in some classes but lacks a documented ownership map.** `RendererManager`, `PostProcessing`, `SceneManager`, and interactions dispose their own resources/listeners, but future performance work needs a single resource lifecycle checklist for textures, generated procedural maps, materials, composer render targets, and observers.
+9. **Backdrop blur / glass UI can be paint-heavy.** FREYRAUM's visual style uses glass surfaces. This should stay visually intact, but the next pass should profile `backdrop-filter` cost on mobile and add compatibility fallbacks only where the browser/GPU struggles.
+10. **Legacy interaction classes remain in the tree.** `MouseInteraction`, `TouchInteraction`, and `ZoomPan` are retained as dead code after `CanvasInteraction`. They do not run, but they increase maintenance/audit cost and can confuse future performance work.
+
+### Non-goals
+
+- Do not remove high-quality painting shader features from the `Hoch` preset.
+- Do not reduce artwork texture fidelity in response to `Reduzierte Bewegung`.
+- Do not replace the local/offline customer preview requirement with a server-only pipeline.
+- Do not add heavy runtime dependencies for profiling or animation.
+- Do not switch to WebGPU as the primary renderer until there is a proven WebGL fallback and browser support matrix.
+
+### Implementation roadmap
+
+#### Slice 1 — Measurement baseline first
+
+- Add a small diagnostics snapshot for renderer state: drawing-buffer size, DPR, quality preset, draw calls, triangle count, texture count where available from `renderer.info`.
+- Add resize diagnostics that count how many resize-like signals were coalesced into each actual resize application.
+- Add interaction diagnostics for pinch/zoom frame budget only in non-default diagnostics modes.
+- Acceptance: `?debug=info` can show whether a performance change improved frame time, draw calls, texture counts, and resize frequency without adding normal-console noise.
+
+#### Slice 2 — Single resize/render-surface coordinator
+
+- Move camera aspect and composer size updates behind explicit methods instead of independent `window.resize` listeners.
+- Let the existing debounced `main.ts` coordinator call renderer, camera, composer, device caps, compact info state, hint text, and gallery viewport refit exactly once per resize batch.
+- Keep `visualViewport` and `ResizeObserver`, but schedule DOM measurement in a single `requestAnimationFrame` after the browser has settled layout.
+- Acceptance: one resize cycle produces one renderer resize, one camera projection update, one composer resize, and one art-safe viewport diagnostic event.
+
+#### Slice 3 — Layout-read batching and cached chrome references
+
+- Cache topbar, timeline, nav-controls, and info-panel element references after UI construction.
+- Separate DOM reads from writes in the resize path: read viewport/CSS/rects together, then apply gallery/capability changes together.
+- Keep hard fallbacks for missing chrome so the artwork-safe viewport never becomes negative.
+- Acceptance: orientation change and split-view resize stay stable with no repeated forced-layout warnings in browser performance tools.
+
+#### Slice 4 — Visibility-aware render loop
+
+- Use the Page Visibility API to pause or reduce rendering while `document.hidden` is true.
+- Reset smoothing/frame-budget time bases when visibility returns so no single huge hidden-tab delta affects motion or adaptive-quality decisions.
+- Preserve WebGL context-loss handling as a separate pause reason.
+- Acceptance: hidden tabs stop burning GPU, return without jumps, and log concise visibility pause/resume diagnostics in debug mode.
+
+#### Slice 5 — Interaction hot-path cleanup
+
+- Optimize pinch calculations by tracking squared distance where exact distance is not required, or by minimizing exact `Math.sqrt()` calls to the delta calculation boundary.
+- Add a disposal idempotency guard to interaction/listener-heavy classes so cleanup remains safe during future lifecycle changes.
+- Remove or clearly quarantine legacy unused interaction classes in a separate future cleanup if no imports remain.
+- Acceptance: pinch/zoom behavior is unchanged visually, but the input path has fewer avoidable calculations and safer cleanup.
+
+#### Slice 6 — Shader-change scheduling without fidelity loss
+
+- Keep the existing visual output for all presets.
+- Before toggling expensive shader defines for inspection/profile changes, measure whether the current frame is already over budget.
+- If the frame is hot, defer the shader-variant update to the next animation frame or idle callback with a timeout fallback.
+- Log the deferral only in diagnostics mode.
+- Acceptance: switching lighting/quality feels responsive on low-end devices and never silently drops shader fidelity.
+
+#### Slice 7 — Texture and asset pipeline scalability
+
+- Add import-time guidance and diagnostics for very large customer pictures: longest edge, estimated RGBA memory, and whether the image exceeds a recommended interactive budget.
+- Preserve the current exact embedded `webglImage` path for local-file compatibility.
+- Research/plan an optional future KTX2/Basis derivative pipeline for web/server deployments while keeping data-URL fallback for one-click offline previews.
+- Ensure generated procedural textures and loaded artwork textures have a documented ownership/disposal path.
+- Acceptance: large-image risk is visible to maintainers before it becomes a runtime memory problem; offline behavior remains unchanged.
+
+#### Slice 8 — CSS paint-cost profiling
+
+- Profile `backdrop-filter` glass surfaces, fixed chrome, and timeline shadows on representative mobile devices.
+- If needed, add capability/quality-specific CSS fallbacks that keep the same layout and premium appearance but reduce blur radius or replace live blur with translucent gradients on constrained devices.
+- Keep transform/opacity-only motion rules from v0.15 intact.
+- Acceptance: no visible downgrade on modern desktop/tablet, but constrained mobile devices avoid avoidable paint spikes.
+
+#### Slice 9 — Resource lifecycle and disposal map
+
+- Document which class owns each renderer, composer, material, texture, generated procedural map, listener, observer, and timeout.
+- Make dispose methods idempotent where future repeated boot/unboot paths are plausible.
+- Ensure any future artwork replacement flow disposes old GPU textures/material resources before uploading new ones.
+- Acceptance: browser memory tools and `renderer.info` do not show unbounded growth after repeated navigation, quality toggles, and gallery reload-style flows.
+
+### Performance budgets to use in the implementation pass
+
+| Area | Budget / target |
+|---|---|
+| Desktop high preset | Stable 60 FPS at DPR cap 1.8 on current demo set, no interaction frame over 32 ms outside initial load. |
+| Balanced laptop/tablet | Stable 60 FPS at DPR cap 1.4, no resize burst causing more than one visible jank frame. |
+| Battery / small phone | DPR cap 1.0 or coarse-pointer cap, sustained interaction near 30–60 FPS depending hardware, no context-loss loop. |
+| Resize/orientation | One coalesced resize application after the debounce/RAF batch. |
+| Hidden tab | No continuous rendering work while hidden; no large-delta jump on resume. |
+| Texture memory | Warn in diagnostics/support docs when customer images exceed a practical interactive budget; do not fail silently. |
+
+### Compatibility matrix for future QA
+
+- Desktop Chrome/Edge/Safari/Firefox at 60 Hz and high-refresh displays.
+- iPhone Safari with notch/home indicator and `visualViewport` chrome movement.
+- iPad Safari split view and rotation.
+- Android Chrome high-DPR phone and mid-range GPU.
+- Windows laptop with integrated GPU on battery.
+- No-WebGL/private-browsing fallback.
+- Reduced motion on/off, high contrast on/off, all quality presets, all lighting profiles.
+- Local `file://` customer preview and Vite dev server.
+
+### Documentation impact of this pass
+
+- `FINDINGS.md` records the detailed audit and source-backed findings.
+- `CHANGELOG.md` records this as a documentation/planning pass.
+- `README.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` now point future work to this v0.16 performance plan.
+- `DOCUMENTATION_RULES.md` notes that performance plans must include measurement, compatibility, and fidelity-preservation boundaries.
+
+### Validation for this documentation pass
+
+- Documentation-only pass; no runtime TypeScript, SCSS, generated preview bundle, or dependency files were intentionally changed.
+- Final validation should confirm only markdown files changed and run automated review/security validation.
+
+---
 ## v0.15 — Implemented: elegant animation system (2026-05-19)
 
 ### Status
