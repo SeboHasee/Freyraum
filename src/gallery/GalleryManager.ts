@@ -4,7 +4,7 @@ import { ArtworkMesh } from './ArtworkMesh';
 import { SidePanels } from './SidePanels';
 import { TextureManager } from './TextureManager';
 import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory';
-import { clamp } from '../utils/math';
+import { clamp, smoothDamp } from '../utils/math';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import type { QualityPreset } from '../config/quality';
 import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/PaintingTextureSet';
@@ -67,6 +67,51 @@ const RESET_REFIT_EPSILON = 0.25;
  */
 const INSPECTION_OVERSCROLL_X = 1.2;
 const INSPECTION_OVERSCROLL_Y = 0.6;
+
+/**
+ * v0.15 — Frame-rate-independent smoothing factors (per second).
+ *
+ * Before v0.15 the same motion settled in ~408ms on a 120 Hz screen and
+ * ~817ms on a 60 Hz screen because every constant was applied per frame
+ * rather than per second. After v0.15 each value below targets a wall-clock
+ * 95% settle time, computed as t95 = -ln(0.05) / lambda ≈ 3 / lambda.
+ *
+ * | Property              | λ    | 95% settle |
+ * | --------------------- | ---- | ---------- |
+ * | hover rotation        | 12.0 |  ~250 ms   |
+ * | nav position (x/y/z)  |  2.5 | ~1200 ms   |
+ * | nav scale             |  3.0 | ~1000 ms   |
+ * | camera zoom           |  4.0 |  ~750 ms   |
+ * | camera pan            |  5.0 |  ~600 ms   |
+ */
+const LAMBDA_HOVER_ROTATION = 12.0;
+const LAMBDA_NAV_POSITION = 2.5;
+const LAMBDA_NAV_SCALE = 3.0;
+const LAMBDA_CAMERA_ZOOM = 4.0;
+const LAMBDA_CAMERA_PAN = 5.0;
+
+/**
+ * v0.15 — Navigation entrance seeds. Applied to the artwork group before
+ * `update()` smooths the values back to their targets (0, 0, 1).
+ *
+ * - position.x: larger horizontal travel (3.2 → 4.5) is now witnessable
+ *   thanks to the slower λ=2.5 settle (~1200 ms).
+ * - position.z: new — painting recedes slightly behind the rest pose,
+ *   giving a soft 3D approach feeling. Frame plane sits at z=0 and the
+ *   artwork plane at z≈0.095, so a target of -0.6 does not cause z-fight.
+ * - rotation.y: reduced 0.32 rad (~18°) → 0.15 rad (~9°) — a museum
+ *   yaw rather than a theatrical pivot.
+ * - scale: 0.84 → 0.88 — slightly less collapsed so the slower settle
+ *   does not look like a shrunken thumbnail growing into place.
+ */
+const NAV_SEED_POSITION_X = 4.5;
+const NAV_SEED_POSITION_Z = -0.6;
+const NAV_SEED_ROTATION_Y = 0.15;
+const NAV_SEED_SCALE = 0.88;
+
+/** Maximum delta-time clamp (seconds) for smoothing — prevents huge jumps
+ * after a stalled/backgrounded tab when `requestAnimationFrame` resumes. */
+const MAX_SMOOTHING_DT = 0.1;
 
 /** Roles that can be filled in by the procedural factory when no authored map exists. */
 const PROCEDURAL_ROLES: PaintingMapRole[] = [
@@ -131,6 +176,12 @@ export class GalleryManager {
   panY = 0;
   targetPanX = 0;
   targetPanY = 0;
+  /**
+   * v0.15 — `DOMHighResTimeStamp` of the previous `update(now)` call.
+   * `0` means we have not yet ticked; the first frame is skipped so the
+   * dt computation never sees an unbounded delta.
+   */
+  private lastUpdateTime = 0;
 
   private onNavigateCallback: NavigationCallback | null = null;
 
@@ -448,12 +499,20 @@ export class GalleryManager {
       fromArtworkId: this.artworks[fromIndex]?.id,
       toArtworkId: this.artworks[newIndex]?.id,
       direction,
+      // v0.15 — motion mode and intended settle timing for QA / diagnostics.
+      motionMode: this.reducedMotion ? 'reduced' : 'full',
+      seedPositionX: this.reducedMotion ? 0 : direction * NAV_SEED_POSITION_X,
+      seedPositionZ: this.reducedMotion ? 0 : NAV_SEED_POSITION_Z,
+      settleTargetMs: this.reducedMotion
+        ? 0
+        : Math.round(1000 * (-Math.log(0.05) / LAMBDA_NAV_POSITION)),
     });
 
     if (!this.reducedMotion) {
-      this.artworkMesh.group.position.x = direction * 3.2;
-      this.artworkMesh.group.rotation.y = direction * 0.32;
-      this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
+      this.artworkMesh.group.position.x = direction * NAV_SEED_POSITION_X;
+      this.artworkMesh.group.position.z = NAV_SEED_POSITION_Z;
+      this.artworkMesh.group.rotation.y = direction * NAV_SEED_ROTATION_Y;
+      this.artworkMesh.group.scale.set(NAV_SEED_SCALE, NAV_SEED_SCALE, NAV_SEED_SCALE);
     }
 
     this.currentIndex = newIndex;
@@ -476,15 +535,23 @@ export class GalleryManager {
       fromArtworkId: this.artworks[this.currentIndex]?.id,
       toArtworkId: this.artworks[index]?.id,
       diff,
+      // v0.15 — motion diagnostics parity with navigate().
+      motionMode: this.reducedMotion ? 'reduced' : 'full',
+      seedPositionX: this.reducedMotion ? 0 : (diff > 0 ? 1 : -1) * NAV_SEED_POSITION_X,
+      seedPositionZ: this.reducedMotion ? 0 : NAV_SEED_POSITION_Z,
+      settleTargetMs: this.reducedMotion
+        ? 0
+        : Math.round(1000 * (-Math.log(0.05) / LAMBDA_NAV_POSITION)),
     });
 
     this.currentIndex = index;
     this.pendingResetAfterArtworkLoad = true;
 
     if (!this.reducedMotion) {
-      this.artworkMesh.group.position.x = (diff > 0 ? 1 : -1) * 3.2;
-      this.artworkMesh.group.rotation.y = direction * 0.32;
-      this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
+      this.artworkMesh.group.position.x = (diff > 0 ? 1 : -1) * NAV_SEED_POSITION_X;
+      this.artworkMesh.group.position.z = NAV_SEED_POSITION_Z;
+      this.artworkMesh.group.rotation.y = direction * NAV_SEED_ROTATION_Y;
+      this.artworkMesh.group.scale.set(NAV_SEED_SCALE, NAV_SEED_SCALE, NAV_SEED_SCALE);
     }
 
     void this.showArtwork(index);
@@ -562,28 +629,63 @@ export class GalleryManager {
     }
   }
 
-  update(): void {
+  /**
+   * v0.15 — frame-rate-independent update step.
+   *
+   * Receives a `DOMHighResTimeStamp now` from the main animation loop and
+   * derives `dt` in seconds. All smoothing uses `smoothDamp(value, target,
+   * lambda, dt)` which is the analytic solution to exponential decay, so
+   * timing is consistent across 30 Hz, 60 Hz, 90 Hz, and 120 Hz displays.
+   */
+  update(now: number): void {
     const group = this.artworkMesh.group;
 
+    // Compute dt. Skip the very first tick (no previous timestamp) so we
+    // do not feed an unbounded delta into smoothDamp. Clamp to
+    // MAX_SMOOTHING_DT to avoid huge jumps after a backgrounded tab.
+    let dt = 0;
+    if (this.lastUpdateTime > 0) {
+      dt = Math.min((now - this.lastUpdateTime) / 1000, MAX_SMOOTHING_DT);
+    }
+    this.lastUpdateTime = now;
+
+    // Target clamping runs every tick (including the first, when dt is 0)
+    // so that any target written between frames — e.g. by zoom/pan input
+    // handlers — is constrained even before the first smoothing step.
     this.targetZoom = this.clampZoom(this.targetZoom);
     this.clampPanTargets();
 
-    group.rotation.x += (this.targetX - group.rotation.x) * 0.05;
-    group.rotation.y += (this.targetY - group.rotation.y) * 0.05;
+    if (dt <= 0) return;
 
-    group.position.x += (0 - group.position.x) * 0.06;
-    group.position.y += (0 - group.position.y) * 0.06;
-    group.scale.x += (1 - group.scale.x) * 0.06;
-    group.scale.y += (1 - group.scale.y) * 0.06;
-    group.scale.z += (1 - group.scale.z) * 0.06;
+    // Hover rotation — λ=12 → ~250 ms settle (immediate feel).
+    group.rotation.x = smoothDamp(group.rotation.x, this.targetX, LAMBDA_HOVER_ROTATION, dt);
+    group.rotation.y = smoothDamp(group.rotation.y, this.targetY, LAMBDA_HOVER_ROTATION, dt);
 
-    this.zoom += (this.targetZoom - this.zoom) * 0.08;
-    this.camera.position.z += (this.zoom - this.camera.position.z) * 0.08;
+    // Navigation position settle — λ=2.5 → ~1200 ms settle (witnessable
+    // artwork entrance, including the new position.z depth recession).
+    group.position.x = smoothDamp(group.position.x, 0, LAMBDA_NAV_POSITION, dt);
+    group.position.y = smoothDamp(group.position.y, 0, LAMBDA_NAV_POSITION, dt);
+    group.position.z = smoothDamp(group.position.z, 0, LAMBDA_NAV_POSITION, dt);
 
-    this.panX += (this.targetPanX - this.panX) * 0.08;
-    this.panY += (this.targetPanY - this.panY) * 0.08;
-    this.camera.position.x += (this.panX - this.camera.position.x) * 0.08;
-    this.camera.position.y += (this.panY - this.camera.position.y) * 0.08;
+    // Navigation scale — λ=3.0 → ~1000 ms settle (smooth swell).
+    group.scale.x = smoothDamp(group.scale.x, 1, LAMBDA_NAV_SCALE, dt);
+    group.scale.y = smoothDamp(group.scale.y, 1, LAMBDA_NAV_SCALE, dt);
+    group.scale.z = smoothDamp(group.scale.z, 1, LAMBDA_NAV_SCALE, dt);
+
+    // Camera zoom — λ=4.0 → ~750 ms settle (graceful, responsive).
+    this.zoom = smoothDamp(this.zoom, this.targetZoom, LAMBDA_CAMERA_ZOOM, dt);
+    this.camera.position.z = smoothDamp(
+      this.camera.position.z,
+      this.zoom,
+      LAMBDA_CAMERA_ZOOM,
+      dt
+    );
+
+    // Camera pan — λ=5.0 → ~600 ms settle (connected to input).
+    this.panX = smoothDamp(this.panX, this.targetPanX, LAMBDA_CAMERA_PAN, dt);
+    this.panY = smoothDamp(this.panY, this.targetPanY, LAMBDA_CAMERA_PAN, dt);
+    this.camera.position.x = smoothDamp(this.camera.position.x, this.panX, LAMBDA_CAMERA_PAN, dt);
+    this.camera.position.y = smoothDamp(this.camera.position.y, this.panY, LAMBDA_CAMERA_PAN, dt);
   }
 
   resetView(): void {

@@ -5,17 +5,18 @@ This guide explains how the image system works after the v0.07 importer update.
 It is meant for the person who maintains the project folder, supports the customer,
 or needs to understand why an image does or does not appear in the gallery.
 
-## Planned v0.15 animation refinement
+## Implemented v0.15 animation refinement
 
-The final v0.15 documentation pass (2026-05-19) plans smoother, longer, more elegant animation behavior. It is not implemented yet and does not affect the importer or image manifest pipeline.
+The v0.15 elegant animation pass was implemented on 2026-05-19. It is independent from the importer / image-manifest pipeline and does not change customer behavior.
 
-Maintenance notes for the future implementation:
+Maintenance notes:
 
-- start from `plan.md` and `FINDINGS.md` v0.15 sections;
-- note that the current plan was re-verified against the full motion/interaction code paths and repository markdown;
-- preserve the existing customer image pipeline and v0.14.2 zoom/pan constants unless visual QA proves otherwise;
-- keep reduced-motion behavior and `prefers-reduced-motion` compatibility;
-- validate rapid navigation with imported customer images because animation retuning must not expose stale texture loads.
+- `src/utils/math.ts` now exports `smoothDamp` alongside `lerp` and `clamp`. Use `smoothDamp` for any new frame-rate-independent value smoothing; keep `lerp` for static interpolation.
+- All `GalleryManager.update()` motion paths now require `now: number` (a `DOMHighResTimeStamp`) — passed from the `requestAnimationFrame` callback in `src/main.ts`. Any future caller must pass `now`.
+- SCSS uses semantic motion tokens (`--dur-content`, `--dur-panel`, `--dur-timeline`, `--dur-reveal`, `--ease-gallery-out`). Backward-compatible aliases (`--dur-base`, `--dur-slow`, `--dur-fast`, `--ease-spring`) still exist for legacy consumers.
+- `InfoPanel.CONTENT_SWAP_DELAY_MS` must stay in sync with `--dur-content` in `main.scss`.
+- `loadingOverlay.remove()` timeout in `main.ts` must stay in sync with `--dur-reveal`.
+- Reduced-motion support is preserved via the existing `[data-motion='reduced']` and `@media (prefers-reduced-motion: reduce)` blocks; no token rename weakens these paths.
 
 ## Responsive and touch support — final technical status (v0.11)
 

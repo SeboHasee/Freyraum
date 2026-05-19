@@ -35,13 +35,32 @@ export class InfoPanel {
     this.update(initialArtwork);
   }
 
+  /**
+   * v0.15 — content-swap delay for animated `update()` calls.
+   *
+   * Must be ≥ the CSS transition duration on `.info-panel` (defined as
+   * `--dur-content: 0.5s` in `src/styles/main.scss`). Before v0.15 this
+   * was hard-coded to 200ms — shorter than the 320ms `--dur-base`
+   * transition — so the text content was swapped while the panel was
+   * still ~62% visible, causing the old text to flicker through the
+   * fade-out. The 20ms tail accounts for browser scheduling jitter.
+   *
+   * Keep in sync with `--dur-content` in `main.scss`.
+   */
+  private static readonly CONTENT_SWAP_DELAY_MS = 520;
+
   update(artwork: Artwork, animate = false): void {
     if (animate) {
       this.el.classList.add('is-transitioning');
       window.setTimeout(() => {
         this.setContent(artwork);
-        this.el.classList.remove('is-transitioning');
-      }, 200);
+        // One animation frame lets the browser apply the new text layout
+        // before we trigger the fade-in transition, preventing a
+        // single-frame flash of un-styled / mid-transition content.
+        window.requestAnimationFrame(() => {
+          this.el.classList.remove('is-transitioning');
+        });
+      }, InfoPanel.CONTENT_SWAP_DELAY_MS);
     } else {
       this.setContent(artwork);
     }

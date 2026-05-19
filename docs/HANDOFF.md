@@ -1,11 +1,26 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current planning status: v0.15 final technical animation audit is
-documented but not implemented. Current runtime status: v0.14.2 zoom/pan/reset-fit
-follow-up is implemented.**
+contributors. **Current runtime status: v0.15 elegant animation system is
+implemented, on top of the v0.14.2 zoom/pan/reset-fit follow-up.**
 
-## v0.15 elegant animation system — final technical audit (2026-05-19)
+## v0.15 elegant animation system — Implemented (2026-05-19)
+
+v0.15 shipped on 2026-05-19 in `src/gallery/GalleryManager.ts`, `src/utils/math.ts`, `src/ui/InfoPanel.ts`, `src/styles/main.scss`, and `src/main.ts`:
+
+- new `smoothDamp(current, target, lambda, dt)` utility — `α = 1 − exp(−λ·dt)` — replaces frame-rate-dependent per-frame lerp;
+- `GalleryManager.update(now: number)` uses the `DOMHighResTimeStamp` already available in the animate loop. All 13 prior per-frame lerps are now lambda-driven (`12` hover, `2.5` nav position, `3.0` nav scale, `4.0` camera zoom, `5.0` camera pan), plus a 14th line for the new `position.z` recession;
+- navigation entrance seeds: `position.x` ±3.2 → ±4.5, `rotation.y` ±0.32 → ±0.15 rad, `scale` 0.84 → 0.88, new `position.z` = -0.6;
+- `InfoPanel` 200 ms / 320 ms timing bug fixed: `CONTENT_SWAP_DELAY_MS = 520` + `requestAnimationFrame` before fade-in;
+- semantic SCSS tokens (`--ease-gallery-out`, `--ease-gallery-in-out`, `--dur-control`, `--dur-content`, `--dur-panel`, `--dur-timeline`, `--dur-reveal`) with backward-compatible aliases;
+- `.info-panel`, `.timeline__thumb`, `.prefs__panel`, `@keyframes prefs-in`, `.loading-overlay`, `.loading-spinner` retuned to museum-elegant durations and `--ease-gallery-out`;
+- `.info-panel.is-transitioning` translateY raised from 8 px to 16 px;
+- `loadingOverlay.remove()` timeout raised from 700 ms to 950 ms to match `--dur-reveal: 0.9s`;
+- new diagnostics fields on `navigate` / `goTo`: `motionMode`, `seedPositionX`, `seedPositionZ`, `settleTargetMs`.
+
+**Validation:** `npm run lint` ✅ and `npm run build` ✅. Preview bundle regenerated.
+
+## v0.15 elegant animation system — Original audit (2026-05-19)
 
 The next documented implementation pass should make animations smoother, longer, and more visible while preserving the premium modern-art style.
 

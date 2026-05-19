@@ -51,12 +51,39 @@
   --radius-sm: 14px;
   --radius-pill: 999px;
 
-  // Motion
+  // Motion (v0.15 — semantic, museum-elegant tokens)
+  //
+  // Easing
+  //   --ease-out:            general-purpose UI controls (unchanged from prior versions)
+  //   --ease-gallery-out:    easeOutExpo — rapid deceleration with silk landing.
+  //                          Replaces `--ease-spring` on gallery surfaces where
+  //                          overshoot reads as un-museum-like (timeline lift,
+  //                          prefs panel entrance, info panel transition).
+  //   --ease-gallery-in-out: easeInOutQuart — full deliberate journey for long reveals.
+  //   --ease-spring:         kept for backward compatibility but no longer used
+  //                          on gallery surfaces (overshoot y1=1.56 reads as
+  //                          theatrical in a quiet museum context).
+  //
+  // Duration — semantic names, with backward-compatible aliases.
+  //   --dur-control:   button hover/active (instant control response)
+  //   --dur-content:   info-panel text fade (matches CONTENT_SWAP_DELAY_MS)
+  //   --dur-panel:     glass-panel open/close entrance
+  //   --dur-timeline:  timeline active thumb lift
+  //   --dur-reveal:    loading overlay + large-scale screen transitions
   --ease-out: cubic-bezier(0.22, 0.78, 0.32, 1);
+  --ease-gallery-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-gallery-in-out: cubic-bezier(0.76, 0, 0.24, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --dur-fast: 0.18s;
-  --dur-base: 0.32s;
-  --dur-slow: 0.6s;
+  --dur-control: 0.18s;
+  --dur-content: 0.5s;
+  --dur-panel: 0.55s;
+  --dur-timeline: 0.42s;
+  --dur-reveal: 0.9s;
+  // Backward-compat aliases. `--dur-base` and `--dur-slow` consumers now
+  // pick up the longer, more elegant timings without rule-level changes.
+  --dur-fast: var(--dur-control);
+  --dur-base: var(--dur-content);
+  --dur-slow: var(--dur-reveal);
 
   --font: 'Inter', system-ui, -apple-system, sans-serif;
 
@@ -188,8 +215,8 @@ button {
   padding: 30px 36px 32px;
   z-index: 100;
   pointer-events: none;
-  transition: opacity var(--dur-base) var(--ease-out),
-    transform var(--dur-base) var(--ease-out);
+  transition: opacity var(--dur-content) var(--ease-gallery-out),
+    transform var(--dur-content) var(--ease-gallery-out);
   box-shadow: var(--shadow-soft);
 }
 
@@ -222,7 +249,9 @@ button {
 
 .info-panel.is-transitioning {
   opacity: 0;
-  transform: translateY(8px);
+  // v0.15 — doubled vertical travel for a more visible fade-in reveal,
+  // paired with --dur-content (0.5s) and --ease-gallery-out.
+  transform: translateY(16px);
 }
 
 .info-panel__eyebrow {
@@ -497,13 +526,15 @@ button {
   padding: 18px 18px 20px;
   box-shadow: var(--shadow-medium);
   transform-origin: top right;
-  animation: prefs-in var(--dur-base) var(--ease-spring);
+  animation: prefs-in var(--dur-panel) var(--ease-gallery-out);
 }
 
 @keyframes prefs-in {
   from {
     opacity: 0;
-    transform: scale(0.94) translateY(-6px);
+    // v0.15 — softer collapse, larger initial offset so the slow easeOutExpo
+    // entrance reads as a deliberate glide rather than a bounce.
+    transform: scale(0.96) translateY(-10px);
   }
   to {
     opacity: 1;
@@ -727,9 +758,9 @@ button {
   cursor: pointer;
   width: 150px;
   height: 95px;
-  transition: transform var(--dur-base) var(--ease-spring),
-    box-shadow var(--dur-base) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-timeline) var(--ease-gallery-out),
+    box-shadow var(--dur-timeline) var(--ease-gallery-out),
+    border-color var(--dur-control) var(--ease-out);
   border: 2px solid transparent;
   background: rgba(255, 255, 255, 0.5);
   scroll-margin-inline: 32px;
@@ -853,7 +884,7 @@ button {
   align-items: center;
   justify-content: center;
   z-index: 200;
-  transition: opacity var(--dur-slow) var(--ease-out);
+  transition: opacity var(--dur-reveal) var(--ease-gallery-out);
 
   &.is-hidden {
     opacity: 0;
@@ -867,7 +898,9 @@ button {
   border: 2px solid var(--bg3);
   border-top-color: var(--text);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  // v0.15 — calmer spinner. 0.8s → 1.4s for a less anxious loading feel.
+  // The reduced-motion block below disables this animation entirely.
+  animation: spin 1.4s linear infinite;
 }
 
 @keyframes spin {

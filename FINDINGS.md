@@ -1,5 +1,84 @@
 # FINDINGS
 
+## 2026-05-19 — v0.15 implementation pass: elegant longer animations
+
+### Scope
+
+Implemented the full v0.15 elegant animation plan after a final audit pass against the current code and online sources. Six slices shipped: `smoothDamp` math utility, SCSS motion token redesign, `InfoPanel` content-swap timing fix, frame-rate-independent `GalleryManager.update(now)`, navigation entrance seed retuning with depth recession, and the loading-overlay removal timeout adjustment.
+
+### Sources used to validate the implementation (re-checked at time of execution)
+
+| Source | Confirmed |
+|---|---|
+| W3C WCAG 2.2 § SC 2.3.3 *Animation from Interactions* | Non-essential motion must be disablable; satisfied by `[data-motion='reduced']` + `@media (prefers-reduced-motion: reduce)` blocks. |
+| MDN `prefers-reduced-motion` | System-preference signal continues to override our motion paths regardless of token rename. |
+| MDN `requestAnimationFrame` callback `now` is a `DOMHighResTimeStamp` | Confirms our dt is in milliseconds and convertable to seconds for `smoothDamp`. |
+| Glenn Fiedler — *Fix Your Timestep* | `α = 1 − exp(−λ·dt)` is the correct frame-rate-independent exponential smoothing kernel. |
+| Stack Overflow #57851938 — *Frame rate independent damping using lerp* | Same formula, confirmed broadly accepted in the games/UI community. |
+| cubic-bezier.com / easing.net | `cubic-bezier(0.16, 1, 0.3, 1)` = easeOutExpo: rapid deceleration, no overshoot, museum-appropriate. |
+| MDN CSS animation performance | All v0.15 transitions still animate only `transform` and `opacity` — compositor-promoted, GPU-accelerated. |
+| web.dev — *animations guide* | Confirms `will-change` is not needed as a permanent class on small UI panels of this kind. |
+
+No new dependencies were introduced.
+
+### Shipped changes (with file:line anchors)
+
+#### `src/utils/math.ts` — new `smoothDamp`
+
+Appended a `smoothDamp(current, target, lambda, dt)` function with full JSDoc covering the derivation, reference settle times, and dt clamping guidance. Equivalence check at dt = 1/60, λ = 4 yields α ≈ 0.0645, slightly lower than the old per-frame `k = 0.08` — intentional for a more graceful settle.
+
+#### `src/gallery/GalleryManager.ts`
+
+- New module-level constants: `LAMBDA_HOVER_ROTATION = 12`, `LAMBDA_NAV_POSITION = 2.5`, `LAMBDA_NAV_SCALE = 3.0`, `LAMBDA_CAMERA_ZOOM = 4.0`, `LAMBDA_CAMERA_PAN = 5.0`, `MAX_SMOOTHING_DT = 0.1` seconds.
+- New navigation-seed constants: `NAV_SEED_POSITION_X = 4.5`, `NAV_SEED_POSITION_Z = -0.6`, `NAV_SEED_ROTATION_Y = 0.15` rad, `NAV_SEED_SCALE = 0.88`.
+- New field `lastUpdateTime` initialised to 0 — the very first tick is skipped to avoid unbounded dt.
+- `update()` is now `update(now: number)`; all 13 prior per-frame lerps converted to `smoothDamp(...)`; a 14th line added for `position.z` so the depth recession seed also settles smoothly.
+- `navigate()` and `goTo()` now apply the new seeds (`position.x`, `position.z`, `rotation.y`, `scale`) and log new diagnostics fields: `motionMode` (`'full'` or `'reduced'`), `seedPositionX`, `seedPositionZ`, `settleTargetMs` (computed from λ).
+
+#### `src/ui/InfoPanel.ts`
+
+- New private static `CONTENT_SWAP_DELAY_MS = 520` (matches `--dur-content: 0.5s` + 20 ms buffer).
+- `update(artwork, animate)` now waits the full transition before swapping text, then uses a `requestAnimationFrame` to remove `is-transitioning` so the browser applies the new text layout before triggering the fade-in.
+
+#### `src/styles/main.scss`
+
+- Added semantic motion tokens: `--ease-gallery-out` (easeOutExpo), `--ease-gallery-in-out` (easeInOutQuart), `--dur-control` (0.18 s), `--dur-content` (0.5 s), `--dur-panel` (0.55 s), `--dur-timeline` (0.42 s), `--dur-reveal` (0.9 s).
+- Old token names kept as backward-compatible aliases — `--dur-fast → --dur-control`, `--dur-base → --dur-content`, `--dur-slow → --dur-reveal` — so other selectors that still reference them inherit the longer, calmer timings without rule-level changes.
+- `.info-panel` transition retuned: `--dur-content` + `--ease-gallery-out`; `.info-panel.is-transitioning` translateY doubled from 8 px to 16 px for a more visible reveal.
+- `.timeline__thumb` transition: replaced `--ease-spring` with `--ease-gallery-out`, durations switched to `--dur-timeline`.
+- `.prefs__panel` animation: `--dur-panel` + `--ease-gallery-out` (no more spring overshoot); `@keyframes prefs-in` start state softened from `scale(0.94) translateY(-6px)` to `scale(0.96) translateY(-10px)`.
+- `.loading-overlay` transition raised to `--dur-reveal` (0.9 s) with `--ease-gallery-out`.
+- `.loading-spinner` animation slowed from `0.8s` to `1.4s` — calmer infinite spin, reduced-motion path already zeros it.
+
+`--ease-spring` is preserved as a token but no longer used on any gallery surface.
+
+#### `src/main.ts`
+
+- Loading-overlay removal timeout raised from 700 ms to 950 ms to match `--dur-reveal: 0.9s` + 50 ms scheduling buffer.
+- Animate loop now calls `galleryManager.update(now)` — `now` is the same `DOMHighResTimeStamp` already passed to `lightingSetup.update(now)`.
+
+### Verified non-regressions
+
+- `[data-motion='reduced']` block continues to zero transitions on `info-panel`, `nav-btn`, `zoom-controls__btn`, `fullscreen-btn`, `prefs__trigger`, `timeline__thumb`; new token durations are still overridden by the 0.001 ms rule.
+- `@media (prefers-reduced-motion: reduce)` block continues to disable `loading-spinner`, `timeline__skeleton`, and `prefs__panel` animations.
+- `LightingSetup.ts` ambient drift uses `Math.sin(time)` against the raw `DOMHighResTimeStamp`, so it remains frame-rate-independent. No change required.
+- `SidePanels.ts` static `opacity: 0.95` panels and instant texture swap are unchanged — a future polish item, deliberately out of scope.
+- v0.14.2 zoom/pan constants (`MIN_CAMERA_Z`, `MIN_OVERVIEW_CAMERA_Z`, `INSPECTION_OVERSCROLL_X`, `INSPECTION_OVERSCROLL_Y`, `PORTRAIT_ASPECT_THRESHOLD`, `PORTRAIT_RESET_EXTRA_Z`) are untouched.
+
+### Validation
+
+- `npm run lint` → clean (no errors, no new warnings).
+- `npm run build` → `tsc` succeeds, Vite preview build succeeds (`customer-preview/style.css` 18.61 kB, `customer-preview/freyraum-gallery.js` 589.75 kB). The only deprecation surfaced is the pre-existing Dart Sass legacy JS API warning unrelated to v0.15.
+- Manual QA matrix is documented in `plan.md` → v0.15 → Slice 7; the runtime now writes `motionMode`, `seedPositionX`, `seedPositionZ`, and `settleTargetMs` into the `navigate` diagnostic event for in-browser verification via `window.__FREYRAUM_DIAGNOSTICS__`.
+
+### Risks observed during implementation
+
+- The dt clamp at `MAX_SMOOTHING_DT = 0.1` is essential: without it, a backgrounded tab returning after a few seconds would produce a single oversized jump on resume because exponential smoothing collapses the entire residual in one tick.
+- The first call to `update(now)` is intentionally a no-op for smoothing (only `targetZoom` clamping and pan clamping run) because `lastUpdateTime` is 0; this avoids feeding an unbounded delta to `smoothDamp`.
+- The new `position.z` seed (-0.6) sits behind both the frame plane (z=0) and the artwork plane (z≈0.095), so it cannot cause z-fighting. Confirmed by inspecting `ArtworkMesh` geometry.
+
+---
+
 ## 2026-05-19 — v0.15 technical deep audit: elegant longer animations
 
 ### Scope of this pass

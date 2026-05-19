@@ -1,10 +1,55 @@
 # FREYRAUM Plan
 
-## v0.15 — Planned: elegant animation system — full technical brainstorm (2026-05-19)
+## v0.15 — Implemented: elegant animation system (2026-05-19)
 
 ### Status
 
-**Planned, not yet implemented.** This is the final documentation audit and coding brainstorm pass for v0.15. It verifies the plan against the current codebase, existing findings, repository markdown, and validated online sources. No runtime code was changed in this pass.
+**Implemented 2026-05-19.** The full v0.15 elegant animation plan shipped in this pass. All six implementation slices below were executed, validated against the current code, re-checked against the published web animation / accessibility sources listed in the v0.15 audit section, and verified by `npm run lint` and `npm run build`. The previous planning section is preserved further down for reference.
+
+### What shipped (summary)
+
+1. **`src/utils/math.ts`** — new `smoothDamp(current, target, lambda, dt)` utility implementing the frame-rate-independent kernel `α = 1 − exp(−λ·dt)`.
+2. **`src/gallery/GalleryManager.ts`** — `update()` now `update(now: number)`. All 13 prior per-frame lerps replaced with `smoothDamp` calls plus one new line for `position.z`. New module-level constants document the lambdas: `LAMBDA_HOVER_ROTATION = 12`, `LAMBDA_NAV_POSITION = 2.5`, `LAMBDA_NAV_SCALE = 3.0`, `LAMBDA_CAMERA_ZOOM = 4.0`, `LAMBDA_CAMERA_PAN = 5.0`. Navigation entrance seeds retuned: `NAV_SEED_POSITION_X = 4.5`, `NAV_SEED_POSITION_Z = -0.6`, `NAV_SEED_ROTATION_Y = 0.15` rad (~9°), `NAV_SEED_SCALE = 0.88`. `navigate()` and `goTo()` now log `motionMode`, `seedPositionX`, `seedPositionZ`, and `settleTargetMs` in their diagnostics events.
+3. **`src/ui/InfoPanel.ts`** — fixed the 200 ms / 320 ms content-swap timing bug. New `CONTENT_SWAP_DELAY_MS = 520` private static matches `--dur-content: 0.5s` + 20 ms buffer, and a `requestAnimationFrame` ensures new layout is applied before fade-in.
+4. **`src/styles/main.scss`** — semantic motion token system. New tokens `--ease-gallery-out` (easeOutExpo), `--ease-gallery-in-out` (easeInOutQuart), `--dur-control` (0.18 s), `--dur-content` (0.5 s), `--dur-panel` (0.55 s), `--dur-timeline` (0.42 s), `--dur-reveal` (0.9 s). Backward-compatible aliases preserve `--dur-fast`, `--dur-base`, `--dur-slow`. The `--ease-spring` token is preserved but no longer used on any gallery surface. `.info-panel`, `.timeline__thumb`, `.prefs__panel`, `@keyframes prefs-in`, `.loading-overlay`, and `.loading-spinner` were retuned. `.info-panel.is-transitioning` translateY raised from 8 px to 16 px.
+5. **`src/main.ts`** — loading-overlay removal timeout raised from 700 ms to 950 ms (matches `--dur-reveal: 0.9s` + 50 ms buffer). The animate loop now calls `galleryManager.update(now)`.
+6. **No new dependencies.** No reduced-motion regressions. v0.14.2 zoom/pan constants untouched.
+
+### Validation
+
+- `npm run lint` → clean.
+- `npm run build` → `tsc` clean, Vite production build succeeded (`customer-preview/style.css` 18.61 kB, `customer-preview/freyraum-gallery.js` 589.75 kB). Only pre-existing Sass legacy-JS-API deprecation warning surfaced — unrelated to v0.15.
+- New diagnostics fields (`motionMode`, `seedPositionX`, `seedPositionZ`, `settleTargetMs`) are visible via `window.__FREYRAUM_DIAGNOSTICS__` for manual QA.
+
+### QA matrix (to perform on physical hardware before tagging)
+
+- Desktop 60 Hz vs 120 Hz: artwork entrance settle time should be identical (~1.2 s) — confirms frame-rate independence.
+- 30 Hz throttled mobile: artwork entrance still settles in ~1.2 s wall-clock.
+- Rapid forward/back navigation: motion interrupts cleanly without value accumulation.
+- Hover rotation: responds within ~250 ms.
+- Camera zoom: glides over ~750 ms.
+- Camera pan: feels connected (~600 ms).
+- Info panel: text never visible during fade-out (no flicker).
+- Timeline active lift: smooth, no overshoot bounce.
+- Prefs panel open: glides in without bounce.
+- Loading overlay: fades smoothly over ~0.9 s, removed at 0.95 s.
+- Reduced motion ON (in-app preference + OS-level `prefers-reduced-motion`): all seeds skipped, all CSS transitions ≤ 0.001 ms.
+
+### Non-goals (unchanged)
+
+- No animation library added.
+- No View Transitions API integration.
+- No `SidePanels.ts` cross-fade on texture swap (out of scope; deliberate future polish item).
+- No changes to v0.14.2 zoom/pan limit constants.
+- No reduced-motion path weakening.
+
+---
+
+## v0.15 — Original plan: elegant animation system — full technical brainstorm (2026-05-19)
+
+### Status
+
+**Implemented 2026-05-19.** This was the final technical audit and coding brainstorm that drove the implementation pass above. It is preserved verbatim below so the reasoning, calculations, source validation, and slice ordering remain available for future contributors. The shipped constants match these numbers exactly.
 
 ### Design goals (refined)
 

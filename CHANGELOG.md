@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Implemented (v0.15 elegant animation system — 2026-05-19)
+
+- **Frame-rate-independent motion.** Added `smoothDamp(current, target, lambda, dt)` to `src/utils/math.ts`. Converted all 13 frame-rate-dependent per-frame lerps in `GalleryManager.update()` to lambda-driven smoothing (`α = 1 − exp(−λ·dt)`), plus a 14th line for the new `position.z` depth recession. Motion now settles in the same wall-clock time on 30/60/90/120 Hz displays.
+- **`GalleryManager.update(now: number)`.** Receives `DOMHighResTimeStamp` from the animate loop; clamps `dt` to ≤ 0.1 s to survive backgrounded tabs.
+- **Navigation entrance seeds retuned.** `NAV_SEED_POSITION_X = 4.5` (was 3.2), `NAV_SEED_POSITION_Z = -0.6` (new depth recession), `NAV_SEED_ROTATION_Y = 0.15` rad / ~9° (was 0.32 rad / ~18°), `NAV_SEED_SCALE = 0.88` (was 0.84). Applied in `navigate()` and `goTo()`.
+- **Lambda constants documented.** `LAMBDA_HOVER_ROTATION = 12`, `LAMBDA_NAV_POSITION = 2.5`, `LAMBDA_NAV_SCALE = 3.0`, `LAMBDA_CAMERA_ZOOM = 4.0`, `LAMBDA_CAMERA_PAN = 5.0`. Settle-time table: hover ≈ 250 ms, position ≈ 1200 ms, scale ≈ 1000 ms, zoom ≈ 750 ms, pan ≈ 600 ms.
+- **New diagnostics on `navigate` / `goTo`.** `motionMode` (`'full'` | `'reduced'`), `seedPositionX`, `seedPositionZ`, `settleTargetMs`.
+- **Fixed `InfoPanel.ts` content-swap timing bug.** `CONTENT_SWAP_DELAY_MS = 520` (was hardcoded 200 ms, shorter than the previous 320 ms CSS transition). Added `requestAnimationFrame` between `setContent()` and removing `is-transitioning` so layout is applied before fade-in.
+- **Semantic SCSS motion tokens.** New: `--ease-gallery-out` (easeOutExpo `cubic-bezier(0.16, 1, 0.3, 1)`), `--ease-gallery-in-out` (easeInOutQuart), `--dur-control` (0.18 s), `--dur-content` (0.5 s), `--dur-panel` (0.55 s), `--dur-timeline` (0.42 s), `--dur-reveal` (0.9 s). Backward-compat aliases preserved: `--dur-fast → --dur-control`, `--dur-base → --dur-content`, `--dur-slow → --dur-reveal`. `--ease-spring` preserved but no longer used on gallery surfaces.
+- **Retuned animated surfaces.** `.info-panel` transition → `--dur-content` + `--ease-gallery-out`; `.info-panel.is-transitioning` translateY 8 px → 16 px; `.timeline__thumb` transition → `--dur-timeline` + `--ease-gallery-out` (no more spring overshoot); `.prefs__panel` animation → `--dur-panel` + `--ease-gallery-out`; `@keyframes prefs-in` softened from `scale(0.94) translateY(-6px)` to `scale(0.96) translateY(-10px)`; `.loading-overlay` → `--dur-reveal` + `--ease-gallery-out`; `.loading-spinner` slowed from 0.8 s to 1.4 s.
+- **`main.ts` adjustments.** `loadingOverlay.remove()` timeout raised from 700 ms to 950 ms (matches `--dur-reveal: 0.9s` + 50 ms buffer). Animate loop calls `galleryManager.update(now)`.
+- **No new dependencies.** No reduced-motion regressions. v0.14.2 zoom/pan constants untouched.
+- **Validation:** `npm run lint` ✅, `npm run build` ✅, preview bundles rebuilt.
+
 ### Documentation (v0.15 final documentation audit cleanup — 2026-05-19)
 
 - Final-cleaned the v0.15 documentation set so the plan, findings, README, handoff, and image/customer guides all point to the same final technical audit wording.
