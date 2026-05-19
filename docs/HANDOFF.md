@@ -6,7 +6,7 @@ implemented; v0.14 tuning is planned.** See the new v0.14 planning section
 immediately below, then v0.13 for the last shipped pass, then v0.12 for the
 zoom/framing/timeline pass.
 
-## v0.14 zoom/pan/reset-fit tuning — Planned (2026-05-19)
+## v0.14 zoom/pan/reset-fit tuning — Technical plan ready (2026-05-19)
 
 Remaining customer-reported tuning requests after v0.13:
 
@@ -14,13 +14,13 @@ Remaining customer-reported tuning requests after v0.13:
 2. the current edge freedom is now a bit too loose and should be tightened;
 3. large vertical artworks should still open a little farther away in reset view.
 
-**Source-audit result:**
+**Technical audit result (see `plan.md` for full details with code and worked examples):**
 
-- closer zoom is still constrained by both `MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`;
-- edge looseness comes from `INSPECTION_OVERSCROLL = 3.0` being added flatly to both pan axes;
-- large vertical reset fit is still controlled by one global `RESET_VIEW_FRAME_MARGIN = 1.04`, so a portrait-aware boost is the next recommended step.
+- On a medium–large artwork the effective close-zoom floor is `~1.06` (dominated by `MIN_VISIBLE_ARTWORK_FRACTION = 0.28`), not `0.5`. Both constants must be lowered together: proposed `MIN_CAMERA_Z = 0.2`, `MIN_VISIBLE_ARTWORK_FRACTION = 0.12` → new floor ~0.45.
+- Edge looseness: at reset zoom `INSPECTION_OVERSCROLL = 3.0` is the full pan allowance (the artwork-hidden-portion term is ~0). Proposed: `INSPECTION_OVERSCROLL = 1.2`.
+- Portrait reset: `DEFAULT_CAMERA_Z = 7` wins over `heightDistance ≈ 5.34`, so a margin-factor fix has no effect. Proposed: add `PORTRAIT_RESET_EXTRA_Z = 1.5` (new constant) after the `Math.max()` when `artworkAspect < PORTRAIT_ASPECT_THRESHOLD = 0.65` → portrait opens at 8.5.
 
-**Planned direction:** tune close zoom, tighten pan overscroll, and add a portrait-sensitive reset-fit boost. No runtime code was changed in this documentation pass.
+No runtime code was changed in this documentation pass.
 
 ## v0.13 nav/zoom/pan/icon fixes — Implemented (2026-05-18)
 

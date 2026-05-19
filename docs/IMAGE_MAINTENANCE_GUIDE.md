@@ -22,13 +22,13 @@ Support checks after implementation should include phone portrait, phone landsca
 
 ## Planned v0.14 tuning status (close zoom, pan edges, large-vertical reset fit)
 
-Planned on 2026-05-19. No runtime code changed in this pass.
+Technical coding plan written 2026-05-19. No runtime code changed in this pass.
 
-Source audit of `src/gallery/GalleryManager.ts` shows:
+Full plan with brainstormed options is in `plan.md`. Key findings from the source audit:
 
-- closer zoom still depends on both `MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`, so the next pass must tune both together;
-- the current pan looseness comes from `INSPECTION_OVERSCROLL = 3.0` being added as a flat constant in `getPanLimits()`;
-- large vertical artworks still rely on one global `RESET_VIEW_FRAME_MARGIN = 1.04`, so the next pass should add a portrait-aware reset boost instead of moving every artwork farther away.
+- Close-zoom floor on a medium portrait is ~1.06, not 0.5 — `MIN_VISIBLE_ARTWORK_FRACTION = 0.28` dominates `MIN_CAMERA_Z = 0.5`. Proposed: lower both to `MIN_CAMERA_Z = 0.2` and `MIN_VISIBLE_ARTWORK_FRACTION = 0.12` → new floor ~0.45.
+- At reset zoom `INSPECTION_OVERSCROLL = 3.0` is the full allowance because artwork fills the viewport; `artworkWidth − visibleWidth ≈ 0`. Proposed: `INSPECTION_OVERSCROLL = 1.2`.
+- `DEFAULT_CAMERA_Z = 7` wins over `heightDistance ≈ 5.34` for a 3-unit portrait, so margin-factor fixes have no effect. Proposed: add `PORTRAIT_RESET_EXTRA_Z = 1.5` (new) after `Math.max()` when `artworkAspect < 0.65` (new `PORTRAIT_ASPECT_THRESHOLD`).
 
 ## Current v0.13 status (nav buttons, zoom range, pan range, icon centering)
 

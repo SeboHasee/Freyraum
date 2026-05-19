@@ -1,32 +1,49 @@
 # FINDINGS
 
-## 2026-05-19 — v0.14 planning pass: deeper close zoom, tighter pan edges, farther reset fit for large vertical artworks
+## 2026-05-19 — v0.14 technical coding plan: deep-zoom, tighter pan, portrait reset (upgraded to full implementation plan)
 
 ### Scope of this pass
 
-This is a documentation/planning pass only. No runtime code changed. The goal was to audit the current v0.13 zoom/pan/reset-fit code and record the exact places that must be tuned next.
+Planning and code-audit pass. No runtime code changed. The v0.14 plan section in `plan.md` was upgraded from a high-level note to a full technical coding plan with exact current code, worked examples, brainstormed options (A/B/C per issue), the recommended implementation for each, a complete constant-change table, and diagnostics additions.
 
-### Code-level findings
+### Code-level findings (detailed)
 
-- **Close zoom is still bounded by `MIN_VISIBLE_ARTWORK_FRACTION`, not only `MIN_CAMERA_Z`.**
-  `getInspectionMinZoom()` computes `heightDistance` and `widthDistance` from `MIN_VISIBLE_ARTWORK_FRACTION = 0.28` and then clamps with `MIN_CAMERA_Z = 0.5`. This means lowering only `MIN_CAMERA_Z` would not reliably produce a visibly closer zoom level on larger artworks. The next pass must tune both values together.
+**Issue 1 — Close zoom bounded by two independent guards**
 
-- **Pan freedom is currently too loose because overscroll is a flat additive constant.**
-  `getPanLimits()` adds `INSPECTION_OVERSCROLL = 3.0` equally to `x` and `y`. Because the allowance is constant instead of aspect-sensitive, the camera can drift too far past the artwork edge even when only a modest amount of extra exploration is needed. The next pass should use a tighter capped allowance or reduce the constant to a middle value.
+Root location: `GalleryManager.ts:46` and `getInspectionMinZoom()`.
 
-- **Large vertical artworks still need extra reset distance.**
-  `getResetFitZoom()` uses one global `RESET_VIEW_FRAME_MARGIN = 1.04`. For strongly vertical artworks, `heightDistance` dominates, so the remaining “too close” feel is best addressed by a portrait-aware reset boost rather than by globally pushing every artwork farther away.
+`getInspectionMinZoom()` returns `clamp(Math.max(MIN_CAMERA_Z, heightDistance, widthDistance), ...)` where `heightDistance = artworkHeight × MIN_VISIBLE_ARTWORK_FRACTION / (2 × fovTan × usableFracY)`. For a 2.5-unit tall portrait: `heightDistance ≈ 1.06`. `MIN_CAMERA_Z = 0.5` is irrelevant because `heightDistance` dominates.
 
-### Planned implementation direction
+Recommended fix: `MIN_CAMERA_Z = 0.2`, `MIN_VISIBLE_ARTWORK_FRACTION = 0.12`. New effective floor ≈ 0.45 on the same artwork.
 
-1. Lower the close-zoom floor by tuning **both** `MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`.
-2. Tighten the current edge freedom by replacing or reducing `INSPECTION_OVERSCROLL`.
-3. Add a portrait-sensitive reset-fit boost so large vertical artworks open a little farther away without weakening the normal fit for other formats.
-4. Extend diagnostics so the next tuning pass logs which constraint is active.
+**Issue 2 — `INSPECTION_OVERSCROLL = 3.0` is additive and zoom-independent**
+
+Root location: `GalleryManager.ts:58` and `getPanLimits()`.
+
+At reset zoom `artworkWidth ≈ visibleWidth`, so the pan limit reduces to `x = max(0, ≈0) + 3.0 = 3.0`. The camera centre drifts 3 world units past the edge even when the full artwork is visible.
+
+Recommended fix: `INSPECTION_OVERSCROLL = 1.2`.
+
+**Issue 3 — `DEFAULT_CAMERA_Z = 7` wins over `heightDistance` for moderate portraits**
+
+Root location: `getResetFitZoom()`. For a 3.0-unit portrait: `heightDistance ≈ 5.34 → max(7.0, 5.34) = 7.0`. Margin-based fixes have no effect here; boost must be additive after the `Math.max()`.
+
+Recommended fix: Add `PORTRAIT_RESET_EXTRA_Z = 1.5` (new) added to the return value when `artworkAspect < PORTRAIT_ASPECT_THRESHOLD = 0.65` (new). Portrait resets to 8.5 instead of 7.0.
+
+### Planned constant changes
+
+| Constant | Current | Proposed |
+|---|---|---|
+| `MIN_CAMERA_Z` | `0.5` | `0.2` |
+| `MIN_VISIBLE_ARTWORK_FRACTION` | `0.28` | `0.12` |
+| `INSPECTION_OVERSCROLL` | `3.0` | `1.2` |
+| `PORTRAIT_RESET_EXTRA_Z` *(new)* | — | `1.5` |
+| `PORTRAIT_ASPECT_THRESHOLD` *(new)* | — | `0.65` |
 
 ### Validation status
 
-- No build/runtime validation was required in this pass because only markdown files were changed.
+- No build/runtime validation required (markdown-only pass).
+- Implementation pass will run `npm run lint && npm run build` and smoke-test the customer preview.
 
 ---
 

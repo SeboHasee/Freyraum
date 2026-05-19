@@ -25,15 +25,15 @@ For support/debugging, the current build logs:
 - `gallery/viewport-refit` when the browser viewport or chrome changes,
 - `layout/art-viewport` with measured art-safe viewport metrics.
 
-## Next planned viewing tuning
+## Next planned viewing tuning (v0.14 — technical plan ready)
 
-The next planned pass will focus on three remaining viewing adjustments:
+The next implementation pass has a complete technical plan ready in `plan.md`. The three changes that will ship:
 
-- allow even closer zoom for detail inspection;
-- keep some edge freedom, but tighten the current pan looseness slightly;
-- make very large vertical artworks start a little farther away in the default/reset view.
+- **Closer zoom:** the close-zoom floor will drop from ~1.1 to ~0.45 camera units on a typical artwork. Two constants are being lowered together (`MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`) because the fraction-based guard is what actually limits close inspection on larger artworks.
+- **Tighter edge freedom:** pan freedom will be reduced from 3.0 to 1.2 world units past the artwork edge. At reset zoom the camera currently drifts the full 3.0 units because the artwork exactly fills the viewport; 1.2 is a more controlled allowance.
+- **Portrait reset farther away:** a new portrait-only constant adds 1.5 camera units to the reset distance when the artwork is taller than wide (aspect ratio below 0.65). Landscape and square artworks are unaffected.
 
-This is currently a documented plan only; it is not yet implemented in the build you are using.
+This is not yet implemented in the current build.
 
 ## What you need (one-time)
 

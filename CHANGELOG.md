@@ -2,13 +2,14 @@
 
 ## Unreleased
 
-### Documentation (v0.14 zoom/pan/reset-fit tuning plan — 2026-05-19)
+### Documentation (v0.14 technical coding plan upgrade — 2026-05-19)
 
-- Added a new v0.14 planning section to `plan.md` after auditing the current `GalleryManager` zoom and pan math.
-- Documented that closer zoom requires tuning both `MIN_CAMERA_Z` **and** `MIN_VISIBLE_ARTWORK_FRACTION`, because the visible-artwork fraction still limits large artworks.
-- Documented that the current edge looseness comes from `INSPECTION_OVERSCROLL = 3.0` being a flat additive constant in `getPanLimits()`.
-- Documented that large vertical artworks still feel too close in reset view because `getResetFitZoom()` uses one global `RESET_VIEW_FRAME_MARGIN = 1.04`; the next pass should add a portrait-aware reset boost instead of shifting all artworks equally.
-- Updated all repository markdown files so the current status, findings, handoff, and support guides reflect the new v0.14 plan.
+- Upgraded the v0.14 section in `plan.md` from a high-level note to a full technical coding plan.
+- Added exact current code for `getInspectionMinZoom()`, `getPanLimits()`, and `getResetFitZoom()` with worked numerical examples showing which constraint is the active floor.
+- Documented three brainstormed options (A/B/C) for each of the three issues, with pros/cons, and selected a recommended implementation per issue.
+- Published a complete constant-change table: `MIN_CAMERA_Z` 0.5→0.2, `MIN_VISIBLE_ARTWORK_FRACTION` 0.28→0.12, `INSPECTION_OVERSCROLL` 3.0→1.2, new `PORTRAIT_RESET_EXTRA_Z = 1.5`, new `PORTRAIT_ASPECT_THRESHOLD = 0.65`.
+- Added the exact `show-artwork-complete` diagnostics fields to add: `inspectionMinFraction`, `effectiveInspectionFloor`, `panOverscroll`, `panLimitAtReset`, `isPortraitReset`, `portraitResetExtra`.
+- Updated `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md` to reflect the upgraded plan.
 
 ### Implemented (v0.13 nav/zoom/pan/icon fixes — 2026-05-18)
 

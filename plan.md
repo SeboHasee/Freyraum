@@ -1,95 +1,281 @@
 # FREYRAUM Plan
 
-## v0.14 — Planned: deeper close zoom, tighter edge limits, and more generous reset fit for large vertical artworks (2026-05-19)
+## v0.14 — Technical coding plan: deeper close zoom, tighter edge limits, portrait-aware reset fit (2026-05-19)
 
 ### Status
 
-**Planned 2026-05-19.** No runtime code has been changed in this pass. This entry records the current source audit for the remaining zoom/pan/reset-fit tuning requests and defines the next implementation slice.
+**Technical coding plan written 2026-05-19.** No runtime code changed. This entry replaces the earlier high-level planning note with exact files, current vs proposed constants, concrete brainstormed code options per issue, the recommended implementation for each, and diagnostics additions.
+
+---
 
 ### Customer-reported issues after v0.13
 
-1. users still want to zoom in further than the current close-inspection ceiling allows;
-2. the current edge freedom is now too loose and should be limited somewhat;
-3. large vertical artworks should still start a bit farther away in the default/reset view.
+1. zoom-in should go even further — fine brushstroke detail is not yet reachable;
+2. the edge freedom introduced in v0.13 (`INSPECTION_OVERSCROLL = 3.0`) is now too loose — the artwork drifts too far off-centre;
+3. very large vertical artworks still feel a bit too close in the default/reset view.
 
-### Code analysis
+---
 
-#### Issue 1 — Close zoom is limited by two separate guards, not only one
+### Issue 1 — Close zoom: two independent guards both limit the floor
 
-- `GalleryManager.getInspectionMinZoom()` does **not** only depend on `MIN_CAMERA_Z`.
-- The minimum close distance is:
-  - `MIN_CAMERA_Z`, **and**
-  - a required visible artwork fraction computed from `MIN_VISIBLE_ARTWORK_FRACTION`.
-- Current values:
-  - `MIN_CAMERA_Z = 0.5`
-  - `MIN_VISIBLE_ARTWORK_FRACTION = 0.28`
-- Result: lowering only `MIN_CAMERA_Z` would not reliably allow a meaningfully closer inspection on larger artworks, because `heightDistance` / `widthDistance` can still dominate.
+#### Exact current code (`GalleryManager.ts` lines 44–46 and 618–626)
 
-**Planned fix direction**
+```ts
+const MIN_CAMERA_Z = 0.5;                  // hard floor on camera distance
+const MIN_VISIBLE_ARTWORK_FRACTION = 0.28; // fraction of artwork that must remain visible
 
-- Lower `MIN_CAMERA_Z` moderately again.
-- Lower `MIN_VISIBLE_ARTWORK_FRACTION` as well, so the close-zoom ceiling actually moves for large artworks instead of only for small ones.
-- Keep the existing `DEFAULT_CAMERA_Z` upper clamp so this change affects only the close-inspection end of the range.
+private getInspectionMinZoom(metrics: ArtworkViewportMetrics): number {
+  const fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+  const requiredHeight = this.artworkMesh.artworkHeight * MIN_VISIBLE_ARTWORK_FRACTION;
+  const requiredWidth  = this.artworkMesh.artworkWidth  * MIN_VISIBLE_ARTWORK_FRACTION;
+  const heightDistance = requiredHeight / (2 * fovTan * metrics.usableFracY);
+  const widthDistance  = requiredWidth  / (2 * fovTan * this.camera.aspect * metrics.usableFracX);
+  return clamp(Math.max(MIN_CAMERA_Z, heightDistance, widthDistance), MIN_CAMERA_Z, DEFAULT_CAMERA_Z);
+}
+```
 
-#### Issue 2 — Edge freedom is too loose because overscroll is a flat additive constant
+For a typical tall artwork (`artworkHeight = 2.5`, `usableFracY ≈ 0.8`, `fov = 45°`):
 
-- `getPanLimits()` currently adds `INSPECTION_OVERSCROLL` directly to both axes:
-  - `x = (artworkWidth - visibleWidth) * 0.5 + INSPECTION_OVERSCROLL`
-  - `y = (artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL`
-- Current value:
-  - `INSPECTION_OVERSCROLL = 3.0`
-- Result: the same large additive overscroll is granted regardless of artwork proportions and regardless of how much of the artwork is already visible. That is why the camera can now feel too “free” near the edges.
+```
+heightDistance = (2.5 × 0.28) / (2 × tan(22.5°) × 0.8)
+               = 0.7 / (2 × 0.4142 × 0.8) ≈ 1.056
+```
 
-**Planned fix direction**
+So the effective floor is ≈1.06, not 0.5. Lowering only `MIN_CAMERA_Z` has zero effect on that artwork.
 
-- Replace the single flat overscroll feel with a smaller, more controlled pan allowance.
-- Recommended approach: introduce a tighter overscroll cap derived from artwork size and/or visible span, then clamp it to a modest maximum. This keeps some edge freedom for inspection without allowing the artwork to drift too far off-centre.
-- If the implementation is kept simpler, the fallback is to reduce `INSPECTION_OVERSCROLL` significantly from `3.0` to a middle value rather than returning all the way to the old `0.5`.
+#### Brainstormed options
 
-#### Issue 3 — Large vertical artworks still need extra reset headroom
+**Option A — Lower both constants (simplest, recommended)**
 
-- `getResetFitZoom()` currently uses:
-  - `frameWidth = artworkWidth + 0.4`
-  - `frameHeight = artworkHeight + 0.4`
-  - `RESET_VIEW_FRAME_MARGIN = 1.04`
-- The computed reset distance is `max(DEFAULT_CAMERA_Z, heightDistance, widthDistance)`.
-- For large vertical artworks, `heightDistance` dominates, so the remaining “too close” feeling is primarily controlled by the reset-fit margin, not by overview headroom.
+```ts
+const MIN_CAMERA_Z = 0.2;
+const MIN_VISIBLE_ARTWORK_FRACTION = 0.12;
+```
 
-**Planned fix direction**
+With the same artwork: `heightDistance = (2.5 × 0.12) / 0.6627 ≈ 0.45`. Floor drops from 1.06 to 0.45.
+Pro: two-line change; no structural risk.
+Con: 12 % visible fraction is loose; on a tiny artwork close inspection is still safe because `MIN_CAMERA_Z` becomes the binding limit.
 
-- Keep the v0.12 art-safe viewport model intact.
-- Add a portrait-sensitive reset-fit boost instead of globally pushing every artwork farther away.
-- Recommended approach: introduce a helper that detects strongly vertical aspect ratios and applies a small additional reset margin only there. This avoids making landscape and square artworks feel unnecessarily distant.
+**Option B — Remove the fraction guard; use only `MIN_CAMERA_Z`**
 
-### Recommended implementation slice
+```ts
+private getInspectionMinZoom(_metrics: ArtworkViewportMetrics): number {
+  return MIN_CAMERA_Z;
+}
+```
 
-1. **Close zoom**
-   - tune `MIN_CAMERA_Z`;
-   - tune `MIN_VISIBLE_ARTWORK_FRACTION`;
-   - verify with large portrait and landscape artworks.
-2. **Pan limits**
-   - replace or reduce the current `INSPECTION_OVERSCROLL`;
-   - verify left/right travel on narrow artworks and top/bottom travel on tall artworks.
-3. **Reset fit for large verticals**
-   - add a portrait-aware reset-fit margin/helper;
-   - verify the first/reset view on the largest vertical artworks.
-4. **Diagnostics**
-   - extend `show-artwork-complete` with the values that now determine the tuning outcome:
-     - close-zoom limiting fraction,
-     - effective pan overscroll/caps,
-     - portrait-reset boost / effective reset margin.
+Pro: one number to tune; completely predictable.
+Con: on very large artworks the camera could get so close only a featureless paint sliver is visible.
 
-### Files expected in the next implementation pass
+**Option C — Scale the fraction floor by the artwork’s longest dimension**
+
+```ts
+const MAX_ARTWORK_DIM_FOR_FRACTION = 3.0;
+const dimScale = Math.min(1.0,
+  MAX_ARTWORK_DIM_FOR_FRACTION /
+  Math.max(this.artworkMesh.artworkWidth, this.artworkMesh.artworkHeight));
+const requiredHeight = this.artworkMesh.artworkHeight * MIN_VISIBLE_ARTWORK_FRACTION * dimScale;
+const requiredWidth  = this.artworkMesh.artworkWidth  * MIN_VISIBLE_ARTWORK_FRACTION * dimScale;
+```
+
+Pro: large artworks get proportionally lower floors; small artworks keep the full guard.
+Con: introduces a new constant; requires per-scene calibration.
+
+#### Recommended implementation
+
+**Option A.** Change `MIN_CAMERA_Z = 0.2` and `MIN_VISIBLE_ARTWORK_FRACTION = 0.12`. The effective close floor drops from ~1.06 to ~0.45 on a medium portrait. Simple two-constant change; no structural modifications required.
+
+---
+
+### Issue 2 — Pan limits: flat overscroll constant is too generous
+
+#### Exact current code (`GalleryManager.ts` lines 58 and 588–604)
+
+```ts
+const INSPECTION_OVERSCROLL = 3.0;
+
+private getPanLimits(zoom: number): { x: number; y: number } {
+  // ...compute visibleWidth/visibleHeight from zoom, FOV, metrics...
+  return {
+    x: Math.max(0, (this.artworkMesh.artworkWidth  - visibleWidth)  * 0.5 + INSPECTION_OVERSCROLL),
+    y: Math.max(0, (this.artworkMesh.artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL),
+  };
+}
+```
+
+At reset zoom the full artwork is visible, so `artworkWidth ≈ visibleWidth`, giving `x ≈ 3.0 world units` of drift even when nothing is hidden. That is the root of the "too free" feeling.
+
+#### Brainstormed options
+
+**Option A — Simple reduction (simplest, recommended)**
+
+```ts
+const INSPECTION_OVERSCROLL = 1.2;
+```
+
+At reset zoom: camera centre can drift ~1.2 units past the edge — moderate and barely noticeable. At close zoom: still enough to reach every corner.
+
+**Option B — Overscroll proportional to the hidden portion**
+
+```ts
+const INSPECTION_OVERSCROLL_MAX = 0.8;
+
+// inside getPanLimits():
+const hiddenX = Math.max(0, (artworkWidth  - visibleWidth)  * 0.5);
+const hiddenY = Math.max(0, (artworkHeight - visibleHeight) * 0.5);
+const overscrollX = Math.min(hiddenX * 0.25, INSPECTION_OVERSCROLL_MAX);
+const overscrollY = Math.min(hiddenY * 0.25, INSPECTION_OVERSCROLL_MAX);
+return { x: hiddenX + overscrollX, y: hiddenY + overscrollY };
+```
+
+Pro: at reset zoom there is almost zero overscroll; at deep zoom there is a capped amount.
+Con: two new constants; the 0.25 factor needs per-scene tuning.
+
+**Option C — Zoom-proportional overscroll**
+
+```ts
+const overscroll = Math.min(boundedZoom * 0.12, 1.5);
+```
+
+At reset zoom (7): `overscroll = 0.84`. At close zoom (0.45): `overscroll = 0.054`.
+Note: this makes close-zoom panning tighter, not looser — this may be the wrong direction.
+
+#### Recommended implementation
+
+**Option A.** Change `INSPECTION_OVERSCROLL = 1.2`. Single-constant change; halves worst-case drift while keeping enough margin for fine-detail corner inspection.
+
+---
+
+### Issue 3 — Portrait reset: global margin does not distinguish aspect ratios
+
+#### Exact current code (`GalleryManager.ts` lines 47 and 628–637)
+
+```ts
+const RESET_VIEW_FRAME_MARGIN = 1.04;
+
+private getResetFitZoom(metrics: ArtworkViewportMetrics): number {
+  const frameWidth  = this.artworkMesh.artworkWidth  + 0.4;
+  const frameHeight = this.artworkMesh.artworkHeight + 0.4;
+  const fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+  const heightDistance = (frameHeight * RESET_VIEW_FRAME_MARGIN) / (2 * fovTan * metrics.usableFracY);
+  const widthDistance  = (frameWidth  * RESET_VIEW_FRAME_MARGIN) / (2 * fovTan * this.camera.aspect * metrics.usableFracX);
+  return Math.max(DEFAULT_CAMERA_Z, heightDistance, widthDistance);
+}
+```
+
+Example — large portrait (`artworkHeight = 3.0`):
+
+```
+heightDistance = (3.4 × 1.04) / 0.6627 ≈ 5.34  →  max(7.0, 5.34) = 7.0
+```
+
+`DEFAULT_CAMERA_Z = 7` wins, so `RESET_VIEW_FRAME_MARGIN` has no visible effect here. A portrait boost must add to the final result, not just change the margin.
+
+#### Brainstormed options
+
+**Option A — Additive portrait extra distance (simplest, recommended)**
+
+```ts
+const PORTRAIT_RESET_EXTRA_Z  = 1.5;
+const PORTRAIT_ASPECT_THRESHOLD = 0.65; // artworkWidth / artworkHeight
+
+private getResetFitZoom(metrics: ArtworkViewportMetrics): number {
+  // ...same height/width distance computation as now...
+  const baseFit    = Math.max(DEFAULT_CAMERA_Z, heightDistance, widthDistance);
+  const isPortrait = this.artworkMesh.artworkAspect < PORTRAIT_ASPECT_THRESHOLD;
+  return baseFit + (isPortrait ? PORTRAIT_RESET_EXTRA_Z : 0);
+}
+```
+
+For the example above: `7.0 + 1.5 = 8.5` — clearly farther.
+Pro: readable; bounded; zero impact on landscape/square artworks; easy to tune.
+Con: the 1.5 extra is the same regardless of how tall the portrait is.
+
+**Option B — Multiply the frame margin**
+
+```ts
+const PORTRAIT_MARGIN_BOOST = 1.12; // applied only for portraits
+const effectiveMargin = isPortrait
+  ? RESET_VIEW_FRAME_MARGIN * PORTRAIT_MARGIN_BOOST
+  : RESET_VIEW_FRAME_MARGIN;
+```
+
+Pro: scales with artwork size.
+Con: has no effect when `DEFAULT_CAMERA_Z` wins (which it does on moderate artworks).
+
+**Option C — Continuous scaling by portrait depth**
+
+```ts
+const portraitExtra = isPortrait
+  ? PORTRAIT_RESET_EXTRA_Z * (1.0 - this.artworkMesh.artworkAspect / PORTRAIT_ASPECT_THRESHOLD)
+  : 0;
+```
+
+For aspect 0.5 (threshold 0.65): `extra = 1.5 × (1 − 0.77) = 0.35`.
+For aspect 0.3: `extra = 1.5 × (1 − 0.46) = 0.81`.
+Pro: more vertical → more boost.
+Con: non-obvious formula; the resulting values need careful review.
+
+#### Recommended implementation
+
+**Option A.** Add two constants: `PORTRAIT_RESET_EXTRA_Z = 1.5` and `PORTRAIT_ASPECT_THRESHOLD = 0.65`. Modify the return line of `getResetFitZoom()`. Simple; readable; isolated to portrait artworks.
+
+---
+
+### Diagnostics additions (`show-artwork-complete` block)
+
+Extend the existing `this.diagnostics.info('show-artwork-complete', ...)` call (line 354) with:
+
+```ts
+const panLimitsAtReset = this.getPanLimits(zoomBounds.resetFitZoom);
+const isPortrait = this.artworkMesh.artworkAspect < PORTRAIT_ASPECT_THRESHOLD;
+
+// Append to the existing object:
+{
+  inspectionMinFraction:  MIN_VISIBLE_ARTWORK_FRACTION,
+  effectiveInspectionFloor: zoomBounds.minInspectionZoom,
+  panOverscroll:           INSPECTION_OVERSCROLL,
+  panLimitAtReset:         { x: panLimitsAtReset.x, y: panLimitsAtReset.y },
+  isPortraitReset:         isPortrait,
+  portraitResetExtra:      isPortrait ? PORTRAIT_RESET_EXTRA_Z : 0,
+}
+```
+
+This surfaces the active values for every artwork so future tuning does not require guesswork.
+
+---
+
+### Complete constant change table
+
+| Constant | Location | Current | Proposed | Effect |
+|---|---|---|---|---|
+| `MIN_CAMERA_Z` | `GalleryManager.ts:45` | `0.5` | `0.2` | hard close-zoom floor |
+| `MIN_VISIBLE_ARTWORK_FRACTION` | `GalleryManager.ts:46` | `0.28` | `0.12` | fraction-derived close-zoom floor |
+| `INSPECTION_OVERSCROLL` | `GalleryManager.ts:58` | `3.0` | `1.2` | edge pan freedom |
+| `PORTRAIT_RESET_EXTRA_Z` *(new)* | `GalleryManager.ts` | — | `1.5` | portrait reset headroom added |
+| `PORTRAIT_ASPECT_THRESHOLD` *(new)* | `GalleryManager.ts` | — | `0.65` | aspect ratio threshold below which boost applies |
+
+---
+
+### Implementation slice order
+
+1. Change the three existing constants and add the two new ones at the top of `GalleryManager.ts`.
+2. Add the `isPortrait` + `portraitExtra` logic inside `getResetFitZoom()`.
+3. Extend the `show-artwork-complete` diagnostics block.
+4. Run `npm run lint && npm run build` (must stay clean).
+5. Open the customer preview; verify:
+   - the largest vertical artwork opens at ~8.5 instead of 7;
+   - zoom-in reaches ~0.45 camera units on a medium portrait (check `show-artwork-complete` → `effectiveInspectionFloor`);
+   - panning at reset zoom feels noticeably tighter.
+6. Update all documentation markdown files.
+7. Rebuild `customer-preview/`.
+
+### Files to change in the implementation pass
 
 - `src/gallery/GalleryManager.ts`
 - `customer-preview/freyraum-gallery.js`
-- `CHANGELOG.md`
-- `FINDINGS.md`
-- `README.md`
-- `DOCUMENTATION_RULES.md`
-- `docs/HANDOFF.md`
-- `docs/CUSTOMER_PICTURE_GUIDE.md`
-- `docs/IMAGE_MAINTENANCE_GUIDE.md`
+- `CHANGELOG.md`, `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`
+- `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`
 
 ---
 
