@@ -5,10 +5,32 @@ import type { QualityPreset } from '../config/quality';
 
 const diagnostics = createScopedDiagnostics('renderer');
 
+/**
+ * v0.16 — read-only snapshot of `renderer.info`. Exposed to the boot
+ * loop so info/verbose diagnostics can periodically log GPU draw-call,
+ * triangle, and texture counts without leaking the mutable info object
+ * into callers.
+ */
+export interface RendererSnapshot {
+  drawCalls: number;
+  triangles: number;
+  points: number;
+  lines: number;
+  geometries: number;
+  textures: number;
+  programs: number;
+  pixelRatio: number;
+  width: number;
+  height: number;
+  renderPaused: boolean;
+  preset: string;
+}
+
 export class RendererManager {
   readonly renderer: THREE.WebGLRenderer;
   private preset: QualityPreset;
   private renderPaused = false;
+  private disposed = false;
 
   constructor(container: HTMLElement, preset: QualityPreset) {
     this.preset = preset;
@@ -26,6 +48,11 @@ export class RendererManager {
     this.renderer.setClearColor(0xdfe5e9);
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // v0.16 — mirror the active preset id to a CSS data attribute so
+    // SCSS rules (e.g. `[data-quality='battery']` blur reductions and
+    // backdrop-filter fallbacks) can react without a JS round-trip.
+    this.applyQualityDataAttribute(preset.id);
 
     // v0.11 — WebGL context-loss handling for mobile reliability. The
     // mobile GPU driver may drop the context under memory pressure, app
@@ -45,10 +72,17 @@ export class RendererManager {
     this.preset = preset;
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.shadowMap.enabled = preset.shadows;
+    this.applyQualityDataAttribute(preset.id);
   }
 
-  resize(): void {
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+  /**
+   * v0.16 — single resize coordinator entry point. The caller passes the
+   * already-measured viewport dimensions (typically the
+   * `window.visualViewport` size on mobile) so every layer in the resize
+   * chain agrees on one viewport rectangle for the same frame.
+   */
+  resize(width: number, height: number): void {
+    this.renderer.setSize(Math.max(1, width), Math.max(1, height));
     this.renderer.setPixelRatio(getOptimalPixelRatio(this.preset.pixelRatioCap));
   }
 
@@ -56,6 +90,77 @@ export class RendererManager {
    *  should skip drawing during this window. */
   isRenderPaused(): boolean {
     return this.renderPaused;
+  }
+
+  /**
+   * v0.16 — non-blocking shader pre-warm. After boot and after expensive
+   * preset/profile changes, this asks three.js to compile every program
+   * the scene currently needs ahead of the first interaction. Prefers
+   * `compileAsync()` when available; falls back to the synchronous
+   * `compile()` on older three.js builds. Failures are logged but never
+   * thrown — pre-warming is an optimization, never a correctness
+   * requirement.
+   *
+   * Online validation: https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync
+   */
+  async prewarm(scene: THREE.Scene, camera: THREE.PerspectiveCamera): Promise<void> {
+    const renderer = this.renderer as THREE.WebGLRenderer & {
+      compileAsync?: (scene: THREE.Scene, camera: THREE.PerspectiveCamera) => Promise<unknown>;
+    };
+    try {
+      if (typeof renderer.compileAsync === 'function') {
+        await renderer.compileAsync(scene, camera);
+        diagnostics.debug('prewarm-async', 'Shader programs pre-warmed via compileAsync()', {
+          preset: this.preset.id,
+        });
+      } else {
+        renderer.compile(scene, camera);
+        diagnostics.debug('prewarm-sync', 'Shader programs pre-warmed via compile()', {
+          preset: this.preset.id,
+        });
+      }
+    } catch (err) {
+      diagnostics.warn('prewarm-failed', 'Shader pre-warm failed; continuing normally', {
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  /**
+   * v0.16 — read-only snapshot of `renderer.info` and the current
+   * drawing-buffer size. Periodically logged from the boot loop in
+   * info/verbose modes to establish a runtime measurement baseline. Does
+   * NOT call `renderer.info.reset()`; three.js manages that internally
+   * via the auto-reset path.
+   */
+  getRendererSnapshot(): RendererSnapshot {
+    const info = this.renderer.info;
+    const size = new THREE.Vector2();
+    this.renderer.getSize(size);
+    return {
+      drawCalls: info.render.calls,
+      triangles: info.render.triangles,
+      points: info.render.points,
+      lines: info.render.lines,
+      geometries: info.memory.geometries,
+      textures: info.memory.textures,
+      programs: info.programs?.length ?? 0,
+      pixelRatio: this.renderer.getPixelRatio(),
+      width: size.x,
+      height: size.y,
+      renderPaused: this.renderPaused,
+      preset: this.preset.id,
+    };
+  }
+
+  private applyQualityDataAttribute(id: string): void {
+    try {
+      if (typeof document !== 'undefined' && document.documentElement) {
+        document.documentElement.dataset['quality'] = id;
+      }
+    } catch {
+      /* Non-DOM contexts (tests / SSR) — ignore. */
+    }
   }
 
   private onContextLost = (event: Event): void => {
@@ -78,6 +183,12 @@ export class RendererManager {
   };
 
   dispose(): void {
+    // v0.16 — dispose idempotency. The boot path can race a context-loss
+    // shutdown with a `beforeunload` cleanup; calling dispose twice must
+    // not double-remove listeners or attempt to dispose an already-dead
+    // GL context.
+    if (this.disposed) return;
+    this.disposed = true;
     const canvas = this.renderer.domElement;
     canvas.removeEventListener('webglcontextlost', this.onContextLost as EventListener, false);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored as EventListener, false);

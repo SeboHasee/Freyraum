@@ -52,6 +52,10 @@ export class CanvasInteraction {
   private readonly galleryManager: GalleryManager;
   private readonly diagnostics = createScopedDiagnostics('interaction');
   private readonly usePointerEvents: boolean;
+  /** v0.16 — guards against double-dispose (mobile context-loss races
+   *  the `beforeunload` cleanup), which previously could remove
+   *  pointer-capture listeners twice and leak a no-op handler. */
+  private disposed = false;
 
   private state: GestureState = 'idle';
   private readonly active = new Map<number, PointerSlot>();
@@ -323,6 +327,9 @@ export class CanvasInteraction {
   }
 
   dispose(): void {
+    // v0.16 — dispose idempotency. See `disposed` field.
+    if (this.disposed) return;
+    this.disposed = true;
     if (this.usePointerEvents) {
       this.canvas.removeEventListener('pointerdown', this.onPointerDown);
       this.canvas.removeEventListener('pointermove', this.onPointerMove);

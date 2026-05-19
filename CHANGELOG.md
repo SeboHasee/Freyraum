@@ -2,6 +2,84 @@
 
 ## Unreleased
 
+### Fixed (v0.16.2 control-shell follow-up — 2026-05-19)
+
+- Completed the settings/nav regression fix with a stronger CSS control-shell approach after the earlier containment-only fix proved incomplete in customer testing.
+- `.nav-btn` now uses a larger 72×72 transparent shell with the visible 64px glass circle rendered on `::before`; hover scale now has spare pixels and is no longer lightly clipped at the edge.
+- `.prefs__trigger` now uses a larger 52×52 transparent shell with the visible 44px glass circle rendered on `::before`; the gear control has a slightly larger hit area and no longer feels clipped.
+- `.prefs` and `.nav-controls` remain excluded from the containment block from v0.16.1.
+- Rebuilt `customer-preview/style.css` so the shipped preview matches the source fix.
+- Validation: `npm run lint` ✅, `npm run build` ✅, and headless Chromium + SwiftShader confirmed the real built preview opens the settings panel (`aria-expanded false→true`, `panel.hidden true→false`).
+
+### Fixed (v0.16.1 UI containment regression hotfix — 2026-05-19)
+
+- Fixed a settings-popover regression where the gear/settings control appeared broken because the popover anchor (`.prefs`) was paint-contained; the absolute panel was clipped to the trigger box boundary.
+- Fixed center left/right navigation button hover clipping where scaled hover states were cut off because `.nav-controls` was paint-contained.
+- Updated `src/styles/main.scss` containment block to exclude `.prefs` and `.nav-controls`, while keeping containment on the other fixed chrome surfaces.
+- Updated all repository markdown files to document this regression and the follow-up v0.16.2 control-shell hardening.
+- Validation status: initial fresh-clone checks failed before dependency install (environment setup), then full checks passed after install (`npm run lint`, `npm run build`).
+
+
+### Implemented (v0.16 deep performance and compatibility optimization — 2026-05-19)
+
+This release implements every actionable finding from the v0.16 audit while preserving 100% of FREYRAUM's museum-grade fidelity. There are no changes to material shading, painting relief, raking-light inspection, or motion behaviour; all changes are restricted to scheduling, GPU resource lifetime, runtime measurement, capability progressive enhancement, and CSS paint-cost reduction on the existing battery preset.
+
+Runtime changes:
+
+- **Single resize coordinator.** Removed `window.resize` listeners from `SceneManager` and `PostProcessing`. New public methods `SceneManager.updateAspect(w, h)` and `PostProcessing.resize(w, h)` are driven exclusively from `main.ts`. The coordinator debounces all resize sources for 120 ms, then runs all DOM reads and GPU writes inside a single `requestAnimationFrame`, eliminating forced-layout thrash on mobile orientation changes.
+- **Cached chrome refs.** `main.ts` populates `chromeRefs` (topbar, timeline, nav controls, info panel) once after UI construction. `measureArtworkViewport` no longer calls `app.querySelector` per resize.
+- **Page Visibility + Page Lifecycle.** New `pageInactive` flag suspends `postProcessing.render()`, the per-frame light/material updates, and adaptive-quality sampling when the tab is hidden or frozen. `visibilitychange`, `freeze`, and `resume` events all route through `suspendRuntime` / `resumeRuntime`. On resume, `frameBudget.markNavigation()` guards against an adaptive downgrade caused by the catch-up spike.
+- **Deferred preference application.** Repeated preference changes coalesce via `requestIdleCallback` (with `setTimeout(0)` fallback). The first apply remains synchronous because the scene is not yet shown. Adaptive downgrades route through the same path so they never land mid-frame.
+- **Shader pre-warm.** New `RendererManager.prewarm(scene, camera)` calls three.js's `compileAsync()` (or falls back to `compile()`) after boot and after every deferred preset apply. Failures are logged but never block startup.
+- **Anisotropy no-op guard.** `TextureManager.setAnisotropyDivisor()` short-circuits when the divisor is unchanged, preventing a GPU texture re-upload on every preference re-apply.
+- **Renderer-info snapshot.** New `RendererManager.getRendererSnapshot()` exposes a read-only view of `renderer.info`. `main.ts` logs one `[renderer] snapshot` entry every 5 s in info/verbose diagnostics mode, providing a running GPU resource history in customer bug reports.
+- **Progressive startup hints.** `suggestStartupQuality()` now consults `navigator.deviceMemory` (≤ 0.5 GB → battery) and `navigator.hardwareConcurrency` (≤ 2 cores → battery). Missing values pass through to the prior viewport-area heuristic.
+- **Long Tasks observer.** Debug-only `PerformanceObserver({ type: 'longtask', buffered: true })` logs any task ≥ 50 ms as `[perf][warn] long-task`. Detached on `beforeunload`.
+- **Dispose idempotency.** `RendererManager.dispose()` and `CanvasInteraction.dispose()` guard against double-invocation that previously could race a context-loss shutdown with `beforeunload`.
+
+CSS changes (battery preset paint cost + compatibility fallback):
+
+- **Quality data attribute.** `RendererManager.applyPreset()` writes `:root[data-quality='high'|'balanced'|'battery']` so SCSS can react without a JS round-trip.
+- **Battery glass blur halved.** `:root[data-quality='battery']` sets `--glass-blur: 12px` (was 26px). Blur cost is O(r²); the visual style survives, the pixel cost drops by ~75%.
+- **`backdrop-filter` fallback.** `@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))` replaces the glass surfaces with a solid `--glass-bg-strong` so older Firefox / embedded WebViews remain legible.
+- **CSS containment on fixed chrome.** `contain: layout paint` was added across fixed-position chrome in v0.16 and later refined in v0.16.1 by excluding `.prefs` and `.nav-controls` to avoid popover/hover clipping regressions. The spinner adds `contain: strict`.
+
+Importer changes (`scripts/import-artworks.mjs`):
+
+- **GPU texture-memory warnings.** New warnings on import: (a) any side larger than 4096 px ("many phones cap textures at 4096"); (b) GPU footprint ≥ 128 MB ("phones may run out of memory and skip the texture"); (c) ≥ 64 MB ("performance may be reduced on low-end phones"). Footprint computed as `width × height × 4 × 4/3` to account for the RGBA8 mip pyramid.
+
+Diagnostic surface (new info-mode entries):
+
+- `[lifecycle] suspend` / `resume`
+- `[renderer] snapshot` (5 s while active)
+- `[renderer] prewarm-async` / `prewarm-sync` / `prewarm-failed`
+- `[texture] anisotropy-noop` / `anisotropy-applied` (debug level)
+- `[perf] longtask-observer-active` / `long-task` / `longtask-unsupported`
+
+Acceptance gates:
+
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `node -c scripts/import-artworks.mjs` ✅
+
+Explicitly deferred (documented rationale in `plan.md § v0.16 implementation summary`):
+
+- Pinch-zoom log-space squared-distance refactor (negligible measurable benefit).
+- `ImageBitmapLoader` raster path (no Safari benefit against data URLs).
+- `FrameBudgetMonitor` running-sum optimization (< 0.05 ms/frame benefit, +1 risk).
+- Deletion of dead-code `MouseInteraction.ts` / `TouchInteraction.ts` / `ZoomPan.ts` (left for a dedicated cleanup PR).
+- `content-visibility` on the glass overlay root (cannot be applied without breaking the blur layer behind it).
+
+### Documentation (v0.16 final audited brainstorm — 2026-05-19)
+
+- Re-audited the full source tree against the already-upgraded v0.16 plan and confirmed the original 12 findings still stand.
+- Added 6 missed enhancements to the plan and findings: Page Lifecycle `freeze` / `resume`, `renderer.compileAsync()` shader pre-warm, optional `ImageBitmapLoader` raster path, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only Long Tasks API instrumentation, and CSS `contain` / internal `content-visibility`.
+- Expanded the online validation section and implementation-order tables to include the new enhancements and their boundaries.
+- Updated validation notes to record the fresh-clone baseline failure before dependency install (`eslint: not found`, `three` / related packages unavailable during `tsc`) so future implementers do not confuse environment setup issues with repo regressions.
+- Updated `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` to reflect the final v0.16 plan state.
+- No runtime code, generated preview bundle, dependencies, or quality preset behavior changed in this pass.
+
 ### Fixed (v0.15.1 reduced-motion fidelity hotfix — 2026-05-19)
 
 - Fixed an unintended coupling where `Reduzierte Bewegung` also reduced

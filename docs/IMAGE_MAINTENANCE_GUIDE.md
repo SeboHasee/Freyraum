@@ -5,6 +5,49 @@ This guide explains how the image system works after the v0.07 importer update.
 It is meant for the person who maintains the project folder, supports the customer,
 or needs to understand why an image does or does not appear in the gallery.
 
+
+## v0.16.2 implemented — control-shell follow-up (2026-05-19)
+
+Maintenance-relevant UI correction:
+
+- `src/styles/main.scss` now renders the visible nav/settings glass circles on inset `::before` pseudo-elements inside slightly larger transparent button shells.
+- This is a follow-up to v0.16.1: containment was part of the problem, but the smallest possible blurred control surface still produced residual edge clipping in customer testing.
+- `customer-preview/style.css` was rebuilt, so local/customer preview now includes the follow-up fix.
+- Image/import pipeline remains unaffected.
+
+## v0.16.1 implemented — UI containment regression hotfix (2026-05-19)
+
+Maintenance-relevant UI correction:
+
+- `.prefs` and `.nav-controls` were removed from the CSS `contain: layout paint` block in `src/styles/main.scss`.
+- Reason: settings popover clipping and nav hover clipping regressions from overly broad containment.
+- Impact: settings popover interaction is restored; center nav hover visuals are restored; image/import pipeline is unaffected.
+
+## v0.16 implemented — Deep performance and compatibility pass (2026-05-19)
+
+The v0.16 audit was implemented on 2026-05-19. From a maintenance and importer perspective:
+
+- **Importer warnings.** `scripts/import-artworks.mjs` now emits new warnings in `customer-artworks/last-import-report.txt` when an image exceeds 4096 px on a side, or its GPU footprint (RGBA8 with mip pyramid: `w × h × 4 × 4/3`) exceeds 64 MB (info-level notice) or 128 MB (strong warning). These are advisory; the manifest is still written.
+- **Renderer diagnostics for support cases.** When `?debug=1` is set, the console now contains periodic `[renderer] snapshot` entries with draw calls, triangle counts, geometries, textures, program count, pixel ratio, and current preset. Customers reporting performance issues can share their console log; the new entries make it easier to identify undersized phones or oversize textures.
+- **Battery preset is now visually softer.** Glass-panel blur is halved on the battery preset (CSS-only — no shader change). Picture quality and the data-URL embedding path are unchanged.
+- **Dead-code cleanup deferred.** The unused `MouseInteraction`, `TouchInteraction`, and `ZoomPan` files remain on disk pending a dedicated refactor PR. They are not part of the active runtime; do not touch them when adjusting interaction behaviour.
+- **Manifest contract unchanged.** Nothing in the importer output shape changes; only new warning text may appear in the human-readable report.
+
+## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19, design history)
+
+This section is retained as design history from the final planning pass before implementation. v0.16 is now shipped; maintenance-relevant outcomes are listed in the implemented section above.
+
+- **Import-time texture memory warnings (`scripts/import-artworks.mjs`):** shipped behavior warns when a customer image exceeds 4096 px on a side, or when estimated GPU memory exceeds ~64 MB / ~128 MB.
+- Preserve exact customer image rendering and the `webglImage` data-URL fallback for offline `file://` previews — explicitly documented as a non-goal in the plan.
+- `TextureManager.setAnisotropyDivisor()` now has a no-op guard to prevent spurious GPU texture re-uploads on same-preset re-apply.
+- CSS glass panels now include `@supports` and `[data-quality='battery']` fallbacks, plus containment where visually safe — no visible downgrade on modern devices.
+- Optional `ImageBitmapLoader` support is now documented as an **intermediate enhancement**, not a replacement for the current compatibility path (Finding 15).
+- Startup quality now optionally uses `deviceMemory` / `hardwareConcurrency` as first-run hints only; stored preference still wins.
+- Debug-only Long Tasks API instrumentation is now part of the runtime diagnostics surface.
+- All other resize, render-loop, shader-deferral, lifecycle, and pre-warm changes are runtime-transparent to the image pipeline.
+
+See `plan.md § v0.16 implementation summary` and `FINDINGS.md § 2026-05-19 (implementation completed)` for complete details.
+
 ## Implemented v0.15 animation refinement
 
 The v0.15 elegant animation pass was implemented on 2026-05-19. It is independent from the importer / image-manifest pipeline and does not change customer behavior.

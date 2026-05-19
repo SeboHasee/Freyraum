@@ -308,36 +308,50 @@ button {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 16px;
+  // v0.16.2 — keep the visible glass circles at the old spacing while giving
+  // the actual buttons a few extra pixels of transparent shell. This prevents
+  // subtle all-sides clipping on hover when the blurred circle scales up.
+  gap: 8px;
   z-index: 100;
+  overflow: visible;
 }
 
 .nav-btn {
-  width: 64px;
-  height: 64px;
+  position: relative;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 22px;
   color: var(--text);
-  transition: background var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+  isolation: isolate;
   user-select: none;
   -webkit-user-select: none;
 
-  &:hover {
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    transition: background var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+    z-index: -1;
+  }
+
+  &:hover::before {
     background: var(--glass-bg-strong);
     transform: scale(1.06);
     box-shadow: var(--shadow-soft);
   }
 
-  &:active {
+  &:active::before {
     transform: scale(0.96);
   }
 }
@@ -461,28 +475,27 @@ button {
 // =============================================================================
 .prefs {
   position: fixed;
-  top: calc(var(--chrome-top) + 24px);
-  right: calc(90px + var(--safe-right));
+  // v0.16.2 — same shell strategy as `.nav-btn`: the actual clickable button
+  // is slightly larger than the visible 44px glass circle so hover/focus/click
+  // never feel clipped at the edges.
+  top: calc(var(--chrome-top) + 20px);
+  right: calc(86px + var(--safe-right));
   z-index: 110;
+  overflow: visible;
 }
 
 .prefs__trigger {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  position: relative;
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  min-height: 52px;
   border-radius: 50%;
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text);
-  box-shadow: var(--shadow-soft);
-  transition: background var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+  isolation: isolate;
 
   // v0.13: same icon centering fix as fullscreen button — clear inline
   // descender space so the gear icon sits at the optical centre.
@@ -497,19 +510,37 @@ button {
     }
   }
 
-  &:hover {
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow-soft);
+    transition: background var(--dur-fast) var(--ease-out),
+      transform var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+    z-index: -1;
+  }
+
+  &:hover::before {
     background: var(--glass-bg-strong);
     transform: scale(1.05);
   }
 
   &[aria-expanded='true'] {
-    background: var(--glass-bg-strong);
+    &::before {
+      background: var(--glass-bg-strong);
+    }
   }
 }
 
 .prefs__panel {
   position: absolute;
-  top: 56px;
+  top: 60px;
   right: 0;
   width: min(320px, calc(100vw - var(--safe-left) - var(--safe-right) - 24px));
   // v0.11 — bound the panel by viewport height minus safe-areas + topbar,
@@ -1109,7 +1140,7 @@ button {
   }
 
   .nav-controls {
-    gap: 12px;
+    gap: 4px;
   }
 
   .zoom-controls {
@@ -1121,7 +1152,7 @@ button {
   }
 
   .prefs {
-    right: calc(70px + var(--safe-right));
+    right: calc(66px + var(--safe-right));
   }
 
   .timeline__thumb {
@@ -1178,4 +1209,80 @@ button {
     left: calc(16px + var(--safe-left));
     padding: 22px 22px 24px;
   }
+}
+
+// =============================================================================
+// v0.16 — Quality-aware paint cost reductions and capability fallbacks
+// =============================================================================
+// `RendererManager.applyPreset()` writes the active preset id to
+//   :root[data-quality='high' | 'balanced' | 'battery']
+// so CSS can drop the most expensive paint operations when the runtime
+// has already chosen the battery preset (low-end phones, weak GPUs, or
+// when adaptive quality has downgraded). This is the single CSS-side
+// counterpart to the JS-side material/shadow/post-process attenuation.
+//
+// Online validation:
+//   - https://developer.mozilla.org/docs/Web/CSS/backdrop-filter#browser_compatibility
+//   - https://developer.mozilla.org/docs/Web/CSS/@supports
+//   - https://developer.mozilla.org/docs/Web/CSS/contain
+//   - https://developer.chrome.com/articles/css-containment/
+//
+// Battery preset — halve the backdrop-filter blur radius. The visual
+// glass look survives at the smaller radius, but the per-pixel cost
+// drops dramatically because the blur kernel is O(r²). Reduced motion
+// already short-circuits transitions, so this is purely a paint-cost
+// change and does not alter the museum-quiet aesthetic.
+:root[data-quality='battery'] {
+  --glass-blur: 12px;
+}
+
+// Backdrop-filter fallback. On browsers that do not implement either
+// `backdrop-filter` or its `-webkit-` prefix (older Firefox without the
+// experimental flag, some embedded WebViews), the glass panels become
+// transparent boxes which look broken on the radial-gradient page
+// background. The fallback paints a slightly stronger solid surface so
+// the chrome remains legible. The detection is wrapped in
+// `@supports not (...)` so modern browsers ignore the rule entirely
+// and keep the genuine glass look.
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .info-panel,
+  .topbar__badge,
+  .nav-btn,
+  .zoom-controls,
+  .zoom-controls__btn,
+  .fullscreen-btn,
+  .prefs__trigger,
+  .prefs__panel,
+  .timeline {
+    background: var(--glass-bg-strong);
+  }
+}
+
+// CSS containment on every fixed-position chrome element. Each of these
+// surfaces is positioned and sized independently of its siblings, so we
+// can tell the browser that layout/paint changes inside one element
+// cannot affect anything outside it. The browser then skips the rest of
+// the document when invalidating styles or rebuilding paint regions
+// during the per-frame info-panel transitions and timeline scroll.
+.topbar,
+.info-panel,
+.zoom-controls,
+.fullscreen-btn,
+.prefs__panel,
+.timeline,
+.hint-text,
+.loading-overlay {
+  contain: layout paint;
+}
+
+// Keep nav and prefs containers out of paint containment:
+// - `.nav-controls` hosts hover-scaled circular buttons that intentionally
+//   paint outside their static bounds.
+// - `.prefs` is the anchor for an absolutely-positioned popover that must
+//   paint and receive pointer events outside the 44x44 trigger box.
+
+// The animated loading spinner additionally benefits from `style`
+// containment because the rotation keyframes never affect ancestors.
+.loading-spinner {
+  contain: strict;
 }

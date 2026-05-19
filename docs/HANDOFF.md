@@ -1,8 +1,82 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current runtime status: v0.15 elegant animation system is
-implemented, on top of the v0.14.2 zoom/pan/reset-fit follow-up.**
+contributors. **Current runtime status: v0.16 deep performance and
+compatibility pass is implemented (on top of the earlier v0.15 and v0.14.2
+passes).**
+
+## v0.16.2 implemented — follow-up UI fix (verified settings gear + stronger nav shell)
+
+Follow-up shipped on 2026-05-19 after customer feedback that v0.16.1 was only a partial fix:
+
+- **Settings gear now verified opening in the built preview.**
+- **Center left/right buttons now have extra visual shell space** so their hover state is no longer lightly clipped.
+
+Code locations:
+
+- `src/styles/main.scss`
+- rebuilt preview stylesheet: `customer-preview/style.css`
+
+Validation:
+
+- `npm run lint` ✅
+- `npm run build` ✅
+- Headless Chromium + SwiftShader verified that clicking `.prefs__trigger` opens `.prefs__panel`.
+
+## v0.16.1 implemented — UI hotfix (settings + center nav hover clipping)
+
+Customer-reported regression fixed on 2026-05-19:
+
+- **Settings button/panel works again.** `.prefs` was removed from CSS paint containment so the absolute popover is no longer clipped to the trigger box.
+- **Center left/right hover clipping removed.** `.nav-controls` was removed from CSS paint containment so hover-scaled nav buttons paint fully.
+
+Code location:
+
+- `src/styles/main.scss` (containment block near the v0.16 quality/fallback section)
+
+Validation note:
+
+- Fresh-clone baseline initially failed before dependency install (environment setup only), then full checks passed after install: `npm run lint` ✅ and `npm run build` ✅.
+
+
+## v0.16 implemented — Deep performance and compatibility pass (2026-05-19)
+
+The v0.16 audit is now live in the runtime. Every actionable finding was implemented; four optional items were explicitly deferred with documented rationale (pinch hot-path micro-optimization, `ImageBitmapLoader`, `FrameBudgetMonitor` running sum, deletion of v0.11 dead-code interaction files). Highlights:
+
+- **Single resize coordinator** in `main.ts` (debounce + rAF + measured `(w,h)` forwarded to renderer, composer, and camera). `SceneManager.updateAspect()` and `PostProcessing.resize()` replace the old per-class `window.resize` listeners.
+- **Page Visibility + Page Lifecycle suspension.** `pageInactive` flag gates `postProcessing.render()` and per-frame light/material updates; `frameBudget.markNavigation()` is called on resume to suppress adaptive downgrades from the catch-up spike.
+- **`RendererManager.prewarm()`** calls `compileAsync()` after boot and every deferred preset apply.
+- **`RendererManager.getRendererSnapshot()`** + 5 s periodic info-mode log of `renderer.info`.
+- **Anisotropy no-op guard** in `TextureManager.setAnisotropyDivisor()`.
+- **Idle-scheduled preference apply** with `setTimeout(0)` fallback.
+- **`navigator.deviceMemory` + `hardwareConcurrency`** hints in `suggestStartupQuality()`.
+- **Debug-only Long Tasks observer** in `main.ts`.
+- **CSS containment + battery-preset blur reduction + `@supports` `backdrop-filter` fallback** in `main.scss`; `:root[data-quality]` mirror written by `RendererManager.applyPreset()`.
+- **Importer GPU texture-memory warnings** (>4096 px and >64 MB / >128 MB GPU footprint).
+- **Dispose idempotency** in `RendererManager` and `CanvasInteraction`.
+
+Validated with `npm run lint`, `npm run build`, and `node -c scripts/import-artworks.mjs`.
+
+## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19 final, design history)
+
+The v0.16 plan is now the **final** audited brainstorm. The original 12 file:line-anchored findings still stand, and the final pass added 6 researched enhancements: Page Lifecycle `freeze` / `resume`, shader pre-warm with `renderer.compileAsync()`, optional `ImageBitmapLoader` raster path, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only Long Tasks API instrumentation, and CSS `contain` / internal `content-visibility`. That particular pass was documentation-only (runtime implementation happened in the section above).
+
+Start future performance work from: `plan.md` → `v0.16 — Deep performance and compatibility optimization (implemented)` and `FINDINGS.md` → `2026-05-19 (implementation completed) — v0.16 deep code audit`.
+
+**Priority order (all with code samples in plan.md):**
+1. Renderer info diagnostics (`RendererManager.ts`, `main.ts`) — establish measurement baseline.
+2. Single resize coordinator — remove independent `window.resize` from `SceneManager` and `PostProcessing`; call from debounced + RAF-deferred coordinator in `main.ts`.
+3. Cache DOM element references + defer reads into RAF (`main.ts`).
+4. Page Visibility + Page Lifecycle suspend/resume (`main.ts`, `GalleryManager.ts`) — prevents false adaptive-quality downgrades and handles `freeze` / `resume`.
+5. Shader-define deferral via `requestIdleCallback` plus post-change pre-warm via `renderer.compileAsync()` (`main.ts`, `RendererManager.ts`).
+6. Pinch hot-path (log-space squared-distance zoom, dispose idempotency) (`CanvasInteraction.ts`).
+7. Anisotropy no-op guard (`TextureManager.ts`).
+8. CSS `@supports` fallback + `[data-quality]` blur reduction + containment (`main.scss`, `RendererManager.ts`).
+9. Import-time texture memory warnings (`scripts/import-artworks.mjs`).
+10. Optional `ImageBitmapLoader` raster path where safe (`TextureManager.ts`).
+11. Progressive startup heuristics with `deviceMemory` / `hardwareConcurrency` (`performance.ts`).
+12. Debug-only Long Tasks API instrumentation (`main.ts`, `Diagnostics.ts`).
+13. Disposal ownership JSDoc (all affected files).
 
 ## v0.15 elegant animation system — Implemented (2026-05-19)
 

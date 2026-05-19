@@ -5,6 +5,45 @@ Welcome! This guide explains how to put your pictures into the FREYRAUM gallery.
 You do **not** need to use a code editor, the terminal, or any technical tool.
 You only ever touch one folder and one button.
 
+
+## UI fix note (v0.16.2 follow-up implemented)
+
+We shipped one more small UI follow-up on 2026-05-19:
+
+- the settings gear has been verified working in the built preview
+- the center left/right navigation buttons now have a slightly larger invisible shell so hover effects are no longer cut off
+
+This still does not change your picture workflow or importer behavior.
+
+## UI fix note (v0.16.1 implemented)
+
+On 2026-05-19 we shipped a small UI hotfix:
+
+- The settings gear now opens and works correctly again.
+- The center left/right navigation buttons are no longer visually cut off when hovered.
+
+This does not change your picture workflow or importer behavior.
+
+## Performance status note (v0.16 implemented)
+
+The v0.16 performance pass is now live. It does **not** change how customers add pictures; picture quality and the data-URL embedding path are unchanged. What is new and may be visible to customers running the importer:
+
+- **Importer warnings.** The "last-import-report.txt" file now flags very large images: anything wider or taller than 4096 px ("many phones cap textures at this size") and anything that would need ~64 MB or ~128 MB of GPU memory ("performance may be reduced" / "phones may run out of memory and skip the texture"). These are *notices*, not errors — the import still completes — but customers who see them can downscale before shipping to reduce risk on visitor phones.
+- **Battery-mode visual polish.** On low-end devices or when "Akkusparend" is active, the glass panels use a slightly less expensive blur. The picture itself is rendered identically; only the chrome paint cost drops.
+- **Better resume behaviour.** Switching tabs and returning no longer causes a brief quality downgrade.
+
+The previously planned `ImageBitmapLoader` raster path was explicitly deferred (no Safari benefit against the data-URL embedding the importer already produces). The customer-facing offline `file://` preview and the embedded `webglImage` behaviour remain authoritative.
+
+## Performance planning note (v0.16 final plan — historical)
+
+This section is retained as design history from the planning stage before implementation. v0.16 is now shipped; customer-facing behavior remains unchanged.
+
+One finding directly relevant to this guide was **import-time texture memory warnings**. In the shipped implementation, warnings now trigger when a customer image exceeds 4096 px on a side, or when estimated GPU memory reaches ~64 MB (notice) / ~128 MB (strong warning). This is a proactive safeguard; it does not change how pictures are imported.
+
+The final v0.16 plan also explicitly keeps the current customer-safe image path as a hard boundary: future optimizations like `ImageBitmapLoader` or compressed deployment textures may be added later, but they must **not** break the existing offline `file://` preview or embedded `webglImage` behavior that customers already rely on.
+
+See `plan.md § v0.16 implementation summary` and `FINDINGS.md § 2026-05-19 (implementation completed)` for the shipped importer behavior and rationale.
+
 ## Phone and tablet note
 
 v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.

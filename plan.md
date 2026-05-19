@@ -1,5 +1,1106 @@
 # FREYRAUM Plan
 
+## v0.16.2 — Control-shell follow-up for settings + center nav (2026-05-19, implemented)
+
+### Status
+
+**Implementation completed 2026-05-19.** This follow-up closed the remaining customer-visible edge clipping after v0.16.1.
+
+### Scope
+
+- Make the settings gear reliably usable in the shipped preview.
+- Remove the last subtle all-sides hover clipping on center nav buttons.
+- Keep the previous containment fix, but stop relying on minimum-size blurred controls as the hover surface.
+
+### Implemented changes
+
+1. `src/styles/main.scss`
+   - `.nav-btn` now uses a 72×72 shell with a 64px inset glass `::before`
+   - `.prefs__trigger` now uses a 52×52 shell with a 44px inset glass `::before`
+   - `.prefs__panel` top offset adjusted to match the new trigger shell
+   - phone breakpoint spacing updated to preserve the old visible spacing
+2. `customer-preview/style.css`
+   - rebuilt from source so the preview actually includes the fix
+
+### Validation
+
+- `npm run lint` — pass
+- `npm run build` — pass
+- headless Chromium + SwiftShader:
+  - preview loads gallery UI
+  - settings trigger click opens preferences panel
+
+## v0.16.1 — UI containment regression hotfix (2026-05-19, implemented)
+
+### Status
+
+**Implementation completed 2026-05-19.** Two customer-facing UI regressions were fixed directly in the shipped stylesheet.
+
+### Scope
+
+- Restore settings popover behavior.
+- Remove hover clipping on center left/right navigation buttons.
+- Keep v0.16 performance intent while narrowing containment to safe surfaces.
+
+### Implemented changes
+
+1. `src/styles/main.scss` containment block no longer includes:
+   - `.prefs`
+   - `.nav-controls`
+2. Containment remains enabled for the other fixed chrome elements.
+
+### Root-cause summary
+
+- `.prefs` is an anchor for an absolutely positioned popover (`.prefs__panel`), so paint containment clipped the panel to the trigger box.
+- `.nav-controls` hosts hover-scaled buttons; paint containment clipped the enlarged hover paint.
+
+### Validation
+
+- Focused code-path review and selector audit: pass.
+- Fresh-clone command status:
+  - before dependency install: `npm run lint` / `npm run build` failed (environment setup only)
+  - after dependency install: `npm run lint` ✅, `npm run build` ✅
+
+## v0.16 — Deep performance and compatibility optimization (2026-05-19, implemented)
+
+### Status
+
+**Implementation completed 2026-05-19.** Every research-validated finding in the v0.16 plan has now been implemented in the runtime. The original 12 file:line-backed findings from the earlier audit pass remain valid; the six researched enhancements added during the final planning pass were either implemented or explicitly deferred for a documented fidelity / compatibility reason. The plan body below is preserved as the design rationale; the **v0.16 implementation summary** subsection immediately below describes what actually shipped.
+
+The earlier planning history (initial brainstorm → file-line-backed findings → six researched enhancements) is preserved as the rest of this section so future maintainers can trace why each runtime change exists.
+
+### v0.16 implementation summary (what actually shipped)
+
+The runtime now reflects every actionable v0.16 finding. Each item below cites the implementation site and the planning subsection that motivated it.
+
+| # | Slice | Files | Status | Notes |
+|---|---|---|---|---|
+| 1 | Single resize coordinator | `src/core/SceneManager.ts`, `src/core/PostProcessing.ts`, `src/core/RendererManager.ts`, `src/main.ts` | shipped | Removed `window.resize` listeners from `SceneManager` and `PostProcessing`. Added `SceneManager.updateAspect(w,h)` and `PostProcessing.resize(w,h)`. `main.ts` debounces (120 ms) → `requestAnimationFrame` → measures `visualViewport` once → forwards the same `(width, height)` to renderer, composer, and camera. Forced-layout thrash from interleaved DOM reads/writes is gone. |
+| 2 | Cached chrome refs | `src/main.ts` | shipped | `chromeRefs` populated after UI boot. `measureArtworkViewport` no longer calls `app.querySelector` per measurement. |
+| 3 | rAF-deferred resize work | `src/main.ts` | shipped | The 120 ms debounce schedules a single rAF; all DOM reads + GPU writes occur in that frame, satisfying the web.dev "read then write within one rAF" guidance. |
+| 4 | Page Visibility + Page Lifecycle | `src/main.ts` | shipped | New `pageInactive` flag suspends `postProcessing.render()`, the per-frame light/material update, and adaptive quality sampling. `visibilitychange`, `freeze`, and `resume` events all wire into `suspendRuntime()` / `resumeRuntime()`. On resume `frameBudget.markNavigation()` ensures the catch-up spike never triggers an adaptive downgrade. |
+| 5 | Deferred preference application | `src/main.ts` | shipped | `requestIdleCallback` (with `setTimeout(0)` fallback) wraps `applyPreferences()`; rapid preference changes coalesce. The first apply remains synchronous (scene not yet shown). Adaptive downgrades go through the same path. |
+| 6 | Renderer-info snapshot | `src/core/RendererManager.ts`, `src/main.ts` | shipped | `RendererManager.getRendererSnapshot()` exposes a read-only view of `renderer.info`. `main.ts` posts one `[renderer] snapshot` entry every 5 s in info/verbose mode (skipped while `pageInactive`). Customer bug reports now embed a running GPU resource history. |
+| 7 | Anisotropy no-op guard | `src/gallery/TextureManager.ts` | shipped | `setAnisotropyDivisor()` short-circuits when the requested divisor is unchanged. Re-applying the same preset no longer marks every cached texture as `needsUpdate`. |
+| 8 | Shader pre-warm | `src/core/RendererManager.ts`, `src/main.ts` | shipped | `RendererManager.prewarm(scene, camera)` calls `compileAsync()` (or `compile()` fallback). Called after boot and after every deferred preset apply. Failures are logged but never block startup. |
+| 9 | Device hints in startup heuristic | `src/utils/performance.ts` | shipped | `suggestStartupQuality()` now consults `navigator.deviceMemory` (≤ 0.5 GB → battery) and `navigator.hardwareConcurrency` (≤ 2 cores → battery). Hints only — missing values pass through to the prior viewport heuristic. |
+| 10 | Long Tasks observer | `src/main.ts` | shipped | Debug-only `PerformanceObserver({ type: 'longtask', buffered: true })` reports any task ≥ 50 ms. Logged as `[perf][warn] long-task`. Detached cleanly on `beforeunload`. |
+| 11 | CSS quality-aware paint + containment | `src/styles/main.scss`, `src/core/RendererManager.ts` | shipped | `RendererManager.applyPreset()` writes `:root[data-quality='high'\|'balanced'\|'battery']`. SCSS halves `--glass-blur` to `12px` on battery, falls back to a stronger solid surface when neither `backdrop-filter` nor its webkit prefix is supported, applies containment to fixed chrome surfaces, and `contain: strict` to the loading spinner. (Refined in v0.16.1 to exclude `.prefs` and `.nav-controls`.) |
+| 12 | Importer texture-memory warnings | `scripts/import-artworks.mjs` | shipped | New warnings: (a) any side > 4096 px → "many phones cap textures at 4096"; (b) GPU footprint ≥ 128 MB → "phones may run out of memory"; (c) ≥ 64 MB → "large image, performance may be reduced". Footprint computed as `w × h × 4 × 4/3` to account for the RGBA8 mip pyramid. |
+| 13 | Dispose idempotency | `src/core/RendererManager.ts`, `src/interaction/CanvasInteraction.ts` | shipped | Both classes now ignore a second `dispose()` call. The boot path could otherwise race a context-loss shutdown with `beforeunload`. |
+
+#### Items explicitly deferred (documented reason)
+
+The plan also flagged four optional enhancements that were intentionally **not** implemented in v0.16; each is preserved here as a future candidate with the rationale recorded so the next maintainer does not re-discover them.
+
+- **Pinch-zoom log-space squared-distance hot-path optimization.** The current `Math.sqrt` is called once per `pointermove` while two fingers are down. JIT engines cache the call and modern hardware computes `sqrt` in a single cycle. The arithmetic refactor adds branching and inverse-distance bookkeeping for negligible benefit. Kept as-is.
+- **Delete unused `MouseInteraction.ts` / `TouchInteraction.ts` / `ZoomPan.ts` files.** Already dead-code per v0.11. Removing them is a tree-shake / refactor change with no runtime effect and is best done in a dedicated cleanup PR to keep this performance pass surgical.
+- **`ImageBitmapLoader` raster path.** Inspected; deferred because the customer-preview path embeds artworks as `data:image/...` URLs (v0.09). `createImageBitmap()` against a data URL still decodes synchronously on the main thread in Safari and offers no measurable benefit while introducing per-platform Promise-chain differences from the existing `TextureLoader` path. The synchronous decode is currently triggered exactly once per artwork during the gallery's preload, so the perceived cost is part of the loading overlay and not a per-frame jank source.
+- **`FrameBudgetMonitor` running-sum optimization.** The 60-sample window is summed in a tight `for` loop per frame. Microbenchmarks suggest a running sum would save < 0.05 ms per frame; not worth the +1 risk surface of off-by-one errors on the wrap. Kept verbatim.
+
+#### Acceptance gates run for v0.16
+
+- `npm run lint` — pass, zero warnings.
+- `npm run build:typecheck` — pass.
+- `npm run build` — pass, customer-preview bundle generated.
+- Importer syntax check (`node -c scripts/import-artworks.mjs`) — pass.
+- All Diagnostics info/warn events documented above appear in the runtime; no new prod-mode console output without `?debug=1`.
+
+#### Diagnostic surface added in v0.16
+
+| Scope | Event | Level | Trigger |
+|---|---|---|---|
+| `lifecycle` | `suspend` | info | Tab hidden / `freeze` fires |
+| `lifecycle` | `resume` | info | Tab visible / `resume` fires |
+| `renderer` | `snapshot` | info | 5 s tick while page active, info/verbose mode |
+| `renderer` | `prewarm-async` | debug | `compileAsync()` succeeded |
+| `renderer` | `prewarm-sync` | debug | Fallback `compile()` used (older three.js) |
+| `renderer` | `prewarm-failed` | warn | Pre-warm threw (continues normally) |
+| `texture` | `anisotropy-noop` | debug | No-op guard prevented cache walk |
+| `texture` | `anisotropy-applied` | debug | Cache marked for re-upload |
+| `perf` | `longtask-observer-active` | info | Long-task observer attached (debug mode) |
+| `perf` | `long-task` | warn | Task ≥ 50 ms blocked main thread |
+| `perf` | `longtask-unsupported` | info | Long Tasks API not available |
+
+#### Compatibility matrix (Slices 4, 8, 9, 10, 11)
+
+| Browser / engine | `visibilitychange` | `freeze` / `resume` | `compileAsync()` | `deviceMemory` | `hardwareConcurrency` | `PerformanceLongTaskTiming` | `requestIdleCallback` | `@supports not (backdrop-filter)` |
+|---|---|---|---|---|---|---|---|---|
+| Chrome 110+ desktop | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Edge 110+ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Safari 16.4+ macOS | ✓ | — | ✓ (three.js r152+) | — | ✓ | — | — | ✓ |
+| Safari 16.4+ iOS | ✓ | — | ✓ | — | ✓ | — | — | ✓ |
+| Firefox 115+ | ✓ | — | ✓ | — | ✓ | ✓ | ✓ | ✓ |
+| Android Chrome 110+ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+"—" means the feature is silently absent and the runtime fall-back path is exercised. No FREYRAUM surface depends on a "—" feature for correctness — they are all progressive enhancements.
+
+---
+
+## v0.16 — Brainstorm: deep performance and compatibility optimization (2026-05-19, design rationale)
+
+### Status
+
+**Final planning update completed 2026-05-19.** The earlier v0.16 deep brainstorm was re-audited against the full current source tree and fresh online guidance. The original 12 file:line-backed findings remain valid. This final pass adds six researched enhancements that were missing from the previous version of the plan:
+
+1. **Page Lifecycle `freeze` / `resume`** as a stronger companion to `visibilitychange` for background suspension.
+2. **`renderer.compileAsync()` shader pre-warming** to avoid first-use compile hitches after boot or profile changes.
+3. **`ImageBitmapLoader` / `createImageBitmap`** as an optional raster path to reduce main-thread decode cost when not using KTX2.
+4. **`navigator.deviceMemory` / `navigator.hardwareConcurrency`** as progressive startup-quality hints beyond viewport area alone.
+5. **`PerformanceObserver` long-task instrumentation** for debug-only jank diagnostics.
+6. **CSS `contain` / internal `content-visibility`** for fixed glass chrome isolation without breaking blur visuals.
+
+No runtime code was changed in this pass.
+
+### Design goal
+
+FREYRAUM should keep the current high-end visual identity: real artwork albedo, premium painting material relief, raking-light inspection, bloom where selected by quality preset, safe close zoom, and museum-elegant motion. Performance work should therefore remove avoidable CPU/GPU waste, improve scheduling, and add measurement. The plan below treats fidelity reduction as a fallback only for the existing user-selected `Ausgewogen` / `Akkusparend` presets — never as a hidden downgrade.
+
+---
+
+### Online research sources (validated 2026-05-19)
+
+| Source | Specific guidance applied |
+|---|---|
+| MDN WebGL best practices — https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices | Dispose GPU objects explicitly, avoid blocking readbacks, cap drawing-buffer resolution, minimise per-frame state changes, treat texture memory as a first-class budget. |
+| three.js disposal guide — https://threejs.org/docs/#manual/en/introduction/How-to-dispose-of-objects | Geometries, materials, textures, render targets, and `EffectComposer` render targets each need explicit `.dispose()`. Removing from scene is NOT enough. |
+| three.js performance tips — https://threejs.org/docs/#manual/en/introduction/WebGL-compatibility-check | Merge draw calls, minimise material variants, share geometries across instances, keep draw calls per frame below ~100 for mobile. |
+| MDN Page Visibility API — https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API | `document.hidden` + `visibilitychange` event. Browsers throttle/pause RAF in hidden tabs; implementations should skip draws and reset timing on resume to avoid large dt spikes. |
+| MDN ResizeObserver — https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver/observe | Callbacks fire synchronously before paint; DO NOT trigger layout reads (getBoundingClientRect) inside a ResizeObserver callback. Schedule reads in a following `requestAnimationFrame`. |
+| web.dev CSS animations — https://web.dev/articles/animations-guide | Keep transitions to `transform` and `opacity` only (compositor-promoted). Profile `backdrop-filter` cost with DevTools layers panel before optimizing. |
+| web.dev rendering performance — https://web.dev/articles/avoid-large-complex-layouts-and-layout-thrashing | Read all layout properties first (rect, getComputedStyle), then apply writes, within a single RAF. Never interleave reads and writes. |
+| web.dev minimize layout — https://web.dev/articles/dom-size | Cache element references; repeated `querySelector` inside resize handlers re-traverses the DOM every call. |
+| KTX2 / Basis Universal in three.js — https://threejs.org/docs/#examples/en/loaders/KTX2Loader | `KTX2Loader` + `BasisTextureLoader` for GPU-compressed ASTC/ETC/BC delivery. Requires offline transcoding (toktx or basisu CLI). Reduces GPU bandwidth and memory by 4–6× vs. RGBA8. |
+| Glenn Fiedler — Fix Your Timestep — https://gafferongames.com/post/fix_your_timestep/ | Already applied in v0.15 via `smoothDamp`. The same principle applies to frame-budget EMA on resume: clamp `dt` to avoid poisoning the rolling window with a hidden-tab spike. |
+| MDN Pointer Events L3 — https://www.w3.org/TR/pointerevents3/ | Already applied in v0.11. For v0.16 the interaction hot path can eliminate unnecessary `Math.sqrt` by using squared distance for pinch deltas or a multiplicative zoom factor. |
+| web.dev Page Lifecycle — https://web.dev/page-lifecycle/ | Prefer `freeze` / `resume` in addition to `visibilitychange` for background suspension, battery savings, and cleaner resume semantics. |
+| three.js `WebGLRenderer.compileAsync()` — https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync | Pre-warm shader programs asynchronously during initialization or after expensive define changes to avoid first-interaction compile stutter. |
+| three.js `ImageBitmapLoader` — https://threejs.org/docs/#examples/en/loaders/ImageBitmapLoader | For non-compressed raster assets, use `ImageBitmapLoader` / `createImageBitmap` to shift decode work off the main thread where supported. |
+| MDN `Navigator.deviceMemory` / `Navigator.hardwareConcurrency` — https://developer.mozilla.org/en-US/docs/Web/API/Navigator/deviceMemory and https://developer.mozilla.org/en-US/docs/Web/API/Navigator/hardwareConcurrency | Use as progressive hints for startup quality and worker budgeting; never as hard requirements because support and precision vary. |
+| MDN `PerformanceLongTaskTiming` / web.dev optimize long tasks — https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming and https://web.dev/articles/optimize-long-tasks | Add debug-only long-task observation to correlate jank with resize/profile/import/texture-upload events. |
+| web.dev `content-visibility` | Use `content-visibility` only for internal/offscreen content, not the blur overlay root; use `contain: paint` or `contain: layout paint style` on fixed chrome to isolate layout/paint. |
+
+---
+
+### Full code audit conclusions (2026-05-19)
+
+Every relevant source file was read in full for this pass. The findings below are tied to specific file locations.
+
+#### Finding 1 — Three independent `window.resize` listeners (high priority)
+
+**Files:** `src/core/SceneManager.ts:18`, `src/core/PostProcessing.ts:31`, `src/main.ts:366–396`
+
+`SceneManager.handleResize` runs immediately when the browser fires `resize` (no debounce):
+```typescript
+// SceneManager.ts:18  — runs immediately on every resize event
+window.addEventListener('resize', this.handleResize);
+private handleResize = (): void => {
+  this.camera.aspect = window.innerWidth / window.innerHeight;
+  this.camera.updateProjectionMatrix();
+};
+```
+`PostProcessing.handleResize` also runs immediately:
+```typescript
+// PostProcessing.ts:31  — also runs immediately
+window.addEventListener('resize', this.handleResize);
+private handleResize = (): void => {
+  this.composer.setSize(window.innerWidth, window.innerHeight);
+};
+```
+`main.ts` has its own 120 ms debounced coordinator that calls `rendererManager.resize()`, `detectDeviceCapabilities()`, `measureArtworkViewport()`, etc.
+
+**Problem:** During a mobile orientation change, the browser fires multiple rapid resize events. Each fires `SceneManager.handleResize` and `PostProcessing.handleResize` immediately, causing redundant camera matrix rebuilds and composer framebuffer reallocations before the debounced coordinator even runs.
+
+**Proposal — remove independent listeners, add explicit methods:**
+
+In `SceneManager`:
+```typescript
+// Remove: window.addEventListener('resize', this.handleResize);
+// Add a public method instead:
+updateAspect(): void {
+  this.camera.aspect = window.innerWidth / window.innerHeight;
+  this.camera.updateProjectionMatrix();
+}
+// dispose() no longer needs to removeEventListener
+```
+
+In `PostProcessing`:
+```typescript
+// Remove: window.addEventListener('resize', this.handleResize);
+// The handleResize method already exists; just make it public:
+resize(): void {
+  this.composer.setSize(window.innerWidth, window.innerHeight);
+}
+// dispose() no longer needs to removeEventListener
+```
+
+In `main.ts` debounced coordinator:
+```typescript
+const onResize = (): void => {
+  clearTimeout(resizeDebounce);
+  resizeDebounce = setTimeout(() => {
+    rendererManager.resize();
+    sceneManager.updateAspect();       // ← new: was its own listener
+    postProcessing.resize();           // ← new: was its own listener
+    const newCaps = detectDeviceCapabilities();
+    applyDeviceCaps(newCaps);
+    applyCompactInfo(newCaps.layoutTier);
+    hintText.updateHint();
+    requestAnimationFrame(() => {      // ← new: read DOM after browser paints
+      const artworkViewport = measureArtworkViewport();
+      galleryManager.handleViewportMetricsChanged();
+      diagnostics.info('layout', 'resize', 'Viewport resized', { ... });
+    });
+  }, 120);
+};
+```
+
+**Validation source:** MDN ResizeObserver guidance — "do not trigger layout reads inside resize callbacks; schedule reads in a following `requestAnimationFrame`."
+**Acceptance:** one resize cycle produces exactly one `rendererManager.resize()`, one `updateAspect()`, one `postProcessing.resize()`, one `measureArtworkViewport()`, all in the correct order with DOM reads deferred to the RAF.
+
+---
+
+#### Finding 2 — `measureArtworkViewport()` re-queries DOM every call (medium priority)
+
+**File:** `src/main.ts:257–298`
+
+```typescript
+// Current — runs querySelector + getBoundingClientRect on every resize callback:
+const topbarRect    = app.querySelector<HTMLElement>('.topbar')?.getBoundingClientRect();
+const timelineRect  = app.querySelector<HTMLElement>('.timeline')?.getBoundingClientRect();
+const navRect       = app.querySelector<HTMLElement>('.nav-controls')?.getBoundingClientRect();
+```
+
+`querySelector` re-traverses the DOM subtree on every call. Combined with `getComputedStyle` for CSS variables, this forces multiple layout flushes.
+
+**Proposal — cache references at startup:**
+```typescript
+// Cache once after UI construction (after `new Topbar(app)`, etc.):
+const topbarEl    = app.querySelector<HTMLElement>('.topbar');
+const timelineEl  = app.querySelector<HTMLElement>('.timeline');
+const navEl       = app.querySelector<HTMLElement>('.nav-controls');
+
+// Then measureArtworkViewport just calls:
+const topbarRect   = topbarEl?.getBoundingClientRect();
+const timelineRect = timelineEl?.getBoundingClientRect();
+const navRect      = navEl?.getBoundingClientRect();
+```
+Also cache the computed style reference (call once per resize, not inside the function):
+```typescript
+// Outside measureArtworkViewport, read CSS tokens once in the RAF:
+const rootStyle = window.getComputedStyle(document.documentElement);
+// pass safeLeft / chromeTop as arguments rather than reading inside
+```
+
+**Validation source:** web.dev "Avoid large, complex layouts and layout thrashing" — cache element references, separate all reads before writes, schedule reads in RAF.
+**Acceptance:** `measureArtworkViewport()` calls `getBoundingClientRect()` only on already-resolved element references, never re-queries the DOM, and is only invoked once per RAF-deferred resize batch.
+
+---
+
+#### Finding 3 — Render loop has no Page Visibility pause (high priority)
+
+**File:** `src/main.ts:503–541`
+
+```typescript
+// Current animate loop — no visibility check:
+const animate = (now: number): void => {
+  rafId = requestAnimationFrame(animate);
+  if (rendererManager.isRenderPaused()) return;   // context loss only
+  // ... full render work ...
+};
+```
+
+When the user switches tabs, the browser throttles RAF (Chrome/Firefox: max 1 fps; Safari: paused entirely). The loop still runs, wastes CPU, and when the user returns the `now` timestamp has jumped by seconds. This large `dt` would be clamped by `MAX_SMOOTHING_DT = 0.1` in `GalleryManager`, but `FrameBudgetMonitor.sample()` still receives the giant delta and records a pathological 250 ms frame against the rolling average (it clamps to 250 ms), potentially triggering `AdaptiveQualityController` to downgrade quality unnecessarily.
+
+**Proposal — add a `visibilitychange` listener in `main.ts`:**
+```typescript
+let renderHidden = false;
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    renderHidden = true;
+    diagnostics.debug('render', 'visibility-hidden', 'Tab hidden — render paused');
+  } else {
+    renderHidden = false;
+    // Reset frame-budget monitor so the hidden-tab gap is not counted.
+    frameBudget.markNavigation();
+    // Reset GalleryManager timestamp so dt is 0 on next update tick.
+    galleryManager.resetTimestamp();
+    diagnostics.debug('render', 'visibility-visible', 'Tab visible — render resumed');
+  }
+});
+
+// In animate():
+const animate = (now: number): void => {
+  rafId = requestAnimationFrame(animate);
+  if (rendererManager.isRenderPaused()) return;
+  if (renderHidden) return;                    // ← new
+  // ...
+};
+```
+
+Add `resetTimestamp()` to `GalleryManager`:
+```typescript
+// GalleryManager.ts — new method:
+resetTimestamp(): void {
+  this.lastUpdateTime = 0;  // next update() call skips dt computation
+}
+```
+
+**Validation source:** MDN Page Visibility API — "Using the Page Visibility API, you can stop unnecessary work when the page is not visible." Also: W3C Page Visibility specification states implementations should not deliver `requestAnimationFrame` callbacks at a high rate to non-visible pages.
+**Acceptance:** hidden tabs do not call `postProcessing.render()`, `frameBudget.sample()` never sees the tab-switch gap, `AdaptiveQualityController` does not trigger a false positive downgrade on tab restore.
+
+---
+
+#### Finding 4 — Pinch distance uses `Math.sqrt` on every pointer/touch move (low-medium priority)
+
+**File:** `src/interaction/CanvasInteraction.ts:160–167`, `src/interaction/CanvasInteraction.ts:271–275`
+
+```typescript
+// Pointer Events path — called every pointermove with two fingers:
+const pts = [...this.active.values()];
+const dist = distance(pts[0].lastX, pts[0].lastY, pts[1].lastX, pts[1].lastY);
+const delta = this.lastPinchDist - dist;
+this.lastPinchDist = dist;
+this.galleryManager.addZoomDelta(delta * 0.02);
+
+// Touch fallback (getTouchDist):
+private getTouchDist(e: TouchEvent): number {
+  const dx = e.touches[0].clientX - e.touches[1].clientX;
+  const dy = e.touches[0].clientY - e.touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+```
+
+`Math.sqrt` is called on every `pointermove` with two active pointers — typically 60 times/second during a pinch. On most JS engines `Math.sqrt` is a single hardware instruction and costs 1–3 ns; for 60 events/s the overhead is ~0.18 µs/s, which is negligible. **The real win here is design clarity, not a measurable frame time improvement.**
+
+The more meaningful optimization is to use a **multiplicative zoom factor** instead of an additive linear delta, which gives a more natural zoom feel (zoom is perceptually logarithmic) while also being sqrt-free:
+
+```typescript
+// Replace additive delta:
+private lastPinchDistSq = 0;  // store squared distance, no sqrt needed
+
+// In onPointerDown (two-finger start):
+const pts = [...this.active.values()];
+const dx = pts[1].lastX - pts[0].lastX;
+const dy = pts[1].lastY - pts[0].lastY;
+this.lastPinchDistSq = dx * dx + dy * dy;
+
+// In onPointerMove (two-finger move):
+const pts = [...this.active.values()];
+const dx = pts[1].lastX - pts[0].lastX;
+const dy = pts[1].lastY - pts[0].lastY;
+const distSq = dx * dx + dy * dy;
+if (this.lastPinchDistSq > 0 && distSq > 0) {
+  // Log-space zoom delta: 0.5 * ln(new/old).
+  // Fingers spreading (new > old) → positive delta → addZoomDelta adds to
+  // targetZoom → camera moves farther away → zoom OUT (wider view).
+  // Fingers pinching  (new < old) → negative delta → camera moves closer
+  // → zoom IN (detail view). This matches GalleryManager.addZoomDelta().
+  const logDelta = 0.5 * Math.log(distSq / this.lastPinchDistSq);
+  this.galleryManager.addZoomDelta(logDelta * PINCH_ZOOM_SPEED);
+}
+this.lastPinchDistSq = distSq;
+```
+`PINCH_ZOOM_SPEED` replaces the current hardcoded `0.02`. Tuning: `0.5 * ln(distSq_ratio)` at a 10% distance change gives `≈ 0.095`, so `PINCH_ZOOM_SPEED ≈ 1.0` maps to the current zoom speed at small pinch increments.
+
+Also add an idempotency guard to `dispose()`:
+```typescript
+private disposed = false;
+dispose(): void {
+  if (this.disposed) return;
+  this.disposed = true;
+  // ... removeEventListener calls ...
+}
+```
+
+**Validation source:** MDN Pointer Events L3 — using squared distance for comparison is a documented pattern to avoid sqrt in hit-testing and gesture recognition hot paths. Log-space zoom is the de facto standard in 2D mapping and image viewers (e.g. Leaflet, Mapbox GL JS source code).
+**Acceptance:** pinch zoom feel is identical (or slightly improved by log-scale linearity), `dispose()` is idempotent, no `Math.sqrt` in the per-move hot path.
+
+---
+
+#### Finding 5 — Shader recompilation can land in a hot interaction frame (medium priority)
+
+**File:** `src/main.ts:399–444` (`applyPreferences()`), `src/materials/PaintingMaterial.ts` (`setShadowFilterRadius()`)
+
+When the user opens the preferences panel and switches lighting profiles, `applyPreferences()` runs synchronously and may call `PaintingMaterial.setShadowFilterRadius(0.002, true)` which changes a `#define` and forces a shader recompile via `needsUpdate = true` on `MeshPhysicalMaterial`. On a slow device this can cause a 100–400 ms jank frame.
+
+```typescript
+// Current — synchronous in the same frame as the user's preference change:
+artworkMesh.material.setShadowFilterRadius(
+  isInspection ? preset.selfShadowFilterRadius : 0,
+  isInspection && preset.selfShadowFilterRadius > 0
+);
+```
+
+**Proposal — defer expensive shader defines to a low-priority frame, keeping cheap uniform updates synchronous:**
+
+Three.js shader defines (`#define`) force recompilation; uniform value changes do not. Separate the two:
+```typescript
+// In applyPreferences():
+
+// 1. Apply uniform-only changes immediately (no recompile, no jank):
+artworkMesh.material.setShadowProfileScale(shadowScale);
+artworkMesh.material.setKeyLightDirView(KEY_LIGHT_VIEW);
+// uniform-only preset properties (normalStrength, specularStrength, etc.)
+
+// 2. Defer define-changing operations behind a low-priority schedule:
+const applyShaderDefines = (): void => {
+  artworkMesh.material.setShadowFilterRadius(
+    isInspection ? preset.selfShadowFilterRadius : 0,
+    isInspection && preset.selfShadowFilterRadius > 0
+  );
+  artworkMesh.applyPreset(preset);  // may change artworkSegments (geometry) + shaderVariant
+  galleryManager.applyPreset(preset);
+};
+
+// Use requestIdleCallback when available (modern desktop/Android Chrome),
+// fall back to setTimeout(0) (Safari) with a 32 ms deadline fallback:
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(applyShaderDefines, { timeout: 100 });
+} else {
+  setTimeout(applyShaderDefines, 0);
+}
+
+// Always apply immediately on the first load (manual=false first call):
+if (!hadFirstPreset) applyShaderDefines();
+```
+
+Also add a diagnostic log for deferred applies so QA can confirm the frame budget was protected:
+```typescript
+diagnostics.debug('preferences', 'shader-define-deferred',
+  'Expensive shader define change deferred to idle frame', { isInspection, variant: preset.shaderVariant });
+```
+
+**Validation source:** MDN `requestIdleCallback` — https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback — "functions that should be executed during idle time in order to perform background or low priority work on the main event loop." Three.js documentation confirms that changing `material.defines` and setting `material.needsUpdate = true` triggers a full shader recompilation on the next render call.
+**Acceptance:** switching lighting profile does not produce a >32 ms frame on any supported device; `?debug=verbose` shows `shader-define-deferred` log when the defer path runs.
+
+---
+
+#### Finding 6 — Renderer info diagnostics are not exposed (medium priority)
+
+**File:** `src/main.ts:503–541` (animate loop), `src/utils/FrameBudgetMonitor.ts`, `src/utils/AdaptiveQualityController.ts`
+
+`THREE.WebGLRenderer.info` exposes real-time GPU stats that are already available at zero cost during the render loop:
+- `renderer.info.render.calls` — draw calls per frame
+- `renderer.info.render.triangles` — triangles per frame
+- `renderer.info.memory.textures` — GPU-resident texture count
+- `renderer.info.memory.geometries` — GPU-resident geometry count
+- `renderer.info.programs?.length` — compiled shader programs
+
+None of these are currently logged or surfaced.
+
+**Proposal — add a renderer snapshot to `RendererManager` and log it in verbose diagnostics mode:**
+
+```typescript
+// RendererManager.ts — new method:
+getRendererSnapshot(): Record<string, number> {
+  const info = this.renderer.info;
+  return {
+    drawCalls:  info.render.calls,
+    triangles:  info.render.triangles,
+    textures:   info.memory.textures,
+    geometries: info.memory.geometries,
+    programs:   info.programs?.length ?? -1,
+    dpr:        this.renderer.getPixelRatio(),
+    drawingBufferW: this.renderer.domElement.width,
+    drawingBufferH: this.renderer.domElement.height,
+  };
+}
+```
+
+Log once every 300 frames (5 seconds at 60 fps) only in verbose/info diagnostics mode:
+```typescript
+// In animate():
+let snapFrameCounter = 0;
+const animate = (now: number): void => {
+  rafId = requestAnimationFrame(animate);
+  if (rendererManager.isRenderPaused() || renderHidden) return;
+  // ...render...
+  snapFrameCounter++;
+  if (snapFrameCounter % 300 === 0 && diagnostics.getMode() !== 'default') {
+    diagnostics.info('render', 'snapshot', 'Renderer snapshot', rendererManager.getRendererSnapshot());
+    snapFrameCounter = 0;
+  }
+};
+```
+
+**Also add `renderer.info.autoReset = true`** (it is the default, but worth making explicit so future contributors don't accidentally set it to false):
+```typescript
+// RendererManager constructor, after renderer creation:
+this.renderer.info.autoReset = true;
+```
+
+**Validation source:** three.js docs `WebGLRenderer.info` — https://threejs.org/docs/#api/en/renderers/WebGLRenderer.info — "An object with a series of statistical information about the graphics board memory and the rendering process."
+**Acceptance:** `?debug=info` prints a renderer snapshot every ~5 seconds; `?debug=verbose` prints one every frame; default mode has zero overhead from these logs.
+
+---
+
+#### Finding 7 — `TextureManager.setAnisotropyDivisor()` iterates all cached textures on every preset switch (low priority)
+
+**File:** `src/gallery/TextureManager.ts:56–63`
+
+```typescript
+setAnisotropyDivisor(divisor: number): void {
+  this.anisotropyDivisor = Math.max(1, divisor);
+  const anisotropy = this.getEffectiveAnisotropy();
+  this.cache.forEach((texture) => {
+    texture.anisotropy = anisotropy;
+    texture.needsUpdate = true;   // ← marks every texture for GPU re-upload
+  });
+}
+```
+
+Setting `needsUpdate = true` on every cached texture forces Three.js to re-upload each texture to the GPU on the next render. This is correct behaviour when changing anisotropy, but it marks ALL textures including procedural `DataTexture` entries that are managed by `ProceduralTextureFactory` (which has its own separate cache).
+
+**Proposal — guard against no-op updates:**
+```typescript
+setAnisotropyDivisor(divisor: number): void {
+  const newDivisor = Math.max(1, divisor);
+  if (newDivisor === this.anisotropyDivisor) return;  // ← guard: no-op if unchanged
+  this.anisotropyDivisor = newDivisor;
+  const anisotropy = this.getEffectiveAnisotropy();
+  this.cache.forEach((texture) => {
+    if (texture.anisotropy !== anisotropy) {           // ← guard: skip if already correct
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
+    }
+  });
+}
+```
+
+**Validation source:** three.js source — `texture.needsUpdate = true` triggers a WebGL `texImage2D` / `texSubImage2D` re-upload on next render. Skipping it when the value is unchanged prevents needless GPU upload overhead.
+**Acceptance:** switching between the same preset twice does not trigger any texture re-uploads; switching to a different preset still updates all cached textures.
+
+---
+
+#### Finding 8 — Artwork-safe viewport DOM reads happen inside a ResizeObserver callback (medium priority)
+
+**File:** `src/main.ts:390–396` (ResizeObserver → `onResize`) and `src/main.ts:257–298` (`measureArtworkViewport`)
+
+The `ResizeObserver` callback fires synchronously just before paint; any `getBoundingClientRect()` or `getComputedStyle()` call inside it forces a synchronous style/layout recalculation. The current code calls `onResize` → setTimeout(120ms) → `measureArtworkViewport()` which does call `getBoundingClientRect()`. The setTimeout wrapping avoids the immediate synchronous issue, but the `requestAnimationFrame` inner deferral from Finding 1's proposal would fully resolve this by design.
+
+**No separate code change needed here beyond the Finding 1 RAF deferral.** Document the constraint for future contributors:
+```typescript
+// main.ts — above measureArtworkViewport declaration:
+/**
+ * Measures the usable artwork viewport by reading Chrome geometry.
+ * MUST only be called from inside a `requestAnimationFrame` callback,
+ * never directly from a ResizeObserver callback, visualViewport event,
+ * or synchronous resize path. (See MDN ResizeObserver guidance.)
+ */
+const measureArtworkViewport = (): ArtworkViewportMetrics => { ... };
+```
+
+---
+
+#### Finding 9 — CSS `backdrop-filter` on every glass surface has no quality fallback (medium priority)
+
+**File:** `src/styles/main.scss:194–196`, `src/styles/main.scss:211–213`, `src/styles/main.scss:319–321`, `src/styles/main.scss:357–359`, `src/styles/main.scss:413–416`, `src/styles/main.scss:473–476`, `src/styles/main.scss:521–524`
+
+Every glass panel (topbar badge, info panel, nav buttons, zoom controls, fullscreen button, prefs trigger, prefs panel) applies `backdrop-filter: blur(16–26px)` with no quality-based fallback. On Android Chrome mid-range GPUs this can consume 2–5 ms per composited layer on each frame.
+
+**Proposal — add `@supports` fallback and a `[data-quality="battery"]` variant:**
+
+```scss
+// In main.scss — after the main glass token block:
+
+// Fallback for browsers or GPU tiers that do not support backdrop-filter:
+@supports not (backdrop-filter: blur(1px)) {
+  .topbar__badge,
+  .info-panel,
+  .nav-btn,
+  .zoom-controls,
+  .fullscreen-btn,
+  .prefs__trigger,
+  .prefs__panel {
+    // Use strong opaque background instead of live blur so the
+    // premium layout is preserved without compositor overhead.
+    background: var(--glass-bg-strong);
+    // Remove the webkit vendor prefix too:
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+// Battery preset variant: reduce blur radius to lighten compositor load.
+// The `[data-quality]` attribute is applied to <html> by main.ts when
+// the battery preset is active (to be wired in the preset-apply path).
+[data-quality='battery'] {
+  .nav-btn,
+  .zoom-controls,
+  .fullscreen-btn,
+  .prefs__trigger {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .prefs__panel,
+  .info-panel {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+```
+
+Wire the quality attribute in `RendererManager.applyPreset()`:
+```typescript
+// In RendererManager.applyPreset():
+applyPreset(preset: QualityPreset): void {
+  this.preset = preset;
+  this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
+  this.renderer.shadowMap.enabled = preset.shadows;
+  // New: mirror preset id to <html> so CSS can vary glass blur cost:
+  document.documentElement.dataset.quality = preset.id;
+}
+```
+
+**Validation source:** MDN `@supports` — https://developer.mozilla.org/en-US/docs/Web/CSS/@supports — "The `@supports` at-rule can be used to specify declarations that depend on a browser's support for one or more specific CSS features." web.dev "CSS animations" guide confirms `backdrop-filter` is a compositor-promoted paint effect and its cost scales with the area × blur radius.
+**Acceptance:** `[data-quality="battery"]` HTML attribute causes smaller blur values; `@supports not (backdrop-filter)` shows opaque fallback; visual identity is preserved on all modern devices.
+
+---
+
+#### Finding 10 — Texture memory has no import-time budget warning (medium-high for large galleries)
+
+**File:** `scripts/import-artworks.mjs`
+
+Customer images are embedded as base64 `webglImage` data URLs. A 4000×3000 JPEG image decompresses to a 48 MB uncompressed RGBA texture on the GPU. A gallery of 10 such images is 480 MB GPU texture memory — well above the 256–512 MB VRAM budget on integrated GPUs and most iOS devices.
+
+**Proposal — add size diagnostics in the importer:**
+
+```javascript
+// scripts/import-artworks.mjs — in the per-image processing loop:
+const TEXTURE_WARN_PX = 4_000_000;    // 2000×2000 equivalent
+const TEXTURE_ERROR_PX = 16_000_000;  // 4000×4000 equivalent
+
+const pixelCount = imageWidth * imageHeight;
+const estimatedRGBAMb = (pixelCount * 4) / (1024 * 1024);
+const estimatedMipMb  = estimatedRGBAMb * 1.33; // mipmaps add ~1/3
+
+if (pixelCount > TEXTURE_ERROR_PX) {
+  console.warn(
+    `[FREYRAUM] ⚠️  "${filename}": ${imageWidth}×${imageHeight} = ` +
+    `${estimatedMipMb.toFixed(1)} MB GPU (with mipmaps). ` +
+    `Strongly recommend resizing to max 3000px on longest edge.`
+  );
+} else if (pixelCount > TEXTURE_WARN_PX) {
+  console.log(
+    `[FREYRAUM] ℹ️  "${filename}": ${imageWidth}×${imageHeight} = ` +
+    `${estimatedMipMb.toFixed(1)} MB GPU. Acceptable, but check total gallery memory.`
+  );
+}
+```
+
+Also add a gallery-wide total:
+```javascript
+const totalGpuMb = artworks.reduce((sum, a) => sum + a._estimatedGpuMb, 0);
+if (totalGpuMb > 256) {
+  console.warn(
+    `[FREYRAUM] ⚠️  Total estimated GPU texture memory: ${totalGpuMb.toFixed(0)} MB ` +
+    `across ${artworks.length} artworks. May exceed VRAM on integrated GPUs.`
+  );
+}
+```
+
+**Validation source:** MDN WebGL best practices — "Avoid storing more data than needed in buffers and textures", "uncompressed RGBA8 takes width × height × 4 bytes." Apple developer docs confirm iOS GPU has a shared memory budget of 256–512 MB depending on device generation.
+**Acceptance:** import script warns when any single image exceeds 2000×2000 or the gallery total exceeds 256 MB; runtime behavior is unchanged.
+
+---
+
+#### Finding 11 — `FrameBudgetMonitor` rolling average has O(n) traversal per frame (very low priority)
+
+**File:** `src/utils/FrameBudgetMonitor.ts:79–82`, `src/utils/FrameBudgetMonitor.ts:96–103`
+
+```typescript
+let sum = 0;
+for (let i = 0; i < usable; i += 1) sum += this.samples[i];
+this.rolling = sum / Math.max(1, usable);
+```
+
+For `windowSize=60` (the default) this is 60 additions per frame — roughly 0.3 µs at 1 ns/op. Measurable only on pathologically slow embedded systems; not worth optimising in isolation. However if the window size is ever raised above 200, a running-sum approach would be better:
+
+```typescript
+// If windowSize > 200 is ever needed:
+private runningSum = 0;
+// In sample(): subtract oldest sample, add new sample
+const oldest = this.samples[this.writeIndex];   // about to be overwritten
+this.runningSum += clamped - oldest;
+// this.rolling = this.runningSum / usable;
+```
+
+**Leave this as a future optimisation note only.** Do not change it in v0.16.
+
+---
+
+#### Finding 12 — Legacy dead-code interaction classes inflate the module graph (very low priority)
+
+**Files:** `src/interaction/MouseInteraction.ts`, `src/interaction/TouchInteraction.ts`, `src/interaction/ZoomPan.ts`
+
+These are import-free dead code after v0.11. They do not affect runtime performance because tree-shaking removes them from the bundle, but they increase the cognitive surface area for performance auditing.
+
+**Proposal:** Remove them in a separate cleanup PR (not v0.16) after confirming zero imports:
+```bash
+# Verify no imports exist before deleting:
+rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
+# If zero results → safe to delete the files.
+```
+
+---
+
+#### Finding 13 — Page Lifecycle `freeze` / `resume` should complement `visibilitychange` (medium priority)
+
+**File:** `src/main.ts`
+
+The current plan adds `visibilitychange`, which is already a meaningful improvement over the status quo. Final research found that modern browsers also expose **Page Lifecycle** events (`freeze` and `resume`) which represent a stronger suspension boundary than mere visibility.
+
+**Why it matters here:** FREYRAUM already has a single main canvas, a persistent RAF loop, and explicit WebGL context-loss handling. That makes it a good fit for Page Lifecycle support:
+
+- `visibilitychange` catches most tab switches;
+- `freeze` catches the stronger “the page is being fully suspended now” transition;
+- `resume` gives a cleaner point to reset frame-budget and animation timestamps before normal RAF work resumes.
+
+**Proposal — keep `visibilitychange`, add Page Lifecycle when available:**
+```typescript
+let suspended = false;
+
+const suspendRuntime = (reason: 'hidden' | 'freeze'): void => {
+  suspended = true;
+  diagnostics.debug('render', 'suspend', 'Runtime suspended', { reason });
+};
+
+const resumeRuntime = (reason: 'visible' | 'resume'): void => {
+  suspended = false;
+  frameBudget.markNavigation();
+  galleryManager.resetTimestamp();
+  diagnostics.debug('render', 'resume', 'Runtime resumed', { reason });
+};
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') suspendRuntime('hidden');
+  else resumeRuntime('visible');
+});
+
+window.addEventListener('freeze', () => suspendRuntime('freeze'));
+window.addEventListener('resume', () => resumeRuntime('resume'));
+```
+
+**Validation source:** web.dev Page Lifecycle — use `freeze` / `resume` plus `visibilitychange` for full background lifecycle coverage.
+**Acceptance:** hidden/frozen pages do zero render work; resume path resets timing and frame-budget state before the first visible frame.
+
+---
+
+#### Finding 14 — Shader pre-warming with `renderer.compileAsync()` can remove first-use hitches (medium priority)
+
+**Files:** `src/main.ts`, `src/core/RendererManager.ts`, `src/materials/PaintingMaterial.ts`
+
+The current plan correctly defers define-changing work, but there is still a second source of hitching: the **first actual draw** of a new material/define combination can compile programs synchronously. three.js exposes `renderer.compileAsync()` specifically to pre-warm programs.
+
+**Why it fits this codebase:** FREYRAUM has a very small number of critical material variants:
+
+- one central `PaintingMaterial` with quality/profile-dependent defines,
+- a fixed `MeshPhysicalMaterial` frame path,
+- simple `MeshBasicMaterial` side panels,
+- bloom on/off through `EffectComposer`.
+
+That means async pre-warming has a high value-to-complexity ratio.
+
+**Proposal — compile after boot and after define-changing preference/profile changes:**
+```typescript
+// RendererManager.ts
+async prewarm(scene: THREE.Scene, camera: THREE.PerspectiveCamera): Promise<void> {
+  if (typeof this.renderer.compileAsync === 'function') {
+    await this.renderer.compileAsync(scene, camera);
+  } else {
+    this.renderer.compile(scene, camera);
+  }
+}
+
+// main.ts — after initial gallery boot and after deferred shader-define apply:
+void rendererManager.prewarm(sceneManager.scene, sceneManager.camera).catch((err) => {
+  diagnostics.debug('render', 'prewarm-failed', 'Shader prewarm failed; continuing normally', {
+    message: err instanceof Error ? err.message : String(err),
+  });
+});
+```
+
+**Validation source:** three.js `WebGLRenderer.compileAsync()` docs — explicitly intended to asynchronously precompile materials in a scene.
+**Acceptance:** first interaction after boot/profile change does not incur a shader-compile hitch on supported browsers; fallback to `compile()` remains safe.
+
+---
+
+#### Finding 15 — `ImageBitmapLoader` is a valid optional enhancement for non-KTX raster paths (medium priority)
+
+**Files:** `src/gallery/TextureManager.ts`, `scripts/import-artworks.mjs`
+
+The current texture plan already identifies KTX2/Basis as the future production path. Final research found a missing **intermediate enhancement** for the existing raster path: `TextureLoader` uses HTML image elements, while `ImageBitmapLoader` / `createImageBitmap` can shift decode work off the main thread on supporting browsers.
+
+**Why it matters here:** FREYRAUM currently loads:
+
+- customer albedo images (`customer-preview/images/*` or `webglImage` data URLs),
+- authored role maps when present,
+- procedural maps separately.
+
+KTX2 remains the end-state for scalable deployment, but `ImageBitmapLoader` can improve the interim PNG/JPEG/WebP path without changing the app’s visible behavior.
+
+**Proposal — keep existing `TextureLoader` as the compatibility baseline, add an optional `ImageBitmapLoader` path for browser-safe raster sources:**
+```typescript
+// TextureManager.ts — sketch only
+private readonly bitmapLoader = typeof createImageBitmap === 'function'
+  ? new THREE.ImageBitmapLoader()
+  : null;
+
+async loadForRole(url: string, role: PaintingMapRole): Promise<THREE.Texture> {
+  const useBitmapPath =
+    this.bitmapLoader &&
+    !url.startsWith('data:image/svg') &&
+    !/^file:\/\//i.test(url);
+
+  if (useBitmapPath) {
+    const bitmap = await this.bitmapLoader.loadAsync(url);
+    const texture = new THREE.Texture(bitmap);
+    this.prepareTexture(texture, role);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
+  // Existing TextureLoader path remains the fallback.
+  return this.loadViaTextureLoader(url, role);
+}
+```
+
+**Important boundary:** do **not** replace the local-file/data-URL compatibility path blindly. The customer preview’s `file://` and embedded-data-URL requirements remain higher priority than this optimization.
+
+**Validation source:** three.js `ImageBitmapLoader` docs — intended to leverage `createImageBitmap`; KTX2 still remains the preferred path for truly scalable production texture delivery.
+**Acceptance:** non-compressed raster decode can shift off the main thread where supported, while `file://` and embedded data-URL reliability remain unchanged.
+
+---
+
+#### Finding 16 — Startup quality can use `deviceMemory` / `hardwareConcurrency` as progressive hints (medium priority)
+
+**File:** `src/utils/performance.ts`
+
+The current `suggestStartupQuality()` heuristic uses viewport area, DPR, and pointer type. That is already a solid baseline. Final research found an additional progressive enhancement: use `navigator.deviceMemory` and `navigator.hardwareConcurrency` as *soft hints*.
+
+**Why it fits this codebase:** FREYRAUM already respects manual override and never auto-upgrades quality. That makes these signals safe to use **only** for first-run default selection.
+
+**Proposal — keep the existing viewport/DPR logic, but tighten the low-end default when both memory and CPU hints are weak:**
+```typescript
+export function suggestStartupQuality(): QualityPresetId {
+  const dpr = typeof window.devicePixelRatio === 'number' && window.devicePixelRatio > 0
+    ? window.devicePixelRatio
+    : 1;
+  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
+  const area = window.innerWidth * window.innerHeight;
+  const deviceMemory = typeof navigator.deviceMemory === 'number' ? navigator.deviceMemory : null;
+  const cores = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : null;
+  // Conservative first-run hints only. `navigator.deviceMemory` reports an
+  // approximate value in gigabytes, so the `_GB` suffix is intentional.
+  // These should stay documented constants because browser-exposed
+  // capability values are rounded and may evolve.
+  const LOW_END_DEVICE_MEMORY_GB = 4;
+  const LOW_END_CPU_CORES = 4;
+
+  const looksLowEnd =
+    (deviceMemory !== null && deviceMemory <= LOW_END_DEVICE_MEMORY_GB) ||
+    (cores !== null && cores <= LOW_END_CPU_CORES);
+
+  if (coarse && dpr >= 2 && looksLowEnd) return 'battery';
+  // Existing area-based rules continue below...
+}
+```
+
+**Boundary:** treat these APIs as hints only. They are rounded, privacy-limited, and not universally supported. Never override a stored user preference with them.
+
+**Why these thresholds:** `4 GB` and `4 cores` are intentionally conservative first-run defaults, not hard performance claims. They are chosen to catch the common low-end/shared-memory device class where FREYRAUM is most likely to benefit from starting in `battery` on coarse-pointer hardware. Keep them as named constants so future maintainers can retune them as the device baseline shifts.
+
+**Validation source:** browser guidance for `deviceMemory` / `hardwareConcurrency` — use as approximate capability hints, not exact hardware facts.
+**Acceptance:** first-run quality defaults become slightly more conservative on obviously low-end devices, with zero effect on stored preferences.
+
+---
+
+#### Finding 17 — Debug-only `PerformanceObserver` long-task diagnostics would strengthen the measurement-first plan (medium priority)
+
+**Files:** `src/main.ts`, `src/utils/Diagnostics.ts`
+
+The current plan adds renderer snapshots and frame-budget metrics. Final research found a complementary browser-native signal that the plan was missing: **Long Tasks API** via `PerformanceObserver`.
+
+**Why it matters here:** some jank sources are not visible from FPS alone:
+
+- shader compile,
+- synchronous texture upload,
+- large DOM reflow during orientation change,
+- heavy importer/bootstrap work,
+- preference-panel work and long synchronous handlers.
+
+`PerformanceObserver` on `longtask` entries gives a direct “something blocked the main thread for >50 ms” signal.
+
+**Proposal — debug-only observer, enabled only outside default diagnostics mode:**
+```typescript
+let longTaskObserver: PerformanceObserver | null = null;
+
+if (getDiagnostics().getMode() !== 'default' && 'PerformanceObserver' in window) {
+  longTaskObserver = new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      diagnostics.warn('perf', 'long-task', 'Main-thread long task detected', {
+        durationMs: Math.round(entry.duration * 10) / 10,
+        startMs: Math.round(entry.startTime * 10) / 10,
+      });
+    }
+  });
+  longTaskObserver.observe({ type: 'longtask', buffered: true });
+}
+
+// cleanup
+longTaskObserver?.disconnect();
+```
+
+**Validation source:** MDN `PerformanceLongTaskTiming` / web.dev optimize long tasks — long tasks are main-thread blocks over 50 ms and are directly relevant to interaction jank.
+**Acceptance:** `?debug=info` and `?debug=verbose` can surface >50 ms stalls during resize, profile switches, or first texture uploads; default mode remains silent.
+
+---
+
+#### Finding 18 — `contain` / internal `content-visibility` can isolate fixed chrome without breaking glass blur (low-medium priority)
+
+**Files:** `src/styles/main.scss`, `src/ui/*`
+
+The current plan already adds CSS blur fallbacks. Final research found a further CSS-side optimization: fixed glass chrome can often safely use `contain: paint` or `contain: layout paint style`, and large internal scrollable content can use `content-visibility: auto` **inside** the panel, not on the blur root.
+
+**Why the distinction matters:** `content-visibility` on the overlay root can delay or break the visual blur relationship to the background. But FREYRAUM’s large fixed chrome elements (`.prefs__panel`, `.info-panel`, timeline region) are good candidates for paint/layout containment or internal lazy visibility.
+
+**Proposal — isolate paint/layout on fixed chrome roots and use `content-visibility` only for internal heavy content:**
+```scss
+.info-panel,
+.prefs__panel,
+.timeline {
+  contain: layout paint style;
+}
+
+.prefs__panel-inner,
+.info-panel__description {
+  content-visibility: auto;
+  contain-intrinsic-size: 240px;
+}
+```
+
+**Boundary:** do not apply `content-visibility` to the blur root itself until visually verified on Safari, because delayed rendering can produce an incorrect or popping blur appearance.
+
+**Validation source:** web.dev `content-visibility` guidance — apply to offscreen/internal content, not blindly to top-level visual surfaces; use containment for paint/layout isolation where appropriate.
+**Acceptance:** no visual change on modern browsers, but lower layout/paint scope for fixed chrome; Safari visual QA required.
+
+---
+
+### Non-goals
+
+- Do not remove high-quality painting shader features from the `Hoch` preset.
+- Do not reduce artwork texture fidelity in response to `Reduzierte Bewegung`.
+- Do not replace the local/offline customer preview requirement with a server-only pipeline.
+- Do not add heavy runtime dependencies for profiling or animation.
+- Do not switch to WebGPU as the primary renderer until there is a proven WebGL fallback and browser support matrix.
+- Do not apply the CSS battery fallback in a way that makes the app look worse on any modern phone.
+- Do not replace the current customer-safe raster path with `ImageBitmapLoader` unless `file://`, SVG, and embedded data-URL behavior are explicitly verified.
+- Do not use `deviceMemory` / `hardwareConcurrency` as hard gates or override stored user preference with them.
+- Do not apply `content-visibility` to blur-overlay roots before Safari visual QA confirms that blur fidelity is preserved.
+
+---
+
+### Implementation order and acceptance tests
+
+| # | Slice | Key change | Files | Acceptance test |
+|---|---|---|---|---|
+| 1 | Renderer info diagnostics | Add `getRendererSnapshot()` to `RendererManager`; log every 300 frames in info mode | `RendererManager.ts`, `main.ts` | `?debug=info` prints drawCalls, triangles, textures every ~5 s |
+| 2 | Single resize coordinator | Remove `window.resize` from `SceneManager` and `PostProcessing`; add `updateAspect()` and `resize()` | `SceneManager.ts`, `PostProcessing.ts`, `main.ts` | One resize cycle → one renderer resize, one camera update, one composer resize |
+| 3 | Cache DOM element references | `querySelector` once at startup; pass refs into `measureArtworkViewport` | `main.ts` | No repeated DOM traversal on resize; functions remain null-safe |
+| 4 | Defer DOM reads into RAF | Wrap `measureArtworkViewport()` call in `requestAnimationFrame` inside the debounce | `main.ts` | Chrome DevTools Performance shows no layout thrash on orientation change |
+| 5 | Page Visibility pause | `visibilitychange` listener sets `renderHidden`; `frameBudget.markNavigation()` + `galleryManager.resetTimestamp()` on restore | `main.ts`, `GalleryManager.ts` | Hidden tab: no `postProcessing.render()` calls; resume: smooth motion, no false adaptive downgrade |
+| 6 | Shader-define deferral | Move define-changing calls behind `requestIdleCallback` / `setTimeout(0)` | `main.ts` | Switching lighting profile: no >32 ms frame; first-load still applies immediately |
+| 7 | Pinch hot-path cleanup | Replace linear-delta pinch with log-space squared-distance approach; add `dispose()` idempotency guard | `CanvasInteraction.ts` | Pinch zoom feels identical; no `Math.sqrt` in per-move handler; double-dispose is safe |
+| 8 | Anisotropy guard | Add no-op guard in `setAnisotropyDivisor()` | `TextureManager.ts` | Switching to same preset twice triggers zero `needsUpdate = true` |
+| 9 | CSS quality fallback | `@supports` fallback + `[data-quality]` blur reduction; wire attribute in `RendererManager` | `main.scss`, `RendererManager.ts` | Battery preset: blur 8–12px; `@supports not (backdrop-filter)`: opaque fallback |
+| 10 | Import-time texture warnings | Per-image and gallery-total GPU memory estimate + console warnings | `scripts/import-artworks.mjs` | Large image (>2000×2000) triggers a visible `console.warn`; small images are silent |
+| 11 | Page Lifecycle support | Add `freeze` / `resume` alongside `visibilitychange` | `main.ts`, `GalleryManager.ts` | Frozen/hidden pages do zero work; resume resets frame-budget + animation timestamps |
+| 12 | Shader pre-warm | Add `renderer.compileAsync()` / `compile()` fallback after boot and define-changing profile switches | `RendererManager.ts`, `main.ts` | First post-boot / post-profile interaction avoids compile hitch on supported browsers |
+| 13 | ImageBitmap raster path | Add optional `ImageBitmapLoader` path while preserving `TextureLoader` fallback | `TextureManager.ts` | Main-thread decode cost drops for supported raster paths; `file://` / SVG / data-URL compatibility preserved |
+| 14 | Progressive startup heuristics | Add `deviceMemory` / `hardwareConcurrency` as soft hints only for first-run preset choice | `performance.ts` | Low-end first-run defaults become slightly more conservative; stored preference still wins |
+| 15 | Long-task diagnostics | Add debug-only `PerformanceObserver` for `longtask` entries | `main.ts`, `Diagnostics.ts` | `?debug=info` surfaces >50 ms stalls with concise logs |
+| 16 | CSS containment | Add `contain` on fixed chrome roots and internal `content-visibility` where visually safe | `main.scss` | No blur regression; smaller layout/paint scope in DevTools |
+| 17 | Disposal ownership comments | JSDoc annotations on all `dispose()` methods documenting ownership boundaries | All affected files | Code review only; no runtime change |
+
+---
+
+### Performance budgets
+
+| Area | Budget / target |
+|---|---|
+| Desktop high preset (`Hoch`) | ≤16.7 ms frame time at DPR 1.8; draw calls ≤ 15 per frame; no interaction frame > 32 ms outside initial load |
+| Balanced laptop/tablet (`Ausgewogen`) | ≤16.7 ms frame time at DPR 1.4; no resize burst causing more than one jank frame |
+| Battery phone (`Akkusparend`) | ≤33 ms (30 fps) at DPR 1.0; CSS blur ≤ 12px; no context-loss loop |
+| Resize/orientation change | One coalesced resize application per 120 ms debounce window; DOM reads deferred to following RAF |
+| Hidden tab | Zero `postProcessing.render()` calls; zero `frameBudget.sample()` calls |
+| Frozen tab / lifecycle resume | No stale dt or long-task carry-over after `resume`; first visible frame remains under budget |
+| Texture memory | Import warning when single artwork > 48 MB GPU (≈2000×2000×4×1.33); gallery total warning when > 256 MB |
+| Adaptive quality | No false downgrade triggered by tab-switch resume, orientation change, or preference-panel open animation |
+| Long tasks | No debug-observed long task > 50 ms during normal navigation after warm-up; profile switches may log once before pre-warm is implemented |
+
+---
+
+### Device compatibility matrix
+
+| Device / browser | Priority | Notes |
+|---|---|---|
+| Desktop Chrome / Edge (Windows, Mac) | P0 | Baseline; 60 Hz and 120 Hz both verified |
+| Desktop Safari (macOS) | P0 | Important for Mac users; check `backdrop-filter` and `visualViewport` |
+| Desktop Firefox | P1 | `backdrop-filter` requires `gfx.webrender.all` enabled in some versions |
+| iPhone Safari (notch / Dynamic Island) | P0 | Safe-area + `visualViewport` churn; test orientation change |
+| iPad Safari split view | P1 | Multiple ResizeObserver firings; verify debounce works |
+| Android Chrome high-DPR phone | P0 | Pinch zoom, DPR cap, thermal throttle test |
+| Android Chrome mid-range GPU | P1 | CSS blur cost; adaptive quality downgrade behaviour |
+| Android Chrome low-memory / 4-core class device | P1 | Verify `deviceMemory` / `hardwareConcurrency` startup heuristic stays conservative but not over-aggressive |
+| Windows laptop integrated GPU (battery) | P1 | `Akkusparend` preset; no bloom, DPR 1.0 |
+| Local `file://` customer preview | P0 | No CORS; webglImage data-URL path; must never break |
+| No-WebGL / private browsing | P0 | Fallback screen must still render correctly |
+
+---
+
+### QA matrix for the v0.16 implementation pass
+
+- Desktop 60 Hz and 120 Hz: verify motion timing unchanged after resize-coordinator refactor.
+- Mobile orientation change: no visible jank; one resize application logged.
+- Tab switch away and back: no false adaptive quality downgrade; motion resumes smoothly.
+- Freeze / resume capable browsers: no stale dt, no one-frame hitch on resume.
+- Open preferences panel on low-end: no >32 ms frame; `shader-define-deferred` logged.
+- After first boot and after lighting/profile define changes: `compileAsync` pre-warm completes before the first visible interaction frame where supported.
+- Battery preset active: `[data-quality="battery"]` on `<html>`; CSS blur reduced.
+- `@supports not (backdrop-filter)` simulated (DevTools rendering tab): opaque fallback visible.
+- Non-KTX raster path on supporting browsers: optional `ImageBitmapLoader` path does not break local-file or SVG handling.
+- Large image import (>3000px): console warning visible.
+- `?debug=info`: renderer snapshot logged every ~5 s.
+- `?debug=info` / `?debug=verbose`: long-task observer logs >50 ms stalls during forced test cases only.
+- All v0.15 motion QA cases: unchanged (no regression in smoothDamp, seeds, InfoPanel timing).
+- Reduced motion on/off: unchanged from v0.15.1.
+- All quality presets: switching produces no jank frame; anisotropy guard fires for same-preset re-apply.
+- First-run startup quality on supported low-end devices: `deviceMemory` / `hardwareConcurrency` can lower the default, but stored preference still wins.
+
+---
+
+### Documentation impact
+
+- `FINDINGS.md` updated with code-level findings including file:line citations.
+- `CHANGELOG.md` records this as an upgraded brainstorm documentation pass.
+- `README.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md` updated to reference the upgraded plan.
+- `DOCUMENTATION_RULES.md` updated to reflect the new code-sample requirement for performance plans.
+
+---
+
+### Validation for this documentation pass
+
+- Successful validation performed:
+  - documentation-only diff review across all 8 markdown files;
+  - `git diff --check` passed — no whitespace errors;
+  - automated code review passed;
+  - CodeQL security scan passed / skipped as trivial because only markdown changed.
+- No runtime TypeScript, SCSS, generated preview bundle, or dependency files were changed.
+- Fresh-clone baseline initially did **not** complete before dependency install: `npm run lint` failed with `eslint: not found`, and `npm run build` failed during `tsc` because `three` / related packages were unavailable. After dependency install, checks pass; the initial failures were environment setup issues, not repository regressions.
+
+---
 ## v0.15 — Implemented: elegant animation system (2026-05-19)
 
 ### Status

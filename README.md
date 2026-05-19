@@ -2,11 +2,60 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current status — v0.15 elegant animation system implemented (2026-05-19)
 
-**Current build:** v0.15 is implemented. v0.14.2 zoom/pan tuning is preserved unchanged.
+## Current status — v0.16.2 control-shell follow-up fix implemented (2026-05-19)
 
-v0.15 ships a museum-elegant motion system on top of v0.14.2:
+**Current build:** v0.16.2 completes the settings/nav regression fix with a stronger control-shell approach:
+
+- **Settings gear verified working.** The preferences panel now opens in the built preview, and the gear button uses a slightly larger transparent shell around the visible 44px glass circle so the control no longer feels clipped at the edge.
+- **Center nav hover clipping eliminated more robustly.** The left/right center buttons now use a larger transparent outer shell with the visual glass circle drawn on `::before`, so hover scale has breathing room instead of being raster-clipped at the button edge.
+
+What changed in code:
+
+- `src/styles/main.scss`: kept `.prefs` and `.nav-controls` out of paint containment, then upgraded `.prefs__trigger` and `.nav-btn` to shell-based controls with inset glass-circle pseudo-elements.
+- `customer-preview/style.css`: rebuilt so the shipped local preview matches the source fix.
+
+Validation for v0.16.2:
+
+- `npm run lint` ✅
+- `npm run build` ✅
+- Headless Chromium + SwiftShader verification ✅
+  - `.prefs__trigger` click toggles `aria-expanded` from `false` → `true`
+  - `.prefs__panel.hidden` changes from `true` → `false`
+  - rebuilt preview loads the real gallery UI (not fallback)
+
+All repository markdown files were updated for this follow-up fix.
+
+## Current status — v0.16 deep performance and compatibility pass implemented (2026-05-19)
+
+**Current build:** v0.16 is implemented on top of v0.15.1. Every actionable finding from the v0.16 audit is now in the runtime. No FREYRAUM fidelity surface (painting material, raking-light inspection, motion behaviour, reduced-motion rules, quality presets) is changed.
+
+What v0.16 actually ships:
+
+- **Unified resize coordinator.** `window.resize` listeners removed from `SceneManager` and `PostProcessing`; new `SceneManager.updateAspect(w,h)` and `PostProcessing.resize(w,h)` are driven from `main.ts`, which debounces (120 ms) and batches all DOM reads + GPU writes inside one `requestAnimationFrame`. No more forced layout thrash on mobile orientation changes.
+- **Page Visibility + Page Lifecycle suspension.** The render path is gated by a `pageInactive` flag that responds to `visibilitychange`, `freeze`, and `resume`. The frame budget catch-up spike on resume is suppressed so adaptive quality never downgrades from a backgrounded tab.
+- **Shader pre-warm.** `RendererManager.prewarm()` calls three.js's `compileAsync()` (or falls back to `compile()`) after boot and after every deferred preset apply. First interactions no longer pay a JIT compile cost.
+- **Idle-scheduled preference apply.** `applyPreferences()` runs in `requestIdleCallback` (with `setTimeout(0)` fallback) after the first synchronous boot apply; repeated preference changes coalesce.
+- **Anisotropy no-op guard.** `TextureManager.setAnisotropyDivisor()` short-circuits when the divisor is unchanged; no more wasted GPU re-uploads on preset re-apply.
+- **Runtime renderer diagnostics.** `RendererManager.getRendererSnapshot()` exposes `renderer.info`; `main.ts` logs a `[renderer] snapshot` every 5 s in info/verbose mode. Customer bug reports now embed GPU resource history.
+- **Progressive startup hints.** `suggestStartupQuality()` now also consults `navigator.deviceMemory` (≤ 0.5 GB → battery) and `navigator.hardwareConcurrency` (≤ 2 cores → battery), but only as hints — missing values fall through to the prior viewport heuristic.
+- **Debug-only Long Tasks observer.** `PerformanceObserver({type:'longtask'})` logs tasks ≥ 50 ms as `[perf][warn] long-task` when diagnostics is in info/verbose mode.
+- **CSS quality + containment.** `:root[data-quality='battery']` halves `--glass-blur` from 26 px to 12 px. `@supports not (backdrop-filter)` falls back to a solid surface. Fixed-position chrome surfaces use containment for paint/layout isolation, and the loading spinner uses `contain: strict`. `RendererManager.applyPreset()` writes the current preset id to `:root` so SCSS can react without a JS round-trip. *(v0.16.1 refines containment scope by excluding `.prefs` and `.nav-controls` to prevent clipping regressions.)*
+- **Importer GPU memory warnings.** `scripts/import-artworks.mjs` warns the customer when any image exceeds 4096 px on a side or its GPU footprint (RGBA8 with mip pyramid) exceeds 64 MB (notice) or 128 MB (strong warning).
+- **Dispose idempotency.** `RendererManager.dispose()` and `CanvasInteraction.dispose()` ignore a second call so the boot path can race a context-loss shutdown with `beforeunload` without leaking listeners.
+
+Validation for v0.16:
+
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅ (`tsc` clean; preview bundles regenerated)
+- Importer syntax check ✅
+
+See [`plan.md § v0.16 implementation summary`](./plan.md#v016--deep-performance-and-compatibility-optimization-2026-05-19-implemented) and [`FINDINGS.md`](./FINDINGS.md) for the implementation matrix, deferred items with rationale, and the device compatibility matrix.
+
+## Previous status — v0.15 elegant animation system implemented (2026-05-19)
+
+v0.14.2 zoom/pan tuning is preserved unchanged. v0.15 ships a museum-elegant motion system on top of v0.14.2:
 
 - **frame-rate-independent smoothing**: new `smoothDamp(current, target, lambda, dt)` in `src/utils/math.ts`; all 13 prior per-frame lerps in `GalleryManager.update()` converted to lambda-based smoothing (+1 new line for the new `position.z` recession). Motion timing is now identical on 60 Hz, 90 Hz, 120 Hz, and 30 Hz screens;
 - **witnessable artwork entrances**: navigation seeds retuned (`position.x` ±3.2 → ±4.5, `rotation.y` ±0.32 rad → ±0.15 rad, `scale` 0.84 → 0.88, new `position.z` = -0.6 depth recession), settling over ~1200 ms with λ=2.5;
