@@ -7,11 +7,32 @@ You only ever touch one folder and one button.
 
 ## Phone and tablet note
 
-The v0.11 final technical coding plan (updated 2026-05-18) documents concrete improvements for phone and tablet users and validates them against current official web guidance. The current gallery already works with touch (swipe, pinch zoom, on-screen buttons, zoom/reset, reduced motion, high contrast, WebGL fallback), but desktop is still the main polished design. Future work will fix 7 specific bugs found in the code — including safe-area support for notched iPhones, better pinch gesture ownership on iOS Safari, compact info-panel mode for portrait phones, and more robust WebGL recovery behavior — while keeping all existing features.
+v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.
+
+## Current viewing status (v0.14.2 implemented)
+
+The customer-facing **v0.14.2 follow-up is implemented**.
+
+What improved in the current build:
+
+- **Closer detail zoom:** close inspection now goes deeper, especially on medium and large artworks.
+- **Tighter panning:** edge movement is more controlled (less drifting away from the artwork when near reset view).
+- **More restrictive top/bottom panning:** vertical edge movement is intentionally tighter while left/right stays unchanged.
+- **Better vertical reset framing:** very tall artworks start farther away in default/reset view for a better first impression.
+
+Technical changes behind this behavior:
+
+- `MIN_CAMERA_Z`: `0.5 → 0.2`
+- `MIN_VISIBLE_ARTWORK_FRACTION`: `0.28 → 0.12`
+- `INSPECTION_OVERSCROLL`: `3.0 → 1.2`
+- `INSPECTION_OVERSCROLL_X = 1.2` and `INSPECTION_OVERSCROLL_Y = 0.6` (v0.14.2 split)
+- New portrait reset constants: `PORTRAIT_ASPECT_THRESHOLD = 0.65`, `PORTRAIT_RESET_EXTRA_Z = 1.5`
+
+For support/debugging, `show-artwork-complete` now logs extra v0.14/v0.14.2 tuning data (`closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
 
 ## What you need (one-time)
 
-1. **Node.js** (free): install the LTS version from <https://nodejs.org>.
+1. **Node.js** (free): install the LTS version from <https://nodejs.org> (**18 or newer**).
 2. The **FREYRAUM** folder (this folder).
 
 Your support person sets these up once. After that, you only do the steps below.
@@ -70,6 +91,23 @@ It runs a small script that:
 5. Writes a plain-language report to `customer-artworks/last-import-report.txt`.
 
 Your original picture files are never changed or deleted.
+
+## If you see a Node.js error during Update Gallery
+
+Errors like these mean your installed Node.js is too old:
+
+- `Unexpected token {`
+- `Cannot find module 'node:child_process'`
+
+Fix:
+
+1. Install/update Node.js LTS from <https://nodejs.org> (version 18+).
+2. Close and reopen the FREYRAUM folder window.
+3. Run **Update Gallery** again.
+
+The updater now writes a plain-language report for this case, so support can
+see the exact Node.js compatibility issue in
+`customer-artworks/last-import-report.txt`.
 
 ## First-time on macOS (Gatekeeper)
 
@@ -169,12 +207,33 @@ If the artifact looks like a hole with the same picture behind it, include the
 `show-artwork-complete` diagnostics entry and check `parallaxScale`; v0.10
 expects Hoch to use the reduced value `0.012`.
 
+**The navigation buttons (left/right arrows) look cut off or hidden.**
+This was fixed in v0.13. If it still happens, send a screenshot and note the browser/device.
+
 **Very tall pictures look too close when I reset the view.**
-This was also addressed in v0.10. Reset view now uses the framed picture
-dimensions, so very vertical pictures should start farther away and show the
-whole framed artwork. If it still looks too close, send a screenshot and the
-`show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`, and
-`maxZoom`.
+This was improved in v0.10 and hardened again in v0.12. Reset view now uses the
+framed picture dimensions **and** the measured art-safe viewport after fixed
+chrome is considered. If it still looks too close, include:
+
+1. a screenshot of the first/reset view,
+2. whether more manual zoom-out is still needed,
+3. the `show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`,
+    `maxZoom`, `overviewHeadroom`, and the usable viewport fields.
+
+There is now also a planned follow-up to make **large vertical** artworks start
+slightly farther away by adding a portrait-aware reset-fit boost.
+
+**The selected timeline picture looks cut off.**
+This should be fixed by v0.12. If it still happens, please send:
+
+1. a screenshot showing the selected thumbnail,
+2. whether it happens after clicking, swiping, or using keyboard arrows,
+3. the browser/device used,
+4. whether reduced motion is enabled.
+
+If a developer is helping you, they should also capture whether the issue still
+appears after the selected item is re-centered in the strip and look for a
+`timeline/center-active` entry in non-default diagnostics mode.
 
 ## Debug / support tools (developer use)
 

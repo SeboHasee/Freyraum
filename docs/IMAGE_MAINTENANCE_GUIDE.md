@@ -20,6 +20,63 @@ The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs,
 
 Support checks after implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states. The QA matrix is documented in `plan.md`.
 
+## Current v0.14.2 status (close zoom, pan edges, large-vertical reset fit)
+
+Implemented on 2026-05-19 in `src/gallery/GalleryManager.ts` (including same-day v0.14.2 vertical pan follow-up).
+
+Shipped values:
+
+- `MIN_CAMERA_Z = 0.2` (was 0.5)
+- `MIN_VISIBLE_ARTWORK_FRACTION = 0.12` (was 0.28)
+- `INSPECTION_OVERSCROLL = 1.2` (was 3.0)
+- `INSPECTION_OVERSCROLL_X = 1.2` (left/right kept)
+- `INSPECTION_OVERSCROLL_Y = 0.6` (top/bottom tightened)
+- `PORTRAIT_ASPECT_THRESHOLD = 0.65` (new)
+- `PORTRAIT_RESET_EXTRA_Z = 1.5` (new)
+
+Behavior changes:
+
+- Close inspection can move substantially nearer on larger artworks.
+- Pan is less loose near reset-fit while still allowing corner inspection; vertical pan is additionally tighter in v0.14.2.
+- Portrait artworks (aspect ratio below 0.65) receive an additive reset-distance boost, so they open farther away without globally changing non-portrait framing.
+
+Diagnostics additions in `show-artwork-complete`:
+
+- `closeZoomMinVisibleFraction`
+- `panOverscrollX`
+- `panOverscrollY`
+- `panLimitAtReset`
+- `portraitResetApplied`
+- `portraitResetExtra`
+
+Validation: `npm run lint` and `npm run build` pass; preview rebuilt.
+
+## Current v0.13 status (nav buttons, zoom range, pan range, icon centering)
+
+Implemented on 2026-05-18. This pass fixed four customer-reported bugs after the v0.12 zoom/framing/timeline pass:
+
+- left/right nav buttons were cut off by the timeline → fixed with explicit `bottom: calc(192px + var(--safe-bottom))` positioning and `--chrome-bottom` raised to 200px+;
+- zoom range was too narrow → `MIN_CAMERA_Z` lowered to 0.5, `MIN_OVERVIEW_CAMERA_Z` raised to 18.0, `OVERVIEW_HEADROOM_Z` raised to 3.5;
+- pan range too tight when zoomed in → `INSPECTION_OVERSCROLL` raised to 3.0 world units;
+- gear and fullscreen icons not centred → added icon span CSS to clear inline descender gap.
+
+Changed files: `src/gallery/GalleryManager.ts`, `src/styles/main.scss`.
+
+## Previous v0.12 status (zoom / tall-picture framing / timeline visibility)
+
+Implemented on 2026-05-18. This pass focused on three viewing issues rather
+than the import pipeline:
+
+- allow a farther zoomed-out overview distance;
+- make the standard/reset view fully show very tall artworks;
+- keep the active timeline thumbnail fully visible instead of clipping it.
+
+The implementation changed `src/gallery/GalleryManager.ts` for zoom/framing
+logic, `src/main.ts` for art-safe viewport measurement and resize/refit wiring,
+and `src/timeline/Timeline.ts` + `src/styles/main.scss` for active timeline
+visibility. The importer, generated manifests, and `webglImage` path are not
+part of this follow-up.
+
 ## Quick overview
 
 The gallery is maintained through one input folder:
@@ -33,7 +90,12 @@ The customer puts image files there and then runs:
 
 That updater runs:
 
-- `/home/runner/work/Freyraum/Freyraum/scripts/import-artworks.mjs`
+- `/home/runner/work/Freyraum/Freyraum/scripts/run-import-artworks.cjs` (launcher)
+- which then runs `/home/runner/work/Freyraum/Freyraum/scripts/import-artworks.mjs`
+
+The launcher is deliberately written with legacy CommonJS built-in module names
+(`child_process`, `fs`, `path`), not newer `node:` specifiers, so old Node
+versions can still reach the Node 18+ compatibility report.
 
 The importer scans the inbox, reads each file's dimensions, copies preview-ready
 files into the preview folder, generates metadata, and writes the runtime file
@@ -84,8 +146,10 @@ computes reset zoom from the framed artwork dimensions. For support, use
 ## How the maintenance flow works
 
 1. Images are added to `customer-artworks/inbox/`.
-2. The updater launches `scripts/import-artworks.mjs`.
-3. The importer:
+2. The updater launches `scripts/run-import-artworks.cjs`.
+3. The launcher verifies Node.js major version (requires 18+). If Node is too old, it writes a plain-language compatibility error to `customer-artworks/last-import-report.txt` and exits cleanly.
+4. If Node is compatible, the launcher runs `scripts/import-artworks.mjs`.
+5. The importer:
    - scans the inbox
    - ignores hidden files
    - sorts files
@@ -96,10 +160,10 @@ computes reset zoom from the framed artwork dimensions. For support, use
    - writes `artworks.json`
    - writes `customer-artworks.js`
    - writes `last-import-report.txt`
-4. `customer-preview/app.html` loads `customer-artworks.js`.
-5. `src/main.ts` reads `window.__FREYRAUM_ARTWORKS`.
-6. The runtime validates the injected entries with `sanitizeInjectedArtworks()`.
-7. The validated list is passed into:
+6. `customer-preview/app.html` loads `customer-artworks.js`.
+7. `src/main.ts` reads `window.__FREYRAUM_ARTWORKS`.
+8. The runtime validates the injected entries with `sanitizeInjectedArtworks()`.
+9. The validated list is passed into:
    - `GalleryManager`
    - `Timeline`
    - `InfoPanel`

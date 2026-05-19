@@ -1,9 +1,81 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current priority: v0.11 — responsive/touch hardening is
-implemented.** See the "v0.11 responsive/touch — Implemented" section immediately
-below for the full status summary.
+contributors. **Current runtime status: v0.14.2 zoom/pan/reset-fit follow-up is
+implemented.**
+
+## v0.14.2 vertical pan tightening — Implemented (2026-05-19)
+
+Follow-up after v0.14 customer feedback: top/bottom pan range should be more restrictive while left/right should stay unchanged.
+
+**Implemented code changes (`src/gallery/GalleryManager.ts`):**
+
+- replaced shared overscroll with axis-specific constants:
+  - `INSPECTION_OVERSCROLL_X = 1.2` (unchanged horizontal feel),
+  - `INSPECTION_OVERSCROLL_Y = 0.6` (tighter vertical feel);
+- `getPanLimits()` now applies separate X/Y overscroll values;
+- diagnostics now log `panOverscrollX` and `panOverscrollY`.
+
+**Validation:** `npm run lint` and `npm run build` pass.
+
+## v0.14 zoom/pan/reset-fit tuning — Implemented (2026-05-19)
+
+v0.14 shipped three viewing adjustments requested after v0.13:
+
+1. deeper close zoom;
+2. tighter edge freedom;
+3. farther reset/default view for strongly vertical artworks.
+
+**Implemented code changes:**
+
+- `MIN_CAMERA_Z` `0.5 → 0.2`
+- `MIN_VISIBLE_ARTWORK_FRACTION` `0.28 → 0.12`
+- `INSPECTION_OVERSCROLL` `3.0 → 1.2`
+- new `PORTRAIT_ASPECT_THRESHOLD = 0.65`
+- new `PORTRAIT_RESET_EXTRA_Z = 1.5`
+- `getResetFitZoom()` now applies portrait-only additive headroom after base fit
+- `show-artwork-complete` diagnostics now includes v0.14 tuning fields
+
+**Validation:** `npm run lint` and `npm run build` pass. `customer-preview/` rebuilt.
+
+## v0.13 nav/zoom/pan/icon fixes — Implemented (2026-05-18)
+
+Customer-reported bugs fixed after v0.12:
+
+1. left and right nav buttons were cut off by the bottom timeline strip;
+2. zoom range was not wide enough — users want to zoom in and out further;
+3. when zoomed in close, pan range was too tight to explore narrow artworks fully;
+4. gear/settings icon and fullscreen icon were not optically centred in their circles.
+
+**Root causes fixed:**
+
+- `--chrome-bottom` was `max(168px, ...)`. After the v0.12 timeline padding change the timeline top edge moved to ≈177px from the viewport bottom, placing nav buttons 9px inside the timeline zone. Updated to `max(200px, 180px+safe)`; nav-controls re-pointed to `bottom: calc(192px + var(--safe-bottom))`.
+- `MIN_CAMERA_Z = 1.2` stopped close inspection too early → lowered to `0.5`.
+- `MIN_OVERVIEW_CAMERA_Z = 10.75` + `OVERVIEW_HEADROOM_Z = 1.6` limited far overview → raised to `18.0` and `3.5` respectively.
+- `INSPECTION_OVERSCROLL = 0.5` limited side-to-side pan → raised to `3.0`.
+- `.prefs__trigger-icon` and `.fullscreen-btn__icon` spans had `display: inline` → added flex + `line-height: 0` + `svg { display: block }` to clear the descender gap.
+
+**Validation:** `npm run lint` and `npm run build` pass. `customer-preview/` rebuilt.
+
+## v0.12 zoom/framing/timeline follow-up — Implemented (2026-05-18)
+
+Customer-facing issues fixed after v0.11:
+
+1. users want to zoom out farther than the current ceiling allows;
+2. very tall artworks should fully fit in the normal/reset view without manual zoom-out;
+3. the selected timeline thumbnail should remain fully visible instead of being cut off.
+
+**Root causes fixed:**
+
+- `src/gallery/GalleryManager.ts` no longer ties reset fit and far zoom-out to one hard-coded ceiling; it now uses explicit zoom bounds.
+- Reset, minimum, pan, hover, and diagnostics math now use measured art-safe viewport metrics instead of raw camera aspect only.
+- `src/main.ts` injects the viewport-metrics provider and listens to `window`, `visualViewport`, and `ResizeObserver` signals for refit.
+- `src/styles/main.scss` reserves timeline headroom/gutters so the lifted active thumb is not clipped.
+- `src/timeline/Timeline.ts` centers the transformed active thumbnail manually, adds `aria-current`, and honors reduced motion.
+
+**Validation:** baseline and final `npm run lint` / `npm run build` pass. `customer-preview/` was rebuilt. Known warnings remain limited to the TypeScript parser support warning and Sass legacy JS API deprecation warning.
+
+See `plan.md` → "v0.12 — Implemented" for implementation details and `FINDINGS.md` → "2026-05-18 — v0.12 implementation pass" for findings, diagnostics, and validation notes.
 
 ## v0.11 responsive/touch — Implemented (2026-05-18)
 
@@ -78,9 +150,11 @@ Current intended workflow:
 
 1. Customer drags pictures into `customer-artworks/inbox/`.
 2. Customer double-clicks `Update Gallery`.
-3. The updater generates image copies, `artworks.json`, and `customer-artworks.js`
+3. The updater (`scripts/run-import-artworks.cjs`) verifies Node.js version
+   first (requires 18+), then runs the ESM importer.
+4. The importer generates image copies, `artworks.json`, and `customer-artworks.js`
    (including `webglImage` data URLs for reliable 3D painting texture upload).
-4. Customer double-clicks root `index.html` as before.
+5. Customer double-clicks root `index.html` as before.
 
 Acceptance checklist:
 

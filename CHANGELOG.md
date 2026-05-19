@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+### Implemented (v0.14.2 vertical pan tightening — 2026-05-19)
+
+- Kept horizontal close-pan behavior unchanged (`INSPECTION_OVERSCROLL_X = 1.2`) because left/right edge reach was already approved.
+- Tightened vertical close-pan behavior (`INSPECTION_OVERSCROLL_Y = 0.6`) so top/bottom movement is more restrictive when zoomed in.
+- `getPanLimits()` now uses axis-specific overscroll constants (`X` and `Y`) instead of one shared value.
+- `show-artwork-complete` diagnostics now logs `panOverscrollX` and `panOverscrollY`.
+- Updated all markdown files for this follow-up and rebuilt validation artifacts via normal build flow.
+
+### Fixed (importer launcher compatibility / Node version guard — 2026-05-19)
+
+- Added `scripts/run-import-artworks.cjs` as a CommonJS launcher for the customer importer flow.
+- `Update Gallery.command` and `Update Gallery.bat` now call the launcher instead of invoking `import-artworks.mjs` directly.
+- The launcher checks Node.js major version before loading ESM importer code and requires Node.js 18+.
+- Follow-up hardening: the launcher now uses legacy built-in module names (`child_process`, `fs`, `path`) instead of `node:` specifiers, so very old Node versions can reach the friendly version check/report instead of failing with `Cannot find module 'node:child_process'`.
+- On unsupported Node versions, it writes a plain-language compatibility error to `customer-artworks/last-import-report.txt` and exits with a clear message instead of showing a raw `Unexpected token {` stack trace.
+- Updated customer and maintainer documentation (`README.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`) with Node 18+ requirement and troubleshooting.
+
+### Implemented (v0.14 zoom/pan/reset-fit follow-up — 2026-05-19)
+
+- **Deeper close zoom on medium/large artworks.** `MIN_CAMERA_Z` changed from `0.5` to `0.2` and `MIN_VISIBLE_ARTWORK_FRACTION` from `0.28` to `0.12`, lowering the practical close-inspection floor where fraction-driven limits previously dominated.
+- **Tighter edge pan behavior.** `INSPECTION_OVERSCROLL` reduced from `3.0` to `1.2`, reducing reset-proximate drift while preserving close-inspection edge reach.
+- **Portrait-aware reset-fit distance.** Added `PORTRAIT_ASPECT_THRESHOLD = 0.65` and `PORTRAIT_RESET_EXTRA_Z = 1.5`; `getResetFitZoom()` now adds portrait-only headroom after base fit computation.
+- **Expanded runtime diagnostics for v0.14 tuning.** `show-artwork-complete` now logs `closeZoomMinVisibleFraction`, `panOverscroll`, `panLimitAtReset`, `portraitResetApplied`, and `portraitResetExtra`.
+- Rebuilt `customer-preview/freyraum-gallery.js`.
+- Updated `plan.md`, `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` with implemented v0.14 details.
+
+### Implemented (v0.13 nav/zoom/pan/icon fixes — 2026-05-18)
+
+- **Nav controls no longer cut off by timeline.** `.nav-controls` bottom position changed from `bottom: var(--chrome-bottom)` (168px) to `bottom: calc(192px + var(--safe-bottom))`, placing the buttons 15px above the timeline's top edge. `--chrome-bottom` was updated from `max(168px, 148px+safe)` to `max(200px, 180px+safe)` to keep zoom controls and artwork fit measurements in sync.
+- **Wider zoom range both directions.** `MIN_CAMERA_Z` lowered from `1.2` to `0.5` (closer inspection); `MIN_OVERVIEW_CAMERA_Z` raised from `10.75` to `18.0` and `OVERVIEW_HEADROOM_Z` raised from `1.6` to `3.5` (farther overview).
+- **More horizontal pan room when zoomed in.** `INSPECTION_OVERSCROLL` raised from `0.5` to `3.0` world units, so narrow or elongated artworks can be panned well past the edge when close.
+- **Gear and fullscreen icons now optically centred.** Added `.prefs__trigger-icon` and `.fullscreen-btn__icon` CSS rules (`display: flex; align-items: center; justify-content: center; line-height: 0; svg { display: block }`) to eliminate the fractional inline descender gap that offset the icons downward inside their circular buttons.
+- Rebuilt `customer-preview/freyraum-gallery.js` and `customer-preview/style.css`.
+- Updated `plan.md`, `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` with v0.13 details.
+
+### Implemented (v0.12 zoom/framing/timeline — 2026-05-18)
+
+- Added `ArtworkViewportMetrics` / `ViewportMetricsProvider` to `GalleryManager` so reset, min, pan, hover, and diagnostics math can use the measured art-safe viewport instead of only raw camera aspect.
+- Split the old far zoom ceiling into explicit `ZoomBounds`: `minInspectionZoom`, `resetFitZoom`, and `maxOverviewZoom`. Reset now uses the fitted distance while zoom-out controls can continue to a farther overview distance.
+- Extended `main.ts` with `measureArtworkViewport()`, `visualViewport` listeners, and `ResizeObserver` coverage for fixed chrome. Viewport/chrome changes now call `galleryManager.handleViewportMetricsChanged()` and emit `layout/art-viewport` diagnostics.
+- Updated timeline selection so the active thumbnail keeps its lifted visual state without clipping: CSS headroom + scroll gutters in `main.scss`, transform-aware manual centering in `Timeline.ts`, `aria-current`, reduced-motion-aware scroll behavior, and non-default `timeline/center-active` diagnostics.
+- Extended `show-artwork-complete` diagnostics with reset/min/max zoom, overview headroom, usable viewport size/fractions, and viewport occlusion.
+- Rebuilt `customer-preview/freyraum-gallery.js` and `customer-preview/style.css`.
+- Updated `plan.md`, `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` with deep v0.12 implementation notes and validation status.
+
+### Documentation (v0.12 final research-backed technical coding plan — 2026-05-18)
+
+- Rewrote the v0.12 section in `plan.md` from a short planning note into a full technical coding plan with exact files, code-level bugs, brainstormed solution options, recommended architecture, TypeScript interface suggestions, scroll/viewport formulas, diagnostics additions, and an implementation slice order.
+- Added the 2026 online validation result and official source list for `VisualViewport`, `ResizeObserver`, `scrollIntoView`, `scroll-padding`, `scroll-margin`, dynamic viewport units, WCAG Reflow, and WCAG Target Size.
+
 ### Added (v0.11 implementation — 2026-05-18)
 
 - New `src/utils/device.ts` module exporting `DeviceCapabilities`, `LayoutTier`, `PointerPrimary`, `Orientation`, `detectDeviceCapabilities()`, and `applyDeviceCaps()`. Capabilities are mirrored to `<html>` data attributes (`data-layout-tier`, `data-pointer-primary`, `data-hover`, `data-orientation`, `data-short-height`) so SCSS can react without re-running JS.

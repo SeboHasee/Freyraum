@@ -14,7 +14,7 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-node scripts\import-artworks.mjs
+node scripts\run-import-artworks.cjs
 set EXITCODE=%errorlevel%
 
 if exist "customer-artworks\last-import-report.txt" (

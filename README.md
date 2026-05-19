@@ -2,6 +2,33 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
+## Current status — v0.14.2 implemented (2026-05-19)
+
+**Current build:** v0.14.2 is implemented.
+
+v0.14 / v0.14.2 runtime changes (in `src/gallery/GalleryManager.ts`):
+
+- deeper close inspection: `MIN_CAMERA_Z` `0.5 → 0.2` and `MIN_VISIBLE_ARTWORK_FRACTION` `0.28 → 0.12`;
+- tighter pan edge freedom: `INSPECTION_OVERSCROLL` `3.0 → 1.2`;
+- follow-up axis split: `INSPECTION_OVERSCROLL_X = 1.2` and `INSPECTION_OVERSCROLL_Y = 0.6` (top/bottom now more restrictive, left/right unchanged);
+- portrait-aware reset-fit boost: new `PORTRAIT_ASPECT_THRESHOLD = 0.65` and `PORTRAIT_RESET_EXTRA_Z = 1.5`, applied additively in `getResetFitZoom()`;
+- richer diagnostics in `show-artwork-complete`: `closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`.
+
+Outcome:
+
+- users can zoom closer for fine-detail inspection on medium/large artworks;
+- pan feels more controlled near reset view while still reaching edges at close zoom, with extra vertical restriction in v0.14.2;
+- large vertical artworks open farther away in reset/default view without pushing landscape/square artworks away.
+
+Validation for v0.14:
+
+- `npm run lint` ✅
+- `npm run build` ✅
+
+See [`plan.md`](./plan.md#v014--implemented-deeper-close-zoom-tighter-edge-limits-portrait-aware-reset-fit-2026-05-19) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v014-implementation-pass-deeper-close-zoom-tighter-pan-edges-portrait-reset-fit-boost) for full technical details.
+
+## Previous pass — v0.12 zoom and framing
+
 ## One-click local customer preview
 
 Double-click the root `index.html` file.
@@ -38,7 +65,17 @@ Quick workflow:
    - A plain-language report opens automatically.
 3. Double-click `index.html` to view the updated gallery.
 
-Behind the scenes, `scripts/import-artworks.mjs` reads each picture's pixel
+Requirement: **Node.js LTS 18+** must be installed (older Node versions fail on
+the ESM importer syntax).
+
+Behind the scenes, `Update Gallery` now launches
+`scripts/run-import-artworks.cjs`, which first checks Node.js major version and
+then runs `scripts/import-artworks.mjs`. This avoids raw syntax-crash stacks on
+older Node and writes a plain-language report instead. The launcher avoids
+modern `node:` built-in module specifiers so even very old Node installations can
+reach that friendly version-check message.
+
+`scripts/import-artworks.mjs` reads each picture's pixel
 dimensions, copies it to `customer-preview/images/`, and writes both
 `customer-artworks/artworks.json` (human-readable manifest) and
 `customer-preview/customer-artworks.js` (runtime injection consumed by the

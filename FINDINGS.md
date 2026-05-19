@@ -1,5 +1,182 @@
 # FINDINGS
 
+## 2026-05-19 — v0.14.2 follow-up: tighter vertical pan limits
+
+### Scope of this pass
+
+Adjusted zoomed-in pan limits so top/bottom movement is more restrictive while preserving the already-approved left/right behavior.
+
+### Code-level findings fixed
+
+- **Issue:** vertical edge travel still felt too loose at close zoom.
+- **Root cause:** `getPanLimits()` used one shared additive overscroll constant for both axes.
+- **Fix:** split overscroll by axis in `src/gallery/GalleryManager.ts`:
+  - `INSPECTION_OVERSCROLL_X = 1.2` (unchanged horizontal)
+  - `INSPECTION_OVERSCROLL_Y = 0.6` (tighter vertical)
+- **Diagnostics:** `show-artwork-complete` now emits `panOverscrollX` and `panOverscrollY`.
+
+### Validation status
+
+- `npm run lint` ✅
+- `npm run build` ✅
+
+---
+
+## 2026-05-19 — importer runtime compatibility fix (Node version guard)
+
+### Scope of this pass
+
+Fixed a customer-facing updater failure where old Node.js versions crashed on ES module syntax in `scripts/import-artworks.mjs` before a useful report could be shown.
+
+### Code-level findings fixed
+
+- **Root cause:** `Update Gallery` launchers called `node scripts/import-artworks.mjs` directly. On old Node versions, parsing failed at `import { ... }` with `SyntaxError: Unexpected token {`.
+- **Fix:** Added `scripts/run-import-artworks.cjs` as a CommonJS compatibility launcher. It can run on old Node, checks `process.versions.node`, requires major version 18+, and only then executes `import-artworks.mjs`.
+- **Follow-up root cause:** the first launcher version used `require('node:child_process')`, which is unsupported in older Node versions. Those versions failed before the compatibility report could be written.
+- **Follow-up fix:** changed the launcher to use legacy built-in module names (`child_process`, `fs`, `path`) and avoided newer helper APIs where unnecessary, so old Node runtimes reach the intended Node 18+ report path.
+- **User-facing reliability improvement:** for unsupported Node versions, the launcher now writes `customer-artworks/last-import-report.txt` with a plain-language compatibility message, so the standard support/report path still works.
+- **Launcher wiring:** `Update Gallery.command` and `Update Gallery.bat` now call `scripts/run-import-artworks.cjs`.
+
+### Validation status
+
+- `npm run lint` ✅
+- `npm run build` ✅
+- Manual launcher smoke test on supported Node: ✅
+
+---
+
+## 2026-05-19 — v0.14 implementation pass: deeper close zoom, tighter pan edges, portrait reset-fit boost
+
+### Scope of this pass
+
+Implemented the v0.14 technical plan in runtime code (`src/gallery/GalleryManager.ts`) and updated all repository markdown files. Preview bundle was regenerated.
+
+### Code-level findings fixed
+
+- **Close zoom floor was still effectively high on medium/large artworks.**
+  Root cause: `getInspectionMinZoom()` floor was dominated by `MIN_VISIBLE_ARTWORK_FRACTION = 0.28` even when `MIN_CAMERA_Z = 0.5` looked permissive.
+  Fix: `MIN_CAMERA_Z` lowered to `0.2` and `MIN_VISIBLE_ARTWORK_FRACTION` lowered to `0.12`.
+
+- **Pan edge freedom felt too loose after v0.13.**
+  Root cause: additive overscroll constant was `INSPECTION_OVERSCROLL = 3.0` in `getPanLimits()`.
+  Fix: tightened to `INSPECTION_OVERSCROLL = 1.2`.
+
+- **Large vertical artworks still opened too close in reset view.**
+  Root cause: `getResetFitZoom()` used a global fit model where `DEFAULT_CAMERA_Z = 7` can dominate moderate portraits; margin-factor tuning alone cannot shift those cases.
+  Fix: added portrait-aware additive headroom with `PORTRAIT_ASPECT_THRESHOLD = 0.65` and `PORTRAIT_RESET_EXTRA_Z = 1.5`; `getResetFitZoom()` now returns `baseFitZoom + PORTRAIT_RESET_EXTRA_Z` for portrait artworks.
+
+- **Tuning state lacked explicit visibility in diagnostics.**
+  Fix: `show-artwork-complete` now logs `closeZoomMinVisibleFraction`, `panOverscroll`, `panLimitAtReset`, `portraitResetApplied`, and `portraitResetExtra`.
+
+### Validation status
+
+- Baseline before changes: `npm run lint` ✅, `npm run build` ✅
+- Final after implementation: `npm run lint` ✅, `npm run build` ✅
+- Known warnings unchanged: TypeScript parser support warning and Sass legacy JS API deprecation warning.
+
+---
+
+## 2026-05-18 — v0.13 implementation pass: nav layout, zoom range, pan range, and icon centering
+
+### Scope of this pass
+
+Customer-reported regressions and UX gaps identified after the v0.12 zoom/framing/timeline implementation. Four distinct issues were audited and fixed. Runtime changes landed in `src/gallery/GalleryManager.ts` and `src/styles/main.scss`; `customer-preview/` was rebuilt.
+
+### Code-level findings fixed
+
+- **Nav controls overlapping the timeline (regression from v0.12 timeline-headroom change).**
+  Root cause: `--chrome-bottom` was `max(168px, 148px+safe)` and `.nav-controls` used `bottom: var(--chrome-bottom)`. After the v0.12 timeline padding increase, the timeline's top edge moved to ≈177px from the viewport bottom, placing the nav buttons (bottom edge at 168px) 9px inside the timeline zone. Both elements shared `z-index: 100`; the timeline won the stacking context because it was appended later.
+  Fix: `.nav-controls` now uses `bottom: calc(192px + var(--safe-bottom))`, giving 15px of clearance above the timeline's top edge. `--chrome-bottom` raised to `max(200px, 180px+safe)` so the zoom controls (which use `--chrome-bottom`) also clear the timeline, and the JS art-viewport fallback floor stays consistent.
+
+- **Zoom range too narrow in both directions.**
+  Root cause: `MIN_CAMERA_Z = 1.2` stopped close inspection too early; `MIN_OVERVIEW_CAMERA_Z = 10.75` and `OVERVIEW_HEADROOM_Z = 1.6` limited the far overview.
+  Fix: `MIN_CAMERA_Z` → `0.5`, `MIN_OVERVIEW_CAMERA_Z` → `18.0`, `OVERVIEW_HEADROOM_Z` → `3.5`.
+
+- **Pan limit too tight when zoomed in close.**
+  Root cause: `INSPECTION_OVERSCROLL = 0.5` only allowed the viewport centre to reach 0.5 world units past the artwork edge, which feels cramped on narrow/elongated artworks at close zoom.
+  Fix: `INSPECTION_OVERSCROLL` → `3.0`.
+
+- **Gear icon and fullscreen icon not optically centred in their circular buttons.**
+  Root cause: `.prefs__trigger-icon` and `.fullscreen-btn__icon` spans had no explicit CSS, so they used `display: inline`. Even inside a `display: flex` button, inline elements carry a fractional descender baseline offset that shifts the SVG slightly downward from the visual centre of the circle.
+  Fix: Added explicit CSS rules for both icon spans with `display: flex; align-items: center; justify-content: center; line-height: 0; svg { display: block }`.
+
+### Implementation outcome
+
+- Nav controls sit clearly above the timeline with 15px of clearance.
+- Zoom-out now allows stepping back to a camera distance of at least 18 world units (+ extra headroom beyond tall-artwork fit). Zoom-in allows detail inspection at camera distance 0.5.
+- Pan limits extend 3.0 world units past the artwork edge in all four directions when zoomed close.
+- Gear and fullscreen icons are precisely centred in their buttons on all browsers.
+
+### Validation status
+
+- Baseline before changes: `npm run lint` ✅, `npm run build` ✅
+- Final after changes: `npm run lint` ✅, `npm run build` ✅
+- Known warnings remain unchanged: TypeScript parser support warning and Sass legacy JS API deprecation warning.
+- `customer-preview/freyraum-gallery.js` and `customer-preview/style.css` were regenerated.
+
+---
+
+## 2026-05-18 — v0.12 implementation pass: farther zoom-out, tall-picture fit, and unclipped timeline selection
+
+### Scope of this pass
+
+Implemented the v0.12 technical coding plan. Runtime changes landed in `src/gallery/GalleryManager.ts`, `src/main.ts`, `src/timeline/Timeline.ts`, and `src/styles/main.scss`; `customer-preview/` was rebuilt. This entry records what shipped, which audit findings are now fixed, and which diagnostics support future customer reports.
+
+### Online validation result
+
+The original v0.12 direction was confirmed, but the research materially improves the implementation detail:
+
+1. use **measured art-safe viewport metrics**, not only raw camera aspect;
+2. treat **`visualViewport` + `ResizeObserver`** as first-class re-fit signals;
+3. combine **CSS scroll gutters (`scroll-padding` / `scroll-margin`) with manual centering** for the active timeline item;
+4. respect **reduced-motion** in timeline auto-centering.
+
+### Official / authoritative sources used in the validation
+
+- MDN — VisualViewport API: <https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport>
+- MDN — ResizeObserver: <https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver>
+- MDN — `Element.scrollIntoView()`: <https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollIntoView>
+- MDN — `scroll-padding`: <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-padding>
+- MDN — `scroll-margin`: <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-margin>
+- web.dev — large, small, and dynamic viewport units: <https://web.dev/blog/viewport-units>
+- WCAG 2.1 Reflow: <https://www.w3.org/WAI/WCAG21/Understanding/reflow.html>
+- WCAG 2.2 Target Size: <https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html>
+
+### Code-level findings fixed
+
+- **`GalleryManager` reset framing and far overview zoom are now separated.** `MAX_CAMERA_Z = 9.25` was replaced by explicit `ZoomBounds` with `minInspectionZoom`, `resetFitZoom`, and `maxOverviewZoom`.
+- **Reset, min, pan, hover, and diagnostics now share measured art-safe viewport math.** `ArtworkViewportMetrics` records viewport size, usable size, usable fractions, effective aspect, and top/right/bottom/left occlusion.
+- **`main.ts` now injects an art-viewport provider into `GalleryManager`.** It measures `visualViewport` when available, falls back to `window.innerWidth/innerHeight`, reads fixed chrome geometry, and wires `window`, `visualViewport`, and `ResizeObserver` change signals into refit handling.
+- **Timeline clipping is fixed structurally.** `.timeline__list` now reserves active-thumb headroom and scroll gutters; `.timeline__item` / `.timeline__thumb` expose scroll margins.
+- **`Timeline.ts` now has dedicated transform-aware centering.** It stores the list element, centers the transformed active thumb with `getBoundingClientRect()`, adds `aria-current`, and only logs centering diagnostics outside default mode.
+- **Timeline auto-centering now respects reduced motion.** It uses `auto` scroll behavior when `<html data-motion="reduced">` or `prefers-reduced-motion: reduce` is active.
+
+### Implementation outcome
+
+- Very tall artworks compute reset fit against the usable artwork viewport, not the full camera viewport.
+- Users can zoom out beyond reset fit because `maxOverviewZoom` is at least `10.75` and at least `1.6` camera units beyond the computed reset distance.
+- Close inspection is preserved because `handleViewportMetricsChanged()` only auto-refits when the user was already near reset; otherwise it clamps and preserves intent.
+- The active timeline thumb remains visually lifted but has enough scroll-container headroom to avoid clipping.
+- Keyboard focus and programmatic selection both keep timeline thumbnails visible near the center of the strip.
+
+### Validation status
+
+- Baseline before changes: `npm run lint` and `npm run build` passed.
+- Final after changes: `npm run lint` and `npm run build` passed.
+- Known warnings remain unchanged: TypeScript parser support warning and Sass legacy JS API deprecation warning.
+- `customer-preview/freyraum-gallery.js` and `customer-preview/style.css` were regenerated.
+
+### Diagnostics surface added
+
+| Scope | Event | Level | Trigger |
+| --- | --- | --- | --- |
+| `gallery` | `show-artwork-complete` | `info` | Now includes reset/min/max zoom, overview headroom, usable viewport size/fractions, and viewport occlusion |
+| `gallery` | `viewport-refit` | `info` | `GalleryManager.handleViewportMetricsChanged()` recomputes bounds after viewport/chrome changes |
+| `layout` | `art-viewport` | `info` | `main.ts` measures the art-safe viewport during resize/visualViewport/ResizeObserver changes |
+| `timeline` | `center-active` | `debug` | Non-default diagnostics mode only; records active thumbnail centering delta and scroll behavior |
+
+---
+
 ## 2026-05-18 — v0.11 implementation pass (responsive phones/tablets, touch, gestures, WebGL reliability)
 
 ### Scope of this pass

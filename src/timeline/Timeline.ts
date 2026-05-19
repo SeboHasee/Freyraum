@@ -1,4 +1,5 @@
 import type { Artwork } from '../config/artworks';
+import { getDiagnostics } from '../utils/Diagnostics';
 
 /**
  * Timeline navigation strip.
@@ -14,7 +15,9 @@ import type { Artwork } from '../config/artworks';
  */
 
 export class Timeline {
+  private readonly diagnostics = getDiagnostics();
   private readonly el: HTMLElement;
+  private readonly listEl: HTMLUListElement;
   private readonly thumbs: HTMLButtonElement[] = [];
   private currentIndex = 0;
   private onSelectCallback: ((index: number) => void) | null = null;
@@ -27,6 +30,7 @@ export class Timeline {
     const list = document.createElement('ul');
     list.className = 'timeline__list';
     list.setAttribute('role', 'list');
+    this.listEl = list;
     this.el.appendChild(list);
 
     artworks.forEach((artwork, i) => {
@@ -38,6 +42,7 @@ export class Timeline {
       thumb.className = 'timeline__thumb';
       thumb.setAttribute('aria-label', `${artwork.subtitle}: ${artwork.title}`);
       thumb.setAttribute('aria-pressed', i === 0 ? 'true' : 'false');
+      thumb.setAttribute('aria-current', i === 0 ? 'true' : 'false');
       thumb.setAttribute('data-index', String(i));
       thumb.tabIndex = i === 0 ? 0 : -1;
 
@@ -78,8 +83,12 @@ export class Timeline {
       list.appendChild(item);
     });
 
-    this.setActive(0);
     container.appendChild(this.el);
+    this.setActive(0);
+    // Double RAF: first frame appends the element; second frame runs after the
+    // browser has performed layout so getBoundingClientRect() returns valid
+    // dimensions for the centering calculation.
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => this.centerThumb(0, 'auto')));
   }
 
   private handleThumbKey = (event: KeyboardEvent): void => {
@@ -123,6 +132,7 @@ export class Timeline {
       t.tabIndex = i === index ? 0 : -1;
     });
     thumb.focus();
+    this.centerThumb(index, this.preferredScrollBehavior());
   }
 
   private select(index: number): void {
@@ -134,21 +144,55 @@ export class Timeline {
     if (prev) {
       prev.classList.remove('is-active');
       prev.setAttribute('aria-pressed', 'false');
+      prev.setAttribute('aria-current', 'false');
     }
     this.currentIndex = index;
     const next = this.thumbs[this.currentIndex];
     if (next) {
       next.classList.add('is-active');
       next.setAttribute('aria-pressed', 'true');
+      next.setAttribute('aria-current', 'true');
       // Keep the active item in the tab order so Tab returns to the current selection.
       this.thumbs.forEach((t, i) => {
         t.tabIndex = i === index ? 0 : -1;
       });
-      next.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-        inline: 'center',
+      this.centerThumb(index, this.preferredScrollBehavior());
+    }
+  }
+
+  private centerThumb(index: number, behavior: ScrollBehavior): void {
+    const thumb = this.thumbs[index];
+    if (!thumb) return;
+
+    const listRect = this.listEl.getBoundingClientRect();
+    const thumbRect = thumb.getBoundingClientRect();
+    if (listRect.width <= 0 || thumbRect.width <= 0) return;
+
+    const delta =
+      (thumbRect.left + thumbRect.width * 0.5) -
+      (listRect.left + listRect.width * 0.5);
+    // Avoid tiny no-op scroll writes when the transformed thumb is already centered.
+    if (Math.abs(delta) < 1) return;
+
+    const targetLeft = this.listEl.scrollLeft + delta;
+    this.listEl.scrollTo({ left: targetLeft, behavior });
+
+    if (this.diagnostics.getMode() !== 'default') {
+      this.diagnostics.debug('timeline', 'center-active', 'Centered active timeline thumbnail', {
+        index,
+        delta: Math.round(delta),
+        targetLeft: Math.round(targetLeft),
+        behavior,
       });
+    }
+  }
+
+  private preferredScrollBehavior(): ScrollBehavior {
+    if (document.documentElement.dataset.motion === 'reduced') return 'auto';
+    try {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    } catch {
+      return 'smooth';
     }
   }
 
