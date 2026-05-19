@@ -1,5 +1,49 @@
 # FINDINGS
 
+## 2026-05-19 — v0.15.1 hotfix: reduced motion must not reduce shader fidelity
+
+### User-reported issue
+
+`Reduzierte Bewegung` was also reducing perceived picture texture/shader quality.
+
+### Root cause
+
+The reduced-motion flag was wired into `PaintingMaterial` shader paths that are
+about surface fidelity, not motion:
+
+- detail normal blend multiplied by `uReducedMotionScalar`;
+- grazing/specular boost multiplied by `uReducedMotionScalar`;
+- `detailNormalActive()` also depended on `uReducedMotionScalar`, so toggling
+  reduced motion could change shader defines and compile paths.
+
+This made the artwork look flatter/duller when motion reduction was enabled.
+
+### Fix implemented
+
+- `src/materials/PaintingMaterial.ts`
+  - removed `uReducedMotionScalar` scaling from detail-normal blending;
+  - removed `uReducedMotionScalar` scaling from grazing/specular boost;
+  - removed `uReducedMotionScalar` from `detailNormalActive()` gating;
+  - kept `setReducedMotion()` for API compatibility but made it fidelity-safe
+    (`uReducedMotionScalar` is pinned to `1.0`).
+- `src/gallery/GalleryManager.ts`
+  - `setReducedMotion()` now only controls motion behavior in the gallery
+    transform system and no longer forwards into `PaintingMaterial`.
+
+### Intended behavior after fix
+
+- `Reduzierte Bewegung` now affects motion only (camera/artwork/UI movement and
+  animated lighting drift), not texture/shader quality.
+- Texture and shader quality stay exclusively controlled by the selected
+  quality preset (`Hoch / Ausgewogen / Akkusparend`).
+
+### Validation
+
+- `npm run lint` ✅
+- `npm run build` ✅ (`tsc` + Vite preview build)
+
+---
+
 ## 2026-05-19 — v0.15 implementation pass: elegant longer animations
 
 ### Scope

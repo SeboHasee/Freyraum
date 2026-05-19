@@ -14,6 +14,8 @@
 4. **`src/styles/main.scss`** — semantic motion token system. New tokens `--ease-gallery-out` (easeOutExpo), `--ease-gallery-in-out` (easeInOutQuart), `--dur-control` (0.18 s), `--dur-content` (0.5 s), `--dur-panel` (0.55 s), `--dur-timeline` (0.42 s), `--dur-reveal` (0.9 s). Backward-compatible aliases preserve `--dur-fast`, `--dur-base`, `--dur-slow`. The `--ease-spring` token is preserved but no longer used on any gallery surface. `.info-panel`, `.timeline__thumb`, `.prefs__panel`, `@keyframes prefs-in`, `.loading-overlay`, and `.loading-spinner` were retuned. `.info-panel.is-transitioning` translateY raised from 8 px to 16 px.
 5. **`src/main.ts`** — loading-overlay removal timeout raised from 700 ms to 950 ms (matches `--dur-reveal: 0.9s` + 50 ms buffer). The animate loop now calls `galleryManager.update(now)`.
 6. **No new dependencies.** No reduced-motion regressions. v0.14.2 zoom/pan constants untouched.
+7. **v0.15.1 hotfix (same date):** reduced motion no longer touches picture
+   texture/shader fidelity. It now affects motion only.
 
 ### Validation
 
@@ -34,6 +36,8 @@
 - Prefs panel open: glides in without bounce.
 - Loading overlay: fades smoothly over ~0.9 s, removed at 0.95 s.
 - Reduced motion ON (in-app preference + OS-level `prefers-reduced-motion`): all seeds skipped, all CSS transitions ≤ 0.001 ms.
+- Reduced motion ON: artwork shader/detail fidelity remains identical to reduced
+  motion OFF at the same quality preset.
 
 ### Non-goals (unchanged)
 

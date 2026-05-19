@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Fixed (v0.15.1 reduced-motion fidelity hotfix — 2026-05-19)
+
+- Fixed an unintended coupling where `Reduzierte Bewegung` also reduced
+  painting texture/shader fidelity.
+- `PaintingMaterial` no longer scales detail-normal blending or grazing/specular
+  response with reduced-motion state.
+- `detailNormalActive()` no longer depends on reduced-motion scalar, avoiding
+  reduced-motion-triggered shader-path degradation.
+- `GalleryManager.setReducedMotion()` now only controls motion behavior and no
+  longer forwards reduced-motion state into `PaintingMaterial`.
+- Result: reduced motion now changes motion only; visual fidelity remains tied
+  exclusively to the selected quality preset.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+
 ### Implemented (v0.15 elegant animation system — 2026-05-19)
 
 - **Frame-rate-independent motion.** Added `smoothDamp(current, target, lambda, dt)` to `src/utils/math.ts`. Converted all 13 frame-rate-dependent per-frame lerps in `GalleryManager.update()` to lambda-driven smoothing (`α = 1 − exp(−λ·dt)`), plus a 14th line for the new `position.z` depth recession. Motion now settles in the same wall-clock time on 30/60/90/120 Hz displays.

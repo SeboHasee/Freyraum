@@ -17,6 +17,8 @@ Maintenance notes:
 - `InfoPanel.CONTENT_SWAP_DELAY_MS` must stay in sync with `--dur-content` in `main.scss`.
 - `loadingOverlay.remove()` timeout in `main.ts` must stay in sync with `--dur-reveal`.
 - Reduced-motion support is preserved via the existing `[data-motion='reduced']` and `@media (prefers-reduced-motion: reduce)` blocks; no token rename weakens these paths.
+- v0.15.1 hotfix: reduced motion must never be used as a shader-fidelity toggle.
+  Keep detail-normal/specular/grazing fidelity tied to quality presets only.
 
 ## Responsive and touch support — final technical status (v0.11)
 

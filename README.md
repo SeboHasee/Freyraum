@@ -14,6 +14,9 @@ v0.15 ships a museum-elegant motion system on top of v0.14.2:
 - **semantic SCSS motion tokens**: `--ease-gallery-out`, `--ease-gallery-in-out`, `--dur-control`, `--dur-content`, `--dur-panel`, `--dur-timeline`, `--dur-reveal`; backward-compatible aliases for the old names; museum-overshoot easing (`--ease-spring`) preserved but no longer used on gallery surfaces;
 - **calmer reveals**: `.loading-overlay` fade extended to 0.9 s, removal timeout raised to 950 ms; spinner slowed from 0.8 s to 1.4 s per rotation;
 - **reduced motion preserved**: both `[data-motion='reduced']` and `@media (prefers-reduced-motion: reduce)` paths remain authoritative.
+- **v0.15.1 fidelity safeguard**: reduced motion no longer affects picture
+  texture/shader quality; quality remains controlled only by the selected
+  quality preset.
 
 Outcome:
 

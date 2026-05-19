@@ -562,7 +562,6 @@ export class GalleryManager {
 
   setReducedMotion(value: boolean): void {
     this.reducedMotion = value;
-    this.artworkMesh.material.setReducedMotion(value);
   }
 
   handleViewportMetricsChanged(): void {

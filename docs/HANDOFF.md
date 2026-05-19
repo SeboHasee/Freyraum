@@ -17,6 +17,8 @@ v0.15 shipped on 2026-05-19 in `src/gallery/GalleryManager.ts`, `src/utils/math.
 - `.info-panel.is-transitioning` translateY raised from 8 px to 16 px;
 - `loadingOverlay.remove()` timeout raised from 700 ms to 950 ms to match `--dur-reveal: 0.9s`;
 - new diagnostics fields on `navigate` / `goTo`: `motionMode`, `seedPositionX`, `seedPositionZ`, `settleTargetMs`.
+- v0.15.1 hotfix: reduced motion now affects motion only and no longer reduces
+  painting texture/shader fidelity (quality remains preset-controlled).
 
 **Validation:** `npm run lint` ✅ and `npm run build` ✅. Preview bundle regenerated.
 
