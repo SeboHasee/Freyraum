@@ -5,13 +5,23 @@ contributors. **Current runtime status: v0.15 elegant animation system is
 implemented, on top of the v0.14.2 zoom/pan/reset-fit follow-up.**
 
 
-## v0.16 performance audit — Planned (2026-05-19)
+## v0.16 deep brainstorm — Code-level performance audit (2026-05-19 updated)
 
-A performance-focused audit is documented for the next implementation pass. It is intentionally measurement-first and fidelity-preserving: do not reduce `Hoch` visual quality, do not connect reduced motion to shader fidelity, and do not break the offline customer preview.
+The v0.16 plan is now a code-sample-backed brainstorm with 12 file:line-anchored findings, TypeScript/SCSS implementation proposals, online validation sources, and acceptance tests for each slice. No runtime code was changed.
 
-Start future performance work from root `plan.md` → `v0.16 — Planned: performance audit and compatibility-safe optimization roadmap` and `FINDINGS.md` → `2026-05-19 — v0.16 performance audit and research-backed optimization plan`.
+Start future performance work from: `plan.md` → `v0.16 — Brainstorm: deep performance and compatibility optimization` and `FINDINGS.md` → `2026-05-19 (updated) — v0.16 deep code audit`.
 
-Priority order: add renderer/frame diagnostics, consolidate resize/camera/composer updates, batch art-safe viewport measurement, add Page Visibility pause/resume, clean pinch hot paths, schedule expensive shader toggles, add texture-memory/import diagnostics, profile glass CSS paint cost, and document GPU resource ownership.
+**Priority order (all with code samples in plan.md):**
+1. Renderer info diagnostics (`RendererManager.ts`, `main.ts`) — establish measurement baseline.
+2. Single resize coordinator — remove independent `window.resize` from `SceneManager` and `PostProcessing`; call from debounced + RAF-deferred coordinator in `main.ts`.
+3. Cache DOM element references + defer reads into RAF (`main.ts`).
+4. Page Visibility pause/resume (`main.ts`, `GalleryManager.ts`) — prevents false adaptive-quality downgrades.
+5. Shader-define deferral via `requestIdleCallback` (`main.ts`).
+6. Pinch hot-path (log-space squared-distance zoom, dispose idempotency) (`CanvasInteraction.ts`).
+7. Anisotropy no-op guard (`TextureManager.ts`).
+8. CSS `@supports` fallback + `[data-quality]` blur reduction (`main.scss`, `RendererManager.ts`).
+9. Import-time texture memory warnings (`scripts/import-artworks.mjs`).
+10. Disposal ownership JSDoc (all affected files).
 
 ## v0.15 elegant animation system — Implemented (2026-05-19)
 

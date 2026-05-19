@@ -6,17 +6,17 @@ It is meant for the person who maintains the project folder, supports the custom
 or needs to understand why an image does or does not appear in the gallery.
 
 
-## Planned v0.16 performance audit / optimization roadmap
+## v0.16 deep brainstorm — code-level audit (2026-05-19 updated)
 
-The v0.16 documentation pass identifies the next performance work without changing the importer or runtime yet. Maintenance-relevant priorities:
+The v0.16 plan has been upgraded to a code-sample-backed brainstorm with 12 file:line-anchored findings. Maintenance-relevant priorities:
 
-- preserve exact customer image rendering and the `webglImage` data-URL fallback for offline `file://` previews;
-- add diagnostics for large image dimensions and estimated texture memory before customers hit GPU limits;
-- consider optional future KTX2/Basis derivatives only as an enhancement for deployments that can support extra generated assets;
-- consolidate resize and viewport measurement before tuning visual quality;
-- document ownership/disposal of generated textures, procedural maps, materials, observers, and renderer resources before any dynamic reload work.
+- **Import-time texture memory warnings (new, `scripts/import-artworks.mjs`):** the planned importer update will print a visible `console.warn` when a customer image exceeds 2000×2000 pixels (≈48 MB GPU texture with mipmaps) or the gallery total exceeds 256 MB GPU. See `plan.md § Finding 10` for the exact JavaScript code sample.
+- Preserve exact customer image rendering and the `webglImage` data-URL fallback for offline `file://` previews — explicitly documented as a non-goal in the plan.
+- `TextureManager.setAnisotropyDivisor()` will gain a no-op guard to prevent spurious GPU texture re-uploads on same-preset re-apply (Finding 7).
+- CSS glass panels will gain `@supports` and `[data-quality='battery']` fallbacks — no visual change on modern devices (Finding 9).
+- All other resize, render-loop, and shader-deferral changes are runtime-transparent to the image pipeline.
 
-See root `plan.md` v0.16 and `FINDINGS.md` v0.16 before implementing performance changes.
+See `plan.md § v0.16` and `FINDINGS.md § 2026-05-19 (updated)` for complete details.
 
 ## Implemented v0.15 animation refinement
 

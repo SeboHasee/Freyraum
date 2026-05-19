@@ -3,11 +3,16 @@
 ## Unreleased
 
 
-### Documentation (v0.16 performance audit and optimization plan — 2026-05-19)
+### Documentation (v0.16 deep brainstorm — code-level performance audit with code samples — 2026-05-19)
 
-- Added a complete research-backed performance audit and implementation roadmap to `plan.md`.
-- Documented WebGL/three.js/mobile performance findings in `FINDINGS.md`: resize consolidation, layout-read batching, visibility-aware render loop, pinch hot-path cleanup, shader-change scheduling, texture memory scalability, CSS paint profiling, and GPU resource ownership.
-- Updated README, handoff, customer guide, image maintenance guide, and documentation rules to point future performance work toward measurement-first optimization that preserves graphical fidelity.
+- Upgraded the v0.16 plan from a high-level audit into a code-sample-backed, file:line-anchored brainstorm with 12 numbered findings.
+- Each finding in `plan.md` now includes: exact file + line number, root cause, TypeScript or SCSS code sample, online validation source, and acceptance test.
+- Expanded online research sources table with direct MDN/three.js/web.dev URLs and specific guidance applied.
+- Added full GPU resource ownership map table covering every `dispose()` boundary in the codebase.
+- Added per-slice implementation order table with key change, files, and acceptance test.
+- Added device compatibility matrix (P0/P1 priorities) and full v0.16 QA matrix.
+- `FINDINGS.md` rewritten with complete code-level findings: file paths, line numbers, root causes, fix summaries, and validation sources for all 12 findings.
+- Updated `CHANGELOG.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md` to reflect the upgraded plan status.
 - No runtime code, generated preview bundle, dependencies, or quality preset behavior changed in this pass.
 
 ### Fixed (v0.15.1 reduced-motion fidelity hotfix — 2026-05-19)

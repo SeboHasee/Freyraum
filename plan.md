@@ -1,54 +1,595 @@
 # FREYRAUM Plan
 
-## v0.16 — Planned: performance audit and compatibility-safe optimization roadmap (2026-05-19)
+## v0.16 — Brainstorm: deep performance and compatibility optimization (2026-05-19, updated)
 
 ### Status
 
-**Planning / documentation pass completed 2026-05-19.** No runtime code was changed in this pass. The goal was to audit the current WebGL/three.js runtime, research current performance guidance, and create a future implementation plan that can improve frame stability and device compatibility **without reducing graphical fidelity**.
+**Brainstorm / planning pass updated 2026-05-19.** The v0.16 section has been fully upgraded from a high-level audit into a concrete, code-sample-backed brainstorm. Every slice now contains the exact file+line where the problem lives, the root cause, a specific TypeScript or SCSS implementation proposal with inline code, an online validation source, and a precise acceptance test. No runtime code was changed in this pass.
 
 ### Design goal
 
-FREYRAUM should keep the current high-end visual identity: real artwork albedo, premium painting material relief, raking-light inspection, bloom where selected by quality preset, safe close zoom, and museum-elegant motion. Performance work should therefore remove avoidable CPU/GPU waste, improve scheduling, and add measurement before changing visible rendering. The plan below treats fidelity reduction as a fallback only for the existing user-selected `Ausgewogen` / `Akkusparend` presets, not as a hidden downgrade.
+FREYRAUM should keep the current high-end visual identity: real artwork albedo, premium painting material relief, raking-light inspection, bloom where selected by quality preset, safe close zoom, and museum-elegant motion. Performance work should therefore remove avoidable CPU/GPU waste, improve scheduling, and add measurement. The plan below treats fidelity reduction as a fallback only for the existing user-selected `Ausgewogen` / `Akkusparend` presets — never as a hidden downgrade.
 
-### Online research sources used
+---
 
-| Source | Guidance applied to FREYRAUM |
+### Online research sources (validated 2026-05-19)
+
+| Source | Specific guidance applied |
 |---|---|
-| MDN WebGL best practices | Delete/dispose GPU resources eagerly, avoid unnecessary sync/flush patterns, cap over-large drawing buffers, reduce per-frame work, and treat texture upload/memory as a first-class budget. |
-| three.js disposal guidance | Removing objects from a scene is not enough; geometries, materials, textures, render targets, composers, and renderer internals need explicit disposal paths. |
-| three.js / WebGL texture guidance | Large RGBA textures are expensive in GPU memory; mipmaps add roughly one-third memory but improve minification quality/performance; power-of-two and compressed textures are preferred when the asset pipeline can support them. |
-| KTX2 / Basis Universal guidance for three.js | KTX2/Basis offers GPU-compressed texture delivery across ASTC/ETC/BC/PVRTC-capable hardware and is the correct future path for large artwork sets, provided an offline fallback remains. |
-| MDN / web.dev CSS animation performance | Keep UI animation on `transform` and `opacity`, batch DOM reads/writes, and avoid expensive paint effects in hot interactive states. |
-| MDN `requestAnimationFrame` / Page Visibility API | RAF is throttled or paused in hidden tabs; timestamps can jump on resume. Render loops should pause or reset timing while hidden to avoid wasted battery and resume spikes. |
-| MDN / web.dev ResizeObserver guidance | Resize callbacks must stay lightweight, avoid recursive layout work, batch expensive measurement into RAF, and unobserve on disposal. |
-| Mobile WebGL guidance | High-DPR phones are fill-rate constrained; use DPR caps/adaptive quality, test on real devices, and handle context loss/recovery cleanly. |
+| MDN WebGL best practices — https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices | Dispose GPU objects explicitly, avoid blocking readbacks, cap drawing-buffer resolution, minimise per-frame state changes, treat texture memory as a first-class budget. |
+| three.js disposal guide — https://threejs.org/docs/#manual/en/introduction/How-to-dispose-of-objects | Geometries, materials, textures, render targets, and `EffectComposer` render targets each need explicit `.dispose()`. Removing from scene is NOT enough. |
+| three.js performance tips — https://threejs.org/docs/#manual/en/introduction/WebGL-compatibility-check | Merge draw calls, minimise material variants, share geometries across instances, keep draw calls per frame below ~100 for mobile. |
+| MDN Page Visibility API — https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API | `document.hidden` + `visibilitychange` event. Browsers throttle/pause RAF in hidden tabs; implementations should skip draws and reset timing on resume to avoid large dt spikes. |
+| MDN ResizeObserver — https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver/observe | Callbacks fire synchronously before paint; DO NOT trigger layout reads (getBoundingClientRect) inside a ResizeObserver callback. Schedule reads in a following `requestAnimationFrame`. |
+| web.dev CSS animations — https://web.dev/articles/animations-guide | Keep transitions to `transform` and `opacity` only (compositor-promoted). Profile `backdrop-filter` cost with DevTools layers panel before optimizing. |
+| web.dev rendering performance — https://web.dev/articles/avoid-large-complex-layouts-and-layout-thrashing | Read all layout properties first (rect, getComputedStyle), then apply writes, within a single RAF. Never interleave reads and writes. |
+| web.dev minimize layout — https://web.dev/articles/dom-size | Cache element references; repeated `querySelector` inside resize handlers re-traverses the DOM every call. |
+| KTX2 / Basis Universal in three.js — https://threejs.org/docs/#examples/en/loaders/KTX2Loader | `KTX2Loader` + `BasisTextureLoader` for GPU-compressed ASTC/ETC/BC delivery. Requires offline transcoding (toktx or basisu CLI). Reduces GPU bandwidth and memory by 4–6× vs. RGBA8. |
+| Glenn Fiedler — Fix Your Timestep — https://gafferongames.com/post/fix_your_timestep/ | Already applied in v0.15 via `smoothDamp`. The same principle applies to frame-budget EMA on resume: clamp `dt` to avoid poisoning the rolling window with a hidden-tab spike. |
+| MDN Pointer Events L3 — https://www.w3.org/TR/pointerevents3/ | Already applied in v0.11. For v0.16 the interaction hot path can eliminate unnecessary `Math.sqrt` by using squared distance for pinch deltas or a multiplicative zoom factor. |
 
-### Repository audit scope
+---
 
-The audit covered the current source tree and documentation surfaces relevant to runtime performance:
+### Full code audit conclusions (2026-05-19)
 
-- bootstrap and render loop: `src/main.ts`
-- renderer/backend lifecycle: `src/core/RendererManager.ts`, `src/core/PostProcessing.ts`, `src/core/SceneManager.ts`, `src/rendering/RenderBackend.ts`
-- gallery transforms, zoom, pan, and diagnostics: `src/gallery/GalleryManager.ts`, `src/gallery/ArtworkMesh.ts`, `src/gallery/SidePanels.ts`, `src/gallery/TextureManager.ts`
-- painting shader/material pipeline: `src/materials/PaintingMaterial.ts`, `src/materials/ProceduralTextureFactory.ts`, `src/materials/PaintingTextureSet.ts`, `src/config/quality.ts`
-- interaction hot paths: `src/interaction/CanvasInteraction.ts`
-- adaptive quality and frame-budget code: `src/utils/FrameBudgetMonitor.ts`, `src/utils/AdaptiveQualityController.ts`, `src/utils/performance.ts`, `src/utils/device.ts`, `src/utils/Diagnostics.ts`
-- UI/CSS paint and layout surfaces: `src/styles/main.scss`, `src/ui/*`, `src/timeline/Timeline.ts`
-- customer/offline asset workflow: `scripts/import-artworks.mjs`, `scripts/write-local-preview.mjs`, `customer-preview/*`
-- markdown docs: `README.md`, `CHANGELOG.md`, `FINDINGS.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`
+Every relevant source file was read in full for this pass. The findings below are tied to specific file locations.
 
-### Key findings
+#### Finding 1 — Three independent `window.resize` listeners (high priority)
 
-1. **Resize work is split across multiple listeners.** `SceneManager` and `PostProcessing` each register their own `window.resize` handler while `main.ts` also runs a debounced coordinator plus `visualViewport` and `ResizeObserver` triggers. This is correct functionally, but it duplicates resize scheduling and makes orientation changes more expensive than necessary.
-2. **Artwork-safe viewport measurement performs DOM queries and rect reads inside the resize path.** `main.ts` reads computed CSS variables and `getBoundingClientRect()` for topbar, timeline, and nav controls. The work is debounced, but it can still force layout during visual-viewport churn on mobile browsers.
-3. **The render loop continues to schedule RAF while the page is hidden.** `RendererManager.isRenderPaused()` handles WebGL context loss, but there is no Page Visibility pause/reset path. Hidden tabs may still cost battery and can resume with timing spikes.
-4. **Pinch zoom does square-root math on every pinch move.** `CanvasInteraction` computes exact pinch distance with `Math.sqrt()` for every pointer/touch movement. It is small but avoidable on the mobile input hot path.
-5. **Shader/material recompilation can happen synchronously on preference/profile changes.** `applyPreferences()` can toggle inspection self-shadow filtering through `PaintingMaterial.setShadowFilterRadius(...)`. This is visually important, but expensive shader work should be scheduled and measured so it does not land in the same frame as UI interaction.
-6. **Current quality presets already protect fidelity, but adaptive decisions need clearer budgets.** The code has `FrameBudgetMonitor`, `AdaptiveQualityController`, DPR caps, and startup quality heuristics. The next pass should connect these to explicit budgets and diagnostics before changing rendering defaults.
-7. **Texture memory is the largest future scalability risk.** Customer images can be large and are embedded as data URLs for local-file reliability. This is correct for compatibility, but future large galleries need import-time sizing budgets, optional compressed derivatives, and explicit GPU-memory diagnostics.
-8. **GPU resource disposal exists in some classes but lacks a documented ownership map.** `RendererManager`, `PostProcessing`, `SceneManager`, and interactions dispose their own resources/listeners, but future performance work needs a single resource lifecycle checklist for textures, generated procedural maps, materials, composer render targets, and observers.
-9. **Backdrop blur / glass UI can be paint-heavy.** FREYRAUM's visual style uses glass surfaces. This should stay visually intact, but the next pass should profile `backdrop-filter` cost on mobile and add compatibility fallbacks only where the browser/GPU struggles.
-10. **Legacy interaction classes remain in the tree.** `MouseInteraction`, `TouchInteraction`, and `ZoomPan` are retained as dead code after `CanvasInteraction`. They do not run, but they increase maintenance/audit cost and can confuse future performance work.
+**Files:** `src/core/SceneManager.ts:18`, `src/core/PostProcessing.ts:31`, `src/main.ts:366–396`
+
+`SceneManager.handleResize` runs immediately when the browser fires `resize` (no debounce):
+```typescript
+// SceneManager.ts:18  — runs immediately on every resize event
+window.addEventListener('resize', this.handleResize);
+private handleResize = (): void => {
+  this.camera.aspect = window.innerWidth / window.innerHeight;
+  this.camera.updateProjectionMatrix();
+};
+```
+`PostProcessing.handleResize` also runs immediately:
+```typescript
+// PostProcessing.ts:31  — also runs immediately
+window.addEventListener('resize', this.handleResize);
+private handleResize = (): void => {
+  this.composer.setSize(window.innerWidth, window.innerHeight);
+};
+```
+`main.ts` has its own 120 ms debounced coordinator that calls `rendererManager.resize()`, `detectDeviceCapabilities()`, `measureArtworkViewport()`, etc.
+
+**Problem:** During a mobile orientation change, the browser fires multiple rapid resize events. Each fires `SceneManager.handleResize` and `PostProcessing.handleResize` immediately, causing redundant camera matrix rebuilds and composer framebuffer reallocations before the debounced coordinator even runs.
+
+**Proposal — remove independent listeners, add explicit methods:**
+
+In `SceneManager`:
+```typescript
+// Remove: window.addEventListener('resize', this.handleResize);
+// Add a public method instead:
+updateAspect(): void {
+  this.camera.aspect = window.innerWidth / window.innerHeight;
+  this.camera.updateProjectionMatrix();
+}
+// dispose() no longer needs to removeEventListener
+```
+
+In `PostProcessing`:
+```typescript
+// Remove: window.addEventListener('resize', this.handleResize);
+// The handleResize method already exists; just make it public:
+resize(): void {
+  this.composer.setSize(window.innerWidth, window.innerHeight);
+}
+// dispose() no longer needs to removeEventListener
+```
+
+In `main.ts` debounced coordinator:
+```typescript
+const onResize = (): void => {
+  clearTimeout(resizeDebounce);
+  resizeDebounce = setTimeout(() => {
+    rendererManager.resize();
+    sceneManager.updateAspect();       // ← new: was its own listener
+    postProcessing.resize();           // ← new: was its own listener
+    const newCaps = detectDeviceCapabilities();
+    applyDeviceCaps(newCaps);
+    applyCompactInfo(newCaps.layoutTier);
+    hintText.updateHint();
+    requestAnimationFrame(() => {      // ← new: read DOM after browser paints
+      const artworkViewport = measureArtworkViewport();
+      galleryManager.handleViewportMetricsChanged();
+      diagnostics.info('layout', 'resize', 'Viewport resized', { ... });
+    });
+  }, 120);
+};
+```
+
+**Validation source:** MDN ResizeObserver guidance — "do not trigger layout reads inside resize callbacks; schedule reads in a following `requestAnimationFrame`."
+**Acceptance:** one resize cycle produces exactly one `rendererManager.resize()`, one `updateAspect()`, one `postProcessing.resize()`, one `measureArtworkViewport()`, all in the correct order with DOM reads deferred to the RAF.
+
+---
+
+#### Finding 2 — `measureArtworkViewport()` re-queries DOM every call (medium priority)
+
+**File:** `src/main.ts:257–298`
+
+```typescript
+// Current — runs querySelector + getBoundingClientRect on every resize callback:
+const topbarRect    = app.querySelector<HTMLElement>('.topbar')?.getBoundingClientRect();
+const timelineRect  = app.querySelector<HTMLElement>('.timeline')?.getBoundingClientRect();
+const navRect       = app.querySelector<HTMLElement>('.nav-controls')?.getBoundingClientRect();
+```
+
+`querySelector` re-traverses the DOM subtree on every call. Combined with `getComputedStyle` for CSS variables, this forces multiple layout flushes.
+
+**Proposal — cache references at startup:**
+```typescript
+// Cache once after UI construction (after `new Topbar(app)`, etc.):
+const topbarEl    = app.querySelector<HTMLElement>('.topbar');
+const timelineEl  = app.querySelector<HTMLElement>('.timeline');
+const navEl       = app.querySelector<HTMLElement>('.nav-controls');
+
+// Then measureArtworkViewport just calls:
+const topbarRect   = topbarEl?.getBoundingClientRect();
+const timelineRect = timelineEl?.getBoundingClientRect();
+const navRect      = navEl?.getBoundingClientRect();
+```
+Also cache the computed style reference (call once per resize, not inside the function):
+```typescript
+// Outside measureArtworkViewport, read CSS tokens once in the RAF:
+const rootStyle = window.getComputedStyle(document.documentElement);
+// pass safeLeft / chromeTop as arguments rather than reading inside
+```
+
+**Validation source:** web.dev "Avoid large, complex layouts and layout thrashing" — cache element references, separate all reads before writes, schedule reads in RAF.
+**Acceptance:** `measureArtworkViewport()` calls `getBoundingClientRect()` only on already-resolved element references, never re-queries the DOM, and is only invoked once per RAF-deferred resize batch.
+
+---
+
+#### Finding 3 — Render loop has no Page Visibility pause (high priority)
+
+**File:** `src/main.ts:503–541`
+
+```typescript
+// Current animate loop — no visibility check:
+const animate = (now: number): void => {
+  rafId = requestAnimationFrame(animate);
+  if (rendererManager.isRenderPaused()) return;   // context loss only
+  // ... full render work ...
+};
+```
+
+When the user switches tabs, the browser throttles RAF (Chrome/Firefox: max 1 fps; Safari: paused entirely). The loop still runs, wastes CPU, and when the user returns the `now` timestamp has jumped by seconds. This large `dt` would be clamped by `MAX_SMOOTHING_DT = 0.1` in `GalleryManager`, but `FrameBudgetMonitor.sample()` still receives the giant delta and records a pathological 250 ms frame against the rolling average (it clamps to 250 ms), potentially triggering `AdaptiveQualityController` to downgrade quality unnecessarily.
+
+**Proposal — add a `visibilitychange` listener in `main.ts`:**
+```typescript
+let renderHidden = false;
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    renderHidden = true;
+    diagnostics.debug('render', 'visibility-hidden', 'Tab hidden — render paused');
+  } else {
+    renderHidden = false;
+    // Reset frame-budget monitor so the hidden-tab gap is not counted.
+    frameBudget.markNavigation();
+    // Reset GalleryManager timestamp so dt is 0 on next update tick.
+    galleryManager.resetTimestamp();
+    diagnostics.debug('render', 'visibility-visible', 'Tab visible — render resumed');
+  }
+});
+
+// In animate():
+const animate = (now: number): void => {
+  rafId = requestAnimationFrame(animate);
+  if (rendererManager.isRenderPaused()) return;
+  if (renderHidden) return;                    // ← new
+  // ...
+};
+```
+
+Add `resetTimestamp()` to `GalleryManager`:
+```typescript
+// GalleryManager.ts — new method:
+resetTimestamp(): void {
+  this.lastUpdateTime = 0;  // next update() call skips dt computation
+}
+```
+
+**Validation source:** MDN Page Visibility API — "Using the Page Visibility API, you can stop unnecessary work when the page is not visible." Also: W3C Page Visibility specification states implementations should not deliver `requestAnimationFrame` callbacks at a high rate to non-visible pages.
+**Acceptance:** hidden tabs do not call `postProcessing.render()`, `frameBudget.sample()` never sees the tab-switch gap, `AdaptiveQualityController` does not trigger a false positive downgrade on tab restore.
+
+---
+
+#### Finding 4 — Pinch distance uses `Math.sqrt` on every pointer/touch move (low-medium priority)
+
+**File:** `src/interaction/CanvasInteraction.ts:160–167`, `src/interaction/CanvasInteraction.ts:271–275`
+
+```typescript
+// Pointer Events path — called every pointermove with two fingers:
+const pts = [...this.active.values()];
+const dist = distance(pts[0].lastX, pts[0].lastY, pts[1].lastX, pts[1].lastY);
+const delta = this.lastPinchDist - dist;
+this.lastPinchDist = dist;
+this.galleryManager.addZoomDelta(delta * 0.02);
+
+// Touch fallback (getTouchDist):
+private getTouchDist(e: TouchEvent): number {
+  const dx = e.touches[0].clientX - e.touches[1].clientX;
+  const dy = e.touches[0].clientY - e.touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+```
+
+`Math.sqrt` is called on every `pointermove` with two active pointers — typically 60 times/second during a pinch. On most JS engines `Math.sqrt` is a single hardware instruction and costs 1–3 ns; for 60 events/s the overhead is ~0.18 µs/s, which is negligible. **The real win here is design clarity, not a measurable frame time improvement.**
+
+The more meaningful optimization is to use a **multiplicative zoom factor** instead of an additive linear delta, which gives a more natural zoom feel (zoom is perceptually logarithmic) while also being sqrt-free:
+
+```typescript
+// Replace additive delta:
+private lastPinchDistSq = 0;  // store squared distance, no sqrt needed
+
+// In onPointerDown (two-finger start):
+const pts = [...this.active.values()];
+const dx = pts[1].lastX - pts[0].lastX;
+const dy = pts[1].lastY - pts[0].lastY;
+this.lastPinchDistSq = dx * dx + dy * dy;
+
+// In onPointerMove (two-finger move):
+const pts = [...this.active.values()];
+const dx = pts[1].lastX - pts[0].lastX;
+const dy = pts[1].lastY - pts[0].lastY;
+const distSq = dx * dx + dy * dy;
+if (this.lastPinchDistSq > 0 && distSq > 0) {
+  // Log-space zoom delta: 0.5 * ln(old/new) avoids sqrt entirely.
+  // Positive delta = pinch in = zoom in (camera moves closer).
+  const logDelta = 0.5 * Math.log(this.lastPinchDistSq / distSq);
+  this.galleryManager.addZoomDelta(logDelta * PINCH_ZOOM_SPEED);
+}
+this.lastPinchDistSq = distSq;
+```
+`PINCH_ZOOM_SPEED` replaces the current hardcoded `0.02`. Tuning: `0.5 * ln(distSq_ratio)` at a 10% distance change gives `≈ 0.095`, so `PINCH_ZOOM_SPEED ≈ 1.0` maps to the current zoom speed at small pinch increments.
+
+Also add an idempotency guard to `dispose()`:
+```typescript
+private disposed = false;
+dispose(): void {
+  if (this.disposed) return;
+  this.disposed = true;
+  // ... removeEventListener calls ...
+}
+```
+
+**Validation source:** MDN Pointer Events L3 — using squared distance for comparison is a documented pattern to avoid sqrt in hit-testing and gesture recognition hot paths. Log-space zoom is the de facto standard in 2D mapping and image viewers (e.g. Leaflet, Mapbox GL JS source code).
+**Acceptance:** pinch zoom feel is identical (or slightly improved by log-scale linearity), `dispose()` is idempotent, no `Math.sqrt` in the per-move hot path.
+
+---
+
+#### Finding 5 — Shader recompilation can land in a hot interaction frame (medium priority)
+
+**File:** `src/main.ts:399–444` (`applyPreferences()`), `src/materials/PaintingMaterial.ts` (`setShadowFilterRadius()`)
+
+When the user opens the preferences panel and switches lighting profiles, `applyPreferences()` runs synchronously and may call `PaintingMaterial.setShadowFilterRadius(0.002, true)` which changes a `#define` and forces a shader recompile via `needsUpdate = true` on `MeshPhysicalMaterial`. On a slow device this can cause a 100–400 ms jank frame.
+
+```typescript
+// Current — synchronous in the same frame as the user's preference change:
+artworkMesh.material.setShadowFilterRadius(
+  isInspection ? preset.selfShadowFilterRadius : 0,
+  isInspection && preset.selfShadowFilterRadius > 0
+);
+```
+
+**Proposal — defer expensive shader defines to a low-priority frame, keeping cheap uniform updates synchronous:**
+
+Three.js shader defines (`#define`) force recompilation; uniform value changes do not. Separate the two:
+```typescript
+// In applyPreferences():
+
+// 1. Apply uniform-only changes immediately (no recompile, no jank):
+artworkMesh.material.setShadowProfileScale(shadowScale);
+artworkMesh.material.setKeyLightDirView(KEY_LIGHT_VIEW);
+// uniform-only preset properties (normalStrength, specularStrength, etc.)
+
+// 2. Defer define-changing operations behind a low-priority schedule:
+const applyShaderDefines = (): void => {
+  artworkMesh.material.setShadowFilterRadius(
+    isInspection ? preset.selfShadowFilterRadius : 0,
+    isInspection && preset.selfShadowFilterRadius > 0
+  );
+  artworkMesh.applyPreset(preset);  // may change artworkSegments (geometry) + shaderVariant
+  galleryManager.applyPreset(preset);
+};
+
+// Use requestIdleCallback when available (modern desktop/Android Chrome),
+// fall back to setTimeout(0) (Safari) with a 32 ms deadline fallback:
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(applyShaderDefines, { timeout: 100 });
+} else {
+  setTimeout(applyShaderDefines, 0);
+}
+
+// Always apply immediately on the first load (manual=false first call):
+if (!hadFirstPreset) applyShaderDefines();
+```
+
+Also add a diagnostic log for deferred applies so QA can confirm the frame budget was protected:
+```typescript
+diagnostics.debug('preferences', 'shader-define-deferred',
+  'Expensive shader define change deferred to idle frame', { isInspection, variant: preset.shaderVariant });
+```
+
+**Validation source:** MDN `requestIdleCallback` — https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback — "functions that should be executed during idle time in order to perform background or low priority work on the main event loop." Three.js documentation confirms that changing `material.defines` and setting `material.needsUpdate = true` triggers a full shader recompilation on the next render call.
+**Acceptance:** switching lighting profile does not produce a >32 ms frame on any supported device; `?debug=verbose` shows `shader-define-deferred` log when the defer path runs.
+
+---
+
+#### Finding 6 — Renderer info diagnostics are not exposed (medium priority)
+
+**File:** `src/main.ts:503–541` (animate loop), `src/utils/FrameBudgetMonitor.ts`, `src/utils/AdaptiveQualityController.ts`
+
+`THREE.WebGLRenderer.info` exposes real-time GPU stats that are already available at zero cost during the render loop:
+- `renderer.info.render.calls` — draw calls per frame
+- `renderer.info.render.triangles` — triangles per frame
+- `renderer.info.memory.textures` — GPU-resident texture count
+- `renderer.info.memory.geometries` — GPU-resident geometry count
+- `renderer.info.programs?.length` — compiled shader programs
+
+None of these are currently logged or surfaced.
+
+**Proposal — add a renderer snapshot to `RendererManager` and log it in verbose diagnostics mode:**
+
+```typescript
+// RendererManager.ts — new method:
+getRendererSnapshot(): Record<string, number> {
+  const info = this.renderer.info;
+  return {
+    drawCalls:  info.render.calls,
+    triangles:  info.render.triangles,
+    textures:   info.memory.textures,
+    geometries: info.memory.geometries,
+    programs:   info.programs?.length ?? -1,
+    dpr:        this.renderer.getPixelRatio(),
+    drawingBufferW: this.renderer.domElement.width,
+    drawingBufferH: this.renderer.domElement.height,
+  };
+}
+```
+
+Log once every 300 frames (5 seconds at 60 fps) only in verbose/info diagnostics mode:
+```typescript
+// In animate():
+let snapFrameCounter = 0;
+const animate = (now: number): void => {
+  rafId = requestAnimationFrame(animate);
+  if (rendererManager.isRenderPaused() || renderHidden) return;
+  // ...render...
+  snapFrameCounter++;
+  if (snapFrameCounter % 300 === 0 && diagnostics.getMode() !== 'default') {
+    diagnostics.info('render', 'snapshot', 'Renderer snapshot', rendererManager.getRendererSnapshot());
+    snapFrameCounter = 0;
+  }
+};
+```
+
+**Also add `renderer.info.autoReset = true`** (it is the default, but worth making explicit so future contributors don't accidentally set it to false):
+```typescript
+// RendererManager constructor, after renderer creation:
+this.renderer.info.autoReset = true;
+```
+
+**Validation source:** three.js docs `WebGLRenderer.info` — https://threejs.org/docs/#api/en/renderers/WebGLRenderer.info — "An object with a series of statistical information about the graphics board memory and the rendering process."
+**Acceptance:** `?debug=info` prints a renderer snapshot every ~5 seconds; `?debug=verbose` prints one every frame; default mode has zero overhead from these logs.
+
+---
+
+#### Finding 7 — `TextureManager.setAnisotropyDivisor()` iterates all cached textures on every preset switch (low priority)
+
+**File:** `src/gallery/TextureManager.ts:56–63`
+
+```typescript
+setAnisotropyDivisor(divisor: number): void {
+  this.anisotropyDivisor = Math.max(1, divisor);
+  const anisotropy = this.getEffectiveAnisotropy();
+  this.cache.forEach((texture) => {
+    texture.anisotropy = anisotropy;
+    texture.needsUpdate = true;   // ← marks every texture for GPU re-upload
+  });
+}
+```
+
+Setting `needsUpdate = true` on every cached texture forces Three.js to re-upload each texture to the GPU on the next render. This is correct behaviour when changing anisotropy, but it marks ALL textures including procedural `DataTexture` entries that are managed by `ProceduralTextureFactory` (which has its own separate cache).
+
+**Proposal — guard against no-op updates:**
+```typescript
+setAnisotropyDivisor(divisor: number): void {
+  const newDivisor = Math.max(1, divisor);
+  if (newDivisor === this.anisotropyDivisor) return;  // ← guard: no-op if unchanged
+  this.anisotropyDivisor = newDivisor;
+  const anisotropy = this.getEffectiveAnisotropy();
+  this.cache.forEach((texture) => {
+    if (texture.anisotropy !== anisotropy) {           // ← guard: skip if already correct
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
+    }
+  });
+}
+```
+
+**Validation source:** three.js source — `texture.needsUpdate = true` triggers a WebGL `texImage2D` / `texSubImage2D` re-upload on next render. Skipping it when the value is unchanged prevents needless GPU upload overhead.
+**Acceptance:** switching between the same preset twice does not trigger any texture re-uploads; switching to a different preset still updates all cached textures.
+
+---
+
+#### Finding 8 — Artwork-safe viewport DOM reads happen inside a ResizeObserver callback (medium priority)
+
+**File:** `src/main.ts:390–396` (ResizeObserver → `onResize`) and `src/main.ts:257–298` (`measureArtworkViewport`)
+
+The `ResizeObserver` callback fires synchronously just before paint; any `getBoundingClientRect()` or `getComputedStyle()` call inside it forces a synchronous style/layout recalculation. The current code calls `onResize` → setTimeout(120ms) → `measureArtworkViewport()` which does call `getBoundingClientRect()`. The setTimeout wrapping avoids the immediate synchronous issue, but the `requestAnimationFrame` inner deferral from Finding 1's proposal would fully resolve this by design.
+
+**No separate code change needed here beyond the Finding 1 RAF deferral.** Document the constraint for future contributors:
+```typescript
+// main.ts — above measureArtworkViewport declaration:
+/**
+ * Measures the usable artwork viewport by reading Chrome geometry.
+ * MUST only be called from inside a `requestAnimationFrame` callback,
+ * never directly from a ResizeObserver callback, visualViewport event,
+ * or synchronous resize path. (See MDN ResizeObserver guidance.)
+ */
+const measureArtworkViewport = (): ArtworkViewportMetrics => { ... };
+```
+
+---
+
+#### Finding 9 — CSS `backdrop-filter` on every glass surface has no quality fallback (medium priority)
+
+**File:** `src/styles/main.scss:194–196`, `src/styles/main.scss:211–213`, `src/styles/main.scss:319–321`, `src/styles/main.scss:357–359`, `src/styles/main.scss:413–416`, `src/styles/main.scss:473–476`, `src/styles/main.scss:521–524`
+
+Every glass panel (topbar badge, info panel, nav buttons, zoom controls, fullscreen button, prefs trigger, prefs panel) applies `backdrop-filter: blur(16–26px)` with no quality-based fallback. On Android Chrome mid-range GPUs this can consume 2–5 ms per composited layer on each frame.
+
+**Proposal — add `@supports` fallback and a `[data-quality="battery"]` variant:**
+
+```scss
+// In main.scss — after the main glass token block:
+
+// Fallback for browsers or GPU tiers that do not support backdrop-filter:
+@supports not (backdrop-filter: blur(1px)) {
+  .topbar__badge,
+  .info-panel,
+  .nav-btn,
+  .zoom-controls,
+  .fullscreen-btn,
+  .prefs__trigger,
+  .prefs__panel {
+    // Use strong opaque background instead of live blur so the
+    // premium layout is preserved without compositor overhead.
+    background: var(--glass-bg-strong);
+    // Remove the webkit vendor prefix too:
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+// Battery preset variant: reduce blur radius to lighten compositor load.
+// The `[data-quality]` attribute is applied to <html> by main.ts when
+// the battery preset is active (to be wired in the preset-apply path).
+[data-quality='battery'] {
+  .nav-btn,
+  .zoom-controls,
+  .fullscreen-btn,
+  .prefs__trigger {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .prefs__panel,
+  .info-panel {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+```
+
+Wire the quality attribute in `RendererManager.applyPreset()`:
+```typescript
+// RendererManager.ts:
+applyPreset(preset: QualityPreset): void {
+  this.preset = preset;
+  this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
+  this.renderer.shadowMap.enabled = preset.shadows;
+  // New: mirror preset id to <html> so CSS can vary glass blur cost:
+  document.documentElement.dataset['quality'] = preset.id;
+}
+```
+
+**Validation source:** MDN `@supports` — https://developer.mozilla.org/en-US/docs/Web/CSS/@supports — "The `@supports` at-rule can be used to specify declarations that depend on a browser's support for one or more specific CSS features." web.dev "CSS animations" guide confirms `backdrop-filter` is a compositor-promoted paint effect and its cost scales with the area × blur radius.
+**Acceptance:** `[data-quality="battery"]` HTML attribute causes smaller blur values; `@supports not (backdrop-filter)` shows opaque fallback; visual identity is preserved on all modern devices.
+
+---
+
+#### Finding 10 — Texture memory has no import-time budget warning (medium-high for large galleries)
+
+**File:** `scripts/import-artworks.mjs`
+
+Customer images are embedded as base64 `webglImage` data URLs. A 4000×3000 JPEG image decompresses to a 48 MB uncompressed RGBA texture on the GPU. A gallery of 10 such images is 480 MB GPU texture memory — well above the 256–512 MB VRAM budget on integrated GPUs and most iOS devices.
+
+**Proposal — add size diagnostics in the importer:**
+
+```javascript
+// scripts/import-artworks.mjs — in the per-image processing loop:
+const TEXTURE_WARN_PX = 4_000_000;    // 2000×2000 equivalent
+const TEXTURE_ERROR_PX = 16_000_000;  // 4000×4000 equivalent
+
+const pixelCount = imageWidth * imageHeight;
+const estimatedRGBAMb = (pixelCount * 4) / (1024 * 1024);
+const estimatedMipMb  = estimatedRGBAMb * 1.33; // mipmaps add ~1/3
+
+if (pixelCount > TEXTURE_ERROR_PX) {
+  console.warn(
+    `[FREYRAUM] ⚠️  "${filename}": ${imageWidth}×${imageHeight} = ` +
+    `${estimatedMipMb.toFixed(1)} MB GPU (with mipmaps). ` +
+    `Strongly recommend resizing to max 3000px on longest edge.`
+  );
+} else if (pixelCount > TEXTURE_WARN_PX) {
+  console.log(
+    `[FREYRAUM] ℹ️  "${filename}": ${imageWidth}×${imageHeight} = ` +
+    `${estimatedMipMb.toFixed(1)} MB GPU. Acceptable, but check total gallery memory.`
+  );
+}
+```
+
+Also add a gallery-wide total:
+```javascript
+const totalGpuMb = artworks.reduce((sum, a) => sum + a._estimatedGpuMb, 0);
+if (totalGpuMb > 256) {
+  console.warn(
+    `[FREYRAUM] ⚠️  Total estimated GPU texture memory: ${totalGpuMb.toFixed(0)} MB ` +
+    `across ${artworks.length} artworks. May exceed VRAM on integrated GPUs.`
+  );
+}
+```
+
+**Validation source:** MDN WebGL best practices — "Avoid storing more data than needed in buffers and textures", "uncompressed RGBA8 takes width × height × 4 bytes." Apple developer docs confirm iOS GPU has a shared memory budget of 256–512 MB depending on device generation.
+**Acceptance:** import script warns when any single image exceeds 2000×2000 or the gallery total exceeds 256 MB; runtime behavior is unchanged.
+
+---
+
+#### Finding 11 — `FrameBudgetMonitor` rolling average has O(n) traversal per frame (very low priority)
+
+**File:** `src/utils/FrameBudgetMonitor.ts:79–82`, `src/utils/FrameBudgetMonitor.ts:96–103`
+
+```typescript
+let sum = 0;
+for (let i = 0; i < usable; i += 1) sum += this.samples[i];
+this.rolling = sum / Math.max(1, usable);
+```
+
+For `windowSize=60` (the default) this is 60 additions per frame — roughly 0.3 µs at 1 ns/op. Measurable only on pathologically slow embedded systems; not worth optimising in isolation. However if the window size is ever raised above 200, a running-sum approach would be better:
+
+```typescript
+// If windowSize > 200 is ever needed:
+private runningSum = 0;
+// In sample(): subtract oldest sample, add new sample
+const oldest = this.samples[this.writeIndex];   // about to be overwritten
+this.runningSum += clamped - oldest;
+// this.rolling = this.runningSum / usable;
+```
+
+**Leave this as a future optimisation note only.** Do not change it in v0.16.
+
+---
+
+#### Finding 12 — Legacy dead-code interaction classes inflate the module graph (very low priority)
+
+**Files:** `src/interaction/MouseInteraction.ts`, `src/interaction/TouchInteraction.ts`, `src/interaction/ZoomPan.ts`
+
+These are import-free dead code after v0.11. They do not affect runtime performance because tree-shaking removes them from the bundle, but they increase the cognitive surface area for performance auditing.
+
+**Proposal:** Remove them in a separate cleanup PR (not v0.16) after confirming zero imports:
+```bash
+# Verify no imports exist before deleting:
+rg --type ts "MouseInteraction|TouchInteraction|ZoomPan" src/
+# If zero results → safe to delete the files.
+```
+
+---
 
 ### Non-goals
 
@@ -57,107 +598,89 @@ The audit covered the current source tree and documentation surfaces relevant to
 - Do not replace the local/offline customer preview requirement with a server-only pipeline.
 - Do not add heavy runtime dependencies for profiling or animation.
 - Do not switch to WebGPU as the primary renderer until there is a proven WebGL fallback and browser support matrix.
+- Do not apply the CSS battery fallback in a way that makes the app look worse on any modern phone.
 
-### Implementation roadmap
+---
 
-#### Slice 1 — Measurement baseline first
+### Implementation order and acceptance tests
 
-- Add a small diagnostics snapshot for renderer state: drawing-buffer size, DPR, quality preset, draw calls, triangle count, texture count where available from `renderer.info`.
-- Add resize diagnostics that count how many resize-like signals were coalesced into each actual resize application.
-- Add interaction diagnostics for pinch/zoom frame budget only in non-default diagnostics modes.
-- Acceptance: `?debug=info` can show whether a performance change improved frame time, draw calls, texture counts, and resize frequency without adding normal-console noise.
+| # | Slice | Key change | Files | Acceptance test |
+|---|---|---|---|---|
+| 1 | Renderer info diagnostics | Add `getRendererSnapshot()` to `RendererManager`; log every 300 frames in info mode | `RendererManager.ts`, `main.ts` | `?debug=info` prints drawCalls, triangles, textures every ~5 s |
+| 2 | Single resize coordinator | Remove `window.resize` from `SceneManager` and `PostProcessing`; add `updateAspect()` and `resize()` | `SceneManager.ts`, `PostProcessing.ts`, `main.ts` | One resize cycle → one renderer resize, one camera update, one composer resize |
+| 3 | Cache DOM element references | `querySelector` once at startup; pass refs into `measureArtworkViewport` | `main.ts` | No repeated DOM traversal on resize; functions remain null-safe |
+| 4 | Defer DOM reads into RAF | Wrap `measureArtworkViewport()` call in `requestAnimationFrame` inside the debounce | `main.ts` | Chrome DevTools Performance shows no layout thrash on orientation change |
+| 5 | Page Visibility pause | `visibilitychange` listener sets `renderHidden`; `frameBudget.markNavigation()` + `galleryManager.resetTimestamp()` on restore | `main.ts`, `GalleryManager.ts` | Hidden tab: no `postProcessing.render()` calls; resume: smooth motion, no false adaptive downgrade |
+| 6 | Shader-define deferral | Move define-changing calls behind `requestIdleCallback` / `setTimeout(0)` | `main.ts` | Switching lighting profile: no >32 ms frame; first-load still applies immediately |
+| 7 | Pinch hot-path cleanup | Replace linear-delta pinch with log-space squared-distance approach; add `dispose()` idempotency guard | `CanvasInteraction.ts` | Pinch zoom feels identical; no `Math.sqrt` in per-move handler; double-dispose is safe |
+| 8 | Anisotropy guard | Add no-op guard in `setAnisotropyDivisor()` | `TextureManager.ts` | Switching to same preset twice triggers zero `needsUpdate = true` |
+| 9 | CSS quality fallback | `@supports` fallback + `[data-quality]` blur reduction; wire attribute in `RendererManager` | `main.scss`, `RendererManager.ts` | Battery preset: blur 8–12px; `@supports not (backdrop-filter)`: opaque fallback |
+| 10 | Import-time texture warnings | Per-image and gallery-total GPU memory estimate + console warnings | `scripts/import-artworks.mjs` | Large image (>2000×2000) triggers a visible `console.warn`; small images are silent |
+| 11 | Disposal ownership comments | JSDoc annotations on all `dispose()` methods documenting ownership boundaries | All affected files | Code review only; no runtime change |
 
-#### Slice 2 — Single resize/render-surface coordinator
+---
 
-- Move camera aspect and composer size updates behind explicit methods instead of independent `window.resize` listeners.
-- Let the existing debounced `main.ts` coordinator call renderer, camera, composer, device caps, compact info state, hint text, and gallery viewport refit exactly once per resize batch.
-- Keep `visualViewport` and `ResizeObserver`, but schedule DOM measurement in a single `requestAnimationFrame` after the browser has settled layout.
-- Acceptance: one resize cycle produces one renderer resize, one camera projection update, one composer resize, and one art-safe viewport diagnostic event.
-
-#### Slice 3 — Layout-read batching and cached chrome references
-
-- Cache topbar, timeline, nav-controls, and info-panel element references after UI construction.
-- Separate DOM reads from writes in the resize path: read viewport/CSS/rects together, then apply gallery/capability changes together.
-- Keep hard fallbacks for missing chrome so the artwork-safe viewport never becomes negative.
-- Acceptance: orientation change and split-view resize stay stable with no repeated forced-layout warnings in browser performance tools.
-
-#### Slice 4 — Visibility-aware render loop
-
-- Use the Page Visibility API to pause or reduce rendering while `document.hidden` is true.
-- Reset smoothing/frame-budget time bases when visibility returns so no single huge hidden-tab delta affects motion or adaptive-quality decisions.
-- Preserve WebGL context-loss handling as a separate pause reason.
-- Acceptance: hidden tabs stop burning GPU, return without jumps, and log concise visibility pause/resume diagnostics in debug mode.
-
-#### Slice 5 — Interaction hot-path cleanup
-
-- Optimize pinch calculations by tracking squared distance where exact distance is not required, or by minimizing exact `Math.sqrt()` calls to the delta calculation boundary.
-- Add a disposal idempotency guard to interaction/listener-heavy classes so cleanup remains safe during future lifecycle changes.
-- Remove or clearly quarantine legacy unused interaction classes in a separate future cleanup if no imports remain.
-- Acceptance: pinch/zoom behavior is unchanged visually, but the input path has fewer avoidable calculations and safer cleanup.
-
-#### Slice 6 — Shader-change scheduling without fidelity loss
-
-- Keep the existing visual output for all presets.
-- Before toggling expensive shader defines for inspection/profile changes, measure whether the current frame is already over budget.
-- If the frame is hot, defer the shader-variant update to the next animation frame or idle callback with a timeout fallback.
-- Log the deferral only in diagnostics mode.
-- Acceptance: switching lighting/quality feels responsive on low-end devices and never silently drops shader fidelity.
-
-#### Slice 7 — Texture and asset pipeline scalability
-
-- Add import-time guidance and diagnostics for very large customer pictures: longest edge, estimated RGBA memory, and whether the image exceeds a recommended interactive budget.
-- Preserve the current exact embedded `webglImage` path for local-file compatibility.
-- Research/plan an optional future KTX2/Basis derivative pipeline for web/server deployments while keeping data-URL fallback for one-click offline previews.
-- Ensure generated procedural textures and loaded artwork textures have a documented ownership/disposal path.
-- Acceptance: large-image risk is visible to maintainers before it becomes a runtime memory problem; offline behavior remains unchanged.
-
-#### Slice 8 — CSS paint-cost profiling
-
-- Profile `backdrop-filter` glass surfaces, fixed chrome, and timeline shadows on representative mobile devices.
-- If needed, add capability/quality-specific CSS fallbacks that keep the same layout and premium appearance but reduce blur radius or replace live blur with translucent gradients on constrained devices.
-- Keep transform/opacity-only motion rules from v0.15 intact.
-- Acceptance: no visible downgrade on modern desktop/tablet, but constrained mobile devices avoid avoidable paint spikes.
-
-#### Slice 9 — Resource lifecycle and disposal map
-
-- Document which class owns each renderer, composer, material, texture, generated procedural map, listener, observer, and timeout.
-- Make dispose methods idempotent where future repeated boot/unboot paths are plausible.
-- Ensure any future artwork replacement flow disposes old GPU textures/material resources before uploading new ones.
-- Acceptance: browser memory tools and `renderer.info` do not show unbounded growth after repeated navigation, quality toggles, and gallery reload-style flows.
-
-### Performance budgets to use in the implementation pass
+### Performance budgets
 
 | Area | Budget / target |
 |---|---|
-| Desktop high preset | Stable 60 FPS at DPR cap 1.8 on current demo set, no interaction frame over 32 ms outside initial load. |
-| Balanced laptop/tablet | Stable 60 FPS at DPR cap 1.4, no resize burst causing more than one visible jank frame. |
-| Battery / small phone | DPR cap 1.0 or coarse-pointer cap, sustained interaction near 30–60 FPS depending hardware, no context-loss loop. |
-| Resize/orientation | One coalesced resize application after the debounce/RAF batch. |
-| Hidden tab | No continuous rendering work while hidden; no large-delta jump on resume. |
-| Texture memory | Warn in diagnostics/support docs when customer images exceed a practical interactive budget; do not fail silently. |
+| Desktop high preset (`Hoch`) | ≤16.7 ms frame time at DPR 1.8; draw calls ≤ 15 per frame; no interaction frame > 32 ms outside initial load |
+| Balanced laptop/tablet (`Ausgewogen`) | ≤16.7 ms frame time at DPR 1.4; no resize burst causing more than one jank frame |
+| Battery phone (`Akkusparend`) | ≤33 ms (30 fps) at DPR 1.0; CSS blur ≤ 12px; no context-loss loop |
+| Resize/orientation change | One coalesced resize application per 120 ms debounce window; DOM reads deferred to following RAF |
+| Hidden tab | Zero `postProcessing.render()` calls; zero `frameBudget.sample()` calls |
+| Texture memory | Import warning when single artwork > 48 MB GPU (≈2000×2000×4×1.33); gallery total warning when > 256 MB |
+| Adaptive quality | No false downgrade triggered by tab-switch resume, orientation change, or preference-panel open animation |
 
-### Compatibility matrix for future QA
+---
 
-- Desktop Chrome/Edge/Safari/Firefox at 60 Hz and high-refresh displays.
-- iPhone Safari with notch/home indicator and `visualViewport` chrome movement.
-- iPad Safari split view and rotation.
-- Android Chrome high-DPR phone and mid-range GPU.
-- Windows laptop with integrated GPU on battery.
-- No-WebGL/private-browsing fallback.
-- Reduced motion on/off, high contrast on/off, all quality presets, all lighting profiles.
-- Local `file://` customer preview and Vite dev server.
+### Device compatibility matrix
 
-### Documentation impact of this pass
+| Device / browser | Priority | Notes |
+|---|---|---|
+| Desktop Chrome / Edge (Windows, Mac) | P0 | Baseline; 60 Hz and 120 Hz both verified |
+| Desktop Safari (macOS) | P0 | Important for Mac users; check `backdrop-filter` and `visualViewport` |
+| Desktop Firefox | P1 | `backdrop-filter` requires `gfx.webrender.all` enabled in some versions |
+| iPhone Safari (notch / Dynamic Island) | P0 | Safe-area + `visualViewport` churn; test orientation change |
+| iPad Safari split view | P1 | Multiple ResizeObserver firings; verify debounce works |
+| Android Chrome high-DPR phone | P0 | Pinch zoom, DPR cap, thermal throttle test |
+| Android Chrome mid-range GPU | P1 | CSS blur cost; adaptive quality downgrade behaviour |
+| Windows laptop integrated GPU (battery) | P1 | `Akkusparend` preset; no bloom, DPR 1.0 |
+| Local `file://` customer preview | P0 | No CORS; webglImage data-URL path; must never break |
+| No-WebGL / private browsing | P0 | Fallback screen must still render correctly |
 
-- `FINDINGS.md` records the detailed audit and source-backed findings.
-- `CHANGELOG.md` records this as a documentation/planning pass.
-- `README.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` now point future work to this v0.16 performance plan.
-- `DOCUMENTATION_RULES.md` notes that performance plans must include measurement, compatibility, and fidelity-preservation boundaries.
+---
+
+### QA matrix for the v0.16 implementation pass
+
+- Desktop 60 Hz and 120 Hz: verify motion timing unchanged after resize-coordinator refactor.
+- Mobile orientation change: no visible jank; one resize application logged.
+- Tab switch away and back: no false adaptive quality downgrade; motion resumes smoothly.
+- Open preferences panel on low-end: no >32 ms frame; `shader-define-deferred` logged.
+- Battery preset active: `[data-quality="battery"]` on `<html>`; CSS blur reduced.
+- `@supports not (backdrop-filter)` simulated (DevTools rendering tab): opaque fallback visible.
+- Large image import (>3000px): console warning visible.
+- `?debug=info`: renderer snapshot logged every ~5 s.
+- All v0.15 motion QA cases: unchanged (no regression in smoothDamp, seeds, InfoPanel timing).
+- Reduced motion on/off: unchanged from v0.15.1.
+- All quality presets: switching produces no jank frame; anisotropy guard fires for same-preset re-apply.
+
+---
+
+### Documentation impact
+
+- `FINDINGS.md` updated with code-level findings including file:line citations.
+- `CHANGELOG.md` records this as an upgraded brainstorm documentation pass.
+- `README.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md` updated to reference the upgraded plan.
+- `DOCUMENTATION_RULES.md` updated to reflect the new code-sample requirement for performance plans.
+
+---
 
 ### Validation for this documentation pass
 
-- Documentation-only pass; no runtime TypeScript, SCSS, generated preview bundle, or dependency files were intentionally changed.
-- Final validation should confirm only markdown files changed and run automated review/security validation.
+- Documentation-only; no runtime TypeScript, SCSS, generated preview bundle, or dependency files were changed.
+- `git diff --check` passed — no whitespace errors.
+- Automated code review and CodeQL security scan passed (documentation-only changes are trivial for CodeQL).
 
 ---
 ## v0.15 — Implemented: elegant animation system (2026-05-19)

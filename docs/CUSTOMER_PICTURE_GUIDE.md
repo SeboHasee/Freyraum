@@ -6,9 +6,13 @@ You do **not** need to use a code editor, the terminal, or any technical tool.
 You only ever touch one folder and one button.
 
 
-## Performance planning note (v0.16 planned)
+## Performance planning note (v0.16 upgraded brainstorm)
 
-The next documented technical pass is a performance audit/optimization roadmap. It does not change how customers add pictures today. The planned work keeps picture quality intact and focuses on smoother performance across more devices, better handling of very large images, and clearer support diagnostics for older or mobile hardware.
+The v0.16 plan is now a code-sample-backed brainstorm with specific TypeScript and SCSS implementation proposals. It does **not** change how customers add pictures today. The planned work keeps picture quality intact.
+
+One finding directly relevant to this guide: **import-time texture memory warnings.** The planned importer update will print a `console.warn` when a customer image exceeds 2000×2000 pixels (≈48 MB uncompressed GPU texture with mipmaps) or when the gallery total exceeds 256 MB GPU. This is a proactive safeguard; it does not change how pictures are imported.
+
+See `plan.md § Finding 10` and `FINDINGS.md § Finding 10` for the proposed importer code sample.
 
 ## Phone and tablet note
 

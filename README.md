@@ -3,11 +3,13 @@
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
 
-## Current planning pass — v0.16 performance audit (2026-05-19)
+## Current planning pass — v0.16 deep brainstorm: code-level performance audit (2026-05-19)
 
-A complete performance audit and research-backed optimization plan has been documented. This pass did **not** change runtime code; it defines the next implementation roadmap for better frame stability and wider device compatibility while preserving FREYRAUM's graphical fidelity.
+The v0.16 performance plan has been upgraded from a high-level audit to a **code-sample-backed, file:line-anchored brainstorm**. 12 numbered findings each contain: exact file + line location, root cause, TypeScript or SCSS implementation code sample, an online validation source (MDN / three.js docs / web.dev), and a precise acceptance test. No runtime code was changed in this pass.
 
-The plan focuses on measurement-first improvements: resize coalescing, batched viewport measurement, visibility-aware render-loop pausing, mobile interaction hot-path cleanup, shader-change scheduling, texture-memory scalability, CSS paint profiling, and explicit GPU resource ownership. See [`plan.md`](./plan.md#v016--planned-performance-audit-and-compatibility-safe-optimization-roadmap-2026-05-19) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v016-performance-audit-and-research-backed-optimization-plan).
+Key findings: three independent `window.resize` listeners cause redundant camera/composer updates on mobile orientation changes; `measureArtworkViewport()` re-queries DOM on every resize call; the render loop has no Page Visibility pause (can cause false adaptive quality downgrades on tab restore); pinch zoom can use a log-space sqrt-free approach; shader `#define` changes land synchronously in preference-change frames; `renderer.info` GPU stats are never exposed in diagnostics; `TextureManager.setAnisotropyDivisor()` marks all textures dirty even when the value is unchanged; CSS glass panels have no `@supports` fallback or quality-tier blur reduction.
+
+See [`plan.md § v0.16`](./plan.md#v016--brainstorm-deep-performance-and-compatibility-optimization-2026-05-19-updated) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19-updated--v016-deep-code-audit-file-level-findings-and-implementation-research) for complete details, code samples, and the full device compatibility + QA matrix.
 
 ## Current status — v0.15 elegant animation system implemented (2026-05-19)
 
