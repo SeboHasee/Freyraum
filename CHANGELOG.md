@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Documentation (v0.14 zoom/pan/reset-fit tuning plan — 2026-05-19)
+
+- Added a new v0.14 planning section to `plan.md` after auditing the current `GalleryManager` zoom and pan math.
+- Documented that closer zoom requires tuning both `MIN_CAMERA_Z` **and** `MIN_VISIBLE_ARTWORK_FRACTION`, because the visible-artwork fraction still limits large artworks.
+- Documented that the current edge looseness comes from `INSPECTION_OVERSCROLL = 3.0` being a flat additive constant in `getPanLimits()`.
+- Documented that large vertical artworks still feel too close in reset view because `getResetFitZoom()` uses one global `RESET_VIEW_FRAME_MARGIN = 1.04`; the next pass should add a portrait-aware reset boost instead of shifting all artworks equally.
+- Updated all repository markdown files so the current status, findings, handoff, and support guides reflect the new v0.14 plan.
+
 ### Implemented (v0.13 nav/zoom/pan/icon fixes — 2026-05-18)
 
 - **Nav controls no longer cut off by timeline.** `.nav-controls` bottom position changed from `bottom: var(--chrome-bottom)` (168px) to `bottom: calc(192px + var(--safe-bottom))`, placing the buttons 15px above the timeline's top edge. `--chrome-bottom` was updated from `max(168px, 148px+safe)` to `max(200px, 180px+safe)` to keep zoom controls and artwork fit measurements in sync.

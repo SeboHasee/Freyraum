@@ -20,6 +20,16 @@ The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs,
 
 Support checks after implementation should include phone portrait, phone landscape, tablet portrait, tablet landscape, desktop, keyboard-only, reduced motion, high contrast, and no-WebGL fallback states. The QA matrix is documented in `plan.md`.
 
+## Planned v0.14 tuning status (close zoom, pan edges, large-vertical reset fit)
+
+Planned on 2026-05-19. No runtime code changed in this pass.
+
+Source audit of `src/gallery/GalleryManager.ts` shows:
+
+- closer zoom still depends on both `MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`, so the next pass must tune both together;
+- the current pan looseness comes from `INSPECTION_OVERSCROLL = 3.0` being added as a flat constant in `getPanLimits()`;
+- large vertical artworks still rely on one global `RESET_VIEW_FRAME_MARGIN = 1.04`, so the next pass should add a portrait-aware reset boost instead of moving every artwork farther away.
+
 ## Current v0.13 status (nav buttons, zoom range, pan range, icon centering)
 
 Implemented on 2026-05-18. This pass fixed four customer-reported bugs after the v0.12 zoom/framing/timeline pass:

@@ -1,5 +1,98 @@
 # FREYRAUM Plan
 
+## v0.14 — Planned: deeper close zoom, tighter edge limits, and more generous reset fit for large vertical artworks (2026-05-19)
+
+### Status
+
+**Planned 2026-05-19.** No runtime code has been changed in this pass. This entry records the current source audit for the remaining zoom/pan/reset-fit tuning requests and defines the next implementation slice.
+
+### Customer-reported issues after v0.13
+
+1. users still want to zoom in further than the current close-inspection ceiling allows;
+2. the current edge freedom is now too loose and should be limited somewhat;
+3. large vertical artworks should still start a bit farther away in the default/reset view.
+
+### Code analysis
+
+#### Issue 1 — Close zoom is limited by two separate guards, not only one
+
+- `GalleryManager.getInspectionMinZoom()` does **not** only depend on `MIN_CAMERA_Z`.
+- The minimum close distance is:
+  - `MIN_CAMERA_Z`, **and**
+  - a required visible artwork fraction computed from `MIN_VISIBLE_ARTWORK_FRACTION`.
+- Current values:
+  - `MIN_CAMERA_Z = 0.5`
+  - `MIN_VISIBLE_ARTWORK_FRACTION = 0.28`
+- Result: lowering only `MIN_CAMERA_Z` would not reliably allow a meaningfully closer inspection on larger artworks, because `heightDistance` / `widthDistance` can still dominate.
+
+**Planned fix direction**
+
+- Lower `MIN_CAMERA_Z` moderately again.
+- Lower `MIN_VISIBLE_ARTWORK_FRACTION` as well, so the close-zoom ceiling actually moves for large artworks instead of only for small ones.
+- Keep the existing `DEFAULT_CAMERA_Z` upper clamp so this change affects only the close-inspection end of the range.
+
+#### Issue 2 — Edge freedom is too loose because overscroll is a flat additive constant
+
+- `getPanLimits()` currently adds `INSPECTION_OVERSCROLL` directly to both axes:
+  - `x = (artworkWidth - visibleWidth) * 0.5 + INSPECTION_OVERSCROLL`
+  - `y = (artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL`
+- Current value:
+  - `INSPECTION_OVERSCROLL = 3.0`
+- Result: the same large additive overscroll is granted regardless of artwork proportions and regardless of how much of the artwork is already visible. That is why the camera can now feel too “free” near the edges.
+
+**Planned fix direction**
+
+- Replace the single flat overscroll feel with a smaller, more controlled pan allowance.
+- Recommended approach: introduce a tighter overscroll cap derived from artwork size and/or visible span, then clamp it to a modest maximum. This keeps some edge freedom for inspection without allowing the artwork to drift too far off-centre.
+- If the implementation is kept simpler, the fallback is to reduce `INSPECTION_OVERSCROLL` significantly from `3.0` to a middle value rather than returning all the way to the old `0.5`.
+
+#### Issue 3 — Large vertical artworks still need extra reset headroom
+
+- `getResetFitZoom()` currently uses:
+  - `frameWidth = artworkWidth + 0.4`
+  - `frameHeight = artworkHeight + 0.4`
+  - `RESET_VIEW_FRAME_MARGIN = 1.04`
+- The computed reset distance is `max(DEFAULT_CAMERA_Z, heightDistance, widthDistance)`.
+- For large vertical artworks, `heightDistance` dominates, so the remaining “too close” feeling is primarily controlled by the reset-fit margin, not by overview headroom.
+
+**Planned fix direction**
+
+- Keep the v0.12 art-safe viewport model intact.
+- Add a portrait-sensitive reset-fit boost instead of globally pushing every artwork farther away.
+- Recommended approach: introduce a helper that detects strongly vertical aspect ratios and applies a small additional reset margin only there. This avoids making landscape and square artworks feel unnecessarily distant.
+
+### Recommended implementation slice
+
+1. **Close zoom**
+   - tune `MIN_CAMERA_Z`;
+   - tune `MIN_VISIBLE_ARTWORK_FRACTION`;
+   - verify with large portrait and landscape artworks.
+2. **Pan limits**
+   - replace or reduce the current `INSPECTION_OVERSCROLL`;
+   - verify left/right travel on narrow artworks and top/bottom travel on tall artworks.
+3. **Reset fit for large verticals**
+   - add a portrait-aware reset-fit margin/helper;
+   - verify the first/reset view on the largest vertical artworks.
+4. **Diagnostics**
+   - extend `show-artwork-complete` with the values that now determine the tuning outcome:
+     - close-zoom limiting fraction,
+     - effective pan overscroll/caps,
+     - portrait-reset boost / effective reset margin.
+
+### Files expected in the next implementation pass
+
+- `src/gallery/GalleryManager.ts`
+- `customer-preview/freyraum-gallery.js`
+- `CHANGELOG.md`
+- `FINDINGS.md`
+- `README.md`
+- `DOCUMENTATION_RULES.md`
+- `docs/HANDOFF.md`
+- `docs/CUSTOMER_PICTURE_GUIDE.md`
+- `docs/IMAGE_MAINTENANCE_GUIDE.md`
+
+---
+
 ## v0.13 — Implemented: nav button layout, wider zoom range, more pan freedom, icon centering (2026-05-18)
 
 ### Status

@@ -2,9 +2,12 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current status — v0.13 nav/zoom/pan/icon fixes implemented
+## Current status — v0.13 implemented, v0.14 tuning planned
 
-**Implemented 2026-05-18.** The current build includes the v0.13 follow-up fix pass:
+**Current build:** v0.13 is implemented.  
+**Next planned pass (v0.14):** deeper close zoom, slightly tighter edge limits, and a farther default/reset fit for large vertical artworks.
+
+The current build includes the v0.13 follow-up fix pass:
 
 - nav left/right buttons no longer overlap or are cut off by the timeline;
 - zoom-out now allows stepping back to a camera distance of 18+ world units (far overview);
@@ -19,7 +22,13 @@ What changed technically:
 - `INSPECTION_OVERSCROLL` raised from `0.5` to `3.0` world units;
 - `.prefs__trigger-icon` and `.fullscreen-btn__icon` CSS rules added to clear inline descender gap.
 
-See [`FINDINGS.md`](./FINDINGS.md#2026-05-18--v013-implementation-pass-nav-layout-zoom-range-pan-range-and-icon-centering) for audit findings and validation notes.
+The next planned tuning pass will:
+
+- lower the effective close-zoom ceiling by tuning both `MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`;
+- tighten the current edge freedom by reducing or capping the overscroll added in `getPanLimits()`;
+- push large vertical artworks slightly farther away in reset view with a portrait-aware reset-fit boost instead of a global shift.
+
+See [`plan.md`](./plan.md#v014--planned-deeper-close-zoom-tighter-edge-limits-and-more-generous-reset-fit-for-large-vertical-artworks-2026-05-19) for the new technical plan and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v014-planning-pass-deeper-close-zoom-tighter-pan-edges-farther-reset-fit-for-large-vertical-artworks) for the current source-audit findings.
 
 ## Previous pass — v0.12 zoom and framing
 

@@ -25,6 +25,16 @@ For support/debugging, the current build logs:
 - `gallery/viewport-refit` when the browser viewport or chrome changes,
 - `layout/art-viewport` with measured art-safe viewport metrics.
 
+## Next planned viewing tuning
+
+The next planned pass will focus on three remaining viewing adjustments:
+
+- allow even closer zoom for detail inspection;
+- keep some edge freedom, but tighten the current pan looseness slightly;
+- make very large vertical artworks start a little farther away in the default/reset view.
+
+This is currently a documented plan only; it is not yet implemented in the build you are using.
+
 ## What you need (one-time)
 
 1. **Node.js** (free): install the LTS version from <https://nodejs.org>.
@@ -196,7 +206,10 @@ chrome is considered. If it still looks too close, include:
 1. a screenshot of the first/reset view,
 2. whether more manual zoom-out is still needed,
 3. the `show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`,
-   `maxZoom`, `overviewHeadroom`, and the usable viewport fields.
+    `maxZoom`, `overviewHeadroom`, and the usable viewport fields.
+
+There is now also a planned follow-up to make **large vertical** artworks start
+slightly farther away by adding a portrait-aware reset-fit boost.
 
 **The selected timeline picture looks cut off.**
 This should be fixed by v0.12. If it still happens, please send:

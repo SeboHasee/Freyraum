@@ -1,5 +1,35 @@
 # FINDINGS
 
+## 2026-05-19 — v0.14 planning pass: deeper close zoom, tighter pan edges, farther reset fit for large vertical artworks
+
+### Scope of this pass
+
+This is a documentation/planning pass only. No runtime code changed. The goal was to audit the current v0.13 zoom/pan/reset-fit code and record the exact places that must be tuned next.
+
+### Code-level findings
+
+- **Close zoom is still bounded by `MIN_VISIBLE_ARTWORK_FRACTION`, not only `MIN_CAMERA_Z`.**
+  `getInspectionMinZoom()` computes `heightDistance` and `widthDistance` from `MIN_VISIBLE_ARTWORK_FRACTION = 0.28` and then clamps with `MIN_CAMERA_Z = 0.5`. This means lowering only `MIN_CAMERA_Z` would not reliably produce a visibly closer zoom level on larger artworks. The next pass must tune both values together.
+
+- **Pan freedom is currently too loose because overscroll is a flat additive constant.**
+  `getPanLimits()` adds `INSPECTION_OVERSCROLL = 3.0` equally to `x` and `y`. Because the allowance is constant instead of aspect-sensitive, the camera can drift too far past the artwork edge even when only a modest amount of extra exploration is needed. The next pass should use a tighter capped allowance or reduce the constant to a middle value.
+
+- **Large vertical artworks still need extra reset distance.**
+  `getResetFitZoom()` uses one global `RESET_VIEW_FRAME_MARGIN = 1.04`. For strongly vertical artworks, `heightDistance` dominates, so the remaining “too close” feel is best addressed by a portrait-aware reset boost rather than by globally pushing every artwork farther away.
+
+### Planned implementation direction
+
+1. Lower the close-zoom floor by tuning **both** `MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`.
+2. Tighten the current edge freedom by replacing or reducing `INSPECTION_OVERSCROLL`.
+3. Add a portrait-sensitive reset-fit boost so large vertical artworks open a little farther away without weakening the normal fit for other formats.
+4. Extend diagnostics so the next tuning pass logs which constraint is active.
+
+### Validation status
+
+- No build/runtime validation was required in this pass because only markdown files were changed.
+
+---
+
 ## 2026-05-18 — v0.13 implementation pass: nav layout, zoom range, pan range, and icon centering
 
 ### Scope of this pass

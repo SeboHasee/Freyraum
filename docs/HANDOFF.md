@@ -1,9 +1,26 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current status: v0.13 nav/zoom/pan/icon follow-up is
-implemented.** See the new v0.13 section immediately below, then v0.12 for the
-zoom/framing/timeline pass, then v0.11 for the responsive/touch hardening.
+contributors. **Current runtime status: v0.13 nav/zoom/pan/icon follow-up is
+implemented; v0.14 tuning is planned.** See the new v0.14 planning section
+immediately below, then v0.13 for the last shipped pass, then v0.12 for the
+zoom/framing/timeline pass.
+
+## v0.14 zoom/pan/reset-fit tuning — Planned (2026-05-19)
+
+Remaining customer-reported tuning requests after v0.13:
+
+1. zoom-in should go even closer;
+2. the current edge freedom is now a bit too loose and should be tightened;
+3. large vertical artworks should still open a little farther away in reset view.
+
+**Source-audit result:**
+
+- closer zoom is still constrained by both `MIN_CAMERA_Z` and `MIN_VISIBLE_ARTWORK_FRACTION`;
+- edge looseness comes from `INSPECTION_OVERSCROLL = 3.0` being added flatly to both pan axes;
+- large vertical reset fit is still controlled by one global `RESET_VIEW_FRAME_MARGIN = 1.04`, so a portrait-aware boost is the next recommended step.
+
+**Planned direction:** tune close zoom, tighten pan overscroll, and add a portrait-sensitive reset-fit boost. No runtime code was changed in this documentation pass.
 
 ## v0.13 nav/zoom/pan/icon fixes — Implemented (2026-05-18)
 
