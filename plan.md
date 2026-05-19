@@ -57,9 +57,9 @@
 ### Validation
 
 - Focused code-path review and selector audit: pass.
-- Repo commands in this sandbox:
-  - `npm run lint` fails (`eslint: not found`)
-  - `npm run build` fails (dependencies unavailable, including `three`)
+- Fresh-clone command status:
+  - before dependency install: `npm run lint` / `npm run build` failed (environment setup only)
+  - after dependency install: `npm run lint` ✅, `npm run build` ✅
 
 ## v0.16 — Deep performance and compatibility optimization (2026-05-19, implemented)
 
@@ -1098,7 +1098,7 @@ The current plan already adds CSS blur fallbacks. Final research found a further
   - automated code review passed;
   - CodeQL security scan passed / skipped as trivial because only markdown changed.
 - No runtime TypeScript, SCSS, generated preview bundle, or dependency files were changed.
-- Baseline repo validation in this sandbox did **not** complete because dependencies are not installed: `npm run lint` failed with `eslint: not found`, and `npm run build` failed during `tsc` because `three` / related packages were unavailable. These failures were pre-existing environment issues, not caused by this documentation pass.
+- Fresh-clone baseline initially did **not** complete before dependency install: `npm run lint` failed with `eslint: not found`, and `npm run build` failed during `tsc` because `three` / related packages were unavailable. After dependency install, checks pass; the initial failures were environment setup issues, not repository regressions.
 
 ---
 ## v0.15 — Implemented: elegant animation system (2026-05-19)

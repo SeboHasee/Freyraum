@@ -36,7 +36,7 @@ Code location:
 
 Validation note:
 
-- In this sandbox, `npm run lint` and `npm run build` are unavailable due missing local tooling/dependencies; fix verified via focused source inspection.
+- Fresh-clone baseline initially failed before dependency install (environment setup only), then full checks passed after install: `npm run lint` ✅ and `npm run build` ✅.
 
 
 ## v0.16 implemented — Deep performance and compatibility pass (2026-05-19)

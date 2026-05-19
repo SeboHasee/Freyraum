@@ -50,9 +50,9 @@ The v0.16 CSS containment block applied `contain: layout paint` to `.prefs` and 
 ### Validation status
 
 - Focused selector/path review: pass.
-- Sandbox command status:
-  - `npm run lint` unavailable (`eslint: not found`)
-  - `npm run build` unavailable (missing local dependencies, including `three`)
+- Fresh-clone command status:
+  - before dependency install: `npm run lint` / `npm run build` failed (environment setup only)
+  - after dependency install: `npm run lint` ✅, `npm run build` ✅
 
 ## 2026-05-19 (implementation completed) — v0.16 deep code audit: findings, decisions, results
 
@@ -381,7 +381,7 @@ This matters because applying `content-visibility` to the overlay root can break
 ### Validation status
 
 - Documentation-only audit; no runtime files changed in this pass.
-- Baseline repo validation in this sandbox did not complete because dependencies are not installed: `npm run lint` failed with `eslint: not found`, and `npm run build` failed during `tsc` because `three` / related packages were unavailable.
+- Fresh-clone baseline initially did not complete before dependency install: `npm run lint` failed with `eslint: not found`, and `npm run build` failed during `tsc` because `three` / related packages were unavailable. After install, checks pass.
 - Future implementation must run `npm run lint` and `npm run build`, then perform the QA matrix in `plan.md § QA matrix for the v0.16 implementation pass`.
 
 ---

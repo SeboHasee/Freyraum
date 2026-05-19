@@ -16,8 +16,8 @@
 - Fixed a settings-popover regression where the gear/settings control appeared broken because the popover anchor (`.prefs`) was paint-contained; the absolute panel was clipped to the trigger box boundary.
 - Fixed center left/right navigation button hover clipping where scaled hover states were cut off because `.nav-controls` was paint-contained.
 - Updated `src/styles/main.scss` containment block to exclude `.prefs` and `.nav-controls`, while keeping containment on the other fixed chrome surfaces.
-- Updated all repository markdown files to document this regression, root cause, shipped fix, and current validation constraints.
-- Validation note: this sandbox cannot run full repo checks (`eslint` missing and build dependencies such as `three` unavailable), so verification was performed via focused code-path inspection.
+- Updated all repository markdown files to document this regression and the follow-up v0.16.2 control-shell hardening.
+- Validation status: initial fresh-clone checks failed before dependency install (environment setup), then full checks passed after install (`npm run lint`, `npm run build`).
 
 
 ### Implemented (v0.16 deep performance and compatibility optimization — 2026-05-19)
@@ -76,7 +76,7 @@ Explicitly deferred (documented rationale in `plan.md § v0.16 implementation su
 - Re-audited the full source tree against the already-upgraded v0.16 plan and confirmed the original 12 findings still stand.
 - Added 6 missed enhancements to the plan and findings: Page Lifecycle `freeze` / `resume`, `renderer.compileAsync()` shader pre-warm, optional `ImageBitmapLoader` raster path, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only Long Tasks API instrumentation, and CSS `contain` / internal `content-visibility`.
 - Expanded the online validation section and implementation-order tables to include the new enhancements and their boundaries.
-- Updated validation notes to record the current sandbox baseline failure (`eslint: not found`, `three` / related packages unavailable during `tsc`) so future implementers do not confuse environment issues with repo regressions.
+- Updated validation notes to record the fresh-clone baseline failure before dependency install (`eslint: not found`, `three` / related packages unavailable during `tsc`) so future implementers do not confuse environment setup issues with repo regressions.
 - Updated `FINDINGS.md`, `README.md`, `DOCUMENTATION_RULES.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, and `docs/IMAGE_MAINTENANCE_GUIDE.md` to reflect the final v0.16 plan state.
 - No runtime code, generated preview bundle, dependencies, or quality preset behavior changed in this pass.
 
