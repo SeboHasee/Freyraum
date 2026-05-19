@@ -6,6 +6,15 @@ You do **not** need to use a code editor, the terminal, or any technical tool.
 You only ever touch one folder and one button.
 
 
+## UI fix note (v0.16.1 implemented)
+
+On 2026-05-19 we shipped a small UI hotfix:
+
+- The settings gear now opens and works correctly again.
+- The center left/right navigation buttons are no longer visually cut off when hovered.
+
+This does not change your picture workflow or importer behavior.
+
 ## Performance status note (v0.16 implemented)
 
 The v0.16 performance pass is now live. It does **not** change how customers add pictures; picture quality and the data-URL embedding path are unchanged. What is new and may be visible to customers running the importer:

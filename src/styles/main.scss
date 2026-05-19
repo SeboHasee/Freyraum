@@ -1235,16 +1235,20 @@ button {
 // during the per-frame info-panel transitions and timeline scroll.
 .topbar,
 .info-panel,
-.nav-controls,
 .zoom-controls,
 .fullscreen-btn,
-.prefs,
 .prefs__panel,
 .timeline,
 .hint-text,
 .loading-overlay {
   contain: layout paint;
 }
+
+// Keep nav and prefs containers out of paint containment:
+// - `.nav-controls` hosts hover-scaled circular buttons that intentionally
+//   paint outside their static bounds.
+// - `.prefs` is the anchor for an absolutely-positioned popover that must
+//   paint and receive pointer events outside the 44x44 trigger box.
 
 // The animated loading spinner additionally benefits from `style`
 // containment because the rotation keyframes never affect ancestors.

@@ -1,5 +1,36 @@
 # FREYRAUM Plan
 
+## v0.16.1 — UI containment regression hotfix (2026-05-19, implemented)
+
+### Status
+
+**Implementation completed 2026-05-19.** Two customer-facing UI regressions were fixed directly in the shipped stylesheet.
+
+### Scope
+
+- Restore settings popover behavior.
+- Remove hover clipping on center left/right navigation buttons.
+- Keep v0.16 performance intent while narrowing containment to safe surfaces.
+
+### Implemented changes
+
+1. `src/styles/main.scss` containment block no longer includes:
+   - `.prefs`
+   - `.nav-controls`
+2. Containment remains enabled for the other fixed chrome elements.
+
+### Root-cause summary
+
+- `.prefs` is an anchor for an absolutely positioned popover (`.prefs__panel`), so paint containment clipped the panel to the trigger box.
+- `.nav-controls` hosts hover-scaled buttons; paint containment clipped the enlarged hover paint.
+
+### Validation
+
+- Focused code-path review and selector audit: pass.
+- Repo commands in this sandbox:
+  - `npm run lint` fails (`eslint: not found`)
+  - `npm run build` fails (dependencies unavailable, including `three`)
+
 ## v0.16 — Deep performance and compatibility optimization (2026-05-19, implemented)
 
 ### Status
@@ -24,7 +55,7 @@ The runtime now reflects every actionable v0.16 finding. Each item below cites t
 | 8 | Shader pre-warm | `src/core/RendererManager.ts`, `src/main.ts` | shipped | `RendererManager.prewarm(scene, camera)` calls `compileAsync()` (or `compile()` fallback). Called after boot and after every deferred preset apply. Failures are logged but never block startup. |
 | 9 | Device hints in startup heuristic | `src/utils/performance.ts` | shipped | `suggestStartupQuality()` now consults `navigator.deviceMemory` (≤ 0.5 GB → battery) and `navigator.hardwareConcurrency` (≤ 2 cores → battery). Hints only — missing values pass through to the prior viewport heuristic. |
 | 10 | Long Tasks observer | `src/main.ts` | shipped | Debug-only `PerformanceObserver({ type: 'longtask', buffered: true })` reports any task ≥ 50 ms. Logged as `[perf][warn] long-task`. Detached cleanly on `beforeunload`. |
-| 11 | CSS quality-aware paint + containment | `src/styles/main.scss`, `src/core/RendererManager.ts` | shipped | `RendererManager.applyPreset()` writes `:root[data-quality='high'\|'balanced'\|'battery']`. SCSS halves `--glass-blur` to `12px` on battery, falls back to a stronger solid surface when neither `backdrop-filter` nor its webkit prefix is supported, applies `contain: layout paint` to every fixed chrome surface, and `contain: strict` to the loading spinner. |
+| 11 | CSS quality-aware paint + containment | `src/styles/main.scss`, `src/core/RendererManager.ts` | shipped | `RendererManager.applyPreset()` writes `:root[data-quality='high'\|'balanced'\|'battery']`. SCSS halves `--glass-blur` to `12px` on battery, falls back to a stronger solid surface when neither `backdrop-filter` nor its webkit prefix is supported, applies containment to fixed chrome surfaces, and `contain: strict` to the loading spinner. (Refined in v0.16.1 to exclude `.prefs` and `.nav-controls`.) |
 | 12 | Importer texture-memory warnings | `scripts/import-artworks.mjs` | shipped | New warnings: (a) any side > 4096 px → "many phones cap textures at 4096"; (b) GPU footprint ≥ 128 MB → "phones may run out of memory"; (c) ≥ 64 MB → "large image, performance may be reduced". Footprint computed as `w × h × 4 × 4/3` to account for the RGBA8 mip pyramid. |
 | 13 | Dispose idempotency | `src/core/RendererManager.ts`, `src/interaction/CanvasInteraction.ts` | shipped | Both classes now ignore a second `dispose()` call. The boot path could otherwise race a context-loss shutdown with `beforeunload`. |
 

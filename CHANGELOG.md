@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed (v0.16.1 UI containment regression hotfix — 2026-05-19)
+
+- Fixed a settings-popover regression where the gear/settings control appeared broken because the popover anchor (`.prefs`) was paint-contained; the absolute panel was clipped to the trigger box boundary.
+- Fixed center left/right navigation button hover clipping where scaled hover states were cut off because `.nav-controls` was paint-contained.
+- Updated `src/styles/main.scss` containment block to exclude `.prefs` and `.nav-controls`, while keeping containment on the other fixed chrome surfaces.
+- Updated all repository markdown files to document this regression, root cause, shipped fix, and current validation constraints.
+- Validation note: this sandbox cannot run full repo checks (`eslint` missing and build dependencies such as `three` unavailable), so verification was performed via focused code-path inspection.
+
 
 ### Implemented (v0.16 deep performance and compatibility optimization — 2026-05-19)
 
@@ -25,7 +33,7 @@ CSS changes (battery preset paint cost + compatibility fallback):
 - **Quality data attribute.** `RendererManager.applyPreset()` writes `:root[data-quality='high'|'balanced'|'battery']` so SCSS can react without a JS round-trip.
 - **Battery glass blur halved.** `:root[data-quality='battery']` sets `--glass-blur: 12px` (was 26px). Blur cost is O(r²); the visual style survives, the pixel cost drops by ~75%.
 - **`backdrop-filter` fallback.** `@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))` replaces the glass surfaces with a solid `--glass-bg-strong` so older Firefox / embedded WebViews remain legible.
-- **CSS containment on fixed chrome.** `contain: layout paint` on every fixed-position chrome surface (`topbar`, `info-panel`, `nav-controls`, `zoom-controls`, `fullscreen-btn`, `prefs`, `prefs__panel`, `timeline`, `hint-text`, `loading-overlay`). The spinner adds `contain: strict`. The browser now skips the rest of the document when invalidating styles or rebuilding paint regions.
+- **CSS containment on fixed chrome.** `contain: layout paint` was added across fixed-position chrome in v0.16 and later refined in v0.16.1 by excluding `.prefs` and `.nav-controls` to avoid popover/hover clipping regressions. The spinner adds `contain: strict`.
 
 Importer changes (`scripts/import-artworks.mjs`):
 

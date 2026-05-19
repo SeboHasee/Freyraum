@@ -3,6 +3,26 @@
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
 
+## Current status — v0.16.1 UI containment regression hotfix implemented (2026-05-19)
+
+**Current build:** v0.16.1 fixes two customer-facing regressions introduced by the v0.16 CSS containment pass:
+
+- **Settings button behavior restored.** The preferences popover anchor (`.prefs`) is no longer paint-contained, so the panel can render and receive pointer input outside the 44×44 trigger box.
+- **Center nav hover clipping fixed.** The nav container (`.nav-controls`) is no longer paint-contained, so hover scale on left/right buttons is no longer visually cut off.
+
+What changed in code:
+
+- `src/styles/main.scss`: removed `.prefs` and `.nav-controls` from the `contain: layout paint` block; kept containment on the remaining fixed chrome surfaces.
+
+Validation for v0.16.1:
+
+- Root-cause review against `main.scss` containment rules ✅
+- Focused regression scan of prefs/nav selectors ✅
+- `npm run lint` ⚠️ unavailable in this sandbox (`eslint: not found`)
+- `npm run build` ⚠️ unavailable in this sandbox (missing local dependencies such as `three`)
+
+All repository markdown files were updated for this hotfix.
+
 ## Current status — v0.16 deep performance and compatibility pass implemented (2026-05-19)
 
 **Current build:** v0.16 is implemented on top of v0.15.1. Every actionable finding from the v0.16 audit is now in the runtime. No FREYRAUM fidelity surface (painting material, raking-light inspection, motion behaviour, reduced-motion rules, quality presets) is changed.
@@ -17,7 +37,7 @@ What v0.16 actually ships:
 - **Runtime renderer diagnostics.** `RendererManager.getRendererSnapshot()` exposes `renderer.info`; `main.ts` logs a `[renderer] snapshot` every 5 s in info/verbose mode. Customer bug reports now embed GPU resource history.
 - **Progressive startup hints.** `suggestStartupQuality()` now also consults `navigator.deviceMemory` (≤ 0.5 GB → battery) and `navigator.hardwareConcurrency` (≤ 2 cores → battery), but only as hints — missing values fall through to the prior viewport heuristic.
 - **Debug-only Long Tasks observer.** `PerformanceObserver({type:'longtask'})` logs tasks ≥ 50 ms as `[perf][warn] long-task` when diagnostics is in info/verbose mode.
-- **CSS quality + containment.** `:root[data-quality='battery']` halves `--glass-blur` from 26 px to 12 px. `@supports not (backdrop-filter)` falls back to a solid surface. Every fixed-position chrome surface adds `contain: layout paint`; the loading spinner adds `contain: strict`. `RendererManager.applyPreset()` writes the current preset id to `:root` so SCSS can react without a JS round-trip.
+- **CSS quality + containment.** `:root[data-quality='battery']` halves `--glass-blur` from 26 px to 12 px. `@supports not (backdrop-filter)` falls back to a solid surface. Fixed-position chrome surfaces use containment for paint/layout isolation, and the loading spinner uses `contain: strict`. `RendererManager.applyPreset()` writes the current preset id to `:root` so SCSS can react without a JS round-trip. *(v0.16.1 refines containment scope by excluding `.prefs` and `.nav-controls` to prevent clipping regressions.)*
 - **Importer GPU memory warnings.** `scripts/import-artworks.mjs` warns the customer when any image exceeds 4096 px on a side or its GPU footprint (RGBA8 with mip pyramid) exceeds 64 MB (notice) or 128 MB (strong warning).
 - **Dispose idempotency.** `RendererManager.dispose()` and `CanvasInteraction.dispose()` ignore a second call so the boot path can race a context-loss shutdown with `beforeunload` without leaking listeners.
 

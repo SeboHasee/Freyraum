@@ -1,5 +1,31 @@
 # FINDINGS
 
+## 2026-05-19 (implementation completed) — v0.16.1 UI containment regression hotfix
+
+### Observed regressions
+
+- The settings gear control was reported as "not working".
+- The center left/right navigation buttons were visibly cut off on hover.
+
+### Root cause
+
+The v0.16 CSS containment block applied `contain: layout paint` to `.prefs` and `.nav-controls` in `src/styles/main.scss`. Paint containment clips descendant painting to the containing element's box:
+
+- `.prefs` is only the 44×44 trigger anchor, while `.prefs__panel` is absolutely positioned outside that box, so the panel was clipped and effectively unusable.
+- `.nav-controls` contains hover-scaled circular buttons (`transform: scale(1.06)`), so the enlarged paint region was clipped at the container edge.
+
+### Shipped fix
+
+- Removed `.prefs` and `.nav-controls` from the containment block in `src/styles/main.scss`.
+- Kept containment for other fixed chrome surfaces where overflow paint is not required.
+
+### Validation status
+
+- Focused selector/path review: pass.
+- Sandbox command status:
+  - `npm run lint` unavailable (`eslint: not found`)
+  - `npm run build` unavailable (missing local dependencies, including `three`)
+
 ## 2026-05-19 (implementation completed) — v0.16 deep code audit: findings, decisions, results
 
 ### Implementation status snapshot
@@ -25,7 +51,7 @@ All 12 file-level findings plus the 6 researched enhancements documented in this
 | 15 | `ImageBitmapLoader` raster path (researched) | Deferred | Customer-preview path embeds data URLs; `createImageBitmap` against data URLs gives no measurable benefit on Safari |
 | 16 | `deviceMemory` / `hardwareConcurrency` hints (researched) | Implemented | `suggestStartupQuality()` consults both; values are pure hints |
 | 17 | Debug-only long-task observer (researched) | Implemented | `PerformanceObserver({type:'longtask'})` attached when diagnostics mode is non-default |
-| 18 | CSS `contain` / `content-visibility` (researched) | Implemented (containment only) | `contain: layout paint` on every fixed chrome surface; `contain: strict` on the spinner. `content-visibility` deferred because the glass overlay root must paint to host the canvas behind it. |
+| 18 | CSS `contain` / `content-visibility` (researched) | Implemented (containment only) | Containment applied to fixed chrome surfaces with `contain: strict` on the spinner; scope refined in v0.16.1 to exclude `.prefs` and `.nav-controls` due clipping regressions. `content-visibility` deferred because the glass overlay root must paint to host the canvas behind it. |
 
 ### Acceptance gates
 

@@ -5,6 +5,21 @@ contributors. **Current runtime status: v0.16 deep performance and
 compatibility pass is implemented (on top of the earlier v0.15 and v0.14.2
 passes).**
 
+## v0.16.1 implemented — UI hotfix (settings + center nav hover clipping)
+
+Customer-reported regression fixed on 2026-05-19:
+
+- **Settings button/panel works again.** `.prefs` was removed from CSS paint containment so the absolute popover is no longer clipped to the trigger box.
+- **Center left/right hover clipping removed.** `.nav-controls` was removed from CSS paint containment so hover-scaled nav buttons paint fully.
+
+Code location:
+
+- `src/styles/main.scss` (containment block near the v0.16 quality/fallback section)
+
+Validation note:
+
+- In this sandbox, `npm run lint` and `npm run build` are unavailable due missing local tooling/dependencies; fix verified via focused source inspection.
+
 
 ## v0.16 implemented — Deep performance and compatibility pass (2026-05-19)
 

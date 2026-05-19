@@ -6,6 +6,14 @@ It is meant for the person who maintains the project folder, supports the custom
 or needs to understand why an image does or does not appear in the gallery.
 
 
+## v0.16.1 implemented — UI containment regression hotfix (2026-05-19)
+
+Maintenance-relevant UI correction:
+
+- `.prefs` and `.nav-controls` were removed from the CSS `contain: layout paint` block in `src/styles/main.scss`.
+- Reason: settings popover clipping and nav hover clipping regressions from overly broad containment.
+- Impact: settings popover interaction is restored; center nav hover visuals are restored; image/import pipeline is unaffected.
+
 ## v0.16 implemented — Deep performance and compatibility pass (2026-05-19)
 
 The v0.16 audit was implemented on 2026-05-19. From a maintenance and importer perspective:
