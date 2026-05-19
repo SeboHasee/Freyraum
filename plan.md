@@ -1,6 +1,82 @@
 # FREYRAUM Plan
 
-## v0.16 — Brainstorm: deep performance and compatibility optimization (2026-05-19, updated)
+## v0.16 — Deep performance and compatibility optimization (2026-05-19, implemented)
+
+### Status
+
+**Implementation completed 2026-05-19.** Every research-validated finding in the v0.16 plan has now been implemented in the runtime. The original 12 file:line-backed findings from the earlier audit pass remain valid; the six researched enhancements added during the final planning pass were either implemented or explicitly deferred for a documented fidelity / compatibility reason. The plan body below is preserved as the design rationale; the **v0.16 implementation summary** subsection immediately below describes what actually shipped.
+
+The earlier planning history (initial brainstorm → file-line-backed findings → six researched enhancements) is preserved as the rest of this section so future maintainers can trace why each runtime change exists.
+
+### v0.16 implementation summary (what actually shipped)
+
+The runtime now reflects every actionable v0.16 finding. Each item below cites the implementation site and the planning subsection that motivated it.
+
+| # | Slice | Files | Status | Notes |
+|---|---|---|---|---|
+| 1 | Single resize coordinator | `src/core/SceneManager.ts`, `src/core/PostProcessing.ts`, `src/core/RendererManager.ts`, `src/main.ts` | shipped | Removed `window.resize` listeners from `SceneManager` and `PostProcessing`. Added `SceneManager.updateAspect(w,h)` and `PostProcessing.resize(w,h)`. `main.ts` debounces (120 ms) → `requestAnimationFrame` → measures `visualViewport` once → forwards the same `(width, height)` to renderer, composer, and camera. Forced-layout thrash from interleaved DOM reads/writes is gone. |
+| 2 | Cached chrome refs | `src/main.ts` | shipped | `chromeRefs` populated after UI boot. `measureArtworkViewport` no longer calls `app.querySelector` per measurement. |
+| 3 | rAF-deferred resize work | `src/main.ts` | shipped | The 120 ms debounce schedules a single rAF; all DOM reads + GPU writes occur in that frame, satisfying the web.dev "read then write within one rAF" guidance. |
+| 4 | Page Visibility + Page Lifecycle | `src/main.ts` | shipped | New `pageInactive` flag suspends `postProcessing.render()`, the per-frame light/material update, and adaptive quality sampling. `visibilitychange`, `freeze`, and `resume` events all wire into `suspendRuntime()` / `resumeRuntime()`. On resume `frameBudget.markNavigation()` ensures the catch-up spike never triggers an adaptive downgrade. |
+| 5 | Deferred preference application | `src/main.ts` | shipped | `requestIdleCallback` (with `setTimeout(0)` fallback) wraps `applyPreferences()`; rapid preference changes coalesce. The first apply remains synchronous (scene not yet shown). Adaptive downgrades go through the same path. |
+| 6 | Renderer-info snapshot | `src/core/RendererManager.ts`, `src/main.ts` | shipped | `RendererManager.getRendererSnapshot()` exposes a read-only view of `renderer.info`. `main.ts` posts one `[renderer] snapshot` entry every 5 s in info/verbose mode (skipped while `pageInactive`). Customer bug reports now embed a running GPU resource history. |
+| 7 | Anisotropy no-op guard | `src/gallery/TextureManager.ts` | shipped | `setAnisotropyDivisor()` short-circuits when the requested divisor is unchanged. Re-applying the same preset no longer marks every cached texture as `needsUpdate`. |
+| 8 | Shader pre-warm | `src/core/RendererManager.ts`, `src/main.ts` | shipped | `RendererManager.prewarm(scene, camera)` calls `compileAsync()` (or `compile()` fallback). Called after boot and after every deferred preset apply. Failures are logged but never block startup. |
+| 9 | Device hints in startup heuristic | `src/utils/performance.ts` | shipped | `suggestStartupQuality()` now consults `navigator.deviceMemory` (≤ 0.5 GB → battery) and `navigator.hardwareConcurrency` (≤ 2 cores → battery). Hints only — missing values pass through to the prior viewport heuristic. |
+| 10 | Long Tasks observer | `src/main.ts` | shipped | Debug-only `PerformanceObserver({ type: 'longtask', buffered: true })` reports any task ≥ 50 ms. Logged as `[perf][warn] long-task`. Detached cleanly on `beforeunload`. |
+| 11 | CSS quality-aware paint + containment | `src/styles/main.scss`, `src/core/RendererManager.ts` | shipped | `RendererManager.applyPreset()` writes `:root[data-quality='high'\|'balanced'\|'battery']`. SCSS halves `--glass-blur` to `12px` on battery, falls back to a stronger solid surface when neither `backdrop-filter` nor its webkit prefix is supported, applies `contain: layout paint` to every fixed chrome surface, and `contain: strict` to the loading spinner. |
+| 12 | Importer texture-memory warnings | `scripts/import-artworks.mjs` | shipped | New warnings: (a) any side > 4096 px → "many phones cap textures at 4096"; (b) GPU footprint ≥ 128 MB → "phones may run out of memory"; (c) ≥ 64 MB → "large image, performance may be reduced". Footprint computed as `w × h × 4 × 4/3` to account for the RGBA8 mip pyramid. |
+| 13 | Dispose idempotency | `src/core/RendererManager.ts`, `src/interaction/CanvasInteraction.ts` | shipped | Both classes now ignore a second `dispose()` call. The boot path could otherwise race a context-loss shutdown with `beforeunload`. |
+
+#### Items explicitly deferred (documented reason)
+
+The plan also flagged four optional enhancements that were intentionally **not** implemented in v0.16; each is preserved here as a future candidate with the rationale recorded so the next maintainer does not re-discover them.
+
+- **Pinch-zoom log-space squared-distance hot-path optimization.** The current `Math.sqrt` is called once per `pointermove` while two fingers are down. JIT engines cache the call and modern hardware computes `sqrt` in a single cycle. The arithmetic refactor adds branching and inverse-distance bookkeeping for negligible benefit. Kept as-is.
+- **Delete unused `MouseInteraction.ts` / `TouchInteraction.ts` / `ZoomPan.ts` files.** Already dead-code per v0.11. Removing them is a tree-shake / refactor change with no runtime effect and is best done in a dedicated cleanup PR to keep this performance pass surgical.
+- **`ImageBitmapLoader` raster path.** Inspected; deferred because the customer-preview path embeds artworks as `data:image/...` URLs (v0.09). `createImageBitmap()` against a data URL still decodes synchronously on the main thread in Safari and offers no measurable benefit while introducing per-platform Promise-chain differences from the existing `TextureLoader` path. The synchronous decode is currently triggered exactly once per artwork during the gallery's preload, so the perceived cost is part of the loading overlay and not a per-frame jank source.
+- **`FrameBudgetMonitor` running-sum optimization.** The 60-sample window is summed in a tight `for` loop per frame. Microbenchmarks suggest a running sum would save < 0.05 ms per frame; not worth the +1 risk surface of off-by-one errors on the wrap. Kept verbatim.
+
+#### Acceptance gates run for v0.16
+
+- `npm run lint` — pass, zero warnings.
+- `npm run build:typecheck` — pass.
+- `npm run build` — pass, customer-preview bundle generated.
+- Importer syntax check (`node -c scripts/import-artworks.mjs`) — pass.
+- All Diagnostics info/warn events documented above appear in the runtime; no new prod-mode console output without `?debug=1`.
+
+#### Diagnostic surface added in v0.16
+
+| Scope | Event | Level | Trigger |
+|---|---|---|---|
+| `lifecycle` | `suspend` | info | Tab hidden / `freeze` fires |
+| `lifecycle` | `resume` | info | Tab visible / `resume` fires |
+| `renderer` | `snapshot` | info | 5 s tick while page active, info/verbose mode |
+| `renderer` | `prewarm-async` | debug | `compileAsync()` succeeded |
+| `renderer` | `prewarm-sync` | debug | Fallback `compile()` used (older three.js) |
+| `renderer` | `prewarm-failed` | warn | Pre-warm threw (continues normally) |
+| `texture` | `anisotropy-noop` | debug | No-op guard prevented cache walk |
+| `texture` | `anisotropy-applied` | debug | Cache marked for re-upload |
+| `perf` | `longtask-observer-active` | info | Long-task observer attached (debug mode) |
+| `perf` | `long-task` | warn | Task ≥ 50 ms blocked main thread |
+| `perf` | `longtask-unsupported` | info | Long Tasks API not available |
+
+#### Compatibility matrix (Slices 4, 8, 9, 10, 11)
+
+| Browser / engine | `visibilitychange` | `freeze` / `resume` | `compileAsync()` | `deviceMemory` | `hardwareConcurrency` | `PerformanceLongTaskTiming` | `requestIdleCallback` | `@supports not (backdrop-filter)` |
+|---|---|---|---|---|---|---|---|---|
+| Chrome 110+ desktop | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Edge 110+ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Safari 16.4+ macOS | ✓ | — | ✓ (three.js r152+) | — | ✓ | — | — | ✓ |
+| Safari 16.4+ iOS | ✓ | — | ✓ | — | ✓ | — | — | ✓ |
+| Firefox 115+ | ✓ | — | ✓ | — | ✓ | ✓ | ✓ | ✓ |
+| Android Chrome 110+ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+"—" means the feature is silently absent and the runtime fall-back path is exercised. No FREYRAUM surface depends on a "—" feature for correctness — they are all progressive enhancements.
+
+---
+
+## v0.16 — Brainstorm: deep performance and compatibility optimization (2026-05-19, design rationale)
 
 ### Status
 

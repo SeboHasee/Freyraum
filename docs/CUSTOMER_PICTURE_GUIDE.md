@@ -6,7 +6,17 @@ You do **not** need to use a code editor, the terminal, or any technical tool.
 You only ever touch one folder and one button.
 
 
-## Performance planning note (v0.16 final plan)
+## Performance status note (v0.16 implemented)
+
+The v0.16 performance pass is now live. It does **not** change how customers add pictures; picture quality and the data-URL embedding path are unchanged. What is new and may be visible to customers running the importer:
+
+- **Importer warnings.** The "last-import-report.txt" file now flags very large images: anything wider or taller than 4096 px ("many phones cap textures at this size") and anything that would need ~64 MB or ~128 MB of GPU memory ("performance may be reduced" / "phones may run out of memory and skip the texture"). These are *notices*, not errors — the import still completes — but customers who see them can downscale before shipping to reduce risk on visitor phones.
+- **Battery-mode visual polish.** On low-end devices or when "Akkusparend" is active, the glass panels use a slightly less expensive blur. The picture itself is rendered identically; only the chrome paint cost drops.
+- **Better resume behaviour.** Switching tabs and returning no longer causes a brief quality downgrade.
+
+The previously planned `ImageBitmapLoader` raster path was explicitly deferred (no Safari benefit against the data-URL embedding the importer already produces). The customer-facing offline `file://` preview and the embedded `webglImage` behaviour remain authoritative.
+
+## Performance planning note (v0.16 final plan — historical)
 
 The v0.16 plan is now a code-sample-backed brainstorm with specific TypeScript and SCSS implementation proposals. It does **not** change how customers add pictures today. The planned work keeps picture quality intact.
 

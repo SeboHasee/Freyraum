@@ -3,6 +3,57 @@
 ## Unreleased
 
 
+### Implemented (v0.16 deep performance and compatibility optimization — 2026-05-19)
+
+This release implements every actionable finding from the v0.16 audit while preserving 100% of FREYRAUM's museum-grade fidelity. There are no changes to material shading, painting relief, raking-light inspection, or motion behaviour; all changes are restricted to scheduling, GPU resource lifetime, runtime measurement, capability progressive enhancement, and CSS paint-cost reduction on the existing battery preset.
+
+Runtime changes:
+
+- **Single resize coordinator.** Removed `window.resize` listeners from `SceneManager` and `PostProcessing`. New public methods `SceneManager.updateAspect(w, h)` and `PostProcessing.resize(w, h)` are driven exclusively from `main.ts`. The coordinator debounces all resize sources for 120 ms, then runs all DOM reads and GPU writes inside a single `requestAnimationFrame`, eliminating forced-layout thrash on mobile orientation changes.
+- **Cached chrome refs.** `main.ts` populates `chromeRefs` (topbar, timeline, nav controls, info panel) once after UI construction. `measureArtworkViewport` no longer calls `app.querySelector` per resize.
+- **Page Visibility + Page Lifecycle.** New `pageInactive` flag suspends `postProcessing.render()`, the per-frame light/material updates, and adaptive-quality sampling when the tab is hidden or frozen. `visibilitychange`, `freeze`, and `resume` events all route through `suspendRuntime` / `resumeRuntime`. On resume, `frameBudget.markNavigation()` guards against an adaptive downgrade caused by the catch-up spike.
+- **Deferred preference application.** Repeated preference changes coalesce via `requestIdleCallback` (with `setTimeout(0)` fallback). The first apply remains synchronous because the scene is not yet shown. Adaptive downgrades route through the same path so they never land mid-frame.
+- **Shader pre-warm.** New `RendererManager.prewarm(scene, camera)` calls three.js's `compileAsync()` (or falls back to `compile()`) after boot and after every deferred preset apply. Failures are logged but never block startup.
+- **Anisotropy no-op guard.** `TextureManager.setAnisotropyDivisor()` short-circuits when the divisor is unchanged, preventing a GPU texture re-upload on every preference re-apply.
+- **Renderer-info snapshot.** New `RendererManager.getRendererSnapshot()` exposes a read-only view of `renderer.info`. `main.ts` logs one `[renderer] snapshot` entry every 5 s in info/verbose diagnostics mode, providing a running GPU resource history in customer bug reports.
+- **Progressive startup hints.** `suggestStartupQuality()` now consults `navigator.deviceMemory` (≤ 0.5 GB → battery) and `navigator.hardwareConcurrency` (≤ 2 cores → battery). Missing values pass through to the prior viewport-area heuristic.
+- **Long Tasks observer.** Debug-only `PerformanceObserver({ type: 'longtask', buffered: true })` logs any task ≥ 50 ms as `[perf][warn] long-task`. Detached on `beforeunload`.
+- **Dispose idempotency.** `RendererManager.dispose()` and `CanvasInteraction.dispose()` guard against double-invocation that previously could race a context-loss shutdown with `beforeunload`.
+
+CSS changes (battery preset paint cost + compatibility fallback):
+
+- **Quality data attribute.** `RendererManager.applyPreset()` writes `:root[data-quality='high'|'balanced'|'battery']` so SCSS can react without a JS round-trip.
+- **Battery glass blur halved.** `:root[data-quality='battery']` sets `--glass-blur: 12px` (was 26px). Blur cost is O(r²); the visual style survives, the pixel cost drops by ~75%.
+- **`backdrop-filter` fallback.** `@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)))` replaces the glass surfaces with a solid `--glass-bg-strong` so older Firefox / embedded WebViews remain legible.
+- **CSS containment on fixed chrome.** `contain: layout paint` on every fixed-position chrome surface (`topbar`, `info-panel`, `nav-controls`, `zoom-controls`, `fullscreen-btn`, `prefs`, `prefs__panel`, `timeline`, `hint-text`, `loading-overlay`). The spinner adds `contain: strict`. The browser now skips the rest of the document when invalidating styles or rebuilding paint regions.
+
+Importer changes (`scripts/import-artworks.mjs`):
+
+- **GPU texture-memory warnings.** New warnings on import: (a) any side larger than 4096 px ("many phones cap textures at 4096"); (b) GPU footprint ≥ 128 MB ("phones may run out of memory and skip the texture"); (c) ≥ 64 MB ("performance may be reduced on low-end phones"). Footprint computed as `width × height × 4 × 4/3` to account for the RGBA8 mip pyramid.
+
+Diagnostic surface (new info-mode entries):
+
+- `[lifecycle] suspend` / `resume`
+- `[renderer] snapshot` (5 s while active)
+- `[renderer] prewarm-async` / `prewarm-sync` / `prewarm-failed`
+- `[texture] anisotropy-noop` / `anisotropy-applied` (debug level)
+- `[perf] longtask-observer-active` / `long-task` / `longtask-unsupported`
+
+Acceptance gates:
+
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `node -c scripts/import-artworks.mjs` ✅
+
+Explicitly deferred (documented rationale in `plan.md § v0.16 implementation summary`):
+
+- Pinch-zoom log-space squared-distance refactor (negligible measurable benefit).
+- `ImageBitmapLoader` raster path (no Safari benefit against data URLs).
+- `FrameBudgetMonitor` running-sum optimization (< 0.05 ms/frame benefit, +1 risk).
+- Deletion of dead-code `MouseInteraction.ts` / `TouchInteraction.ts` / `ZoomPan.ts` (left for a dedicated cleanup PR).
+- `content-visibility` on the glass overlay root (cannot be applied without breaking the blur layer behind it).
+
 ### Documentation (v0.16 final audited brainstorm — 2026-05-19)
 
 - Re-audited the full source tree against the already-upgraded v0.16 plan and confirmed the original 12 findings still stand.

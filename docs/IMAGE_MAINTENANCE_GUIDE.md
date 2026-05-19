@@ -6,7 +6,17 @@ It is meant for the person who maintains the project folder, supports the custom
 or needs to understand why an image does or does not appear in the gallery.
 
 
-## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19, final)
+## v0.16 implemented — Deep performance and compatibility pass (2026-05-19)
+
+The v0.16 audit was implemented on 2026-05-19. From a maintenance and importer perspective:
+
+- **Importer warnings.** `scripts/import-artworks.mjs` now emits new warnings in `customer-artworks/last-import-report.txt` when an image exceeds 4096 px on a side, or its GPU footprint (RGBA8 with mip pyramid: `w × h × 4 × 4/3`) exceeds 64 MB (info-level notice) or 128 MB (strong warning). These are advisory; the manifest is still written.
+- **Renderer diagnostics for support cases.** When `?debug=1` is set, the console now contains periodic `[renderer] snapshot` entries with draw calls, triangle counts, geometries, textures, program count, pixel ratio, and current preset. Customers reporting performance issues can share their console log; the new entries make it easier to identify undersized phones or oversize textures.
+- **Battery preset is now visually softer.** Glass-panel blur is halved on the battery preset (CSS-only — no shader change). Picture quality and the data-URL embedding path are unchanged.
+- **Dead-code cleanup deferred.** The unused `MouseInteraction`, `TouchInteraction`, and `ZoomPan` files remain on disk pending a dedicated refactor PR. They are not part of the active runtime; do not touch them when adjusting interaction behaviour.
+- **Manifest contract unchanged.** Nothing in the importer output shape changes; only new warning text may appear in the human-readable report.
+
+## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19, design history)
 
 The v0.16 plan has now received its final documentation update. The original 12 file:line-anchored findings remain valid, and the final pass added 6 researched enhancements. Maintenance-relevant priorities:
 

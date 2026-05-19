@@ -5,7 +5,25 @@ contributors. **Current runtime status: v0.15 elegant animation system is
 implemented, on top of the v0.14.2 zoom/pan/reset-fit follow-up.**
 
 
-## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19 final)
+## v0.16 implemented — Deep performance and compatibility pass (2026-05-19)
+
+The v0.16 audit is now live in the runtime. Every actionable finding was implemented; four optional items were explicitly deferred with documented rationale (pinch hot-path micro-optimization, `ImageBitmapLoader`, `FrameBudgetMonitor` running sum, deletion of v0.11 dead-code interaction files). Highlights:
+
+- **Single resize coordinator** in `main.ts` (debounce + rAF + measured `(w,h)` forwarded to renderer, composer, and camera). `SceneManager.updateAspect()` and `PostProcessing.resize()` replace the old per-class `window.resize` listeners.
+- **Page Visibility + Page Lifecycle suspension.** `pageInactive` flag gates `postProcessing.render()` and per-frame light/material updates; `frameBudget.markNavigation()` is called on resume to suppress adaptive downgrades from the catch-up spike.
+- **`RendererManager.prewarm()`** calls `compileAsync()` after boot and every deferred preset apply.
+- **`RendererManager.getRendererSnapshot()`** + 5 s periodic info-mode log of `renderer.info`.
+- **Anisotropy no-op guard** in `TextureManager.setAnisotropyDivisor()`.
+- **Idle-scheduled preference apply** with `setTimeout(0)` fallback.
+- **`navigator.deviceMemory` + `hardwareConcurrency`** hints in `suggestStartupQuality()`.
+- **Debug-only Long Tasks observer** in `main.ts`.
+- **CSS containment + battery-preset blur reduction + `@supports` `backdrop-filter` fallback** in `main.scss`; `:root[data-quality]` mirror written by `RendererManager.applyPreset()`.
+- **Importer GPU texture-memory warnings** (>4096 px and >64 MB / >128 MB GPU footprint).
+- **Dispose idempotency** in `RendererManager` and `CanvasInteraction`.
+
+Validated with `npm run lint`, `npm run build`, and `node -c scripts/import-artworks.mjs`.
+
+## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19 final, design history)
 
 The v0.16 plan is now the **final** audited brainstorm. The original 12 file:line-anchored findings still stand, and the final pass added 6 researched enhancements: Page Lifecycle `freeze` / `resume`, shader pre-warm with `renderer.compileAsync()`, optional `ImageBitmapLoader` raster path, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only Long Tasks API instrumentation, and CSS `contain` / internal `content-visibility`. No runtime code was changed.
 

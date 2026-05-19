@@ -3,19 +3,36 @@
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
 
-## Current planning pass — v0.16 final audited brainstorm (2026-05-19)
+## Current status — v0.16 deep performance and compatibility pass implemented (2026-05-19)
 
-The v0.16 performance plan has now received its **final documentation update**. It is a code-sample-backed, file:line-anchored brainstorm validated against the current FREYRAUM source tree and fresh online guidance. The original 12 findings remain valid, and the final pass added six missed enhancements: Page Lifecycle `freeze` / `resume`, shader pre-warm via `renderer.compileAsync()`, optional `ImageBitmapLoader` for raster decode, `deviceMemory` / `hardwareConcurrency` first-run hints, debug-only long-task observation, and CSS `contain` / internal `content-visibility`.
+**Current build:** v0.16 is implemented on top of v0.15.1. Every actionable finding from the v0.16 audit is now in the runtime. No FREYRAUM fidelity surface (painting material, raking-light inspection, motion behaviour, reduced-motion rules, quality presets) is changed.
 
-Key findings still start with the core repo issues: redundant resize listeners, DOM re-query/layout work in the resize path, missing hidden/frozen tab pause, interaction hot-path cleanup, define-change shader hitches, missing renderer diagnostics, texture re-upload guards, importer texture-memory warnings, and fixed-glass CSS cost controls.
+What v0.16 actually ships:
 
-See [`plan.md § v0.16`](./plan.md#v016--brainstorm-deep-performance-and-compatibility-optimization-2026-05-19-updated) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19-updated--v016-deep-code-audit-file-level-findings-and-implementation-research) for the final audited plan, additional researched enhancements, and the full device compatibility + QA matrix.
+- **Unified resize coordinator.** `window.resize` listeners removed from `SceneManager` and `PostProcessing`; new `SceneManager.updateAspect(w,h)` and `PostProcessing.resize(w,h)` are driven from `main.ts`, which debounces (120 ms) and batches all DOM reads + GPU writes inside one `requestAnimationFrame`. No more forced layout thrash on mobile orientation changes.
+- **Page Visibility + Page Lifecycle suspension.** The render path is gated by a `pageInactive` flag that responds to `visibilitychange`, `freeze`, and `resume`. The frame budget catch-up spike on resume is suppressed so adaptive quality never downgrades from a backgrounded tab.
+- **Shader pre-warm.** `RendererManager.prewarm()` calls three.js's `compileAsync()` (or falls back to `compile()`) after boot and after every deferred preset apply. First interactions no longer pay a JIT compile cost.
+- **Idle-scheduled preference apply.** `applyPreferences()` runs in `requestIdleCallback` (with `setTimeout(0)` fallback) after the first synchronous boot apply; repeated preference changes coalesce.
+- **Anisotropy no-op guard.** `TextureManager.setAnisotropyDivisor()` short-circuits when the divisor is unchanged; no more wasted GPU re-uploads on preset re-apply.
+- **Runtime renderer diagnostics.** `RendererManager.getRendererSnapshot()` exposes `renderer.info`; `main.ts` logs a `[renderer] snapshot` every 5 s in info/verbose mode. Customer bug reports now embed GPU resource history.
+- **Progressive startup hints.** `suggestStartupQuality()` now also consults `navigator.deviceMemory` (≤ 0.5 GB → battery) and `navigator.hardwareConcurrency` (≤ 2 cores → battery), but only as hints — missing values fall through to the prior viewport heuristic.
+- **Debug-only Long Tasks observer.** `PerformanceObserver({type:'longtask'})` logs tasks ≥ 50 ms as `[perf][warn] long-task` when diagnostics is in info/verbose mode.
+- **CSS quality + containment.** `:root[data-quality='battery']` halves `--glass-blur` from 26 px to 12 px. `@supports not (backdrop-filter)` falls back to a solid surface. Every fixed-position chrome surface adds `contain: layout paint`; the loading spinner adds `contain: strict`. `RendererManager.applyPreset()` writes the current preset id to `:root` so SCSS can react without a JS round-trip.
+- **Importer GPU memory warnings.** `scripts/import-artworks.mjs` warns the customer when any image exceeds 4096 px on a side or its GPU footprint (RGBA8 with mip pyramid) exceeds 64 MB (notice) or 128 MB (strong warning).
+- **Dispose idempotency.** `RendererManager.dispose()` and `CanvasInteraction.dispose()` ignore a second call so the boot path can race a context-loss shutdown with `beforeunload` without leaking listeners.
 
-## Current status — v0.15 elegant animation system implemented (2026-05-19)
+Validation for v0.16:
 
-**Current build:** v0.15 is implemented. v0.14.2 zoom/pan tuning is preserved unchanged.
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅ (`tsc` clean; preview bundles regenerated)
+- Importer syntax check ✅
 
-v0.15 ships a museum-elegant motion system on top of v0.14.2:
+See [`plan.md § v0.16 implementation summary`](./plan.md#v016--deep-performance-and-compatibility-optimization-2026-05-19-implemented) and [`FINDINGS.md`](./FINDINGS.md) for the implementation matrix, deferred items with rationale, and the device compatibility matrix.
+
+## Previous status — v0.15 elegant animation system implemented (2026-05-19)
+
+v0.14.2 zoom/pan tuning is preserved unchanged. v0.15 ships a museum-elegant motion system on top of v0.14.2:
 
 - **frame-rate-independent smoothing**: new `smoothDamp(current, target, lambda, dt)` in `src/utils/math.ts`; all 13 prior per-frame lerps in `GalleryManager.update()` converted to lambda-based smoothing (+1 new line for the new `position.z` recession). Motion timing is now identical on 60 Hz, 90 Hz, 120 Hz, and 30 Hz screens;
 - **witnessable artwork entrances**: navigation seeds retuned (`position.x` ±3.2 → ±4.5, `rotation.y` ±0.32 rad → ±0.15 rad, `scale` 0.84 → 0.88, new `position.z` = -0.6 depth recession), settling over ~1200 ms with λ=2.5;

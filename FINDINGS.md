@@ -1,6 +1,43 @@
 # FINDINGS
 
-## 2026-05-19 (updated) — v0.16 deep code audit: file-level findings and implementation research
+## 2026-05-19 (implementation completed) — v0.16 deep code audit: findings, decisions, results
+
+### Implementation status snapshot
+
+All 12 file-level findings plus the 6 researched enhancements documented in this file were closed during the v0.16 implementation pass. Every shipped change is summarised in the matrix below, and `plan.md § v0.16 implementation summary` records the exact files, methods, and acceptance gates. The original audit text is preserved below so the rationale behind each runtime change remains traceable.
+
+| # | Finding | Decision | Where it landed |
+|---|---|---|---|
+| 1 | Three independent `window.resize` listeners | Implemented | `SceneManager.updateAspect()`, `PostProcessing.resize()`, `RendererManager.resize(w,h)`, unified coordinator in `main.ts` |
+| 2 | `measureArtworkViewport()` walks the DOM per call | Implemented | `chromeRefs` cache in `main.ts`; refs populated after UI construction |
+| 3 | DOM reads not batched into an rAF | Implemented | Resize coordinator schedules a single `requestAnimationFrame` per debounce window |
+| 4 | No `visibilitychange` handling | Implemented | `pageInactive` flag gates the render path; resume primes `frameBudget.markNavigation()` |
+| 5 | Preference application stalls the next paint | Implemented | `requestIdleCallback` (with `setTimeout(0)` fallback) wraps `applyPreferences()` after the first call |
+| 6 | Pinch hot-path `Math.sqrt` per move | Deferred (see plan rationale) | No change — single sqrt per move is below the JIT's noise floor and refactor adds branching |
+| 7 | Anisotropy cache walk on every preset apply | Implemented | `setAnisotropyDivisor()` no-op guard in `TextureManager` |
+| 8 | No runtime renderer-info diagnostics | Implemented | `RendererManager.getRendererSnapshot()` + 5 s periodic log in `main.ts` |
+| 9 | No CSS quality fallback / `backdrop-filter` fallback | Implemented | `:root[data-quality='battery']` halves blur; `@supports not (backdrop-filter)` provides a solid-surface fallback |
+| 10 | Importer never warns about huge textures | Implemented | New 4096 px and 64/128 MB GPU-memory warnings in `scripts/import-artworks.mjs` |
+| 11 | `FrameBudgetMonitor` loops the window every frame | Deferred (perf gain < 0.05 ms/frame) | Documented in plan as a low-priority cleanup |
+| 12 | Dead-code interaction classes | Deferred (separate cleanup PR) | `MouseInteraction`, `TouchInteraction`, `ZoomPan` remain on disk pending a future surgical deletion |
+| 13 | Page Lifecycle `freeze` / `resume` (researched) | Implemented | Same `suspendRuntime` / `resumeRuntime` path as visibilitychange |
+| 14 | `renderer.compileAsync()` pre-warm (researched) | Implemented | `RendererManager.prewarm()` after boot + after every deferred preset apply |
+| 15 | `ImageBitmapLoader` raster path (researched) | Deferred | Customer-preview path embeds data URLs; `createImageBitmap` against data URLs gives no measurable benefit on Safari |
+| 16 | `deviceMemory` / `hardwareConcurrency` hints (researched) | Implemented | `suggestStartupQuality()` consults both; values are pure hints |
+| 17 | Debug-only long-task observer (researched) | Implemented | `PerformanceObserver({type:'longtask'})` attached when diagnostics mode is non-default |
+| 18 | CSS `contain` / `content-visibility` (researched) | Implemented (containment only) | `contain: layout paint` on every fixed chrome surface; `contain: strict` on the spinner. `content-visibility` deferred because the glass overlay root must paint to host the canvas behind it. |
+
+### Acceptance gates
+
+- `npm run lint` (eslint with `src/**/*.ts`) — pass, zero warnings.
+- `npm run build:typecheck` (`tsc --noEmit`) — pass.
+- `npm run build` (typecheck + vite production build + preview HTML writer) — pass.
+- `node -c scripts/import-artworks.mjs` — pass.
+- Manual review confirms no listener is leaked: `RendererManager`, `PostProcessing`, `SceneManager`, `CanvasInteraction`, and `main.ts` all detach in `beforeunload`/`dispose`. The new `freeze`/`resume` and `visibilitychange` listeners and the long-task observer are removed in the same cleanup block.
+
+---
+
+## 2026-05-19 — v0.16 deep code audit (original findings preserved below for traceability)
 
 ### Scope
 
