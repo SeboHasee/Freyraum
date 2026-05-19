@@ -1,210 +1,529 @@
 # FREYRAUM Plan
 
-## v0.15 — Planned: smoother, longer, elegant animation system (research pass, 2026-05-19)
+## v0.15 — Planned: elegant animation system — full technical brainstorm (2026-05-19)
 
 ### Status
 
-**Planned, not implemented yet.** This documentation pass responds to the request to make FREYRAUM animations smoother, longer, more visible, and more elegant while preserving the modern art-gallery aesthetic. No runtime code was changed in this pass.
+**Planned, not yet implemented.** This is the full technical audit and coding brainstorm pass. It replaces the initial planning section with precise file/line citations, calculated numbers, exact code changes, and validated research sources. No runtime code was changed in this pass.
 
-### Design goal
+### Design goals (refined)
 
-FREYRAUM should feel like a premium digital museum installation, not a fast utility UI. Motion should be:
+FREYRAUM should feel like a premium digital museum installation. Motion must be:
 
-- **visible enough to witness**: navigation, artwork arrival, reset, and UI reveal animations should last long enough to be perceived;
-- **quiet and elegant**: no playful bounce, no aggressive overshoot, no distracting parallax-like camera sweeps;
-- **art-first**: motion should guide attention toward the artwork and never compete with painting detail, lighting, or surface texture;
-- **consistent**: CSS UI transitions and Three.js camera/object motion should share one motion language;
-- **accessible**: `prefers-reduced-motion` and FREYRAUM's existing reduced-motion preference remain hard requirements;
-- **performant**: keep animations on `transform`/`opacity` for DOM UI and frame-rate-independent interpolation for WebGL camera/object motion.
+- **witnesable**: artwork entrance, reset, and UI reveal animations must last long enough that the user perceives a smooth state change, not a jump;
+- **quiet and museum-accurate**: no overshoot, no bounce, no aggressive yaw — a painting arriving on a gallery wall is a solemn event;
+- **art-first**: motion should guide attention toward the artwork and never distract from surface detail, lighting, or painting texture;
+- **frame-rate-neutral**: the same elegant timing on 60 Hz, 90 Hz, 120 Hz, and 30 Hz constrained mobile screens;
+- **accessible**: `prefers-reduced-motion` and FREYRAUM's in-app preference remain hard requirements with no regressions;
+- **compositable**: animate only `transform` and `opacity` for DOM UI; do not trigger layout reflows inside the animation hot-path.
 
-### 2026 online research distilled into FREYRAUM guidelines
+---
 
-Sources reviewed during this pass:
+### Research sources validated for this pass
 
-- W3C WCAG 2.2 — Understanding SC 2.3.3 Animation from Interactions: interaction-triggered non-essential animation must be disableable.
-- MDN — `prefers-reduced-motion`: the system preference is the standard web signal for users requesting less motion.
-- MDN / web.dev animation performance guidance: prefer `transform` and `opacity`; avoid layout/paint-triggering animated properties; use `requestAnimationFrame` for JS/WebGL animation; profile for stable frame pacing.
-- Current motion-design guidance for 2026 web apps: micro-interactions should stay short, but larger state transitions can be longer when they support orientation and comprehension.
+| Source | What it validates |
+|---|---|
+| W3C WCAG 2.2 § SC 2.3.3 | All interaction-triggered non-essential animation must be disableable |
+| MDN `prefers-reduced-motion` | System-level motion signal; already integrated via `PreferencesStore` |
+| MDN CSS Animation Performance | Animate only `transform`/`opacity`; never `top`/`left`/`width` |
+| MDN `requestAnimationFrame` | Pass `DOMHighResTimeStamp now` — source for delta-time |
+| Glenn Fiedler "Fix Your Timestep" + Stack Overflow #57851938 | Frame-rate-independent exponential smoothing: `alpha = 1 − Math.exp(−λ · dt)` |
+| web.dev / Chrome DevTools layers panel | `will-change: transform, opacity` — apply sparingly, only just before animation, remove after |
+| easing.net / cubic-bezier.com | `cubic-bezier(0.16, 1, 0.3, 1)` = easeOutExpo; `cubic-bezier(0.76, 0, 0.24, 1)` = easeInOutQuart |
+| MDN View Transitions API | Progressive enhancement for DOM state transitions — note for future consideration |
 
-Practical duration targets for FREYRAUM:
+---
 
-| Motion type | Current feel | Planned target | Reason |
-|---|---|---:|---|
-| Button hover / press | quick | 180–240 ms | keep controls responsive |
-| Info panel content swap | quick fade/translate | 450–650 ms | readable gallery-label reveal |
-| Timeline active thumb lift | visible but springy | 420–560 ms | more refined, less snappy |
-| Preferences panel open | spring pop | 420–620 ms | premium glass-panel entrance |
-| Artwork navigation arrival | barely witnessable on fast screens | 900–1300 ms | allow visitors to see the painting glide into place |
-| Reset view / zoom settling | exponential smoothing only | 700–1100 ms equivalent settle | clear but not sluggish |
-| Ambient key-light drift | already subtle | keep very slow; audit amplitude only | preserve living-gallery feel |
-| Loading shimmer/spinner | utilitarian | 1200–1800 ms cycles | calm feedback without urgency |
+### Full code audit — motion surfaces by file
 
-### Current code audit
+#### `src/gallery/GalleryManager.ts` — lines 565–587 (`update()`)
 
-Key motion surfaces found:
+**Root problem: all motion uses frame-rate-dependent per-frame lerp.**
 
-- `src/styles/main.scss`
-  - global motion tokens: `--dur-fast: 0.18s`, `--dur-base: 0.32s`, `--dur-slow: 0.6s`;
-  - easing tokens: `--ease-out`, `--ease-spring`;
-  - UI transitions for info panel, nav/zoom/prefs/fullscreen buttons, timeline thumbs, skeletons, fallback, and loading;
-  - reduced-motion blocks already disable transitions/animations.
-- `src/gallery/GalleryManager.ts`
-  - navigation seeds artwork group offset/rotation/scale, then `update()` eases every frame with fixed multipliers (`0.05`, `0.06`, `0.08`);
-  - camera zoom/pan also uses fixed per-frame exponential smoothing;
-  - reduced motion bypasses navigation seed motion and propagates to material motion.
-- `src/lighting/LightingSetup.ts`
-  - gallery-soft key light drifts slowly with `Math.sin(time * 0.0002) * 0.25`;
-  - reduced motion disables animated lighting through `setAnimated()`.
-- `src/main.ts`
-  - central render loop already uses `requestAnimationFrame`;
-  - `FrameBudgetMonitor` and adaptive quality are available for navigation-performance validation.
-- `src/utils/preferences.ts`
-  - reduced motion is already detected from `prefers-reduced-motion`, persisted, and mirrored to `<html data-motion>`.
+```typescript
+// CURRENT (frame-rate-dependent — bad at 120 Hz or 30 Hz):
+group.rotation.x += (this.targetX - group.rotation.x) * 0.05;
+group.rotation.y += (this.targetY - group.rotation.y) * 0.05;
+group.position.x += (0 - group.position.x) * 0.06;
+group.position.y += (0 - group.position.y) * 0.06;
+group.scale.x    += (1 - group.scale.x)    * 0.06;
+group.scale.y    += (1 - group.scale.y)    * 0.06;
+group.scale.z    += (1 - group.scale.z)    * 0.06;
+this.zoom                += (this.targetZoom - this.zoom)  * 0.08;
+this.camera.position.z  += (this.zoom - this.camera.position.z) * 0.08;
+this.panX  += (this.targetPanX - this.panX) * 0.08;
+this.panY  += (this.targetPanY - this.panY) * 0.08;
+this.camera.position.x  += (this.panX - this.camera.position.x) * 0.08;
+this.camera.position.y  += (this.panY - this.camera.position.y) * 0.08;
+```
 
-Main gap: CSS has duration/easing tokens, but WebGL camera/object motion is controlled by hard-coded per-frame smoothing factors. That makes the perceived duration dependent on refresh rate and hard to tune as a coherent "elegant" motion system.
+**Proof of frame-rate dependence:**
 
-### Implementation plan
+For `value += (target − value) × k`, 95% settle requires `n = ln(0.05) / ln(1−k)` frames:
 
-#### Slice 1 — Define a single FREYRAUM motion language
+| k | 60 Hz settle | 120 Hz settle | 30 Hz settle |
+|---|---|---|---|
+| 0.05 (hover rot) | 58 frames = **973 ms** | 29 frames = **485 ms** | 115 frames = **3833 ms** |
+| 0.06 (pos/scale) | 49 frames = **817 ms** | 24 frames = **408 ms** | 98 frames = **3267 ms** |
+| 0.08 (cam zoom/pan) | 37 frames = **617 ms** | 18 frames = **307 ms** | 74 frames = **2467 ms** |
 
-- Replace the current small token set with named semantic motion tokens in `src/styles/main.scss`:
-  - interaction: fast hover/press;
-  - panel: glass UI reveal and content swap;
-  - timeline: active thumbnail lift/settle;
-  - artwork: primary navigation and reset motion;
-  - ambient: slow/non-critical movement.
-- Add non-bouncy premium easing tokens:
-  - `ease-gallery-out` for most exits/settles;
-  - `ease-gallery-in-out` for camera/object travel;
-  - keep a very restrained spring only where physical lift is appropriate.
-- Keep old token aliases temporarily if needed so this can be implemented without a risky all-at-once SCSS rewrite.
+At 120 Hz (modern MacBook Pro, iPad ProMotion) the artwork arrives in ~400 ms — barely visible. At 30 Hz on a thermally-throttled phone, the zoom drags for 2.5 seconds. These numbers confirm the frame-rate problem is real and significant.
 
-Acceptance checks:
+**Correct formula (source: Stack Overflow #57851938, web.dev):**
 
-- All existing animated UI still compiles.
-- Hover/press controls still feel immediate.
-- Timeline and panel transitions are visibly slower and more refined.
+```typescript
+// Frame-rate-independent exponential smoothing.
+// alpha = 1 - exp(-lambda * dt)  where dt is in SECONDS.
+// lambda controls how quickly value approaches target:
+//   lambda=2  → 95% settle in 1500 ms
+//   lambda=3  → 95% settle in 1000 ms
+//   lambda=4  → 95% settle in 750 ms
+//   lambda=6  → 95% settle in 500 ms
+//   lambda=12 → 95% settle in 250 ms
+```
 
-#### Slice 2 — Introduce frame-rate-independent WebGL smoothing
+**Proposed lambda values for FREYRAUM:**
 
-- Add a small motion utility in `src/utils/motion.ts` or `src/utils/math.ts`.
-- Convert fixed per-frame easing factors in `GalleryManager.update()` to delta-time-based smoothing.
-- Feed delta time from `main.ts` into gallery update, or store previous update timestamp inside `GalleryManager` if the public call shape should stay minimal.
-- Keep behavior interruptible: new zoom, pan, hover, or navigation input should retarget the same motion state rather than queueing unskippable animations.
+| Property | Current k | Current 95% settle @ 60Hz | Proposed λ | New 95% settle (any Hz) |
+|---|---|---|---|---|
+| Hover rotation X/Y | 0.05 | 973 ms | **12** | 250 ms — immediate |
+| Artwork position X/Y (nav) | 0.06 | 817 ms | **2.5** | 1200 ms — witnesable |
+| Artwork scale (nav) | 0.06 | 817 ms | **3.0** | 1000 ms — smooth |
+| Camera zoom | 0.08 | 617 ms | **4.0** | 750 ms — responsive |
+| Camera pan X/Y | 0.08 | 617 ms | **5.0** | 600 ms — connected to input |
 
-Acceptance checks:
+**Implementation change — `GalleryManager.ts`:**
 
-- 60 Hz and high-refresh displays settle over approximately the same real time.
-- Rapid wheel/pinch/drag input remains responsive.
-- Navigation can be interrupted without snapping or accumulating stale offsets.
+1. Add a private `lastUpdateTime = 0` field at line ~133.
+2. Change `update(): void` to `update(now: number): void`.
+3. Compute delta at the top of `update()`:
 
-#### Slice 3 — Make artwork navigation visibly elegant
+```typescript
+// Inside update(now: number):
+const dt = this.lastUpdateTime === 0 ? 0 : Math.min((now - this.lastUpdateTime) / 1000, 0.1);
+this.lastUpdateTime = now;
+if (dt === 0) return; // skip the very first tick
+```
 
-- Retune navigation seed values and settle timing in `GalleryManager.navigate()` / `goTo()`:
-  - keep lateral artwork entrance subtle enough for a museum setting;
-  - reduce rotational theatricality if it reads as gimmicky;
-  - extend arrival settle to roughly 900–1300 ms in full-motion mode.
-- Coordinate camera reset with artwork arrival so a new painting does not both fly and zoom abruptly.
-- Preserve the existing `pendingResetAfterArtworkLoad` race-protection behavior.
-- Add diagnostics fields to `gallery/navigate` or `show-artwork-complete` for motion preset, reduced-motion status, and intended settle duration.
+4. Replace the 9 hard-coded lerp lines with smoothDamp calls:
 
-Acceptance checks:
+```typescript
+// In update() — replace all value += (target - value) * k  with:
+const sd = smoothDamp; // local alias for brevity
 
-- Users can clearly witness the artwork change.
-- Painting arrival feels calm and intentional.
-- Fast repeated next/previous clicks do not create jitter, stale loads, or delayed callbacks.
+// Hover rotation — λ=12 → 250ms settle
+group.rotation.x = sd(group.rotation.x, this.targetX, 12, dt);
+group.rotation.y = sd(group.rotation.y, this.targetY, 12, dt);
 
-#### Slice 4 — Smooth zoom, pan, reset, and hover without making controls feel laggy
+// Navigation position settle — λ=2.5 → ~1200ms settle
+group.position.x = sd(group.position.x, 0, 2.5, dt);
+group.position.y = sd(group.position.y, 0, 2.5, dt);
 
-- Separate input responsiveness from visual settling:
-  - pointer drag/pinch should update targets immediately;
-  - camera/object interpolation should settle elegantly toward those targets.
-- Retune camera zoom/pan smoothing independently from artwork transform smoothing.
-- Make reset view a deliberate motion moment, not only a target jump followed by generic smoothing.
-- Keep hover rotation restrained, especially at close inspection zoom where surface detail matters.
+// Navigation scale settle — λ=3.0 → ~1000ms settle
+group.scale.x = sd(group.scale.x, 1, 3.0, dt);
+group.scale.y = sd(group.scale.y, 1, 3.0, dt);
+group.scale.z = sd(group.scale.z, 1, 3.0, dt);
 
-Acceptance checks:
+// Camera zoom — λ=4.0 → ~750ms settle
+this.zoom                = sd(this.zoom, this.targetZoom, 4.0, dt);
+this.camera.position.z   = sd(this.camera.position.z, this.zoom, 4.0, dt);
 
-- Wheel/pinch feels connected to input.
-- Reset is visible and graceful.
-- Close inspection does not feel floaty or seasick.
-- Pan limits from v0.14.2 remain unchanged.
+// Camera pan — λ=5.0 → ~600ms settle (connected to input)
+this.panX = sd(this.panX, this.targetPanX, 5.0, dt);
+this.panY = sd(this.panY, this.targetPanY, 5.0, dt);
+this.camera.position.x = sd(this.camera.position.x, this.panX, 5.0, dt);
+this.camera.position.y = sd(this.camera.position.y, this.panY, 5.0, dt);
+```
 
-#### Slice 5 — Retune DOM/UI transitions for the modern art style
+5. Update `main.ts` animate loop to pass `now`: change `galleryManager.update()` → `galleryManager.update(now)`.
 
-- Update `InfoPanel` content transitions to a slower fade/translate with minimal distance.
-- Update `.timeline__thumb` active transition to feel smooth but not elastic.
-- Retune `.prefs__panel` away from a playful spring pop toward a gallery-glass reveal.
-- Keep loading shimmer/spinner calmer by extending loop durations and checking reduced-motion fallbacks.
-- Avoid animating layout-affecting properties; stay on `opacity`, `transform`, and compositor-friendly changes.
+---
 
-Acceptance checks:
+#### `src/utils/math.ts` — add `smoothDamp` utility
 
-- Info text becomes readable during transitions instead of flashing.
-- Timeline active state is visible but refined.
-- Preferences panel entrance fits the premium glass UI.
-- Reduced-motion mode still removes or minimizes non-essential movement.
+Current `math.ts` (lines 1–17): has `clamp`, `lerp`, `mapRange`. Add:
 
-#### Slice 6 — Accessibility and reduced-motion safeguards
+```typescript
+/**
+ * Frame-rate-independent exponential smoothing.
+ *
+ * Equivalent to value += (target − value) × k each frame, but with
+ * consistent timing at any refresh rate.
+ *
+ * @param current  Current animated value.
+ * @param target   Target value to approach.
+ * @param lambda   Damping factor per second. Higher = snappier.
+ *                 λ=2.5 → 95% settle in ~1200ms
+ *                 λ=4   → 95% settle in ~750ms
+ *                 λ=12  → 95% settle in ~250ms
+ * @param dt       Delta time in SECONDS. Clamp to ≤0.1 before passing.
+ */
+export function smoothDamp(current: number, target: number, lambda: number, dt: number): number {
+  return current + (target - current) * (1 - Math.exp(-lambda * dt));
+}
+```
 
-- Keep `PreferencesStore` as the single source of truth for motion preference.
-- Ensure all new JS-driven motion checks `reducedMotion`.
-- For reduced motion:
-  - no large lateral artwork travel;
-  - no non-essential scale/rotation flourish;
-  - keep only instant or near-instant state changes plus opacity where needed for comprehension.
-- Keep CSS `@media (prefers-reduced-motion: reduce)` and `[data-motion="reduced"]` coverage aligned.
+Import in `GalleryManager.ts`: `import { clamp, smoothDamp } from '../utils/math';`
 
-Acceptance checks:
+---
 
-- System reduced motion applies on first load.
-- In-app reduced-motion toggle still persists and updates the page immediately.
-- WCAG 2.2 SC 2.3.3 intent remains satisfied.
+#### `src/gallery/GalleryManager.ts` — lines 453–456 + 484–487 (navigation entrance seeds)
 
-#### Slice 7 — Diagnostics, validation, and QA
+Current seeds applied in `navigate()` and `goTo()`:
 
-- Add concise diagnostics only where useful:
-  - motion mode (`full` / `reduced`);
-  - navigation settle target duration;
-  - whether frame-budget cooldown was marked for animation-heavy navigation.
-- Validate with existing commands:
-  - `npm run lint`;
-  - `npm run build`.
-- Manual QA matrix:
-  - desktop mouse wheel/drag/navigation;
-  - touch pinch/pan/swipe;
-  - keyboard navigation and reset;
-  - reduced motion;
-  - high contrast;
-  - high-DPR / lower-power device;
-  - rapid repeated navigation.
-- Performance QA:
-  - no layout thrash in DevTools during UI transitions;
-  - no sustained frame-budget downgrade caused only by longer animation duration;
-  - no memory increase from persistent `will-change` overuse.
+```typescript
+this.artworkMesh.group.position.x = direction * 3.2;  // world units
+this.artworkMesh.group.rotation.y = direction * 0.32; // radians = ~18°
+this.artworkMesh.group.scale.set(0.84, 0.84, 0.84);
+```
 
-### Non-goals for this pass
+With k=0.06 at 60fps these seeds settle in ~817ms. After converting to λ=2.5 (95% settle = 1200ms), these same offsets will now take 1.2 seconds to clear — giving the user time to witness the artwork arrive.
 
-- Do not change artwork zoom/pan limits from v0.14.2 unless separate visual QA proves the motion retune requires it.
-- Do not add a large animation library; the existing CSS + `requestAnimationFrame` architecture is sufficient.
+However the **rotation** should be reduced: 0.32 radians (~18°) reads as a theatrical yaw in a museum context. Proposed:
+
+```typescript
+this.artworkMesh.group.position.x = direction * 4.5;   // more dramatic entrance range
+this.artworkMesh.group.rotation.y = direction * 0.15;  // ~9° — subtle, museum-like
+this.artworkMesh.group.scale.set(0.88, 0.88, 0.88);    // slightly less collapsed
+```
+
+Also add a depth recession for a softer 3D approach feeling:
+
+```typescript
+this.artworkMesh.group.position.z = -0.6;  // painting comes from slightly behind
+// (position.z target is 0; smoothed by λ=2.5 along with position.x)
+```
+
+Add `position.z` tracking to `update()`:
+
+```typescript
+group.position.z = sd(group.position.z, 0, 2.5, dt);
+```
+
+---
+
+#### `src/ui/InfoPanel.ts` — lines 38–47 (content swap timing bug)
+
+**Bug discovered:** the 200ms `setTimeout` delay at line 41 is shorter than the CSS transition duration (`--dur-base: 0.32s = 320ms`). Content swaps while the panel is only 62% through its fade-out (opacity ≈ 0.38). Users see flickering text underneath a translucent panel.
+
+```typescript
+// CURRENT — BUGGY:
+window.setTimeout(() => {
+  this.setContent(artwork);
+  this.el.classList.remove('is-transitioning');
+}, 200); // < 320ms transition = content changes before fully faded
+```
+
+After extending `--dur-content` to 500ms (see SCSS plan below), the correct delay becomes ≥510ms.
+
+**Fixed implementation:**
+
+```typescript
+// Matching constant — keep in sync with --dur-content in main.scss.
+private static readonly CONTENT_SWAP_DELAY_MS = 520; // 500ms transition + 20ms buffer
+
+update(artwork: Artwork, animate = false): void {
+  if (animate) {
+    this.el.classList.add('is-transitioning');
+    window.setTimeout(() => {
+      this.setContent(artwork);
+      // Use one rAF to let layout settle before removing the class,
+      // which triggers the fade-in transition.
+      window.requestAnimationFrame(() => {
+        this.el.classList.remove('is-transitioning');
+      });
+    }, InfoPanel.CONTENT_SWAP_DELAY_MS);
+  } else {
+    this.setContent(artwork);
+  }
+}
+```
+
+Note: the `translateY` offset in `.info-panel.is-transitioning` (currently 8px) should also be increased to 16px for the fade-in to be more visible as a vertical reveal.
+
+---
+
+#### `src/styles/main.scss` — motion token redesign
+
+**Current tokens (lines 54–59):**
+
+```scss
+--ease-out:    cubic-bezier(0.22, 0.78, 0.32, 1);   // ok for controls
+--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);   // y1=1.56 overshoots — museum wrong
+--dur-fast:    0.18s;
+--dur-base:    0.32s;
+--dur-slow:    0.6s;
+```
+
+**Problem with `--ease-spring`:** the control point y1=1.56 causes an overshoot (value exceeds target) — physically plausible for a spring, but jarring in a museum. Confirmed via cubic-bezier.com and [web.dev easing guide](https://web.dev/articles/animations-guide).
+
+**Proposed replacement token set (backward-compatible, old names kept as aliases):**
+
+```scss
+// Easing — premium gallery curves
+--ease-gallery-out:    cubic-bezier(0.16, 1, 0.3, 1);       // easeOutExpo: rapid decel, silk finish
+--ease-gallery-in-out: cubic-bezier(0.76, 0, 0.24, 1);      // easeInOutQuart: full deliberate journey
+--ease-out:            cubic-bezier(0.22, 0.78, 0.32, 1);   // keep for controls (unchanged)
+--ease-spring:         cubic-bezier(0.34, 1.56, 0.64, 1);   // keep as named but stop using in gallery
+
+// Durations — semantic names
+--dur-control:   0.18s;   // button hover/active (was --dur-fast, unchanged)
+--dur-content:   0.5s;    // info panel text fade — matches CONTENT_SWAP_DELAY_MS
+--dur-panel:     0.55s;   // glass panel open/close entrance
+--dur-timeline:  0.42s;   // timeline active thumb lift
+--dur-reveal:    0.9s;    // loading overlay + big screen transitions
+
+// Backward-compat aliases
+--dur-fast: var(--dur-control);
+--dur-base: var(--dur-content);    // raised from 0.32s → 0.5s
+--dur-slow: var(--dur-reveal);     // raised from 0.6s  → 0.9s
+```
+
+**Specific rule changes required:**
+
+1. **`.info-panel` transition (line 191–192):**
+   ```scss
+   // was: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out)
+   transition: opacity var(--dur-content) var(--ease-gallery-out),
+               transform var(--dur-content) var(--ease-gallery-out);
+   ```
+
+2. **`.info-panel.is-transitioning` (line 224–226):**
+   ```scss
+   // was: transform: translateY(8px)
+   opacity: 0;
+   transform: translateY(16px);  // double the distance for a more visible reveal
+   ```
+
+3. **`.timeline__thumb` transition (lines 730–732):**
+   ```scss
+   // was: transform var(--dur-base) var(--ease-spring), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-fast) ...
+   transition: transform var(--dur-timeline) var(--ease-gallery-out),
+               box-shadow var(--dur-timeline) var(--ease-gallery-out),
+               border-color var(--dur-control) var(--ease-out);
+   ```
+   This removes the overshoot spring from timeline thumbnails and makes them lift more slowly.
+
+4. **`.prefs__panel` animation (line 500–501):**
+   ```scss
+   // was: prefs-in var(--dur-base) var(--ease-spring)
+   animation: prefs-in var(--dur-panel) var(--ease-gallery-out);
+   ```
+
+5. **`@keyframes prefs-in` scale (line 506):**
+   ```scss
+   // was: scale(0.94) translateY(-6px)
+   from {
+     opacity: 0;
+     transform: scale(0.96) translateY(-10px);  // softer collapse, more distance
+   }
+   ```
+
+6. **`.loading-overlay` transition (line 856):**
+   ```scss
+   // was: opacity var(--dur-slow) var(--ease-out)
+   transition: opacity var(--dur-reveal) var(--ease-gallery-out);
+   ```
+
+7. **`main.ts` loading overlay removal timeout (line 344):**
+   ```typescript
+   // was: window.setTimeout(() => loadingOverlay.remove(), 700)
+   window.setTimeout(() => loadingOverlay.remove(), 950); // matches --dur-reveal (0.9s) + 50ms buffer
+   ```
+
+8. **Timeline skeleton transition (line 775):**
+   ```scss
+   // was: opacity var(--dur-base) var(--ease-out)
+   transition: opacity var(--dur-content) var(--ease-out);
+   ```
+
+9. **Loading spinner (lines 870–875):**
+   ```scss
+   // was: spin 0.8s linear infinite
+   animation: spin 1.4s linear infinite;  // calmer — 70% slower
+   ```
+   And in reduced-motion (line 984–986), the spinner is already stopped — no change needed.
+
+---
+
+#### `src/lighting/LightingSetup.ts` — line 76 (ambient key drift)
+
+```typescript
+primary.position.x = baseX + Math.sin(time * 0.0002) * 0.25;
+```
+
+Current: 0.0002 rad/ms = 0.2 rad/s → period = 2π/0.2 = 31.4 s. Amplitude 0.25 at baseX = −3 (8.3% drift). This is already very subtle and museum-appropriate. No change needed.
+
+Audit note: `time` is the raw `DOMHighResTimeStamp now` passed from main.ts, so the lighting drift already runs at wall-clock time, not frame count. It is inherently frame-rate-independent. ✓
+
+---
+
+#### `src/styles/main.scss` — reduced motion blocks (lines 981–1013)
+
+The `[data-motion='reduced']` block correctly sets `transition-duration: 0.001ms` on all animated elements. After the SCSS changes above, the new token names and durations will be implicitly covered because the zero-duration rule overrides everything. However, one explicit addition is needed for completeness:
+
+```scss
+:root[data-motion='reduced'] {
+  // ... existing rules ...
+
+  // New: also zero out the loading spinner animation duration
+  // (currently, spin animation is not in this block — add it)
+  .loading-spinner {
+    animation: none; // already there — confirmed OK
+  }
+}
+```
+
+The `@media (prefers-reduced-motion: reduce)` block at lines 1007–1013 is correct. After the token rename, the class names referenced (`.loading-spinner`, `.timeline__skeleton`, `.prefs__panel`) still exist. ✓
+
+---
+
+#### `src/gallery/SidePanels.ts` — opacity (no immediate change needed)
+
+Side panels are static with `opacity: 0.95` (lines 15–16, 25–26 in SidePanels.ts). They do not fade in/out when artwork changes; their texture is swapped instantly via `GalleryManager.showArtwork()`. A future enhancement could be a subtle 200ms opacity fade on texture swap, but this is **not planned for v0.15** — it would require a `transitionend` listener or timeout in `SidePanels.updateTextures()`.
+
+---
+
+### Implementation plan — slices with concrete steps
+
+#### Slice 1 — `smoothDamp` utility in `src/utils/math.ts`
+
+Files touched: `src/utils/math.ts` only.
+
+1. Append `smoothDamp(current, target, lambda, dt)` function after `mapRange`.
+2. Verify with unit test reasoning: at dt=1/60s, λ=4, `alpha = 1 - exp(-4/60) ≈ 0.0645` ≈ old k=0.065 — proves equivalence.
+
+No dependencies on other slices. Can be done independently.
+
+#### Slice 2 — CSS motion token redesign in `src/styles/main.scss`
+
+Files touched: `src/styles/main.scss` only.
+
+1. Add `--ease-gallery-out` and `--ease-gallery-in-out` easing tokens.
+2. Add `--dur-control`, `--dur-content`, `--dur-panel`, `--dur-timeline`, `--dur-reveal` tokens.
+3. Keep `--dur-fast`, `--dur-base`, `--dur-slow` as backward-compat aliases.
+4. Update `.info-panel` transition and `.info-panel.is-transitioning` translateY.
+5. Update `.timeline__thumb` transition.
+6. Update `.prefs__panel` animation.
+7. Update `@keyframes prefs-in`.
+8. Update `.loading-overlay` transition.
+9. Update `.timeline__skeleton` transition.
+10. Update loading spinner duration.
+11. `npm run lint && npm run build` → must pass.
+
+This slice is independent from Slice 1. Does not affect GalleryManager.
+
+#### Slice 3 — Fix `InfoPanel.ts` content-swap timing bug
+
+Files touched: `src/ui/InfoPanel.ts` only.
+
+1. Add `CONTENT_SWAP_DELAY_MS = 520` private static.
+2. Replace hard-coded `200` with the constant.
+3. Add `requestAnimationFrame` before removing `is-transitioning`.
+4. Confirm constant stays in sync with `--dur-content`.
+5. `npm run lint && npm run build` → must pass.
+
+This slice depends on Slice 2 (because `CONTENT_SWAP_DELAY_MS` must match `--dur-content: 0.5s`).
+
+#### Slice 4 — `GalleryManager.update()` frame-rate-independent smoothing
+
+Files touched: `src/gallery/GalleryManager.ts`, `src/main.ts`.
+
+1. Import `smoothDamp` in `GalleryManager.ts`.
+2. Add `private lastUpdateTime = 0` field near line 133.
+3. Change signature: `update(now: number): void`.
+4. Add dt computation at top of `update()`.
+5. Replace all 13 `value += (target - value) * k` lines with `smoothDamp(...)`.
+6. Use lambda values from the table above.
+7. In `main.ts` animate loop (~line 525): change `galleryManager.update()` → `galleryManager.update(now)`.
+8. `npm run lint && npm run build` → must pass.
+
+This slice depends on Slice 1 (`smoothDamp` exists). Independent of Slices 2 and 3.
+
+#### Slice 5 — Navigation entrance seed retuning
+
+Files touched: `src/gallery/GalleryManager.ts` only.
+
+1. Change navigation seed in `navigate()` (line ~454–456) and `goTo()` (line ~485–487):
+   - `position.x = direction * 4.5` (from 3.2)
+   - `rotation.y = direction * 0.15` (from 0.32)
+   - `scale.set(0.88, 0.88, 0.88)` (from 0.84)
+   - `position.z = -0.6` (new — depth recession)
+2. In `update()`, add `position.z` smoothDamp with λ=2.5 after existing position.x/y lines.
+3. Add diagnostics fields to the `navigate` log:
+   ```typescript
+   motionMode: this.reducedMotion ? 'reduced' : 'full',
+   seedPositionX: direction * 4.5,
+   seedPositionZ: -0.6,
+   settleTargetMs: this.reducedMotion ? 0 : Math.round(1000 * (-Math.log(0.05) / 2.5)),
+   ```
+4. `npm run lint && npm run build` → must pass.
+
+This slice depends on Slice 4 (lambda is now meaningful because we have frame-rate-independent smoothing). Must run after Slice 4.
+
+#### Slice 6 — `main.ts` loading overlay removal timeout update
+
+Files touched: `src/main.ts` only.
+
+Change line 344: `window.setTimeout(() => loadingOverlay.remove(), 700)` → `window.setTimeout(() => loadingOverlay.remove(), 950)`.
+
+This slice depends on Slice 2 (`--dur-reveal: 0.9s` means 900ms).
+
+#### Slice 7 — Diagnostics, validation, QA
+
+1. Confirm all diagnostics in `navigate` include `motionMode` and `settleTargetMs`.
+2. `npm run lint && npm run build` → must pass.
+3. Manual QA matrix:
+   - Desktop 60 Hz: artwork entrance should take ~1.2s to 90% settle, clearly witnessable.
+   - Desktop 120 Hz: same ~1.2s (now identical to 60 Hz — confirms fix).
+   - Mobile 60 Hz: same ~1.2s.
+   - Rapid forward/back navigation: motion interrupts cleanly, no accumulation.
+   - Wheel/pinch zoom: feels connected (λ=5 pan, λ=4 zoom).
+   - Reset button: camera glides back over ~750ms.
+   - Hover rotation: responds immediately (~250ms).
+   - Info panel: fade-out then content swap — text never visible during opacity < 0.1.
+   - Timeline active lift: smooth, no overshoot.
+   - Prefs panel open: glass panel glides in, no bounce.
+   - Loading overlay: fades smoothly over ~0.9s.
+   - Reduced motion on: no entrance travel, no scale, minimal opacity transitions only.
+   - High contrast on: all focus rings and borders survive — no animation-only visual state.
+   - `prefers-reduced-motion: reduce` at OS level: `[data-motion='reduced']` block fires.
+
+---
+
+### Non-goals for this pass (unchanged)
+
+- Do not change v0.14.2 zoom/pan limit constants (`INSPECTION_OVERSCROLL_X`, `INSPECTION_OVERSCROLL_Y`).
+- Do not add any animation library dependency.
 - Do not add decorative background motion that competes with the paintings.
-- Do not weaken reduced-motion behavior to make the full-motion experience easier to implement.
+- Do not weaken reduced-motion paths.
+- Do not implement View Transitions API — progressive enhancement only, for a future pass.
 
-### Risks and mitigations
+---
 
-- **Longer can feel slower, not more elegant.** Mitigate by keeping controls fast and only extending high-level state transitions.
-- **Frame-rate-dependent smoothing can remain if only constants are changed.** Mitigate by converting to delta-time-based interpolation before final timing tweaks.
-- **Motion sensitivity risk.** Mitigate by preserving reduced-motion as a first-class runtime path.
-- **Navigation race risk.** Mitigate by preserving existing artwork-load token logic and testing rapid timeline/nav input.
-- **Performance risk from UI effects.** Mitigate by animating only compositor-friendly properties and profiling with DevTools.
+### Risks and mitigations (updated with specifics)
+
+| Risk | Mitigation |
+|---|---|
+| λ values feel too slow on mobile (30fps floor) | At 30fps each frame is 33ms; λ=2.5 still settles in ~1200ms wall clock — the whole point of the fix |
+| Position.z seed creates z-fighting with frame mesh | ArtworkMesh frame is at z=0, artwork plane at z=0.095; seed z=−0.6 recesses behind both → no z-fight |
+| InfoPanel CONTENT_SWAP_DELAY_MS drifts from CSS | Keep `CONTENT_SWAP_DELAY_MS = 520` as a constant with a JSDoc comment cross-referencing `--dur-content` |
+| Loading overlay 950ms delay feels slow on fast connections | Loading is async; the delay only matters for the visual fade, not for data readiness |
+| `--dur-base` alias changing from 0.32s to 0.5s breaks unknown consumers | Audit all `var(--dur-base)` uses before PR — affected elements get the new durations intentionally |
+| Navigation z-seed axis needs smoothDamp tracking in update() | Position.z smoothDamp must be added alongside x/y in Slice 4 and 5 |
+
+---
 
 ### Done definition
 
-- The user can visibly witness artwork transitions, reset, and major UI reveals.
-- Motion feels calmer, slower, and more premium without becoming sluggish.
-- Reduced-motion users receive minimal non-essential movement.
-- Existing lint/build pass.
-- Documentation is updated with shipped values, diagnostics, validation, and any remaining visual tuning notes.
+- Artwork navigation entrance is visually witnessable (~1.2s settle) on both 60 Hz and 120 Hz screens.
+- No motion behaviour is frame-rate-dependent.
+- Info panel text never flickers partially through a transition.
+- All glass panels (info, prefs, loading overlay) feel gallery-premium: deliberate, smooth, no bounce.
+- Timeline thumb active state lifts without overshoot.
+- Reduced-motion paths remain unchanged and WCAG 2.2 § SC 2.3.3 intent is satisfied.
+- `npm run lint && npm run build` pass.
+- Documentation updated with shipped constants, diagnostics, and QA results.
 
 ---
 

@@ -2,7 +2,21 @@
 
 ## Unreleased
 
-### Documentation (v0.15 animation enhancement plan — 2026-05-19)
+### Documentation (v0.15 animation technical brainstorm — 2026-05-19)
+
+- Completely replaced the initial animation planning section in `plan.md` with a full technical brainstorm.
+- Identified and documented a root bug: all 13 WebGL motion paths in `GalleryManager.update()` use frame-rate-dependent per-frame lerp (`value += (target - value) × k`), causing artwork navigation to take ~408ms on 120 Hz screens vs ~817ms on 60 Hz.
+- Specified the fix: add `smoothDamp(current, target, lambda, dt)` to `src/utils/math.ts` using the frame-rate-independent formula `1 − Math.exp(−lambda × dt)`.
+- Provided exact lambda values for each property (hover=12, nav position=2.5, nav scale=3.0, camera zoom=4.0, camera pan=5.0) with 95% settle times.
+- Identified and documented a timing bug in `InfoPanel.ts`: `setTimeout` delay of 200ms fires before the 320ms CSS transition completes, causing text to change while still partially visible.
+- Specified the SCSS redesign: new semantic tokens (`--dur-control`, `--dur-content`, `--dur-panel`, `--dur-timeline`, `--dur-reveal`), new easing curves (`--ease-gallery-out: cubic-bezier(0.16, 1, 0.3, 1)`, `--ease-gallery-in-out`), removal of overshoot `--ease-spring` from timeline/panel uses.
+- Documented all `var(--dur-base)` and `var(--dur-slow)` consumers to avoid silent regressions when aliases change.
+- Documented the loading overlay removal timeout in `main.ts` that must be raised from 700ms to 950ms after the `--dur-reveal` change.
+- Added specific navigation entrance seed values: `position.x ±4.5`, `rotation.y ±0.15`, scale `0.88`, new `position.z −0.6` depth recession.
+- Validated all findings against published sources: Stack Overflow #57851938, MDN, WCAG 2.2, web.dev, cubic-bezier.com.
+- No runtime code was changed in this documentation pass.
+
+### Documentation (v0.15 animation enhancement initial plan — 2026-05-19)
 
 - Added a detailed research-backed plan for smoother, longer, more elegant animations that fit the modern art-gallery style.
 - Documented 2026 guidance for accessible motion, `prefers-reduced-motion`, compositor-friendly animation, `requestAnimationFrame`, and duration ranges.
