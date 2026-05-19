@@ -21,3 +21,10 @@ TASK → INSPECT → PLAN → IMPLEMENT → VALIDATE → SELF-REVIEW → DOCUMEN
 - Update `LESSONS_LEARNED.md` for recurring mistakes, regressions, or workflow corrections.
 - Update `.github/copilot-instructions.md`, prompts, or standards only when a durable repository rule changes.
 - Keep learning entries factual, dated, and tied to observed repository behavior.
+
+## Related prompts and docs
+
+- Architecture: [`architecture.prompt.md`](./architecture.prompt.md)
+- Refactor: [`refactor.prompt.md`](./refactor.prompt.md)
+- Review: [`review.prompt.md`](./review.prompt.md)
+- Feedback loop: [`../../docs/ai-feedback/AI_FEEDBACK_LOOP.md`](../../docs/ai-feedback/AI_FEEDBACK_LOOP.md)

@@ -30,3 +30,12 @@ Hard constraints for AI-assisted work in this repository.
 - Fresh clones need `npm install` before lint/build.
 - Use existing scripts: `npm run lint`, `npm run build`, and focused checks for touched scripts.
 - If runtime or SCSS changes affect preview output, rebuild and commit the relevant `customer-preview/` output.
+
+## Audit and dependency rules
+
+- Treat `npm audit` findings as maintenance signals unless the task is a dependency/security fix; document severity, package path, and whether an available fix is semver-major.
+- Do not apply `npm audit fix --force` automatically. Major tooling upgrades need a dedicated PR with lint/build/customer-preview validation.
+- If lint prints supported-version warnings, document the resolved package versions and align the toolchain in a focused pass instead of suppressing warnings.
+- For browser APIs with partial support (`requestIdleCallback`, Long Tasks API, Page Lifecycle), keep runtime feature detection and fallback behavior documented in `FINDINGS.md`.
+
+See `LESSONS_LEARNED.md` and `docs/lessons-learned/` for the incidents that justify these rules.

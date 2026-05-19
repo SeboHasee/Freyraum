@@ -31,6 +31,8 @@ Use these repository-specific instructions before changing code or docs.
 5. Self-review for correctness, edge cases, readability, performance, accessibility, and security.
 6. Update docs when meaningful work changes behavior, architecture, workflow, or known lessons.
 
+For full-repository audits, also run dependency/tooling checks that already exist (`npm audit`, lint/build, focused script syntax checks) and document warnings separately from regressions.
+
 ## Coding standards
 
 - Keep TypeScript strict and avoid unused locals/parameters.
@@ -42,3 +44,5 @@ Use these repository-specific instructions before changing code or docs.
 ## Documentation expectations
 
 Follow `DOCUMENTATION_RULES.md`. For meaningful implementation work, update `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, and relevant README/docs sections. Record failures and regressions as reusable lessons, not only successes.
+
+When online research is requested, prefer official sources and record source URLs in `FINDINGS.md` with the exact repository decision they support.

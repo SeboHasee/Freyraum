@@ -22,3 +22,9 @@ Use this prompt for architecture analysis or planning.
 - A concise plan with affected files/modules.
 - No speculative implementation details beyond the current architecture.
 - Explicit validation and documentation requirements.
+
+## Related prompts
+
+- Refactor implementation: [`refactor.prompt.md`](./refactor.prompt.md)
+- Review checklist: [`review.prompt.md`](./review.prompt.md)
+- Autonomous loop: [`autonomous-agent.prompt.md`](./autonomous-agent.prompt.md)

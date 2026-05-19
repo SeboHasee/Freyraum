@@ -1,10 +1,12 @@
 # DOCUMENTATION RULES
 
-## Rule
+## Current policy
+
+### Rule
 
 Always document meaningful repository work for future development.
 
-## Required updates for every meaningful implementation
+### Required updates for every meaningful implementation
 
 1. Update `plan.md`
    - current scope
@@ -21,7 +23,7 @@ Always document meaningful repository work for future development.
 5. Update this file
    - only when the documentation policy itself changes
 
-## Quality expectations
+### Quality expectations
 
 - documentation must reflect the code that was actually committed
 - documentation should mention remaining limitations, not only successes
@@ -32,7 +34,7 @@ Always document meaningful repository work for future development.
   document it as a first-class follow-up with observed behavior, expected
   behavior, likely failure boundary, diagnostics needed, and acceptance checks
 
-## Additional rule for technical planning documents
+### Additional rule for technical planning documents
 
 When adding future implementation plans for rendering, performance, shaders, WebGPU, asset pipelines, or other high-risk architecture work, document:
 
@@ -51,6 +53,8 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - performance planning must explicitly state measurement strategy, fidelity-preservation boundaries, compatibility/fallback behavior, and resource ownership/disposal assumptions
 
 ## Latest documentation pass
+
+- 2026-05-19 (documentation): full repository audit + online validation documented. Reviewed source architecture, scripts, generated preview behavior, dependency/tooling health, diagnostics, accessibility, customer docs, and every Markdown file. Online validation covered `requestIdleCallback`, Long Tasks API, Page Lifecycle `freeze`/`resume`, three.js `compileAsync`, typescript-eslint support, and ESLint v8 EOL. Validation passed after install (`npm run lint`, `npm run build`, and focused script syntax checks); `npm audit` reports two moderate Vite/esbuild dev-server advisories requiring a dedicated semver-major tooling upgrade pass. All Markdown files were refreshed with cross-links, stale wording fixes, or audit notes. No runtime code changed.
 
 - 2026-05-19 (documentation): AI context engineering workflow added. New files: `.github/copilot-instructions.md`, `.github/prompts/refactor.prompt.md`, `.github/prompts/architecture.prompt.md`, `.github/prompts/review.prompt.md`, `.github/prompts/autonomous-agent.prompt.md`, `AI_RULES.md`, `ARCHITECTURE_MAP.md`, `LESSONS_LEARNED.md`, `docs/architecture/README.md`, `docs/standards/CODING_GUIDELINES.md`, `docs/lessons-learned/README.md`, and `docs/ai-feedback/AI_FEEDBACK_LOOP.md`. Updated `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, and `README.md` to reference the new context-engineering layer. No runtime code changed.
 

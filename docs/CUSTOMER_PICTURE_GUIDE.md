@@ -266,8 +266,9 @@ chrome is considered. If it still looks too close, include:
 3. the `show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`,
     `maxZoom`, `overviewHeadroom`, and the usable viewport fields.
 
-There is now also a planned follow-up to make **large vertical** artworks start
-slightly farther away by adding a portrait-aware reset-fit boost.
+Large vertical artworks also receive the implemented portrait-aware reset-fit
+boost from the later v0.14 pass. If a tall artwork still starts too close, treat
+it as a new regression and include the diagnostics fields listed above.
 
 **The selected timeline picture looks cut off.**
 This should be fixed by v0.12. If it still happens, please send:
@@ -294,5 +295,7 @@ shown in the console by default.
 
 ## For developers
 
-See `plan.md` (section "v0.07 Technical Implementation Guide") for the
-full architecture, file layout, and code references.
+See `plan.md` (section "v0.07 Technical Implementation Guide"),
+`ARCHITECTURE_MAP.md`, and `docs/architecture/README.md` for the full
+architecture, file layout, and code references. For audits, also check
+`FINDINGS.md` and `LESSONS_LEARNED.md`.

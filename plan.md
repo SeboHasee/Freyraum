@@ -1,5 +1,58 @@
 # FREYRAUM Plan
 
+## Full repository audit + online validation (2026-05-19, documentation-only)
+
+### Status
+
+Documentation-only audit completed. No runtime code changed.
+
+### Scope
+
+- Audit complete repository structure: source, scripts, generated preview, customer docs, AI instructions, validation scripts, and current markdown.
+- Re-run validation to distinguish actual regressions from maintenance risks.
+- Research current online guidance for browser/runtime features used by the app.
+- Update every Markdown file with current findings, cross-links, stale wording fixes, or audit-specific guidance.
+
+### Repository findings
+
+1. Runtime architecture remains consistent with the documented boundaries:
+   - `src/main.ts` owns orchestration, lifecycle, resize coordination, preferences, diagnostics, and render loop.
+   - `src/core/` owns renderer/scene/post-processing infrastructure.
+   - `src/gallery/` owns artwork state, texture loading, mesh state, navigation, zoom/pan math, and layout.
+   - `src/materials/` owns painting fidelity and procedural texture generation.
+   - `src/ui/`, `src/timeline/`, and `src/interaction/` own DOM controls and input.
+   - `scripts/` owns customer import/preview generation.
+2. Validation is green after dependency install:
+   - `npm install` — completed, with deprecation/audit warnings.
+   - `npm run lint` — pass, with TypeScript-version support warning from `@typescript-eslint`.
+   - `npm run build` — pass; preview bundle regenerated without committed source changes.
+   - `node -c scripts/import-artworks.mjs`, `node -c scripts/write-local-preview.mjs`, and `node -c scripts/run-import-artworks.cjs` — pass.
+3. Dependency maintenance risks need a dedicated future code/dependency pass:
+   - `npm audit` reports two moderate dev-server advisories in Vite/esbuild.
+   - Automated remediation currently requires a semver-major Vite upgrade.
+   - Floating `^` ranges installed TypeScript 5.9.x, outside the lint stack's logged supported range.
+4. Deferred cleanup remains valid:
+   - legacy interaction files (`MouseInteraction.ts`, `TouchInteraction.ts`, `ZoomPan.ts`) are superseded by `CanvasInteraction.ts` and remain reserved for a dedicated cleanup PR.
+   - deprecated `isMobileDevice()` remains as a compatibility export; new code should use `detectDeviceCapabilities()`.
+5. Documentation corrections:
+   - stale customer-guide wording that described portrait reset boost as "planned" was updated to current implemented status.
+   - all AI context documents now cross-link to the architecture, standards, lessons, and feedback-loop docs.
+
+### Online validation summary
+
+- `requestIdleCallback`: useful for preference work deferral; required work should use a timeout and Safari support still needs the existing fallback path.
+- Long Tasks API: useful debug-only signal for ≥50 ms main-thread stalls; limited/experimental browser support justifies the current guarded observer.
+- Page Lifecycle `freeze`/`resume`: Chrome guidance supports pausing/resuming non-critical work; current implementation correctly treats it as progressive enhancement alongside `visibilitychange`.
+- three.js `WebGLRenderer.compileAsync`: official docs recommend it where possible because it uses `KHR_parallel_shader_compile`; current fallback to `compile()` remains correct.
+- ESLint v8: official ESLint v8 support ended on 2024-10-05; this repository should plan a future lint-tooling upgrade.
+- typescript-eslint v7: lint warnings show the current installed TypeScript is outside the parser's logged supported range; pinning or upgrading lint tooling should be handled in a dedicated pass.
+
+### Remaining items
+
+- Dedicated dependency/tooling upgrade PR for Vite/esbuild advisories, ESLint v8 EOL, and TypeScript/parser range alignment.
+- Dedicated legacy interaction cleanup PR.
+- Optional PreferencesPanel refactor to reduce per-render listener churn by using delegated change handling or cached form controls.
+
 ## AI context engineering workflow (2026-05-19, implemented)
 
 ### Status

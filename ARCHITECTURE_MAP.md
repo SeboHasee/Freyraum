@@ -38,7 +38,7 @@ FREYRAUM is a Vite + strict TypeScript + three.js customer-preview application f
 
 - `src/interaction/CanvasInteraction.ts`: pointer/touch/canvas interaction path.
 - `src/interaction/KeyboardNav.ts`: keyboard navigation.
-- Legacy interaction files remain until a dedicated cleanup pass.
+- Legacy interaction files (`MouseInteraction.ts`, `TouchInteraction.ts`, `ZoomPan.ts`) remain until a dedicated cleanup pass; do not add new callers.
 - `src/ui/`: topbar, info panel, preferences, fallback screen, fullscreen, hints, navigation, zoom controls.
 - `src/timeline/Timeline.ts`: timeline UI, selection, and scroll behavior.
 - `src/styles/main.scss`: global layout, glass chrome, responsive/safe-area styling, motion tokens, quality-aware CSS.
@@ -48,6 +48,7 @@ FREYRAUM is a Vite + strict TypeScript + three.js customer-preview application f
 - `src/utils/Diagnostics.ts`: bounded diagnostics buffer, global report API, scoped logging.
 - `src/utils/FrameBudgetMonitor.ts` and `src/utils/AdaptiveQualityController.ts`: frame budget sampling and adaptive quality.
 - `src/utils/performance.ts`: startup quality and pixel ratio heuristics.
+- `src/utils/preferences.ts`: `freyraum.preferences.v1` localStorage schema and document-level data attributes.
 - `src/utils/device.ts`: device capability detection and DOM data attributes.
 - `src/utils/math.ts`, `texture.ts`, `webgl.ts`, `preferences.ts`: focused helpers.
 
@@ -68,3 +69,6 @@ FREYRAUM is a Vite + strict TypeScript + three.js customer-preview application f
 - `DOCUMENTATION_RULES.md`: required documentation updates.
 - `docs/HANDOFF.md`: customer/contributor handoff.
 - `.github/copilot-instructions.md` and `.github/prompts/`: AI workflow guidance.
+- `docs/architecture/README.md`: deeper architecture notes and subsystem documentation entry point.
+- `docs/standards/CODING_GUIDELINES.md`: code, diagnostics, CSS, and dependency maintenance standards.
+- `docs/ai-feedback/AI_FEEDBACK_LOOP.md`: audit/review loop for future AI-assisted work.

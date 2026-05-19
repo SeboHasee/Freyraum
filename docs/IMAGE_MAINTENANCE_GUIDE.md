@@ -420,3 +420,6 @@ When helping a customer:
 - `/home/runner/work/Freyraum/Freyraum/src/timeline/Timeline.ts`
 - `/home/runner/work/Freyraum/Freyraum/src/ui/InfoPanel.ts`
 - `/home/runner/work/Freyraum/Freyraum/docs/CUSTOMER_PICTURE_GUIDE.md`
+- `/home/runner/work/Freyraum/Freyraum/ARCHITECTURE_MAP.md`
+- `/home/runner/work/Freyraum/Freyraum/docs/architecture/README.md`
+- `/home/runner/work/Freyraum/Freyraum/docs/ai-feedback/AI_FEEDBACK_LOOP.md`

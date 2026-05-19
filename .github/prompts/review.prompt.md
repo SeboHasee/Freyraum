@@ -17,3 +17,9 @@ Use this prompt for self-review or PR review.
 - Verify generated preview assets if runtime/style output changed.
 - Confirm docs reflect actual committed behavior.
 - Record reusable lessons if the change fixes a regression or exposes a repeated mistake.
+
+## Related prompts
+
+- Architecture context: [`architecture.prompt.md`](./architecture.prompt.md)
+- Refactor work: [`refactor.prompt.md`](./refactor.prompt.md)
+- Autonomous loop: [`autonomous-agent.prompt.md`](./autonomous-agent.prompt.md)

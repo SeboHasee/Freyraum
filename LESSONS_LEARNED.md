@@ -21,3 +21,20 @@ Use this file for durable lessons that should change future agent behavior.
 
 - A prior regression coupled motion preference to painting texture/shader detail.
 - Future rule: accessibility motion settings should reduce movement only; quality presets remain responsible for visual fidelity.
+
+## 2026-05-19 — Floating tool versions can create validation noise
+
+- The audit install resolved TypeScript 5.9.x, and lint passed while printing an `@typescript-eslint` supported-version warning.
+- Future rule: treat tooling range drift as maintenance debt. Align TypeScript, typescript-eslint, and ESLint in a dedicated upgrade pass rather than mixing it into feature work.
+
+## 2026-05-19 — npm audit fixes may require major tooling upgrades
+
+- `npm audit` currently reports moderate Vite/esbuild dev-server advisories, but npm's available fix points to a semver-major Vite upgrade.
+- Future rule: document advisories during audits and reserve forced/major dependency upgrades for focused PRs with full validation.
+
+## 2026-05-19 — Stale planned wording can outlive implementation
+
+- The customer picture guide still described the portrait reset boost as planned even though later versions implemented it.
+- Future rule: every audit should search customer-facing docs for "planned", "future", and "follow-up" wording and reconcile it with current source state.
+
+Extended incident documentation belongs in `docs/lessons-learned/`.

@@ -26,3 +26,9 @@ Improve structure or maintainability without changing customer-visible behavior 
 - Are validation commands unchanged and passing?
 - Did documentation need an update?
 - Are any lessons worth recording for future agents?
+
+## Related prompts
+
+- Architecture first: [`architecture.prompt.md`](./architecture.prompt.md)
+- Review after changes: [`review.prompt.md`](./review.prompt.md)
+- Full autonomous loop: [`autonomous-agent.prompt.md`](./autonomous-agent.prompt.md)

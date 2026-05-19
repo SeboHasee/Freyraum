@@ -2,9 +2,17 @@
 
 ## Unreleased
 
+### Documentation (full repository audit + online validation — 2026-05-19)
+
+- Completed a documentation-only deep audit across runtime architecture, scripts, dependency health, diagnostics, accessibility, customer docs, and AI guidance.
+- Revalidated current platform/tooling assumptions online: `requestIdleCallback`, Long Tasks API, Page Lifecycle `freeze`/`resume`, three.js `WebGLRenderer.compileAsync`, typescript-eslint support, and ESLint v8 support status.
+- Documented validation output: `npm install`, `npm run lint`, `npm run build`, and focused script syntax checks pass; `npm audit` reports two moderate Vite/esbuild dev-server advisories requiring a semver-major Vite upgrade to auto-fix.
+- Recorded the lint-time TypeScript 5.9.x / `@typescript-eslint` v7 supported-version warning caused by floating dependency ranges.
+- Refreshed every Markdown file with cross-links, stale wording fixes, audit notes, or workflow guidance.
+
 ### Documentation (AI context engineering workflow — 2026-05-19)
 
-- Added repository-level AI guidance: `.github/copilot-instructions.md`, reusable prompts under `.github/prompts/`, `AI_RULES.md`, `ARCHITECTURE_MAP.md`, and `LESSONS_LEARNED.md`.
+- Added repository-level AI guidance: `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `.github/prompts/refactor.prompt.md`, `.github/prompts/review.prompt.md`, `.github/prompts/autonomous-agent.prompt.md`, `AI_RULES.md`, `ARCHITECTURE_MAP.md`, and `LESSONS_LEARNED.md`.
 - Added docs folders for architecture, standards, lessons learned, and AI feedback so future agent work starts from repository structure and previous regressions.
 - Documented hard constraints around diagnostics, reduced motion, CSS containment, customer-preview rebuilds, injected artwork validation, and validation workflow.
 
