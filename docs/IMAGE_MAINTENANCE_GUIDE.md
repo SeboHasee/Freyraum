@@ -6,7 +6,7 @@ It is meant for the person who maintains the project folder, supports the custom
 or needs to understand why an image does or does not appear in the gallery.
 
 
-## v0.16 deep brainstorm — code-level audit (2026-05-19 updated)
+## v0.16 deep brainstorm — Code-level performance audit (2026-05-19, updated)
 
 The v0.16 plan has been upgraded to a code-sample-backed brainstorm with 12 file:line-anchored findings. Maintenance-relevant priorities:
 

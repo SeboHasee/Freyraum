@@ -240,9 +240,12 @@ const dx = pts[1].lastX - pts[0].lastX;
 const dy = pts[1].lastY - pts[0].lastY;
 const distSq = dx * dx + dy * dy;
 if (this.lastPinchDistSq > 0 && distSq > 0) {
-  // Log-space zoom delta: 0.5 * ln(old/new) avoids sqrt entirely.
-  // Positive delta = pinch in = zoom in (camera moves closer).
-  const logDelta = 0.5 * Math.log(this.lastPinchDistSq / distSq);
+  // Log-space zoom delta: 0.5 * ln(new/old).
+  // Fingers spreading (new > old) → positive delta → addZoomDelta adds to
+  // targetZoom → camera moves farther away → zoom OUT (wider view).
+  // Fingers pinching  (new < old) → negative delta → camera moves closer
+  // → zoom IN (detail view). This matches GalleryManager.addZoomDelta().
+  const logDelta = 0.5 * Math.log(distSq / this.lastPinchDistSq);
   this.galleryManager.addZoomDelta(logDelta * PINCH_ZOOM_SPEED);
 }
 this.lastPinchDistSq = distSq;
@@ -489,13 +492,13 @@ Every glass panel (topbar badge, info panel, nav buttons, zoom controls, fullscr
 
 Wire the quality attribute in `RendererManager.applyPreset()`:
 ```typescript
-// RendererManager.ts:
+// In RendererManager.applyPreset():
 applyPreset(preset: QualityPreset): void {
   this.preset = preset;
   this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
   this.renderer.shadowMap.enabled = preset.shadows;
   // New: mirror preset id to <html> so CSS can vary glass blur cost:
-  document.documentElement.dataset['quality'] = preset.id;
+  document.documentElement.dataset.quality = preset.id;
 }
 ```
 

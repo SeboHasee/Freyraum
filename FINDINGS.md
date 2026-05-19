@@ -12,15 +12,15 @@ Files read in full: `src/main.ts`, `src/core/RendererManager.ts`, `src/core/Post
 
 ### Current strengths (confirmed in code)
 
-- `getOptimalPixelRatio()` (`performance.ts:12`) caps coarse-pointer devices at DPR 1.5 regardless of the requested cap. Correct.
-- `suggestStartupQuality()` (`performance.ts:52`) uses viewport area + DPR + pointer type to select an appropriate first-run preset. Correct.
+- `getOptimalPixelRatio()` (`performance.ts:12`) caps coarse-pointer devices at DPR 1.5 regardless of the requested cap — prevents fill-rate overruns on high-DPR mobile GPUs.
+- `suggestStartupQuality()` (`performance.ts:52`) uses viewport area + DPR + pointer type to select an appropriate first-run preset — avoids thermal throttling on small phones.
 - `MAX_SMOOTHING_DT = 0.1` in `GalleryManager.ts:114` protects against huge dt after tab switch — but only for the smoothing math, not for the frame-budget monitor.
-- `RendererManager` handles context loss/restoration correctly (`RendererManager.ts:61–78`).
-- `TextureManager.dispose()` calls `tex.dispose()` on every cached texture (`TextureManager.ts:207–210`). Correct ownership boundary.
-- `ProceduralTextureFactory.disposeAll()` disposes its own generated DataTextures (`ProceduralTextureFactory.ts:78–80`). Correct.
-- `ArtworkMesh.dispose()` disposes geometry and materials but not textures — deliberately, because `TextureManager` owns them (`ArtworkMesh.ts:198–205`). Correct.
-- `AdaptiveQualityController` never auto-upgrades quality and suspends after a manual override (`AdaptiveQualityController.ts:17–20`). Correct policy.
-- All CSS transitions already animate only `transform` and `opacity` after v0.15. Correct.
+- `RendererManager` handles context loss/restoration correctly (`RendererManager.ts:61–78`) — prevents black-screen on app-switch on mobile.
+- `TextureManager.dispose()` calls `tex.dispose()` on every cached texture (`TextureManager.ts:207–210`) — correct ownership boundary; materials reference but never dispose.
+- `ProceduralTextureFactory.disposeAll()` disposes its own generated DataTextures (`ProceduralTextureFactory.ts:78–80`) — separate ownership from TextureManager.
+- `ArtworkMesh.dispose()` disposes geometry and materials but not textures — deliberately, because `TextureManager` owns them (`ArtworkMesh.ts:198–205`).
+- `AdaptiveQualityController` never auto-upgrades quality and suspends after a manual override (`AdaptiveQualityController.ts:17–20`) — prevents unwanted quality bouncing.
+- All CSS transitions already animate only `transform` and `opacity` after v0.15 — compositor-promoted; no layout/paint cost in the hot path.
 
 ---
 
