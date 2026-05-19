@@ -9,6 +9,10 @@ You only ever touch one folder and one button.
 
 v0.11 already implemented the main phone/tablet hardening pass: touch gestures, safe-area handling, responsive breakpoints, compact info-panel mode, and better mobile WebGL reliability are in place. Desktop is still the main polished design, but the current build now works substantially better on phones and tablets than the original release.
 
+## Upcoming animation refinement
+
+A v0.15 planning pass is documented for smoother, longer, more elegant gallery animations. This is **not implemented yet** and does not change the current customer workflow. The plan keeps reduced-motion support as a requirement, so customers who prefer less movement should still be protected when the animation pass is implemented.
+
 ## Current viewing status (v0.14.2 implemented)
 
 The customer-facing **v0.14.2 follow-up is implemented**.

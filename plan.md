@@ -1,5 +1,213 @@
 # FREYRAUM Plan
 
+## v0.15 — Planned: smoother, longer, elegant animation system (research pass, 2026-05-19)
+
+### Status
+
+**Planned, not implemented yet.** This documentation pass responds to the request to make FREYRAUM animations smoother, longer, more visible, and more elegant while preserving the modern art-gallery aesthetic. No runtime code was changed in this pass.
+
+### Design goal
+
+FREYRAUM should feel like a premium digital museum installation, not a fast utility UI. Motion should be:
+
+- **visible enough to witness**: navigation, artwork arrival, reset, and UI reveal animations should last long enough to be perceived;
+- **quiet and elegant**: no playful bounce, no aggressive overshoot, no distracting parallax-like camera sweeps;
+- **art-first**: motion should guide attention toward the artwork and never compete with painting detail, lighting, or surface texture;
+- **consistent**: CSS UI transitions and Three.js camera/object motion should share one motion language;
+- **accessible**: `prefers-reduced-motion` and FREYRAUM's existing reduced-motion preference remain hard requirements;
+- **performant**: keep animations on `transform`/`opacity` for DOM UI and frame-rate-independent interpolation for WebGL camera/object motion.
+
+### 2026 online research distilled into FREYRAUM guidelines
+
+Sources reviewed during this pass:
+
+- W3C WCAG 2.2 — Understanding SC 2.3.3 Animation from Interactions: interaction-triggered non-essential animation must be disableable.
+- MDN — `prefers-reduced-motion`: the system preference is the standard web signal for users requesting less motion.
+- MDN / web.dev animation performance guidance: prefer `transform` and `opacity`; avoid layout/paint-triggering animated properties; use `requestAnimationFrame` for JS/WebGL animation; profile for stable frame pacing.
+- Current motion-design guidance for 2026 web apps: micro-interactions should stay short, but larger state transitions can be longer when they support orientation and comprehension.
+
+Practical duration targets for FREYRAUM:
+
+| Motion type | Current feel | Planned target | Reason |
+|---|---|---:|---|
+| Button hover / press | quick | 180–240 ms | keep controls responsive |
+| Info panel content swap | quick fade/translate | 450–650 ms | readable gallery-label reveal |
+| Timeline active thumb lift | visible but springy | 420–560 ms | more refined, less snappy |
+| Preferences panel open | spring pop | 420–620 ms | premium glass-panel entrance |
+| Artwork navigation arrival | barely witnessable on fast screens | 900–1300 ms | allow visitors to see the painting glide into place |
+| Reset view / zoom settling | exponential smoothing only | 700–1100 ms equivalent settle | clear but not sluggish |
+| Ambient key-light drift | already subtle | keep very slow; audit amplitude only | preserve living-gallery feel |
+| Loading shimmer/spinner | utilitarian | 1200–1800 ms cycles | calm feedback without urgency |
+
+### Current code audit
+
+Key motion surfaces found:
+
+- `src/styles/main.scss`
+  - global motion tokens: `--dur-fast: 0.18s`, `--dur-base: 0.32s`, `--dur-slow: 0.6s`;
+  - easing tokens: `--ease-out`, `--ease-spring`;
+  - UI transitions for info panel, nav/zoom/prefs/fullscreen buttons, timeline thumbs, skeletons, fallback, and loading;
+  - reduced-motion blocks already disable transitions/animations.
+- `src/gallery/GalleryManager.ts`
+  - navigation seeds artwork group offset/rotation/scale, then `update()` eases every frame with fixed multipliers (`0.05`, `0.06`, `0.08`);
+  - camera zoom/pan also uses fixed per-frame exponential smoothing;
+  - reduced motion bypasses navigation seed motion and propagates to material motion.
+- `src/lighting/LightingSetup.ts`
+  - gallery-soft key light drifts slowly with `Math.sin(time * 0.0002) * 0.25`;
+  - reduced motion disables animated lighting through `setAnimated()`.
+- `src/main.ts`
+  - central render loop already uses `requestAnimationFrame`;
+  - `FrameBudgetMonitor` and adaptive quality are available for navigation-performance validation.
+- `src/utils/preferences.ts`
+  - reduced motion is already detected from `prefers-reduced-motion`, persisted, and mirrored to `<html data-motion>`.
+
+Main gap: CSS has duration/easing tokens, but WebGL camera/object motion is controlled by hard-coded per-frame smoothing factors. That makes the perceived duration dependent on refresh rate and hard to tune as a coherent "elegant" motion system.
+
+### Implementation plan
+
+#### Slice 1 — Define a single FREYRAUM motion language
+
+- Replace the current small token set with named semantic motion tokens in `src/styles/main.scss`:
+  - interaction: fast hover/press;
+  - panel: glass UI reveal and content swap;
+  - timeline: active thumbnail lift/settle;
+  - artwork: primary navigation and reset motion;
+  - ambient: slow/non-critical movement.
+- Add non-bouncy premium easing tokens:
+  - `ease-gallery-out` for most exits/settles;
+  - `ease-gallery-in-out` for camera/object travel;
+  - keep a very restrained spring only where physical lift is appropriate.
+- Keep old token aliases temporarily if needed so this can be implemented without a risky all-at-once SCSS rewrite.
+
+Acceptance checks:
+
+- All existing animated UI still compiles.
+- Hover/press controls still feel immediate.
+- Timeline and panel transitions are visibly slower and more refined.
+
+#### Slice 2 — Introduce frame-rate-independent WebGL smoothing
+
+- Add a small motion utility in `src/utils/motion.ts` or `src/utils/math.ts`.
+- Convert fixed per-frame easing factors in `GalleryManager.update()` to delta-time-based smoothing.
+- Feed delta time from `main.ts` into gallery update, or store previous update timestamp inside `GalleryManager` if the public call shape should stay minimal.
+- Keep behavior interruptible: new zoom, pan, hover, or navigation input should retarget the same motion state rather than queueing unskippable animations.
+
+Acceptance checks:
+
+- 60 Hz and high-refresh displays settle over approximately the same real time.
+- Rapid wheel/pinch/drag input remains responsive.
+- Navigation can be interrupted without snapping or accumulating stale offsets.
+
+#### Slice 3 — Make artwork navigation visibly elegant
+
+- Retune navigation seed values and settle timing in `GalleryManager.navigate()` / `goTo()`:
+  - keep lateral artwork entrance subtle enough for a museum setting;
+  - reduce rotational theatricality if it reads as gimmicky;
+  - extend arrival settle to roughly 900–1300 ms in full-motion mode.
+- Coordinate camera reset with artwork arrival so a new painting does not both fly and zoom abruptly.
+- Preserve the existing `pendingResetAfterArtworkLoad` race-protection behavior.
+- Add diagnostics fields to `gallery/navigate` or `show-artwork-complete` for motion preset, reduced-motion status, and intended settle duration.
+
+Acceptance checks:
+
+- Users can clearly witness the artwork change.
+- Painting arrival feels calm and intentional.
+- Fast repeated next/previous clicks do not create jitter, stale loads, or delayed callbacks.
+
+#### Slice 4 — Smooth zoom, pan, reset, and hover without making controls feel laggy
+
+- Separate input responsiveness from visual settling:
+  - pointer drag/pinch should update targets immediately;
+  - camera/object interpolation should settle elegantly toward those targets.
+- Retune camera zoom/pan smoothing independently from artwork transform smoothing.
+- Make reset view a deliberate motion moment, not only a target jump followed by generic smoothing.
+- Keep hover rotation restrained, especially at close inspection zoom where surface detail matters.
+
+Acceptance checks:
+
+- Wheel/pinch feels connected to input.
+- Reset is visible and graceful.
+- Close inspection does not feel floaty or seasick.
+- Pan limits from v0.14.2 remain unchanged.
+
+#### Slice 5 — Retune DOM/UI transitions for the modern art style
+
+- Update `InfoPanel` content transitions to a slower fade/translate with minimal distance.
+- Update `.timeline__thumb` active transition to feel smooth but not elastic.
+- Retune `.prefs__panel` away from a playful spring pop toward a gallery-glass reveal.
+- Keep loading shimmer/spinner calmer by extending loop durations and checking reduced-motion fallbacks.
+- Avoid animating layout-affecting properties; stay on `opacity`, `transform`, and compositor-friendly changes.
+
+Acceptance checks:
+
+- Info text becomes readable during transitions instead of flashing.
+- Timeline active state is visible but refined.
+- Preferences panel entrance fits the premium glass UI.
+- Reduced-motion mode still removes or minimizes non-essential movement.
+
+#### Slice 6 — Accessibility and reduced-motion safeguards
+
+- Keep `PreferencesStore` as the single source of truth for motion preference.
+- Ensure all new JS-driven motion checks `reducedMotion`.
+- For reduced motion:
+  - no large lateral artwork travel;
+  - no non-essential scale/rotation flourish;
+  - keep only instant or near-instant state changes plus opacity where needed for comprehension.
+- Keep CSS `@media (prefers-reduced-motion: reduce)` and `[data-motion="reduced"]` coverage aligned.
+
+Acceptance checks:
+
+- System reduced motion applies on first load.
+- In-app reduced-motion toggle still persists and updates the page immediately.
+- WCAG 2.2 SC 2.3.3 intent remains satisfied.
+
+#### Slice 7 — Diagnostics, validation, and QA
+
+- Add concise diagnostics only where useful:
+  - motion mode (`full` / `reduced`);
+  - navigation settle target duration;
+  - whether frame-budget cooldown was marked for animation-heavy navigation.
+- Validate with existing commands:
+  - `npm run lint`;
+  - `npm run build`.
+- Manual QA matrix:
+  - desktop mouse wheel/drag/navigation;
+  - touch pinch/pan/swipe;
+  - keyboard navigation and reset;
+  - reduced motion;
+  - high contrast;
+  - high-DPR / lower-power device;
+  - rapid repeated navigation.
+- Performance QA:
+  - no layout thrash in DevTools during UI transitions;
+  - no sustained frame-budget downgrade caused only by longer animation duration;
+  - no memory increase from persistent `will-change` overuse.
+
+### Non-goals for this pass
+
+- Do not change artwork zoom/pan limits from v0.14.2 unless separate visual QA proves the motion retune requires it.
+- Do not add a large animation library; the existing CSS + `requestAnimationFrame` architecture is sufficient.
+- Do not add decorative background motion that competes with the paintings.
+- Do not weaken reduced-motion behavior to make the full-motion experience easier to implement.
+
+### Risks and mitigations
+
+- **Longer can feel slower, not more elegant.** Mitigate by keeping controls fast and only extending high-level state transitions.
+- **Frame-rate-dependent smoothing can remain if only constants are changed.** Mitigate by converting to delta-time-based interpolation before final timing tweaks.
+- **Motion sensitivity risk.** Mitigate by preserving reduced-motion as a first-class runtime path.
+- **Navigation race risk.** Mitigate by preserving existing artwork-load token logic and testing rapid timeline/nav input.
+- **Performance risk from UI effects.** Mitigate by animating only compositor-friendly properties and profiling with DevTools.
+
+### Done definition
+
+- The user can visibly witness artwork transitions, reset, and major UI reveals.
+- Motion feels calmer, slower, and more premium without becoming sluggish.
+- Reduced-motion users receive minimal non-essential movement.
+- Existing lint/build pass.
+- Documentation is updated with shipped values, diagnostics, validation, and any remaining visual tuning notes.
+
+---
+
 ## v0.14.2 — Implemented: tighter top/bottom pan limits at close zoom (2026-05-19)
 
 ### Status

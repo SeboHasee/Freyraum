@@ -1,5 +1,48 @@
 # FINDINGS
 
+## 2026-05-19 — v0.15 research pass: elegant longer animations
+
+### Scope of this pass
+
+Documented the next animation-enhancement plan. No runtime code was changed.
+
+### Online research findings
+
+- **Accessibility:** W3C WCAG 2.2 SC 2.3.3 requires interaction-triggered non-essential animation to be disableable. FREYRAUM already has a reduced-motion preference and should continue treating it as a hard implementation boundary.
+- **System preference:** MDN documents `prefers-reduced-motion` as the standard browser-facing signal for users who request less motion. FREYRAUM already reads this through `PreferencesStore`.
+- **Performance:** MDN and web.dev guidance continues to favor animating `transform` and `opacity`, using `requestAnimationFrame` for JavaScript/WebGL animation, and avoiding layout/paint-heavy animated properties.
+- **Motion timing:** Current 2026 UI guidance supports short micro-interactions but allows longer 400–1300 ms transitions for larger state changes when they improve orientation and comprehension. This fits the request that FREYRAUM animations should be long enough to witness.
+
+Source links recorded for the implementation pass:
+
+- <https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html>
+- <https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion>
+- <https://developer.mozilla.org/en-US/docs/Web/API/window/requestAnimationFrame>
+- <https://developer.mozilla.org/en-US/docs/Web/Performance/CSS_animation_performance>
+- <https://web.dev/animations-guide/>
+
+### Codebase findings
+
+- `src/styles/main.scss` already centralizes CSS motion with `--dur-fast`, `--dur-base`, `--dur-slow`, `--ease-out`, and `--ease-spring`, but those tokens are too generic for a refined gallery-wide motion language.
+- DOM transitions are already mostly on compositor-friendly properties (`opacity`, `transform`, `box-shadow`, `border-color`). Future implementation should avoid adding layout-affecting animation.
+- `src/gallery/GalleryManager.ts` uses hard-coded per-frame smoothing constants in `update()` for artwork rotation/position/scale and camera zoom/pan. This makes perceived duration refresh-rate-dependent and difficult to tune consistently.
+- Navigation currently seeds a lateral offset, yaw, and scale when reduced motion is off, then lets generic smoothing settle the artwork. This is the main place to make artwork changes visibly elegant and longer.
+- `src/main.ts` already owns a `requestAnimationFrame` loop and `FrameBudgetMonitor`, so the implementation can add delta-time-aware motion without adding a new animation library.
+- `src/lighting/LightingSetup.ts` already disables animated key-light drift when reduced motion is active. Ambient motion should remain very subtle.
+
+### Recommended implementation boundaries
+
+- Do not add a heavy animation dependency.
+- Do not alter v0.14.2 zoom/pan limit constants as part of the animation pass unless QA proves motion retuning requires it.
+- Convert WebGL motion to frame-rate-independent smoothing before retuning durations; changing only constants would be fragile.
+- Add diagnostics for motion mode and intended navigation settle timing, but keep normal logs quiet.
+
+### Validation status
+
+- Documentation-only pass. No lint/build required.
+
+---
+
 ## 2026-05-19 — v0.14.2 follow-up: tighter vertical pan limits
 
 ### Scope of this pass

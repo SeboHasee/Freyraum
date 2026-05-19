@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Documentation (v0.15 animation enhancement plan — 2026-05-19)
+
+- Added a detailed research-backed plan for smoother, longer, more elegant animations that fit the modern art-gallery style.
+- Documented 2026 guidance for accessible motion, `prefers-reduced-motion`, compositor-friendly animation, `requestAnimationFrame`, and duration ranges.
+- Audited current motion surfaces in `src/styles/main.scss`, `src/gallery/GalleryManager.ts`, `src/main.ts`, `src/lighting/LightingSetup.ts`, and `src/utils/preferences.ts`.
+- Planned a future implementation path for semantic motion tokens, frame-rate-independent WebGL smoothing, refined artwork navigation, smoother reset/zoom/pan, UI transition retuning, diagnostics, and reduced-motion safeguards.
+- No runtime code was changed in this documentation pass.
+
 ### Implemented (v0.14.2 vertical pan tightening — 2026-05-19)
 
 - Kept horizontal close-pan behavior unchanged (`INSPECTION_OVERSCROLL_X = 1.2`) because left/right edge reach was already approved.

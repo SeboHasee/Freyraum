@@ -5,6 +5,17 @@ This guide explains how the image system works after the v0.07 importer update.
 It is meant for the person who maintains the project folder, supports the customer,
 or needs to understand why an image does or does not appear in the gallery.
 
+## Planned v0.15 animation refinement
+
+The v0.15 documentation pass (2026-05-19) plans smoother, longer, more elegant animation behavior. It is not implemented yet and does not affect the importer or image manifest pipeline.
+
+Maintenance notes for the future implementation:
+
+- start from `plan.md` and `FINDINGS.md` v0.15 sections;
+- preserve the existing customer image pipeline and v0.14.2 zoom/pan constants unless visual QA proves otherwise;
+- keep reduced-motion behavior and `prefers-reduced-motion` compatibility;
+- validate rapid navigation with imported customer images because animation retuning must not expose stale texture loads.
+
 ## Responsive and touch support — final technical status (v0.11)
 
 The v0.11 final technical coding plan (2026-05-18) identifies 7 code-level bugs, validates the proposed fixes against current official browser/accessibility guidance, and maps every fix to specific source files. The customer artwork pipeline (`webglImage` data URLs, aspect-ratio handling, importer, diagnostics) is unaffected by the responsive changes. The implementation preserves all artwork reliability work from v0.07–v0.10 while adding:

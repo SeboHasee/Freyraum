@@ -2,7 +2,22 @@
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
-## Current status — v0.14.2 implemented (2026-05-19)
+## Current planning status — v0.15 animation enhancement plan (2026-05-19)
+
+**Current planning pass:** v0.15 is documented but not implemented yet.
+
+The next planned enhancement is a smoother, longer, more elegant motion system for the gallery. The plan is based on 2026 web animation/accessibility/performance guidance and targets:
+
+- semantic motion tokens for the modern art-gallery style;
+- frame-rate-independent WebGL camera/artwork smoothing;
+- artwork navigation transitions long enough to witness;
+- calmer info-panel, timeline, preferences, loading, and reset motion;
+- preserved `prefers-reduced-motion` / in-app reduced-motion behavior;
+- diagnostics and QA checks for motion timing and frame budget.
+
+See [`plan.md`](./plan.md#v015--planned-smoother-longer-elegant-animation-system-research-pass-2026-05-19) and [`FINDINGS.md`](./FINDINGS.md#2026-05-19--v015-research-pass-elegant-longer-animations) for the detailed plan and research findings.
+
+## Current runtime status — v0.14.2 implemented (2026-05-19)
 
 **Current build:** v0.14.2 is implemented.
 
