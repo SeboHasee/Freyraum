@@ -26,7 +26,6 @@ export interface BackgroundAudioState {
 export class BackgroundAudioManager {
   private readonly diagnostics = createScopedDiagnostics('audio');
   private readonly audio = new Audio();
-  private payload: BackgroundAudioPayload | null = null;
   private source: BackgroundAudioSource | null = null;
   private disposed = false;
   private suspended = false;
@@ -52,7 +51,6 @@ export class BackgroundAudioManager {
 
   load(payload: BackgroundAudioPayload | null): void {
     if (this.disposed) return;
-    this.payload = payload;
     const chosen = this.pickPlayableSource(payload);
     if (!chosen) {
       this.audio.removeAttribute('src');
@@ -267,12 +265,17 @@ export class BackgroundAudioManager {
     );
     if (sourceList.length === 0) return null;
 
-    for (const source of sourceList) {
-      const support = this.audio.canPlayType(source.mime);
-      if (support === 'probably' || support === 'maybe') {
-        return source;
+    const canProbeRuntime = typeof this.audio.canPlayType === 'function';
+    if (canProbeRuntime) {
+      for (const source of sourceList) {
+        const support = this.audio.canPlayType(source.mime);
+        if (support === 'probably' || support === 'maybe') {
+          return source;
+        }
       }
+      return null;
     }
+
     if (payload.selectedByImporter) {
       const importerMatch = sourceList.find((source) => source.src === payload.selectedByImporter?.src);
       if (importerMatch) return importerMatch;

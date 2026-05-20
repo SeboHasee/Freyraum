@@ -746,14 +746,18 @@ async function main(): Promise<void> {
           (window as unknown as { cancelIdleCallback: (h: number) => void }).cancelIdleCallback(h)
       : (h): void => window.clearTimeout(h);
   let pendingApplyHandle: IdleCancelHandle | null = null;
+  const VOLUME_CHANGE_EPSILON = 1e-6;
   const unsubscribePreferences = preferences.subscribe(() => {
     const nextPrefs = preferences.current;
     const manual = nextPrefs.quality !== previousPrefs.quality && !adaptiveQualityWriteInFlight;
     const audioChanged =
       nextPrefs.audioMuted !== previousPrefs.audioMuted ||
-      Math.abs(nextPrefs.audioVolume - previousPrefs.audioVolume) > 0.0001;
+      Math.abs(nextPrefs.audioVolume - previousPrefs.audioVolume) > VOLUME_CHANGE_EPSILON;
     previousPrefs = nextPrefs;
     if (audioChanged) {
+      // Audio changes are applied synchronously so autoplay-sensitive
+      // user gestures (mute toggle / volume slider) are not lost behind
+      // idle-callback deferral.
       if (pendingApplyHandle !== null) {
         cancelIdle(pendingApplyHandle);
         pendingApplyHandle = null;

@@ -679,7 +679,7 @@ imageEntries.forEach((filename, i) => {
 const selectedAudio = pickAudioByPriority(audioCandidates);
 const copiedAudio = [];
 for (const candidate of audioCandidates) {
-  const destFilename = `${normalizeId(basename(candidate.filename, candidate.ext))}-${candidate.ext.slice(1)}${candidate.ext}`;
+  const destFilename = `${normalizeId(basename(candidate.filename, candidate.ext))}${candidate.ext}`;
   const destPath = join(PREVIEW_AUDIO, destFilename);
   try {
     cpSync(candidate.srcPath, destPath);
