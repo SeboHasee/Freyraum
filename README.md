@@ -3,7 +3,37 @@
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
 
-## Current status — v0.16.2 control-shell follow-up fix implemented (2026-05-19)
+## Current status — v0.17 easy wins shipped (2026-05-20)
+
+**Latest pass:** implemented three accessibility fixes and removed dead code based on the 2026-05-19 deep audit and online research.
+
+What v0.17 ships:
+
+- **PreferencesPanel ARIA fixes.** Added `aria-modal="true"` (WCAG 4.1.2), replaced `aria-label` with `aria-labelledby` pointing to the panel heading, and returned focus to the trigger on outside-click dismiss. Screen readers now correctly identify the dialog title and treat background content as inert while the panel is open.
+- **Legacy interaction cleanup.** Removed `MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts` — three files superseded by `CanvasInteraction.ts` in v0.11 with no remaining production imports.
+- **Deprecated API removal.** Removed `isMobileDevice()` from `src/utils/performance.ts`. It had no callers; `detectDeviceCapabilities()` is the correct replacement.
+
+Validation for v0.17:
+
+- `npm run lint` ✅
+- `npm run build` ✅
+- `customer-preview/` rebuilt.
+
+Remaining items documented in `plan.md` (v0.17 section): ESLint v8 → v9 upgrade, Vite v5 → v6 for audit advisories, PreferencesPanel in-place DOM refactor.
+
+
+
+**Latest pass:** a documentation-only deep audit reviewed the full repository structure, runtime architecture, validation workflow, dependency health, diagnostics surface, customer docs, and new AI context-engineering files.
+
+Audit highlights:
+
+- **Runtime still validates.** `npm install`, `npm run lint`, `npm run build`, and focused script syntax checks pass.
+- **Dependency risk documented.** `npm audit` currently reports two moderate dev-server advisories in the Vite/esbuild chain; the available automated fix jumps to a semver-major Vite release, so it is reserved for a dedicated upgrade pass.
+- **Tooling drift documented.** The floating TypeScript range installed TypeScript 5.9.x, which triggers the current `@typescript-eslint` v7 supported-version warning during lint; this is now recorded as a maintenance risk, not a runtime regression.
+- **Online research captured.** The audit revalidated `requestIdleCallback`, Long Tasks API, Page Lifecycle `freeze`/`resume`, three.js `compileAsync`, typescript-eslint support, and ESLint v8 EOL status in `FINDINGS.md`.
+- **All Markdown files refreshed.** Cross-links, stale planned wording, AI workflow guidance, developer handoff notes, and customer image-maintenance docs now point to the current architecture and audit findings.
+
+## Current runtime status — v0.16.2 control-shell follow-up fix implemented (2026-05-19)
 
 **Current build:** v0.16.2 completes the settings/nav regression fix with a stronger control-shell approach:
 
@@ -25,6 +55,31 @@ Validation for v0.16.2:
   - rebuilt preview loads the real gallery UI (not fallback)
 
 All repository markdown files were updated for this follow-up fix.
+
+## AI context engineering workflow
+
+Repository guidance for future autonomous agent work now lives in:
+
+- `.github/copilot-instructions.md`
+- `.github/prompts/architecture.prompt.md`
+- `.github/prompts/refactor.prompt.md`
+- `.github/prompts/review.prompt.md`
+- `.github/prompts/autonomous-agent.prompt.md`
+- `AI_RULES.md`
+- `ARCHITECTURE_MAP.md`
+- `LESSONS_LEARNED.md`
+- `docs/architecture/README.md`
+- `docs/ai-feedback/AI_FEEDBACK_LOOP.md`
+- `docs/standards/CODING_GUIDELINES.md`
+- `docs/lessons-learned/README.md`
+
+Use these files with `DOCUMENTATION_RULES.md`, `plan.md`, `FINDINGS.md`, and `CHANGELOG.md` before planning or implementing meaningful changes.
+
+Recommended order:
+
+1. Architecture analysis: `ARCHITECTURE_MAP.md` → `docs/architecture/README.md`.
+2. Coding or refactor work: `AI_RULES.md` → `docs/standards/CODING_GUIDELINES.md` → the relevant prompt in `.github/prompts/`.
+3. Review or audit work: `docs/ai-feedback/AI_FEEDBACK_LOOP.md` → `FINDINGS.md` → `LESSONS_LEARNED.md`.
 
 ## Current status — v0.16 deep performance and compatibility pass implemented (2026-05-19)
 

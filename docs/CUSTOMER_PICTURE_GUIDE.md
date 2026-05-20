@@ -55,6 +55,15 @@ The v0.15 elegant animation system is **implemented**. Artwork navigation now fe
 v0.15.1 hotfix note: **Reduzierte Bewegung now changes movement only**. It does
 not lower picture texture/shader quality.
 
+## Current viewing status (v0.17 implemented — 2026-05-20)
+
+**v0.17 easy-wins pass** shipped two non-visual improvements:
+
+- Screen readers now correctly identify the preferences dialog title and treat background content as inert while the panel is open.
+- Keyboard users land on the settings gear button after dismissing the panel via outside-click or Escape.
+
+No change to picture display, navigation, zoom, pan, or texture rendering.
+
 ## Current viewing status (v0.14.2 implemented)
 
 The customer-facing **v0.14.2 follow-up is implemented**.
@@ -266,8 +275,9 @@ chrome is considered. If it still looks too close, include:
 3. the `show-artwork-complete` diagnostics entry with `resetZoom`, `minZoom`,
     `maxZoom`, `overviewHeadroom`, and the usable viewport fields.
 
-There is now also a planned follow-up to make **large vertical** artworks start
-slightly farther away by adding a portrait-aware reset-fit boost.
+Large vertical artworks also receive the implemented portrait-aware reset-fit
+boost from the later v0.14 pass. If a tall artwork still starts too close, treat
+it as a new regression and include the diagnostics fields listed above.
 
 **The selected timeline picture looks cut off.**
 This should be fixed by v0.12. If it still happens, please send:
@@ -294,5 +304,7 @@ shown in the console by default.
 
 ## For developers
 
-See `plan.md` (section "v0.07 Technical Implementation Guide") for the
-full architecture, file layout, and code references.
+See `plan.md` (section "v0.07 Technical Implementation Guide"),
+`ARCHITECTURE_MAP.md`, and `docs/architecture/README.md` for the full
+architecture, file layout, and code references. For audits, also check
+`FINDINGS.md` and `LESSONS_LEARNED.md`.

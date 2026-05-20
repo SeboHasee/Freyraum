@@ -6,7 +6,15 @@ It is meant for the person who maintains the project folder, supports the custom
 or needs to understand why an image does or does not appear in the gallery.
 
 
-## v0.16.2 implemented — control-shell follow-up (2026-05-19)
+## v0.17 implemented — accessibility and dead-code cleanup (2026-05-20)
+
+Image-pipeline unaffected. UI/accessibility changes visible only if using assistive technology:
+
+- The preferences panel (`Anzeige`/`Performance`) is now correctly identified by screen readers via `aria-modal="true"` and `aria-labelledby`.
+- Keyboard users now land on the settings gear button after dismissing the panel via outside-click (previously only Escape returned focus).
+- Three internal dead-code files and one deprecated function were removed; no customer-facing behavior changed.
+
+
 
 Maintenance-relevant UI correction:
 
@@ -420,3 +428,6 @@ When helping a customer:
 - `/home/runner/work/Freyraum/Freyraum/src/timeline/Timeline.ts`
 - `/home/runner/work/Freyraum/Freyraum/src/ui/InfoPanel.ts`
 - `/home/runner/work/Freyraum/Freyraum/docs/CUSTOMER_PICTURE_GUIDE.md`
+- `/home/runner/work/Freyraum/Freyraum/ARCHITECTURE_MAP.md`
+- `/home/runner/work/Freyraum/Freyraum/docs/architecture/README.md`
+- `/home/runner/work/Freyraum/Freyraum/docs/ai-feedback/AI_FEEDBACK_LOOP.md`

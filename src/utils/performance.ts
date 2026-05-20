@@ -18,20 +18,6 @@ export function getOptimalPixelRatio(cap = 1.8): number {
   return Math.min(dpr, effectiveCap);
 }
 
-/**
- * v0.11 — deprecated viewport-width-only mobile check.
- *
- * Kept for backwards compatibility with callers that have not migrated
- * to `detectDeviceCapabilities()` in `src/utils/device.ts`. New code
- * should use `pointerPrimary === 'coarse'` (capability-based) instead
- * of this function (viewport-only). See `plan.md` § "Bug 4".
- *
- * @deprecated Use `detectDeviceCapabilities()` from `./device.ts`.
- */
-export function isMobileDevice(): boolean {
-  return window.innerWidth < 768;
-}
-
 export function isReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }

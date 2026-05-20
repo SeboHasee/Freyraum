@@ -2,10 +2,10 @@
  * v0.11 — Device capability model.
  *
  * Replaces the previous viewport-width-only mobile heuristic
- * (`isMobileDevice()` in `performance.ts`) with a capability-based
- * detection that combines media queries, pointer type, and viewport
- * geometry. The result is mirrored to `<html>` data attributes so SCSS
- * can react without re-running JS, and is consumed by:
+ * (`isMobileDevice()`, removed in v0.17 dead-code cleanup) with a
+ * capability-based detection that combines media queries, pointer type,
+ * and viewport geometry. The result is mirrored to `<html>` data
+ * attributes so SCSS can react without re-running JS, and is consumed by:
  *   - `main.ts`               — resize coordinator + UI compact mode
  *   - `HintText.ts`           — coarse-pointer hint copy
  *   - `performance.ts`        — DPR cap + startup quality heuristic

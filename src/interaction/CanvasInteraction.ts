@@ -4,10 +4,10 @@ import { createScopedDiagnostics } from '../utils/Diagnostics';
 /**
  * v0.11 — Unified canvas interaction layer.
  *
- * Replaces three previously-separate classes (`MouseInteraction`,
- * `ZoomPan`, `TouchInteraction`) with a single gesture coordinator
- * that uses Pointer Events Level 3 when available and Touch Events as
- * a fallback for older Safari. Fixes:
+ * Replaced three previously-separate classes (`MouseInteraction`,
+ * `ZoomPan`, `TouchInteraction`, removed in v0.17 dead-code cleanup) with
+ * a single gesture coordinator that uses Pointer Events Level 3 when
+ * available and Touch Events as a fallback for older Safari. Fixes:
  *
  *   - Bug 2: all touch listeners were passive, so iOS Safari's native
  *     page pinch-zoom always fired in parallel with the custom zoom.

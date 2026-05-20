@@ -1,5 +1,123 @@
 # FINDINGS
 
+## 2026-05-20 — v0.17 easy wins: accessibility, dead-code cleanup
+
+### Problems identified and fixed
+
+1. `PreferencesPanel` custom `role="dialog"` element lacked `aria-modal="true"`, was labelled by `aria-label` instead of `aria-labelledby`, and did not return focus to the trigger after an outside-click dismiss. WCAG 2.2 SC 4.1.2 and the ARIA APG dialog pattern all require these. Fixed in `src/ui/PreferencesPanel.ts`.
+2. Three legacy interaction files (`MouseInteraction.ts`, `TouchInteraction.ts`, `ZoomPan.ts`) had no remaining production imports (confirmed by grep). Removed.
+3. Deprecated `isMobileDevice()` had no remaining callers (confirmed by grep). Removed from `src/utils/performance.ts`.
+
+### Online sources that validated the decisions
+
+- ARIA APG dialog pattern: <https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/>
+- MDN `dialog` role: <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/dialog_role>
+- three.js r166 `TextureUtils` (future enhancement candidate): <https://newreleases.io/project/github/mrdoob/three.js/release/r166>
+- ESLint v9 flat config migration (future tooling pass): <https://typescript-eslint.io/linting/configs/flat-config/>
+- CSS `content-visibility: auto` (not applicable to current WebGL layout): <https://developer.mozilla.org/en-US/docs/Web/CSS/content-visibility>
+
+### Remaining items documented in plan.md
+
+- ESLint v8 → v9 flat-config migration (dedicated PR).
+- Vite v5 → v6 to resolve moderate `npm audit` advisories (dedicated PR).
+- `PreferencesPanel.renderPanel()` in-place DOM refactor (dedicated PR).
+
+
+
+### Validation results
+
+- `npm install` completed successfully.
+- `npm run lint` passed. The lint run printed a TypeScript support warning because the current floating dependency install resolved TypeScript 5.9.x while `@typescript-eslint/typescript-estree` reports support for `>=4.7.4 <5.6.0` in this installed toolchain.
+- `npm run build` passed and rebuilt `customer-preview/`.
+- `node -c scripts/import-artworks.mjs`, `node -c scripts/write-local-preview.mjs`, and `node -c scripts/run-import-artworks.cjs` passed.
+- `npm audit --json` reported two moderate advisories:
+  - `vite` path traversal / optimized deps sourcemap handling advisory (`GHSA-4w7w-66w2-5vf9`), fixed by a semver-major Vite upgrade according to npm.
+  - transitive `esbuild` dev-server request advisory (`GHSA-67mh-4wv8-2f99`), also fixed through a semver-major Vite upgrade according to npm.
+
+### Code architecture findings
+
+1. **Architecture boundaries remain coherent.**
+   - `src/main.ts` is still the orchestration layer for boot, diagnostics, lifecycle, resize coordination, preferences, UI wiring, and render loop.
+   - Rendering infrastructure remains in `src/core/`.
+   - Gallery state, texture loading, navigation, zoom/pan math, and artwork layout remain in `src/gallery/`.
+   - Painting fidelity and procedural map generation remain in `src/materials/`.
+2. **Diagnostics coverage is strong and should remain mandatory.**
+   - `Diagnostics.ts` exposes a bounded, deduplicated log and global report API through `window.__FREYRAUM_DIAGNOSTICS__`.
+   - Runtime now logs lifecycle suspend/resume, renderer snapshots, texture anisotropy changes, adaptive downgrades, importer validation, and debug long tasks.
+3. **PreferencesPanel listener churn is low-risk but worth documenting.**
+   - `PreferencesPanel.renderPanel()` replaces `panel.innerHTML` and attaches fresh input listeners after preference updates.
+   - Old DOM nodes are collectable, so this is not treated as a leak, but future work can simplify this with delegated `change` handling.
+4. **Legacy interaction cleanup remains deferred.**
+   - `MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts` are superseded by unified `CanvasInteraction.ts`.
+   - They remain useful as historical references but should be removed in a dedicated cleanup PR after one focused validation pass.
+5. **Deprecated API remains intentionally exported.**
+   - `isMobileDevice()` in `src/utils/performance.ts` is deprecated in favor of `detectDeviceCapabilities()`; future code should not add new callers.
+6. **Preference persistence schema is now part of the audit record.**
+   - Storage key: `freyraum.preferences.v1`.
+   - Fields: `reducedMotion`, `highContrast`, `contrastMode`, `quality`, and `lighting`.
+   - Storage failures are logged and non-fatal.
+
+### Online research findings
+
+1. **`requestIdleCallback`**
+   - MDN documents `requestIdleCallback(callback, { timeout })` and recommends a timeout for required work because callbacks can otherwise be delayed for multiple seconds.
+   - The current code uses `{ timeout: 200 }` and a `setTimeout(0)` fallback, which is appropriate for browsers without stable support.
+   - Source: <https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback>
+2. **Long Tasks API**
+   - MDN describes `PerformanceLongTaskTiming` as experimental/limited availability and defines long tasks as main-thread tasks of 50 ms or more.
+   - Current implementation gates the observer behind diagnostics mode and catches unsupported observer setup, which matches the API's compatibility status.
+   - Source: <https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming>
+3. **Page Lifecycle `freeze` / `resume`**
+   - Chrome's Page Lifecycle guidance recommends pausing/saving non-critical work on `freeze` and resuming on `resume`.
+   - Current implementation combines `visibilitychange` with `freeze`/`resume`, so unsupported browsers still follow the visibility path.
+   - Source: <https://developer.chrome.com/docs/web-platform/page-lifecycle-api/>
+4. **three.js `WebGLRenderer.compileAsync`**
+   - three.js documents `compileAsync()` as an async `compile()` variant using `KHR_parallel_shader_compile`, recommended where possible to avoid shader compilation stalls.
+   - Current implementation prefers `compileAsync()` and falls back to synchronous `compile()`.
+   - Source: <https://threejs.org/docs/#api/en/renderers/WebGLRenderer>
+5. **ESLint v8 support**
+   - ESLint's official version-support policy records ESLint v8 end of life on 2024-10-05.
+   - Current ESLint 8 usage is acceptable for the present docs-only pass but should be upgraded in a dedicated tooling PR.
+   - Source: <https://eslint.org/blog/2024/09/eslint-v8-eol-version-support/>
+6. **typescript-eslint support**
+   - The lint output reports the installed TypeScript version is outside the parser's supported range. The future tooling pass should align TypeScript and typescript-eslint versions rather than hiding the warning.
+   - Source: <https://typescript-eslint.io/users/dependency-versions/>
+
+### Documentation findings
+
+- README, handoff, standards, AI feedback, lessons, architecture docs, and prompt files needed stronger cross-linking.
+- Customer picture guide contained stale wording that portrait reset boost was "planned"; current runtime has already implemented the portrait reset boost.
+- Image maintenance guide related-file list needed architecture and AI-feedback references for developer support.
+- Documentation rules needed a current audit-history entry so future maintainers can distinguish this pass from runtime releases.
+
+## 2026-05-19 — AI context engineering workflow
+
+### Finding
+
+The repository already had strong implementation-history documents (`plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `DOCUMENTATION_RULES.md`), but no dedicated AI instruction layer that summarized architecture boundaries, forbidden patterns, durable lessons, and reusable agent prompts.
+
+### Decision
+
+Add a lightweight context-engineering layer without changing runtime code:
+
+- `.github/copilot-instructions.md`
+- `.github/prompts/refactor.prompt.md`
+- `.github/prompts/architecture.prompt.md`
+- `.github/prompts/review.prompt.md`
+- `.github/prompts/autonomous-agent.prompt.md`
+- `AI_RULES.md`
+- `ARCHITECTURE_MAP.md`
+- `LESSONS_LEARNED.md`
+- `docs/architecture/README.md`
+- `docs/standards/CODING_GUIDELINES.md`
+- `docs/lessons-learned/README.md`
+- `docs/ai-feedback/AI_FEEDBACK_LOOP.md`
+
+### Validation status
+
+- Documentation-only change; no runtime behavior changed.
+- Future implementation work should still run the existing validation commands that apply to touched code.
+
 ## 2026-05-19 (implementation completed) — v0.16.2 control-shell follow-up
 
 ### Why v0.16.1 was not enough

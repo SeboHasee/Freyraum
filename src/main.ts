@@ -377,10 +377,11 @@ async function main(): Promise<void> {
   canvas.setAttribute('aria-label', 'Interaktive Galerie');
   canvas.setAttribute('role', 'img');
 
-  // v0.11 — unified canvas interaction replaces MouseInteraction +
-  // ZoomPan + TouchInteraction. Uses Pointer Events when available and
-  // Touch Events as a fallback. Fixes Bug 2 (passive pinch) and Bug 3
-  // (duplicate synthetic mouse events after touch).
+  // v0.11 — unified canvas interaction replaced MouseInteraction,
+  // ZoomPan, and TouchInteraction (removed in v0.17 dead-code cleanup).
+  // Uses Pointer Events when available and Touch Events as a fallback.
+  // Fixed Bug 2 (passive pinch) and Bug 3 (duplicate synthetic mouse
+  // events after touch).
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
   const keyboardNav = new KeyboardNav(galleryManager);
 
