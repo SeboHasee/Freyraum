@@ -1,5 +1,13 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+
+## 2026-05-20 — Volume mapping and slider continuity implemented (v0.20.4)
+
+These lessons were documented in v0.20.2/v0.20.3 planning passes and are now implemented:
+
+1. **Volume display↔gain mapping:** use `displayPercentToGain` / `gainToDisplayPercent` from `src/audio/volumeMapping.ts` for all volume rendering and persistence. Never write raw slider percentages directly to preferences.
+2. **High-frequency slider continuity:** `PreferencesPanel` now uses an in-place patch model. For any future slider controls, keep stable DOM nodes; use `isVolumeDragging`-style guards to suppress structural re-renders during active pointer drag.
+3. **Fade envelope:** all play/pause/mute/loop transitions now use `BackgroundAudioManager.startFade()` instead of direct element volume writes.
 
 ## 2026-05-20 — Volume UX changes need explicit mapping contracts
 

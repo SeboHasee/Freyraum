@@ -1,6 +1,7 @@
 import type { BackgroundAudioManager, BackgroundAudioState } from '../audio/BackgroundAudioManager';
 import type { PreferencesStore } from '../utils/preferences';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import { gainToDisplayPercent, displayPercentToGain } from '../audio/volumeMapping';
 
 const diagnostics = createScopedDiagnostics('audio-controls');
 
@@ -108,10 +109,13 @@ export class AudioControls {
       ${blocked && !muted ? '<span class="audio-controls__indicator" aria-hidden="true"></span>' : ''}
     `;
 
-    // Volume slider value (sync with actual audio volume).
-    this.volumeInput.value = String(Math.round(state.volume * 100));
+    // Volume slider value: convert stored effective gain to display percent.
+    const displayPct = gainToDisplayPercent(state.volume);
+    this.volumeInput.value = String(displayPct);
     this.volumeInput.disabled = muted;
-    this.volumeInput.setAttribute('aria-valuenow', String(Math.round(state.volume * 100)));
+    this.volumeInput.setAttribute('aria-valuenow', String(displayPct));
+    // Update the CSS custom property used for the track fill gradient.
+    this.volumeInput.style.setProperty('--volume-pct', String(displayPct));
   }
 
   // ── Event handlers ───────────────────────────────────────────────────────────
@@ -147,10 +151,17 @@ export class AudioControls {
   };
 
   private handleVolumeInput = (): void => {
-    const value = Number(this.volumeInput.value);
-    if (Number.isNaN(value)) return;
-    this.prefs.setAudioVolume(value / 100);
-    diagnostics.debug('user-volume', 'User adjusted volume via main-page slider', { volume: value });
+    const displayPct = Number(this.volumeInput.value);
+    if (Number.isNaN(displayPct)) return;
+    // Update track fill immediately (visual feedback before state round-trip).
+    this.volumeInput.style.setProperty('--volume-pct', String(displayPct));
+    // Convert display percent to effective gain before persisting.
+    const gain = displayPercentToGain(displayPct);
+    this.prefs.setAudioVolume(gain);
+    diagnostics.debug('user-volume', 'User adjusted volume via main-page slider', {
+      displayPct,
+      gain,
+    });
   };
 
   dispose(): void {

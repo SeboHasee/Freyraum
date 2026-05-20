@@ -1,14 +1,18 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+
+## v0.20.4 — Audio implementation constraints now enforced (2026-05-20)
+
+All four planned items from v0.20.3 are now implemented. AI rules going forward:
+
+- Volume: always use `displayPercentToGain` / `gainToDisplayPercent` from `src/audio/volumeMapping.ts`. Never write raw percentage ÷ 100 directly to preferences.
+- Sliders: do not replace slider DOM nodes in active preference subscriptions. Use the in-place patch model in `PreferencesPanel` as the precedent.
+- Audio transitions: use `BackgroundAudioManager.startFade()` for all volume changes at transition boundaries. Direct `audio.volume =` is reserved only for the fade ramp itself.
+- Responsive: do not add overflow-causing elements to `.audio-controls` on narrow phones; use the slider-collapse pattern as precedent.
 
 ## v0.20.3 — Audio implementation planning constraints (2026-05-20)
 
-Upcoming audio follow-up implementation must preserve deterministic diagnostics and should add:
-
-- explicit display↔effective volume mapping helpers (single source of truth),
-- non-destructive slider continuity handling in `PreferencesPanel`,
-- cancellable fade-envelope transitions in `BackgroundAudioManager`,
-- overlap-safe responsive placement rules for main-page audio controls.
+Implemented in v0.20.4.
 
 ## v0.20 — Audio workflow reliability shipped (2026-05-20)
 

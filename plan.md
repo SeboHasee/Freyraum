@@ -1,11 +1,11 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
 
 ## v0.20.3 — Full technical audit + enhancement roadmap (planning, 2026-05-20)
 
 ### Status
 
-Planned (not yet shipped).
+Implemented (v0.20.4, 2026-05-20).
 
 ### Audit scope
 
@@ -104,7 +104,7 @@ Planned (not yet shipped).
 
 ### Status
 
-Planned (not yet shipped).
+Implemented (v0.20.4, 2026-05-20).
 
 ### Requested outcomes
 

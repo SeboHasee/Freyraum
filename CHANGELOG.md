@@ -1,5 +1,42 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+
+## v0.20.4 — Volume mapping, slider continuity, fade envelope, responsive layout (2026-05-20)
+
+### Added
+
+- **`src/audio/volumeMapping.ts`** — new volume display↔gain mapping utility.
+  - `displayPercentToGain(percent)`: power-curve mapping so 50% display → ~15% effective gain (calm ambient baseline).
+  - `gainToDisplayPercent(gain)`: deterministic inverse.
+  - `DEFAULT_AUDIO_GAIN` constant (≈ 0.152) used as the new startup default.
+  - Source: https://www.dr-lex.be/info-stuff/volumecontrols.html
+
+### Changed
+
+- **`src/utils/preferences.ts`** — default `audioVolume` changed from `0.35` (linear 35%) to `DEFAULT_AUDIO_GAIN` (≈ 0.152, mapped from display 50%). First-launch audio is now calm by default. Legacy stored values continue to be read as effective gain with no migration needed.
+- **`src/audio/BackgroundAudioManager.ts`** — added rAF-based fade envelope (Slice C):
+  - `startFade(target, durationMs, label, onComplete?)` drives a per-frame volume ramp.
+  - `cancelFade()` stops any in-progress ramp before starting a new one.
+  - `FADE_IN_MS = 300` applied on `play()` start.
+  - `FADE_OUT_MS = 200` applied on `pause()` and `setMuted(true)`.
+  - `LOOP_RESTART_FADE_MS = 150` applied before the `ended`-fallback loop restart.
+  - Added diagnostics events: `audio-fade-start`, `audio-fade-cancel`, `audio-fade-complete`, `audio-volume-map`, `audio-resume-attempt`.
+- **`src/ui/PreferencesPanel.ts`** — refactored to in-place DOM patch model (Slice B):
+  - Panel is built once (`buildPanel()`); `patchPanel()` only updates mutable states (checked, value, textContent).
+  - `isVolumeDragging` guard: structural re-patches are suppressed while the user drags the slider. Display label and track fill are updated in-place.
+  - `pointerdown`/`pointerup`/`pointercancel` guard lifecycle is complete; keyboard slider updates remain fully live.
+  - Volume slider now uses `displayPercentToGain`/`gainToDisplayPercent` mapping.
+  - Audio status element uses `hidden` attribute pattern instead of conditional re-render.
+- **`src/ui/AudioControls.ts`** — volume slider now uses `gainToDisplayPercent` for display and `displayPercentToGain` on input; sets `--volume-pct` CSS property for track fill.
+- **`src/styles/main.scss`** — Slice D placement and responsive improvements:
+  - `.audio-controls` now uses `--audio-ctrl-bottom` and `--audio-ctrl-left` CSS tokens (fall back to previous values); responsive overrides only need to change tokens.
+  - Fixed `--volume-pct` CSS default from `35%` (invalid unit in `calc`) to `50` (unitless, matching new default display percent).
+  - `@media (max-width: 599px)` now collapses `.audio-controls__slider-wrap` to keep the control compact and non-overlapping on narrow phones.
+
+### Validation
+
+- `npm run lint` ✅
+- `npm run build` ✅
 
 ## v0.20.3 — Technical plan hardening + markdown sync (2026-05-20, docs-only)
 

@@ -1,14 +1,28 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+
+## v0.20.4 — Volume mapping, slider continuity, fade envelope, responsive layout (2026-05-20)
+
+**Implemented.** All five technical slices shipped:
+
+- **`src/audio/volumeMapping.ts`** (new) — deterministic display↔gain mapping. Power-curve exponent 2.74 so 50% display → ~15% effective gain. `displayPercentToGain` / `gainToDisplayPercent` / `DEFAULT_AUDIO_GAIN`.
+- **`src/audio/BackgroundAudioManager.ts`** — rAF fade engine (`startFade`, `cancelFade`, `tickFade`). Volume ramps applied at play/pause/mute/loop-restart transitions. New diagnostics events: `audio-fade-start/cancel/complete`, `audio-volume-map`, `audio-resume-attempt`.
+- **`src/ui/PreferencesPanel.ts`** — in-place patch model (`buildPanel` once, `patchPanel` on preference updates). `isVolumeDragging` guard suppresses re-patch during active pointer drag.
+- **`src/ui/AudioControls.ts`** — uses `gainToDisplayPercent`/`displayPercentToGain`; sets `--volume-pct` CSS property for track fill.
+- **`src/utils/preferences.ts`** — default `audioVolume` updated to `DEFAULT_AUDIO_GAIN` (≈ 0.152).
+- **`src/styles/main.scss`** — `--audio-ctrl-left`/`--audio-ctrl-bottom` placement tokens; `--volume-pct` default fixed to `50` (unitless); narrow phone slider collapse.
 
 ## v0.20.3 planning boundary — audio UX technical hardening (2026-05-20)
 
-Planned (not yet shipped): the next audio pass should preserve current module boundaries while adding:
+Implemented in v0.20.4. Previous planned status was:
 
-- mapping helpers between displayed volume percent and effective gain,
-- an in-place PreferencesPanel update strategy for continuous slider drag,
-- fade-envelope transitions in `BackgroundAudioManager`,
-- responsive placement policy for `.audio-controls` with documented overlap checks.
+> Planned (not yet shipped): the next audio pass should preserve current module boundaries while adding:
+> - mapping helpers between displayed volume percent and effective gain,
+> - an in-place PreferencesPanel update strategy for continuous slider drag,
+> - fade-envelope transitions in `BackgroundAudioManager`,
+> - responsive placement policy for `.audio-controls` with documented overlap checks.
+
+All four items are now shipped. See `FINDINGS.md § 2026-05-20 (v0.20.4)`.
 
 ## v0.20 — Audio CORS fix + main-page AudioControls (2026-05-20)
 

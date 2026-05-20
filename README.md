@@ -1,32 +1,25 @@
 # Freyraum
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+
+## v0.20.4 — Volume mapping, slider continuity, fade envelope, responsive layout (2026-05-20)
+
+Current status: **implemented**.
+
+This release implements all five technical slices from the v0.20.2 / v0.20.3 plans:
+
+1. **Volume mapping (`src/audio/volumeMapping.ts`):** power-curve display↔gain mapping. 50% UI slider = ~15% effective gain (calm ambient baseline). Persisted as effective gain; displayed as mapped percent in both sliders.
+2. **PreferencesPanel in-place patch:** panel is built once; preference updates patch only mutable states without rebuilding innerHTML. Active slider drag is guarded by `isVolumeDragging` to prevent pointer-capture loss.
+3. **Fade envelope (`BackgroundAudioManager`):** rAF-based volume ramp (300 ms fade-in, 200 ms fade-out, 150 ms loop restart). Eliminates audible click/pop artifacts at loop boundaries and mute/unmute edges.
+4. **Responsive layout (CSS Slice D):** audio controls use placement tokens (`--audio-ctrl-left`, `--audio-ctrl-bottom`). Narrow phones (<600 px) collapse the volume slider; mute button stays accessible.
+5. **Diagnostics expansion (Slice E):** new events `audio-fade-start/cancel/complete`, `audio-volume-map`, `audio-resume-attempt` added to diagnostics exports.
+
+Canonical plan: `plan.md § v0.20.2 + v0.20.3`
+Implementation findings: `FINDINGS.md § 2026-05-20 (v0.20.4 implementation audit)`
+Build validation: `npm run lint` ✅ `npm run build` ✅
 
 ## v0.20.3 — Technical planning hardening pass (2026-05-20, planning only)
 
-Current status: **planned, not yet shipped**.
-
-This pass upgrades the latest audio follow-up into an implementation-ready technical roadmap:
-
-1. Formal display↔effective volume mapping model with migration-safe persistence behavior.
-2. Concrete refactor guidance to fix settings-slider drag continuity (`PreferencesPanel` in-place updates).
-3. Fade-envelope transition model for loop/toggle/lifecycle audio state changes.
-4. Responsive placement policy for main-page audio controls with overlap/safe-area checks.
-5. Expanded diagnostics contract for mapped volume values and transition phases.
-
-Canonical plan: `plan.md § v0.20.3`  
-Technical findings: `FINDINGS.md § 2026-05-20 (v0.20.3 technical audit)`
-
-## v0.20.2 — Audio UX follow-up planning pass (2026-05-20, planning only)
-
-Current status: **planned, not yet shipped**.
-
-This pass documents the next audio-focused fixes requested for implementation:
-
-1. Start with audio on, but with a calmer effective default loudness.
-2. Add a balanced volume mapping where UI 50% represents a lower effective loudness baseline.
-3. Reposition main-page mute/volume controls using current web usability guidance.
-4. Fix the settings volume slider so it behaves continuously while dragging.
-5. Add fade-in/fade-out handling to reduce loop/toggle click artifacts.
+Current status: **implemented in v0.20.4**.
 
 Canonical plan: `plan.md § v0.20.2`  
 Research and code-audit notes: `FINDINGS.md § 2026-05-20 (v0.20.2 planning audit)`

@@ -3,6 +3,7 @@ import { DEFAULT_QUALITY_PRESET, QUALITY_PRESETS } from '../config/quality';
 import type { LightProfileId } from '../lighting/LightProfile';
 import { DEFAULT_LIGHT_PROFILE, LIGHT_PROFILES } from '../lighting/LightProfile';
 import { createScopedDiagnostics } from './Diagnostics';
+import { DEFAULT_AUDIO_GAIN } from '../audio/volumeMapping';
 
 /**
  * Central user-preference store for accessibility and performance choices.
@@ -87,10 +88,13 @@ export class PreferencesStore {
       quality,
       lighting,
       audioMuted: typeof stored.audioMuted === 'boolean' ? stored.audioMuted : false,
+      // v0.20.2: default is the calm-startup gain (displayPercentToGain(50) ≈ 0.152).
+      // Legacy stored values that are valid floats in [0..1] are used as-is
+      // (they already represent effective gain from the v0.19/v0.20 schema).
       audioVolume:
         typeof stored.audioVolume === 'number' && Number.isFinite(stored.audioVolume)
           ? Math.max(0, Math.min(1, stored.audioVolume))
-          : 0.35,
+          : DEFAULT_AUDIO_GAIN,
     };
 
     this.motionMedia?.addEventListener?.('change', this.handleSystemMotionChange);

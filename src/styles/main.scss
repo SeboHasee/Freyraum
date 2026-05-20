@@ -417,10 +417,16 @@ button {
 // =============================================================================
 // Symmetric to ZoomControls (bottom-right). Hidden via `hidden` attribute
 // when no audio source is available; shown as a low-profile glass pill.
+//
+// v0.20.2 / v0.20.3 Slice D — placement tokens for collision-aware layout.
+// The left/bottom offsets are derived from shared safe-area variables so
+// responsive overrides only need to touch the token definitions.
+
 .audio-controls {
   position: fixed;
-  bottom: var(--chrome-bottom);
-  left: calc(36px + var(--safe-left));
+  // Placement tokens: override these in media queries for responsive behavior.
+  bottom: var(--audio-ctrl-bottom, var(--chrome-bottom));
+  left: var(--audio-ctrl-left, calc(36px + var(--safe-left)));
   display: flex;
   align-items: center;
   gap: 0;
@@ -523,8 +529,8 @@ button {
   background: linear-gradient(
     to right,
     var(--accent) 0%,
-    var(--accent) calc(var(--volume-pct, 35%) * 1%),
-    rgba(0, 0, 0, 0.12) calc(var(--volume-pct, 35%) * 1%),
+    var(--accent) calc(var(--volume-pct, 50) * 1%),
+    rgba(0, 0, 0, 0.12) calc(var(--volume-pct, 50) * 1%),
     rgba(0, 0, 0, 0.12) 100%
   );
   outline: none;
@@ -1348,6 +1354,18 @@ button {
 
   .prefs {
     right: calc(66px + var(--safe-right));
+  }
+
+  // v0.20.2 / v0.20.3 Slice D — narrow phone: hide the volume slider so the
+  // control stays compact and never overlaps the nav buttons. Mute button
+  // remains fully accessible; users can adjust volume in the settings panel.
+  .audio-controls__slider-wrap {
+    display: none;
+  }
+
+  // Tighten the left offset to match the zoom-controls right offset.
+  .audio-controls {
+    --audio-ctrl-left: calc(16px + var(--safe-left));
   }
 
   .timeline__thumb {

@@ -1,5 +1,5 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
 
 ## v0.20 — Full documentation check-up (2026-05-20, audit complete)
 

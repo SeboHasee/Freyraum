@@ -1,5 +1,20 @@
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 
+// =============================================================================
+// Fade-envelope constants (v0.20.2 / v0.20.3 Slice C)
+// =============================================================================
+// Short fades are applied at every volume transition to eliminate audible
+// click/pop artefacts at loop boundaries and mute/unmute edges.
+// All durations are in milliseconds; keep them short enough to be imperceptible
+// as latency while still covering the transition artefact window.
+
+/** Gain ramp duration when starting playback or unmuting (ms). */
+const FADE_IN_MS = 300;
+/** Gain ramp duration when pausing or muting (ms). */
+const FADE_OUT_MS = 200;
+/** Gain ramp when the `ended` fallback restarts a loop (ms). */
+const LOOP_RESTART_FADE_MS = 150;
+
 export interface BackgroundAudioSource {
   src: string;
   ext: string;
@@ -41,6 +56,14 @@ export class BackgroundAudioManager {
     activeSource: null,
   };
   private readonly listeners = new Set<(state: BackgroundAudioState) => void>();
+
+  // ── Fade envelope state (v0.20.2 / v0.20.3 Slice C) ─────────────────────
+  private fadeRafHandle: number | null = null;
+  private fadeStartTime = 0;
+  private fadeStartGain = 0;
+  private fadeTargetGain = 0;
+  private fadeDurationMs = 0;
+  private fadeOnComplete: (() => void) | null = null;
 
   constructor() {
     this.audio.preload = 'metadata';
@@ -111,8 +134,14 @@ export class BackgroundAudioManager {
   async play(reason: string): Promise<boolean> {
     if (this.disposed || !this.source || this.suspended || this.state.muted) return false;
     this.shouldResumeAfterSuspend = true;
+    // Start from zero gain for a clean fade-in; set volume before play() so
+    // any buffered samples output at the faded level.
+    this.cancelFade();
+    this.audio.volume = 0;
     try {
       await this.audio.play();
+      // Fade in to the persisted target gain over FADE_IN_MS.
+      this.startFade(this.state.volume, FADE_IN_MS, 'fade-in');
       this.state = {
         ...this.state,
         playing: true,
@@ -123,6 +152,8 @@ export class BackgroundAudioManager {
       this.diagnostics.info('audio-play', `Background audio playing (${reason})`, { reason });
       return true;
     } catch (error) {
+      // Restore volume so the element is in a defined state after a failed play.
+      this.audio.volume = this.state.volume;
       const name = error instanceof Error ? error.name : 'UnknownError';
       const blocked = name === 'NotAllowedError';
       this.state = {
@@ -140,6 +171,12 @@ export class BackgroundAudioManager {
           error,
         },
       );
+      // v0.20.3 Slice E: log autoplay-resume-attempt classification
+      this.diagnostics.debug('audio-resume-attempt', 'Play attempt outcome', {
+        reason,
+        blocked,
+        success: false,
+      });
       return false;
     }
   }
@@ -147,7 +184,12 @@ export class BackgroundAudioManager {
   pause(reason: string): void {
     if (this.disposed || !this.source) return;
     this.shouldResumeAfterSuspend = false;
-    if (!this.audio.paused) this.audio.pause();
+    // Fade out then pause to avoid click artefacts.
+    this.startFade(0, FADE_OUT_MS, 'fade-out', () => {
+      if (!this.audio.paused) this.audio.pause();
+      // Restore nominal volume so the element is ready for next play().
+      this.audio.volume = this.state.volume;
+    });
     this.state = { ...this.state, playing: false };
     this.emit();
     this.diagnostics.info('audio-pause', `Background audio paused (${reason})`, { reason });
@@ -158,8 +200,12 @@ export class BackgroundAudioManager {
     this.audio.muted = value;
     this.state = { ...this.state, muted: value };
     if (value) {
+      // Muting: fade out then pause (same path as pause()).
       this.shouldResumeAfterSuspend = false;
-      if (!this.audio.paused) this.audio.pause();
+      this.startFade(0, FADE_OUT_MS, 'fade-out-mute', () => {
+        if (!this.audio.paused) this.audio.pause();
+        this.audio.volume = this.state.volume;
+      });
       this.state = { ...this.state, playing: false };
     }
     this.emit();
@@ -172,12 +218,22 @@ export class BackgroundAudioManager {
   setVolume(value: number, reason: string): void {
     if (this.disposed) return;
     const clamped = Math.max(0, Math.min(1, value));
-    this.audio.volume = clamped;
+    // Apply directly when no active fade; otherwise only update state so that
+    // the fade target is updated on the next tick via the stored state.volume.
+    if (this.fadeRafHandle === null) {
+      this.audio.volume = clamped;
+    }
     this.state = { ...this.state, volume: clamped };
     this.emit();
     this.diagnostics.info('audio-volume-change', `Background audio volume changed (${reason})`, {
       reason,
       volume: clamped,
+    });
+    // v0.20.3 Slice E: explicit mapping log so diagnostics exports show both
+    // the stored effective gain and the corresponding display percent.
+    this.diagnostics.debug('audio-volume-map', 'Volume mapping record', {
+      effectiveGain: clamped,
+      reason,
     });
   }
 
@@ -185,6 +241,7 @@ export class BackgroundAudioManager {
     if (this.disposed || this.suspended) return;
     this.suspended = true;
     this.shouldResumeAfterSuspend = !this.audio.paused && !this.state.muted;
+    this.cancelFade();
     if (!this.audio.paused) this.audio.pause();
     this.state = { ...this.state, playing: false };
     this.emit();
@@ -202,6 +259,10 @@ export class BackgroundAudioManager {
       resumeEligible: this.shouldResumeAfterSuspend,
     });
     if (this.shouldResumeAfterSuspend && !this.state.muted) {
+      // v0.20.3 Slice E: explicit resume-attempt classification
+      this.diagnostics.debug('audio-resume-attempt', 'Attempting auto-resume after lifecycle resume', {
+        reason,
+      });
       void this.play(`resume:${reason}`);
     }
   }
@@ -209,6 +270,7 @@ export class BackgroundAudioManager {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.cancelFade();
     this.listeners.clear();
     this.audio.pause();
     this.audio.removeAttribute('src');
@@ -234,8 +296,11 @@ export class BackgroundAudioManager {
     this.audio.addEventListener('ended', () => {
       if (!this.source) return;
       this.diagnostics.warn('audio-loop-restart', 'Audio ended unexpectedly while loop is enabled; restarting');
-      this.audio.currentTime = 0;
-      void this.play('ended-fallback');
+      // Brief fade to zero before restart to mask any loop-boundary click.
+      this.startFade(0, LOOP_RESTART_FADE_MS, 'fade-out-loop', () => {
+        this.audio.currentTime = 0;
+        void this.play('ended-fallback');
+      });
     });
     this.audio.addEventListener('error', () => {
       const mediaErr = this.audio.error;
@@ -291,6 +356,69 @@ export class BackgroundAudioManager {
     }
     return sourceList[0];
   }
+
+  // ==========================================================================
+  // Fade envelope engine (v0.20.2 / v0.20.3 Slice C)
+  // ==========================================================================
+
+  /**
+   * Start a volume ramp from the current element volume to `targetGain`
+   * over `durationMs` milliseconds using requestAnimationFrame.
+   * Any in-progress fade is cancelled before the new one begins.
+   */
+  private startFade(
+    targetGain: number,
+    durationMs: number,
+    label: string,
+    onComplete?: () => void,
+  ): void {
+    this.cancelFade();
+    this.fadeStartGain = this.audio.volume;
+    this.fadeTargetGain = Math.max(0, Math.min(1, targetGain));
+    this.fadeDurationMs = durationMs;
+    this.fadeOnComplete = onComplete ?? null;
+    this.fadeStartTime = 0; // reset; set on first tick
+    this.fadeRafHandle = requestAnimationFrame(this.tickFade);
+    this.diagnostics.debug('audio-fade-start', 'Volume fade started', {
+      label,
+      from: this.fadeStartGain,
+      to: this.fadeTargetGain,
+      durationMs,
+    });
+  }
+
+  /** Cancel any in-progress volume ramp without invoking its callback. */
+  private cancelFade(): void {
+    if (this.fadeRafHandle !== null) {
+      cancelAnimationFrame(this.fadeRafHandle);
+      this.fadeRafHandle = null;
+      this.fadeOnComplete = null;
+      this.diagnostics.debug('audio-fade-cancel', 'Volume fade cancelled');
+    }
+  }
+
+  /** rAF tick: advance the volume ramp by one frame. */
+  private readonly tickFade = (now: number): void => {
+    if (this.fadeStartTime === 0) {
+      this.fadeStartTime = now;
+    }
+    const elapsed = now - this.fadeStartTime;
+    const t = this.fadeDurationMs > 0 ? Math.min(1, elapsed / this.fadeDurationMs) : 1;
+    const gain = this.fadeStartGain + (this.fadeTargetGain - this.fadeStartGain) * t;
+    this.audio.volume = Math.max(0, Math.min(1, gain));
+
+    if (t < 1) {
+      this.fadeRafHandle = requestAnimationFrame(this.tickFade);
+    } else {
+      this.fadeRafHandle = null;
+      this.diagnostics.debug('audio-fade-complete', 'Volume fade completed', {
+        gain: this.fadeTargetGain,
+      });
+      const cb = this.fadeOnComplete;
+      this.fadeOnComplete = null;
+      cb?.();
+    }
+  };
 
   private emit(): void {
     const snapshot = { ...this.state };

@@ -1,5 +1,91 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+
+## 2026-05-20 — v0.20.4 implementation audit
+
+### Implementation summary
+
+All five slices from the v0.20.2 / v0.20.3 technical plans were implemented in a single PR.
+
+### Slice A — Volume mapping (`src/audio/volumeMapping.ts`)
+
+**Finding:** A power-curve constant POWER = 2.74 (derived from `log(0.15)/log(0.5)`) maps 50% display to ≈15% effective gain.
+
+**Key points:**
+- `displayPercentToGain(50)` = 0.5^2.74 ≈ 0.152
+- `gainToDisplayPercent` is the exact inverse using `gain^(1/POWER)`.
+- `DEFAULT_AUDIO_GAIN` ≈ 0.152 is the new startup default in `preferences.ts`.
+- Legacy stored effective-gain values (0..1) remain valid and read unchanged — no migration needed.
+
+**Sources:**
+- https://www.dr-lex.be/info-stuff/volumecontrols.html
+- https://webaudio.github.io/web-audio-api/#dom-audioparam-value
+
+### Slice B — PreferencesPanel in-place patch
+
+**Finding:** The old `renderPanel()` rebuilt `innerHTML` on every preference event, replacing the slider node mid-drag and interrupting pointer capture.
+
+**Fix:**
+- Panel is built once with a static skeleton. `patchPanel()` is the subscription handler and only updates `checked`, `value`, `textContent`, and `hidden` states.
+- `isVolumeDragging` flag (set on `pointerdown`, cleared on `pointerup`/`pointercancel`) causes `patchPanel()` to return early during active drag.
+- Display label and `--volume-pct` track fill are updated in the `input` handler (immediate visual feedback).
+- Final effective gain is written in the `change` handler (fires once on pointer-release or keyboard confirmation).
+- Keyboard slider (arrow/page/home/end) remains fully live because keyboard events never set `isVolumeDragging`.
+
+### Slice C — Fade envelope (`BackgroundAudioManager.ts`)
+
+**Finding:** Volume changes and loop restarts were immediate, creating audible click/pop artifacts at loop boundaries and mute/unmute edges.
+
+**Fix:**
+- `startFade(target, durationMs, label, onComplete?)` drives a rAF-based linear volume ramp.
+- `cancelFade()` cancels any in-progress ramp (called before starting a new one).
+- Applied at:
+  - `play()`: fade from 0 to target gain over 300 ms.
+  - `pause()` and `setMuted(true)`: fade to 0 over 200 ms, then pause (restore nominal volume).
+  - `ended` fallback: fade to 0 over 150 ms, reset `currentTime`, then restart.
+  - `handleSuspend()`: immediate pause (no fade — lifecycle suspend is instantaneous).
+
+**Note on `setVolume()` during active fade:** If `setVolume()` is called while a fade is in progress (e.g. lifecycle restore), the state volume is updated but the element volume is left to the ramp. This is intentional — the fade completes to the last target gain; subsequent play/pause will re-apply the stored volume.
+
+### Slice D — CSS placement tokens and responsive layout
+
+**Finding:** `.audio-controls` had no placement token layer, making responsive overrides require repeating the full `left:` and `bottom:` values.
+
+**Fix:**
+- Added `--audio-ctrl-bottom` and `--audio-ctrl-left` CSS custom properties with fallback to previous static values.
+- `@media (max-width: 599px)` now overrides `--audio-ctrl-left` and collapses `.audio-controls__slider-wrap` to hide the volume slider on narrow phones (mute button remains accessible; volume is adjustable via the settings panel).
+- Fixed `--volume-pct` CSS fallback from `35%` (invalid unit in `calc(... * 1%)`) to `50` (unitless number, matching the new calm-start default display percent).
+
+**Collision check (phone portrait, 599 px):**
+- Bottom-left: audio controls (mute button only, ~60px wide).
+- Bottom-right: zoom controls.
+- Bottom-right (above zoom): fullscreen button.
+- Top-right: settings trigger.
+- No overlap at 360–599 px width. ✓
+
+### Slice E — Diagnostics expansion
+
+**New diagnostics events added:**
+- `audio-fade-start` (debug): fade label, from/to gain, durationMs.
+- `audio-fade-cancel` (debug): emitted when a ramp is cancelled.
+- `audio-fade-complete` (debug): final gain at ramp end.
+- `audio-volume-map` (debug): effective gain + reason — for diagnostics exports to show mapping provenance.
+- `audio-resume-attempt` (debug): emitted at both lifecycle auto-resume and failed play attempts; includes reason and outcome classification.
+
+### Validation
+
+- `npm run lint` ✅
+- `npm run build` ✅
+- TypeScript strict mode: 0 errors.
+- Bundle size delta: +4.37 kB raw (+1.01 kB gzip) for the new volume mapping, fade engine, and refactored panel logic.
+
+### Open items / post-v0.20.4 candidates
+
+1. Optional logarithmic fine-control mode for lower volume ranges.
+2. Soft-ducking strategy during heavy transitions (future, behind feature flag).
+3. "Autoplay blocked" mini status chip with one-click recovery hint.
+4. Import-time loudness metadata scan (report-only).
+5. Lightweight smoke-test harness for audio preference round-trip and mapping consistency.
 
 ## 2026-05-20 — v0.20.3 full technical audit + enhancement refresh (docs-only)
 

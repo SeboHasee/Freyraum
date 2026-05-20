@@ -1,31 +1,22 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
 
-## v0.20.3 technical audio enhancement roadmap — planned (not yet shipped, 2026-05-20)
+## v0.20.4 — Volume mapping, slider continuity, fade, responsive layout — implemented (2026-05-20)
 
-This is still a planning/documentation pass. The next implementation should follow:
+All five audio technical improvements are now shipped:
 
-1. A formal display-to-effective volume mapping contract.
-2. A settings-panel slider continuity refactor (no drag interruption).
-3. Fade-in/fade-out transitions for play/mute/loop/lifecycle paths.
-4. Responsive, collision-safe main-page audio-control placement policy.
-5. Extended diagnostics for transition phases and mapped volume values.
+1. **Calm startup loudness:** audio starts enabled with display slider at 50%, effective gain ~15% (calm ambient baseline). Customers see a balanced midpoint they can move up or down symmetrically.
+2. **Volume mapping:** displayed slider percent and stored effective gain use a power-curve mapping. All sliders (main-page and settings) and persistence use the same contract.
+3. **Slider continuity:** settings panel volume slider is now continuous — dragging never replaces the control node mid-gesture.
+4. **Fade transitions:** play, mute, and loop-restart transitions use smooth rAF-based fades (300 ms in, 200 ms out, 150 ms loop restart) to eliminate click/pop artifacts.
+5. **Responsive controls:** the main-page volume slider collapses on narrow phones (<600 px) to keep the control compact; the mute button stays accessible and volume is adjustable in the settings panel.
 
-Implementation reference: `plan.md § v0.20.3`  
-Technical findings: `FINDINGS.md § 2026-05-20 (v0.20.3 technical audit)`
+Implementation files: `src/audio/volumeMapping.ts`, `src/audio/BackgroundAudioManager.ts`, `src/ui/PreferencesPanel.ts`, `src/ui/AudioControls.ts`, `src/styles/main.scss`, `src/utils/preferences.ts`  
+Technical findings: `FINDINGS.md § 2026-05-20 (v0.20.4 implementation audit)`
 
-## v0.20.2 audio UX follow-up — planned (not yet shipped, 2026-05-20)
+## v0.20.3 technical audio enhancement roadmap — implemented in v0.20.4
 
-This pass is planning-only and prepares the next audio refinements:
-
-1. Audio should start enabled with a calmer effective default loudness.
-2. Volume UX should support a balanced display mapping (requested midpoint display at 50% while effective loudness baseline stays low).
-3. Main-page mute/volume control placement will be reworked using current website usability guidance.
-4. Settings-panel slider behavior will be fixed to stay continuous during drag.
-5. Fade-in/fade-out transitions will be added to reduce loop click artifacts.
-
-Implementation reference: `plan.md § v0.20.2`  
-Research + technical findings: `FINDINGS.md § 2026-05-20 (v0.20.2 planning audit)`
+## v0.20.2 audio UX follow-up — implemented in v0.20.4
 
 ## v0.20 audio + sidecar fixes — implemented (2026-05-20)
 

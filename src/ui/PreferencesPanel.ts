@@ -3,12 +3,20 @@ import { QUALITY_PRESETS } from '../config/quality';
 import type { LightProfileId, LightProfile } from '../lighting/LightProfile';
 import { LIGHT_PROFILES } from '../lighting/LightProfile';
 import type { PreferencesStore } from '../utils/preferences';
+import { gainToDisplayPercent, displayPercentToGain } from '../audio/volumeMapping';
 
 /**
  * Floating preferences panel: motion, contrast, and quality presets.
  * Implemented as a popover-style menu that opens from a trigger button
  * so it never blocks the artwork at rest. All controls are real form
  * controls so screen readers describe them natively.
+ *
+ * v0.20.2 / v0.20.3 Slice B: panel is built once; only mutable states
+ * are patched on each preference update. This prevents full innerHTML
+ * replacement from interrupting active pointer/keyboard slider drags.
+ * During an active volume-slider drag, structural re-patches are suppressed
+ * and the display label is updated in-place without writing to preferences
+ * storage; the final effective gain is written on the `change` event.
  */
 
 export class PreferencesPanel {
@@ -18,6 +26,20 @@ export class PreferencesPanel {
   private isOpen = false;
   private readonly unsubscribe: () => void;
   private audioStatusMessage: string | null = null;
+
+  // ── In-place patch targets (resolved once after buildPanel) ───────────────
+  private motionInput: HTMLInputElement | null = null;
+  private contrastInput: HTMLInputElement | null = null;
+  private audioMutedInput: HTMLInputElement | null = null;
+  private audioVolumeInput: HTMLInputElement | null = null;
+  private audioValueLabel: HTMLElement | null = null;
+  private audioStatusEl: HTMLElement | null = null;
+
+  // ── Drag-continuity guard (v0.20.2 / v0.20.3 Slice B) ────────────────────
+  // While the user is actively dragging the volume slider we suppress the
+  // full structural re-patch triggered by the preference subscription, so
+  // the control node is never replaced mid-drag.
+  private isVolumeDragging = false;
 
   constructor(container: HTMLElement, private readonly prefs: PreferencesStore) {
     this.root = document.createElement('div');
@@ -45,7 +67,7 @@ export class PreferencesPanel {
     this.panel.id = 'freyraum-prefs-panel';
     this.panel.className = 'prefs__panel';
     this.panel.setAttribute('role', 'dialog');
-    // v0.17: aria-labelledby points to the static heading id added in renderPanel(),
+    // v0.17: aria-labelledby points to the static heading id added in buildPanel(),
     // replacing the previous aria-label so screen readers announce the dialog title
     // correctly (WCAG 4.1.2, ARIA dialog role requirements).
     this.panel.setAttribute('aria-labelledby', 'freyraum-prefs-heading');
@@ -56,7 +78,7 @@ export class PreferencesPanel {
     this.panel.setAttribute('aria-modal', 'true');
     this.panel.hidden = true;
 
-    this.renderPanel();
+    this.buildPanel();
 
     this.root.append(this.trigger, this.panel);
     container.appendChild(this.root);
@@ -64,10 +86,13 @@ export class PreferencesPanel {
     document.addEventListener('click', this.handleOutsideClick);
     document.addEventListener('keydown', this.handleEscape);
 
-    this.unsubscribe = this.prefs.subscribe(() => this.renderPanel());
+    // v0.20.2: patch only mutable states on each preference update (no full rebuild).
+    this.unsubscribe = this.prefs.subscribe(() => this.patchPanel());
   }
 
-  private renderPanel(): void {
+  // ── Panel construction (called once) ────────────────────────────────────────
+
+  private buildPanel(): void {
     const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume } = this.prefs.current;
 
     const qualityOptions = (Object.values(QUALITY_PRESETS) as QualityPreset[])
@@ -101,6 +126,9 @@ export class PreferencesPanel {
         `
       )
       .join('');
+
+    // v0.20.2: volume is stored as effective gain; display as mapped percent.
+    const displayPct = gainToDisplayPercent(audioVolume);
 
     this.panel.innerHTML = `
       <h2 class="prefs__heading" id="freyraum-prefs-heading">Anzeige</h2>
@@ -141,15 +169,11 @@ export class PreferencesPanel {
           min="0"
           max="100"
           step="1"
-          value="${Math.round(audioVolume * 100)}"
+          value="${displayPct}"
         />
-        <span class="prefs__range-value">${Math.round(audioVolume * 100)}%</span>
+        <span class="prefs__range-value" id="freyraum-audio-volume-label">${displayPct}%</span>
       </label>
-      ${
-        this.audioStatusMessage
-          ? `<p class="prefs__note" role="status">${this.audioStatusMessage}</p>`
-          : ''
-      }
+      <p class="prefs__note" role="status" id="freyraum-audio-status" ${this.audioStatusMessage ? '' : 'hidden'}>${this.audioStatusMessage ?? ''}</p>
       <h2 class="prefs__heading">Performance</h2>
       <fieldset class="prefs__group">
         <legend class="prefs__legend">Qualitätsstufe</legend>
@@ -157,11 +181,25 @@ export class PreferencesPanel {
       </fieldset>
     `;
 
-    this.panel.querySelector<HTMLInputElement>('#freyraum-motion')?.addEventListener('change', (e) => {
+    // Cache mutable DOM references for in-place patching.
+    this.motionInput = this.panel.querySelector<HTMLInputElement>('#freyraum-motion');
+    this.contrastInput = this.panel.querySelector<HTMLInputElement>('#freyraum-contrast');
+    this.audioMutedInput = this.panel.querySelector<HTMLInputElement>('#freyraum-audio-muted');
+    this.audioVolumeInput = this.panel.querySelector<HTMLInputElement>('#freyraum-audio-volume');
+    this.audioValueLabel = this.panel.querySelector<HTMLElement>('#freyraum-audio-volume-label');
+    this.audioStatusEl = this.panel.querySelector<HTMLElement>('#freyraum-audio-status');
+
+    this.bindPanelEvents();
+  }
+
+  // ── Event bindings (called once after buildPanel) ────────────────────────────
+
+  private bindPanelEvents(): void {
+    this.motionInput?.addEventListener('change', (e) => {
       this.prefs.setReducedMotion((e.target as HTMLInputElement).checked);
     });
 
-    this.panel.querySelector<HTMLInputElement>('#freyraum-contrast')?.addEventListener('change', (e) => {
+    this.contrastInput?.addEventListener('change', (e) => {
       this.prefs.setContrastMode((e.target as HTMLInputElement).checked ? 'high' : 'auto');
     });
 
@@ -181,23 +219,100 @@ export class PreferencesPanel {
       });
     });
 
-    this.panel.querySelector<HTMLInputElement>('#freyraum-audio-muted')?.addEventListener('change', (e) => {
+    this.audioMutedInput?.addEventListener('change', (e) => {
       this.prefs.setAudioMuted((e.target as HTMLInputElement).checked);
     });
 
-    const volumeInput = this.panel.querySelector<HTMLInputElement>('#freyraum-audio-volume');
-    const volumeValue = this.panel.querySelector<HTMLElement>('.prefs__range-value');
-    volumeInput?.addEventListener('input', (e) => {
-      const value = Number((e.target as HTMLInputElement).value);
-      if (Number.isNaN(value)) return;
-      this.prefs.setAudioVolume(value / 100);
-      if (volumeValue) volumeValue.textContent = `${Math.round(value)}%`;
+    if (this.audioVolumeInput) {
+      const volumeInput = this.audioVolumeInput;
+
+      // Drag-continuity guards: suppress structural re-patches during pointer drag.
+      volumeInput.addEventListener('pointerdown', () => { this.isVolumeDragging = true; });
+      volumeInput.addEventListener('pointerup', () => { this.isVolumeDragging = false; });
+      volumeInput.addEventListener('pointercancel', () => { this.isVolumeDragging = false; });
+
+      // `input` fires on every rAF-rate update during drag (and on keyboard steps).
+      // We update the display label immediately for responsive visual feedback and
+      // apply the mapped gain directly for audible feedback, but we skip the full
+      // patchPanel() re-render while dragging is active.
+      volumeInput.addEventListener('input', () => {
+        const displayPct = Number(volumeInput.value);
+        if (Number.isNaN(displayPct)) return;
+        // Live display label update.
+        if (this.audioValueLabel) {
+          this.audioValueLabel.textContent = `${Math.round(displayPct)}%`;
+        }
+        // Update track fill CSS variable immediately.
+        volumeInput.style.setProperty('--volume-pct', String(displayPct));
+        // Write gain to preferences (triggers audio immediately; patchPanel is
+        // suppressed by isVolumeDragging for pointer events).
+        this.prefs.setAudioVolume(displayPercentToGain(displayPct));
+      });
+
+      // `change` fires once on pointer-release (and on keyboard confirmation).
+      // At this point dragging is already false, so patchPanel() will run when
+      // the next preference notification arrives.
+      volumeInput.addEventListener('change', () => {
+        this.isVolumeDragging = false;
+        const displayPct = Number(volumeInput.value);
+        if (!Number.isNaN(displayPct)) {
+          this.prefs.setAudioVolume(displayPercentToGain(displayPct));
+        }
+      });
+    }
+  }
+
+  // ── In-place patch (called on every preference update) ───────────────────────
+
+  private patchPanel(): void {
+    // Do not replace slider during active pointer drag (Slice B continuity fix).
+    if (this.isVolumeDragging) return;
+
+    const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume } = this.prefs.current;
+
+    if (this.motionInput) this.motionInput.checked = reducedMotion;
+    if (this.contrastInput) this.contrastInput.checked = contrastMode === 'high';
+    if (this.audioMutedInput) this.audioMutedInput.checked = audioMuted;
+
+    if (this.audioVolumeInput && this.audioValueLabel) {
+      const displayPct = gainToDisplayPercent(audioVolume);
+      this.audioVolumeInput.value = String(displayPct);
+      this.audioVolumeInput.style.setProperty('--volume-pct', String(displayPct));
+      this.audioValueLabel.textContent = `${displayPct}%`;
+    }
+
+    // Patch audio status message.
+    if (this.audioStatusEl) {
+      if (this.audioStatusMessage) {
+        this.audioStatusEl.textContent = this.audioStatusMessage;
+        this.audioStatusEl.removeAttribute('hidden');
+      } else {
+        this.audioStatusEl.setAttribute('hidden', '');
+      }
+    }
+
+    // Patch quality radios.
+    this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-quality"]').forEach((input) => {
+      input.checked = input.value === quality;
+    });
+
+    // Patch lighting radios.
+    this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-lighting"]').forEach((input) => {
+      input.checked = input.value === lighting;
     });
   }
 
   setAudioStatusMessage(message: string | null): void {
     this.audioStatusMessage = message;
-    this.renderPanel();
+    // Always apply immediately even during drag (status is not a slider).
+    if (this.audioStatusEl) {
+      if (message) {
+        this.audioStatusEl.textContent = message;
+        this.audioStatusEl.removeAttribute('hidden');
+      } else {
+        this.audioStatusEl.setAttribute('hidden', '');
+      }
+    }
   }
 
   private handleToggle = (): void => {
