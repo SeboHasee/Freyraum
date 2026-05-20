@@ -1,10 +1,10 @@
 # FREYRAUM architecture map
 
-## v0.19 — Calm background music workflow planned (2026-05-20)
+## v0.19 — Calm background music workflow shipped (2026-05-20)
 
-Planned architecture addition: importer + runtime audio boundary for calm background music, with format compatibility and accessible mute/volume controls.
+Architecture addition shipped: importer + runtime audio boundary for calm background music, with format compatibility and accessible mute/volume controls.
 
-Current runtime: **not shipped yet** (no background audio pipeline active). Canonical plan: `plan.md § v0.19`.
+Current runtime: **shipped**. Background audio now loads from importer payloads, integrates with preferences/lifecycle, and exposes mute/volume controls in the preferences panel. Canonical reference: `plan.md § v0.19`.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
@@ -63,11 +63,12 @@ FREYRAUM is a Vite + strict TypeScript + three.js customer-preview application f
 
 ## Asset/customer workflow
 
-- `scripts/import-artworks.mjs`: imports customer artwork files, validates dimensions, generates data URLs/preview data, and warns about GPU memory risk.
+- `scripts/import-artworks.mjs`: imports customer artwork files and customer audio files, validates assets, generates artwork/audio preview payloads, and writes warning-first reports.
 - `scripts/run-import-artworks.cjs`: Node version guard and friendly compatibility report.
-- `scripts/write-local-preview.mjs`: writes the local customer preview HTML.
+- `scripts/write-local-preview.mjs`: writes the local customer preview HTML plus artwork/audio stubs.
 - `Update Gallery.bat` and `Update Gallery.command`: customer-facing launchers.
 - `customer-artworks/`: customer input and processed folders.
+- `customer-audio/`: customer audio input folders.
 - `customer-preview/`: generated preview bundle and assets.
 
 ## Documentation system

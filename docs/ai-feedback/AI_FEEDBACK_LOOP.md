@@ -1,8 +1,8 @@
 # AI feedback loop
 
-## v0.19 planning status note
+## v0.19 implementation status note
 
-Include the new background-audio scope (`plan.md § v0.19`) in future review loops as a planned/not-yet-shipped feature boundary.
+Treat the shipped background-audio scope (`plan.md § v0.19`) as an active regression boundary in future review loops (importer payload, autoplay handling, lifecycle, controls, diagnostics).
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

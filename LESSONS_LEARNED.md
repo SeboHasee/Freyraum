@@ -1,8 +1,8 @@
 # FREYRAUM lessons learned
 
-## v0.19 planning note — keep planned customer audio clearly labeled (2026-05-20)
+## v0.19 implementation note — background audio shipped (2026-05-20)
 
-Lesson carried forward from this pass: planned customer-facing audio workflows must be clearly marked as planned in every relevant markdown file until implementation is actually shipped.
+Lesson carried forward from this pass: once customer-facing workflows ship, all markdown banners must be flipped from planned to implemented in the same PR to avoid stale guidance.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

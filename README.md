@@ -1,13 +1,13 @@
 # Freyraum
 
-## v0.19 — Calm background music workflow (planned, not yet shipped — 2026-05-20)
+## v0.19 — Calm background music workflow (implemented, 2026-05-20)
 
-This repository now has a documented plan to add customer-managed background audio with format compatibility, mute/volume controls, and `Update Gallery` integration.
+Customer-managed background audio is now integrated into the one-click `Update Gallery` workflow, with deterministic importer payloads, runtime compatibility selection, mute/volume controls, and lifecycle-aware playback handling.
 
-Current runtime status: **not implemented yet**. The website currently ships without background music playback controls.
+Current runtime status: **implemented**. The website now ships with background music playback controls in the preferences panel and importer-generated preview audio payloads.
 
-Plan source: `plan.md § v0.19`
-Research/notes: `FINDINGS.md § 2026-05-20 (v0.19 planning)`
+Implementation details: `plan.md § v0.19`
+Research/notes: `FINDINGS.md § 2026-05-20 (v0.19 implementation)`
 
 ## v0.18 — Customer painting text sidecars (shipped, 2026-05-20)
 

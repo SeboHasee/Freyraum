@@ -650,6 +650,39 @@ button {
   gap: 2px;
 }
 
+.prefs__range {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 6px 4px;
+
+  input[type='range'] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+}
+
+.prefs__range-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.prefs__range-value {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: right;
+}
+
+.prefs__note {
+  margin: 6px 6px 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 .prefs__toggle-title,
 .prefs__radio-title {
   font-size: 13px;

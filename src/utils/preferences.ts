@@ -21,6 +21,10 @@ export interface Preferences {
   quality: QualityPresetId;
   /** v0.03: artistic lighting profile (display vs. inspection). */
   lighting: LightProfileId;
+  /** v0.19: background audio mute state. */
+  audioMuted: boolean;
+  /** v0.19: background audio volume (0..1). */
+  audioVolume: number;
 }
 
 export type PreferenceListener = (prefs: Preferences) => void;
@@ -82,6 +86,11 @@ export class PreferencesStore {
       contrastMode,
       quality,
       lighting,
+      audioMuted: typeof stored.audioMuted === 'boolean' ? stored.audioMuted : false,
+      audioVolume:
+        typeof stored.audioVolume === 'number' && Number.isFinite(stored.audioVolume)
+          ? Math.max(0, Math.min(1, stored.audioVolume))
+          : 0.35,
     };
 
     this.motionMedia?.addEventListener?.('change', this.handleSystemMotionChange);
@@ -129,6 +138,16 @@ export class PreferencesStore {
   setLighting(id: LightProfileId): void {
     if (!(id in LIGHT_PROFILES)) return;
     this.prefs.lighting = id;
+    this.emit();
+  }
+
+  setAudioMuted(value: boolean): void {
+    this.prefs.audioMuted = value;
+    this.emit();
+  }
+
+  setAudioVolume(value: number): void {
+    this.prefs.audioVolume = Math.max(0, Math.min(1, value));
     this.emit();
   }
 

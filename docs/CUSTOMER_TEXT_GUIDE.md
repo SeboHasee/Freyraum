@@ -4,7 +4,7 @@
 
 A separate v0.19 plan exists for customer-managed background audio and website mute/volume controls.
 
-Current status: **planned/not yet shipped**. This guide remains focused on shipped text-sidecar workflow only.
+Current status: **implemented** for background audio and text sidecars. This guide remains focused on text-sidecar workflow only; audio setup is documented in `docs/CUSTOMER_PICTURE_GUIDE.md` and `docs/IMAGE_MAINTENANCE_GUIDE.md`.
 
 > Status: **implemented and shipped in v0.18 (2026-05-20)**. The importer
 > (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecar files

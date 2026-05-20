@@ -1,10 +1,12 @@
 # Architecture docs
 
-## v0.19 planning status
+## v0.19 implementation status
 
-Planned architecture extension: customer audio-file ingestion plus runtime calm background playback controls.
+Shipped architecture extension: customer audio-file ingestion plus runtime calm background playback controls.
 
-Current status: **not implemented yet**.
+Current status: **implemented**.
+
+Key implementation anchors: `src/audio/BackgroundAudioManager.ts`, `src/main.ts` audio payload sanitization/orchestration, `src/utils/preferences.ts` audio fields, `src/ui/PreferencesPanel.ts` controls, `scripts/import-artworks.mjs` audio importer flow.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

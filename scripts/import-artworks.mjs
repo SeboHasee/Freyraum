@@ -49,11 +49,14 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const ROOT = join(dirname(__filename), '..');
 const INBOX = join(ROOT, 'customer-artworks', 'inbox');
+const AUDIO_INBOX = join(ROOT, 'customer-audio', 'inbox');
 const PROCESSED = join(ROOT, 'customer-artworks', 'processed');
 const MANIFEST_JSON = join(ROOT, 'customer-artworks', 'artworks.json');
 const MANIFEST_BACKUP = join(ROOT, 'customer-artworks', 'artworks.json.bak');
 const PREVIEW_IMAGES = join(ROOT, 'customer-preview', 'images');
+const PREVIEW_AUDIO = join(ROOT, 'customer-preview', 'audio');
 const PREVIEW_JS = join(ROOT, 'customer-preview', 'customer-artworks.js');
+const PREVIEW_AUDIO_JS = join(ROOT, 'customer-preview', 'customer-audio.js');
 const REPORT_FILE = join(ROOT, 'customer-artworks', 'last-import-report.txt');
 
 // -------- Format policy --------
@@ -62,6 +65,14 @@ const RISKY_EXTENSIONS = new Set(['.heic', '.heif', '.tif', '.tiff', '.bmp']);
 const RAW_EXTENSIONS = new Set([
   '.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2', '.raw', '.pef', '.srw',
 ]);
+const AUDIO_SAFE_EXTENSIONS = new Set(['.mp3', '.ogg', '.m4a', '.wav']);
+const AUDIO_SELECTION_PRIORITY = ['.mp3', '.ogg', '.m4a', '.wav'];
+const AUDIO_MIME_TYPES = {
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+  '.wav': 'audio/wav',
+};
 
 // v0.18 — sidecar text files.
 //   - `.txt` is the primary, customer-friendly format (Notepad / TextEdit).
@@ -408,11 +419,24 @@ function parseSidecar(filePath) {
   return { fields, fieldWarnings };
 }
 
+function pickAudioByPriority(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const sorted = [...candidates].sort((a, b) => {
+    const prioA = AUDIO_SELECTION_PRIORITY.indexOf(a.ext);
+    const prioB = AUDIO_SELECTION_PRIORITY.indexOf(b.ext);
+    if (prioA !== prioB) return prioA - prioB;
+    return a.filename.localeCompare(b.filename, 'en', { numeric: true, sensitivity: 'base' });
+  });
+  return sorted[0] || null;
+}
+
 // -------- Main --------
 
 mkdirSync(INBOX, { recursive: true });
+mkdirSync(AUDIO_INBOX, { recursive: true });
 mkdirSync(PROCESSED, { recursive: true });
 mkdirSync(PREVIEW_IMAGES, { recursive: true });
+mkdirSync(PREVIEW_AUDIO, { recursive: true });
 mkdirSync(dirname(MANIFEST_JSON), { recursive: true });
 
 const inboxEntries = readdirSync(INBOX, { withFileTypes: true })
@@ -469,11 +493,42 @@ const picturesMissingText = [];
 const textFieldWarnings = [];
 const matchedSidecarStems = new Set();
 
+const audioSelected = [];
+const audioIgnored = [];
+const audioUnsupported = [];
+let audioPayload = { sources: [] };
+
+const audioEntries = readdirSync(AUDIO_INBOX, { withFileTypes: true })
+  .filter((e) => e.isFile() && !e.name.startsWith('.'))
+  .map((e) => e.name)
+  .sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
+
+const audioCandidates = [];
+for (const filename of audioEntries) {
+  const ext = extname(filename).toLowerCase();
+  if (!AUDIO_SAFE_EXTENSIONS.has(ext)) {
+    audioUnsupported.push(`${filename} — unsupported audio file type "${ext || '(none)'}". Use MP3, OGG, M4A, or WAV.`);
+    continue;
+  }
+  audioCandidates.push({
+    filename,
+    ext,
+    srcPath: join(AUDIO_INBOX, filename),
+  });
+}
+
 // Clean previously generated images that no longer correspond to inbox files
 // (best-effort housekeeping; ignored on failure).
 try {
   for (const f of readdirSync(PREVIEW_IMAGES, { withFileTypes: true })) {
     if (f.isFile()) rmSync(join(PREVIEW_IMAGES, f.name));
+  }
+} catch {
+  // ignore
+}
+try {
+  for (const f of readdirSync(PREVIEW_AUDIO, { withFileTypes: true })) {
+    if (f.isFile()) rmSync(join(PREVIEW_AUDIO, f.name));
   }
 } catch {
   // ignore
@@ -621,6 +676,40 @@ imageEntries.forEach((filename, i) => {
   imported.push(`${filename} (${dims.width} × ${dims.height})`);
 });
 
+const selectedAudio = pickAudioByPriority(audioCandidates);
+const copiedAudio = [];
+for (const candidate of audioCandidates) {
+  const destFilename = `${normalizeId(basename(candidate.filename, candidate.ext))}-${candidate.ext.slice(1)}${candidate.ext}`;
+  const destPath = join(PREVIEW_AUDIO, destFilename);
+  try {
+    cpSync(candidate.srcPath, destPath);
+  } catch (err) {
+    warnings.push(`${candidate.filename} — could not copy audio to preview folder: ${err.message}`);
+    continue;
+  }
+  const source = {
+    src: `./audio/${destFilename}`,
+    ext: candidate.ext,
+    mime: AUDIO_MIME_TYPES[candidate.ext] || 'application/octet-stream',
+    filename: candidate.filename,
+  };
+  copiedAudio.push(source);
+  if (selectedAudio && selectedAudio.filename === candidate.filename) {
+    audioSelected.push(`${candidate.filename} (${candidate.ext.slice(1).toUpperCase()})`);
+  } else {
+    audioIgnored.push(`${candidate.filename} — copied as fallback source`);
+  }
+}
+
+audioPayload = {
+  sources: copiedAudio,
+  ...(selectedAudio
+    ? {
+        selectedByImporter: copiedAudio.find((source) => source.filename === selectedAudio.filename),
+      }
+    : {}),
+};
+
 // Back up previous manifest (best-effort), then write new one.
 try {
   if (existsSync(MANIFEST_JSON)) {
@@ -637,6 +726,12 @@ const js =
   '// Last run: ' + new Date().toISOString() + '\n' +
   'window.__FREYRAUM_ARTWORKS = ' + JSON.stringify(artworks, null, 2) + ';\n';
 writeFileSync(PREVIEW_JS, js, 'utf8');
+
+const audioJs =
+  '// Auto-generated by scripts/import-artworks.mjs — do not edit manually.\n' +
+  '// Last run: ' + new Date().toISOString() + '\n' +
+  'window.__FREYRAUM_AUDIO = ' + JSON.stringify(audioPayload, null, 2) + ';\n';
+writeFileSync(PREVIEW_AUDIO_JS, audioJs, 'utf8');
 
 // v0.18 — Compute orphaned sidecars (text files without matching pictures).
 // `imageStems` mirrors the lowercased basenames the image loop processed.
@@ -690,6 +785,26 @@ if (duplicateSidecarWarnings.length > 0) {
   if (lines[lines.length - 1] !== '') lines.push('');
   lines.push(`Duplicate text files (${duplicateSidecarWarnings.length}):`);
   duplicateSidecarWarnings.forEach((t) => lines.push(`  ⚠ ${t}`));
+}
+
+if (audioSelected.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Audio selected (${audioSelected.length}):`);
+  audioSelected.forEach((entry) => lines.push(`  ✓ ${entry}`));
+} else {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push('Audio selected (0):');
+  lines.push('  ⚠ No supported background audio files found in customer-audio/inbox.');
+}
+if (audioIgnored.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Audio candidates ignored by precedence (${audioIgnored.length}):`);
+  audioIgnored.forEach((entry) => lines.push(`  ⚠ ${entry}`));
+}
+if (audioUnsupported.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Unsupported audio files (${audioUnsupported.length}):`);
+  audioUnsupported.forEach((entry) => lines.push(`  ⚠ ${entry}`));
 }
 
 if (warnings.length > 0) {

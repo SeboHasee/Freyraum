@@ -1,17 +1,34 @@
 # FREYRAUM — Customer Picture Guide
 
-## v0.19 calm background music note (planned, not yet shipped)
+## v0.19 calm background music note (implemented)
 
-A future update is planned to support calm background music from customer-provided audio files.
+Calm background music from customer-provided audio files is now supported.
 
-Current status: **not implemented yet**. Today, `Update Gallery` manages pictures/text only; no music playback controls are currently shipped in the website.
+Current status: **implemented**. `Update Gallery` now manages pictures/text/audio, and the website ships mute/volume controls in the settings panel.
 
-Track progress in `plan.md § v0.19`.
+Implementation details: `plan.md § v0.19`.
 
 Welcome! This guide explains how to put your pictures into the FREYRAUM gallery.
 
 You do **not** need to use a code editor, the terminal, or any technical tool.
-You only ever touch one folder and one button.
+You only ever touch two folders and one button.
+
+## v0.19 background music workflow (shipped)
+
+Add calm background music files in:
+
+```text
+customer-audio/inbox/
+  calm-track.mp3
+  calm-track.ogg
+  calm-track.m4a
+  calm-track.wav
+```
+
+- Supported audio types: **MP3**, **OGG**, **M4A**, **WAV**
+- Unsupported audio files are listed in the report and ignored (no hard failure)
+- If multiple supported files exist, the importer uses deterministic precedence and runtime still performs compatibility probing
+- In the website, open the settings gear and use **Ton stummschalten** + **Lautstärke** controls
 
 
 ## UI fix note (v0.16.2 follow-up implemented)
@@ -130,15 +147,16 @@ Your support person sets these up once. After that, you only do the steps below.
 ## How to update your gallery
 
 1. Open the FREYRAUM folder.
-2. Open the folder called **`customer-artworks`**, then the folder called **`inbox`**.
-3. Drag your pictures into the **inbox** folder.
-   - You can put in as many pictures as you want.
-   - Any size or shape works: portrait, landscape, square, very wide, etc.
-4. Go back to the FREYRAUM folder and double-click **`Update Gallery`**:
-   - On macOS: `Update Gallery.command`
-   - On Windows: `Update Gallery.bat`
-5. A short report opens automatically when the update is done.
-6. Double-click **`index.html`** (in the FREYRAUM folder) to view the updated gallery.
+2. Open the folder called **`customer-artworks`**, then **`inbox`**.
+3. Drag your pictures into the artwork **inbox** folder.
+    - You can put in as many pictures as you want.
+    - Any size or shape works: portrait, landscape, square, very wide, etc.
+4. (Optional) Open **`customer-audio/inbox`** and add one or more calm background tracks (`.mp3`, `.ogg`, `.m4a`, `.wav`).
+5. Go back to the FREYRAUM folder and double-click **`Update Gallery`**:
+    - On macOS: `Update Gallery.command`
+    - On Windows: `Update Gallery.bat`
+6. A short report opens automatically when the update is done.
+7. Double-click **`index.html`** (in the FREYRAUM folder) to view the updated gallery.
 
 That's the whole workflow.
 
@@ -153,6 +171,12 @@ Cannot show in any browser (skipped with a clear message): **camera RAW** files
 
 If you only have HEIC pictures from your iPhone, ask your support person to convert them
 to JPG, or change your iPhone setting to take JPG photos.
+
+## Which background music file types work
+
+Best supported: **MP3**, **OGG**, **M4A**, **WAV**.
+
+Other audio formats are listed under `Unsupported audio files` in the update report and ignored without breaking the gallery.
 
 ## How the gallery picks titles
 
@@ -175,10 +199,12 @@ It runs a small script that:
 1. Looks in **`customer-artworks/inbox/`** for your pictures.
 2. Reads each picture's size (width × height) and creates a friendly title.
 3. Copies a working copy into **`customer-preview/images/`**.
-4. Writes a list of all imported pictures into:
+4. Looks in **`customer-audio/inbox/`** for supported background music files and copies them into **`customer-preview/audio/`**.
+5. Writes a list of all imported pictures into:
    - `customer-artworks/artworks.json` (human-readable)
    - `customer-preview/customer-artworks.js` (used by the gallery)
-5. Writes a plain-language report to `customer-artworks/last-import-report.txt`.
+   - `customer-preview/customer-audio.js` (used by the gallery for background music)
+6. Writes a plain-language report to `customer-artworks/last-import-report.txt`.
 
 Your original picture files are never changed or deleted.
 
@@ -218,8 +244,10 @@ the button will recreate them on the next run:
 - `customer-artworks/last-import-report.txt`
 - `customer-preview/images/`
 - `customer-preview/customer-artworks.js`
+- `customer-preview/audio/`
+- `customer-preview/customer-audio.js`
 
-You only need to touch **`customer-artworks/inbox/`**.
+You only need to touch **`customer-artworks/inbox/`** and optionally **`customer-audio/inbox/`**.
 
 ## What happens if I do nothing
 

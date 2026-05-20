@@ -1,8 +1,8 @@
 # DOCUMENTATION RULES
 
-## v0.19 — Calm background music deep technical plan (2026-05-20, planned)
+## v0.19 — Calm background music workflow (2026-05-20, implemented)
 
-Current status: planned/not-yet-shipped. `plan.md § v0.19` now contains a codebase-audited technical implementation roadmap with file/module boundaries, autoplay/compatibility handling, diagnostics expectations, and explicit indefinite-loop behavior requirements for background audio. Runtime currently has no shipped background audio playback yet.
+Current status: shipped. `plan.md § v0.19` now reflects implemented importer/runtime/UI behavior: audio ingestion from `customer-audio/inbox`, generated `customer-preview/customer-audio.js`, runtime compatibility probing, loop-guarded playback, mute/volume persistence, and lifecycle/autoplay diagnostics.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
@@ -62,7 +62,7 @@ When adding future implementation plans for rendering, performance, shaders, Web
 
 ## Latest documentation pass
 
-- 2026-05-20 (documentation): v0.19 deep technical audio audit refresh documented. Re-audited runtime/importer boundaries (`src/main.ts`, preferences store, PreferencesPanel, importer/preview scripts, update launchers), expanded `plan.md § v0.19` into a coding-ready technical brainstorm with vertical slices and risk/acceptance matrices, and formalized the indefinite-loop requirement (`loop=true` with guarded ended-restart fallback). Added autoplay/codec research references in `FINDINGS.md`. Runtime remains unchanged and not-yet-shipped for background audio.
+- 2026-05-20 (implemented): v0.19 background-audio workflow shipped. Added importer audio ingestion (`customer-audio/inbox`), generated preview payload (`customer-preview/customer-audio.js`), preview HTML/stub wiring, runtime `BackgroundAudioManager` with diagnostics + loop fallback + autoplay handling + lifecycle suspend/resume integration, persisted `audioMuted`/`audioVolume` preferences, and preferences-panel mute/volume controls with status messaging. Validated with `npm run lint` and `npm run build`.
 
 - 2026-05-20 (implemented): v0.18 customer sidecar text shipped. `scripts/import-artworks.mjs` now reads same-basename `.txt` sidecars (`.md` accepted as backup, `.txt` wins on duplicates) and merges customer-facing fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. `customer-artworks/last-import-report.txt` gained `Text applied`, `Pictures missing text`, `Text files without matching pictures`, `Text fields needing attention`, and `Duplicate text files` sections. `docs/CUSTOMER_TEXT_GUIDE.md` rewritten as the shipped how-to-import-text walkthrough. `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` aligned with the shipped parser contract. All v0.18 banners across `README.md`, `CHANGELOG.md`, `plan.md`, `FINDINGS.md`, `docs/HANDOFF.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `DOCUMENTATION_RULES.md`, `ARCHITECTURE_MAP.md`, `AI_RULES.md`, and `LESSONS_LEARNED.md` updated from "planned" to "shipped". Validated `npm run lint`, `npm run build`, and a fixture importer run covering matched/missing/orphan/duplicate sidecars plus invalid `Year`/`Surface`/blank `Alt`/multi-line `Description`.
 

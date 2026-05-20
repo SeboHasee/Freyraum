@@ -1,14 +1,23 @@
 # FREYRAUM Plan
 
-## v0.19 — Background music workflow deep technical plan (planned, not yet shipped — 2026-05-20 audit refresh)
+## v0.19 — Background music workflow implementation (shipped, 2026-05-20)
 
 ### Status
 
-Planning/audit only. No runtime audio code is shipped yet.
+Implemented. Importer, preview payload, runtime audio manager, preferences persistence, and UI controls are shipped.
 
-### Requested outcome (audited)
+### Implemented outcome
 
 Implement customer-managed calm background music that integrates with the existing one-click `Update Gallery` workflow, supports compatible audio formats, exposes clear mute + volume controls, and loops continuously until the user pauses/mutes or leaves the experience.
+
+### Implementation summary
+
+1. `scripts/import-artworks.mjs` now scans `customer-audio/inbox`, copies supported audio files to `customer-preview/audio`, writes `customer-preview/customer-audio.js`, and reports selected/ignored/unsupported/no-audio outcomes.
+2. `scripts/write-local-preview.mjs` now injects `customer-audio.js` into preview HTML and writes a stub payload when no generated file exists yet.
+3. Runtime now sanitizes `window.__FREYRAUM_AUDIO` and orchestrates playback through `src/audio/BackgroundAudioManager.ts`.
+4. `src/utils/preferences.ts` persists `audioMuted` and `audioVolume` in `freyraum.preferences.v1` with backward-compatible defaults.
+5. `src/ui/PreferencesPanel.ts` + `src/styles/main.scss` now expose mute toggle, volume slider, and autoplay-status messaging.
+6. `src/main.ts` integrates audio manager lifecycle (load/apply/suspend/resume/dispose) with existing diagnostics and page-lifecycle orchestration.
 
 ### Current architecture audit (code-level)
 
@@ -46,12 +55,12 @@ Validated current boundaries against runtime + importer code:
 - New runtime dependency for audio playback.
 - Replacing existing artwork/text manifest contract.
 
-### Proposed file/module changes (implementation target)
+### Implemented file/module changes
 
 1. **Importer + preview payload**
    - `scripts/import-artworks.mjs`
    - `scripts/write-local-preview.mjs`
-   - potential generated output: `customer-preview/customer-audio.js`
+   - generated output: `customer-preview/customer-audio.js`
 2. **Runtime audio domain**
    - new `src/audio/BackgroundAudioManager.ts` (or `src/utils/BackgroundAudioManager.ts` if repository wants no new top-level domain folder)
 3. **Main orchestration integration**
@@ -66,7 +75,7 @@ Validated current boundaries against runtime + importer code:
    - `docs/HANDOFF.md`
    - plus status banners in core markdown
 
-### Audio asset contract (planned)
+### Audio asset contract (implemented)
 
 Recommended v0.19 contract:
 
@@ -93,7 +102,7 @@ Policy:
    - unsupported audio files,
    - no audio found.
 
-### Runtime playback contract (planned)
+### Runtime playback contract (implemented)
 
 `BackgroundAudioManager` responsibilities:
 
@@ -112,7 +121,7 @@ Policy:
    - on `pageInactive`: pause audio (policy default for power-friendliness),
    - on resume: re-attempt play only if user had audio active before suspension.
 
-### UI + accessibility contract (planned)
+### UI + accessibility contract (implemented)
 
 Controls must be clean, discoverable, and WCAG-friendly:
 

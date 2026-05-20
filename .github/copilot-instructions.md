@@ -2,8 +2,8 @@
 
 ## v0.19 context note
 
-A calm background-music workflow is currently planned in `plan.md § v0.19` and is **not shipped yet**.
-When updating docs, keep this distinction explicit until implementation lands.
+The calm background-music workflow in `plan.md § v0.19` is shipped.
+When updating docs or code, treat importer payloads, autoplay handling, preferences persistence, and lifecycle audio behavior as active regression boundaries.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## v0.19 — Background audio workflow (2026-05-20, implemented)
+
+### Added / Changed
+
+- `scripts/import-artworks.mjs` now imports customer audio from `customer-audio/inbox`, copies supported files to `customer-preview/audio`, emits `customer-preview/customer-audio.js`, and writes report sections for selected/ignored/unsupported/no-audio outcomes.
+- `scripts/write-local-preview.mjs` now injects `customer-audio.js` into preview HTML and writes a fallback audio stub when no generated file exists yet.
+- Added `src/audio/BackgroundAudioManager.ts` for runtime audio ownership (source selection, autoplay handling, loop fallback, diagnostics, lifecycle suspend/resume, disposal).
+- `src/main.ts` now sanitizes injected audio payloads, wires manager lifecycle into existing runtime lifecycle hooks, and syncs UI status messaging.
+- `src/utils/preferences.ts` now persists `audioMuted` + `audioVolume` in `freyraum.preferences.v1`.
+- `src/ui/PreferencesPanel.ts` and `src/styles/main.scss` now include mute + volume controls and autoplay status note rendering.
+
+### Documentation
+
+- Updated v0.19 status across repository markdown files from planned to implemented and added shipped workflow details to customer/developer docs.
+
+### Validation
+
+- `npm run lint` ✅
+- `npm run build` ✅
+
 ## v0.18 — Customer painting text sidecars (2026-05-20, implemented)
 
 Implementation pass. The importer (`scripts/import-artworks.mjs`) now
@@ -63,13 +83,9 @@ implementation pass above.
 
 ## Unreleased
 
-### Documentation (v0.19 deep audio technical audit refresh — 2026-05-20)
+### Historical note (v0.19 planning audit — 2026-05-20)
 
-- Re-audited the v0.19 audio scope against current runtime/importer architecture (`src/main.ts`, `src/utils/preferences.ts`, `src/ui/PreferencesPanel.ts`, `scripts/import-artworks.mjs`, `scripts/write-local-preview.mjs`, update launchers).
-- Upgraded `plan.md § v0.19` into a deep technical coding plan with module boundaries, vertical slices, risk matrix, acceptance matrix, and implementation guardrails.
-- Added explicit non-negotiable loop requirement: background audio must repeat indefinitely (`loop=true` plus guarded `ended` recovery path).
-- Documented autoplay-policy and codec-selection research references (`play()`, autoplay guide, `loop`, `canPlayType`) in `FINDINGS.md`.
-- Validation for this documentation pass: `npm run lint` and `npm run build` pass after `npm install`.
+- The pre-implementation v0.19 planning audit has been superseded by the shipped implementation entry above.
 
 ### Documentation (v0.18 final audited plan — 2026-05-20)
 

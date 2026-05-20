@@ -1,12 +1,20 @@
 # FREYRAUM — Image Maintenance Guide
 
-## v0.19 calm background music maintenance note (planned, not yet shipped)
+## v0.19 calm background music maintenance note (implemented)
 
-Planned next scope includes customer-managed audio assets and background playback controls.
+Customer-managed audio assets and background playback controls are now part of the shipped maintenance surface.
 
-Current status: **not implemented yet**. Existing maintenance workflow remains image/text focused; no shipped audio import/playback pipeline exists yet.
+Current status: **implemented**. Maintenance workflow now includes customer audio import (`customer-audio/inbox`), preview payload generation, and runtime playback controls.
 
-See `plan.md § v0.19`.
+See `plan.md § v0.19` and `FINDINGS.md § 2026-05-20`.
+
+Audio maintenance boundaries:
+
+- Supported audio import extensions: `.mp3`, `.ogg`, `.m4a`, `.wav`
+- Generated audio assets: `customer-preview/audio/*`
+- Generated runtime payload: `customer-preview/customer-audio.js`
+- Runtime global consumed by app: `window.__FREYRAUM_AUDIO`
+- Failures stay warning-first in importer report; they must not block image import
 
 This guide explains how the image system works after the v0.07 importer update.
 

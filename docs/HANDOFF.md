@@ -1,12 +1,19 @@
 # FREYRAUM customer handoff guide
 
-## v0.19 background music workflow — planned (not yet shipped, 2026-05-20)
+## v0.19 background music workflow — implemented (2026-05-20)
 
-A new background-audio workflow is planned: customers will place compatible audio files in a documented folder and use the existing `Update Gallery` flow.
+Background-audio workflow is live: customers place compatible audio files in `customer-audio/inbox` and use the existing `Update Gallery` flow.
 
-Current status: **not shipped yet**. The website currently has no background music controls.
+Current status: **shipped**. The website now includes background music controls (mute + volume) in the settings panel.
 
-Canonical plan: `plan.md § v0.19`
+Canonical implementation reference: `plan.md § v0.19`
+
+Quick handoff checklist for customer audio:
+
+- Put music files into `customer-audio/inbox` (`.mp3`, `.ogg`, `.m4a`, `.wav`).
+- Run `Update Gallery`.
+- Confirm `customer-artworks/last-import-report.txt` contains the audio sections (`Audio selected`, `Audio candidates ignored by precedence`, `Unsupported audio files`).
+- In preview, open settings and verify mute + volume controls.
 
 ## v0.18 sidecar text — implemented (2026-05-20)
 
@@ -26,7 +33,7 @@ unchanged. Missing or invalid sidecars never fail the import; they are
 surfaced through the existing plain-language report.
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current runtime status: v0.17 easy-wins pass implemented (on top of v0.16, v0.15, and v0.14).**
+contributors. **Current runtime status: v0.19 implemented (on top of v0.18, v0.17, v0.16, v0.15, and v0.14).**
 
 ## AI/contributor context
 

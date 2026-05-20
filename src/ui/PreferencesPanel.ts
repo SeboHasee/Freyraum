@@ -17,6 +17,7 @@ export class PreferencesPanel {
   private readonly panel: HTMLElement;
   private isOpen = false;
   private readonly unsubscribe: () => void;
+  private audioStatusMessage: string | null = null;
 
   constructor(container: HTMLElement, private readonly prefs: PreferencesStore) {
     this.root = document.createElement('div');
@@ -67,7 +68,7 @@ export class PreferencesPanel {
   }
 
   private renderPanel(): void {
-    const { reducedMotion, contrastMode, quality, lighting } = this.prefs.current;
+    const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume } = this.prefs.current;
 
     const qualityOptions = (Object.values(QUALITY_PRESETS) as QualityPreset[])
       .map(
@@ -123,6 +124,32 @@ export class PreferencesPanel {
         <legend class="prefs__legend">Beleuchtung</legend>
         ${lightingOptions}
       </fieldset>
+      <h2 class="prefs__heading">Hintergrundmusik</h2>
+      <label class="prefs__toggle">
+        <input type="checkbox" id="freyraum-audio-muted" ${audioMuted ? 'checked' : ''} />
+        <span class="prefs__toggle-track" aria-hidden="true"></span>
+        <span class="prefs__toggle-label">
+          <span class="prefs__toggle-title">Ton stummschalten</span>
+          <span class="prefs__toggle-desc">Beruhigende Hintergrundmusik ein- oder ausschalten.</span>
+        </span>
+      </label>
+      <label class="prefs__range" for="freyraum-audio-volume">
+        <span class="prefs__range-label">Lautstärke</span>
+        <input
+          type="range"
+          id="freyraum-audio-volume"
+          min="0"
+          max="100"
+          step="1"
+          value="${Math.round(audioVolume * 100)}"
+        />
+        <span class="prefs__range-value">${Math.round(audioVolume * 100)}%</span>
+      </label>
+      ${
+        this.audioStatusMessage
+          ? `<p class="prefs__note" role="status">${this.audioStatusMessage}</p>`
+          : ''
+      }
       <h2 class="prefs__heading">Performance</h2>
       <fieldset class="prefs__group">
         <legend class="prefs__legend">Qualitätsstufe</legend>
@@ -153,6 +180,24 @@ export class PreferencesPanel {
         }
       });
     });
+
+    this.panel.querySelector<HTMLInputElement>('#freyraum-audio-muted')?.addEventListener('change', (e) => {
+      this.prefs.setAudioMuted((e.target as HTMLInputElement).checked);
+    });
+
+    const volumeInput = this.panel.querySelector<HTMLInputElement>('#freyraum-audio-volume');
+    const volumeValue = this.panel.querySelector<HTMLElement>('.prefs__range-value');
+    volumeInput?.addEventListener('input', (e) => {
+      const value = Number((e.target as HTMLInputElement).value);
+      if (Number.isNaN(value)) return;
+      this.prefs.setAudioVolume(value / 100);
+      if (volumeValue) volumeValue.textContent = `${Math.round(value)}%`;
+    });
+  }
+
+  setAudioStatusMessage(message: string | null): void {
+    this.audioStatusMessage = message;
+    this.renderPanel();
   }
 
   private handleToggle = (): void => {

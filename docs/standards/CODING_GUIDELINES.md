@@ -1,9 +1,9 @@
 # FREYRAUM coding guidelines
 
-## v0.19 planning status note
+## v0.19 implementation status note
 
-Background-audio support is currently a planned scope (`plan.md § v0.19`), not shipped runtime behavior.
-Future implementation must keep warning-first importer behavior and accessibility-compliant mute/volume controls.
+Background-audio support is now shipped (`plan.md § v0.19`).
+Ongoing changes must keep warning-first importer behavior, accessibility-compliant mute/volume controls, and lifecycle/autoplay-safe diagnostics paths.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

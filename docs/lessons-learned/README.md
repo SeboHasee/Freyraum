@@ -1,8 +1,8 @@
 # Lessons learned docs
 
-## v0.19 planning status
+## v0.19 implementation status
 
-Current lesson for this pass: keep planned customer-facing audio workflows clearly labeled as planned until code is shipped.
+Current lesson for this pass: keep docs, importer behavior, and runtime status synchronized immediately after shipping customer-facing audio workflows.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

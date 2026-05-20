@@ -2,8 +2,8 @@
 
 ## v0.19 context note
 
-Current repository status includes a **planned/not-yet-shipped** background-music workflow (`plan.md § v0.19`).
-Do not describe it as implemented unless runtime code has landed.
+Current repository status includes a **shipped** background-music workflow (`plan.md § v0.19`).
+Do not regress importer/runtime/preferences audio boundaries during refactors.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

@@ -1,8 +1,8 @@
 # FREYRAUM AI rules
 
-## v0.19 — Calm background music planning boundary (2026-05-20, planned)
+## v0.19 — Calm background music workflow shipped (2026-05-20)
 
-When implementing the planned audio workflow, keep docs explicit about planned vs shipped state until runtime code lands, preserve one-click customer launchers, and keep warning-first failure handling for missing/invalid audio assets.
+Background-audio workflow is now implemented. Preserve one-click customer launchers, warning-first importer behavior for invalid audio assets, and diagnostics-backed autoplay/lifecycle handling for ongoing maintenance.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
@@ -14,7 +14,7 @@ Hard constraints for AI-assisted work in this repository.
 
 - Keep `src/main.ts` as the orchestration layer; do not move feature logic there unless it wires existing modules together.
 - Keep rendering infrastructure in `src/core/`, gallery/domain behavior in `src/gallery/`, material fidelity in `src/materials/`, and DOM controls in `src/ui/` or `src/timeline/`.
-- Keep customer artwork import logic in `scripts/` and preserve friendly Node compatibility errors.
+- Keep customer artwork/audio import logic in `scripts/` and preserve friendly Node compatibility errors.
 - Do not treat `customer-preview/` as source of truth. It is rebuilt output.
 
 ## Forbidden patterns

@@ -24,6 +24,7 @@ import { showFallbackScreen } from './ui/FallbackScreen';
 import { Timeline } from './timeline/Timeline';
 import { KeyboardNav } from './interaction/KeyboardNav';
 import { CanvasInteraction } from './interaction/CanvasInteraction';
+import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
 import { PreferencesStore } from './utils/preferences';
 import { isWebGLAvailable } from './utils/webgl';
 import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
@@ -133,6 +134,67 @@ function sanitizeInjectedArtworks(
   return out;
 }
 
+function sanitizeInjectedAudio(
+  raw: unknown,
+  diagnostics: ReturnType<typeof getDiagnostics>
+): BackgroundAudioPayload | null {
+  if (raw === undefined || raw === null || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const rawSources = Array.isArray(payload['sources']) ? (payload['sources'] as unknown[]) : [];
+  const sources = rawSources
+    .map((source) => source as Record<string, unknown>)
+    .filter(
+      (source) =>
+        source &&
+        typeof source['src'] === 'string' &&
+        typeof source['ext'] === 'string' &&
+        typeof source['mime'] === 'string' &&
+        typeof source['filename'] === 'string',
+    )
+    .map((source) => ({
+      src: (source['src'] as string).trim(),
+      ext: (source['ext'] as string).trim().toLowerCase(),
+      mime: (source['mime'] as string).trim().toLowerCase(),
+      filename: (source['filename'] as string).trim(),
+    }))
+    .filter(
+      (source) =>
+        source.src.startsWith('./audio/') &&
+        /^audio\/[a-z0-9.+-]+$/.test(source.mime) &&
+        ['.mp3', '.ogg', '.m4a', '.wav'].includes(source.ext),
+    );
+
+  if (sources.length === 0) return null;
+
+  const selectedRaw =
+    payload['selectedByImporter'] && typeof payload['selectedByImporter'] === 'object'
+      ? (payload['selectedByImporter'] as Record<string, unknown>)
+      : null;
+  const selectedByImporter = selectedRaw
+    ? sources.find(
+        (source) =>
+          source.src === selectedRaw['src'] &&
+          source.ext === selectedRaw['ext'] &&
+          source.mime === selectedRaw['mime'] &&
+          source.filename === selectedRaw['filename'],
+      )
+    : undefined;
+
+  diagnostics.info('boot', 'audio-source-resolved', 'Background audio payload resolved', {
+    sources: sources.map((source) => ({
+      file: source.filename,
+      ext: source.ext,
+      mime: source.mime,
+    })),
+    selectedByImporter: selectedByImporter?.filename ?? null,
+  });
+
+  return {
+    sources,
+    ...(selectedByImporter ? { selectedByImporter } : {}),
+  };
+}
+
 async function main(): Promise<void> {
   const diagnostics = getDiagnostics();
   diagnostics.installGlobalHandlers();
@@ -148,6 +210,7 @@ async function main(): Promise<void> {
   // screen and loading overlay both react to motion/contrast settings.
   const preferences = new PreferencesStore();
   diagnostics.debug('boot', 'preferences-ready', 'Preferences store created', preferences.current);
+  const backgroundAudio = new BackgroundAudioManager();
 
   // v0.11 — capability-based device detection. Mirrored to <html> data
   // attributes so SCSS, HintText, and CanvasInteraction can react
@@ -204,6 +267,10 @@ async function main(): Promise<void> {
     withWebglImage: artworkManifest.filter((a) => a.hasWebglImage).length,
     withoutWebglImage: artworkManifest.filter((a) => !a.hasWebglImage).length,
   });
+
+  const injectedAudio = (window as unknown as { __FREYRAUM_AUDIO?: unknown }).__FREYRAUM_AUDIO;
+  const customerAudio = sanitizeInjectedAudio(injectedAudio, diagnostics);
+  backgroundAudio.load(customerAudio);
 
   if (!isWebGLAvailable()) {
     diagnostics.error('boot', 'webgl-unavailable', 'WebGL is not available in the current browser');
@@ -350,6 +417,9 @@ async function main(): Promise<void> {
   const preferencesPanel = new PreferencesPanel(app, preferences);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
+  const unsubscribeAudioState = backgroundAudio.subscribe((state) => {
+    preferencesPanel.setAudioStatusMessage(state.message);
+  });
 
   // v0.16 — populate cached chrome refs now that all chrome elements are in
   // the DOM. `measureArtworkViewport` reads from this object instead of
@@ -461,10 +531,15 @@ async function main(): Promise<void> {
 
   // Apply current preferences to all subsystems.
   const applyPreferences = (manual: boolean): void => {
-    const { reducedMotion, quality, lighting } = preferences.current;
+    const { reducedMotion, quality, lighting, audioMuted, audioVolume } = preferences.current;
     galleryManager.setReducedMotion(reducedMotion);
     lightingSetup.setAnimated(!reducedMotion);
     lightingSetup.setProfile(lighting);
+    backgroundAudio.setVolume(audioVolume, 'preferences-apply');
+    backgroundAudio.setMuted(audioMuted, 'preferences-apply');
+    if (!audioMuted && backgroundAudio.hasSource()) {
+      void backgroundAudio.play('preferences-apply');
+    }
 
     // v0.05: self-shadow profile scale. Museum-style display profiles dim
     // the self-shadow contribution to 50%; inspection (raking) profiles get
@@ -503,6 +578,8 @@ async function main(): Promise<void> {
       reducedMotion,
       quality,
       lighting,
+      audioMuted,
+      audioVolume,
       inspection: isInspection,
     });
   };
@@ -528,6 +605,7 @@ async function main(): Promise<void> {
   const suspendRuntime = (reason: string): void => {
     if (pageInactive) return;
     pageInactive = true;
+    backgroundAudio.handleSuspend(reason);
     diagnostics.info('lifecycle', 'suspend', `Runtime suspended (${reason})`, {
       reason,
       visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
@@ -536,6 +614,7 @@ async function main(): Promise<void> {
   const resumeRuntime = (reason: string): void => {
     if (!pageInactive) return;
     pageInactive = false;
+    backgroundAudio.handleResume(reason);
     // Mark a cooldown so the immediate post-resume frame spike doesn't
     // cause an adaptive quality downgrade.
     frameBudget.markNavigation();
@@ -637,7 +716,7 @@ async function main(): Promise<void> {
       mode: diagnostics.getMode(),
     });
   }
-  let previousQuality = preferences.current.quality;
+  let previousPrefs = preferences.current;
   // v0.16 — defer expensive shader-define / preset recomputation to an
   // idle slot so a click on a preferences radio button does not stall the
   // next paint. The very first apply (above) remains synchronous because
@@ -668,9 +747,20 @@ async function main(): Promise<void> {
       : (h): void => window.clearTimeout(h);
   let pendingApplyHandle: IdleCancelHandle | null = null;
   const unsubscribePreferences = preferences.subscribe(() => {
-    const next = preferences.current.quality;
-    const manual = next !== previousQuality && !adaptiveQualityWriteInFlight;
-    previousQuality = next;
+    const nextPrefs = preferences.current;
+    const manual = nextPrefs.quality !== previousPrefs.quality && !adaptiveQualityWriteInFlight;
+    const audioChanged =
+      nextPrefs.audioMuted !== previousPrefs.audioMuted ||
+      Math.abs(nextPrefs.audioVolume - previousPrefs.audioVolume) > 0.0001;
+    previousPrefs = nextPrefs;
+    if (audioChanged) {
+      if (pendingApplyHandle !== null) {
+        cancelIdle(pendingApplyHandle);
+        pendingApplyHandle = null;
+      }
+      applyPreferences(manual);
+      return;
+    }
     if (pendingApplyHandle !== null) {
       cancelIdle(pendingApplyHandle);
     }
@@ -762,6 +852,7 @@ async function main(): Promise<void> {
     window.removeEventListener('freeze', onPageFreeze as EventListener);
     window.removeEventListener('resume', onPageResume as EventListener);
     unsubscribePreferences();
+    unsubscribeAudioState();
     if (debugEnabled) {
       window.removeEventListener('keydown', handleDebugKey);
     }
@@ -783,6 +874,7 @@ async function main(): Promise<void> {
     preferencesPanel.dispose();
     hintText.dispose();
     timeline.dispose();
+    backgroundAudio.dispose();
     artworkMesh.dispose();
     sidePanels.dispose();
     textureManager.dispose();
