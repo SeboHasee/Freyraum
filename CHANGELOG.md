@@ -1,5 +1,23 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+
+## v0.20.3 — Technical plan hardening + markdown sync (2026-05-20, docs-only)
+
+### Planned
+
+- Expanded the latest audio-focused roadmap into a deeper technical implementation plan:
+  - formal volume display↔effective-gain mapping contract,
+  - PreferencesPanel in-place slider continuity refactor guidance,
+  - BackgroundAudioManager fade-envelope transition model,
+  - responsive control-placement policy and diagnostics expansion.
+- Added explicit coding-slice sequencing and acceptance checks for the next implementation PR.
+
+### Documentation
+
+- Added v0.20.3 technical audit findings to `FINDINGS.md`.
+- Added v0.20.3 technical planning section to `plan.md`.
+- Updated top-level status references in `README.md`, `docs/HANDOFF.md`, and `DOCUMENTATION_RULES.md`.
+- Refreshed markdown audit stamp text across repository `.md` files.
 
 ## v0.20.2 — Audio UX follow-up plan (2026-05-20, docs-only planning pass)
 

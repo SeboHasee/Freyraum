@@ -1,5 +1,14 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+
+## v0.20.3 — Audio implementation planning constraints (2026-05-20)
+
+Upcoming audio follow-up implementation must preserve deterministic diagnostics and should add:
+
+- explicit display↔effective volume mapping helpers (single source of truth),
+- non-destructive slider continuity handling in `PreferencesPanel`,
+- cancellable fade-envelope transitions in `BackgroundAudioManager`,
+- overlap-safe responsive placement rules for main-page audio controls.
 
 ## v0.20 — Audio workflow reliability shipped (2026-05-20)
 

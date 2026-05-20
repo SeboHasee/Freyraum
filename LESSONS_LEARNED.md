@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+
+## 2026-05-20 — Volume UX changes need explicit mapping contracts
+
+- The current audio system stores linear gain and exposes linear sliders, but product requests now require “balanced display” behavior with calmer effective startup loudness.
+- Future rule: whenever UX wording and technical gain model diverge, define explicit forward + inverse mapping helpers and reuse them across defaults, persistence, UI rendering, and diagnostics.
+
+## 2026-05-20 — High-frequency controls should avoid full DOM re-render loops
+
+- Preferences slider continuity risk is caused by full panel `innerHTML` replacement on each preference change.
+- Future rule: for range sliders and other high-frequency controls, keep stable DOM nodes and patch values in place; avoid replacing active controls during pointer drag.
 
 ## v0.20 implementation note — audio reliability shipped (2026-05-20)
 
@@ -69,4 +79,3 @@ Use this file for durable lessons that should change future agent behavior.
 - Future rule: when adding optional customer-edited fields, separate "present but blank" (warn) from "omitted entirely" (silent fallback). Use `Object.prototype.hasOwnProperty.call(fields, key)` for the distinction, not `!fields[key]`.
 
 Extended incident documentation belongs in `docs/lessons-learned/`.
-

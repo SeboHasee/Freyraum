@@ -1,5 +1,18 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+
+## v0.20.3 technical audio enhancement roadmap — planned (not yet shipped, 2026-05-20)
+
+This is still a planning/documentation pass. The next implementation should follow:
+
+1. A formal display-to-effective volume mapping contract.
+2. A settings-panel slider continuity refactor (no drag interruption).
+3. Fade-in/fade-out transitions for play/mute/loop/lifecycle paths.
+4. Responsive, collision-safe main-page audio-control placement policy.
+5. Extended diagnostics for transition phases and mapped volume values.
+
+Implementation reference: `plan.md § v0.20.3`  
+Technical findings: `FINDINGS.md § 2026-05-20 (v0.20.3 technical audit)`
 
 ## v0.20.2 audio UX follow-up — planned (not yet shipped, 2026-05-20)
 

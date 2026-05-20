@@ -1,5 +1,104 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+
+## v0.20.3 — Full technical audit + enhancement roadmap (planning, 2026-05-20)
+
+### Status
+
+Planned (not yet shipped).
+
+### Audit scope
+
+- Runtime orchestration (`src/main.ts`)
+- Audio domain (`src/audio/BackgroundAudioManager.ts`)
+- Preferences persistence and UI (`src/utils/preferences.ts`, `src/ui/PreferencesPanel.ts`, `src/ui/AudioControls.ts`)
+- Styling behavior for controls (`src/styles/main.scss`)
+- Current documentation consistency and upgrade readiness
+
+### Highest-impact technical findings
+
+1. **Perceptual loudness mapping is missing.**
+   - Current model stores linear gain (`audioVolume`) and renders linear sliders (0–100).
+   - Requested behavior (“show 50%, sound calm”) needs a stable display↔effective mapping contract and migration-safe persistence behavior.
+2. **Settings slider drag continuity is interrupted by full re-rendering.**
+   - `PreferencesPanel` rebuilds full panel markup on each preference update.
+   - `input` events on the range slider immediately write preferences, so the control node can be replaced mid-drag.
+3. **Fade envelope is not implemented for loop/toggle edges.**
+   - `BackgroundAudioManager` applies volume changes directly and restarts immediately on `ended` fallback.
+   - This can create audible clicks depending on source boundaries and browser/device timing.
+4. **Main-page audio controls need collision-aware placement policy.**
+   - Current bottom-left placement is visually balanced but not yet formalized against viewport crowding / safe-area / timeline overlap rules.
+5. **Audio diagnostics are useful but can be made more actionable.**
+   - Events exist, but there is no explicit diagnostic contract for fade phases, mapping source-of-truth values, and autoplay recovery transitions.
+
+### Technical implementation slices (coding advice)
+
+1. **Slice A — Volume mapping contract + helpers**
+   - Add explicit helper functions in `src/audio/volumeMapping.ts` (or equivalent utility):
+     - `displayPercentToGain(percent: number): number`
+     - `gainToDisplayPercent(gain: number): number`
+   - Keep `PreferencesStore` as source-of-truth for persisted effective gain (`audioVolume`).
+   - Render both sliders from `gainToDisplayPercent(...)`; write preferences using `displayPercentToGain(...)`.
+   - Add migration-safe guardrails: clamp out-of-range legacy values and log one diagnostics warning when normalization occurs.
+
+2. **Slice B — Continuous slider behavior in PreferencesPanel**
+   - Refactor `PreferencesPanel` away from full `innerHTML` replacement on every preference event.
+   - Keep static panel skeleton and patch only mutable text/value/checked states.
+   - During active pointer drag:
+     - suppress structural re-renders,
+     - update live value label in place,
+     - commit final value on `change` to reduce churn while preserving immediate audible feedback.
+   - Keep keyboard slider updates fully live (arrow/page/home/end).
+
+3. **Slice C — Fade envelope in BackgroundAudioManager**
+   - Add a small envelope layer around `HTMLAudioElement.volume` writes:
+     - configurable `FADE_IN_MS`, `FADE_OUT_MS`, `LOOP_RESTART_FADE_MS`
+     - cancel previous ramps before starting a new one.
+   - Implement deterministic state transitions for:
+     - play-start,
+     - mute/unmute,
+     - lifecycle suspend/resume,
+     - ended fallback restart.
+   - Keep autoplay rejection behavior unchanged; only enrich transition handling.
+
+4. **Slice D — Main-page control placement policy**
+   - Define CSS placement tokens for left/bottom offsets and overlap boundaries.
+   - Add responsive fallback rules for narrow phone widths (stacking, compact width, or temporary slider collapse).
+   - Validate that `.audio-controls` never intersects timeline/prefs/fullscreen hit targets across supported breakpoints.
+
+5. **Slice E — Diagnostics/logging expansion**
+   - Extend scoped diagnostics with explicit audio transition events:
+     - `audio-fade-start`, `audio-fade-cancel`, `audio-fade-complete`
+     - `audio-volume-map` (display percent + effective gain)
+     - `audio-resume-attempt` and outcome classification
+   - Keep log levels bounded: high-frequency slider logs must stay `debug`, not `info`.
+   - Include enough payload fields to replay user-reported behavior from exported diagnostics snapshots.
+
+### Brainstorm enhancements (post-v0.20.3 candidates)
+
+1. Optional logarithmic “fine control” mode for lower volume ranges.
+2. Soft-ducking strategy during heavy transitions (future, behind feature flag).
+3. Optional mini status chip for “autoplay blocked” with one-click recovery hints.
+4. Import-time optional loudness metadata scan (report-only) to warn about unusually loud masters.
+5. Lightweight smoke test harness for audio preference round-trip and mapping consistency.
+
+### Acceptance checks
+
+- Displayed slider value remains stable and continuous during pointer drag and keyboard adjustment.
+- Requested startup profile is met exactly by mapping contract (display midpoint + calm effective loudness baseline).
+- No audible click at normal mute/unmute, play-start, or ended-fallback loop transitions.
+- Main-page controls stay discoverable and non-overlapping across breakpoints and safe-area variants.
+- Diagnostics exports clearly reveal mapping values and transition/fallback states.
+
+### Validation plan for implementation PR
+
+- `npm run lint`
+- `npm run build`
+- Manual interaction sweep:
+  - mouse drag + touch drag + keyboard slider control
+  - autoplay-blocked recovery click path
+  - tab hide/show + freeze/resume path
+  - repeated loop boundary observation on at least one short and one long track
 
 ## v0.20.2 — Audio calm-start + control UX + seamless looping (planning, 2026-05-20)
 

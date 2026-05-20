@@ -1,5 +1,20 @@
 # Freyraum
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+
+## v0.20.3 — Technical planning hardening pass (2026-05-20, planning only)
+
+Current status: **planned, not yet shipped**.
+
+This pass upgrades the latest audio follow-up into an implementation-ready technical roadmap:
+
+1. Formal display↔effective volume mapping model with migration-safe persistence behavior.
+2. Concrete refactor guidance to fix settings-slider drag continuity (`PreferencesPanel` in-place updates).
+3. Fade-envelope transition model for loop/toggle/lifecycle audio state changes.
+4. Responsive placement policy for main-page audio controls with overlap/safe-area checks.
+5. Expanded diagnostics contract for mapped volume values and transition phases.
+
+Canonical plan: `plan.md § v0.20.3`  
+Technical findings: `FINDINGS.md § 2026-05-20 (v0.20.3 technical audit)`
 
 ## v0.20.2 — Audio UX follow-up planning pass (2026-05-20, planning only)
 

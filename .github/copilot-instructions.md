@@ -1,5 +1,5 @@
 # FREYRAUM Copilot instructions
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
 
 ## v0.20 full-check context note
 

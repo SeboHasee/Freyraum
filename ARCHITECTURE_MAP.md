@@ -1,5 +1,14 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+
+## v0.20.3 planning boundary — audio UX technical hardening (2026-05-20)
+
+Planned (not yet shipped): the next audio pass should preserve current module boundaries while adding:
+
+- mapping helpers between displayed volume percent and effective gain,
+- an in-place PreferencesPanel update strategy for continuous slider drag,
+- fade-envelope transitions in `BackgroundAudioManager`,
+- responsive placement policy for `.audio-controls` with documented overlap checks.
 
 ## v0.20 — Audio CORS fix + main-page AudioControls (2026-05-20)
 

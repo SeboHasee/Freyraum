@@ -1,5 +1,42 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+
+## 2026-05-20 — v0.20.3 full technical audit + enhancement refresh (docs-only)
+
+### Deep code findings
+
+1. **Volume semantics are currently linear and under-specified for UX goals.**
+   - `PreferencesStore` persists linear `audioVolume` values (`src/utils/preferences.ts`).
+   - `AudioControls` and `PreferencesPanel` both expose linear 0–100 sliders (`src/ui/AudioControls.ts`, `src/ui/PreferencesPanel.ts`).
+   - A formal mapping layer is required to satisfy “balanced display control, calmer effective output.”
+2. **Preferences panel architecture still causes structural churn during slider interaction.**
+   - `renderPanel()` rewrites `innerHTML`, then rebinds events on every preference update.
+   - Continuous slider `input` writes preferences immediately, which can force control replacement and pointer continuity loss.
+3. **Audio state transitions have no envelope abstraction.**
+   - `setVolume` and mute/play transitions are immediate in `BackgroundAudioManager`.
+   - `ended` fallback restart path also performs immediate replay.
+   - This increases audible edge-artifact risk.
+4. **Audio control placement currently has implementation but no explicit policy contract.**
+   - `.audio-controls` is fixed bottom-left in SCSS.
+   - No documented collision matrix exists for timeline + nav + prefs + fullscreen on constrained viewports.
+5. **Diagnostics foundation is strong and should be extended, not replaced.**
+   - Existing scoped logs are correctly centralized.
+   - The next increment should add transition/mapping events while preserving low-noise log levels.
+
+### Technical improvement priorities
+
+1. Introduce a dedicated display↔gain mapping utility with deterministic inverse behavior.
+2. Refactor `PreferencesPanel` to an in-place DOM update model for high-frequency controls.
+3. Add a cancellable fade-envelope pipeline inside `BackgroundAudioManager`.
+4. Formalize responsive control-placement acceptance checks and overlap rules.
+5. Expand diagnostics payloads for audio transitions and mapped volume values.
+
+### Output of this pass
+
+- Added new v0.20.3 technical roadmap section to `plan.md` with implementation slices, coding advice, acceptance checks, and brainstorm candidates.
+- Synced top-level docs to v0.20.3 planning context.
+- Refreshed markdown audit stamp text across repository markdown.
+- No runtime code changed in this pass.
 
 ## 2026-05-20 — v0.20.2 audio UX follow-up planning audit (docs-only)
 

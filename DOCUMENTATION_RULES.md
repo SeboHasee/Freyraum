@@ -1,5 +1,5 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
 
 ## v0.20 — Full documentation check-up (2026-05-20, audit complete)
 
@@ -62,6 +62,8 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - performance planning must explicitly state measurement strategy, fidelity-preservation boundaries, compatibility/fallback behavior, and resource ownership/disposal assumptions
 
 ## Latest documentation pass
+
+- 2026-05-20 (documentation): v0.20.3 technical planning hardening completed. Audited `src/main.ts`, `BackgroundAudioManager`, `PreferencesStore`, `PreferencesPanel`, `AudioControls`, and related SCSS boundaries; expanded `plan.md` with implementation-ready coding slices (volume mapping contract, slider continuity refactor, fade envelope transitions, control-placement policy, diagnostics expansion). Logged deep findings in `FINDINGS.md`, updated top-level status docs, and refreshed markdown audit stamp text across all `.md` files. No runtime code changed.
 
 - 2026-05-20 (documentation): v0.20.2 audio UX follow-up planning sync completed. Added a dedicated planning section for calm-start audio defaults, UI-vs-effective volume mapping, control-placement refinement, settings-slider continuity, and fade envelope handling. Logged code-audit and online research findings in `FINDINGS.md`. Updated top-level status notes and refreshed markdown audit stamp across all `.md` files. No runtime code changed.
 
