@@ -44,7 +44,15 @@ export class PreferencesPanel {
     this.panel.id = 'freyraum-prefs-panel';
     this.panel.className = 'prefs__panel';
     this.panel.setAttribute('role', 'dialog');
-    this.panel.setAttribute('aria-label', 'Anzeige- und Performance-Einstellungen');
+    // v0.17: aria-labelledby points to the static heading id added in renderPanel(),
+    // replacing the previous aria-label so screen readers announce the dialog title
+    // correctly (WCAG 4.1.2, ARIA dialog role requirements).
+    this.panel.setAttribute('aria-labelledby', 'freyraum-prefs-heading');
+    // v0.17: aria-modal=true tells assistive technology that background content is
+    // inert while this panel is open. Required for WCAG 2.1.2 and 2.4.3 compliance
+    // with custom role=dialog implementations.
+    // Source: https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
+    this.panel.setAttribute('aria-modal', 'true');
     this.panel.hidden = true;
 
     this.renderPanel();
@@ -94,7 +102,7 @@ export class PreferencesPanel {
       .join('');
 
     this.panel.innerHTML = `
-      <h2 class="prefs__heading">Anzeige</h2>
+      <h2 class="prefs__heading" id="freyraum-prefs-heading">Anzeige</h2>
       <label class="prefs__toggle">
         <input type="checkbox" id="freyraum-motion" ${reducedMotion ? 'checked' : ''} />
         <span class="prefs__toggle-track" aria-hidden="true"></span>
@@ -155,6 +163,10 @@ export class PreferencesPanel {
     if (!this.isOpen) return;
     if (this.root.contains(event.target as Node)) return;
     this.setOpen(false);
+    // v0.17: return focus to the trigger so keyboard users land on a known
+    // control after an outside-click dismiss (previously only Escape did this).
+    // WCAG SC 2.4.3 (Focus Order) and APG dialog pattern.
+    this.trigger.focus();
   };
 
   private handleEscape = (event: KeyboardEvent): void => {

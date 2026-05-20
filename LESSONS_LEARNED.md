@@ -32,9 +32,17 @@ Use this file for durable lessons that should change future agent behavior.
 - `npm audit` currently reports moderate Vite/esbuild dev-server advisories, but npm's available fix points to a semver-major Vite upgrade.
 - Future rule: document advisories during audits and reserve forced/major dependency upgrades for focused PRs with full validation.
 
-## 2026-05-19 — Stale planned wording can outlive implementation
+## 2026-05-20 — Custom role=dialog elements need explicit aria-modal + aria-labelledby
 
-- The customer picture guide still described the portrait reset boost as planned even though later versions implemented it.
-- Future rule: every audit should search customer-facing docs for "planned", "future", and "follow-up" wording and reconcile it with current source state.
+- `PreferencesPanel` had `role="dialog"` and `aria-label` but no `aria-modal="true"`. Screen readers were not treating background content as inert while the panel was open.
+- Additionally, `handleOutsideClick` closed the panel but did not return focus to the trigger — only the Escape path did. WCAG SC 2.4.3 requires focus to return to the opener on any dismiss path.
+- Future rule: every custom `role="dialog"` element needs `aria-modal="true"`, `aria-labelledby` pointing to a stable heading id, and focus returned to the trigger on every dismiss path (Escape, outside-click, close button).
+- Source: <https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/>
+
+## 2026-05-20 — Verify caller graphs before every dead-code cleanup
+
+- Three interaction files (`MouseInteraction.ts`, `TouchInteraction.ts`, `ZoomPan.ts`) and one deprecated export (`isMobileDevice()`) were confirmed caller-free by grep before deletion. No runtime errors resulted.
+- Future rule: before removing any exported symbol, grep all source and test files for its name; proceed only when no non-comment match is found.
 
 Extended incident documentation belongs in `docs/lessons-learned/`.
+

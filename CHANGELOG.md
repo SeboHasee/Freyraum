@@ -2,7 +2,24 @@
 
 ## Unreleased
 
-### Documentation (full repository audit + online validation — 2026-05-19)
+### Changed / Fixed (v0.17 easy wins — 2026-05-20)
+
+**PreferencesPanel ARIA accessibility:**
+
+- Added `aria-modal="true"` to the preferences panel element (WCAG 4.1.2, ARIA APG dialog pattern).
+- Replaced `aria-label` with `aria-labelledby` pointing to the panel's first heading (more robust per ARIA spec).
+- Added static `id="freyraum-prefs-heading"` to the heading generated inside `renderPanel()` so the `aria-labelledby` reference is stable across re-renders.
+- `handleOutsideClick` now returns focus to the trigger after dismissing the panel, matching the existing Escape-key path (WCAG SC 2.4.3 Focus Order).
+
+**Dead-code removal:**
+
+- Deleted `src/interaction/MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts`. These three files were superseded by `CanvasInteraction.ts` in v0.11 and confirmed to have no remaining production imports.
+- Removed deprecated `isMobileDevice()` from `src/utils/performance.ts`. No callers remained; `detectDeviceCapabilities()` in `device.ts` is the correct replacement.
+- Updated comments in `CanvasInteraction.ts`, `main.ts`, and `device.ts` from present to past tense to match the removal.
+
+Validation: `npm run lint` ✅, `npm run build` ✅, `customer-preview/` rebuilt.
+
+
 
 - Completed a documentation-only deep audit across runtime architecture, scripts, dependency health, diagnostics, accessibility, customer docs, and AI guidance.
 - Revalidated current platform/tooling assumptions online: `requestIdleCallback`, Long Tasks API, Page Lifecycle `freeze`/`resume`, three.js `WebGLRenderer.compileAsync`, typescript-eslint support, and ESLint v8 support status.

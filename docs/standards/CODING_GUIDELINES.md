@@ -28,7 +28,12 @@ Read this with [`../../AI_RULES.md`](../../AI_RULES.md), [`../../ARCHITECTURE_MA
 - Avoid paint containment on elements that host popovers, overflow animation, or scaled controls.
 - Preserve safe-area, responsive, keyboard, touch, and reduced-motion behavior.
 
-## Documentation
+## Accessibility
+
+- Every custom `role="dialog"` element must have `aria-modal="true"`, `aria-labelledby` (pointing to a stable heading id), and focus returned to the opener on all dismiss paths.
+- Reference: <https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/>
+
+
 
 - Follow `DOCUMENTATION_RULES.md`.
 - Record regressions, validation failures, and deferred boundaries in `FINDINGS.md` or `LESSONS_LEARNED.md`.

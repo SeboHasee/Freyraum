@@ -1,9 +1,7 @@
 # FREYRAUM customer handoff guide
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current runtime status: v0.16 deep performance and
-compatibility pass is implemented (on top of the earlier v0.15 and v0.14.2
-passes).**
+contributors. **Current runtime status: v0.17 easy-wins pass implemented (on top of v0.16, v0.15, and v0.14).**
 
 ## AI/contributor context
 
@@ -19,13 +17,15 @@ Before planning significant changes, read:
 
 These files capture repository boundaries, validation expectations, durable lessons, and reusable AI review loops.
 
-Latest audit note:
+Latest notes:
 
-- The 2026-05-19 full repo audit was documentation-only. Runtime validation passed after `npm install`.
-- Current maintenance risks are documented, not fixed in this pass: moderate Vite/esbuild audit advisories needing a semver-major upgrade, ESLint v8 EOL, and TypeScript/parser supported-version drift.
+- v0.17 (2026-05-20): PreferencesPanel ARIA fixes, legacy interaction cleanup, deprecated API removal. Runtime validation: `npm run lint` ✅, `npm run build` ✅.
+- Maintenance risks carried forward: moderate Vite/esbuild audit advisories (need semver-major upgrade), ESLint v8 EOL, TypeScript/parser supported-version drift.
 - Developer support should collect `window.__FREYRAUM_DIAGNOSTICS__.snapshot()` or `.exportJson()` when customer behavior is unclear.
 
-## v0.16.2 implemented — follow-up UI fix (verified settings gear + stronger nav shell)
+## v0.17 implemented — accessibility fixes and dead-code removal (2026-05-20)
+
+
 
 Follow-up shipped on 2026-05-19 after customer feedback that v0.16.1 was only a partial fix:
 

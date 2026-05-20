@@ -6,7 +6,7 @@ Use this prompt for self-review or PR review.
 
 - Correctness: Does the change solve the reported problem completely?
 - Regression risk: Could it affect rendering fidelity, navigation, preferences, importer output, or customer preview?
-- Accessibility: Are reduced-motion, keyboard, touch, viewport, and safe-area behaviors preserved?
+- Accessibility: Are `aria-modal`, `aria-labelledby`, keyboard focus return, reduced-motion, touch, viewport, and safe-area behaviors preserved?
 - Performance: Are layout reads batched, GPU changes intentional, and diagnostics signal-to-noise controlled?
 - Security: Are injected artwork data, URLs, generated files, and browser APIs handled defensively?
 - Maintainability: Does the change follow current module ownership and naming patterns?

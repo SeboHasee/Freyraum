@@ -1,6 +1,125 @@
 # FREYRAUM Plan
 
-## Full repository audit + online validation (2026-05-19, documentation-only)
+## v0.17 — Easy wins: accessibility, dead-code cleanup (2026-05-20)
+
+### Status
+
+Implemented. Runtime code changed.
+
+### Scope
+
+Implement the high-confidence, low-risk improvements identified by the 2026-05-19 deep audit and researched online:
+
+1. `PreferencesPanel` ARIA accessibility fixes.
+2. Legacy interaction file cleanup.
+3. Deprecated `isMobileDevice()` removal.
+
+Out of scope for this pass (reserved for dedicated PRs):
+
+- ESLint v8 → v9 tooling upgrade (breaking config migration, requires separate validation).
+- Vite v5 → v6 semver-major upgrade (fixes `npm audit` advisories).
+- `PreferencesPanel.renderPanel()` innerHTML → in-place DOM refactor (behavioural equivalence requires thorough testing).
+- three.js `TextureUtils` contain/cover for artwork fitting (potential fidelity change, needs design sign-off).
+
+### Implemented changes
+
+#### 1. PreferencesPanel ARIA accessibility
+
+**Problem (confirmed by online research):**
+
+WCAG 2.2 SC 4.1.2 (Name, Role, Value) and the ARIA APG dialog pattern require:
+
+- `aria-modal="true"` on a custom `role="dialog"` element so screen readers treat background content as inert.
+- `aria-labelledby` pointing to the dialog's visible heading (preferred over `aria-label` per ARIA spec; `aria-labelledby` takes precedence and is more robust when heading text changes).
+- Focus returned to the trigger after every dismiss path, not just Escape.
+
+Before v0.17 the panel had `aria-label` but no `aria-modal` and did not return focus when dismissed by outside-click.
+
+Sources:
+
+- <https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/>
+- <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/dialog_role>
+- <https://www.accesify.io/blog/accessible-modals-focus-traps-keyboard-controls-aria-dialogs/>
+
+**Changes (`src/ui/PreferencesPanel.ts`):**
+
+- Replaced `aria-label` with `aria-labelledby="freyraum-prefs-heading"`.
+- Added `aria-modal="true"`.
+- Added `id="freyraum-prefs-heading"` to the first `<h2>` inside `renderPanel()`.
+- Added `this.trigger.focus()` inside `handleOutsideClick` after `setOpen(false)`, matching existing Escape-key behaviour.
+
+No visual or functional change to sighted or pointer users.
+
+#### 2. Legacy interaction file cleanup
+
+**Problem (identified in 2026-05-19 audit):**
+
+`MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts` were superseded by `CanvasInteraction.ts` in v0.11. No production code imports them. They add 230 lines of dead TypeScript to the source tree and make architecture documentation harder to read.
+
+**Verification before deletion:**
+
+```
+grep -rn "MouseInteraction|TouchInteraction|ZoomPan" src/ --include="*.ts"
+```
+
+Result: only comments/documentation in `CanvasInteraction.ts` and `main.ts`. No runtime imports.
+
+**Changes:**
+
+- Deleted `src/interaction/MouseInteraction.ts`.
+- Deleted `src/interaction/TouchInteraction.ts`.
+- Deleted `src/interaction/ZoomPan.ts`.
+- Updated `CanvasInteraction.ts` docblock from "Replaces…" to "Replaced… (removed in v0.17)".
+- Updated `main.ts` comment from present to past tense.
+
+#### 3. Deprecated `isMobileDevice()` removal
+
+**Problem (identified in 2026-05-19 audit):**
+
+`isMobileDevice()` was deprecated in v0.11 in favour of `detectDeviceCapabilities()`. The audit confirmed zero callers remain; only a JSDoc reference existed in `device.ts`. The stub exported a viewport-width-only check (`< 768 px`) which the new capability model superseded.
+
+**Verification before deletion:**
+
+```
+grep -rn "isMobileDevice" src/ --include="*.ts" | grep -v performance.ts
+```
+
+Result: one comment reference in `device.ts`, no runtime calls.
+
+**Changes:**
+
+- Removed `isMobileDevice()` from `src/utils/performance.ts`.
+- Updated the JSDoc reference in `src/utils/device.ts` from present to past tense.
+
+### Validation
+
+- `npm run lint` ✅ (same TypeScript-version support warning as v0.16, not a regression).
+- `npm run build` ✅ (595 kB bundle, no module resolution errors).
+- `customer-preview/` rebuilt from updated source.
+
+### Remaining items
+
+- Dedicated PR: ESLint v8 → v9 flat-config migration.
+- Dedicated PR: Vite v5 → v6 to resolve `npm audit` moderate advisories.
+- Dedicated PR: `PreferencesPanel.renderPanel()` in-place DOM refactor.
+- Potential future enhancement: three.js `TextureUtils` contain/cover for artwork texture fitting (online research confirmed `TextureUtils` added in r166+).
+
+### Online research findings for this pass
+
+1. **ARIA dialog pattern (WCAG 2.2)**
+   - `aria-modal="true"` is required on custom `role="dialog"` elements. `aria-labelledby` is preferred over `aria-label` when a visible heading is present. Focus must return to the opener after every dismiss path.
+   - Source: <https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/>
+2. **three.js r166 `TextureUtils`**
+   - r166 added `TextureUtils.contain`, `cover`, and `fill` helpers for automatic texture fitting, relevant to artwork loading and aspect-ratio preservation.
+   - Source: <https://newreleases.io/project/github/mrdoob/three.js/release/r166>
+3. **ESLint v9 flat config migration**
+   - ESLint v9 requires `eslint.config.js` (flat config). The `@typescript-eslint` v8+ packages now align with ESLint v9 versions. Migration requires replacing `.eslintrc.js` with a flat config file and porting rules manually.
+   - Source: <https://typescript-eslint.io/linting/configs/flat-config/>
+4. **CSS `content-visibility: auto`**
+   - MDN and web.dev document `content-visibility: auto` for lazy off-screen rendering. Requires `contain-intrinsic-size` to avoid CLS. Not applicable to the current app's single-viewport WebGL layout.
+   - Source: <https://developer.mozilla.org/en-US/docs/Web/CSS/content-visibility>
+
+
 
 ### Status
 

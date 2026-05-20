@@ -55,6 +55,15 @@ The v0.15 elegant animation system is **implemented**. Artwork navigation now fe
 v0.15.1 hotfix note: **Reduzierte Bewegung now changes movement only**. It does
 not lower picture texture/shader quality.
 
+## Current viewing status (v0.17 implemented — 2026-05-20)
+
+**v0.17 easy-wins pass** shipped two non-visual improvements:
+
+- Screen readers now correctly identify the preferences dialog title and treat background content as inert while the panel is open.
+- Keyboard users land on the settings gear button after dismissing the panel via outside-click or Escape.
+
+No change to picture display, navigation, zoom, pan, or texture rendering.
+
 ## Current viewing status (v0.14.2 implemented)
 
 The customer-facing **v0.14.2 follow-up is implemented**.

@@ -16,6 +16,8 @@ Hard constraints for AI-assisted work in this repository.
 - Do not reduce painting material fidelity as a side effect of accessibility or performance work.
 - Do not apply CSS containment to popover anchors or hover-scaled control containers without testing overflow paint.
 - Do not accept arbitrary injected artwork URLs where a validated data URL is required.
+- Do not use `isMobileDevice()` (removed in v0.17). Use `detectDeviceCapabilities()` from `src/utils/device.ts` instead.
+- Do not import `MouseInteraction`, `TouchInteraction`, or `ZoomPan` (removed in v0.17). Use `CanvasInteraction` for all canvas input.
 
 ## Required patterns
 
@@ -24,6 +26,7 @@ Hard constraints for AI-assisted work in this repository.
 - Batch resize/layout work through the existing coordinator pattern.
 - Preserve reduced-motion behavior as a motion control, not a visual quality control.
 - Update documentation for meaningful behavior, workflow, architecture, or regression changes.
+- Every custom `role="dialog"` element must have `aria-modal="true"`, `aria-labelledby` (pointing to a stable heading id), and focus returned to the opener on every dismiss path. Reference: ARIA APG dialog pattern.
 
 ## Validation
 

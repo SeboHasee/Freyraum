@@ -3,7 +3,25 @@
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
 
-## Current status — full repository audit documented (2026-05-19)
+## Current status — v0.17 easy wins shipped (2026-05-20)
+
+**Latest pass:** implemented three accessibility fixes and removed dead code based on the 2026-05-19 deep audit and online research.
+
+What v0.17 ships:
+
+- **PreferencesPanel ARIA fixes.** Added `aria-modal="true"` (WCAG 4.1.2), replaced `aria-label` with `aria-labelledby` pointing to the panel heading, and returned focus to the trigger on outside-click dismiss. Screen readers now correctly identify the dialog title and treat background content as inert while the panel is open.
+- **Legacy interaction cleanup.** Removed `MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts` — three files superseded by `CanvasInteraction.ts` in v0.11 with no remaining production imports.
+- **Deprecated API removal.** Removed `isMobileDevice()` from `src/utils/performance.ts`. It had no callers; `detectDeviceCapabilities()` is the correct replacement.
+
+Validation for v0.17:
+
+- `npm run lint` ✅
+- `npm run build` ✅
+- `customer-preview/` rebuilt.
+
+Remaining items documented in `plan.md` (v0.17 section): ESLint v8 → v9 upgrade, Vite v5 → v6 for audit advisories, PreferencesPanel in-place DOM refactor.
+
+
 
 **Latest pass:** a documentation-only deep audit reviewed the full repository structure, runtime architecture, validation workflow, dependency health, diagnostics surface, customer docs, and new AI context-engineering files.
 

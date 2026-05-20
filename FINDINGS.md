@@ -1,6 +1,28 @@
 # FINDINGS
 
-## 2026-05-19 — full repository audit + online validation
+## 2026-05-20 — v0.17 easy wins: accessibility, dead-code cleanup
+
+### Problems identified and fixed
+
+1. `PreferencesPanel` custom `role="dialog"` element lacked `aria-modal="true"`, was labelled by `aria-label` instead of `aria-labelledby`, and did not return focus to the trigger after an outside-click dismiss. WCAG 2.2 SC 4.1.2 and the ARIA APG dialog pattern all require these. Fixed in `src/ui/PreferencesPanel.ts`.
+2. Three legacy interaction files (`MouseInteraction.ts`, `TouchInteraction.ts`, `ZoomPan.ts`) had no remaining production imports (confirmed by grep). Removed.
+3. Deprecated `isMobileDevice()` had no remaining callers (confirmed by grep). Removed from `src/utils/performance.ts`.
+
+### Online sources that validated the decisions
+
+- ARIA APG dialog pattern: <https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/>
+- MDN `dialog` role: <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/dialog_role>
+- three.js r166 `TextureUtils` (future enhancement candidate): <https://newreleases.io/project/github/mrdoob/three.js/release/r166>
+- ESLint v9 flat config migration (future tooling pass): <https://typescript-eslint.io/linting/configs/flat-config/>
+- CSS `content-visibility: auto` (not applicable to current WebGL layout): <https://developer.mozilla.org/en-US/docs/Web/CSS/content-visibility>
+
+### Remaining items documented in plan.md
+
+- ESLint v8 → v9 flat-config migration (dedicated PR).
+- Vite v5 → v6 to resolve moderate `npm audit` advisories (dedicated PR).
+- `PreferencesPanel.renderPanel()` in-place DOM refactor (dedicated PR).
+
+
 
 ### Validation results
 
