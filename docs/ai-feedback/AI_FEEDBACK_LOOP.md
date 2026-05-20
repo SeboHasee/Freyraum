@@ -1,6 +1,7 @@
 # AI feedback loop
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 implementation status note
+## v0.20 full-check status note
 
 Treat the shipped background-audio scope (`plan.md § v0.19`) as an active regression boundary in future review loops (importer payload, autoplay handling, lifecycle, controls, diagnostics).
 

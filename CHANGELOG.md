@@ -1,4 +1,19 @@
 # CHANGELOG
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+
+## v0.20.1 — Full markdown audit and sync (2026-05-20, docs-only)
+
+### Changed
+
+- Completed a full markdown consistency pass across all repository `.md` files.
+- Added a shared audit stamp to every markdown file and refreshed top status labels to align with shipped v0.20 state.
+- Updated customer/developer guidance phrasing where stale v0.19-only wording remained.
+
+### Validation
+
+- `npm install` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
 
 ## v0.20 — Audio playback fix + main-page controls + sidecar cache-bust (2026-05-20)
 

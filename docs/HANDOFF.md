@@ -1,4 +1,5 @@
 # FREYRAUM customer handoff guide
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
 ## v0.20 audio + sidecar fixes — implemented (2026-05-20)
 

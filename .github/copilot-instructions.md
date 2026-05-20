@@ -1,6 +1,7 @@
 # FREYRAUM Copilot instructions
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 context note
+## v0.20 full-check context note
 
 The calm background-music workflow in `plan.md § v0.19` is shipped.
 When updating docs or code, treat importer payloads, autoplay handling, preferences persistence, and lifecycle audio behavior as active regression boundaries.

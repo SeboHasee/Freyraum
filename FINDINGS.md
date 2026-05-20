@@ -1,4 +1,26 @@
 # FINDINGS
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+
+## 2026-05-20 — v0.20.1 full markdown audit (docs-only)
+
+### Audit scope
+
+- Reviewed every markdown file in the repository (`root`, `docs/`, `.github/prompts/`).
+- Cross-checked top-level status notes against shipped v0.20 behavior.
+- Confirmed this pass is documentation-only (no runtime source changes).
+
+### Findings
+
+1. v0.20 runtime status is correctly implemented in code and already documented in core files (`README.md`, `plan.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md`).
+2. Several markdown files still used v0.19-labeled top status blocks, which could cause confusion during future audits and handoff.
+3. Repository-wide docs synchronization is now complete for this pass: all markdown files carry the same audit timestamp marker and refreshed top status context.
+4. No new functional or security regression was discovered during this documentation check.
+
+### Validation output (audit session)
+
+- `npm install` ✅
+- `npm run lint` ✅ (existing TypeScript support warning from `@typescript-eslint` remains a known maintenance item)
+- `npm run build` ✅
 
 ## 2026-05-20 — v0.20 audio fix + main-page controls + sidecar cache-bust
 

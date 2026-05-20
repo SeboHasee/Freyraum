@@ -1,10 +1,11 @@
 # FREYRAUM — Customer Picture Guide
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 calm background music note (implemented)
+## v0.20 calm background music + audio-controls note (implemented)
 
 Calm background music from customer-provided audio files is now supported.
 
-Current status: **implemented**. `Update Gallery` now manages pictures/text/audio, and the website ships mute/volume controls in the settings panel.
+Current status: **implemented**. `Update Gallery` now manages pictures/text/audio, and the website ships mute/volume controls in the settings panel and as a quick control on the main page.
 
 Implementation details: `plan.md § v0.19`.
 

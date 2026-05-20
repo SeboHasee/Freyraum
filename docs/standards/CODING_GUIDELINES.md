@@ -1,6 +1,7 @@
 # FREYRAUM coding guidelines
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 implementation status note
+## v0.20 full-check status note
 
 Background-audio support is now shipped (`plan.md § v0.19`).
 Ongoing changes must keep warning-first importer behavior, accessibility-compliant mute/volume controls, and lifecycle/autoplay-safe diagnostics paths.

@@ -1,4 +1,30 @@
 # FREYRAUM Plan
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+
+## v0.20.1 — Full markdown audit and sync (docs-only, 2026-05-20)
+
+### Status
+
+Implemented.
+
+### Scope
+
+- Audit every markdown file for current-state consistency and stale wording.
+- Ensure top-level docs match shipped v0.20 runtime behavior.
+- Record audit output in `FINDINGS.md` and `CHANGELOG.md`.
+
+### Findings summary
+
+1. Core runtime/docs state is consistent with shipped v0.20 behavior (audio CORS fix, main-page controls, sidecar cache-bust).
+2. Multiple markdown files still used v0.19-labeled top status notes even though v0.20 is already shipped.
+3. All markdown files were refreshed in this pass with a unified audit stamp and updated status headings.
+4. No runtime code changes were required.
+
+### Validation
+
+- `npm install` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
 
 ## v0.20 — Audio playback fix + main-page audio controls + sidecar cache-bust (2026-05-20)
 

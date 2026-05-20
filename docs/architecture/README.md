@@ -1,6 +1,7 @@
 # Architecture docs
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 implementation status
+## v0.20 full-check status
 
 Shipped architecture extension: customer audio-file ingestion plus runtime calm background playback controls.
 

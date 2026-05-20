@@ -1,6 +1,7 @@
 # FREYRAUM AI rules
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 — Calm background music workflow shipped (2026-05-20)
+## v0.20 — Audio workflow reliability shipped (2026-05-20)
 
 Background-audio workflow is now implemented. Preserve one-click customer launchers, warning-first importer behavior for invalid audio assets, and diagnostics-backed autoplay/lifecycle handling for ongoing maintenance.
 

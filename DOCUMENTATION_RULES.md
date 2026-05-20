@@ -1,6 +1,7 @@
 # DOCUMENTATION RULES
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 — Calm background music workflow (2026-05-20, implemented)
+## v0.20 — Full documentation check-up (2026-05-20, audit complete)
 
 Current status: shipped. `plan.md § v0.19` now reflects implemented importer/runtime/UI behavior: audio ingestion from `customer-audio/inbox`, generated `customer-preview/customer-audio.js`, runtime compatibility probing, loop-guarded playback, mute/volume persistence, and lifecycle/autoplay diagnostics.
 
@@ -61,6 +62,8 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - performance planning must explicitly state measurement strategy, fidelity-preservation boundaries, compatibility/fallback behavior, and resource ownership/disposal assumptions
 
 ## Latest documentation pass
+
+- 2026-05-20 (documentation): v0.20.1 full markdown audit completed. Every repository markdown file was re-checked and updated with a shared audit stamp plus refreshed top status notes to keep v0.20 context consistent. Validation rerun in this audit session: `npm install`, `npm run lint`, `npm run build`. No runtime code changed.
 
 - 2026-05-20 (implemented): v0.19 background-audio workflow shipped. Added importer audio ingestion (`customer-audio/inbox`), generated preview payload (`customer-preview/customer-audio.js`), preview HTML/stub wiring, runtime `BackgroundAudioManager` with diagnostics + loop fallback + autoplay handling + lifecycle suspend/resume integration, persisted `audioMuted`/`audioVolume` preferences, and preferences-panel mute/volume controls with status messaging. Validated with `npm run lint` and `npm run build`.
 

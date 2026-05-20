@@ -1,6 +1,7 @@
 # FREYRAUM lessons learned
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 implementation note — background audio shipped (2026-05-20)
+## v0.20 implementation note — audio reliability shipped (2026-05-20)
 
 Lesson carried forward from this pass: once customer-facing workflows ship, all markdown banners must be flipped from planned to implemented in the same PR to avoid stale guidance.
 

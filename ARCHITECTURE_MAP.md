@@ -1,4 +1,5 @@
 # FREYRAUM architecture map
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
 ## v0.20 — Audio CORS fix + main-page AudioControls (2026-05-20)
 
@@ -8,7 +9,7 @@
 
 **Sidecar cache-bust:** `import-artworks.mjs` now stamps `?t=<timestamp>` on `customer-artworks.js` + `customer-audio.js` script src tags in `app.html` after every import, bypassing Chromium's file:// disk cache.
 
-## v0.19 — Calm background music workflow shipped (2026-05-20)
+## v0.20 — Audio workflow reliability shipped (2026-05-20)
 
 Architecture addition shipped: importer + runtime audio boundary for calm background music, with format compatibility and accessible mute/volume controls.
 

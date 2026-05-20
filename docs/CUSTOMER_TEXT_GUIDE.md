@@ -1,8 +1,9 @@
 # FREYRAUM — How to import painting text (v0.18 — shipped)
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 planning note (calm background music)
+## v0.20 status note (audio + cache-bust shipped)
 
-A separate v0.19 plan exists for customer-managed background audio and website mute/volume controls.
+Background audio workflow is already shipped (v0.19 + v0.20 follow-up).
 
 Current status: **implemented** for background audio and text sidecars. This guide remains focused on text-sidecar workflow only; audio setup is documented in `docs/CUSTOMER_PICTURE_GUIDE.md` and `docs/IMAGE_MAINTENANCE_GUIDE.md`.
 

@@ -1,6 +1,7 @@
 # Review prompt
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
-## v0.19 context note
+## v0.20 full-check context note
 
 Current repository status includes a **shipped** background-music workflow (`plan.md § v0.19`).
 Include audio importer/runtime/preferences/lifecycle paths in regression review coverage.

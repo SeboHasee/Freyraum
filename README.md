@@ -1,4 +1,5 @@
 # Freyraum
+> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
 
 ## v0.20 — Audio playback fix + main-page controls + sidecar cache-bust (2026-05-20)
 
@@ -11,6 +12,13 @@ Three bugs fixed in v0.20:
 Current runtime status: **v0.20 implemented**. Audio plays reliably from `file://`. Sidecar text always reflects the latest import.
 
 Implementation details: `plan.md § v0.20` | Research: `FINDINGS.md § 2026-05-20 (v0.20)`
+
+## v0.20.1 — Full markdown audit and sync (docs-only, 2026-05-20)
+
+- Ran a full markdown consistency check across all repository `.md` files.
+- Updated every markdown file with a shared audit stamp and refreshed top-level status notes.
+- Revalidated baseline health during audit: `npm install`, `npm run lint`, `npm run build`.
+- Recorded findings and release notes in `FINDINGS.md` and `CHANGELOG.md`.
 
 ## v0.19 — Calm background music workflow (implemented, 2026-05-20)
 
