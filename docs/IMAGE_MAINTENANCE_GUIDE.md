@@ -143,6 +143,23 @@ and `src/timeline/Timeline.ts` + `src/styles/main.scss` for active timeline
 visibility. The importer, generated manifests, and `webglImage` path are not
 part of this follow-up.
 
+
+## Planned text-maintenance system (2026-05-20 brainstorm)
+
+The current importer already writes runtime text fields, but they are generated placeholders. Future customer-written painting text should be maintained in a separate source file and merged during import, instead of editing generated manifests by hand.
+
+Recommended first implementation:
+
+- Add `customer-artworks/artwork-texts.csv` as the customer-editable source of truth.
+- Match rows to inbox images by exact `filename`.
+- Merge `title`, `description`, `alt`, `credit`, `year`, `medium`, `tags`, and optional `surfaceProfile` into the generated artwork objects.
+- Keep `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` generated.
+- Extend `last-import-report.txt` with text-specific sections: applied text, missing text, unmatched rows, and invalid fields.
+
+Do not auto-guess matches after renames. The painting text is customer-authored and artwork-specific, so a mismatch is worse than a warning that asks the maintainer to fix the filename or CSV row.
+
+See `plan.md § v0.18 proposal — Customer-written artwork text system` and `FINDINGS.md § 2026-05-20 — Customer-written artwork text system brainstorm` for the full option comparison and acceptance criteria.
+
 ## Quick overview
 
 The gallery is maintained through one input folder:

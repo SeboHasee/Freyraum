@@ -1,5 +1,50 @@
 # FINDINGS
 
+## 2026-05-20 — Customer-written artwork text system brainstorm
+
+### Current-state findings
+
+1. `scripts/import-artworks.mjs` already creates all runtime text fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) while importing images.
+2. Those fields are currently generated from filename, dimensions, current year, and placeholders; customer-specific painting text is not yet represented as a maintained source file.
+3. `src/config/artworks.ts` defines the runtime `Artwork` contract consumed by the info panel and timeline. The future metadata system can feed the existing fields without changing the UI model.
+4. `src/main.ts` defensively normalizes generated customer artwork data, so importer output should stay plain JSON-compatible and complete.
+5. The safest boundary is to keep `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` generated, and add a separate customer-editable text source that the importer merges.
+
+### Recommended direction
+
+Use `customer-artworks/artwork-texts.csv` as the first customer-editable source of truth because it is closest to the existing easy picture workflow: customers can edit a spreadsheet, keep one row per image, then run `Update Gallery`. The importer should match rows to pictures by exact filename, merge text into the generated manifest, and report any missing/unmatched rows in plain language.
+
+### Alternatives considered
+
+- **Sidecar JSON:** technically robust and portable, but too fragile for direct customer editing.
+- **Sidecar TXT/Markdown:** excellent image-to-text pairing and good for long writing, but creates many files and is harder to bulk review.
+- **Markdown front matter:** strong editorial format, but front matter syntax is likely too technical for the immediate customer workflow.
+- **Headless CMS:** best long-term authoring UI, but adds hosting/admin complexity and is not necessary for the local offline preview workflow.
+
+### Online research findings
+
+- Web accessibility sources recommend meaningful alt text for informative images; captions/descriptions do not replace alt text.
+- Static site data-file patterns commonly use JSON, YAML, or CSV-like structured data to separate content from presentation.
+- Spreadsheet/CSV workflows are practical for bulk catalog editing, while JSON/front matter are better for developer- or CMS-backed pipelines.
+- A CMS is worth considering only if the customer needs a full editorial UI, permissions, media library, localization, or remote collaboration.
+
+Sources:
+
+- WebAIM Alternative Text: <https://webaim.org/techniques/alttext/>
+- W3C Images Tutorial: <https://www.w3.org/WAI/tutorials/images/>
+- Google Image SEO best practices: <https://developers.google.com/search/docs/crawling-indexing/images>
+- Jekyll data files: <https://jekyllrb.com/docs/datafiles/>
+- Eleventy data files: <https://www.11ty.dev/docs/data/>
+
+### Future implementation risks to control
+
+1. Do not silently attach text to the wrong picture after renames. Report mismatches instead.
+2. Parse CSV robustly enough for quoted commas and customer spreadsheet exports.
+3. Preserve the current image-only import behavior when no text file exists.
+4. Keep generated files clearly marked as generated; customers should edit only the source text file.
+5. Warn on missing alt text and empty descriptions without blocking image import.
+
+
 ## 2026-05-20 — v0.17 easy wins: accessibility, dead-code cleanup
 
 ### Problems identified and fixed

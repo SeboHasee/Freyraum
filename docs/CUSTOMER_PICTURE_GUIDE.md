@@ -85,6 +85,20 @@ Technical changes behind this behavior:
 
 For support/debugging, `show-artwork-complete` now logs extra v0.14/v0.14.2 tuning data (`closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
 
+
+## Future picture text workflow — planned
+
+A future update should make painting text as easy to maintain as pictures. The recommended direction is one customer-editable spreadsheet/CSV file, likely `customer-artworks/artwork-texts.csv`, with one row per image.
+
+Planned customer workflow:
+
+1. Put pictures into `customer-artworks/inbox/`.
+2. Fill in one text row per picture (`filename`, `title`, `description`, `alt`, optional `year`, `credit`, `medium`, `tags`).
+3. Run `Update Gallery`.
+4. Read the report if any picture is missing text or any text row no longer matches a picture.
+
+Important: the matching should use the exact image filename so each customer-written text stays attached to the correct painting. Until that system is implemented, the gallery still creates titles from filenames and uses placeholder imported-artwork text.
+
 ## What you need (one-time)
 
 1. **Node.js** (free): install the LTS version from <https://nodejs.org> (**18 or newer**).

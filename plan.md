@@ -1,5 +1,150 @@
 # FREYRAUM Plan
 
+## v0.18 proposal — Customer-written artwork text system (2026-05-20)
+
+### Status
+
+Documentation-only brainstorm and implementation plan. No runtime code changed in this pass.
+
+### Problem
+
+The current importer is easy for pictures because the customer only drops files into `customer-artworks/inbox/` and runs `Update Gallery`. Text is not yet equally maintainable: `scripts/import-artworks.mjs` currently derives `title` from the filename and writes placeholder fields (`subtitle`, `description`, `alt`, `credit`, `tags`) into the generated manifest. Future customer-written text must stay matched to the exact painting, survive re-imports, and remain simple enough for a non-technical maintainer.
+
+### Existing repository constraints
+
+1. Keep the current one-folder / one-button image workflow intact.
+2. Keep `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` generated, not hand-edited.
+3. Preserve stable artwork matching through the importer-generated `id`, which is derived from the filename stem.
+4. Continue writing plain-language feedback to `customer-artworks/last-import-report.txt`.
+5. Avoid systems that require an internet connection for the local `file://` preview.
+
+### Brainstormed options
+
+#### Option A — One central JSON metadata file
+
+Maintain a file such as `customer-artworks/artwork-texts.json` with one object per artwork id. The importer reads it, merges matching text into the generated manifest, and reports missing or unmatched entries.
+
+- Pros: matches current JSON manifest shape, easy for code, supports all current fields, good for validation.
+- Cons: less friendly for customers to edit directly; a missing comma can break the file.
+- Best use: support-maintained projects or when a simple editor UI is added later.
+
+#### Option B — One central CSV/spreadsheet file
+
+Maintain `customer-artworks/artwork-texts.csv` with columns like `filename`, `title`, `description`, `alt`, `credit`, `year`, and `tags`. The customer can edit it in Excel, Numbers, LibreOffice, or Google Sheets and export CSV.
+
+- Pros: familiar for customers, excellent for many paintings, easy to scan, easy to send to/from the customer.
+- Cons: CSV escaping and line breaks require careful importer handling; rich multi-paragraph text is awkward.
+- Best use: customer-first workflow with many paintings and short-to-medium descriptions.
+
+#### Option C — Sidecar text files beside each image
+
+For every `painting.jpg`, allow `painting.txt`, `painting.md`, or `painting.json` in the inbox. The importer matches by base filename.
+
+- Pros: text physically travels with the image; very clear one-image/one-text relationship; low risk of mismatching.
+- Cons: many small files; ordering and bulk editing are less convenient; customer must keep names identical.
+- Best use: small collections or when the customer writes longer individual painting notes.
+
+#### Option D — Markdown files with front matter
+
+Each artwork gets an `.md` file with front matter fields plus long-form body text. The importer uses front matter for structured fields and the body as the description.
+
+- Pros: best plain-text writing format; supports longer customer stories; version-control friendly.
+- Cons: front matter is technical; needs a parser or strict custom subset; more complexity than the current importer.
+- Best use: future editorial workflow if descriptions become long and story-like.
+
+#### Option E — Headless CMS
+
+Use a hosted or local CMS where each artwork is an entry connected to an image.
+
+- Pros: best editor interface, permissions, history, media library, localization.
+- Cons: setup/hosting/admin overhead; internet/API dependency unless exported to static files; far heavier than the current local workflow.
+- Best use: later phase if the gallery becomes a larger maintained catalog.
+
+### Recommendation
+
+Use a **two-stage path**:
+
+1. **Near-term:** add a simple central metadata file, preferably CSV for customer editing plus importer validation. Use `filename` as the customer-facing match key and `id` as the generated stable runtime key.
+2. **Later:** if the customer wants richer writing or a nicer interface, generate/edit the same data through a small local form or migrate the source file to Markdown/front matter or CMS export.
+
+This keeps the workflow as easy as importing pictures: customer drops images into the inbox, updates one text table, runs `Update Gallery`, and receives a report if any picture is missing text or any text row no longer matches an image.
+
+### Proposed source-of-truth file
+
+Preferred file for v0.18 implementation:
+
+- `customer-artworks/artwork-texts.csv`
+
+Suggested columns:
+
+| Column | Required | Purpose |
+| --- | --- | --- |
+| `filename` | yes | Exact image filename in `customer-artworks/inbox/`; easiest customer match key. |
+| `title` | yes | Info-panel title. Falls back to filename-generated title if blank. |
+| `description` | yes | Customer-written painting text shown in the info panel. |
+| `alt` | yes | Accessibility description. Should describe the visible artwork, not repeat the title. |
+| `credit` | no | Artist/customer credit. Defaults to `Customer`. |
+| `year` | no | Creation year. Defaults to current year if blank. |
+| `medium` | no | Optional custom medium. Defaults to current dimension-based medium. |
+| `tags` | no | Comma- or semicolon-separated tags for future filtering. |
+| `surfaceProfile` | no | Optional existing surface profile (`matte-canvas`, `satin-canvas`, `varnished-oil`, `paper`). |
+
+### Matching rules
+
+1. First match by exact `filename` including extension.
+2. If the image is renamed, report the old text row as unmatched and the new image as missing text.
+3. Do not silently guess across unrelated names; the text is artwork-specific and must not drift to the wrong painting.
+4. Keep generated `id` stable from the filename stem, as today.
+5. Include a clear section in `last-import-report.txt`:
+   - text applied
+   - pictures missing text
+   - text rows without matching pictures
+   - invalid years, unknown surface profiles, or empty required fields
+
+### Suggested customer workflow
+
+1. Put images into `customer-artworks/inbox/`.
+2. Open `customer-artworks/artwork-texts.csv`.
+3. Fill one row per image.
+4. Run `Update Gallery`.
+5. Read the report. If it says text is missing or unmatched, fix the CSV and run again.
+6. Open `index.html` to review that every painting has the correct text.
+
+### Accessibility and content guidance
+
+- Keep `description` as the customer's visible painting text.
+- Keep `alt` separate. Alt text should concisely describe the visual content for screen-reader users; it should not be only the painting title.
+- Captions/descriptions can be longer and can include story, material, emotion, or context.
+- Missing `alt` should produce a warning because every artwork image needs a meaningful text alternative.
+
+### Acceptance criteria for a future implementation
+
+1. Existing image-only workflow continues to work if no metadata file exists.
+2. Importer merges customer text into generated `artworks.json` and `customer-artworks.js`.
+3. Generated manifests remain the only runtime source consumed by the app.
+4. Report clearly identifies missing/unmatched/invalid text data.
+5. Text never silently attaches to the wrong image after a rename.
+6. CSV parsing supports quoted commas and normal customer spreadsheet exports.
+7. Documentation explains the workflow in customer language.
+8. Validation includes importer syntax checks, lint/build if runtime code changes, and a small sample import with matching and missing text rows.
+
+### Online research summary
+
+- Sidecar JSON keeps metadata portable with each image and works well for automation, but is less customer-friendly for manual editing.
+- Markdown/front matter is strong for human writing and version control, but may feel technical and adds parsing complexity.
+- CSV/spreadsheet workflows are common for bulk catalog editing and are the easiest non-technical option when many items need short structured fields.
+- Headless CMS tools give the best editor experience, but add hosting, setup, and maintenance overhead.
+- Accessibility guidance consistently recommends meaningful alt text for images and visible captions/descriptions as separate content.
+
+Sources consulted:
+
+- WebAIM Alternative Text: <https://webaim.org/techniques/alttext/>
+- W3C Images Tutorial: <https://www.w3.org/WAI/tutorials/images/>
+- Google Image SEO best practices: <https://developers.google.com/search/docs/crawling-indexing/images>
+- Jekyll data files: <https://jekyllrb.com/docs/datafiles/>
+- Eleventy data files: <https://www.11ty.dev/docs/data/>
+
+
 ## v0.17 — Easy wins: accessibility, dead-code cleanup (2026-05-20)
 
 ### Status
