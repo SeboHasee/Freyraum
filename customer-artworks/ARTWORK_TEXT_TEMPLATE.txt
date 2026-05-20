@@ -23,14 +23,14 @@ All other fields are optional. Delete any line you do not want to fill in.
 Copy everything below this line into your new file:
 ======================================
 
-Title: 
+Title: Your painting title here   (required)
 Year: 
 Credit: 
-Alt: 
+Alt: Describe the painting visually for screen readers   (required)
 Tags: 
 Surface: matte-canvas
 
-Description:
+Description:   (required — write your text on the lines below this one)
 
 
 ======================================
