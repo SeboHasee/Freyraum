@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## v0.20 — Audio playback fix + main-page controls + sidecar cache-bust (2026-05-20)
+
+### Fixed
+
+- **Audio not playing on file:// origin:** Removed `crossOrigin = 'anonymous'` from `BackgroundAudioManager`. Chromium-family browsers treat `file://` pages as `null` origin; the CORS attribute triggered a rejected cross-origin request that silently blocked all audio loading. Audio now loads and plays correctly when the gallery is opened locally.
+- **Sidecar text stale after re-import:** `import-artworks.mjs` now updates `customer-preview/app.html` on every import run, stamping `?t=<timestamp>` on the `customer-artworks.js` and `customer-audio.js` script src attributes. This forces Chromium's `file://` cache to treat each run as a new resource URL, ensuring updated sidecar text is always applied.
+
+### Added
+
+- **Main-page audio controls** (`src/ui/AudioControls.ts`): subtle glass-pill widget fixed to bottom-left, symmetric to ZoomControls. Shows mute/unmute button and compact volume slider. Hidden when no audio source is imported. Pulsing indicator appears when autoplay is blocked — clicking activates playback within the user gesture. Full accessibility labels (aria-label, aria-pressed, title) and reduced-motion / high-contrast adaptations.
+- Improved `BackgroundAudioManager` error event handler to log `MediaError.code` and `MediaError.message` for easier future diagnosis.
+
 ## v0.19 — Background audio workflow (2026-05-20, implemented)
 
 ### Added / Changed

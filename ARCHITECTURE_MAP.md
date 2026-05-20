@@ -1,10 +1,18 @@
 # FREYRAUM architecture map
 
+## v0.20 — Audio CORS fix + main-page AudioControls (2026-05-20)
+
+**CORS fix:** `BackgroundAudioManager` no longer sets `crossOrigin = 'anonymous'`. This was blocking all audio on `file://` origins (Chromium null-origin CORS rejection). Canonical reference: `plan.md § v0.20`, `FINDINGS.md § 2026-05-20 (v0.20)`.
+
+**AudioControls:** New `src/ui/AudioControls.ts` component. Glass-pill fixed bottom-left, symmetric to `ZoomControls`. Hidden when `!available`. Handles autoplay-unlock within user gesture. `main.ts` instantiates and disposes it alongside other chrome components.
+
+**Sidecar cache-bust:** `import-artworks.mjs` now stamps `?t=<timestamp>` on `customer-artworks.js` + `customer-audio.js` script src tags in `app.html` after every import, bypassing Chromium's file:// disk cache.
+
 ## v0.19 — Calm background music workflow shipped (2026-05-20)
 
 Architecture addition shipped: importer + runtime audio boundary for calm background music, with format compatibility and accessible mute/volume controls.
 
-Current runtime: **shipped**. Background audio now loads from importer payloads, integrates with preferences/lifecycle, and exposes mute/volume controls in the preferences panel. Canonical reference: `plan.md § v0.19`.
+Current runtime: **shipped**. Background audio now loads from importer payloads, integrates with preferences/lifecycle, and exposes mute/volume controls in the preferences panel and via the new main-page `AudioControls` widget (v0.20). Canonical reference: `plan.md § v0.19`.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

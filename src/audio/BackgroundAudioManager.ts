@@ -45,7 +45,12 @@ export class BackgroundAudioManager {
   constructor() {
     this.audio.preload = 'metadata';
     this.audio.loop = true;
-    this.audio.crossOrigin = 'anonymous';
+    // NOTE: Do NOT set crossOrigin here.
+    // When app.html is opened as a file:// URL, Chromium treats the page
+    // origin as `null`. Setting crossOrigin = 'anonymous' causes the browser
+    // to issue a CORS request, which always fails from a null origin, blocking
+    // all audio playback. The audio files are co-located in the same directory
+    // so no CORS header is needed.
     this.bindEvents();
   }
 
@@ -233,13 +238,17 @@ export class BackgroundAudioManager {
       void this.play('ended-fallback');
     });
     this.audio.addEventListener('error', () => {
+      const mediaErr = this.audio.error;
       this.state = {
         ...this.state,
         playing: false,
         message: 'Hintergrundmusik konnte nicht geladen werden.',
       };
       this.emit();
-      this.diagnostics.warn('audio-error', 'Background audio element emitted an error event');
+      this.diagnostics.warn('audio-error', 'Background audio element emitted an error event', {
+        code: mediaErr?.code,
+        message: mediaErr?.message,
+      });
     });
     this.audio.addEventListener('volumechange', () => {
       this.state = {

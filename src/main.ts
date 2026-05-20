@@ -20,6 +20,7 @@ import { HintText } from './ui/HintText';
 import { ZoomControls } from './ui/ZoomControls';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { PreferencesPanel } from './ui/PreferencesPanel';
+import { AudioControls } from './ui/AudioControls';
 import { showFallbackScreen } from './ui/FallbackScreen';
 import { Timeline } from './timeline/Timeline';
 import { KeyboardNav } from './interaction/KeyboardNav';
@@ -415,6 +416,9 @@ async function main(): Promise<void> {
   const zoomControls = new ZoomControls(app, galleryManager);
   const fullscreenButton = new FullscreenButton(app, document.documentElement);
   const preferencesPanel = new PreferencesPanel(app, preferences);
+  // v0.20 — subtle main-page audio controls (mute/volume, bottom-left).
+  // Symmetric to ZoomControls (bottom-right). Hidden when no audio source exists.
+  const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
   const unsubscribeAudioState = backgroundAudio.subscribe((state) => {
@@ -746,6 +750,9 @@ async function main(): Promise<void> {
           (window as unknown as { cancelIdleCallback: (h: number) => void }).cancelIdleCallback(h)
       : (h): void => window.clearTimeout(h);
   let pendingApplyHandle: IdleCancelHandle | null = null;
+  // Epsilon for volume comparison: prevents spurious preference updates from
+  // floating-point rounding when converting between 0-100 slider values and
+  // the 0.0-1.0 audio volume range used by HTMLMediaElement.
   const VOLUME_CHANGE_EPSILON = 1e-6;
   const unsubscribePreferences = preferences.subscribe(() => {
     const nextPrefs = preferences.current;
@@ -876,6 +883,7 @@ async function main(): Promise<void> {
     zoomControls.dispose();
     fullscreenButton.dispose();
     preferencesPanel.dispose();
+    audioControls.dispose();
     hintText.dispose();
     timeline.dispose();
     backgroundAudio.dispose();

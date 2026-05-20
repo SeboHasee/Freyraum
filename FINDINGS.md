@@ -1,5 +1,35 @@
 # FINDINGS
 
+## 2026-05-20 — v0.20 audio fix + main-page controls + sidecar cache-bust
+
+### Root cause findings
+
+#### Finding 1 — CORS blocks audio on file:// origin (confirmed, fixed)
+
+`BackgroundAudioManager` set `this.audio.crossOrigin = 'anonymous'` in its constructor. When `app.html` is opened as a `file://` URL, Chromium (Chrome, Opera, Edge) assigns the page a `null` origin. Setting `crossOrigin` on an audio element causes the browser to issue a CORS request — a request from `null` origin is always rejected with:
+
+> Access to audio at 'file:///.../audio/willow.mp3' from origin 'null' has been blocked by CORS policy: Cross origin requests are only supported for protocol schemes: chrome, chrome-extension, http, https …
+
+The `<audio>` element emits an `error` event; the manager sets `playing: false` and the error path makes it look like an autoplay policy block — masking the real cause. The autoplay block message appearing in the UI was a **secondary symptom**, not the primary failure.
+
+**Fix:** Removed `crossOrigin = 'anonymous'`. Audio files are co-located with `app.html`, no CORS header needed.
+
+#### Finding 2 — Sidecar text stale because of file:// cache (confirmed, fixed)
+
+The importer correctly re-reads all `.txt` sidecar files on every run — there is no "skip if already processed" logic for sidecar content. The stale text was due to Chromium caching `file://` resources by URL: since `customer-artworks.js` always had the same path/URL, the browser served the old cached version after the file was overwritten on disk.
+
+**Fix:** `import-artworks.mjs` now writes `?t=<Date.now()>` onto both `customer-artworks.js` and `customer-audio.js` script src attributes in `customer-preview/app.html` after every import. Each run produces a distinct URL, bypassing the browser's disk/memory cache.
+
+#### Finding 3 — Main-page audio activation missing (addressed with AudioControls)
+
+The only user-visible audio control was buried inside the PreferencesPanel popover. When autoplay was blocked, there was no obvious way for the user to activate audio from the main view. A new `AudioControls` glass-pill widget (bottom-left, symmetric to ZoomControls) provides quick-access mute/volume on the main page and handles the autoplay-unlock click path directly within the user gesture context.
+
+### Online research findings
+
+- Chromium `file://` CORS: `file://` origins are treated as opaque (`null`) by the browser's security model; cross-origin attribute on any resource load from a file:// page will fail.
+- Source: <https://developer.mozilla.org/en-US/docs/Web/Security/Same-origin_policy>
+- Chromium `file://` disk cache: Chrome caches `file://` URLs like any other URL, keyed by the full URL string including path. Changing file content without changing the URL does not invalidate the cache.
+
 ## 2026-05-20 — v0.19 background music implementation notes (shipped)
 
 ### Audit target

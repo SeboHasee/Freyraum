@@ -1,10 +1,26 @@
 # FREYRAUM customer handoff guide
 
+## v0.20 audio + sidecar fixes — implemented (2026-05-20)
+
+Three fixes shipped in v0.20:
+
+1. **Audio plays correctly from file:// origin.** Previous CORS misconfiguration prevented audio loading in Chrome/Opera/Edge. Fixed — music plays immediately on first user interaction or autoplay (when browser allows it).
+2. **Sidecar text always up-to-date.** Every `Update Gallery` run now cache-busts the gallery script URLs so updated painting text appears immediately without needing to clear the browser cache.
+3. **Main-page mute/volume controls.** A subtle glass-pill control (bottom-left of screen) lets you mute/unmute and adjust volume without opening settings. It also shows an activation button when browser autoplay was blocked.
+
+**Updated checklist for customer audio (v0.20):**
+
+- Put music files into `customer-audio/inbox` (`.mp3`, `.ogg`, `.m4a`, `.wav`).
+- Run `Update Gallery`.
+- Open `customer-preview/app.html` (double-click or use the `.command`/`.bat` launcher).
+- Audio should start automatically (or show an activation button bottom-left if the browser blocked autoplay).
+- Use the bottom-left glass pill to mute/unmute or adjust volume directly on the main page.
+
 ## v0.19 background music workflow — implemented (2026-05-20)
 
 Background-audio workflow is live: customers place compatible audio files in `customer-audio/inbox` and use the existing `Update Gallery` flow.
 
-Current status: **shipped**. The website now includes background music controls (mute + volume) in the settings panel.
+Current status: **shipped**. The website now includes background music controls (mute + volume) in the settings panel and as a quick-access widget on the main page (v0.20).
 
 Canonical implementation reference: `plan.md § v0.19`
 
@@ -13,7 +29,7 @@ Quick handoff checklist for customer audio:
 - Put music files into `customer-audio/inbox` (`.mp3`, `.ogg`, `.m4a`, `.wav`).
 - Run `Update Gallery`.
 - Confirm `customer-artworks/last-import-report.txt` contains the audio sections (`Audio selected`, `Audio candidates ignored by precedence`, `Unsupported audio files`).
-- In preview, open settings and verify mute + volume controls.
+- In preview, mute/volume controls are accessible bottom-left on the main page or in the settings panel.
 
 ## v0.18 sidecar text — implemented (2026-05-20)
 
@@ -33,7 +49,7 @@ unchanged. Missing or invalid sidecars never fail the import; they are
 surfaced through the existing plain-language report.
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current runtime status: v0.19 implemented (on top of v0.18, v0.17, v0.16, v0.15, and v0.14).**
+contributors. **Current runtime status: v0.20 implemented (on top of v0.19, v0.18, v0.17, v0.16, v0.15, and v0.14).**
 
 ## AI/contributor context
 

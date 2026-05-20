@@ -1,5 +1,17 @@
 # Freyraum
 
+## v0.20 — Audio playback fix + main-page controls + sidecar cache-bust (2026-05-20)
+
+Three bugs fixed in v0.20:
+
+1. **Audio not playing (CORS block):** Removed `crossOrigin = 'anonymous'` from `BackgroundAudioManager`. Chromium-family browsers assign `null` origin to `file://` pages, causing all audio element CORS requests to fail. Audio now loads and plays correctly.
+2. **Main-page audio controls:** New glass-pill `AudioControls` widget (bottom-left, symmetric to ZoomControls). Mute/unmute button + volume slider. Hidden when no audio is imported. Handles autoplay-unlock click within user gesture.
+3. **Sidecar text stale after re-import:** Importer now stamps `?t=<timestamp>` on script src tags in `app.html` after every run, bypassing Chromium's file:// disk cache.
+
+Current runtime status: **v0.20 implemented**. Audio plays reliably from `file://`. Sidecar text always reflects the latest import.
+
+Implementation details: `plan.md § v0.20` | Research: `FINDINGS.md § 2026-05-20 (v0.20)`
+
 ## v0.19 — Calm background music workflow (implemented, 2026-05-20)
 
 Customer-managed background audio is now integrated into the one-click `Update Gallery` workflow, with deterministic importer payloads, runtime compatibility selection, mute/volume controls, and lifecycle-aware playback handling.

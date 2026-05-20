@@ -57,6 +57,7 @@ const PREVIEW_IMAGES = join(ROOT, 'customer-preview', 'images');
 const PREVIEW_AUDIO = join(ROOT, 'customer-preview', 'audio');
 const PREVIEW_JS = join(ROOT, 'customer-preview', 'customer-artworks.js');
 const PREVIEW_AUDIO_JS = join(ROOT, 'customer-preview', 'customer-audio.js');
+const PREVIEW_HTML = join(ROOT, 'customer-preview', 'app.html');
 const REPORT_FILE = join(ROOT, 'customer-artworks', 'last-import-report.txt');
 
 // -------- Format policy --------
@@ -732,6 +733,35 @@ const audioJs =
   '// Last run: ' + new Date().toISOString() + '\n' +
   'window.__FREYRAUM_AUDIO = ' + JSON.stringify(audioPayload, null, 2) + ';\n';
 writeFileSync(PREVIEW_AUDIO_JS, audioJs, 'utf8');
+
+// v0.20 — Cache-bust the dynamic script tags in app.html on every import run.
+//
+// When the customer opens app.html as a file:// URL, Chromium-family browsers
+// cache script resources keyed by their full URL. Re-importing (which rewrites
+// customer-artworks.js and customer-audio.js on disk) does NOT change the URL,
+// so the browser can serve stale content from its disk/memory cache. Adding
+// a `?t=<timestamp>` query string makes each import produce a distinct URL
+// that forces a fresh read — with zero risk of misloading because browsers
+// always ignore the query string when resolving file:// paths to disk.
+//
+// customer-artworks.js and customer-audio.js are stamped because their content
+// changes on every import. freyraum-gallery.js is left unversioned because it
+// changes only on developer-issued gallery updates, not customer data imports.
+try {
+  if (existsSync(PREVIEW_HTML)) {
+    const ts = Date.now();
+    const originalHtml = readFileSync(PREVIEW_HTML, 'utf8');
+    const updatedHtml = originalHtml
+      // Match only inside src="..." attributes to avoid touching comments or other text.
+      .replace(/(src=["'][^"']*?)customer-artworks\.js(\?t=\d+)?/g, `$1customer-artworks.js?t=${ts}`)
+      .replace(/(src=["'][^"']*?)customer-audio\.js(\?t=\d+)?/g, `$1customer-audio.js?t=${ts}`);
+    if (updatedHtml !== originalHtml) {
+      writeFileSync(PREVIEW_HTML, updatedHtml, 'utf8');
+    }
+  }
+} catch {
+  // Best-effort: cache-busting failure does not block the import.
+}
 
 // v0.18 — Compute orphaned sidecars (text files without matching pictures).
 // `imageStems` mirrors the lowercased basenames the image loop processed.

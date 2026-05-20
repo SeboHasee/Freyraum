@@ -1,5 +1,51 @@
 # FREYRAUM Plan
 
+## v0.20 — Audio playback fix + main-page audio controls + sidecar cache-bust (2026-05-20)
+
+### Status
+
+Implemented.
+
+### Problems addressed
+
+#### 1. Background music not playing (CORS block on file:// origin)
+
+**Root cause:** `BackgroundAudioManager` set `this.audio.crossOrigin = 'anonymous'` on the `<audio>` element. When the gallery is opened as a `file://` URL, Chromium-based browsers (Chrome, Opera, Edge) treat the page origin as `null`. Setting `crossOrigin` triggers a CORS request from a null origin, which is always rejected by the browser with:
+> "Cross origin requests are only supported for protocol schemes: http, https …"
+
+The audio element then emits an `error` event, `playing` never fires, and the autoplay-blocked path makes the failure look like a policy block — masking the real cause.
+
+**Fix:** Removed `this.audio.crossOrigin = 'anonymous'` from `BackgroundAudioManager` constructor. The audio files live in `customer-preview/audio/` alongside `app.html`, so no CORS header is needed. Also improved the `error` event handler to log `mediaErr.code` and `mediaErr.message` for easier future diagnosis.
+
+#### 2. Subtle volume/mute controls on the main page
+
+New `src/ui/AudioControls.ts` widget — glass-pill, bottom-left, symmetric to ZoomControls (bottom-right). Hidden when no audio source is imported. Shows a pulsing activation indicator when autoplay is blocked. Includes:
+- Mute/unmute button with three SVG icons (active / muted / blocked)
+- Compact volume slider, disabled when muted
+- Full accessibility labels (aria-label, aria-pressed, title)
+- Reduced-motion and high-contrast CSS adaptations
+
+The click handler handles three cases without breaking the browser user-gesture chain:
+1. Muted → `prefs.setAudioMuted(false)` → triggers synchronous `applyPreferences()` → `audio.play()`
+2. Playing → `prefs.setAudioMuted(true)` → pause
+3. Not playing / autoplay blocked → `audioManager.play('user-activate')` directly (stays within gesture)
+
+#### 3. Sidecar text not updating after first import
+
+**Root cause:** The importer re-reads all `.txt` sidecar files on every run (no skip logic) — so the JS files on disk are always up-to-date. The stale text is a **browser cache** issue: Chromium caches `file://` resources by URL. Since `customer-artworks.js` always has the same URL, the browser may serve the old cached version even after the file has been overwritten.
+
+**Fix:** `import-artworks.mjs` now stamps `?t=<Date.now()>` on both `customer-artworks.js` and `customer-audio.js` script src attributes in `customer-preview/app.html` on each import run. Each run produces distinct URL strings, forcing the browser to treat them as new resources and bypassing the disk cache.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/audio/BackgroundAudioManager.ts` | Removed `crossOrigin = 'anonymous'`; improved error event logging |
+| `src/ui/AudioControls.ts` | **New file** — main-page audio widget |
+| `src/styles/main.scss` | Added `.audio-controls` glass-pill styles + all cross-cutting selector updates |
+| `src/main.ts` | Import + instantiate `AudioControls`; add to dispose |
+| `scripts/import-artworks.mjs` | Added `PREVIEW_HTML` constant; cache-bust `app.html` script src tags on each run |
+
 ## v0.19 — Background music workflow implementation (shipped, 2026-05-20)
 
 ### Status

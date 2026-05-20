@@ -413,6 +413,157 @@ button {
 }
 
 // =============================================================================
+// Audio controls (main-page mute + volume, bottom-left)
+// =============================================================================
+// Symmetric to ZoomControls (bottom-right). Hidden via `hidden` attribute
+// when no audio source is available; shown as a low-profile glass pill.
+.audio-controls {
+  position: fixed;
+  bottom: var(--chrome-bottom);
+  left: calc(36px + var(--safe-left));
+  display: flex;
+  align-items: center;
+  gap: 0;
+  z-index: 100;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  box-shadow: var(--shadow-soft);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.audio-controls__btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.55);
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    background: var(--glass-bg-strong);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  // Muted state: icon dimmed.
+  &--muted {
+    color: var(--text-muted);
+  }
+
+  // Autoplay blocked: button pulses gently to invite a tap.
+  &--blocked {
+    animation: audio-blocked-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes audio-blocked-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+// Small dot indicator shown on the button when autoplay is blocked.
+.audio-controls__indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: none;
+  animation: audio-indicator-pop 0.3s var(--ease-spring) both;
+}
+
+@keyframes audio-indicator-pop {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.audio-controls__btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+
+  svg { display: block; }
+}
+
+.audio-controls__slider-wrap {
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  padding-right: 4px;
+}
+
+// Compact horizontal volume slider. Uses accent colour for the thumb.
+.audio-controls__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) calc(var(--volume-pct, 35%) * 1%),
+    rgba(0, 0, 0, 0.12) calc(var(--volume-pct, 35%) * 1%),
+    rgba(0, 0, 0, 0.12) 100%
+  );
+  outline: none;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+  }
+
+  &:hover:not(:disabled)::-webkit-slider-thumb {
+    transform: scale(1.2);
+  }
+}
+
+// =============================================================================
 // Fullscreen button
 // =============================================================================
 .fullscreen-btn {
@@ -1050,6 +1201,8 @@ button {
   .nav-btn,
   .zoom-controls,
   .zoom-controls__btn,
+  .audio-controls,
+  .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger,
   .prefs__panel,
@@ -1060,6 +1213,7 @@ button {
 
   .nav-btn,
   .zoom-controls__btn,
+  .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger {
     color: var(--text-strong);
@@ -1090,6 +1244,7 @@ button {
   .info-panel,
   .nav-btn,
   .zoom-controls__btn,
+  .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger,
   .timeline__thumb {
@@ -1097,6 +1252,13 @@ button {
   }
 
   .prefs__panel {
+    animation: none;
+  }
+
+  .audio-controls__btn--blocked {
+    animation: none;
+  }
+  .audio-controls__indicator {
     animation: none;
   }
 }
@@ -1283,6 +1445,8 @@ button {
   .nav-btn,
   .zoom-controls,
   .zoom-controls__btn,
+  .audio-controls,
+  .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger,
   .prefs__panel,
@@ -1300,6 +1464,7 @@ button {
 .topbar,
 .info-panel,
 .zoom-controls,
+.audio-controls,
 .fullscreen-btn,
 .prefs__panel,
 .timeline,
