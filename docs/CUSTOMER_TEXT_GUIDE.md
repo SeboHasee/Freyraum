@@ -1,17 +1,23 @@
-# FREYRAUM — Draft guide for painting text sidecars (planned v0.18)
+# FREYRAUM — How to import painting text (v0.18 — shipped)
 
-> Status: **planned, not live yet**. The current importer still ignores `.txt` sidecar files. This guide documents the finalized v0.18 workflow so the future implementation and customer wording stay aligned. Today, continue using the shipped picture-only workflow in `docs/CUSTOMER_PICTURE_GUIDE.md`.
+> Status: **implemented and shipped in v0.18 (2026-05-20)**. The importer
+> (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecar files
+> beside every painting and uses your text in the gallery info panel.
 
-This draft guide explains how the **planned** sidecar-text workflow will work once v0.18 is implemented.
+You do **not** need a code editor, terminal, or any technical tool.
+You only need a plain text editor:
 
-You will not need a code editor, terminal, or technical tool.
-You will only need a plain text editor (Windows: Notepad — macOS: TextEdit in plain-text mode).
+- Windows → Notepad
+- macOS → TextEdit, switched to plain text (Format → Make Plain Text)
+- Linux → any UTF-8 editor (gedit, kate, Sublime, VS Code, …)
 
 ---
 
-## Planned idea in one sentence
+## The idea in one sentence
 
-For each painting file in `customer-artworks/inbox/`, the future v0.18 importer will also read a matching text file with the **same basename** and the `.txt` extension.
+For each painting file in `customer-artworks/inbox/`, the importer also
+reads a matching text file with the **same basename** and the `.txt`
+extension.
 
 ```text
 customer-artworks/inbox/
@@ -21,30 +27,40 @@ customer-artworks/inbox/
   02-forest-path.txt
 ```
 
+The painting still imports if you forget the text card; the importer just
+generates a fallback title and lists the picture under
+`Pictures missing text` in the report.
+
 ---
 
-## Planned workflow (after v0.18 implementation)
+## Step-by-step workflow
 
-### 1. Put the painting in the inbox
+### 1. Put the painting into the inbox
 
 Open `customer-artworks` → `inbox` and place the picture file there.
+Supported formats: JPG, PNG, WebP, GIF, SVG, AVIF.
 
-### 2. Create a text file with the same name
+### 2. Create the matching text file
 
-Open Notepad (Windows) or TextEdit (macOS, switched to plain text first).
+Open Notepad (Windows) or TextEdit (macOS, plain text mode first).
 
-The text file name must match the picture file name exactly, only the extension changes to `.txt`.
+The text file name must match the painting file name exactly — only the
+extension changes to `.txt`.
 
-| Picture file | Matching text file |
+| Painting file | Matching text file |
 | --- | --- |
 | `01-sunset-at-the-lake.jpg` | `01-sunset-at-the-lake.txt` |
 | `02-forest-path.png` | `02-forest-path.txt` |
 | `my favourite painting.webp` | `my favourite painting.txt` |
 
+Tip: the importer compares names case-insensitively, so
+`Sunset.JPG` + `sunset.txt` is fine.
+
 ### 3. Fill in the text card
 
-Copy the template below and fill in the fields.
-The planned workflow expects the customer to provide at least `Title:`, `Alt:`, and `Description:`.
+Copy `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`, rename the copy, and
+fill in the fields. At minimum the importer expects `Title`, `Alt`, and
+`Description` to be filled in.
 
 ```text
 Title: Sunset at the lake
@@ -57,127 +73,201 @@ Surface: matte-canvas
 Medium: Oil on canvas · 60×80 cm
 
 Description:
-This painting captures the quiet end of a summer day at the lake near my childhood home.
-The warm light on the water always reminded me of how brief those evenings felt.
+This painting captures the quiet end of a summer day at the lake near my
+childhood home. The warm light on the water always reminded me of how
+brief those evenings felt.
 ```
 
-### 4. Save the text file next to the image
+Everything after `Description:` becomes the visible info-panel text.
+Blank lines between paragraphs are preserved.
 
-Save the `.txt` file into the same inbox folder as the image:
-`customer-artworks/inbox/`
+### 4. Save the text file next to the painting
 
-### 5. Run Update Gallery
+Save the `.txt` file into the same inbox folder as the image
+(`customer-artworks/inbox/`).
 
-After the future v0.18 implementation ships, double-click **Update Gallery** in the FREYRAUM folder.
+UTF-8 is recommended (the default on macOS/Linux and the default on
+modern Windows Notepad). The importer also accepts UTF-8 files saved
+with a leading BOM — Notepad on older Windows versions adds one
+automatically; it is silently stripped.
+
+### 5. Run **Update Gallery**
+
+Double-click **Update Gallery** in the FREYRAUM folder (or run
+`node scripts/import-artworks.mjs` from the repository root).
 
 ### 6. Read the report
 
-After implementation, the report is planned to include text-specific sections such as:
+Open `customer-artworks/last-import-report.txt`. The v0.18 importer
+writes dedicated text-card sections:
 
-- **Text applied** — the text card was matched and used.
-- **Pictures missing text** — the picture imported with fallback text because no sidecar existed.
-- **Text files without matching pictures** — a text card exists but no image with the same basename was found.
-- **Text fields needing attention** — a sidecar file parsed, but one or more fields need correction.
+```text
+Text applied (2):
+  ✓ 01-sunset-at-the-lake.txt matched 01-sunset-at-the-lake.jpg
+
+Pictures missing text (1):
+  ⚠ 03-blue-room.webp — add 03-blue-room.txt next to the image
+
+Text files without matching pictures (1):
+  ⚠ old-painting.txt — no image named old-painting.* was found
+
+Text fields needing attention (1):
+  ⚠ 02-forest-path.txt — Alt is empty — add a short visual description
+
+Duplicate text files (1):
+  ⚠ 01-sunset-at-the-lake.md — duplicate sidecar (also found
+    01-sunset-at-the-lake.txt); using 01-sunset-at-the-lake.txt (.txt preferred)
+```
+
+These are all **warnings**, never errors: the gallery still updates.
 
 ### 7. Open the gallery
 
-After implementation, `index.html` should show the sidecar text in the info panel.
+Open `index.html`. Your title, subtitle, year, credit, and description
+appear in the info panel exactly as you wrote them.
 
 ---
 
-## Planned text-card format reference
+## Field reference
 
 ```text
-Title: (painting title — customer should provide)
+Title: (painting title — recommended)
 Subtitle: (optional eyebrow line above the title)
 Year: (optional four-digit year)
 Credit: (optional — defaults to "Customer")
-Alt: (customer should provide a short visual description)
-Tags: (optional comma-separated keywords)
+Alt: (recommended short visual description for screen readers)
+Tags: (optional comma- or semicolon-separated keywords)
 Surface: (optional: matte-canvas, satin-canvas, varnished-oil, paper)
 Medium: (optional free-text medium override)
 
 Description:
-(customer should provide the main info-panel text here)
+(recommended main info-panel text)
 (can be multiple lines)
 (blank lines inside the description are preserved)
 ```
 
----
-
-## Field guide
-
 ### Title
+
 The main title shown in the info panel.
-If omitted, the planned importer will fall back to a filename-generated title and warn in the report.
+If omitted, the importer falls back to a filename-generated title and
+warns in the report.
 
 ### Subtitle
-Optional short line above the title.
-If omitted, the importer should keep the generated `Artwork 01`, `Artwork 02`, etc.
+
+Optional eyebrow line shown above the title.
+If omitted, the importer uses the generated `Artwork 01`, `Artwork 02`,
+etc.
 
 ### Alt
+
 A concise visual description for assistive technology.
 It should describe the visible painting rather than repeating the title.
 
-Good alt text usually mentions subject, colours, composition, mood, and visible text where relevant.
-Avoid starting with “image of” or “picture of”.
+Good alt text typically mentions subject, colours, composition, mood, and
+any visible text. Avoid starting with “image of” or “picture of”.
 
 ### Description
+
 The longer visible text shown in the info panel.
-The parser is planned to keep it separate from `Alt` and preserve multiple lines.
+The parser keeps it separate from `Alt` and preserves multiple lines and
+blank lines between paragraphs.
 
 ### Year
-Optional four-digit year.
-Invalid values should warn and fall back to the current year.
+
+Optional four-digit year. Anything other than four digits triggers a
+warning and falls back to the current year.
 
 ### Credit
+
 Optional artist/studio/rights-holder string.
-If omitted, the planned default is `Customer`.
+If omitted, the default is `Customer`.
 
 ### Tags
-Optional keywords reserved for future filtering.
+
+Optional keywords reserved for future filtering. Separate with commas or
+semicolons.
 
 ### Surface
-Optional visual material profile for the 3D painting effect.
 
-Allowed values:
+Optional visual material profile for the 3D painting effect.
 
 | Value | Meaning |
 | --- | --- |
-| `matte-canvas` | classic matte linen canvas |
+| `matte-canvas` | classic matte linen canvas (default) |
 | `satin-canvas` | slightly glossy canvas |
 | `varnished-oil` | varnished oil painting |
 | `paper` | smooth paper |
 
+Unknown values trigger a warning and fall back to `matte-canvas`.
+
 ### Medium
-Optional free-text medium description.
-If omitted, the importer should keep the current dimension-based label.
+
+Optional free-text medium description. If omitted, the importer keeps
+the dimension-based label (`Landscape · 1920 × 1080`, etc.).
 
 ---
 
-## Planned report behavior
+## How matching works (in plain language)
 
-The future implementation is expected to stay forgiving:
-
-- missing text should **not** fail the whole import;
-- invalid text fields should warn in plain language;
-- orphaned text files should be listed clearly;
-- the current offline `file://` preview and `webglImage` workflow should remain unchanged.
+- The importer looks for a sidecar with **exactly the same basename**
+  (case-insensitive) in the same folder as the painting.
+- `.txt` is the primary format. `.md` is accepted as a backup.
+- If both `painting.txt` and `painting.md` exist, the `.txt` file wins
+  and the `.md` is listed under `Duplicate text files`.
+- The importer never guesses a match for a renamed image. Wrong text is
+  worse than missing text, so an orphaned `.txt` is always reported
+  rather than silently attached to a different painting.
 
 ---
 
-## What is true today
+## What the importer never touches
 
-- The current importer does **not** yet read `.txt` sidecars.
-- The current shipped customer workflow is still picture-only.
-- The importer still generates fallback metadata automatically.
-- This guide and `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` are draft assets for the upcoming v0.18 implementation.
+The importer **always** owns these fields and never reads them from the
+sidecar:
+
+- `id` (generated from the filename)
+- `image` and `webglImage` (the copied/embedded image bytes)
+- `dimensions` (read from the image header)
+
+Sidecars only supply customer-facing text. You can safely rename a
+painting + sidecar pair without losing any image data.
+
+---
+
+## Frequently asked questions
+
+**Q: I forgot the `.txt` file. Will my picture still show up?**
+Yes. The painting imports with the generated fallback title, current
+year, and `Imported artwork` description. The picture is listed under
+`Pictures missing text` so you remember to add a text card later.
+
+**Q: I renamed my painting but forgot to rename the sidecar.**
+The painting will still import (with fallback text), and the old
+sidecar will appear under `Text files without matching pictures`.
+Rename the `.txt` file to match the new painting basename and run
+**Update Gallery** again.
+
+**Q: My description spans many paragraphs. Will line breaks survive?**
+Yes. Everything after `Description:` is taken as the visible body, with
+blank lines preserved.
+
+**Q: I use Markdown. Will `**bold**` render in the gallery?**
+No. The info panel renders descriptions as plain text on purpose, so the
+literal `**` characters appear. Use plain prose; the canvas styling
+handles emphasis visually.
+
+**Q: My text shows odd characters at the start (`ï»¿`).**
+Re-save the file as UTF-8. Notepad on modern Windows offers UTF-8 in the
+Save dialog. The importer already strips the BOM marker automatically;
+visible mojibake usually means the file was saved as Windows-1252 or a
+similar legacy encoding.
 
 ---
 
 ## Related docs
 
-- Current shipped workflow: `docs/CUSTOMER_PICTURE_GUIDE.md`
-- Final audited plan: `plan.md § v0.18`
+- Picture-only workflow (still supported): `docs/CUSTOMER_PICTURE_GUIDE.md`
+- Maintainer notes: `docs/IMAGE_MAINTENANCE_GUIDE.md`
+- Final v0.18 plan + acceptance: `plan.md § v0.18`
 - Research log: `FINDINGS.md § 2026-05-20`
-- Draft template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
+- Copy-paste template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`

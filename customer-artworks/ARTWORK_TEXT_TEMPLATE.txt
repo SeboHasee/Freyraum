@@ -1,4 +1,4 @@
-STATUS: planned for v0.18 — the current importer still ignores this file until sidecar support is implemented.
+STATUS: shipped in v0.18 — the importer reads this file when its basename matches a painting in the same inbox folder.
 
 FREYRAUM — Artwork text card template
 ======================================
@@ -10,29 +10,32 @@ HOW TO USE THIS FILE
    Example: if your painting is "01-sunset-at-the-lake.jpg",
             rename the copy to "01-sunset-at-the-lake.txt"
 3. Put the renamed copy into the "inbox" folder next to your painting.
-4. Fill in your text below, then save.
+4. Fill in your text below, then save (UTF-8 is recommended).
 5. Run "Update Gallery".
 
-WHICH FIELDS ARE REQUIRED
---------------------------
-  Title        — required
-  Alt          — required (short visual description for screen readers)
-  Description  — required (the main text shown in the gallery)
+WHICH FIELDS ARE RECOMMENDED
+----------------------------
+  Title        — recommended
+  Alt          — recommended (short visual description for screen readers)
+  Description  — recommended (the main text shown in the gallery)
 
 All other fields are optional. Delete any line you do not want to fill in.
+Missing or blank required fields are flagged in
+"customer-artworks/last-import-report.txt" but never block the import.
 
 ======================================
 Copy everything below this line into your new file:
 ======================================
 
-Title: Your painting title here   (required)
+Title: Your painting title here
 Year: 
 Credit: 
-Alt: Describe the painting visually for screen readers   (required)
+Alt: Describe the painting visually for screen readers
 Tags: 
 Surface: matte-canvas
 
-Description:   (required — write your text on the lines below this one)
+Description:
+Write your text on the lines below this one.
 
 
 ======================================
@@ -60,7 +63,7 @@ Alt:
   Example:  Alt: Warm orange sky reflected in a calm lake at dusk, dark tree silhouettes on the left.
 
 Tags:
-  Comma-separated keywords (reserved for future filtering).
+  Comma- or semicolon-separated keywords (reserved for future filtering).
   Example:  Tags: landscape, lake, warm, summer
 
 Surface:
@@ -70,6 +73,7 @@ Surface:
     satin-canvas        — slightly glossy canvas
     varnished-oil       — varnished oil painting
     paper               — smooth paper
+  Unknown values fall back to matte-canvas with a warning in the report.
   Example:  Surface: varnished-oil
 
 Medium:

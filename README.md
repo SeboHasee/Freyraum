@@ -1,15 +1,27 @@
 # Freyraum
 
-## v0.18 — Final audited sidecar-text plan (not shipped yet, 2026-05-20)
+## v0.18 — Customer painting text sidecars (shipped, 2026-05-20)
 
-The v0.18 sidecar-text workflow is now fully audited in `plan.md § v0.18` and `FINDINGS.md § 2026-05-20`, but it is **not implemented in the current runtime yet**.
+The v0.18 sidecar-text workflow is implemented and live in
+`scripts/import-artworks.mjs`. Each painting in `customer-artworks/inbox/`
+can now carry a same-basename `.txt` sidecar that the importer parses
+and merges into the gallery info panel.
 
 **Plan:** `plan.md § v0.18` — final audited implementation plan.
 **Research log:** `FINDINGS.md § 2026-05-20`
-**Customer guide draft:** `docs/CUSTOMER_TEXT_GUIDE.md`
-**Template draft:** `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
+**Customer guide:** `docs/CUSTOMER_TEXT_GUIDE.md` (how to import text)
+**Template:** `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
 
-Current behavior remains unchanged: the importer still generates fallback text, and the planned implementation stays confined to `scripts/import-artworks.mjs` with no planned `src/` runtime changes for the first slice.
+What v0.18 ships:
+
+- Same-basename `.txt` sidecars are parsed (`.md` accepted as a backup); `.txt` wins when both exist.
+- BOM-safe UTF-8 reader; Windows / classic Mac line endings normalized; case-insensitive stem matching.
+- Customer-facing fields merged: `title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`.
+- Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned.
+- Plain-language report (`customer-artworks/last-import-report.txt`) gains sections: `Text applied`, `Pictures missing text`, `Text files without matching pictures`, `Text fields needing attention`, `Duplicate text files`.
+- Missing or invalid sidecars never fail the run; they surface as warnings only.
+
+No `src/` runtime changes, no new dependencies.
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 

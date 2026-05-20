@@ -86,28 +86,29 @@ Technical changes behind this behavior:
 For support/debugging, `show-artwork-complete` now logs extra v0.14/v0.14.2 tuning data (`closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
 
 
-## Planned v0.18 painting text workflow (draft, not shipped yet)
+## v0.18 painting text workflow (shipped)
 
-The repository now contains a **final audited plan** for customer-written painting text via same-basename `.txt` sidecar files, but that workflow is **not active in the current importer yet**.
-
-Planned future shape:
+The importer now reads same-basename `.txt` sidecar files for each
+painting and uses them in the gallery info panel.
 
 ```text
 customer-artworks/inbox/
   01-sunset-at-the-lake.jpg      ← painting
-  01-sunset-at-the-lake.txt      ← planned text card
+  01-sunset-at-the-lake.txt      ← matching text card
 ```
 
-Planned customer flow after implementation:
+Customer flow:
 
 1. Copy `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
 2. Rename it to match the painting file name.
-3. Fill in `Title:`, `Alt:`, and `Description:` at minimum.
+3. Fill in `Title:`, `Alt:`, and `Description:` (everything else is optional).
 4. Save the `.txt` file next to the painting in the inbox.
 5. Run **Update Gallery**.
-6. Read the report for `Text applied`, `Pictures missing text`, or `Text files without matching pictures`.
+6. Read the report for `Text applied`, `Pictures missing text`, `Text files without matching pictures`, or `Text fields needing attention`.
 
-**Current reality:** the shipped importer still ignores sidecar files and still generates fallback text automatically. Until v0.18 code is implemented, treat `docs/CUSTOMER_TEXT_GUIDE.md` and the template as draft documentation only.
+Missing or invalid sidecars never fail the import — they appear as
+warnings only. For full guidance and a field reference, see
+`docs/CUSTOMER_TEXT_GUIDE.md`.
 
 **References:** `plan.md § v0.18`, `FINDINGS.md § 2026-05-20`, `docs/CUSTOMER_TEXT_GUIDE.md`.
 

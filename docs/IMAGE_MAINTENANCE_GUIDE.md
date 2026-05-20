@@ -144,34 +144,32 @@ visibility. The importer, generated manifests, and `webglImage` path are not
 part of this follow-up.
 
 
-## Painting text maintenance — planned v0.18 sidecar workflow
+## Painting text maintenance — v0.18 sidecar workflow (shipped)
 
-The sidecar-text workflow is now fully audited, but it is **not implemented yet**.
+The sidecar-text workflow is live in v0.18.
 
-Planned maintainer model:
+Maintainer model:
 
-- `customer-artworks/inbox/<image-base>.txt` will become the customer-editable text source of truth for each painting.
-- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` is the draft copy-paste template.
-- `docs/CUSTOMER_TEXT_GUIDE.md` is the draft customer-facing guide.
+- `customer-artworks/inbox/<image-base>.txt` is the customer-editable text source of truth for each painting.
+- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` is the copy-paste template.
+- `docs/CUSTOMER_TEXT_GUIDE.md` is the customer-facing how-to guide.
 
-Planned importer behavior:
+Importer behavior (implemented in `scripts/import-artworks.mjs`):
 
-1. Split the inbox scan into image files and sidecar files.
-2. Match sidecars to images by lowercase basename in the same folder.
-3. Parse labeled text fields (`Title`, `Subtitle`, `Year`, `Credit`, `Alt`, `Tags`, `Surface`, `Medium`, `Description`).
-4. Merge sidecar metadata into the generated manifest while leaving asset fields (`id`, `image`, `webglImage`, `dimensions`) importer-owned.
-5. Extend the report with `Text applied`, `Pictures missing text`, and `Text files without matching pictures` sections.
+1. The inbox scan separates image files from sidecar files (`.txt`, `.md`).
+2. Sidecars match images by lowercase basename in the same folder. When both `.txt` and `.md` exist for the same stem, `.txt` wins and `.md` is reported under `Duplicate text files`.
+3. The parser reads labeled text fields case-insensitively (`Title`, `Subtitle`, `Year`, `Credit`, `Alt`, `Tags`, `Surface`, `Medium`) and treats everything after `Description:` as the multi-line description body, preserving blank lines between paragraphs.
+4. Sidecar metadata merges into the generated manifest via `??` fallback; asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned.
+5. The plain-language report gains `Text applied`, `Pictures missing text`, `Text files without matching pictures`, `Text fields needing attention`, and `Duplicate text files` sections.
 
-Maintenance rules once shipped:
+Maintenance rules:
 
 - Treat image and sidecar as a pair during rename/delete/move.
 - Never edit `artworks.json` or `customer-artworks.js` to fix customer text; edit the sidecar and rerun the importer.
-- Do not fuzzy-match orphaned text files after renames.
-- Keep the current offline `file://` preview and `webglImage` reliability path unchanged.
+- The importer never fuzzy-matches orphaned text files after renames — an orphan stays an orphan until the customer renames it back.
+- The offline `file://` preview and `webglImage` reliability path remain unchanged.
 
-Current reality: the importer still ignores sidecars today, so this section remains planning guidance until the dedicated v0.18 implementation pass lands.
-
-See `plan.md § v0.18` and `FINDINGS.md § 2026-05-20` for the final audited technical plan.
+See `plan.md § v0.18` and `FINDINGS.md § 2026-05-20` for the final audited technical plan and acceptance checks.
 
 ## Quick overview
 

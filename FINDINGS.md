@@ -1,12 +1,22 @@
 # FINDINGS
 
-## 2026-05-20 — Final audit of the planned customer sidecar-text workflow
+## 2026-05-20 — v0.18 sidecar text shipped (implementation note)
+
+The audit below remains the authoritative research log. As of
+2026-05-20 the v0.18 sidecar-text workflow it recommended has been
+**implemented** in `scripts/import-artworks.mjs`. Every customer-facing
+v0.18 Markdown banner has been updated from "planned/not yet shipped"
+to "shipped". See `plan.md § v0.18 — Customer sidecar text shipped`
+and `CHANGELOG.md` for the implementation summary and validation
+results.
+
+## 2026-05-20 — Final audit of the customer sidecar-text workflow (research log)
 
 ### Audit outcome
 
 Option C remains the correct v0.18 direction: **one customer-editable sidecar text file beside each artwork image**, matched by basename.
 
-Important status correction: this workflow is still **planned, not implemented**. The current importer does not yet read sidecars. During this final audit, all Markdown docs were cleaned so they no longer imply the feature has already shipped.
+The audit recommendation was implemented in the same 2026-05-20 work session; the rest of this section is preserved as the research log that backed the implementation.
 
 ### Full-codebase audit summary
 
@@ -45,10 +55,10 @@ Validated boundaries:
 
 The final audit corrected a documentation drift problem: several docs had started to read as though the sidecar workflow already existed. The cleanup now makes these points explicit everywhere:
 
-- the v0.18 sidecar workflow is finalized but **not shipped yet**;
-- the current importer still generates fallback text;
-- `docs/CUSTOMER_TEXT_GUIDE.md` and `ARTWORK_TEXT_TEMPLATE.txt` are draft assets for the upcoming implementation;
-- the current authoritative shipped customer workflow remains the picture-only importer.
+- the v0.18 sidecar workflow was finalized in this audit and **then implemented** in the same work session;
+- the current importer reads sidecar text and only falls back to generated text when no sidecar exists;
+- `docs/CUSTOMER_TEXT_GUIDE.md` and `ARTWORK_TEXT_TEMPLATE.txt` are the shipped customer assets for the workflow;
+- the picture-only importer remains supported for customers who choose not to provide sidecar text.
 
 ### Online validation findings
 

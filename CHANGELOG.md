@@ -1,8 +1,65 @@
 # CHANGELOG
 
+## v0.18 — Customer painting text sidecars (2026-05-20, implemented)
+
+Implementation pass. The importer (`scripts/import-artworks.mjs`) now
+reads same-basename `.txt` sidecar files (with `.md` as a secondary
+alias) and merges customer-edited metadata into the generated manifest.
+Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain
+importer-owned. No new dependencies; no `src/` runtime changes.
+
+### Added
+
+- `scripts/import-artworks.mjs`:
+  - Sidecar constants `SIDECAR_EXTENSIONS`, `PRIMARY_SIDECAR_EXT`,
+    `ALLOWED_SURFACE_PROFILES`, `SIDECAR_FIELD_KEYS` lifted to the
+    format-policy block.
+  - Inbox scan separated into `imageEntries` and a deterministic
+    `sidecarMap` (`.txt` preferred over `.md`); duplicates collected
+    into `duplicateSidecarWarnings`.
+  - Pure `parseSidecar(filePath)` helper: BOM-safe UTF-8 read,
+    `CRLF`/`CR` normalization, case-insensitive `Label: value` parsing,
+    multi-line `Description:` body with preserved internal blank lines,
+    validated `Year` (four digits) and `Surface` (allow-listed),
+    tags split on `,`/`;`, and field-level warnings (unknown keys,
+    blank `Title`/`Alt`/`Description`).
+  - Sidecar fields merged into the artwork object using `??` semantics
+    so omitted falls back cleanly while blank still warns.
+  - Orphaned sidecars (text without matching picture) computed from
+    `imageStems` after the image loop.
+- `customer-artworks/last-import-report.txt` gains plain-language
+  sections: `Text applied`, `Pictures missing text`,
+  `Text files without matching pictures`, `Text fields needing attention`,
+  `Duplicate text files`. Missing/invalid text never fails the run.
+
+### Documentation
+
+- `docs/CUSTOMER_TEXT_GUIDE.md` rewritten as the shipped step-by-step
+  "how to import text" walkthrough (template copy → rename → fill →
+  save → run Update Gallery → read report).
+- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` updated to reflect
+  shipped behaviour and softer "recommended" wording (vs. "required",
+  since missing text is non-fatal).
+- All v0.18-referenced Markdown updated from "planned/not yet shipped"
+  to "implemented" (`README.md`, `docs/HANDOFF.md`,
+  `docs/IMAGE_MAINTENANCE_GUIDE.md`,
+  `docs/CUSTOMER_PICTURE_GUIDE.md`, `DOCUMENTATION_RULES.md`,
+  `ARCHITECTURE_MAP.md`, `AI_RULES.md`, `LESSONS_LEARNED.md`,
+  `FINDINGS.md`, `plan.md`).
+
+### Validation
+
+- `npm install`, `npm run lint`, `npm run build` ✅
+- `node -c scripts/import-artworks.mjs` ✅
+- Manual importer pass over a fixture inbox (matched, missing, orphan,
+  duplicate `.txt`/`.md`, invalid `Year`, invalid `Surface`, blank `Alt`,
+  multi-line description) verified the expected report sections.
+
 ## v0.18 — Final audited sidecar-text plan (2026-05-20)
 
-Planning/docs only. The sidecar-text workflow is fully audited in `plan.md § v0.18` and `FINDINGS.md § 2026-05-20`, but it is not shipped in the current runtime yet. Planned implementation remains confined to `scripts/import-artworks.mjs` (Node 18+ ESM, zero new dependencies).
+Planning/docs only. The sidecar-text workflow was fully audited in
+`plan.md § v0.18` and `FINDINGS.md § 2026-05-20` ahead of the
+implementation pass above.
 
 ## Unreleased
 

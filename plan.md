@@ -1,10 +1,85 @@
 # FREYRAUM Plan
 
-## v0.18 — Final audited plan: customer sidecar text files for each painting (2026-05-20)
+## v0.18 — Customer sidecar text shipped (2026-05-20)
 
 ### Status
 
-Documentation/audit only. The sidecar workflow is now fully validated as the preferred v0.18 direction, but it is **not implemented in the current runtime yet**. Today `scripts/import-artworks.mjs` still ignores `.txt`/`.md` sidecars and still generates fallback metadata (`Imported artwork`, generated title, current year, `Customer`, etc.). All v0.18 customer-facing docs are therefore draft guidance until the dedicated implementation pass lands.
+**Implemented in `scripts/import-artworks.mjs`.** Customer-editable
+same-basename `.txt` sidecar files are now read at import time and
+merged into the generated manifest. `.md` is accepted as a secondary
+alias; when both exist for the same image stem, `.txt` wins and the
+duplicate is warned. Missing/invalid sidecars never fail the run.
+
+### Implementation summary
+
+The implementation followed the audited slices exactly:
+
+1. **Slice 1 — separate images from sidecars.** Added
+   `SIDECAR_EXTENSIONS`, `PRIMARY_SIDECAR_EXT`,
+   `ALLOWED_SURFACE_PROFILES`, and `SIDECAR_FIELD_KEYS` to the
+   format-policy block. The inbox scan now produces a deterministic
+   `imageEntries` array plus a `sidecarMap` (lowercase stem → chosen
+   sidecar). Duplicates collect into `duplicateSidecarWarnings`.
+2. **Slice 2 — `parseSidecar()`.** Pure helper above `// -------- Main --------`:
+   BOM-safe UTF-8 read, `CRLF`/`CR` → `\n` normalization,
+   case-insensitive `Label: value` parsing, multi-line `Description:`
+   body (internal blank lines preserved, trailing blank lines trimmed),
+   validated `Year` (four digits) and `Surface` (allow-list of
+   `matte-canvas`, `satin-canvas`, `varnished-oil`, `paper`), tags split
+   on `,`/`;`, unknown-key warnings, and blank `Title`/`Alt`/`Description`
+   warnings. Field-level mistakes never throw.
+3. **Slice 3 — merge into the artwork object.** After
+   `const stem = basename(filename, ext);` the importer looks up the
+   sidecar by lowercased stem, merges customer-facing fields with
+   `sidecarFields?.X ?? generatedDefault` semantics, and records
+   `textApplied`, `picturesMissingText`, `textFieldWarnings`,
+   `matchedSidecarStems`. Asset fields stay importer-owned.
+4. **Slice 4 — extended report.** New sections in
+   `customer-artworks/last-import-report.txt`: `Text applied`,
+   `Pictures missing text`, `Text files without matching pictures`,
+   `Text fields needing attention`, `Duplicate text files`. All warning
+   level; the run still succeeds.
+5. **Slice 5 — docs/template/lessons.** `docs/CUSTOMER_TEXT_GUIDE.md`
+   rewritten as the shipped "how to import text" walkthrough,
+   `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` aligned with the final
+   parser contract, and every "planned/not yet shipped" v0.18 banner
+   replaced across `README.md`, `CHANGELOG.md`, `docs/HANDOFF.md`,
+   `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`,
+   `DOCUMENTATION_RULES.md`, `ARCHITECTURE_MAP.md`, `AI_RULES.md`,
+   `LESSONS_LEARNED.md`, and `FINDINGS.md`.
+
+### Cleanup applied
+
+- Inbox scan is a single source of truth (`inboxEntries` →
+  `imageEntries` + `sidecarMap`), not repeated directory rescans.
+- Sidecar constants and validation sets live next to the existing
+  format-policy block.
+- `parseSidecar()` is a pure helper; the main loop only handles I/O,
+  merge, and reporting.
+- Customer docs no longer imply sidecar text is "planned" anywhere in
+  the repository.
+- Report stays plain-language; no JSON-only diagnostics introduced.
+
+### Validation results
+
+- `npm install`, `npm run lint`, `npm run build` — pass.
+- `node -c scripts/import-artworks.mjs` — pass.
+- Manual fixture run covering:
+  - matched `.txt` sidecar (title/description/alt applied to both
+    `customer-artworks/artworks.json` and
+    `customer-preview/customer-artworks.js`),
+  - picture without sidecar (imported with fallback, listed under
+    `Pictures missing text`),
+  - orphan `.txt` (listed under `Text files without matching pictures`),
+  - duplicate `.txt`/`.md` (`.txt` wins, `.md` listed under
+    `Duplicate text files`),
+  - invalid `Year` (`22` rejected, warning written),
+  - invalid `Surface` (`shiny-velvet` rejected, fallback to
+    `matte-canvas`),
+  - blank `Alt` (warning written),
+  - multi-line `Description:` with preserved blank lines.
+
+### Final audited plan (history)
 
 ### Codebase audit summary
 
@@ -197,7 +272,13 @@ Then run one manual importer check with sample files and confirm:
 
 ### Customer-doc status
 
-`docs/CUSTOMER_TEXT_GUIDE.md` and `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` now remain in the repository as **draft assets for the planned v0.18 workflow**. The current authoritative shipped workflow is still the picture-only importer documented in `docs/CUSTOMER_PICTURE_GUIDE.md`.
+### Customer-doc status
+
+`docs/CUSTOMER_TEXT_GUIDE.md` and
+`customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` are the **shipped** customer
+assets for the v0.18 sidecar workflow. The picture-only flow documented
+in `docs/CUSTOMER_PICTURE_GUIDE.md` remains supported for customers who
+choose not to provide sidecar text.
 
 ## v0.17 — Easy wins: accessibility, dead-code cleanup (2026-05-20)
 

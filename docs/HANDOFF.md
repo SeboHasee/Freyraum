@@ -1,15 +1,21 @@
 # FREYRAUM customer handoff guide
 
-## v0.18 sidecar text — final audited plan (not implemented yet, 2026-05-20)
+## v0.18 sidecar text — implemented (2026-05-20)
 
-The sidecar-text workflow is the confirmed v0.18 direction, but it is **still planning/docs only** in the current repository state.
+The sidecar-text workflow is **live in v0.18**. The importer reads
+same-basename `.txt` files beside each painting and merges customer text
+into the gallery info panel.
 
-- Final plan: `plan.md § v0.18`
+- Customer guide (how to import text): `docs/CUSTOMER_TEXT_GUIDE.md`
+- Copy-paste template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
+- Final plan + acceptance: `plan.md § v0.18`
 - Research log: `FINDINGS.md § 2026-05-20`
-- Customer guide draft: `docs/CUSTOMER_TEXT_GUIDE.md`
-- Copy-paste template draft: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
 
-Planned implementation remains confined to `scripts/import-artworks.mjs` (zero new dependencies). TypeScript runtime code (`src/`) does not need first-slice changes, and the offline `file://` preview plus `webglImage` path stay unchanged.
+Implementation is confined to `scripts/import-artworks.mjs` (zero new
+dependencies). TypeScript runtime code (`src/`) did not need changes,
+and the offline `file://` preview plus `webglImage` path remain
+unchanged. Missing or invalid sidecars never fail the import; they are
+surfaced through the existing plain-language report.
 
 This document supports presenting FREYRAUM to customers and onboarding new
 contributors. **Current runtime status: v0.17 easy-wins pass implemented (on top of v0.16, v0.15, and v0.14).**
