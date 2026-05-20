@@ -1,5 +1,11 @@
 # FREYRAUM — How to import painting text (v0.18 — shipped)
 
+## v0.19 planning note (calm background music)
+
+A separate v0.19 plan exists for customer-managed background audio and website mute/volume controls.
+
+Current status: **planned/not yet shipped**. This guide remains focused on shipped text-sidecar workflow only.
+
 > Status: **implemented and shipped in v0.18 (2026-05-20)**. The importer
 > (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecar files
 > beside every painting and uses your text in the gallery info panel.
