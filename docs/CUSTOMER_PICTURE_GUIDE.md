@@ -1,5 +1,13 @@
 # FREYRAUM — Customer Picture Guide
 
+## v0.19 calm background music note (planned, not yet shipped)
+
+A future update is planned to support calm background music from customer-provided audio files.
+
+Current status: **not implemented yet**. Today, `Update Gallery` manages pictures/text only; no music playback controls are currently shipped in the website.
+
+Track progress in `plan.md § v0.19`.
+
 Welcome! This guide explains how to put your pictures into the FREYRAUM gallery.
 
 You do **not** need to use a code editor, the terminal, or any technical tool.

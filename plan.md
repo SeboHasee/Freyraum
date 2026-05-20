@@ -1,5 +1,52 @@
 # FREYRAUM Plan
 
+## v0.19 — Background music workflow (planned, not yet shipped — 2026-05-20)
+
+### Requested outcome
+
+Add calm background music to the website using customer-provided audio files, with clean in-UI mute/volume controls and compatibility with the existing `Update Gallery` launch workflow.
+
+### Current runtime boundary
+
+Background music is **not implemented yet**. The current app has no shipped customer audio-import folder, no playback engine, and no visible mute/volume controls.
+
+### Scope
+
+1. Define a customer-facing `customer-audio/` workflow that supports calm background tracks in multiple formats (`.mp3`, `.ogg`, `.wav`, `.m4a`, with deterministic preference order).
+2. Extend importer tooling in `scripts/` so `Update Gallery.command` and `Update Gallery.bat` also validate and stage audio files into the preview/runtime payload.
+3. Add a runtime `BackgroundAudioManager` (or equivalent) that:
+   - starts in a safe default state,
+   - supports mute/unmute and volume slider,
+   - persists user preference in local storage with existing preference schema conventions,
+   - handles autoplay restrictions with explicit user-trigger fallback.
+4. Add an accessible and visually clean UI control surface aligned with existing glass-control style and keyboard/screen-reader expectations.
+5. Keep diagnostics/logging detailed for load failures, unsupported formats, autoplay blocks, mute/volume changes, and lifecycle pause/resume events.
+6. Update customer docs so the audio workflow is explicit, non-technical, and clearly distinguishes planned vs shipped behavior.
+
+### Out of scope
+
+- No streaming integration.
+- No multi-track DJ/timeline editor.
+- No replacement of current image/text importer behavior.
+- No breaking changes to the one-click customer launch flow.
+
+### Vertical implementation slices
+
+1. **Audio asset contract**: finalize folder name, supported extensions, and deterministic file-pick strategy.
+2. **Importer/launcher integration**: include audio scan/validation in existing update scripts and report output.
+3. **Runtime playback layer**: add load/play/pause/lifecycle handling and robust failure paths.
+4. **UI + accessibility**: add mute + volume controls with clear states and ARIA labels.
+5. **Diagnostics + QA**: verify browser compatibility, autoplay fallback, and customer-facing report clarity.
+6. **Docs promotion pass**: after implementation, flip all v0.19 audio wording from planned to shipped in all markdown files.
+
+### Acceptance checks
+
+- Customer can drop audio files into the documented folder and run `Update Gallery` on macOS/Windows without CLI usage.
+- Website plays calm background music when a compatible file exists.
+- Mute and volume controls are discoverable, keyboard-accessible, and screen-reader friendly.
+- Missing/invalid audio files do not break gallery rendering; they produce plain-language warnings.
+- `npm run lint` and `npm run build` pass after implementation.
+
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
 ### Status

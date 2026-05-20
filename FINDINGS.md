@@ -1,5 +1,26 @@
 # FINDINGS
 
+## 2026-05-20 — v0.19 calm background music planning (not yet shipped)
+
+### Request captured
+
+Plan a customer-friendly audio workflow: place audio files in a folder, run the existing update flow, then play calm background music in the website with clean mute and volume controls.
+
+### Current-state finding
+
+The current repository ships image/text importer workflows but no equivalent shipped audio-import + playback path. Therefore this pass is documentation planning only.
+
+### Planned technical boundary
+
+- Keep customer workflow one-click (`Update Gallery`).
+- Keep failures warning-first; do not block gallery usage when audio is missing/invalid.
+- Add deterministic format compatibility handling and fallback order.
+- Add accessible control UI and preference persistence with diagnostics coverage.
+
+### Next implementation entry point
+
+Start from `plan.md § v0.19` and ship in vertical slices (asset contract → importer integration → runtime audio manager → UI/accessibility → diagnostics + docs promotion).
+
 ## 2026-05-20 — v0.18 sidecar text shipped (implementation note)
 
 The audit below remains the authoritative research log. As of

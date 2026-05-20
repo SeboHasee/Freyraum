@@ -1,5 +1,14 @@
 # Freyraum
 
+## v0.19 — Calm background music workflow (planned, not yet shipped — 2026-05-20)
+
+This repository now has a documented plan to add customer-managed background audio with format compatibility, mute/volume controls, and `Update Gallery` integration.
+
+Current runtime status: **not implemented yet**. The website currently ships without background music playback controls.
+
+Plan source: `plan.md § v0.19`
+Research/notes: `FINDINGS.md § 2026-05-20 (v0.19 planning)`
+
 ## v0.18 — Customer painting text sidecars (shipped, 2026-05-20)
 
 The v0.18 sidecar-text workflow is implemented and live in

@@ -63,6 +63,13 @@ implementation pass above.
 
 ## Unreleased
 
+### Documentation (v0.19 calm background music plan — 2026-05-20)
+
+- Added a new not-yet-shipped planning section in `plan.md` for customer-managed background music.
+- Defined the target workflow: audio folder ingestion with format compatibility, `Update Gallery` launcher integration, and website mute/volume controls.
+- Updated repository/customer markdown to clearly mark v0.19 audio work as planned while stating current runtime behavior (no shipped background music yet).
+- Validation for this documentation pass: `npm run lint` and `npm run build` pass.
+
 ### Documentation (v0.18 final audited plan — 2026-05-20)
 
 - Completed a full codebase audit focused on the planned sidecar-text importer change.

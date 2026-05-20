@@ -1,5 +1,9 @@
 # DOCUMENTATION RULES
 
+## v0.19 — Calm background music plan (2026-05-20, planned)
+
+Current status: planned/not-yet-shipped. `plan.md § v0.19` defines a customer audio-folder workflow with format compatibility, `Update Gallery` integration, and accessible mute/volume controls. Runtime currently has no shipped background audio playback.
+
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
 Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
@@ -57,6 +61,8 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - performance planning must explicitly state measurement strategy, fidelity-preservation boundaries, compatibility/fallback behavior, and resource ownership/disposal assumptions
 
 ## Latest documentation pass
+
+- 2026-05-20 (documentation): v0.19 calm background-music planning documented. Added `plan.md § v0.19` with customer audio-folder ingestion scope, `Update Gallery` integration boundary, mute/volume UI/accessibility expectations, and warning-first failure behavior. Updated markdown banners to keep the work clearly labeled as planned/not-yet-shipped and to state current runtime behavior (no shipped background music playback yet).
 
 - 2026-05-20 (implemented): v0.18 customer sidecar text shipped. `scripts/import-artworks.mjs` now reads same-basename `.txt` sidecars (`.md` accepted as backup, `.txt` wins on duplicates) and merges customer-facing fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. `customer-artworks/last-import-report.txt` gained `Text applied`, `Pictures missing text`, `Text files without matching pictures`, `Text fields needing attention`, and `Duplicate text files` sections. `docs/CUSTOMER_TEXT_GUIDE.md` rewritten as the shipped how-to-import-text walkthrough. `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` aligned with the shipped parser contract. All v0.18 banners across `README.md`, `CHANGELOG.md`, `plan.md`, `FINDINGS.md`, `docs/HANDOFF.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `DOCUMENTATION_RULES.md`, `ARCHITECTURE_MAP.md`, `AI_RULES.md`, and `LESSONS_LEARNED.md` updated from "planned" to "shipped". Validated `npm run lint`, `npm run build`, and a fixture importer run covering matched/missing/orphan/duplicate sidecars plus invalid `Year`/`Surface`/blank `Alt`/multi-line `Description`.
 

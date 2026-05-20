@@ -1,5 +1,9 @@
 # FREYRAUM lessons learned
 
+## v0.19 planning note — keep planned customer audio clearly labeled (2026-05-20)
+
+Lesson carried forward from this pass: planned customer-facing audio workflows must be clearly marked as planned in every relevant markdown file until implementation is actually shipped.
+
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
 Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.

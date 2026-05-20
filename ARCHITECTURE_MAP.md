@@ -1,5 +1,11 @@
 # FREYRAUM architecture map
 
+## v0.19 — Calm background music workflow planned (2026-05-20)
+
+Planned architecture addition: importer + runtime audio boundary for calm background music, with format compatibility and accessible mute/volume controls.
+
+Current runtime: **not shipped yet** (no background audio pipeline active). Canonical plan: `plan.md § v0.19`.
+
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
 Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.

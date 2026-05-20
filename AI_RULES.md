@@ -1,5 +1,9 @@
 # FREYRAUM AI rules
 
+## v0.19 — Calm background music planning boundary (2026-05-20, planned)
+
+When implementing the planned audio workflow, keep docs explicit about planned vs shipped state until runtime code lands, preserve one-click customer launchers, and keep warning-first failure handling for missing/invalid audio assets.
+
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
 Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.

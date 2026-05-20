@@ -1,5 +1,13 @@
 # FREYRAUM customer handoff guide
 
+## v0.19 background music workflow — planned (not yet shipped, 2026-05-20)
+
+A new background-audio workflow is planned: customers will place compatible audio files in a documented folder and use the existing `Update Gallery` flow.
+
+Current status: **not shipped yet**. The website currently has no background music controls.
+
+Canonical plan: `plan.md § v0.19`
+
 ## v0.18 sidecar text — implemented (2026-05-20)
 
 The sidecar-text workflow is **live in v0.18**. The importer reads

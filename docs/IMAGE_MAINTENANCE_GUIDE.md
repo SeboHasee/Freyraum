@@ -1,5 +1,13 @@
 # FREYRAUM — Image Maintenance Guide
 
+## v0.19 calm background music maintenance note (planned, not yet shipped)
+
+Planned next scope includes customer-managed audio assets and background playback controls.
+
+Current status: **not implemented yet**. Existing maintenance workflow remains image/text focused; no shipped audio import/playback pipeline exists yet.
+
+See `plan.md § v0.19`.
+
 This guide explains how the image system works after the v0.07 importer update.
 
 It is meant for the person who maintains the project folder, supports the customer,
