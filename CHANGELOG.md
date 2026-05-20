@@ -63,12 +63,13 @@ implementation pass above.
 
 ## Unreleased
 
-### Documentation (v0.19 calm background music plan — 2026-05-20)
+### Documentation (v0.19 deep audio technical audit refresh — 2026-05-20)
 
-- Added a new not-yet-shipped planning section in `plan.md` for customer-managed background music.
-- Defined the target workflow: audio folder ingestion with format compatibility, `Update Gallery` launcher integration, and website mute/volume controls.
-- Updated repository/customer markdown to clearly mark v0.19 audio work as planned while stating current runtime behavior (no shipped background music yet).
-- Validation for this documentation pass: `npm run lint` and `npm run build` pass.
+- Re-audited the v0.19 audio scope against current runtime/importer architecture (`src/main.ts`, `src/utils/preferences.ts`, `src/ui/PreferencesPanel.ts`, `scripts/import-artworks.mjs`, `scripts/write-local-preview.mjs`, update launchers).
+- Upgraded `plan.md § v0.19` into a deep technical coding plan with module boundaries, vertical slices, risk matrix, acceptance matrix, and implementation guardrails.
+- Added explicit non-negotiable loop requirement: background audio must repeat indefinitely (`loop=true` plus guarded `ended` recovery path).
+- Documented autoplay-policy and codec-selection research references (`play()`, autoplay guide, `loop`, `canPlayType`) in `FINDINGS.md`.
+- Validation for this documentation pass: `npm run lint` and `npm run build` pass after `npm install`.
 
 ### Documentation (v0.18 final audited plan — 2026-05-20)
 

@@ -1,51 +1,212 @@
 # FREYRAUM Plan
 
-## v0.19 — Background music workflow (planned, not yet shipped — 2026-05-20)
+## v0.19 — Background music workflow deep technical plan (planned, not yet shipped — 2026-05-20 audit refresh)
 
-### Requested outcome
+### Status
 
-Add calm background music to the website using customer-provided audio files, with clean in-UI mute/volume controls and compatibility with the existing `Update Gallery` launch workflow.
+Planning/audit only. No runtime audio code is shipped yet.
 
-### Current runtime boundary
+### Requested outcome (audited)
 
-Background music is **not implemented yet**. The current app has no shipped customer audio-import folder, no playback engine, and no visible mute/volume controls.
+Implement customer-managed calm background music that integrates with the existing one-click `Update Gallery` workflow, supports compatible audio formats, exposes clear mute + volume controls, and loops continuously until the user pauses/mutes or leaves the experience.
 
-### Scope
+### Current architecture audit (code-level)
 
-1. Define a customer-facing `customer-audio/` workflow that supports calm background tracks in multiple formats (`.mp3`, `.ogg`, `.wav`, `.m4a`, with deterministic preference order).
-2. Extend importer tooling in `scripts/` so `Update Gallery.command` and `Update Gallery.bat` also validate and stage audio files into the preview/runtime payload.
-3. Add a runtime `BackgroundAudioManager` (or equivalent) that:
-   - starts in a safe default state,
-   - supports mute/unmute and volume slider,
-   - persists user preference in local storage with existing preference schema conventions,
-   - handles autoplay restrictions with explicit user-trigger fallback.
-4. Add an accessible and visually clean UI control surface aligned with existing glass-control style and keyboard/screen-reader expectations.
-5. Keep diagnostics/logging detailed for load failures, unsupported formats, autoplay blocks, mute/volume changes, and lifecycle pause/resume events.
-6. Update customer docs so the audio workflow is explicit, non-technical, and clearly distinguishes planned vs shipped behavior.
+Validated current boundaries against runtime + importer code:
 
-### Out of scope
+1. `src/main.ts` is the orchestration layer and the correct integration point for an `AudioManager` lifecycle (boot, page visibility/freeze/resume, diagnostics, dispose).
+2. Runtime customer content is already injected through generated globals (`window.__FREYRAUM_ARTWORKS`) and sanitized before use; this is the clean precedent for adding a second injected audio payload.
+3. Preferences persistence exists in `src/utils/preferences.ts` (`freyraum.preferences.v1`) and can be extended for audio fields (`audioMuted`, `audioVolume`) without introducing a new storage system.
+4. Accessibility-safe control patterns already exist in `PreferencesPanel` (`aria-modal`, `aria-labelledby`, focus-return on dismiss) and can host audio controls with the same semantics.
+5. Update workflow is centralized in `scripts/import-artworks.mjs` + `scripts/run-import-artworks.cjs` + `Update Gallery.command/.bat`; this is the correct boundary for audio folder scan/validation/reporting.
+6. Runtime diagnostics are centralized (`Diagnostics.ts`) with scoped events and dedupe, so audio events should use the same signal path (no ad-hoc console logs).
 
-- No streaming integration.
-- No multi-track DJ/timeline editor.
-- No replacement of current image/text importer behavior.
-- No breaking changes to the one-click customer launch flow.
+### Non-negotiable behavior for v0.19
 
-### Vertical implementation slices
+1. **Indefinite loop:** background track must repeat continuously.
+   - Primary mechanism: `HTMLAudioElement.loop = true`.
+   - Guardrail: if browser/device edge-cases emit `ended` unexpectedly, restart from `currentTime = 0` and re-attempt `play()` through the managed recovery path.
+2. **User control supremacy:** mute and volume changes must apply immediately and persist.
+3. **Warning-first failures:** missing/invalid/unsupported audio must never block image gallery runtime.
+4. **One-click customer flow:** customer still runs only `Update Gallery` and then opens preview.
 
-1. **Audio asset contract**: finalize folder name, supported extensions, and deterministic file-pick strategy.
-2. **Importer/launcher integration**: include audio scan/validation in existing update scripts and report output.
-3. **Runtime playback layer**: add load/play/pause/lifecycle handling and robust failure paths.
-4. **UI + accessibility**: add mute + volume controls with clear states and ARIA labels.
-5. **Diagnostics + QA**: verify browser compatibility, autoplay fallback, and customer-facing report clarity.
-6. **Docs promotion pass**: after implementation, flip all v0.19 audio wording from planned to shipped in all markdown files.
+### Goals and non-goals
 
-### Acceptance checks
+**Goals**
 
-- Customer can drop audio files into the documented folder and run `Update Gallery` on macOS/Windows without CLI usage.
-- Website plays calm background music when a compatible file exists.
-- Mute and volume controls are discoverable, keyboard-accessible, and screen-reader friendly.
-- Missing/invalid audio files do not break gallery rendering; they produce plain-language warnings.
-- `npm run lint` and `npm run build` pass after implementation.
+- Add deterministic customer audio ingestion with multi-format compatibility.
+- Add robust runtime playback with autoplay-safe fallback.
+- Add accessible mute/volume UI aligned with existing design language.
+- Add detailed diagnostics and plain-language import reporting.
+
+**Non-goals (v0.19)**
+
+- Streaming services, playlists, cross-fades, beat-sync, timeline audio editor.
+- Multiple simultaneous ambient tracks/mixing graph.
+- New runtime dependency for audio playback.
+- Replacing existing artwork/text manifest contract.
+
+### Proposed file/module changes (implementation target)
+
+1. **Importer + preview payload**
+   - `scripts/import-artworks.mjs`
+   - `scripts/write-local-preview.mjs`
+   - potential generated output: `customer-preview/customer-audio.js`
+2. **Runtime audio domain**
+   - new `src/audio/BackgroundAudioManager.ts` (or `src/utils/BackgroundAudioManager.ts` if repository wants no new top-level domain folder)
+3. **Main orchestration integration**
+   - `src/main.ts`
+4. **Preferences state + UI**
+   - `src/utils/preferences.ts`
+   - `src/ui/PreferencesPanel.ts`
+   - `src/styles/main.scss`
+5. **Customer/update workflow docs**
+   - `docs/CUSTOMER_PICTURE_GUIDE.md`
+   - `docs/IMAGE_MAINTENANCE_GUIDE.md`
+   - `docs/HANDOFF.md`
+   - plus status banners in core markdown
+
+### Audio asset contract (planned)
+
+Recommended v0.19 contract:
+
+```text
+customer-audio/
+  inbox/
+    calm-track.mp3
+    calm-track.ogg
+    calm-track.m4a
+    calm-track.wav
+```
+
+Policy:
+
+1. Accept `.mp3`, `.ogg`, `.m4a`, `.wav` (lowercase-normalized extension handling).
+2. Select one canonical runtime track deterministically when multiple candidates exist.
+3. Preferred selection order for generated payload:
+   - runtime `canPlayType` first,
+   - importer fallback priority when runtime probing is unavailable in script context: `mp3 > ogg > m4a > wav` (documented and deterministic).
+4. Keep source-of-truth customer files untouched; copy resolved assets into preview output similarly to image pipeline.
+5. Import report must include sections for:
+   - audio selected,
+   - audio candidates ignored by precedence,
+   - unsupported audio files,
+   - no audio found.
+
+### Runtime playback contract (planned)
+
+`BackgroundAudioManager` responsibilities:
+
+1. Create and own one `HTMLAudioElement`.
+2. Set safe defaults (`preload = 'metadata'`, `loop = true`, configurable initial volume, muted false by default unless policy decides otherwise).
+3. Provide idempotent APIs:
+   - `load(sourceSpec)`
+   - `play(reason)`
+   - `pause(reason)`
+   - `setMuted(value, reason)`
+   - `setVolume(value, reason)`
+   - `dispose()`
+4. Handle `play()` promise rejection paths (`NotAllowedError`, `AbortError`, unknown errors) and surface state for UI fallback (“Tap to start audio”).
+5. Register media events (`canplay`, `playing`, `pause`, `ended`, `error`, `volumechange`) with scoped diagnostics.
+6. Integrate with lifecycle:
+   - on `pageInactive`: pause audio (policy default for power-friendliness),
+   - on resume: re-attempt play only if user had audio active before suspension.
+
+### UI + accessibility contract (planned)
+
+Controls must be clean, discoverable, and WCAG-friendly:
+
+1. Add controls to existing preferences surface first (lowest visual risk):
+   - Mute toggle (checkbox/switch with explicit label).
+   - Volume slider (`input[type='range']`, 0–100).
+2. Required semantics:
+   - label + description text,
+   - keyboard operable by default,
+   - focus-visible styling aligned with current global focus ring,
+   - `aria-valuemin/max/now` naturally provided by range input.
+3. Keep panel wording explicit when autoplay is blocked (“Click to enable background music”).
+4. Do not auto-start loud audio without user gesture in environments that block autoplay.
+
+### Detailed coding suggestions (for implementation PR)
+
+1. **Do not bind audio logic directly into `main.ts` anonymous closures.** Keep state transitions in a dedicated manager class and call it from main lifecycle hooks.
+2. **Mirror current diagnostics style exactly.** Use `createScopedDiagnostics('audio')` and stable event names (`audio-load-start`, `audio-play-blocked`, `audio-loop-restart`, `audio-volume-change`).
+3. **Extend existing preferences schema instead of creating new localStorage key.** Keep migration backward compatible by treating missing audio fields as defaults.
+4. **Keep importer deterministic and pure-helper driven.** Follow v0.18 sidecar pattern: parse/validate helpers above main section, warning aggregation in report writer.
+5. **Do not hard-fail on unsupported codecs.** Fall through to next candidate and report clearly.
+6. **Guard loop continuity against source/runtime edge cases.** `loop=true` is canonical, but keep an `ended` fallback that replays through the same guarded `play()` path.
+7. **Preserve one-click launcher UX.** `Update Gallery.command/.bat` should remain unchanged unless messaging/output needs extension; integration should happen in script internals.
+
+### Online research checkpoints (used for this audit)
+
+1. `HTMLMediaElement.loop` is the standards-based mechanism for continuous replay.
+2. `HTMLMediaElement.play()` returns a promise and can reject under autoplay policy; rejection handling is mandatory.
+3. Browser autoplay policies generally require user interaction for unmuted playback; UI fallback flow is required.
+4. `canPlayType()` is the browser-native way to pick compatible codecs when multiple sources are available.
+
+Sources referenced for implementation planning:
+
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/loop>
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play>
+- <https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Autoplay>
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/canPlayType>
+
+### Vertical implementation slices (deep)
+
+1. **Slice A — importer audio discovery + report model**
+   - extend `scripts/import-artworks.mjs` with audio-folder scan and deterministic selection
+   - emit preview payload for runtime consumption
+   - extend plain-language report with audio sections
+2. **Slice B — runtime audio payload ingestion**
+   - load generated audio payload in preview HTML output path
+   - add runtime sanitizer equivalent to `sanitizeInjectedArtworks`
+3. **Slice C — audio manager core**
+   - implement load/play/pause/mute/volume/loop/lifecycle APIs + diagnostics
+4. **Slice D — preferences integration**
+   - add persisted audio fields and subscription handling
+5. **Slice E — preferences UI + styling**
+   - add mute + volume controls with full keyboard/a11y behavior
+6. **Slice F — lifecycle + autoplay recovery**
+   - bind to existing suspend/resume hooks in `main.ts`
+   - add explicit user-gesture recovery path when autoplay is blocked
+7. **Slice G — docs + customer workflow promotion**
+   - document folder layout, supported formats, and troubleshooting
+
+### Risks and reserved boundaries
+
+1. **Autoplay inconsistency across browsers/devices:** treat as expected runtime state, not fatal error.
+2. **Codec mismatch:** always support fallback candidate selection and clear report output.
+3. **UI crowding on phone tiers:** keep first iteration inside preferences panel to avoid control overlap regressions.
+4. **State drift between UI and audio element:** enforce one source of truth via preferences + manager state sync.
+5. **Loop interruptions after decode/network errors:** add retry/backoff policy boundary for v0.20 if needed; v0.19 keeps one immediate recovery attempt + warning.
+
+### Acceptance checks (expanded)
+
+Functional:
+
+- Audio starts when policy allows and remains active through track end (continuous loop).
+- Mute toggle and volume slider update playback immediately and persist after reload.
+- Unsupported/invalid audio files do not break gallery load.
+
+Accessibility:
+
+- Controls are keyboard-operable and clearly labeled.
+- Focus order remains stable when opening/closing preferences.
+
+Lifecycle:
+
+- Hidden/frozen tab suspends audio according to policy and resumes predictably.
+- Diagnostics capture suspend/resume and autoplay-block events.
+
+Importer/report:
+
+- `Update Gallery` report includes deterministic audio decision details.
+
+Validation gates for implementation PR:
+
+- `npm run lint`
+- `npm run build`
+- script syntax checks for touched `scripts/*.mjs|*.cjs`
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

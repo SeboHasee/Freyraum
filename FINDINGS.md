@@ -1,25 +1,54 @@
 # FINDINGS
 
-## 2026-05-20 — v0.19 calm background music planning (not yet shipped)
+## 2026-05-20 — v0.19 background music deep audit refresh (not yet shipped)
 
-### Request captured
+### Audit target
 
-Plan a customer-friendly audio workflow: place audio files in a folder, run the existing update flow, then play calm background music in the website with clean mute and volume controls.
+Re-audit v0.19 planning against the real runtime/importer architecture and tighten the implementation plan so coding can start with minimal ambiguity.
 
-### Current-state finding
+### Current-state findings (verified in repository)
 
-The current repository ships image/text importer workflows but no equivalent shipped audio-import + playback path. Therefore this pass is documentation planning only.
+1. **No shipped audio pipeline exists yet.** Runtime has no audio manager or audio controls; current v0.19 remains planning-only.
+2. **Best runtime integration point is already clear.** `src/main.ts` owns lifecycle suspend/resume, preferences apply, diagnostics, and disposal — this is where audio orchestration should be wired.
+3. **Existing global-payload model is reusable.** Current preview workflow injects `window.__FREYRAUM_ARTWORKS`; an audio payload can follow the same pattern with explicit sanitization.
+4. **Importer/report architecture is warning-first and extensible.** `scripts/import-artworks.mjs` already supports deterministic extension filtering, report sectioning, and non-fatal warnings.
+5. **Preference persistence boundary exists.** `freyraum.preferences.v1` already stores user-controlled runtime settings and can absorb audio mute/volume fields.
+6. **Accessibility control baseline is strong.** `PreferencesPanel` already has stable modal semantics and focus-return paths, reducing risk when adding audio controls there.
 
-### Planned technical boundary
+### Key technical decision added in this refresh
 
-- Keep customer workflow one-click (`Update Gallery`).
-- Keep failures warning-first; do not block gallery usage when audio is missing/invalid.
-- Add deterministic format compatibility handling and fallback order.
-- Add accessible control UI and preference persistence with diagnostics coverage.
+The v0.19 plan now explicitly requires **indefinite loop behavior**:
 
-### Next implementation entry point
+- primary: `HTMLMediaElement.loop = true`
+- robustness fallback: handle `ended` by restarting playback through guarded `play()` path with diagnostics
 
-Start from `plan.md § v0.19` and ship in vertical slices (asset contract → importer integration → runtime audio manager → UI/accessibility → diagnostics + docs promotion).
+This resolves a previous ambiguity where looping was implied but not formalized as acceptance behavior.
+
+### Online research findings used in this pass
+
+1. `HTMLMediaElement.loop` is the canonical browser API for repeat playback.
+2. `HTMLMediaElement.play()` can reject promises under autoplay restrictions; explicit error handling and user-gesture fallback are required.
+3. Modern autoplay policies commonly block unmuted autoplay without prior user interaction.
+4. `canPlayType()` is the browser-native compatibility probe for selecting among codec/container alternatives.
+
+Sources used for planning references:
+
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/loop>
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play>
+- <https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Autoplay>
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/canPlayType>
+
+### Implementation guidance extracted from audit
+
+1. Keep one-click customer flow unchanged (`Update Gallery.command/.bat`); extend internals only.
+2. Prefer adding audio controls to `PreferencesPanel` first to minimize layout regression risk.
+3. Keep diagnostics first-class for every audio state transition and failure path.
+4. Keep all missing/invalid audio paths non-fatal; report clearly in plain language.
+
+### Output of this pass
+
+- `plan.md` v0.19 upgraded from high-level notes to a deeply technical coding plan with file-level slices, lifecycle design, autoplay/loop guarantees, risks, and acceptance matrix.
+- This pass remains documentation-only; no runtime/importer code was changed.
 
 ## 2026-05-20 — v0.18 sidecar text shipped (implementation note)
 
