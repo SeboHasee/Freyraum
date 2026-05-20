@@ -1,5 +1,5 @@
 # Architecture docs
-> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
 
 ## v0.20 full-check status
 

@@ -1,5 +1,53 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+
+## v0.20.2 — Audio calm-start + control UX + seamless looping (planning, 2026-05-20)
+
+### Status
+
+Planned (not yet shipped).
+
+### Requested outcomes
+
+1. Start website audio **on by default** (not muted), but with a calm effective loudness baseline.
+2. Use a new volume behavior target where startup loudness is low (requested: 15%) while the UI shows a balanced midpoint (requested: 50%) so users can move down/up symmetrically.
+3. Rework main-page mute/volume control placement to align with common website media-control usability guidance.
+4. Fix the settings-panel volume slider so dragging behaves as a truly continuous slider (not “press/click only” behavior).
+5. Add fade-in/fade-out handling to avoid audible clip/click artifacts when audio loops or toggles.
+
+### Code-audit findings to address
+
+1. Current persisted default is `audioMuted: false` and `audioVolume: 0.35` (`src/utils/preferences.ts`) — this does not match the new requested startup profile.
+2. Volume control is currently linear 0..100 in both main-page and settings UI (`src/ui/AudioControls.ts`, `src/ui/PreferencesPanel.ts`), with no user-facing remap for “50% shown = 15% effective loudness.”
+3. Settings slider re-renders through `renderPanel()` subscription on every preference write (`PreferencesPanel`), which can interrupt drag continuity.
+4. `BackgroundAudioManager` currently applies direct volume changes with no envelope/fade, and loop recovery (`ended` fallback) does immediate restart (`src/audio/BackgroundAudioManager.ts`), increasing pop/click risk on imperfect loop boundaries.
+5. Main-page audio controls are bottom-left (`src/styles/main.scss` `.audio-controls`), which should be re-validated against consistency/discoverability/touch-target guidance before adjusting layout.
+
+### Planning slices
+
+1. **Volume model update**
+   - Define a deterministic mapping between displayed slider percentage and effective media gain.
+   - Apply mapping consistently in startup defaults, preference persistence, and both UI sliders.
+2. **Main-page control placement refinement**
+   - Reposition controls using documented UI heuristics (discoverability, accidental-tap avoidance, timeline/other-control collision checks, safe-area behavior).
+3. **Continuous slider behavior fix**
+   - Remove drag interruptions by decoupling slider interaction from full panel re-render during active pointer/keyboard changes.
+4. **Fade envelope implementation plan**
+   - Introduce short fade-in/fade-out transitions for start/stop and loop edge handling.
+   - Keep autoplay/error diagnostics behavior intact.
+5. **Validation + documentation**
+   - Validate control behavior on pointer + keyboard.
+   - Validate no regression for autoplay-blocked flows and lifecycle suspend/resume.
+   - Update customer/developer docs with explicit “planned vs shipped” status.
+
+### Online research checkpoints
+
+- W3C ARIA Slider Pattern: <https://www.w3.org/WAI/ARIA/apg/patterns/slider/>
+- MDN slider role and range semantics: <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/slider_role>
+- WCAG input modalities / operable controls: <https://www.w3.org/WAI/WCAG21/quickref/#input-modalities>
+- Apple HIG touch-target baseline (44x44): <https://developer.apple.com/design/human-interface-guidelines/layout>
+- Material accessibility touch-target guidance: <https://m3.material.io/foundations/accessible-design/accessibility-basics>
+- MDN Web Audio advanced techniques (seamless loop context): <https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques>
 
 ## v0.20.1 — Full markdown audit and sync (docs-only, 2026-05-20)
 

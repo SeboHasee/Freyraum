@@ -1,5 +1,41 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+
+## 2026-05-20 — v0.20.2 audio UX follow-up planning audit (docs-only)
+
+### Problem-focused findings
+
+1. **Startup loudness mismatch vs requested behavior**
+   - Current defaults in `src/utils/preferences.ts` are `audioMuted: false` and `audioVolume: 0.35`.
+   - Requested behavior is lower effective startup loudness (15%) with a UI midpoint representation (50%), which requires a defined display↔effective volume mapping model.
+2. **Main-page control placement needs guideline-based pass**
+   - Current `.audio-controls` placement is bottom-left and symmetric with zoom controls.
+   - A dedicated placement pass is needed to verify discoverability, clutter avoidance, and touch ergonomics with existing timeline/nav/prefs controls.
+3. **Settings slider continuity issue is structurally reproducible**
+   - `PreferencesPanel` rebuilds panel markup via `renderPanel()` on preference updates.
+   - The volume slider writes preferences on `input`, which immediately triggers panel re-render and can break drag-continuity behavior.
+4. **Loop pop/click risk remains**
+   - `BackgroundAudioManager` uses direct volume assignment and immediate restart on `ended` fallback.
+   - No fade envelope exists for start/stop/loop edges, so clip/click artifacts can occur depending on source-loop boundaries.
+
+### Online research notes used for planning
+
+- ARIA slider keyboard behavior and semantics:
+  - <https://www.w3.org/WAI/ARIA/apg/patterns/slider/>
+  - <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/slider_role>
+- Operable input modality requirements:
+  - <https://www.w3.org/WAI/WCAG21/quickref/#input-modalities>
+- Touch target and control ergonomics references:
+  - <https://developer.apple.com/design/human-interface-guidelines/layout>
+  - <https://m3.material.io/foundations/accessible-design/accessibility-basics>
+- Seamless loop and fade context:
+  - <https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques>
+
+### Output of this pass
+
+- Added a new v0.20.2 planning section in `plan.md` for calm-start audio, volume remapping, control placement, slider continuity, and fade envelope work.
+- Updated top-level docs/changelog/handoff status to mark this as planning-only.
+- Refreshed markdown audit stamp across all repository `.md` files.
 
 ## 2026-05-20 — v0.20.1 full markdown audit (docs-only)
 

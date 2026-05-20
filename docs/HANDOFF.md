@@ -1,5 +1,18 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+
+## v0.20.2 audio UX follow-up — planned (not yet shipped, 2026-05-20)
+
+This pass is planning-only and prepares the next audio refinements:
+
+1. Audio should start enabled with a calmer effective default loudness.
+2. Volume UX should support a balanced display mapping (requested midpoint display at 50% while effective loudness baseline stays low).
+3. Main-page mute/volume control placement will be reworked using current website usability guidance.
+4. Settings-panel slider behavior will be fixed to stay continuous during drag.
+5. Fade-in/fade-out transitions will be added to reduce loop click artifacts.
+
+Implementation reference: `plan.md § v0.20.2`  
+Research + technical findings: `FINDINGS.md § 2026-05-20 (v0.20.2 planning audit)`
 
 ## v0.20 audio + sidecar fixes — implemented (2026-05-20)
 

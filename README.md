@@ -1,5 +1,20 @@
 # Freyraum
-> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+
+## v0.20.2 — Audio UX follow-up planning pass (2026-05-20, planning only)
+
+Current status: **planned, not yet shipped**.
+
+This pass documents the next audio-focused fixes requested for implementation:
+
+1. Start with audio on, but with a calmer effective default loudness.
+2. Add a balanced volume mapping where UI 50% represents a lower effective loudness baseline.
+3. Reposition main-page mute/volume controls using current web usability guidance.
+4. Fix the settings volume slider so it behaves continuously while dragging.
+5. Add fade-in/fade-out handling to reduce loop/toggle click artifacts.
+
+Canonical plan: `plan.md § v0.20.2`  
+Research and code-audit notes: `FINDINGS.md § 2026-05-20 (v0.20.2 planning audit)`
 
 ## v0.20 — Audio playback fix + main-page controls + sidecar cache-bust (2026-05-20)
 

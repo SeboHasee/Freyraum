@@ -1,5 +1,21 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
+
+## v0.20.2 — Audio UX follow-up plan (2026-05-20, docs-only planning pass)
+
+### Planned
+
+- Define a new startup-volume behavior: audio enabled by default with calm effective loudness and a display mapping where UI `50%` corresponds to the requested lower baseline.
+- Rework main-page mute/volume control placement according to discoverability, accessibility, and touch-target guidance.
+- Fix settings-panel volume slider continuity so dragging remains continuous and does not degrade to click-step behavior.
+- Add fade-in/fade-out handling to reduce clip/click artifacts at loop/toggle boundaries.
+
+### Documentation
+
+- Added v0.20.2 planning detail to `plan.md`.
+- Logged supporting code-audit and online UX findings in `FINDINGS.md`.
+- Updated top-level status notes in `README.md` and `docs/HANDOFF.md`.
+- Refreshed markdown audit stamp across all repository `.md` files.
 
 ## v0.20.1 — Full markdown audit and sync (2026-05-20, docs-only)
 

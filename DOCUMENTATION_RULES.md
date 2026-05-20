@@ -1,5 +1,5 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-20 (v0.20.1 docs sync + verification).
+> Last full markdown audit: 2026-05-20 (v0.20.2 audio UX planning sync).
 
 ## v0.20 — Full documentation check-up (2026-05-20, audit complete)
 
@@ -62,6 +62,8 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - performance planning must explicitly state measurement strategy, fidelity-preservation boundaries, compatibility/fallback behavior, and resource ownership/disposal assumptions
 
 ## Latest documentation pass
+
+- 2026-05-20 (documentation): v0.20.2 audio UX follow-up planning sync completed. Added a dedicated planning section for calm-start audio defaults, UI-vs-effective volume mapping, control-placement refinement, settings-slider continuity, and fade envelope handling. Logged code-audit and online research findings in `FINDINGS.md`. Updated top-level status notes and refreshed markdown audit stamp across all `.md` files. No runtime code changed.
 
 - 2026-05-20 (documentation): v0.20.1 full markdown audit completed. Every repository markdown file was re-checked and updated with a shared audit stamp plus refreshed top status notes to keep v0.20 context consistent. Validation rerun in this audit session: `npm install`, `npm run lint`, `npm run build`. No runtime code changed.
 
