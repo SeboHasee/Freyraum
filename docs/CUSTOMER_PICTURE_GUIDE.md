@@ -86,24 +86,37 @@ Technical changes behind this behavior:
 For support/debugging, `show-artwork-complete` now logs extra v0.14/v0.14.2 tuning data (`closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
 
 
-## Future picture text workflow — planned sidecar files
+## Painting text workflow — sidecar text files
 
-A future update should make painting text as easy to maintain as pictures. The selected direction is one simple text file next to each picture, with the same name:
+Each painting can have its own text card: a small `.txt` file with the same
+name as the picture, placed in the same `inbox` folder.
 
 ```text
-01-sunset-at-the-lake.jpg
-01-sunset-at-the-lake.txt
+customer-artworks/inbox/
+  01-sunset-at-the-lake.jpg      ← your painting
+  01-sunset-at-the-lake.txt      ← your text card
 ```
 
-Planned customer workflow:
+**Quick start:**
 
-1. Put a picture into `customer-artworks/inbox/`.
-2. Create a matching `.txt` file with the same name as the picture.
-3. Fill in `Title`, `Alt`, and `Description` in that text file.
-4. Run `Update Gallery`.
-5. Read the report if any picture is missing text or any text file no longer matches a picture.
+1. Open `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
+2. Copy it, rename it to match your painting (only change the `.txt` extension stays, replace the rest).
+3. Fill in `Title:`, `Alt:`, and `Description:` at minimum.
+4. Save the `.txt` file in the inbox next to the painting.
+5. Run **Update Gallery**. The report will confirm "Text applied".
+6. Open `index.html` — the info panel on the right shows your text.
 
-Important: the matching should use the exact image filename base so each customer-written text stays attached to the correct painting. Until that system is implemented, the gallery still creates titles from filenames and uses placeholder imported-artwork text.
+**What the report tells you:**
+- `Text applied (n)` — your text card was matched and used.
+- `Pictures missing text (n)` — the painting imported with placeholder text; add a `.txt` card.
+- `Text files without matching pictures (n)` — the `.txt` filename does not match any picture; check the spelling.
+
+Until you add text cards, the gallery creates titles from file names and uses
+placeholder imported-artwork text. The importer never fails because a text card
+is missing — it just reports it and continues.
+
+**Full guide:** see `docs/CUSTOMER_TEXT_GUIDE.md` for step-by-step instructions,
+the full field reference, and a copy-paste template.
 
 ## What you need (one-time)
 

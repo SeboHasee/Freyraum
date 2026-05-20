@@ -6,6 +6,11 @@
 
 The earlier CSV-first recommendation has been superseded. The preferred v0.18 direction is now **Option C: one sidecar text file beside each image**. The customer-facing source of truth should be `painting.txt` next to `painting.jpg`, matched by the exact same base filename.
 
+See also:
+- `plan.md § v0.18` — full technical implementation plan with code samples
+- `docs/CUSTOMER_TEXT_GUIDE.md` — customer-facing step-by-step guide
+- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` — copy-paste template
+
 ### Current-state findings
 
 1. `scripts/import-artworks.mjs` already creates the runtime text fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) while importing images.
@@ -42,14 +47,42 @@ Sources:
 - WebAIM Alternative Text: <https://webaim.org/techniques/alttext/>
 - Smithsonian image description guidance: <https://www.si.edu/accessibility/ai#describe>
 
+### Code-level analysis — `scripts/import-artworks.mjs` (v0.18 audit)
+
+Full read of `scripts/import-artworks.mjs` (427 lines, Node 18+ ESM, zero npm dependencies):
+
+**Current importer behaviour relevant to v0.18:**
+
+1. Line 44–48: Three extension sets (`SAFE_EXTENSIONS`, `RISKY_EXTENSIONS`, `RAW_EXTENSIONS`). No sidecar awareness.
+2. Lines 237–240: Single inbox scan into `inboxEntries`. Sorted numerically. No two-pass logic.
+3. Lines 259–364: Single `inboxEntries.forEach()` loop. At line 268–270: any file that is not in `SAFE_EXTENSIONS` or `RISKY_EXTENSIONS` falls into `skipped[]` with "unsupported file type". A `.txt` file would currently be listed as skipped — this must change.
+4. Lines 285–288: `const stem = basename(filename, ext)` — the stable base name for each image. This is the anchor for sidecar matching.
+5. Lines 347–362: Artwork object literal. All five customer-visible text fields are currently hardcoded: `subtitle: \`Artwork ${indexLabel}\``, `description: 'Imported artwork'`, `year: new Date().getFullYear()`, `alt: title`, `credit: 'Customer'`, `tags: []`, `surfaceProfile: 'matte-canvas'`. These are the exact fields that sidecar merge replaces.
+6. Lines 302–309: `webglImage` generation via `readFileSync(destPath)` + base64. **This must remain fully unchanged.** The sidecar approach does not touch image bytes or this code path.
+7. Lines 384–421: Report builder. Currently four sections: `Imported`, `Needs attention`, `Skipped`, `Errors`. No text-specific sections.
+
+**`src/main.ts` normalizer (lines 59–134) — no changes needed:**
+
+The `sanitizeInjectedArtworks()` function accepts optional fields gracefully. `description`, `year`, `credit`, `alt`, `subtitle` all have safe fallbacks at lines 104–115. `surfaceProfile` is validated against the exact `SurfaceProfile` union at lines 117–124. The sidecar values the importer emits will all pass this validation without any runtime code changes.
+
+**`src/ui/InfoPanel.ts` — no changes needed:**
+
+`setContent()` at line 81–86 renders `artwork.description` as `.textContent`, so multi-line descriptions will appear with natural line breaks in the rendered DOM. No HTML injection risk from sidecar text.
+
+**`src/config/artworks.ts` — no changes needed:**
+
+The `Artwork` interface already has every field the sidecar will populate (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`). Nothing needs to be added or changed.
+
 ### Future implementation risks to control
 
 1. Do not fuzzy-match or auto-attach orphaned text to a different image. Wrong text is worse than missing text.
-2. Ignore `.txt`/`.md` sidecars during image format validation so they do not appear as skipped image files.
-3. Warn when required fields (`Title`, `Description`, `Alt`) are empty, but keep image import non-blocking.
+2. `.txt`/`.md` sidecars must never appear as skipped image files — filter them out before the image loop with `SIDECAR_EXTENSIONS`.
+3. Warn when `Alt` is empty, but keep image import non-blocking.
 4. Handle duplicate sidecars deterministically (`.txt` before `.md`) and report the duplicate.
 5. Preserve multi-line descriptions and customer punctuation through JSON generation.
 6. Keep generated files marked as generated; sidecars are the only customer-editable text source.
+7. The `??` null-coalescing operator (not `||`) must be used for field merge — an empty string from a sidecar is intentionally blank; using `||` would incorrectly fall back to the generated value.
+8. Stem matching must be case-insensitive (`.toLowerCase()`) because Windows filesystems are case-insensitive and a file named `Painting.TXT` must still match `painting.jpg`.
 
 ## 2026-05-20 — v0.17 easy wins: accessibility, dead-code cleanup
 

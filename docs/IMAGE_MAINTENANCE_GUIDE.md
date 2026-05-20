@@ -144,21 +144,39 @@ visibility. The importer, generated manifests, and `webglImage` path are not
 part of this follow-up.
 
 
-## Planned text-maintenance system (2026-05-20 sidecar refocus)
+## Painting text maintenance — sidecar text files (v0.18 plan)
 
-The current importer already writes runtime text fields, but they are generated placeholders. Future customer-written painting text should be maintained in one sidecar text file beside each image and merged during import, instead of editing generated manifests by hand.
+Customer-written painting text is maintained in one sidecar text file beside
+each image in the inbox, merged during import.
 
-Recommended first implementation:
+**Maintainer reference:**
 
-- Use `customer-artworks/inbox/<image-base>.txt` as the customer-editable source of truth for each image.
-- Match sidecars to inbox images by exact base filename (`painting.jpg` ↔ `painting.txt`).
-- Merge `Title`, `Description`, `Alt`, `Credit`, `Year`, `Tags`, `Medium`, and optional `Surface` into the generated artwork objects.
-- Keep `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` generated.
-- Extend `last-import-report.txt` with text-specific sections: applied sidecars, missing sidecars, orphaned sidecars, duplicate sidecars, and invalid fields.
+- `customer-artworks/inbox/<image-base>.txt` — customer-editable source of truth for each painting
+- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` — copy-paste template for customers
+- `docs/CUSTOMER_TEXT_GUIDE.md` — full customer-facing guide
 
-Do not auto-guess matches after renames. The painting text is customer-authored and artwork-specific, so a mismatch is worse than a warning that asks the maintainer to fix the filename pair.
+**How sidecar merge works (v0.18 importer changes):**
 
-See `plan.md § v0.18 proposal — Customer sidecar text files for each painting` and `FINDINGS.md § 2026-05-20 — Customer sidecar text files selected for artwork text` for the full sidecar plan, research, and acceptance criteria.
+1. The inbox scan is split into two passes: image files and `.txt`/`.md` sidecar files.
+2. Each image is matched to a sidecar by exact base filename (case-insensitive).
+3. The `parseSidecar()` function reads the `.txt` file, strips BOM, normalises line endings, and extracts fields: `Title`, `Year`, `Credit`, `Alt`, `Tags`, `Surface`, `Medium`, `Subtitle`, `Description`.
+4. Matched sidecar fields override the importer-generated placeholders via `??` null-coalescing (a missing field falls back to the generated value, not to blank).
+5. `image`, `webglImage`, `dimensions`, and `id` are always importer-generated; no sidecar field can override them.
+6. `.txt` sidecar files are never treated as images; they never appear in the "Skipped" section of the report.
+
+**Report sections added in v0.18:**
+- `Text applied (n)` — sidecars matched and applied
+- `Pictures missing text (n)` — images with no sidecar; fallback text used
+- `Text files without matching pictures (n)` — orphaned sidecars (wrong filename or image deleted)
+
+**Maintenance rules:**
+- Treat the image and sidecar as a pair during rename/delete/move.
+- Never edit `artworks.json` or `customer-artworks.js` to fix text; edit the sidecar and rerun the importer.
+- Wrong text is worse than missing text — do not auto-guess matches after renames.
+- The `webglImage` generation path and the offline `file://` preview are completely unchanged.
+
+See `plan.md § v0.18` for the full technical implementation plan with exact code samples.
+See `FINDINGS.md § 2026-05-20` for the research log and code-level analysis.
 
 ## Quick overview
 

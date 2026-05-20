@@ -1,10 +1,15 @@
 # FREYRAUM Plan
 
-## v0.18 proposal — Customer sidecar text files for each painting (2026-05-20)
+## v0.18 — Customer sidecar text files for each painting (2026-05-20)
 
 ### Status
 
-Documentation-only deep research and implementation plan. No runtime code changed in this pass. This replaces the earlier CSV-first recommendation: **Option C, sidecar text files beside each image, is now the preferred customer workflow.**
+Technical coding plan. All changes are confined to `scripts/import-artworks.mjs` (Node 18+ ESM, zero new dependencies). No TypeScript runtime code changes needed. This replaces the earlier CSV-first recommendation: **Option C, sidecar text files beside each image, is now the preferred customer workflow.**
+
+See also:
+- `docs/CUSTOMER_TEXT_GUIDE.md` — customer-facing step-by-step guide for writing sidecar files
+- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` — copy-paste template to start from
+- `FINDINGS.md § 2026-05-20` — research log and code-level analysis
 
 ### Decision
 
@@ -117,25 +122,13 @@ This keeps support easy: the report becomes the checklist for fixing customer te
 4. Log sidecar decisions through the existing report path and, for debug mode later, through diagnostics if runtime metadata problems are detected.
 5. Add fixture coverage for matching sidecars, missing sidecars, orphaned sidecars, duplicate `.txt`/`.md`, invalid fields, and multi-line descriptions.
 
-### Parser approach for a future implementation
-
-Use a small custom parser instead of adding a dependency:
-
-1. Read UTF-8 text. Strip a UTF-8 BOM if present.
-2. Normalize line endings (`CRLF` and `CR` to `LF`).
-3. Parse leading `Key: value` lines until `Description:`.
-4. Treat everything after `Description:` as the description body, preserving blank lines but trimming only outer whitespace.
-5. Accept case-insensitive keys (`Title`, `title`, `TITLE`).
-6. Warn on unknown keys instead of failing.
-7. Escape nothing manually in the sidecar; generated JSON serialization already handles special characters safely.
-
 ### Accessibility guidance
 
 - `Alt` is for assistive technology and should be concise.
 - `Description` is the visible customer story and can be longer.
 - Captions/descriptions do not replace alt text.
 - For art, useful alt text usually describes composition, colors, subject, mood, and visible text if present.
-- Avoid starting with “image of” or “picture of”; screen readers already announce the image role in normal HTML contexts.
+- Avoid starting with "image of" or "picture of"; screen readers already announce the image role in normal HTML contexts.
 
 ### Why not full XMP sidecars now
 
@@ -148,28 +141,315 @@ XMP is the professional sidecar metadata standard and is useful evidence that si
 - **Markdown/front matter:** powerful for long editorial writing, but more technical than a labeled `.txt` card. `.md` can be accepted later using the same labels.
 - **CMS:** best UI at scale, but too heavy for an offline local gallery.
 
-### Future implementation steps
+---
 
-1. Add constants for accepted sidecar extensions (`.txt` first, optional `.md`).
-2. Split inbox scanning into image entries and sidecar entries.
-3. Parse sidecars into a normalized metadata map keyed by base filename.
-4. Merge sidecar fields into each generated artwork object.
-5. Add text-specific report sections.
-6. Add customer docs with copy-paste sidecar template.
-7. Add small importer fixtures or temporary validation samples for all matching/error cases.
-8. Run syntax checks, lint/build if runtime code changes, and manual sample import validation.
+### Technical implementation — exact coding plan for `scripts/import-artworks.mjs`
 
-### Acceptance criteria
+This is the only file that must change for v0.18. All changes are additive (new function, new constants, extended arrays, new report sections). No existing logic is removed; the image-import path is unchanged. All code samples are Node 18+ ESM, zero new dependencies.
 
-1. Image-only imports still work when no sidecars exist.
-2. `painting.jpg` + `painting.txt` produces the expected `title`, `description`, `alt`, `credit`, `year`, `tags`, and optional `surfaceProfile`.
-3. Missing sidecars produce warnings but do not block import.
-4. Orphaned sidecars produce warnings and are never attached to the wrong image.
-5. Duplicate sidecars are reported deterministically.
-6. `.txt` sidecars are not listed as unsupported image files.
-7. Multi-line customer descriptions survive into `artworks.json` and `customer-artworks.js`.
-8. The customer guide explains the workflow without requiring a code editor, terminal, JSON, or spreadsheet.
+**Code audit — current state:**
 
+| Location | Current behaviour | What changes |
+|---|---|---|
+| Lines 44–48 | `SAFE_EXTENSIONS`, `RISKY_EXTENSIONS`, `RAW_EXTENSIONS` sets | Add `SIDECAR_EXTENSIONS` and `PRIMARY_SIDECAR_EXT` constants after line 48 |
+| Lines 237–240 | Single inbox scan into `inboxEntries` array | Replace with two-pass scan: `imageEntries` + `sidecarMap` |
+| Lines 242–247 | `artworks`, `imported`, `warnings`, `skipped`, `errors` arrays | Add `textApplied`, `textMissing`, `orphanedSidecars`, `matchedSidecars` |
+| Lines 259–364 | `inboxEntries.forEach(...)` — skips `.txt` as unsupported image | Change to `imageEntries.forEach(...)` so `.txt` is never seen as an image; add sidecar lookup and merge |
+| Lines 285 | `const stem = basename(filename, ext);` | After this line: add sidecar lookup block |
+| Lines 347–362 | Artwork object with hardcoded placeholder fields | Merge sidecar fields with `??` null-coalescing so generated defaults stay when field is absent |
+| Lines 384–421 | Report builder | Add `Text applied`, `Pictures missing text`, `Text files without matching pictures` sections |
+
+**A. Add sidecar constants (after line 48)**
+
+```js
+// v0.18 — Sidecar text extensions. Primary is .txt; .md is accepted as alias.
+const SIDECAR_EXTENSIONS = new Set(['.txt', '.md']);
+const PRIMARY_SIDECAR_EXT = '.txt';
+```
+
+**B. Replace single inbox scan with two-pass scan (replaces lines 237–240)**
+
+```js
+// All non-hidden entries, sorted numerically.
+const inboxEntries = readdirSync(INBOX, { withFileTypes: true })
+  .filter((e) => e.isFile() && !e.name.startsWith('.'))
+  .map((e) => e.name)
+  .sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
+
+// Pass 1 — separate image files from sidecar text files.
+const imageEntries = inboxEntries.filter(
+  (f) => !SIDECAR_EXTENSIONS.has(extname(f).toLowerCase())
+);
+
+// Pass 2 — build sidecar lookup: stem (lowercase) → sidecar filename.
+// If a stem has both .txt and .md, prefer .txt and warn about the duplicate.
+const sidecarMap = new Map();
+for (const f of inboxEntries) {
+  const ext = extname(f).toLowerCase();
+  if (!SIDECAR_EXTENSIONS.has(ext)) continue;
+  const stem = basename(f, ext).toLowerCase();
+  if (!sidecarMap.has(stem)) {
+    sidecarMap.set(stem, f);
+  } else {
+    const existing = sidecarMap.get(stem);
+    const existingExt = extname(existing).toLowerCase();
+    if (ext === PRIMARY_SIDECAR_EXT && existingExt !== PRIMARY_SIDECAR_EXT) {
+      sidecarMap.set(stem, f); // .txt wins over .md
+      warnings.push(
+        `${existing} — duplicate sidecar found; using "${f}" instead (.txt takes priority).`
+      );
+    } else {
+      warnings.push(
+        `${f} — duplicate sidecar found; "${existing}" is already used for "${stem}.*".`
+      );
+    }
+  }
+}
+```
+
+**C. Add `parseSidecar()` function (place after `uniqueId()`, before `// -------- Main --------`)**
+
+```js
+/** v0.18: valid SurfaceProfile values accepted from sidecar files. */
+const VALID_SURFACE_PROFILES = new Set([
+  'matte-canvas', 'satin-canvas', 'varnished-oil', 'paper', 'procedural-fallback',
+]);
+
+/**
+ * v0.18: Parses a customer sidecar text file into normalized artwork metadata.
+ *
+ * Format (UTF-8 .txt, CRLF-safe, Windows Notepad BOM-safe):
+ *   Title: Sunset at the lake
+ *   Year: 2026
+ *   Credit: Customer
+ *   Alt: Abstract landscape with warm sunset colors over a lake.
+ *   Tags: sunset, lake, warm
+ *   Surface: matte-canvas
+ *   Medium: Oil on canvas · 80×60 cm
+ *   Subtitle: Artwork 01
+ *
+ *   Description:
+ *   This is the customer text shown in the info panel.
+ *   Multiple lines are allowed here.
+ *
+ * Rules:
+ * - Keys are case-insensitive. Unknown keys produce a warning, not a failure.
+ * - Year must be an integer 1000–2999; invalid values warn and fall back to current year.
+ * - Surface must match a valid SurfaceProfile; unknown values warn and fall back.
+ * - Everything after `Description:` becomes the description body (multi-line safe).
+ * - Returns { _warnings: string[], _error?: string, ...fields }.
+ */
+function parseSidecar(filePath) {
+  let raw;
+  try {
+    raw = readFileSync(filePath, 'utf8');
+  } catch (err) {
+    return { _warnings: [], _error: `Could not read sidecar: ${err.message}` };
+  }
+
+  // Strip UTF-8 BOM; normalize line endings.
+  const text = raw.replace(/^\uFEFF/, '').replace(/\r\n|\r/g, '\n');
+  const lines = text.split('\n');
+
+  const meta = { _warnings: [] };
+  const descLines = [];
+  let inDescription = false;
+
+  for (const line of lines) {
+    if (inDescription) {
+      descLines.push(line);
+      continue;
+    }
+    if (!line.trim()) continue; // skip blank lines before Description:
+
+    const colonIdx = line.indexOf(':');
+    if (colonIdx < 1) continue; // no colon or colon at position 0
+
+    const rawKey = line.slice(0, colonIdx).trim();
+    const key = rawKey.toLowerCase();
+    const value = line.slice(colonIdx + 1).trim();
+
+    switch (key) {
+      case 'title':    meta.title    = value || undefined; break;
+      case 'subtitle': meta.subtitle = value || undefined; break;
+      case 'credit':   meta.credit   = value || undefined; break;
+      case 'alt':      meta.alt      = value || undefined; break;
+      case 'medium':   meta.medium   = value || undefined; break;
+      case 'year': {
+        const y = parseInt(value, 10);
+        if (Number.isFinite(y) && y > 1000 && y < 3000) {
+          meta.year = y;
+        } else if (value) {
+          meta._warnings.push(
+            `Year "${value}" is not a valid year; current year will be used.`
+          );
+        }
+        break;
+      }
+      case 'tags':
+        meta.tags = value.split(/[,;]+/).map((t) => t.trim()).filter(Boolean);
+        break;
+      case 'surface':
+        if (VALID_SURFACE_PROFILES.has(value)) {
+          meta.surfaceProfile = value;
+        } else if (value) {
+          meta._warnings.push(
+            `Surface "${value}" is not a known profile ` +
+            `(${[...VALID_SURFACE_PROFILES].join(', ')}); "matte-canvas" will be used.`
+          );
+        }
+        break;
+      case 'description':
+        inDescription = true;
+        if (value) descLines.push(value); // text on same line as Description: label
+        break;
+      default:
+        if (value) meta._warnings.push(`Unknown field "${rawKey}" ignored.`);
+    }
+  }
+
+  if (inDescription) {
+    // Trim outer blank lines; preserve internal blank lines.
+    meta.description = descLines.join('\n').replace(/^\n+|\n+$/g, '');
+  }
+
+  // Accessibility reminder: prompt the customer to add Alt if it was omitted.
+  if (!meta.alt) {
+    meta._warnings.push(
+      'Alt field is empty or missing; add a short visual description for screen readers.'
+    );
+  }
+
+  return meta;
+}
+```
+
+**D. Add tracking arrays (alongside existing `imported`, `warnings`, etc. — lines 242–247)**
+
+```js
+const textApplied     = []; // sidecars successfully matched to an image
+const textMissing     = []; // images that had no matching sidecar
+const matchedSidecars = new Set(); // lowercase stems of consumed sidecars
+```
+
+**E. Change the main loop and merge sidecar data**
+
+Replace `inboxEntries.forEach((filename, i) => {` with `imageEntries.forEach((filename, i) => {`
+
+After `const stem = basename(filename, ext);` (line 285), insert:
+
+```js
+const stemLower = stem.toLowerCase();
+const sidecarFilename = sidecarMap.get(stemLower);
+let sidecarMeta = null;
+
+if (sidecarFilename) {
+  sidecarMeta = parseSidecar(join(INBOX, sidecarFilename));
+  if (sidecarMeta._error) {
+    warnings.push(`${sidecarFilename} — ${sidecarMeta._error}`);
+    sidecarMeta = null;
+  } else {
+    sidecarMeta._warnings.forEach((w) => warnings.push(`${sidecarFilename} — ${w}`));
+    textApplied.push(`${sidecarFilename} → ${filename}`);
+    matchedSidecars.add(stemLower);
+  }
+} else {
+  textMissing.push(
+    `${filename} — add ${stem}.txt next to the image to set custom text`
+  );
+}
+```
+
+Replace the `artworks.push({...})` block (lines 347–362) with the sidecar-aware version:
+
+```js
+artworks.push({
+  id,
+  title:          sidecarMeta?.title         ?? title,
+  subtitle:       sidecarMeta?.subtitle      ?? `Artwork ${indexLabel}`,
+  description:    sidecarMeta?.description   ?? 'Imported artwork',
+  year:           sidecarMeta?.year          ?? new Date().getFullYear(),
+  medium:         sidecarMeta?.medium        ?? generateMedium(dims.width, dims.height),
+  image:          `./images/${destFilename}`,
+  ...(webglImage ? { webglImage } : {}),
+  dimensions:     { width: dims.width, height: dims.height },
+  alt:            sidecarMeta?.alt           ?? title,
+  credit:         sidecarMeta?.credit        ?? 'Customer',
+  tags:           sidecarMeta?.tags          ?? [],
+  surfaceProfile: sidecarMeta?.surfaceProfile ?? 'matte-canvas',
+});
+```
+
+The `??` operator: uses the sidecar value when it is a real string/number/array; falls back to generated defaults when the field is `undefined`. The `image`, `webglImage`, `dimensions`, and `id` fields are always importer-generated and are not overridable from a sidecar.
+
+**F. Compute orphaned sidecars (after the main forEach loop, before manifest write)**
+
+```js
+const orphanedSidecars = [];
+for (const [stem, filename] of sidecarMap.entries()) {
+  if (!matchedSidecars.has(stem)) {
+    orphanedSidecars.push(
+      `${filename} — no image named "${stem}.*" found in inbox`
+    );
+  }
+}
+```
+
+**G. Add new report sections (in the report builder, after the `errors` section)**
+
+```js
+if (textApplied.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Text applied (${textApplied.length}):`);
+  textApplied.forEach((t) => lines.push(`  ✓ ${t}`));
+}
+if (textMissing.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Pictures missing text (${textMissing.length}):`);
+  textMissing.forEach((t) => lines.push(`  ⚠ ${t}`));
+  lines.push('');
+  lines.push('  → Create a .txt file with the same name as each picture.');
+  lines.push('  → See customer-artworks/ARTWORK_TEXT_TEMPLATE.txt for the format.');
+}
+if (orphanedSidecars.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Text files without matching pictures (${orphanedSidecars.length}):`);
+  orphanedSidecars.forEach((t) => lines.push(`  ⚠ ${t}`));
+}
+```
+
+**H. Stability guard — importer regression checklist**
+
+Before merging v0.18, manually verify these scenarios:
+
+1. Inbox with only images, no `.txt` files → same output as today; `textMissing` section lists every image.
+2. `painting.jpg` + `painting.txt` (all fields) → `title`, `description`, `alt`, `year`, `credit`, `tags`, `surfaceProfile` from sidecar; `medium` (if omitted in sidecar), `dimensions`, `image`, `webglImage`, `id` still importer-generated.
+3. `painting.jpg` + `painting.txt` (no `Description:` line) → `description` fallback `'Imported artwork'`; no crash.
+4. `painting.jpg` alone (no sidecar) → import completes; `textMissing` entry emitted; artwork uses generated fallbacks as today.
+5. `painting.txt` alone (no matching image) → never imported as an image; `orphanedSidecars` entry emitted.
+6. `painting.txt` + `painting.md` both present → one warning emitted; `.txt` wins; import completes.
+7. Unknown field `Mood: joyful` → warning emitted; all other fields parse correctly.
+8. `Year: abc` → warning emitted; current year used.
+9. `Surface: oil-paint` (invalid) → warning emitted; `matte-canvas` fallback used.
+10. Multi-line `Description:` → arrives in `artworks.json` with embedded `\n`; `InfoPanel.setContent()` renders it as `.textContent` (plain text, no HTML injection possible).
+11. `.txt` file with UTF-8 BOM (Windows Notepad) → BOM stripped; parse succeeds.
+12. `webglImage` generation path (lines 302–309) is entirely unchanged; `cpSync` and `readFileSync(destPath)` are identical; offline `file://` preview is unaffected.
+
+### Implementation steps (ordered)
+
+1. Add `SIDECAR_EXTENSIONS`, `PRIMARY_SIDECAR_EXT` constants (A).
+2. Add `parseSidecar()` function with `VALID_SURFACE_PROFILES` (C).
+3. Replace single inbox scan with two-pass scan (B).
+4. Add `textApplied`, `textMissing`, `matchedSidecars` tracking (D).
+5. Change `inboxEntries.forEach` → `imageEntries.forEach` (E).
+6. Add sidecar lookup block inside the loop (E).
+7. Replace artwork object construction with `??` version (E).
+8. Compute `orphanedSidecars` after the loop (F).
+9. Add three new report sections (G).
+10. Run `node -c scripts/import-artworks.mjs` (syntax check).
+11. Manual sample import — work through regression checklist (H).
+12. Run `npm run lint && npm run build`.
+13. Add `CHANGELOG.md` entry for v0.18.
 ### Deep online research summary
 
 - Sidecar metadata workflows commonly place metadata files beside the media file and match by the same base filename. This supports portability and keeps asset context close to the asset.

@@ -1,8 +1,12 @@
 # Freyraum
 
-## v0.18 sidecar text planning note (2026-05-20)
+## v0.18 — Customer painting text via sidecar `.txt` files (plan ready 2026-05-20)
 
-Current artwork-text planning is focused on **Option C: one sidecar text file beside each customer image** (`painting.jpg` + `painting.txt`). Treat `plan.md § v0.18 proposal — Customer sidecar text files for each painting` as the source of truth and `FINDINGS.md § 2026-05-20 — Customer sidecar text files selected for artwork text` as the research log. Generated manifests remain generated; future customer-written painting text should come from matching sidecars, not manual edits to `artworks.json` or `customer-artworks.js`.
+**Plan:** `plan.md § v0.18` — full technical implementation plan with JS code samples.
+**Customer guide:** `docs/CUSTOMER_TEXT_GUIDE.md`
+**Template:** `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
+
+Only `scripts/import-artworks.mjs` changes. All TypeScript runtime code is unchanged.
 
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
