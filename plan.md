@@ -1,149 +1,195 @@
 # FREYRAUM Plan
 
-## v0.18 proposal — Customer-written artwork text system (2026-05-20)
+## v0.18 proposal — Customer sidecar text files for each painting (2026-05-20)
 
 ### Status
 
-Documentation-only brainstorm and implementation plan. No runtime code changed in this pass.
+Documentation-only deep research and implementation plan. No runtime code changed in this pass. This replaces the earlier CSV-first recommendation: **Option C, sidecar text files beside each image, is now the preferred customer workflow.**
 
-### Problem
+### Decision
 
-The current importer is easy for pictures because the customer only drops files into `customer-artworks/inbox/` and runs `Update Gallery`. Text is not yet equally maintainable: `scripts/import-artworks.mjs` currently derives `title` from the filename and writes placeholder fields (`subtitle`, `description`, `alt`, `credit`, `tags`) into the generated manifest. Future customer-written text must stay matched to the exact painting, survive re-imports, and remain simple enough for a non-technical maintainer.
+Use one customer-editable text sidecar per artwork image. The sidecar lives next to the image in `customer-artworks/inbox/` and uses the exact same base filename:
 
-### Existing repository constraints
+```text
+customer-artworks/inbox/
+  01-sunset-at-the-lake.jpg
+  01-sunset-at-the-lake.txt
+  02-forest-path.png
+  02-forest-path.txt
+```
 
-1. Keep the current one-folder / one-button image workflow intact.
-2. Keep `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` generated, not hand-edited.
-3. Preserve stable artwork matching through the importer-generated `id`, which is derived from the filename stem.
-4. Continue writing plain-language feedback to `customer-artworks/last-import-report.txt`.
-5. Avoid systems that require an internet connection for the local `file://` preview.
+This is the clearest mental model for the customer: **one painting file + one text file**. The text physically travels with the image, renames are visible immediately, and the importer can report missing or orphaned text without guessing.
 
-### Brainstormed options
+### Why Option C fits this repository best
 
-#### Option A — One central JSON metadata file
+1. The current image workflow is already folder-based, not CMS-based. A same-folder sidecar keeps the workflow local and offline.
+2. Painting text is artwork-specific. A sidecar minimizes the risk that a row in a spreadsheet silently drifts to the wrong painting.
+3. The customer can send one image and its matching text file together to support.
+4. The importer already scans `customer-artworks/inbox/`, so matching sidecars during the same pass is a small future change.
+5. Generated runtime files (`customer-artworks/artworks.json`, `customer-preview/customer-artworks.js`) can remain generated and should still not be edited manually.
+6. Sidecars are a known pattern in digital-asset workflows. Professional XMP sidecars are standardized for metadata portability; this project should use a simpler customer-facing text sidecar rather than full XMP.
 
-Maintain a file such as `customer-artworks/artwork-texts.json` with one object per artwork id. The importer reads it, merges matching text into the generated manifest, and reports missing or unmatched entries.
+### Recommended sidecar format
 
-- Pros: matches current JSON manifest shape, easy for code, supports all current fields, good for validation.
-- Cons: less friendly for customers to edit directly; a missing comma can break the file.
-- Best use: support-maintained projects or when a simple editor UI is added later.
+Canonical format for v0.18 implementation: **UTF-8 `.txt` with simple labels**. `.md` can be accepted as an alias later, but `.txt` is the least technical file type for the customer.
 
-#### Option B — One central CSV/spreadsheet file
+Suggested template:
 
-Maintain `customer-artworks/artwork-texts.csv` with columns like `filename`, `title`, `description`, `alt`, `credit`, `year`, and `tags`. The customer can edit it in Excel, Numbers, LibreOffice, or Google Sheets and export CSV.
+```text
+Title: Sunset at the lake
+Year: 2026
+Credit: Customer
+Alt: Abstract landscape painting with warm sunset colors over a calm lake.
+Tags: sunset, lake, warm
+Surface: matte-canvas
 
-- Pros: familiar for customers, excellent for many paintings, easy to scan, easy to send to/from the customer.
-- Cons: CSV escaping and line breaks require careful importer handling; rich multi-paragraph text is awkward.
-- Best use: customer-first workflow with many paintings and short-to-medium descriptions.
+Description:
+This is the customer-written text shown in the info panel.
+It can be one paragraph or multiple short paragraphs.
+```
 
-#### Option C — Sidecar text files beside each image
+Field rules:
 
-For every `painting.jpg`, allow `painting.txt`, `painting.md`, or `painting.json` in the inbox. The importer matches by base filename.
-
-- Pros: text physically travels with the image; very clear one-image/one-text relationship; low risk of mismatching.
-- Cons: many small files; ordering and bulk editing are less convenient; customer must keep names identical.
-- Best use: small collections or when the customer writes longer individual painting notes.
-
-#### Option D — Markdown files with front matter
-
-Each artwork gets an `.md` file with front matter fields plus long-form body text. The importer uses front matter for structured fields and the body as the description.
-
-- Pros: best plain-text writing format; supports longer customer stories; version-control friendly.
-- Cons: front matter is technical; needs a parser or strict custom subset; more complexity than the current importer.
-- Best use: future editorial workflow if descriptions become long and story-like.
-
-#### Option E — Headless CMS
-
-Use a hosted or local CMS where each artwork is an entry connected to an image.
-
-- Pros: best editor interface, permissions, history, media library, localization.
-- Cons: setup/hosting/admin overhead; internet/API dependency unless exported to static files; far heavier than the current local workflow.
-- Best use: later phase if the gallery becomes a larger maintained catalog.
-
-### Recommendation
-
-Use a **two-stage path**:
-
-1. **Near-term:** add a simple central metadata file, preferably CSV for customer editing plus importer validation. Use `filename` as the customer-facing match key and `id` as the generated stable runtime key.
-2. **Later:** if the customer wants richer writing or a nicer interface, generate/edit the same data through a small local form or migrate the source file to Markdown/front matter or CMS export.
-
-This keeps the workflow as easy as importing pictures: customer drops images into the inbox, updates one text table, runs `Update Gallery`, and receives a report if any picture is missing text or any text row no longer matches an image.
-
-### Proposed source-of-truth file
-
-Preferred file for v0.18 implementation:
-
-- `customer-artworks/artwork-texts.csv`
-
-Suggested columns:
-
-| Column | Required | Purpose |
-| --- | --- | --- |
-| `filename` | yes | Exact image filename in `customer-artworks/inbox/`; easiest customer match key. |
-| `title` | yes | Info-panel title. Falls back to filename-generated title if blank. |
-| `description` | yes | Customer-written painting text shown in the info panel. |
-| `alt` | yes | Accessibility description. Should describe the visible artwork, not repeat the title. |
-| `credit` | no | Artist/customer credit. Defaults to `Customer`. |
-| `year` | no | Creation year. Defaults to current year if blank. |
-| `medium` | no | Optional custom medium. Defaults to current dimension-based medium. |
-| `tags` | no | Comma- or semicolon-separated tags for future filtering. |
-| `surfaceProfile` | no | Optional existing surface profile (`matte-canvas`, `satin-canvas`, `varnished-oil`, `paper`). |
+| Field | Required | Runtime target | Notes |
+| --- | --- | --- | --- |
+| `Title` | yes | `artwork.title` | Falls back to filename-generated title only if missing. Missing title should be reported. |
+| `Description` | yes | `artwork.description` | Main visible painting text. Multi-line text after `Description:` is allowed. |
+| `Alt` | yes | `artwork.alt` | Accessibility description. Should describe the visual artwork, not just repeat the title. |
+| `Year` | no | `artwork.year` | Defaults to current year if blank or invalid, but invalid values should warn. |
+| `Credit` | no | `artwork.credit` | Defaults to `Customer`. |
+| `Tags` | no | `artwork.tags` | Comma- or semicolon-separated. Reserved for future filtering. |
+| `Surface` | no | `artwork.surfaceProfile` | Allow `matte-canvas`, `satin-canvas`, `varnished-oil`, `paper`; unknown values warn and fall back. |
+| `Medium` | no | `artwork.medium` | Optional override; if omitted, keep current dimension-based medium. |
 
 ### Matching rules
 
-1. First match by exact `filename` including extension.
-2. If the image is renamed, report the old text row as unmatched and the new image as missing text.
-3. Do not silently guess across unrelated names; the text is artwork-specific and must not drift to the wrong painting.
-4. Keep generated `id` stable from the filename stem, as today.
-5. Include a clear section in `last-import-report.txt`:
-   - text applied
-   - pictures missing text
-   - text rows without matching pictures
-   - invalid years, unknown surface profiles, or empty required fields
+1. Match by exact base filename in the same folder: `painting.jpg` ↔ `painting.txt`.
+2. The image extension is ignored for the text match, but the base name must match exactly.
+3. If both `painting.txt` and `painting.md` exist, prefer `.txt` and warn about the duplicate.
+4. Do not fuzzy-match renamed files. If the text sidecar does not match, report it as orphaned.
+5. Do not attach a sidecar to a different image merely because the title looks similar.
+6. Ignore text sidecars when building the image-file list so `.txt` files are not reported as unsupported images.
+7. Keep the importer-generated runtime `id` based on the image filename stem, as today.
 
-### Suggested customer workflow
+### Missing sidecar behavior
 
-1. Put images into `customer-artworks/inbox/`.
-2. Open `customer-artworks/artwork-texts.csv`.
-3. Fill one row per image.
+The first implementation should be forgiving:
+
+1. If an image has no sidecar, import the image as today using generated fallback text.
+2. Add a warning in `last-import-report.txt` that the image is missing customer text.
+3. Optionally create a starter sidecar template next to the image, but only if this is clearly reported so the customer understands what changed.
+4. Never fail the whole import because a text file is missing; missing text is a content warning, not an image import failure.
+
+### Import report design
+
+Extend `customer-artworks/last-import-report.txt` with plain-language text sections:
+
+```text
+Text applied (2):
+  ✓ 01-sunset-at-the-lake.txt matched 01-sunset-at-the-lake.jpg
+
+Pictures missing text (1):
+  ⚠ 03-blue-room.webp — add 03-blue-room.txt next to the image
+
+Text files without matching pictures (1):
+  ⚠ old-painting.txt — no image named old-painting.* was found
+
+Text fields needing attention (1):
+  ⚠ 02-forest-path.txt — Alt is empty; add a short visual description
+```
+
+This keeps support easy: the report becomes the checklist for fixing customer text.
+
+### Customer workflow
+
+1. Put a painting image into `customer-artworks/inbox/`.
+2. Create a text file with the same name, only ending in `.txt`.
+3. Fill in title, alt text, and description.
 4. Run `Update Gallery`.
-5. Read the report. If it says text is missing or unmatched, fix the CSV and run again.
-6. Open `index.html` to review that every painting has the correct text.
+5. Read the report. If it says a text file is missing or orphaned, fix the filename pair and run again.
+6. Open `index.html` and confirm the painting shows the right text.
 
-### Accessibility and content guidance
+### Maintenance workflow
 
-- Keep `description` as the customer's visible painting text.
-- Keep `alt` separate. Alt text should concisely describe the visual content for screen-reader users; it should not be only the painting title.
-- Captions/descriptions can be longer and can include story, material, emotion, or context.
-- Missing `alt` should produce a warning because every artwork image needs a meaningful text alternative.
+1. Treat the image and sidecar as a pair during rename/delete/move operations.
+2. Never edit generated `artworks.json` or `customer-artworks.js` to fix text; edit the sidecar and rerun the importer.
+3. Keep the parser strict enough to prevent accidental mismatches, but friendly enough to accept normal punctuation and multi-line descriptions.
+4. Log sidecar decisions through the existing report path and, for debug mode later, through diagnostics if runtime metadata problems are detected.
+5. Add fixture coverage for matching sidecars, missing sidecars, orphaned sidecars, duplicate `.txt`/`.md`, invalid fields, and multi-line descriptions.
 
-### Acceptance criteria for a future implementation
+### Parser approach for a future implementation
 
-1. Existing image-only workflow continues to work if no metadata file exists.
-2. Importer merges customer text into generated `artworks.json` and `customer-artworks.js`.
-3. Generated manifests remain the only runtime source consumed by the app.
-4. Report clearly identifies missing/unmatched/invalid text data.
-5. Text never silently attaches to the wrong image after a rename.
-6. CSV parsing supports quoted commas and normal customer spreadsheet exports.
-7. Documentation explains the workflow in customer language.
-8. Validation includes importer syntax checks, lint/build if runtime code changes, and a small sample import with matching and missing text rows.
+Use a small custom parser instead of adding a dependency:
 
-### Online research summary
+1. Read UTF-8 text. Strip a UTF-8 BOM if present.
+2. Normalize line endings (`CRLF` and `CR` to `LF`).
+3. Parse leading `Key: value` lines until `Description:`.
+4. Treat everything after `Description:` as the description body, preserving blank lines but trimming only outer whitespace.
+5. Accept case-insensitive keys (`Title`, `title`, `TITLE`).
+6. Warn on unknown keys instead of failing.
+7. Escape nothing manually in the sidecar; generated JSON serialization already handles special characters safely.
 
-- Sidecar JSON keeps metadata portable with each image and works well for automation, but is less customer-friendly for manual editing.
-- Markdown/front matter is strong for human writing and version control, but may feel technical and adds parsing complexity.
-- CSV/spreadsheet workflows are common for bulk catalog editing and are the easiest non-technical option when many items need short structured fields.
-- Headless CMS tools give the best editor experience, but add hosting, setup, and maintenance overhead.
-- Accessibility guidance consistently recommends meaningful alt text for images and visible captions/descriptions as separate content.
+### Accessibility guidance
+
+- `Alt` is for assistive technology and should be concise.
+- `Description` is the visible customer story and can be longer.
+- Captions/descriptions do not replace alt text.
+- For art, useful alt text usually describes composition, colors, subject, mood, and visible text if present.
+- Avoid starting with “image of” or “picture of”; screen readers already announce the image role in normal HTML contexts.
+
+### Why not full XMP sidecars now
+
+XMP is the professional sidecar metadata standard and is useful evidence that sidecars are a durable pattern. However, `.xmp` files are XML/RDF-oriented, too technical for the intended customer workflow, and not needed for the current runtime fields. FREYRAUM should keep a simple `.txt` sidecar now and leave XMP import/export as a possible future bridge if professional DAM tools enter the workflow.
+
+### Alternatives after refocus
+
+- **CSV/spreadsheet:** still useful for bulk catalog review, but weaker for this customer because text can drift away from images and CSV line breaks are fragile. Keep as possible export/import later, not the primary source.
+- **Central JSON:** good for code and validation, but customer-hostile for direct editing.
+- **Markdown/front matter:** powerful for long editorial writing, but more technical than a labeled `.txt` card. `.md` can be accepted later using the same labels.
+- **CMS:** best UI at scale, but too heavy for an offline local gallery.
+
+### Future implementation steps
+
+1. Add constants for accepted sidecar extensions (`.txt` first, optional `.md`).
+2. Split inbox scanning into image entries and sidecar entries.
+3. Parse sidecars into a normalized metadata map keyed by base filename.
+4. Merge sidecar fields into each generated artwork object.
+5. Add text-specific report sections.
+6. Add customer docs with copy-paste sidecar template.
+7. Add small importer fixtures or temporary validation samples for all matching/error cases.
+8. Run syntax checks, lint/build if runtime code changes, and manual sample import validation.
+
+### Acceptance criteria
+
+1. Image-only imports still work when no sidecars exist.
+2. `painting.jpg` + `painting.txt` produces the expected `title`, `description`, `alt`, `credit`, `year`, `tags`, and optional `surfaceProfile`.
+3. Missing sidecars produce warnings but do not block import.
+4. Orphaned sidecars produce warnings and are never attached to the wrong image.
+5. Duplicate sidecars are reported deterministically.
+6. `.txt` sidecars are not listed as unsupported image files.
+7. Multi-line customer descriptions survive into `artworks.json` and `customer-artworks.js`.
+8. The customer guide explains the workflow without requiring a code editor, terminal, JSON, or spreadsheet.
+
+### Deep online research summary
+
+- Sidecar metadata workflows commonly place metadata files beside the media file and match by the same base filename. This supports portability and keeps asset context close to the asset.
+- XMP sidecars are standardized through ISO 16684 and widely used by professional DAM/photo tools, validating the general sidecar concept even though FREYRAUM should not expose XMP complexity to the customer yet.
+- ExifTool documents metadata sidecar files as a normal metadata interchange pattern.
+- Immich and PhotoPrism document XMP sidecar handling in modern photo-management workflows, showing that sidecar metadata remains current rather than obsolete.
+- Web accessibility guidance from W3C and WebAIM supports separate meaningful alt text; longer captions/descriptions can supplement but should not replace it.
+- Museum/art description guidance recommends describing visible composition, color, style, mood, and relevant text for artwork access.
 
 Sources consulted:
 
-- WebAIM Alternative Text: <https://webaim.org/techniques/alttext/>
+- Adobe XMP specifications: <https://developer.adobe.com/xmp/docs/xmp-specifications/>
+- Adobe XMP docs repository: <https://github.com/adobe/xmp-docs>
+- ISO 16684-3 XMP JSON-LD serialization: <https://www.iso.org/obp/ui/#!iso:std:79384:en>
+- ExifTool metadata sidecar files: <https://exiftool.org/metafiles.html>
+- Immich XMP sidecars: <https://docs.immich.app/features/xmp-sidecars/>
+- PhotoPrism XMP metadata: <https://docs.photoprism.app/developer-guide/metadata/xmp/>
 - W3C Images Tutorial: <https://www.w3.org/WAI/tutorials/images/>
-- Google Image SEO best practices: <https://developers.google.com/search/docs/crawling-indexing/images>
-- Jekyll data files: <https://jekyllrb.com/docs/datafiles/>
-- Eleventy data files: <https://www.11ty.dev/docs/data/>
-
+- WebAIM Alternative Text: <https://webaim.org/techniques/alttext/>
+- Smithsonian image description guidance: <https://www.si.edu/accessibility/ai#describe>
 
 ## v0.17 — Easy wins: accessibility, dead-code cleanup (2026-05-20)
 

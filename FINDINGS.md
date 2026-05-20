@@ -1,49 +1,55 @@
 # FINDINGS
 
-## 2026-05-20 — Customer-written artwork text system brainstorm
+## 2026-05-20 — Customer sidecar text files selected for artwork text
+
+### Decision update
+
+The earlier CSV-first recommendation has been superseded. The preferred v0.18 direction is now **Option C: one sidecar text file beside each image**. The customer-facing source of truth should be `painting.txt` next to `painting.jpg`, matched by the exact same base filename.
 
 ### Current-state findings
 
-1. `scripts/import-artworks.mjs` already creates all runtime text fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) while importing images.
-2. Those fields are currently generated from filename, dimensions, current year, and placeholders; customer-specific painting text is not yet represented as a maintained source file.
-3. `src/config/artworks.ts` defines the runtime `Artwork` contract consumed by the info panel and timeline. The future metadata system can feed the existing fields without changing the UI model.
-4. `src/main.ts` defensively normalizes generated customer artwork data, so importer output should stay plain JSON-compatible and complete.
-5. The safest boundary is to keep `customer-artworks/artworks.json` and `customer-preview/customer-artworks.js` generated, and add a separate customer-editable text source that the importer merges.
+1. `scripts/import-artworks.mjs` already creates the runtime text fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) while importing images.
+2. Those fields are currently generated from filename, dimensions, current year, and placeholders; no maintained customer text source exists yet.
+3. The importer already scans `customer-artworks/inbox/`, so same-folder text matching can be added without changing the customer’s main folder workflow.
+4. `src/config/artworks.ts` already contains the target metadata contract. A sidecar parser can feed the existing fields without changing the UI model.
+5. `src/main.ts` normalizes generated customer artwork data, so importer output should remain complete JSON data and generated files should stay the runtime boundary.
 
-### Recommended direction
+### Sidecar-specific findings
 
-Use `customer-artworks/artwork-texts.csv` as the first customer-editable source of truth because it is closest to the existing easy picture workflow: customers can edit a spreadsheet, keep one row per image, then run `Update Gallery`. The importer should match rows to pictures by exact filename, merge text into the generated manifest, and report any missing/unmatched rows in plain language.
-
-### Alternatives considered
-
-- **Sidecar JSON:** technically robust and portable, but too fragile for direct customer editing.
-- **Sidecar TXT/Markdown:** excellent image-to-text pairing and good for long writing, but creates many files and is harder to bulk review.
-- **Markdown front matter:** strong editorial format, but front matter syntax is likely too technical for the immediate customer workflow.
-- **Headless CMS:** best long-term authoring UI, but adds hosting/admin complexity and is not necessary for the local offline preview workflow.
+- Same-base-name sidecars are the safest matching model for artwork-specific text because the image and text are visibly paired in the filesystem.
+- `.txt` is preferable for the customer-facing sidecar because it avoids JSON commas, CSV quoting, YAML indentation, and XMP/XML complexity.
+- `.md` can be a future accepted alias, but the first parser should not require Markdown/front matter.
+- XMP sidecars prove the sidecar concept is industry-standard, but XMP itself is too technical for this local customer workflow.
+- The importer must treat text sidecars as metadata, not unsupported image files.
 
 ### Online research findings
 
-- Web accessibility sources recommend meaningful alt text for informative images; captions/descriptions do not replace alt text.
-- Static site data-file patterns commonly use JSON, YAML, or CSV-like structured data to separate content from presentation.
-- Spreadsheet/CSV workflows are practical for bulk catalog editing, while JSON/front matter are better for developer- or CMS-backed pipelines.
-- A CMS is worth considering only if the customer needs a full editorial UI, permissions, media library, localization, or remote collaboration.
+- XMP is standardized under ISO 16684 and commonly used as an external metadata sidecar format in digital-asset/photo workflows.
+- ExifTool documents sidecar metadata files as a normal metadata import/export mechanism.
+- Immich and PhotoPrism both document XMP sidecar support, confirming that sidecars remain active in modern media-management tools.
+- W3C and WebAIM guidance supports meaningful alt text for informative images; longer descriptions/captions are separate supporting content.
+- Art-gallery description guidance should cover subject, composition, color, style, mood, and visible text where relevant.
 
 Sources:
 
-- WebAIM Alternative Text: <https://webaim.org/techniques/alttext/>
+- Adobe XMP specifications: <https://developer.adobe.com/xmp/docs/xmp-specifications/>
+- Adobe XMP docs repository: <https://github.com/adobe/xmp-docs>
+- ISO 16684-3 XMP JSON-LD serialization: <https://www.iso.org/obp/ui/#!iso:std:79384:en>
+- ExifTool metadata sidecar files: <https://exiftool.org/metafiles.html>
+- Immich XMP sidecars: <https://docs.immich.app/features/xmp-sidecars/>
+- PhotoPrism XMP metadata: <https://docs.photoprism.app/developer-guide/metadata/xmp/>
 - W3C Images Tutorial: <https://www.w3.org/WAI/tutorials/images/>
-- Google Image SEO best practices: <https://developers.google.com/search/docs/crawling-indexing/images>
-- Jekyll data files: <https://jekyllrb.com/docs/datafiles/>
-- Eleventy data files: <https://www.11ty.dev/docs/data/>
+- WebAIM Alternative Text: <https://webaim.org/techniques/alttext/>
+- Smithsonian image description guidance: <https://www.si.edu/accessibility/ai#describe>
 
 ### Future implementation risks to control
 
-1. Do not silently attach text to the wrong picture after renames. Report mismatches instead.
-2. Parse CSV robustly enough for quoted commas and customer spreadsheet exports.
-3. Preserve the current image-only import behavior when no text file exists.
-4. Keep generated files clearly marked as generated; customers should edit only the source text file.
-5. Warn on missing alt text and empty descriptions without blocking image import.
-
+1. Do not fuzzy-match or auto-attach orphaned text to a different image. Wrong text is worse than missing text.
+2. Ignore `.txt`/`.md` sidecars during image format validation so they do not appear as skipped image files.
+3. Warn when required fields (`Title`, `Description`, `Alt`) are empty, but keep image import non-blocking.
+4. Handle duplicate sidecars deterministically (`.txt` before `.md`) and report the duplicate.
+5. Preserve multi-line descriptions and customer punctuation through JSON generation.
+6. Keep generated files marked as generated; sidecars are the only customer-editable text source.
 
 ## 2026-05-20 — v0.17 easy wins: accessibility, dead-code cleanup
 
