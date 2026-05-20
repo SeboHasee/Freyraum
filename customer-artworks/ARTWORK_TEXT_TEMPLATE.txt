@@ -1,3 +1,5 @@
+STATUS: planned for v0.18 — the current importer still ignores this file until sidecar support is implemented.
+
 FREYRAUM — Artwork text card template
 ======================================
 

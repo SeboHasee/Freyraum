@@ -1,9 +1,8 @@
 # FREYRAUM architecture map
 
-## v0.18 — Sidecar text plan ready (2026-05-20)
+## v0.18 — Final audited sidecar-text plan (2026-05-20)
 
-v0.18 technical coding plan is documented in `plan.md § v0.18`. Only `scripts/import-artworks.mjs` changes. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
-
+Current status: planned, not implemented yet. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide draft: `docs/CUSTOMER_TEXT_GUIDE.md`. Template draft: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`. The current runtime still uses generated importer text until `scripts/import-artworks.mjs` is updated.
 
 FREYRAUM is a Vite + strict TypeScript + three.js customer-preview application for an interactive digital museum installation.
 

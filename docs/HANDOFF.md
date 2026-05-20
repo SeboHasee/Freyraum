@@ -1,15 +1,15 @@
 # FREYRAUM customer handoff guide
 
-## v0.18 sidecar text — technical plan ready (2026-05-20)
+## v0.18 sidecar text — final audited plan (not implemented yet, 2026-05-20)
 
-v0.18 adds customer-written text cards for each painting as `.txt` sidecar files.
-The full technical coding plan (with exact JS code samples) is in `plan.md § v0.18`.
-Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`.
-Copy-paste template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
+The sidecar-text workflow is the confirmed v0.18 direction, but it is **still planning/docs only** in the current repository state.
 
-All changes are confined to `scripts/import-artworks.mjs` (zero new dependencies).
-TypeScript runtime code (`src/`) does not change. The offline `file://` preview and `webglImage` path are unchanged.
+- Final plan: `plan.md § v0.18`
+- Research log: `FINDINGS.md § 2026-05-20`
+- Customer guide draft: `docs/CUSTOMER_TEXT_GUIDE.md`
+- Copy-paste template draft: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
 
+Planned implementation remains confined to `scripts/import-artworks.mjs` (zero new dependencies). TypeScript runtime code (`src/`) does not need first-slice changes, and the offline `file://` preview plus `webglImage` path stay unchanged.
 
 This document supports presenting FREYRAUM to customers and onboarding new
 contributors. **Current runtime status: v0.17 easy-wins pass implemented (on top of v0.16, v0.15, and v0.14).**

@@ -86,37 +86,30 @@ Technical changes behind this behavior:
 For support/debugging, `show-artwork-complete` now logs extra v0.14/v0.14.2 tuning data (`closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
 
 
-## Painting text workflow — sidecar text files
+## Planned v0.18 painting text workflow (draft, not shipped yet)
 
-Each painting can have its own text card: a small `.txt` file with the same
-name as the picture, placed in the same `inbox` folder.
+The repository now contains a **final audited plan** for customer-written painting text via same-basename `.txt` sidecar files, but that workflow is **not active in the current importer yet**.
+
+Planned future shape:
 
 ```text
 customer-artworks/inbox/
-  01-sunset-at-the-lake.jpg      ← your painting
-  01-sunset-at-the-lake.txt      ← your text card
+  01-sunset-at-the-lake.jpg      ← painting
+  01-sunset-at-the-lake.txt      ← planned text card
 ```
 
-**Quick start:**
+Planned customer flow after implementation:
 
-1. Open `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
-2. Copy it, rename it to match your painting (only change the `.txt` extension stays, replace the rest).
+1. Copy `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
+2. Rename it to match the painting file name.
 3. Fill in `Title:`, `Alt:`, and `Description:` at minimum.
-4. Save the `.txt` file in the inbox next to the painting.
-5. Run **Update Gallery**. The report will confirm "Text applied".
-6. Open `index.html` — the info panel on the right shows your text.
+4. Save the `.txt` file next to the painting in the inbox.
+5. Run **Update Gallery**.
+6. Read the report for `Text applied`, `Pictures missing text`, or `Text files without matching pictures`.
 
-**What the report tells you:**
-- `Text applied (n)` — your text card was matched and used.
-- `Pictures missing text (n)` — the painting imported with placeholder text; add a `.txt` card.
-- `Text files without matching pictures (n)` — the `.txt` filename does not match any picture; check the spelling.
+**Current reality:** the shipped importer still ignores sidecar files and still generates fallback text automatically. Until v0.18 code is implemented, treat `docs/CUSTOMER_TEXT_GUIDE.md` and the template as draft documentation only.
 
-Until you add text cards, the gallery creates titles from file names and uses
-placeholder imported-artwork text. The importer never fails because a text card
-is missing — it just reports it and continues.
-
-**Full guide:** see `docs/CUSTOMER_TEXT_GUIDE.md` for step-by-step instructions,
-the full field reference, and a copy-paste template.
+**References:** `plan.md § v0.18`, `FINDINGS.md § 2026-05-20`, `docs/CUSTOMER_TEXT_GUIDE.md`.
 
 ## What you need (one-time)
 

@@ -1,11 +1,18 @@
 # CHANGELOG
 
-## v0.18 — Sidecar text plan ready (2026-05-20)
+## v0.18 — Final audited sidecar-text plan (2026-05-20)
 
-Technical coding plan in `plan.md § v0.18`. Only `scripts/import-artworks.mjs` changes (Node 18+ ESM, zero new deps). Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
-
+Planning/docs only. The sidecar-text workflow is fully audited in `plan.md § v0.18` and `FINDINGS.md § 2026-05-20`, but it is not shipped in the current runtime yet. Planned implementation remains confined to `scripts/import-artworks.mjs` (Node 18+ ESM, zero new dependencies).
 
 ## Unreleased
+
+### Documentation (v0.18 final audited plan — 2026-05-20)
+
+- Completed a full codebase audit focused on the planned sidecar-text importer change.
+- Revalidated the coding guidance against `scripts/import-artworks.mjs`, `src/main.ts`, `src/config/artworks.ts`, and `src/ui/InfoPanel.ts`, plus current Node/accessibility/metadata sources.
+- Finalized the v0.18 plan with explicit implementation slices, cleanup, and check-up steps.
+- Updated repository markdown to mark the sidecar workflow as planned/not-yet-shipped and to point every v0.18 reference at the final audit sources.
+- Current runtime behavior is unchanged: the importer still generates fallback text until the dedicated implementation pass lands.
 
 ### Changed / Fixed (v0.17 easy wins — 2026-05-20)
 

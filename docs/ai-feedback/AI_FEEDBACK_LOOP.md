@@ -1,9 +1,8 @@
 # AI feedback loop
 
-## v0.18 — Sidecar text plan ready (2026-05-20)
+## v0.18 — Final audited sidecar-text plan (2026-05-20)
 
-Technical coding plan: `plan.md § v0.18`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`. Only `scripts/import-artworks.mjs` changes.
-
+Current status: planned, not implemented yet. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide draft: `docs/CUSTOMER_TEXT_GUIDE.md`. Template draft: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`. The current runtime still uses generated importer text until `scripts/import-artworks.mjs` is updated.
 
 FREYRAUM uses repository context engineering so future AI work starts from the current architecture and previous mistakes.
 

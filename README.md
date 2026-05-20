@@ -1,13 +1,15 @@
 # Freyraum
 
-## v0.18 — Customer painting text via sidecar `.txt` files (plan ready 2026-05-20)
+## v0.18 — Final audited sidecar-text plan (not shipped yet, 2026-05-20)
 
-**Plan:** `plan.md § v0.18` — full technical implementation plan with JS code samples.
-**Customer guide:** `docs/CUSTOMER_TEXT_GUIDE.md`
-**Template:** `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
+The v0.18 sidecar-text workflow is now fully audited in `plan.md § v0.18` and `FINDINGS.md § 2026-05-20`, but it is **not implemented in the current runtime yet**.
 
-Only `scripts/import-artworks.mjs` changes. All TypeScript runtime code is unchanged.
+**Plan:** `plan.md § v0.18` — final audited implementation plan.
+**Research log:** `FINDINGS.md § 2026-05-20`
+**Customer guide draft:** `docs/CUSTOMER_TEXT_GUIDE.md`
+**Template draft:** `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
 
+Current behavior remains unchanged: the importer still generates fallback text, and the planned implementation stays confined to `scripts/import-artworks.mjs` with no planned `src/` runtime changes for the first slice.
 
 A premium interactive digital museum installation built by a high-end creative technology studio.
 

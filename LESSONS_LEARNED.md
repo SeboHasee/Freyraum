@@ -1,9 +1,8 @@
 # FREYRAUM lessons learned
 
-## v0.18 — Sidecar text plan ready (2026-05-20)
+## v0.18 — Final audited sidecar-text plan (2026-05-20)
 
-Technical coding plan: `plan.md § v0.18`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`. Only `scripts/import-artworks.mjs` changes.
-
+Current status: planned, not implemented yet. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide draft: `docs/CUSTOMER_TEXT_GUIDE.md`. Template draft: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`. The current runtime still uses generated importer text until `scripts/import-artworks.mjs` is updated.
 
 Use this file for durable lessons that should change future agent behavior.
 
@@ -48,6 +47,11 @@ Use this file for durable lessons that should change future agent behavior.
 
 - Three interaction files (`MouseInteraction.ts`, `TouchInteraction.ts`, `ZoomPan.ts`) and one deprecated export (`isMobileDevice()`) were confirmed caller-free by grep before deletion. No runtime errors resulted.
 - Future rule: before removing any exported symbol, grep all source and test files for its name; proceed only when no non-comment match is found.
+
+## 2026-05-20 — Planned customer workflows must stay clearly labeled as planned
+
+- Draft guides and templates for future customer workflows can easily read like shipped behavior if they use present-tense instructions.
+- Future rule: whenever documentation describes an unimplemented workflow, mark it as draft/not-yet-shipped in the intro and repeat the current runtime behavior so customers are not misled.
 
 Extended incident documentation belongs in `docs/lessons-learned/`.
 

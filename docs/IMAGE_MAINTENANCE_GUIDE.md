@@ -38,7 +38,7 @@ The v0.16 audit was implemented on 2026-05-19. From a maintenance and importer p
 - **Importer warnings.** `scripts/import-artworks.mjs` now emits new warnings in `customer-artworks/last-import-report.txt` when an image exceeds 4096 px on a side, or its GPU footprint (RGBA8 with mip pyramid: `w × h × 4 × 4/3`) exceeds 64 MB (info-level notice) or 128 MB (strong warning). These are advisory; the manifest is still written.
 - **Renderer diagnostics for support cases.** When `?debug=1` is set, the console now contains periodic `[renderer] snapshot` entries with draw calls, triangle counts, geometries, textures, program count, pixel ratio, and current preset. Customers reporting performance issues can share their console log; the new entries make it easier to identify undersized phones or oversize textures.
 - **Battery preset is now visually softer.** Glass-panel blur is halved on the battery preset (CSS-only — no shader change). Picture quality and the data-URL embedding path are unchanged.
-- **Dead-code cleanup deferred.** The unused `MouseInteraction`, `TouchInteraction`, and `ZoomPan` files remain on disk pending a dedicated refactor PR. They are not part of the active runtime; do not touch them when adjusting interaction behaviour.
+- **Dead-code cleanup resolved in v0.17.** `MouseInteraction`, `TouchInteraction`, and `ZoomPan` were removed after caller-graph validation. All canvas input now routes through `CanvasInteraction.ts`.
 - **Manifest contract unchanged.** Nothing in the importer output shape changes; only new warning text may appear in the human-readable report.
 
 ## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19, design history)
@@ -144,39 +144,34 @@ visibility. The importer, generated manifests, and `webglImage` path are not
 part of this follow-up.
 
 
-## Painting text maintenance — sidecar text files (v0.18 plan)
+## Painting text maintenance — planned v0.18 sidecar workflow
 
-Customer-written painting text is maintained in one sidecar text file beside
-each image in the inbox, merged during import.
+The sidecar-text workflow is now fully audited, but it is **not implemented yet**.
 
-**Maintainer reference:**
+Planned maintainer model:
 
-- `customer-artworks/inbox/<image-base>.txt` — customer-editable source of truth for each painting
-- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` — copy-paste template for customers
-- `docs/CUSTOMER_TEXT_GUIDE.md` — full customer-facing guide
+- `customer-artworks/inbox/<image-base>.txt` will become the customer-editable text source of truth for each painting.
+- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` is the draft copy-paste template.
+- `docs/CUSTOMER_TEXT_GUIDE.md` is the draft customer-facing guide.
 
-**How sidecar merge works (v0.18 importer changes):**
+Planned importer behavior:
 
-1. The inbox scan is split into two passes: image files and `.txt`/`.md` sidecar files.
-2. Each image is matched to a sidecar by exact base filename (case-insensitive).
-3. The `parseSidecar()` function reads the `.txt` file, strips BOM, normalises line endings, and extracts fields: `Title`, `Year`, `Credit`, `Alt`, `Tags`, `Surface`, `Medium`, `Subtitle`, `Description`.
-4. Matched sidecar fields override the importer-generated placeholders via `??` null-coalescing (a missing field falls back to the generated value, not to blank).
-5. `image`, `webglImage`, `dimensions`, and `id` are always importer-generated; no sidecar field can override them.
-6. `.txt` sidecar files are never treated as images; they never appear in the "Skipped" section of the report.
+1. Split the inbox scan into image files and sidecar files.
+2. Match sidecars to images by lowercase basename in the same folder.
+3. Parse labeled text fields (`Title`, `Subtitle`, `Year`, `Credit`, `Alt`, `Tags`, `Surface`, `Medium`, `Description`).
+4. Merge sidecar metadata into the generated manifest while leaving asset fields (`id`, `image`, `webglImage`, `dimensions`) importer-owned.
+5. Extend the report with `Text applied`, `Pictures missing text`, and `Text files without matching pictures` sections.
 
-**Report sections added in v0.18:**
-- `Text applied (n)` — sidecars matched and applied
-- `Pictures missing text (n)` — images with no sidecar; fallback text used
-- `Text files without matching pictures (n)` — orphaned sidecars (wrong filename or image deleted)
+Maintenance rules once shipped:
 
-**Maintenance rules:**
-- Treat the image and sidecar as a pair during rename/delete/move.
-- Never edit `artworks.json` or `customer-artworks.js` to fix text; edit the sidecar and rerun the importer.
-- Wrong text is worse than missing text — do not auto-guess matches after renames.
-- The `webglImage` generation path and the offline `file://` preview are completely unchanged.
+- Treat image and sidecar as a pair during rename/delete/move.
+- Never edit `artworks.json` or `customer-artworks.js` to fix customer text; edit the sidecar and rerun the importer.
+- Do not fuzzy-match orphaned text files after renames.
+- Keep the current offline `file://` preview and `webglImage` reliability path unchanged.
 
-See `plan.md § v0.18` for the full technical implementation plan with exact code samples.
-See `FINDINGS.md § 2026-05-20` for the research log and code-level analysis.
+Current reality: the importer still ignores sidecars today, so this section remains planning guidance until the dedicated v0.18 implementation pass lands.
+
+See `plan.md § v0.18` and `FINDINGS.md § 2026-05-20` for the final audited technical plan.
 
 ## Quick overview
 

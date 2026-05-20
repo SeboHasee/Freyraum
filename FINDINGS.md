@@ -1,88 +1,88 @@
 # FINDINGS
 
-## 2026-05-20 — Customer sidecar text files selected for artwork text
+## 2026-05-20 — Final audit of the planned customer sidecar-text workflow
 
-### Decision update
+### Audit outcome
 
-The earlier CSV-first recommendation has been superseded. The preferred v0.18 direction is now **Option C: one sidecar text file beside each image**. The customer-facing source of truth should be `painting.txt` next to `painting.jpg`, matched by the exact same base filename.
+Option C remains the correct v0.18 direction: **one customer-editable sidecar text file beside each artwork image**, matched by basename.
 
-See also:
-- `plan.md § v0.18` — full technical implementation plan with code samples
-- `docs/CUSTOMER_TEXT_GUIDE.md` — customer-facing step-by-step guide
-- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` — copy-paste template
+Important status correction: this workflow is still **planned, not implemented**. The current importer does not yet read sidecars. During this final audit, all Markdown docs were cleaned so they no longer imply the feature has already shipped.
 
-### Current-state findings
+### Full-codebase audit summary
 
-1. `scripts/import-artworks.mjs` already creates the runtime text fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) while importing images.
-2. Those fields are currently generated from filename, dimensions, current year, and placeholders; no maintained customer text source exists yet.
-3. The importer already scans `customer-artworks/inbox/`, so same-folder text matching can be added without changing the customer’s main folder workflow.
-4. `src/config/artworks.ts` already contains the target metadata contract. A sidecar parser can feed the existing fields without changing the UI model.
-5. `src/main.ts` normalizes generated customer artwork data, so importer output should remain complete JSON data and generated files should stay the runtime boundary.
+The repository was re-checked across the importer path, runtime contract, UI rendering path, architecture docs, AI guidance, customer docs, and validation workflow.
 
-### Sidecar-specific findings
+Validated boundaries:
 
-- Same-base-name sidecars are the safest matching model for artwork-specific text because the image and text are visibly paired in the filesystem.
-- `.txt` is preferable for the customer-facing sidecar because it avoids JSON commas, CSV quoting, YAML indentation, and XMP/XML complexity.
-- `.md` can be a future accepted alias, but the first parser should not require Markdown/front matter.
-- XMP sidecars prove the sidecar concept is industry-standard, but XMP itself is too technical for this local customer workflow.
-- The importer must treat text sidecars as metadata, not unsupported image files.
+1. `scripts/import-artworks.mjs` is the only file that needs first-slice runtime changes.
+2. `src/config/artworks.ts` already exposes every metadata field the sidecar workflow needs.
+3. `src/main.ts` already sanitizes injected artwork records and safely accepts the planned metadata fields.
+4. `src/ui/InfoPanel.ts` renders `description` with `.textContent`, so sidecar descriptions stay plain text.
+5. The current report/import architecture is warning-first and already suitable for missing/orphaned/invalid sidecar cases.
+6. No `src/` UI or rendering changes are required for the initial implementation slice.
 
-### Online research findings
+### Current importer findings
 
-- XMP is standardized under ISO 16684 and commonly used as an external metadata sidecar format in digital-asset/photo workflows.
-- ExifTool documents sidecar metadata files as a normal metadata import/export mechanism.
-- Immich and PhotoPrism both document XMP sidecar support, confirming that sidecars remain active in modern media-management tools.
-- W3C and WebAIM guidance supports meaningful alt text for informative images; longer descriptions/captions are separate supporting content.
-- Art-gallery description guidance should cover subject, composition, color, style, mood, and visible text where relevant.
+- The inbox scan is currently a single pass over all files in `customer-artworks/inbox/`.
+- Any non-image file that is not in the supported extension sets falls into the `Skipped` section as an unsupported file. A `.txt` sidecar would therefore currently be misclassified.
+- The stable matching anchor already exists: `const stem = basename(filename, ext)`.
+- The importer already generates all customer-facing metadata fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`), so sidecar parsing is a merge problem, not a schema-expansion problem.
+- `webglImage`, image copy, dimension parsing, id generation, and preview manifest writing are already working and must remain unchanged.
+- The report writer already separates `Imported`, `Needs attention`, `Skipped`, and `Errors`, which makes text-specific report sections a natural extension.
 
-Sources:
+### Finalized implementation guidance
 
-- Adobe XMP specifications: <https://developer.adobe.com/xmp/docs/xmp-specifications/>
-- Adobe XMP docs repository: <https://github.com/adobe/xmp-docs>
-- ISO 16684-3 XMP JSON-LD serialization: <https://www.iso.org/obp/ui/#!iso:std:79384:en>
-- ExifTool metadata sidecar files: <https://exiftool.org/metafiles.html>
+- Keep the implementation confined to `scripts/import-artworks.mjs`.
+- Add sidecar-aware inbox separation before the image loop.
+- Parse `.txt` as primary sidecar format; allow `.md` as a secondary alias only if it uses the same labeled plain-text shape.
+- Match by lowercase stem in the same folder; never fuzzy-match renamed files.
+- Strip BOM and normalize line endings before parsing because customer editors will likely be Notepad/TextEdit.
+- Keep missing/invalid text non-fatal; surface problems through the existing plain-language report.
+- Use `??` for merge fallback so “field missing” differs from “field present but blank”.
+- Keep `Alt` and `Description` distinct both in parsing and guidance.
+
+### Documentation cleanup completed in this audit
+
+The final audit corrected a documentation drift problem: several docs had started to read as though the sidecar workflow already existed. The cleanup now makes these points explicit everywhere:
+
+- the v0.18 sidecar workflow is finalized but **not shipped yet**;
+- the current importer still generates fallback text;
+- `docs/CUSTOMER_TEXT_GUIDE.md` and `ARTWORK_TEXT_TEMPLATE.txt` are draft assets for the upcoming implementation;
+- the current authoritative shipped customer workflow remains the picture-only importer.
+
+### Online validation findings
+
+1. **Sidecars remain a standard asset-management pattern.** Adobe Lightroom, Capture One, Immich, and ExifTool all document sidecar metadata workflows, validating the decision to keep metadata physically beside the artwork file.
+2. **A simple `.txt` adaptation is appropriate here.** Professional XMP sidecars prove the pattern, but `.txt` remains the better customer-facing format for this offline/local gallery.
+3. **Node path handling requires explicit case normalization.** Current Node docs note that `path.basename(path, suffix)` treats suffix comparison case-sensitively even on Windows, so lowercased stem matching is the correct cross-platform rule.
+4. **UTF-8 text reading is straightforward in Node.** `readFileSync(filePath, 'utf8')` is the right baseline; manual BOM stripping is still useful for Windows-authored files.
+5. **Alt text and long description must stay separate.** W3C, WCAG, WebAIM, and Smithsonian guidance all distinguish concise alt text from longer explanatory or descriptive text for complex/informative images and art.
+
+### Sources
+
+- Node.js `path`: <https://nodejs.org/api/path.html>
+- Node.js `fs`: <https://nodejs.org/api/fs.html>
+- Adobe Lightroom XMP sidecars: <https://helpx.adobe.com/lightroom-classic/help/create-xmp-acr-files.html>
+- Capture One XMP sidecars: <https://support.captureone.com/hc/en-us/articles/360002544898-Metadata-in-XMP-sidecar-files>
 - Immich XMP sidecars: <https://docs.immich.app/features/xmp-sidecars/>
-- PhotoPrism XMP metadata: <https://docs.photoprism.app/developer-guide/metadata/xmp/>
-- W3C Images Tutorial: <https://www.w3.org/WAI/tutorials/images/>
-- WebAIM Alternative Text: <https://webaim.org/techniques/alttext/>
-- Smithsonian image description guidance: <https://www.si.edu/accessibility/ai#describe>
+- ExifTool sidecar files: <https://exiftool.org/metafiles.html>
+- W3C WAI Images Tutorial: <https://www.w3.org/WAI/tutorials/images/>
+- WCAG quick reference: <https://www.w3.org/WAI/WCAG21/quickref/#non-text-content>
+- WebAIM alt text: <https://webaim.org/techniques/alttext/>
+- Smithsonian visual descriptions: <https://www.si.edu/accessibility/visual-descriptions>
 
-### Code-level analysis — `scripts/import-artworks.mjs` (v0.18 audit)
+### Validation results for this audit pass
 
-Full read of `scripts/import-artworks.mjs` (427 lines, Node 18+ ESM, zero npm dependencies):
+- `npm install` ✅
+- `npm run lint` ✅ (with the existing `@typescript-eslint` / TypeScript supported-version warning)
+- `npm run build` ✅
+- `node -c scripts/import-artworks.mjs` ✅
+- `node -c scripts/write-local-preview.mjs` ✅
+- `node -c scripts/run-import-artworks.cjs` ✅
 
-**Current importer behaviour relevant to v0.18:**
+### Remaining boundary
 
-1. Line 44–48: Three extension sets (`SAFE_EXTENSIONS`, `RISKY_EXTENSIONS`, `RAW_EXTENSIONS`). No sidecar awareness.
-2. Lines 237–240: Single inbox scan into `inboxEntries`. Sorted numerically. No two-pass logic.
-3. Lines 259–364: Single `inboxEntries.forEach()` loop. At line 268–270: any file that is not in `SAFE_EXTENSIONS` or `RISKY_EXTENSIONS` falls into `skipped[]` with "unsupported file type". A `.txt` file would currently be listed as skipped — this must change.
-4. Lines 285–288: `const stem = basename(filename, ext)` — the stable base name for each image. This is the anchor for sidecar matching.
-5. Lines 347–362: Artwork object literal. All five customer-visible text fields are currently hardcoded: `subtitle: \`Artwork ${indexLabel}\``, `description: 'Imported artwork'`, `year: new Date().getFullYear()`, `alt: title`, `credit: 'Customer'`, `tags: []`, `surfaceProfile: 'matte-canvas'`. These are the exact fields that sidecar merge replaces.
-6. Lines 302–309: `webglImage` generation via `readFileSync(destPath)` + base64. **This must remain fully unchanged.** The sidecar approach does not touch image bytes or this code path.
-7. Lines 384–421: Report builder. Currently four sections: `Imported`, `Needs attention`, `Skipped`, `Errors`. No text-specific sections.
-
-**`src/main.ts` normalizer (lines 59–134) — no changes needed:**
-
-The `sanitizeInjectedArtworks()` function accepts optional fields gracefully. `description`, `year`, `credit`, `alt`, `subtitle` all have safe fallbacks at lines 104–115. `surfaceProfile` is validated against the exact `SurfaceProfile` union at lines 117–124. The sidecar values the importer emits will all pass this validation without any runtime code changes.
-
-**`src/ui/InfoPanel.ts` — no changes needed:**
-
-`setContent()` at line 81–86 renders `artwork.description` as `.textContent`, so multi-line descriptions will appear with natural line breaks in the rendered DOM. No HTML injection risk from sidecar text.
-
-**`src/config/artworks.ts` — no changes needed:**
-
-The `Artwork` interface already has every field the sidecar will populate (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`). Nothing needs to be added or changed.
-
-### Future implementation risks to control
-
-1. Do not fuzzy-match or auto-attach orphaned text to a different image. Wrong text is worse than missing text.
-2. `.txt`/`.md` sidecars must never appear as skipped image files — filter them out before the image loop with `SIDECAR_EXTENSIONS`.
-3. Warn when `Alt` is empty, but keep image import non-blocking.
-4. Handle duplicate sidecars deterministically (`.txt` before `.md`) and report the duplicate.
-5. Preserve multi-line descriptions and customer punctuation through JSON generation.
-6. Keep generated files marked as generated; sidecars are the only customer-editable text source.
-7. The `??` null-coalescing operator (not `||`) must be used for field merge — an empty string from a sidecar is intentionally blank; using `||` would incorrectly fall back to the generated value.
-8. Stem matching must be case-insensitive (`.toLowerCase()`) because Windows filesystems are case-insensitive and a file named `Painting.TXT` must still match `painting.jpg`.
+This final audit intentionally does **not** implement the sidecar importer change. The next dedicated v0.18 implementation pass should start from `plan.md § v0.18` and keep the current docs/runtime distinction intact until the code actually lands.
 
 ## 2026-05-20 — v0.17 easy wins: accessibility, dead-code cleanup
 
@@ -131,11 +131,11 @@ The `Artwork` interface already has every field the sidecar will populate (`titl
 3. **PreferencesPanel listener churn is low-risk but worth documenting.**
    - `PreferencesPanel.renderPanel()` replaces `panel.innerHTML` and attaches fresh input listeners after preference updates.
    - Old DOM nodes are collectable, so this is not treated as a leak, but future work can simplify this with delegated `change` handling.
-4. **Legacy interaction cleanup remains deferred.**
-   - `MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts` are superseded by unified `CanvasInteraction.ts`.
-   - They remain useful as historical references but should be removed in a dedicated cleanup PR after one focused validation pass.
-5. **Deprecated API remains intentionally exported.**
-   - `isMobileDevice()` in `src/utils/performance.ts` is deprecated in favor of `detectDeviceCapabilities()`; future code should not add new callers.
+4. **Legacy interaction cleanup is complete.**
+   - `MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts` were removed after caller-graph validation.
+   - `CanvasInteraction.ts` is now the only production canvas-input path.
+5. **Deprecated mobile helper was removed.**
+   - `isMobileDevice()` was deleted from `src/utils/performance.ts`; future code should use `detectDeviceCapabilities()` from `src/utils/device.ts`.
 6. **Preference persistence schema is now part of the audit record.**
    - Storage key: `freyraum.preferences.v1`.
    - Fields: `reducedMotion`, `highContrast`, `contrastMode`, `quality`, and `lighting`.

@@ -1,260 +1,183 @@
-# FREYRAUM — How to add text to your paintings
+# FREYRAUM — Draft guide for painting text sidecars (planned v0.18)
 
-This guide explains how to write a short text card for each painting so that
-the gallery shows your own title, description, and other details.
+> Status: **planned, not live yet**. The current importer still ignores `.txt` sidecar files. This guide documents the finalized v0.18 workflow so the future implementation and customer wording stay aligned. Today, continue using the shipped picture-only workflow in `docs/CUSTOMER_PICTURE_GUIDE.md`.
 
-You do **not** need a code editor, terminal, or technical tool.
-You only need a plain text editor (Windows: Notepad — macOS: TextEdit).
+This draft guide explains how the **planned** sidecar-text workflow will work once v0.18 is implemented.
+
+You will not need a code editor, terminal, or technical tool.
+You will only need a plain text editor (Windows: Notepad — macOS: TextEdit in plain-text mode).
 
 ---
 
-## The idea in one sentence
+## Planned idea in one sentence
 
-For each painting file you put in the inbox, you also create a matching text
-file with the **exact same name** but ending in `.txt`.
+For each painting file in `customer-artworks/inbox/`, the future v0.18 importer will also read a matching text file with the **same basename** and the `.txt` extension.
 
-```
+```text
 customer-artworks/inbox/
-  01-sunset-at-the-lake.jpg      ← your painting
-  01-sunset-at-the-lake.txt      ← your text card for that painting
+  01-sunset-at-the-lake.jpg      ← painting
+  01-sunset-at-the-lake.txt      ← matching text card
   02-forest-path.png
   02-forest-path.txt
 ```
 
-When you run **Update Gallery**, the importer reads both files together and
-fills in the painting's title, description, and other details from the text card.
-
 ---
 
-## Step-by-step
+## Planned workflow (after v0.18 implementation)
 
-### 1. Put your painting in the inbox
+### 1. Put the painting in the inbox
 
-Open `customer-artworks` → `inbox` and drop your picture file in there.
+Open `customer-artworks` → `inbox` and place the picture file there.
 
 ### 2. Create a text file with the same name
 
-Open Notepad (Windows) or TextEdit (macOS, switch to plain text first).
+Open Notepad (Windows) or TextEdit (macOS, switched to plain text first).
 
-**Important:** the text file name must match the picture file name exactly,
-only the ending changes to `.txt`.
+The text file name must match the picture file name exactly, only the extension changes to `.txt`.
 
 | Picture file | Matching text file |
-|---|---|
+| --- | --- |
 | `01-sunset-at-the-lake.jpg` | `01-sunset-at-the-lake.txt` |
 | `02-forest-path.png` | `02-forest-path.txt` |
 | `my favourite painting.webp` | `my favourite painting.txt` |
 
 ### 3. Fill in the text card
 
-Copy the template below and fill in your own text.
-The only lines you **must** fill in are `Title:`, `Alt:`, and `Description:`.
-Everything else is optional.
+Copy the template below and fill in the fields.
+The planned workflow expects the customer to provide at least `Title:`, `Alt:`, and `Description:`.
 
-```
+```text
 Title: Sunset at the lake
+Subtitle: Freyraum Collection
 Year: 2024
 Credit: Your Name
 Alt: Warm orange and pink sky reflected in a calm lake at dusk.
 Tags: sunset, lake, landscape
+Surface: matte-canvas
+Medium: Oil on canvas · 60×80 cm
 
 Description:
 This painting captures the quiet end of a summer day at the lake near my childhood home.
 The warm light on the water always reminded me of how brief those evenings felt.
-You can write as many lines here as you like.
 ```
 
-### 4. Save the text file in the inbox
+### 4. Save the text file next to the image
 
-Save the `.txt` file into the **same inbox folder** as the picture:
+Save the `.txt` file into the same inbox folder as the image:
 `customer-artworks/inbox/`
 
 ### 5. Run Update Gallery
 
-Double-click **Update Gallery** in the FREYRAUM folder.
+After the future v0.18 implementation ships, double-click **Update Gallery** in the FREYRAUM folder.
 
 ### 6. Read the report
 
-The report opens automatically. Look for these sections:
+After implementation, the report is planned to include text-specific sections such as:
 
-- **Text applied** — your text card was matched and used. ✓
-- **Pictures missing text** — picture imported with placeholder text; you should add a text card.
-- **Text files without matching pictures** — a text card was found but has no matching picture; check the filename spelling.
-- **Needs attention** — a field in your text card has a problem (e.g. the year is not a number).
-
-Fix any issues, then run Update Gallery again.
+- **Text applied** — the text card was matched and used.
+- **Pictures missing text** — the picture imported with fallback text because no sidecar existed.
+- **Text files without matching pictures** — a text card exists but no image with the same basename was found.
+- **Text fields needing attention** — a sidecar file parsed, but one or more fields need correction.
 
 ### 7. Open the gallery
 
-Double-click `index.html` in the FREYRAUM folder.
-Click the left/right arrows to see your paintings.
-The panel on the right shows the text from your text cards.
+After implementation, `index.html` should show the sidecar text in the info panel.
 
 ---
 
-## Text card format reference
+## Planned text-card format reference
 
-```
-Title: (your painting title — required)
-Year: (year of creation, e.g. 2024 — optional, defaults to current year)
-Credit: (your name or studio name — optional, defaults to "Customer")
-Alt: (short visual description for screen readers — required)
-Tags: (comma-separated words for future filtering — optional)
-Surface: (one of: matte-canvas, satin-canvas, varnished-oil, paper — optional)
-Medium: (e.g. "Oil on canvas · 60×80 cm" — optional)
-Subtitle: (short eyebrow line above the title — optional)
+```text
+Title: (painting title — customer should provide)
+Subtitle: (optional eyebrow line above the title)
+Year: (optional four-digit year)
+Credit: (optional — defaults to "Customer")
+Alt: (customer should provide a short visual description)
+Tags: (optional comma-separated keywords)
+Surface: (optional: matte-canvas, satin-canvas, varnished-oil, paper)
+Medium: (optional free-text medium override)
 
 Description:
-(your text here — required)
+(customer should provide the main info-panel text here)
 (can be multiple lines)
-(blank lines inside the description are kept as-is)
+(blank lines inside the description are preserved)
 ```
 
 ---
 
 ## Field guide
 
-### Title (required)
-The main title shown in the info panel. If you leave it out, the gallery
-generates a title from the file name.
+### Title
+The main title shown in the info panel.
+If omitted, the planned importer will fall back to a filename-generated title and warn in the report.
 
-**Example:** `Title: Sunset at the lake`
+### Subtitle
+Optional short line above the title.
+If omitted, the importer should keep the generated `Artwork 01`, `Artwork 02`, etc.
 
-### Alt (required)
-A short description of what the painting looks like, for visitors using a
-screen reader or who cannot see images. Write in plain sentences.
+### Alt
+A concise visual description for assistive technology.
+It should describe the visible painting rather than repeating the title.
 
-Good alt text describes: subject, colours, composition, mood, and any visible text.
+Good alt text usually mentions subject, colours, composition, mood, and visible text where relevant.
+Avoid starting with “image of” or “picture of”.
 
-**Example:**
-`Alt: Warm orange and pink sky reflected in a calm lake at dusk, with dark tree silhouettes on the left.`
+### Description
+The longer visible text shown in the info panel.
+The parser is planned to keep it separate from `Alt` and preserve multiple lines.
 
-**Tip:** Do not start with "image of" or "picture of" — screen readers
-already say "image" before reading the alt text.
+### Year
+Optional four-digit year.
+Invalid values should warn and fall back to the current year.
 
-### Description (required)
-The main text shown in the info panel below the title.
-Start a new line after `Description:` and write as much as you like.
-Blank lines within the description are preserved.
+### Credit
+Optional artist/studio/rights-holder string.
+If omitted, the planned default is `Customer`.
 
-**Example:**
-```
-Description:
-This painting captures the quiet end of a summer day at the lake.
-The warm light on the water always reminded me of how brief those evenings felt.
-```
+### Tags
+Optional keywords reserved for future filtering.
 
-### Year (optional)
-The year the painting was created, as a four-digit number.
-If you leave it blank or enter something invalid, the current year is used.
+### Surface
+Optional visual material profile for the 3D painting effect.
 
-**Example:** `Year: 2024`
+Allowed values:
 
-### Credit (optional)
-Your name, studio name, or rights holder.
-Shown in the info panel as `© [Credit]`.
-If omitted, defaults to "Customer".
+| Value | Meaning |
+| --- | --- |
+| `matte-canvas` | classic matte linen canvas |
+| `satin-canvas` | slightly glossy canvas |
+| `varnished-oil` | varnished oil painting |
+| `paper` | smooth paper |
 
-**Example:** `Credit: Maria Musterfrau`
-
-### Tags (optional)
-Comma-separated keywords reserved for future filtering.
-
-**Example:** `Tags: landscape, lake, warm`
-
-### Surface (optional)
-The visual material simulation for the 3D painting effect.
-If omitted, defaults to `matte-canvas`.
-
-Allowed values (copy exactly):
-
-| Value | Looks like |
-|---|---|
-| `matte-canvas` | Classic matte linen canvas |
-| `satin-canvas` | Slightly glossy canvas |
-| `varnished-oil` | Varnished oil painting |
-| `paper` | Smooth paper |
-
-**Example:** `Surface: varnished-oil`
-
-### Medium (optional)
-Free-text medium description, shown in the info panel alongside the pixel dimensions.
-If omitted, the gallery shows the image orientation and pixel size.
-
-**Example:** `Medium: Oil on canvas · 60×80 cm`
-
-### Subtitle (optional)
-Short line shown above the title (the "eyebrow" line).
-If omitted, defaults to "Artwork 01", "Artwork 02", etc.
-
-**Example:** `Subtitle: Freyraum Collection`
+### Medium
+Optional free-text medium description.
+If omitted, the importer should keep the current dimension-based label.
 
 ---
 
-## Common questions
+## Planned report behavior
 
-**What if I do not create a text card for a painting?**
+The future implementation is expected to stay forgiving:
 
-The importer still imports the picture and uses a generated title (from the
-file name) and placeholder text. You will see a "Pictures missing text" entry
-in the report.
-
-**What if the file names do not match?**
-
-The picture imports without your custom text (uses the generated fallback).
-The text card appears in the report as "Text files without matching pictures".
-Check that both names are identical apart from the file extension.
-
-**Can I use a different text editor?**
-
-Yes. You can use any editor that saves plain text. Avoid rich-text editors
-like Microsoft Word that save in proprietary formats — they must be saved as
-"Plain Text (.txt)".
-
-On macOS, switch TextEdit to plain text first: Format menu → Make Plain Text.
-
-**Can I add more than one description paragraph?**
-
-Yes. Just write multiple lines after `Description:`. Blank lines between
-paragraphs are preserved.
-
-**What happens if I make a spelling mistake in a field name?**
-
-The field is ignored (a warning appears in the report). All other fields
-still parse correctly.
-
-**Can I update the text without re-importing the image?**
-
-No. You must run Update Gallery again after editing the text card so the
-changes appear in the gallery.
-
-**What is the `ARTWORK_TEXT_TEMPLATE.txt` file?**
-
-It is the reference copy-paste template, located at
-`customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`. Open it, copy it, rename
-the copy to match your image, and fill in your text.
+- missing text should **not** fail the whole import;
+- invalid text fields should warn in plain language;
+- orphaned text files should be listed clearly;
+- the current offline `file://` preview and `webglImage` workflow should remain unchanged.
 
 ---
 
-## Quick checklist
+## What is true today
 
-- [ ] Image file is in `customer-artworks/inbox/`
-- [ ] Text file has the **same name** as the image (only `.txt` at the end)
-- [ ] Text file is in the **same inbox folder**
-- [ ] `Title:` is filled in
-- [ ] `Alt:` is filled in with a plain-language description
-- [ ] `Description:` section is filled in
-- [ ] Ran **Update Gallery**
-- [ ] Report says "Text applied" for the painting
-- [ ] Gallery shows the correct text in the info panel
+- The current importer does **not** yet read `.txt` sidecars.
+- The current shipped customer workflow is still picture-only.
+- The importer still generates fallback metadata automatically.
+- This guide and `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` are draft assets for the upcoming v0.18 implementation.
 
 ---
 
-## For support
+## Related docs
 
-If the report shows a warning you do not understand, send the
-`customer-artworks/last-import-report.txt` file to your support person.
-It is written in plain language and they can read it without seeing the gallery.
-
-See `docs/CUSTOMER_PICTURE_GUIDE.md` for the full picture-import guide.
-See `plan.md § v0.18` for the technical implementation notes.
+- Current shipped workflow: `docs/CUSTOMER_PICTURE_GUIDE.md`
+- Final audited plan: `plan.md § v0.18`
+- Research log: `FINDINGS.md § 2026-05-20`
+- Draft template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
