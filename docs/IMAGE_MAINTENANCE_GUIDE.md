@@ -38,7 +38,7 @@ The v0.16 audit was implemented on 2026-05-19. From a maintenance and importer p
 - **Importer warnings.** `scripts/import-artworks.mjs` now emits new warnings in `customer-artworks/last-import-report.txt` when an image exceeds 4096 px on a side, or its GPU footprint (RGBA8 with mip pyramid: `w × h × 4 × 4/3`) exceeds 64 MB (info-level notice) or 128 MB (strong warning). These are advisory; the manifest is still written.
 - **Renderer diagnostics for support cases.** When `?debug=1` is set, the console now contains periodic `[renderer] snapshot` entries with draw calls, triangle counts, geometries, textures, program count, pixel ratio, and current preset. Customers reporting performance issues can share their console log; the new entries make it easier to identify undersized phones or oversize textures.
 - **Battery preset is now visually softer.** Glass-panel blur is halved on the battery preset (CSS-only — no shader change). Picture quality and the data-URL embedding path are unchanged.
-- **Dead-code cleanup deferred.** The unused `MouseInteraction`, `TouchInteraction`, and `ZoomPan` files remain on disk pending a dedicated refactor PR. They are not part of the active runtime; do not touch them when adjusting interaction behaviour.
+- **Dead-code cleanup resolved in v0.17.** `MouseInteraction`, `TouchInteraction`, and `ZoomPan` were removed after caller-graph validation. All canvas input now routes through `CanvasInteraction.ts`.
 - **Manifest contract unchanged.** Nothing in the importer output shape changes; only new warning text may appear in the human-readable report.
 
 ## v0.16 final audited brainstorm — Code-level performance audit (2026-05-19, design history)
@@ -142,6 +142,34 @@ logic, `src/main.ts` for art-safe viewport measurement and resize/refit wiring,
 and `src/timeline/Timeline.ts` + `src/styles/main.scss` for active timeline
 visibility. The importer, generated manifests, and `webglImage` path are not
 part of this follow-up.
+
+
+## Painting text maintenance — v0.18 sidecar workflow (shipped)
+
+The sidecar-text workflow is live in v0.18.
+
+Maintainer model:
+
+- `customer-artworks/inbox/<image-base>.txt` is the customer-editable text source of truth for each painting.
+- `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` is the copy-paste template.
+- `docs/CUSTOMER_TEXT_GUIDE.md` is the customer-facing how-to guide.
+
+Importer behavior (implemented in `scripts/import-artworks.mjs`):
+
+1. The inbox scan separates image files from sidecar files (`.txt`, `.md`).
+2. Sidecars match images by lowercase basename in the same folder. When both `.txt` and `.md` exist for the same stem, `.txt` wins and `.md` is reported under `Duplicate text files`.
+3. The parser reads labeled text fields case-insensitively (`Title`, `Subtitle`, `Year`, `Credit`, `Alt`, `Tags`, `Surface`, `Medium`) and treats everything after `Description:` as the multi-line description body, preserving blank lines between paragraphs.
+4. Sidecar metadata merges into the generated manifest via `??` fallback; asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned.
+5. The plain-language report gains `Text applied`, `Pictures missing text`, `Text files without matching pictures`, `Text fields needing attention`, and `Duplicate text files` sections.
+
+Maintenance rules:
+
+- Treat image and sidecar as a pair during rename/delete/move.
+- Never edit `artworks.json` or `customer-artworks.js` to fix customer text; edit the sidecar and rerun the importer.
+- The importer never fuzzy-matches orphaned text files after renames — an orphan stays an orphan until the customer renames it back.
+- The offline `file://` preview and `webglImage` reliability path remain unchanged.
+
+See `plan.md § v0.18` and `FINDINGS.md § 2026-05-20` for the final audited technical plan and acceptance checks.
 
 ## Quick overview
 

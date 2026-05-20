@@ -1,5 +1,28 @@
 # Freyraum
 
+## v0.18 — Customer painting text sidecars (shipped, 2026-05-20)
+
+The v0.18 sidecar-text workflow is implemented and live in
+`scripts/import-artworks.mjs`. Each painting in `customer-artworks/inbox/`
+can now carry a same-basename `.txt` sidecar that the importer parses
+and merges into the gallery info panel.
+
+**Plan:** `plan.md § v0.18` — final audited implementation plan.
+**Research log:** `FINDINGS.md § 2026-05-20`
+**Customer guide:** `docs/CUSTOMER_TEXT_GUIDE.md` (how to import text)
+**Template:** `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`
+
+What v0.18 ships:
+
+- Same-basename `.txt` sidecars are parsed (`.md` accepted as a backup); `.txt` wins when both exist.
+- BOM-safe UTF-8 reader; Windows / classic Mac line endings normalized; case-insensitive stem matching.
+- Customer-facing fields merged: `title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`.
+- Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned.
+- Plain-language report (`customer-artworks/last-import-report.txt`) gains sections: `Text applied`, `Pictures missing text`, `Text files without matching pictures`, `Text fields needing attention`, `Duplicate text files`.
+- Missing or invalid sidecars never fail the run; they surface as warnings only.
+
+No `src/` runtime changes, no new dependencies.
+
 A premium interactive digital museum installation built by a high-end creative technology studio.
 
 

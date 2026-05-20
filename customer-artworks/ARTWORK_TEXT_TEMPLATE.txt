@@ -1,0 +1,97 @@
+STATUS: shipped in v0.18 — the importer reads this file when its basename matches a painting in the same inbox folder.
+
+FREYRAUM — Artwork text card template
+======================================
+
+HOW TO USE THIS FILE
+--------------------
+1. Copy this file.
+2. Rename the copy so it matches your painting file name exactly.
+   Example: if your painting is "01-sunset-at-the-lake.jpg",
+            rename the copy to "01-sunset-at-the-lake.txt"
+3. Put the renamed copy into the "inbox" folder next to your painting.
+4. Fill in your text below, then save (UTF-8 is recommended).
+5. Run "Update Gallery".
+
+WHICH FIELDS ARE RECOMMENDED
+----------------------------
+  Title        — recommended
+  Alt          — recommended (short visual description for screen readers)
+  Description  — recommended (the main text shown in the gallery)
+
+All other fields are optional. Delete any line you do not want to fill in.
+Missing or blank required fields are flagged in
+"customer-artworks/last-import-report.txt" but never block the import.
+
+======================================
+Copy everything below this line into your new file:
+======================================
+
+Title: Your painting title here
+Year: 
+Credit: 
+Alt: Describe the painting visually for screen readers
+Tags: 
+Surface: matte-canvas
+
+Description:
+Write your text on the lines below this one.
+
+
+======================================
+FIELD REFERENCE
+======================================
+
+Title:
+  The main painting title shown in the gallery.
+  Example:  Title: Sunset at the lake
+
+Year:
+  Year the painting was created. Must be a four-digit number.
+  Example:  Year: 2024
+  Default:  current year
+
+Credit:
+  Your name or studio. Shown as "© [Credit]" in the gallery.
+  Example:  Credit: Maria Musterfrau
+  Default:  Customer
+
+Alt:
+  Short description of what the painting looks like.
+  For visitors using a screen reader. Describe colours, subject, mood.
+  Do NOT start with "image of" or "picture of".
+  Example:  Alt: Warm orange sky reflected in a calm lake at dusk, dark tree silhouettes on the left.
+
+Tags:
+  Comma- or semicolon-separated keywords (reserved for future filtering).
+  Example:  Tags: landscape, lake, warm, summer
+
+Surface:
+  Material look for the 3D painting effect.
+  Allowed values (copy exactly):
+    matte-canvas        — classic matte linen canvas (default)
+    satin-canvas        — slightly glossy canvas
+    varnished-oil       — varnished oil painting
+    paper               — smooth paper
+  Unknown values fall back to matte-canvas with a warning in the report.
+  Example:  Surface: varnished-oil
+
+Medium:
+  Free-text medium override. If omitted, the importer uses image dimensions.
+  Example:  Medium: Oil on canvas · 60×80 cm
+
+Subtitle:
+  Short line shown above the title ("eyebrow"). Defaults to "Artwork 01", etc.
+  Example:  Subtitle: Freyraum Collection
+
+Description:
+  Write your text on the lines AFTER "Description:".
+  Multiple lines and blank lines between paragraphs are all fine.
+  Example:
+    Description:
+    This painting captures the quiet end of a summer day.
+    The warm light on the water always reminded me of how brief those evenings felt.
+
+======================================
+For help, see: docs/CUSTOMER_TEXT_GUIDE.md
+======================================

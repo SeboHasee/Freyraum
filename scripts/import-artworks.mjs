@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * FREYRAUM — Customer artwork importer (v0.07)
+ * FREYRAUM — Customer artwork importer (v0.18)
  *
- * Scans `customer-artworks/inbox/` for image files, validates them, reads
- * their pixel dimensions (zero-dependency header parsing), and emits:
+ * Scans `customer-artworks/inbox/` for image files and matching plain-text
+ * sidecar files, validates them, reads pixel dimensions (zero-dependency
+ * header parsing), parses sidecar metadata, and emits:
  *   - `customer-artworks/artworks.json` (human-readable manifest, backed up)
  *   - `customer-preview/customer-artworks.js` (runtime injection for the app)
  *   - `customer-preview/images/<id>.<ext>` (copied image assets)
@@ -12,6 +13,21 @@
  * The importer is intentionally robust against partial failure: one bad
  * file does not stop the whole run. It also keeps a backup of the previous
  * manifest so a failed run can be restored manually.
+ *
+ * v0.18 — Sidecar text files
+ * --------------------------
+ * Each painting `inbox/<name>.<ext>` may have a matching plain-text card
+ * `inbox/<name>.txt` (or `<name>.md` as a secondary alias). Sidecars are
+ * matched by lowercase basename, parsed BOM-safely, and merged into the
+ * generated manifest. Missing or invalid sidecars never fail the run; they
+ * are surfaced through the plain-language report (`Text applied`,
+ * `Pictures missing text`, `Text files without matching pictures`,
+ * `Text fields needing attention`).
+ *
+ * The asset fields (`id`, `image`, `webglImage`, `dimensions`) remain
+ * importer-owned. Sidecars only supply customer-facing metadata
+ * (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`,
+ * `tags`, `surfaceProfile`).
  *
  * No npm dependencies are required. Node 18+.
  */
@@ -45,6 +61,38 @@ const SAFE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg
 const RISKY_EXTENSIONS = new Set(['.heic', '.heif', '.tif', '.tiff', '.bmp']);
 const RAW_EXTENSIONS = new Set([
   '.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2', '.raw', '.pef', '.srw',
+]);
+
+// v0.18 — sidecar text files.
+//   - `.txt` is the primary, customer-friendly format (Notepad / TextEdit).
+//   - `.md` is accepted as a secondary alias and parsed with the same
+//     `Label: value` + `Description:` block contract.
+//   - Order matters: when both exist for the same image stem, `.txt` wins
+//     and the duplicate is reported as a warning.
+const SIDECAR_EXTENSIONS = ['.txt', '.md'];
+const PRIMARY_SIDECAR_EXT = '.txt';
+
+// Allowed surface profile values for sidecar `Surface:` lines. Mirrors the
+// `SurfaceProfile` type in `src/config/artworks.ts` minus the runtime-only
+// `procedural-fallback` value.
+const ALLOWED_SURFACE_PROFILES = new Set([
+  'matte-canvas',
+  'satin-canvas',
+  'varnished-oil',
+  'paper',
+]);
+
+// Sidecar field keys (lowercased) that map to artwork metadata fields.
+const SIDECAR_FIELD_KEYS = new Set([
+  'title',
+  'subtitle',
+  'year',
+  'credit',
+  'alt',
+  'tags',
+  'surface',
+  'medium',
+  'description',
 ]);
 
 /** MIME types for data URL encoding. */
@@ -227,6 +275,139 @@ function uniqueId(base, taken) {
   return id;
 }
 
+/**
+ * v0.18 — Parse a customer-edited sidecar text file.
+ *
+ * Format:
+ *   - UTF-8 (BOM tolerated)
+ *   - `Label: value` lines, case-insensitive keys
+ *   - Everything after a line starting with `Description:` becomes the
+ *     description body (multi-line, blank lines preserved, trailing
+ *     blank lines trimmed)
+ *
+ * Returns `{ fields, fieldWarnings }`. Field-level mistakes (invalid year,
+ * unknown surface, unknown keys, blank required values) collect warnings
+ * but never throw — the import still succeeds. I/O errors throw so the
+ * caller can decide how to surface them.
+ */
+function parseSidecar(filePath) {
+  let raw = readFileSync(filePath, 'utf8');
+  // Strip UTF-8 BOM (common from Notepad / TextEdit).
+  if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+  // Normalize Windows / classic Mac line endings to \n.
+  raw = raw.replace(/\r\n?/g, '\n');
+
+  const fields = {};
+  const fieldWarnings = [];
+  const lines = raw.split('\n');
+
+  let inDescription = false;
+  const descriptionLines = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (inDescription) {
+      descriptionLines.push(line);
+      continue;
+    }
+
+    // Skip blank lines outside the description block.
+    if (line.trim() === '') continue;
+
+    const colon = line.indexOf(':');
+    if (colon < 0) {
+      // Free-text line outside any block — treat as a warning so the
+      // customer notices a typo, but do not fail the import.
+      fieldWarnings.push(
+        `unrecognized line "${line.trim().slice(0, 60)}" — expected "Label: value"`,
+      );
+      continue;
+    }
+
+    const rawKey = line.slice(0, colon).trim();
+    const value = line.slice(colon + 1).trim();
+    const key = rawKey.toLowerCase();
+
+    if (key === 'description') {
+      inDescription = true;
+      if (value !== '') descriptionLines.push(value);
+      continue;
+    }
+
+    if (!SIDECAR_FIELD_KEYS.has(key)) {
+      fieldWarnings.push(`unknown field "${rawKey}" — ignored`);
+      continue;
+    }
+
+    fields[key] = value;
+  }
+
+  if (inDescription) {
+    // Trim trailing blank lines but preserve internal blank lines.
+    while (descriptionLines.length > 0 && descriptionLines[descriptionLines.length - 1].trim() === '') {
+      descriptionLines.pop();
+    }
+    fields.description = descriptionLines.join('\n');
+  }
+
+  // Validate Year — must be a four-digit number.
+  if (Object.prototype.hasOwnProperty.call(fields, 'year')) {
+    const yearText = fields.year;
+    if (yearText === '') {
+      // Treat blank year the same as omitted; remove so `??` fallback fires.
+      delete fields.year;
+    } else if (!/^\d{4}$/.test(yearText)) {
+      fieldWarnings.push(`Year "${yearText}" is not a four-digit number — falling back to current year`);
+      delete fields.year;
+    } else {
+      fields.year = Number(yearText);
+    }
+  }
+
+  // Validate Surface — must be one of the allowed profiles.
+  if (Object.prototype.hasOwnProperty.call(fields, 'surface')) {
+    const surfaceText = fields.surface;
+    if (surfaceText === '') {
+      delete fields.surface;
+    } else if (!ALLOWED_SURFACE_PROFILES.has(surfaceText)) {
+      fieldWarnings.push(
+        `Surface "${surfaceText}" is not recognized — falling back to matte-canvas (allowed: ${[
+          ...ALLOWED_SURFACE_PROFILES,
+        ].join(', ')})`,
+      );
+      delete fields.surface;
+    }
+  }
+
+  // Tags — split on comma or semicolon, trim, drop empties.
+  if (Object.prototype.hasOwnProperty.call(fields, 'tags')) {
+    const tagsText = fields.tags;
+    if (tagsText === '') {
+      delete fields.tags;
+    } else {
+      fields.tags = tagsText
+        .split(/[,;]/)
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+    }
+  }
+
+  // Warn on blank required fields. Use Object.prototype.hasOwnProperty so
+  // "missing" (omitted) is distinct from "present but blank".
+  if (Object.prototype.hasOwnProperty.call(fields, 'title') && fields.title === '') {
+    fieldWarnings.push('Title is empty — add a short painting title');
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, 'alt') && fields.alt === '') {
+    fieldWarnings.push('Alt is empty — add a short visual description');
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, 'description') && fields.description === '') {
+    fieldWarnings.push('Description is empty — add the main info-panel text');
+  }
+
+  return { fields, fieldWarnings };
+}
+
 // -------- Main --------
 
 mkdirSync(INBOX, { recursive: true });
@@ -239,12 +420,54 @@ const inboxEntries = readdirSync(INBOX, { withFileTypes: true })
   .map((e) => e.name)
   .sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
 
+// v0.18 — Split inbox entries into image candidates and sidecar files.
+//   - sidecarMap: lowercase stem → { filename, ext } for the *chosen* sidecar
+//     (`.txt` wins over `.md` deterministically).
+//   - duplicateSidecarWarnings: collected when both `.txt` and `.md` exist
+//     for the same stem.
+const imageEntries = [];
+const sidecarMap = new Map();
+const duplicateSidecarWarnings = [];
+
+{
+  // Group all sidecars per stem so the chosen file is deterministic across
+  // OSes regardless of `readdirSync` ordering.
+  const sidecarsByStem = new Map();
+  for (const filename of inboxEntries) {
+    const ext = extname(filename).toLowerCase();
+    if (SIDECAR_EXTENSIONS.includes(ext)) {
+      const stem = basename(filename, ext).toLowerCase();
+      if (!sidecarsByStem.has(stem)) sidecarsByStem.set(stem, []);
+      sidecarsByStem.get(stem).push({ filename, ext });
+    } else {
+      imageEntries.push(filename);
+    }
+  }
+  for (const [stem, candidates] of sidecarsByStem) {
+    // Prefer .txt over .md.
+    candidates.sort((a, b) => SIDECAR_EXTENSIONS.indexOf(a.ext) - SIDECAR_EXTENSIONS.indexOf(b.ext));
+    const chosen = candidates[0];
+    sidecarMap.set(stem, chosen);
+    for (let i = 1; i < candidates.length; i++) {
+      duplicateSidecarWarnings.push(
+        `${candidates[i].filename} — duplicate sidecar (also found ${chosen.filename}); using ${chosen.filename} (${PRIMARY_SIDECAR_EXT} preferred)`,
+      );
+    }
+  }
+}
+
 const artworks = [];
 const imported = [];
 const warnings = [];
 const skipped = [];
 const errors = [];
 const usedIds = new Set();
+
+// v0.18 — sidecar-aware report state.
+const textApplied = [];
+const picturesMissingText = [];
+const textFieldWarnings = [];
+const matchedSidecarStems = new Set();
 
 // Clean previously generated images that no longer correspond to inbox files
 // (best-effort housekeeping; ignored on failure).
@@ -256,7 +479,7 @@ try {
   // ignore
 }
 
-inboxEntries.forEach((filename, i) => {
+imageEntries.forEach((filename, i) => {
   const srcPath = join(INBOX, filename);
   const ext = extname(filename).toLowerCase();
   const indexLabel = String(i + 1).padStart(2, '0');
@@ -283,9 +506,10 @@ inboxEntries.forEach((filename, i) => {
   }
 
   const stem = basename(filename, ext);
+  const stemLower = stem.toLowerCase();
   const baseId = normalizeId(stem) || `artwork-${indexLabel}`;
   const id = uniqueId(baseId, usedIds);
-  const title = generateTitle(stem) || `Artwork ${indexLabel}`;
+  const generatedTitle = generateTitle(stem) || `Artwork ${indexLabel}`;
   const destFilename = `${id}${ext}`;
   const destPath = join(PREVIEW_IMAGES, destFilename);
 
@@ -344,20 +568,54 @@ inboxEntries.forEach((filename, i) => {
     );
   }
 
+  // v0.18 — Look up a sidecar by lowercased stem and merge customer fields.
+  let sidecarFields = null;
+  const sidecarEntry = sidecarMap.get(stemLower);
+  if (sidecarEntry) {
+    matchedSidecarStems.add(stemLower);
+    const sidecarPath = join(INBOX, sidecarEntry.filename);
+    try {
+      const parsed = parseSidecar(sidecarPath);
+      sidecarFields = parsed.fields;
+      textApplied.push(`${sidecarEntry.filename} matched ${filename}`);
+      for (const w of parsed.fieldWarnings) {
+        textFieldWarnings.push(`${sidecarEntry.filename} — ${w}`);
+      }
+    } catch (err) {
+      warnings.push(
+        `${sidecarEntry.filename} — could not read text card (${err.message}). Importing ${filename} with fallback text.`,
+      );
+    }
+  } else {
+    picturesMissingText.push(
+      `${filename} — add ${stem}${PRIMARY_SIDECAR_EXT} next to the image`,
+    );
+  }
+
+  const title = (sidecarFields?.title) || generatedTitle;
+  const subtitle = (sidecarFields?.subtitle) || `Artwork ${indexLabel}`;
+  const description = (sidecarFields?.description) || 'Imported artwork';
+  const year = sidecarFields?.year ?? new Date().getFullYear();
+  const credit = (sidecarFields?.credit) || 'Customer';
+  const alt = (sidecarFields?.alt) || title;
+  const tags = Array.isArray(sidecarFields?.tags) ? sidecarFields.tags : [];
+  const surfaceProfile = (sidecarFields?.surface) || 'matte-canvas';
+  const medium = (sidecarFields?.medium) || generateMedium(dims.width, dims.height);
+
   artworks.push({
     id,
     title,
-    subtitle: `Artwork ${indexLabel}`,
-    description: 'Imported artwork',
-    year: new Date().getFullYear(),
-    medium: generateMedium(dims.width, dims.height),
+    subtitle,
+    description,
+    year,
+    medium,
     image: `./images/${destFilename}`,
     ...(webglImage ? { webglImage } : {}),
     dimensions: { width: dims.width, height: dims.height },
-    alt: title,
-    credit: 'Customer',
-    tags: [],
-    surfaceProfile: 'matte-canvas',
+    alt,
+    credit,
+    tags,
+    surfaceProfile,
   });
 
   imported.push(`${filename} (${dims.width} × ${dims.height})`);
@@ -380,6 +638,20 @@ const js =
   'window.__FREYRAUM_ARTWORKS = ' + JSON.stringify(artworks, null, 2) + ';\n';
 writeFileSync(PREVIEW_JS, js, 'utf8');
 
+// v0.18 — Compute orphaned sidecars (text files without matching pictures).
+// `imageStems` mirrors the lowercased basenames the image loop processed.
+const imageStems = new Set();
+for (const filename of imageEntries) {
+  const ext = extname(filename).toLowerCase();
+  imageStems.add(basename(filename, ext).toLowerCase());
+}
+const orphanedSidecars = [];
+for (const [stem, entry] of sidecarMap) {
+  if (!imageStems.has(stem)) {
+    orphanedSidecars.push(`${entry.filename} — no image named ${stem}.* was found`);
+  }
+}
+
 // -------- Plain-language report --------
 
 const lines = [];
@@ -391,6 +663,35 @@ if (imported.length > 0) {
   lines.push('');
   lines.push('  3D painting source: images embedded as data URLs for reliable offline WebGL.');
 }
+
+// v0.18 — Text-card sections. Missing/orphaned text and field problems are
+// warnings, not errors: the import still succeeds.
+if (textApplied.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Text applied (${textApplied.length}):`);
+  textApplied.forEach((t) => lines.push(`  ✓ ${t}`));
+}
+if (picturesMissingText.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Pictures missing text (${picturesMissingText.length}):`);
+  picturesMissingText.forEach((t) => lines.push(`  ⚠ ${t}`));
+}
+if (orphanedSidecars.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Text files without matching pictures (${orphanedSidecars.length}):`);
+  orphanedSidecars.forEach((t) => lines.push(`  ⚠ ${t}`));
+}
+if (textFieldWarnings.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Text fields needing attention (${textFieldWarnings.length}):`);
+  textFieldWarnings.forEach((t) => lines.push(`  ⚠ ${t}`));
+}
+if (duplicateSidecarWarnings.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Duplicate text files (${duplicateSidecarWarnings.length}):`);
+  duplicateSidecarWarnings.forEach((t) => lines.push(`  ⚠ ${t}`));
+}
+
 if (warnings.length > 0) {
   if (lines[lines.length - 1] !== '') lines.push('');
   lines.push(`Needs attention (${warnings.length}):`);
@@ -406,7 +707,13 @@ if (errors.length > 0) {
   lines.push(`Errors (${errors.length}):`);
   errors.forEach((e) => lines.push(`  ! ${e}`));
 }
-if (imported.length === 0 && warnings.length === 0 && skipped.length === 0 && errors.length === 0) {
+if (
+  imported.length === 0 &&
+  warnings.length === 0 &&
+  skipped.length === 0 &&
+  errors.length === 0 &&
+  orphanedSidecars.length === 0
+) {
   lines.push('No image files were found in:');
   lines.push(`  ${INBOX}`);
   lines.push('');

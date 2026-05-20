@@ -1,5 +1,9 @@
 # FREYRAUM lessons learned
 
+## v0.18 — Customer sidecar text shipped (2026-05-20)
+
+Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
+
 Use this file for durable lessons that should change future agent behavior.
 
 ## 2026-05-19 — CSS containment can break controls that need overflow paint
@@ -43,6 +47,21 @@ Use this file for durable lessons that should change future agent behavior.
 
 - Three interaction files (`MouseInteraction.ts`, `TouchInteraction.ts`, `ZoomPan.ts`) and one deprecated export (`isMobileDevice()`) were confirmed caller-free by grep before deletion. No runtime errors resulted.
 - Future rule: before removing any exported symbol, grep all source and test files for its name; proceed only when no non-comment match is found.
+
+## 2026-05-20 — Planned customer workflows must stay clearly labeled as planned
+
+- Draft guides and templates for future customer workflows can easily read like shipped behavior if they use present-tense instructions.
+- Future rule: whenever documentation describes an unimplemented workflow, mark it as draft/not-yet-shipped in the intro and repeat the current runtime behavior so customers are not misled.
+
+## 2026-05-20 — Promote draft docs in the same pass as the implementation
+
+- v0.18 shipped sidecar text by updating `scripts/import-artworks.mjs` and then immediately rewriting `docs/CUSTOMER_TEXT_GUIDE.md`, `ARTWORK_TEXT_TEMPLATE.txt`, README, CHANGELOG, HANDOFF, IMAGE_MAINTENANCE_GUIDE, CUSTOMER_PICTURE_GUIDE, DOCUMENTATION_RULES, ARCHITECTURE_MAP, AI_RULES, and FINDINGS from "planned" to "shipped" wording.
+- Future rule: when an audit produces draft customer docs ahead of code, the implementation PR must also flip all "planned/not yet shipped" wording in one pass so customers and contributors never see stale labels next to live behavior.
+
+## 2026-05-20 — Sidecar parsing must distinguish "omitted" from "blank"
+
+- v0.18 uses `??` to merge sidecar values so an omitted field falls back cleanly while a blank field still warns. Mixing the two cases hides typos (blank `Title` looks the same as a deleted line).
+- Future rule: when adding optional customer-edited fields, separate "present but blank" (warn) from "omitted entirely" (silent fallback). Use `Object.prototype.hasOwnProperty.call(fields, key)` for the distinction, not `!fields[key]`.
 
 Extended incident documentation belongs in `docs/lessons-learned/`.
 

@@ -1,5 +1,9 @@
 # DOCUMENTATION RULES
 
+## v0.18 — Customer sidecar text shipped (2026-05-20)
+
+Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
+
 ## Current policy
 
 ### Rule
@@ -53,6 +57,10 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - performance planning must explicitly state measurement strategy, fidelity-preservation boundaries, compatibility/fallback behavior, and resource ownership/disposal assumptions
 
 ## Latest documentation pass
+
+- 2026-05-20 (implemented): v0.18 customer sidecar text shipped. `scripts/import-artworks.mjs` now reads same-basename `.txt` sidecars (`.md` accepted as backup, `.txt` wins on duplicates) and merges customer-facing fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. `customer-artworks/last-import-report.txt` gained `Text applied`, `Pictures missing text`, `Text files without matching pictures`, `Text fields needing attention`, and `Duplicate text files` sections. `docs/CUSTOMER_TEXT_GUIDE.md` rewritten as the shipped how-to-import-text walkthrough. `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` aligned with the shipped parser contract. All v0.18 banners across `README.md`, `CHANGELOG.md`, `plan.md`, `FINDINGS.md`, `docs/HANDOFF.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `DOCUMENTATION_RULES.md`, `ARCHITECTURE_MAP.md`, `AI_RULES.md`, and `LESSONS_LEARNED.md` updated from "planned" to "shipped". Validated `npm run lint`, `npm run build`, and a fixture importer run covering matched/missing/orphan/duplicate sidecars plus invalid `Year`/`Surface`/blank `Alt`/multi-line `Description`.
+
+- 2026-05-20 (documentation): v0.18 sidecar-text plan finalized after a complete codebase audit. Revalidated the importer-only implementation path against `scripts/import-artworks.mjs`, `src/main.ts`, `src/config/artworks.ts`, `src/ui/InfoPanel.ts`, and current online Node/accessibility/metadata guidance. Cleaned the plan, added explicit cleanup/check-up sections, corrected customer-facing docs so they no longer imply the workflow is already shipped, and refreshed all Markdown files to point at the final audited plan state. Runtime behavior unchanged.
 
 - 2026-05-20 (implemented): v0.17 easy wins shipped. Three PreferencesPanel ARIA fixes: added `aria-modal="true"`, replaced `aria-label` with `aria-labelledby` pointing to a stable heading id, and added `trigger.focus()` on outside-click dismiss. Removed legacy interaction dead code (`MouseInteraction.ts`, `TouchInteraction.ts`, `ZoomPan.ts`) and deprecated `isMobileDevice()`. Validated `npm run lint` and `npm run build`. Updated `plan.md`, `FINDINGS.md`, `CHANGELOG.md`, `README.md`, `ARCHITECTURE_MAP.md`, `LESSONS_LEARNED.md`, `docs/HANDOFF.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, and all AI guidance docs.
 

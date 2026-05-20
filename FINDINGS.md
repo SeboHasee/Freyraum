@@ -1,5 +1,99 @@
 # FINDINGS
 
+## 2026-05-20 — v0.18 sidecar text shipped (implementation note)
+
+The audit below remains the authoritative research log. As of
+2026-05-20 the v0.18 sidecar-text workflow it recommended has been
+**implemented** in `scripts/import-artworks.mjs`. Every customer-facing
+v0.18 Markdown banner has been updated from "planned/not yet shipped"
+to "shipped". See `plan.md § v0.18 — Customer sidecar text shipped`
+and `CHANGELOG.md` for the implementation summary and validation
+results.
+
+## 2026-05-20 — Final audit of the customer sidecar-text workflow (research log)
+
+### Audit outcome
+
+Option C remains the correct v0.18 direction: **one customer-editable sidecar text file beside each artwork image**, matched by basename.
+
+The audit recommendation was implemented in the same 2026-05-20 work session; the rest of this section is preserved as the research log that backed the implementation.
+
+### Full-codebase audit summary
+
+The repository was re-checked across the importer path, runtime contract, UI rendering path, architecture docs, AI guidance, customer docs, and validation workflow.
+
+Validated boundaries:
+
+1. `scripts/import-artworks.mjs` is the only file that needs first-slice runtime changes.
+2. `src/config/artworks.ts` already exposes every metadata field the sidecar workflow needs.
+3. `src/main.ts` already sanitizes injected artwork records and safely accepts the planned metadata fields.
+4. `src/ui/InfoPanel.ts` renders `description` with `.textContent`, so sidecar descriptions stay plain text.
+5. The current report/import architecture is warning-first and already suitable for missing/orphaned/invalid sidecar cases.
+6. No `src/` UI or rendering changes are required for the initial implementation slice.
+
+### Current importer findings
+
+- The inbox scan is currently a single pass over all files in `customer-artworks/inbox/`.
+- Any non-image file that is not in the supported extension sets falls into the `Skipped` section as an unsupported file. A `.txt` sidecar would therefore currently be misclassified.
+- The stable matching anchor already exists: `const stem = basename(filename, ext)`.
+- The importer already generates all customer-facing metadata fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`), so sidecar parsing is a merge problem, not a schema-expansion problem.
+- `webglImage`, image copy, dimension parsing, id generation, and preview manifest writing are already working and must remain unchanged.
+- The report writer already separates `Imported`, `Needs attention`, `Skipped`, and `Errors`, which makes text-specific report sections a natural extension.
+
+### Finalized implementation guidance
+
+- Keep the implementation confined to `scripts/import-artworks.mjs`.
+- Add sidecar-aware inbox separation before the image loop.
+- Parse `.txt` as primary sidecar format; allow `.md` as a secondary alias only if it uses the same labeled plain-text shape.
+- Match by lowercase stem in the same folder; never fuzzy-match renamed files.
+- Strip BOM and normalize line endings before parsing because customer editors will likely be Notepad/TextEdit.
+- Keep missing/invalid text non-fatal; surface problems through the existing plain-language report.
+- Use `??` for merge fallback so “field missing” differs from “field present but blank”.
+- Keep `Alt` and `Description` distinct both in parsing and guidance.
+
+### Documentation cleanup completed in this audit
+
+The final audit corrected a documentation drift problem: several docs had started to read as though the sidecar workflow already existed. The cleanup now makes these points explicit everywhere:
+
+- the v0.18 sidecar workflow was finalized in this audit and **then implemented** in the same work session;
+- the current importer reads sidecar text and only falls back to generated text when no sidecar exists;
+- `docs/CUSTOMER_TEXT_GUIDE.md` and `ARTWORK_TEXT_TEMPLATE.txt` are the shipped customer assets for the workflow;
+- the picture-only importer remains supported for customers who choose not to provide sidecar text.
+
+### Online validation findings
+
+1. **Sidecars remain a standard asset-management pattern.** Adobe Lightroom, Capture One, Immich, and ExifTool all document sidecar metadata workflows, validating the decision to keep metadata physically beside the artwork file.
+2. **A simple `.txt` adaptation is appropriate here.** Professional XMP sidecars prove the pattern, but `.txt` remains the better customer-facing format for this offline/local gallery.
+3. **Node path handling requires explicit case normalization.** Current Node docs note that `path.basename(path, suffix)` treats suffix comparison case-sensitively even on Windows, so lowercased stem matching is the correct cross-platform rule.
+4. **UTF-8 text reading is straightforward in Node.** `readFileSync(filePath, 'utf8')` is the right baseline; manual BOM stripping is still useful for Windows-authored files.
+5. **Alt text and long description must stay separate.** W3C, WCAG, WebAIM, and Smithsonian guidance all distinguish concise alt text from longer explanatory or descriptive text for complex/informative images and art.
+
+### Sources
+
+- Node.js `path`: <https://nodejs.org/api/path.html>
+- Node.js `fs`: <https://nodejs.org/api/fs.html>
+- Adobe Lightroom XMP sidecars: <https://helpx.adobe.com/lightroom-classic/help/create-xmp-acr-files.html>
+- Capture One XMP sidecars: <https://support.captureone.com/hc/en-us/articles/360002544898-Metadata-in-XMP-sidecar-files>
+- Immich XMP sidecars: <https://docs.immich.app/features/xmp-sidecars/>
+- ExifTool sidecar files: <https://exiftool.org/metafiles.html>
+- W3C WAI Images Tutorial: <https://www.w3.org/WAI/tutorials/images/>
+- WCAG quick reference: <https://www.w3.org/WAI/WCAG21/quickref/#non-text-content>
+- WebAIM alt text: <https://webaim.org/techniques/alttext/>
+- Smithsonian visual descriptions: <https://www.si.edu/accessibility/visual-descriptions>
+
+### Validation results for this audit pass
+
+- `npm install` ✅
+- `npm run lint` ✅ (with the existing `@typescript-eslint` / TypeScript supported-version warning)
+- `npm run build` ✅
+- `node -c scripts/import-artworks.mjs` ✅
+- `node -c scripts/write-local-preview.mjs` ✅
+- `node -c scripts/run-import-artworks.cjs` ✅
+
+### Remaining boundary
+
+This final audit intentionally does **not** implement the sidecar importer change. The next dedicated v0.18 implementation pass should start from `plan.md § v0.18` and keep the current docs/runtime distinction intact until the code actually lands.
+
 ## 2026-05-20 — v0.17 easy wins: accessibility, dead-code cleanup
 
 ### Problems identified and fixed
@@ -47,11 +141,11 @@
 3. **PreferencesPanel listener churn is low-risk but worth documenting.**
    - `PreferencesPanel.renderPanel()` replaces `panel.innerHTML` and attaches fresh input listeners after preference updates.
    - Old DOM nodes are collectable, so this is not treated as a leak, but future work can simplify this with delegated `change` handling.
-4. **Legacy interaction cleanup remains deferred.**
-   - `MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts` are superseded by unified `CanvasInteraction.ts`.
-   - They remain useful as historical references but should be removed in a dedicated cleanup PR after one focused validation pass.
-5. **Deprecated API remains intentionally exported.**
-   - `isMobileDevice()` in `src/utils/performance.ts` is deprecated in favor of `detectDeviceCapabilities()`; future code should not add new callers.
+4. **Legacy interaction cleanup is complete.**
+   - `MouseInteraction.ts`, `TouchInteraction.ts`, and `ZoomPan.ts` were removed after caller-graph validation.
+   - `CanvasInteraction.ts` is now the only production canvas-input path.
+5. **Deprecated mobile helper was removed.**
+   - `isMobileDevice()` was deleted from `src/utils/performance.ts`; future code should use `detectDeviceCapabilities()` from `src/utils/device.ts`.
 6. **Preference persistence schema is now part of the audit record.**
    - Storage key: `freyraum.preferences.v1`.
    - Fields: `reducedMotion`, `highContrast`, `contrastMode`, `quality`, and `lighting`.

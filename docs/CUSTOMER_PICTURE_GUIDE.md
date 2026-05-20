@@ -85,6 +85,33 @@ Technical changes behind this behavior:
 
 For support/debugging, `show-artwork-complete` now logs extra v0.14/v0.14.2 tuning data (`closeZoomMinVisibleFraction`, `panOverscrollX`, `panOverscrollY`, `panLimitAtReset`, `portraitResetApplied`, `portraitResetExtra`).
 
+
+## v0.18 painting text workflow (shipped)
+
+The importer now reads same-basename `.txt` sidecar files for each
+painting and uses them in the gallery info panel.
+
+```text
+customer-artworks/inbox/
+  01-sunset-at-the-lake.jpg      ← painting
+  01-sunset-at-the-lake.txt      ← matching text card
+```
+
+Customer flow:
+
+1. Copy `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
+2. Rename it to match the painting file name.
+3. Fill in `Title:`, `Alt:`, and `Description:` (everything else is optional).
+4. Save the `.txt` file next to the painting in the inbox.
+5. Run **Update Gallery**.
+6. Read the report for `Text applied`, `Pictures missing text`, `Text files without matching pictures`, or `Text fields needing attention`.
+
+Missing or invalid sidecars never fail the import — they appear as
+warnings only. For full guidance and a field reference, see
+`docs/CUSTOMER_TEXT_GUIDE.md`.
+
+**References:** `plan.md § v0.18`, `FINDINGS.md § 2026-05-20`, `docs/CUSTOMER_TEXT_GUIDE.md`.
+
 ## What you need (one-time)
 
 1. **Node.js** (free): install the LTS version from <https://nodejs.org> (**18 or newer**).
