@@ -1,21 +1,34 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.2 strict full-gallery entry contract shipped; all paintings warmed before enter CTA is enabled).
 
 
-## v0.24.2 — Deep loading research + strict full-gallery entry plan (docs-only, 2026-05-21)
+## v0.24.2 — Strict full-gallery entry contract (2026-05-21)
 
 ### Changed
 
-- Reclassified the loading issue as still open after user confirmation: early navigation can still feel cold until more paintings are visited.
-- Added a new v0.24.2 plan that requires all paintings to satisfy pre-entry readiness before the enter CTA is shown, with explicit safety fallback behavior for memory-constrained devices.
-- Added deeper research synthesis on idle scheduling limits, texture upload behavior, and large-gallery memory pressure to guide implementation priorities.
-- Refreshed all repository Markdown files with the v0.24.2 audit stamp and cross-links.
+- **GalleryManager.ts**: Replaced `PBR_PRELOAD_LIMIT = 15` with `FULL_PRELOAD_SAFETY_CAP = 50`. All authored PBR texture sets are now preloaded during `init()` under the loading overlay — not just the first 15. Artworks beyond the safety cap (extreme exhibitions) fall back to the idle prefetch sweep.
+- **GalleryManager.ts**: Exported new `FullGalleryReadinessResult` interface and added `getFullGalleryReadinessSummary()` method that aggregates per-artwork readiness ledger into a concise pre-entry audit report (total, fullyReadyCount, gpuWarmedCount, pbrLoadedCount, proceduralReadyCount, memoryCapApplied).
+- **main.ts**: Removed the device-capped `entryWarmTargets` warm model. The pre-entry GPU warm loop now iterates over the complete `warmOrder` (all artworks in priority order). "Galerie betreten" is only enabled after every artwork has been GPU-warmed.
+- **main.ts**: Loading overlay now shows `Gemälde X / Y wird vorbereitet` for each artwork during the full warm pass, so users see deterministic per-painting progress.
+- **main.ts**: Entry readiness contract now covers all artworks (`fullWarmTargets = warmOrder`), not the former subset. Retry loop resolves remaining stragglers.
+- **main.ts**: `getFullGalleryReadinessSummary()` is logged with event `full-gallery-ready` immediately before CTA enablement, providing a machine-readable pre-entry diagnostics proof.
+- **main.ts**: `warmCursor` starts at `warmOrder.length` post-reveal; `continueWarmQueue` exits on first RAF tick and disposes the warm render target immediately.
 
-### Validation and residual risk
+### Closes plan gaps
 
-- Documentation-only pass; no runtime code changed.
-- Baseline validation before docs update: `npm install`, `npm run lint`, and `npm run build` passed.
-- Runtime implementation is pending the v0.24.2 execution pass.
+- **Q-01** ✅ Strict all-paintings-ready contract before CTA (no more subset warm model).
+- **Q-02** ✅ Memory guardrail: `FULL_PRELOAD_SAFETY_CAP = 50` prevents unbounded preload on extreme galleries.
+- **Q-03** ✅ Deterministic completion: sequential `ensureEntryReadiness` with bounded retry loop (no idle-only dependency).
+- **Q-04** ✅ Pre-entry diagnostics: `full-gallery-ready` log with per-stage counts before reveal.
+- **Q-06** ✅ UX status text shows painting-by-painting progress.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- `npm audit` — known moderate Vite/esbuild advisory (pre-existing, unrelated).
+
+
 
 ## v0.24.1 — Runtime smoothness hardening (2026-05-21)
 

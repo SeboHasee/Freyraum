@@ -1,8 +1,8 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.2 strict full-gallery entry contract shipped; PBR_PRELOAD_LIMIT raised to FULL_PRELOAD_SAFETY_CAP=50, all paintings GPU-warmed pre-reveal).
 
 
-## v0.24.2 — planning (2026-05-21) — strict all-paintings-ready entry gate
+## v0.24.2 — **shipped** (2026-05-21) — strict all-paintings-ready entry gate
 
 **Status: planning/documentation only; runtime still v0.24.1.**
 

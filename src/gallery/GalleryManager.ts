@@ -114,11 +114,13 @@ const NAV_SEED_SCALE = 0.88;
 const MAX_SMOOTHING_DT = 0.1;
 
 /**
- * v0.22 L-01: Maximum number of artworks to pre-load PBR texture sets for
- * during `init()` under the loading overlay. Artworks beyond this index are
- * left for the idle prefetch sweep to avoid CPU memory exhaustion.
+ * v0.24.2 Q-01: Hard safety cap for full-gallery PBR preload under the loading
+ * overlay. All artworks up to this index will have their authored texture sets
+ * loaded before "Galerie betreten" is enabled, guaranteeing zero cold paths
+ * on first navigation. Artworks beyond this cap (extreme galleries) fall back
+ * to the idle prefetch sweep. Raised from the former PBR_PRELOAD_LIMIT of 15.
  */
-const PBR_PRELOAD_LIMIT = 15;
+const FULL_PRELOAD_SAFETY_CAP = 50;
 
 /** Roles that can be filled in by the procedural factory when no authored map exists. */
 const PROCEDURAL_ROLES: PaintingMapRole[] = [
@@ -182,6 +184,24 @@ export interface EntryReadinessContract {
   ready: boolean;
   pendingIndices: readonly number[];
   targetIndices: readonly number[];
+}
+
+/**
+ * v0.24.2 Q-04: Snapshot of full-gallery readiness staged immediately before
+ * the loading overlay is dismissed. Allows pre-entry diagnostics to confirm
+ * every artwork is GPU-warmed and has no remaining cold paths.
+ */
+export interface FullGalleryReadinessResult {
+  totalArtworks: number;
+  /** Artworks where all 6 readiness stages are complete. */
+  fullyReadyCount: number;
+  /** Artworks where at least one stage is still incomplete. */
+  pendingCount: number;
+  gpuWarmedCount: number;
+  pbrLoadedCount: number;
+  proceduralReadyCount: number;
+  /** True when the gallery exceeds FULL_PRELOAD_SAFETY_CAP and capping was applied. */
+  memoryCapApplied: boolean;
 }
 
 interface NavigationProbe {
@@ -372,13 +392,13 @@ export class GalleryManager {
     const textureSetCount = this.artworks.filter((a) => !!a.textureSet).length;
     const pbrArtworks = this.artworks
       .map((artwork, index) => ({ artwork, index }))
-      .filter(({ artwork, index }) => !!artwork.textureSet && index < PBR_PRELOAD_LIMIT);
-    this.diagnostics.info('init', 'Preloading PBR texture sets under loading overlay', {
+      .filter(({ artwork, index }) => !!artwork.textureSet && index < FULL_PRELOAD_SAFETY_CAP);
+    this.diagnostics.info('init', 'Preloading all PBR texture sets under loading overlay (v0.24.2 full-gallery contract)', {
       pbrCount: pbrArtworks.length,
       textureSetCount,
       totalArtworks: this.artworks.length,
-      limit: PBR_PRELOAD_LIMIT,
-      skippedForLimit: Math.max(0, textureSetCount - pbrArtworks.length),
+      safetyCap: FULL_PRELOAD_SAFETY_CAP,
+      cappedArtworks: Math.max(0, this.artworks.length - FULL_PRELOAD_SAFETY_CAP),
     });
     await Promise.allSettled(
       pbrArtworks.map(({ artwork, index }) =>
@@ -655,6 +675,27 @@ export class GalleryManager {
 
   getReadinessLedger(): readonly ArtworkReadiness[] {
     return this.readiness.map((entry) => ({ ...entry }));
+  }
+
+  /**
+   * v0.24.2 Q-04: Aggregates the per-artwork readiness ledger into a
+   * concise summary for the pre-entry diagnostics log. Called immediately
+   * before `loadingOverlay.reveal()` to confirm full-gallery warm state.
+   */
+  getFullGalleryReadinessSummary(): FullGalleryReadinessResult {
+    const r = this.readiness;
+    const fullyReadyCount = r.filter(
+      (e) => e.albedoLoaded && e.pbrLoaded && e.proceduralReady && e.materialApplied && e.shaderCompiled && e.gpuWarmed
+    ).length;
+    return {
+      totalArtworks: this.artworks.length,
+      fullyReadyCount,
+      pendingCount: this.artworks.length - fullyReadyCount,
+      gpuWarmedCount: r.filter((e) => e.gpuWarmed).length,
+      pbrLoadedCount: r.filter((e) => e.pbrLoaded).length,
+      proceduralReadyCount: r.filter((e) => e.proceduralReady).length,
+      memoryCapApplied: this.artworks.length > FULL_PRELOAD_SAFETY_CAP,
+    };
   }
 
   getEntryWarmTargets(center: number, targetCount: number): number[] {

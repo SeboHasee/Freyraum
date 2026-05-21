@@ -12,7 +12,7 @@ import { LightingSetup } from './lighting/LightingSetup';
 import { TextureManager } from './gallery/TextureManager';
 import { ArtworkMesh } from './gallery/ArtworkMesh';
 import { SidePanels } from './gallery/SidePanels';
-import { GalleryManager, type ArtworkViewportMetrics } from './gallery/GalleryManager';
+import { GalleryManager, type ArtworkViewportMetrics, type FullGalleryReadinessResult } from './gallery/GalleryManager';
 import { Topbar } from './ui/Topbar';
 import { InfoPanel } from './ui/InfoPanel';
 import { NavigationControls } from './ui/NavigationControls';
@@ -715,26 +715,36 @@ async function main(): Promise<void> {
     return true;
   };
   const warmOrder = galleryManager.getBudgetedWarmOrder(0);
-  const entryWarmTargets = galleryManager.getEntryWarmTargets(0, warmProfile.preEntryWarmCount);
-  await galleryManager.ensureEntryReadiness(entryWarmTargets, 'overlay-entry-contract');
+
+  // v0.24.2 Q-01/Q-02: Enforce strict all-paintings-ready contract before CTA.
+  // Every artwork in warmOrder (all artworks, priority-ordered) must have its PBR
+  // texture set loaded, procedural maps generated, and GPU upload completed before
+  // "Galerie betreten" is enabled. This eliminates cold paths on first navigation.
+  const fullWarmTargets = warmOrder;
+  await galleryManager.ensureEntryReadiness(fullWarmTargets, 'overlay-full-gallery-contract');
   loadingOverlay.setStatus('GPU wird vorbereitet');
-  for (let i = 0; i < entryWarmTargets.length; i += 1) {
-    warmArtwork(entryWarmTargets[i], 'overlay-critical-contract');
-    loadingOverlay.setProgress(93 + Math.round(((i + 1) / Math.max(1, entryWarmTargets.length)) * 3));
+  for (let i = 0; i < fullWarmTargets.length; i += 1) {
+    // v0.24.2 Q-06: Show per-artwork preparation progress in status text.
+    loadingOverlay.setStatus(`Gemälde ${i + 1} / ${fullWarmTargets.length} wird vorbereitet`);
+    warmArtwork(fullWarmTargets[i], 'overlay-full-gallery-contract');
+    loadingOverlay.setProgress(93 + Math.round(((i + 1) / Math.max(1, fullWarmTargets.length)) * 4));
   }
 
-  let entryContract = galleryManager.getEntryReadinessContract(entryWarmTargets);
+  // v0.24.2 Q-03: Deterministic completion pass — retry any paintings that did not
+  // reach full readiness in the first sweep (transient fetch failures, OOM-evicted
+  // textures, etc.). The contract covers every artwork, not just an entry subset.
+  let entryContract = galleryManager.getEntryReadinessContract(fullWarmTargets);
   let entryContractPass = 0;
-  const maxEntryContractPasses = Math.max(2, entryWarmTargets.length + 1);
+  const maxEntryContractPasses = Math.max(2, fullWarmTargets.length + 1);
   while (!entryContract.ready && entryContractPass < maxEntryContractPasses) {
     entryContractPass += 1;
     loadingOverlay.setStatus('Zusätzliche Vorbereitung läuft');
     await galleryManager.ensureEntryReadiness(entryContract.pendingIndices, `overlay-contract-retry-${entryContractPass}`);
     entryContract.pendingIndices.forEach((index) => warmArtwork(index, `overlay-contract-retry-${entryContractPass}`));
-    entryContract = galleryManager.getEntryReadinessContract(entryWarmTargets);
+    entryContract = galleryManager.getEntryReadinessContract(fullWarmTargets);
   }
   if (!entryContract.ready) {
-    diagnostics.warn('boot', 'entry-contract-unresolved', 'Entry readiness contract could not be fully satisfied before reveal', {
+    diagnostics.warn('boot', 'entry-contract-unresolved', 'Full-gallery entry readiness contract could not be fully satisfied before reveal', {
       pendingIndices: entryContract.pendingIndices,
       targetIndices: entryContract.targetIndices,
       attempts: entryContractPass,
@@ -742,14 +752,24 @@ async function main(): Promise<void> {
     });
   }
   galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-overlay-warm');
-  const criticalWarmCount = entryWarmTargets.length;
-  diagnostics.info('boot', 'gpu-warm-scheduled', 'Budgeted GPU warm scheduler primed', {
+
+  // v0.24.2 Q-04: Pre-entry diagnostics summary — log full gallery readiness ledger
+  // before CTA is enabled to confirm zero remaining cold paths.
+  const fullReadinessSummary: FullGalleryReadinessResult = galleryManager.getFullGalleryReadinessSummary();
+  diagnostics.info('boot', 'full-gallery-ready', 'Full-gallery readiness contract resolved; enabling entry CTA', {
     artworkCount,
-    criticalWarmCount,
-    entryWarmTargets,
-    entryContract,
+    fullyReadyCount: fullReadinessSummary.fullyReadyCount,
+    pendingCount: fullReadinessSummary.pendingCount,
+    gpuWarmedCount: fullReadinessSummary.gpuWarmedCount,
+    pbrLoadedCount: fullReadinessSummary.pbrLoadedCount,
+    proceduralReadyCount: fullReadinessSummary.proceduralReadyCount,
+    memoryCapApplied: fullReadinessSummary.memoryCapApplied,
     entryContractPasses: entryContractPass,
     entryContractMaxPasses: maxEntryContractPasses,
+  });
+
+  diagnostics.info('boot', 'gpu-warm-complete', 'Full pre-entry GPU warm finished; warmOrder exhausted before reveal', {
+    artworkCount,
     warmOrder,
     frameBudgetMs: warmProfile.postRevealFrameBudgetMs,
     batchCap: warmProfile.postRevealBatchCap,
@@ -765,12 +785,14 @@ async function main(): Promise<void> {
   rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
-  let warmCursor = criticalWarmCount;
+  // v0.24.2: All artworks were warmed pre-reveal, so warmCursor starts at warmOrder.length.
+  // continueWarmQueue exits immediately and disposes the render target.
+  let warmCursor = warmOrder.length;
   const continueWarmQueue = (): void => {
     if (warmCursor >= warmOrder.length) {
       warmRenderTarget.dispose();
       galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-budget-warm');
-      diagnostics.info('boot', 'gpu-warm-complete', 'Budgeted GPU warm scheduler completed', {
+      diagnostics.info('boot', 'gpu-warm-post-reveal', 'Post-reveal warm queue already complete (all artworks warmed pre-entry)', {
         artworkCount,
         warmed: warmOrder.length,
         readinessLedger: galleryManager.getReadinessLedger(),

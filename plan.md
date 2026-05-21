@@ -1,10 +1,10 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.2 strict full-gallery entry contract shipped; PBR_PRELOAD_LIMIT raised to FULL_PRELOAD_SAFETY_CAP=50, all paintings GPU-warmed pre-reveal).
 
 
-## v0.24.2 — Strict all-paintings-ready loading plan (2026-05-21, planning)
+## v0.24.2 — Strict all-paintings-ready loading (2026-05-21, **shipped**)
 
-Runtime status: **planning only**. User reports confirm the loading problem still occurs, so the entry gate must now cover every painting instead of a capped warm subset.
+Runtime status: **shipped**. Full-gallery entry contract enforced in GalleryManager.ts and main.ts.
 
 ### Requirement
 
