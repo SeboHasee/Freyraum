@@ -458,6 +458,29 @@ async function main(): Promise<void> {
   // events after touch).
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
   const keyboardNav = new KeyboardNav(galleryManager);
+  // v0.20.6 — autoplay-recovery helper: if browser blocks initial autoplay,
+  // retry once on first trusted user interaction while keeping user mute
+  // preference authoritative.
+  let interactionAudioRecoveryDone = false;
+  const tryRecoverBlockedAudio = (reason: string): void => {
+    if (interactionAudioRecoveryDone) return;
+    const prefsNow = preferences.current;
+    const audioState = backgroundAudio.getState();
+    if (!backgroundAudio.hasSource() || prefsNow.audioMuted || !audioState.autoplayBlocked) return;
+    interactionAudioRecoveryDone = true;
+    diagnostics.info('audio', 'autoplay-recovery-attempt', 'Retrying blocked autoplay after user interaction', {
+      reason,
+    });
+    void backgroundAudio.play(`interaction-recovery:${reason}`);
+  };
+  const onFirstInteractionPointer = (): void => tryRecoverBlockedAudio('pointerdown');
+  const onFirstInteractionKey = (event: KeyboardEvent): void => {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === ' ' || event.key === 'Enter') {
+      tryRecoverBlockedAudio(`keydown:${event.key}`);
+    }
+  };
+  window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
+  window.addEventListener('keydown', onFirstInteractionKey);
 
   // v0.16 — unified, RAF-deferred resize coordinator. Replaces the
   // v0.11 design where SceneManager and PostProcessing each owned their
@@ -541,7 +564,8 @@ async function main(): Promise<void> {
     lightingSetup.setProfile(lighting);
     backgroundAudio.setVolume(audioVolume, 'preferences-apply');
     backgroundAudio.setMuted(audioMuted, 'preferences-apply');
-    if (!audioMuted && backgroundAudio.hasSource()) {
+    const audioState = backgroundAudio.getState();
+    if (!audioMuted && backgroundAudio.hasSource() && (!audioState.playing || audioState.autoplayBlocked)) {
       void backgroundAudio.play('preferences-apply');
     }
 
@@ -867,6 +891,8 @@ async function main(): Promise<void> {
     if (debugEnabled) {
       window.removeEventListener('keydown', handleDebugKey);
     }
+    window.removeEventListener('pointerdown', onFirstInteractionPointer);
+    window.removeEventListener('keydown', onFirstInteractionKey);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('orientationchange', onResize);
     visualViewport?.removeEventListener('resize', onResize);

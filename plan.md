@@ -1,5 +1,36 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+
+## v0.20.6 — Audio stabilization + control polish (2026-05-21)
+
+### Status
+
+Implemented.
+
+### Requested outcomes covered in this pass
+
+1. Keep background audio stable while switching settings and during heavy runtime updates.
+2. Ensure startup preference state is unmuted by default.
+3. Improve autoplay-block recovery so audio resumes quickly on first user interaction.
+4. Align quick audio control sizing with the top-right settings/fullscreen control cluster.
+5. Remove the dark circular focus artifact seen on nav arrow buttons during keyboard navigation.
+6. Refresh markdown status text for this pass.
+
+### Implementation slices
+
+1. **Slice A — Playback stability guardrails**
+   - Prevent `BackgroundAudioManager.play()` from re-triggering fade-in when audio is already playing.
+   - Avoid redundant mute state writes so unnecessary transitions do not run.
+2. **Slice B — Preference-apply behavior**
+   - In `main.ts`, only call `play('preferences-apply')` when audio is not currently playing or autoplay is blocked.
+3. **Slice C — Autoplay-blocked recovery**
+   - Add first-interaction retry hooks (`pointerdown`, `ArrowLeft/ArrowRight/Space/Enter`) that attempt playback once when autoplay was blocked and the user is not muted.
+4. **Slice D — UI control polish**
+   - Reduce audio-control chrome height and tune slider width/padding to better match settings/fullscreen visual scale.
+   - Add dedicated `nav-btn:focus-visible` styling to suppress the dark browser halo while preserving visible keyboard focus.
+5. **Slice E — Documentation sync**
+   - Record the implementation in `CHANGELOG.md` and `FINDINGS.md`.
+   - Refresh markdown audit stamp wording for v0.20.6.
 
 ## v0.20.5 — Complete audio regression recovery plan (planning, 2026-05-21)
 

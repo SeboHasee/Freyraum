@@ -1,5 +1,16 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+
+## v0.20.6 — Audio stabilization follow-up implemented (2026-05-21)
+
+Current handoff status for the reported audio/UI follow-up:
+
+- startup defaults remain unmuted,
+- runtime no longer re-triggers unnecessary play fades during normal preference churn,
+- autoplay-blocked playback now gets a one-shot retry on first user interaction (including arrow-key navigation),
+- quick audio control sizing and nav-arrow focus visuals were polished.
+
+Reference: `plan.md § v0.20.6`, `FINDINGS.md § 2026-05-21 — v0.20.6 implementation findings`.
 
 ## v0.20.5 — Audio regression follow-up now open (2026-05-21, planning only)
 

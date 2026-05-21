@@ -1,5 +1,17 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+
+## v0.20.6 — Audio stabilization + UI polish (implemented, 2026-05-21)
+
+Latest pass addressed the current customer-reported runtime/audio polish issues:
+
+1. audio no longer dips/cuts during routine settings changes caused by redundant play restarts,
+2. autoplay-blocked states now retry on first user interaction (including arrow-key navigation),
+3. startup mute default remains unmuted,
+4. top-right audio control sizing was tuned to better match fullscreen/settings controls,
+5. keyboard focus on nav arrow buttons no longer shows the dark circular artifact.
+
+Details: `plan.md § v0.20.6`, `FINDINGS.md § 2026-05-21 — v0.20.6 implementation findings`.
 
 ## v0.20.5 — Audio regression audit + recovery plan (2026-05-21, planning only)
 

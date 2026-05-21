@@ -354,6 +354,17 @@ button {
   &:active::before {
     transform: scale(0.96);
   }
+
+  // v0.20.6 — avoid the dark browser-default focus halo seen during
+  // keyboard navigation while keeping a clear custom focus affordance.
+  &:focus-visible {
+    outline: none;
+  }
+
+  &:focus-visible::before {
+    background: var(--glass-bg-strong);
+    box-shadow: var(--shadow-soft), 0 0 0 3px rgba(255, 255, 255, 0.8);
+  }
 }
 
 // =============================================================================
@@ -435,8 +446,9 @@ button {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  padding: 8px;
+  border-radius: 22px;
+  padding: 0 8px 0 0;
+  min-height: 44px;
   box-shadow: var(--shadow-soft);
 
   &[hidden] {
@@ -515,15 +527,16 @@ button {
 .audio-controls__slider-wrap {
   display: flex;
   align-items: center;
-  padding-left: 8px;
-  padding-right: 4px;
+  min-height: 44px;
+  padding-left: 6px;
+  padding-right: 2px;
 }
 
 // Compact horizontal volume slider. Uses accent colour for the thumb.
 .audio-controls__slider {
   -webkit-appearance: none;
   appearance: none;
-  width: 72px;
+  width: 84px;
   height: 4px;
   border-radius: 2px;
   background: linear-gradient(

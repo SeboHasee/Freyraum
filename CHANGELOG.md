@@ -1,5 +1,20 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+
+## v0.20.6 — Audio stabilization + UI polish (2026-05-21)
+
+### Fixed
+
+- Prevented audio cut-offs during settings changes by skipping redundant `play()` transitions when background audio is already playing.
+- Hardened mute handling to ignore no-op mute writes, reducing unnecessary envelope transitions.
+- Added first-interaction autoplay recovery retry (`pointerdown`, arrow keys, Space/Enter) when autoplay was blocked and mute is off.
+- Kept startup mute preference default unmuted (`audioMuted: false`) so fresh loads do not persist muted state.
+- Removed the dark circular keyboard-focus artifact on nav arrow buttons with explicit `.nav-btn:focus-visible` styling.
+
+### Changed
+
+- Refined `.audio-controls` sizing/padding and slider width in `src/styles/main.scss` so the audio control visually aligns better with settings/fullscreen controls.
+- Updated markdown status stamp/context to v0.20.6.
 
 ## v0.20.5 — Audio regression audit + recovery plan (2026-05-21, docs-only)
 

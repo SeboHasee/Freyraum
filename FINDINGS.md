@@ -1,5 +1,22 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+
+## 2026-05-21 — v0.20.6 implementation findings (audio stability + UI polish)
+
+### Root-cause confirmation
+
+1. Repeated `play('preferences-apply')` calls were re-running fade-in even when audio was already playing, causing audible dips during non-audio preference updates.
+2. When autoplay is blocked, users could remain in a silent state until they explicitly clicked the audio button.
+3. Nav arrow buttons could show an undesirable dark focus halo during keyboard navigation.
+4. Audio quick-control dimensions looked visually heavier than adjacent top-right controls.
+
+### Implemented fixes
+
+1. `BackgroundAudioManager.play()` now short-circuits when already playing (`audio-play-skip` diagnostics event).
+2. `BackgroundAudioManager.setMuted()` now ignores unchanged mute requests (`audio-mute-unchanged` diagnostics event).
+3. `main.ts` now calls `backgroundAudio.play('preferences-apply')` only when playback is not already active or when autoplay is blocked.
+4. `main.ts` adds one-shot first-interaction autoplay recovery (pointer + keyboard navigation keys) when source exists, mute is off, and autoplay was blocked.
+5. `main.scss` updates tighten `.audio-controls` dimensions and slider sizing, and adds `.nav-btn:focus-visible` override styling to remove the dark ring artifact.
 
 ## 2026-05-21 — v0.20.5 audio regression audit
 

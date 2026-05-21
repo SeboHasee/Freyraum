@@ -1,5 +1,5 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
 
 ## v0.20.5 — Documentation correction after audio regression audit (2026-05-21, audit complete)
 

@@ -136,6 +136,11 @@ export class BackgroundAudioManager {
 
   async play(reason: string): Promise<boolean> {
     if (this.disposed || !this.source || this.suspended || this.state.muted) return false;
+    if (!this.audio.paused && this.state.playing) {
+      this.shouldResumeAfterSuspend = true;
+      this.diagnostics.debug('audio-play-skip', 'Play request ignored because audio is already playing', { reason });
+      return true;
+    }
     this.shouldResumeAfterSuspend = true;
     // Start from zero gain for a clean fade-in; set volume before play() so
     // any buffered samples output at the faded level.
@@ -203,6 +208,13 @@ export class BackgroundAudioManager {
 
   setMuted(value: boolean, reason: string): void {
     if (this.disposed) return;
+    if (this.state.muted === value) {
+      this.diagnostics.debug('audio-mute-unchanged', 'Mute request ignored because state is unchanged', {
+        reason,
+        muted: value,
+      });
+      return;
+    }
     this.audio.muted = value;
     this.state = { ...this.state, muted: value };
     if (value) {
