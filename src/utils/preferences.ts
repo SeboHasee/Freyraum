@@ -124,7 +124,7 @@ export class PreferencesStore {
       contrastMode,
       quality,
       lighting,
-      audioMuted: typeof stored.audioMuted === 'boolean' ? stored.audioMuted : false,
+      audioMuted: false, // always start unmuted regardless of stored state
       audioVolume,
     };
 
