@@ -1,6 +1,33 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
 
+
+## v0.24.4 — Local metrics evidence (2026-05-21, docs-only)
+
+### Status
+
+Documentation pass using newly provided local Web Vitals evidence. Runtime remains **v0.24.2**.
+
+### New measured evidence (local)
+
+- **LCP:** `1.85 s` (good)
+- **CLS:** `0.00` (good)
+- **INP:** `1,024 ms` (poor)
+- Worst interactions are pointer events on `canvas.gallery-canvas.gallery-canvas--ready`.
+- The slow interaction breakdown is dominated by **presentation delay** (around 630–676 ms for repeated events; INP sample at 1,024 ms with near-zero input delay and tiny processing duration).
+
+### Interpretation
+
+The bottleneck is not event-handler CPU work (processing is usually 3–14 ms). The dominant issue is frame presentation latency after interaction, which is consistent with render/GPU pipeline pressure and/or large frame workloads at interaction time.
+
+### Updated implication for preload smoothness
+
+Even with stronger preload/readiness logic, interaction quality can still fail if render-cost spikes remain high at pointer-driven updates. Preload correctness and interaction-frame budget control must be treated as two separate acceptance gates.
+
+### Validation
+
+- Documentation-only pass.
+- No runtime code changes in this pass.
 
 ## v0.24.3 — Loading completeness re-audit findings (2026-05-21, docs-only)
 

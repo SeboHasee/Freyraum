@@ -1,6 +1,20 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
 
+
+## v0.24.4 — Local metrics evidence + INP stabilization planning (docs-only, 2026-05-21)
+
+### Changed
+
+- Added a new local-metrics findings section in `FINDINGS.md` with the provided evidence: `LCP 1.85 s`, `CLS 0.00`, `INP 1,024 ms`, including interaction-phase interpretation.
+- Added a new INP-focused remediation plan in `plan.md` (S-series), targeting pointer interaction presentation-delay reduction.
+- Updated `README.md` top status to include the new metrics and links to v0.24.4 findings/plan sections.
+- Refreshed markdown audit stamp across repository Markdown files.
+
+### Validation and residual risk
+
+- Documentation-only pass; no runtime code changed.
+- INP runtime remediation remains pending implementation of the v0.24.4 plan.
 
 ## v0.24.3 — Loading completeness re-audit + remediation plan (docs-only, 2026-05-21)
 

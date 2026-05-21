@@ -1,6 +1,45 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
 
+
+## v0.24.4 — INP stabilization plan (2026-05-21, planning)
+
+Runtime status: **planning only**. Runtime remains **v0.24.2** until implementation.
+
+### Trigger
+
+Local metrics now show good loading stability (`LCP 1.85 s`, `CLS 0.00`) but poor interaction responsiveness (`INP 1,024 ms`) with pointer interactions on the gallery canvas dominated by presentation delay.
+
+### Goals
+
+1. Reduce pointer-driven interaction INP into good range by cutting presentation delay spikes.
+2. Preserve current preload/readiness guarantees while stabilizing post-entry frame delivery.
+3. Add diagnostics that separate handler cost from render/presentation cost for each interaction burst.
+
+### Gap analysis (S-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| S-01 | **HIGH** | Pointer INP is poor despite low input delay and low processing time. | Prioritize render/presentation budget controls on interaction frames. |
+| S-02 | **HIGH** | No explicit interaction-mode frame budget policy in startup/readiness plan. | Add an interaction-time quality throttle path (temporary cost reduction while input is active). |
+| S-03 | **MEDIUM** | Diagnostics focus heavily on load readiness but less on pointer presentation latency. | Add structured interaction frame telemetry (CPU update ms, GPU/present proxy timings, dropped-frame indicators). |
+| S-04 | **MEDIUM** | Acceptance criteria currently emphasize preload completeness, not Core Web Vitals INP thresholds. | Add INP-focused pass/fail criteria and regression checks. |
+| S-05 | **LOW** | User-facing status does not communicate when background optimization may affect immediate interaction quality. | Clarify post-entry optimization status/copy where relevant. |
+
+### Implementation plan
+
+1. Add an interaction-mode budget profile that temporarily reduces expensive render features while pointer interaction is active.
+2. Ensure pointer-driven camera/artwork updates are coalesced to one visual update per animation frame.
+3. Limit concurrent non-critical background warm/prefetch/procedural work during active interaction windows.
+4. Extend diagnostics to log per-interaction timing slices with explicit presentation-delay focus.
+5. Define and enforce INP acceptance targets for local validation runs.
+6. Reconcile preload contract messaging with interaction-quality contract messaging in startup UX text/docs.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime changes.
+- Capture local interaction traces and verify INP improvement against baseline (`1,024 ms`).
+- Re-run security scanning after runtime updates.
 
 ## v0.24.3 — true preload completion plan (2026-05-21, planning)
 

@@ -1,6 +1,14 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
 
+
+## v0.24.4 — local metrics evidence + INP planning (2026-05-21, docs-only)
+
+**Status: planning/documentation only; runtime remains v0.24.2.**
+
+New local Web Vitals evidence was added: **LCP 1.85 s (good)**, **CLS 0.00 (good)**, but **INP 1,024 ms (poor)**. The worst interactions are pointer events on the gallery canvas, with dominant presentation delay and very low handler processing time. This indicates an interaction-frame rendering/presentation bottleneck rather than input-handler CPU load.
+
+See `FINDINGS.md § v0.24.4` for the metrics interpretation and `plan.md § v0.24.4` for the INP stabilization plan.
 
 ## v0.24.3 — loading completeness re-audit (2026-05-21, docs-only)
 
