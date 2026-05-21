@@ -158,10 +158,43 @@ interface ArtworkReadiness {
 interface PrefetchJob {
   index: number;
   reason: string;
-  priority: number;
+  lane: PrefetchLane;
+  enqueuedAt: number;
+  sequence: number;
 }
 
 const CRITICAL_NAV_RADIUS = 2;
+const PREFETCH_STARVATION_MS = 2500;
+const PROCEDURAL_QUEUE_TIMEOUT_MS = 250;
+const PREFETCH_LANE_PRIORITY: Record<PrefetchLane, number> = {
+  'critical-now': 0,
+  'near-next': 1,
+  background: 2,
+};
+
+export type PrefetchLane = 'critical-now' | 'near-next' | 'background';
+
+export interface ReadinessProfileConfig {
+  criticalRadius: number;
+}
+
+export interface EntryReadinessContract {
+  ready: boolean;
+  pendingIndices: readonly number[];
+  targetIndices: readonly number[];
+}
+
+interface NavigationProbe {
+  fromIndex: number;
+  toIndex: number;
+  trigger: 'navigate-next' | 'navigate-prev' | 'timeline-select';
+  startedAt: number;
+  readinessBefore?: {
+    pbrLoaded: boolean;
+    proceduralReady: boolean;
+    gpuWarmed: boolean;
+  };
+}
 
 /**
  * v0.06: roles whose procedural texel grid is visible under raking light at
@@ -212,6 +245,11 @@ export class GalleryManager {
   private readonly prefetchQueue: PrefetchJob[] = [];
   private readonly activePrefetches = new Set<number>();
   private prefetchQueueRunning = false;
+  private prefetchSequence = 0;
+  private readinessRadius = CRITICAL_NAV_RADIUS;
+  private pendingNavigationProbe: NavigationProbe | null = null;
+  private readonly proceduralQueue = new Set<number>();
+  private proceduralQueueRunning = false;
 
   private targetX = 0;
   private targetY = 0;
@@ -266,6 +304,14 @@ export class GalleryManager {
   /** Allows main.ts to call `frameBudget.markNavigation()` on every navigation. */
   setFrameBudgetMarker(marker: FrameBudgetMarker | null): void {
     this.frameBudgetNavigationMarker = marker;
+  }
+
+  configureReadinessProfile(profile: ReadinessProfileConfig): void {
+    this.readinessRadius = clamp(Math.round(profile.criticalRadius), 1, 3);
+    this.diagnostics.info('readiness-profile', 'Applied readiness profile', {
+      criticalRadius: this.readinessRadius,
+      artworkCount: this.artworks.length,
+    });
   }
 
   /** Receives preset changes from the preference store. */
@@ -346,12 +392,12 @@ export class GalleryManager {
       )
     );
 
-    this.preGenerateProceduralWindow(0, CRITICAL_NAV_RADIUS, 'init-critical-window');
+    this.preGenerateProceduralWindow(0, this.readinessRadius, 'init-critical-window');
     this.logGalleryScaleValidation();
     this.diagnostics.info('init', 'Preload complete — showing first artwork', {
       artworkCount: urls.length,
       pbrPreloaded: pbrArtworks.length,
-      criticalProceduralReady: this.getCriticalWindowIndices(0, CRITICAL_NAV_RADIUS).length,
+      criticalProceduralReady: this.getCriticalWindowIndices(0, this.readinessRadius).length,
     });
     this.pendingResetAfterArtworkLoad = true;
     await this.showArtwork(0);
@@ -405,6 +451,17 @@ export class GalleryManager {
 
     const token = ++this.artworkLoadToken;
     const preset = this.currentPreset;
+    const probeForIndex = this.pendingNavigationProbe?.toIndex === index ? this.pendingNavigationProbe : null;
+    if (probeForIndex && !probeForIndex.readinessBefore) {
+      const before = this.readiness[index];
+      if (before) {
+        probeForIndex.readinessBefore = {
+          pbrLoaded: before.pbrLoaded,
+          proceduralReady: before.proceduralReady,
+          gpuWarmed: before.gpuWarmed,
+        };
+      }
+    }
     this.diagnostics.debug('show-artwork', 'Preparing artwork render state', {
       index,
       artworkId: artwork.id,
@@ -557,11 +614,12 @@ export class GalleryManager {
     }
     this.clampPanTargets();
     this.prefetchAdjacentArtworks(index);
-    this.preGenerateProceduralWindow(index, CRITICAL_NAV_RADIUS, 'show-artwork-adjacent');
+    this.queueProceduralWindow(index, this.readinessRadius, 'show-artwork-adjacent');
+    this.logNavigationReadinessVerdict(index);
   }
 
   getBudgetedWarmOrder(center = this.currentIndex): number[] {
-    const critical = this.getCriticalWindowIndices(center, CRITICAL_NAV_RADIUS);
+    const critical = this.getCriticalWindowIndices(center, this.readinessRadius);
     const rest = this.artworks
       .map((_artwork, index) => index)
       .filter((index) => !critical.includes(index));
@@ -581,12 +639,12 @@ export class GalleryManager {
   }
 
   promotePrefetchWindow(center: number, reason: string): void {
-    this.scheduleTextureSetPrefetch(center, reason, undefined, 0);
-    this.getCriticalWindowIndices(center, CRITICAL_NAV_RADIUS).forEach((index, order) => {
+    this.scheduleTextureSetPrefetch(center, reason, 'critical-now');
+    this.getCriticalWindowIndices(center, this.readinessRadius).forEach((index) => {
       if (index === center) return;
-      this.scheduleTextureSetPrefetch(index, `${reason}:nearby`, undefined, 10 + order);
+      this.scheduleTextureSetPrefetch(index, `${reason}:nearby`, 'near-next');
     });
-    this.preGenerateProceduralWindow(center, CRITICAL_NAV_RADIUS, reason);
+    this.queueProceduralWindow(center, this.readinessRadius, `${reason}:nearby`);
   }
 
   hasReadinessWork(): boolean {
@@ -597,6 +655,39 @@ export class GalleryManager {
 
   getReadinessLedger(): readonly ArtworkReadiness[] {
     return this.readiness.map((entry) => ({ ...entry }));
+  }
+
+  getEntryWarmTargets(center: number, targetCount: number): number[] {
+    const requested = Math.max(1, Math.min(this.artworks.length, Math.round(targetCount)));
+    return this.getBudgetedWarmOrder(center).slice(0, requested);
+  }
+
+  async ensureEntryReadiness(indices: readonly number[], reason: string): Promise<void> {
+    for (const index of indices) {
+      await this.preloadAuthoredTextureSet(index, `${reason}:critical-now`);
+      if (this.artworks[index]?.textureSet) this.prefetchedTextureSets.add(index);
+      this.preGenerateProceduralWindow(index, 0, `${reason}:critical-now`);
+      this.scheduleTextureSetPrefetch(index, `${reason}:critical-now`, 'critical-now');
+    }
+  }
+
+  getEntryReadinessContract(indices: readonly number[]): EntryReadinessContract {
+    const pendingIndices: number[] = [];
+    for (const index of indices) {
+      const entry = this.readiness[index];
+      if (!entry) {
+        pendingIndices.push(index);
+        continue;
+      }
+      if (!entry.albedoLoaded || !entry.pbrLoaded || !entry.proceduralReady || !entry.materialApplied || !entry.gpuWarmed) {
+        pendingIndices.push(index);
+      }
+    }
+    return {
+      ready: pendingIndices.length === 0,
+      pendingIndices,
+      targetIndices: [...indices],
+    };
   }
 
   /**
@@ -786,10 +877,10 @@ export class GalleryManager {
   }
 
   private prefetchAdjacentArtworks(index: number): void {
-    for (const [order, offset] of [-1, 1, -2, 2].entries()) {
+    for (const offset of [-1, 1, -2, 2]) {
       const target = index + offset;
       if (target < 0 || target >= this.artworks.length) continue;
-      this.scheduleTextureSetPrefetch(target, `adjacent:${offset}`, undefined, 20 + order);
+      this.scheduleTextureSetPrefetch(target, `adjacent:${offset}`, 'near-next');
     }
   }
 
@@ -808,13 +899,18 @@ export class GalleryManager {
         });
         return;
       }
-      this.scheduleTextureSetPrefetch(index, 'idle-sweep', runNext, 100 + index);
+      this.scheduleTextureSetPrefetch(index, 'idle-sweep', 'background', runNext);
       index += 1;
     };
     this.scheduleIdle(runNext, 500);
   }
 
-  private scheduleTextureSetPrefetch(index: number, reason: string, after?: () => void, priority = 50): void {
+  private scheduleTextureSetPrefetch(
+    index: number,
+    reason: string,
+    lane: PrefetchLane,
+    after?: () => void
+  ): void {
     const artwork = this.artworks[index];
     if (!artwork?.textureSet || this.prefetchedTextureSets.has(index) || this.activePrefetches.has(index)) {
       after?.();
@@ -822,21 +918,28 @@ export class GalleryManager {
     }
     const queued = this.prefetchQueue.find((job) => job.index === index);
     if (queued) {
-      if (priority < queued.priority) {
-        queued.priority = priority;
+      if (PREFETCH_LANE_PRIORITY[lane] < PREFETCH_LANE_PRIORITY[queued.lane]) {
+        queued.lane = lane;
         queued.reason = reason;
-        this.prefetchQueue.sort((a, b) => a.priority - b.priority);
+        queued.enqueuedAt = this.now();
+        this.sortPrefetchQueue();
       }
       after?.();
       return;
     }
-    this.prefetchQueue.push({ index, reason, priority });
-    this.prefetchQueue.sort((a, b) => a.priority - b.priority);
+    this.prefetchQueue.push({
+      index,
+      reason,
+      lane,
+      enqueuedAt: this.now(),
+      sequence: this.prefetchSequence++,
+    });
+    this.sortPrefetchQueue();
     this.diagnostics.debug('prefetch-queued', 'Artwork texture-set prefetch queued', {
       index,
       artworkId: artwork.id,
       reason,
-      priority,
+      lane,
       queueLength: this.prefetchQueue.length,
     });
     this.drainPrefetchQueue(after);
@@ -865,7 +968,7 @@ export class GalleryManager {
           index: job.index,
           artworkId: artwork.id,
           reason: job.reason,
-          priority: job.priority,
+          lane: job.lane,
           queueLength: this.prefetchQueue.length,
         });
         this.preloadAuthoredTextureSet(job.index, `prefetch:${job.reason}`)
@@ -894,6 +997,20 @@ export class GalleryManager {
     };
     this.prefetchQueueRunning = true;
     runNext();
+  }
+
+  private sortPrefetchQueue(): void {
+    const now = this.now();
+    const effectiveRank = (job: PrefetchJob): number => {
+      const ageMs = now - job.enqueuedAt;
+      if (job.lane === 'background' && ageMs >= PREFETCH_STARVATION_MS) return PREFETCH_LANE_PRIORITY['near-next'];
+      return PREFETCH_LANE_PRIORITY[job.lane];
+    };
+    this.prefetchQueue.sort((a, b) => {
+      const rankDiff = effectiveRank(a) - effectiveRank(b);
+      if (rankDiff !== 0) return rankDiff;
+      return a.sequence - b.sequence;
+    });
   }
 
   private scheduleIdle(callback: () => void, timeout: number): void {
@@ -959,6 +1076,12 @@ export class GalleryManager {
 
     this.currentIndex = newIndex;
     this.pendingResetAfterArtworkLoad = true;
+    this.pendingNavigationProbe = {
+      fromIndex,
+      toIndex: newIndex,
+      trigger: direction > 0 ? 'navigate-next' : 'navigate-prev',
+      startedAt: this.now(),
+    };
     this.promotePrefetchWindow(newIndex, `navigate:${direction > 0 ? 'next' : 'prev'}`);
     void this.showArtwork(newIndex);
     this.frameBudgetNavigationMarker?.();
@@ -969,6 +1092,7 @@ export class GalleryManager {
 
   goTo(index: number): void {
     if (index === this.currentIndex) return;
+    const fromIndex = this.currentIndex;
     const direction = index > this.currentIndex ? 1 : -1;
     const diff = index - this.currentIndex;
 
@@ -989,6 +1113,12 @@ export class GalleryManager {
 
     this.currentIndex = index;
     this.pendingResetAfterArtworkLoad = true;
+    this.pendingNavigationProbe = {
+      fromIndex,
+      toIndex: index,
+      trigger: 'timeline-select',
+      startedAt: this.now(),
+    };
     this.promotePrefetchWindow(index, 'timeline-select');
 
     if (!this.reducedMotion) {
@@ -1251,5 +1381,55 @@ export class GalleryManager {
       occlusionBottom: 0,
       occlusionLeft: 0,
     };
+  }
+
+  private queueProceduralWindow(center: number, radius: number, reason: string): void {
+    this.getCriticalWindowIndices(center, radius).forEach((index) => this.proceduralQueue.add(index));
+    if (this.proceduralQueueRunning) return;
+    this.proceduralQueueRunning = true;
+    const drain = (): void => {
+      const next = this.proceduralQueue.values().next();
+      if (next.done) {
+        this.proceduralQueueRunning = false;
+        return;
+      }
+      const index = next.value;
+      this.proceduralQueue.delete(index);
+      this.scheduleIdle(() => {
+        this.preGenerateProceduralWindow(index, 0, `${reason}:queued`);
+        drain();
+      }, PROCEDURAL_QUEUE_TIMEOUT_MS);
+    };
+    drain();
+  }
+
+  private logNavigationReadinessVerdict(index: number): void {
+    const probe = this.pendingNavigationProbe;
+    if (!probe || probe.toIndex !== index) return;
+    this.pendingNavigationProbe = null;
+    const before = probe.readinessBefore;
+    if (!before) return;
+    const entry = this.readiness[index];
+    if (!entry) return;
+    const wasColdPbr = !before.pbrLoaded;
+    const wasColdProcedural = !before.proceduralReady;
+    const wasColdGpu = !before.gpuWarmed;
+    const cold = wasColdPbr || wasColdProcedural || wasColdGpu;
+    this.diagnostics.info(
+      cold ? 'cold-path-detected' : 'hot-path-confirmed',
+      cold ? 'Navigation required remaining readiness work' : 'Navigation stayed on prepared hot path',
+      {
+        trigger: probe.trigger,
+        fromIndex: probe.fromIndex,
+        toIndex: probe.toIndex,
+        durationMs: Math.round((this.now() - probe.startedAt) * 10) / 10,
+        cold: {
+          pbr: wasColdPbr,
+          procedural: wasColdProcedural,
+          gpu: wasColdGpu,
+        },
+        readiness: entry,
+      }
+    );
   }
 }

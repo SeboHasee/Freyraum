@@ -2,6 +2,30 @@
 > Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
 
+## v0.24.1 — Runtime smoothness implementation findings (2026-05-21)
+
+### Status
+
+Runtime implementation shipped for the v0.24 P-series targets.
+
+### Implemented outcomes
+
+- **P-01:** Entry gating now enforces a concrete readiness contract for a device-aware warm target set before CTA reveal.
+- **P-02:** Post-reveal warm queue now obeys both frame-time budget and per-frame batch caps; adjacent procedural prep is idle-queued.
+- **P-03:** Texture-set prefetching now uses explicit priority lanes with starvation-aware effective ranking.
+- **P-04:** Navigation now records cold/hot readiness verdict diagnostics, including trigger, duration, and readiness-stage deltas.
+- **P-06:** Large-gallery/mobile profile tuning keeps entry responsive by scaling warm radius/count and post-reveal chunk sizes from device capabilities.
+
+### Remaining boundary
+
+- **P-05** (KTX2/Basis importer/runtime fallback migration) remains staged as a separate asset-pipeline milestone.
+
+### Validation
+
+- `npm run lint` passed.
+- `npm run build` passed and rebuilt `customer-preview/freyraum-gallery.js`.
+- `npm audit --audit-level=moderate` still reports the known Vite/esbuild advisory requiring a breaking major upgrade.
+
 ## v0.24 — Deeper performance/loading findings (planning, 2026-05-21)
 
 ### Status

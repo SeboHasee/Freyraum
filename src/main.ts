@@ -32,14 +32,15 @@ import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
-import { detectDeviceCapabilities, applyDeviceCaps } from './utils/device';
+import { detectDeviceCapabilities, applyDeviceCaps, type DeviceCapabilities } from './utils/device';
 import { suggestStartupQuality } from './utils/performance';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
 const MIN_LOADING_SCREEN_MS = 500;
-const GPU_WARM_CRITICAL_COUNT = 5;
-const GPU_WARM_FRAME_BUDGET_MS = 8;
+const DEFAULT_GPU_WARM_CRITICAL_COUNT = 5;
+const DEFAULT_GPU_WARM_FRAME_BUDGET_MS = 8;
+const DEFAULT_GPU_WARM_BATCH_CAP = 2;
 
 interface LoadingOverlayControls {
   overlay: HTMLDivElement;
@@ -60,6 +61,52 @@ function parseCssNumeric(value: string): number {
   if (Number.isFinite(parsed)) return parsed;
   const fallback = value.match(/-?\d+(?:\.\d+)?/);
   return fallback ? Number.parseFloat(fallback[0]) : 0;
+}
+
+interface WarmProfile {
+  criticalRadius: number;
+  preEntryWarmCount: number;
+  postRevealFrameBudgetMs: number;
+  postRevealBatchCap: number;
+}
+
+function deriveWarmProfile(caps: DeviceCapabilities, artworkCount: number): WarmProfile {
+  const isPhone =
+    caps.layoutTier === 'phone-small' ||
+    caps.layoutTier === 'phone-portrait' ||
+    caps.layoutTier === 'phone-landscape';
+  const isTablet = caps.layoutTier === 'tablet-portrait' || caps.layoutTier === 'tablet-landscape';
+
+  const criticalRadius = isPhone ? 1 : 2;
+  let preEntryWarmCount = DEFAULT_GPU_WARM_CRITICAL_COUNT;
+  let postRevealFrameBudgetMs = DEFAULT_GPU_WARM_FRAME_BUDGET_MS;
+  let postRevealBatchCap = DEFAULT_GPU_WARM_BATCH_CAP;
+
+  if (isPhone) {
+    preEntryWarmCount = 4;
+    postRevealFrameBudgetMs = 5;
+    postRevealBatchCap = 1;
+  } else if (isTablet) {
+    preEntryWarmCount = 5;
+    postRevealFrameBudgetMs = 6;
+    postRevealBatchCap = 1;
+  } else {
+    preEntryWarmCount = 7;
+    postRevealFrameBudgetMs = 8;
+    postRevealBatchCap = 2;
+  }
+
+  if (artworkCount >= 50) {
+    preEntryWarmCount = Math.max(3, preEntryWarmCount - 1);
+    postRevealBatchCap = 1;
+  }
+
+  return {
+    criticalRadius,
+    preEntryWarmCount: Math.min(artworkCount, preEntryWarmCount),
+    postRevealFrameBudgetMs,
+    postRevealBatchCap,
+  };
 }
 
 /**
@@ -553,6 +600,15 @@ async function main(): Promise<void> {
     measureArtworkViewport
   );
   galleryManager.applyPreset(initialPreset);
+  const warmProfile = deriveWarmProfile(initialCaps, artworks.length);
+  galleryManager.configureReadinessProfile({ criticalRadius: warmProfile.criticalRadius });
+  diagnostics.info('boot', 'warm-profile', 'Applied device-aware warm profile', {
+    artworkCount: artworks.length,
+    layoutTier: initialCaps.layoutTier,
+    pointer: initialCaps.pointerPrimary,
+    dpr: initialCaps.dpr,
+    profile: warmProfile,
+  });
 
   // Frame budget + adaptive quality (v0.02)
   const frameBudget = new FrameBudgetMonitor({ budgetMs: 16.7 });
@@ -659,18 +715,44 @@ async function main(): Promise<void> {
     return true;
   };
   const warmOrder = galleryManager.getBudgetedWarmOrder(0);
-  const criticalWarmCount = Math.min(GPU_WARM_CRITICAL_COUNT, warmOrder.length);
+  const entryWarmTargets = galleryManager.getEntryWarmTargets(0, warmProfile.preEntryWarmCount);
+  await galleryManager.ensureEntryReadiness(entryWarmTargets, 'overlay-entry-contract');
   loadingOverlay.setStatus('GPU wird vorbereitet');
-  for (let i = 0; i < criticalWarmCount; i += 1) {
-    warmArtwork(warmOrder[i], 'overlay-critical');
-    loadingOverlay.setProgress(93 + Math.round(((i + 1) / Math.max(1, criticalWarmCount)) * 3));
+  for (let i = 0; i < entryWarmTargets.length; i += 1) {
+    warmArtwork(entryWarmTargets[i], 'overlay-critical-contract');
+    loadingOverlay.setProgress(93 + Math.round(((i + 1) / Math.max(1, entryWarmTargets.length)) * 3));
+  }
+
+  let entryContract = galleryManager.getEntryReadinessContract(entryWarmTargets);
+  let entryContractPass = 0;
+  const maxEntryContractPasses = Math.max(2, entryWarmTargets.length + 1);
+  while (!entryContract.ready && entryContractPass < maxEntryContractPasses) {
+    entryContractPass += 1;
+    loadingOverlay.setStatus('Zusätzliche Vorbereitung läuft');
+    await galleryManager.ensureEntryReadiness(entryContract.pendingIndices, `overlay-contract-retry-${entryContractPass}`);
+    entryContract.pendingIndices.forEach((index) => warmArtwork(index, `overlay-contract-retry-${entryContractPass}`));
+    entryContract = galleryManager.getEntryReadinessContract(entryWarmTargets);
+  }
+  if (!entryContract.ready) {
+    diagnostics.warn('boot', 'entry-contract-unresolved', 'Entry readiness contract could not be fully satisfied before reveal', {
+      pendingIndices: entryContract.pendingIndices,
+      targetIndices: entryContract.targetIndices,
+      attempts: entryContractPass,
+      maxAttempts: maxEntryContractPasses,
+    });
   }
   galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-overlay-warm');
+  const criticalWarmCount = entryWarmTargets.length;
   diagnostics.info('boot', 'gpu-warm-scheduled', 'Budgeted GPU warm scheduler primed', {
     artworkCount,
     criticalWarmCount,
+    entryWarmTargets,
+    entryContract,
+    entryContractPasses: entryContractPass,
+    entryContractMaxPasses: maxEntryContractPasses,
     warmOrder,
-    frameBudgetMs: GPU_WARM_FRAME_BUDGET_MS,
+    frameBudgetMs: warmProfile.postRevealFrameBudgetMs,
+    batchCap: warmProfile.postRevealBatchCap,
   });
 
   loadingOverlay.setStatus('Shader werden vorbereitet');
@@ -697,7 +779,11 @@ async function main(): Promise<void> {
     }
     const start = performance.now();
     let warmedThisFrame = 0;
-    while (warmCursor < warmOrder.length && performance.now() - start < GPU_WARM_FRAME_BUDGET_MS) {
+    while (
+      warmCursor < warmOrder.length &&
+      warmedThisFrame < warmProfile.postRevealBatchCap &&
+      performance.now() - start < warmProfile.postRevealFrameBudgetMs
+    ) {
       warmArtwork(warmOrder[warmCursor], 'post-reveal-budget');
       warmCursor += 1;
       warmedThisFrame += 1;

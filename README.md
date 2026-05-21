@@ -2,13 +2,13 @@
 > Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
 
-## v0.24 — planning in progress (2026-05-21) — deeper loading/performance hardening
+## v0.24.1 — shipped (2026-05-21) — first-visit smoothness hardening
 
-**Status: planning/documentation pass; runtime still v0.23.1.**
+**Status: shipped in runtime code and rebuilt preview output.**
 
-User validation still reports that entering the gallery and first-time navigation can remain unsmooth until many/all paintings have been visited once. The new v0.24 plan strengthens readiness guarantees beyond the current warm-window approach by prioritizing pre-entry warm completion, reducing same-frame main-thread bursts, and adding explicit acceptance instrumentation for first-visit smoothness.
+v0.24.1 implements the deep smoothness plan: entry now uses a strict readiness contract for a device-aware warm target set before the CTA reveals, prefetch scheduling is lane-based (`critical-now`, `near-next`, `background`) with starvation protection, procedural follow-up generation is queued via idle chunks, post-reveal warm work is frame-budgeted with batch caps, and navigation now emits explicit cold/hot readiness verdict diagnostics.
 
-See `plan.md § v0.24` for the canonical implementation plan and `FINDINGS.md § v0.24` for source-backed findings plus deeper online research synthesis.
+Large-gallery behavior is now profile-driven from detected device capabilities (layout tier/pointer/DPR), so mobile-heavy galleries keep the entry responsive while still front-loading critical first navigation smoothness.
 
 ## v0.23.1 — shipped (2026-05-21) — Performance + Preloading
 

@@ -2,6 +2,22 @@
 > Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
 
+## v0.24.1 — Runtime smoothness hardening (2026-05-21)
+
+### Changed
+
+- Implemented a strict pre-entry readiness contract: CTA reveal now waits for a device-aware warm target set to finish critical readiness stages.
+- Added device-capability warm profiles (radius, pre-entry warm count, post-reveal frame budget, batch caps) to balance smoothness and responsiveness on large/mobile galleries.
+- Refactored prefetch scheduling to explicit lanes (`critical-now`, `near-next`, `background`) with starvation-aware queue ranking.
+- Deferred adjacent procedural pre-generation into queued idle chunks to reduce bursty same-frame main-thread work.
+- Added per-navigation cold/hot readiness verdict diagnostics to prove whether interactions still triggered cold readiness work.
+
+### Validation and residual risk
+
+- `npm run lint` passed.
+- `npm run build` passed and rebuilt `customer-preview/freyraum-gallery.js`.
+- `npm audit --audit-level=moderate` remains the known Vite/esbuild advisory requiring a semver-major tooling upgrade.
+
 ## v0.24 — Deep loading/performance planning + full markdown refresh (docs-only, 2026-05-21)
 
 ### Changed

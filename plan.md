@@ -2,6 +2,21 @@
 > Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
 
+## v0.24.1 — Deep loading/performance hardening (IMPLEMENTED, 2026-05-21)
+
+Runtime status: **implemented in runtime code**. v0.24.1 now enforces entry-readiness gating, lane-based prefetch scheduling, tighter warm/procedural chunking, navigation cold/hot verdict telemetry, and device-aware large-gallery warm profiles.
+
+Implementation closeout:
+
+1. **Strict pre-entry readiness contract:** `src/main.ts` now requests entry warm targets from `GalleryManager`, ensures readiness, and only reveals after contract checks/retries.
+2. **Priority lanes + starvation protection:** `GalleryManager` prefetch queue now tracks `critical-now`, `near-next`, `background` with aging-aware sorting.
+3. **Chunking hardening:** Post-reveal warm queue now uses per-profile frame budgets + batch caps; procedural adjacent generation moved to queued idle work.
+4. **Cold/hot telemetry:** `GalleryManager` records navigation probes and emits explicit readiness verdict diagnostics per navigation.
+5. **Device-aware large-gallery controls:** `main.ts` derives warm profile from capability detection and applies it to readiness radius/count/budget.
+6. **KTX2/Basis staging:** kept documented as future asset-pipeline work; no importer/runtime format switch in this pass.
+
+Validation: `npm run lint` and `npm run build` passed after implementation.
+
 ## v0.24 — Deep loading/performance hardening plan (2026-05-21, planning)
 
 Runtime status: **planning only**. v0.23.1 improved readiness substantially, but user testing still reports lag while entering/navigating until many paintings were already visited once.
