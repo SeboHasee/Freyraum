@@ -1,9 +1,9 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
 
-## v0.21 — Preloading + Interactive Loading Screen (2026-05-21, planning)
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support (2026-05-21, planning)
 
-### Planned
+### Planned (original scope — G-01 through G-07)
 
 - **Interactive loading screen:** Replace plain white spinner with dark-themed FREYRAUM branded overlay: wordmark, real-progress bar wired to Three.js `LoadingManager`, cycling German hint texts, floating ambient particle glows, and an elegant scale+unblur gallery reveal on completion.
 - **Shader prewarm:** Wire existing `RendererManager.prewarm()` (with `compileAsync`) into boot path before loading overlay hides — eliminates first-interaction shader-compile stutter (G-01).
@@ -12,6 +12,16 @@
 - **GPU texture warm pass:** Perform a hidden render pass after all textures load but before the overlay hides — forces CPU→GPU texture upload so first artwork render has no stall (G-06).
 - **Idle full-prefetch sweep:** After first artwork reveals, use `requestIdleCallback` to progressively preload all remaining artwork PBR maps during browser idle time (G-07).
 - **`<link rel="preload">` hints:** Add font preload hints to `app.html` `<head>` (G-05).
+
+### Planned (extension — H-01 through H-07)
+
+- **LightingSetup delta clamp (H-01):** Prevent key-light position jump on tab resume by clamping the inter-frame delta to 100 ms in `LightingSetup.update()`, matching the existing `GalleryManager.MAX_SMOOTHING_DT` pattern.
+- **WebGL context restore UI (H-02):** Add optional callback in `RendererManager.onContextChange()` so `main.ts` can show a brief "Grafik wird wiederhergestellt …" status during context loss on mobile.
+- **TextureManager oversized-texture guard (H-03):** Emit a `diagnostics.warn('texture-oversized', …)` with pixel dimensions and device `maxTextureSize` when a loaded texture exceeds the device limit.
+- **PaintingMaterial GLSL highp precision guard (H-04):** Inject `#ifdef GL_FRAGMENT_PRECISION_HIGH / precision highp float` block into PaintingMaterial shader to prevent UV seaming on high-resolution artworks with large detail tiling factors on mobile.
+- **Importer 16K norm update (H-05):** Replace single `MAX_RECOMMENDED_DIMENSION = 4096` with a four-tier threshold system (≤ 4096 all-safe / ≤ 8192 modern-mobile+desktop / ≤ 16384 high-end-desktop / > 16384 hard-block). Updated GPU memory thresholds: 85 MB / 341 MB / 1024 MB.
+- **Importer NPOT diagnostic (H-06):** Add silent internal note for NPOT dimensions (not customer-visible). WebGL 2.0 handles NPOT correctly; note is advisory for future WebGL 1.0 fallback awareness.
+- **LOD/tiled streaming (H-07, future):** Document the LOD pipeline architecture (thumb/preview/hires manifest + progressive swap) for when zoom depth requires full 16K detail. No code change in this pass.
 
 ### No runtime code changed in this pass (docs-only planning).
 

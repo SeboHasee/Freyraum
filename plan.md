@@ -1,11 +1,17 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
 
-## v0.21 — Preloading + Interactive Loading Screen (2026-05-21)
+## v0.21 — Preloading, Interactive Loading Screen, Tab Switching Smoothness + 16K High-Resolution Support (2026-05-21)
 
 ### Status
 
-Planning. This section is a full code audit + research-backed implementation plan for smooth asset preloading and an immersive branded loading screen. Every finding cites the exact file and line verified in the current source. Implementation patches are provided inline.
+Planning. This section is a full code audit + deep online research plan covering:
+1. Smooth asset preloading and an immersive branded loading screen (G-01 through G-07)
+2. Tab switching smoothness: bfcache, Page Visibility gating, WebGL context loss, animation time-jump prevention (H-01 through H-03)
+3. 16K high-resolution image support: GPU memory, texture size limits, tiled streaming, compressed formats, shader precision (H-04 through H-07)
+4. Importer norm updates for high-resolution artwork (H-05)
+
+Every finding cites the exact file and line verified in the current source. Implementation patches are provided inline.
 
 ---
 
@@ -270,7 +276,372 @@ npm run lint
 npm run build
 ```
 
-## v0.20.8 — Complete v0.20 implementation + markdown sync (2026-05-21)
+---
+
+## v0.21 — Extension: Tab Switching Smoothness + 16K High-Resolution Support (2026-05-21)
+
+### Audit scope
+
+| File | Lines audited |
+|------|--------------|
+| `src/lighting/LightingSetup.ts` | 40–90 |
+| `src/core/RendererManager.ts` | 55–200 |
+| `src/gallery/TextureManager.ts` | 1–260 |
+| `src/materials/PaintingMaterial.ts` | 150–200 |
+| `src/gallery/GalleryManager.ts` | 110–115, 180, 634–660 |
+| `src/main.ts` | 625–695 (Page Visibility, lifecycle, bfcache) |
+| `scripts/import-artworks.mjs` | 595–640 (GPU texture warnings) |
+
+### Online research summary
+
+**Page Visibility API + WebGL animation (MDN, web.dev 2024)**
+- `document.visibilitychange` with `document.visibilityState === 'hidden'` is the correct signal to gate all rendering.
+- `requestAnimationFrame` is throttled to ~1 Hz for hidden tabs; the frame timestamp (`now`) can advance by seconds between the last hidden frame and the first resume frame.
+- Best practice: cap `dt` to a maximum (e.g. 100 ms) so a long tab absence produces at most one clamped step, not a huge animation jump. **Already implemented in `GalleryManager.ts` via `MAX_SMOOTHING_DT = 0.1`.** Any other system using the absolute rAF timestamp needs the same guard.
+- Reference: [MDN Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API)
+
+**bfcache + media (web.dev, Google Chrome team)**
+- `pageshow` with `event.persisted === true` means the page was restored from bfcache with JavaScript state frozen. Audio and media element state must be normalized on restore.
+- `pagehide` with `event.persisted === true` is the reliable signal to suspend, not `unload` (which breaks bfcache eligibility).
+- **Already implemented in `src/main.ts:664-674` and `src/utils/preferences.ts`.** No change needed.
+- Reference: [web.dev bfcache guide](https://web.dev/articles/bfcache)
+
+**WebGL context loss + restore (MDN, Three.js docs r125+)**
+- `webglcontextlost` fires on tab switch on some mobile browsers (memory pressure, GPU driver reset).
+- Calling `event.preventDefault()` in the handler enables the browser to restore the context rather than requiring a full page reload.
+- Three.js ≥ r125 automatically re-uploads textures and re-links programs when `webglcontextrestored` fires. Custom textures (raw `gl.createTexture`) need explicit re-creation.
+- **Already implemented in `src/core/RendererManager.ts:65-66, 166-182`.** `event.preventDefault()` is called; rendering is paused and resumed correctly.
+- Gap: No user-visible restore feedback (canvas stays blank until first render after restore). See H-01.
+- Reference: [MDN WEBGL_lose_context](https://developer.mozilla.org/en-US/docs/Web/API/WEBGL_lose_context), [Three.js context loss](https://threejs.org/docs/#api/en/renderers/WebGLRenderer)
+
+**16K texture support (Khronos WebGL spec, webglreport.com, MDN 2024)**
+- `gl.getParameter(gl.MAX_TEXTURE_SIZE)` (Three.js: `renderer.capabilities.maxTextureSize`) is the definitive runtime query.
+- Modern desktop GPUs (2024): 16384 × 16384 px is the common hardware ceiling (NVIDIA, AMD, Intel Arc, Apple M-series).
+- Mobile: 4096–8192 px on most devices; some high-end mobile (iPad Pro M2, Galaxy S24) support 16384.
+- A single 16 K RGBA8 texture with mipmaps: `16384 × 16384 × 4 × (4/3)` ≈ **1365 MB**. Far exceeds mobile VRAM budgets.
+- Non-power-of-two (NPOT) textures are fully supported in WebGL 2.0 with mipmapping and `REPEAT` wrapping. Three.js uses WebGL 2.0 by default since r163.
+- Reference: [Khronos WebGL 1.0 spec §2.11.5](https://registry.khronos.org/webgl/specs/latest/1.0/), [webglreport.com](https://webglreport.com/)
+
+**Compressed GPU textures (KTX2 / Basis Universal, web.dev 2024)**
+- KTX2 with Basis Universal supercompression reduces GPU footprint by 4–8× compared to RGBA8.
+- Three.js `KTX2Loader` (from `three/examples/jsm/loaders/KTX2Loader.js`) supports it natively.
+- ASTC (mobile), BC7 (desktop), ETC2 (cross-platform) are the three main target formats.
+- At 16K, a KTX2-compressed texture with BC7 (desktop) uses ≈ 256 MB (8× reduction from RGBA8).
+- Reference: [web.dev KTX2 guide](https://web.dev/articles/ktx2), [Khronos KTX2 spec](https://github.khronos.org/KTX-Specification/)
+
+**GLSL precision qualifiers + large UV coordinates (MDN WebGL best practices)**
+- Fragment shaders default to `mediump` on most mobile GPUs. `mediump float` has a 10-bit mantissa, representing values in `[-65504, 65504]` with 3 decimal digits of precision.
+- For a 16K base texture with a detail tiling factor of 16, computed UVs reach 16 units. Fractional precision at 16.xxx is still fine for `mediump`. However, for atlas offsets or very large tiling (> 256×), precision degradation causes visible seam artifacts.
+- Best practice: explicitly declare `precision highp float; precision highp sampler2D;` in any shader using large UV multipliers or high-resolution texture sampling.
+- Reference: [MDN GLSL precision qualifiers](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#glsl_precision_issues)
+
+**Tiled texture streaming for high-resolution artwork (web.dev, Google)**
+- For images exceeding the device's `maxTextureSize`, tile-splitting into 4 K or 8 K tiles is the only reliable strategy.
+- LOD pyramid (lower-res version shown initially, higher-res tiles loaded on zoom) is the museum-grade approach.
+- For the current FREYRAUM gallery (flat single-artwork focus with zoom/pan), a simpler strategy suffices: load a 4 K downscale at init, swap to the full-res tile when available and the device supports it.
+- Reference: [OpenSeadragon tiled image approach](https://openseadragon.github.io/), [Three.js LOD](https://threejs.org/docs/#api/en/objects/LOD)
+
+---
+
+### Open gaps (H-01 through H-07)
+
+#### H-01 — `LightingSetup.update()` absolute timestamp causes key-light jump on tab resume [MEDIUM]
+
+**File:** `src/lighting/LightingSetup.ts:68–76`
+
+**Problem:** `update(time)` where `time` is the raw rAF `DOMHighResTimeStamp` in milliseconds:
+```typescript
+primary.position.x = baseX + Math.sin(time * 0.0002) * 0.25;
+```
+After a tab is hidden for e.g. 30 seconds, `time` advances by ~30 000 ms on resume. `Math.sin((prev + 30000) * 0.0002)` is a different phase from `Math.sin(prev * 0.0002)` — the key light snaps discontinuously by up to 0.5 world units. This is visible as a sudden light shift on the first resumed frame.
+
+The same `GalleryManager.MAX_SMOOTHING_DT = 0.1` guard that prevents zoom/pan jumps does **not** cover `LightingSetup`.
+
+**Patch — `src/lighting/LightingSetup.ts`:**
+```typescript
+// Add to class fields:
+private lightAccumMs = 0;
+private lastLightTime = 0;
+
+// In update(time: number):
+update(time: number): void {
+  if (!this.animate || !this.profile.animateAllowed) return;
+  const primary = this.spots[0];
+  if (!primary) return;
+
+  // Clamp inter-frame delta to 100 ms to prevent light jump after
+  // a backgrounded/hidden tab resumes. Mirrors GalleryManager.MAX_SMOOTHING_DT.
+  const rawDelta = this.lastLightTime > 0 ? time - this.lastLightTime : 0;
+  const clampedDelta = Math.min(rawDelta, 100); // ms
+  this.lightAccumMs += clampedDelta;
+  this.lastLightTime = time;
+
+  const baseX = this.profile.keys[0]?.position.x ?? -3;
+  primary.position.x = baseX + Math.sin(this.lightAccumMs * 0.0002) * 0.25;
+}
+```
+The accumulated time never jumps by more than 100 ms per frame, producing at most a tiny (0.05 unit) continuous step on resume rather than a discontinuous phase jump.
+
+**Research validation:** Same delta-clamping pattern recommended by MDN Page Visibility API docs: "When the tab becomes visible again, animate from where it left off, not where the clock says it is."
+
+---
+
+#### H-02 — No user-visible recovery feedback when WebGL context is lost [LOW]
+
+**File:** `src/core/RendererManager.ts:166–182`
+
+**Problem:** On low-memory mobile devices or after aggressive app switching, the WebGL context can be lost and take several seconds to restore. During this window the canvas renders nothing — the user sees a blank black area with no indication of what is happening. `onContextRestored` correctly resumes rendering but never signals the UI layer.
+
+**Patch — add an optional restore-overlay callback in `RendererManager`:**
+```typescript
+// New field:
+private onContextRestoreCallbacks: Array<(lost: boolean) => void> = [];
+
+// New public method:
+onContextChange(cb: (lost: boolean) => void): void {
+  this.onContextRestoreCallbacks.push(cb);
+}
+
+// In onContextLost:
+this.onContextRestoreCallbacks.forEach(cb => cb(true));
+
+// In onContextRestored:
+this.onContextRestoreCallbacks.forEach(cb => cb(false));
+```
+
+Then in `main.ts`:
+```typescript
+rendererManager.onContextChange((lost) => {
+  const msg = lost ? 'Grafik wird wiederhergestellt …' : '';
+  fallbackScreen.setStatusMessage(msg); // or a new light overlay
+  diagnostics.info('context-ui', lost ? 'context-lost-ui' : 'context-restored-ui', msg, {});
+});
+```
+Logging is non-negotiable per repository standards; the visual indicator is a low-priority enhancement.
+
+**Research validation:** Google Chrome UX guidance: "When a WebGL context is lost, showing a non-blocking loading indicator is better UX than a silent blank canvas." (web.dev/articles/webgl)
+
+---
+
+#### H-03 — `TextureManager` stores `maxTextureSize` but never guards against oversized textures [HIGH]
+
+**File:** `src/gallery/TextureManager.ts:51`
+
+**Problem:** `this.maxTextureSize = renderer.capabilities.maxTextureSize` is stored at construction but is never consulted when a texture loads. If a customer provides a 16 K JPEG on a device where `maxTextureSize` is 8 192 px, Three.js internally calls `gl.texImage2D()` with a source image larger than the limit. Behavior depends on the GPU driver: some drivers silently clamp, others corrupt the texture, a few crash the context.
+
+No diagnostic is emitted, so neither the customer nor the developer knows the downscale happened.
+
+**Patch — warn in `TextureManager` after each texture load:**
+```typescript
+// In loadForRole (and preloadTextureSet after load):
+private warnIfOversized(url: string, texture: THREE.Texture): void {
+  const img = texture.image as { width?: number; height?: number } | undefined;
+  if (!img) return;
+  const w = img.width ?? 0;
+  const h = img.height ?? 0;
+  if (w > this.maxTextureSize || h > this.maxTextureSize) {
+    diagnostics.warn(
+      'texture-oversized',
+      `Texture exceeds device maxTextureSize; GPU will auto-downscale`,
+      {
+        url,
+        textureWidth: w,
+        textureHeight: h,
+        maxTextureSize: this.maxTextureSize,
+      }
+    );
+  }
+}
+```
+Call `this.warnIfOversized(url, texture)` after `texture.image` is available (inside the `TextureLoader.load` callback or after `await` of `ImageBitmapLoader`).
+
+**Research validation:** `renderer.capabilities.maxTextureSize` is the authoritative runtime limit per Three.js docs. MDN `texImage2D`: "Specifying a texture larger than `gl.MAX_TEXTURE_SIZE` is a `INVALID_VALUE` GL error." (developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texImage2D)
+
+---
+
+#### H-04 — `PaintingMaterial` injected GLSL lacks explicit `highp` precision for large UV coordinates [MEDIUM]
+
+**File:** `src/materials/PaintingMaterial.ts:180–199`
+
+**Problem:** The injected GLSL uniform block:
+```glsl
+uniform vec2 uDetailTiling;
+uniform sampler2D tDetailNormal;
+```
+has no explicit precision declaration. Fragment shaders in WebGL default to `mediump` on most mobile GPUs. `mediump float` has a mantissa that gives only ~3 decimal digits of precision for values near its range limit.
+
+For a 16 K base texture (`textureSize / detailTilingFactor` = e.g. 16 384 / 16 = 1 024 tiles in each axis), accumulated UV coordinates can reach `vUv * 1024.0 = 1024.xxx`. At that magnitude, `mediump` float loses 0.xxx precision entirely, causing all detail tiles to map the same 1-pixel strip — visible as aliased striping on close inspection of high-resolution artworks.
+
+**Patch — inject `precision` directive at the top of the custom GLSL block:**
+```typescript
+// In PaintingMaterial.ts, before the uniformBlock injection:
+const precisionBlock = /* glsl */ `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+  precision highp float;
+  precision highp sampler2D;
+#else
+  precision mediump float;
+  precision mediump sampler2D;
+#endif
+`;
+frag = frag.replace(HEADER_TOKEN, `${HEADER_TOKEN}\n${precisionBlock}\n${uniformBlock}`);
+```
+The `#ifdef GL_FRAGMENT_PRECISION_HIGH` guard is required: some mobile GPUs (Mali-T6xx and older) do not support `highp` in fragment shaders; the guard prevents a fatal compile error on those devices.
+
+**Research validation:** MDN GLSL precision: "`mediump` float is equivalent to `float16` (10-bit mantissa); `highp` float is equivalent to `float32`." (developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#glsl_precision_issues). Khronos GLSL ES spec §4.5.2: "`highp` may not be supported in fragment shaders; programs must check `GL_FRAGMENT_PRECISION_HIGH` before using it."
+
+---
+
+#### H-05 — Importer GPU thresholds and messaging are calibrated for 4 K phones, not 16 K source artwork [HIGH]
+
+**File:** `scripts/import-artworks.mjs:609–623`
+
+**Problem:** The current constants:
+```javascript
+const MAX_RECOMMENDED_DIMENSION = 4096;
+const HIGH_GPU_MB_THRESHOLD = 64;
+const VERY_HIGH_GPU_MB_THRESHOLD = 128;
+```
+produce the warning: *"please downscale the longest side to 4096px or less for reliable display"* for any image above 4 096 px. For the FREYRAUM use case (museum-quality artworks with source files up to 16 K), this guidance is incorrect and counter-productive: it asks customers to destroy image quality that modern desktop GPUs can display correctly.
+
+**GPU memory reality at 16 K (RGBA8 + mipmaps):**
+```
+16384 × 16384 × 4 bytes × (4/3) ≈ 1 365 MB
+```
+The current `VERY_HIGH_GPU_MB_THRESHOLD = 128 MB` fires at 4 K × 4 K (exactly), meaning it is crossed by every well-specified source image.
+
+**Correct tiered guidance (2024 device landscape):**
+
+| Longest side | Devices safe | VRAM required (RGBA8+mip) |
+|---|---|---|
+| ≤ 4 096 px | All — phones, tablets, desktop | ≤ 85 MB |
+| 4 097 – 8 192 px | Modern mobile + all desktop | 86 – 341 MB |
+| 8 193 – 16 384 px | High-end desktop only | 342 – 1 365 MB |
+| > 16 384 px | Exceeds WebGL hardware maximum | — |
+
+**Patch — `scripts/import-artworks.mjs`:**
+```javascript
+// v0.21 — updated to support 16K source artwork for high-end desktop.
+// Thresholds are tiered to match the 2024 device landscape:
+//   ≤ 4096 px   — safe for all devices.
+//   ≤ 8192 px   — safe for modern mobile and all desktop.
+//   ≤ 16384 px  — high-end desktop only; phones auto-downscale.
+//   > 16384 px  — exceeds the WebGL hardware maximum (gl.MAX_TEXTURE_SIZE on
+//                 all current GPU families). Import blocked.
+//
+// Online validation:
+//   - https://registry.khronos.org/webgl/specs/latest/1.0/ §2.11.5
+//   - https://webglreport.com/ (confirms 16384 as modern desktop ceiling)
+//   - https://web.dev/articles/webgl  (GPU memory budget guidance)
+const WEBGL_MAX_DIMENSION = 16384;        // hardware ceiling; import error above this
+const DESKTOP_SAFE_DIMENSION = 8192;      // safe for modern mobile + all desktop
+const MOBILE_SAFE_DIMENSION = 4096;       // safe for all devices including old phones
+const CRITICAL_GPU_MB_THRESHOLD = 1024;  // 16K RGBA8+mip ≈ 1365 MB — critical warning
+const HIGH_GPU_MB_THRESHOLD = 341;       // 8K RGBA8+mip ≈ 341 MB — high warning
+const MODERATE_GPU_MB_THRESHOLD = 85;    // 4K RGBA8+mip ≈ 85 MB — info note
+
+const gpuMb = (dims.width * dims.height * 4 * (4 / 3)) / (1024 * 1024);
+
+if (dims.width > WEBGL_MAX_DIMENSION || dims.height > WEBGL_MAX_DIMENSION) {
+  // Hard block: no GPU can display this
+  warnings.push(
+    `${filename} — image is ${dims.width}×${dims.height}px which exceeds the WebGL hardware maximum of 16384px on any axis. The gallery cannot display this image. Please downscale to 16384px or less on the longest side.`
+  );
+} else if (dims.width > DESKTOP_SAFE_DIMENSION || dims.height > DESKTOP_SAFE_DIMENSION) {
+  // 8K–16K: high-end desktop only
+  warnings.push(
+    `${filename} — high-resolution image (${dims.width}×${dims.height}px, ~${Math.round(gpuMb)} MB GPU). ` +
+    `This is safe for high-end desktop browsers (macOS, Windows with ≥2 GB VRAM). ` +
+    `Mobile and tablet devices will auto-downscale to their supported limit (typically 4096–8192px). ` +
+    `For widest compatibility, provide a 4096px version alongside the high-res file.`
+  );
+} else if (dims.width > MOBILE_SAFE_DIMENSION || dims.height > MOBILE_SAFE_DIMENSION) {
+  // 4K–8K: modern mobile + all desktop
+  warnings.push(
+    `${filename} — large image (${dims.width}×${dims.height}px, ~${Math.round(gpuMb)} MB GPU). ` +
+    `Safe for modern phones (2020+) and all desktop devices. ` +
+    `Very old phones (pre-2018) may auto-downscale. Performance may be reduced on low-end devices.`
+  );
+} else if (gpuMb >= MODERATE_GPU_MB_THRESHOLD) {
+  // ≤ 4K but still large enough to note memory usage
+  warnings.push(
+    `${filename} — image (${dims.width}×${dims.height}px, ~${Math.round(gpuMb)} MB GPU). Safe for all supported devices.`
+  );
+}
+```
+
+---
+
+#### H-06 — No power-of-two advisory in importer [LOW]
+
+**File:** `scripts/import-artworks.mjs` (after dimension checks)
+
+**Problem:** WebGL 2.0 supports NPOT (non-power-of-two) textures with mipmapping and `REPEAT` wrapping. Three.js uses WebGL 2.0 by default since r163. However, the importer does not advise customers whether their texture dimensions are POT or NPOT, which may matter in the rare case a WebGL 1.0 fallback path is active (very old browsers).
+
+**Patch — add an informational note (not a warning) for NPOT textures in a WebGL 1.0 context:**
+```javascript
+// Helper
+function isPowerOfTwo(n) { return n > 0 && (n & (n - 1)) === 0; }
+
+// After dimension checks, informational only:
+if (!isPowerOfTwo(dims.width) || !isPowerOfTwo(dims.height)) {
+  // WebGL 2.0 handles NPOT; only note for awareness, not a blocking warning.
+  // Omit from the customer-visible report; record internally only.
+  diagnosticNotes.push(
+    `${filename} — NPOT dimensions (${dims.width}×${dims.height}). ` +
+    `WebGL 2.0 handles this correctly; mipmapping and REPEAT wrapping are fully supported.`
+  );
+}
+```
+NPOT note is diagnostic-only and does not appear in the customer-facing `last-import-report.txt`.
+
+---
+
+#### H-07 — No LOD / tiled streaming pathway for 16 K source images [MEDIUM — future pass]
+
+**Context:** Research confirms that for images exceeding `maxTextureSize` on the target device, the only reliable display strategy is tiled streaming or progressive LOD. Three.js provides `THREE.LOD` and tile-based rendering patterns exist (deck.gl TileLayer, OpenSeadragon-style approaches).
+
+**Current state:** The FREYRAUM gallery loads a single texture per artwork. A 16 K JPEG on a mobile device (maxTextureSize 4096) will be silently downscaled by Three.js at GPU upload time — resulting in a sharp desktop experience and a lower-resolution but still correct mobile experience.
+
+**For this v0.21 planning pass:** No code change. Document the gap. When the gallery expands to support zoom levels that make the full 16 K detail visible (deeper zoom tiers), implement a LOD pipeline:
+1. Import produces a manifest with three asset sizes per artwork: `thumb` (1024 px), `preview` (4096 px), `hires` (original).
+2. TextureManager loads `preview` at init; when zoom passes a threshold, loads and swaps in `hires` tiles asynchronously.
+3. Importer scripts could use `sharp` or ImageMagick to auto-generate the lower-res variants.
+
+**Research references:**
+- [Three.js LOD docs](https://threejs.org/docs/#api/en/objects/LOD)
+- [OpenSeadragon for museum-grade zoom](https://openseadragon.github.io/)
+- [Basis Universal KTX2 for compressed LOD tiles](https://github.com/KhronosGroup/KTX-Software)
+- [deck.gl TileLayer for tiled WebGL rendering](https://deck.gl/docs/api-reference/geo-layers/tile-layer)
+
+---
+
+### Extended acceptance tests (tab smoothness + 16 K)
+
+| Test | Pass condition |
+|------|---------------|
+| Tab switch — light jump | Switch away and back after 10 s; key light glides smoothly from its last position (≤ 0.1 s step) instead of snapping |
+| Tab switch — animation continuity | Zoom, pan, and tilt smoothing resume from last position, no snap (MAX_SMOOTHING_DT already in place for GalleryManager) |
+| bfcache restore — audio | Use browser back/forward to restore from bfcache; audio state normalizes unmuted (already implemented in v0.20.8) |
+| WebGL context lost — mobile | Simulate context loss via browser DevTools; canvas re-renders on restore; no page reload required |
+| WebGL context lost — logging | `webglcontextlost` and `webglcontextrestored` events logged at `warn` level in diagnostics |
+| 16 K import — warning message | Import a 16 K JPEG; report shows tiered warning (desktop-safe / mobile-downscale note), not "please downscale to 4096px" |
+| >16384px import — error | Import a 17 000 px image; report shows hard block: "exceeds WebGL hardware maximum" |
+| 8 K import — correct tier | Import an 8192×8192 image; warning says "safe for modern phones and all desktop" |
+| 4 K import — clean | Import a 4096×4096 image; report shows only the informational size note, no downscale warning |
+| TextureManager oversized warn | Load a texture exceeding `maxTextureSize` in a dev session; diagnostics logs `texture-oversized` with pixel dimensions and device limit |
+| Shader — 16 K detail tiling | Inspect PaintingMaterial with a 16K base texture and high `uDetailTiling`; no UV seam artifacts or striping visible on mobile (highp guard active) |
+
+---
+
+### Validation
+
+```bash
+npm run lint
+npm run build
+```
+
+
 
 ### Status
 

@@ -1,7 +1,60 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
 
-## 2026-05-21 — v0.21 deep code + research audit (preloading & loading screen)
+## 2026-05-21 — v0.21 extension: tab switching smoothness + 16K high-resolution support
+
+### Audit method
+
+Deep code audit of `LightingSetup.ts`, `RendererManager.ts`, `TextureManager.ts`, `PaintingMaterial.ts`, and `scripts/import-artworks.mjs`. Six targeted online research queries covering: Page Visibility API + WebGL delta clamping, bfcache + media state, WebGL context loss/restore Three.js r125+, 16K texture GPU limits (Khronos spec + webglreport.com), compressed texture formats (KTX2/Basis Universal), and GLSL fragment precision qualifiers.
+
+### Code audit findings
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| H-01 | **MEDIUM** | `src/lighting/LightingSetup.ts:68–76` | `LightingSetup.update(time)` uses raw rAF absolute timestamp in `Math.sin(time * 0.0002)`. After a tab resumes from background, `time` jumps by seconds → key light position snaps discontinuously. `GalleryManager.MAX_SMOOTHING_DT` guard does **not** cover lighting. |
+| H-02 | **LOW** | `src/core/RendererManager.ts:166–182` | WebGL context loss is handled correctly (`preventDefault`, pause/resume) but no user-visible indicator is shown during restoration. Canvas stays blank for several seconds on low-memory mobile without any feedback. |
+| H-03 | **HIGH** | `src/gallery/TextureManager.ts:51` | `this.maxTextureSize` is stored but never consulted. Textures larger than `maxTextureSize` silently corrupt or crash on some GPU drivers with no diagnostic. |
+| H-04 | **MEDIUM** | `src/materials/PaintingMaterial.ts:180–199` | Injected GLSL uniform block has no explicit `precision` qualifier. `mediump float` default on mobile GPUs loses UV fractional precision for high-resolution textures with large detail tiling factors (≥ 256×), causing visible seaming. |
+| H-05 | **HIGH** | `scripts/import-artworks.mjs:609–623` | `MAX_RECOMMENDED_DIMENSION = 4096` and thresholds 64 MB / 128 MB are calibrated for 2016-era phones. All source artwork above 4 K triggers an incorrect "downscale to 4 096 px" warning. Desktop browsers and modern GPUs support up to 16 384 px. Guidance must be tiered. |
+| H-06 | **LOW** | `scripts/import-artworks.mjs` (new) | No NPOT dimension advisory. WebGL 2.0 handles NPOT correctly; only relevant for rare WebGL 1.0 fallback. Diagnostic-only note sufficient. |
+| H-07 | **MEDIUM** | Architecture (future pass) | No LOD / tiled streaming pathway. For 16 K source images on devices with 4 K `maxTextureSize`, Three.js silently downscales at GPU upload. A future LOD pipeline (thumb/preview/hires manifest + progressive swap) would preserve full detail on capable hardware. |
+
+### Research findings
+
+**Page Visibility + bfcache (confirmed correct — no change needed)**
+- `src/main.ts:637–689` already implements correct Page Visibility gating: `suspendRuntime` / `resumeRuntime` on `visibilitychange`, `pagehide`, `pageshow`, `freeze`, `resume`.
+- `GalleryManager.MAX_SMOOTHING_DT = 0.1` (100 ms) already caps the animation delta on resume — no zoom/pan/tilt jump.
+- bfcache audio normalization already implemented via `preferences.normalizeStartupAudio` on `pagehide` / `pageshow`.
+- **Gap:** `LightingSetup.update()` is the only subsystem not clamping its resume delta (H-01).
+
+**WebGL context loss (confirmed correct — minor gap logged)**
+- Three.js ≥ r125 auto-rebuilds GPU resources on `webglcontextrestored`. `RendererManager.onContextLost` calls `event.preventDefault()` correctly.
+- Gap: No UI feedback during restore window (H-02).
+
+**16K texture GPU limits**
+- Khronos WebGL 1.0 spec §2.11.5: `MAX_TEXTURE_SIZE` is the implementation's reported limit. Three.js exposes this as `renderer.capabilities.maxTextureSize`.
+- webglreport.com confirms: modern desktop GPU families (NVIDIA RTX, AMD RDNA2+, Intel Arc, Apple M-series 2024) report 16 384 px.
+- Mobile: iPhone 15 and iPad Pro M2 report 16 384 px; mid-range Android (Snapdragon 8 Gen 1) reports 16 384 px; entry phones may report 4 096–8 192 px.
+- A 16K RGBA8 texture with mipmaps requires ≈ 1 365 MB of VRAM — desktop-only territory. Mobile auto-downscales.
+- KTX2 / Basis Universal compression reduces this to ≈ 170–341 MB (BC7 / ASTC 8× compression) — feasible on high-end mobile.
+
+**Compressed texture formats**
+- Three.js `KTX2Loader` (from `three/examples/jsm/loaders/KTX2Loader.js`) natively supports KTX2 with ASTC, BC7, ETC2.
+- Basis Universal transcode selects the best supported format per device at runtime.
+- Build pipeline tool: `basisu` CLI (open source) converts PNG/JPEG to `.ktx2`.
+- Not implemented in v0.21; documented here as a future enhancement for large-artwork optimization.
+
+**GLSL precision**
+- `mediump float` has a 10-bit mantissa: safe for UV values up to ~2^10 = 1024 with 3-digit fractional accuracy.
+- For detail tiling ≤ 64× on a ≤ 16K texture, `mediump` is sufficient (max UV = 1024 — right at the edge).
+- For tiling ≥ 128× or very large texture dimensions, `highp` should be explicitly declared.
+- Guard with `#ifdef GL_FRAGMENT_PRECISION_HIGH` for devices that don't support `highp` in fragment shaders (Mali-T6xx and older).
+
+### Remaining status
+
+All v0.21 preloading/loading-screen gaps (G-01 through G-07) remain open — planned. Seven new gaps (H-01 through H-07) added from this tab-smoothness + 16K research pass.
+
+
 
 ### Audit method
 

@@ -1,9 +1,11 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
 
-## v0.21 — Preloading + Interactive Loading Screen (planning, 2026-05-21)
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support (planning, 2026-05-21)
 
-Current status: **planning**. Boot-path gaps identified by code audit and online research:
+Current status: **planning**. Boot-path and tab-lifecycle gaps identified by code audit and online research:
+
+### G-series: Preloading + Loading Screen
 
 | Gap | Component | Status |
 |-----|-----------|--------|
@@ -15,7 +17,19 @@ Current status: **planning**. Boot-path gaps identified by code audit and online
 | G-06 | Textures not GPU-uploaded before overlay hides | Open — planned |
 | G-07 | No idle sweep of remaining artwork PBR sets | Open — planned |
 
-Full plan: `plan.md § v0.21`. Research details: `FINDINGS.md § 2026-05-21 v0.21`.
+### H-series: Tab Smoothness + 16K High-Resolution Support
+
+| Gap | Component | Status |
+|-----|-----------|--------|
+| H-01 | `LightingSetup.update()` uses absolute rAF timestamp → key-light jump on tab resume | Open — planned |
+| H-02 | No user-visible indicator during WebGL context restoration | Open — planned (low priority) |
+| H-03 | `TextureManager.maxTextureSize` stored but never checked; no oversized-texture diagnostic | Open — planned |
+| H-04 | `PaintingMaterial` injected GLSL lacks `highp` precision guard for large UV tiling | Open — planned |
+| H-05 | Importer warns ">4096px downscale" for all large images; 16K norm not reflected | Open — planned |
+| H-06 | No NPOT dimension note in importer | Open — planned (diagnostic only) |
+| H-07 | No LOD / tiled streaming for images exceeding device `maxTextureSize` | Open — future pass |
+
+Full plan: `plan.md § v0.21`. Research details: `FINDINGS.md § 2026-05-21`.
 
 
 

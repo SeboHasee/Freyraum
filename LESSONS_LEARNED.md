@@ -1,7 +1,27 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
 
-## 2026-05-21 — Prewarm methods must be wired in, not just defined
+## 2026-05-21 — Delta clamping must cover every time-driven subsystem
+
+- `GalleryManager` has `MAX_SMOOTHING_DT = 0.1` to prevent zoom/pan jumps after a backgrounded tab. `LightingSetup` uses an absolute `DOMHighResTimeStamp` directly, so the guard never applied to it — the key light could snap discontinuously on resume.
+- Future rule: **every subsystem that advances a value based on `requestAnimationFrame` timestamp must clamp its inter-frame delta**, either using the shared `MAX_SMOOTHING_DT` constant or its own equivalent guard. Never assume that gating in one file covers related files.
+
+## 2026-05-21 — Stored capabilities must be actively guarded
+
+- `TextureManager` stores `renderer.capabilities.maxTextureSize` but never uses it to warn or block oversized textures. A capability that is queried and stored but never checked provides false confidence.
+- Future rule: **every stored device capability should have a corresponding runtime guard** — at minimum a diagnostic warning — so mismatches are surfaced before they corrupt the render.
+
+## 2026-05-21 — Importer thresholds age with the device landscape
+
+- `import-artworks.mjs` was last calibrated in v0.16 against 2016-era phone limits (4096 px, 64 MB). By 2024, the same hardware ceiling is 16 384 px on all modern desktop GPUs and many flagship phones. The v0.16 guidance was actively harmful: it told customers to destroy 16K source images that modern browsers can display correctly.
+- Future rule: **hardware threshold constants in the importer must include a citation to the source spec and the year they were verified.** When the device landscape changes, outdated thresholds must be updated alongside the guidance text.
+
+## 2026-05-21 — GLSL precision must be declared for high-resolution UV work
+
+- Default fragment shader precision is `mediump` on mobile GPUs. For a 16K base texture with 128× detail tiling, computed UVs can reach values where `mediump float` loses fractional bits, causing visible seaming. Three.js does not inject `highp` on behalf of `onBeforeCompile` patches.
+- Future rule: **any injected GLSL block that operates on UV coordinates with large multipliers must explicitly declare `precision highp float;`** under a `#ifdef GL_FRAGMENT_PRECISION_HIGH` guard. Never rely on the default fragment precision when UV values may exceed single-digit ranges.
+
+
 
 - `RendererManager.prewarm()` existed with proper `compileAsync` support but was never called in the boot path. This is a category of bug: an optimization method that is defined but not connected cannot help.
 - Future rule: every performance utility (prewarm, prefetch, warm render) must have a call site in the boot sequence documented alongside its definition.

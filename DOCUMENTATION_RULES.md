@@ -1,5 +1,5 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
 
 ## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 

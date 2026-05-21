@@ -1,9 +1,9 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
 
-## v0.21 — Preloading + Interactive Loading Screen (planning, 2026-05-21)
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support (planning, 2026-05-21)
 
-Current status: **planning**. A deep code audit revealed 7 gaps (G-01 through G-07) in the preloading and loading-screen domain. Full implementation plan is in `plan.md § v0.21`. Research notes and finding details are in `FINDINGS.md § 2026-05-21 v0.21`.
+Current status: **planning**. A deep code audit and online research session revealed 7 preloading/loading-screen gaps (G-01 through G-07) and 7 further gaps around tab switching smoothness and 16K high-resolution image support (H-01 through H-07). Full implementation plans are in `plan.md § v0.21`. Research notes and findings are in `FINDINGS.md § 2026-05-21`.
 
 Planned changes:
 - Branded interactive loading screen (dark glass theme, wordmark, real progress bar, particles, hint texts, reveal animation)
@@ -12,6 +12,10 @@ Planned changes:
 - Adjacent artwork PBR prefetch via `requestIdleCallback` (fix G-03)
 - GPU texture warm render pass before overlay hides (fix G-06)
 - Idle sweep of all remaining artwork PBR maps (fix G-07)
+- LightingSetup inter-frame delta clamp to prevent key-light jump on tab resume (fix H-01)
+- TextureManager oversized-texture diagnostic warning (fix H-03)
+- PaintingMaterial GLSL `highp` precision guard for large UV detail tiling (fix H-04)
+- Importer updated to 16K norm: four-tier resolution guidance, updated GPU memory thresholds (fix H-05)
 
 
 
