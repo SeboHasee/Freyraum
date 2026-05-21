@@ -1,7 +1,12 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
+> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
-## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+## v0.23 performance/preloading architecture note
+
+The current runtime has no dedicated preload coordinator. Responsibility is split across `GalleryManager.init()` (albedo and capped authored PBR preload), `GalleryManager.scheduleFullTextureSetPrefetch()` (idle PBR sweep), `GalleryManager.warmArtworkForGPU()` plus `main.ts` (hidden render upload), `ProceduralTextureFactory` (synchronous fallback map generation), and `RendererManager.prewarm()` (shader compile). The v0.23 plan introduces a future readiness/scheduler boundary so these steps can be measured and prioritized per artwork instead of being inferred from scattered logs.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
 
 **Status: shipped.**
 

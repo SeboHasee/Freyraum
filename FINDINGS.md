@@ -1,7 +1,34 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
+> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
-## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+## v0.23 — Performance/Preloading Planning Audit (2026-05-21)
+
+### Audit result
+
+The current codebase has strong v0.22 mitigations, but the user-reported pattern still has credible root causes in source:
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| N-01 | **HIGH** | `src/main.ts:40-42`, `src/main.ts:645-661` | `GPU_WARM_LIMIT = 15`; galleries above that limit skip the per-artwork GPU warm loop and fall back to one render of the current scene only. |
+| N-02 | **HIGH** | `src/gallery/GalleryManager.ts:402-420`, `src/materials/ProceduralTextureFactory.ts:32-76` | Missing procedural maps are generated synchronously while an artwork is being shown. Cold generation can allocate and fill large buffers on the main thread. |
+| N-03 | **HIGH** | `src/gallery/GalleryManager.ts:274-295`, `src/gallery/GalleryManager.ts:573-626` | Authored PBR sets are loaded under the overlay only up to `PBR_PRELOAD_LIMIT = 15`; the rest depend on idle prefetch and can still load during navigation. |
+| N-04 | **MEDIUM** | `src/core/RendererManager.ts:113-134`, `src/main.ts:663-666` | Shader prewarm is awaited, but it only covers the scene/material state currently bound. It does not prove every future artwork texture is uploaded. |
+| N-05 | **MEDIUM** | `src/utils/FrameBudgetMonitor.ts:53-58`, `src/utils/AdaptiveQualityController.ts:45-66` | Navigation cooldown is fixed at 600 ms and not tied to actual texture/procedural readiness jobs. |
+| N-06 | **LOW** | `src/main.ts:648-654` | Artwork 0 is warmed inside the loop and then rebound/rendered again. This may be harmless, but it should be measured or removed. |
+
+### Research notes
+
+- Three.js loaders and `LoadingManager` track loading/decode progress, not guaranteed GPU residency. First render using a texture can still upload it to VRAM.
+- `WebGLRenderer.compileAsync()` is useful for shader compilation but does not replace hidden render passes for texture upload.
+- `requestIdleCallback` should be treated as opportunistic. It is not a promise that all work finishes before an eager visitor navigates.
+- `ImageBitmapLoader` and KTX2/Basis compressed textures are promising next steps, but each needs compatibility testing against the repository's customer-preview constraints, especially local files and data URIs.
+
+### Status
+
+Planning/documentation only. No runtime code changed in this pass. The implementation plan is canonical in `plan.md § v0.23`.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
 
 ### Problem confirmed by user testing
 

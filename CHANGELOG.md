@@ -1,7 +1,21 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
+> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
-## v0.22 — Guaranteed Jank-Free Gallery: Full Pre-Load + "Galerie betreten" (SHIPPED)
+
+## v0.23 — Performance/Preloading Planning Audit (docs-only, 2026-05-21)
+
+### Changed
+
+- Refreshed all Markdown files to document the remaining navigation-stutter root causes after v0.22.
+- Added the N-series performance/preloading plan to `plan.md`.
+- Added source-referenced findings to `FINDINGS.md` covering large-gallery GPU warm gaps, synchronous procedural generation, idle-prefetch limits, shader/readiness diagnostics, and adaptive-quality cooldown timing.
+
+### Validation and residual risk
+
+- Documentation-only pass; no runtime code changed.
+- Runtime validation is deferred to the N-series implementation pass. Known `npm audit --audit-level=moderate` Vite/esbuild advisory remains a separate tooling upgrade.
+
+## v0.22 — Improved Preloading: Capped PBR Pre-Load + "Galerie betreten" (SHIPPED)
 
 **Status: shipped in runtime code, rebuilt preview output, and all Markdown docs.**
 

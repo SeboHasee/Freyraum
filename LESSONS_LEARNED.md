@@ -1,7 +1,18 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
+> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
-## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+## 2026-05-21 — v0.23 performance audit lessons
+
+### Lesson 60 — Loaded is not the same as GPU-ready
+
+`TextureLoader`/`LoadingManager` success means the browser has fetched and decoded enough image data for a `THREE.Texture`; it does not prove that texture has been uploaded to GPU memory. Future performance plans must separately track CPU-loaded, material-bound, shader-compiled, and GPU-warmed states. **Future rule:** never describe a gallery as jank-free only because textures are preloaded; require proof that first navigation does not trigger texture load, procedural generation, shader compile, or GPU upload.
+
+### Lesson 61 — Fixed warm limits must be documented as partial coverage
+
+`GPU_WARM_LIMIT = 15` and `PBR_PRELOAD_LIMIT = 15` are valid memory guardrails, but they also define the exact point where large galleries return to best-effort warming. **Future rule:** when a performance fix has a count or memory cap, docs must state what happens beyond the cap and include a follow-up plan for budgeted continuation.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
 
 **Status: shipped in runtime code and documentation.**
 

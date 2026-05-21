@@ -1,11 +1,18 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
+> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
-## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+## v0.23 — planning audit (2026-05-21) — Performance + Preloading
+
+**Status: planning/documentation only; runtime still v0.22.** A fresh audit confirms why navigation can still feel choppy after the loading screen: v0.22 warms all artworks only up to 15 items, large galleries continue after reveal via best-effort idle prefetch, and missing procedural maps are still generated synchronously on first use. The new N-series plan in `plan.md` prioritizes a measured readiness ledger, budgeted GPU warm queue, critical-window procedural pre-generation, navigation-aware prefetch, and future ImageBitmap/KTX2 research.
+
+See `FINDINGS.md § v0.23` for the audit table and `plan.md § v0.23` for the implementation plan.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
 
 **Status: shipped in runtime code and documentation.**
 
-After v0.21, first navigation to each painting could still hick-up because PBR texture sets for artworks 2–N were loaded and uploaded only on demand. v0.22 closes that gap:
+After v0.21, first navigation to each painting could still hick-up because PBR texture sets for artworks 2–N were loaded and uploaded only on demand. v0.22 reduces that gap for the capped warm/preload window:
 
 1. **Full PBR pre-load (L-01):** `GalleryManager.init()` now preloads albedo plus authored PBR texture sets under the loading overlay. `PBR_PRELOAD_LIMIT = 15` protects large galleries from mobile OOM while the idle sweep remains as a second-chance retry for skipped/failed sets.
 2. **GPU warm-all artworks (L-02):** Galleries up to `GPU_WARM_LIMIT = 15` bind each cached artwork texture set and render once under the overlay to force CPU→VRAM upload before users can navigate. Larger galleries keep the v0.21 single-artwork warm fallback.

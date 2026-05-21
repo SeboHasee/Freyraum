@@ -1,7 +1,67 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
+> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
-## v0.22 — Guaranteed Jank-Free Gallery: Full Pre-Load + "Galerie betreten" (SHIPPED)
+
+## v0.23 — Performance/Preloading Planning Audit (OPEN)
+
+Runtime status: **planning only; no runtime code changed in this pass**. The current user report is still reproducible from the source architecture: navigation becomes smooth only after every painting has been visited once, which means some expensive work still happens on first use instead of under the loading screen.
+
+### Problem statement
+
+The v0.22 pass improved the loading experience, but the code still has first-use work after reveal:
+
+1. `src/main.ts` warms GPU uploads only when `artworkCount <= GPU_WARM_LIMIT` (`15`). Larger exhibitions render only the active artwork once, so artwork 16+ still uploads on first navigation.
+2. `src/gallery/GalleryManager.ts` preloads only the first `PBR_PRELOAD_LIMIT` (`15`) authored PBR sets under the overlay. Remaining texture sets depend on the idle sweep, which is best-effort and can lose the race against fast user navigation.
+3. `src/gallery/GalleryManager.ts` still creates missing procedural maps inside `showArtwork()`. `src/materials/ProceduralTextureFactory.ts` generates large `Uint8Array` buffers synchronously on the main thread, so a cold artwork can block a frame even if albedo is already cached.
+4. `TextureLoader`/decoded images in CPU memory are not equivalent to GPU residency. The first render using each texture still pays upload cost unless deliberately warmed.
+5. Existing diagnostics log successful loads and renderer snapshots, but they do not yet create a per-artwork readiness ledger that proves CPU decode, procedural generation, shader variant compile, and GPU upload happened before reveal.
+
+### Online research synthesis
+
+- Three.js `LoadingManager` is correct for network/decode progress, but GPU texture upload is normally lazy and happens on first render that samples the texture. A hidden render pass per prepared texture set is still required for VRAM residency.
+- `WebGLRenderer.compileAsync(scene, camera)` reduces shader-link stalls, but it does not replace texture upload warming and only compiles the currently reachable material variants.
+- `ImageBitmapLoader` can move image decode work off the critical main-thread path where supported; it should be evaluated behind a feature guard because color-space, orientation, and browser support details differ from `TextureLoader`.
+- KTX2/Basis compressed textures are the long-term answer for customer galleries with many large images: lower transfer size, lower VRAM footprint, and GPU-native formats after transcoding. It requires an asset-pipeline change and a fallback path for current JPG/PNG/WebP imports.
+- `requestIdleCallback` is useful for non-critical background work, but it is not a correctness guarantee. Critical next/previous artworks should use an explicit priority queue that can run before interaction resumes.
+
+Reference topics used for this plan: Three.js `LoadingManager`, `TextureLoader`, `ImageBitmapLoader`, `KTX2Loader`, `WebGLRenderer.compileAsync`; MDN `requestIdleCallback`; WebGL lazy texture upload behavior; Chrome/DevTools Long Tasks and performance marks.
+
+### Gap analysis (N-series)
+
+| ID | Severity | Component | Finding | Plan |
+|----|----------|-----------|---------|------|
+| N-01 | **HIGH** | Boot GPU warm path | `GPU_WARM_LIMIT = 15` leaves large galleries cold beyond artwork 15. | Replace the all-or-nothing gate with a budgeted warm queue: warm first/adjacent artworks before reveal, then continue visible-priority warm jobs after reveal with frame-budget yielding. |
+| N-02 | **HIGH** | Procedural texture generation | Missing PBR roles are generated synchronously in `showArtwork()`. | Add procedural pre-generation for the initial navigation window, then move remaining generation to a queued idle/worker-compatible path. |
+| N-03 | **HIGH** | PBR preload limit | `PBR_PRELOAD_LIMIT = 15` protects memory but leaves the rest dependent on idle timing. | Keep the memory cap, but make prefetch priority explicit: current, ±1, ±2, timeline-selected candidates, then full sweep. |
+| N-04 | **MEDIUM** | GPU readiness diagnostics | Logs say textures loaded, but not whether each artwork is GPU-warmed. | Add per-artwork readiness state: albedo loaded, PBR loaded, procedural maps ready, shader compiled, GPU warmed, last warm duration. |
+| N-05 | **MEDIUM** | Shader variants | `compileAsync` only compiles current scene/material state. | Compile the active preset/profile variants expected during the first session and log program counts before/after. |
+| N-06 | **MEDIUM** | Decode path | `TextureLoader` may decode large customer images on the main path. | Prototype guarded `ImageBitmapLoader` for image decode, compare timings, and preserve current fallback for local/file/data-URI reliability. |
+| N-07 | **MEDIUM** | Asset pipeline | Raw large JPG/PNG/WebP textures inflate memory and upload time. | Plan KTX2/Basis generation in `scripts/import-artworks.mjs` as a future asset-pipeline milestone with fallback manifests. |
+| N-08 | **LOW** | Adaptive quality | 600 ms navigation cooldown can expire before cold texture/procedural work finishes. | Tie cooldown to readiness jobs or extend it while a navigation-triggered warm/load task is active. |
+| N-09 | **LOW** | Redundant warm restore | Artwork 0 is warmed once in the loop and then rebound/warmed again. | Remove or justify duplicate render after verifying material state restoration needs. |
+| N-10 | **LOW** | Documentation/runtime naming | v0.22 says “Guaranteed Jank-Free” although large-gallery and procedural cold paths remain. | Reword docs to “improved / partial for ≤15 warm window” until N-series implementation ships. |
+
+### Implementation plan
+
+1. **Instrument before changing behavior.** Add a small readiness model and timing marks around albedo load, authored PBR load, procedural generation, material apply, shader compile/prewarm, and GPU warm render. Surface the readiness ledger in diagnostics mode.
+2. **Replace fixed warm limits with a budgeted warm scheduler.** Warm current, previous, next, and near-future artworks under the overlay; continue the rest in small batches that yield between frames and stop when the frame budget is stressed.
+3. **Pre-generate procedural maps for the critical window.** Generate current ±2 maps before reveal for the active preset. For the remaining gallery, queue procedural work separately from network texture loads so it cannot block navigation.
+4. **Make prefetch priority navigation-aware.** When the user hovers/clicks timeline or presses next/previous, promote that target and its neighbors ahead of the full idle sweep.
+5. **Evaluate decode and compression upgrades.** Benchmark `ImageBitmapLoader` against the current `TextureLoader` on local-relative, HTTP, and data-URI sources; separately design KTX2/Basis import output for a later breaking asset-pipeline update.
+6. **Tune adaptive quality using readiness state.** Do not treat warm-up or cold-load spikes as sustained device weakness; keep downgrade decisions for steady-state rendering after readiness jobs settle.
+7. **Validate with large galleries.** Test at 4, 15, 20, and 50 artworks with diagnostics enabled. Acceptance criterion: first navigation to every warmed/queued target has no visible long task over 50 ms and no texture `load-start` triggered by the navigation itself.
+
+### Validation plan
+
+- Run `npm run lint` and `npm run build` after implementation changes.
+- Use diagnostics mode to capture Long Tasks, renderer texture/program counts, per-artwork readiness state, and navigation timings.
+- Re-run `npm audit --audit-level=moderate`; known Vite/esbuild advisory remains separate unless the Vite major upgrade is explicitly in scope.
+
+### Documentation closeout for this planning pass
+
+All repository Markdown files were refreshed to point at this v0.23 plan and to correct over-strong v0.22 wording. Runtime remains unchanged until the N-series plan is implemented.
+
+## v0.22 — Improved Preloading: Capped PBR Pre-Load + "Galerie betreten" (SHIPPED)
 
 Runtime status: shipped. Source changes landed in `src/gallery/GalleryManager.ts`, `src/gallery/TextureManager.ts`, `src/main.ts`, and `src/styles/main.scss`; preview output was rebuilt. Validation after implementation: `npm run lint` and `npm run build` passed. `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory requiring a semver-major upgrade.
 
