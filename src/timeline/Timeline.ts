@@ -28,6 +28,7 @@ export class Timeline {
   private renderedStart = -1;
   private renderedEnd = -1;
   private onSelectCallback: ((index: number) => void) | null = null;
+  private onPreviewCallback: ((index: number) => void) | null = null;
 
   constructor(container: HTMLElement, artworks: readonly Artwork[]) {
     this.artworks = artworks;
@@ -132,6 +133,8 @@ export class Timeline {
 
     thumb.append(frame, label);
     thumb.addEventListener('click', () => this.select(index));
+    thumb.addEventListener('pointerenter', () => this.preview(index));
+    thumb.addEventListener('focus', () => this.preview(index));
     thumb.addEventListener('keydown', this.handleThumbKey);
 
     this.thumbs[index] = thumb;
@@ -192,6 +195,10 @@ export class Timeline {
 
   private select(index: number): void {
     this.onSelectCallback?.(index);
+  }
+
+  private preview(index: number): void {
+    this.onPreviewCallback?.(index);
   }
 
   setActive(index: number): void {
@@ -318,6 +325,10 @@ export class Timeline {
 
   onSelect(cb: (index: number) => void): void {
     this.onSelectCallback = cb;
+  }
+
+  onPreview(cb: (index: number) => void): void {
+    this.onPreviewCallback = cb;
   }
 
   dispose(): void {

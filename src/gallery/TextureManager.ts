@@ -33,6 +33,8 @@ export class TextureManager {
   private maxAnisotropy = 1;
   private maxTextureSize = 0;
   private anisotropyDivisor = 1;
+  private readonly imageBitmapDecodeSupported =
+    typeof createImageBitmap === 'function' && typeof THREE.ImageBitmapLoader === 'function';
   /**
    * v0.08: tracks which cache keys resolved to the generated fallback texture
    * rather than the real customer image. Used by GalleryManager to emit a
@@ -53,6 +55,11 @@ export class TextureManager {
     this.diagnostics.info('capabilities', 'Texture manager initialized', {
       maxAnisotropy: this.maxAnisotropy,
       maxTextureSize: this.maxTextureSize,
+      imageBitmapDecodeSupported: this.imageBitmapDecodeSupported,
+      imageBitmapStatus: this.imageBitmapDecodeSupported
+        ? 'available-for-guarded-benchmark'
+        : 'unsupported-or-unavailable',
+      compressedTexturePipeline: 'ktx2-basis-future-importer-milestone',
     });
   }
 

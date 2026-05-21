@@ -131,6 +131,38 @@ const PROCEDURAL_ROLES: PaintingMapRole[] = [
   'varnish',
 ];
 
+type ReadinessStage =
+  | 'albedoLoaded'
+  | 'pbrLoaded'
+  | 'proceduralReady'
+  | 'materialApplied'
+  | 'shaderCompiled'
+  | 'gpuWarmed';
+
+interface ArtworkReadiness {
+  index: number;
+  artworkId: string;
+  albedoLoaded: boolean;
+  pbrLoaded: boolean;
+  proceduralReady: boolean;
+  materialApplied: boolean;
+  shaderCompiled: boolean;
+  gpuWarmed: boolean;
+  pbrMs: number;
+  proceduralMs: number;
+  lastWarmMs: number;
+  lastReason: string;
+  updatedAt: number;
+}
+
+interface PrefetchJob {
+  index: number;
+  reason: string;
+  priority: number;
+}
+
+const CRITICAL_NAV_RADIUS = 2;
+
 /**
  * v0.06: roles whose procedural texel grid is visible under raking light at
  * maximum zoom. When `inspectionMode` is true and the active preset declares
@@ -176,6 +208,10 @@ export class GalleryManager {
   private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
   private readonly prefetchedTextureSets = new Set<number>();
   private fullPrefetchScheduled = false;
+  private readonly readiness: ArtworkReadiness[];
+  private readonly prefetchQueue: PrefetchJob[] = [];
+  private readonly activePrefetches = new Set<number>();
+  private prefetchQueueRunning = false;
 
   private targetX = 0;
   private targetY = 0;
@@ -210,6 +246,21 @@ export class GalleryManager {
     this.camera = camera;
     this.procedural = procedural ?? new ProceduralTextureFactory();
     this.viewportMetricsProvider = viewportMetricsProvider ?? null;
+    this.readiness = artworks.map((artwork, index) => ({
+      index,
+      artworkId: artwork.id,
+      albedoLoaded: false,
+      pbrLoaded: !artwork.textureSet,
+      proceduralReady: false,
+      materialApplied: false,
+      shaderCompiled: false,
+      gpuWarmed: false,
+      pbrMs: 0,
+      proceduralMs: 0,
+      lastWarmMs: 0,
+      lastReason: 'init',
+      updatedAt: 0,
+    }));
   }
 
   /** Allows main.ts to call `frameBudget.markNavigation()` on every navigation. */
@@ -270,6 +321,7 @@ export class GalleryManager {
     });
     const urls = this.artworks.map((a) => a.webglImage ?? a.image);
     await this.textureManager.preload(urls);
+    this.readiness.forEach((entry) => this.markReadiness(entry.index, 'albedoLoaded', 'init-preload'));
 
     const textureSetCount = this.artworks.filter((a) => !!a.textureSet).length;
     const pbrArtworks = this.artworks
@@ -284,7 +336,7 @@ export class GalleryManager {
     });
     await Promise.allSettled(
       pbrArtworks.map(({ artwork, index }) =>
-        this.textureManager.preloadTextureSet(artwork.textureSet).then(() => {
+        this.preloadAuthoredTextureSet(index, 'init-pbr-preload').then(() => {
           this.prefetchedTextureSets.add(index);
           this.diagnostics.debug('preload-all', 'PBR texture set preloaded during init', {
             index,
@@ -294,9 +346,12 @@ export class GalleryManager {
       )
     );
 
+    this.preGenerateProceduralWindow(0, CRITICAL_NAV_RADIUS, 'init-critical-window');
+    this.logGalleryScaleValidation();
     this.diagnostics.info('init', 'Preload complete — showing first artwork', {
       artworkCount: urls.length,
       pbrPreloaded: pbrArtworks.length,
+      criticalProceduralReady: this.getCriticalWindowIndices(0, CRITICAL_NAV_RADIUS).length,
     });
     this.pendingResetAfterArtworkLoad = true;
     await this.showArtwork(0);
@@ -386,7 +441,7 @@ export class GalleryManager {
     }
 
     // Load any authored maps for this artwork in parallel.
-    const authored = await this.textureManager.preloadTextureSet(artwork.textureSet);
+    const authored = await this.preloadAuthoredTextureSet(index, 'show-artwork');
     if (artwork.textureSet) this.prefetchedTextureSets.add(index);
 
     // Audited guard: discard stale loads.
@@ -403,24 +458,23 @@ export class GalleryManager {
     const resolved: ResolvedPaintingTextures = {
       albedo: authored.albedo ?? albedo,
     };
+    const proceduralStart = this.now();
+    let proceduralGenerated = false;
     for (const role of PROCEDURAL_ROLES) {
       if (authored[role]) {
         resolved[role] = authored[role];
       } else if (this.shouldFillRole(role, preset)) {
-        // v0.06: geometry-carrying roles use the higher inspection tile size
-        // when the inspection light profile is active AND the preset opts in
-        // (proceduralInspectionTileSize > 0). Gallery profiles and presets
-        // without an inspection size fall through to proceduralTileSize.
-        const inspSize = preset.proceduralInspectionTileSize;
-        const useInspection =
-          this.inspectionMode && inspSize > 0 && (INSPECTION_ROLES as readonly string[]).includes(role);
-        const tileSize = useInspection ? inspSize : preset.proceduralTileSize;
-        resolved[role] = this.procedural.generate(artwork.id, role, tileSize);
+        resolved[role] = this.generateProceduralMap(artwork.id, role, preset);
+        proceduralGenerated = true;
       }
     }
+    this.markReadiness(index, 'proceduralReady', 'show-artwork', {
+      proceduralMs: proceduralGenerated ? this.now() - proceduralStart : 0,
+    });
 
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
+    this.markReadiness(index, 'materialApplied', 'show-artwork');
 
     // Log the full resolved texture map so support can see which roles are
     // authored vs procedurally generated vs absent at a glance.
@@ -491,6 +545,7 @@ export class GalleryManager {
       parallaxScale: preset.parallaxScale,
       specularStrength: preset.specularStrength,
       selfShadowBias: preset.selfShadowBias,
+      readiness: this.readiness[index],
     });
 
     if (this.pendingResetAfterArtworkLoad) {
@@ -502,6 +557,46 @@ export class GalleryManager {
     }
     this.clampPanTargets();
     this.prefetchAdjacentArtworks(index);
+    this.preGenerateProceduralWindow(index, CRITICAL_NAV_RADIUS, 'show-artwork-adjacent');
+  }
+
+  getBudgetedWarmOrder(center = this.currentIndex): number[] {
+    const critical = this.getCriticalWindowIndices(center, CRITICAL_NAV_RADIUS);
+    const rest = this.artworks
+      .map((_artwork, index) => index)
+      .filter((index) => !critical.includes(index));
+    return [...critical, ...rest];
+  }
+
+  markGpuWarmed(index: number, durationMs: number, reason: string): void {
+    this.markReadiness(index, 'gpuWarmed', reason, { lastWarmMs: durationMs });
+  }
+
+  markShaderCompiled(index: number, reason: string): void {
+    this.markReadiness(index, 'shaderCompiled', reason);
+  }
+
+  markAllShaderCompiled(reason: string): void {
+    this.readiness.forEach((entry) => this.markReadiness(entry.index, 'shaderCompiled', reason));
+  }
+
+  promotePrefetchWindow(center: number, reason: string): void {
+    this.scheduleTextureSetPrefetch(center, reason, undefined, 0);
+    this.getCriticalWindowIndices(center, CRITICAL_NAV_RADIUS).forEach((index, order) => {
+      if (index === center) return;
+      this.scheduleTextureSetPrefetch(index, `${reason}:nearby`, undefined, 10 + order);
+    });
+    this.preGenerateProceduralWindow(center, CRITICAL_NAV_RADIUS, reason);
+  }
+
+  hasReadinessWork(): boolean {
+    if (this.prefetchQueue.length > 0 || this.activePrefetches.size > 0) return true;
+    const current = this.readiness[this.currentIndex];
+    return !!current && (!current.pbrLoaded || !current.proceduralReady || !current.gpuWarmed);
+  }
+
+  getReadinessLedger(): readonly ArtworkReadiness[] {
+    return this.readiness.map((entry) => ({ ...entry }));
   }
 
   /**
@@ -509,10 +604,11 @@ export class GalleryManager {
    * triggering navigation side effects. Call under the loading overlay before a
    * renderer.render() pass to force CPU→VRAM upload for first navigation.
    */
-  warmArtworkForGPU(index: number): void {
+  warmArtworkForGPU(index: number, reason = 'gpu-warm'): boolean {
+    const start = this.now();
     const artwork = this.artworks[index];
     const preset = this.currentPreset;
-    if (!artwork || !preset) return;
+    if (!artwork || !preset) return false;
 
     const albedoUrl = artwork.webglImage ?? artwork.image;
     const fallbackAlbedo = this.textureManager.get(albedoUrl);
@@ -521,7 +617,7 @@ export class GalleryManager {
         index,
         artworkId: artwork.id,
       });
-      return;
+      return false;
     }
 
     const authored: Partial<ResolvedPaintingTextures> = {};
@@ -545,28 +641,155 @@ export class GalleryManager {
       if (authored[role]) {
         resolved[role] = authored[role];
       } else if (this.shouldFillRole(role, preset)) {
-        const inspSize = preset.proceduralInspectionTileSize;
-        const useInspection =
-          this.inspectionMode && inspSize > 0 && (INSPECTION_ROLES as readonly string[]).includes(role);
-        const tileSize = useInspection ? inspSize : preset.proceduralTileSize;
-        resolved[role] = this.procedural.generate(artwork.id, role, tileSize);
+        resolved[role] = this.generateProceduralMap(artwork.id, role, preset);
       }
     }
 
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
+    this.markReadiness(index, 'proceduralReady', reason);
+    this.markReadiness(index, 'materialApplied', reason);
     this.diagnostics.debug('warm-gpu', 'Cached artwork textures bound for GPU warm render', {
       index,
       artworkId: artwork.id,
       activeMaps: this.artworkMesh.material.activeMaps(),
+      reason,
+      bindMs: Math.round((this.now() - start) * 10) / 10,
+    });
+    return true;
+  }
+
+  private async preloadAuthoredTextureSet(
+    index: number,
+    reason: string
+  ): Promise<Partial<ResolvedPaintingTextures>> {
+    const artwork = this.artworks[index];
+    if (!artwork?.textureSet) {
+      this.markReadiness(index, 'pbrLoaded', reason, { pbrMs: 0 });
+      return {};
+    }
+    const start = this.now();
+    const authored = await this.textureManager.preloadTextureSet(artwork.textureSet);
+    this.markReadiness(index, 'pbrLoaded', reason, { pbrMs: this.now() - start });
+    return authored;
+  }
+
+  private generateProceduralMap(
+    artworkId: string,
+    role: PaintingMapRole,
+    preset: QualityPreset
+  ): THREE.Texture {
+    // v0.06: geometry-carrying roles use the higher inspection tile size when
+    // the inspection light profile is active and the preset opts in.
+    const inspSize = preset.proceduralInspectionTileSize;
+    const useInspection =
+      this.inspectionMode && inspSize > 0 && (INSPECTION_ROLES as readonly string[]).includes(role);
+    const tileSize = useInspection ? inspSize : preset.proceduralTileSize;
+    return this.procedural.generate(artworkId, role, tileSize);
+  }
+
+  private preGenerateProceduralWindow(center: number, radius: number, reason: string): void {
+    const preset = this.currentPreset;
+    if (!preset) return;
+    for (const index of this.getCriticalWindowIndices(center, radius)) {
+      const artwork = this.artworks[index];
+      const start = this.now();
+      let generated = 0;
+      for (const role of PROCEDURAL_ROLES) {
+        if (artwork.textureSet?.[role] || !this.shouldFillRole(role, preset)) continue;
+        this.generateProceduralMap(artwork.id, role, preset);
+        generated += 1;
+      }
+      this.markReadiness(index, 'proceduralReady', reason, {
+        proceduralMs: generated > 0 ? this.now() - start : 0,
+      });
+      this.diagnostics.debug('procedural-pregenerate', 'Procedural maps prepared for artwork', {
+        index,
+        artworkId: artwork.id,
+        generated,
+        reason,
+        radius,
+      });
+    }
+  }
+
+  private getCriticalWindowIndices(center: number, radius: number): number[] {
+    const result: number[] = [];
+    const seen = new Set<number>();
+    const add = (index: number): void => {
+      if (index < 0 || index >= this.artworks.length || seen.has(index)) return;
+      seen.add(index);
+      result.push(index);
+    };
+    add(center);
+    for (let offset = 1; offset <= radius; offset += 1) {
+      add(center - offset);
+      add(center + offset);
+    }
+    return result;
+  }
+
+  private markReadiness(
+    index: number,
+    stage: ReadinessStage,
+    reason: string,
+    timing: Partial<Pick<ArtworkReadiness, 'pbrMs' | 'proceduralMs' | 'lastWarmMs'>> = {}
+  ): void {
+    const entry = this.readiness[index];
+    if (!entry) return;
+    entry[stage] = true;
+    entry.lastReason = reason;
+    entry.updatedAt = this.now();
+    if (timing.pbrMs !== undefined) entry.pbrMs = Math.round(timing.pbrMs * 10) / 10;
+    if (timing.proceduralMs !== undefined) entry.proceduralMs = Math.round(timing.proceduralMs * 10) / 10;
+    if (timing.lastWarmMs !== undefined) entry.lastWarmMs = Math.round(timing.lastWarmMs * 10) / 10;
+    this.diagnostics.debug('readiness', `Artwork readiness updated: ${stage}`, {
+      index,
+      artworkId: entry.artworkId,
+      stage,
+      reason,
+      ready: {
+        albedoLoaded: entry.albedoLoaded,
+        pbrLoaded: entry.pbrLoaded,
+        proceduralReady: entry.proceduralReady,
+        materialApplied: entry.materialApplied,
+        shaderCompiled: entry.shaderCompiled,
+        gpuWarmed: entry.gpuWarmed,
+      },
+      timings: {
+        pbrMs: entry.pbrMs,
+        proceduralMs: entry.proceduralMs,
+        lastWarmMs: entry.lastWarmMs,
+      },
+    });
+  }
+
+  private now(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
+
+  private logGalleryScaleValidation(): void {
+    const count = this.artworks.length;
+    const buckets = [4, 15, 20, 50];
+    const closest = buckets.reduce((best, candidate) =>
+      Math.abs(candidate - count) < Math.abs(best - count) ? candidate : best
+    );
+    this.diagnostics.info('validation', 'v0.23 gallery-size readiness profile', {
+      artworkCount: count,
+      nearestValidationBucket: closest,
+      validationBuckets: buckets,
+      criticalWindowRadius: CRITICAL_NAV_RADIUS,
+      criticalWindow: this.getCriticalWindowIndices(0, CRITICAL_NAV_RADIUS),
+      warmOrderPreview: this.getBudgetedWarmOrder(0).slice(0, Math.min(count, 12)),
+      readinessLedger: this.getReadinessLedger(),
     });
   }
 
   private prefetchAdjacentArtworks(index: number): void {
-    for (const offset of [-1, 1, -2, 2]) {
+    for (const [order, offset] of [-1, 1, -2, 2].entries()) {
       const target = index + offset;
       if (target < 0 || target >= this.artworks.length) continue;
-      this.scheduleTextureSetPrefetch(target, `adjacent:${offset}`);
+      this.scheduleTextureSetPrefetch(target, `adjacent:${offset}`, undefined, 20 + order);
     }
   }
 
@@ -585,44 +808,92 @@ export class GalleryManager {
         });
         return;
       }
-      this.scheduleTextureSetPrefetch(index, 'idle-sweep', runNext);
+      this.scheduleTextureSetPrefetch(index, 'idle-sweep', runNext, 100 + index);
       index += 1;
     };
     this.scheduleIdle(runNext, 500);
   }
 
-  private scheduleTextureSetPrefetch(index: number, reason: string, after?: () => void): void {
+  private scheduleTextureSetPrefetch(index: number, reason: string, after?: () => void, priority = 50): void {
     const artwork = this.artworks[index];
-    if (!artwork?.textureSet || this.prefetchedTextureSets.has(index)) {
+    if (!artwork?.textureSet || this.prefetchedTextureSets.has(index) || this.activePrefetches.has(index)) {
       after?.();
       return;
     }
-    this.prefetchedTextureSets.add(index);
-    this.scheduleIdle(() => {
-      this.diagnostics.debug('prefetch-start', 'Prefetching artwork texture set during idle time', {
-        index,
-        artworkId: artwork.id,
-        reason,
-      });
-      this.textureManager.preloadTextureSet(artwork.textureSet)
-        .then(() => {
-          this.diagnostics.debug('prefetch-complete', 'Artwork texture set prefetched', {
-            index,
-            artworkId: artwork.id,
-            reason,
+    const queued = this.prefetchQueue.find((job) => job.index === index);
+    if (queued) {
+      if (priority < queued.priority) {
+        queued.priority = priority;
+        queued.reason = reason;
+        this.prefetchQueue.sort((a, b) => a.priority - b.priority);
+      }
+      after?.();
+      return;
+    }
+    this.prefetchQueue.push({ index, reason, priority });
+    this.prefetchQueue.sort((a, b) => a.priority - b.priority);
+    this.diagnostics.debug('prefetch-queued', 'Artwork texture-set prefetch queued', {
+      index,
+      artworkId: artwork.id,
+      reason,
+      priority,
+      queueLength: this.prefetchQueue.length,
+    });
+    this.drainPrefetchQueue(after);
+  }
+
+  private drainPrefetchQueue(after?: () => void): void {
+    if (this.prefetchQueueRunning) {
+      after?.();
+      return;
+    }
+    const runNext = (): void => {
+      const job = this.prefetchQueue.shift();
+      if (!job) {
+        this.prefetchQueueRunning = false;
+        after?.();
+        return;
+      }
+      const artwork = this.artworks[job.index];
+      if (!artwork?.textureSet || this.prefetchedTextureSets.has(job.index)) {
+        this.scheduleIdle(runNext, 50);
+        return;
+      }
+      this.activePrefetches.add(job.index);
+      this.scheduleIdle(() => {
+        this.diagnostics.debug('prefetch-start', 'Prefetching artwork texture set', {
+          index: job.index,
+          artworkId: artwork.id,
+          reason: job.reason,
+          priority: job.priority,
+          queueLength: this.prefetchQueue.length,
+        });
+        this.preloadAuthoredTextureSet(job.index, `prefetch:${job.reason}`)
+          .then(() => {
+            this.prefetchedTextureSets.add(job.index);
+            this.diagnostics.debug('prefetch-complete', 'Artwork texture set prefetched', {
+              index: job.index,
+              artworkId: artwork.id,
+              reason: job.reason,
+            });
+          })
+          .catch((err) => {
+            this.prefetchedTextureSets.delete(job.index);
+            this.diagnostics.warn('prefetch-failed', 'Artwork texture-set prefetch failed', {
+              index: job.index,
+              artworkId: artwork.id,
+              reason: job.reason,
+              message: err instanceof Error ? err.message : String(err),
+            });
+          })
+          .finally(() => {
+            this.activePrefetches.delete(job.index);
+            runNext();
           });
-        })
-        .catch((err) => {
-          this.prefetchedTextureSets.delete(index);
-          this.diagnostics.warn('prefetch-failed', 'Artwork texture-set prefetch failed', {
-            index,
-            artworkId: artwork.id,
-            reason,
-            message: err instanceof Error ? err.message : String(err),
-          });
-        })
-        .finally(() => after?.());
-    }, 250);
+      }, 250);
+    };
+    this.prefetchQueueRunning = true;
+    runNext();
   }
 
   private scheduleIdle(callback: () => void, timeout: number): void {
@@ -688,6 +959,7 @@ export class GalleryManager {
 
     this.currentIndex = newIndex;
     this.pendingResetAfterArtworkLoad = true;
+    this.promotePrefetchWindow(newIndex, `navigate:${direction > 0 ? 'next' : 'prev'}`);
     void this.showArtwork(newIndex);
     this.frameBudgetNavigationMarker?.();
 
@@ -717,6 +989,7 @@ export class GalleryManager {
 
     this.currentIndex = index;
     this.pendingResetAfterArtworkLoad = true;
+    this.promotePrefetchWindow(index, 'timeline-select');
 
     if (!this.reducedMotion) {
       this.artworkMesh.group.position.x = (diff > 0 ? 1 : -1) * NAV_SEED_POSITION_X;

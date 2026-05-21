@@ -89,6 +89,9 @@ export class FrameBudgetMonitor {
   markNavigation(): void {
     this.cooldownUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + this.cooldownMs;
   }
+  markReadinessWork(): void {
+    this.markNavigation();
+  }
   markPresetChange(): void {
     this.markNavigation();
   }

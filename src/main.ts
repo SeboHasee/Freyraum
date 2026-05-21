@@ -38,7 +38,8 @@ import { suggestStartupQuality } from './utils/performance';
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
 const MIN_LOADING_SCREEN_MS = 500;
-const GPU_WARM_LIMIT = 15;
+const GPU_WARM_CRITICAL_COUNT = 5;
+const GPU_WARM_FRAME_BUDGET_MS = 8;
 
 interface LoadingOverlayControls {
   overlay: HTMLDivElement;
@@ -643,32 +644,73 @@ async function main(): Promise<void> {
   window.addEventListener('keydown', onFirstInteractionKey);
 
   const artworkCount = artworks.length;
-  if (artworkCount <= GPU_WARM_LIMIT) {
-    loadingOverlay.setStatus('GPU wird vorbereitet');
-    for (let i = 0; i < artworkCount; i++) {
-      galleryManager.warmArtworkForGPU(i);
-      rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
-      loadingOverlay.setProgress(93 + Math.round(((i + 1) / artworkCount) * 4));
-    }
-    galleryManager.warmArtworkForGPU(0);
+  const warmRenderTarget = new THREE.WebGLRenderTarget(4, 4, {
+    depthBuffer: true,
+    stencilBuffer: false,
+  });
+  const warmArtwork = (index: number, reason: string): boolean => {
+    const start = performance.now();
+    if (!galleryManager.warmArtworkForGPU(index, reason)) return false;
+    const previousTarget = rendererManager.renderer.getRenderTarget();
+    rendererManager.renderer.setRenderTarget(warmRenderTarget);
     rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
-  } else {
-    diagnostics.info('boot', 'gpu-warm-limited', 'Large gallery detected; using single-artwork GPU warm fallback', {
-      artworkCount,
-      limit: GPU_WARM_LIMIT,
-    });
-    rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+    rendererManager.renderer.setRenderTarget(previousTarget);
+    galleryManager.markGpuWarmed(index, performance.now() - start, reason);
+    return true;
+  };
+  const warmOrder = galleryManager.getBudgetedWarmOrder(0);
+  const criticalWarmCount = Math.min(GPU_WARM_CRITICAL_COUNT, warmOrder.length);
+  loadingOverlay.setStatus('GPU wird vorbereitet');
+  for (let i = 0; i < criticalWarmCount; i += 1) {
+    warmArtwork(warmOrder[i], 'overlay-critical');
+    loadingOverlay.setProgress(93 + Math.round(((i + 1) / Math.max(1, criticalWarmCount)) * 3));
   }
+  galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-overlay-warm');
+  diagnostics.info('boot', 'gpu-warm-scheduled', 'Budgeted GPU warm scheduler primed', {
+    artworkCount,
+    criticalWarmCount,
+    warmOrder,
+    frameBudgetMs: GPU_WARM_FRAME_BUDGET_MS,
+  });
 
   loadingOverlay.setStatus('Shader werden vorbereitet');
   loadingOverlay.setProgress(97);
   await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+  galleryManager.markAllShaderCompiled('boot-prewarm');
   loadingOverlay.setProgress(100);
   loadingOverlay.setStatus('Galerie bereit');
   rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
   rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
+  let warmCursor = criticalWarmCount;
+  const continueWarmQueue = (): void => {
+    if (warmCursor >= warmOrder.length) {
+      warmRenderTarget.dispose();
+      galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-budget-warm');
+      diagnostics.info('boot', 'gpu-warm-complete', 'Budgeted GPU warm scheduler completed', {
+        artworkCount,
+        warmed: warmOrder.length,
+        readinessLedger: galleryManager.getReadinessLedger(),
+      });
+      return;
+    }
+    const start = performance.now();
+    let warmedThisFrame = 0;
+    while (warmCursor < warmOrder.length && performance.now() - start < GPU_WARM_FRAME_BUDGET_MS) {
+      warmArtwork(warmOrder[warmCursor], 'post-reveal-budget');
+      warmCursor += 1;
+      warmedThisFrame += 1;
+    }
+    galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-between-budget-warm');
+    diagnostics.debug('boot', 'gpu-warm-frame', 'Budgeted GPU warm frame completed', {
+      warmedThisFrame,
+      warmCursor,
+      total: warmOrder.length,
+    });
+    requestAnimationFrame(continueWarmQueue);
+  };
+  requestAnimationFrame(continueWarmQueue);
 
   // v0.16 — unified, RAF-deferred resize coordinator. Replaces the
   // v0.11 design where SceneManager and PostProcessing each owned their
@@ -1023,6 +1065,7 @@ async function main(): Promise<void> {
   navControls.onNext(() => galleryManager.navigate(1));
 
   timeline.onSelect((index: number) => galleryManager.goTo(index));
+  timeline.onPreview((index: number) => galleryManager.promotePrefetchWindow(index, 'timeline-preview'));
 
   // Animation loop
   let rafId: number;
@@ -1037,6 +1080,9 @@ async function main(): Promise<void> {
     // skipping the postprocessing composer + per-frame light/material
     // updates avoids waking the GPU just to redraw an off-screen canvas.
     if (pageInactive) return;
+    if (galleryManager.hasReadinessWork()) {
+      frameBudget.markReadinessWork();
+    }
     const sample = frameBudget.sample(now);
     const downgrade = adaptiveQuality.evaluate(sample, frameBudget);
     if (downgrade && downgrade !== preferences.current.quality) {
