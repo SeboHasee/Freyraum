@@ -1,10 +1,9 @@
 # FREYRAUM Copilot instructions
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 full-check context note
+## v0.20.5 context note
 
-The calm background-music workflow in `plan.md § v0.19` is shipped.
-When updating docs or code, treat importer payloads, autoplay handling, preferences persistence, and lifecycle audio behavior as active regression boundaries.
+The repository has an **active audio follow-up**. Importer support exists, but runtime startup loudness, mute/unmute recovery, slider synchronization, and quick-control placement are not yet fully correct. Use `plan.md § v0.20.5` and `FINDINGS.md § 2026-05-21` as the current source of truth for audio work.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

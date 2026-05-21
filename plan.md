@@ -1,5 +1,112 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+
+## v0.20.5 — Complete audio regression recovery plan (planning, 2026-05-21)
+
+### Status
+
+Planning only. The problems below are **not fixed yet**. This section replaces the earlier assumption that v0.20.4 fully solved the audio work.
+
+### Exact problems to solve
+
+1. The website still starts effectively muted.
+2. Startup loudness must be **15% effective output**, but the UI should show **50%** because the intended user-facing range is **0–30% effective mapped onto 0–100% display**.
+3. The mute button and quick volume slider are still in the wrong place.
+4. Unmuting can restore audio at 0%.
+5. Setting the preferences slider to 50% can still produce 0% effective output instead of the requested 15%.
+6. The documentation currently says these issues were fixed even though the runtime still fails.
+
+### Code-audit conclusions
+
+1. **Startup/unmute failure is primarily a state-corruption bug, not just a default-value bug.**
+   - `BackgroundAudioManager.play()` forces `audio.volume = 0` for fade-in.
+   - The `volumechange` listener then copies that temporary value back into manager state.
+   - The fade target and UI readback can therefore collapse to zero immediately.
+
+2. **The implemented mapping contract is not the requested one.**
+   - Current code uses a power curve targeting “50% display ≈ 15% effective” while still allowing full-scale output at 100%.
+   - The requested contract is simpler and stricter: display `0..100` must map to effective `0.00..0.30`, so display `50` must equal effective `0.15` exactly.
+
+3. **Source-of-truth boundaries are mixed.**
+   - Preferences store target gain.
+   - `BackgroundAudioManager` state is also used by UI, but it currently carries transient element-volume values during fades and mutes.
+   - This makes the main-page control, mute recovery, and startup behavior unreliable.
+
+4. **Quick-control placement was treated as final without confirming the requested target location.**
+   - The current bottom-left placement must be treated as rejected and replaced by the requested position in the implementation pass.
+
+5. **Broken persisted values must be reviewed during the fix.**
+   - Returning users may have localStorage written by the faulty v0.20.4 behavior.
+   - The fix needs explicit handling so old broken values do not keep forcing silent startup or bad slider readback.
+
+### Recovery plan
+
+1. **Rebuild the audio state model**
+   - Split audio state into at least two distinct concepts: persisted/user-selected target loudness and live media-element loudness during fades.
+   - Ensure mute, fade, loop restart, autoplay recovery, and lifecycle resume never overwrite the target loudness.
+   - Define which state each UI surface is allowed to render.
+
+2. **Replace the volume mapping contract everywhere**
+   - Remove the current power-curve assumption.
+   - Implement a deterministic display↔effective mapping for the requested capped range (`0..100` display ↔ `0..0.30` effective).
+   - Update startup defaults, settings slider, quick slider, diagnostics payloads, and any customer-facing copy together.
+
+3. **Fix startup, mute/unmute, and resume semantics**
+   - Make first load start audible when defaults apply.
+   - Make unmute restore the last chosen target loudness instead of the current live envelope value.
+   - Validate autoplay-blocked recovery, loop fallback, and lifecycle resume against the same rule.
+
+4. **Correct the settings slider and main-page slider contract**
+   - Keep both sliders bound to the same target-volume source of truth.
+   - Preserve immediate audible feedback without letting transient fade values feed back into displayed percentages.
+   - Confirm that a displayed 50% always means exactly the requested 15% effective output.
+
+5. **Move the quick audio controls to the requested location**
+   - Remove the current bottom-left placement assumption from the implementation.
+   - Re-anchor the mute button and quick slider to the requested position and verify that they no longer sit in the currently rejected spot.
+   - Re-run overlap checks against settings, fullscreen, zoom, navigation, timeline, safe areas, and narrow viewports.
+
+6. **Repair documentation and diagnostics**
+   - Downgrade stale “implemented/fixed” claims until the runtime fix actually lands.
+   - Expand diagnostics so logs show target gain, live element gain, mute state, autoplay state, and placement-related layout decisions where relevant.
+
+### Required implementation slices
+
+1. **Slice A — Audio-state ownership cleanup**
+   - Refactor `BackgroundAudioManager` so fade envelopes operate on live element state only.
+   - Keep user-selected loudness in a stable target field that is never replaced by `volumechange` feedback.
+
+2. **Slice B — Requested capped mapping**
+   - Replace `src/audio/volumeMapping.ts` with helpers that encode the requested `0..30% effective` maximum.
+   - Recalculate the default startup target from that contract.
+   - Define how pre-existing stored values are interpreted or migrated.
+
+3. **Slice C — UI synchronization**
+   - Make `AudioControls` and `PreferencesPanel` render the same target loudness and write through the same mapping helpers.
+   - Keep quick visual feedback without drifting to transient fade values.
+
+4. **Slice D — Placement correction**
+   - Replace the current hard-coded quick-control placement with the requested target position.
+   - Verify no overlap or crowding across supported viewports.
+
+5. **Slice E — Recovery validation + logging**
+   - Add or expand diagnostics for startup, mute/unmute, slider sync, autoplay recovery, lifecycle resume, and legacy-preference handling.
+   - Record manual test results and exact acceptance outcomes before documenting the work as fixed.
+
+### Acceptance matrix for the eventual implementation PR
+
+- New visitor with empty localStorage: audio starts audible at the requested effective loudness and UI reads 50%.
+- Returning visitor with previously muted state: mute behavior stays intentional and reversible.
+- Returning visitor with v0.20.4-broken zero-volume state: migration/recovery path is defined and verified.
+- Main-page slider, settings slider, and mute button stay in sync through drag, click, autoplay unblock, tab hide/show, and loop boundary events.
+- Quick controls no longer occupy the currently rejected location.
+- Documentation is only upgraded from planning to implemented after the runtime behavior is manually re-verified.
+
+### Validation baseline for this planning pass
+
+- `npm install` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
 
 ## v0.20.3 — Full technical audit + enhancement roadmap (planning, 2026-05-20)
 

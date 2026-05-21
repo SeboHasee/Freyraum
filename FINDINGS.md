@@ -1,5 +1,63 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+
+## 2026-05-21 — v0.20.5 audio regression audit
+
+### Validation baseline
+
+- `npm install` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### Confirmed user-facing failures
+
+1. **Website appears muted on startup even though defaults say otherwise.**
+2. **Unmuting can resume at 0% instead of the previously selected loudness.**
+3. **A 50% setting does not reliably produce the requested 15% effective loudness.**
+4. **Main-page mute button and slider are still in the previously rejected location.**
+5. **Current docs describe these behaviors as solved even though the runtime still fails.**
+
+### Root-cause audit
+
+1. **Transient element volume is incorrectly treated as the source of truth.**
+   - `BackgroundAudioManager.play()` sets `this.audio.volume = 0` before calling `audio.play()` so the fade-in can start from silence.
+   - The `volumechange` listener then copies `this.audio.volume` back into `state.volume`.
+   - Because `startFade(this.state.volume, ...)` reads the now-corrupted `state.volume`, the fade target becomes `0` and playback behaves as muted.
+   - The same bug also contaminates mute/unmute and loop-restart paths because the fade envelope repeatedly drives the live media element volume to zero.
+
+2. **The implemented mapping does not match the requested contract.**
+   - `src/audio/volumeMapping.ts` uses a power curve that maps UI `100%` to effective gain `1.0`.
+   - The current requirement is stricter: UI `0..100%` must represent only effective `0..0.30`, so UI `50%` must equal exactly `0.15`.
+   - This means the existing helpers, default gain constant, and all mapping-related documentation are conceptually wrong even before the fade bug is considered.
+
+3. **The two sliders render different kinds of state.**
+   - `PreferencesPanel` renders from persisted preferences.
+   - `AudioControls` renders from `BackgroundAudioManager.state.volume`, which is currently the live media-element volume, not the selected target loudness.
+   - During fades or after mute/unmute, the main-page slider can therefore drift to `0%` while settings still represent the last chosen target.
+
+4. **Control placement is hard-coded instead of requirement-driven.**
+   - `src/ui/AudioControls.ts` and `src/styles/main.scss` still assume the bottom-left quick-control location is acceptable.
+   - The latest customer report explicitly says the mute button and volume slider remain in the wrong place, so the current placement policy is invalidated.
+
+5. **Preference persistence needs a follow-up migration review.**
+   - Existing `freyraum.preferences.v1` entries can contain broken zero-volume outcomes or old mapping assumptions from the current faulty implementation.
+   - The fix plan must define how to distinguish legitimate user choices from values polluted by the broken v0.20.4 behavior.
+
+### Required implementation boundaries for the next pass
+
+1. Separate **target gain** from **live element gain** inside `BackgroundAudioManager`; never let fade-envelope or mute-driven `volumechange` events overwrite the user-selected target value.
+2. Replace the current power-curve mapping with the explicitly requested `0..100 display → 0..30 effective` contract and update defaults, persistence handling, and both sliders together.
+3. Make both sliders read/write the same target-volume source of truth.
+4. Rework quick-control placement to the requested location instead of preserving the current bottom-left assumption.
+5. Add diagnostics that log both target gain and live element gain so future bug reports can distinguish mapping bugs from fade-state bugs.
+
+### Acceptance checks required before calling this fixed
+
+- Fresh profile: first load starts audible, not muted, at exactly the intended effective loudness for UI `50%` (= `0.15` effective under the requested `0..30%` cap).
+- Mute/unmute round-trip: unmuting restores the last chosen target loudness rather than `0%`.
+- Settings slider and main-page slider always show the same value after startup, drag, mute, unmute, autoplay recovery, and page resume.
+- Quick controls are moved off the currently rejected position and verified against the approved placement requirement.
+- Legacy/localStorage scenarios are checked so the fix does not leave returning users stuck on broken zero-volume state.
 
 ## 2026-05-20 — v0.20.4 implementation audit
 

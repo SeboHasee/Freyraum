@@ -1,11 +1,9 @@
 # FREYRAUM — How to import painting text (v0.18 — shipped)
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 status note (audio + cache-bust shipped)
+## v0.20.5 status note
 
-Background audio workflow is already shipped (v0.19 + v0.20 follow-up).
-
-Current status: **implemented** for background audio and text sidecars. This guide remains focused on text-sidecar workflow only; audio setup is documented in `docs/CUSTOMER_PICTURE_GUIDE.md` and `docs/IMAGE_MAINTENANCE_GUIDE.md`.
+Background-audio importer support exists, but the runtime audio controls are under follow-up because startup loudness, mute recovery, slider sync, and control placement still have open regressions. This guide remains focused on text-sidecar workflow only.
 
 > Status: **implemented and shipped in v0.18 (2026-05-20)**. The importer
 > (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecar files

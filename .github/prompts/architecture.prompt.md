@@ -1,10 +1,9 @@
 # Architecture prompt
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 full-check context note
+## v0.20.5 context note
 
-Current repository status includes a **shipped** background-music workflow (`plan.md § v0.19`).
-Treat importer/runtime/preferences integration as active architecture constraints in analysis.
+Current repository status includes a shipped importer path for audio, but the runtime audio behavior is still under repair. Treat startup loudness, target-vs-live volume ownership, slider synchronization, and control placement as open architecture problems; use `plan.md § v0.20.5` and `FINDINGS.md § 2026-05-21`.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

@@ -1,21 +1,21 @@
 # Freyraum
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20.4 — Volume mapping, slider continuity, fade envelope, responsive layout (2026-05-20)
+## v0.20.5 — Audio regression audit + recovery plan (2026-05-21, planning only)
 
-Current status: **implemented**.
+Current status: **not fixed yet**. The repository now carries a confirmed follow-up plan because the shipped v0.20.4 audio behavior does **not** satisfy the reported customer expectations.
 
-This release implements all five technical slices from the v0.20.2 / v0.20.3 plans:
+Confirmed audit findings from the current codebase:
 
-1. **Volume mapping (`src/audio/volumeMapping.ts`):** power-curve display↔gain mapping. 50% UI slider = ~15% effective gain (calm ambient baseline). Persisted as effective gain; displayed as mapped percent in both sliders.
-2. **PreferencesPanel in-place patch:** panel is built once; preference updates patch only mutable states without rebuilding innerHTML. Active slider drag is guarded by `isVolumeDragging` to prevent pointer-capture loss.
-3. **Fade envelope (`BackgroundAudioManager`):** rAF-based volume ramp (300 ms fade-in, 200 ms fade-out, 150 ms loop restart). Eliminates audible click/pop artifacts at loop boundaries and mute/unmute edges.
-4. **Responsive layout (CSS Slice D):** audio controls use placement tokens (`--audio-ctrl-left`, `--audio-ctrl-bottom`). Narrow phones (<600 px) collapse the volume slider; mute button stays accessible.
-5. **Diagnostics expansion (Slice E):** new events `audio-fade-start/cancel/complete`, `audio-volume-map`, `audio-resume-attempt` added to diagnostics exports.
+1. **Startup/unmute can collapse to effective 0%.** `BackgroundAudioManager.play()` sets `audio.volume = 0` before playback, and the `volumechange` listener writes that transient fade value back into manager state. The fade target is therefore overwritten to zero, which makes first load, autoplay recovery, and unmute appear muted.
+2. **The current volume mapping contract is wrong for the stated requirement.** `src/audio/volumeMapping.ts` uses a power curve that still allows 100% display to reach 100% effective gain. The requested model is stricter: UI `0..100%` should represent only `0..30%` effective output, so UI `50%` must equal exactly `15%` effective gain.
+3. **The two audio sliders do not share one trustworthy source of truth.** Preferences persist target gain, but `AudioControls` renders `BackgroundAudioManager.state.volume`, which is currently the live element volume during fades/mutes rather than the user-selected target gain. This is why the UI can show or behave like `0%` even after choosing `50%` in settings.
+4. **Control placement is still unresolved.** The quick audio control remains hard-coded bottom-left in `src/styles/main.scss` / `src/ui/AudioControls.ts`, even though that position has been reported as wrong. The current docs that describe bottom-left as final are stale.
+5. **Existing documentation over-claimed the fix.** Multiple markdown files said the v0.20.4 pass was implemented and reliable; this audit downgrades that claim and points to a new recovery plan instead.
 
-Canonical plan: `plan.md § v0.20.2 + v0.20.3`
-Implementation findings: `FINDINGS.md § 2026-05-20 (v0.20.4 implementation audit)`
-Build validation: `npm run lint` ✅ `npm run build` ✅
+Canonical recovery plan: `plan.md § v0.20.5`  
+Technical audit: `FINDINGS.md § 2026-05-21 — v0.20.5 audio regression audit`  
+Validation baseline: `npm install`, `npm run lint`, `npm run build` ✅
 
 ## v0.20.3 — Technical planning hardening pass (2026-05-20, planning only)
 
@@ -29,10 +29,10 @@ Research and code-audit notes: `FINDINGS.md § 2026-05-20 (v0.20.2 planning audi
 Three bugs fixed in v0.20:
 
 1. **Audio not playing (CORS block):** Removed `crossOrigin = 'anonymous'` from `BackgroundAudioManager`. Chromium-family browsers assign `null` origin to `file://` pages, causing all audio element CORS requests to fail. Audio now loads and plays correctly.
-2. **Main-page audio controls:** New glass-pill `AudioControls` widget (bottom-left, symmetric to ZoomControls). Mute/unmute button + volume slider. Hidden when no audio is imported. Handles autoplay-unlock click within user gesture.
+2. **Main-page audio controls:** v0.20 added a glass-pill `AudioControls` widget for quick mute/unmute and volume access. The originally shipped bottom-left placement is now under follow-up in `v0.20.5` because that location has been reported as wrong.
 3. **Sidecar text stale after re-import:** Importer now stamps `?t=<timestamp>` on script src tags in `app.html` after every run, bypassing Chromium's file:// disk cache.
 
-Current runtime status: **v0.20 implemented**. Audio plays reliably from `file://`. Sidecar text always reflects the latest import.
+Current runtime status: **partially implemented**. Importer support and the `file://` playback fix remain real, but `v0.20.5` reopened the runtime audio follow-up for startup loudness, mute recovery, slider synchronization, and quick-control placement.
 
 Implementation details: `plan.md § v0.20` | Research: `FINDINGS.md § 2026-05-20 (v0.20)`
 
@@ -47,7 +47,7 @@ Implementation details: `plan.md § v0.20` | Research: `FINDINGS.md § 2026-05-2
 
 Customer-managed background audio is now integrated into the one-click `Update Gallery` workflow, with deterministic importer payloads, runtime compatibility selection, mute/volume controls, and lifecycle-aware playback handling.
 
-Current runtime status: **implemented**. The website now ships with background music playback controls in the preferences panel and importer-generated preview audio payloads.
+Current runtime status: **implemented importer path, runtime follow-up still open**. The preferences/audio payload architecture exists, but the current runtime behavior is being reworked under `plan.md § v0.20.5`.
 
 Implementation details: `plan.md § v0.19`
 Research/notes: `FINDINGS.md § 2026-05-20 (v0.19 implementation)`

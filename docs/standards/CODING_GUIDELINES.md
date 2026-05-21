@@ -1,10 +1,9 @@
 # FREYRAUM coding guidelines
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 full-check status note
+## v0.20.5 status note
 
-Background-audio support is now shipped (`plan.md § v0.19`).
-Ongoing changes must keep warning-first importer behavior, accessibility-compliant mute/volume controls, and lifecycle/autoplay-safe diagnostics paths.
+Audio importer support is shipped, but runtime audio behavior still has open regressions. Ongoing changes must protect warning-first importer behavior while fixing target-vs-live volume ownership, slider synchronization, mute recovery, and quick-control placement according to `plan.md § v0.20.5`.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

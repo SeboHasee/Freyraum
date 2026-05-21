@@ -1,13 +1,9 @@
 # Architecture docs
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 full-check status
+## v0.20.5 status
 
-Shipped architecture extension: customer audio-file ingestion plus runtime calm background playback controls.
-
-Current status: **implemented**.
-
-Key implementation anchors: `src/audio/BackgroundAudioManager.ts`, `src/main.ts` audio payload sanitization/orchestration, `src/utils/preferences.ts` audio fields, `src/ui/PreferencesPanel.ts` controls, `scripts/import-artworks.mjs` audio importer flow.
+Customer audio-file ingestion is implemented, but runtime audio behavior is still under repair. Current architecture focus: separate target loudness from live element loudness, replace the mapping contract with the requested `0..30% effective` range, keep both sliders on one source of truth, and relocate quick controls away from the rejected current position. Canonical references: `plan.md § v0.20.5`, `FINDINGS.md § 2026-05-21`.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

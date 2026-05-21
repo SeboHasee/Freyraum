@@ -1,14 +1,15 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20.4 — Audio implementation constraints now enforced (2026-05-20)
+## v0.20.5 — Audio bugfix constraints after failed follow-up (2026-05-21)
 
-All four planned items from v0.20.3 are now implemented. AI rules going forward:
+The current audio implementation is **not** a finished precedent. Until the next fix lands:
 
-- Volume: always use `displayPercentToGain` / `gainToDisplayPercent` from `src/audio/volumeMapping.ts`. Never write raw percentage ÷ 100 directly to preferences.
-- Sliders: do not replace slider DOM nodes in active preference subscriptions. Use the in-place patch model in `PreferencesPanel` as the precedent.
-- Audio transitions: use `BackgroundAudioManager.startFade()` for all volume changes at transition boundaries. Direct `audio.volume =` is reserved only for the fade ramp itself.
-- Responsive: do not add overflow-causing elements to `.audio-controls` on narrow phones; use the slider-collapse pattern as precedent.
+- Do **not** treat the current power-curve mapping in `src/audio/volumeMapping.ts` as canonical; the requested contract is `display 0..100 ↔ effective 0..0.30`.
+- Do **not** let `HTMLMediaElement.volume` feedback overwrite the persisted/user-selected target loudness. Fade envelopes and mute transitions must operate on live element state only.
+- Do **not** render quick-control slider values from transient fade state; both sliders must reflect the same target loudness source of truth.
+- Do **not** preserve the current bottom-left quick-control placement as if it were approved.
+- Keep detailed diagnostics when touching audio state transitions, because startup-muted and unmute-at-0 regressions are now confirmed failure modes.
 
 ## v0.20.3 — Audio implementation planning constraints (2026-05-20)
 

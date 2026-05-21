@@ -1,9 +1,9 @@
 # AI feedback loop
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 full-check status note
+## v0.20.5 status note
 
-Treat the shipped background-audio scope (`plan.md § v0.19`) as an active regression boundary in future review loops (importer payload, autoplay handling, lifecycle, controls, diagnostics).
+Treat the audio area as an active regression-recovery boundary, not as a closed feature. Review loops should explicitly check startup loudness, target-vs-live volume ownership, slider synchronization, mute recovery, and quick-control placement against `plan.md § v0.20.5`.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

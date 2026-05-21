@@ -1,13 +1,15 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## 2026-05-20 — Volume mapping and slider continuity implemented (v0.20.4)
+## 2026-05-21 — Never let live fade volume overwrite the user target
 
-These lessons were documented in v0.20.2/v0.20.3 planning passes and are now implemented:
+- The v0.20.4 follow-up introduced a critical audio-state bug: `BackgroundAudioManager.play()` starts from `audio.volume = 0`, and the `volumechange` listener then feeds that transient value back into the shared state.
+- Future rule: keep **target loudness** separate from **live element loudness**. UI rendering, persistence, and mute recovery must use the target value; fade envelopes may only control the live element value.
 
-1. **Volume display↔gain mapping:** use `displayPercentToGain` / `gainToDisplayPercent` from `src/audio/volumeMapping.ts` for all volume rendering and persistence. Never write raw slider percentages directly to preferences.
-2. **High-frequency slider continuity:** `PreferencesPanel` now uses an in-place patch model. For any future slider controls, keep stable DOM nodes; use `isVolumeDragging`-style guards to suppress structural re-renders during active pointer drag.
-3. **Fade envelope:** all play/pause/mute/loop transitions now use `BackgroundAudioManager.startFade()` instead of direct element volume writes.
+## 2026-05-21 — Volume mappings must match the exact product contract
+
+- The existing power-curve implementation matched only one example point (50% → ~15%) but not the full stated requirement (`0..30% effective mapped to 0..100% display`).
+- Future rule: whenever a user defines a bounded display range, encode the entire mapping contract explicitly and verify both midpoint and endpoints before documenting it as fixed.
 
 ## 2026-05-20 — Volume UX changes need explicit mapping contracts
 

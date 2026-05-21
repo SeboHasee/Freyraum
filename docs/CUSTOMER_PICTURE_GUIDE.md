@@ -1,13 +1,9 @@
 # FREYRAUM — Customer Picture Guide
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 calm background music + audio-controls note (implemented)
+## v0.20.5 audio status note (follow-up open)
 
-Calm background music from customer-provided audio files is now supported.
-
-Current status: **implemented**. `Update Gallery` now manages pictures/text/audio, and the website ships mute/volume controls in the settings panel and as a quick control on the main page.
-
-Implementation details: `plan.md § v0.19`.
+Customer audio import is available, but the current runtime audio behavior is **not fully fixed**. The website still has an active follow-up for startup loudness, mute/unmute recovery, slider synchronization, and quick-control placement. Use this guide for the file workflow; do not rely on current audio UI behavior being final until `plan.md § v0.20.5` is implemented.
 
 Welcome! This guide explains how to put your pictures into the FREYRAUM gallery.
 

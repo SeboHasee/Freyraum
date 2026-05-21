@@ -1,5 +1,20 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+
+## v0.20.5 — Audio regression audit + recovery plan (2026-05-21, docs-only)
+
+### Changed
+
+- Reclassified the v0.20.4 audio pass as incomplete after a fresh code audit against the reported customer failures.
+- Added a new recovery plan for the remaining audio bugs in `plan.md`.
+- Logged confirmed root causes and acceptance coverage in `FINDINGS.md`.
+- Refreshed repository markdown so docs no longer claim the current audio behavior is fully fixed.
+
+### Confirmed issues
+
+- `BackgroundAudioManager.play()` and the `volumechange` listener currently overwrite the stored target gain with transient fade-to-zero values, which can make startup, autoplay recovery, and unmute behave like 0% volume.
+- `src/audio/volumeMapping.ts` currently implements the wrong mapping contract for the stated requirement; UI `50%` should equal `15%` effective gain because the intended effective range is `0..30%`, not `0..100%`.
+- Main-page audio controls are still documented and implemented in the same bottom-left position even though that placement has been reported as wrong.
 
 ## v0.20.4 — Volume mapping, slider continuity, fade envelope, responsive layout (2026-05-20)
 

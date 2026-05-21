@@ -1,15 +1,9 @@
 # FREYRAUM — Image Maintenance Guide
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 audio maintenance note (implemented)
+## v0.20.5 audio maintenance note (follow-up open)
 
-Customer-managed audio assets and background playback controls are now part of the shipped maintenance surface.
-
-Current status: **implemented**. Maintenance workflow now includes customer audio import (`customer-audio/inbox`), preview payload generation, and runtime playback controls.
-
-See `plan.md § v0.19` and `FINDINGS.md § 2026-05-20`.
-
-v0.20 follow-up reliability fixes are active: `file://` audio playback no longer fails due to CORS attribute usage, and importer runs now cache-bust preview script URLs so sidecar text/audio updates appear immediately.
+Customer audio import remains part of the maintenance surface, but the runtime playback controls are currently under follow-up. The repository still needs a corrective pass for startup loudness, mute/unmute recovery, slider synchronization, and quick-control placement. Use `plan.md § v0.20.5` and `FINDINGS.md § 2026-05-21` for the current maintenance status.
 
 Audio maintenance boundaries:
 

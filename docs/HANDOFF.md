@@ -1,18 +1,17 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20.4 — Volume mapping, slider continuity, fade, responsive layout — implemented (2026-05-20)
+## v0.20.5 — Audio regression follow-up now open (2026-05-21, planning only)
 
-All five audio technical improvements are now shipped:
+Do **not** present the current audio behavior as fully fixed. A fresh audit confirmed that the runtime still has customer-visible regressions:
 
-1. **Calm startup loudness:** audio starts enabled with display slider at 50%, effective gain ~15% (calm ambient baseline). Customers see a balanced midpoint they can move up or down symmetrically.
-2. **Volume mapping:** displayed slider percent and stored effective gain use a power-curve mapping. All sliders (main-page and settings) and persistence use the same contract.
-3. **Slider continuity:** settings panel volume slider is now continuous — dragging never replaces the control node mid-gesture.
-4. **Fade transitions:** play, mute, and loop-restart transitions use smooth rAF-based fades (300 ms in, 200 ms out, 150 ms loop restart) to eliminate click/pop artifacts.
-5. **Responsive controls:** the main-page volume slider collapses on narrow phones (<600 px) to keep the control compact; the mute button stays accessible and volume is adjustable in the settings panel.
+1. startup can still behave like muted / 0% volume,
+2. the current display↔effective loudness mapping is not the requested `0..30% effective` model,
+3. mute/unmute can restore at 0%,
+4. the quick audio controls are still in the wrong place,
+5. earlier docs over-claimed the fix.
 
-Implementation files: `src/audio/volumeMapping.ts`, `src/audio/BackgroundAudioManager.ts`, `src/ui/PreferencesPanel.ts`, `src/ui/AudioControls.ts`, `src/styles/main.scss`, `src/utils/preferences.ts`  
-Technical findings: `FINDINGS.md § 2026-05-20 (v0.20.4 implementation audit)`
+Current handoff rule: describe background audio as **partially implemented with an active follow-up plan**, not as complete. Canonical references: `plan.md § v0.20.5` and `FINDINGS.md § 2026-05-21`.
 
 ## v0.20.3 technical audio enhancement roadmap — implemented in v0.20.4
 
@@ -20,25 +19,25 @@ Technical findings: `FINDINGS.md § 2026-05-20 (v0.20.4 implementation audit)`
 
 ## v0.20 audio + sidecar fixes — implemented (2026-05-20)
 
-Three fixes shipped in v0.20:
+Three fixes shipped in v0.20, but the runtime audio UX now has a documented follow-up in `v0.20.5`:
 
 1. **Audio plays correctly from file:// origin.** Previous CORS misconfiguration prevented audio loading in Chrome/Opera/Edge. Fixed — music plays immediately on first user interaction or autoplay (when browser allows it).
 2. **Sidecar text always up-to-date.** Every `Update Gallery` run now cache-busts the gallery script URLs so updated painting text appears immediately without needing to clear the browser cache.
-3. **Main-page mute/volume controls.** A subtle glass-pill control (bottom-left of screen) lets you mute/unmute and adjust volume without opening settings. It also shows an activation button when browser autoplay was blocked.
+3. **Main-page mute/volume controls.** A quick-control widget was added in v0.20, but its current location and runtime loudness behavior are still under follow-up and must not be described as final.
 
 **Updated checklist for customer audio (v0.20):**
 
 - Put music files into `customer-audio/inbox` (`.mp3`, `.ogg`, `.m4a`, `.wav`).
 - Run `Update Gallery`.
 - Open `customer-preview/app.html` (double-click or use the `.command`/`.bat` launcher).
-- Audio should start automatically (or show an activation button bottom-left if the browser blocked autoplay).
-- Use the bottom-left glass pill to mute/unmute or adjust volume directly on the main page.
+- Audio importer support is present, but current runtime startup loudness and control placement are under follow-up in `plan.md § v0.20.5`.
+- If audio behavior looks wrong, collect diagnostics and treat it as an open regression rather than expected final behavior.
 
 ## v0.19 background music workflow — implemented (2026-05-20)
 
 Background-audio workflow is live: customers place compatible audio files in `customer-audio/inbox` and use the existing `Update Gallery` flow.
 
-Current status: **shipped**. The website now includes background music controls (mute + volume) in the settings panel and as a quick-access widget on the main page (v0.20).
+Current status: **partially shipped**. Audio importer flow and controls exist, but `v0.20.5` reopened the runtime follow-up because startup loudness, mute recovery, slider sync, and quick-control placement still need correction.
 
 Canonical implementation reference: `plan.md § v0.19`
 
@@ -47,7 +46,7 @@ Quick handoff checklist for customer audio:
 - Put music files into `customer-audio/inbox` (`.mp3`, `.ogg`, `.m4a`, `.wav`).
 - Run `Update Gallery`.
 - Confirm `customer-artworks/last-import-report.txt` contains the audio sections (`Audio selected`, `Audio candidates ignored by precedence`, `Unsupported audio files`).
-- In preview, mute/volume controls are accessible bottom-left on the main page or in the settings panel.
+- In preview, audio controls exist in the settings panel and via a quick-control widget, but the current quick-control placement and runtime loudness behavior are not yet final.
 
 ## v0.18 sidecar text — implemented (2026-05-20)
 

@@ -1,10 +1,9 @@
 # Refactor prompt
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 full-check context note
+## v0.20.5 context note
 
-Current repository status includes a **shipped** background-music workflow (`plan.md § v0.19`).
-Do not regress importer/runtime/preferences audio boundaries during refactors.
+Current repository status includes a live audio follow-up. Do not preserve the current broken volume-state coupling or the current quick-control placement by accident during refactors; consult `plan.md § v0.20.5` first.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

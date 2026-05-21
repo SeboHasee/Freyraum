@@ -1,9 +1,11 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
+
+## v0.20.5 — Documentation correction after audio regression audit (2026-05-21, audit complete)
+
+Current status: planning follow-up only. The repository still contains active audio regressions, so docs must describe the audio feature as **under repair** until the next implementation pass actually validates startup loudness, slider sync, mute recovery, and corrected control placement. Canonical references: `plan.md § v0.20.5`, `FINDINGS.md § 2026-05-21`.
 
 ## v0.20 — Full documentation check-up (2026-05-20, audit complete)
-
-Current status: shipped. `plan.md § v0.19` now reflects implemented importer/runtime/UI behavior: audio ingestion from `customer-audio/inbox`, generated `customer-preview/customer-audio.js`, runtime compatibility probing, loop-guarded playback, mute/volume persistence, and lifecycle/autoplay diagnostics.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
@@ -62,6 +64,8 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - performance planning must explicitly state measurement strategy, fidelity-preservation boundaries, compatibility/fallback behavior, and resource ownership/disposal assumptions
 
 ## Latest documentation pass
+
+- 2026-05-21 (documentation): v0.20.5 audio regression audit completed. Re-ran `npm install`, `npm run lint`, and `npm run build`; confirmed that the current runtime still fails the reported startup-volume, mute/unmute, slider-sync, and control-placement expectations. Added a detailed recovery plan to `plan.md`, logged root causes and acceptance checks in `FINDINGS.md`, and refreshed repository markdown so docs no longer claim the current audio behavior is fully fixed. No runtime code changed.
 
 - 2026-05-20 (documentation): v0.20.3 technical planning hardening completed. Audited `src/main.ts`, `BackgroundAudioManager`, `PreferencesStore`, `PreferencesPanel`, `AudioControls`, and related SCSS boundaries; expanded `plan.md` with implementation-ready coding slices (volume mapping contract, slider continuity refactor, fade envelope transitions, control-placement policy, diagnostics expansion). Logged deep findings in `FINDINGS.md`, updated top-level status docs, and refreshed markdown audit stamp text across all `.md` files. No runtime code changed.
 

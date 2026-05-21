@@ -1,9 +1,9 @@
 # Lessons learned docs
-> Last full markdown audit: 2026-05-20 (v0.20.3 technical planning sync).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20 full-check status
+## v0.20.5 status
 
-Current lesson for this pass: keep docs, importer behavior, and runtime status synchronized immediately after shipping customer-facing audio workflows.
+Current lesson for this pass: never document an audio fix as complete until startup loudness, mute recovery, slider synchronization, and placement are re-tested in the live preview. Use `LESSONS_LEARNED.md` for the detailed follow-up rules from this audit.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

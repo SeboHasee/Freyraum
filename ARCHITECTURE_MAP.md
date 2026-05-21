@@ -1,16 +1,16 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-20 (v0.20.4 implementation).
+> Last full markdown audit: 2026-05-21 (v0.20.5 audio regression audit + recovery plan).
 
-## v0.20.4 — Volume mapping, slider continuity, fade envelope, responsive layout (2026-05-20)
+## v0.20.5 — Audio regression boundary update (2026-05-21, planning only)
 
-**Implemented.** All five technical slices shipped:
+**Not fixed yet.** Current architecture risk is now understood more precisely:
 
-- **`src/audio/volumeMapping.ts`** (new) — deterministic display↔gain mapping. Power-curve exponent 2.74 so 50% display → ~15% effective gain. `displayPercentToGain` / `gainToDisplayPercent` / `DEFAULT_AUDIO_GAIN`.
-- **`src/audio/BackgroundAudioManager.ts`** — rAF fade engine (`startFade`, `cancelFade`, `tickFade`). Volume ramps applied at play/pause/mute/loop-restart transitions. New diagnostics events: `audio-fade-start/cancel/complete`, `audio-volume-map`, `audio-resume-attempt`.
-- **`src/ui/PreferencesPanel.ts`** — in-place patch model (`buildPanel` once, `patchPanel` on preference updates). `isVolumeDragging` guard suppresses re-patch during active pointer drag.
-- **`src/ui/AudioControls.ts`** — uses `gainToDisplayPercent`/`displayPercentToGain`; sets `--volume-pct` CSS property for track fill.
-- **`src/utils/preferences.ts`** — default `audioVolume` updated to `DEFAULT_AUDIO_GAIN` (≈ 0.152).
-- **`src/styles/main.scss`** — `--audio-ctrl-left`/`--audio-ctrl-bottom` placement tokens; `--volume-pct` default fixed to `50` (unitless); narrow phone slider collapse.
+- `BackgroundAudioManager` currently mixes **target loudness** and **live media-element loudness**. The next implementation pass must separate them so fade envelopes and `volumechange` feedback cannot overwrite the user-selected target.
+- `src/audio/volumeMapping.ts` currently encodes the wrong contract. The requested architecture contract is `display 0..100 ↔ effective 0..0.30`, so UI `50%` must equal effective `0.15`.
+- `src/ui/AudioControls.ts` must stop rendering transient fade-state volume as if it were the persisted user choice.
+- Quick-control placement must be treated as unresolved; bottom-left is no longer a valid architectural assumption.
+
+Canonical recovery plan: `plan.md § v0.20.5`. Audit details: `FINDINGS.md § 2026-05-21`.
 
 ## v0.20.3 planning boundary — audio UX technical hardening (2026-05-20)
 
@@ -28,7 +28,7 @@ All four items are now shipped. See `FINDINGS.md § 2026-05-20 (v0.20.4)`.
 
 **CORS fix:** `BackgroundAudioManager` no longer sets `crossOrigin = 'anonymous'`. This was blocking all audio on `file://` origins (Chromium null-origin CORS rejection). Canonical reference: `plan.md § v0.20`, `FINDINGS.md § 2026-05-20 (v0.20)`.
 
-**AudioControls:** New `src/ui/AudioControls.ts` component. Glass-pill fixed bottom-left, symmetric to `ZoomControls`. Hidden when `!available`. Handles autoplay-unlock within user gesture. `main.ts` instantiates and disposes it alongside other chrome components.
+**AudioControls:** `src/ui/AudioControls.ts` is the quick-control component instantiated by `main.ts`. The original bottom-left placement is now explicitly disputed by `v0.20.5`, so treat location and displayed-volume behavior as active follow-up areas rather than settled architecture.
 
 **Sidecar cache-bust:** `import-artworks.mjs` now stamps `?t=<timestamp>` on `customer-artworks.js` + `customer-audio.js` script src tags in `app.html` after every import, bypassing Chromium's file:// disk cache.
 
