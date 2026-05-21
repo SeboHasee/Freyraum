@@ -1,11 +1,22 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.21 — full code audit with corrections to G-01/H-03, K-series new findings, deepened patches with online verification).
+> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+### Validation and residual risk
+
+- Baseline before code changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Final validation after v0.21 implementation and docs sync: `npm run lint` and `npm run build` passed.
+- Security audit: `npm audit --audit-level=moderate` still reports the pre-existing moderate Vite/esbuild development-server advisory; the available fix requires a breaking Vite major upgrade and was left as a separate dependency-upgrade task.
 
 ## v0.21 — Preloading, Interactive Loading Screen, Tab Switching Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (2026-05-21)
 
 ### Status
 
-Planning. This section is a full code audit + deep online research plan covering:
+Shipped. This section records the full code audit, implementation closeout, and research coverage for:
 1. Smooth asset preloading and an immersive branded loading screen (G-01 through G-07)
 2. Tab switching smoothness: bfcache, Page Visibility gating, WebGL context loss, animation time-jump prevention (H-01 through H-03)
 3. 16K high-resolution image support: GPU memory, texture size limits, tiled streaming, compressed formats, shader precision (H-04 through H-07)
@@ -13,7 +24,7 @@ Planning. This section is a full code audit + deep online research plan covering
 5. Global pointer tracking — painting drag and hover rotation always tracked across all UI elements (timeline, settings panel, nav buttons, preferences overlay) (I-01 through I-04)
 6. Timeline scalability — proper design and programming for large painting collections with virtual rendering, navigation arrows, counter, and responsive sizing (J-01 through J-06)
 
-Every finding cites the exact file and line verified in the current source. Implementation patches are provided inline.
+Every finding cites the exact file and line verified in the current source. Implementation patches and shipped closeout notes are provided inline.
 
 ---
 
@@ -35,7 +46,7 @@ Every finding cites the exact file and line verified in the current source. Impl
 
 ---
 
-### Open gaps (G-01 through G-07)
+### Closed gaps (G-01 through G-07)
 
 #### G-01 — Shader prewarm called after overlay hides and as void (non-awaited) [HIGH]
 
@@ -688,7 +699,7 @@ NPOT note is diagnostic-only and does not appear in the customer-facing `last-im
 
 **Current state:** The FREYRAUM gallery loads a single texture per artwork. A 16 K JPEG on a mobile device (maxTextureSize 4096) will be silently downscaled by Three.js at GPU upload time — resulting in a sharp desktop experience and a lower-resolution but still correct mobile experience.
 
-**For this v0.21 planning pass:** No code change. Document the gap. When the gallery expands to support zoom levels that make the full 16 K detail visible (deeper zoom tiers), implement a LOD pipeline:
+**v0.21 future boundary:** No LOD/tiled-streaming runtime is shipped in this pass. When the gallery expands to support zoom levels that make the full 16 K detail visible (deeper zoom tiers), implement a LOD pipeline:
 1. Import produces a manifest with three asset sizes per artwork: `thumb` (1024 px), `preview` (4096 px), `hires` (original).
 2. TextureManager loads `preview` at init; when zoom passes a threshold, loads and swaps in `hires` tiles asynchronously.
 3. Importer scripts could use `sharp` or ImageMagick to auto-generate the lower-res variants.
@@ -1164,7 +1175,7 @@ This scales smoothly from 90×57px at 600px viewport to 150×95px at 1000px+ vie
 - Add a compact group-jump dropdown: selecting a group jumps the scroll position and active window.
 - For more than 50 artworks: collapse to a paginated view (page 1 of N, with 20 per page) with prev/next page buttons replacing the continuous scroll.
 
-**For this v0.21 planning pass:** No code change. Document the gap. Implement when the gallery grows beyond 20 artworks in production.
+**v0.21 future boundary:** Grouped/page navigation remains documented, not shipped. Implement when the gallery grows beyond 50+ artworks in production.
 
 ---
 

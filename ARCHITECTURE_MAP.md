@@ -1,61 +1,66 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
+> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
 
-## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (planning, 2026-05-21)
+## v0.21 — implementation shipped (2026-05-21)
 
-Current status: **planning**. Boot-path and tab-lifecycle gaps identified by code audit and online research:
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (shipped, 2026-05-21)
+
+Current status: **shipped**. Boot-path and tab-lifecycle gaps identified by code audit and online research:
 
 ### G-series: Preloading + Loading Screen
 
 | Gap | Component | Status |
 |-----|-----------|--------|
-| G-01 | `RendererManager.prewarm()` called post-overlay-hide as fire-and-forget `void` — not awaited before overlay hides | Open — planned |
-| G-02 | Audio `preload='metadata'` instead of `'auto'` | Open — planned |
-| G-03 | PBR maps lazy-loaded per artwork, no adjacent prefetch | Open — planned |
-| G-04 | Loading screen is unbranded white spinner | Open — planned |
-| G-05 | No `<link rel="preload">` for fonts in `<head>` | Open — planned |
-| G-06 | Textures not GPU-uploaded before overlay hides | Open — planned |
-| G-07 | No idle sweep of remaining artwork PBR sets | Open — planned |
+| G-01 | `RendererManager.prewarm()` called post-overlay-hide as fire-and-forget `void` — not awaited before overlay hides | Shipped in v0.21 |
+| G-02 | Audio `preload='metadata'` instead of `'auto'` | Shipped in v0.21 |
+| G-03 | PBR maps lazy-loaded per artwork, no adjacent prefetch | Shipped in v0.21 |
+| G-04 | Loading screen is unbranded white spinner | Shipped in v0.21 |
+| G-05 | No `<link rel="preload">` for fonts in `<head>` | Shipped in v0.21 |
+| G-06 | Textures not GPU-uploaded before overlay hides | Shipped in v0.21 |
+| G-07 | No idle sweep of remaining artwork PBR sets | Shipped in v0.21 |
 
 ### H-series: Tab Smoothness + 16K High-Resolution Support
 
 | Gap | Component | Status |
 |-----|-----------|--------|
-| H-01 | `LightingSetup.update()` uses absolute rAF timestamp → key-light jump on tab resume | Open — planned |
-| H-02 | No user-visible indicator during WebGL context restoration | Open — planned (low priority) |
-| H-03 | `TextureManager.maxTextureSize` **not stored as field** (only logged); no oversized-texture diagnostic | Open — planned |
-| H-04 | `PaintingMaterial` injected GLSL lacks `highp` precision guard for large UV tiling | Open — planned |
-| H-05 | Importer warns ">4096px downscale" for all large images; 16K norm not reflected | Open — planned |
-| H-06 | No NPOT dimension note in importer | Open — planned (diagnostic only) |
+| H-01 | `LightingSetup.update()` uses absolute rAF timestamp → key-light jump on tab resume | Shipped in v0.21 |
+| H-02 | No user-visible indicator during WebGL context restoration | Shipped in v0.21 |
+| H-03 | `TextureManager.maxTextureSize` **not stored as field** (only logged); no oversized-texture diagnostic | Shipped in v0.21 |
+| H-04 | `PaintingMaterial` injected GLSL lacks `highp` precision guard for large UV tiling | Shipped in v0.21 |
+| H-05 | Importer warns ">4096px downscale" for all large images; 16K norm not reflected | Shipped in v0.21 |
+| H-06 | No NPOT dimension note in importer | Shipped in v0.21 |
 | H-07 | No LOD / tiled streaming for images exceeding device `maxTextureSize` | Open — future pass |
 
 ### I-series: Global Pointer Tracking
 
 | Gap | Component | Status |
 |-----|-----------|--------|
-| I-01 | Hover rotation only updates when cursor is over the canvas — freezes over timeline / settings / nav overlays | Open — planned |
-| I-02 | Touch Events fallback `mousemove` canvas-scoped only — same hover freeze in legacy browsers | Open — planned |
-| I-03 | `setPointerCapture` failure unlogged; no global drag fallback if capture is stolen by an overlay | Open — planned |
-| I-04 | Touch Events path: `touchmove` canvas-scoped; touch drag interrupted if finger exits to adjacent element | Open — planned |
+| I-01 | Hover rotation only updates when cursor is over the canvas — freezes over timeline / settings / nav overlays | Shipped in v0.21 |
+| I-02 | Touch Events fallback `mousemove` canvas-scoped only — same hover freeze in legacy browsers | Shipped in v0.21 |
+| I-03 | `setPointerCapture` failure unlogged; no global drag fallback if capture is stolen by an overlay | Shipped in v0.21 |
+| I-04 | Touch Events path: `touchmove` canvas-scoped; touch drag interrupted if finger exits to adjacent element | Shipped in v0.21 |
 
 ### J-series: Timeline Scalability
 
 | Gap | Component | Status |
 |-----|-----------|--------|
-| J-01 | All thumbnails rendered as full DOM nodes at construction — no virtual windowing | Open — planned |
-| J-02 | No scroll-arrow buttons for mouse-click navigation of the timeline strip | Open — planned |
-| J-03 | No artwork counter ("3 / 20") in the timeline bar | Open — planned |
-| J-04 | No CSS `mask-image` edge fade to indicate off-screen content | Open — planned |
-| J-05 | Timeline thumbnail size hardcoded at 150×95px — not responsive | Open — planned |
+| J-01 | All thumbnails rendered as full DOM nodes at construction — no virtual windowing | Shipped in v0.21 |
+| J-02 | No scroll-arrow buttons for mouse-click navigation of the timeline strip | Shipped in v0.21 |
+| J-03 | No artwork counter ("3 / 20") in the timeline bar | Shipped in v0.21 |
+| J-04 | No CSS `mask-image` edge fade to indicate off-screen content | Shipped in v0.21 |
+| J-05 | Timeline thumbnail size hardcoded at 150×95px — not responsive | Shipped in v0.21 |
 | J-06 | No group/page navigation for 50+ artwork galleries | Open — future pass |
 
 ### K-series: Code Audit Corrections (2026-05-21)
 
 | Gap | Component | Status |
 |-----|-----------|--------|
-| K-01 | `CanvasInteraction.dispose()` must remove global `window` listeners added by I-series patches | Open — planned |
-| K-02 | `Timeline.dispose()` retains `this.thumbs` array — prevents GC of button element listeners | Open — planned |
-| K-03 | `prefetchAdjacentArtworks()` method does not exist; G-03 patch must add it | Open — planned |
+| K-01 | `CanvasInteraction.dispose()` must remove global `window` listeners added by I-series patches | Shipped in v0.21 |
+| K-02 | `Timeline.dispose()` retains `this.thumbs` array — prevents GC of button element listeners | Shipped in v0.21 |
+| K-03 | `prefetchAdjacentArtworks()` method does not exist; G-03 patch must add it | Shipped in v0.21 |
 
 **Plan corrections:**
 - G-01 description updated: prewarm IS called but as fire-and-forget `void`, AFTER overlay hides

@@ -1,5 +1,16 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
+> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+### Validation and residual risk
+
+- Baseline before code changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Final validation after v0.21 implementation and docs sync: `npm run lint` and `npm run build` passed.
+- Security audit: `npm audit --audit-level=moderate` still reports the pre-existing moderate Vite/esbuild development-server advisory; the available fix requires a breaking Vite major upgrade and was left as a separate dependency-upgrade task.
 
 ## 2026-05-21 — v0.21 extension: global pointer tracking + timeline scalability
 
@@ -53,7 +64,7 @@ Full line-by-line inspection of `src/interaction/CanvasInteraction.ts` (358 line
 
 ### Remaining status
 
-I-series (I-01 through I-04) and J-series (J-01 through J-06) gaps added. All are open — planned. No code changed in this audit pass.
+I-series (I-01 through I-04) and J-series implementation items are now shipped in v0.21; J-06 remains a future grouped/page-navigation boundary.
 
 ## 2026-05-21 — v0.21 deep code audit corrections (K-series)
 
@@ -78,7 +89,7 @@ Line-by-line inspection of `src/main.ts` (full boot path, lines 400–700), `src
 
 ### Remaining status
 
-K-series corrections applied to plan.md. G-01 and H-03 plan entries updated with accurate source-verified descriptions. K-01, K-02, K-03 new gaps documented in plan.md K-series section. No runtime code changed in this documentation pass.
+K-series corrections were implemented in v0.21: global listener cleanup, Timeline thumb-reference cleanup, and GalleryManager adjacent/idle PBR prefetch are now in runtime code.
 
 
 
@@ -129,7 +140,7 @@ K-series corrections applied to plan.md. G-01 and H-03 plan entries updated with
 
 ### Remaining status
 
-All v0.21 preloading/loading-screen gaps (G-01 through G-07) remain open — planned. Seven new gaps (H-01 through H-07) added from this tab-smoothness + 16K research pass.
+G-01 through G-07 and H-01 through H-06 are shipped in v0.21. H-07 remains documented as a future LOD/tiled-streaming architecture boundary.
 
 
 
@@ -172,7 +183,7 @@ Eight targeted online research queries covering Three.js `LoadingManager`/`compi
 
 ### Remaining status
 
-All v0.20.8 audio/control findings remain closed. v0.21 opens 7 new gaps (G-01 through G-07) for the preloading + loading screen domain.
+All v0.20.8 audio/control findings remain closed. v0.21 closes the G-series preloading/loading-screen domain in runtime code.
 
 ## 2026-05-21 — v0.20.8 implementation verification
 

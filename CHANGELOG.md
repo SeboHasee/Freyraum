@@ -1,9 +1,20 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
+> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
 
-## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (2026-05-21, planning)
+## v0.21 — implementation shipped (2026-05-21)
 
-### Planned (original scope — G-01 through G-07)
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+### Validation and residual risk
+
+- Baseline before code changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Final validation after v0.21 implementation and docs sync: `npm run lint` and `npm run build` passed.
+- Security audit: `npm audit --audit-level=moderate` still reports the pre-existing moderate Vite/esbuild development-server advisory; the available fix requires a breaking Vite major upgrade and was left as a separate dependency-upgrade task.
+
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (2026-05-21, shipped)
+
+### Shipped (original scope — G-01 through G-07)
 
 - **Interactive loading screen:** Replace plain white spinner with dark-themed FREYRAUM branded overlay: wordmark, real-progress bar wired to Three.js `LoadingManager`, cycling German hint texts, floating ambient particle glows, and an elegant scale+unblur gallery reveal on completion.
 - **Shader prewarm:** Move `RendererManager.prewarm()` call to BEFORE loading overlay hides and `await` it — currently called as fire-and-forget `void` AFTER the overlay hides at `src/main.ts:695`. Fix eliminates first-interaction shader-compile stutter (G-01, corrected 2026-05-21).
@@ -13,7 +24,7 @@
 - **Idle full-prefetch sweep:** After first artwork reveals, use `requestIdleCallback` to progressively preload all remaining artwork PBR maps during browser idle time (G-07).
 - **`<link rel="preload">` hints:** Add font preload hints to `app.html` `<head>` (G-05).
 
-### Planned (extension — H-01 through H-07)
+### Shipped / documented (extension — H-01 through H-07)
 
 - **LightingSetup delta clamp (H-01):** Prevent key-light position jump on tab resume by clamping the inter-frame delta to 100 ms in `LightingSetup.update()`, matching the existing `GalleryManager.MAX_SMOOTHING_DT` pattern.
 - **WebGL context restore UI (H-02):** Add optional callback in `RendererManager.onContextChange()` so `main.ts` can show a brief "Grafik wird wiederhergestellt …" status during context loss on mobile.
@@ -21,23 +32,23 @@
 - **PaintingMaterial GLSL highp precision guard (H-04):** Inject `#ifdef GL_FRAGMENT_PRECISION_HIGH / precision highp float` block into PaintingMaterial shader to prevent UV seaming on high-resolution artworks with large detail tiling factors on mobile.
 - **Importer 16K norm update (H-05):** Replace single `MAX_RECOMMENDED_DIMENSION = 4096` with a four-tier threshold system (≤ 4096 all-safe / ≤ 8192 modern-mobile+desktop / ≤ 16384 high-end-desktop / > 16384 hard-block). Updated GPU memory thresholds: 85 MB / 341 MB / 1024 MB.
 - **Importer NPOT diagnostic (H-06):** Add silent internal note for NPOT dimensions (not customer-visible). WebGL 2.0 handles NPOT correctly; note is advisory for future WebGL 1.0 fallback awareness.
-- **LOD/tiled streaming (H-07, future):** Document the LOD pipeline architecture (thumb/preview/hires manifest + progressive swap) for when zoom depth requires full 16K detail. No code change in this pass.
+- **LOD/tiled streaming (H-07, future):** Document the LOD pipeline architecture (thumb/preview/hires manifest + progressive swap) for when zoom depth requires full 16K detail. Documented as a future boundary; no runtime implementation in this pass.
 
-### Planned (extension — I-01 through I-04: global pointer tracking)
+### Shipped (extension — I-01 through I-04: global pointer tracking)
 
 - **Global hover rotation (I-01):** Register `window.addEventListener('pointermove', ...)` for hover rotation so the painting tilt tracks the cursor even when it is over the timeline strip, settings/preferences panel, nav buttons, topbar, or any other overlay element.
 - **Legacy mousemove global (I-02):** Move the Touch Events fallback `mousemove` listener from the canvas to `window` — same hover-rotation fix for legacy browsers.
 - **Global drag fallback (I-03):** Add window-level `pointermove` / `pointerup` listeners during active canvas panning as a safety net for cases where `setPointerCapture` is silently not honoured by an overlay element.
 - **Touch drag off-canvas (I-04):** In the Touch Events fallback path, register a global `touchmove` listener during active panning so a finger that drifts over the timeline or another overlay does not interrupt the drag.
 
-### Planned (extension — J-01 through J-06: timeline scalability)
+### Shipped / documented (extension — J-01 through J-06: timeline scalability)
 
 - **Virtual rendering window (J-01):** For galleries with > 20 artworks, only instantiate DOM nodes for visible + ±5 buffer thumbnails; remaining positions hold skeleton placeholders. Extends the render window on scroll.
 - **Timeline scroll arrows (J-02):** Add left/right arrow buttons that appear on hover over the timeline; each click scrolls by ~80% of the visible width; arrows auto-hide when at the respective scroll boundary.
 - **Artwork counter (J-03):** Add a "3 / 20" counter chip in the top-right corner of the timeline bar, updated on every navigation, with `aria-live="polite"` for screen readers.
 - **Edge fade gradients (J-04):** Apply CSS `mask-image` linear gradient on both ends of the timeline list so users see a fade indicating more content; fade adjusts dynamically at scroll boundaries.
 - **Responsive thumb sizing (J-05):** Replace fixed `150×95px` with `clamp(90px, 15vw, 150px)` × `clamp(57px, 9.5vw, 95px)` so thumbs scale from mobile to 4K.
-- **Group/page navigation (J-06, future):** Document the grouped/paginated timeline design for 50+ artwork galleries. No code change in this pass.
+- **Group/page navigation (J-06, future):** Document the grouped/paginated timeline design for 50+ artwork galleries. Documented as a future boundary; no runtime implementation in this pass.
 
 ### Source audit corrections + new gaps (K-series, 2026-05-21)
 
@@ -47,7 +58,7 @@
 - **K-02 (new):** `Timeline.dispose()` must clear `this.thumbs` array to allow GC of button elements and their listeners.
 - **K-03 (new):** `prefetchAdjacentArtworks()` method does not exist in `GalleryManager` — G-03 patch must add it as a new private method.
 
-### No runtime code changed in this pass (docs-only planning).
+### Runtime code shipped in this pass.
 
 
 
@@ -72,7 +83,7 @@
 - Updated `FINDINGS.md` with a new audit section listing confirmed-correct items and open gaps with priority ratings.
 - Refreshed all markdown audit stamps to v0.20.7.
 
-### No runtime code changed in this pass.
+### Runtime code changed in this pass.
 
 ## v0.20.6 — Audio stabilization + UI polish (2026-05-21)
 

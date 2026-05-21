@@ -1,11 +1,22 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
+> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
 
-## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (planning, 2026-05-21)
+## v0.21 — implementation shipped (2026-05-21)
 
-Current status: **planning**. A deep code audit and online research session revealed 7 preloading/loading-screen gaps (G-01 through G-07), 7 further gaps around tab switching smoothness and 16K high-resolution image support (H-01 through H-07), 4 global pointer tracking gaps (I-01 through I-04), and 6 timeline scalability gaps (J-01 through J-06). Full implementation plans are in `plan.md § v0.21`. Research notes and findings are in `FINDINGS.md § 2026-05-21`.
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
 
-Planned changes:
+
+### Validation and residual risk
+
+- Baseline before code changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Final validation after v0.21 implementation and docs sync: `npm run lint` and `npm run build` passed.
+- Security audit: `npm audit --audit-level=moderate` still reports the pre-existing moderate Vite/esbuild development-server advisory; the available fix requires a breaking Vite major upgrade and was left as a separate dependency-upgrade task.
+
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (shipped, 2026-05-21)
+
+Current status: **shipped**. A deep code audit and online research session revealed 7 preloading/loading-screen gaps (G-01 through G-07), 7 further gaps around tab switching smoothness and 16K high-resolution image support (H-01 through H-07), 4 global pointer tracking gaps (I-01 through I-04), and 6 timeline scalability gaps (J-01 through J-06). Full implementation plans are in `plan.md § v0.21`. Research notes and findings are in `FINDINGS.md § 2026-05-21`.
+
+Shipped changes:
 - Branded interactive loading screen (dark glass theme, wordmark, real progress bar, particles, hint texts, reveal animation)
 - Shader prewarm wired into boot path (fix G-01)
 - Audio `preload='auto'` for gapless first-play (fix G-02)
