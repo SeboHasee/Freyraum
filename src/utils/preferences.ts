@@ -31,7 +31,6 @@ export interface Preferences {
 export type PreferenceListener = (prefs: Preferences) => void;
 
 const STORAGE_KEY = 'freyraum.preferences.v1';
-const AUDIO_RECOVERY_KEY = 'freyraum.audio-recovery.v205';
 const diagnostics = createScopedDiagnostics('preferences');
 
 function readStored(): Partial<Preferences> {
@@ -48,25 +47,16 @@ function readStored(): Partial<Preferences> {
 
 function writeStored(prefs: Preferences): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...prefs,
+        // Startup invariant: every fresh open must begin unmuted.
+        audioMuted: false,
+      } satisfies Preferences)
+    );
   } catch {
     diagnostics.warn('storage-write-failed', 'Could not persist preferences to localStorage');
-  }
-}
-
-function readAudioRecoveryFlag(): boolean {
-  try {
-    return localStorage.getItem(AUDIO_RECOVERY_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function writeAudioRecoveryFlag(): void {
-  try {
-    localStorage.setItem(AUDIO_RECOVERY_KEY, '1');
-  } catch {
-    diagnostics.warn('storage-write-failed', 'Could not persist audio recovery marker to localStorage');
   }
 }
 
@@ -86,7 +76,6 @@ export class PreferencesStore {
 
   constructor() {
     const stored = readStored();
-    const wasAudioRecovered = readAudioRecoveryFlag();
     const quality: QualityPresetId =
       stored.quality && stored.quality in QUALITY_PRESETS
         ? (stored.quality as QualityPresetId)
@@ -104,19 +93,17 @@ export class PreferencesStore {
         ? Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, stored.audioVolume))
         : DEFAULT_AUDIO_GAIN;
 
-    const shouldRecoverZeroVolume =
-      !wasAudioRecovered &&
-      stored.audioMuted === false &&
+    const shouldNormalizeZeroVolume =
       typeof stored.audioVolume === 'number' &&
       Number.isFinite(stored.audioVolume) &&
       stored.audioVolume <= 0;
 
-    if (shouldRecoverZeroVolume) {
+    if (shouldNormalizeZeroVolume) {
       audioVolume = DEFAULT_AUDIO_GAIN;
-      diagnostics.warn('audio-volume-recovered', 'Recovered legacy broken zero-volume state from localStorage', {
+      diagnostics.warn('audio-volume-normalized', 'Normalized stored zero-volume state to startup default', {
         key: STORAGE_KEY,
         stored: stored.audioVolume,
-        recoveredTo: audioVolume,
+        normalizedTo: audioVolume,
       });
     }
 
@@ -131,15 +118,14 @@ export class PreferencesStore {
     };
 
     const shouldNormalizeMutedPreference = stored.audioMuted !== false;
-    if (shouldRecoverZeroVolume) {
+    if (shouldNormalizeZeroVolume || shouldNormalizeMutedPreference) {
       writeStored(this.prefs);
-      writeAudioRecoveryFlag();
-    } else if (shouldNormalizeMutedPreference) {
-      writeStored(this.prefs);
-      diagnostics.info(
-        'audio-muted-normalized',
-        'Normalized persisted muted preference to startup default (unmuted)'
-      );
+      diagnostics.info('audio-startup-normalized', 'Normalized persisted startup audio state', {
+        storedMuted: stored.audioMuted,
+        storedVolume: stored.audioVolume,
+        normalizedMuted: this.prefs.audioMuted,
+        normalizedVolume: this.prefs.audioVolume,
+      });
     }
 
     this.motionMedia?.addEventListener?.('change', this.handleSystemMotionChange);
@@ -198,6 +184,37 @@ export class PreferencesStore {
   setAudioVolume(value: number): void {
     this.prefs.audioVolume = Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, value));
     this.emit();
+  }
+
+  normalizeStartupAudio(reason: string, notifyListeners = true): void {
+    const normalizedVolume = this.prefs.audioVolume > 0 ? this.prefs.audioVolume : DEFAULT_AUDIO_GAIN;
+    const changed = this.prefs.audioMuted || this.prefs.audioVolume !== normalizedVolume;
+    this.prefs = {
+      ...this.prefs,
+      audioMuted: false,
+      audioVolume: normalizedVolume,
+    };
+
+    if (changed) {
+      diagnostics.info('audio-startup-reset', 'Reset audio to startup defaults', {
+        reason,
+        audioMuted: this.prefs.audioMuted,
+        audioVolume: this.prefs.audioVolume,
+      });
+    } else {
+      diagnostics.debug('audio-startup-reset-skip', 'Startup audio already matches required defaults', {
+        reason,
+        audioMuted: this.prefs.audioMuted,
+        audioVolume: this.prefs.audioVolume,
+      });
+    }
+
+    if (notifyListeners) {
+      this.emit();
+      return;
+    }
+
+    writeStored(this.prefs);
   }
 
   /**

@@ -660,6 +660,19 @@ async function main(): Promise<void> {
     if (document.visibilityState === 'hidden') suspendRuntime('visibilitychange-hidden');
     else if (document.visibilityState === 'visible') resumeRuntime('visibilitychange-visible');
   };
+  const onPageHide = (event: PageTransitionEvent): void => {
+    preferences.normalizeStartupAudio(event.persisted ? 'pagehide-bfcache' : 'pagehide-close', false);
+    diagnostics.info('audio', 'startup-audio-persisted', 'Persisted startup audio defaults during page hide', {
+      persisted: event.persisted,
+    });
+  };
+  const onPageShow = (event: PageTransitionEvent): void => {
+    if (!event.persisted) return;
+    diagnostics.info('audio', 'startup-audio-restore', 'Restoring startup audio defaults after bfcache resume', {
+      persisted: event.persisted,
+    });
+    preferences.normalizeStartupAudio('pageshow-bfcache');
+  };
   // Page Lifecycle: 'freeze' fires before the browser may purge memory of a
   // hidden tab; 'resume' fires when that tab becomes visible again. The
   // events are non-standard on older browsers; the listeners are no-ops
@@ -670,6 +683,8 @@ async function main(): Promise<void> {
   const onPageFreeze = (): void => suspendRuntime('page-lifecycle-freeze');
   const onPageResume = (): void => resumeRuntime('page-lifecycle-resume');
   document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('pagehide', onPageHide);
+  window.addEventListener('pageshow', onPageShow);
   window.addEventListener('freeze', onPageFreeze as EventListener);
   window.addEventListener('resume', onPageResume as EventListener);
 
@@ -883,12 +898,15 @@ async function main(): Promise<void> {
 
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {
+    preferences.normalizeStartupAudio('beforeunload-close', false);
     cancelAnimationFrame(rafId);
     if (resizeRafId !== 0) cancelAnimationFrame(resizeRafId);
     if (pendingApplyHandle !== null) cancelIdle(pendingApplyHandle);
     longTaskObserver?.disconnect();
     if (rendererSnapshotTimer !== undefined) clearInterval(rendererSnapshotTimer);
     document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('pageshow', onPageShow);
     window.removeEventListener('freeze', onPageFreeze as EventListener);
     window.removeEventListener('resume', onPageResume as EventListener);
     unsubscribePreferences();
