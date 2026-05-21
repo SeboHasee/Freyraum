@@ -1,12 +1,49 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.24.2 strict full-gallery entry contract shipped; PBR_PRELOAD_LIMIT raised to FULL_PRELOAD_SAFETY_CAP=50, all paintings GPU-warmed pre-reveal).
+> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
 
+
+## v0.24.3 — Loading completeness re-audit findings (2026-05-21, docs-only)
+
+### Status
+
+Planning/documentation pass only. Runtime remains **v0.24.2**.
+
+### Problem reaffirmed
+
+User feedback remains consistent: loading reports “ready”, but additional loading-like stalls still occur until paintings have been visited. This indicates entry readiness and perceived readiness are still not perfectly aligned for all gallery sizes.
+
+### Source-backed findings
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|--------------|---------|
+| R-01 | **HIGH** | `src/gallery/GalleryManager.ts:123`, `src/gallery/GalleryManager.ts:395-401` | Preload is explicitly capped at `FULL_PRELOAD_SAFETY_CAP = 50`; artworks beyond the cap are not guaranteed ready under the loading overlay. |
+| R-02 | **HIGH** | `src/gallery/GalleryManager.ts:424`, `src/gallery/GalleryManager.ts:928-947` | Overflow readiness depends on post-init idle/background sweep (`scheduleFullTextureSetPrefetch`), so completion can race against early interaction. |
+| R-03 | **MEDIUM** | `src/main.ts:783`, `src/main.ts:786`, `src/gallery/GalleryManager.ts:685-697` | CTA readiness currently relies on aggregate summary and contract loops, but large-gallery capped paths can still present “Galerie bereit” while overflow work continues. |
+| R-04 | **MEDIUM** | `src/main.ts:741`, `src/main.ts:783` | Overlay copy transitions to ready-state text without exposing whether startup is strict full-gallery ready or fallback-with-background-work mode. |
+
+### Online research synthesis (2026-05-21)
+
+- `requestIdleCallback` is best-effort and not reliable for critical correctness gates; critical startup work needs deterministic scheduling with timeout/fallback semantics.  
+  Source: MDN `requestIdleCallback` guidance (https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback).
+- Three.js loading completion and shader compile helpers do not, by themselves, guarantee every future texture/material path is GPU-ready; explicit render/warm paths are still required for first-use smoothness.  
+  Source: Three.js docs and common WebGL warmup guidance (`LoadingManager`, `WebGLRenderer.compile` docs).
+- Modern browser guidance favors deferring non-critical media work (lazy/deferred decode) but keeping user-critical first-view assets deterministic; perceived “ready” must map to actually prepared interaction paths.  
+  Source: web.dev browser-level lazy loading guidance (https://web.dev/articles/browser-level-image-lazy-loading).
+
+### Conclusion
+
+The remaining issue is not a single missing preload call; it is a contract mismatch between UX-ready signaling and guaranteed readiness scope for capped/overflow scenarios. The v0.24.3 plan introduces strict mode boundaries, explicit fallback mode semantics, and acceptance criteria that verify no first-use cold path leaks after entry.
+
+### Validation
+
+- Documentation/research pass only.
+- No runtime code changes in this pass.
 
 ## v0.24.2 — Deep loading findings for strict full-gallery entry (**shipped**, 2026-05-21)
 
 ### Status
 
-Planning/documentation pass only. Runtime remains v0.24.1 while a stricter entry contract is prepared.
+Shipped in runtime code. The strict full-gallery entry contract is implemented in v0.24.2.
 
 ### Problem reaffirmed
 

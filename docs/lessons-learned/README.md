@@ -1,5 +1,5 @@
 # Lessons learned docs
-> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
 
 
 ## v0.23 — Performance/Preloading Planning Audit

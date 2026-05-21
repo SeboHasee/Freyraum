@@ -1,6 +1,20 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.24.2 strict full-gallery entry contract shipped; all paintings warmed before enter CTA is enabled).
+> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
 
+
+## v0.24.3 — Loading completeness re-audit + remediation plan (docs-only, 2026-05-21)
+
+### Changed
+
+- Added a new v0.24.3 root-cause findings section in `FINDINGS.md` focused on why “ready” can still precede full first-use smoothness in capped/overflow gallery scenarios.
+- Added a new v0.24.3 remediation plan in `plan.md` (R-series) defining strict vs fallback preload modes, deterministic completion requirements, and acceptance criteria.
+- Updated `README.md` top status to reflect current runtime truth (`v0.24.2 shipped`, `v0.24.3 planning/docs-only`) and linked the new plan/findings sections.
+- Refreshed markdown audit stamp across repository Markdown files.
+
+### Validation and residual risk
+
+- Documentation-only pass; no runtime code changed.
+- Runtime preload-completeness fix remains pending implementation of the v0.24.3 plan.
 
 ## v0.24.2 — Strict full-gallery entry contract (2026-05-21)
 

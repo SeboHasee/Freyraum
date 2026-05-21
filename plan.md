@@ -1,6 +1,48 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.24.2 strict full-gallery entry contract shipped; PBR_PRELOAD_LIMIT raised to FULL_PRELOAD_SAFETY_CAP=50, all paintings GPU-warmed pre-reveal).
+> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
 
+
+## v0.24.3 — true preload completion plan (2026-05-21, planning)
+
+Runtime status: **planning only**. Runtime remains **v0.24.2** until this plan is implemented.
+
+### Problem statement
+
+User feedback still reports that the loading screen reaches “ready” before all first-use work is complete. Smoothness improves only after paintings are visited, meaning some readiness work still crosses the interaction boundary.
+
+### Goals
+
+1. Ensure loading completion reflects real first-use readiness, not only partial readiness counters.
+2. Remove first-navigation cold work for the full supported gallery size.
+3. Keep startup stable on lower-memory devices with explicit fallback behavior.
+4. Add deterministic diagnostics proving whether any interaction still triggered load/decode/procedural/GPU work.
+
+### Gap analysis (R-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| R-01 | **HIGH** | `FULL_PRELOAD_SAFETY_CAP = 50` can leave larger galleries partially prepared before entry. | Add explicit contract behavior for `artworks.length > safety cap`, including user-facing preload mode and acceptance boundary. |
+| R-02 | **HIGH** | Idle/background prefetch remains part of completion for overflow artworks. | Move critical completion path to deterministic queued work; keep idle scheduling only for non-critical optimization. |
+| R-03 | **MEDIUM** | Current readiness summary is aggregate and may hide per-artwork unresolved states unless logs are inspected manually. | Add a strict “no pending artwork” gate and structured unresolved-artwork diagnostics before CTA. |
+| R-04 | **MEDIUM** | Loading UX copy says “ready” without clarifying fallback/partial modes for capped galleries. | Align status/CTA messaging with actual readiness contract mode to avoid false-ready perception. |
+| R-05 | **MEDIUM** | Large-gallery memory pressure remains high under full eager paths. | Stage compressed texture migration (KTX2/Basis) and/or tiered preload policy with deterministic guarantees per tier. |
+| R-06 | **LOW** | Acceptance criteria are not yet codified for “no first-use load” across size/device buckets. | Add explicit pass/fail criteria for 4/15/20/50 and overflow galleries with diagnostics capture requirements. |
+
+### Implementation plan
+
+1. Define two explicit startup modes: strict full-preload mode and bounded fallback mode, each with truthful UI copy and diagnostics.
+2. For strict mode, block CTA until every artwork meets readiness stages (`albedoLoaded`, `pbrLoaded`, `proceduralReady`, `materialApplied`, `gpuWarmed`).
+3. For bounded fallback mode, block CTA until a documented guaranteed set is ready and clearly communicate remaining background preparation.
+4. Replace idle-only critical completion dependency with deterministic queue stepping and bounded retries.
+5. Emit machine-readable unresolved-artwork lists before CTA; treat non-empty unresolved sets as contract failure in strict mode.
+6. Add acceptance checks for first navigation in each bucket and log any cold-path detection as release-blocking for this objective.
+7. Stage compressed-texture rollout plan so strict full-gallery readiness remains feasible at higher artwork counts.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime changes.
+- Validate diagnostics for startup contract verdict and first-navigation cold/hot verdict across gallery-size buckets.
+- Re-run security scanning after runtime updates.
 
 ## v0.24.2 — Strict all-paintings-ready loading (2026-05-21, **shipped**)
 

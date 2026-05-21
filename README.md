@@ -1,14 +1,20 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.24.2 strict full-gallery entry contract shipped; PBR_PRELOAD_LIMIT raised to FULL_PRELOAD_SAFETY_CAP=50, all paintings GPU-warmed pre-reveal).
+> Last full markdown audit: 2026-05-21 (v0.24.3 loading-completeness re-audit + remediation planning pass; all Markdown files refreshed).
 
 
-## v0.24.2 — **shipped** (2026-05-21) — strict all-paintings-ready entry gate
+## v0.24.3 — loading completeness re-audit (2026-05-21, docs-only)
 
-**Status: planning/documentation only; runtime still v0.24.1.**
+**Status: planning/documentation only; runtime remains v0.24.2.**
 
-A new pass was prepared for the still-reported startup issue: before the loading screen allows “Galerie betreten”, the system should complete readiness work for every painting so first navigation is already warm everywhere, not only around an initial subset. The plan now documents a hard full-gallery readiness contract plus explicit memory-safety boundaries, diagnostics acceptance criteria, and compressed-texture staging requirements for larger exhibitions.
+The startup issue is still reproducible in customer usage: the loading screen can report readiness while some expensive work still occurs on first interaction. This pass adds a focused root-cause analysis, fresh online research notes, and a new remediation plan to eliminate “loads on first use” behavior.
 
-See `plan.md § v0.24.2` for the implementation plan and `FINDINGS.md § v0.24.2` for deep research synthesis.
+See `plan.md § v0.24.3` for the new remediation plan and `FINDINGS.md § v0.24.3` for research-backed findings.
+
+## v0.24.2 — shipped (2026-05-21) — strict all-paintings-ready entry gate
+
+**Status: shipped in runtime code.**
+
+v0.24.2 enforced a strict pre-entry contract for the warm target order, raised authored PBR preload guardrails to `FULL_PRELOAD_SAFETY_CAP = 50`, added pre-entry full-gallery readiness diagnostics, and warmed artworks before CTA reveal.
 
 ## v0.24.1 — shipped (2026-05-21) — first-visit smoothness hardening
 
