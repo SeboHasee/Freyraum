@@ -1,5 +1,221 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+
+## v0.22 — Guaranteed Jank-Free Gallery: Full Pre-Load + "Galerie betreten" (PLANNED)
+
+### Problem statement
+
+Users still experience visible hickups (stutters) when switching paintings for the first time. After visiting every painting once, everything becomes smooth. This pattern confirms the root cause: PBR texture maps (normal, roughness, ao, height, specular, varnish, detail) for artworks 2–N are loaded from disk/network **on first navigation** to each painting. This loading happens **after** the loading overlay is dismissed, so users feel the load stall as a visible hick-up during navigation.
+
+Root cause in current code: `GalleryManager.init()` only preloads albedo textures (all artwork photos) during the loading phase. `scheduleFullTextureSetPrefetch()` begins the idle PBR-map sweep using `requestIdleCallback` **after** the loading overlay is removed and the gallery is already interactive. A user who navigates quickly arrives at unpreloaded artworks before the idle sweep has reached them.
+
+The loading screen is also dismissed **automatically** when technical loading is complete — the user has no agency over when the immersive experience begins.
+
+### Research findings
+
+**Three.js LoadingManager full-preload pattern (three.js docs)**
+All texture loaders sharing a `THREE.LoadingManager` instance contribute their load events to the shared `onProgress` / `onLoad` callbacks. Loading all PBR texture sets inside `init()` before calling `reveal()` means the progress bar reflects true total progress, and `onLoad` only fires when every texture is in CPU memory. Reference: three.js docs `LoadingManager.onLoad`.
+
+**GPU texture upload — CPU→VRAM must be forced before reveal**
+`THREE.TextureLoader` delivers a `THREE.Texture` with decoded pixel data in CPU memory. The actual GPU upload (CPU→VRAM transfer) occurs only during the first `renderer.render()` call that uses each texture. For the currently-active artwork, the existing warm render pass in v0.21 covers GPU upload. But for artworks 2–N, textures sit in CPU memory untouched until the user navigates there — causing a brief first-render stall even after PBR maps are "loaded in memory." Standard pattern to force GPU upload without displaying frames: temporarily assign each texture set to the active scene mesh, render once, restore. Runs under loading overlay — users see no visual output. Reference: Three.js discourse "How to preload texture to GPU to prevent first-frame stutter."
+
+**"Press to Start" / "Enter Gallery" — UX research (Google Arts & Culture, TeamLab, 2024 best practice)**
+Industry standard for WebGL/3D gallery experiences: never auto-reveal on load complete. Show a CTA button that only becomes active when assets are 100% ready. Benefits: (1) user knows the experience is ready; (2) first interaction is deliberate — psychological primer for immersion; (3) browser AudioContext starts on first user gesture, satisfying autoplay policy cleanly; (4) prevents accidental interaction during GPU warm-up. German gallery label: "Galerie betreten" (enter gallery) is more evocative than "Starten". Accessibility: real `<button>` element, Enter/Space trigger, visible focus ring, ARIA label. Reference: Google Arts & Culture entry patterns, TeamLab WebGL experiences.
+
+**Minimum loading screen duration (Material Design, Apple HIG)**
+On fast local networks, loading < 200ms followed by an instant flash of the branded screen degrades perceived quality. A 500ms enforced minimum ensures the branded loading experience is always seen and sets the emotional context. The minimum is implemented as `Promise.all([actualLoad(), delay(500)])`. Reference: Google Material Design loading patterns, Apple HIG launch screen guidelines.
+
+**`requestIdleCallback` sweep — keep as second-chance retry (web.dev)**
+Once L-01 ships (all PBR sets preloaded during loading), the idle sweep is redundant for successfully loaded artworks. `scheduleFullTextureSetPrefetch()` already checks `prefetchedTextureSets`; it will skip loaded artworks and only retry failures. No code change needed — but a diagnostics log should confirm when the sweep is effectively a no-op.
+
+### Gap analysis (L-series)
+
+| ID | Severity | Component | Problem |
+|----|----------|-----------|---------|
+| L-01 | **HIGH** | `GalleryManager.init()` | Only albedo textures preloaded during loading. PBR sets for artworks 2–N loaded on first navigation → jank. |
+| L-02 | **HIGH** | `main.ts` boot + `GalleryManager` | GPU warm render only covers first artwork. Artworks 2–N cause CPU→VRAM stall on first navigation even after L-01. |
+| L-03 | **HIGH** | `main.ts` → `createLoadingOverlay()` | Loading overlay auto-reveals on completion. No "press to start" button. User has no agency; audio context start on gesture is better. |
+| L-04 | **LOW** | `GalleryManager.scheduleFullTextureSetPrefetch()` | After L-01, sweep is redundant for loaded artworks. Should log a no-op confirmation; retain as second-chance retry for failures. |
+| L-05 | **LOW** | `main.ts` boot | No minimum loading screen duration. On fast LAN/cache, branded screen flashes < 100ms. Enforce 500ms minimum. |
+
+### Implementation patches (planned — not yet in runtime code)
+
+#### L-01 — Preload ALL PBR texture sets under loading overlay
+
+**File:** `src/gallery/GalleryManager.ts` — `init()` method
+
+Problem: `init()` calls `textureManager.preload(urls)` for albedo only. PBR sets are left for on-demand loading.
+
+Patch — add PBR preload block immediately after albedo preload:
+```typescript
+async init(): Promise<void> {
+  // ... existing albedo preload ...
+  const urls = this.artworks.map((a) => a.webglImage ?? a.image);
+  await this.textureManager.preload(urls);
+
+  // NEW: Preload ALL PBR texture sets before gallery reveals.
+  // Promise.allSettled — one failed artwork does not block the rest.
+  const pbr = this.artworks
+    .map((a, i) => ({ artwork: a, index: i }))
+    .filter(({ artwork }) => !!artwork.textureSet);
+  await Promise.allSettled(
+    pbr.map(({ artwork, index }) =>
+      this.textureManager.preloadTextureSet(artwork.textureSet!).then(() => {
+        this.prefetchedTextureSets.add(index);
+        this.diagnostics.debug('preload-all', 'PBR texture set loaded during init', {
+          index,
+          id: artwork.id,
+        });
+      })
+    )
+  );
+
+  this.pendingResetAfterArtworkLoad = true;
+  await this.showArtwork(0);
+  this.scheduleFullTextureSetPrefetch(); // now a no-op for loaded sets; retries failures
+}
+```
+
+Note: `Promise.allSettled` ensures partial failures do not block the gallery. Failed PBR sets are retried by the existing idle sweep.
+
+#### L-02 — GPU warm all artworks under loading overlay
+
+**File:** `src/main.ts` — boot sequence after `galleryManager.init()` + new `GalleryManager` helper
+
+Problem: Single warm render pass only uploads the first artwork's textures. Artworks 2–N still incur a CPU→VRAM stall on first navigation.
+
+Patch — iterate through all artworks, temporarily bind each set, render once:
+```typescript
+// In main.ts, after galleryManager.init():
+// Force GPU upload for ALL artworks by rendering each texture set once under the overlay.
+const artworkCount = artworks.length;
+const gpuWarmLimit = 15; // Skip per-artwork GPU warm for large galleries (> 15 artworks)
+if (artworkCount <= gpuWarmLimit) {
+  for (let i = 0; i < artworkCount; i++) {
+    await galleryManager.prepareArtworkForWarmRender(i);
+    rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+    loadingOverlay.setProgress(92 + Math.round(((i + 1) / artworkCount) * 5));
+  }
+  // Restore first artwork after warm sweep
+  await galleryManager.prepareArtworkForWarmRender(0);
+}
+```
+
+New helper `GalleryManager.prepareArtworkForWarmRender(index)` applies a texture set to the mesh material without triggering the full `showArtwork()` flow (no animation reset, no side panels, no ARIA updates). Returns a Promise that resolves when textures are applied.
+
+Note: For galleries > 15 artworks, skip per-artwork GPU warm (the CPU→VRAM stall is shorter than a full network load stall and acceptable). This limit is a named constant.
+
+#### L-03 — "Galerie betreten" button on loading screen
+
+**File:** `src/main.ts` → `createLoadingOverlay()` + `src/styles/main.scss`
+
+Problem: `reveal()` auto-dismisses the overlay. No user agency. No press-to-start CTA.
+
+Loading screen state machine after patch:
+1. **loading** — progress bar fills; hint texts cycle; button hidden and `disabled`
+2. **ready** — 100% reached; button fades in with scale-up animation; hint texts stop; status shows "Galerie bereit — zum Starten klicken"
+3. **entered** — user clicks button (or presses Enter/Space); overlay fades out; gallery reveals
+
+Button markup added inside `createLoadingOverlay()`:
+```typescript
+const startButton = document.createElement('button');
+startButton.className = 'loading-start-btn';
+startButton.textContent = 'Galerie betreten';
+startButton.setAttribute('aria-label', 'Galerie betreten und Ausstellung beginnen');
+startButton.disabled = true;
+card.appendChild(startButton);
+```
+
+`reveal()` changes — returns `Promise<void>` that resolves on button click:
+```typescript
+reveal(): Promise<void> {
+  startButton.disabled = false;
+  startButton.classList.add('is-visible');
+  subtitle.textContent = 'Galerie bereit — zum Starten klicken';
+  return new Promise<void>((resolve) => {
+    const go = () => {
+      startButton.removeEventListener('click', go);
+      document.removeEventListener('keydown', onKey);
+      overlay.classList.add('is-hidden');
+      window.setTimeout(() => { overlay.remove(); resolve(); }, 1300);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') go();
+    };
+    startButton.addEventListener('click', go);
+    document.addEventListener('keydown', onKey);
+    startButton.focus();
+  });
+}
+```
+
+CSS for `.loading-start-btn` (add to `main.scss`):
+```scss
+.loading-start-btn {
+  margin-top: 2rem;
+  padding: 0.9rem 2.4rem;
+  border: 1.5px solid #b59a6a;
+  border-radius: 4px;
+  background: transparent;
+  color: #f0eae0;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.6s ease, transform 0.6s ease, background 0.2s ease;
+
+  &.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  &:hover {
+    background: rgba(181, 154, 106, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #b59a6a;
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &.is-visible { opacity: 1; transform: none; }
+  }
+}
+```
+
+`main.ts` call site change:
+```typescript
+// Replace:
+loadingOverlay.reveal();
+loadingOverlay.dispose();
+// With:
+await loadingOverlay.reveal(); // waits for user button click
+loadingOverlay.dispose();
+```
+
+#### L-04 — `scheduleFullTextureSetPrefetch()` — no code change, add diagnostics log
+
+After L-01, the sweep will find all artworks in `prefetchedTextureSets` and log "Idle artwork texture-set prefetch sweep complete" immediately. No change needed except to verify the log appears confirming all were pre-loaded. Retain the sweep for second-chance retry of failed loads.
+
+#### L-05 — 500ms minimum loading screen duration
+
+**File:** `src/main.ts` — boot sequence
+
+```typescript
+// Ensure branded loading screen is always visible for at least 500ms.
+const [,] = await Promise.all([
+  galleryManager.init(),
+  new Promise<void>((resolve) => setTimeout(resolve, 500)),
+]);
+```
+
+The 500ms delay runs in parallel with actual loading — on slow networks the load takes longer and the minimum is never felt. On fast LAN/cache, the minimum ensures the loading screen is always meaningfully shown.
+
+---
 
 ## v0.21 — implementation shipped (2026-05-21)
 

@@ -1,7 +1,28 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
 
-## v0.21 — implementation shipped (2026-05-21)
+## v0.22 — planned (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+**Status: planned — not yet in runtime code.**
+
+## 2026-05-21 — Idle-prefetch-after-reveal does not prevent first-navigation jank
+
+- Scheduling texture prefetch via `requestIdleCallback` **after** the gallery is revealed is insufficient for users who navigate immediately. The idle callbacks fire when the browser is idle, which may be several seconds after the first navigation attempt. Users who navigate quickly will hit cold PBR texture loads and see visible stutter.
+- Root cause: `GalleryManager.init()` only preloads albedo textures, then returns. The idle sweep starts too late.
+- Future rule: **any texture set that must be available without jank must be fully loaded under the loading overlay, before `reveal()` is called.** Idle-time prefetch is appropriate only as a second-chance retry for failures or for assets that are genuinely optional (e.g., off-screen artworks in a 50+ collection where upfront loading is impractical).
+
+## 2026-05-21 — GPU warm render must cover all artworks, not just the first
+
+- A single `renderer.render(scene, camera)` call uploads only the textures currently bound to the active scene mesh. This covers artwork 0 only. Artworks 1–N still incur a CPU→VRAM stall on first navigation.
+- Future rule: **if zero-stall first render is required for all artworks, iterate through all artworks under the loading overlay**, temporarily bind each texture set to the mesh, render once, restore. Guard with a max-artwork count (e.g., 15) so the warm sweep does not extend the loading screen excessively for large galleries.
+
+## 2026-05-21 — "Press to Start" is not just UX polish — it solves audio + GPU timing
+
+- Auto-revealing the gallery on technical loading completion creates three problems: (1) user may not be looking when the reveal happens; (2) browser AudioContext start is not tied to a user gesture, risking autoplay policy failures; (3) GPU warm-up render passes may still be in progress at reveal time.
+- A "press to start" / "Galerie betreten" button solves all three: it is the user's deliberate first gesture, it cleanly starts the AudioContext, and it happens after all warm passes complete.
+- Future rule: **loading screens for immersive WebGL/audio experiences should always require a deliberate user action to enter, not auto-reveal.** This is an industry standard for gallery, game, and experience-driven web applications.
+
+## 2026-05-21 — implementation shipped (2026-05-21)
 
 Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
 

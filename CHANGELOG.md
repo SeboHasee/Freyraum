@@ -1,5 +1,23 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+
+## v0.22 — Guaranteed Jank-Free Gallery: Full Pre-Load + "Galerie betreten" (PLANNED)
+
+**Status: planned — not yet in runtime code. Implementation patches documented in `plan.md § v0.22` and `FINDINGS.md § v0.22`.**
+
+### Root cause of remaining hick-ups (confirmed 2026-05-21)
+
+After v0.21 shipped, users still experience visible stutters when switching paintings for the first time. Root cause: `GalleryManager.init()` only preloads albedo textures during loading. PBR texture sets (normal/roughness/ao/height/specular/varnish/detail) for artworks 2–N are loaded on-demand at first navigation, stalling the render. The idle-prefetch sweep (`scheduleFullTextureSetPrefetch`) runs after the gallery is already visible — too late for users who navigate immediately.
+
+### Planned changes (L-series)
+
+- **L-01 [HIGH] — Full PBR pre-load in `init()`:** Move all `preloadTextureSet()` calls into `GalleryManager.init()`, using `Promise.allSettled` to load all artwork PBR maps under the loading overlay before the gallery reveals. `scheduleFullTextureSetPrefetch()` becomes a no-op for loaded artworks (second-chance retry for failures only).
+- **L-02 [HIGH] — GPU warm-all artworks:** After all PBR sets are loaded, iterate through all artworks (up to a 15-artwork limit for large galleries), temporarily bind each set to the scene mesh, and call `renderer.render()` once per artwork to force CPU→VRAM upload before the overlay hides.
+- **L-03 [HIGH] — "Galerie betreten" press-to-start button:** Replace auto-reveal with a CTA button that appears when loading reaches 100%. `reveal()` returns a `Promise<void>` that resolves on button click (or Enter/Space key). Button fades in with a gold-bordered animation. Ensures deliberate first interaction, clean AudioContext start, and premium gallery experience.
+- **L-04 [LOW] — Idle sweep diagnostics:** Confirm `scheduleFullTextureSetPrefetch()` logs a no-op after L-01. No code change required.
+- **L-05 [LOW] — 500ms minimum loading duration:** `Promise.all([galleryManager.init(), delay(500)])` ensures the branded loading screen is always visible for at least 500ms even on fast LAN/cache.
+
+---
 
 ## v0.21 — implementation shipped (2026-05-21)
 

@@ -1,5 +1,18 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+
+## v0.22 — planned (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+**Status: planned — not yet in runtime code.**
+
+After v0.21 shipped, users still experience visible hick-ups when navigating to a painting for the first time. Root cause confirmed: PBR texture sets (normal, roughness, ao, etc.) for artworks 2–N are loaded on first navigation, not during the loading screen. The v0.22 plan addresses this with three high-priority changes:
+
+1. **Full PBR pre-load (L-01):** All artwork PBR texture sets are loaded inside `GalleryManager.init()` under the loading overlay — users see real progress, not jank.
+2. **GPU warm-all artworks (L-02):** After all PBR sets load, each artwork is temporarily bound to the scene mesh and a render pass forces CPU→VRAM upload before the overlay hides.
+3. **"Galerie betreten" press-to-start (L-03):** Loading screen shows a gold-bordered CTA button at 100%. Gallery only reveals on user click — deliberate entry, premium feel, clean audio context start.
+4. **500ms minimum loading duration (L-05):** Branded loading screen is always visible for at least 500ms.
+
+Full implementation patches are in `plan.md § v0.22` and `FINDINGS.md § v0.22`.
 
 ## v0.21 — implementation shipped (2026-05-21)
 

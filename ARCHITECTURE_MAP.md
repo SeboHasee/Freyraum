@@ -1,5 +1,21 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+
+## v0.22 — planned (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+**Status: planned — not yet in runtime code.**
+
+### L-series: Full pre-load + press-to-start
+
+| Gap | Component | Status |
+|-----|-----------|--------|
+| L-01 | `GalleryManager.init()` — only albedo preloaded; PBR sets 2–N loaded on-demand → jank | **Planned** |
+| L-02 | GPU warm render only covers first artwork; artworks 2–N CPU→VRAM stall on first navigation | **Planned** |
+| L-03 | Auto-reveal on load complete; no press-to-start button; no user agency | **Planned** |
+| L-04 | Idle sweep redundant after L-01; retain as retry for failures; add no-op diagnostics log | **Planned (low)** |
+| L-05 | No minimum loading screen duration; branded screen flashes < 100ms on fast LAN/cache | **Planned (low)** |
+
+---
 
 ## v0.21 — implementation shipped (2026-05-21)
 

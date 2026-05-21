@@ -1,5 +1,61 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+
+## v0.22 — planned (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+### Problem confirmed by user testing
+
+After v0.21 shipped, users still report visible hickups (stutters) when switching between paintings for the first time. After visiting every painting once, transitions become smooth. This pattern precisely matches a cold-load texture scenario: PBR maps (normal/roughness/ao/height/specular/varnish/detail) for artworks 2–N are absent from GPU memory on first navigation.
+
+### Root cause in current code
+
+1. `GalleryManager.init()` (`src/gallery/GalleryManager.ts:263–269`) calls `textureManager.preload(urls)` for albedo textures only, then calls `showArtwork(0)` and returns.
+2. `scheduleFullTextureSetPrefetch()` is called last in `init()`. It chains idle-callbacks via `requestIdleCallback`. This sweep runs **after** `init()` returns → **after** the loading overlay has been dismissed → after the gallery is already interactive.
+3. A user navigating before the sweep reaches their target painting hits cold texture load (disk/network → CPU memory → GPU VRAM) and sees the stall as a hickup.
+4. The single GPU warm render pass added in v0.21 only covers the first artwork (the one currently bound to the scene mesh); artworks 2–N still incur CPU→VRAM stall on first navigation.
+5. The loading overlay auto-reveals on technical completion — user has no "press to start" agency and audio context start is not tied to a deliberate gesture.
+
+### Research findings
+
+**Three.js LoadingManager full-preload (three.js official docs)**
+All loaders sharing a `THREE.LoadingManager` instance report to the same `onProgress`/`onLoad` pipeline. Loading all PBR sets inside `GalleryManager.init()` (before `showArtwork(0)`) means the progress bar tracks real total progress and `onLoad` only fires when every PBR map is in CPU memory. No additional wiring needed — the existing `LoadingManager` instance is already passed to `TextureManager`.
+
+**GPU texture upload — CPU→VRAM force-upload (Three.js discourse + WebGL spec)**
+`THREE.TextureLoader` decodes image data to CPU memory (`ImageBitmap` or `HTMLImageElement`). The GPU upload occurs only during the first `renderer.render()` that uses each texture. Standard pre-upload pattern: temporarily assign each artwork's texture set to the active scene mesh, call `renderer.render()` once to upload to VRAM, restore. This all happens under the loading overlay — users see nothing. `renderer.compile(scene, camera)` compiles shaders but does **not** force texture upload; a render pass is required. Reference: Three.js discourse "Preloading textures to GPU" and Chrome DevTools GPU rasterization docs.
+
+**"Press to Start" — WebGL gallery UX best practice (Google Arts & Culture, TeamLab, 2024)**
+Best-practice pattern confirmed by research: never auto-reveal on load complete. Show a CTA button that activates at 100%. Benefits confirmed:
+- Deliberate first interaction primes immersive experience psychologically
+- `AudioContext` start tied to user gesture satisfies browser autoplay policy cleanly
+- User knows assets are ready; zero perceived delay after button press
+- Gallery feels premium and intentional, not technical
+German CTA label: "Galerie betreten" — more evocative than "Starten". Keyboard: Enter or Space activates button. Accessibility: real `<button>` element, `aria-label`, visible `focus-visible` ring with gold (#b59a6a) outline. Animation: fade-in + translateY(8px→0) over 0.6s ease on `.is-visible` class. Reduced-motion: instant show, no animation.
+
+**Minimum loading screen duration (Material Design, Apple HIG)**
+A minimum loading duration of 500ms is the established balance point:
+- Short enough that it never feels like an artificial wait on fast networks
+- Long enough that the branded screen always registers visually
+- On slow networks, the actual load takes longer and the minimum is never perceived
+Implementation: `Promise.all([actualLoad(), delay(500)])` — runs in parallel, adds zero time on slow loads.
+
+**`requestIdleCallback` sweep as second-chance retry**
+After L-01 ships (all PBR sets preloaded in `init()`), `scheduleFullTextureSetPrefetch()` will find all entries in `prefetchedTextureSets` and exit immediately. This is correct and harmless — the sweep is retained as a second-chance retry for artworks whose PBR load failed during `init()` (network error, missing file). No code change needed; confirm via diagnostics log output.
+
+### New findings (L-series)
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| L-01 | **HIGH** | `src/gallery/GalleryManager.ts:263–269` | `init()` preloads albedo textures only. PBR sets for artworks 2–N loaded on first navigation → stall visible as hick-up. |
+| L-02 | **HIGH** | `src/main.ts` (boot), `src/gallery/GalleryManager.ts` | GPU warm render covers only first artwork. Artworks 2–N have textures in CPU memory but not VRAM after L-01 — CPU→VRAM stall still occurs on first navigation. Need per-artwork warm render under overlay. |
+| L-03 | **HIGH** | `src/main.ts:574`, `createLoadingOverlay()` | `reveal()` auto-dismisses overlay. No press-to-start button. No user agency. AudioContext should start on deliberate gesture. |
+| L-04 | **LOW** | `src/gallery/GalleryManager.ts:481–497` | After L-01, `scheduleFullTextureSetPrefetch()` is a no-op for loaded artworks. Retain as second-chance retry. Add diagnostics confirmation log. |
+| L-05 | **LOW** | `src/main.ts` (boot) | No minimum loading screen duration. On fast LAN/cache, branded screen may flash < 100ms. Enforce 500ms minimum via `Promise.all`. |
+
+### Status
+
+L-series findings documented. Implementation patches planned. Not yet in runtime code.
+
+---
 
 ## v0.21 — implementation shipped (2026-05-21)
 
