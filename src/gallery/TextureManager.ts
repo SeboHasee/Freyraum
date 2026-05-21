@@ -33,6 +33,8 @@ export class TextureManager {
   private maxAnisotropy = 1;
   private maxTextureSize = 0;
   private anisotropyDivisor = 1;
+  /** v0.25 T-03: stored renderer reference used for proactive GPU texture upload via initTexture(). */
+  private renderer: THREE.WebGLRenderer | null = null;
   private readonly imageBitmapDecodeSupported =
     typeof createImageBitmap === 'function' && typeof THREE.ImageBitmapLoader === 'function';
   /**
@@ -50,6 +52,7 @@ export class TextureManager {
   }
 
   init(renderer: THREE.WebGLRenderer): void {
+    this.renderer = renderer;
     this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
     this.maxTextureSize = renderer.capabilities.maxTextureSize;
     this.diagnostics.info('capabilities', 'Texture manager initialized', {
@@ -150,6 +153,9 @@ export class TextureManager {
         (texture) => {
           this.prepareTexture(texture, role);
           this.cache.set(cacheKey, texture);
+          // v0.25 T-03: proactively push the decoded texture to the GPU so the
+          // compositor can drain the upload queue before the warm render loop.
+          this.renderer?.initTexture(texture);
           const img = texture.image as HTMLImageElement | ImageBitmap | { width?: number; height?: number };
           const w = 'naturalWidth' in img ? (img.naturalWidth || img.width || 0) : (img.width || 0);
           const h = 'naturalHeight' in img ? (img.naturalHeight || img.height || 0) : (img.height || 0);
@@ -173,6 +179,8 @@ export class TextureManager {
           });
           const fallback = this.createFallbackTexture(url);
           this.cache.set(cacheKey, fallback);
+          // v0.25 T-03: upload fallback texture to GPU immediately.
+          this.renderer?.initTexture(fallback);
           this.fallbackKeys.add(cacheKey);
           resolve(fallback);
         }

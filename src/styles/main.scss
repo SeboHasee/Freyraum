@@ -969,9 +969,14 @@ button {
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  padding: 14px 18px;
+  // v0.25 U-03: tighter vertical padding reduces excess height
+  padding: 10px 14px;
   z-index: 100;
   box-shadow: var(--shadow-soft);
+  // v0.25 U-01: flex row so arrows and counter are natural siblings of the list
+  display: flex;
+  align-items: center;
+  gap: 6px;
   --timeline-mask-left: transparent 0, #000 0;
   --timeline-mask-right: #000 100%, transparent 100%;
 
@@ -998,7 +1003,10 @@ button {
   // horizontal gutters used by native scroll snapping and JS centering.
   scroll-padding-inline: 32px;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 18px 8px;
+  // v0.25 U-03: reduced padding; U-01: flex:1 fills space between arrows
+  padding: 12px 8px 6px;
+  flex: 1 1 0;
+  min-width: 0;
   mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
   -webkit-mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
 
@@ -1049,20 +1057,23 @@ button {
 }
 
 .timeline__arrow {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 2;
-  width: 34px;
-  height: 58px;
+  // v0.25 U-01: natural flex sibling — no longer absolutely positioned
+  flex-shrink: 0;
+  // v0.25 U-02: 32×32 px circle replacing 34×58 px pill
+  width: 32px;
+  height: 32px;
   border: 1px solid var(--glass-border);
-  border-radius: 999px;
+  border-radius: 50%;
   background: var(--glass-bg-strong);
   color: var(--text-strong);
   box-shadow: var(--shadow-soft);
   cursor: pointer;
   opacity: 0;
   transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  // Center the arrow glyph
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
   .timeline:hover &,
   .timeline:focus-within & {
@@ -1079,21 +1090,29 @@ button {
     outline-offset: 3px;
     opacity: 1;
   }
+
+  // v0.25 U-05: always show arrows on touch devices (no hover available)
+  @media (pointer: coarse) {
+    opacity: 0.65;
+
+    &:disabled {
+      opacity: 0;
+    }
+  }
 }
 
+// v0.25 U-01: flex order ensures prev is first child, no explicit left offset needed
 .timeline__arrow--prev {
-  left: 8px;
 }
 
+// v0.25 U-01: next arrow order is natural after list; no explicit right offset needed
 .timeline__arrow--next {
-  right: 8px;
 }
 
+// v0.25 U-04: counter is the last flex child in the timeline row — no longer
+// absolutely positioned, sits naturally at the tail of the flex container.
 .timeline__counter {
-  position: absolute;
-  top: 8px;
-  right: 18px;
-  z-index: 3;
+  flex-shrink: 0;
   padding: 4px 9px;
   border-radius: 999px;
   background: rgba(17, 24, 29, 0.72);

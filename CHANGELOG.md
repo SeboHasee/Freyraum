@@ -1,31 +1,42 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.25 T-series + U-series planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.25 T-series + U-series shipped).
 
 
-## v0.25 — GPU warm flush hardening + timeline elegance redesign (2026-05-21, **planning/docs-only**)
+## v0.25 — GPU warm flush hardening + timeline elegance redesign (2026-05-21, **shipped**)
 
 ### Summary
 
-Documentation and planning pass. Two persistent user-reported issues root-caused:
+Two persistent user-reported issues fixed:
 
-1. **Choppy navigation**: Despite v0.24.6's strict full-gallery entry contract, the warm loop runs all paintings in a single synchronous JS task with no RAF yield between artworks. GPU receives a batched command queue; "Galerie betreten" can be enabled while the GPU is still draining. Fix planned: `rafYield()` between warm renders + 3-frame GPU drain pass + `renderer.initTexture()` proactive upload.
+1. **GPU flush / loading screen**: warm loop now yields one RAF frame between each painting render (`rafYield()`), allowing the GPU to flush its command queue and the browser to paint incremental progress bar updates. Three drain frames added after the warm loop and before shader prewarm. `renderer.initTexture()` called immediately after each decoded texture is cached. Loading progress now spans 50 %→95 % during the warm phase (previously 93 %→97 %, invisible).
 
-2. **Timeline arrow layout**: Arrows are `position: absolute` overlapping the thumbnail strip; pill shape (`34 × 58px`) is disproportionate for compact navigation. Fix planned: flex-sibling layout, `32 × 32px` circles, tighter padding, inline counter.
-
-### Added
-
-- `FINDINGS.md § v0.25`: Root-cause analysis with source evidence and online research citations for both issues.
-- `plan.md § v0.25`: Full T-series (loading) and U-series (timeline) gap tables + implementation + validation plan.
-- `README.md`: Top-section updated to reflect v0.25 planning status and link to new plan sections.
+2. **Timeline arrow elegance**: arrows redesigned as `32 × 32 px` glass circles and made natural flex siblings of the scroll list (removing `position: absolute` overlap). Counter moved to inline flex tail. Padding tightened. Touch devices show arrows at 65 % opacity always.
 
 ### Changed
 
-- All Markdown files: audit timestamp updated to 2026-05-21 v0.25 planning pass.
+#### T-series — GPU warm / loading screen
+
+- **`main.ts`** (`rafYield`, `rafDrain`): Added `rafYield()` (one RAF frame) and `rafDrain(n)` (n frames) helpers at module scope (T-01, T-02, T-05).
+- **`main.ts`** (warm loop): `await rafYield()` after each `warmArtwork()` call so the browser compositor flushes GPU commands between paintings (T-01).
+- **`main.ts`** (warm loop progress): range changed from `93%→97%` to `50%→95%`; loading-manager texture-phase caps lowered accordingly (`onProgress` → 48 %, `onLoad` → 50 %) so the warm loop has visible room to animate (T-04).
+- **`main.ts`** (post-warm drain): `await rafDrain(3)` inserted between warm-loop end and shader prewarm step, draining the GPU upload queue before the next phase and before "Galerie betreten" is enabled (T-02, T-05).
+- **`TextureManager.ts`** (`init`): renderer reference now stored as `this.renderer` (T-03).
+- **`TextureManager.ts`** (`loadForRole`): `this.renderer?.initTexture(texture)` called immediately after every successful or fallback texture cache insertion to proactively upload the texture to the GPU (T-03).
+
+#### U-series — Timeline elegance redesign
+
+- **`main.scss`** (`.timeline`): `display: flex; align-items: center; gap: 6px` added so arrows and counter are natural flex row siblings; padding reduced to `10px 14px` (U-01, U-03).
+- **`main.scss`** (`.timeline__list`): `flex: 1 1 0; min-width: 0` added so the list fills available space between the arrows; padding reduced to `12px 8px 6px` (U-01, U-03).
+- **`main.scss`** (`.timeline__arrow`): `position: absolute` removed; resized to `32 × 32 px`; `border-radius: 50%`; `display: flex; align-items: center; justify-content: center` for glyph centering (U-01, U-02).
+- **`main.scss`** (`.timeline__arrow--prev`, `--next`): removed redundant `left`/`right` offsets (no longer needed after flex layout) (U-01).
+- **`main.scss`** (`.timeline__counter`): `position: absolute` removed; `flex-shrink: 0` added; counter now sits at the tail of the flex row (U-04).
+- **`main.scss`** (`@media (pointer: coarse)`): new rule in `.timeline__arrow` shows arrows at `opacity: 0.65` always on touch/stylus devices so they are discoverable without hover (U-05).
 
 ### Validation
 
-- Documentation-only pass; no runtime code changed.
-- Runtime remains v0.24.6.
+- `npm run lint` — clean (0 errors, 0 warnings in project code).
+- `npm run build` — clean (TypeScript typecheck + Vite bundle).
+- Runtime: v0.25.
 
 
 ## v0.24.6 — True preload completion + INP stabilization (2026-05-21, **shipped**)

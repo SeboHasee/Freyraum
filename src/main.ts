@@ -42,6 +42,25 @@ const DEFAULT_GPU_WARM_CRITICAL_COUNT = 5;
 const DEFAULT_GPU_WARM_FRAME_BUDGET_MS = 8;
 const DEFAULT_GPU_WARM_BATCH_CAP = 2;
 
+/**
+ * v0.25 T-01/T-02/T-05: Yields to the browser compositor for one animation
+ * frame. Calling this between GPU warm renders lets the GPU flush its pending
+ * command queue and allows the browser to paint loading-bar progress updates.
+ */
+function rafYield(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+/**
+ * v0.25 T-02/T-05: Drains `frames` consecutive animation frames so the GPU
+ * can fully flush any batched upload queue before the next phase begins.
+ */
+async function rafDrain(frames: number): Promise<void> {
+  for (let i = 0; i < frames; i += 1) {
+    await rafYield();
+  }
+}
+
 interface LoadingOverlayControls {
   overlay: HTMLDivElement;
   setProgress(value: number): void;
@@ -458,14 +477,16 @@ async function main(): Promise<void> {
   const loadingManager = new THREE.LoadingManager();
   loadingManager.onStart = (_url, loaded, total) => {
     loadingOverlay.setStatus('Texturen werden geladen');
-    loadingOverlay.setProgress(total > 0 ? (loaded / total) * 90 : 8);
+    // v0.25 T-04: cap texture-loading phase at 45% so the warm loop (50%→95%)
+    // has visible room to animate the progress bar per painting.
+    loadingOverlay.setProgress(total > 0 ? (loaded / total) * 40 : 8);
   };
   loadingManager.onProgress = (_url, loaded, total) => {
-    loadingOverlay.setProgress(total > 0 ? Math.min(92, (loaded / total) * 92) : 35);
+    loadingOverlay.setProgress(total > 0 ? Math.min(48, (loaded / total) * 48) : 35);
   };
   loadingManager.onLoad = () => {
     loadingOverlay.setStatus('Galerie wird vorbereitet');
-    loadingOverlay.setProgress(94);
+    loadingOverlay.setProgress(50);
   };
   loadingManager.onError = (url) => {
     diagnostics.warn('boot', 'loading-manager-error', 'Asset failed during loading-manager preload', {
@@ -749,11 +770,17 @@ async function main(): Promise<void> {
   const fullWarmTargets = warmOrder;
   await galleryManager.ensureEntryReadiness(fullWarmTargets, 'overlay-full-gallery-contract');
   loadingOverlay.setStatus('GPU wird vorbereitet');
+  loadingOverlay.setProgress(50);
   for (let i = 0; i < fullWarmTargets.length; i += 1) {
     // v0.24.2 Q-06: Show per-artwork preparation progress in status text.
     loadingOverlay.setStatus(`Gemälde ${i + 1} / ${fullWarmTargets.length} wird vorbereitet`);
     warmArtwork(fullWarmTargets[i], 'overlay-full-gallery-contract');
-    loadingOverlay.setProgress(93 + Math.round(((i + 1) / Math.max(1, fullWarmTargets.length)) * 4));
+    // v0.25 T-04: spread progress across the 50%→95% range so the bar
+    // animates visibly during warm; one increment per painting.
+    loadingOverlay.setProgress(50 + Math.round(((i + 1) / Math.max(1, fullWarmTargets.length)) * 45));
+    // v0.25 T-01: yield one RAF so the browser compositor flushes pending
+    // GPU commands between paintings instead of batching the entire warm loop.
+    await rafYield();
   }
 
   // v0.24.2 Q-03: Deterministic completion pass — retry any paintings that did not
@@ -826,6 +853,11 @@ async function main(): Promise<void> {
     frameBudgetMs: warmProfile.postRevealFrameBudgetMs,
     batchCap: warmProfile.postRevealBatchCap,
   });
+
+  // v0.25 T-05/T-02: Drain 3 consecutive RAF frames between warm-loop end and
+  // shader prewarm so the GPU fully flushes its upload queue before the next
+  // phase begins and CTA cannot activate while the GPU is still working.
+  await rafDrain(3);
 
   loadingOverlay.setStatus('Shader werden vorbereitet');
   loadingOverlay.setProgress(97);
