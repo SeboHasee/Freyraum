@@ -1,6 +1,14 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
+> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
 
+
+## v0.24.2 — planning (2026-05-21) — strict all-paintings-ready entry gate
+
+**Status: planning/documentation only; runtime still v0.24.1.**
+
+A new pass was prepared for the still-reported startup issue: before the loading screen allows “Galerie betreten”, the system should complete readiness work for every painting so first navigation is already warm everywhere, not only around an initial subset. The plan now documents a hard full-gallery readiness contract plus explicit memory-safety boundaries, diagnostics acceptance criteria, and compressed-texture staging requirements for larger exhibitions.
+
+See `plan.md § v0.24.2` for the implementation plan and `FINDINGS.md § v0.24.2` for deep research synthesis.
 
 ## v0.24.1 — shipped (2026-05-21) — first-visit smoothness hardening
 

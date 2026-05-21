@@ -1,5 +1,5 @@
 # FREYRAUM coding guidelines
-> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
+> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
 
 
 ## v0.23 performance coding guideline

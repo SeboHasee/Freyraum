@@ -1,6 +1,48 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
+> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
 
+
+## v0.24.2 — Strict all-paintings-ready loading plan (2026-05-21, planning)
+
+Runtime status: **planning only**. User reports confirm the loading problem still occurs, so the entry gate must now cover every painting instead of a capped warm subset.
+
+### Requirement
+
+Before “Galerie betreten” is enabled, the system must have completed required first-use readiness for all paintings so users can navigate immediately without first-visit cold stalls.
+
+### Goals
+
+1. Guarantee full-gallery readiness before entry CTA enablement.
+2. Preserve stability on low-memory devices with explicit safety controls and deterministic fallback behavior.
+3. Provide diagnostics evidence that proves pre-entry readiness completion across the full painting set.
+4. Keep the customer workflow compatible while staging compressed-texture support for scale.
+
+### Gap analysis (Q-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| Q-01 | **HIGH** | Entry still uses a warm subset model rather than full-gallery completion. | Replace subset threshold with a strict all-painting readiness contract before CTA reveal. |
+| Q-02 | **HIGH** | Full eager readiness can exceed memory limits on large/mobile exhibitions. | Add memory-budget admission checks, bounded staging, and explicit “cannot safely preload all” handling without silent failures. |
+| Q-03 | **HIGH** | Critical readiness can still depend on opportunistic idle windows. | Enforce deterministic scheduler progress with bounded work chunks and required completion milestones. |
+| Q-04 | **MEDIUM** | No single pre-entry proof that each painting reached readiness. | Emit full-gallery readiness ledger + summary diagnostics before CTA becomes interactive. |
+| Q-05 | **MEDIUM** | Current asset path may be too heavy for strict all-painting readiness at scale. | Define KTX2/Basis migration phase with importer/runtime fallback to reduce memory/upload pressure. |
+| Q-06 | **LOW** | UX text does not clearly communicate strict readiness state. | Align loading status copy so users see when full readiness is completed and entry is truly immediate. |
+
+### Implementation plan
+
+1. Define mandatory per-painting readiness stages required for entry and enforce completion over the entire artwork list before CTA enablement.
+2. Add a global readiness coordinator that tracks completion, failure reasons, and retry policy for every painting and blocks entry until contract verdict is final.
+3. Introduce strict memory and frame-budget guardrails for full-gallery preparation, including deterministic fallback outcomes when the contract cannot be safely completed on current hardware.
+4. Remove reliance on idle-only completion for critical readiness; use deterministic queued progress and explicit completion deadlines.
+5. Extend diagnostics to produce an auditable pre-entry full-gallery readiness report (complete count, incomplete count, blocked reasons, total warm duration).
+6. Prepare a staged compressed-texture migration plan (importer output + runtime fallback) so strict readiness remains feasible for high artwork counts.
+7. Validate across 4/15/20/50 artwork sets with acceptance criteria focused on zero first-visit cold work after entry.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime changes.
+- Capture diagnostics for full-gallery entry readiness and first-navigation behavior across device tiers.
+- Re-run security scanning and treat new readiness-path issues as release blockers.
 
 ## v0.24.1 — Deep loading/performance hardening (IMPLEMENTED, 2026-05-21)
 

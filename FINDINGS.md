@@ -1,6 +1,38 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
+> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
 
+
+## v0.24.2 — Deep loading findings for strict full-gallery entry (planning, 2026-05-21)
+
+### Status
+
+Planning/documentation pass only. Runtime remains v0.24.1 while a stricter entry contract is prepared.
+
+### Problem reaffirmed
+
+User feedback confirms the same pattern still occurs: loading/entry can feel incomplete, and smoothness improves only after additional paintings are visited. This supports the requirement that all paintings must be fully ready before enabling gallery entry.
+
+### Deep online research synthesis
+
+- Idle scheduling is opportunistic: `requestIdleCallback` is useful for background work but is not reliable as the only mechanism for critical readiness guarantees, especially on busy or throttled pages.
+- First-use stalls are typically tied to heavy decode/upload/procedural work crossing the interaction boundary; readiness must explicitly include the complete path needed for first render, not just fetch completion.
+- Large-gallery memory pressure is the primary risk of strict full pre-entry loading: uncompressed 2K textures are roughly 16 MB each and 4K textures roughly 64 MB each before accounting for multiple PBR roles and mipmaps, so unbounded eager loading can trigger OOM or severe thrash on mobile/integrated GPUs.
+- Compressed texture pipelines (KTX2/Basis with runtime transcoding) remain the strongest long-term mitigation for making all-painting readiness feasible without extreme memory spikes.
+
+### New planning targets (Q-series)
+
+| ID | Severity | Area | Required outcome |
+|----|----------|------|------------------|
+| Q-01 | **HIGH** | Entry contract | Enter CTA only appears after every painting reaches the required readiness stages for first interaction. |
+| Q-02 | **HIGH** | Memory safety | Add hard memory guardrails and deterministic fallback states so full-gallery readiness cannot crash low-memory devices. |
+| Q-03 | **HIGH** | Scheduler correctness | Remove critical dependency on idle-only completion and enforce bounded deterministic progress for remaining readiness jobs. |
+| Q-04 | **MEDIUM** | Diagnostics proof | Emit per-painting readiness completion evidence and a single pre-entry audit summary before CTA enablement. |
+| Q-05 | **MEDIUM** | Asset pipeline | Stage KTX2/Basis importer + runtime fallback path to keep strict readiness viable for larger exhibitions. |
+
+### Validation
+
+- Baseline checks passed before docs updates: `npm install`, `npm run lint`, `npm run build`.
+- No runtime code changed in this pass.
 
 ## v0.24.1 — Runtime smoothness implementation findings (2026-05-21)
 

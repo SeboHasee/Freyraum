@@ -1,6 +1,21 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
+> Last full markdown audit: 2026-05-21 (v0.24.2 deep loading research + strict all-paintings-before-enter planning pass; all Markdown files refreshed).
 
+
+## v0.24.2 — Deep loading research + strict full-gallery entry plan (docs-only, 2026-05-21)
+
+### Changed
+
+- Reclassified the loading issue as still open after user confirmation: early navigation can still feel cold until more paintings are visited.
+- Added a new v0.24.2 plan that requires all paintings to satisfy pre-entry readiness before the enter CTA is shown, with explicit safety fallback behavior for memory-constrained devices.
+- Added deeper research synthesis on idle scheduling limits, texture upload behavior, and large-gallery memory pressure to guide implementation priorities.
+- Refreshed all repository Markdown files with the v0.24.2 audit stamp and cross-links.
+
+### Validation and residual risk
+
+- Documentation-only pass; no runtime code changed.
+- Baseline validation before docs update: `npm install`, `npm run lint`, and `npm run build` passed.
+- Runtime implementation is pending the v0.24.2 execution pass.
 
 ## v0.24.1 — Runtime smoothness hardening (2026-05-21)
 
