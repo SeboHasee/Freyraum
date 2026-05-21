@@ -1,6 +1,24 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.25 T-series + U-series planning pass; all Markdown files refreshed).
 
+
+## v0.25 — GPU warm flush hardening + timeline redesign (2026-05-21, planning)
+
+**Status: planning/documentation only; runtime remains v0.24.6.**
+
+Two persistent issues root-caused and planned:
+
+1. **Choppy navigation (T-series)**: The v0.24.6 warm loop fires all painting warm renders back-to-back in one JS task with no `requestAnimationFrame` yield. The GPU receives a batched command queue and may still be draining when "Galerie betreten" activates. Fix: per-painting `rafYield()` in the warm loop, 3-frame GPU drain pass before CTA, and proactive `renderer.initTexture()` upload for all pre-loaded textures.
+
+2. **Timeline layout (U-series)**: Arrow buttons are `position: absolute`, overlapping the thumbnail strip. Their pill shape (`34 × 58px`) is too tall for compact navigation. Fix: flex-sibling arrows, `32 × 32px` circular buttons, tighter overall padding, inline counter, touch-device arrow visibility.
+
+See `plan.md § v0.25` for the full T-series and U-series gap analysis and implementation plan, and `FINDINGS.md § v0.25` for source-evidence and online research citations.
+
+## v0.24.6 — True preload completion + INP stabilization (2026-05-21, shipped)
+
+**Status: shipped in runtime code.**
+
+v0.24.6 implemented R-series (true preload completion) and S-series (INP stabilization). Key additions: `preloadMode` strict/bounded-fallback contract, `unresolvedArtworkIds` diagnostic, overflow artwork `near-next` queue, mode-aware overlay copy, `setInteractionActive()` prefetch throttle during pointer windows, `markInteractionFrame()` per-window telemetry, and INP acceptance boot diagnostic.
 
 ## v0.24.4 — local metrics evidence + INP planning (2026-05-21, docs-only)
 

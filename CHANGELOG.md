@@ -1,5 +1,31 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.24.6 R-series + S-series implementation pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.25 T-series + U-series planning pass; all Markdown files refreshed).
+
+
+## v0.25 — GPU warm flush hardening + timeline elegance redesign (2026-05-21, **planning/docs-only**)
+
+### Summary
+
+Documentation and planning pass. Two persistent user-reported issues root-caused:
+
+1. **Choppy navigation**: Despite v0.24.6's strict full-gallery entry contract, the warm loop runs all paintings in a single synchronous JS task with no RAF yield between artworks. GPU receives a batched command queue; "Galerie betreten" can be enabled while the GPU is still draining. Fix planned: `rafYield()` between warm renders + 3-frame GPU drain pass + `renderer.initTexture()` proactive upload.
+
+2. **Timeline arrow layout**: Arrows are `position: absolute` overlapping the thumbnail strip; pill shape (`34 × 58px`) is disproportionate for compact navigation. Fix planned: flex-sibling layout, `32 × 32px` circles, tighter padding, inline counter.
+
+### Added
+
+- `FINDINGS.md § v0.25`: Root-cause analysis with source evidence and online research citations for both issues.
+- `plan.md § v0.25`: Full T-series (loading) and U-series (timeline) gap tables + implementation + validation plan.
+- `README.md`: Top-section updated to reflect v0.25 planning status and link to new plan sections.
+
+### Changed
+
+- All Markdown files: audit timestamp updated to 2026-05-21 v0.25 planning pass.
+
+### Validation
+
+- Documentation-only pass; no runtime code changed.
+- Runtime remains v0.24.6.
 
 
 ## v0.24.6 — True preload completion + INP stabilization (2026-05-21, **shipped**)

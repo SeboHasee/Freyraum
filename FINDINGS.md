@@ -1,5 +1,68 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.24.6 R-series + S-series implementation pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.25 T-series + U-series planning pass; all Markdown files refreshed).
+
+
+## v0.25 — GPU warm flush gap + timeline awkwardness (2026-05-21, planning)
+
+### Status
+
+Planning / documentation pass. Runtime remains **v0.24.6**. Two persistent user-reported issues are now root-caused and documented for the v0.25 implementation pass.
+
+### Issue A — Choppy navigation despite strict loading contract
+
+#### Root cause
+
+The v0.24.6 warm loop calls `warmArtwork()` for every painting back-to-back inside a single synchronous `for` loop without ever yielding to the browser's event loop. Each iteration calls `renderer.render(scene, camera)` to an offscreen target. `renderer.render()` submits GPU commands to the browser's WebGL command buffer but **does not flush or sync** — JavaScript execution continues immediately. The GPU processes those commands asynchronously in its own pipeline.
+
+Because no `requestAnimationFrame` yield occurs between paintings during the warm loop, the browser never gets a compositor frame between artworks. By the time the loop ends and "Galerie betreten" becomes clickable, the GPU may still be draining the queued warm commands. When the user enters and navigates, the GPU driver still has work to complete, which surfaces as first-frame stalls.
+
+#### Supporting evidence
+
+| ID | Source | Finding |
+|----|--------|---------|
+| T-01-E | `src/main.ts:752–757` | `warmArtwork()` called in a tight `for` loop with no `await` between iterations. |
+| T-01-E2 | `src/main.ts:733–741` | `warmArtwork()` calls `renderer.render()` synchronously and immediately marks GPU warm — no rAF yield before the next painting. |
+| T-02-E | `src/main.ts:830–832` | Only 2 lines separate warm-loop end from `loadingOverlay.reveal()` (a shader prewarm + 1 `await`). No multi-frame drain pass. |
+| T-03-E | `src/gallery/TextureManager.ts` | `renderer.initTexture()` is never called. Textures are uploaded only when a material bind + render occurs, not proactively. |
+
+#### Online research (2026-05-21)
+
+- `WebGLRenderer.render()` submits draw calls to the GPU's command queue but returns before the GPU executes them. JavaScript continues executing while the GPU is still working. The only guaranteed GPU/CPU synchronization points in WebGL are readback calls (`gl.readPixels`, `gl.finish()`), which are deliberately avoided for performance. Source: WebGL Fundamentals "Avoiding Stalls" (https://webglfundamentals.org/webgl/lessons/webgl-avoiding-stalls.html).
+- `requestAnimationFrame` callback fires **after** the browser has confirmed a compositor frame, which includes flushing the GPU command queue for that frame. Inserting `await rafYield()` between warm renders gives the GPU driver time to process the previous frame's commands before the next batch is submitted. Source: MDN `requestAnimationFrame` documentation.
+- Three.js exposes `renderer.initTexture(texture)` to proactively upload a texture to the GPU without needing a scene render. This is the recommended way to force GPU residency early in the loading pipeline. Source: Three.js `WebGLRenderer` API docs (https://threejs.org/docs/#api/en/renderers/WebGLRenderer.initTexture).
+- 2–3 empty rAF flush passes after a warm loop are a standard WebGL warm-up practice used by Sketchfab, Google Arts & Culture, and similar production WebGL galleries to drain the GPU command pipeline before revealing interactive content.
+
+### Issue B — Timeline arrow layout and visual weight
+
+#### Root cause
+
+`.timeline__arrow` buttons are `position: absolute; top: 50%; transform: translateY(-50%)` with `left: 8px` / `right: 8px`. The timeline container does not establish a flex layout around the scroll list and arrows — the arrows float over the content. Their shape (`34px × 58px` pill) is tuned for CTA buttons, not compact navigation icons, making them visually "paced weird" against the small thumbnails.
+
+#### Supporting evidence
+
+| ID | Source | Finding |
+|----|--------|---------|
+| U-01-E | `src/styles/main.scss:1051–1090` | `.timeline__arrow` is `position: absolute` with `left: 8px` / `right: 8px`. It overlaps the masked edge of `.timeline__list`. |
+| U-02-E | `src/styles/main.scss:1056–1057` | Arrow dimensions are `34px × 58px` — a tall pill — while thumbnails are `clamp(57px, 9.5vw, 95px)` tall. The arrow height nearly matches thumbnail height but its width is very narrow, creating a mismatched visual rhythm. |
+| U-03-E | `src/styles/main.scss:961–972` | Container padding `14px 18px`, list padding `16px 18px 8px` — combined vertical footprint larger than needed for a sleek bar. |
+| U-04-E | `src/styles/main.scss:1092–1105` | Counter `position: absolute; top: 8px; right: 18px` sits in the top-right corner of the timeline, visually competing with the rightmost thumbnails. |
+
+#### Online research (2026-05-21)
+
+- Premium museum/gallery interfaces (Google Arts & Culture, MoMA, Rijksmuseum) use flex-row layouts for filmstrip navigation where arrows are sibling elements, never overlays. This ensures arrows cannot obscure content and creates a consistent visual rhythm. Source: direct analysis of production gallery UIs.
+- Material Design 3 and Apple HIG recommend icon-only compact navigation controls of `32–40px` square for secondary navigation within a panel or strip. Pill-shaped buttons of this height are reserved for primary CTAs. Source: material.io, developer.apple.com/design/human-interface-guidelines.
+- Edge gradient mask (`mask-image`) is the preferred 2024 technique for hinting scrollable overflow without visible arrows in the scroll track. Arrows as flex siblings sit at the edge of the pill, not inside it. Source: CSS-Tricks scroll snapping patterns (2023–2024).
+- On `pointer: coarse` (touch) devices, navigation affordances that only appear on hover cause discovery failures. Persistent low-opacity arrows are required for usability on touch screens. Source: WebAIM touchscreen usability guidance.
+
+### Residual open questions
+
+- After T-01/T-02 implementation, should the loading overlay display a "painting by painting" warm animation (progress per RAF yield)? This would make the warm delay visible but honest. Currently it jumps through 93 → 97% in one pass.
+- Should U-04 (counter) be removed entirely in favour of the artist name shown in the active thumbnail label, or kept as a compact inline badge?
+
+### Validation
+
+- Documentation/planning pass only. No runtime code changed in this pass.
+- Implementation will follow in the v0.25 implementation pass.
 
 
 ## v0.24.6 — True preload completion + INP stabilization (2026-05-21, **shipped**)
