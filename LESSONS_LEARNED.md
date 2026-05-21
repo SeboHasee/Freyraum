@@ -1,5 +1,11 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + K-series source audit corrections).
+
+## 2026-05-21 — Always verify plan descriptions against actual source before documenting patches
+
+- The v0.21 K-series pass found two critical factual errors in the existing plan: G-01 claimed prewarm was "never called" when it was called (just at the wrong time and as `void`); H-03 claimed `maxTextureSize` was "stored but never consulted" when it was never stored as a field at all.
+- Patch code that depends on a field that doesn't exist, or that moves code that doesn't exist, will fail immediately on implementation.
+- Future rule: **before writing a plan entry that says "X is stored but not used" or "Y is never called", run a grep for the exact symbol and read the relevant lines.** Do not rely on second-order inference. Document the exact line numbers and the exact code pattern you found.
 
 ## 2026-05-21 — Delta clamping must cover every time-driven subsystem
 
@@ -8,8 +14,8 @@
 
 ## 2026-05-21 — Stored capabilities must be actively guarded
 
-- `TextureManager` stores `renderer.capabilities.maxTextureSize` but never uses it to warn or block oversized textures. A capability that is queried and stored but never checked provides false confidence.
-- Future rule: **every stored device capability should have a corresponding runtime guard** — at minimum a diagnostic warning — so mismatches are surfaced before they corrupt the render.
+- **Corrected from v0.21 audit:** `TextureManager` does **NOT** store `renderer.capabilities.maxTextureSize` as a class field — only passes it to a diagnostics log call in `init()`. It was never assigned to `this.maxTextureSize`. A capability that is only logged, not stored, cannot guard anything.
+- Future rule: **every stored device capability should have a corresponding runtime guard** — at minimum a diagnostic warning — so mismatches are surfaced before they corrupt the render. And verify the field actually exists before writing plan patches that reference it.
 
 ## 2026-05-21 — Importer thresholds age with the device landscape
 
@@ -23,8 +29,10 @@
 
 
 
-- `RendererManager.prewarm()` existed with proper `compileAsync` support but was never called in the boot path. This is a category of bug: an optimization method that is defined but not connected cannot help.
-- Future rule: every performance utility (prewarm, prefetch, warm render) must have a call site in the boot sequence documented alongside its definition.
+## 2026-05-21 — `void` and post-sequence placement defeat optimizations
+
+- **Corrected from v0.21 audit:** `RendererManager.prewarm()` was called in the boot path — but as a fire-and-forget `void` call, approximately 250 lines after the loading overlay already hides. Two separate bugs: (1) wrong placement (post-overlay), and (2) non-awaited (`void`). Both must be fixed.
+- Future rule: every performance utility (prewarm, prefetch, warm render) must have a call site in the boot sequence documented alongside its definition. The call must be `await`-ed if the optimization only helps when complete before user interaction.
 
 ## 2026-05-21 — Loading screens should brand and inform, not just block
 

@@ -9,7 +9,7 @@ Current status: **planning**. Boot-path and tab-lifecycle gaps identified by cod
 
 | Gap | Component | Status |
 |-----|-----------|--------|
-| G-01 | `RendererManager.prewarm()` never called | Open — planned |
+| G-01 | `RendererManager.prewarm()` called post-overlay-hide as fire-and-forget `void` — not awaited before overlay hides | Open — planned |
 | G-02 | Audio `preload='metadata'` instead of `'auto'` | Open — planned |
 | G-03 | PBR maps lazy-loaded per artwork, no adjacent prefetch | Open — planned |
 | G-04 | Loading screen is unbranded white spinner | Open — planned |
@@ -23,7 +23,7 @@ Current status: **planning**. Boot-path and tab-lifecycle gaps identified by cod
 |-----|-----------|--------|
 | H-01 | `LightingSetup.update()` uses absolute rAF timestamp → key-light jump on tab resume | Open — planned |
 | H-02 | No user-visible indicator during WebGL context restoration | Open — planned (low priority) |
-| H-03 | `TextureManager.maxTextureSize` stored but never checked; no oversized-texture diagnostic | Open — planned |
+| H-03 | `TextureManager.maxTextureSize` **not stored as field** (only logged); no oversized-texture diagnostic | Open — planned |
 | H-04 | `PaintingMaterial` injected GLSL lacks `highp` precision guard for large UV tiling | Open — planned |
 | H-05 | Importer warns ">4096px downscale" for all large images; 16K norm not reflected | Open — planned |
 | H-06 | No NPOT dimension note in importer | Open — planned (diagnostic only) |
@@ -48,6 +48,18 @@ Current status: **planning**. Boot-path and tab-lifecycle gaps identified by cod
 | J-04 | No CSS `mask-image` edge fade to indicate off-screen content | Open — planned |
 | J-05 | Timeline thumbnail size hardcoded at 150×95px — not responsive | Open — planned |
 | J-06 | No group/page navigation for 50+ artwork galleries | Open — future pass |
+
+### K-series: Code Audit Corrections (2026-05-21)
+
+| Gap | Component | Status |
+|-----|-----------|--------|
+| K-01 | `CanvasInteraction.dispose()` must remove global `window` listeners added by I-series patches | Open — planned |
+| K-02 | `Timeline.dispose()` retains `this.thumbs` array — prevents GC of button element listeners | Open — planned |
+| K-03 | `prefetchAdjacentArtworks()` method does not exist; G-03 patch must add it | Open — planned |
+
+**Plan corrections:**
+- G-01 description updated: prewarm IS called but as fire-and-forget `void`, AFTER overlay hides
+- H-03 description updated: `maxTextureSize` is not stored as a field — only logged in `init()`
 
 Full plan: `plan.md § v0.21`. Research details: `FINDINGS.md § 2026-05-21`.
 

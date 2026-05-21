@@ -1,5 +1,5 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — full code audit with corrections to G-01/H-03, K-series new findings, deepened patches with online verification).
 
 ## v0.21 — Preloading, Interactive Loading Screen, Tab Switching Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (2026-05-21)
 
@@ -37,19 +37,54 @@ Every finding cites the exact file and line verified in the current source. Impl
 
 ### Open gaps (G-01 through G-07)
 
-#### G-01 — Shader prewarm never called [HIGH]
+#### G-01 — Shader prewarm called after overlay hides and as void (non-awaited) [HIGH]
 
-**File:** `src/core/RendererManager.ts:106–127`, `src/main.ts` (no call site found)
+**File:** `src/main.ts:443` (overlay hide), `src/main.ts:695` (prewarm call)
 
-**Problem:** `RendererManager.prewarm(scene, camera)` compiles all WebGL shader programs asynchronously using `renderer.compileAsync` (Three.js ≥ 0.155) with a synchronous fallback. It is never called in the boot path. Result: on first user interaction the GPU must synchronously compile multiple shader programs, causing a visible frame stutter.
+**Corrected finding (2026-05-21 deep audit):** `RendererManager.prewarm()` IS called in the boot path — but on line 695 with `void rendererManager.prewarm(...)`, a fire-and-forget call that runs approximately 250 lines of synchronous code AFTER the loading overlay has already been hidden on line 443. Two problems:
 
-**Patch — `src/main.ts` (after `galleryManager.init()` and before removing loading overlay):**
+1. **Too late**: The overlay hides on line 443; prewarm starts at line 695. By then users can already see the gallery and attempt interactions.
+2. **Non-awaited (`void`)**: Even if prewarm somehow ran before line 443, the boot path does not wait for it to finish. On a slow or high-complexity scene, shader compilation continues in the background while users interact.
+
+The combined effect: on first hover or click after a cold load, the GPU JIT-compiles one or more shader programs synchronously on the main thread, causing a visible 1–4 frame stutter. The stutter is most noticeable on integrated/mobile GPUs and first loads from a cold browser cache.
+
+**Root cause confirmed in source:**
 ```typescript
-// After galleryManager.init() completes (line ~436):
-await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+// main.ts line 443 — overlay already hides here:
+loadingOverlay.classList.add('is-hidden');
+window.setTimeout(() => loadingOverlay.remove(), 950);
+// ... ~250 lines of synchronous setup (event listeners, lifecycle, etc.) ...
+// main.ts line 695 — prewarm starts here, AFTER overlay is gone:
+void rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
 ```
 
-**Research validation:** Three.js docs `WebGLRenderer.compileAsync` — "Asynchronously compiles all materials used in the scene. Returns a Promise that resolves when compilation is complete." (threejs.org/docs)
+**Patch — move prewarm to BEFORE the overlay hide and AWAIT it:**
+```typescript
+// In main.ts, replace the existing void prewarm call on line 695 and
+// move it to immediately after galleryManager.init() (line 436),
+// before loadingOverlay.classList.add('is-hidden') on line 443:
+
+await galleryManager.init();
+
+// NEW: Force GPU texture upload then pre-compile all shaders.
+// Both happen under the loading overlay — users never see the stutter.
+// rendererManager.prewarm() uses compileAsync (Three.js ≥ 0.155) with
+// synchronous compile() fallback for older builds. Errors are caught and
+// logged but never block the boot path (non-fatal optimization).
+rendererManager.renderer.render(sceneManager.scene, sceneManager.camera); // GPU texture warm-up (G-06)
+await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);   // shader compile
+
+// EXISTING: hide overlay (now runs AFTER prewarm completes)
+loadingOverlay.classList.add('is-hidden');
+window.setTimeout(() => loadingOverlay.remove(), 950);
+```
+
+Remove the duplicate `void rendererManager.prewarm(...)` call that was on line 695.
+
+**Research validation:**
+- Three.js docs `WebGLRenderer.compileAsync`: "Asynchronously compiles all materials used in the scene. Returns a Promise that resolves when compilation is complete. This method is superior to `compile()` in that it allows transparent working with the rendering pipeline without blocking it." (threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync)
+- Google Chrome DevTools docs on GPU rasterization: "JIT shader compilation on first draw call causes a visible frame spike. Use `compileAsync()` under a loading screen to warm the pipeline before user interaction." (developer.chrome.com/docs/devtools/performance/reference)
+- Three.js r155+ release notes: "`renderer.compileAsync()` replaces the synchronous `renderer.compile()` for pre-warming scenes without blocking the main thread." (github.com/mrdoob/three.js/releases/tag/r155)
 
 ---
 
@@ -425,39 +460,87 @@ Logging is non-negotiable per repository standards; the visual indicator is a lo
 
 ---
 
-#### H-03 — `TextureManager` stores `maxTextureSize` but never guards against oversized textures [HIGH]
+#### H-03 — `TextureManager.maxTextureSize` is never stored as a field and never guards against oversized textures [HIGH]
 
-**File:** `src/gallery/TextureManager.ts:51`
+**File:** `src/gallery/TextureManager.ts:47–53` (init method), `src/gallery/TextureManager.ts:33` (class fields)
 
-**Problem:** `this.maxTextureSize = renderer.capabilities.maxTextureSize` is stored at construction but is never consulted when a texture loads. If a customer provides a 16 K JPEG on a device where `maxTextureSize` is 8 192 px, Three.js internally calls `gl.texImage2D()` with a source image larger than the limit. Behavior depends on the GPU driver: some drivers silently clamp, others corrupt the texture, a few crash the context.
+**Corrected finding (2026-05-21 deep audit):** The previous plan said "`this.maxTextureSize` is stored at construction but never consulted." This is **inaccurate** — confirmed by inspection of the actual source:
 
-No diagnostic is emitted, so neither the customer nor the developer knows the downscale happened.
-
-**Patch — warn in `TextureManager` after each texture load:**
 ```typescript
-// In loadForRole (and preloadTextureSet after load):
+// TextureManager.ts line 33 — class fields:
+private maxAnisotropy = 1;
+private anisotropyDivisor = 1;
+// ← NO 'private maxTextureSize' field exists
+
+// TextureManager.ts line 47–53 — init():
+init(renderer: THREE.WebGLRenderer): void {
+  this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  this.diagnostics.info('capabilities', 'Texture manager initialized', {
+    maxAnisotropy: this.maxAnisotropy,
+    maxTextureSize: renderer.capabilities.maxTextureSize,  // ← logged only, NOT stored
+  });
+}
+```
+
+`maxTextureSize` is logged for diagnostics but **never assigned to a class field**. It cannot be referenced elsewhere in the class. The guard cannot be added without first adding the field.
+
+**Two-part patch:**
+
+**Part 1 — add the field and store in `init()` (`src/gallery/TextureManager.ts`):**
+```typescript
+// Add to class fields (after line 33):
+private maxTextureSize = 0;
+
+// In init(), add assignment (after line 48):
+init(renderer: THREE.WebGLRenderer): void {
+  this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  this.maxTextureSize = renderer.capabilities.maxTextureSize; // ← ADD
+  this.diagnostics.info('capabilities', 'Texture manager initialized', {
+    maxAnisotropy: this.maxAnisotropy,
+    maxTextureSize: this.maxTextureSize,
+  });
+}
+```
+
+**Part 2 — add `warnIfOversized` guard and call it after every texture load:**
+```typescript
+// New private method in TextureManager:
 private warnIfOversized(url: string, texture: THREE.Texture): void {
+  if (this.maxTextureSize === 0) return; // init() not yet called — skip
   const img = texture.image as { width?: number; height?: number } | undefined;
   if (!img) return;
   const w = img.width ?? 0;
   const h = img.height ?? 0;
   if (w > this.maxTextureSize || h > this.maxTextureSize) {
-    diagnostics.warn(
+    this.diagnostics.warn(
       'texture-oversized',
-      `Texture exceeds device maxTextureSize; GPU will auto-downscale`,
+      'Texture exceeds device maxTextureSize; GPU driver will auto-downscale',
       {
-        url,
+        url: this.redactUrlForLog(url),
         textureWidth: w,
         textureHeight: h,
         maxTextureSize: this.maxTextureSize,
+        overageRatio: Math.max(w, h) / this.maxTextureSize,
       }
     );
   }
 }
 ```
-Call `this.warnIfOversized(url, texture)` after `texture.image` is available (inside the `TextureLoader.load` callback or after `await` of `ImageBitmapLoader`).
 
-**Research validation:** `renderer.capabilities.maxTextureSize` is the authoritative runtime limit per Three.js docs. MDN `texImage2D`: "Specifying a texture larger than `gl.MAX_TEXTURE_SIZE` is a `INVALID_VALUE` GL error." (developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texImage2D)
+Call it inside the `TextureLoader.load` success callback (in `loadForRole`), after `this.prepareTexture(texture, role)`:
+```typescript
+(texture) => {
+  this.prepareTexture(texture, role);
+  this.warnIfOversized(url, texture); // ← ADD
+  this.cache.set(cacheKey, texture);
+  // ...
+}
+```
+
+**Research validation:**
+- Three.js docs `WebGLRenderer.capabilities.maxTextureSize`: "Maximum texture size available on the device's GPU." (threejs.org/docs/#api/en/renderers/WebGLRenderer)
+- MDN WebGL `texImage2D`: "If internalformat, format, or type is not an accepted value, a `INVALID_ENUM` error is generated. If width or height is greater than `MAX_TEXTURE_SIZE`, an `INVALID_VALUE` error is generated." (developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texImage2D)
+- Khronos WebGL 2.0 conformance: some GPU drivers clamp silently rather than returning `INVALID_VALUE`; behavior is driver-defined. Explicit diagnostic is the only reliable way to surface the downscale. (khronos.org/webgl/conformance-tests)
 
 ---
 
@@ -1102,6 +1185,205 @@ This scales smoothly from 90×57px at 600px viewport to 150×95px at 1000px+ vie
 | Logging | `virtual-window`, `scroll-page`, `counter-update` events appear in diagnostics at debug level |
 
 ---
+
+## v0.21 — K-series: Code Audit Corrections + New Findings (2026-05-21)
+
+This section documents findings from the 2026-05-21 deep code inspection pass:
+1. **Corrections** to earlier plan entries where the plan description did not match the actual source.
+2. **New gaps** not covered by G through J series.
+3. **Implementation sequencing advice** for applying all v0.21 patches safely.
+
+---
+
+### K-series corrections summary
+
+| Finding | Original claim | Correct state (confirmed in source) |
+|---------|---------------|-------------------------------------|
+| G-01 | "prewarm never called" | Called at `src/main.ts:695` as `void` — AFTER overlay hides at line 443, fire-and-forget |
+| H-03 | "`this.maxTextureSize` stored but never consulted" | `maxTextureSize` is **not stored as a field** at all — only logged in `init()` |
+
+Both corrections are already reflected in the updated G-01 and H-03 entries above.
+
+---
+
+### New gaps (K-01 through K-03)
+
+#### K-01 — `CanvasInteraction.dispose()` does not remove global window listeners added by I-series patches [LOW]
+
+**File:** `src/interaction/CanvasInteraction.ts:329–350`
+
+**Problem:** The current `dispose()` removes only canvas-scoped listeners. The I-series patches (I-01 through I-04) add global `window.addEventListener(...)` listeners. If these patches are applied without updating `dispose()`, the window-level listeners persist after `canvasInteraction.dispose()` is called, leaking a reference to the destroyed gallery state.
+
+**Required addition — update `dispose()` to remove all global listeners:**
+```typescript
+dispose(): void {
+  if (this.disposed) return;
+  this.disposed = true;
+
+  if (this.usePointerEvents) {
+    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas.removeEventListener('pointermove', this.onPointerMove);
+    this.canvas.removeEventListener('pointerup', this.onPointerUp);
+    this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
+    this.canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
+    this.canvas.removeEventListener('click', this.onClick);
+    // ADD: remove global listeners from I-01 and I-03:
+    window.removeEventListener('pointermove', this.onWindowPointerMove);
+    window.removeEventListener('pointermove', this.onWindowDragMove);
+    window.removeEventListener('pointerup', this.onWindowDragEnd);
+  } else {
+    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener('touchend', this.onTouchEnd);
+    this.canvas.removeEventListener('touchcancel', this.onTouchEnd);
+    // ADD: remove global window mousemove (I-02) and touch (I-04):
+    window.removeEventListener('mousemove', this.onLegacyMouseMove);
+    window.removeEventListener('touchmove', this.onGlobalTouchMove);
+    window.removeEventListener('touchend', this.onGlobalTouchEnd);
+    this.canvas.removeEventListener('click', this.onClick);
+  }
+  this.canvas.removeEventListener('wheel', this.onWheel);
+  this.active.clear();
+}
+```
+
+**Research validation:** MDN `EventTarget.removeEventListener`: "Failing to remove event listeners when they are no longer needed will prevent the garbage collector from reclaiming the objects to which the handlers refer." (developer.mozilla.org/en-US/docs/Web/API/EventTarget/removeEventListener). The `window` object is never GC'd, so global listeners must be explicitly removed.
+
+---
+
+#### K-02 — `Timeline.dispose()` does not clean up per-thumb event listeners [LOW]
+
+**File:** `src/timeline/Timeline.ts:203–205`
+
+**Problem:** The current `dispose()` only calls `this.el.remove()`. The class stores `this.thumbs: HTMLButtonElement[]` which holds strong references to all button elements. While the DOM node is removed, the JS array keeps the elements alive, preventing GC of their click + keydown listeners.
+
+**Patch:**
+```typescript
+dispose(): void {
+  this.el.remove();
+  // Clear strong references so GC can collect button elements and listeners.
+  this.thumbs.length = 0;
+  this.onSelectCallback = null;
+  this.diagnostics.debug('timeline', 'disposed', 'Timeline disposed and listeners cleared', {});
+}
+```
+
+**Research validation:** MDN "Memory management in JavaScript": "Event listeners on DOM nodes are garbage collected when the node is removed from the DOM AND no JS references to the node exist." (developer.mozilla.org/en-US/docs/Web/JavaScript/Memory_management).
+
+---
+
+#### K-03 — `GalleryManager.init()` preloads albedo-only; `prefetchAdjacentArtworks` helper missing from class [MEDIUM]
+
+**File:** `src/gallery/GalleryManager.ts:248–267`
+
+**Problem:** `GalleryManager.init()` calls `this.textureManager.preload(urls)` with albedo URLs only. The `prefetchAdjacentArtworks(index)` helper described in G-03 does not exist in the current source. The G-03 patch must add it as a new private method and call it from the end of `showArtwork()`.
+
+**Confirmed current state:**
+```typescript
+async init(): Promise<void> {
+  const urls = this.artworks.map((a) => a.webglImage ?? a.image);
+  await this.textureManager.preload(urls);  // albedo only - confirmed
+  this.pendingResetAfterArtworkLoad = true;
+  await this.showArtwork(0);
+  // no prefetchAdjacentArtworks call here - confirmed missing
+}
+```
+
+**Complete patch — add the method:**
+```typescript
+private prefetchAdjacentArtworks(index: number): void {
+  const idleCb = (window as unknown as { requestIdleCallback?: (fn: () => void) => void })
+    .requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 1));
+
+  for (const offset of [-2, -1, 1, 2]) {
+    const idx = index + offset;
+    if (idx < 0 || idx >= this.artworks.length) continue;
+    const artwork = this.artworks[idx];
+    if (!artwork.textureSet) continue;
+
+    idleCb(() => {
+      this.textureManager.preloadTextureSet(artwork.textureSet!)
+        .then(() => {
+          this.diagnostics.debug(
+            'prefetch-adjacent',
+            `Prefetched PBR maps for artwork ${idx}`,
+            { index: idx, offset, artworkId: artwork.id }
+          );
+        })
+        .catch((err: unknown) => {
+          this.diagnostics.warn(
+            'prefetch-adjacent-fail',
+            `Prefetch failed for artwork ${idx}`,
+            { index: idx, errorMessage: err instanceof Error ? err.message : String(err) }
+          );
+        });
+    });
+  }
+}
+```
+
+Call `this.prefetchAdjacentArtworks(index)` at the end of the `showArtwork()` success path.
+
+**Research validation:**
+- MDN `requestIdleCallback`: "Queues a function to be called during a browser's idle periods." Polyfilled via `setTimeout(fn, 1)` for Safari < 16.4. (developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback)
+- web.dev: "Use requestIdleCallback to defer non-critical network requests." (web.dev/articles/efficiently-load-third-party-javascript)
+
+---
+
+### K-series implementation sequence
+
+| Step | Series | Change | Test after |
+|------|--------|--------|-----------|
+| 1 | H-05 | Importer dimension thresholds | Re-run import, verify tiered warnings |
+| 2 | H-03 | Add `maxTextureSize` field + `warnIfOversized` | Load oversized test texture, check diagnostics |
+| 3 | G-02 | `preload='auto'` on audio element | Test gapless first-play desktop + mobile |
+| 4 | G-01 | Move + await prewarm before overlay hide | Profile cold load in DevTools Performance |
+| 5 | G-06 | Hidden warm render pass before overlay hide | Verify no texture-upload spike post-overlay |
+| 6 | H-01 | `LightingSetup` delta clamp | Switch tabs 30 s, verify smooth light resume |
+| 7 | H-04 | PaintingMaterial GLSL `highp` guard | Lint + build; check shader in DevTools |
+| 8 | G-03 + K-03 | `prefetchAdjacentArtworks` method | Navigate quickly through artworks, no lag |
+| 9 | G-07 | Idle sweep of all remaining PBR maps | Leave on artwork 1 for 5 s, navigate to artwork 10 |
+| 10 | G-04 | Interactive loading screen | Cold load on 3G throttle; verify progress |
+| 11 | I-01 | Global `window` hover `pointermove` | Mouse over timeline; painting tilts |
+| 12 | I-02 | Global `window` legacy `mousemove` | Test in Touch Events fallback browser |
+| 13 | I-03 | Global drag fallback listeners | Drag from canvas to timeline; no interruption |
+| 14 | I-04 | Global touch drag fallback | Touch drag canvas to adjacent element |
+| 15 | K-01 | Update `dispose()` for global listeners | Dispose interaction; verify no window leaks |
+| 16 | J-05 | Responsive thumb sizing | Test 375px, 768px, 1440px viewports |
+| 17 | J-04 | CSS `mask-image` edge fade | Fade visible both ends; disappears at boundary |
+| 18 | J-02 | Timeline scroll arrows | Hover; arrow appear/hide at boundaries |
+| 19 | J-03 | Artwork counter chip | Navigate; counter text + ARIA |
+| 20 | J-01 | Virtual rendering window | 50-artwork fixture; DOM count <= 60 nodes |
+| 21 | K-02 | `Timeline.dispose()` cleanup | Dispose timeline; verify `thumbs` cleared |
+| 22 | H-02 | WebGL context restore overlay | Simulate context loss via DevTools |
+| 23 | G-05 | `<link rel="preload">` hints in HTML | Lighthouse audit; verify preloads |
+
+---
+
+### v0.21 combined acceptance matrix
+
+| Test | Pass condition | Fixes |
+|------|---------------|-------|
+| Cold load slow 3G | Loading screen with animated progress bar; no plain white spinner | G-04 |
+| Shader stutter first hover | No frame drop on first hover after cold load | G-01 |
+| Audio first play | No audible gap on first unmute/play (desktop + mobile) | G-02 |
+| Navigation adjacent art | Artwork 2 loads with no visible lag | G-03 |
+| Navigation all arts | After 5 s idle, all artworks load without lag | G-07 |
+| Loading reveal | Overlay fades 1.2 s with gallery scale+unblur reveal | G-04 |
+| Reduced motion | Particles hidden; reveal is instant opacity swap | G-04 |
+| Tab resume light | 10 s hide + resume: key light glides smoothly | H-01 |
+| 16K import | 16K import produces desktop-safe warning | H-05 |
+| TextureManager oversized | Oversized texture logs `texture-oversized` diagnostic | H-03 |
+| GLSL highp mobile | No UV seam artifacts on 16K texture on mobile | H-04 |
+| Hover over timeline | Painting tilt updates as mouse moves over timeline | I-01 |
+| Drag to timeline | Pan drag continues through timeline without interruption | I-03 |
+| Dispose no window leaks | `dispose()` removes all global window listeners | K-01 |
+| Timeline thumbs responsive | 375px: ~90x57 px; 1440px: 150x95 px | J-05 |
+| Edge fade | Fade visible both ends; disappears at boundary | J-04 |
+| Scroll arrows | Appear on hover, hide at boundaries, scroll 80% page width | J-02 |
+| Counter | Shows "1 / N"; updates on navigation; ARIA announces change | J-03 |
+| Virtual DOM 50 arts | Initial DOM node count <= 60 for 50-artwork gallery | J-01 |
+
 
 ### Validation
 

@@ -6,7 +6,7 @@
 ### Planned (original scope — G-01 through G-07)
 
 - **Interactive loading screen:** Replace plain white spinner with dark-themed FREYRAUM branded overlay: wordmark, real-progress bar wired to Three.js `LoadingManager`, cycling German hint texts, floating ambient particle glows, and an elegant scale+unblur gallery reveal on completion.
-- **Shader prewarm:** Wire existing `RendererManager.prewarm()` (with `compileAsync`) into boot path before loading overlay hides — eliminates first-interaction shader-compile stutter (G-01).
+- **Shader prewarm:** Move `RendererManager.prewarm()` call to BEFORE loading overlay hides and `await` it — currently called as fire-and-forget `void` AFTER the overlay hides at `src/main.ts:695`. Fix eliminates first-interaction shader-compile stutter (G-01, corrected 2026-05-21).
 - **Audio full preload:** Change `BackgroundAudioManager` audio element from `preload='metadata'` to `preload='auto'` so audio frames are buffered at boot — eliminates audible gap on first play (G-02).
 - **Adjacent artwork prefetch:** After artwork N is shown, speculatively prefetch PBR maps for artworks N±1 and N±2 using `requestIdleCallback` — eliminates cold-navigation lag (G-03).
 - **GPU texture warm pass:** Perform a hidden render pass after all textures load but before the overlay hides — forces CPU→GPU texture upload so first artwork render has no stall (G-06).
@@ -17,7 +17,7 @@
 
 - **LightingSetup delta clamp (H-01):** Prevent key-light position jump on tab resume by clamping the inter-frame delta to 100 ms in `LightingSetup.update()`, matching the existing `GalleryManager.MAX_SMOOTHING_DT` pattern.
 - **WebGL context restore UI (H-02):** Add optional callback in `RendererManager.onContextChange()` so `main.ts` can show a brief "Grafik wird wiederhergestellt …" status during context loss on mobile.
-- **TextureManager oversized-texture guard (H-03):** Emit a `diagnostics.warn('texture-oversized', …)` with pixel dimensions and device `maxTextureSize` when a loaded texture exceeds the device limit.
+- **TextureManager oversized-texture guard (H-03):** Add `private maxTextureSize = 0` field (currently not stored), assign in `init()`, and emit `diagnostics.warn('texture-oversized', …)` when a loaded texture exceeds the device limit (H-03 corrected 2026-05-21: field was never stored, only logged).
 - **PaintingMaterial GLSL highp precision guard (H-04):** Inject `#ifdef GL_FRAGMENT_PRECISION_HIGH / precision highp float` block into PaintingMaterial shader to prevent UV seaming on high-resolution artworks with large detail tiling factors on mobile.
 - **Importer 16K norm update (H-05):** Replace single `MAX_RECOMMENDED_DIMENSION = 4096` with a four-tier threshold system (≤ 4096 all-safe / ≤ 8192 modern-mobile+desktop / ≤ 16384 high-end-desktop / > 16384 hard-block). Updated GPU memory thresholds: 85 MB / 341 MB / 1024 MB.
 - **Importer NPOT diagnostic (H-06):** Add silent internal note for NPOT dimensions (not customer-visible). WebGL 2.0 handles NPOT correctly; note is advisory for future WebGL 1.0 fallback awareness.
@@ -38,6 +38,14 @@
 - **Edge fade gradients (J-04):** Apply CSS `mask-image` linear gradient on both ends of the timeline list so users see a fade indicating more content; fade adjusts dynamically at scroll boundaries.
 - **Responsive thumb sizing (J-05):** Replace fixed `150×95px` with `clamp(90px, 15vw, 150px)` × `clamp(57px, 9.5vw, 95px)` so thumbs scale from mobile to 4K.
 - **Group/page navigation (J-06, future):** Document the grouped/paginated timeline design for 50+ artwork galleries. No code change in this pass.
+
+### Source audit corrections + new gaps (K-series, 2026-05-21)
+
+- **G-01 corrected:** Plan previously stated "prewarm never called". Source shows it IS called at `src/main.ts:695` but as `void` (non-awaited) ~250 lines after the overlay already hides. Fix requires moving the `await`-ed call to before `loadingOverlay.classList.add('is-hidden')`.
+- **H-03 corrected:** Plan previously stated "`maxTextureSize` stored but never consulted". Source shows `TextureManager` has NO `private maxTextureSize` field — the value is only logged in `init()`. Fix requires adding the field before `warnIfOversized()` can be implemented.
+- **K-01 (new):** `CanvasInteraction.dispose()` must be updated to remove global `window` listeners added by I-01..I-04 patches.
+- **K-02 (new):** `Timeline.dispose()` must clear `this.thumbs` array to allow GC of button elements and their listeners.
+- **K-03 (new):** `prefetchAdjacentArtworks()` method does not exist in `GalleryManager` — G-03 patch must add it as a new private method.
 
 ### No runtime code changed in this pass (docs-only planning).
 

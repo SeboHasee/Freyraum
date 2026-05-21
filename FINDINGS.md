@@ -55,6 +55,31 @@ Full line-by-line inspection of `src/interaction/CanvasInteraction.ts` (358 line
 
 I-series (I-01 through I-04) and J-series (J-01 through J-06) gaps added. All are open — planned. No code changed in this audit pass.
 
+## 2026-05-21 — v0.21 deep code audit corrections (K-series)
+
+### Audit method
+
+Line-by-line inspection of `src/main.ts` (full boot path, lines 400–700), `src/gallery/TextureManager.ts` (all class fields and `init()` method), `src/interaction/CanvasInteraction.ts:329–350` (dispose), and `src/timeline/Timeline.ts:203–205` (dispose). Objective: verify plan descriptions against actual source code.
+
+### Corrections to earlier findings
+
+| ID | Original claim | Corrected fact (source-verified) |
+|----|---------------|----------------------------------|
+| G-01 | "prewarm() never called in boot path" | Called at `src/main.ts:695` as `void` — fire-and-forget, ~250 lines AFTER overlay hides at line 443 |
+| H-03 | "`this.maxTextureSize` stored but never consulted" | `maxTextureSize` is **not stored as a class field at all** — only passed to a log call in `init()` |
+
+### New findings (K-series)
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| K-01 | **LOW** | `src/interaction/CanvasInteraction.ts:329–350` | `dispose()` removes canvas-scoped listeners only. I-series patches add global `window` listeners (pointermove, pointerup, mousemove, touchmove). Without updating `dispose()`, these persist as leaks after the gallery is torn down. |
+| K-02 | **LOW** | `src/timeline/Timeline.ts:203–205` | `dispose()` calls only `this.el.remove()`. `this.thumbs` array holds strong JS references to all button elements — prevents GC of click/keydown listeners on those nodes. |
+| K-03 | **MEDIUM** | `src/gallery/GalleryManager.ts:248–267` | `prefetchAdjacentArtworks()` method does not exist in current source. G-03 patch must add it as a new private method plus call sites at end of `showArtwork()`. |
+
+### Remaining status
+
+K-series corrections applied to plan.md. G-01 and H-03 plan entries updated with accurate source-verified descriptions. K-01, K-02, K-03 new gaps documented in plan.md K-series section. No runtime code changed in this documentation pass.
+
 
 
 
@@ -65,7 +90,7 @@ I-series (I-01 through I-04) and J-series (J-01 through J-06) gaps added. All ar
 |----|----------|-------------|---------|
 | H-01 | **MEDIUM** | `src/lighting/LightingSetup.ts:68–76` | `LightingSetup.update(time)` uses raw rAF absolute timestamp in `Math.sin(time * 0.0002)`. After a tab resumes from background, `time` jumps by seconds → key light position snaps discontinuously. `GalleryManager.MAX_SMOOTHING_DT` guard does **not** cover lighting. |
 | H-02 | **LOW** | `src/core/RendererManager.ts:166–182` | WebGL context loss is handled correctly (`preventDefault`, pause/resume) but no user-visible indicator is shown during restoration. Canvas stays blank for several seconds on low-memory mobile without any feedback. |
-| H-03 | **HIGH** | `src/gallery/TextureManager.ts:51` | `this.maxTextureSize` is stored but never consulted. Textures larger than `maxTextureSize` silently corrupt or crash on some GPU drivers with no diagnostic. |
+| H-03 | **HIGH** | `src/gallery/TextureManager.ts:47–53` | `maxTextureSize` is **not stored as a class field** — only passed to a diagnostics log call in `init()`. The guard patch requires: (a) `private maxTextureSize = 0` field, (b) `this.maxTextureSize = renderer.capabilities.maxTextureSize` assignment in `init()`, (c) `warnIfOversized()` call after each texture load. |
 | H-04 | **MEDIUM** | `src/materials/PaintingMaterial.ts:180–199` | Injected GLSL uniform block has no explicit `precision` qualifier. `mediump float` default on mobile GPUs loses UV fractional precision for high-resolution textures with large detail tiling factors (≥ 256×), causing visible seaming. |
 | H-05 | **HIGH** | `scripts/import-artworks.mjs:609–623` | `MAX_RECOMMENDED_DIMENSION = 4096` and thresholds 64 MB / 128 MB are calibrated for 2016-era phones. All source artwork above 4 K triggers an incorrect "downscale to 4 096 px" warning. Desktop browsers and modern GPUs support up to 16 384 px. Guidance must be tiered. |
 | H-06 | **LOW** | `scripts/import-artworks.mjs` (new) | No NPOT dimension advisory. WebGL 2.0 handles NPOT correctly; only relevant for rare WebGL 1.0 fallback. Diagnostic-only note sufficient. |
@@ -117,7 +142,7 @@ Eight targeted online research queries covering Three.js `LoadingManager`/`compi
 
 | ID | Severity | File : Lines | Finding |
 |----|----------|-------------|---------|
-| G-01 | **HIGH** | `src/core/RendererManager.ts:106–127` | `prewarm()` (with `compileAsync` support for Three.js ≥ 0.155) exists but is **never called** in the boot path. First user interaction triggers visible shader-compile stutter. |
+| G-01 | **HIGH** | `src/main.ts:443` (overlay hide), `src/main.ts:695` (prewarm call) | `prewarm()` IS called — but as `void` (fire-and-forget) 250+ lines AFTER the loading overlay already hides. Non-awaited post-overlay call means shader JIT-compile races with first user interaction. Fix: move call to before overlay hide and `await` it. |
 | G-02 | **HIGH** | `src/audio/BackgroundAudioManager.ts:72` | Audio element uses `preload='metadata'` — only duration/header fetched at boot. Full audio frames not buffered → playback start on slow connections causes audible gap/stutter. |
 | G-03 | **MEDIUM** | `src/gallery/GalleryManager.ts:262–263` | `init()` preloads albedo textures for all artworks in parallel (good) but PBR maps (normal, roughness, ao, height, specular, varnish, detail) are **lazy-loaded only when the user navigates to each artwork**. Navigation to an unvisited artwork shows visible loading lag. |
 | G-04 | **HIGH** | `src/main.ts:282–291`, `src/styles/main.scss:1113–1142` | Loading screen is a bare white spinner on solid `--bg1` (#eef1f3). No real progress indication, no FREYRAUM branding, no user engagement. Users see a blank white screen with a small circle for up to several seconds on cold load. |
