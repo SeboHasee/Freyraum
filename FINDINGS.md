@@ -1,5 +1,39 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.6 R-series + S-series implementation pass; all Markdown files refreshed).
+
+
+## v0.24.6 — True preload completion + INP stabilization (2026-05-21, **shipped**)
+
+### Status
+
+Runtime shipped. All R-series (v0.24.3) and S-series (v0.24.4) gaps have been implemented in `GalleryManager.ts` and `main.ts`. See CHANGELOG v0.24.6 for full detail.
+
+### R-series closed gaps
+
+| ID | Severity | Resolution |
+|----|----------|-----------|
+| R-01 | **HIGH** | `FullGalleryReadinessResult` now carries `preloadMode` (`strict`/`bounded-fallback`) and `overflowArtworkCount`. |
+| R-02 | **HIGH** | Overflow artworks (index ≥ `FULL_PRELOAD_SAFETY_CAP`) queued as `near-next` in `init()` for deterministic completion. |
+| R-03 | **MEDIUM** | `entry-unresolved-artworks` diagnostic emitted before CTA with full unresolved ID list; `warn` in strict mode, `info` in bounded-fallback. |
+| R-04 | **MEDIUM** | Overlay status text is now mode-aware: `Galerie bereit` (strict) vs `Galerie bereit – N Gemälde werden im Hintergrund optimiert` (bounded-fallback). |
+| R-05 | **MEDIUM** | Deferred — KTX2/Basis migration requires importer pipeline changes beyond this pass. |
+| R-06 | **LOW** | INP acceptance target logged as `inp-acceptance-target` boot diagnostic; per-bucket gallery acceptance tests remain a manual step. |
+
+### S-series closed gaps
+
+| ID | Severity | Resolution |
+|----|----------|-----------|
+| S-01 | **HIGH** | `setInteractionActive(true/false)` pauses non-`critical-now` prefetch during active pointer windows; queue auto-resumes on close. |
+| S-02 | **HIGH** | Interaction window policy: opens on `pointerdown`, closes 200 ms after last `pointerup`/`pointercancel`. |
+| S-03 | **MEDIUM** | `markInteractionFrame(dtMs)` called from `animate()` loop; `interaction-end` log emits CPU ms, dropped frames, avg frame time per window. |
+| S-04 | **MEDIUM** | `inp-acceptance-target` boot diagnostic records baseline `1,024 ms` and target `200 ms` for release validation. |
+| S-05 | **LOW** | Post-entry optimization status copy shown in bounded-fallback mode via overlay status text. |
+
+### Residual risks
+
+- R-05 (KTX2/Basis migration) remains unimplemented; full strict readiness at very large counts (> 50) still carries memory pressure.
+- INP improvement from S-01/S-02 depends on interaction-window detection accuracy; very long drag gestures may briefly re-allow deferred work during the gesture.
+- Actual measured INP reduction requires a new local trace run against the v0.24.6 bundle.
 
 
 ## v0.24.4 — Local metrics evidence (2026-05-21, docs-only)

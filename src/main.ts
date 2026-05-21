@@ -699,6 +699,32 @@ async function main(): Promise<void> {
   window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
   window.addEventListener('keydown', onFirstInteractionKey);
 
+  // v0.24.4 S-01/S-02: Interaction window tracking for INP-aware prefetch throttling.
+  // When a pointer interaction starts, we signal GalleryManager to pause non-critical
+  // background prefetch so the main thread stays free for render/present cycles.
+  // The window closes 200 ms after the last pointerup/cancel (interaction cooldown).
+  let interactionWindowTimer: ReturnType<typeof setTimeout> | undefined;
+  const INTERACTION_WINDOW_COOLDOWN_MS = 200;
+  const openInteractionWindow = (): void => {
+    if (interactionWindowTimer !== undefined) {
+      clearTimeout(interactionWindowTimer);
+      interactionWindowTimer = undefined;
+    }
+    galleryManager.setInteractionActive(true);
+  };
+  const scheduleInteractionWindowClose = (): void => {
+    if (interactionWindowTimer !== undefined) clearTimeout(interactionWindowTimer);
+    interactionWindowTimer = setTimeout(() => {
+      interactionWindowTimer = undefined;
+      galleryManager.setInteractionActive(false);
+    }, INTERACTION_WINDOW_COOLDOWN_MS);
+  };
+  const onInteractionPointerDown = (): void => openInteractionWindow();
+  const onInteractionPointerUp = (): void => scheduleInteractionWindowClose();
+  window.addEventListener('pointerdown', onInteractionPointerDown, { passive: true });
+  window.addEventListener('pointerup', onInteractionPointerUp, { passive: true });
+  window.addEventListener('pointercancel', onInteractionPointerUp, { passive: true });
+
   const artworkCount = artworks.length;
   const warmRenderTarget = new THREE.WebGLRenderTarget(4, 4, {
     depthBuffer: true,
@@ -753,8 +779,8 @@ async function main(): Promise<void> {
   }
   galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-overlay-warm');
 
-  // v0.24.2 Q-04: Pre-entry diagnostics summary — log full gallery readiness ledger
-  // before CTA is enabled to confirm zero remaining cold paths.
+  // v0.24.2 Q-04 / v0.24.3 R-01/R-03: Pre-entry diagnostics summary — log full gallery
+  // readiness ledger before CTA is enabled, including preload mode and unresolved list.
   const fullReadinessSummary: FullGalleryReadinessResult = galleryManager.getFullGalleryReadinessSummary();
   diagnostics.info('boot', 'full-gallery-ready', 'Full-gallery readiness contract resolved; enabling entry CTA', {
     artworkCount,
@@ -764,8 +790,34 @@ async function main(): Promise<void> {
     pbrLoadedCount: fullReadinessSummary.pbrLoadedCount,
     proceduralReadyCount: fullReadinessSummary.proceduralReadyCount,
     memoryCapApplied: fullReadinessSummary.memoryCapApplied,
+    preloadMode: fullReadinessSummary.preloadMode,
+    overflowArtworkCount: fullReadinessSummary.overflowArtworkCount,
     entryContractPasses: entryContractPass,
     entryContractMaxPasses: maxEntryContractPasses,
+  });
+
+  // v0.24.3 R-03: Structured unresolved-artwork gate — log every artwork ID that
+  // has not reached all 6 readiness stages so release validation can confirm zero
+  // unresolved artworks in strict mode. Non-empty list is a contract failure in strict mode.
+  if (fullReadinessSummary.pendingCount > 0) {
+    const severity = fullReadinessSummary.preloadMode === 'strict' ? 'warn' : 'info';
+    diagnostics[severity]('boot', 'entry-unresolved-artworks', 'Pre-entry unresolved artworks detected', {
+      pendingCount: fullReadinessSummary.pendingCount,
+      unresolvedArtworkIds: fullReadinessSummary.unresolvedArtworkIds,
+      preloadMode: fullReadinessSummary.preloadMode,
+      overflowArtworkCount: fullReadinessSummary.overflowArtworkCount,
+      contractSatisfied: fullReadinessSummary.preloadMode === 'bounded-fallback',
+    });
+  }
+
+  // v0.24.4 S-04: Emit INP acceptance diagnostic so local validation can confirm
+  // post-entry interaction responsiveness against the 200 ms INP "good" threshold.
+  diagnostics.info('boot', 'inp-acceptance-target', 'INP acceptance criteria: interaction presentation delay must stay below 200 ms (Core Web Vitals "good" threshold)', {
+    baseline_inp_ms: 1024,
+    target_inp_ms: 200,
+    preloadMode: fullReadinessSummary.preloadMode,
+    artworkCount,
+    note: 'Measure with Chrome DevTools Performance > Interactions panel or CrUX field data after deploy.',
   });
 
   diagnostics.info('boot', 'gpu-warm-complete', 'Full pre-entry GPU warm finished; warmOrder exhausted before reveal', {
@@ -780,7 +832,14 @@ async function main(): Promise<void> {
   await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
   galleryManager.markAllShaderCompiled('boot-prewarm');
   loadingOverlay.setProgress(100);
-  loadingOverlay.setStatus('Galerie bereit');
+  // v0.24.3 R-04: Align status text with actual preload contract mode.
+  // Strict mode: all artworks were fully prepared before entry.
+  // Bounded-fallback: overflow artworks are completing in the background.
+  if (fullReadinessSummary.preloadMode === 'bounded-fallback') {
+    loadingOverlay.setStatus(`Galerie bereit – ${fullReadinessSummary.overflowArtworkCount} Gemälde werden im Hintergrund optimiert`);
+  } else {
+    loadingOverlay.setStatus('Galerie bereit');
+  }
   rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
   rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
   await loadingOverlay.reveal();
@@ -1192,6 +1251,9 @@ async function main(): Promise<void> {
       frameBudget.markReadinessWork();
     }
     const sample = frameBudget.sample(now);
+    // v0.24.4 S-03: Record per-frame CPU time into the interaction telemetry
+    // accumulator while a pointer interaction window is open.
+    galleryManager.markInteractionFrame(sample.dtMs);
     const downgrade = adaptiveQuality.evaluate(sample, frameBudget);
     if (downgrade && downgrade !== preferences.current.quality) {
       diagnostics.warn('quality', 'adaptive-downgrade', 'Adaptive quality downgrade triggered', {
@@ -1248,6 +1310,10 @@ async function main(): Promise<void> {
     }
     window.removeEventListener('pointerdown', onFirstInteractionPointer);
     window.removeEventListener('keydown', onFirstInteractionKey);
+    window.removeEventListener('pointerdown', onInteractionPointerDown);
+    window.removeEventListener('pointerup', onInteractionPointerUp);
+    window.removeEventListener('pointercancel', onInteractionPointerUp);
+    if (interactionWindowTimer !== undefined) clearTimeout(interactionWindowTimer);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('orientationchange', onResize);
     visualViewport?.removeEventListener('resize', onResize);

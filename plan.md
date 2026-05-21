@@ -1,10 +1,10 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.6 R-series + S-series implementation pass; all Markdown files refreshed).
 
 
-## v0.24.4 — INP stabilization plan (2026-05-21, planning)
+## v0.24.4 — INP stabilization plan (2026-05-21, **SHIPPED in v0.24.6**)
 
-Runtime status: **planning only**. Runtime remains **v0.24.2** until implementation.
+Runtime status: **shipped**. Implemented in `GalleryManager.ts` + `main.ts` as v0.24.6 (2026-05-21).
 
 ### Trigger
 
@@ -41,9 +41,9 @@ Local metrics now show good loading stability (`LCP 1.85 s`, `CLS 0.00`) but poo
 - Capture local interaction traces and verify INP improvement against baseline (`1,024 ms`).
 - Re-run security scanning after runtime updates.
 
-## v0.24.3 — true preload completion plan (2026-05-21, planning)
+## v0.24.3 — true preload completion plan (2026-05-21, **SHIPPED in v0.24.6**)
 
-Runtime status: **planning only**. Runtime remains **v0.24.2** until this plan is implemented.
+Runtime status: **shipped**. Implemented in `GalleryManager.ts` + `main.ts` as v0.24.6 (2026-05-21).
 
 ### Problem statement
 

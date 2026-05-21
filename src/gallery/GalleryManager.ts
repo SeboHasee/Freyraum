@@ -187,9 +187,10 @@ export interface EntryReadinessContract {
 }
 
 /**
- * v0.24.2 Q-04: Snapshot of full-gallery readiness staged immediately before
- * the loading overlay is dismissed. Allows pre-entry diagnostics to confirm
- * every artwork is GPU-warmed and has no remaining cold paths.
+ * v0.24.2 Q-04 / v0.24.3 R-01: Snapshot of full-gallery readiness staged
+ * immediately before the loading overlay is dismissed. Allows pre-entry
+ * diagnostics to confirm every artwork is GPU-warmed and has no remaining
+ * cold paths, and surfaces the active preload mode contract.
  */
 export interface FullGalleryReadinessResult {
   totalArtworks: number;
@@ -202,6 +203,24 @@ export interface FullGalleryReadinessResult {
   proceduralReadyCount: number;
   /** True when the gallery exceeds FULL_PRELOAD_SAFETY_CAP and capping was applied. */
   memoryCapApplied: boolean;
+  /**
+   * v0.24.3 R-01: Active preload contract mode.
+   * - `strict`: all artworks ≤ FULL_PRELOAD_SAFETY_CAP; every artwork was
+   *   eagerly loaded and warmed before CTA enablement.
+   * - `bounded-fallback`: gallery exceeds the cap; overflow artworks are
+   *   queued as `near-next` and will complete in the background after entry.
+   */
+  preloadMode: 'strict' | 'bounded-fallback';
+  /**
+   * v0.24.3 R-03: IDs of artworks that have not yet reached all 6 readiness
+   * stages. Empty array means the contract is fully satisfied.
+   */
+  unresolvedArtworkIds: readonly string[];
+  /**
+   * v0.24.3 R-01: Number of artworks that exceeded FULL_PRELOAD_SAFETY_CAP
+   * and were not included in the strict preload pass (0 in strict mode).
+   */
+  overflowArtworkCount: number;
 }
 
 interface NavigationProbe {
@@ -259,6 +278,19 @@ export class GalleryManager {
   private lastResetFitZoom = DEFAULT_CAMERA_Z;
   /** Optional callback used to mark navigation events for FrameBudgetMonitor. */
   private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
+  /**
+   * v0.24.4 S-01: True while a pointer interaction window is open. When
+   * active, non-critical-now prefetch jobs are deferred so the main thread
+   * stays free for the render/present cycle that drives INP.
+   */
+  private interactionActive = false;
+  private interactionActiveSince = 0;
+  /** Frames rendered during the current interaction window (for telemetry). */
+  private interactionFrameCount = 0;
+  /** Accumulated CPU frame time (ms) across the current interaction window. */
+  private interactionFrameTotalMs = 0;
+  /** Frames in the current window where dt exceeded 33 ms (dropped at ≥30 fps). */
+  private interactionFrameDropped = 0;
   private readonly prefetchedTextureSets = new Set<number>();
   private fullPrefetchScheduled = false;
   private readonly readiness: ArtworkReadiness[];
@@ -324,6 +356,60 @@ export class GalleryManager {
   /** Allows main.ts to call `frameBudget.markNavigation()` on every navigation. */
   setFrameBudgetMarker(marker: FrameBudgetMarker | null): void {
     this.frameBudgetNavigationMarker = marker;
+  }
+
+  /**
+   * v0.24.4 S-01/S-02: Signals that a pointer interaction window has opened
+   * or closed. While active, non-`critical-now` prefetch queue jobs are
+   * deferred so the main thread stays free for the render/present cycle that
+   * drives INP. When the window closes, the queue is automatically resumed
+   * and a per-interaction telemetry entry is emitted (S-03).
+   */
+  setInteractionActive(active: boolean): void {
+    if (active === this.interactionActive) return;
+    if (active) {
+      this.interactionActive = true;
+      this.interactionActiveSince = this.now();
+      this.interactionFrameCount = 0;
+      this.interactionFrameTotalMs = 0;
+      this.interactionFrameDropped = 0;
+      this.diagnostics.debug('interaction-start', 'Pointer interaction window opened; non-critical prefetch paused');
+    } else {
+      const durationMs = this.now() - this.interactionActiveSince;
+      // v0.24.4 S-03: structured interaction telemetry
+      this.diagnostics.info('interaction-end', 'Pointer interaction window ended; resuming background work', {
+        durationMs: Math.round(durationMs),
+        frameCount: this.interactionFrameCount,
+        avgFrameMs: this.interactionFrameCount > 0
+          ? Math.round(this.interactionFrameTotalMs / this.interactionFrameCount * 10) / 10
+          : 0,
+        droppedFrames: this.interactionFrameDropped,
+        droppedFramePct: this.interactionFrameCount > 0
+          ? Math.round((this.interactionFrameDropped / this.interactionFrameCount) * 100)
+          : 0,
+      });
+      this.interactionActive = false;
+      this.interactionActiveSince = 0;
+      this.interactionFrameCount = 0;
+      this.interactionFrameTotalMs = 0;
+      this.interactionFrameDropped = 0;
+      // Resume prefetch queue if it was paused while waiting for interaction to end
+      if (this.prefetchQueue.length > 0 && !this.prefetchQueueRunning) {
+        this.drainPrefetchQueue();
+      }
+    }
+  }
+
+  /**
+   * v0.24.4 S-03: Called from the main animation loop each frame that falls
+   * within an active interaction window. Accumulates CPU frame timing for
+   * the per-interaction telemetry summary emitted by `setInteractionActive(false)`.
+   */
+  markInteractionFrame(dtMs: number): void {
+    if (!this.interactionActive) return;
+    this.interactionFrameCount += 1;
+    this.interactionFrameTotalMs += dtMs;
+    if (dtMs > 33) this.interactionFrameDropped += 1;
   }
 
   configureReadinessProfile(profile: ReadinessProfileConfig): void {
@@ -411,6 +497,22 @@ export class GalleryManager {
         })
       )
     );
+
+    // v0.24.3 R-02: Queue overflow artworks (index >= FULL_PRELOAD_SAFETY_CAP) into
+    // the near-next prefetch lane so their completion is deterministic and queued,
+    // not dependent on opportunistic idle callbacks alone.
+    const overflowArtworks = this.artworks
+      .map((artwork, index) => ({ artwork, index }))
+      .filter(({ artwork, index }) => !!artwork.textureSet && index >= FULL_PRELOAD_SAFETY_CAP);
+    if (overflowArtworks.length > 0) {
+      this.diagnostics.info('init', 'Queuing overflow artworks for deterministic near-next prefetch (v0.24.3 R-02)', {
+        overflowCount: overflowArtworks.length,
+        safetyCap: FULL_PRELOAD_SAFETY_CAP,
+      });
+      for (const { index } of overflowArtworks) {
+        this.scheduleTextureSetPrefetch(index, 'init-overflow-near-next', 'near-next');
+      }
+    }
 
     this.preGenerateProceduralWindow(0, this.readinessRadius, 'init-critical-window');
     this.logGalleryScaleValidation();
@@ -678,15 +780,20 @@ export class GalleryManager {
   }
 
   /**
-   * v0.24.2 Q-04: Aggregates the per-artwork readiness ledger into a
-   * concise summary for the pre-entry diagnostics log. Called immediately
-   * before `loadingOverlay.reveal()` to confirm full-gallery warm state.
+   * v0.24.2 Q-04 / v0.24.3 R-01/R-03: Aggregates the per-artwork readiness
+   * ledger into a concise summary for the pre-entry diagnostics log. Called
+   * immediately before `loadingOverlay.reveal()` to confirm full-gallery warm
+   * state, surface the active preload mode, and list any unresolved artworks.
    */
   getFullGalleryReadinessSummary(): FullGalleryReadinessResult {
     const r = this.readiness;
     const fullyReadyCount = r.filter(
       (e) => e.albedoLoaded && e.pbrLoaded && e.proceduralReady && e.materialApplied && e.shaderCompiled && e.gpuWarmed
     ).length;
+    const overflowArtworkCount = Math.max(0, this.artworks.length - FULL_PRELOAD_SAFETY_CAP);
+    const unresolvedArtworkIds = r
+      .filter((e) => !(e.albedoLoaded && e.pbrLoaded && e.proceduralReady && e.materialApplied && e.shaderCompiled && e.gpuWarmed))
+      .map((e) => e.artworkId);
     return {
       totalArtworks: this.artworks.length,
       fullyReadyCount,
@@ -695,6 +802,9 @@ export class GalleryManager {
       pbrLoadedCount: r.filter((e) => e.pbrLoaded).length,
       proceduralReadyCount: r.filter((e) => e.proceduralReady).length,
       memoryCapApplied: this.artworks.length > FULL_PRELOAD_SAFETY_CAP,
+      preloadMode: overflowArtworkCount > 0 ? 'bounded-fallback' : 'strict',
+      unresolvedArtworkIds,
+      overflowArtworkCount,
     };
   }
 
@@ -992,12 +1102,24 @@ export class GalleryManager {
       return;
     }
     const runNext = (): void => {
-      const job = this.prefetchQueue.shift();
-      if (!job) {
+      if (!this.prefetchQueue.length) {
         this.prefetchQueueRunning = false;
         after?.();
         return;
       }
+      // v0.24.4 S-01: Defer non-critical-now jobs while pointer interaction is
+      // active. Pausing the queue keeps the main thread free for the render/
+      // present cycle that drives INP. The queue resumes via setInteractionActive(false).
+      const topJob = this.prefetchQueue[0];
+      if (this.interactionActive && topJob && topJob.lane !== 'critical-now') {
+        this.prefetchQueueRunning = false;
+        this.diagnostics.debug('prefetch-deferred-interaction', 'Non-critical prefetch paused for active interaction window', {
+          deferredLane: topJob.lane,
+          queueLength: this.prefetchQueue.length,
+        });
+        return;
+      }
+      const job = this.prefetchQueue.shift()!;
       const artwork = this.artworks[job.index];
       if (!artwork?.textureSet || this.prefetchedTextureSets.has(job.index)) {
         this.scheduleIdle(runNext, 50);

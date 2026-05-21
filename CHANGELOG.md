@@ -1,20 +1,50 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-21 (v0.24.6 R-series + S-series implementation pass; all Markdown files refreshed).
 
 
-## v0.24.4 — Local metrics evidence + INP stabilization planning (docs-only, 2026-05-21)
+## v0.24.6 — True preload completion + INP stabilization (2026-05-21, **shipped**)
 
 ### Changed
 
-- Added a new local-metrics findings section in `FINDINGS.md` with the provided evidence: `LCP 1.85 s`, `CLS 0.00`, `INP 1,024 ms`, including interaction-phase interpretation.
-- Added a new INP-focused remediation plan in `plan.md` (S-series), targeting pointer interaction presentation-delay reduction.
-- Updated `README.md` top status to include the new metrics and links to v0.24.4 findings/plan sections.
-- Refreshed markdown audit stamp across repository Markdown files.
+#### v0.24.3 R-series — True preload completion
 
-### Validation and residual risk
+- **GalleryManager.ts** (`FullGalleryReadinessResult`): Extended interface with three new fields: `preloadMode` (`'strict' | 'bounded-fallback'`), `unresolvedArtworkIds` (list of artwork IDs not yet at all 6 readiness stages), `overflowArtworkCount` (artworks beyond safety cap).
+- **GalleryManager.ts** (`getFullGalleryReadinessSummary()`): Populates new fields. `preloadMode` is `'strict'` when `artworks.length ≤ FULL_PRELOAD_SAFETY_CAP`; `'bounded-fallback'` when gallery exceeds the cap. `unresolvedArtworkIds` enumerates every pending artwork by ID (R-01, R-03).
+- **GalleryManager.ts** (`init()`): Overflow artworks (index ≥ `FULL_PRELOAD_SAFETY_CAP`) are now enqueued as `near-next` prefetch jobs immediately after the strict preload pass, giving them a deterministic completion path instead of relying solely on the opportunistic idle sweep (R-02).
+- **main.ts**: Pre-CTA log (`full-gallery-ready`) now includes `preloadMode`, `overflowArtworkCount` (R-01).
+- **main.ts**: Added `entry-unresolved-artworks` diagnostic before CTA enablement that lists every unresolved artwork ID; severity is `warn` in strict mode (contract failure) and `info` in bounded-fallback mode (expected) (R-03).
+- **main.ts**: Added `inp-acceptance-target` boot diagnostic recording the INP baseline (`1,024 ms`) and good-range target (`200 ms`) for release validation (S-04).
+- **main.ts**: Loading overlay "ready" text is now mode-aware: strict mode shows `Galerie bereit`; bounded-fallback mode shows `Galerie bereit – N Gemälde werden im Hintergrund optimiert` (R-04).
 
-- Documentation-only pass; no runtime code changed.
-- INP runtime remediation remains pending implementation of the v0.24.4 plan.
+#### v0.24.4 S-series — INP stabilization
+
+- **GalleryManager.ts**: Added `setInteractionActive(active: boolean)` public method. While active, non-`critical-now` prefetch queue jobs are deferred — the queue runner exits when it encounters a deferred job and is restarted automatically on `setInteractionActive(false)`. This keeps the main thread free for render/present cycles during pointer windows (S-01, S-02).
+- **GalleryManager.ts**: Added `markInteractionFrame(dtMs: number)` public method. Accumulates per-frame CPU time, frame count, and dropped-frame count (dt > 33 ms) for the current interaction window (S-03).
+- **GalleryManager.ts**: `setInteractionActive(false)` emits a structured `interaction-end` diagnostic with `durationMs`, `frameCount`, `avgFrameMs`, `droppedFrames`, `droppedFramePct` for every closed interaction window (S-03).
+- **main.ts**: Added window-level `pointerdown`/`pointerup`/`pointercancel` listeners that open/close an interaction window via `galleryManager.setInteractionActive()`. Window closes after a 200 ms cooldown following the last pointer-up/cancel (S-01, S-02).
+- **main.ts** (`animate()`): Calls `galleryManager.markInteractionFrame(sample.dtMs)` every frame so interaction-window telemetry is accurate (S-03).
+- **main.ts** (`beforeunload`): Cleans up the three new interaction listeners and the cooldown timer (S-01).
+
+### Closes plan gaps
+
+- **R-01** ✅ `preloadMode` + `overflowArtworkCount` expose the active preload contract to diagnostics and UX.
+- **R-02** ✅ Overflow artworks queued as `near-next` for deterministic post-init completion.
+- **R-03** ✅ Structured unresolved-artwork list logged before CTA; severity differentiated by mode.
+- **R-04** ✅ Loading status text aligned with preload mode.
+- **R-05** — deferred; KTX2/Basis migration requires importer pipeline work beyond this pass.
+- **R-06** — acceptance criteria captured via `inp-acceptance-target` diagnostic; gallery-size bucket tests remain a manual validation step.
+- **S-01** ✅ Interaction-mode prefetch throttle: non-`critical-now` jobs paused during active pointer windows.
+- **S-02** ✅ Interaction window policy implemented with 200 ms cooldown.
+- **S-03** ✅ Per-interaction frame telemetry: CPU ms, dropped frames, avg frame time logged on every window close.
+- **S-04** ✅ INP acceptance target emitted as boot diagnostic.
+- **S-05** ✅ Post-entry optimization status copy visible in bounded-fallback mode.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- `npm audit` — known moderate Vite/esbuild advisory (pre-existing, unrelated).
+
 
 ## v0.24.5 — Diagnostics recursion hardening (2026-05-21)
 
