@@ -71,6 +71,10 @@ export class BackgroundAudioManager {
   constructor() {
     this.audio.preload = 'metadata';
     this.audio.loop = true;
+    // Startup invariant: always boot unmuted. Keep the media element in sync
+    // with the initial state so the UI mute icon cannot start in a stale state.
+    this.audio.muted = false;
+    this.audio.volume = DEFAULT_AUDIO_GAIN;
     // NOTE: Do NOT set crossOrigin here.
     // When app.html is opened as a file:// URL, Chromium treats the page
     // origin as `null`. Setting crossOrigin = 'anonymous' causes the browser
@@ -208,12 +212,19 @@ export class BackgroundAudioManager {
 
   setMuted(value: boolean, reason: string): void {
     if (this.disposed) return;
-    if (this.state.muted === value) {
+    if (this.state.muted === value && this.audio.muted === value) {
       this.diagnostics.debug('audio-mute-unchanged', 'Mute request ignored because state is unchanged', {
         reason,
         muted: value,
       });
       return;
+    }
+    if (this.state.muted === value && this.audio.muted !== value) {
+      this.diagnostics.warn('audio-mute-state-desync', 'Repairing muted state desync between manager and audio element', {
+        reason,
+        expectedMuted: value,
+        actualMuted: this.audio.muted,
+      });
     }
     this.audio.muted = value;
     this.state = { ...this.state, muted: value };
