@@ -16,6 +16,19 @@
 - Documentation-only pass; no runtime code changed.
 - INP runtime remediation remains pending implementation of the v0.24.4 plan.
 
+## v0.24.5 — Diagnostics recursion hardening (2026-05-21)
+
+### Fixed
+
+- Hardened `src/utils/Diagnostics.ts` serialization to safely handle circular references and non-serializable values (`function`, `symbol`, `bigint`) without recursive crashes.
+- Added re-entrancy guards around global `error` and `unhandledrejection` handlers so diagnostics cannot recursively log their own failures.
+- Wrapped diagnostics print path in fail-safe guards so console/group logging failures no longer crash runtime.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
 ## v0.24.3 — Loading completeness re-audit + remediation plan (docs-only, 2026-05-21)
 
 ### Changed
