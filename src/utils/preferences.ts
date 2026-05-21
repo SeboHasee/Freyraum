@@ -130,9 +130,16 @@ export class PreferencesStore {
       audioVolume,
     };
 
+    const shouldNormalizeMutedPreference = stored.audioMuted !== false;
     if (shouldRecoverZeroVolume) {
       writeStored(this.prefs);
       writeAudioRecoveryFlag();
+    } else if (shouldNormalizeMutedPreference) {
+      writeStored(this.prefs);
+      diagnostics.info(
+        'audio-muted-normalized',
+        'Normalized persisted muted preference to startup default (unmuted)'
+      );
     }
 
     this.motionMedia?.addEventListener?.('change', this.handleSystemMotionChange);

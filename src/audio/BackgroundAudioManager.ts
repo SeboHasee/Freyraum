@@ -73,6 +73,8 @@ export class BackgroundAudioManager {
     this.audio.loop = true;
     // Startup invariant: always boot unmuted. Keep the media element in sync
     // with the initial state so the UI mute icon cannot start in a stale state.
+    this.audio.defaultMuted = false;
+    this.audio.removeAttribute('muted');
     this.audio.muted = false;
     this.audio.volume = DEFAULT_AUDIO_GAIN;
     // NOTE: Do NOT set crossOrigin here.
@@ -86,6 +88,15 @@ export class BackgroundAudioManager {
 
   load(payload: BackgroundAudioPayload | null): void {
     if (this.disposed) return;
+    // Re-assert startup invariant on every source load so browser-level element
+    // state cannot drift into muted=true before first user interaction.
+    if (this.audio.muted !== this.state.muted) {
+      this.diagnostics.warn('audio-load-mute-desync', 'Repairing muted state desync before loading source', {
+        expectedMuted: this.state.muted,
+        actualMuted: this.audio.muted,
+      });
+      this.audio.muted = this.state.muted;
+    }
     const chosen = this.pickPlayableSource(payload);
     if (!chosen) {
       this.audio.removeAttribute('src');
@@ -140,6 +151,14 @@ export class BackgroundAudioManager {
 
   async play(reason: string): Promise<boolean> {
     if (this.disposed || !this.source || this.suspended || this.state.muted) return false;
+    if (this.audio.muted !== this.state.muted) {
+      this.diagnostics.warn('audio-play-mute-desync', 'Repairing muted state desync before play', {
+        reason,
+        expectedMuted: this.state.muted,
+        actualMuted: this.audio.muted,
+      });
+      this.audio.muted = this.state.muted;
+    }
     if (!this.audio.paused && this.state.playing) {
       this.shouldResumeAfterSuspend = true;
       this.diagnostics.debug('audio-play-skip', 'Play request ignored because audio is already playing', { reason });
@@ -352,9 +371,16 @@ export class BackgroundAudioManager {
       });
     });
     this.audio.addEventListener('volumechange', () => {
+      if (this.audio.muted !== this.state.muted) {
+        this.diagnostics.warn('audio-volumechange-mute-desync', 'Repairing muted state desync during volumechange', {
+          expectedMuted: this.state.muted,
+          actualMuted: this.audio.muted,
+        });
+        this.audio.muted = this.state.muted;
+      }
       this.state = {
         ...this.state,
-        muted: this.audio.muted,
+        muted: this.state.muted,
         liveVolume: this.audio.volume,
       };
       this.emit();
