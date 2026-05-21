@@ -1,5 +1,21 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+
+## v0.21 — Preloading + Interactive Loading Screen (2026-05-21, planning)
+
+### Planned
+
+- **Interactive loading screen:** Replace plain white spinner with dark-themed FREYRAUM branded overlay: wordmark, real-progress bar wired to Three.js `LoadingManager`, cycling German hint texts, floating ambient particle glows, and an elegant scale+unblur gallery reveal on completion.
+- **Shader prewarm:** Wire existing `RendererManager.prewarm()` (with `compileAsync`) into boot path before loading overlay hides — eliminates first-interaction shader-compile stutter (G-01).
+- **Audio full preload:** Change `BackgroundAudioManager` audio element from `preload='metadata'` to `preload='auto'` so audio frames are buffered at boot — eliminates audible gap on first play (G-02).
+- **Adjacent artwork prefetch:** After artwork N is shown, speculatively prefetch PBR maps for artworks N±1 and N±2 using `requestIdleCallback` — eliminates cold-navigation lag (G-03).
+- **GPU texture warm pass:** Perform a hidden render pass after all textures load but before the overlay hides — forces CPU→GPU texture upload so first artwork render has no stall (G-06).
+- **Idle full-prefetch sweep:** After first artwork reveals, use `requestIdleCallback` to progressively preload all remaining artwork PBR maps during browser idle time (G-07).
+- **`<link rel="preload">` hints:** Add font preload hints to `app.html` `<head>` (G-05).
+
+### No runtime code changed in this pass (docs-only planning).
+
+
 
 ## v0.20.8 — Complete v0.20 implementation + markdown sync (2026-05-21)
 

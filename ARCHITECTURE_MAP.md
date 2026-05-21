@@ -1,5 +1,23 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+
+## v0.21 — Preloading + Interactive Loading Screen (planning, 2026-05-21)
+
+Current status: **planning**. Boot-path gaps identified by code audit and online research:
+
+| Gap | Component | Status |
+|-----|-----------|--------|
+| G-01 | `RendererManager.prewarm()` never called | Open — planned |
+| G-02 | Audio `preload='metadata'` instead of `'auto'` | Open — planned |
+| G-03 | PBR maps lazy-loaded per artwork, no adjacent prefetch | Open — planned |
+| G-04 | Loading screen is unbranded white spinner | Open — planned |
+| G-05 | No `<link rel="preload">` for fonts in `<head>` | Open — planned |
+| G-06 | Textures not GPU-uploaded before overlay hides | Open — planned |
+| G-07 | No idle sweep of remaining artwork PBR sets | Open — planned |
+
+Full plan: `plan.md § v0.21`. Research details: `FINDINGS.md § 2026-05-21 v0.21`.
+
+
 
 ## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 

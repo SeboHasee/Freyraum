@@ -1,5 +1,19 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+
+## v0.21 — Preloading + Interactive Loading Screen (planning, 2026-05-21)
+
+Current status: **planning**. A deep code audit revealed 7 gaps (G-01 through G-07) in the preloading and loading-screen domain. Full implementation plan is in `plan.md § v0.21`. Research notes and finding details are in `FINDINGS.md § 2026-05-21 v0.21`.
+
+Planned changes:
+- Branded interactive loading screen (dark glass theme, wordmark, real progress bar, particles, hint texts, reveal animation)
+- Shader prewarm wired into boot path (fix G-01)
+- Audio `preload='auto'` for gapless first-play (fix G-02)
+- Adjacent artwork PBR prefetch via `requestIdleCallback` (fix G-03)
+- GPU texture warm render pass before overlay hides (fix G-06)
+- Idle sweep of all remaining artwork PBR maps (fix G-07)
+
+
 
 ## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 

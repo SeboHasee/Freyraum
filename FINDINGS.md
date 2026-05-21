@@ -1,5 +1,48 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+
+## 2026-05-21 — v0.21 deep code + research audit (preloading & loading screen)
+
+### Audit method
+
+Full line-by-line inspection of loading, texture, audio, shader, and animation code paths.
+Eight targeted online research queries covering Three.js `LoadingManager`/`compileAsync`, audio `preload` strategy, `requestIdleCallback` prefetch, CSS glassmorphism loading screens, GSAP gallery reveal, bfcache media handling, WebWorker `createImageBitmap`, and `<link rel="preload">` patterns.
+
+### Code audit findings
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| G-01 | **HIGH** | `src/core/RendererManager.ts:106–127` | `prewarm()` (with `compileAsync` support for Three.js ≥ 0.155) exists but is **never called** in the boot path. First user interaction triggers visible shader-compile stutter. |
+| G-02 | **HIGH** | `src/audio/BackgroundAudioManager.ts:72` | Audio element uses `preload='metadata'` — only duration/header fetched at boot. Full audio frames not buffered → playback start on slow connections causes audible gap/stutter. |
+| G-03 | **MEDIUM** | `src/gallery/GalleryManager.ts:262–263` | `init()` preloads albedo textures for all artworks in parallel (good) but PBR maps (normal, roughness, ao, height, specular, varnish, detail) are **lazy-loaded only when the user navigates to each artwork**. Navigation to an unvisited artwork shows visible loading lag. |
+| G-04 | **HIGH** | `src/main.ts:282–291`, `src/styles/main.scss:1113–1142` | Loading screen is a bare white spinner on solid `--bg1` (#eef1f3). No real progress indication, no FREYRAUM branding, no user engagement. Users see a blank white screen with a small circle for up to several seconds on cold load. |
+| G-05 | **LOW** | `app.html` (line 1–16) | No `<link rel="preload">` hints for critical first-paint assets (fonts, background audio, hero albedo). Browser cannot start fetching these until HTML and JS are fully parsed. |
+| G-06 | **MEDIUM** | `src/gallery/GalleryManager.ts:263`, `src/core/RendererManager.ts:106` | Textures are decoded to CPU memory by `TextureLoader` but **not uploaded to GPU until first draw call**. This causes first-frame stutter even when all textures are "loaded". No warm render pass exists before loading overlay hides. |
+| G-07 | **LOW** | `src/gallery/GalleryManager.ts:308–384` | Adjacent artwork textures (prev/next) have their albedo available from the global preload, but PBR maps for ±1 or ±2 neighbours are never prefetched speculatively. A `requestIdleCallback` prefetch window of ±2 would eliminate cold-navigation lag after first open. |
+
+### Research summary
+
+**Three.js `LoadingManager`** (threejs.org): `onProgress(url, loaded, total)` callback gives real-time asset count for progress bars. Tracks all loaders that share the manager instance.
+
+**`renderer.compileAsync(scene, camera)`** (Three.js ≥ 0.155): Compiles all shader programs asynchronously before first frame. Eliminates compile-stutter on first render. The method already exists in `RendererManager.prewarm()` but is not called.
+
+**`renderer.compile(scene, camera)` + hidden render pass**: Force GPU texture upload by rendering once off-screen under loading overlay. Standard pattern to prevent first-frame stutter from texture CPU→GPU transfer.
+
+**Audio `preload='auto'`**: Directs browser to buffer full audio file. Best for guaranteed-playback-on-first-play scenarios. Chrome/Firefox/Edge respect it on desktop; mobile browsers may downgrade to `'metadata'` due to data-saver heuristics.
+
+**`requestIdleCallback` prefetch**: Standard browser-idle texture pre-fetch pattern for non-urgent assets (adjacent artworks). Polyfilled for Safari (`setTimeout(fn, 1)` fallback). Moves speculative loads off the critical path.
+
+**`<link rel="preload">`**: `as="font"` / `as="audio"` in `<head>` start fetches before JS parses. Critical for reducing time-to-first-paint for fonts and first-play audio.
+
+**CSS glassmorphism loading screen** (MDN, web.dev): `backdrop-filter: blur(16px) saturate(150%)` on semi-transparent dark card. Floating radial-gradient particles via `@keyframes float`. Progress bar via `width` transition on a child div.
+
+**GSAP stagger reveal**: After loading completes, `gsap.to('.gallery-item', { opacity: 1, scale: 1, filter:'blur(0)', stagger: 0.1, ease:'expo.out' })` provides a premium branded gallery reveal. (GSAP is not currently a dependency — can be replicated with CSS transitions if not desired.)
+
+**bfcache + audio**: `pageshow` event with `event.persisted === true` detects bfcache restore. Audio state already handled in v0.20.8. No change needed for bfcache.
+
+### Remaining status
+
+All v0.20.8 audio/control findings remain closed. v0.21 opens 7 new gaps (G-01 through G-07) for the preloading + loading screen domain.
 
 ## 2026-05-21 — v0.20.8 implementation verification
 

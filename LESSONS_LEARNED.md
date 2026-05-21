@@ -1,5 +1,17 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+
+## 2026-05-21 — Prewarm methods must be wired in, not just defined
+
+- `RendererManager.prewarm()` existed with proper `compileAsync` support but was never called in the boot path. This is a category of bug: an optimization method that is defined but not connected cannot help.
+- Future rule: every performance utility (prewarm, prefetch, warm render) must have a call site in the boot sequence documented alongside its definition.
+
+## 2026-05-21 — Loading screens should brand and inform, not just block
+
+- The v0.21 audit found the loading screen was a plain white spinner with no FREYRAUM branding, no progress indication, and no user engagement. Users seeing a white screen with a small spinner have no context that the experience will be immersive.
+- Future rule: loading screens must show brand identity (wordmark/logo), real progress feedback (not just a spinner), and at minimum a hint of the visual theme before the gallery reveals.
+
+
 
 ## 2026-05-21 — Close plans in code and docs together
 

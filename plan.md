@@ -1,5 +1,274 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen plan).
+
+## v0.21 — Preloading + Interactive Loading Screen (2026-05-21)
+
+### Status
+
+Planning. This section is a full code audit + research-backed implementation plan for smooth asset preloading and an immersive branded loading screen. Every finding cites the exact file and line verified in the current source. Implementation patches are provided inline.
+
+---
+
+### Audit scope
+
+| File | Lines audited |
+|------|--------------|
+| `src/main.ts` | 138–500 |
+| `src/core/RendererManager.ts` | 1–150 |
+| `src/core/PostProcessing.ts` | 1–55 |
+| `src/gallery/GalleryManager.ts` | 245–470 |
+| `src/gallery/TextureManager.ts` | 1–300 |
+| `src/audio/BackgroundAudioManager.ts` | 65–100 |
+| `src/ui/FallbackScreen.ts` | 1–60 |
+| `src/styles/main.scss` | 1113–1145, 1252–1516 |
+| `app.html` | 1–16 |
+| `vite.config.ts` | 1–21 |
+| `vite.local.config.ts` | 1–16 |
+
+---
+
+### Open gaps (G-01 through G-07)
+
+#### G-01 — Shader prewarm never called [HIGH]
+
+**File:** `src/core/RendererManager.ts:106–127`, `src/main.ts` (no call site found)
+
+**Problem:** `RendererManager.prewarm(scene, camera)` compiles all WebGL shader programs asynchronously using `renderer.compileAsync` (Three.js ≥ 0.155) with a synchronous fallback. It is never called in the boot path. Result: on first user interaction the GPU must synchronously compile multiple shader programs, causing a visible frame stutter.
+
+**Patch — `src/main.ts` (after `galleryManager.init()` and before removing loading overlay):**
+```typescript
+// After galleryManager.init() completes (line ~436):
+await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+```
+
+**Research validation:** Three.js docs `WebGLRenderer.compileAsync` — "Asynchronously compiles all materials used in the scene. Returns a Promise that resolves when compilation is complete." (threejs.org/docs)
+
+---
+
+#### G-02 — Audio buffers only metadata, not audio frames [HIGH]
+
+**File:** `src/audio/BackgroundAudioManager.ts:72`
+
+**Problem:** `new Audio()` element is constructed with `preload='metadata'`. Only the file header and duration are fetched at boot. Full audio frames are not buffered. On slow/mobile connections, pressing play causes an audible delay before music starts.
+
+**Patch — `src/audio/BackgroundAudioManager.ts:72`:**
+```typescript
+// Change:
+this.audio.preload = 'metadata';
+// To:
+this.audio.preload = 'auto';
+```
+
+**Research validation:** MDN Web Docs: "`preload='auto'` — indicates that the whole video file could be downloaded, even if the user is not expected to use it." Browser data-saver mode on mobile may downgrade this to `metadata`, so no regression risk on constrained devices.
+
+---
+
+#### G-03 — PBR maps for adjacent artworks never prefetched [MEDIUM]
+
+**File:** `src/gallery/GalleryManager.ts:306–384`
+
+**Problem:** When the user navigates from artwork N to artwork N+1, the full PBR texture set (normal, roughness, ao, height, specular, varnish, detail) is loaded on-demand. On a cold gallery this causes visible loading during navigation. The `±1` adjacent artworks should be prefetched speculatively during idle time after each artwork shows.
+
+**Patch — add `prefetchAdjacentArtworks(index)` to `GalleryManager.ts`:**
+```typescript
+private prefetchAdjacentArtworks(index: number): void {
+  const prefetch = (idx: number) => {
+    if (idx < 0 || idx >= this.artworks.length) return;
+    const artwork = this.artworks[idx];
+    if (!artwork.textureSet) return;
+    const idleCb = (window as any).requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 1));
+    idleCb(() => {
+      this.textureManager.preloadTextureSet(artwork.textureSet!).catch(() => {/* non-fatal */});
+    });
+  };
+  prefetch(index - 1);
+  prefetch(index + 1);
+  prefetch(index - 2);
+  prefetch(index + 2);
+}
+```
+Call after `showArtwork(index)` completes. Wrap in `requestIdleCallback` so prefetch never competes with active rendering.
+
+**Research validation:** Three.js LoadingManager docs + texture prefetch windowing pattern (2024 web.dev "Efficiently load third-party JavaScript").
+
+---
+
+#### G-04 — Loading screen is unbranded and gives no progress feedback [HIGH]
+
+**File:** `src/main.ts:282–291`, `src/styles/main.scss:1113–1142`
+
+**Problem:** The current loading overlay is a plain white screen with a 40×40px spinner. Users have no indication of:
+- How much has loaded
+- That this is a FREYRAUM gallery (branding absent until spinner disappears)
+- Any sense of the artistic theme
+
+**Full replacement design (v0.21 Interactive Loading Screen):**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [floating particle glows — theme colours #b59a6a / #c8d6e5] │
+│                                                              │
+│              FREYRAUM          ← large wordmark              │
+│         Galerie wird geladen   ← cycling subtitle            │
+│                                                              │
+│      ████████████████░░░░░░    ← progress bar (real %)       │
+│              62%               ← percentage label            │
+│                                                              │
+│  [cycling hint text — rotates every 2s while loading]        │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Colour palette for loading screen (matches gallery dark glass theme):**
+- Background: `#0d0d0e` (near-black, matches WebGL canvas)
+- Card glass: `rgba(18, 18, 20, 0.80)` + `backdrop-filter: blur(20px)`
+- Accent warm: `#b59a6a` (gold/bronze — FREYRAUM warmth)
+- Accent cool: `#c8d6e5` (steel blue — gallery cool)
+- Progress fill: linear-gradient from `#b59a6a` to `#c8d6e5`
+- Text: `#f0eae0` (warm white)
+- Particles: semi-transparent radial glow blobs at 5–12% opacity
+
+**Cycling hint texts (German, display one every 2s):**
+1. "Kunstwerke werden vorbereitet …"
+2. "Texturen werden geladen …"
+3. "Licht und Schatten werden berechnet …"
+4. "Atmosphäre wird eingestellt …"
+5. "Fast fertig …"
+
+**Progress bar wiring — use Three.js `LoadingManager`:**
+```typescript
+const loadingManager = new THREE.LoadingManager();
+loadingManager.onProgress = (_url, loaded, total) => {
+  const pct = Math.round((loaded / total) * 100);
+  progressBar.style.width = `${pct}%`;
+  progressLabel.textContent = `${pct}%`;
+};
+loadingManager.onLoad = () => {
+  // Trigger reveal after all textures confirmed loaded
+  revealGallery();
+};
+// Pass loadingManager to TextureManager:
+this.externalLoader = new TextureLoader(loadingManager);
+this.localLoader   = new TextureLoader(loadingManager);
+```
+
+**Reveal sequence (replace abrupt class toggle):**
+```typescript
+function revealGallery() {
+  // 1. Fade out loading overlay over 1.2s
+  loadingOverlay.style.opacity = '0';
+  loadingOverlay.style.transition = 'opacity 1.2s cubic-bezier(0.16,1,0.3,1)';
+  // 2. Simultaneously scale+unblur the canvas
+  canvas.style.transform = 'scale(1)';
+  canvas.style.filter = 'blur(0px)';
+  canvas.style.opacity = '1';
+  canvas.style.transition = 'all 1.4s cubic-bezier(0.16,1,0.3,1)';
+  setTimeout(() => loadingOverlay.remove(), 1300);
+}
+```
+
+**CSS additions (in `main.scss`):**
+- Replace `.loading-overlay` background from `var(--bg1)` to `#0d0d0e`
+- Add `.loading-wordmark` — 2.8rem letter-spaced FREYRAUM title
+- Add `.loading-subtitle` — cycling hint text with `opacity` crossfade
+- Add `.loading-progress-track` + `.loading-progress-fill` — 320px wide pill bar
+- Add `.loading-progress-pct` — percentage label
+- Add `.loading-particle` — 6 absolutely-positioned radial gradient blobs with `@keyframes float`
+- Reduce motion: hide particles, disable transitions but keep progress bar
+
+**Interactive element:** The loading screen itself is interactive — `mousemove` over the overlay moves the particle blobs in parallax (3–5px offset at the extremes) creating an ambient depth effect even while loading. On touch devices, a gentle idle bob animation replaces the parallax.
+
+---
+
+#### G-05 — No `<link rel="preload">` for critical first-paint assets [LOW]
+
+**File:** `app.html`, `customer-preview/app.html`
+
+**Problem:** Critical fonts and the background audio are not hinted early to the browser. The browser cannot start fetching them until the HTML is fully parsed and JS begins executing.
+
+**Patch — `app.html` `<head>` section:**
+```html
+<!-- Preload primary font weight used by gallery UI -->
+<link rel="preload" as="font" href="/public/fonts/primary.woff2" type="font/woff2" crossorigin>
+<!-- Preload audio if asset path is known at build time -->
+<!-- <link rel="preload" as="audio" href="/customer-audio/background.mp3" type="audio/mpeg"> -->
+```
+Note: Audio preload hint is only applicable when the audio URL is known at HTML build time (static deployment). For dynamic/customer-injected audio, preload via `preload='auto'` (G-02) is more appropriate.
+
+**Research validation:** MDN `<link rel="preload">`: "The browser will preload the resource with the highest priority possible."
+
+---
+
+#### G-06 — Textures not GPU-uploaded before loading overlay hides [MEDIUM]
+
+**File:** `src/gallery/GalleryManager.ts:263`, `src/core/RendererManager.ts:106`
+
+**Problem:** `textureManager.preload(urls)` loads all albedo bitmaps to CPU memory. They are not uploaded to GPU until the first draw call that uses each texture. When the loading overlay fades away, the first render of each new artwork still causes a GPU stall as it uploads the texture.
+
+**Patch — warm render pass in `main.ts` (after `galleryManager.init()`):**
+```typescript
+// Force GPU texture upload before revealing gallery
+// (runs under loading overlay, invisible to user)
+rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+// Then call prewarm to compile shaders
+await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+// THEN hide loading overlay
+```
+The single warm render causes all loaded textures to be transferred to VRAM. Subsequent renders reuse the already-uploaded textures with no stall.
+
+**Research validation:** Three.js discourse "How to preload texture to GPU to prevent first-frame stutter" — "do a single render under loading overlay to force upload."
+
+---
+
+#### G-07 — No `requestIdleCallback` prefetch for off-screen artworks [LOW]
+
+**File:** `src/gallery/GalleryManager.ts:306–384`
+
+**Problem:** See G-03. Even if G-03 is resolved for ±2, artworks further away will still cold-load. A broader idle prefetch of all remaining PBR sets during browser idle time after the first artwork is revealed would eliminate all further navigation lag.
+
+**Patch — post-init idle prefetch sweep:**
+```typescript
+// After first artwork shows (line ~443 in main.ts):
+const idleCb = (window as any).requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 100));
+let prefetchIdx = 0;
+const prefetchAllRemaining = (deadline: any) => {
+  while ((deadline?.timeRemaining() > 5 || !deadline) && prefetchIdx < artworks.length) {
+    const art = artworks[prefetchIdx++];
+    if (art.textureSet) {
+      textureManager.preloadTextureSet(art.textureSet).catch(() => {});
+    }
+  }
+  if (prefetchIdx < artworks.length) idleCb(prefetchAllRemaining);
+};
+idleCb(prefetchAllRemaining);
+```
+
+**Research validation:** web.dev "Using requestIdleCallback" — "schedule low-priority work to run during browser idle periods."
+
+---
+
+### Acceptance tests
+
+| Test | Pass condition |
+|------|---------------|
+| Cold load — slow 3G throttle | Loading screen visible with animated progress bar; gallery reveals after ≥ 1 complete texture load cycle; no spinner-only white screen |
+| Loading screen branding | FREYRAUM wordmark, progress bar, cycling hint text, floating particles all visible during load |
+| Shader stutter | After G-01 fix: navigating or hovering any artwork produces no visible frame drop on first approach |
+| Audio start | After G-02 fix: background music starts without audible gap/buffer pause on desktop Chrome/Firefox/Safari |
+| Navigation smoothness | After G-03+G-07 fixes: navigating to artwork 2 immediately after opening shows no loading spinner or texture pop-in |
+| Loading reveal | Loading overlay fades out smoothly with 1.2s opacity transition; gallery simultaneously reveals with scale+unblur animation |
+| Reduced motion | With `prefers-reduced-motion: reduce`: particles hidden, reveal is instant opacity swap (no scale/blur) |
+| Mobile loading screen | Particles use bob animation (not parallax); progress bar visible and legible on 375px viewport |
+| GPU warm | After G-06 fix: first artwork render on any device produces no texture-upload stutter (no frame spike in DevTools) |
+
+---
+
+### Validation
+
+```bash
+npm run lint
+npm run build
+```
 
 ## v0.20.8 — Complete v0.20 implementation + markdown sync (2026-05-21)
 
