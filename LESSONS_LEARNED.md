@@ -1,5 +1,10 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+
+## 2026-05-21 — Close plans in code and docs together
+
+- The v0.20.7 plan contained actionable source-level patches and customer-facing wording risks. Completing the plan required both code changes and an all-markdown status refresh so shipped behavior and docs stayed aligned.
+- When a regression-recovery plan is complete, remove or supersede “under repair” guidance from AI prompts, customer guides, architecture notes, and maintenance docs in the same pass.
 
 ## 2026-05-21 — Never let live fade volume overwrite the user target
 

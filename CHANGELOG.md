@@ -1,5 +1,15 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+
+## v0.20.8 — Complete v0.20 implementation + markdown sync (2026-05-21)
+
+### Fixed
+
+- Closed the remaining v0.20.7 audio/control gaps: capped fade targets, enriched volume diagnostics, selective preferences slider patching, percent-aware slider accessibility text, recovery diagnostics, extended first-interaction playback recovery, manager-local unmute playback, percentage-valued slider CSS, and shorter loop fallback fade.
+
+### Changed
+
+- Refreshed every tracked Markdown file with the v0.20.8 shipped-status audit so docs no longer describe v0.20 audio as an open regression.
 
 ## v0.20.7 — Full technical audit + gap-closure coding plan (2026-05-21, docs-only)
 

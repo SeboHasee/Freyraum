@@ -1,5 +1,35 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+
+## v0.20.8 — Complete v0.20 implementation + markdown sync (2026-05-21)
+
+### Status
+
+Implemented. This pass completes the v0.20.7 gap-closure coding plan and refreshes every tracked Markdown file to remove stale “under repair” wording.
+
+### Implemented code closures
+
+- **F-01:** `BackgroundAudioManager.startFade()` now clamps fade targets to `MAX_EFFECTIVE_AUDIO_GAIN` (0.30) instead of `1.0`.
+- **F-02:** `audio-volume-map` diagnostics now include `displayPct` alongside effective gain and live gain.
+- **F-03:** `PreferencesPanel.patchPanel()` only skips the volume-slider value patch while dragging; motion, contrast, mute, status, quality, and lighting controls still update immediately.
+- **F-04:** Main-page and preferences volume sliders now expose `aria-valuetext` such as `50 Prozent`.
+- **F-05:** Broken zero-volume recovery diagnostics now log the stored value, recovery target, and storage key.
+- **F-06:** First-interaction recovery now retries when audio should be playing but is still stopped before an autoplay-block flag exists.
+- **F-07:** `BackgroundAudioManager.setMuted(false)` now attempts playback directly when a source is available and lifecycle is not suspended.
+- **F-08:** `--volume-pct` is now written as a CSS percentage string and consumed directly by the slider gradient.
+- **F-09:** Confirmed correct; no code change required.
+- **F-10:** The ended-loop fallback fade is reduced from 150 ms to 50 ms.
+
+### Documentation sync
+
+All tracked Markdown files were updated with the v0.20.8 audit stamp and a current shipped-status note so customer, architecture, AI, and maintenance docs no longer describe v0.20 audio as an open regression.
+
+### Validation target
+
+```bash
+npm run lint
+npm run build
+```
 
 ## v0.20.7 — Full technical code audit + gap-closure coding plan (2026-05-21)
 

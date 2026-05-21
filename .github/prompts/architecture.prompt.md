@@ -1,9 +1,9 @@
 # Architecture prompt
-> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
 
-## v0.20.5 context note
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 
-Current repository status includes a shipped importer path for audio, but the runtime audio behavior is still under repair. Treat startup loudness, target-vs-live volume ownership, slider synchronization, and control placement as open architecture problems; use `plan.md § v0.20.5` and `FINDINGS.md § 2026-05-21`.
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

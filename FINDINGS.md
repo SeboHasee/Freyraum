@@ -1,5 +1,30 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
+
+## 2026-05-21 — v0.20.8 implementation verification
+
+### Summary
+
+The complete v0.20.7 gap-closure plan has been implemented. All tracked Markdown files were refreshed during the same pass so the repository now documents v0.20 audio/control behavior as shipped instead of under repair.
+
+### Closed findings
+
+| Finding | Resolution |
+|---------|------------|
+| F-01 | Fade targets now clamp to `MAX_EFFECTIVE_AUDIO_GAIN` (0.30). |
+| F-02 | `audio-volume-map` diagnostics include `displayPct`. |
+| F-03 | Preference panel patching only guards the volume-slider value during active drags. |
+| F-04 | Volume sliders expose `aria-valuetext` with German percent wording. |
+| F-05 | Recovery logging includes stored and recovered audio gain values. |
+| F-06 | User-interaction recovery covers both autoplay-blocked and pre-play stopped states. |
+| F-07 | Unmuting through `BackgroundAudioManager` attempts playback directly. |
+| F-08 | Slider fill CSS uses percentage-valued `--volume-pct`. |
+| F-09 | Confirmed correct; no change required. |
+| F-10 | Ended-loop fallback fade reduced to 50 ms. |
+
+### Remaining status
+
+No known v0.20 audio/control implementation gaps remain from the v0.20.7 plan.
 
 ## 2026-05-21 — v0.20.7 deep code audit
 

@@ -1,23 +1,9 @@
 # FREYRAUM — Image Maintenance Guide
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
 
-## v0.20.5 audio maintenance note (follow-up open)
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 
-Customer audio import remains part of the maintenance surface, but the runtime playback controls are currently under follow-up. The repository still needs a corrective pass for startup loudness, mute/unmute recovery, slider synchronization, and quick-control placement. Use `plan.md § v0.20.5` and `FINDINGS.md § 2026-05-21` for the current maintenance status.
-
-Audio maintenance boundaries:
-
-- Supported audio import extensions: `.mp3`, `.ogg`, `.m4a`, `.wav`
-- Generated audio assets: `customer-preview/audio/*`
-- Generated runtime payload: `customer-preview/customer-audio.js`
-- Runtime global consumed by app: `window.__FREYRAUM_AUDIO`
-- Failures stay warning-first in importer report; they must not block image import
-
-This guide explains how the image system works after the v0.07 importer update.
-
-It is meant for the person who maintains the project folder, supports the customer,
-or needs to understand why an image does or does not appear in the gallery.
-
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
 
 ## v0.17 implemented — accessibility and dead-code cleanup (2026-05-20)
 

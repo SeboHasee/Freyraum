@@ -1,9 +1,9 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
 
-## v0.20.5 — Documentation correction after audio regression audit (2026-05-21, audit complete)
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 
-Current status: planning follow-up only. The repository still contains active audio regressions, so docs must describe the audio feature as **under repair** until the next implementation pass actually validates startup loudness, slider sync, mute recovery, and corrected control placement. Canonical references: `plan.md § v0.20.5`, `FINDINGS.md § 2026-05-21`.
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
 
 ## v0.20 — Full documentation check-up (2026-05-20, audit complete)
 

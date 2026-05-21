@@ -1,9 +1,9 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
 
-## v0.20.7 — Technical audit complete; all blocking audio bugs confirmed resolved (2026-05-21)
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 
-A deep code audit was completed for all v0.20 audio and control files. All previously reported customer-visible audio regressions (startup-muted, zero-volume on unmute, wrong volume mapping, wrong control placement) are **confirmed fixed** in the current codebase. Ten quality-improvement findings with coding suggestions are recorded in `plan.md § v0.20.7` for the next implementation pass.
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
 
 ## v0.20.6 — Audio stabilization follow-up implemented (2026-05-21)
 

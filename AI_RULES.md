@@ -1,15 +1,9 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
 
-## v0.20.5 — Audio bugfix constraints after failed follow-up (2026-05-21)
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 
-The current audio implementation is **not** a finished precedent. Until the next fix lands:
-
-- Do **not** treat the current power-curve mapping in `src/audio/volumeMapping.ts` as canonical; the requested contract is `display 0..100 ↔ effective 0..0.30`.
-- Do **not** let `HTMLMediaElement.volume` feedback overwrite the persisted/user-selected target loudness. Fade envelopes and mute transitions must operate on live element state only.
-- Do **not** render quick-control slider values from transient fade state; both sliders must reflect the same target loudness source of truth.
-- Do **not** preserve the current bottom-left quick-control placement as if it were approved.
-- Keep detailed diagnostics when touching audio state transitions, because startup-muted and unmute-at-0 regressions are now confirmed failure modes.
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
 
 ## v0.20.3 — Audio implementation planning constraints (2026-05-20)
 

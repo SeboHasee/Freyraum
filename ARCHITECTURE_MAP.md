@@ -1,16 +1,9 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
 
-## v0.20.5 — Audio regression boundary update (2026-05-21, planning only)
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 
-**Not fixed yet.** Current architecture risk is now understood more precisely:
-
-- `BackgroundAudioManager` currently mixes **target loudness** and **live media-element loudness**. The next implementation pass must separate them so fade envelopes and `volumechange` feedback cannot overwrite the user-selected target.
-- `src/audio/volumeMapping.ts` currently encodes the wrong contract. The requested architecture contract is `display 0..100 ↔ effective 0..0.30`, so UI `50%` must equal effective `0.15`.
-- `src/ui/AudioControls.ts` must stop rendering transient fade-state volume as if it were the persisted user choice.
-- Quick-control placement must be treated as unresolved; bottom-left is no longer a valid architectural assumption.
-
-Canonical recovery plan: `plan.md § v0.20.5`. Audit details: `FINDINGS.md § 2026-05-21`.
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
 
 ## v0.20.3 planning boundary — audio UX technical hardening (2026-05-20)
 

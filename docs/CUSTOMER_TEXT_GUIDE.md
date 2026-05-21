@@ -1,22 +1,9 @@
 # FREYRAUM — How to import painting text (v0.18 — shipped)
-> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+> Last full markdown audit: 2026-05-21 (v0.20.8 — complete v0.20 implementation + markdown sync).
 
-## v0.20.5 status note
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
 
-Background-audio importer support exists, but the runtime audio controls are under follow-up because startup loudness, mute recovery, slider sync, and control placement still have open regressions. This guide remains focused on text-sidecar workflow only.
-
-> Status: **implemented and shipped in v0.18 (2026-05-20)**. The importer
-> (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecar files
-> beside every painting and uses your text in the gallery info panel.
-
-You do **not** need a code editor, terminal, or any technical tool.
-You only need a plain text editor:
-
-- Windows → Notepad
-- macOS → TextEdit, switched to plain text (Format → Make Plain Text)
-- Linux → any UTF-8 editor (gedit, kate, Sublime, VS Code, …)
-
----
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
 
 ## The idea in one sentence
 
