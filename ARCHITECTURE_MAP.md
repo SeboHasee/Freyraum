@@ -1,7 +1,7 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
 
-## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support (planning, 2026-05-21)
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (planning, 2026-05-21)
 
 Current status: **planning**. Boot-path and tab-lifecycle gaps identified by code audit and online research:
 
@@ -28,6 +28,26 @@ Current status: **planning**. Boot-path and tab-lifecycle gaps identified by cod
 | H-05 | Importer warns ">4096px downscale" for all large images; 16K norm not reflected | Open — planned |
 | H-06 | No NPOT dimension note in importer | Open — planned (diagnostic only) |
 | H-07 | No LOD / tiled streaming for images exceeding device `maxTextureSize` | Open — future pass |
+
+### I-series: Global Pointer Tracking
+
+| Gap | Component | Status |
+|-----|-----------|--------|
+| I-01 | Hover rotation only updates when cursor is over the canvas — freezes over timeline / settings / nav overlays | Open — planned |
+| I-02 | Touch Events fallback `mousemove` canvas-scoped only — same hover freeze in legacy browsers | Open — planned |
+| I-03 | `setPointerCapture` failure unlogged; no global drag fallback if capture is stolen by an overlay | Open — planned |
+| I-04 | Touch Events path: `touchmove` canvas-scoped; touch drag interrupted if finger exits to adjacent element | Open — planned |
+
+### J-series: Timeline Scalability
+
+| Gap | Component | Status |
+|-----|-----------|--------|
+| J-01 | All thumbnails rendered as full DOM nodes at construction — no virtual windowing | Open — planned |
+| J-02 | No scroll-arrow buttons for mouse-click navigation of the timeline strip | Open — planned |
+| J-03 | No artwork counter ("3 / 20") in the timeline bar | Open — planned |
+| J-04 | No CSS `mask-image` edge fade to indicate off-screen content | Open — planned |
+| J-05 | Timeline thumbnail size hardcoded at 150×95px — not responsive | Open — planned |
+| J-06 | No group/page navigation for 50+ artwork galleries | Open — future pass |
 
 Full plan: `plan.md § v0.21`. Research details: `FINDINGS.md § 2026-05-21`.
 

@@ -1,9 +1,9 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
 
-## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support (planning, 2026-05-21)
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (planning, 2026-05-21)
 
-Current status: **planning**. A deep code audit and online research session revealed 7 preloading/loading-screen gaps (G-01 through G-07) and 7 further gaps around tab switching smoothness and 16K high-resolution image support (H-01 through H-07). Full implementation plans are in `plan.md § v0.21`. Research notes and findings are in `FINDINGS.md § 2026-05-21`.
+Current status: **planning**. A deep code audit and online research session revealed 7 preloading/loading-screen gaps (G-01 through G-07), 7 further gaps around tab switching smoothness and 16K high-resolution image support (H-01 through H-07), 4 global pointer tracking gaps (I-01 through I-04), and 6 timeline scalability gaps (J-01 through J-06). Full implementation plans are in `plan.md § v0.21`. Research notes and findings are in `FINDINGS.md § 2026-05-21`.
 
 Planned changes:
 - Branded interactive loading screen (dark glass theme, wordmark, real progress bar, particles, hint texts, reveal animation)
@@ -16,6 +16,12 @@ Planned changes:
 - TextureManager oversized-texture diagnostic warning (fix H-03)
 - PaintingMaterial GLSL `highp` precision guard for large UV detail tiling (fix H-04)
 - Importer updated to 16K norm: four-tier resolution guidance, updated GPU memory thresholds (fix H-05)
+- **Global hover rotation tracking**: painting tilt tracks the cursor across the timeline, settings panel, nav buttons, and all other UI elements — not just the canvas (fix I-01 through I-04)
+- **Timeline scroll arrows**: left/right page-scroll buttons with auto-hide at scroll boundaries (fix J-02)
+- **Artwork counter**: "3 / 20" indicator chip in timeline bar with ARIA live announce (fix J-03)
+- **Virtual rendering window**: for 20+ artwork galleries, only instantiate visible thumbnail DOM nodes (fix J-01)
+- **Edge fade gradients**: CSS mask-image fades on both ends of the timeline strip to indicate off-screen content (fix J-04)
+- **Responsive thumb sizing**: timeline thumbnails scale from 90px (mobile) to 150px (desktop) via `clamp()` (fix J-05)
 
 
 

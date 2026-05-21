@@ -1,7 +1,7 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
 
-## v0.21 — Preloading, Interactive Loading Screen, Tab Switching Smoothness + 16K High-Resolution Support (2026-05-21)
+## v0.21 — Preloading, Interactive Loading Screen, Tab Switching Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (2026-05-21)
 
 ### Status
 
@@ -10,6 +10,8 @@ Planning. This section is a full code audit + deep online research plan covering
 2. Tab switching smoothness: bfcache, Page Visibility gating, WebGL context loss, animation time-jump prevention (H-01 through H-03)
 3. 16K high-resolution image support: GPU memory, texture size limits, tiled streaming, compressed formats, shader precision (H-04 through H-07)
 4. Importer norm updates for high-resolution artwork (H-05)
+5. Global pointer tracking — painting drag and hover rotation always tracked across all UI elements (timeline, settings panel, nav buttons, preferences overlay) (I-01 through I-04)
+6. Timeline scalability — proper design and programming for large painting collections with virtual rendering, navigation arrows, counter, and responsive sizing (J-01 through J-06)
 
 Every finding cites the exact file and line verified in the current source. Implementation patches are provided inline.
 
@@ -641,9 +643,472 @@ npm run lint
 npm run build
 ```
 
+---
 
+## v0.21 — Extension: Global Pointer Tracking + Timeline Scalability (2026-05-21)
 
-### Status
+### Overview
+
+This extension covers two new v0.21 gaps discovered during the interaction and timeline code audit:
+
+**I-series (Global Pointer Tracking):** The painting drag (pan) and hover-rotation must be tracked across **every** UI element — timeline strip, settings/preferences panel, navigation buttons, zoom controls, topbar, and any future overlay. Currently the hover rotation freezes and drag may misbehave when the cursor moves over any overlay.
+
+**J-series (Timeline Scalability):** The `Timeline.ts` renders all artwork thumbnails as full DOM nodes at construction time. For galleries with many paintings this causes slow initial paint, memory pressure, and a cluttered strip with no quick navigation. The timeline must be redesigned for large collections with virtual rendering, navigation arrows, a counter, and responsive sizing.
+
+---
+
+### Audit scope
+
+| File | Lines audited |
+|------|--------------|
+| `src/interaction/CanvasInteraction.ts` | 1–358 |
+| `src/timeline/Timeline.ts` | 1–206 |
+| `src/styles/main.scss` | 943–1110 (timeline block) |
+
+---
+
+### I-series — Global Pointer Tracking
+
+#### I-01 — Hover rotation freezes when cursor enters any UI overlay [MEDIUM]
+
+**File:** `src/interaction/CanvasInteraction.ts:147–156`
+
+**Problem:** `updateHoverRotation` is called only from `onPointerMove`, which fires only when the pointer is either captured (dragging) or physically over the canvas element. As soon as the mouse drifts over the timeline bar, the preferences panel, a nav button, or any other UI element the pointer is no longer over the canvas. `onPointerMove` stops firing → `updateHoverRotation` is never called → the painting's subtle tilt locks at the last angle until the cursor returns to the canvas.
+
+The hover effect is specifically designed to follow the cursor anywhere on the page (it reads `clientX / window.innerWidth`), so the fix is to source it from the global window instead of the canvas.
+
+**Root cause:** The canvas-scoped `pointermove` / `mousemove` event does not reach overlay elements. The global `window` level always receives pointer movement regardless of which element is under the cursor.
+
+**Research validation:** MDN Pointer Events: "A `pointermove` event is dispatched to the element that has pointer capture set, or, if no capture is set, to the element the pointer is over." → Capturing on canvas only covers active drag. Global `window.pointermove` covers idle hover at all times. (developer.mozilla.org/en-US/docs/Web/API/Pointer_events)
+
+**Patch — `src/interaction/CanvasInteraction.ts`:**
+```typescript
+// Add to class fields:
+private readonly onWindowPointerMove: (e: PointerEvent) => void;
+
+// In constructor, after all canvas listeners:
+this.onWindowPointerMove = (e: PointerEvent) => {
+  // Update hover rotation for fine pointer at any screen position, even
+  // when the cursor is over the timeline, settings panel, nav buttons, etc.
+  if (e.pointerType !== 'mouse') return;
+  if (this.state !== 'idle') return; // defer to active gesture during drag
+  this.updateHoverRotation(e.clientX, e.clientY);
+  this.diagnostics.debug('hover-global', 'Global hover rotation update', {
+    x: Math.round(e.clientX),
+    y: Math.round(e.clientY),
+  });
+};
+window.addEventListener('pointermove', this.onWindowPointerMove, { passive: true });
+
+// In dispose():
+window.removeEventListener('pointermove', this.onWindowPointerMove);
+```
+
+Remove the canvas-local hover call from `onPointerMove` (the idle branch) once this global handler is active to avoid double-processing.
+
+---
+
+#### I-02 — Legacy `mousemove` hover also canvas-scoped [LOW]
+
+**File:** `src/interaction/CanvasInteraction.ts:300–305`
+
+**Problem:** The Touch Events fallback branch registers `mousemove` on `this.canvas`. Same problem as I-01 for the subset of users on legacy browsers.
+
+**Patch — replace canvas-scoped `mousemove` with window-scoped:**
+```typescript
+// Remove:
+this.canvas.addEventListener('mousemove', this.onLegacyMouseMove);
+
+// Add to constructor (Touch Events branch):
+window.addEventListener('mousemove', this.onLegacyMouseMove, { passive: true });
+
+// Update dispose():
+window.removeEventListener('mousemove', this.onLegacyMouseMove);
+```
+
+`onLegacyMouseMove` already guards `state !== 'idle'` so it will not interfere with active gestures.
+
+---
+
+#### I-03 — Panning drag: no global fallback when pointer leaves canvas without capture [LOW]
+
+**File:** `src/interaction/CanvasInteraction.ts:118–123`
+
+**Problem:** In the Pointer Events path, `this.canvas.setPointerCapture(e.pointerId)` is called on `pointerdown`. This correctly routes all subsequent `pointermove` and `pointerup` to the canvas even when the pointer leaves the element — so panning already works across overlays in the standard path.
+
+However, `setPointerCapture` can silently fail (older browsers, or if the canvas is inside a Shadow DOM). The current code wraps the call in `try/catch` but does not log the failure and does not install a global fallback.
+
+Additionally: any overlay that calls `element.setPointerCapture(e.pointerId)` on the same pointer ID would steal the capture from the canvas mid-drag — a rare but possible case if a future UI element (e.g., a draggable preferences panel) is added.
+
+**Patch — add window-level fallback listeners during active drag:**
+```typescript
+// Add to class fields:
+private readonly onWindowDragMove: (e: PointerEvent) => void;
+private readonly onWindowDragEnd: (e: PointerEvent) => void;
+
+// In onPointerDown (after setPointerCapture):
+window.addEventListener('pointermove', this.onWindowDragMove, { passive: true });
+window.addEventListener('pointerup', this.onWindowDragEnd, { passive: true });
+
+// New handlers:
+private readonly onWindowDragMove = (e: PointerEvent): void => {
+  // Only act on the captured pointer ID during an active pan; the
+  // canvas capture already handles this normally — this is a fallback.
+  const slot = this.active.get(e.pointerId);
+  if (!slot || this.state !== 'panning') return;
+  const dx = e.clientX - slot.lastX;
+  const dy = e.clientY - slot.lastY;
+  slot.lastX = e.clientX;
+  slot.lastY = e.clientY;
+  this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
+  this.diagnostics.debug('drag-global', 'Global drag fallback active', {
+    pointerId: e.pointerId,
+    dx: Math.round(dx),
+    dy: Math.round(dy),
+  });
+};
+
+private readonly onWindowDragEnd = (e: PointerEvent): void => {
+  if (!this.active.has(e.pointerId)) return;
+  this.active.delete(e.pointerId);
+  if (this.active.size === 0) this.state = 'idle';
+  window.removeEventListener('pointermove', this.onWindowDragMove);
+  window.removeEventListener('pointerup', this.onWindowDragEnd);
+};
+```
+
+The canvas-captured path is the primary path; the window handlers are a safety net only.
+
+---
+
+#### I-04 — Touch Events fallback: touch drag not tracked off-canvas [LOW]
+
+**File:** `src/interaction/CanvasInteraction.ts:235–261`
+
+**Problem:** In the Touch Events fallback path, `touchmove` is registered on `this.canvas` with `{ passive: false }` for `preventDefault`. Touch events do not support pointer capture (unlike Pointer Events). If the user starts a drag on the canvas and moves a finger to an adjacent element (e.g., the timeline strip), `touchmove` fires on that element instead of the canvas, and the pan stops.
+
+**Patch:** Register a global `touchmove` listener during active touch panning, limited to the known touch ID, and remove it on `touchend`:
+```typescript
+// In onTouchStart when state becomes 'panning':
+window.addEventListener('touchmove', this.onGlobalTouchMove, { passive: false });
+window.addEventListener('touchend', this.onGlobalTouchEnd, { passive: true });
+
+private readonly onGlobalTouchMove = (e: TouchEvent): void => {
+  if (this.state !== 'panning') return;
+  const slot = this.active.get(0);
+  if (!slot) return;
+  const t = Array.from(e.changedTouches).find(tc => tc.identifier === slot.id);
+  if (!t) return;
+  if (e.cancelable) e.preventDefault();
+  const dx = t.clientX - slot.lastX;
+  const dy = t.clientY - slot.lastY;
+  slot.lastX = t.clientX;
+  slot.lastY = t.clientY;
+  this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
+  this.diagnostics.debug('touch-global', 'Global touch drag fallback', {
+    dx: Math.round(dx),
+    dy: Math.round(dy),
+  });
+};
+
+private readonly onGlobalTouchEnd = (): void => {
+  window.removeEventListener('touchmove', this.onGlobalTouchMove);
+  window.removeEventListener('touchend', this.onGlobalTouchEnd);
+  this.active.clear();
+  this.state = 'idle';
+};
+```
+
+---
+
+#### I-series acceptance tests
+
+| Test | Pass condition |
+|------|---------------|
+| Hover over timeline — rotation | Move mouse over the timeline strip; painting tilt continues to follow the cursor smoothly |
+| Hover over settings panel — rotation | Open the settings/preferences overlay; move mouse across it; painting angle updates in real time |
+| Hover over nav buttons — rotation | Hover over the prev/next navigation arrows; painting tilt updates |
+| Drag starts on canvas, ends on timeline | Start a pan drag on the canvas and move to the timeline; pan continues without interruption |
+| Drag starts on canvas, ends on settings | Start a pan drag on the canvas and move into the settings panel; pan continues without interruption |
+| Legacy mousemove — all elements | In a Touch Events fallback browser, hover over any overlay; painting tilt updates |
+| Global listeners removed on dispose | After `dispose()`, no global `pointermove`/`mousemove` listeners remain on `window` |
+| Diagnostics logging | `drag-global` and `hover-global` events appear in diagnostics at debug level when applicable |
+
+---
+
+### J-series — Timeline Scalability
+
+#### J-01 — All artwork thumbnails rendered as DOM nodes at construction [HIGH]
+
+**File:** `src/timeline/Timeline.ts:36–84`
+
+**Problem:** `artworks.forEach(...)` unconditionally creates a full DOM subtree (`<li>` + `<button>` + `<span>` + `<img>` + label) for every artwork during construction. For a gallery with:
+- 20 artworks: 20 × ~5 nodes = 100 DOM nodes (manageable)
+- 50 artworks: 50 × ~5 nodes = 250 DOM nodes (noticeable layout cost)
+- 100+ artworks: significant initial paint delay, memory pressure, layout thrashing on scroll
+
+Each `<img>` uses `loading="lazy"` and `decoding="async"` which helps, but the full DOM node tree is still created and the browser must still resolve layout for all 100+ items before the timeline can paint.
+
+**Research validation:** Chrome DevTools "Avoid excessive DOM size" audit: > 1 500 DOM nodes is a performance warning; > 60 DOM nodes deep is a warning. (web.dev/articles/dom-size). Virtual list rendering (only instantiate visible + buffer items) is the standard solution.
+
+**Patch — virtual rendering window in `Timeline.ts`:**
+
+```typescript
+// Class-level constants:
+private static readonly VIRTUAL_BUFFER = 5; // render N items before/after visible range
+private static readonly VIRTUAL_THRESHOLD = 20; // only virtualise if artwork count > this
+
+// New field:
+private readonly virtualEnabled: boolean;
+private renderedRange: [number, number] = [0, 0]; // inclusive index range currently in DOM
+
+// In constructor: if artworks.length > VIRTUAL_THRESHOLD, do NOT render all items.
+// Instead, create placeholder <li> nodes (skeleton only, no image) for the full count,
+// then call renderWindow(0, VIRTUAL_BUFFER * 2) to populate only the first visible range.
+
+private renderWindow(from: number, to: number): void {
+  const clamped = [
+    Math.max(0, from),
+    Math.min(this.artworks.length - 1, to),
+  ] as [number, number];
+
+  for (let i = clamped[0]; i <= clamped[1]; i++) {
+    if (this.thumbs[i]) continue; // already rendered
+    this.buildThumb(i); // create full DOM node and replace skeleton placeholder
+  }
+  this.renderedRange = clamped;
+  this.diagnostics.debug('timeline', 'virtual-window', 'Rendered virtual window', {
+    from: clamped[0],
+    to: clamped[1],
+    total: this.artworks.length,
+  });
+}
+
+// On scroll, extend window: add a scroll listener to listEl that calls
+// renderWindow(visibleFrom - VIRTUAL_BUFFER, visibleTo + VIRTUAL_BUFFER).
+// Optionally: destroy far-off items (replace with skeleton) to reclaim memory.
+```
+
+For galleries with ≤ `VIRTUAL_THRESHOLD` artworks, the existing full-render path is unchanged.
+
+---
+
+#### J-02 — No navigation arrows for scrolling the timeline strip [MEDIUM]
+
+**File:** `src/timeline/Timeline.ts` (no current arrow controls)
+
+**Problem:** On desktop the timeline has no left/right arrow buttons. Users must:
+- Click and drag the scroll area
+- Use arrow keys (only when a thumb has focus)
+- Scroll with the trackpad/mouse wheel
+
+There is no visible affordance that more items exist off-screen. For large galleries (20+ paintings), users may miss artworks entirely.
+
+**Research validation:** Museum collection interfaces (Google Arts & Culture, MoMA Online Collection) universally include prev/next arrow buttons on horizontal strips for discoverability. CSS `overflow-x: auto` with hidden scrollbar gives no visual cue of more content.
+
+**Patch — add scroll-arrow buttons to `Timeline`:**
+
+```typescript
+// In constructor, after creating this.el:
+const prevBtn = document.createElement('button');
+prevBtn.className = 'timeline__scroll-arrow timeline__scroll-arrow--prev';
+prevBtn.setAttribute('aria-label', 'Vorherige Werke');
+prevBtn.innerHTML = '‹';
+prevBtn.addEventListener('click', () => this.scrollByPage(-1));
+
+const nextBtn = document.createElement('button');
+nextBtn.className = 'timeline__scroll-arrow timeline__scroll-arrow--next';
+nextBtn.setAttribute('aria-label', 'Nächste Werke');
+nextBtn.innerHTML = '›';
+nextBtn.addEventListener('click', () => this.scrollByPage(1));
+
+this.el.prepend(prevBtn);
+this.el.appendChild(nextBtn);
+
+private scrollByPage(direction: -1 | 1): void {
+  const pageWidth = this.listEl.clientWidth;
+  this.listEl.scrollBy({ left: direction * pageWidth * 0.8, behavior: 'smooth' });
+  this.diagnostics.debug('timeline', 'scroll-page', 'Timeline page scroll', {
+    direction,
+    pageWidth,
+  });
+}
+```
+
+Arrows are hidden via CSS when the list is fully scrolled to that end (use `scroll` event + `scrollLeft` / `scrollWidth` - `clientWidth` to toggle a CSS class).
+
+**CSS additions (`main.scss`):**
+```scss
+.timeline__scroll-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px; height: 32px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  font-size: 18px;
+  color: var(--text-primary);
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity var(--dur-control) var(--ease-out);
+  pointer-events: none;
+
+  &--prev { left: 6px; }
+  &--next { right: 6px; }
+}
+
+.timeline:hover .timeline__scroll-arrow,
+.timeline:focus-within .timeline__scroll-arrow {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.timeline--at-start .timeline__scroll-arrow--prev { opacity: 0; pointer-events: none; }
+.timeline--at-end   .timeline__scroll-arrow--next { opacity: 0; pointer-events: none; }
+```
+
+---
+
+#### J-03 — No artwork counter / position indicator [MEDIUM]
+
+**File:** `src/timeline/Timeline.ts`, `src/styles/main.scss`
+
+**Problem:** There is no indicator showing "Werk 3 von 20". Users cannot tell at a glance how many artworks are in the collection or where they are in the sequence. This is standard in all professional gallery interfaces.
+
+**Patch — add a counter chip to the timeline bar:**
+
+```typescript
+// In constructor:
+this.counterEl = document.createElement('span');
+this.counterEl.className = 'timeline__counter';
+this.counterEl.setAttribute('aria-live', 'polite');
+this.el.appendChild(this.counterEl);
+
+// In setActive():
+this.counterEl.textContent = `${index + 1} / ${this.thumbs.length}`;
+this.diagnostics.debug('timeline', 'counter-update', 'Counter updated', {
+  current: index + 1,
+  total: this.thumbs.length,
+});
+```
+
+**CSS (`main.scss`):**
+```scss
+.timeline__counter {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  pointer-events: none;
+  user-select: none;
+}
+```
+
+---
+
+#### J-04 — No edge-fade gradient indicating off-screen content [LOW]
+
+**File:** `src/styles/main.scss:959–978`
+
+**Problem:** The `.timeline__list` hides its scrollbar (`scrollbar-width: none`). Users cannot see that there are more items beyond both edges of the visible area. This is a discoverability problem for large galleries.
+
+**Patch — CSS mask-image fade at both ends of the list:**
+```scss
+.timeline__list {
+  // Add:
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent 100%
+  );
+}
+```
+
+When the list is scrolled fully to one end, update the mask dynamically (via CSS variables) to remove the fade on that end:
+```scss
+.timeline--at-start .timeline__list {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 40px), transparent 100%);
+}
+.timeline--at-end .timeline__list {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 100%);
+}
+```
+
+**Research validation:** CSS `mask-image` for indicating horizontal scroll overflow is documented in MDN and recommended in web.dev "UI Patterns for overflow scrolling" (2024). No JS required for the basic fade; scroll-position-aware toggling requires a lightweight scroll event listener.
+
+---
+
+#### J-05 — Thumbnail size not responsive at narrow viewports [LOW]
+
+**File:** `src/styles/main.scss:986–1018`
+
+**Problem:** `.timeline__thumb` is hardcoded at `width: 150px; height: 95px`. On phones (375–430px viewport), this means only 2–2.5 artworks are visible at once, making the collection feel much larger than it is and forcing more scrolling to find a specific artwork.
+
+**Patch — responsive thumb sizing:**
+```scss
+// In .timeline__thumb, replace fixed width/height with:
+width: clamp(90px, 15vw, 150px);
+height: clamp(57px, 9.5vw, 95px);
+```
+
+This scales smoothly from 90×57px at 600px viewport to 150×95px at 1000px+ viewport. Aspect ratios of the content images are unaffected (governed by `.timeline__frame` inner layout).
+
+---
+
+#### J-06 — No group/page navigation for very large collections (50+ artworks) [MEDIUM — future pass]
+
+**Context:** For galleries with 50+ artworks, the flat horizontal scroll strip becomes impractical even with virtual rendering. Industry patterns (Google Arts & Culture, Artsy, museum collections) use grouped sections, decade/series grouping, or a compact pagination control ("1–20 of 87").
+
+**Proposed future design:**
+- Group artworks by `series` field (if present in the `Artwork` type) or in blocks of 20.
+- Show group headings above the timeline list as anchor points.
+- Add a compact group-jump dropdown: selecting a group jumps the scroll position and active window.
+- For more than 50 artworks: collapse to a paginated view (page 1 of N, with 20 per page) with prev/next page buttons replacing the continuous scroll.
+
+**For this v0.21 planning pass:** No code change. Document the gap. Implement when the gallery grows beyond 20 artworks in production.
+
+---
+
+### J-series acceptance tests
+
+| Test | Pass condition |
+|------|---------------|
+| Large gallery — initial paint | With 50 artworks, timeline paints first visible thumbs (≤20) before remaining 30 are loaded; no layout stall |
+| Virtual window — scroll | Scrolling the timeline right gradually renders more thumbs; far-left thumbs may be replaced by skeletons |
+| Scroll arrows visible | Hovering or focusing the timeline reveals left/right arrow buttons; clicking scrolls ~0.8 page width |
+| Arrow at start | When scrolled fully left, left arrow is hidden / disabled |
+| Arrow at end | When scrolled fully right, right arrow is hidden / disabled |
+| Counter display | Counter reads "1 / 20" (or total count) and updates on every artwork navigation |
+| Counter ARIA | Screen reader announces counter text on change (`aria-live="polite"`) |
+| Edge fade | Both ends of the timeline list show a fade gradient indicating more content; fades remove when at the boundary |
+| Responsive thumbs | At 375px viewport, thumbs are ≈90×57px; at 1200px they are 150×95px |
+| Keyboard nav unchanged | Arrow keys, Home, End still navigate between thumbs; roving tabindex still applies |
+| Logging | `virtual-window`, `scroll-page`, `counter-update` events appear in diagnostics at debug level |
+
+---
+
+### Validation
+
+```bash
+npm run lint
+npm run build
+```
 
 Implemented. This pass completes the v0.20.7 gap-closure coding plan and refreshes every tracked Markdown file to remove stale “under repair” wording.
 

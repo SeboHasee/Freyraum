@@ -1,11 +1,63 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
 
-## 2026-05-21 — v0.21 extension: tab switching smoothness + 16K high-resolution support
+## 2026-05-21 — v0.21 extension: global pointer tracking + timeline scalability
 
 ### Audit method
 
-Deep code audit of `LightingSetup.ts`, `RendererManager.ts`, `TextureManager.ts`, `PaintingMaterial.ts`, and `scripts/import-artworks.mjs`. Six targeted online research queries covering: Page Visibility API + WebGL delta clamping, bfcache + media state, WebGL context loss/restore Three.js r125+, 16K texture GPU limits (Khronos spec + webglreport.com), compressed texture formats (KTX2/Basis Universal), and GLSL fragment precision qualifiers.
+Full line-by-line inspection of `src/interaction/CanvasInteraction.ts` (358 lines), `src/timeline/Timeline.ts` (206 lines), and the `.timeline` CSS block in `src/styles/main.scss` (lines 943–1110). Four targeted online research queries covering: Pointer Events Level 3 global capture patterns, virtual list rendering for large DOM trees, museum-grade horizontal timeline UI patterns, and CSS mask-image edge-fade patterns.
+
+### Code audit findings
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| I-01 | **MEDIUM** | `src/interaction/CanvasInteraction.ts:147–156` | `updateHoverRotation` is called from canvas-scoped `onPointerMove` only. Moving mouse over timeline, settings panel, or nav buttons stops the painting rotation update. Global `window.pointermove` listener needed for idle hover at all screen positions. |
+| I-02 | **LOW** | `src/interaction/CanvasInteraction.ts:300–305` | Touch Events fallback `mousemove` registered on `canvas` element only — same hover freeze as I-01 for legacy browsers. |
+| I-03 | **LOW** | `src/interaction/CanvasInteraction.ts:118–123` | `setPointerCapture` failure is silently caught with no fallback. A future overlay that steals pointer capture could break panning. Global `window.pointermove` / `pointerup` fallback needed during active drag. |
+| I-04 | **LOW** | `src/interaction/CanvasInteraction.ts:235–261` | Touch Events fallback: `touchmove` registered on canvas only. Touch drag that exits to an adjacent element (e.g., timeline strip) loses tracking. |
+| J-01 | **HIGH** | `src/timeline/Timeline.ts:36–84` | All artwork thumbnails rendered as full DOM nodes at construction. 50+ artworks creates 250+ nodes — initial paint delay and memory pressure. No virtual rendering window. |
+| J-02 | **MEDIUM** | `src/timeline/Timeline.ts` (no arrow controls) | No left/right scroll-arrow buttons on the timeline strip. Users have no visible affordance that more artworks exist off-screen. |
+| J-03 | **MEDIUM** | `src/timeline/Timeline.ts` (no counter) | No artwork counter / position indicator ("3 / 20"). Users cannot tell how many artworks are in the collection. |
+| J-04 | **LOW** | `src/styles/main.scss:959–978` | Hidden scrollbar (`scrollbar-width: none`) with no CSS mask-image edge fade. No visual indicator of off-screen content. |
+| J-05 | **LOW** | `src/styles/main.scss:986–1018` | `.timeline__thumb` hardcoded at `width: 150px; height: 95px`. On 375px phones only 2–2.5 artworks are visible without responsive scaling. |
+| J-06 | **MEDIUM — future** | Architecture | No group/page navigation for 50+ artworks. Flat scroll strip is impractical beyond ~30 items. |
+
+### Research findings
+
+**Pointer Events Level 3 — global capture (MDN, W3C spec)**
+- `pointermove` fires on the element that has pointer capture (via `setPointerCapture`) OR on the element the pointer is physically over.
+- Global `window.addEventListener('pointermove', ...)` fires for ALL pointer movements regardless of which element is under the cursor — correct source for hover rotation that should work across the entire page.
+- Registering global listeners during drag (mousedown → mouseup) and removing them immediately after is the standard pattern; no memory leak risk.
+- Reference: [MDN Pointer Events](https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events), [W3C Pointer Events L3](https://www.w3.org/TR/pointerevents3/)
+
+**Virtual list rendering for large DOM trees (web.dev, Chrome DevTools docs)**
+- Chrome DevTools "Avoid excessive DOM size" warns at > 1 500 total nodes and > 60 deep nodes.
+- Virtual / windowed rendering (only instantiate visible + buffer items) is the canonical solution for long lists.
+- A render buffer of ±5 items beyond the visible viewport prevents pop-in during fast scrolling.
+- Plain vanilla JS virtual list: maintain an array of data items; only create DOM nodes for the visible window; replace off-screen items with fixed-height skeleton placeholders.
+- Reference: [web.dev DOM size](https://web.dev/articles/dom-size), [TanStack Virtual (concept reference)](https://tanstack.com/virtual)
+
+**Museum-grade horizontal timeline UI patterns (Google Arts & Culture, MoMA Online, Artsy)**
+- Prev/next page arrow buttons on the strip edges: standard for discoverability.
+- Artwork counter chip ("3 / 20"): standard for orientation.
+- CSS `mask-image` edge fade: standard to indicate more content beyond visible area.
+- Scroll-snap with `proximity`: already implemented in FREYRAUM v0.11.
+- Responsive thumb sizing (`clamp()`): scales gracefully from mobile to 4K displays.
+- Reference: [Google Arts & Culture](https://artsandculture.google.com/), [MoMA Online Collection](https://www.moma.org/collection/)
+
+**CSS `mask-image` for scroll overflow indication (MDN, web.dev 2024)**
+- `mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 calc(100% - 40px), transparent 100%)` fades both edges of an overflowing container.
+- Toggle `--mask-left` / `--mask-right` CSS variables via a scroll listener to remove the fade at scroll boundaries.
+- No performance cost: composited on GPU alongside the existing `backdrop-filter`.
+- Reference: [MDN mask-image](https://developer.mozilla.org/en-US/docs/Web/CSS/mask-image)
+
+### Remaining status
+
+I-series (I-01 through I-04) and J-series (J-01 through J-06) gaps added. All are open — planned. No code changed in this audit pass.
+
+
+
+
 
 ### Code audit findings
 

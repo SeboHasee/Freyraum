@@ -1,7 +1,7 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support plan).
+> Last full markdown audit: 2026-05-21 (v0.21 — preloading + interactive loading screen + tab smoothness + 16K high-res support + global pointer tracking + timeline scalability plan).
 
-## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support (2026-05-21, planning)
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (2026-05-21, planning)
 
 ### Planned (original scope — G-01 through G-07)
 
@@ -22,6 +22,22 @@
 - **Importer 16K norm update (H-05):** Replace single `MAX_RECOMMENDED_DIMENSION = 4096` with a four-tier threshold system (≤ 4096 all-safe / ≤ 8192 modern-mobile+desktop / ≤ 16384 high-end-desktop / > 16384 hard-block). Updated GPU memory thresholds: 85 MB / 341 MB / 1024 MB.
 - **Importer NPOT diagnostic (H-06):** Add silent internal note for NPOT dimensions (not customer-visible). WebGL 2.0 handles NPOT correctly; note is advisory for future WebGL 1.0 fallback awareness.
 - **LOD/tiled streaming (H-07, future):** Document the LOD pipeline architecture (thumb/preview/hires manifest + progressive swap) for when zoom depth requires full 16K detail. No code change in this pass.
+
+### Planned (extension — I-01 through I-04: global pointer tracking)
+
+- **Global hover rotation (I-01):** Register `window.addEventListener('pointermove', ...)` for hover rotation so the painting tilt tracks the cursor even when it is over the timeline strip, settings/preferences panel, nav buttons, topbar, or any other overlay element.
+- **Legacy mousemove global (I-02):** Move the Touch Events fallback `mousemove` listener from the canvas to `window` — same hover-rotation fix for legacy browsers.
+- **Global drag fallback (I-03):** Add window-level `pointermove` / `pointerup` listeners during active canvas panning as a safety net for cases where `setPointerCapture` is silently not honoured by an overlay element.
+- **Touch drag off-canvas (I-04):** In the Touch Events fallback path, register a global `touchmove` listener during active panning so a finger that drifts over the timeline or another overlay does not interrupt the drag.
+
+### Planned (extension — J-01 through J-06: timeline scalability)
+
+- **Virtual rendering window (J-01):** For galleries with > 20 artworks, only instantiate DOM nodes for visible + ±5 buffer thumbnails; remaining positions hold skeleton placeholders. Extends the render window on scroll.
+- **Timeline scroll arrows (J-02):** Add left/right arrow buttons that appear on hover over the timeline; each click scrolls by ~80% of the visible width; arrows auto-hide when at the respective scroll boundary.
+- **Artwork counter (J-03):** Add a "3 / 20" counter chip in the top-right corner of the timeline bar, updated on every navigation, with `aria-live="polite"` for screen readers.
+- **Edge fade gradients (J-04):** Apply CSS `mask-image` linear gradient on both ends of the timeline list so users see a fade indicating more content; fade adjusts dynamically at scroll boundaries.
+- **Responsive thumb sizing (J-05):** Replace fixed `150×95px` with `clamp(90px, 15vw, 150px)` × `clamp(57px, 9.5vw, 95px)` so thumbs scale from mobile to 4K.
+- **Group/page navigation (J-06, future):** Document the grouped/paginated timeline design for 50+ artwork galleries. No code change in this pass.
 
 ### No runtime code changed in this pass (docs-only planning).
 
