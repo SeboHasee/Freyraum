@@ -22,6 +22,39 @@
 - A "press to start" / "Galerie betreten" button solves all three: it is the user's deliberate first gesture, it cleanly starts the AudioContext, and it happens after all warm passes complete.
 - Future rule: **loading screens for immersive WebGL/audio experiences should always require a deliberate user action to enter, not auto-reveal.** This is an industry standard for gallery, game, and experience-driven web applications.
 
+## 2026-05-21 — Audio gesture listeners must be registered BEFORE the press-to-start await
+
+- In the v0.22 plan (M-03), audio recovery `pointerdown` listeners were originally placed after `await loadingOverlay.reveal()`. This means the button click is not captured by the audio recovery path — the listener is registered AFTER the gesture has already happened.
+- The button click on the "Galerie betreten" overlay IS the first user gesture and the optimal AudioContext start point. Registering listeners post-reveal misses this window entirely.
+- Future rule: **any listener that must capture the first user gesture (for audio context, autoplay recovery, etc.) must be registered before `await reveal()`, not after.** The `await` is a blocking yield point — code after it runs only after the gesture.
+
+## 2026-05-21 — TypeScript interface changes are compilation blockers, not implementation details
+
+- The `LoadingOverlayControls` interface at `main.ts:45` declares `reveal(): void`. Changing the implementation to return `Promise<void>` without updating the interface is a TypeScript compilation error, not just a type mismatch. It will block the entire build.
+- Future rule: **whenever a method return type changes (especially from `void` to `Promise<void>` or vice versa), update the interface declaration first**, before writing any call-site code that depends on the new type. Interface changes are always step 1, not step N.
+
+## 2026-05-21 — Preload limits must account for peak CPU memory, not just GPU memory
+
+- The v0.22 L-01 plan draft iterated all artworks without a count limit. For a 50-artwork gallery with 7 PBR maps per artwork at 2048×2048 (16 MB each uncompressed), peak CPU memory before GPU upload would be 5 600 MB. This OOMs any mobile device and most mid-range desktops.
+- GPU memory (VRAM) is the concern usually discussed in WebGL performance planning. CPU memory (heap) is equally finite and silently causes browser tab crashes.
+- Future rule: **any preload strategy that decodes a bounded number of textures into CPU memory must calculate worst-case peak heap usage before choosing a limit.** For multi-map PBR sets, the per-artwork cost is 7× a single texture. Use `PBR_PRELOAD_LIMIT = 15` as a named constant with a comment stating the memory derivation.
+
+## 2026-05-21 — Synchronous cache reads are always preferable to async re-loads
+
+- The v0.22 L-02 plan described `prepareArtworkForWarmRender()` as async. After L-01 runs, all textures within `PBR_PRELOAD_LIMIT` are already in `TextureManager.cache` with keys `"${role}::${url}"`. A cache hit is synchronous — no network, no Promise needed.
+- An unnecessary `async/await` around a synchronous operation wastes one event-loop microtask turn per artwork in the warm loop (15 artworks = 15 microtask yields), adds confusing `await` syntax at the call site, and misleads readers into thinking network I/O might occur.
+- Future rule: **a method that only reads from an in-memory cache must be synchronous.** Reserve `async`/`Promise` for methods that may trigger I/O (network, file system, IndexedDB). Add a JSDoc precondition comment when a method requires callers to have pre-populated the cache.
+
+## 2026-05-21 — Interval timers must be stopped when their output is superseded
+
+- `createLoadingOverlay()` starts a 2 s hint-cycling interval. `reveal()` overwrites `subtitle.textContent` to "Galerie bereit — zum Starten klicken". But the interval still fires 2 s later, overwriting the ready-state message back to a cycling hint.
+- Future rule: **any DOM text element that is set to a terminal (final/permanent) value must have its update interval cleared at that point.** Do not rely on `dispose()` — `dispose()` is called after user interaction, which may be many seconds after the terminal value is set.
+
+## 2026-05-21 — `renderer.render()` is the only mechanism to force CPU→VRAM texture upload
+
+- `renderer.compile(scene, camera)` compiles shader programs but does NOT trigger texture upload. `texture.needsUpdate = true` marks a texture for re-upload but upload still only occurs during the next render that uses the texture. There is no direct WebGL API to upload a texture outside of a draw call.
+- Future rule: **to guarantee a texture is in VRAM before user interaction, it must be bound to the active scene mesh and the scene must be rendered at least once.** This must happen under the loading overlay so users see no visual artifact from the intermediate bind.
+
 ## 2026-05-21 — implementation shipped (2026-05-21)
 
 Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.

@@ -15,6 +15,42 @@
 | L-04 | Idle sweep redundant after L-01; retain as retry for failures; add no-op diagnostics log | **Planned (low)** |
 | L-05 | No minimum loading screen duration; branded screen flashes < 100ms on fast LAN/cache | **Planned (low)** |
 
+### M-series: Deep code audit corrections (2026-05-21)
+
+Second-pass audit found 7 additional implementation gaps in the L-series plan:
+
+| Gap | Component | Status |
+|-----|-----------|--------|
+| M-01 | `LoadingOverlayControls` interface: `reveal(): void` must become `reveal(): Promise<void>` — TypeScript compilation blocker for L-03 | **Planned** |
+| M-02 | `createLoadingOverlay()` hint timer runs during ready state and overwrites "Galerie bereit" label after 2 s — `reveal()` must stop timer first | **Planned** |
+| M-03 | Audio recovery `pointerdown` listener registered post-reveal, missing the button click gesture — must register before `await reveal()` | **Planned** |
+| M-04 | L-01 no preload count limit — 50-artwork gallery loads ~5 600 MB CPU textures → OOM on mobile — add `PBR_PRELOAD_LIMIT = 15` | **Planned** |
+| M-05 | `prepareArtworkForWarmRender()` described as async — after L-01 textures are cached; method should be synchronous `warmArtworkForGPU(): void` + add `TextureManager.getForRole()` | **Planned** |
+| M-06 | Standalone `renderer.render()` at `main.ts:567` is redundant after L-02 warm loop — remove for small galleries, keep as fallback for large | **Planned (med)** |
+| M-07 | Progress bar ranges 92–97% overlap between L-02 loop and existing code — remap: warm=93–97%, prewarm=97–99%, ready=100% | **Planned (low)** |
+
+### Boot sequence architecture after all patches (L+M series)
+
+```
+galleryManager.init()          ←→  delay(500ms)        [L-01 + L-05, parallel]
+  └─ albedo preload (LoadingManager 0–90%)
+  └─ PBR preload ≤ 15 artworks (LoadingManager 90–92%)
+  └─ showArtwork(0)
+  └─ scheduleFullTextureSetPrefetch() [no-op for loaded; retries failures]
+warmArtworkForGPU(0..N-1) + render × N                  [L-02 + M-05, sync]
+  └─ progress 93–97%
+renderer.prewarm()                                       [awaited, 97–99%]
+setProgress(100) → reveal(): Promise<void>               [L-03 + M-01]
+  └─ hint timer stopped [M-02]
+  └─ startButton shown, focus after transitionend [M-03]
+user clicks "Galerie betreten"
+  └─ pointerdown captured by pre-registered listener [M-03]
+  └─ overlay fades out over 1.3 s
+  └─ gallery fully interactive
+```
+
+Full implementation patches: `plan.md § v0.22` and `plan.md § v0.22 M-series`.
+
 ---
 
 ## v0.21 — implementation shipped (2026-05-21)

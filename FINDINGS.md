@@ -51,9 +51,31 @@ After L-01 ships (all PBR sets preloaded in `init()`), `scheduleFullTextureSetPr
 | L-04 | **LOW** | `src/gallery/GalleryManager.ts:481–497` | After L-01, `scheduleFullTextureSetPrefetch()` is a no-op for loaded artworks. Retain as second-chance retry. Add diagnostics confirmation log. |
 | L-05 | **LOW** | `src/main.ts` (boot) | No minimum loading screen duration. On fast LAN/cache, branded screen may flash < 100ms. Enforce 500ms minimum via `Promise.all`. |
 
+### New findings (M-series) — deep code audit 2026-05-21
+
+Second-pass audit against actual runtime code in `src/main.ts`, `src/gallery/GalleryManager.ts`, and `src/gallery/TextureManager.ts` found 7 additional gaps that the L-series plan did not account for:
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| M-01 | **HIGH** | `src/main.ts:41–47` | `LoadingOverlayControls` interface declares `reveal(): void`. L-03 changes the implementation to return `Promise<void>`. TypeScript compilation error unless interface is updated in lock-step. Must be changed first. |
+| M-02 | **HIGH** | `src/main.ts:264–268` | `window.setInterval(() => ..., 2000)` hint cycling timer is only cleared in `dispose()`. When `reveal()` overwrites `subtitle.textContent`, the interval fires 2 s later and overwrites it back, destroying the "Galerie bereit — zum Starten klicken" label. `reveal()` must call `window.clearInterval(hintTimer)` before updating the subtitle. |
+| M-03 | **HIGH** | `src/main.ts:609–616` | `window.addEventListener('pointerdown', onFirstInteractionPointer)` is registered AFTER `await loadingOverlay.reveal()` returns (i.e., after user clicks button). The button click is the single best AudioContext start gesture — it is not captured by the recovery system. Listeners must be registered before `await reveal()`. |
+| M-04 | **HIGH** | `src/gallery/GalleryManager.ts:250–270` | L-01 draft patch iterates all artworks with no count limit. 50 artworks × 7 PBR maps × 2048×2048 × 4 B = 5 600 MB peak CPU memory — certain OOM on mobile. Must add `PBR_PRELOAD_LIMIT = 15` constant and filter before the `Promise.allSettled` call. |
+| M-05 | **MEDIUM** | `src/gallery/GalleryManager.ts` (new method) | L-02 describes `prepareArtworkForWarmRender()` as async. After L-01, textures are already in `TextureManager.cache`. The method should be **synchronous** — no `await`, no `Promise`. Async design is misleading and adds per-artwork event-loop overhead. Rename to `warmArtworkForGPU(index): void`. Requires a new `TextureManager.getForRole(url, role)` synchronous cache getter. |
+| M-06 | **MEDIUM** | `src/main.ts:567` | After L-02 ships, the standalone `renderer.render()` at line 567 (the v0.21 single warm render pass) is superseded by the L-02 warm loop. Remove it to avoid a redundant GPU flush. For galleries above `GPU_WARM_LIMIT`, keep it as fallback — wrapped in `if (artworkCount > GPU_WARM_LIMIT)`. |
+| M-07 | **LOW** | `src/main.ts:566–575` | L-02's `setProgress(92+…)` (92–97%) and the existing `setProgress(97)` write to overlapping ranges. Remap: L-02 warm loop = 93–97%, shader prewarm = 97–99%, button-ready = 100%. Remove the redundant standalone `setProgress(97)` that is superseded by M-06. |
+
+### Research note: `renderer.compile()` does NOT force texture upload
+
+`renderer.compile(scene, camera)` compiles shader programs but does NOT force texture upload to VRAM. The L-02 per-artwork `renderer.render()` call is the correct mechanism to force CPU→VRAM transfer. This is confirmed by Three.js discourse and Chrome DevTools GPU rasterization analysis.
+
+### Research note: `TextureManager.cache` key format
+
+Cache keys are `"${role}::${url}"` — e.g., `"albedo::data:image/webp;base64,…"` or `"normal::artworks/painting-1/normal.webp"`. The existing `TextureManager.get(url)` method only looks up the `albedo` key. A new `getForRole(url, role)` getter is needed for `warmArtworkForGPU()` to retrieve authored PBR maps synchronously. This is a minimal, non-breaking addition (2 lines of code).
+
 ### Status
 
-L-series findings documented. Implementation patches planned. Not yet in runtime code.
+L-series + M-series findings documented. Full implementation patches with exact line numbers in `plan.md § v0.22`. Not yet in runtime code.
 
 ---
 

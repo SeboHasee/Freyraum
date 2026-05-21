@@ -1,5 +1,5 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-21 (v0.21 shipped — preloading, interactive loading screen, tab/context smoothness, 16K diagnostics, global pointer tracking, timeline scalability).
+> Last full markdown audit: 2026-05-21 (v0.22 planned — L+M series: guaranteed jank-free gallery via full PBR pre-load + GPU warm-all + "Galerie betreten" press-to-start + 7 M-series deep-audit corrections).
 
 ## v0.21 — implementation shipped (2026-05-21)
 

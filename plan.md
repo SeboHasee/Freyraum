@@ -38,6 +38,8 @@ Once L-01 ships (all PBR sets preloaded during loading), the idle sweep is redun
 | L-04 | **LOW** | `GalleryManager.scheduleFullTextureSetPrefetch()` | After L-01, sweep is redundant for loaded artworks. Should log a no-op confirmation; retain as second-chance retry for failures. |
 | L-05 | **LOW** | `main.ts` boot | No minimum loading screen duration. On fast LAN/cache, branded screen flashes < 100ms. Enforce 500ms minimum. |
 
+> **M-series corrections:** Deep code audit found 7 additional gaps in the L-series plan — see `§ v0.22 M-series` section below for full analysis. Key issues: M-01 (TypeScript interface blocker), M-02 (hint timer override), M-03 (audio context gesture), M-04 (large-gallery OOM risk), M-05 (sync vs async warm helper), M-06 (redundant render), M-07 (progress remap).
+
 ### Implementation patches (planned — not yet in runtime code)
 
 #### L-01 — Preload ALL PBR texture sets under loading overlay
@@ -53,7 +55,7 @@ async init(): Promise<void> {
   const urls = this.artworks.map((a) => a.webglImage ?? a.image);
   await this.textureManager.preload(urls);
 
-  // NEW: Preload ALL PBR texture sets before gallery reveals.
+  // NEW: Preload PBR texture sets before gallery reveals (up to PBR_PRELOAD_LIMIT).
   // Promise.allSettled — one failed artwork does not block the rest.
   const pbr = this.artworks
     .map((a, i) => ({ artwork: a, index: i }))
@@ -77,6 +79,7 @@ async init(): Promise<void> {
 ```
 
 Note: `Promise.allSettled` ensures partial failures do not block the gallery. Failed PBR sets are retried by the existing idle sweep.
+**M-04 correction:** Add `PBR_PRELOAD_LIMIT = 15` guard — see M-series section below for the corrected patch with memory analysis.
 
 #### L-02 — GPU warm all artworks under loading overlay
 
@@ -84,26 +87,31 @@ Note: `Promise.allSettled` ensures partial failures do not block the gallery. Fa
 
 Problem: Single warm render pass only uploads the first artwork's textures. Artworks 2–N still incur a CPU→VRAM stall on first navigation.
 
-Patch — iterate through all artworks, temporarily bind each set, render once:
+Patch — iterate through all artworks, synchronously bind each cached set, render once:
 ```typescript
 // In main.ts, after galleryManager.init():
 // Force GPU upload for ALL artworks by rendering each texture set once under the overlay.
 const artworkCount = artworks.length;
-const gpuWarmLimit = 15; // Skip per-artwork GPU warm for large galleries (> 15 artworks)
-if (artworkCount <= gpuWarmLimit) {
+const GPU_WARM_LIMIT = 15; // named constant; matches PBR_PRELOAD_LIMIT
+if (artworkCount <= GPU_WARM_LIMIT) {
+  loadingOverlay.setStatus('GPU wird vorbereitet');
   for (let i = 0; i < artworkCount; i++) {
-    await galleryManager.prepareArtworkForWarmRender(i);
+    galleryManager.warmArtworkForGPU(i);   // M-05: synchronous, no await needed
     rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
-    loadingOverlay.setProgress(92 + Math.round(((i + 1) / artworkCount) * 5));
+    loadingOverlay.setProgress(93 + Math.round(((i + 1) / artworkCount) * 4));
   }
-  // Restore first artwork after warm sweep
-  await galleryManager.prepareArtworkForWarmRender(0);
+  // Restore artwork 0 after warm sweep
+  galleryManager.warmArtworkForGPU(0);
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+} else {
+  // M-06 fallback: single warm render for artwork 0 (large gallery path).
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
 }
 ```
 
-New helper `GalleryManager.prepareArtworkForWarmRender(index)` applies a texture set to the mesh material without triggering the full `showArtwork()` flow (no animation reset, no side panels, no ARIA updates). Returns a Promise that resolves when textures are applied.
+New helper `GalleryManager.warmArtworkForGPU(index)` — **synchronous** (M-05 correction): binds cached textures to the mesh without network fetch, token guard, ARIA updates, or callbacks. See M-series section for the full implementation including the required `TextureManager.getForRole()` helper.
 
-Note: For galleries > 15 artworks, skip per-artwork GPU warm (the CPU→VRAM stall is shorter than a full network load stall and acceptable). This limit is a named constant.
+Note: For galleries > `GPU_WARM_LIMIT` artworks, falls back to v0.21 single-artwork warm pass (M-06).
 
 #### L-03 — "Galerie betreten" button on loading screen
 
@@ -214,6 +222,388 @@ const [,] = await Promise.all([
 ```
 
 The 500ms delay runs in parallel with actual loading — on slow networks the load takes longer and the minimum is never felt. On fast LAN/cache, the minimum ensures the loading screen is always meaningfully shown.
+
+---
+
+## v0.22 — M-series: Deep Code Audit Corrections + New Findings (2026-05-21)
+
+> Deep source audit against actual runtime code in `src/main.ts`, `src/gallery/GalleryManager.ts`, and `src/gallery/TextureManager.ts` found 7 additional gaps in the L-series plan. These must be resolved alongside L-01 through L-05. Findings are documented below in severity order.
+
+### Gap table (M-series)
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| M-01 | **HIGH** | `src/main.ts:41–47` | `LoadingOverlayControls` interface declares `reveal(): void`; L-03 changes `reveal()` to return `Promise<void>`. TypeScript compilation error unless interface is updated first. |
+| M-02 | **HIGH** | `src/main.ts:264–288` | Hint cycling timer (2 s interval) is only cleared in `dispose()`. `reveal()` overwrites `subtitle.textContent` but the interval fires 2 s later and overwrites it back, destroying "Galerie bereit — zum Starten klicken". Timer must be stopped at the start of `reveal()`. |
+| M-03 | **HIGH** | `src/main.ts:609–616` | `window.addEventListener('pointerdown', onFirstInteractionPointer)` is registered AFTER `await loadingOverlay.reveal()` returns (i.e., after button click). The button click is the first user gesture and the cleanest AudioContext start point — but it is not captured. Audio recovery must either be triggered inside `reveal()`'s `go()` callback, or the listener must be registered before `await reveal()`. |
+| M-04 | **HIGH** | `src/gallery/GalleryManager.ts:250–270` | L-01 patch calls `Promise.allSettled(pbr.map(...))` for ALL artworks with no count limit. For a 50-artwork gallery at 7 PBR maps × 2048×2048 = ~16 MB each: 50 × 7 × 16 MB = **5 600 MB peak CPU memory**. Mobile devices OOM before the gallery reveals. Add `PBR_PRELOAD_LIMIT = 15` constant — artworks beyond the limit are left for the idle sweep. |
+| M-05 | **MEDIUM** | `src/gallery/GalleryManager.ts` (new method) | L-02 plan describes `GalleryManager.prepareArtworkForWarmRender(index)` as async, returning a Promise. After L-01, textures are already in `TextureManager.cache`. The method should be synchronous — no network call is needed. Async design introduces unnecessary await overhead per artwork in the warm loop and risks confusion about whether a network load is happening. |
+| M-06 | **MEDIUM** | `src/main.ts:566–568` | After L-02 ships, the warm loop already executes a `renderer.render()` call per artwork, with artwork 0 restored last. The stand-alone `renderer.render()` at line 567 (currently the single warm render pass added in v0.21) becomes redundant. It should be removed to avoid a duplicate GPU flush that extends loading time by one frame budget. |
+| M-07 | **LOW** | `src/main.ts:566–575` | Progress bar range 92–97% is used by both L-02's per-artwork warm loop AND the existing `setProgress(97)` call. Both write to the same range. Remap: L-02 warm = 93–97 %, shader prewarm = 97–99 %, button-ready = 100 %. Remove the now-redundant `setProgress(97)` line after the single warm render pass (which is itself removed by M-06). |
+
+### Implementation patches (M-series)
+
+#### M-01 — Update `LoadingOverlayControls` interface
+
+**File:** `src/main.ts:41–47`
+
+The interface must be updated before the `reveal()` implementation, otherwise TypeScript will reject `await loadingOverlay.reveal()`.
+
+```typescript
+// Before:
+interface LoadingOverlayControls {
+  overlay: HTMLDivElement;
+  setProgress(value: number): void;
+  setStatus(text: string): void;
+  reveal(): void;          // ← return type must change
+  dispose(): void;
+}
+
+// After:
+interface LoadingOverlayControls {
+  overlay: HTMLDivElement;
+  setProgress(value: number): void;
+  setStatus(text: string): void;
+  reveal(): Promise<void>; // ← returns Promise; resolves on button click
+  dispose(): void;
+}
+```
+
+This is a TypeScript compilation blocker for L-03. Fix it first.
+
+#### M-02 — Stop hint timer inside `reveal()`
+
+**File:** `src/main.ts` — `createLoadingOverlay()` → `reveal()` method
+
+The `hintTimer` variable is in the closure scope of `createLoadingOverlay()`. The `reveal()` closure can reference it directly. Add `window.clearInterval(hintTimer)` as the first line of `reveal()`:
+
+```typescript
+reveal(): Promise<void> {
+  window.clearInterval(hintTimer);          // ← stop hint cycling immediately
+  startButton.disabled = false;
+  startButton.classList.add('is-visible');
+  subtitle.textContent = 'Galerie bereit — zum Starten klicken';
+  return new Promise<void>((resolve) => {
+    const go = () => {
+      startButton.removeEventListener('click', go);
+      document.removeEventListener('keydown', onKey);
+      overlay.classList.add('is-hidden');
+      window.setTimeout(() => { overlay.remove(); resolve(); }, 1300);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') go();
+    };
+    startButton.addEventListener('click', go);
+    document.addEventListener('keydown', onKey);
+    startButton.addEventListener('transitionend', () => startButton.focus(), { once: true });
+  });
+},
+```
+
+Note: `startButton.focus()` is called on `transitionend` so the focus ring appears after the 0.6 s fade-in completes, not while the button is still transparent. This is a subtle but important accessibility improvement.
+
+`dispose()` may still call `clearInterval(hintTimer)` as a safety net — `clearInterval` on an already-cleared timer ID is a no-op in all browsers.
+
+#### M-03 — Trigger audio recovery on button click
+
+**File:** `src/main.ts` — boot sequence, near lines 559–576
+
+The cleanest solution: register `onFirstInteractionPointer` BEFORE `await loadingOverlay.reveal()`. Since the listener is added to `window`, it captures the button click even though the button is inside the overlay.
+
+```typescript
+// v0.22: Register audio recovery listener BEFORE awaiting the start button click.
+// The button click is a pointerdown on window and IS the first user gesture —
+// the cleanest AudioContext start point.
+window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
+window.addEventListener('keydown', onFirstInteractionKey);
+
+await loadingOverlay.reveal(); // waits for "Galerie betreten" button click
+loadingOverlay.dispose();
+
+// Remove recovery listeners after reveal to prevent duplicate triggers.
+// (interactionAudioRecoveryDone flag already prevents double-play, but
+//  removing the listener is cleaner and avoids holding a closure reference.)
+// NOTE: listeners are intentionally left registered for key navigation after
+// the overlay — only the pointerdown-specific one-shot path is managed here.
+```
+
+Wait — the recovery listeners must persist after reveal for keyboard navigation recovery. The `interactionAudioRecoveryDone` flag handles deduplication. The key insight is simply: **move the `window.addEventListener` registrations to before `await loadingOverlay.reveal()`** so the button click gesture is captured.
+
+Exact placement in `main()`:
+
+```typescript
+// Interaction — register BEFORE await reveal() so button click = first gesture.
+const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
+const keyboardNav = new KeyboardNav(galleryManager);
+let interactionAudioRecoveryDone = false;
+const tryRecoverBlockedAudio = (reason: string): void => { /* unchanged */ };
+const onFirstInteractionPointer = (): void => tryRecoverBlockedAudio('pointerdown');
+const onFirstInteractionKey = (event: KeyboardEvent): void => { /* unchanged */ };
+window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
+window.addEventListener('keydown', onFirstInteractionKey);
+
+// v0.22 L-02: GPU warm all artworks under overlay.
+// ... GPU warm loop ...
+
+await loadingOverlay.reveal(); // button click IS the first gesture → audio context starts here
+loadingOverlay.dispose();
+```
+
+#### M-04 — `PBR_PRELOAD_LIMIT` constant in `GalleryManager.init()`
+
+**File:** `src/gallery/GalleryManager.ts`
+
+Add a named constant at the top of the file alongside the other module-level constants:
+
+```typescript
+/**
+ * v0.22 L-01: Maximum number of artworks to pre-load PBR texture sets for
+ * during `init()` under the loading overlay. Artworks beyond this index are
+ * left for the idle prefetch sweep. Prevents CPU memory exhaustion on large
+ * galleries where upfront loading of all PBR sets is impractical.
+ * At 7 PBR maps × 2048×2048 × 4 bytes ≈ 112 MB per artwork, a limit of 15
+ * caps peak CPU-side texture memory at ≈ 1 680 MB — acceptable on all
+ * modern devices that support WebGL 2.0.
+ */
+const PBR_PRELOAD_LIMIT = 15;
+```
+
+Updated L-01 patch in `init()`:
+
+```typescript
+async init(): Promise<void> {
+  // ... existing albedo preload ...
+  const urls = this.artworks.map((a) => a.webglImage ?? a.image);
+  await this.textureManager.preload(urls);
+
+  // v0.22 L-01: Preload PBR texture sets under loading overlay.
+  // Limited to the first PBR_PRELOAD_LIMIT artworks to cap CPU memory use.
+  // Artworks beyond the limit are left for the idle sweep (second-chance retry).
+  const pbrArtworks = this.artworks
+    .map((a, i) => ({ artwork: a, index: i }))
+    .filter(({ artwork, index }) => !!artwork.textureSet && index < PBR_PRELOAD_LIMIT);
+
+  this.diagnostics.info('init', 'Preloading PBR texture sets under loading overlay', {
+    pbrCount: pbrArtworks.length,
+    totalArtworks: this.artworks.length,
+    limit: PBR_PRELOAD_LIMIT,
+    skippedForLimit: Math.max(0, this.artworks.filter((a) => !!a.textureSet).length - pbrArtworks.length),
+  });
+
+  await Promise.allSettled(
+    pbrArtworks.map(({ artwork, index }) =>
+      this.textureManager.preloadTextureSet(artwork.textureSet!).then(() => {
+        this.prefetchedTextureSets.add(index);
+        this.diagnostics.debug('preload-all', 'PBR texture set preloaded during init', {
+          index,
+          id: artwork.id,
+        });
+      })
+    )
+  );
+
+  this.pendingResetAfterArtworkLoad = true;
+  await this.showArtwork(0);
+  this.scheduleFullTextureSetPrefetch(); // no-op for loaded sets; retries failures and loads sets > limit
+}
+```
+
+#### M-05 — `warmArtworkForGPU(index)` must be synchronous
+
+**File:** `src/gallery/GalleryManager.ts` — new `public` method
+
+After L-01, all textures within `PBR_PRELOAD_LIMIT` are already in `TextureManager.cache`. `warmArtworkForGPU(index)` must not make network calls. It is synchronous:
+
+```typescript
+/**
+ * v0.22 L-02: Binds the cached texture set for artwork at `index` to the
+ * scene mesh without triggering navigation side effects (no token guard,
+ * no ARIA updates, no viewport refit, no callbacks). Call once per artwork
+ * under the loading overlay to force CPU→VRAM upload via the subsequent
+ * renderer.render() call.
+ *
+ * Precondition: L-01 must have run so textures are already in cache.
+ * This method is intentionally synchronous — it must never trigger a
+ * network fetch.
+ */
+warmArtworkForGPU(index: number): void {
+  const artwork = this.artworks[index];
+  if (!artwork || !this.currentPreset) return;
+  const albedoUrl = artwork.webglImage ?? artwork.image;
+  const albedo = this.textureManager.get(albedoUrl);
+  if (!albedo) {
+    this.diagnostics.warn('warm-gpu', 'warmArtworkForGPU: albedo not in cache — skipping', {
+      index,
+      artworkId: artwork.id,
+    });
+    return;
+  }
+
+  // Build a minimal resolved texture set from cache only.
+  // `preloadTextureSet` returns a Promise, but after L-01 textures are cached;
+  // access the cache synchronously via the TextureManager.get() path for each role.
+  // For roles not in cache (e.g., artworks > PBR_PRELOAD_LIMIT), fall back to
+  // the procedural factory the same way showArtwork() does.
+  const preset = this.currentPreset;
+  const authored: Partial<ResolvedPaintingTextures> = {};
+  // Attempt synchronous cache hits for authored roles.
+  // TextureManager.get() uses the albedo key — authored roles are stored
+  // under the role-prefixed key. Expose a role-aware synchronous getter.
+  // (See M-05 addendum below for the TextureManager change needed.)
+
+  const resolved: ResolvedPaintingTextures = { albedo };
+  for (const role of PROCEDURAL_ROLES) {
+    if (authored[role]) {
+      resolved[role] = authored[role];
+    } else if (this.shouldFillRole(role, preset)) {
+      resolved[role] = this.procedural.generate(artwork.id, role, preset.proceduralTileSize);
+    }
+  }
+  this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
+  this.diagnostics.debug('warm-gpu', 'warmArtworkForGPU: textures bound to mesh', {
+    index,
+    artworkId: artwork.id,
+  });
+}
+```
+
+**M-05 addendum — `TextureManager.getForRole(url, role)` synchronous getter**
+
+The current `TextureManager.get(url)` only retrieves `albedo` cache keys. A synchronous role-aware getter is needed for `warmArtworkForGPU`:
+
+```typescript
+/** Synchronous role-aware cache hit. Returns undefined on miss (no network fetch). */
+getForRole(url: string, role: PaintingMapRole): THREE.Texture | undefined {
+  return this.cache.get(`${role}::${url}`);
+}
+```
+
+Add this to `TextureManager` alongside the existing `get(url)` method. Then update `warmArtworkForGPU` to use it:
+
+```typescript
+// Inside warmArtworkForGPU(), replace the authored block with:
+if (artwork.textureSet) {
+  for (const role of PROCEDURAL_ROLES) {
+    const entry = artwork.textureSet[role];
+    if (entry) {
+      const cached = this.textureManager.getForRole(entry.url, role);
+      if (cached) authored[role] = cached;
+    }
+  }
+}
+```
+
+This is fully synchronous, zero-network, and correctly skips artworks whose PBR sets were not preloaded (beyond `PBR_PRELOAD_LIMIT`).
+
+#### M-06 — Remove redundant warm render at `main.ts:567`
+
+**File:** `src/main.ts:566–568`
+
+After L-02's warm loop, the GPU already has artwork 0's textures uploaded. The single-artwork warm render added in v0.21 is now superseded. Remove it:
+
+```typescript
+// Before (v0.21 single warm render):
+loadingOverlay.setStatus('Shader werden vorbereitet');
+rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);  // ← remove
+loadingOverlay.setProgress(97);
+
+// After (v0.22 — L-02 loop already covers this):
+loadingOverlay.setStatus('Shader werden vorbereitet');
+// No redundant single render needed — L-02 loop handled all artworks.
+loadingOverlay.setProgress(97);
+```
+
+If L-02 is disabled (large gallery, > `gpuWarmLimit`), the single render should be KEPT as a fallback. Use a flag:
+
+```typescript
+if (artworkCount > gpuWarmLimit) {
+  // Fallback: GPU warm only for artwork 0 (the v0.21 single warm pass).
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+}
+```
+
+#### M-07 — Progress bar remap for L-02 + shader prewarm
+
+**File:** `src/main.ts` — boot sequence
+
+Updated progress ranges after all L-series + M-series patches apply:
+
+| Phase | Progress range | Source |
+|-------|---------------|--------|
+| Albedo preload (`LoadingManager.onProgress`) | 0 – 90 % | `loadingManager.onProgress` callback (unchanged) |
+| PBR preload in `init()` (L-01) | 90 – 92 % | `LoadingManager.onLoad` fires when all textures done → `setProgress(94)` |
+| First artwork shown, gallery ready | 94 % | `loadingManager.onLoad` callback (unchanged) |
+| GPU warm loop per artwork (L-02) | 93 – 97 % | Overwritten from the warm loop itself |
+| Shader prewarm | 97 – 99 % | `await rendererManager.prewarm(...)` |
+| Button-ready | 100 % | `setProgress(100)` before `reveal()` |
+
+Note: the existing `loadingManager.onLoad` callback sets `setProgress(94)`. L-02's loop starts from 93 and overwrites this immediately. This is fine — the progress bar never goes backward because `setProgress` clamps to max(0, min(100, value)). The remap is cosmetic but clarifies intent.
+
+---
+
+### Complete boot sequence for v0.22 (all patches applied)
+
+```typescript
+// In main() — after artworkMesh, textureManager, galleryManager are created:
+
+// ── Step 1: Load all textures (L-01 + L-05 minimum duration) ──────────
+// galleryManager.init() now loads all PBR sets (up to PBR_PRELOAD_LIMIT)
+// under the LoadingManager so the progress bar reflects real total progress.
+const [,] = await Promise.all([
+  galleryManager.init(),                                      // L-01 full PBR preload
+  new Promise<void>((resolve) => setTimeout(resolve, 500)),  // L-05 500ms minimum
+]);
+diagnostics.info('boot', 'gallery-ready', 'Gallery initialized and PBR sets preloaded');
+
+// ── Step 2: GPU warm all artworks under overlay (L-02) ─────────────────
+const artworkCount = artworks.length;
+const GPU_WARM_LIMIT = 15; // named constant; matches PBR_PRELOAD_LIMIT
+if (artworkCount <= GPU_WARM_LIMIT) {
+  loadingOverlay.setStatus('GPU wird vorbereitet');
+  for (let i = 0; i < artworkCount; i++) {
+    galleryManager.warmArtworkForGPU(i);                    // M-05: synchronous
+    rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+    loadingOverlay.setProgress(93 + Math.round(((i + 1) / artworkCount) * 4));
+  }
+  // Restore artwork 0 after warm sweep
+  galleryManager.warmArtworkForGPU(0);
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+} else {
+  // M-06 fallback: single warm render for artwork 0 only (large gallery).
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+}
+
+// ── Step 3: Shader prewarm ─────────────────────────────────────────────
+loadingOverlay.setStatus('Shader werden vorbereitet');
+loadingOverlay.setProgress(97);
+await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+loadingOverlay.setProgress(100);
+loadingOverlay.setStatus('Galerie bereit');
+
+rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
+rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
+
+// ── Step 4: Register interaction + audio recovery listeners ────────────
+// M-03: Register BEFORE await reveal() so button click = first gesture.
+const canvas = rendererManager.renderer.domElement;
+canvas.setAttribute('aria-label', 'Interaktive Galerie');
+canvas.setAttribute('role', 'img');
+const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
+const keyboardNav = new KeyboardNav(galleryManager);
+let interactionAudioRecoveryDone = false;
+const tryRecoverBlockedAudio = (reason: string): void => { /* unchanged */ };
+const onFirstInteractionPointer = (): void => tryRecoverBlockedAudio('pointerdown');
+const onFirstInteractionKey = (event: KeyboardEvent): void => { /* unchanged */ };
+window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
+window.addEventListener('keydown', onFirstInteractionKey);
+
+// ── Step 5: Press-to-start reveal (L-03) ──────────────────────────────
+// M-01: reveal() now returns Promise<void>.
+// M-02: reveal() stops hint timer internally.
+// M-03: button click IS captured by pointerdown listener registered above.
+await loadingOverlay.reveal(); // blocks until user clicks "Galerie betreten"
+loadingOverlay.dispose();
+```
 
 ---
 

@@ -7,12 +7,12 @@
 
 After v0.21 shipped, users still experience visible hick-ups when navigating to a painting for the first time. Root cause confirmed: PBR texture sets (normal, roughness, ao, etc.) for artworks 2–N are loaded on first navigation, not during the loading screen. The v0.22 plan addresses this with three high-priority changes:
 
-1. **Full PBR pre-load (L-01):** All artwork PBR texture sets are loaded inside `GalleryManager.init()` under the loading overlay — users see real progress, not jank.
-2. **GPU warm-all artworks (L-02):** After all PBR sets load, each artwork is temporarily bound to the scene mesh and a render pass forces CPU→VRAM upload before the overlay hides.
-3. **"Galerie betreten" press-to-start (L-03):** Loading screen shows a gold-bordered CTA button at 100%. Gallery only reveals on user click — deliberate entry, premium feel, clean audio context start.
+1. **Full PBR pre-load (L-01):** All artwork PBR texture sets are loaded inside `GalleryManager.init()` under the loading overlay — users see real progress, not jank. `PBR_PRELOAD_LIMIT = 15` guards OOM on mobile devices (M-04).
+2. **GPU warm-all artworks (L-02):** After all PBR sets load, each artwork is temporarily bound to the scene mesh and a render pass forces CPU→VRAM upload before the overlay hides. Synchronous helper `warmArtworkForGPU()` + new `TextureManager.getForRole()` getter (M-05). Progress remapped to 93–97% warm loop, 97–99% shader prewarm, 100% ready (M-07).
+3. **"Galerie betreten" press-to-start (L-03):** Loading screen shows a gold-bordered CTA button at 100%. Gallery only reveals on user click — deliberate entry, premium feel, clean audio context start. Requires `LoadingOverlayControls.reveal(): Promise<void>` interface update (M-01), hint timer stop in `reveal()` (M-02), and audio listeners registered before `await reveal()` (M-03).
 4. **500ms minimum loading duration (L-05):** Branded loading screen is always visible for at least 500ms.
 
-Full implementation patches are in `plan.md § v0.22` and `FINDINGS.md § v0.22`.
+A second-pass audit (M-series) found 7 additional implementation gaps in the original L-series plan. All 12 planned changes (L+M series) are documented with full TypeScript patches in `plan.md § v0.22` and `plan.md § v0.22 M-series`. Research notes and gap tables are in `FINDINGS.md § v0.22`.
 
 ## v0.21 — implementation shipped (2026-05-21)
 
