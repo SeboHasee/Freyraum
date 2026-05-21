@@ -1,6 +1,20 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
+> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
+
+## v0.24 — Deep loading/performance planning + full markdown refresh (docs-only, 2026-05-21)
+
+### Changed
+
+- Added a new v0.24 plan focused on eliminating remaining first-visit gallery lag after entry.
+- Consolidated deeper online research notes for render/upload scheduling, idle-work chunking, and compressed/deferred texture pipeline options.
+- Refreshed all repository Markdown files with the new v0.24 audit stamp and updated cross-references.
+
+### Validation and residual risk
+
+- Documentation-only pass; no runtime code changed.
+- Baseline repository validation before docs updates: `npm install`, `npm run lint`, and `npm run build` passed.
+- Runtime smoothness fix remains pending implementation of the v0.24 plan.
 
 ## v0.23.1 — Performance/Preloading implementation (2026-05-21)
 

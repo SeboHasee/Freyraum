@@ -1,6 +1,39 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
+> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
+
+## v0.24 — Deeper performance/loading findings (planning, 2026-05-21)
+
+### Status
+
+Planning/documentation pass only. Runtime remains v0.23.1 while the new v0.24 implementation plan is prepared.
+
+### Confirmed runtime pattern
+
+The user-reported behavior remains credible and technically consistent: entering the gallery still can feel laggy in larger sets, then becomes smooth after most paintings were already visited once. This indicates first-use work still crossing the interaction boundary (GPU upload, procedural synthesis, and/or on-demand decode for not-yet-ready targets).
+
+### Source-backed risk areas to address next
+
+| ID | Severity | Area | Current gap in shipped behavior |
+|----|----------|------|---------------------------------|
+| P-01 | **HIGH** | Pre-entry readiness threshold | Overlay reveal currently does not enforce a measurable readiness floor for a configurable first-navigation set (current + neighbors + likely timeline targets). |
+| P-02 | **HIGH** | Main-thread burst control | Warm/procedural jobs can still cluster inside short windows on slower devices; frame-budget yielding needs stricter guardrails and instrumentation. |
+| P-03 | **MEDIUM** | Navigation-priority scheduler | Intent promotion exists but should become deterministic with explicit queue classes (`immediate`, `next-likely`, `background`) and starvation protection. |
+| P-04 | **MEDIUM** | Readiness acceptance telemetry | Existing diagnostics are strong but still need a direct “first-visit cold work” verdict per navigation (did interaction trigger load/decode/procedural/gpu-upload). |
+| P-05 | **MEDIUM** | Asset pipeline strategy | KTX2/Basis + worker decode are still future-facing; no phased rollout criteria are documented yet for this repository’s customer import workflow. |
+| P-06 | **LOW** | UX gating quality | Loading CTA should remain responsive while continuing non-critical warm tasks post-entry, with clearer status text for “ready-to-enter” vs “optimizing in background”. |
+
+### Deeper online research synthesis
+
+- Hidden/offscreen render passes remain the practical way to guarantee texture residency before first interaction; shader compile helpers reduce but do not replace this requirement.
+- Idle callbacks are opportunistic and must be chunked with strict deadline checks; critical first-navigation readiness should not depend solely on idle availability.
+- Compressed textures (KTX2/Basis) plus worker-based transcode/decode remain the strongest path for large-gallery memory/upload stability, but require importer/runtime dual-format planning.
+- Progressive readiness is acceptable only if user-facing interaction paths are backed by explicit readiness guarantees for near-future targets.
+
+### Validation
+
+- Pre-change baseline checks passed: `npm install`, `npm run lint`, `npm run build`.
+- No runtime code was modified in this pass.
 
 ## v0.23.1 — Performance/Preloading implementation findings (2026-05-21)
 

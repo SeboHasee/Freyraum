@@ -1,6 +1,48 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
+> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
+
+## v0.24 — Deep loading/performance hardening plan (2026-05-21, planning)
+
+Runtime status: **planning only**. v0.23.1 improved readiness substantially, but user testing still reports lag while entering/navigating until many paintings were already visited once.
+
+### Problem statement
+
+The loading screen must guarantee smooth first-use interaction for the high-probability navigation set instead of allowing cold work to leak into early user actions. Current behavior still allows occasional first-visit stalls in larger exhibitions.
+
+### Goals
+
+1. Keep “Galerie betreten” responsive and premium.
+2. Ensure first navigation set is ready enough that entering + first interactions stay smooth on typical devices.
+3. Move non-critical work behind strict frame-budget yielding.
+4. Produce diagnostics that can prove whether any interaction triggered cold-load work.
+
+### Gap analysis (P-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| P-01 | **HIGH** | No explicit pre-entry readiness threshold contract. | Add deterministic readiness criteria for a warm set (current, ±1/±2, top timeline candidates) before reveal is enabled. |
+| P-02 | **HIGH** | Warm/procedural tasks can still exceed safe per-frame work on slower hardware. | Introduce stricter chunking + abort/yield logic with measurable frame-budget caps. |
+| P-03 | **MEDIUM** | Navigation promotion is present but not fully classed/prioritized. | Formalize queue priorities with starvation protection and cancellation for stale targets. |
+| P-04 | **MEDIUM** | Diagnostics lack explicit per-navigation cold-work verdict. | Record navigation events against readiness ledger and emit a clear cold/hot transition outcome. |
+| P-05 | **MEDIUM** | Compressed texture migration path is not staged. | Define phased KTX2/Basis rollout: importer output, runtime fallback, and acceptance gates. |
+| P-06 | **LOW** | Entry UX does not distinguish “ready now” from “remaining optimization”. | Keep CTA immediate once warm threshold is met while surfacing quiet background optimization status. |
+
+### Implementation plan
+
+1. Define the v0.24 readiness contract and gate CTA enablement on that contract, not on generic overall loading completion alone.
+2. Refactor readiness scheduler into explicit priority lanes (`critical-now`, `near-next`, `background`) with frame-budget-aware stepping and stale-task cancellation.
+3. Isolate procedural generation into smaller chunks and pre-generate only critical-window variants before reveal.
+4. Expand diagnostics to log, per navigation, whether any cold decode/load/procedural/upload occurred after user input.
+5. Add optional large-gallery profile toggles (e.g., reduced immediate warm radius) chosen from device capability diagnostics.
+6. Draft KTX2/Basis migration design for importer + runtime fallback without breaking current customer workflow.
+7. Validate on 4/15/20/50 artwork sets and treat any first-navigation long task above threshold as release-blocking for the smoothness objective.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime changes.
+- Capture diagnostics traces for entry and first-time navigation paths across artwork-count buckets.
+- Confirm no new security findings are introduced by scheduler/import changes.
 
 ## v0.23 — Performance/Preloading Planning Audit (IMPLEMENTED v0.23.1)
 

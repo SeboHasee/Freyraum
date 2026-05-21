@@ -1,5 +1,5 @@
 # Refactor prompt
-> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
+> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
 
 ## v0.23 — Performance/Preloading Planning Audit

@@ -1,6 +1,14 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
+> Last full markdown audit: 2026-05-21 (v0.24 deep performance/loading planning pass — first-visit gallery lag still appears in larger exhibitions, deeper online research was consolidated, and a stronger implementation plan is now documented).
 
+
+## v0.24 — planning in progress (2026-05-21) — deeper loading/performance hardening
+
+**Status: planning/documentation pass; runtime still v0.23.1.**
+
+User validation still reports that entering the gallery and first-time navigation can remain unsmooth until many/all paintings have been visited once. The new v0.24 plan strengthens readiness guarantees beyond the current warm-window approach by prioritizing pre-entry warm completion, reducing same-frame main-thread bursts, and adding explicit acceptance instrumentation for first-visit smoothness.
+
+See `plan.md § v0.24` for the canonical implementation plan and `FINDINGS.md § v0.24` for source-backed findings plus deeper online research synthesis.
 
 ## v0.23.1 — shipped (2026-05-21) — Performance + Preloading
 
