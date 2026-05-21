@@ -1,5 +1,443 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+
+## v0.20.7 — Full technical code audit + gap-closure coding plan (2026-05-21)
+
+### Status
+
+Planning. This section is a deep, file-level code audit of the entire v0.20 audio and control domain, written to serve as the definitive technical coding reference for any remaining implementation work. Every finding cites the exact file and line numbers confirmed in the current checked-in source. TypeScript and SCSS code patches are provided inline for each open gap.
+
+---
+
+### Audit scope
+
+| File | Lines audited |
+|------|--------------|
+| `src/audio/volumeMapping.ts` | 1–31 |
+| `src/audio/BackgroundAudioManager.ts` | 1–449 |
+| `src/utils/preferences.ts` | 1–205 |
+| `src/ui/AudioControls.ts` | 1–195 |
+| `src/ui/PreferencesPanel.ts` | 1–310 |
+| `src/main.ts` | 200–820 (audio + lifecycle paths) |
+| `src/styles/main.scss` | 436–560, 1370–1410 (audio-controls blocks) |
+
+---
+
+### F-01 — `startFade()` clamps to 1.0 instead of `MAX_EFFECTIVE_AUDIO_GAIN`
+
+**File:** `src/audio/BackgroundAudioManager.ts:399`
+
+```typescript
+// CURRENT (line 399)
+this.fadeTargetGain = Math.max(0, Math.min(1, targetGain));
+```
+
+**Problem:** The fade engine silently allows targets above `MAX_EFFECTIVE_AUDIO_GAIN` (0.30). In practice all callers pass a value already clamped by `setVolume()`, so no user-visible bug exists today — but a future internal caller could accidentally exceed the cap.
+
+**Fix:**
+
+```typescript
+// PROPOSED
+import { MAX_EFFECTIVE_AUDIO_GAIN } from './volumeMapping';
+// ...
+this.fadeTargetGain = Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, targetGain));
+```
+
+The `MAX_EFFECTIVE_AUDIO_GAIN` import is already present at line 2 of `BackgroundAudioManager.ts`, so no new import is needed. Change only the `Math.min` ceiling on line 399.
+
+---
+
+### F-02 — `audio-volume-map` diagnostics event omits display percent
+
+**File:** `src/audio/BackgroundAudioManager.ts:250–257`
+
+```typescript
+// CURRENT (lines 250–257)
+this.diagnostics.debug('audio-volume-map', 'Volume mapping record', {
+  targetGain: clamped,
+  liveGain: this.audio.volume,
+  reason,
+});
+```
+
+**Problem:** Exported diagnostics snapshots do not include the display-percent value. When a user reports a volume issue, engineers must re-derive the display percent from the raw gain value instead of reading it directly from the log.
+
+**Fix** — add `gainToDisplayPercent` import (already present via the file's existing volumeMapping import) and enrich the payload:
+
+```typescript
+import { MAX_EFFECTIVE_AUDIO_GAIN, gainToDisplayPercent } from './volumeMapping';
+// ...
+this.diagnostics.debug('audio-volume-map', 'Volume mapping record', {
+  targetGain: clamped,
+  displayPct: gainToDisplayPercent(clamped),   // ← add
+  liveGain: this.audio.volume,
+  reason,
+});
+```
+
+---
+
+### F-03 — `PreferencesPanel.patchPanel()` skips all preference updates during slider drag
+
+**File:** `src/ui/PreferencesPanel.ts:178–182`
+
+```typescript
+// CURRENT (lines 178–182)
+private patchPanel(): void {
+  // Do not replace slider during active pointer drag (Slice B continuity fix).
+  if (this.isVolumeDragging) return;
+  // ...
+}
+```
+
+**Problem:** When the user is dragging the volume slider and simultaneously triggers any other preference change (e.g., the quality radio from the adaptive quality controller writing through `preferences.setQuality()`), the quality radio UI is not updated until the drag completes. In practice the adaptive controller fires rarely and the lag is imperceptible, but the intent was to guard only slider node replacement, not all DOM patches.
+
+**Fix** — split the guard so only the slider-value patch is skipped during drag:
+
+```typescript
+private patchPanel(): void {
+  const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume } = this.prefs.current;
+
+  if (this.motionInput) this.motionInput.checked = reducedMotion;
+  if (this.contrastInput) this.contrastInput.checked = contrastMode === 'high';
+  if (this.audioMutedInput) this.audioMutedInput.checked = audioMuted;
+
+  // Only skip the volume-slider patch while the user is actively dragging;
+  // all other controls must update immediately regardless of drag state.
+  if (!this.isVolumeDragging && this.audioVolumeInput && this.audioValueLabel) {
+    const displayPct = gainToDisplayPercent(audioVolume);
+    this.audioVolumeInput.value = String(displayPct);
+    this.audioVolumeInput.style.setProperty('--volume-pct', String(displayPct));
+    this.audioValueLabel.textContent = `${displayPct}%`;
+  }
+
+  if (this.audioStatusEl) { /* ... unchanged ... */ }
+
+  this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-quality"]').forEach((input) => {
+    input.checked = input.value === quality;
+  });
+  this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-lighting"]').forEach((input) => {
+    input.checked = input.value === lighting;
+  });
+}
+```
+
+---
+
+### F-04 — Volume sliders missing `aria-valuetext`
+
+**Files:** `src/ui/AudioControls.ts:113`, `src/ui/PreferencesPanel.ts:154`
+
+**Problem:** Both `<input type="range">` elements expose only `aria-valuenow` (the raw integer 0–100). Screen readers announce "50" rather than "50 percent". WCAG SC 4.1.2 recommends `aria-valuetext` for sliders where the numeric value requires a unit or description for meaning.
+
+**Fix for `AudioControls.ts`** — in `update()` method, after setting `aria-valuenow`:
+
+```typescript
+// Line ~113 in AudioControls.ts — add after the aria-valuenow line
+this.volumeInput.setAttribute('aria-valuenow', String(displayPct));
+this.volumeInput.setAttribute('aria-valuetext', `${displayPct} Prozent`);  // ← add
+```
+
+**Fix for `PreferencesPanel.ts`** — in `buildPanel()` and `patchPanel()`:
+
+```html
+<!-- buildPanel() range input — add aria-valuetext attribute -->
+<input
+  type="range"
+  id="freyraum-audio-volume"
+  min="0" max="100" step="1"
+  value="${displayPct}"
+  aria-valuetext="${displayPct} Prozent"
+/>
+```
+
+In `patchPanel()` (non-dragging branch):
+
+```typescript
+this.audioVolumeInput.setAttribute('aria-valuetext', `${displayPct} Prozent`);
+```
+
+In the `input` event handler (in-place label update during drag):
+
+```typescript
+volumeInput.addEventListener('input', () => {
+  const displayPct = Number(volumeInput.value);
+  if (Number.isNaN(displayPct)) return;
+  if (this.audioValueLabel) this.audioValueLabel.textContent = `${Math.round(displayPct)}%`;
+  volumeInput.style.setProperty('--volume-pct', String(displayPct));
+  volumeInput.setAttribute('aria-valuetext', `${Math.round(displayPct)} Prozent`);  // ← add
+  this.prefs.setAudioVolume(displayPercentToGain(displayPct));
+});
+```
+
+---
+
+### F-05 — `AUDIO_RECOVERY_KEY` one-shot flag never resets on localStorage clear
+
+**File:** `src/utils/preferences.ts:34–68`
+
+```typescript
+// CURRENT — key is written once and never revisited
+const AUDIO_RECOVERY_KEY = 'freyraum.audio-recovery.v205';
+```
+
+**Problem:** If a user manually clears `localStorage`, the recovery key is gone. On the next load the zero-volume recovery logic re-runs correctly (no bug). However, if `freyraum.preferences.v1` is populated from a backup/sync while `AUDIO_RECOVERY_KEY` is absent, the recovery fires again — which is harmless but emits a misleading warning log.
+
+**Fix (low priority)** — check that the stored value is actually out-of-range before logging:
+
+```typescript
+if (shouldRecoverZeroVolume) {
+  audioVolume = DEFAULT_AUDIO_GAIN;
+  diagnostics.warn('audio-volume-recovered',
+    'Recovered broken zero-volume preference (was likely written by faulty v0.20.4)',
+    { stored: stored.audioVolume, recoveredTo: audioVolume, key: STORAGE_KEY }  // include stored value
+  );
+}
+```
+
+No behavior change needed — this is a diagnostic-quality improvement only.
+
+---
+
+### F-06 — Autoplay recovery guard does not handle pre-play state (audio loaded but `play()` never attempted)
+
+**File:** `src/main.ts:465–474`
+
+```typescript
+// CURRENT — tryRecoverBlockedAudio only acts when autoplayBlocked is already true
+const tryRecoverBlockedAudio = (reason: string): void => {
+  if (interactionAudioRecoveryDone) return;
+  const audioState = backgroundAudio.getState();
+  if (!backgroundAudio.hasSource() || prefsNow.audioMuted || !audioState.autoplayBlocked) return;
+  // ...
+};
+```
+
+**Problem:** `autoplayBlocked` is set to `true` only after `play()` is called and rejected with `NotAllowedError`. In some browser/OS configurations (particularly iOS Safari before first interaction), `audio.play()` is never called during boot (no source, late load, or similar timing). The `autoplayBlocked` flag stays `false`, the recovery guard never fires, and audio never starts.
+
+**Fix** — also recover when `!playing && !muted && hasSource()` regardless of `autoplayBlocked`, as a unified "audio should be playing but isn't" recovery:
+
+```typescript
+const tryRecoverBlockedAudio = (reason: string): void => {
+  if (interactionAudioRecoveryDone) return;
+  const prefsNow = preferences.current;
+  const audioState = backgroundAudio.getState();
+  const shouldPlay =
+    backgroundAudio.hasSource() &&
+    !prefsNow.audioMuted &&
+    (audioState.autoplayBlocked || (!audioState.playing && audioState.available));
+  if (!shouldPlay) return;
+  interactionAudioRecoveryDone = true;
+  diagnostics.info('audio', 'autoplay-recovery-attempt',
+    'Retrying audio play after user interaction', { reason, autoplayBlocked: audioState.autoplayBlocked });
+  void backgroundAudio.play(`interaction-recovery:${reason}`);
+};
+```
+
+**Note:** The `interactionAudioRecoveryDone` flag still prevents this from retriggering after the first successful interaction attempt.
+
+---
+
+### F-07 — `BackgroundAudioManager.setMuted(false)` does not call `play()` directly
+
+**File:** `src/audio/BackgroundAudioManager.ts:206–230`
+
+```typescript
+// CURRENT — setMuted(false) only sets state and emits; play() is triggered by main.ts subscription
+setMuted(value: boolean, reason: string): void {
+  if (this.disposed) return;
+  if (this.state.muted === value) { /* skip */ return; }
+  this.audio.muted = value;
+  this.state = { ...this.state, muted: value };
+  if (value) {
+    // Muting path: fade out then pause
+    this.shouldResumeAfterSuspend = false;
+    this.startFade(0, FADE_OUT_MS, 'fade-out-mute', () => { ... });
+    this.state = { ...this.state, playing: false };
+  }
+  // No `else` branch for unmute — relies on main.ts calling play() via preferences path
+  this.emit();
+}
+```
+
+**Problem:** Unmuting relies on `main.ts` receiving a preference update notification and calling `applyPreferences()` which calls `play()`. This coupling works but creates an implicit dependency: if `setMuted(false)` is ever called directly on the manager (not through preferences), audio will not resume automatically. The current codebase does not call it directly outside `main.ts`, so no immediate bug — but the architecture is fragile.
+
+**Future hardening suggestion** — add an unmute-resume branch inside `setMuted()`:
+
+```typescript
+if (value) {
+  // Muting: fade out + pause
+  this.shouldResumeAfterSuspend = false;
+  this.startFade(0, FADE_OUT_MS, 'fade-out-mute', () => {
+    if (!this.audio.paused) this.audio.pause();
+    this.audio.volume = this.state.targetVolume;
+    this.state = { ...this.state, liveVolume: this.audio.volume };
+  });
+  this.state = { ...this.state, playing: false };
+} else if (!this.disposed && this.source && !this.suspended) {
+  // Unmuting: attempt play within the same call to avoid relying on external orchestration.
+  // play() internally handles the "already playing" guard.
+  void this.play(`unmute:${reason}`);
+}
+```
+
+**Note:** This change would make `main.ts` `applyPreferences()` call `play()` a second time (harmless, since `play()` now short-circuits when already playing). The double-call is acceptable and clarified by the existing `audio-play-skip` diagnostics event.
+
+---
+
+### F-08 — CSS `--volume-pct` default unit mismatch risk in future `calc()` contexts
+
+**File:** `src/styles/main.scss` (`.audio-controls__slider` block, and related CSS custom property usage)
+
+The `--volume-pct` custom property stores a **unitless** integer (e.g., `50`) and is consumed as:
+
+```scss
+calc(var(--volume-pct, 50) * 1%)
+```
+
+**Problem:** If a future maintainer uses `--volume-pct` in a new `calc()` context expecting a percentage value and omits the `* 1%` multiplication, the property silently produces wrong output.
+
+**Fix** — store as a percentage string from the start:
+
+```typescript
+// AudioControls.ts and PreferencesPanel.ts — change all setProperty calls
+this.volumeInput.style.setProperty('--volume-pct', `${displayPct}%`);
+```
+
+```scss
+// main.scss — change the gradient to consume the value directly
+background: linear-gradient(
+  to right,
+  var(--accent) 0%,
+  var(--accent) var(--volume-pct, 50%),     // ← change: no multiplication
+  rgba(0, 0, 0, 0.12) var(--volume-pct, 50%),
+  rgba(0, 0, 0, 0.12) 100%
+);
+```
+
+This is a low-risk CSS convention fix. All three `.setProperty` call sites must change together:
+- `AudioControls.ts`: `handleVolumeInput()` and `update()`
+- `PreferencesPanel.ts`: `input` handler, `buildPanel()` initial render, and `patchPanel()`
+
+---
+
+### F-09 — `BackgroundAudioManager` does not export `targetVolume` directly on its state type
+
+**File:** `src/audio/BackgroundAudioManager.ts:31–40`
+
+```typescript
+// CURRENT — BackgroundAudioState already includes targetVolume ✅
+export interface BackgroundAudioState {
+  available: boolean;
+  loaded: boolean;
+  playing: boolean;
+  muted: boolean;
+  targetVolume: number;   // ← exists
+  liveVolume: number;     // ← exists
+  autoplayBlocked: boolean;
+  message: string | null;
+  activeSource: BackgroundAudioSource | null;
+}
+```
+
+**Finding:** The state split between `targetVolume` and `liveVolume` is **correctly implemented**. `AudioControls.update()` renders `state.targetVolume` (not `liveVolume`), so the slider never drifts to the fade envelope value. No code change needed — this is a confirmation.
+
+---
+
+### F-10 — `LOOP_RESTART_FADE_MS = 150` produces a brief audible gap on chromium at high gain
+
+**File:** `src/audio/BackgroundAudioManager.ts:17`
+
+```typescript
+const LOOP_RESTART_FADE_MS = 150;
+```
+
+**Problem:** The `ended` fallback fades to zero over 150 ms then calls `play()` which starts a 300 ms fade-in. The total gap is ≈150 ms of silence before audible restart. On some browsers `loop = true` handles this seamlessly (no `ended` event), so the fallback fires rarely. But on Chromium with gapless content this produces a subtle dip.
+
+**Better pattern** — keep `loop = true` as primary and only attempt a crossfade on the `ended` event. The current code already does this. To minimize the gap, reduce `LOOP_RESTART_FADE_MS` to `50`:
+
+```typescript
+/** Gain ramp when the `ended` fallback restarts a loop (ms). Kept short to minimize audible gap. */
+const LOOP_RESTART_FADE_MS = 50;
+```
+
+Alternatively, reset `currentTime = 0` synchronously without a pre-fade, relying on `loop=true` to catch the edge silently in most browsers:
+
+```typescript
+this.audio.addEventListener('ended', () => {
+  if (!this.source) return;
+  this.diagnostics.warn('audio-loop-restart', 'Audio ended unexpectedly; looping via ended fallback');
+  // Reset time synchronously — no fade — to minimize silence.
+  this.audio.currentTime = 0;
+  void this.play('ended-fallback');
+});
+```
+
+---
+
+### Remaining implementation slices (priority order)
+
+| Priority | Slice | Files | Complexity |
+|----------|-------|-------|------------|
+| High | **F-06**: Extended autoplay recovery | `src/main.ts:465` | Trivial (3 lines) |
+| High | **F-03**: Selective drag guard in patchPanel | `src/ui/PreferencesPanel.ts:178` | Low |
+| Medium | **F-01**: Fade clamp consistency | `src/audio/BackgroundAudioManager.ts:399` | Trivial (1 line) |
+| Medium | **F-02**: Add displayPct to volume-map log | `src/audio/BackgroundAudioManager.ts:252` | Trivial (1 line) |
+| Medium | **F-04**: `aria-valuetext` on sliders | `src/ui/AudioControls.ts:113`, `src/ui/PreferencesPanel.ts:154` | Low |
+| Medium | **F-07**: Unmute → play within BAM | `src/audio/BackgroundAudioManager.ts:215` | Medium |
+| Low | **F-08**: `--volume-pct` as percentage string | `src/styles/main.scss` + 3 TS call sites | Low |
+| Low | **F-05**: Enhanced recovery diagnostics | `src/utils/preferences.ts:114` | Trivial |
+| Low | **F-10**: Reduce loop-restart fade gap | `src/audio/BackgroundAudioManager.ts:17` | Trivial (1 line) |
+
+---
+
+### Confirmed-correct findings (no code change needed)
+
+- **Volume mapping contract** (`src/audio/volumeMapping.ts`): Uses linear `0..100% display → 0..0.30 effective`, `DEFAULT_AUDIO_GAIN = 0.15`. Exactly matches the requested contract. ✅
+- **State ownership** (`BackgroundAudioManager.ts`): `targetVolume` and `liveVolume` are properly separated; fade envelope never overwrites `targetVolume`. ✅
+- **Startup mute default** (`src/utils/preferences.ts:141`): `audioMuted: false` is hardcoded at construction, ignoring any stored mute state. Fresh loads always start unmuted. ✅
+- **Zero-volume legacy recovery** (`src/utils/preferences.ts:107–131`): Detects and heals broken `audioVolume = 0` from faulty v0.20.4 behavior using a one-shot `AUDIO_RECOVERY_KEY`. ✅
+- **`play()` short-circuit guard** (`BackgroundAudioManager.ts:142–147`): Skips re-triggering fade-in when audio is already playing. ✅
+- **`setMuted()` no-op guard** (`BackgroundAudioManager.ts:212–218`): Ignores identical mute requests. ✅
+- **Slider source of truth** (`AudioControls.ts:107–108`): Renders from `state.targetVolume`, never from `liveVolume`. ✅
+- **PreferencesPanel drag continuity** (`PreferencesPanel.ts:178`): `isVolumeDragging` prevents full patchPanel() from replacing the slider during pointer drag. ✅
+- **First-interaction autoplay recovery** (`main.ts:461–481`): `pointerdown` + arrow keys + Space/Enter all trigger a one-shot play retry. ✅
+- **Audio placement** (`src/styles/main.scss:436`): Positioned top-right via `right: calc(146px + var(--safe-right))`, aligned with the settings/fullscreen control cluster. ✅
+- **Narrow-phone slider collapse** (`main.scss:1375`): Slider wrap hidden on `max-width: 599px`, mute button still accessible. ✅
+
+---
+
+### Acceptance matrix for the next implementation PR (gap-closure)
+
+| Scenario | Expected outcome |
+|----------|-----------------|
+| First load, empty localStorage | Audio starts audible at UI 50% (= 0.15 effective gain) |
+| First load on iOS Safari (delayed autoplay) | First canvas touch/keypress triggers play via extended recovery (F-06) |
+| Slider drag while adaptive quality changes | Quality radio updates immediately; slider does not jump (F-03) |
+| Screen reader announces slider | Reads "50 Prozent", not "50" (F-04) |
+| Tab hidden then restored | Audio suspends and resumes; `targetVolume` is unchanged |
+| Mute → unmute fast toggle | No silence gap; fade-in from mid-fade correctly (existing ✅) |
+| Loop boundary on Chromium | Restart gap ≤ 50 ms (F-10) |
+| Diagnostics export | Every volume log includes both `targetGain` and `displayPct` (F-02) |
+
+---
+
+### Validation baseline for any implementation PR in this domain
+
+```bash
+npm run lint   # must pass with 0 warnings
+npm run build  # must produce dist/ with no type errors
+```
+
+Manual sweep checklist:
+- [ ] Pointer drag on both sliders: value does not jump; label updates live
+- [ ] Keyboard arrow keys on sliders: value steps by 1%; aria-valuetext announced
+- [ ] Mute toggle: fades out, then back in to previously selected level
+- [ ] Tab hide then restore: audio resumes automatically
+- [ ] No audio source: `.audio-controls[hidden]` — widget invisible
+- [ ] Autoplay blocked: indicator dot visible; first canvas interaction starts audio
+
+---
 
 ## v0.20.6 — Audio stabilization + control polish (2026-05-21)
 
@@ -32,11 +470,13 @@ Implemented.
    - Record the implementation in `CHANGELOG.md` and `FINDINGS.md`.
    - Refresh markdown audit stamp wording for v0.20.6.
 
-## v0.20.5 — Complete audio regression recovery plan (planning, 2026-05-21)
+## v0.20.5 — Complete audio regression recovery plan (planning → substantially resolved, 2026-05-21)
 
 ### Status
 
-Planning only. The problems below are **not fixed yet**. This section replaces the earlier assumption that v0.20.4 fully solved the audio work.
+Substantially resolved. The core state-corruption and mapping bugs documented below were fixed in the v0.20.6 implementation pass and in the corrected `volumeMapping.ts` linear contract. See v0.20.7 for precise file-level confirmation of what is now correct and what minor gaps remain.
+
+**Original planning text preserved below for audit trail.**
 
 ### Exact problems to solve
 

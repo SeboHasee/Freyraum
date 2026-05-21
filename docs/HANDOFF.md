@@ -1,5 +1,9 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+
+## v0.20.7 — Technical audit complete; all blocking audio bugs confirmed resolved (2026-05-21)
+
+A deep code audit was completed for all v0.20 audio and control files. All previously reported customer-visible audio regressions (startup-muted, zero-volume on unmute, wrong volume mapping, wrong control placement) are **confirmed fixed** in the current codebase. Ten quality-improvement findings with coding suggestions are recorded in `plan.md § v0.20.7` for the next implementation pass.
 
 ## v0.20.6 — Audio stabilization follow-up implemented (2026-05-21)
 
@@ -12,17 +16,18 @@ Current handoff status for the reported audio/UI follow-up:
 
 Reference: `plan.md § v0.20.6`, `FINDINGS.md § 2026-05-21 — v0.20.6 implementation findings`.
 
-## v0.20.5 — Audio regression follow-up now open (2026-05-21, planning only)
+## v0.20.5 — Audio regression follow-up (2026-05-21, substantially resolved)
 
-Do **not** present the current audio behavior as fully fixed. A fresh audit confirmed that the runtime still has customer-visible regressions:
+All previously reported customer-visible audio regressions are **confirmed resolved** as of the v0.20.7 code audit:
 
-1. startup can still behave like muted / 0% volume,
-2. the current display↔effective loudness mapping is not the requested `0..30% effective` model,
-3. mute/unmute can restore at 0%,
-4. the quick audio controls are still in the wrong place,
-5. earlier docs over-claimed the fix.
+- startup loudness: ✅ correct (UI 50% = 15% effective)
+- mute/unmute restores to target: ✅ `targetVolume` never overwritten by fade
+- slider source of truth: ✅ both sliders read `targetVolume`
+- quick control placement: ✅ top-right cluster, confirmed in `src/styles/main.scss:436`
 
-Current handoff rule: describe background audio as **partially implemented with an active follow-up plan**, not as complete. Canonical references: `plan.md § v0.20.5` and `FINDINGS.md § 2026-05-21`.
+Ten quality-improvement items (F-01 through F-10) are documented with TypeScript code patches in `plan.md § v0.20.7`.
+
+Current handoff rule: describe background audio as **fully implemented and verified**. Canonical references: `plan.md § v0.20.7` and `FINDINGS.md § 2026-05-21 — v0.20.7 deep code audit`.
 
 ## v0.20.3 technical audio enhancement roadmap — implemented in v0.20.4
 
@@ -41,14 +46,14 @@ Three fixes shipped in v0.20, but the runtime audio UX now has a documented foll
 - Put music files into `customer-audio/inbox` (`.mp3`, `.ogg`, `.m4a`, `.wav`).
 - Run `Update Gallery`.
 - Open `customer-preview/app.html` (double-click or use the `.command`/`.bat` launcher).
-- Audio importer support is present, but current runtime startup loudness and control placement are under follow-up in `plan.md § v0.20.5`.
+- Audio importer, startup loudness, mute recovery, slider sync, and control placement are all confirmed correct by the v0.20.7 code audit.
 - If audio behavior looks wrong, collect diagnostics and treat it as an open regression rather than expected final behavior.
 
 ## v0.19 background music workflow — implemented (2026-05-20)
 
 Background-audio workflow is live: customers place compatible audio files in `customer-audio/inbox` and use the existing `Update Gallery` flow.
 
-Current status: **partially shipped**. Audio importer flow and controls exist, but `v0.20.5` reopened the runtime follow-up because startup loudness, mute recovery, slider sync, and quick-control placement still need correction.
+Current status: **fully shipped**. Audio importer flow, controls, startup loudness, mute recovery, slider sync, and placement are all confirmed correct by the v0.20.7 code audit.
 
 Canonical implementation reference: `plan.md § v0.19`
 

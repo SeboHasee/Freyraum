@@ -1,7 +1,48 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
 
-## 2026-05-21 — v0.20.6 implementation findings (audio stability + UI polish)
+## 2026-05-21 — v0.20.7 deep code audit
+
+### Audit method
+
+Full line-by-line inspection of all v0.20 audio/control source files. Each finding is linked to a file and line number verified in the current checked-in source.
+
+### Confirmed-correct items (no change needed)
+
+| Item | File : Line | Verification |
+|------|-------------|--------------|
+| Linear volume mapping `0..30%` effective | `src/audio/volumeMapping.ts:1–31` | `MAX_EFFECTIVE_AUDIO_GAIN = 0.3`; `displayPercentToGain(50) = 0.15` exactly |
+| `targetVolume`/`liveVolume` state split | `src/audio/BackgroundAudioManager.ts:50–52` | Fade ramps write only `liveVolume`; `setVolume()` writes only `targetVolume` |
+| `play()` already-playing short-circuit | `BackgroundAudioManager.ts:142–147` | Guard checks `!this.audio.paused && this.state.playing` |
+| `setMuted()` no-op guard | `BackgroundAudioManager.ts:212–218` | Returns early when `this.state.muted === value` |
+| Startup `audioMuted: false` | `src/utils/preferences.ts:141` | Hardcoded; stored state ignored for mute |
+| Zero-volume legacy recovery | `src/utils/preferences.ts:107–131` | `AUDIO_RECOVERY_KEY` guards one-shot fix |
+| Slider renders `targetVolume` | `src/ui/AudioControls.ts:107–108` | `gainToDisplayPercent(state.targetVolume)` |
+| Drag-continuity guard in PreferencesPanel | `src/ui/PreferencesPanel.ts:178` | `if (this.isVolumeDragging) return;` |
+| First-interaction autoplay recovery | `src/main.ts:461–481` | `pointerdown` + arrow/Space/Enter |
+| Audio control placement (top-right) | `src/styles/main.scss:436–459` | `right: calc(146px + var(--safe-right))` |
+| Narrow-phone slider collapse | `src/styles/main.scss:1375–1380` | `display: none` at `max-width: 599px` |
+
+### Open gaps (with fix references in plan.md v0.20.7)
+
+| ID | File : Line | Gap | Priority |
+|----|-------------|-----|----------|
+| F-01 | `BackgroundAudioManager.ts:399` | `startFade()` clamps to 1.0 not `MAX_EFFECTIVE_AUDIO_GAIN` | Medium |
+| F-02 | `BackgroundAudioManager.ts:250–257` | `audio-volume-map` log omits `displayPct` | Medium |
+| F-03 | `PreferencesPanel.ts:178–182` | `patchPanel()` skips ALL updates during drag, not just slider | Medium |
+| F-04 | `AudioControls.ts:113`, `PreferencesPanel.ts:154` | Sliders lack `aria-valuetext` | Medium |
+| F-05 | `preferences.ts:114` | Recovery log omits stored value for diagnostics | Low |
+| F-06 | `main.ts:465–474` | Recovery guard requires `autoplayBlocked=true`; misses pre-play state | High |
+| F-07 | `BackgroundAudioManager.ts:215` | `setMuted(false)` does not self-play; relies on external orchestration | Low |
+| F-08 | `main.scss` + 3 TS files | `--volume-pct` stored unitless; future `calc()` misuse risk | Low |
+| F-09 | `BackgroundAudioManager.ts:31–40` | (Confirmed correct — no change needed) | — |
+| F-10 | `BackgroundAudioManager.ts:17` | `LOOP_RESTART_FADE_MS = 150` produces audible 150 ms gap on fallback | Low |
+
+### Regression risk summary
+
+All v0.20.5 blocking issues (state corruption, wrong mapping contract, placement, startup muted) are resolved in the checked-in code. The 10 items above are quality/robustness improvements, not blocking regressions.
+
+
 
 ### Root-cause confirmation
 

@@ -1,5 +1,18 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+
+## v0.20.7 — Full technical audit + gap-closure coding plan (2026-05-21, docs-only)
+
+### Changed
+
+- Performed a full line-by-line code audit of all v0.20 audio and control source files.
+- Confirmed that all v0.20.5 blocking regressions (state corruption, wrong mapping contract, startup muted, control placement) are resolved in the current codebase.
+- Added 10 new technical findings (F-01 through F-10) with file:line references and TypeScript/SCSS code patches to `plan.md`.
+- Reclassified v0.20.5 status from "planning only" to "substantially resolved".
+- Updated `FINDINGS.md` with a new audit section listing confirmed-correct items and open gaps with priority ratings.
+- Refreshed all markdown audit stamps to v0.20.7.
+
+### No runtime code changed in this pass.
 
 ## v0.20.6 — Audio stabilization + UI polish (2026-05-21)
 

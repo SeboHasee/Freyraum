@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
 
 ## v0.20.5 audio status note (follow-up open)
 

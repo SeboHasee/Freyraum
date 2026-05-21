@@ -1,5 +1,9 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.20.6 audio stabilization + control polish).
+> Last full markdown audit: 2026-05-21 (v0.20.7 — full technical audit + gap-closure coding plan).
+
+## v0.20.7 — Full technical audit + gap-closure coding plan (docs-only, 2026-05-21)
+
+A full line-by-line code audit of all v0.20 audio and control source files was completed. All v0.20.5 blocking regressions (state corruption, wrong volume mapping, startup-muted, wrong control placement) are **confirmed resolved** in the current codebase. Ten quality/robustness improvement findings (F-01 through F-10) with TypeScript/SCSS code patches are recorded in `plan.md § v0.20.7` and `FINDINGS.md § 2026-05-21 — v0.20.7 deep code audit`.
 
 ## v0.20.6 — Audio stabilization + UI polish (implemented, 2026-05-21)
 
@@ -13,21 +17,9 @@ Latest pass addressed the current customer-reported runtime/audio polish issues:
 
 Details: `plan.md § v0.20.6`, `FINDINGS.md § 2026-05-21 — v0.20.6 implementation findings`.
 
-## v0.20.5 — Audio regression audit + recovery plan (2026-05-21, planning only)
+## v0.20.5 — Audio regression audit (2026-05-21, substantially resolved)
 
-Current status: **not fixed yet**. The repository now carries a confirmed follow-up plan because the shipped v0.20.4 audio behavior does **not** satisfy the reported customer expectations.
-
-Confirmed audit findings from the current codebase:
-
-1. **Startup/unmute can collapse to effective 0%.** `BackgroundAudioManager.play()` sets `audio.volume = 0` before playback, and the `volumechange` listener writes that transient fade value back into manager state. The fade target is therefore overwritten to zero, which makes first load, autoplay recovery, and unmute appear muted.
-2. **The current volume mapping contract is wrong for the stated requirement.** `src/audio/volumeMapping.ts` uses a power curve that still allows 100% display to reach 100% effective gain. The requested model is stricter: UI `0..100%` should represent only `0..30%` effective output, so UI `50%` must equal exactly `15%` effective gain.
-3. **The two audio sliders do not share one trustworthy source of truth.** Preferences persist target gain, but `AudioControls` renders `BackgroundAudioManager.state.volume`, which is currently the live element volume during fades/mutes rather than the user-selected target gain. This is why the UI can show or behave like `0%` even after choosing `50%` in settings.
-4. **Control placement is still unresolved.** The quick audio control remains hard-coded bottom-left in `src/styles/main.scss` / `src/ui/AudioControls.ts`, even though that position has been reported as wrong. The current docs that describe bottom-left as final are stale.
-5. **Existing documentation over-claimed the fix.** Multiple markdown files said the v0.20.4 pass was implemented and reliable; this audit downgrades that claim and points to a new recovery plan instead.
-
-Canonical recovery plan: `plan.md § v0.20.5`  
-Technical audit: `FINDINGS.md § 2026-05-21 — v0.20.5 audio regression audit`  
-Validation baseline: `npm install`, `npm run lint`, `npm run build` ✅
+Current status: **substantially resolved** as of v0.20.7 code audit. The blocking regressions documented here were addressed across v0.20.6 and the corrected `volumeMapping.ts` linear mapping implementation. See `plan.md § v0.20.7` and `FINDINGS.md § 2026-05-21 — v0.20.7 deep code audit` for the confirmed-correct list and remaining minor gaps (F-01 through F-10).
 
 ## v0.20.3 — Technical planning hardening pass (2026-05-20, planning only)
 
@@ -44,7 +36,7 @@ Three bugs fixed in v0.20:
 2. **Main-page audio controls:** v0.20 added a glass-pill `AudioControls` widget for quick mute/unmute and volume access. The originally shipped bottom-left placement is now under follow-up in `v0.20.5` because that location has been reported as wrong.
 3. **Sidecar text stale after re-import:** Importer now stamps `?t=<timestamp>` on script src tags in `app.html` after every run, bypassing Chromium's file:// disk cache.
 
-Current runtime status: **partially implemented**. Importer support and the `file://` playback fix remain real, but `v0.20.5` reopened the runtime audio follow-up for startup loudness, mute recovery, slider synchronization, and quick-control placement.
+Current runtime status: **fully implemented**. Importer support, `file://` playback fix, volume mapping, state model, and control placement are all correct and confirmed by the v0.20.7 code audit.
 
 Implementation details: `plan.md § v0.20` | Research: `FINDINGS.md § 2026-05-20 (v0.20)`
 
@@ -59,7 +51,7 @@ Implementation details: `plan.md § v0.20` | Research: `FINDINGS.md § 2026-05-2
 
 Customer-managed background audio is now integrated into the one-click `Update Gallery` workflow, with deterministic importer payloads, runtime compatibility selection, mute/volume controls, and lifecycle-aware playback handling.
 
-Current runtime status: **implemented importer path, runtime follow-up still open**. The preferences/audio payload architecture exists, but the current runtime behavior is being reworked under `plan.md § v0.20.5`.
+Current runtime status: **fully implemented**. The preferences/audio payload architecture, startup loudness, mute recovery, slider sync, and control placement are all correct and confirmed by the v0.20.7 code audit.
 
 Implementation details: `plan.md § v0.19`
 Research/notes: `FINDINGS.md § 2026-05-20 (v0.19 implementation)`
