@@ -114,8 +114,9 @@ export class AudioControls {
     this.volumeInput.value = String(displayPct);
     this.volumeInput.disabled = muted;
     this.volumeInput.setAttribute('aria-valuenow', String(displayPct));
+    this.volumeInput.setAttribute('aria-valuetext', `${displayPct} Prozent`);
     // Update the CSS custom property used for the track fill gradient.
-    this.volumeInput.style.setProperty('--volume-pct', String(displayPct));
+    this.volumeInput.style.setProperty('--volume-pct', `${displayPct}%`);
   }
 
   // ── Event handlers ───────────────────────────────────────────────────────────
@@ -154,7 +155,10 @@ export class AudioControls {
     const displayPct = Number(this.volumeInput.value);
     if (Number.isNaN(displayPct)) return;
     // Update track fill immediately (visual feedback before state round-trip).
-    this.volumeInput.style.setProperty('--volume-pct', String(displayPct));
+    const roundedDisplayPct = Math.round(displayPct);
+    this.volumeInput.style.setProperty('--volume-pct', `${roundedDisplayPct}%`);
+    this.volumeInput.setAttribute('aria-valuenow', String(roundedDisplayPct));
+    this.volumeInput.setAttribute('aria-valuetext', `${roundedDisplayPct} Prozent`);
     // Convert display percent to effective gain before persisting.
     const gain = displayPercentToGain(displayPct);
     this.prefs.setAudioVolume(gain);

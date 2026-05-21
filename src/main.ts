@@ -466,10 +466,15 @@ async function main(): Promise<void> {
     if (interactionAudioRecoveryDone) return;
     const prefsNow = preferences.current;
     const audioState = backgroundAudio.getState();
-    if (!backgroundAudio.hasSource() || prefsNow.audioMuted || !audioState.autoplayBlocked) return;
+    const shouldPlay =
+      backgroundAudio.hasSource() &&
+      !prefsNow.audioMuted &&
+      (audioState.autoplayBlocked || (!audioState.playing && audioState.available));
+    if (!shouldPlay) return;
     interactionAudioRecoveryDone = true;
-    diagnostics.info('audio', 'autoplay-recovery-attempt', 'Retrying blocked autoplay after user interaction', {
+    diagnostics.info('audio', 'autoplay-recovery-attempt', 'Retrying audio play after user interaction', {
       reason,
+      autoplayBlocked: audioState.autoplayBlocked,
     });
     void backgroundAudio.play(`interaction-recovery:${reason}`);
   };

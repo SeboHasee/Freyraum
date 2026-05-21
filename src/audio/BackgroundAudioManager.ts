@@ -1,5 +1,5 @@
 import { createScopedDiagnostics } from '../utils/Diagnostics';
-import { DEFAULT_AUDIO_GAIN, MAX_EFFECTIVE_AUDIO_GAIN } from './volumeMapping';
+import { DEFAULT_AUDIO_GAIN, MAX_EFFECTIVE_AUDIO_GAIN, gainToDisplayPercent } from './volumeMapping';
 
 // =============================================================================
 // Fade-envelope constants (v0.20.2 / v0.20.3 Slice C)
@@ -13,8 +13,8 @@ import { DEFAULT_AUDIO_GAIN, MAX_EFFECTIVE_AUDIO_GAIN } from './volumeMapping';
 const FADE_IN_MS = 300;
 /** Gain ramp duration when pausing or muting (ms). */
 const FADE_OUT_MS = 200;
-/** Gain ramp when the `ended` fallback restarts a loop (ms). */
-const LOOP_RESTART_FADE_MS = 150;
+/** Gain ramp when the `ended` fallback restarts a loop (ms). Kept short to minimize audible gap. */
+const LOOP_RESTART_FADE_MS = 50;
 
 export interface BackgroundAudioSource {
   src: string;
@@ -226,6 +226,8 @@ export class BackgroundAudioManager {
         this.state = { ...this.state, liveVolume: this.audio.volume };
       });
       this.state = { ...this.state, playing: false };
+    } else if (!this.disposed && this.source && !this.suspended) {
+      void this.play(`unmute:${reason}`);
     }
     this.emit();
     this.diagnostics.info('audio-mute-change', `Background audio mute changed (${reason})`, {
@@ -254,6 +256,7 @@ export class BackgroundAudioManager {
     // the stored effective gain and the corresponding display percent.
     this.diagnostics.debug('audio-volume-map', 'Volume mapping record', {
       targetGain: clamped,
+      displayPct: gainToDisplayPercent(clamped),
       liveGain: this.audio.volume,
       reason,
     });
@@ -396,7 +399,7 @@ export class BackgroundAudioManager {
   ): void {
     this.cancelFade();
     this.fadeStartGain = this.audio.volume;
-    this.fadeTargetGain = Math.max(0, Math.min(1, targetGain));
+    this.fadeTargetGain = Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, targetGain));
     this.fadeDurationMs = durationMs;
     this.fadeOnComplete = onComplete ?? null;
     this.fadeStartTime = 0; // reset; set on first tick

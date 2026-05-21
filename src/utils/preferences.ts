@@ -115,6 +115,8 @@ export class PreferencesStore {
       audioVolume = DEFAULT_AUDIO_GAIN;
       diagnostics.warn('audio-volume-recovered', 'Recovered legacy broken zero-volume state from localStorage', {
         key: STORAGE_KEY,
+        stored: stored.audioVolume,
+        recoveredTo: audioVolume,
       });
     }
 

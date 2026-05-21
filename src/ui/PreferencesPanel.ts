@@ -170,6 +170,8 @@ export class PreferencesPanel {
           max="100"
           step="1"
           value="${displayPct}"
+          aria-valuetext="${displayPct} Prozent"
+          style="--volume-pct: ${displayPct}%;"
         />
         <span class="prefs__range-value" id="freyraum-audio-volume-label">${displayPct}%</span>
       </label>
@@ -243,7 +245,9 @@ export class PreferencesPanel {
           this.audioValueLabel.textContent = `${Math.round(displayPct)}%`;
         }
         // Update track fill CSS variable immediately.
-        volumeInput.style.setProperty('--volume-pct', String(displayPct));
+        const roundedDisplayPct = Math.round(displayPct);
+        volumeInput.style.setProperty('--volume-pct', `${roundedDisplayPct}%`);
+        volumeInput.setAttribute('aria-valuetext', `${roundedDisplayPct} Prozent`);
         // Write gain to preferences (triggers audio immediately; patchPanel is
         // suppressed by isVolumeDragging for pointer events).
         this.prefs.setAudioVolume(displayPercentToGain(displayPct));
@@ -265,19 +269,18 @@ export class PreferencesPanel {
   // ── In-place patch (called on every preference update) ───────────────────────
 
   private patchPanel(): void {
-    // Do not replace slider during active pointer drag (Slice B continuity fix).
-    if (this.isVolumeDragging) return;
-
     const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume } = this.prefs.current;
 
     if (this.motionInput) this.motionInput.checked = reducedMotion;
     if (this.contrastInput) this.contrastInput.checked = contrastMode === 'high';
     if (this.audioMutedInput) this.audioMutedInput.checked = audioMuted;
 
-    if (this.audioVolumeInput && this.audioValueLabel) {
+    // Do not patch slider value during active pointer drag (Slice B continuity fix).
+    if (!this.isVolumeDragging && this.audioVolumeInput && this.audioValueLabel) {
       const displayPct = gainToDisplayPercent(audioVolume);
       this.audioVolumeInput.value = String(displayPct);
-      this.audioVolumeInput.style.setProperty('--volume-pct', String(displayPct));
+      this.audioVolumeInput.style.setProperty('--volume-pct', `${displayPct}%`);
+      this.audioVolumeInput.setAttribute('aria-valuetext', `${displayPct} Prozent`);
       this.audioValueLabel.textContent = `${displayPct}%`;
     }
 

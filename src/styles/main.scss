@@ -542,8 +542,8 @@ button {
   background: linear-gradient(
     to right,
     var(--accent) 0%,
-    var(--accent) calc(var(--volume-pct, 50) * 1%),
-    rgba(0, 0, 0, 0.12) calc(var(--volume-pct, 50) * 1%),
+    var(--accent) var(--volume-pct, 50%),
+    rgba(0, 0, 0, 0.12) var(--volume-pct, 50%),
     rgba(0, 0, 0, 0.12) 100%
   );
   outline: none;
