@@ -1,14 +1,14 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
 
-## v0.22 — planned (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
 
-**Status: planned — not yet in runtime code.**
+**Status: shipped in runtime code and documentation.**
 
 ## 2026-05-21 — Idle-prefetch-after-reveal does not prevent first-navigation jank
 
 - Scheduling texture prefetch via `requestIdleCallback` **after** the gallery is revealed is insufficient for users who navigate immediately. The idle callbacks fire when the browser is idle, which may be several seconds after the first navigation attempt. Users who navigate quickly will hit cold PBR texture loads and see visible stutter.
-- Root cause: `GalleryManager.init()` only preloads albedo textures, then returns. The idle sweep starts too late.
+- Pre-v0.22 root cause: `GalleryManager.init()` only preloaded albedo textures, then returned. The idle sweep started too late; v0.22 moved capped PBR preload and GPU warm-up under the loading overlay.
 - Future rule: **any texture set that must be available without jank must be fully loaded under the loading overlay, before `reveal()` is called.** Idle-time prefetch is appropriate only as a second-chance retry for failures or for assets that are genuinely optional (e.g., off-screen artworks in a 50+ collection where upfront loading is impractical).
 
 ## 2026-05-21 — GPU warm render must cover all artworks, not just the first

@@ -1,57 +1,52 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
 
-## v0.22 — planned (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
 
-**Status: planned — not yet in runtime code.**
+**Status: shipped.**
 
 ### L-series: Full pre-load + press-to-start
 
 | Gap | Component | Status |
 |-----|-----------|--------|
-| L-01 | `GalleryManager.init()` — only albedo preloaded; PBR sets 2–N loaded on-demand → jank | **Planned** |
-| L-02 | GPU warm render only covers first artwork; artworks 2–N CPU→VRAM stall on first navigation | **Planned** |
-| L-03 | Auto-reveal on load complete; no press-to-start button; no user agency | **Planned** |
-| L-04 | Idle sweep redundant after L-01; retain as retry for failures; add no-op diagnostics log | **Planned (low)** |
-| L-05 | No minimum loading screen duration; branded screen flashes < 100ms on fast LAN/cache | **Planned (low)** |
+| L-01 | `GalleryManager.init()` preloads authored PBR texture sets under the overlay, capped by `PBR_PRELOAD_LIMIT = 15` | **Shipped** |
+| L-02 | GPU warm loop binds each cached artwork texture set and renders once before reveal, capped by `GPU_WARM_LIMIT = 15` | **Shipped** |
+| L-03 | Loading overlay waits for accessible "Galerie betreten" CTA instead of auto-revealing | **Shipped** |
+| L-04 | Idle sweep retained as a no-op/second-chance retry for failed or over-limit texture sets | **Shipped** |
+| L-05 | 500 ms minimum branded loading duration added with `Promise.all([init, delay])` | **Shipped** |
 
-### M-series: Deep code audit corrections (2026-05-21)
-
-Second-pass audit found 7 additional implementation gaps in the L-series plan:
+### M-series: Deep code audit corrections
 
 | Gap | Component | Status |
 |-----|-----------|--------|
-| M-01 | `LoadingOverlayControls` interface: `reveal(): void` must become `reveal(): Promise<void>` — TypeScript compilation blocker for L-03 | **Planned** |
-| M-02 | `createLoadingOverlay()` hint timer runs during ready state and overwrites "Galerie bereit" label after 2 s — `reveal()` must stop timer first | **Planned** |
-| M-03 | Audio recovery `pointerdown` listener registered post-reveal, missing the button click gesture — must register before `await reveal()` | **Planned** |
-| M-04 | L-01 no preload count limit — 50-artwork gallery loads ~5 600 MB CPU textures → OOM on mobile — add `PBR_PRELOAD_LIMIT = 15` | **Planned** |
-| M-05 | `prepareArtworkForWarmRender()` described as async — after L-01 textures are cached; method should be synchronous `warmArtworkForGPU(): void` + add `TextureManager.getForRole()` | **Planned** |
-| M-06 | Standalone `renderer.render()` at `main.ts:567` is redundant after L-02 warm loop — remove for small galleries, keep as fallback for large | **Planned (med)** |
-| M-07 | Progress bar ranges 92–97% overlap between L-02 loop and existing code — remap: warm=93–97%, prewarm=97–99%, ready=100% | **Planned (low)** |
+| M-01 | `LoadingOverlayControls.reveal()` returns `Promise<void>` | **Shipped** |
+| M-02 | `reveal()` clears the hint timer before ready-state copy is shown | **Shipped** |
+| M-03 | Audio recovery listeners are registered before awaiting the start-button reveal | **Shipped** |
+| M-04 | `PBR_PRELOAD_LIMIT = 15` prevents large-gallery OOM during upfront PBR preload | **Shipped** |
+| M-05 | `warmArtworkForGPU(index): void` is synchronous and uses `TextureManager.getForRole()` | **Shipped** |
+| M-06 | Redundant single render removed for small galleries; retained only as large-gallery fallback | **Shipped** |
+| M-07 | Progress ranges remapped: warm 93–97%, shader prewarm 97–99%, ready 100% | **Shipped** |
 
-### Boot sequence architecture after all patches (L+M series)
+### Boot sequence architecture
 
 ```
-galleryManager.init()          ←→  delay(500ms)        [L-01 + L-05, parallel]
-  └─ albedo preload (LoadingManager 0–90%)
-  └─ PBR preload ≤ 15 artworks (LoadingManager 90–92%)
+galleryManager.init()          ←→  delay(500ms)
+  └─ albedo preload + PBR preload ≤ 15 artworks under LoadingManager
   └─ showArtwork(0)
-  └─ scheduleFullTextureSetPrefetch() [no-op for loaded; retries failures]
-warmArtworkForGPU(0..N-1) + render × N                  [L-02 + M-05, sync]
+  └─ scheduleFullTextureSetPrefetch() [retry / over-limit continuation]
+warmArtworkForGPU(0..N-1) + render × N [≤15 artworks]
   └─ progress 93–97%
-renderer.prewarm()                                       [awaited, 97–99%]
-setProgress(100) → reveal(): Promise<void>               [L-03 + M-01]
-  └─ hint timer stopped [M-02]
-  └─ startButton shown, focus after transitionend [M-03]
+renderer.prewarm() [awaited, 97–99%]
+setProgress(100) → reveal(): Promise<void>
+  └─ hint timer stopped
+  └─ startButton shown and focused
 user clicks "Galerie betreten"
-  └─ pointerdown captured by pre-registered listener [M-03]
+  └─ pointerdown captured by pre-registered audio recovery listener
   └─ overlay fades out over 1.3 s
   └─ gallery fully interactive
 ```
 
-Full implementation patches: `plan.md § v0.22` and `plan.md § v0.22 M-series`.
-
----
+Implementation references: `src/gallery/GalleryManager.ts`, `src/gallery/TextureManager.ts`, `src/main.ts`, `src/styles/main.scss`, `plan.md § v0.22`, and `FINDINGS.md § v0.22`.
 
 ## v0.21 — implementation shipped (2026-05-21)
 

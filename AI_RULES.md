@@ -1,5 +1,9 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-21 (v0.22 planned — L+M series: guaranteed jank-free gallery via full PBR pre-load + GPU warm-all + "Galerie betreten" press-to-start + 7 M-series deep-audit corrections).
+> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
+
+## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+
+Current status: shipped. Runtime now preloads albedo plus PBR texture sets for the first 15 artworks under the loading overlay, warms each cached artwork texture set on the GPU before reveal, keeps the branded loader visible for at least 500 ms, and waits for the accessible "Galerie betreten" button before entering the gallery. Validation: `npm run lint` and `npm run build` passed after implementation; `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory that requires a semver-major upgrade.
 
 ## v0.21 — implementation shipped (2026-05-21)
 

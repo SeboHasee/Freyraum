@@ -1,13 +1,13 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
 
-## v0.22 — planned (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
 
 ### Problem confirmed by user testing
 
 After v0.21 shipped, users still report visible hickups (stutters) when switching between paintings for the first time. After visiting every painting once, transitions become smooth. This pattern precisely matches a cold-load texture scenario: PBR maps (normal/roughness/ao/height/specular/varnish/detail) for artworks 2–N are absent from GPU memory on first navigation.
 
-### Root cause in current code
+### Historical root cause before v0.22 shipped
 
 1. `GalleryManager.init()` (`src/gallery/GalleryManager.ts:263–269`) calls `textureManager.preload(urls)` for albedo textures only, then calls `showArtwork(0)` and returns.
 2. `scheduleFullTextureSetPrefetch()` is called last in `init()`. It chains idle-callbacks via `requestIdleCallback`. This sweep runs **after** `init()` returns → **after** the loading overlay has been dismissed → after the gallery is already interactive.
@@ -75,7 +75,7 @@ Cache keys are `"${role}::${url}"` — e.g., `"albedo::data:image/webp;base64,�
 
 ### Status
 
-L-series + M-series findings documented. Full implementation patches with exact line numbers in `plan.md § v0.22`. Not yet in runtime code.
+L-series + M-series findings are implemented in runtime code and documented. `npm run lint` and `npm run build` passed after implementation; `npm audit --audit-level=moderate` remains the known Vite/esbuild development-server advisory requiring a semver-major tooling upgrade.
 
 ---
 

@@ -1,18 +1,18 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
 
-## v0.22 — planned (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
+## v0.22 — shipped (2026-05-21) — Guaranteed Jank-Free Gallery + Press-to-Start
 
-**Status: planned — not yet in runtime code.**
+**Status: shipped in runtime code and documentation.**
 
-After v0.21 shipped, users still experience visible hick-ups when navigating to a painting for the first time. Root cause confirmed: PBR texture sets (normal, roughness, ao, etc.) for artworks 2–N are loaded on first navigation, not during the loading screen. The v0.22 plan addresses this with three high-priority changes:
+After v0.21, first navigation to each painting could still hick-up because PBR texture sets for artworks 2–N were loaded and uploaded only on demand. v0.22 closes that gap:
 
-1. **Full PBR pre-load (L-01):** All artwork PBR texture sets are loaded inside `GalleryManager.init()` under the loading overlay — users see real progress, not jank. `PBR_PRELOAD_LIMIT = 15` guards OOM on mobile devices (M-04).
-2. **GPU warm-all artworks (L-02):** After all PBR sets load, each artwork is temporarily bound to the scene mesh and a render pass forces CPU→VRAM upload before the overlay hides. Synchronous helper `warmArtworkForGPU()` + new `TextureManager.getForRole()` getter (M-05). Progress remapped to 93–97% warm loop, 97–99% shader prewarm, 100% ready (M-07).
-3. **"Galerie betreten" press-to-start (L-03):** Loading screen shows a gold-bordered CTA button at 100%. Gallery only reveals on user click — deliberate entry, premium feel, clean audio context start. Requires `LoadingOverlayControls.reveal(): Promise<void>` interface update (M-01), hint timer stop in `reveal()` (M-02), and audio listeners registered before `await reveal()` (M-03).
-4. **500ms minimum loading duration (L-05):** Branded loading screen is always visible for at least 500ms.
+1. **Full PBR pre-load (L-01):** `GalleryManager.init()` now preloads albedo plus authored PBR texture sets under the loading overlay. `PBR_PRELOAD_LIMIT = 15` protects large galleries from mobile OOM while the idle sweep remains as a second-chance retry for skipped/failed sets.
+2. **GPU warm-all artworks (L-02):** Galleries up to `GPU_WARM_LIMIT = 15` bind each cached artwork texture set and render once under the overlay to force CPU→VRAM upload before users can navigate. Larger galleries keep the v0.21 single-artwork warm fallback.
+3. **"Galerie betreten" press-to-start (L-03):** The loading screen reaches 100%, shows an accessible gold CTA button, stops hint cycling, and only reveals after user action. Audio recovery listeners are registered before the CTA click so the button gesture can start blocked audio cleanly.
+4. **Minimum branded loading duration (L-05):** Boot waits on `Promise.all([galleryManager.init(), delay(500)])`, so fast local previews no longer flash past the branded loader.
 
-A second-pass audit (M-series) found 7 additional implementation gaps in the original L-series plan. All 12 planned changes (L+M series) are documented with full TypeScript patches in `plan.md § v0.22` and `plan.md § v0.22 M-series`. Research notes and gap tables are in `FINDINGS.md § v0.22`.
+Implementation touched `src/gallery/GalleryManager.ts`, `src/gallery/TextureManager.ts`, `src/main.ts`, `src/styles/main.scss`, and rebuilt `customer-preview/`. Validation after implementation: `npm run lint` ✅ and `npm run build` ✅. `npm audit --audit-level=moderate` remains the known Vite/esbuild development-server advisory requiring a semver-major upgrade.
 
 ## v0.21 — implementation shipped (2026-05-21)
 

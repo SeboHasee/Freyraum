@@ -1,13 +1,15 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.22 planned — guaranteed jank-free gallery via full PBR pre-load under loading overlay + "Galerie betreten" press-to-start button + GPU warm-all artworks).
+> Last full markdown audit: 2026-05-21 (v0.22 shipped — full PBR pre-load under loading overlay, GPU warm-all ≤15 artworks, 500ms minimum branded loading, and "Galerie betreten" press-to-start).
 
-## v0.22 — Guaranteed Jank-Free Gallery: Full Pre-Load + "Galerie betreten" (PLANNED)
+## v0.22 — Guaranteed Jank-Free Gallery: Full Pre-Load + "Galerie betreten" (SHIPPED)
+
+Runtime status: shipped. Source changes landed in `src/gallery/GalleryManager.ts`, `src/gallery/TextureManager.ts`, `src/main.ts`, and `src/styles/main.scss`; preview output was rebuilt. Validation after implementation: `npm run lint` and `npm run build` passed. `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory requiring a semver-major upgrade.
 
 ### Problem statement
 
 Users still experience visible hickups (stutters) when switching paintings for the first time. After visiting every painting once, everything becomes smooth. This pattern confirms the root cause: PBR texture maps (normal, roughness, ao, height, specular, varnish, detail) for artworks 2–N are loaded from disk/network **on first navigation** to each painting. This loading happens **after** the loading overlay is dismissed, so users feel the load stall as a visible hick-up during navigation.
 
-Root cause in current code: `GalleryManager.init()` only preloads albedo textures (all artwork photos) during the loading phase. `scheduleFullTextureSetPrefetch()` begins the idle PBR-map sweep using `requestIdleCallback` **after** the loading overlay is removed and the gallery is already interactive. A user who navigates quickly arrives at unpreloaded artworks before the idle sweep has reached them.
+Historical pre-v0.22 root cause: `GalleryManager.init()` only preloaded albedo textures (all artwork photos) during the loading phase. `scheduleFullTextureSetPrefetch()` began the idle PBR-map sweep using `requestIdleCallback` **after** the loading overlay was removed and the gallery was already interactive. v0.22 now preloads the first 15 authored PBR sets under the overlay and keeps the idle sweep as a retry/over-limit path.
 
 The loading screen is also dismissed **automatically** when technical loading is complete — the user has no agency over when the immersive experience begins.
 
@@ -38,9 +40,9 @@ Once L-01 ships (all PBR sets preloaded during loading), the idle sweep is redun
 | L-04 | **LOW** | `GalleryManager.scheduleFullTextureSetPrefetch()` | After L-01, sweep is redundant for loaded artworks. Should log a no-op confirmation; retain as second-chance retry for failures. |
 | L-05 | **LOW** | `main.ts` boot | No minimum loading screen duration. On fast LAN/cache, branded screen flashes < 100ms. Enforce 500ms minimum. |
 
-> **M-series corrections:** Deep code audit found 7 additional gaps in the L-series plan — see `§ v0.22 M-series` section below for full analysis. Key issues: M-01 (TypeScript interface blocker), M-02 (hint timer override), M-03 (audio context gesture), M-04 (large-gallery OOM risk), M-05 (sync vs async warm helper), M-06 (redundant render), M-07 (progress remap).
+> **M-series corrections shipped:** Deep code audit found 7 additional gaps in the L-series plan; all L-series and M-series items are now implemented. Key issues: M-01 (TypeScript interface blocker), M-02 (hint timer override), M-03 (audio context gesture), M-04 (large-gallery OOM risk), M-05 (sync vs async warm helper), M-06 (redundant render), M-07 (progress remap).
 
-### Implementation patches (planned — not yet in runtime code)
+### Implementation closeout (shipped in runtime code)
 
 #### L-01 — Preload ALL PBR texture sets under loading overlay
 
