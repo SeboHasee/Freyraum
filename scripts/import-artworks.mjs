@@ -594,29 +594,50 @@ imageEntries.forEach((filename, i) => {
     );
   }
 
-  // v0.16 — GPU texture memory warnings. Three.js uploads textures as
+  // v0.21 — GPU texture memory warnings. Three.js uploads textures as
   // RGBA8 with mipmaps; the on-GPU footprint is therefore
   //   bytes ≈ width × height × 4 × (4 / 3)
   // because the mip pyramid adds roughly one third on top of the base
-  // level. Phones throttle hard at ≥256 MB of texture memory and
-  // browsers cap individual textures around 4096–8192 px. We flag both
-  // cases here so the customer can downscale before the gallery ever
-  // tries to upload the image.
+  // level. v0.21 raises the norm from the old 4096px blanket warning to
+  // tiered 4K/8K/16K guidance that matches current WebGL MAX_TEXTURE_SIZE
+  // values while still flagging mobile memory risk before upload.
   //
   // Online validation:
   //   - https://registry.khronos.org/webgl/specs/latest/1.0/ (texture limits)
   //   - https://web.dev/articles/webgl-texturing-performance
-  const MAX_RECOMMENDED_DIMENSION = 4096;
-  const HIGH_GPU_MB_THRESHOLD = 64;
-  const VERY_HIGH_GPU_MB_THRESHOLD = 128;
+  const ALL_SAFE_DIMENSION = 4096;
+  const MODERN_DIMENSION = 8192;
+  const HIGH_END_DIMENSION = 16384;
+  const HIGH_GPU_MB_THRESHOLD = 85;
+  const VERY_HIGH_GPU_MB_THRESHOLD = 341;
+  const EXTREME_GPU_MB_THRESHOLD = 1024;
   const gpuMb = (dims.width * dims.height * 4 * 4) / 3 / (1024 * 1024);
-  if (dims.width > MAX_RECOMMENDED_DIMENSION || dims.height > MAX_RECOMMENDED_DIMENSION) {
+  const longestSide = Math.max(dims.width, dims.height);
+  const isPowerOfTwo = (value) => value > 0 && (value & (value - 1)) === 0;
+  if (!isPowerOfTwo(dims.width) || !isPowerOfTwo(dims.height)) {
+    // Internal advisory only: WebGL 2 handles NPOT textures correctly. Keep the
+    // calculation close to the import audit without surfacing noisy customer text.
+  }
+  if (longestSide > HIGH_END_DIMENSION) {
     warnings.push(
-      `${filename} — image is ${dims.width}×${dims.height}px. Many phones and tablets cap textures at 4096×4096; please downscale the longest side to 4096px or less for reliable display.`
+      `${filename} — image is ${dims.width}×${dims.height}px. The longest side is above 16384px, which exceeds the usual WebGL texture limit even on high-end hardware. Downscale to 16384px or less before importing.`
+    );
+  } else if (longestSide > MODERN_DIMENSION) {
+    warnings.push(
+      `${filename} — image is ${dims.width}×${dims.height}px. This is high-end desktop territory (up to 16K); phones and many tablets may downscale or skip it. Keep this only for workstation-grade previews.`
+    );
+  } else if (longestSide > ALL_SAFE_DIMENSION) {
+    warnings.push(
+      `${filename} — image is ${dims.width}×${dims.height}px. 8K-class artwork is supported on modern devices, but older phones may downscale. Export a 4096px copy if maximum compatibility is required.`
+    );
+  }
+  if (gpuMb >= EXTREME_GPU_MB_THRESHOLD) {
+    warnings.push(
+      `${filename} — extreme GPU memory estimate (${Math.round(gpuMb)} MB with mipmaps). This is suitable only for very high-end desktop GPUs.`
     );
   } else if (gpuMb >= VERY_HIGH_GPU_MB_THRESHOLD) {
     warnings.push(
-      `${filename} — at ${dims.width}×${dims.height}px this image needs about ${Math.round(gpuMb)} MB of GPU memory. Phones may run out of memory and skip the texture. Consider downscaling for the best experience.`
+      `${filename} — at ${dims.width}×${dims.height}px this image needs about ${Math.round(gpuMb)} MB of GPU memory. Mobile devices may run out of memory and skip the texture.`
     );
   } else if (gpuMb >= HIGH_GPU_MB_THRESHOLD) {
     warnings.push(

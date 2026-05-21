@@ -81,6 +81,9 @@ export class CanvasInteraction {
       this.canvas.addEventListener('pointercancel', this.onPointerCancel);
       this.canvas.addEventListener('lostpointercapture', this.onPointerCancel);
       this.canvas.addEventListener('click', this.onClick);
+      window.addEventListener('pointermove', this.onGlobalPointerMove, { passive: true });
+      window.addEventListener('pointerup', this.onGlobalPointerUp, { passive: true });
+      window.addEventListener('pointercancel', this.onGlobalPointerCancel, { passive: true });
     } else {
       // Touch Events fallback (older iOS Safari only). Non-passive for
       // touchstart/touchmove because we need `preventDefault()` to own
@@ -91,7 +94,8 @@ export class CanvasInteraction {
       this.canvas.addEventListener('touchcancel', this.onTouchEnd, { passive: true });
       // Click is still useful for panel-click on the rare desktop browser
       // that lacks Pointer Events.
-      this.canvas.addEventListener('mousemove', this.onLegacyMouseMove);
+      window.addEventListener('mousemove', this.onLegacyMouseMove, { passive: true });
+      window.addEventListener('touchmove', this.onGlobalTouchMove, { passive: false });
       this.canvas.addEventListener('click', this.onClick);
     }
 
@@ -145,6 +149,15 @@ export class CanvasInteraction {
   };
 
   private onPointerMove = (e: PointerEvent): void => {
+    this.handlePointerMove(e);
+  };
+
+  private onGlobalPointerMove = (e: PointerEvent): void => {
+    if (e.target === this.canvas) return;
+    this.handlePointerMove(e);
+  };
+
+  private handlePointerMove(e: PointerEvent): void {
     const slot = this.active.get(e.pointerId);
 
     // Hover rotation (fine pointer only, no buttons held).
@@ -177,7 +190,7 @@ export class CanvasInteraction {
       }
       // swipe-candidate: do nothing during move; resolved on pointerup.
     }
-  };
+  }
 
   private onPointerUp = (e: PointerEvent): void => {
     const slot = this.active.get(e.pointerId);
@@ -203,12 +216,22 @@ export class CanvasInteraction {
     }
   };
 
+  private onGlobalPointerUp = (e: PointerEvent): void => {
+    if (e.target === this.canvas) return;
+    this.onPointerUp(e);
+  };
+
   private onPointerCancel = (e: PointerEvent): void => {
     this.active.delete(e.pointerId);
     if (this.active.size === 0) {
       this.state = 'idle';
       this.diagnostics.debug('gesture-cancel', 'Pointer gesture cancelled', {});
     }
+  };
+
+  private onGlobalPointerCancel = (e: PointerEvent): void => {
+    if (e.target === this.canvas) return;
+    this.onPointerCancel(e);
   };
 
   // ---------------------------------------------------------------------------
@@ -259,6 +282,11 @@ export class CanvasInteraction {
       this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
       this.state = 'panning';
     }
+  };
+
+  private onGlobalTouchMove = (e: TouchEvent): void => {
+    if (e.target === this.canvas || this.state === 'idle') return;
+    this.onTouchMove(e);
   };
 
   private onTouchEnd = (e: TouchEvent): void => {
@@ -337,12 +365,16 @@ export class CanvasInteraction {
       this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
       this.canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
       this.canvas.removeEventListener('click', this.onClick);
+      window.removeEventListener('pointermove', this.onGlobalPointerMove);
+      window.removeEventListener('pointerup', this.onGlobalPointerUp);
+      window.removeEventListener('pointercancel', this.onGlobalPointerCancel);
     } else {
       this.canvas.removeEventListener('touchstart', this.onTouchStart);
       this.canvas.removeEventListener('touchmove', this.onTouchMove);
       this.canvas.removeEventListener('touchend', this.onTouchEnd);
       this.canvas.removeEventListener('touchcancel', this.onTouchEnd);
-      this.canvas.removeEventListener('mousemove', this.onLegacyMouseMove);
+      window.removeEventListener('mousemove', this.onLegacyMouseMove);
+      window.removeEventListener('touchmove', this.onGlobalTouchMove);
       this.canvas.removeEventListener('click', this.onClick);
     }
     this.canvas.removeEventListener('wheel', this.onWheel);

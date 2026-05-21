@@ -26,11 +26,14 @@ export interface RendererSnapshot {
   preset: string;
 }
 
+export type RendererContextState = 'lost' | 'restored';
+
 export class RendererManager {
   readonly renderer: THREE.WebGLRenderer;
   private preset: QualityPreset;
   private renderPaused = false;
   private disposed = false;
+  private contextChangeCallback: ((state: RendererContextState) => void) | null = null;
 
   constructor(container: HTMLElement, preset: QualityPreset) {
     this.preset = preset;
@@ -90,6 +93,10 @@ export class RendererManager {
    *  should skip drawing during this window. */
   isRenderPaused(): boolean {
     return this.renderPaused;
+  }
+
+  onContextChange(callback: ((state: RendererContextState) => void) | null): void {
+    this.contextChangeCallback = callback;
   }
 
   /**
@@ -166,6 +173,7 @@ export class RendererManager {
   private onContextLost = (event: Event): void => {
     event.preventDefault();
     this.renderPaused = true;
+    this.contextChangeCallback?.('lost');
     diagnostics.warn('context-lost', 'WebGL context lost; render paused until restoration', {
       width: this.renderer.domElement.width,
       height: this.renderer.domElement.height,
@@ -179,6 +187,7 @@ export class RendererManager {
     // for the framebuffer to be allocated at the right size.
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(getOptimalPixelRatio(this.preset.pixelRatioCap));
+    this.contextChangeCallback?.('restored');
     diagnostics.info('context-restored', 'WebGL context restored', {});
   };
 
@@ -192,6 +201,7 @@ export class RendererManager {
     const canvas = this.renderer.domElement;
     canvas.removeEventListener('webglcontextlost', this.onContextLost as EventListener, false);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored as EventListener, false);
+    this.contextChangeCallback = null;
     this.renderer.dispose();
   }
 }

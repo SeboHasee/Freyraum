@@ -69,7 +69,7 @@ export class BackgroundAudioManager {
   private fadeOnComplete: (() => void) | null = null;
 
   constructor() {
-    this.audio.preload = 'metadata';
+    this.audio.preload = 'auto';
     this.audio.loop = true;
     // Startup invariant: always boot unmuted. Keep the media element in sync
     // with the initial state so the UI mute icon cannot start in a stale state.

@@ -38,6 +38,14 @@ import { suggestStartupQuality } from './utils/performance';
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
 
+interface LoadingOverlayControls {
+  overlay: HTMLDivElement;
+  setProgress(value: number): void;
+  setStatus(text: string): void;
+  reveal(): void;
+  dispose(): void;
+}
+
 /**
  * Extracts the first numeric component from a computed CSS value or custom
  * property. This keeps viewport measuring resilient when custom properties
@@ -196,6 +204,90 @@ function sanitizeInjectedAudio(
   };
 }
 
+function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
+  const hints = [
+    'Kunstwerke werden vorbereitet …',
+    'Texturen werden geladen …',
+    'Licht und Schatten werden berechnet …',
+    'Atmosphäre wird eingestellt …',
+    'Fast fertig …',
+  ];
+  const overlay = document.createElement('div');
+  overlay.className = 'loading-overlay';
+  overlay.setAttribute('role', 'status');
+  overlay.setAttribute('aria-live', 'polite');
+  overlay.setAttribute('aria-label', 'Galerie wird geladen');
+
+  const particles = [
+    ['12%', '18%', '180px', 'rgba(181, 154, 106, 0.12)', '8s'],
+    ['78%', '14%', '220px', 'rgba(200, 214, 229, 0.10)', '10s'],
+    ['18%', '76%', '260px', 'rgba(200, 214, 229, 0.08)', '12s'],
+    ['82%', '72%', '190px', 'rgba(181, 154, 106, 0.10)', '9s'],
+    ['50%', '8%', '150px', 'rgba(181, 154, 106, 0.08)', '11s'],
+    ['48%', '92%', '210px', 'rgba(200, 214, 229, 0.07)', '13s'],
+  ];
+  particles.forEach(([x, y, size, color, duration]) => {
+    const particle = document.createElement('span');
+    particle.className = 'loading-particle';
+    particle.setAttribute('aria-hidden', 'true');
+    particle.style.setProperty('--particle-x', x);
+    particle.style.setProperty('--particle-y', y);
+    particle.style.setProperty('--particle-size', size);
+    particle.style.setProperty('--particle-color', color);
+    particle.style.setProperty('--particle-duration', duration);
+    overlay.appendChild(particle);
+  });
+
+  const card = document.createElement('div');
+  card.className = 'loading-card';
+  const wordmark = document.createElement('div');
+  wordmark.className = 'loading-wordmark';
+  wordmark.textContent = 'FREYRAUM';
+  const subtitle = document.createElement('div');
+  subtitle.className = 'loading-subtitle';
+  subtitle.textContent = 'Galerie wird geladen';
+  const track = document.createElement('div');
+  track.className = 'loading-progress-track';
+  const fill = document.createElement('div');
+  fill.className = 'loading-progress-fill';
+  track.appendChild(fill);
+  const pct = document.createElement('div');
+  pct.className = 'loading-progress-pct';
+  pct.textContent = '0%';
+  const hint = document.createElement('div');
+  hint.className = 'loading-hint';
+  hint.textContent = hints[0];
+  card.append(wordmark, subtitle, track, pct, hint);
+  overlay.appendChild(card);
+  app.appendChild(overlay);
+
+  let hintIndex = 0;
+  const hintTimer = window.setInterval(() => {
+    hintIndex = (hintIndex + 1) % hints.length;
+    hint.textContent = hints[hintIndex];
+  }, 2000);
+
+  return {
+    overlay,
+    setProgress(value: number): void {
+      const clamped = Math.max(0, Math.min(100, Math.round(value)));
+      fill.style.width = `${clamped}%`;
+      pct.textContent = `${clamped}%`;
+    },
+    setStatus(text: string): void {
+      subtitle.textContent = text;
+      overlay.setAttribute('aria-label', text);
+    },
+    reveal(): void {
+      overlay.classList.add('is-hidden');
+      window.setTimeout(() => overlay.remove(), 1300);
+    },
+    dispose(): void {
+      window.clearInterval(hintTimer);
+    },
+  };
+}
+
 async function main(): Promise<void> {
   const diagnostics = getDiagnostics();
   diagnostics.installGlobalHandlers();
@@ -279,16 +371,24 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Loading overlay
-  const loadingOverlay = document.createElement('div');
-  loadingOverlay.className = 'loading-overlay';
-  loadingOverlay.setAttribute('role', 'status');
-  loadingOverlay.setAttribute('aria-label', 'Galerie wird geladen');
-  const spinner = document.createElement('div');
-  spinner.className = 'loading-spinner';
-  spinner.setAttribute('aria-hidden', 'true');
-  loadingOverlay.appendChild(spinner);
-  app.appendChild(loadingOverlay);
+  const loadingOverlay = createLoadingOverlay(app);
+  const loadingManager = new THREE.LoadingManager();
+  loadingManager.onStart = (_url, loaded, total) => {
+    loadingOverlay.setStatus('Texturen werden geladen');
+    loadingOverlay.setProgress(total > 0 ? (loaded / total) * 90 : 8);
+  };
+  loadingManager.onProgress = (_url, loaded, total) => {
+    loadingOverlay.setProgress(total > 0 ? Math.min(92, (loaded / total) * 92) : 35);
+  };
+  loadingManager.onLoad = () => {
+    loadingOverlay.setStatus('Galerie wird vorbereitet');
+    loadingOverlay.setProgress(94);
+  };
+  loadingManager.onError = (url) => {
+    diagnostics.warn('boot', 'loading-manager-error', 'Asset failed during loading-manager preload', {
+      url: url.startsWith('data:') ? `[data-uri:${url.length}bytes]` : url,
+    });
+  };
 
   // Core setup
   const initialPreset = getQualityPreset(preferences.current.quality);
@@ -298,10 +398,33 @@ async function main(): Promise<void> {
     rendererManager = new RendererManager(app, initialPreset);
   } catch (err) {
     diagnostics.error('renderer', 'init-failed', 'RendererManager initialization failed', err);
-    loadingOverlay.remove();
+    loadingOverlay.dispose();
+    loadingOverlay.overlay.remove();
     showFallbackScreen(app, err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.');
     return;
   }
+  rendererManager.renderer.domElement.classList.add('gallery-canvas', 'gallery-canvas--loading');
+  const restoreStatus = document.createElement('div');
+  restoreStatus.className = 'webgl-restore-status';
+  restoreStatus.setAttribute('role', 'status');
+  restoreStatus.setAttribute('aria-live', 'polite');
+  restoreStatus.textContent = 'Grafik wird wiederhergestellt …';
+  app.appendChild(restoreStatus);
+  let restoreStatusTimer: ReturnType<typeof setTimeout> | undefined;
+  rendererManager.onContextChange((state) => {
+    if (state === 'lost') {
+      clearTimeout(restoreStatusTimer);
+      restoreStatus.classList.add('is-visible');
+      diagnostics.warn('renderer', 'context-restore-visible', 'Showing WebGL restore status');
+      return;
+    }
+    restoreStatus.textContent = 'Grafik wiederhergestellt';
+    diagnostics.info('renderer', 'context-restore-hidden', 'WebGL restore status will hide');
+    restoreStatusTimer = setTimeout(() => {
+      restoreStatus.classList.remove('is-visible');
+      restoreStatus.textContent = 'Grafik wird wiederhergestellt …';
+    }, 1200);
+  });
 
   const sceneManager = new SceneManager();
   const postProcessing = new PostProcessing(
@@ -312,7 +435,7 @@ async function main(): Promise<void> {
   );
 
   // Texture & lighting
-  const textureManager = new TextureManager();
+  const textureManager = new TextureManager(loadingManager);
   textureManager.init(rendererManager.renderer);
   textureManager.setAnisotropyDivisor(initialPreset.anisotropyDivisor);
 
@@ -440,11 +563,16 @@ async function main(): Promise<void> {
     lighting: preferences.current.lighting,
   });
 
-  loadingOverlay.classList.add('is-hidden');
-  // v0.15 — matches --dur-reveal (0.9s) on `.loading-overlay` + 50 ms buffer
-  // so the overlay is fully transparent before it is removed from the DOM.
-  // Previous value was 700 ms (matching the old --dur-slow = 0.6s).
-  window.setTimeout(() => loadingOverlay.remove(), 950);
+  loadingOverlay.setStatus('Shader werden vorbereitet');
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+  loadingOverlay.setProgress(97);
+  await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+  loadingOverlay.setProgress(100);
+  loadingOverlay.setStatus('Galerie bereit');
+  rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
+  rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
+  loadingOverlay.reveal();
+  loadingOverlay.dispose();
 
   // Interaction
   const canvas = rendererManager.renderer.domElement;
@@ -688,12 +816,6 @@ async function main(): Promise<void> {
   window.addEventListener('freeze', onPageFreeze as EventListener);
   window.addEventListener('resume', onPageResume as EventListener);
 
-  // v0.16 — non-blocking shader pre-warm. After the gallery is initialised,
-  // ask three.js to compile every program the scene currently needs so
-  // the first interaction does not pay a JIT shader-compile cost. Failures
-  // are logged but never block the boot path.
-  void rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
-
   // v0.16 — debug-only Long Tasks observer. Reports any task that blocks
   // the main thread for more than 50 ms (the Long Tasks API definition).
   // Disabled outside diagnostics mode because the observer itself imposes
@@ -904,6 +1026,7 @@ async function main(): Promise<void> {
     if (pendingApplyHandle !== null) cancelIdle(pendingApplyHandle);
     longTaskObserver?.disconnect();
     if (rendererSnapshotTimer !== undefined) clearInterval(rendererSnapshotTimer);
+    if (restoreStatusTimer !== undefined) clearTimeout(restoreStatusTimer);
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener('pageshow', onPageShow);
@@ -935,6 +1058,7 @@ async function main(): Promise<void> {
     audioControls.dispose();
     hintText.dispose();
     timeline.dispose();
+    restoreStatus.remove();
     backgroundAudio.dispose();
     artworkMesh.dispose();
     sidePanels.dispose();

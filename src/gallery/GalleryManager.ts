@@ -167,6 +167,8 @@ export class GalleryManager {
   private lastResetFitZoom = DEFAULT_CAMERA_Z;
   /** Optional callback used to mark navigation events for FrameBudgetMonitor. */
   private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
+  private readonly prefetchedTextureSets = new Set<number>();
+  private fullPrefetchScheduled = false;
 
   private targetX = 0;
   private targetY = 0;
@@ -264,6 +266,7 @@ export class GalleryManager {
     this.diagnostics.info('init', 'Preload complete — showing first artwork', { artworkCount: urls.length });
     this.pendingResetAfterArtworkLoad = true;
     await this.showArtwork(0);
+    this.scheduleFullTextureSetPrefetch();
   }
 
   addZoomDelta(delta: number): void {
@@ -350,6 +353,7 @@ export class GalleryManager {
 
     // Load any authored maps for this artwork in parallel.
     const authored = await this.textureManager.preloadTextureSet(artwork.textureSet);
+    if (artwork.textureSet) this.prefetchedTextureSets.add(index);
 
     // Audited guard: discard stale loads.
     if (token !== this.artworkLoadToken) {
@@ -463,6 +467,81 @@ export class GalleryManager {
       this.zoom = this.clampZoom(this.zoom);
     }
     this.clampPanTargets();
+    this.prefetchAdjacentArtworks(index);
+  }
+
+  private prefetchAdjacentArtworks(index: number): void {
+    for (const offset of [-1, 1, -2, 2]) {
+      const target = index + offset;
+      if (target < 0 || target >= this.artworks.length) continue;
+      this.scheduleTextureSetPrefetch(target, `adjacent:${offset}`);
+    }
+  }
+
+  private scheduleFullTextureSetPrefetch(): void {
+    if (this.fullPrefetchScheduled) return;
+    this.fullPrefetchScheduled = true;
+    let index = 0;
+    const runNext = (): void => {
+      while (index < this.artworks.length && this.prefetchedTextureSets.has(index)) {
+        index += 1;
+      }
+      if (index >= this.artworks.length) {
+        this.diagnostics.info('prefetch-complete', 'Idle artwork texture-set prefetch sweep complete', {
+          artworkCount: this.artworks.length,
+          prefetched: this.prefetchedTextureSets.size,
+        });
+        return;
+      }
+      this.scheduleTextureSetPrefetch(index, 'idle-sweep', runNext);
+      index += 1;
+    };
+    this.scheduleIdle(runNext, 500);
+  }
+
+  private scheduleTextureSetPrefetch(index: number, reason: string, after?: () => void): void {
+    const artwork = this.artworks[index];
+    if (!artwork?.textureSet || this.prefetchedTextureSets.has(index)) {
+      after?.();
+      return;
+    }
+    this.prefetchedTextureSets.add(index);
+    this.scheduleIdle(() => {
+      this.diagnostics.debug('prefetch-start', 'Prefetching artwork texture set during idle time', {
+        index,
+        artworkId: artwork.id,
+        reason,
+      });
+      this.textureManager.preloadTextureSet(artwork.textureSet)
+        .then(() => {
+          this.diagnostics.debug('prefetch-complete', 'Artwork texture set prefetched', {
+            index,
+            artworkId: artwork.id,
+            reason,
+          });
+        })
+        .catch((err) => {
+          this.prefetchedTextureSets.delete(index);
+          this.diagnostics.warn('prefetch-failed', 'Artwork texture-set prefetch failed', {
+            index,
+            artworkId: artwork.id,
+            reason,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        })
+        .finally(() => after?.());
+    }, 250);
+  }
+
+  private scheduleIdle(callback: () => void, timeout: number): void {
+    const idle = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    if (typeof idle === 'function') {
+      idle(callback, { timeout });
+      return;
+    }
+    window.setTimeout(callback, 1);
   }
 
   /** Selects which procedural fallback roles to generate for the active preset. */
