@@ -1,4 +1,5 @@
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import { DEFAULT_AUDIO_GAIN, MAX_EFFECTIVE_AUDIO_GAIN } from './volumeMapping';
 
 // =============================================================================
 // Fade-envelope constants (v0.20.2 / v0.20.3 Slice C)
@@ -32,7 +33,8 @@ export interface BackgroundAudioState {
   loaded: boolean;
   playing: boolean;
   muted: boolean;
-  volume: number;
+  targetVolume: number;
+  liveVolume: number;
   autoplayBlocked: boolean;
   message: string | null;
   activeSource: BackgroundAudioSource | null;
@@ -50,7 +52,8 @@ export class BackgroundAudioManager {
     loaded: false,
     playing: false,
     muted: false,
-    volume: 0.35,
+    targetVolume: DEFAULT_AUDIO_GAIN,
+    liveVolume: DEFAULT_AUDIO_GAIN,
     autoplayBlocked: false,
     message: null,
     activeSource: null,
@@ -138,10 +141,11 @@ export class BackgroundAudioManager {
     // any buffered samples output at the faded level.
     this.cancelFade();
     this.audio.volume = 0;
+    this.state = { ...this.state, liveVolume: 0 };
     try {
       await this.audio.play();
       // Fade in to the persisted target gain over FADE_IN_MS.
-      this.startFade(this.state.volume, FADE_IN_MS, 'fade-in');
+      this.startFade(this.state.targetVolume, FADE_IN_MS, 'fade-in');
       this.state = {
         ...this.state,
         playing: true,
@@ -153,7 +157,8 @@ export class BackgroundAudioManager {
       return true;
     } catch (error) {
       // Restore volume so the element is in a defined state after a failed play.
-      this.audio.volume = this.state.volume;
+      this.audio.volume = this.state.targetVolume;
+      this.state = { ...this.state, liveVolume: this.audio.volume };
       const name = error instanceof Error ? error.name : 'UnknownError';
       const blocked = name === 'NotAllowedError';
       this.state = {
@@ -188,7 +193,8 @@ export class BackgroundAudioManager {
     this.startFade(0, FADE_OUT_MS, 'fade-out', () => {
       if (!this.audio.paused) this.audio.pause();
       // Restore nominal volume so the element is ready for next play().
-      this.audio.volume = this.state.volume;
+      this.audio.volume = this.state.targetVolume;
+      this.state = { ...this.state, liveVolume: this.audio.volume };
     });
     this.state = { ...this.state, playing: false };
     this.emit();
@@ -204,7 +210,8 @@ export class BackgroundAudioManager {
       this.shouldResumeAfterSuspend = false;
       this.startFade(0, FADE_OUT_MS, 'fade-out-mute', () => {
         if (!this.audio.paused) this.audio.pause();
-        this.audio.volume = this.state.volume;
+        this.audio.volume = this.state.targetVolume;
+        this.state = { ...this.state, liveVolume: this.audio.volume };
       });
       this.state = { ...this.state, playing: false };
     }
@@ -217,22 +224,25 @@ export class BackgroundAudioManager {
 
   setVolume(value: number, reason: string): void {
     if (this.disposed) return;
-    const clamped = Math.max(0, Math.min(1, value));
-    // Apply directly when no active fade; otherwise only update state so that
-    // the fade target is updated on the next tick via the stored state.volume.
-    if (this.fadeRafHandle === null) {
+    const clamped = Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, value));
+    if (this.fadeRafHandle !== null) {
+      this.fadeTargetGain = clamped;
+    } else if (!this.state.muted) {
       this.audio.volume = clamped;
+      this.state = { ...this.state, liveVolume: clamped };
     }
-    this.state = { ...this.state, volume: clamped };
+    this.state = { ...this.state, targetVolume: clamped };
     this.emit();
     this.diagnostics.info('audio-volume-change', `Background audio volume changed (${reason})`, {
       reason,
-      volume: clamped,
+      targetGain: clamped,
+      liveGain: this.audio.volume,
     });
     // v0.20.3 Slice E: explicit mapping log so diagnostics exports show both
     // the stored effective gain and the corresponding display percent.
     this.diagnostics.debug('audio-volume-map', 'Volume mapping record', {
-      effectiveGain: clamped,
+      targetGain: clamped,
+      liveGain: this.audio.volume,
       reason,
     });
   }
@@ -319,7 +329,7 @@ export class BackgroundAudioManager {
       this.state = {
         ...this.state,
         muted: this.audio.muted,
-        volume: this.audio.volume,
+        liveVolume: this.audio.volume,
       };
       this.emit();
     });
@@ -406,6 +416,8 @@ export class BackgroundAudioManager {
     const t = this.fadeDurationMs > 0 ? Math.min(1, elapsed / this.fadeDurationMs) : 1;
     const gain = this.fadeStartGain + (this.fadeTargetGain - this.fadeStartGain) * t;
     this.audio.volume = Math.max(0, Math.min(1, gain));
+    this.state = { ...this.state, liveVolume: this.audio.volume };
+    this.emit();
 
     if (t < 1) {
       this.fadeRafHandle = requestAnimationFrame(this.tickFade);

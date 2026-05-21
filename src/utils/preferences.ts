@@ -3,7 +3,7 @@ import { DEFAULT_QUALITY_PRESET, QUALITY_PRESETS } from '../config/quality';
 import type { LightProfileId } from '../lighting/LightProfile';
 import { DEFAULT_LIGHT_PROFILE, LIGHT_PROFILES } from '../lighting/LightProfile';
 import { createScopedDiagnostics } from './Diagnostics';
-import { DEFAULT_AUDIO_GAIN } from '../audio/volumeMapping';
+import { DEFAULT_AUDIO_GAIN, MAX_EFFECTIVE_AUDIO_GAIN } from '../audio/volumeMapping';
 
 /**
  * Central user-preference store for accessibility and performance choices.
@@ -24,13 +24,14 @@ export interface Preferences {
   lighting: LightProfileId;
   /** v0.19: background audio mute state. */
   audioMuted: boolean;
-  /** v0.19: background audio volume (0..1). */
+  /** v0.19+: background audio effective gain (0..0.30). */
   audioVolume: number;
 }
 
 export type PreferenceListener = (prefs: Preferences) => void;
 
 const STORAGE_KEY = 'freyraum.preferences.v1';
+const AUDIO_RECOVERY_KEY = 'freyraum.audio-recovery.v205';
 const diagnostics = createScopedDiagnostics('preferences');
 
 function readStored(): Partial<Preferences> {
@@ -53,6 +54,22 @@ function writeStored(prefs: Preferences): void {
   }
 }
 
+function readAudioRecoveryFlag(): boolean {
+  try {
+    return localStorage.getItem(AUDIO_RECOVERY_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeAudioRecoveryFlag(): void {
+  try {
+    localStorage.setItem(AUDIO_RECOVERY_KEY, '1');
+  } catch {
+    diagnostics.warn('storage-write-failed', 'Could not persist audio recovery marker to localStorage');
+  }
+}
+
 function detectSystemReducedMotion(): boolean {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
 }
@@ -69,6 +86,7 @@ export class PreferencesStore {
 
   constructor() {
     const stored = readStored();
+    const wasAudioRecovered = readAudioRecoveryFlag();
     const quality: QualityPresetId =
       stored.quality && stored.quality in QUALITY_PRESETS
         ? (stored.quality as QualityPresetId)
@@ -81,6 +99,25 @@ export class PreferencesStore {
 
     const contrastMode: ContrastMode = stored.contrastMode === 'high' ? 'high' : 'auto';
 
+    let audioVolume =
+      typeof stored.audioVolume === 'number' && Number.isFinite(stored.audioVolume)
+        ? Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, stored.audioVolume))
+        : DEFAULT_AUDIO_GAIN;
+
+    const shouldRecoverZeroVolume =
+      !wasAudioRecovered &&
+      stored.audioMuted === false &&
+      typeof stored.audioVolume === 'number' &&
+      Number.isFinite(stored.audioVolume) &&
+      stored.audioVolume <= 0;
+
+    if (shouldRecoverZeroVolume) {
+      audioVolume = DEFAULT_AUDIO_GAIN;
+      diagnostics.warn('audio-volume-recovered', 'Recovered legacy broken zero-volume state from localStorage', {
+        key: STORAGE_KEY,
+      });
+    }
+
     this.prefs = {
       reducedMotion: stored.reducedMotion ?? detectSystemReducedMotion(),
       highContrast: contrastMode === 'high' ? true : detectSystemHighContrast(),
@@ -88,14 +125,13 @@ export class PreferencesStore {
       quality,
       lighting,
       audioMuted: typeof stored.audioMuted === 'boolean' ? stored.audioMuted : false,
-      // v0.20.2: default is the calm-startup gain (displayPercentToGain(50) ≈ 0.152).
-      // Legacy stored values that are valid floats in [0..1] are used as-is
-      // (they already represent effective gain from the v0.19/v0.20 schema).
-      audioVolume:
-        typeof stored.audioVolume === 'number' && Number.isFinite(stored.audioVolume)
-          ? Math.max(0, Math.min(1, stored.audioVolume))
-          : DEFAULT_AUDIO_GAIN,
+      audioVolume,
     };
+
+    if (shouldRecoverZeroVolume) {
+      writeStored(this.prefs);
+      writeAudioRecoveryFlag();
+    }
 
     this.motionMedia?.addEventListener?.('change', this.handleSystemMotionChange);
     this.contrastMedia?.addEventListener?.('change', this.handleSystemContrastChange);
@@ -151,7 +187,7 @@ export class PreferencesStore {
   }
 
   setAudioVolume(value: number): void {
-    this.prefs.audioVolume = Math.max(0, Math.min(1, value));
+    this.prefs.audioVolume = Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, value));
     this.emit();
   }
 

@@ -416,8 +416,8 @@ async function main(): Promise<void> {
   const zoomControls = new ZoomControls(app, galleryManager);
   const fullscreenButton = new FullscreenButton(app, document.documentElement);
   const preferencesPanel = new PreferencesPanel(app, preferences);
-  // v0.20 — subtle main-page audio controls (mute/volume, bottom-left).
-  // Symmetric to ZoomControls (bottom-right). Hidden when no audio source exists.
+  // v0.20.5 — subtle main-page audio controls (mute/volume, top-right cluster).
+  // Hidden when no audio source exists.
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);

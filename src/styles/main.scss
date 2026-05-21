@@ -413,20 +413,20 @@ button {
 }
 
 // =============================================================================
-// Audio controls (main-page mute + volume, bottom-left)
+// Audio controls (main-page mute + volume, top-right cluster)
 // =============================================================================
-// Symmetric to ZoomControls (bottom-right). Hidden via `hidden` attribute
-// when no audio source is available; shown as a low-profile glass pill.
+// Hidden via `hidden` attribute when no audio source is available; shown as a
+// low-profile glass pill aligned with the top-right utility controls.
 //
 // v0.20.2 / v0.20.3 Slice D — placement tokens for collision-aware layout.
-// The left/bottom offsets are derived from shared safe-area variables so
+// The top/right offsets are derived from shared safe-area variables so
 // responsive overrides only need to touch the token definitions.
 
 .audio-controls {
   position: fixed;
   // Placement tokens: override these in media queries for responsive behavior.
-  bottom: var(--audio-ctrl-bottom, var(--chrome-bottom));
-  left: var(--audio-ctrl-left, calc(36px + var(--safe-left)));
+  top: var(--audio-ctrl-top, calc(var(--chrome-top) + 20px));
+  right: var(--audio-ctrl-right, calc(146px + var(--safe-right)));
   display: flex;
   align-items: center;
   gap: 0;
@@ -1363,9 +1363,9 @@ button {
     display: none;
   }
 
-  // Tighten the left offset to match the zoom-controls right offset.
+  // Keep the top-right cluster compact on narrow phones.
   .audio-controls {
-    --audio-ctrl-left: calc(16px + var(--safe-left));
+    --audio-ctrl-right: calc(126px + var(--safe-right));
   }
 
   .timeline__thumb {

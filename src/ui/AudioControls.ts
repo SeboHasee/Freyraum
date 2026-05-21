@@ -8,7 +8,7 @@ const diagnostics = createScopedDiagnostics('audio-controls');
 /**
  * Subtle main-page audio widget: mute/unmute button + compact volume slider.
  *
- * Positioned bottom-left, symmetric to ZoomControls (bottom-right).
+ * Positioned in the top-right control cluster.
  * Hidden when no audio source is available. Shows an activation indicator
  * when browser autoplay policy has blocked the initial play attempt.
  *
@@ -110,7 +110,7 @@ export class AudioControls {
     `;
 
     // Volume slider value: convert stored effective gain to display percent.
-    const displayPct = gainToDisplayPercent(state.volume);
+    const displayPct = gainToDisplayPercent(state.targetVolume);
     this.volumeInput.value = String(displayPct);
     this.volumeInput.disabled = muted;
     this.volumeInput.setAttribute('aria-valuenow', String(displayPct));
