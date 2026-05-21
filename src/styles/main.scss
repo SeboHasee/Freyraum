@@ -1277,6 +1277,49 @@ button {
   color: rgba(240, 234, 224, 0.66);
 }
 
+.loading-start-btn {
+  margin-top: 2rem;
+  padding: 0.9rem 2.4rem;
+  border: 1.5px solid #b59a6a;
+  border-radius: 4px;
+  background: transparent;
+  color: #f0eae0;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.6s ease, transform 0.6s ease, background 0.2s ease;
+
+  &.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:not(:disabled):hover {
+    background: rgba(181, 154, 106, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #b59a6a;
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &.is-visible {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
 .loading-particle {
   position: absolute;
   width: var(--particle-size, 160px);

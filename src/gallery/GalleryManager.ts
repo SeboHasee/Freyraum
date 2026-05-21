@@ -113,6 +113,13 @@ const NAV_SEED_SCALE = 0.88;
  * after a stalled/backgrounded tab when `requestAnimationFrame` resumes. */
 const MAX_SMOOTHING_DT = 0.1;
 
+/**
+ * v0.22 L-01: Maximum number of artworks to pre-load PBR texture sets for
+ * during `init()` under the loading overlay. Artworks beyond this index are
+ * left for the idle prefetch sweep to avoid CPU memory exhaustion.
+ */
+const PBR_PRELOAD_LIMIT = 15;
+
 /** Roles that can be filled in by the procedural factory when no authored map exists. */
 const PROCEDURAL_ROLES: PaintingMapRole[] = [
   'normal',
@@ -263,7 +270,34 @@ export class GalleryManager {
     });
     const urls = this.artworks.map((a) => a.webglImage ?? a.image);
     await this.textureManager.preload(urls);
-    this.diagnostics.info('init', 'Preload complete — showing first artwork', { artworkCount: urls.length });
+
+    const textureSetCount = this.artworks.filter((a) => !!a.textureSet).length;
+    const pbrArtworks = this.artworks
+      .map((artwork, index) => ({ artwork, index }))
+      .filter(({ artwork, index }) => !!artwork.textureSet && index < PBR_PRELOAD_LIMIT);
+    this.diagnostics.info('init', 'Preloading PBR texture sets under loading overlay', {
+      pbrCount: pbrArtworks.length,
+      textureSetCount,
+      totalArtworks: this.artworks.length,
+      limit: PBR_PRELOAD_LIMIT,
+      skippedForLimit: Math.max(0, textureSetCount - pbrArtworks.length),
+    });
+    await Promise.allSettled(
+      pbrArtworks.map(({ artwork, index }) =>
+        this.textureManager.preloadTextureSet(artwork.textureSet).then(() => {
+          this.prefetchedTextureSets.add(index);
+          this.diagnostics.debug('preload-all', 'PBR texture set preloaded during init', {
+            index,
+            artworkId: artwork.id,
+          });
+        })
+      )
+    );
+
+    this.diagnostics.info('init', 'Preload complete — showing first artwork', {
+      artworkCount: urls.length,
+      pbrPreloaded: pbrArtworks.length,
+    });
     this.pendingResetAfterArtworkLoad = true;
     await this.showArtwork(0);
     this.scheduleFullTextureSetPrefetch();
@@ -468,6 +502,64 @@ export class GalleryManager {
     }
     this.clampPanTargets();
     this.prefetchAdjacentArtworks(index);
+  }
+
+  /**
+   * v0.22 L-02: Binds cached textures for the artwork at `index` without
+   * triggering navigation side effects. Call under the loading overlay before a
+   * renderer.render() pass to force CPU→VRAM upload for first navigation.
+   */
+  warmArtworkForGPU(index: number): void {
+    const artwork = this.artworks[index];
+    const preset = this.currentPreset;
+    if (!artwork || !preset) return;
+
+    const albedoUrl = artwork.webglImage ?? artwork.image;
+    const fallbackAlbedo = this.textureManager.get(albedoUrl);
+    if (!fallbackAlbedo) {
+      this.diagnostics.warn('warm-gpu', 'Cannot warm artwork because albedo is not cached', {
+        index,
+        artworkId: artwork.id,
+      });
+      return;
+    }
+
+    const authored: Partial<ResolvedPaintingTextures> = {};
+    if (artwork.textureSet) {
+      const authoredAlbedo = artwork.textureSet.albedo
+        ? this.textureManager.getForRole(artwork.textureSet.albedo.url, 'albedo')
+        : undefined;
+      if (authoredAlbedo) authored.albedo = authoredAlbedo;
+      for (const role of PROCEDURAL_ROLES) {
+        const entry = artwork.textureSet[role];
+        if (!entry) continue;
+        const cached = this.textureManager.getForRole(entry.url, role);
+        if (cached) authored[role] = cached;
+      }
+    }
+
+    const resolved: ResolvedPaintingTextures = {
+      albedo: authored.albedo ?? fallbackAlbedo,
+    };
+    for (const role of PROCEDURAL_ROLES) {
+      if (authored[role]) {
+        resolved[role] = authored[role];
+      } else if (this.shouldFillRole(role, preset)) {
+        const inspSize = preset.proceduralInspectionTileSize;
+        const useInspection =
+          this.inspectionMode && inspSize > 0 && (INSPECTION_ROLES as readonly string[]).includes(role);
+        const tileSize = useInspection ? inspSize : preset.proceduralTileSize;
+        resolved[role] = this.procedural.generate(artwork.id, role, tileSize);
+      }
+    }
+
+    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
+    this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
+    this.diagnostics.debug('warm-gpu', 'Cached artwork textures bound for GPU warm render', {
+      index,
+      artworkId: artwork.id,
+      activeMaps: this.artworkMesh.material.activeMaps(),
+    });
   }
 
   private prefetchAdjacentArtworks(index: number): void {

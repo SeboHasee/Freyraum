@@ -221,6 +221,11 @@ export class TextureManager {
     return tex;
   }
 
+  /** Synchronous role-aware cache hit. Returns undefined on miss (no network fetch). */
+  getForRole(url: string, role: PaintingMapRole): THREE.Texture | undefined {
+    return this.cache.get(`${role}::${url}`);
+  }
+
   /**
    * v0.08: returns true if the cached texture for this URL+role is a
    * generated fallback (i.e. the real image failed to load). Used by

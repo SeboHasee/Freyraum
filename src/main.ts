@@ -37,12 +37,14 @@ import { suggestStartupQuality } from './utils/performance';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
+const MIN_LOADING_SCREEN_MS = 500;
+const GPU_WARM_LIMIT = 15;
 
 interface LoadingOverlayControls {
   overlay: HTMLDivElement;
   setProgress(value: number): void;
   setStatus(text: string): void;
-  reveal(): void;
+  reveal(): Promise<void>;
   dispose(): void;
 }
 
@@ -257,7 +259,12 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   const hint = document.createElement('div');
   hint.className = 'loading-hint';
   hint.textContent = hints[0];
-  card.append(wordmark, subtitle, track, pct, hint);
+  const startButton = document.createElement('button');
+  startButton.className = 'loading-start-btn';
+  startButton.textContent = 'Galerie betreten';
+  startButton.setAttribute('aria-label', 'Galerie betreten und Ausstellung beginnen');
+  startButton.disabled = true;
+  card.append(wordmark, subtitle, track, pct, hint, startButton);
   overlay.appendChild(card);
   app.appendChild(overlay);
 
@@ -278,9 +285,37 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
       subtitle.textContent = text;
       overlay.setAttribute('aria-label', text);
     },
-    reveal(): void {
-      overlay.classList.add('is-hidden');
-      window.setTimeout(() => overlay.remove(), 1300);
+    reveal(): Promise<void> {
+      window.clearInterval(hintTimer);
+      startButton.disabled = false;
+      startButton.classList.add('is-visible');
+      subtitle.textContent = 'Galerie bereit — zum Starten klicken';
+      hint.textContent = 'Alle Kunstwerke sind vorbereitet.';
+      overlay.setAttribute('aria-label', 'Galerie bereit — zum Starten klicken');
+      return new Promise<void>((resolve) => {
+        let entered = false;
+        const go = (): void => {
+          if (entered) return;
+          entered = true;
+          startButton.disabled = true;
+          startButton.removeEventListener('click', go);
+          document.removeEventListener('keydown', onKey);
+          overlay.classList.add('is-hidden');
+          window.setTimeout(() => {
+            overlay.remove();
+            resolve();
+          }, 1300);
+        };
+        const onKey = (event: KeyboardEvent): void => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          go();
+        };
+        startButton.addEventListener('click', go);
+        document.addEventListener('keydown', onKey);
+        startButton.addEventListener('transitionend', () => startButton.focus(), { once: true });
+        window.setTimeout(() => startButton.focus(), 650);
+      });
     },
     dispose(): void {
       window.clearInterval(hintTimer);
@@ -556,23 +591,15 @@ async function main(): Promise<void> {
   chromeRefs.navControls = app.querySelector<HTMLElement>('.nav-controls');
   chromeRefs.infoPanel = app.querySelector<HTMLElement>('.info-panel');
 
-  await galleryManager.init();
+  await Promise.all([
+    galleryManager.init(),
+    new Promise<void>((resolve) => window.setTimeout(resolve, MIN_LOADING_SCREEN_MS)),
+  ]);
   diagnostics.info('boot', 'gallery-ready', 'Gallery initialized', {
     artworkCount: artworks.length,
     quality: preferences.current.quality,
     lighting: preferences.current.lighting,
   });
-
-  loadingOverlay.setStatus('Shader werden vorbereitet');
-  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
-  loadingOverlay.setProgress(97);
-  await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
-  loadingOverlay.setProgress(100);
-  loadingOverlay.setStatus('Galerie bereit');
-  rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
-  rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
-  loadingOverlay.reveal();
-  loadingOverlay.dispose();
 
   // Interaction
   const canvas = rendererManager.renderer.domElement;
@@ -614,6 +641,34 @@ async function main(): Promise<void> {
   };
   window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
   window.addEventListener('keydown', onFirstInteractionKey);
+
+  const artworkCount = artworks.length;
+  if (artworkCount <= GPU_WARM_LIMIT) {
+    loadingOverlay.setStatus('GPU wird vorbereitet');
+    for (let i = 0; i < artworkCount; i++) {
+      galleryManager.warmArtworkForGPU(i);
+      rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+      loadingOverlay.setProgress(93 + Math.round(((i + 1) / artworkCount) * 4));
+    }
+    galleryManager.warmArtworkForGPU(0);
+    rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+  } else {
+    diagnostics.info('boot', 'gpu-warm-limited', 'Large gallery detected; using single-artwork GPU warm fallback', {
+      artworkCount,
+      limit: GPU_WARM_LIMIT,
+    });
+    rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+  }
+
+  loadingOverlay.setStatus('Shader werden vorbereitet');
+  loadingOverlay.setProgress(97);
+  await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+  loadingOverlay.setProgress(100);
+  loadingOverlay.setStatus('Galerie bereit');
+  rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
+  rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
+  await loadingOverlay.reveal();
+  loadingOverlay.dispose();
 
   // v0.16 — unified, RAF-deferred resize coordinator. Replaces the
   // v0.11 design where SceneManager and PostProcessing each owned their
