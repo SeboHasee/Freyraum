@@ -2,9 +2,13 @@
 > Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
 
-## v0.23 — Performance/Preloading Planning Audit (OPEN)
+## v0.23 — Performance/Preloading Planning Audit (IMPLEMENTED v0.23.1)
 
-Runtime status: **planning only; no runtime code changed in this pass**. The current user report is still reproducible from the source architecture: navigation becomes smooth only after every painting has been visited once, which means some expensive work still happens on first use instead of under the loading screen.
+Runtime status: **implemented in v0.23.1 runtime code**. Per-artwork readiness diagnostics, budgeted/offscreen GPU warming, critical-window procedural pre-generation, navigation-aware prefetch promotion, readiness-aware adaptive cooldowns, and ImageBitmap/KTX2 diagnostics are now shipped; the original planning rationale remains below for traceability.
+
+Implementation closeout: `src/gallery/GalleryManager.ts` owns the readiness ledger, procedural pre-generation, priority prefetch queue, and warm-order calculation; `src/main.ts` performs critical pre-reveal warming and post-reveal frame-budgeted offscreen warming; `src/timeline/Timeline.ts` promotes hovered/focused targets; `src/utils/FrameBudgetMonitor.ts` exposes readiness cooldown marking; `src/gallery/TextureManager.ts` logs ImageBitmap/KTX2 pipeline diagnostics. Validation: `npm run lint` and `npm run build` passed; `npm audit --audit-level=moderate` remains the known Vite/esbuild advisory.
+
+Original planning note: navigation became smooth only after every painting had been visited once, which meant some expensive work still happened on first use instead of under/around the loading screen.
 
 ### Problem statement
 

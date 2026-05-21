@@ -2,6 +2,12 @@
 > Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
 
+## v0.23.1 — shipped (2026-05-21) — Performance + Preloading
+
+**Status: shipped in runtime code and rebuilt preview output.** The v0.23 N-series implementation now records per-artwork readiness, prepares the critical navigation window before reveal, continues the remaining GPU warm queue with an offscreen render target and frame budget, promotes navigation/timeline targets ahead of the idle sweep, and keeps adaptive quality from downgrading while readiness jobs are active. Diagnostics also report ImageBitmap decode support, future KTX2/Basis pipeline status, and 4/15/20/50 artwork validation buckets.
+
+Validation after implementation: `npm run lint` ✅ and `npm run build` ✅. `npm audit --audit-level=moderate` remains the known Vite/esbuild development-server advisory requiring a semver-major upgrade.
+
 ## v0.23 — planning audit (2026-05-21) — Performance + Preloading
 
 **Status: planning/documentation only; runtime still v0.22.** A fresh audit confirms why navigation can still feel choppy after the loading screen: v0.22 warms all artworks only up to 15 items, large galleries continue after reveal via best-effort idle prefetch, and missing procedural maps are still generated synchronously on first use. The new N-series plan in `plan.md` prioritizes a measured readiness ledger, budgeted GPU warm queue, critical-window procedural pre-generation, navigation-aware prefetch, and future ImageBitmap/KTX2 research.

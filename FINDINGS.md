@@ -2,6 +2,18 @@
 > Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
 
+## v0.23.1 — Performance/Preloading implementation findings (2026-05-21)
+
+### Status
+
+Runtime implementation shipped for the N-series plan: readiness diagnostics are now per artwork, the fixed `GPU_WARM_LIMIT = 15` path is replaced by budgeted/offscreen warming, procedural maps are prepared for the critical navigation window, prefetch promotion follows navigation intent, and adaptive quality cooldown stays active while readiness work remains. ImageBitmap decode and KTX2/Basis are logged as guarded/future pipeline diagnostics rather than forced into the current JPG/PNG/WebP customer-preview path.
+
+### Validation
+
+- `npm run lint` passed.
+- `npm run build` passed and rebuilt `customer-preview/freyraum-gallery.js`.
+- `npm audit --audit-level=moderate` still reports the known Vite/esbuild advisory requiring a breaking major upgrade.
+
 ## v0.23 — Performance/Preloading Planning Audit (2026-05-21)
 
 ### Audit result

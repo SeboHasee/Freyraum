@@ -2,6 +2,21 @@
 > Last full markdown audit: 2026-05-21 (v0.23 planning audit — navigation still warms only ≤15 artworks, procedural maps are generated synchronously, idle prefetch is best-effort, and the next performance/preloading plan is documented).
 
 
+## v0.23.1 — Performance/Preloading implementation (2026-05-21)
+
+### Changed
+
+- Added a per-artwork readiness ledger covering albedo, authored PBR, procedural maps, material apply, shader compile, and GPU warm state.
+- Replaced the fixed `GPU_WARM_LIMIT = 15` fallback with a budgeted warm order that prepares the critical navigation window before reveal and continues safely through an offscreen render target after entry.
+- Pre-generates procedural maps for current ±2 artworks, promotes next/previous/timeline targets ahead of the idle sweep, and keeps adaptive-quality cooldown active while readiness work is pending.
+- Added startup diagnostics for ImageBitmap decode support, future KTX2/Basis importer planning, and 4/15/20/50 artwork validation buckets.
+
+### Validation and residual risk
+
+- Baseline before changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Post-implementation validation: `npm run lint` and `npm run build` passed.
+- `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory; the available automated remediation requires a semver-major tooling upgrade and remains a separate maintenance task.
+
 ## v0.23 — Performance/Preloading Planning Audit (docs-only, 2026-05-21)
 
 ### Changed
