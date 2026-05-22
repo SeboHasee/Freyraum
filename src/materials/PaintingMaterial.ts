@@ -109,6 +109,8 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
     super({
       roughness: 0.88,
       metalness: 0,
+      emissive: 0xffffff,
+      emissiveIntensity: preset.albedoFidelityFill,
       // v0.03 matte-first retune: was 0.04. Default reads as rough painted
       // surface, not varnished oil.
       clearcoat: 0.0,
@@ -454,6 +456,7 @@ ${LIGHTS_END_TOKEN}
   applyPreset(preset: QualityPreset): void {
     this.normalScale.set(preset.normalStrength, preset.normalStrength);
     this.clearcoatRoughness = preset.clearcoatRoughnessValue;
+    this.emissiveIntensity = preset.albedoFidelityFill;
 
     if (!preset.clearcoatEnabled) {
       this.clearcoat = 0.0;
@@ -568,6 +571,8 @@ ${LIGHTS_END_TOKEN}
     preset: QualityPreset
   ): void {
     this.map = textures.albedo;
+    this.emissiveMap = textures.albedo;
+    this.emissiveIntensity = preset.albedoFidelityFill;
 
     this.normalMap = textures.normal ?? null;
 
@@ -695,6 +700,7 @@ ${LIGHTS_END_TOKEN}
     if (this.specularIntensityMap) active.push('specular');
     if (this.aoMap) active.push('ao');
     if (this.clearcoatMap || this.clearcoat > 0) active.push('varnish');
+    if (this.emissiveMap && this.emissiveIntensity > 0) active.push('albedoFill');
     return active;
   }
 }

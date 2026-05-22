@@ -109,6 +109,14 @@ export interface QualityPreset {
    * Disabled on `battery` preset to reduce GPU load.
    */
   fxaaEnabled: boolean;
+
+  // ── v0.30 artwork fidelity field ──────────────────────────────────────────
+  /**
+   * Unlit albedo contribution mixed through the painting material. This keeps
+   * customer artwork closer to its source brightness while the PBR lighting
+   * still supplies depth, normals, and varnish response.
+   */
+  albedoFidelityFill: number;
 }
 
 export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
@@ -116,12 +124,12 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     id: 'high',
     label: 'Hoch',
     description: 'Volle Detailtiefe für moderne dedizierte GPUs.',
-    pixelRatioCap: 1.8,
-    bloomStrength: 0.08,
+    pixelRatioCap: 1.6,
+    bloomStrength: 0.04,
     bloomRadius: 0.36,
     bloomThreshold: 1.2,
     shadows: true,
-    artworkSegments: 240,
+    artworkSegments: 180,
     shaderVariant: 'painting-high',
     normalStrength: 0.7,
     detailNormalStrength: 0.6,
@@ -136,10 +144,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     proceduralTileSize: 1024,
     proceduralInspectionTileSize: 2048,
     parallaxEnabled: true,
-    parallaxSteps: 12,
+    parallaxSteps: 10,
     parallaxScale: 0.012,
     selfShadowEnabled: true,
-    selfShadowSteps: 8,
+    selfShadowSteps: 6,
     // v0.05: lowered from 0.55. Combined with the new soft accumulation,
     // max-occlusion cap, and display-profile scale, this reads as surface
     // texture rather than a stain on gallery-soft / museum-neutral profiles.
@@ -155,13 +163,14 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.12,
     clearcoatRoughnessValue: 0.35,
     fxaaEnabled: true,
+    albedoFidelityFill: 0.2,
   },
   balanced: {
     id: 'balanced',
     label: 'Ausgewogen',
     description: 'Empfohlen für die meisten Laptops und Tablets.',
-    pixelRatioCap: 1.4,
-    bloomStrength: 0.06,
+    pixelRatioCap: 1.25,
+    bloomStrength: 0.03,
     bloomRadius: 0.3,
     bloomThreshold: 1.25,
     shadows: true,
@@ -191,6 +200,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.35,
     fxaaEnabled: true,
+    albedoFidelityFill: 0.18,
   },
   battery: {
     id: 'battery',
@@ -227,6 +237,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
+    albedoFidelityFill: 0.14,
   },
 };
 

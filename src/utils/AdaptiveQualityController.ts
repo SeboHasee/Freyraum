@@ -59,6 +59,7 @@ export class AdaptiveQualityController {
       rollingMs: Math.round(sample.rollingMs * 10) / 10,
       rollingFps: Math.round(sample.rollingFps * 10) / 10,
       emaMs: Math.round(sample.emaMs * 10) / 10,
+      severeFrameCount: sample.severeFrameCount,
     });
     this.current = next;
     this.holdOffUntil = now + this.holdOffMs;

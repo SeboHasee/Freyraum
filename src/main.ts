@@ -1473,6 +1473,7 @@ async function main(): Promise<void> {
         to: downgrade,
         rollingFps: Math.round(sample.rollingFps * 10) / 10,
         rollingMs: Math.round(sample.rollingMs * 10) / 10,
+        severeFrameCount: sample.severeFrameCount,
       });
       // Adaptive downgrade: drive the preference store so listeners pick it up
       // and the user sees the change in the PreferencesPanel.
