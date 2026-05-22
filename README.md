@@ -1,6 +1,20 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
 
+
+## v0.27 — Startup smoothness + loading/AA remediation plan (2026-05-22, planned)
+
+**Status: planned; runtime still v0.26.**
+
+The next pass targets user-reported startup smoothness gaps that are still visible:
+
+1. Loading branding centering must hold consistently across viewport/device combinations.
+2. Loading particles must be more recognizable while remaining lightweight.
+3. Enter CTA hover must be preloaded so first hover is smooth (no first-use hitch).
+4. Gallery must feel smooth immediately after entry, not only after every painting has been visited once.
+5. AA strategy must be explicit per device tier to keep visual quality without startup/frame-time regressions.
+
+See `plan.md § v0.27` for the remediation plan and `FINDINGS.md § v0.27` for research-backed rationale.
 
 ## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, shipped)
 

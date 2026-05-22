@@ -1,6 +1,38 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
 
+
+## v0.27 — Startup smoothness + loading/AA deep planning findings (2026-05-22, planned)
+
+### Status
+
+Documentation/research planning pass only. Runtime remains **v0.26**.
+
+### User-reported regressions to resolve
+
+- Loading branding not reliably centered.
+- Particle effect not strong enough to clearly communicate active loading.
+- Enter-button hover has first-use lag.
+- Main site remains laggy until all paintings were viewed once.
+
+### Research-backed findings
+
+| ID | Source | Finding |
+|----|--------|---------|
+| W-01 | Nielsen Norman Group progress indicator guidance; Smashing Magazine loading-pattern guidance | Loading progress must match actual readiness states; premature “ready” creates trust/performance mismatch. |
+| W-02 | web.dev preload guidance | Interactive-state assets (hover/focus visuals) should be preloaded/prioritized before user interaction to avoid first-hover hitching. |
+| W-03 | MDN `requestIdleCallback` | Idle callbacks are opportunistic and not reliable as sole correctness gates for critical startup readiness. |
+| W-04 | Three.js renderer compile documentation and practical warmup guidance | Shader/material program preparation must be deterministic pre-entry when smooth first interaction is a hard requirement. |
+| W-05 | WebGL AA tradeoff references (MSAA/FXAA/SMAA) | AA should be selected by device budget and validated against frame-time targets, not fixed blindly at one profile. |
+
+### Conclusion
+
+The remaining issue cluster is a startup-contract and prioritization problem: first interaction still pays for work that should be finished under the loading screen. The v0.27 plan therefore focuses on strict readiness truthfulness, hover-dependency preloading, stronger but performant loading visuals, and explicit AA/perf tiering.
+
+### Validation
+
+- Documentation/research pass only.
+- No runtime code changes in this pass.
 
 ## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, shipped)
 

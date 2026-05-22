@@ -1,5 +1,5 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
 
 
 ## 2026-05-21 — v0.23 performance audit lessons

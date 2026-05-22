@@ -1,6 +1,24 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
 
+
+## v0.27 — Startup smoothness + loading/AA remediation planning pass (2026-05-22, **planned**)
+
+### Summary
+
+Planning/documentation pass only. This captures the next implementation scope for unresolved startup-smoothness feedback: loading-brand centering consistency, stronger loading-particle legibility, first-hover lag elimination for the enter CTA, and true first-use smoothness before gallery entry.
+
+### Changed
+
+- **`plan.md`**: added v0.27 W-series remediation plan with explicit gaps, acceptance direction, and rollout steps.
+- **`FINDINGS.md`**: added v0.27 research synthesis and source-backed findings for loading-truthfulness, preload prioritization, idle scheduling limits, and AA strategy implications.
+- **`README.md`**: top status section updated to show v0.27 as the active planned workstream and mark runtime state as still v0.26.
+- **All Markdown docs (`**/*.md`)**: audit banner synced to v0.27 planning-pass wording as requested.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, **shipped**)
 

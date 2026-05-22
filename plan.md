@@ -1,6 +1,57 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
 
+
+## v0.27 — Startup smoothness + loading/AA remediation plan (2026-05-22, **planned**)
+
+Runtime status: **planned**, not yet shipped.
+
+### Problem statement (current user feedback)
+
+- Loading branding still appears off-center.
+- Particle motion is still too subtle to read as intentional loading feedback.
+- The enter-button hover effect still performs first-use work at hover time and feels laggy.
+- Main gallery smoothness still improves only after all paintings have been visited, so startup is still not truly first-use smooth.
+
+### Online research synthesis (2026-05-22)
+
+- Progress indicators must be truthful and map to real completion states to avoid perceived “fake ready” behavior.  
+  Sources: Nielsen Norman Group progress indicator guidance; Smashing Magazine loading UX patterns.
+- Critical interaction assets should be preloaded early; first-hover lag is often a preload/prioritization issue, not only an animation-timing issue.  
+  Sources: web.dev preload guidance; MDN preload and rendering hint guidance.
+- Idle scheduling is best-effort and should not be the sole correctness gate for first-use readiness.  
+  Source: MDN `requestIdleCallback` documentation.
+- For WebGL scenes, anti-aliasing strategy should be tiered by device budget (quality vs latency), with deterministic startup warm coverage.  
+  Sources: Three.js renderer compile docs; common WebGL AA tradeoff guidance (MSAA/FXAA/SMAA).
+
+### Gap analysis (W-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| W-01 | **HIGH** | Loading-brand centering still drifts in practical viewport/device combinations. | Rework loading brand container alignment contract and verify with deterministic viewport matrix checks. |
+| W-02 | **HIGH** | Particle motion/contrast is too weak to be recognized as active progress. | Increase particle salience (contrast, count distribution, amplitude, motion layering) with reduced visual noise. |
+| W-03 | **HIGH** | Enter CTA hover still triggers first-use style/asset/compositor work. | Guarantee hover-state dependencies are preloaded and composited before CTA becomes interactive. |
+| W-04 | **HIGH** | First navigation still hits cold-path cost until each painting has been visited once. | Enforce stricter startup readiness gate so no first-visit decode/upload/procedural spikes leak past entry. |
+| W-05 | **MEDIUM** | Loading overlay copy and progress semantics can still overstate readiness scope. | Align copy/progress phases with exact readiness gates (strict vs fallback) and expose any deferred work explicitly. |
+| W-06 | **MEDIUM** | Anti-aliasing/perf policy is not explicitly tied to device capability tiers at startup. | Introduce deterministic AA profile selection policy and validate quality/perf balance per tier. |
+| W-07 | **LOW** | Acceptance criteria are not yet codified for hover-latency and first-navigation frame stability. | Add measurable pass/fail criteria and diagnostics for hover latency, first-interaction stutter, and frame pacing. |
+
+### Implementation plan
+
+1. Define a single startup contract that must complete before CTA enablement: centered branding, loaded hover assets/styles, strict first-view readiness, and selected AA profile.
+2. Refactor loading overlay visual system to improve centered layout resilience and clearly readable particle motion without excessive overdraw.
+3. Move all CTA hover dependencies to preload/startup phases so first hover is only state toggle, not resource preparation.
+4. Harden gallery readiness gate to block entry until first-use rendering paths for all targeted paintings are already warm.
+5. Add AA startup policy by device tier with deterministic fallback path and explicit diagnostics output.
+6. Reconcile UX copy/status phases with the true readiness gates and deferred-work semantics.
+7. Add a validation checklist for startup smoothness covering hover latency, first navigation jank, and stability across representative gallery sizes.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime implementation.
+- Capture diagnostics proving CTA hover has no first-use load at interaction time.
+- Verify first navigation/frame pacing across small and large galleries without per-painting warm-up dependence after entry.
+- Re-run security/code review validation after implementation changes.
 
 ## v0.26 — Loading overlay centering + full-preload strictness (2026-05-22, **shipped**)
 
