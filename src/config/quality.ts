@@ -163,7 +163,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.12,
     clearcoatRoughnessValue: 0.35,
     fxaaEnabled: true,
-    albedoFidelityFill: 0.38,
+    albedoFidelityFill: 0.72,
   },
   balanced: {
     id: 'balanced',
@@ -200,7 +200,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.35,
     fxaaEnabled: true,
-    albedoFidelityFill: 0.34,
+    albedoFidelityFill: 0.72,
   },
   battery: {
     id: 'battery',
@@ -237,7 +237,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
-    albedoFidelityFill: 0.28,
+    albedoFidelityFill: 0.72,
   },
 };
 

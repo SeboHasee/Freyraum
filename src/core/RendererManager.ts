@@ -46,12 +46,13 @@ export class RendererManager {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // v0.28 X-01 — NeutralToneMapping (Khronos PBR Neutral, r163+) preserves
-    // original artwork colours: near-identity below 1.0, gentle rolloff above.
-    // ACESFilmicToneMapping was crushing dark/high-contrast paintings by applying
-    // an aggressive S-curve on top of the artist's intentional colour values.
-    this.renderer.toneMapping = THREE.NeutralToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    // v0.32 — NoToneMapping (identity pass-through). Any tone-mapping curve
+    // (including NeutralToneMapping) applies an S-curve that increases contrast
+    // and shifts colour balance away from the artist's source file. With the
+    // albedoFidelityFill emissive path dominating the output, total luminance
+    // stays in [0,1] so no rolloff/clipping is needed.
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.setClearColor(0xdfe5e9);
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;

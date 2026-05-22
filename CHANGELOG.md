@@ -1,5 +1,28 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.31 shipped — further painting brightness/contrast fix; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.32 shipped — source-faithful colour reproduction; NoToneMapping + high albedo fill; lint/build pass).
+
+## v0.32 — Source-faithful colour reproduction (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Problem
+
+Paintings on the site appeared much higher contrast and darker than the original source files: highlights blown out to white, purple/blue tones crushed to near-black, reds over-saturated.
+
+### Changed
+
+- **`src/core/RendererManager.ts`:** Switched from `NeutralToneMapping` to `NoToneMapping` (identity pass-through). Any tone-mapping curve, even the mild Khronos PBR Neutral, applies an S-curve that increases contrast and shifts colour away from the source. With the albedo-fill path keeping total luminance in [0,1], no rolloff is needed. Exposure reset to 1.0.
+- **`src/config/quality.ts`:** Raised `albedoFidelityFill` from 0.38/0.34/0.28 → 0.72 across all presets. The emissive (unlit) channel now dominates, reproducing the source image faithfully while the remaining lit contribution adds only subtle dimensionality.
+- **`src/lighting/LightProfile.ts`:** Dramatically reduced museum-neutral key lights (100/70 → 25/18) and ambient (2.8 → 1.2). gallery-soft key (150 → 30) and ambient (1.8 → 1.0). This prevents directional lighting from pushing colour values above 1.0 and introducing contrast.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.31 — Painting brightness & contrast correction (2026-05-22, **shipped**)
 
