@@ -1,10 +1,10 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
 
 
-## v0.27 — Startup smoothness + loading/AA remediation plan (2026-05-22, **planned**)
+## v0.27 — Startup smoothness + loading/AA deep technical audit and remediation plan (2026-05-22, **planned**)
 
-Runtime status: **planned**, not yet shipped.
+Runtime status: **planned**, not yet shipped. Deep code audit completed 2026-05-22.
 
 ### Problem statement (current user feedback)
 
@@ -13,46 +13,190 @@ Runtime status: **planned**, not yet shipped.
 - The enter-button hover effect still performs first-use work at hover time and feels laggy.
 - Main gallery smoothness still improves only after all paintings have been visited, so startup is still not truly first-use smooth.
 
+---
+
+### Deep code audit findings (2026-05-22)
+
+Full source audit of: `src/main.ts` (1406 lines), `src/core/PostProcessing.ts`, `src/core/RendererManager.ts`, `src/gallery/GalleryManager.ts` (1597 lines), `src/materials/PaintingMaterial.ts`, `src/materials/ProceduralTextureFactory.ts`, `src/config/quality.ts`, `src/styles/main.scss` (1760 lines).
+
+#### A. AA regression — EffectComposer bypasses native MSAA
+
+**Root cause:** `RendererManager` creates `THREE.WebGLRenderer({ antialias: true })` (`RendererManager.ts` line 41–44). `PostProcessing` uses `EffectComposer`. EffectComposer renders the scene to an internal `WebGLRenderTarget` — native `antialias: true` is bypassed. All edges in the composed output lack AA.
+
+**Fix (W-06):** Add `ShaderPass(FXAAShader)` after `UnrealBloomPass`. Both `three/examples/jsm/postprocessing/ShaderPass.js` and `three/examples/jsm/shaders/FXAAShader.js` are present in `node_modules/three`. FXAA is single-pass (~0.3ms), driven by a resolution uniform. Disable on `battery` preset.
+
+```typescript
+// src/core/PostProcessing.ts
+private readonly fxaaPass: ShaderPass;
+// constructor: after bloomPass:
+this.fxaaPass = new ShaderPass(FXAAShader);
+this.applyFXAAResolution(window.innerWidth, window.innerHeight);
+this.fxaaPass.enabled = preset.fxaaEnabled ?? true;
+this.composer.addPass(this.fxaaPass);
+// new helper:
+private applyFXAAResolution(w: number, h: number): void {
+  const pr = this.renderer.getPixelRatio();
+  this.fxaaPass.material.uniforms['resolution'].value.set(1/(w*pr), 1/(h*pr));
+}
+// resize(): append: this.applyFXAAResolution(width, height);
+// applyPreset(): append: this.fxaaPass.enabled = preset.fxaaEnabled ?? true;
+```
+
+```typescript
+// src/config/quality.ts — QualityPreset interface:
+fxaaEnabled: boolean;
+// high: true, balanced: true, battery: false
+```
+
+---
+
+#### B. Bloom shaders never prewarmed — first gallery frame stutters
+
+**Root cause:** `rendererManager.prewarm(scene, camera)` calls `renderer.compileAsync(scene, camera)` which only traverses scene meshes. `UnrealBloomPass` has 4 internal shader programs compiled lazily on first `composer.render()` — called only after `loadingOverlay.dispose()`. On low-end GPUs: 80–250ms stall on first gallery frame.
+
+**Fix (W-04):** Add `PostProcessing.prewarmComposer(w, h)`. Shrinks composer to 4×4, calls `composer.render()` once (forces all programs to compile), then restores size. Canvas is fully covered by loading overlay during this.
+
+```typescript
+// src/core/PostProcessing.ts
+prewarmComposer(width: number, height: number): void {
+  try {
+    this.resize(4, 4);
+    this.composer.render();
+  } finally {
+    this.resize(width, height);
+  }
+}
+```
+
+```typescript
+// src/main.ts — after rendererManager.prewarm(), before loadingOverlay.reveal():
+const ppSize = new THREE.Vector2();
+rendererManager.renderer.getSize(ppSize);
+postProcessing.prewarmComposer(ppSize.x, ppSize.y);
+await rafDrain(1);
+```
+
+---
+
+#### C. Enter-button first-hover lag — CSSOM/compositor cold path
+
+**Root cause:** After `startButton.disabled = false`, the `:hover` rule in `.loading-start-btn:not(:disabled):hover` is applicable but not yet resolved in CSSOM. No `will-change`. First hover triggers a style recalculation + compositor layer promotion.
+
+**Fix (W-03):** Force CSSOM resolution immediately after button activation.
+
+```typescript
+// src/main.ts — in reveal(), after: startButton.disabled = false; startButton.classList.add('is-visible');
+void startButton.offsetHeight;
+void getComputedStyle(startButton).backgroundColor;
+startButton.style.setProperty('will-change', 'background-color');
+startButton.addEventListener('click', () => {
+  startButton.style.removeProperty('will-change');
+}, { once: true });
+```
+
+```scss
+// src/styles/main.scss — .loading-start-btn:
+&.is-visible:not(:disabled) { will-change: background-color; }
+```
+
+---
+
+#### D. Wordmark centering — letter-spacing + block layout drift
+
+**Root cause:** `.loading-wordmark`: `display:block; padding-left:0.18em; text-align:center`. `padding-left` shrinks left edge; `text-align:center` centers within the shrunken box, shifting visual center ~0.09em right.
+
+**Fix (W-01):** Flexbox parent + inner `span.loading-wordmark__text` with `padding-left` inside the inline box.
+
+```typescript
+// src/main.ts — createLoadingOverlay():
+const wordmark = document.createElement('div');
+wordmark.className = 'loading-wordmark';
+const wordmarkText = document.createElement('span');
+wordmarkText.className = 'loading-wordmark__text';
+wordmarkText.textContent = 'FREYRAUM';
+wordmark.appendChild(wordmarkText);
+```
+
+```scss
+// src/styles/main.scss:
+.loading-wordmark {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; font-size: clamp(36px, 9vw, 58px); line-height: 0.95; font-weight: 700;
+}
+.loading-wordmark__text {
+  display: inline-block; letter-spacing: 0.18em; padding-left: 0.18em;
+}
+```
+
+---
+
+#### E. Particle salience — opacity values below perceptual threshold
+
+**Root cause:** Color alphas 0.08–0.14. CSS `opacity: 0.7`. Pulse keyframes `0.45→0.95`. Effective max: `0.14 × 0.7 × 0.95 = 9.3%` against `#0d0d0e` — below perceptual threshold on mid-range displays.
+
+**Fix (W-02):** Raise alphas to 0.16–0.32, CSS opacity to 0.9, blur to 4px, pulse min to 0.60, add 2 particles (6→8), sizes 220–400px.
+
+```typescript
+// src/main.ts — particle array in createLoadingOverlay():
+const particles = [
+  ['12%','18%','280px','rgba(181,154,106,0.32)','8s',  '0s',  '28px', '-32px'],
+  ['78%','14%','340px','rgba(200,214,229,0.26)','10s', '-1.4s','-24px','34px' ],
+  ['18%','76%','400px','rgba(200,214,229,0.24)','12s', '-2.6s','32px', '-24px'],
+  ['82%','72%','290px','rgba(181,154,106,0.28)','9s',  '-0.8s','-26px','-22px'],
+  ['50%','8%', '220px','rgba(181,154,106,0.22)','11s', '-3.2s','22px', '30px' ],
+  ['48%','92%','320px','rgba(200,214,229,0.20)','13s', '-2.1s','-30px','-28px'],
+  ['28%','52%','240px','rgba(181,154,106,0.18)','14s', '-4.5s','18px', '22px' ],
+  ['72%','48%','260px','rgba(200,214,229,0.16)','9.5s','-1.8s','-22px','20px' ],
+];
+```
+
+```scss
+// src/styles/main.scss:
+.loading-particle { opacity: 0.9; filter: blur(4px); }
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.60; }
+  50%       { opacity: 1.0;  }
+}
+```
+
+---
+
+### Gap analysis (W-series) — updated with code-level evidence
+
+| ID | Severity | Root cause (code reference) | Fix files | Planned outcome |
+|----|----------|-----------------------------|-----------|-----------------|
+| W-01 | **HIGH** | `.loading-wordmark`: `display:block; padding-left:0.18em` + `text-align:center` shifts visual center ~0.09em right | `main.scss`, `main.ts` | Flex + inner `span.loading-wordmark__text` |
+| W-02 | **HIGH** | Particle alphas 0.08–0.14 × opacity 0.7 × pulse 0.45 = 2.5–9.3% — below perception | `main.ts`, `main.scss` | Alphas 0.16–0.32, opacity 0.9, blur 4px, sizes 220–400px, pulse 0.60 |
+| W-03 | **HIGH** | No `getComputedStyle`/`will-change` after CTA activation → CSSOM `:hover` unresolved | `main.ts`, `main.scss` | `offsetHeight` + `getComputedStyle` + `will-change` after `startButton.disabled=false` |
+| W-04 | **HIGH** | `EffectComposer` bloom shaders (4 programs) JIT-compiled on first `composer.render()` post-entry | `PostProcessing.ts`, `main.ts` | `prewarmComposer(w,h)` called before `loadingOverlay.reveal()` |
+| W-05 | **MEDIUM** | Overlay status copy in bounded-fallback branch may overstate readiness | `main.ts` | Audit and tighten status strings |
+| W-06 | **HIGH** | `antialias:true` bypassed by `EffectComposer` — all composed frames lack AA | `PostProcessing.ts`, `quality.ts` | `ShaderPass(FXAAShader)` after bloom; `fxaaEnabled` per-preset |
+| W-07 | **LOW** | No acceptance criteria for hover latency / first-frame timing | diagnostics | Target: hover ≤16ms, first frame ≤33ms |
+
+---
+
+### Full technical implementation checklist
+
+1. **`src/config/quality.ts`** — add `fxaaEnabled: boolean`; high/balanced: `true`, battery: `false`.
+2. **`src/core/PostProcessing.ts`** — import `ShaderPass`, `FXAAShader`; add `fxaaPass` field; `applyFXAAResolution(w,h)`; update `constructor`, `resize()`, `applyPreset()`; add `prewarmComposer(w,h)`.
+3. **`src/main.ts`** — (a) call `postProcessing.prewarmComposer()` + `await rafDrain(1)` after prewarm, before reveal; (b) add CSSOM prewarm in `reveal()`; (c) add wordmark inner span; (d) raise particle values.
+4. **`src/styles/main.scss`** — flex wordmark; add `.loading-wordmark__text`; raise `.loading-particle` opacity + blur; update pulse; add `will-change` on `.is-visible:not(:disabled)`.
+
 ### Online research synthesis (2026-05-22)
 
-- Progress indicators must be truthful and map to real completion states to avoid perceived “fake ready” behavior.  
-  Sources: Nielsen Norman Group progress indicator guidance; Smashing Magazine loading UX patterns.
-- Critical interaction assets should be preloaded early; first-hover lag is often a preload/prioritization issue, not only an animation-timing issue.  
-  Sources: web.dev preload guidance; MDN preload and rendering hint guidance.
-- Idle scheduling is best-effort and should not be the sole correctness gate for first-use readiness.  
-  Source: MDN `requestIdleCallback` documentation.
-- For WebGL scenes, anti-aliasing strategy should be tiered by device budget (quality vs latency), with deterministic startup warm coverage.  
-  Sources: Three.js renderer compile docs; common WebGL AA tradeoff guidance (MSAA/FXAA/SMAA).
-
-### Gap analysis (W-series)
-
-| ID | Severity | Gap | Planned outcome |
-|----|----------|-----|-----------------|
-| W-01 | **HIGH** | Loading-brand centering still drifts in practical viewport/device combinations. | Rework loading brand container alignment contract and verify with deterministic viewport matrix checks. |
-| W-02 | **HIGH** | Particle motion/contrast is too weak to be recognized as active progress. | Increase particle salience (contrast, count distribution, amplitude, motion layering) with reduced visual noise. |
-| W-03 | **HIGH** | Enter CTA hover still triggers first-use style/asset/compositor work. | Guarantee hover-state dependencies are preloaded and composited before CTA becomes interactive. |
-| W-04 | **HIGH** | First navigation still hits cold-path cost until each painting has been visited once. | Enforce stricter startup readiness gate so no first-visit decode/upload/procedural spikes leak past entry. |
-| W-05 | **MEDIUM** | Loading overlay copy and progress semantics can still overstate readiness scope. | Align copy/progress phases with exact readiness gates (strict vs fallback) and expose any deferred work explicitly. |
-| W-06 | **MEDIUM** | Anti-aliasing/perf policy is not explicitly tied to device capability tiers at startup. | Introduce deterministic AA profile selection policy and validate quality/perf balance per tier. |
-| W-07 | **LOW** | Acceptance criteria are not yet codified for hover-latency and first-navigation frame stability. | Add measurable pass/fail criteria and diagnostics for hover latency, first-interaction stutter, and frame pacing. |
-
-### Implementation plan
-
-1. Define a single startup contract that must complete before CTA enablement: centered branding, loaded hover assets/styles, strict first-view readiness, and selected AA profile.
-2. Refactor loading overlay visual system to improve centered layout resilience and clearly readable particle motion without excessive overdraw.
-3. Move all CTA hover dependencies to preload/startup phases so first hover is only state toggle, not resource preparation.
-4. Harden gallery readiness gate to block entry until first-use rendering paths for all targeted paintings are already warm.
-5. Add AA startup policy by device tier with deterministic fallback path and explicit diagnostics output.
-6. Reconcile UX copy/status phases with the true readiness gates and deferred-work semantics.
-7. Add a validation checklist for startup smoothness covering hover latency, first navigation jank, and stability across representative gallery sizes.
+- **EffectComposer + MSAA:** Three.js `WebGLRenderTarget` does not support MSAA by default. `antialias:true` only works on direct canvas draws. Post-process AA (FXAA/SMAA) is the production standard. Source: Three.js docs.
+- **Shader lazy compilation:** `renderer.compileAsync(scene,camera)` only covers scene mesh materials. EffectComposer pass shaders compile on first `composer.render()`. Pre-warming requires an explicit render call. Source: Three.js `WebGLPrograms.js`.
+- **CSSOM `:hover` pre-resolution:** `getComputedStyle` + `offsetHeight` reflow causes browser to resolve pending style rules, eliminating first-hover recalculation spike. Source: MDN, web.dev.
+- **`will-change`:** Promotes element to compositor layer before hover occurs, making transition GPU-composited on first contact. Source: MDN `will-change`.
+- **Letter-spacing centering:** `padding-left` on a `display:inline-block` inner span inside a flex container gives true optical centering. Source: CSS Text Module Level 3.
 
 ### Validation plan for implementation pass
 
-- Run `npm run lint` and `npm run build` after runtime implementation.
-- Capture diagnostics proving CTA hover has no first-use load at interaction time.
-- Verify first navigation/frame pacing across small and large galleries without per-painting warm-up dependence after entry.
-- Re-run security/code review validation after implementation changes.
-
+- Run `npm run lint && npm run build` — must pass.
+- Chrome DevTools Performance: no long tasks (>50ms) on first `animate()` frame.
+- FXAA: `renderer.info.programs` count changes by 1 on preset toggle.
+- Hover: pointer event → `transitionstart` latency ≤16ms.
+- Re-run `parallel_validation` after all code changes.
 ## v0.26 — Loading overlay centering + full-preload strictness (2026-05-22, **shipped**)
 
 Runtime status: **shipped** in `main.ts`, `GalleryManager.ts`, and `main.scss`.

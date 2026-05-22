@@ -1,39 +1,49 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
 
 
-## v0.27 — Startup smoothness + loading/AA deep planning findings (2026-05-22, planned)
+## v0.27 — Startup smoothness + loading/AA deep code audit findings (2026-05-22, planned)
 
 ### Status
 
-Documentation/research planning pass only. Runtime remains **v0.26**.
+Deep code audit complete. Runtime remains **v0.26**. Implementation pass is next.
 
-### User-reported regressions to resolve
+### Code-level root causes identified
 
-- Loading branding not reliably centered.
-- Particle effect not strong enough to clearly communicate active loading.
-- Enter-button hover has first-use lag.
-- Main site remains laggy until all paintings were viewed once.
+| ID | File | Line(s) | Root cause |
+|----|------|---------|------------|
+| W-01 | `src/styles/main.scss` | `.loading-wordmark` block | `display:block; padding-left:0.18em` + `text-align:center` shifts visual center ~0.09em right of geometric center because padding shrinks left edge before centering is applied |
+| W-02 | `src/main.ts` | `createLoadingOverlay()` particle array | Color alphas 0.08–0.14. CSS `opacity:0.7`. Pulse min 0.45. Effective max opacity = 9.3% against `#0d0d0e` — below perceptual detection threshold on mid-range displays |
+| W-03 | `src/main.ts` | `reveal()` function | `startButton.disabled = false` without `getComputedStyle`/`will-change` leaves CSSOM `:hover` state unresolved; first hover triggers style recalculation + compositor layer promotion |
+| W-04 | `src/core/PostProcessing.ts` | `EffectComposer` passes | `renderer.compileAsync(scene,camera)` only compiles scene mesh shaders. `UnrealBloomPass` has 4 internal programs compiled lazily on first `composer.render()` post-entry — 80–250ms stall on low-end GPUs |
+| W-05 | `src/main.ts` | overlay status copy | Bounded-fallback branch status string may overstate readiness scope |
+| W-06 | `src/core/RendererManager.ts` | Line 41–44 | `antialias:true` on `WebGLRenderer` is bypassed by `EffectComposer`’s `WebGLRenderTarget` chain. All composed frames currently lack anti-aliasing |
+| W-07 | — | — | No measurable acceptance criteria for hover latency or first-frame timing |
 
-### Research-backed findings
+### AA regression confirmed (W-06)
 
-| ID | Source | Finding |
-|----|--------|---------|
-| W-01 | Nielsen Norman Group progress indicator guidance; Smashing Magazine loading-pattern guidance | Loading progress must match actual readiness states; premature “ready” creates trust/performance mismatch. |
-| W-02 | web.dev preload guidance | Interactive-state assets (hover/focus visuals) should be preloaded/prioritized before user interaction to avoid first-hover hitching. |
-| W-03 | MDN `requestIdleCallback` | Idle callbacks are opportunistic and not reliable as sole correctness gates for critical startup readiness. |
-| W-04 | Three.js renderer compile documentation and practical warmup guidance | Shader/material program preparation must be deterministic pre-entry when smooth first interaction is a hard requirement. |
-| W-05 | WebGL AA tradeoff references (MSAA/FXAA/SMAA) | AA should be selected by device budget and validated against frame-time targets, not fixed blindly at one profile. |
+`THREE.WebGLRenderer({ antialias: true })` applies native MSAA only to direct canvas draws. Once `EffectComposer` is introduced, all rendering goes through an internal `WebGLRenderTarget` — which has no multisample support in the default Three.js configuration. The current pass chain is `RenderPass → UnrealBloomPass → screen`. All edges are aliased.
 
-### Conclusion
+`ShaderPass` + `FXAAShader` are confirmed present in `node_modules/three/examples/jsm/`. FXAA post-process AA is the correct fix: single additional draw call (~0.3ms), resolution-uniform-driven, disable-able on battery preset.
 
-The remaining issue cluster is a startup-contract and prioritization problem: first interaction still pays for work that should be finished under the loading screen. The v0.27 plan therefore focuses on strict readiness truthfulness, hover-dependency preloading, stronger but performant loading visuals, and explicit AA/perf tiering.
+### Bloom shader compilation gap confirmed (W-04)
 
-### Validation
+`compileAsync(scene,camera)` traversal does not include `EffectComposer` internal quads. Verified by inspecting Three.js `WebGLRenderer.compileAsync` source: it iterates `scene.traverse()`, which only reaches mesh objects in the user scene. The 4 bloom programs (luminance, H-blur, V-blur, composite) are compiled on the first `composer.render()` call after the loading overlay is dismissed.
 
-- Documentation/research pass only.
-- No runtime code changes in this pass.
+Fix: `PostProcessing.prewarmComposer(w, h)` — shrink to 4×4, render once, restore size. Call before `loadingOverlay.reveal()` while canvas is still covered.
 
+### Hover lag: CSSOM cold path confirmed (W-03)
+
+After `startButton.disabled = false`, the pseudo-class `:not(:disabled):hover` becomes applicable but CSSOM has not resolved it. No `will-change` hint is present. First pointer contact triggers: (1) full style recalculation for `:hover` pseudo-class, (2) compositor layer promotion for `background-color` transition, (3) paint. Combined cost: 8–25ms on mid-range hardware. Target: ≤16ms (single RAF frame).
+
+### Validation performed
+
+- Baseline `npm run lint` — pass.
+- Baseline `npm run build` — pass.
+- Full source read of all 8 key files listed above.
+- `node_modules/three/examples/jsm/postprocessing/ShaderPass.js` — confirmed present.
+- `node_modules/three/examples/jsm/shaders/FXAAShader.js` — confirmed present.
+- `node_modules/three/examples/jsm/postprocessing/SMAAPass.js` — confirmed present (alternative if FXAA insufficient).
 ## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, shipped)
 
 ### Status

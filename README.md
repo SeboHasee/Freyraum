@@ -1,5 +1,5 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
 
 
 ## v0.27 — Startup smoothness + loading/AA remediation plan (2026-05-22, planned)

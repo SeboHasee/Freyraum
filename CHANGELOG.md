@@ -1,25 +1,31 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.27 startup smoothness + loading/AA planning pass; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
 
 
-## v0.27 — Startup smoothness + loading/AA remediation planning pass (2026-05-22, **planned**)
+## v0.27 — Startup smoothness + loading/AA deep technical audit (2026-05-22, **planned**)
 
 ### Summary
 
-Planning/documentation pass only. This captures the next implementation scope for unresolved startup-smoothness feedback: loading-brand centering consistency, stronger loading-particle legibility, first-hover lag elimination for the enter CTA, and true first-use smoothness before gallery entry.
+Deep code audit pass: full source analysis of 8 core files. Root causes for all W-series gaps confirmed with file/line evidence and TypeScript/SCSS code fixes prepared. Implementation pass is ready to execute.
 
 ### Changed
 
-- **`plan.md`**: added v0.27 W-series remediation plan with explicit gaps, acceptance direction, and rollout steps.
-- **`FINDINGS.md`**: added v0.27 research synthesis and source-backed findings for loading-truthfulness, preload prioritization, idle scheduling limits, and AA strategy implications.
-- **`README.md`**: top status section updated to show v0.27 as the active planned workstream and mark runtime state as still v0.26.
-- **All Markdown docs (`**/*.md`)**: audit banner synced to v0.27 planning-pass wording as requested.
+- **`plan.md`**: v0.27 section replaced with deep technical audit — includes code-level root cause analysis, TypeScript + SCSS fix snippets for W-01 through W-06, updated gap table with file/line evidence, full implementation checklist, and validation plan.
+- **`FINDINGS.md`**: v0.27 section replaced with deep audit findings — confirmed AA regression (W-06), bloom shader compilation gap (W-04), hover lag CSSOM cold path (W-03), wordmark centering drift (W-01), particle opacity below threshold (W-02).
+- **All Markdown docs**: audit banner updated to reflect deep audit pass.
+
+### Key findings
+
+- W-06 (AA): `antialias:true` bypassed by EffectComposer. Fix: `ShaderPass(FXAAShader)` + `fxaaEnabled` per preset.
+- W-04 (bloom stall): 4 UnrealBloomPass shaders not covered by `compileAsync`. Fix: `PostProcessing.prewarmComposer()`.
+- W-03 (hover lag): No CSSOM prewarm after CTA activation. Fix: `getComputedStyle` + `will-change` force.
+- W-01 (centering): `padding-left` on block container drifts visual center. Fix: flex + inner span.
+- W-02 (particles): <10% effective opacity. Fix: raise alphas, sizes, blur, pulse floor.
 
 ### Validation
 
 - `npm run lint` — pass.
 - `npm run build` — pass.
-
 ## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, **shipped**)
 
 ### Summary
