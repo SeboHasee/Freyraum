@@ -87,7 +87,7 @@ vec3 frmBrushedNormal(vec2 uv, float seed) {
 const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
 {
   vec3 proceduralN = frmBrushedNormal(vUv, uFrameSeed);
-  normal = normalize(vTBN * proceduralN);
+  normal = normalize(tbn * proceduralN);
 }
 `;
 
