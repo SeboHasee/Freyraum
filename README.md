@@ -1,9 +1,23 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.42 frame UV bug fix shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.44 research pass — GLSL shader-injection plan documented; lint/build pass on v0.43).
 
-## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
+## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **planned — not yet shipped**)
+
+Research complete. Runtime remains v0.43.
+
+The frame still shows horizontal banding and lacks micro-detail after v0.43. Root cause: `DataTexture + RepeatWrapping` seams every 1 world unit; 2-octave noise is too coarse; no scratch component. Planned fix: replace all DataTexture generation with `onBeforeCompile` GLSL injection — 4-octave FBM + ridged-noise scratches + hash-based anti-tiling, computed per-fragment in UV space with no tiling boundary. See `plan.md § v0.44` and `FINDINGS.md § v0.44` for full detail.
+
+## v0.43 — anisotropic value-noise + mipmaps (2026-05-22, **shipped**)
 
 Current status: **shipped and validated**.
+
+- Replaced synthetic sine-wave frame texture generators with 2-octave anisotropic value-noise + finite-difference normal computation.
+- Fixed pixelation: DataTextures now use `generateMipmaps = true`, `LinearMipMapLinearFilter`, `LinearFilter`.
+- Raised `normalScale` from `(0.08, 0.08)` to `(0.40, 0.40)` so grain is visible under IBL lighting.
+
+Remaining: horizontal banding (tiling seams) and missing scratch micro-detail — addressed in v0.44 plan.
+
+
 
 - Fixed critical frame texture artifact: ~53 dense vertical stripes eliminated across all frame bars. Root cause was `texture.repeat.set(12, 1)` combined with `THREE.ExtrudeGeometry`'s world-space UV coordinates (raw world values, not normalised). `12 × 4.4 world units = 52.8 texture cycles` → 53 thin bands. Fixed to `repeat.set(1, 1)`.
 - Fixed 1D-only texture generation: both frame normal and roughness maps previously had no Y variation (every row was identical). Added cross-grain Y terms to produce proper 2D surface variation.

@@ -1,5 +1,238 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.42 frame UV bug fix shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.44 research pass — GLSL shader-injection plan documented; lint/build pass on v0.43).
+
+## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **planned — not yet shipped**)
+
+Runtime status: **not yet shipped. v0.43 is the current runtime.**
+
+### Problem statement
+
+After v0.43 (anisotropic value-noise + mipmaps), the frame still shows:
+1. **Horizontal banding** — regular alternating light/dark stripes across the left/right/bottom bars (~6 visible repetitions).
+2. **Missing micro-detail** — no sharp individual scratches, no multi-scale grain, no fine-surface texture.
+
+Root causes are documented in full in `FINDINGS.md § v0.44`.
+
+Short form:
+- `DataTexture + RepeatWrapping` seams every 1 world unit. The ring spans 6.1 world units in Y → 6 seams → 6 bands. No seamlessly-tiling noise approach can be made as good as per-fragment GLSL.
+- 2-octave value noise is too coarse; no scratch component.
+
+### Online research summary
+
+| Technique | Source | Conclusion |
+|-----------|--------|------------|
+| FBM 4-octave anisotropic | The Book of Shaders §13; GLSL FBM reference shaders | Standard for multi-scale grain; eliminates dominant-band repetition |
+| Ridged noise (scratches) | Production PBR shader libraries; Shadertoy metal shaders | `1 - abs(2*fbm - 1)` inverts FBM to sharp bright peaks = individual scratches |
+| `onBeforeCompile` injection | Three.js discourse; Three.js examples repo | Documented production approach for custom GLSL in MeshPhysicalMaterial without losing IBL/PMREM |
+| Hash-based UV jitter (Heitz/Neyret 2018) | SIGGRAPH 2018 paper; Alexandre Pestana blog | 3-tap random-offset blend breaks any periodic seam cadence |
+| Per-fragment GLSL (no DataTexture) | Three.js community, production museum viz tools | Eliminates tiling entirely; only per-fragment UV coordinate monotonically increases |
+
+### Detailed implementation slices
+
+---
+
+#### S-01 — GLSL constants (`CanvasMaterial.ts`)
+
+Add two top-of-file TypeScript string constants:
+
+**`FRAME_FRAG_FUNCTIONS`** — prepended to `shader.fragmentShader` in `onBeforeCompile`. Contains:
+
+```glsl
+// --- v0.44 brushed-metal procedural normal ---
+
+float frmHash(float n) {
+  return fract(sin(n) * 43758.5453123);
+}
+
+float frmNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n = i.x + i.y * 57.0;
+  return mix(
+    mix(frmHash(n), frmHash(n + 1.0), f.x),
+    mix(frmHash(n + 57.0), frmHash(n + 58.0), f.x),
+    f.y
+  );
+}
+
+// 4-octave FBM — anisotropic: X stretched 8× relative to Y
+float frmFbm(vec2 p) {
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    v += a * frmNoise(p);
+    p = p * mat2(2.1, 0.0, 0.0, 2.0);   // 2× per octave, slight X/Y ratio drift
+    a *= 0.5;
+  }
+  return v;
+}
+
+// Ridged noise → sharp bright lines (individual scratches)
+float frmRidge(vec2 p) {
+  return 1.0 - abs(2.0 * frmFbm(p) - 1.0);
+}
+
+// Anti-tile: sample at two hash-offset cells, blend
+vec2 frmTileOffset(vec2 p, float freq) {
+  vec2 cell = floor(p * freq);
+  float h = frmHash(cell.x + cell.y * 137.0);
+  return vec2(fract(h * 1234.5), fract(h * 9876.5));
+}
+
+// Tangent-space normal from height-field finite difference
+vec3 frmBrushedNormal(vec2 uv, float seed) {
+  // Anisotropic scale: very low X-frequency (long horizontal grain), moderate Y
+  vec2 sc = vec2(uv.x * 1.2 + seed * 0.07, uv.y * 14.0 + seed * 0.13);
+
+  // Anti-tiling: two samples with different cell offsets
+  vec2 off0 = frmTileOffset(uv, 1.5);
+  vec2 off1 = frmTileOffset(uv + 0.17, 1.5);
+  float blend = frmNoise(uv * 2.3);  // smooth blend mask
+
+  float h0  = frmFbm(sc + off0 * 3.0)
+            + frmRidge(sc * vec2(4.0, 0.05) + off0) * 0.12;
+  float h0x = frmFbm((sc + vec2(0.02, 0.0)) + off0 * 3.0);
+  float h0y = frmFbm((sc + vec2(0.0, 0.02)) + off0 * 3.0);
+
+  float h1  = frmFbm(sc + off1 * 3.0)
+            + frmRidge(sc * vec2(4.0, 0.05) + off1) * 0.12;
+  float h1x = frmFbm((sc + vec2(0.02, 0.0)) + off1 * 3.0);
+  float h1y = frmFbm((sc + vec2(0.0, 0.02)) + off1 * 3.0);
+
+  // Blend between two anti-tiled samples
+  float h  = mix(h0,  h1,  blend);
+  float hx = mix(h0x, h1x, blend);
+  float hy = mix(h0y, h1y, blend);
+
+  // Finite differences → local tangent-space gradient
+  vec2 grad = vec2(h - hx, h - hy) * 8.0;   // 8.0 = normalScale control
+  return normalize(vec3(grad, 1.0));
+}
+```
+
+**`FRAME_FRAG_NORMAL_REPLACE`** — the string that replaces `#include <normal_fragment_maps>` in the compiled shader:
+
+```glsl
+{
+  vec3 proceduralN = frmBrushedNormal(vUv, uFrameSeed);
+  // Transform tangent-space normal to view space using TBN from vertex shader
+  normal = normalize(vTBN * proceduralN);
+}
+```
+
+---
+
+#### S-02 — `onBeforeCompile` wiring (`CanvasMaterial.ts`, `createFrameMaterial`)
+
+```typescript
+const uniforms = {
+  uFrameSeed:      { value: seed * 0.00390625 },  // seed/256 → [0,1)
+  uBaseRoughness:  { value: preset.frameRoughness },
+};
+
+material.onBeforeCompile = (shader) => {
+  Object.assign(shader.uniforms, uniforms);
+  shader.fragmentShader =
+    FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <normal_fragment_maps>',
+    FRAME_FRAG_NORMAL_REPLACE
+  );
+  // Procedural roughness: small FBM variation on top of base roughness
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <roughnessmap_fragment>',
+    `float roughnessFactor = uBaseRoughness
+       + frmFbm(vec2(vUv.x * 1.2, vUv.y * 5.0) + uFrameSeed * 0.5) * 0.12
+       - 0.06;`
+  );
+};
+// Required so Three.js doesn't cache the same compiled shader across materials
+material.customProgramCacheKey = () => `frame-v0.44-${seed}`;
+```
+
+---
+
+#### S-03 — Remove DataTexture infrastructure (`CanvasMaterial.ts`)
+
+Remove:
+- `frameNormalTexture` field
+- `frameRoughnessTexture` field
+- `makeFrameNormalTexture(seed)` private method
+- `makeFrameRoughnessTexture(seed, withMacroDrift)` private method
+- `latticeHash`, `valueNoise2d`, `scratchHeight` private methods (superseded by GLSL)
+
+Update `dispose()` — remove `frameNormalTexture?.dispose()` and `frameRoughnessTexture?.dispose()`.
+
+Remove `roughnessMap` from the material constructor call (roughness now computed in GLSL).
+
+---
+
+#### S-04 — Replace `refreshFrameTextures` with `refreshFrameUniforms` (`CanvasMaterial.ts`)
+
+```typescript
+refreshFrameUniforms(material: THREE.MeshPhysicalMaterial, seed: number): void {
+  // Access stored uniforms reference and update only uFrameSeed
+  // (material.userData.frameUniforms is set during createFrameMaterial)
+  const u = material.userData.frameUniforms as { uFrameSeed: { value: number } };
+  if (!u) return;
+  u.uFrameSeed.value = seed * 0.00390625;
+  console.debug('[CanvasMaterial] frame-uniforms-refreshed', { seed });
+}
+```
+
+Store the `uniforms` object reference in `material.userData.frameUniforms` during `createFrameMaterial` so `refreshFrameUniforms` can access it without storing a separate field on `CanvasMaterial`.
+
+---
+
+#### S-05 — Update `ArtworkMesh.updateFrameSeed` (`ArtworkMesh.ts`)
+
+Replace `this.canvasMaterial.refreshFrameTextures(...)` call with `this.canvasMaterial.refreshFrameUniforms(this.frameMaterial, seed)`.
+
+---
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- Visual checklist:
+  - [ ] No visible horizontal banding on left/right/bottom frame bars at any camera angle.
+  - [ ] Individual scratch lines visible under studio light (bright thin horizontal streaks).
+  - [ ] Multi-scale grain: both macro sweeps and fine micro-scratches readable simultaneously.
+  - [ ] Grain phase distinct between artworks (per-artwork `uFrameSeed`).
+  - [ ] Battery preset shows simpler but still natural grain (same GLSL path, no preset branching needed).
+
+---
+
+## v0.43 — anisotropic value-noise + mipmaps (2026-05-22, **shipped**)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+After v0.42 (UV fix), the frame showed two remaining issues:
+1. **Pixelation at oblique angles** — DataTexture with NearestFilter default.
+2. **Synthetic regular sine stripes** — pure `Math.sin(x * constant)` patterns.
+
+### Fix delivered
+
+| Slice | File | Change |
+|-------|------|--------|
+| N-01 | `src/materials/CanvasMaterial.ts` | Replaced sine-wave generators with 2-octave anisotropic `scratchHeight` value-noise (finite-difference normals). |
+| N-02 | `src/materials/CanvasMaterial.ts` | Both DataTextures now have `generateMipmaps = true`, `minFilter = LinearMipMapLinearFilter`, `magFilter = LinearFilter`. |
+| N-03 | `src/materials/CanvasMaterial.ts` | `normalScale` raised from `(0.08, 0.08)` → `(0.40, 0.40)`. |
+
+### Remaining issues (v0.44 scope)
+
+- Non-seamless tiling causes 6 horizontal bands (Bug 4).
+- 2-octave noise too coarse; no scratch-line component (Bugs 5, 6).
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
 

@@ -1,5 +1,149 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.42 frame UV bug fix shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.44 research pass — GLSL shader-injection plan documented; lint/build pass on v0.43).
+
+## v0.44 — remaining horizontal banding + missing micro-detail (2026-05-22, **research complete / not yet shipped**)
+
+### Symptom
+
+After v0.43 (anisotropic value-noise + mipmaps), the frame still exhibits:
+1. **Regular horizontal banding** — approximately 6–8 alternating light/dark stripes visible across the vertical extent of the left/right/bottom frame bars.
+2. **Missing fine-detail texture** — the metal surface looks smooth and uniform up close, with no individual scratches, micro-roughness variation, or polish direction variation.
+
+### Root cause analysis
+
+#### Bug 4 — Non-seamlessly-tiling DataTexture with RepeatWrapping (primary)
+
+`THREE.ExtrudeGeometry` uses `WorldUVGenerator` by default. Raw world-Y coordinates become UV.y values. The frame ring spans approximately −3.05 to +3.05 world units in Y = **6.1 world units**.
+
+With `texture.repeat.set(1, 1)`, the DataTexture repeats every **1 world unit** → the texture tiles ~6 times vertically across the ring.
+
+The v0.43 `scratchHeight` function uses `valueNoise2d(x * 0.006, y * 0.25, seed)`. Sampled over a 256×256 DataTexture:
+- At pixel row 0: noise sampled at y_noise = 0
+- At pixel row 255: noise sampled at y_noise = 0.25 × 255 = 63.75
+- At pixel row 0 (tile repeat): back to y_noise = 0
+
+Since `valueNoise2d` is **not seamlessly periodic**, the value at row 255 ≠ value at row 0 → discontinuity → **visible seam at every tile boundary** = 6 horizontal bands visible on the frame.
+
+This is independent of how many noise octaves are used; any non-periodic function will produce a seam when RepeatWrapping is applied and the UV range forces multiple tiles.
+
+#### Bug 5 — Only 2 noise octaves (too coarse)
+
+The v0.43 `scratchHeight` uses only 2 octaves:
+- `fine = valueNoise2d(x * 0.006, y * 0.25, seed) * 0.60`
+- `mid  = valueNoise2d(x * 0.002, y * 0.08, seed + 37) * 0.40`
+
+Two octaves leave a large frequency gap between the mid-scale grain and the pixel-level surface. Real brushed metal has grain structure at 4–6 visible scales simultaneously (macro sweeps, mid streaks, fine scratches, micro-roughness, individual highlight points). The coarse-only result looks like smooth geometric blobs rather than physical metal.
+
+#### Bug 6 — No sharp-scratch component
+
+Real brushed aluminium or steel has two layers:
+1. **Diffuse grain** — broad, overlapping, low-contrast streaks from the polishing direction.
+2. **Individual scratches** — narrow, bright, high-contrast lines that catch specular highlights. These are the characteristic "shine lines" visible when studio light grazes metal.
+
+The v0.43 height field contains only layer 1. Without layer 2, the surface reads as matte/flat rather than polished metal.
+
+### Online research findings (2026-05-22)
+
+#### Finding 1 — `onBeforeCompile` is the standard Three.js way to inject procedural GLSL
+
+Three.js `MeshPhysicalMaterial` exposes `material.onBeforeCompile(shader)` which fires once before GPU compilation. `shader.fragmentShader` is a string; GLSL chunks are injected by replacing include markers (e.g., `#include <normal_fragment_maps>`). All IBL/PMREM/lighting features of `MeshPhysicalMaterial` remain intact — only the normal/roughness input channels are replaced.
+
+Sources: Three.js discourse, Three.js examples repo, production PBR material guides.
+
+#### Finding 2 — FBM (fractal Brownian motion) is the standard for multi-scale noise
+
+FBM = sum of `N` noise octaves, each at 2× the frequency and 0.5× the amplitude of the previous. 4 octaves cover:
+- Octave 1: macro grain (~long horizontal sweeps)
+- Octave 2: mid-scale streaks
+- Octave 3: fine grain
+- Octave 4: micro grain
+
+No single dominant frequency → no visible banding, regardless of whether the UV wraps. Reference: "The Book of Shaders §13 — Fractal Brownian Motion" (thebookofshaders.com).
+
+#### Finding 3 — Ridged noise for sharp scratches
+
+Ridged noise = `1.0 - abs(2.0 * fbm(p) - 1.0)`. This inverts the FBM distribution to produce narrow bright peaks (scratch lines) separated by wide dark troughs. Applied at very high X-anisotropy (long scratches across the grain) at ~10–15% weight in the height field, it produces the characteristic specular lines visible on polished metal.
+
+#### Finding 4 — Hash-based UV jitter for anti-tiling (Heitz/Neyret 2018)
+
+Technique: divide UV space into tile cells using `floor(uv * tileFreq)`. Hash the cell coordinate to get a random offset vector. Sample the noise at `uv + randomOffset`. Blend two or three such samples using a smooth low-frequency mask. The random per-cell offset breaks any periodic seam cadence.
+
+Full paper: Heitz & Neyret, "High-Performance By-Example Noise using a Histogram-Preserving Blending Operator", SIGGRAPH 2018. Simplified 3-tap GLSL version suitable for production use (median blend for histogram preservation) documented at eheitzresearch.wordpress.com and adapted in multiple Three.js community projects.
+
+With GLSL FBM this technique is partially redundant (FBM itself avoids dominant periodic bands), but the tile-jitter adds an extra safety layer against pattern lock-in on flat frame surfaces where the UV is monotonically increasing.
+
+#### Finding 5 — GLSL injection eliminates tiling entirely
+
+A per-fragment GLSL generator has no texture tiles to repeat. The input coordinate (`vUv` or world position) increases monotonically across the surface — there is no wraparound discontinuity. This is the cleanest solution for any surface where UV wrapping is unavoidable (as with `WorldUVGenerator` on `ExtrudeGeometry`).
+
+The DataTexture approach can only be fixed with either (a) seamless tiling (periodic noise generation), which limits achievable quality, or (b) replacing it with GLSL injection — option (b) is strictly better.
+
+### Solution architecture for v0.44
+
+Replace the `DataTexture` generators with `onBeforeCompile` GLSL injection:
+
+```
+MeshPhysicalMaterial
+  + onBeforeCompile(shader):
+      prepend: hash21, valueNoise2d, fbm4, ridgedNoise, brushedMetalNormal
+      replace: '#include <normal_fragment_maps>'
+             → procedural normal from brushedMetalNormal(vUv, uSeed)
+      replace: roughnessMap sampling
+             → uBaseRoughness + fbm2(vUv scaled) * 0.12
+      add uniform: uSeed (float, per-artwork deterministic float)
+      add uniform: uBaseRoughness (float, from preset.frameRoughness)
+```
+
+Roughness stays per-fragment; `roughnessMap` DataTexture removed. Seed update on navigation = only update the `uSeed` uniform (single float, zero GPU allocation).
+
+### Files impacted
+
+| File | Change |
+|------|--------|
+| `src/materials/CanvasMaterial.ts` | Add GLSL constants, wire `onBeforeCompile`, remove DataTexture fields and generators, replace `refreshFrameTextures` with `refreshFrameUniforms` |
+| `src/gallery/ArtworkMesh.ts` | Update `updateFrameSeed` to call `refreshFrameUniforms` |
+
+### Validation
+
+- `npm run lint` — pass required.
+- `npm run build` — pass required.
+- Visual: no horizontal bands; natural individual scratches visible under studio light; grain varies between artworks.
+
+---
+
+## v0.43 — anisotropic value-noise + mipmaps (2026-05-22, **shipped**)
+
+### Status
+
+Shipped in runtime code; lint/build pass.
+
+### Symptom addressed
+
+Frame appeared pixelated/blocky at any non-perpendicular camera angle (nearest-filter aliasing), and showed perfectly regular sine-wave stripes rather than natural metal grain.
+
+### Root cause
+
+1. `DataTexture` default filter is `NearestFilter` (Three.js) — no mipmapping, no linear interpolation.
+2. `Math.sin(x * constant)` produces a perfectly periodic, synthetic-looking pattern.
+
+### Fix
+
+- Added `latticeHash`, `valueNoise2d`, `scratchHeight` to `CanvasMaterial`.
+- Both `makeFrameNormalTexture` and `makeFrameRoughnessTexture` now use 2-octave anisotropic value noise with finite-difference height-field normal computation.
+- Both DataTextures now have `generateMipmaps = true`, `minFilter = LinearMipMapLinearFilter`, `magFilter = LinearFilter`.
+- `normalScale` raised from `(0.08, 0.08)` to `(0.40, 0.40)`.
+
+### Remaining issues (addressed in v0.44 plan)
+
+- Non-seamless tiling causes 6 horizontal seam-bands on the ring frame (Bug 4 above).
+- 2-octave noise too coarse; no scratch-line component (Bugs 5 and 6 above).
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
 

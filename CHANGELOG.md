@@ -1,5 +1,85 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.42 frame UV bug fix shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.44 research pass — GLSL shader-injection plan documented; lint/build pass on v0.43).
+
+## v0.44 — GLSL shader-injection brushed-metal (2026-05-22, **planned — not yet shipped**)
+
+### Status
+
+Research and plan complete. Runtime code not yet changed — v0.43 is the current shipped state.
+
+### Problem (remaining after v0.43)
+
+The frame still shows visible horizontal banding (6–8 regular light/dark stripes across the bottom/side bars). The metal lacks micro-detail (no individual scratches, no fine-grain surface texture). Both issues trace to the `DataTexture + RepeatWrapping` approach: any non-seamlessly-tiling DataTexture produces a visible seam every time the texture tile repeats, and the v0.43 value-noise texture is not seamlessly periodic.
+
+### Root cause (see FINDINGS.md § v0.44)
+
+`THREE.ExtrudeGeometry` uses `WorldUVGenerator` → raw world-Y coordinate as UV.y. The frame ring spans ~6.1 world units in Y. With `texture.repeat.set(1,1)`, the DataTexture repeats every 1 world unit → ~6 tiles vertically. The v0.43 noise is not seamlessly periodic at the 256-pixel tile boundary → 6 seams = 6 visible horizontal bands.
+
+### Planned changes
+
+| Slice | File | Change |
+|-------|------|--------|
+| S-01 | `src/materials/CanvasMaterial.ts` | Add `FRAME_VERT_GLSL` and `FRAME_FRAG_GLSL` string constants with self-contained brushed-metal GLSL (hash21, FBM, ridgedNoise, brushedMetalNormal). |
+| S-02 | `src/materials/CanvasMaterial.ts` | In `createFrameMaterial()`: attach `onBeforeCompile` to the returned `MeshPhysicalMaterial`. Hook injects GLSL at `#include <normal_fragment_maps>` for per-fragment procedural normal and at roughness map sampling for procedural roughness variation. |
+| S-03 | `src/materials/CanvasMaterial.ts` | Pass seed and preset roughness as `uniforms` on the shader so each artwork has distinct grain phase without regenerating any buffer. |
+| S-04 | `src/materials/CanvasMaterial.ts` | Remove `makeFrameNormalTexture`, `makeFrameRoughnessTexture`, `frameNormalTexture`, `frameRoughnessTexture` fields — DataTextures no longer needed. |
+| S-05 | `src/materials/CanvasMaterial.ts` | Remove `refreshFrameTextures()` — replace with `refreshFrameUniforms(material, seed)` that only updates the `uSeed` uniform (no texture disposal/regeneration). |
+| S-06 | `src/gallery/ArtworkMesh.ts` | Update `updateFrameSeed()` to call `refreshFrameUniforms` instead of `refreshFrameTextures`. |
+
+### GLSL technique (researched)
+
+**FBM (fractal Brownian motion) — 4 octaves:**
+- Octave 1: coarse grain (long horizontal sweeps, low X frequency)
+- Octave 2: medium grain (~2× frequency, 0.5× amplitude)
+- Octave 3: fine grain (~4× frequency, 0.25× amplitude)
+- Octave 4: micro grain (~8× frequency, 0.125× amplitude)
+
+Sum of 4 octaves covers all visible scale bands. No single dominant frequency → no visible periodic banding regardless of UV tiling.
+
+**Ridged noise (individual scratches):**
+Ridge = `1.0 - abs(2.0 * fbm - 1.0)` — inverts the FBM range to produce sharp bright peaks (scratches) with wide dark troughs. Applied at high X-frequency / very low Y-frequency to give thin individual scratches running across the grain direction. Blended at ~10–15% weight into the normal height field.
+
+**Hash-based anti-tiling (tile-cell jitter):**
+Sample the noise at two UV offsets (offset by `hash2(floor(uv * tileFreq))`), blend between them using a smooth low-frequency mask. Even if the UV wraps, the random offset per tile cell breaks any visible seam cadence. This is the technique described in:
+- Heitz & Neyret 2018 "High-Performance By-Example Noise using a Histogram-Preserving Blending Operator" (SIGGRAPH 2018)
+- Alexandre Pestana "Anti-tiling technique" (2019, blog)
+
+**`onBeforeCompile` injection (Three.js standard pattern):**
+Three.js `MeshPhysicalMaterial` exposes `material.onBeforeCompile(shader)` which runs once before the first GPU compilation. GLSL chunks are prepended/replaced in `shader.fragmentShader` using `String.replace('#include <normal_fragment_maps>', ...)`. This is the documented production approach for procedural materials in Three.js (discourse.threejs.org, r/threejs, Three.js examples repo).
+
+### Validation plan
+
+- `npm run lint` — must pass.
+- `npm run build` — must pass.
+- Visual: no visible horizontal banding; natural random scratches; each artwork shows distinct grain.
+
+---
+
+## v0.43 — anisotropic value-noise frame textures + mipmaps (2026-05-22, **shipped**)
+
+### Status
+
+Shipped in runtime code; lint/build pass.
+
+### Fixed
+
+- **Pixelation:** Both frame `DataTexture` objects previously used Three.js's default `NearestFilter` for min/mag filtering. At oblique camera angles nearest-neighbour sampling picks the closest texel, producing visible blocky squares. **Fixed:** `generateMipmaps = true`, `minFilter = LinearMipMapLinearFilter`, `magFilter = LinearFilter` added to both `makeFrameNormalTexture` and `makeFrameRoughnessTexture`.
+
+- **Synthetic regular stripes:** Pure `Math.sin(x * constant)` waves produce perfectly regular, equally-spaced stripes — the frame looked synthetic. **Fixed:** replaced both generators with a 2-octave anisotropic value-noise height field (`scratchHeight`): very low X-frequency (long horizontal streaks, low Y-frequency (cross-section fine detail), seeded per artwork.
+
+### Changed
+
+- `src/materials/CanvasMaterial.ts` — added `latticeHash`, `valueNoise2d`, `scratchHeight` helpers.
+- `src/materials/CanvasMaterial.ts` — `makeFrameNormalTexture`: replaced sine layers with finite-difference height-field from `scratchHeight`; both Nx (R) and Ny (G) channels populated; mipmaps enabled.
+- `src/materials/CanvasMaterial.ts` — `makeFrameRoughnessTexture`: replaced sine layers with anisotropic value noise; mipmaps enabled.
+- `src/materials/CanvasMaterial.ts` — `createFrameMaterial`: `normalScale` raised from `0.08 → 0.40`.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
 
