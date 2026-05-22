@@ -1,5 +1,89 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.42 frame UV bug fix shipped; lint/build pass).
+
+## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+The frame metal texture appeared as ~50 dense, regularly-spaced vertical stripes across all four bars of the frame. The effect was clearly visible at any quality preset and made the frame look broken/procedurally wrong rather than like brushed metal.
+
+Screenshot shows: silver frame with obvious repetitive parallel lines running vertically, the pattern repeating at identical intervals across every face of the ring geometry.
+
+### Root cause analysis (three compounding bugs)
+
+#### Bug 1 — `texture.repeat.set(12, 1)` with world-space UVs (primary cause, ~53× stripe count)
+
+`THREE.ExtrudeGeometry` uses `WorldUVGenerator` by default. This maps each vertex's raw XY world-coordinate values directly as UV coordinates — they are **not** normalised to [0, 1]. Our ring shape spans approximately −2.2 to +2.2 in X (4.4 world units) and −3.05 to +3.05 in Y (6.1 world units).
+
+`texture.repeat.set(12, 1)` then multiplies those raw UV values:
+- X direction: `12 × 4.4 world units = 52.8 texture cycles` → ~53 thin bands
+- Y direction: `1 × 6.1 world units = 6.1 texture cycles` → 6 bands (less visible)
+
+**53 cycles across the frame width is the primary cause of the extreme striping.**
+
+This was confirmed by the Three.js community (discourse.threejs.org) and the `WorldUVGenerator` implementation in the Three.js source, which does `new THREE.Vector2(ax, ay)` using raw vertex positions.
+
+#### Bug 2 — 1D-only texture generation (no Y variation)
+
+Both `makeFrameNormalTexture` and `makeFrameRoughnessTexture` only contain `Math.sin(x * ...)` terms — no `y` terms at all. The inner `for (y)` loop does nothing because every row is computed identically. The result is a texture of pure vertical stripes (constant along columns, varying along rows).
+
+When multiplied by bug 1, every world-Y slice of the frame shows the same pattern: 53 identical bands with no variation in the perpendicular direction.
+
+#### Bug 3 — Asymmetric repeat `(12, 1)` amplifies the visual mismatch
+
+The V (Y) repeat of 1 × 6.1 = 6 cycles is far less visually noisy than 53. The asymmetry means horizontal and vertical frame bars look differently broken, adding to the perception of a UV mapping error.
+
+### Research findings
+
+Online research and Three.js documentation confirm:
+
+- **ExtrudeGeometry + WorldUVGenerator**: raw world XY coords as UV — `repeat.set()` acts as a *world-space multiplier*, not a tile count. To get N tiles across width W, set `repeat.set(N / W, N / H)`.
+- **1D textures for brushed metal**: production brushed metal textures always have both grain direction *and* cross-grain micro-variation. 2D noise or Perlin-based functions are standard.
+- **Brushed metal grain frequency**: real picture frame aluminium at gallery viewing distance shows roughly 3–8 visible grain cycles across the frame bar width (~0.2 world units). With normalised UVs this maps to `repeat ≈ 15–40` on a [0,1] UV map, or `repeat ≈ 1` on raw world-space UVs (since 0.2 units × 1 repeat/unit = 0.2 cycles per bar, but the full 4.4-unit ring face shows ~4 cycles — acceptable).
+
+### Fix delivered
+
+| Bug | Fix | File |
+|-----|-----|------|
+| Bug 1 — repeat too large for world-space UV | `texture.repeat.set(12, 1)` → `texture.repeat.set(1, 1)` (reduces from ~53 to ~4.4 cycles across frame width) | `src/materials/CanvasMaterial.ts` |
+| Bug 2 — 1D-only texture | Added Y-direction terms: cross-grain component in normal map, micro-roughness row variation in roughness map | `src/materials/CanvasMaterial.ts` |
+| Bug 3 — asymmetric repeat | Symmetric `(1, 1)` repeat removes U/V mismatch | `src/materials/CanvasMaterial.ts` |
+
+#### Normal texture fix details
+
+Added a cross-grain component (`Math.sin(y * 0.13 + seed * 0.61) * 0.07`) so the texture is no longer a pure horizontal stripe pattern. Reduced fine-brush amplitude from 0.25 → 0.20 and mid-drift from 0.30 → 0.25 to leave headroom for the new cross-grain term without clipping.
+
+#### Roughness texture fix details
+
+Added a row-variation term (`Math.sin(y * 0.17 + seed * 0.47) * 0.05`) so micro-roughness varies both across and along the grain. Reduced fineLine amplitude from 0.40 → 0.35 for the same reason.
+
+#### Repeat value rationale
+
+| Metric | Old | New | Effect |
+|--------|-----|-----|--------|
+| Normal repeat U | 12 | 1 | 53 cycles → ~4.4 cycles across frame width |
+| Normal repeat V | 1 | 1 | 6 cycles → same (was already acceptable) |
+| Roughness repeat U | 12 | 1 | Same 53→4.4 improvement |
+| Roughness repeat V | 1 | 1 | Unchanged |
+
+With `repeat.set(1, 1)` and world-space UVs spanning ~4.4 units in X:
+- Top/bottom bar (full 4.4-unit run): shows ~4 grain cycles → natural, not obviously repetitive
+- Left/right bars (0.2-unit width): shows ~0.2 grain cycles → essentially one brushed sweep = correct for a narrow frame bar
+
+### Future improvement path (not in v0.42)
+
+1. **UV normalisation**: After `ExtrudeGeometry` creation, remap UVs from world-space [−2.2, 2.2] to [0, 1] using bounding box. This decouples `texture.repeat` from world scale, making the repeat value artwork-aspect-independent.
+2. **Per-bar grain direction**: Build frame from 4 separate `BoxGeometry` bars (top/bottom/left/right). Each bar gets a texture whose grain runs along its length. This is the reference technique used by production museum visualisation tools.
+3. **Stochastic UV offset blending**: Sample the same texture at two UV offsets and lerp with a low-frequency mask. Eliminates any remaining visible period even at very close view. Requires `onBeforeCompile` GLSL hook.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
 

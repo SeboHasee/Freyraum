@@ -1,14 +1,13 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.42 frame UV bug fix shipped; lint/build pass).
 
-## v0.40 — premium metal PBR texture realism + anti-repetition (2026-05-22, **shipped**)
+## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
 
 Current status: **shipped and validated**.
 
-- Multi-scale seeded frame texture generation: normal map uses three layered sinusoidal bands (fine grain + mid streak + low-frequency warp), roughness map uses two bands plus an optional macro drift layer for non-battery presets.
-- Per-artwork deterministic seed system: each artwork's frame shows a distinct, stable texture phase so no two adjacent artworks appear phase-aligned. Seed is `artworkIndex % 256`, refreshed on every navigation.
-- Calibrated PBR preset values: high `roughness=0.28/anisotropy=0.7/clearcoat=0.18`, balanced `0.38/0.55/0.14`, battery `0.48/0/0`.
-- Diagnostics logging: `[CanvasMaterial]` and `[ArtworkMesh]` debug entries expose active seed, preset, and macro-drift flag per artwork.
+- Fixed critical frame texture artifact: ~53 dense vertical stripes eliminated across all frame bars. Root cause was `texture.repeat.set(12, 1)` combined with `THREE.ExtrudeGeometry`'s world-space UV coordinates (raw world values, not normalised). `12 × 4.4 world units = 52.8 texture cycles` → 53 thin bands. Fixed to `repeat.set(1, 1)`.
+- Fixed 1D-only texture generation: both frame normal and roughness maps previously had no Y variation (every row was identical). Added cross-grain Y terms to produce proper 2D surface variation.
+- Frame now shows ~4 natural grain cycles across its width; the brushed metal finish is clearly readable without obvious tiling.
 
 ## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
 

@@ -1,5 +1,54 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.42 frame UV bug fix shipped; lint/build pass).
+
+## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
+
+### Status
+
+Bug fixed in runtime code; lint/build pass.
+
+### Symptom
+
+Frame showed ~50 dense vertical stripes across all four bars (top, bottom, left, right) at all quality presets. Looked like broken UV mapping — because it was.
+
+### Root cause: three compounding bugs in `CanvasMaterial.ts`
+
+#### Bug 1 — `texture.repeat.set(12, 1)` with world-space UV (PRIMARY)
+
+`THREE.ExtrudeGeometry` defaults to `WorldUVGenerator`, which sets UV.x = raw world x, UV.y = raw world y (no normalisation). The ring frame shape spans about −2.2 to +2.2 in world X (4.4 units wide).
+
+`texture.repeat.set(12, 1)` then produces an effective UV sweep of `12 × 4.4 = 52.8` texture cycles across the frame width. This is **53 thin stripes** — the dense banding visible in the screenshot.
+
+Fix: `texture.repeat.set(1, 1)`. With world-space UVs and 1 repeat/unit, the 4.4-unit-wide frame shows ~4 grain cycles — natural and non-repetitive.
+
+#### Bug 2 — 1D-only texture (no cross-grain)
+
+Both `makeFrameNormalTexture` and `makeFrameRoughnessTexture` looped over y but only used `Math.sin(x * ...)` — the inner y loop body was identical for every row. The result was a pure column-stripe texture. Combined with Bug 1 (53 repeats), every frame face showed identical narrow bands.
+
+Fix: added a `Math.sin(y * 0.13 + seed * 0.61)` cross-grain term to the normal map and a `Math.sin(y * 0.17 + seed * 0.47)` micro-roughness row-variation term to the roughness map.
+
+#### Bug 3 — Asymmetric repeat `(12, 1)`
+
+The V repeat of 1 over 6.1 world units = 6 cycles (less visible). The asymmetry between U (53 cycles) and V (6 cycles) amplified the perception of a UV error by making horizontal and vertical frame bars look differently wrong.
+
+Fix: symmetric `(1, 1)` removes the asymmetry.
+
+### Implementation evidence
+
+| Bug | File | Change |
+|-----|------|--------|
+| Bug 1 | `src/materials/CanvasMaterial.ts` | `makeFrameNormalTexture`: `texture.repeat.set(12, 1)` → `texture.repeat.set(1, 1)` |
+| Bug 1 | `src/materials/CanvasMaterial.ts` | `makeFrameRoughnessTexture`: `texture.repeat.set(12, 1)` → `texture.repeat.set(1, 1)` |
+| Bug 2 | `src/materials/CanvasMaterial.ts` | `makeFrameNormalTexture`: added `crossGrain = Math.sin(y * 0.13 + seed * 0.61) * 0.07` term |
+| Bug 2 | `src/materials/CanvasMaterial.ts` | `makeFrameRoughnessTexture`: added `fineCross = Math.sin(y * 0.17 + seed * 0.47) * 0.05` term |
+| Bug 3 | Both generators | Repeat is now symmetric `(1, 1)` |
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.41 — battery preset painting invisible bug fix + detailed PBR plan (2026-05-22, **shipped**)
 

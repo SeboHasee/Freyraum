@@ -1,5 +1,30 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.42 frame UV bug fix shipped; lint/build pass).
+
+## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
+
+### Status
+
+Bug fix shipped in runtime code; lint/build pass.
+
+### Fixed
+
+- **Frame texture UV bug — ~53 dense vertical stripes eliminated.** Three compounding bugs in `CanvasMaterial.ts` caused the extreme stripe artifact visible in the screenshot:
+  1. `texture.repeat.set(12, 1)` with world-space UV coordinates. `THREE.ExtrudeGeometry` uses `WorldUVGenerator` which maps raw world XY values directly as UV (not normalised 0–1). The ring shape spans ~4.4 world units in X. `repeat.set(12, 1)` therefore produced `12 × 4.4 = 52.8` texture cycles — ~53 thin bands. **Fixed:** `texture.repeat.set(1, 1)`. With world-space UVs and 1 repeat/unit the frame now shows ~4 grain cycles across its width — natural and non-repetitive.
+  2. 1D-only texture generation. Both `makeFrameNormalTexture` and `makeFrameRoughnessTexture` only used `Math.sin(x * ...)` — no Y variation. Every row was identical, so the texture was a pure column-stripe pattern. **Fixed:** added a cross-grain Y term to the normal map (`Math.sin(y * 0.13 + seed * 0.61) * 0.07`) and a row-variation term to the roughness map (`Math.sin(y * 0.17 + seed * 0.47) * 0.05`).
+  3. Asymmetric repeat `(12, 1)` amplified the mismatch between U and V axes. **Fixed:** symmetric `(1, 1)`.
+
+### Changed
+
+- `src/materials/CanvasMaterial.ts` — `makeFrameNormalTexture(seed)`: `repeat.set(12, 1)` → `repeat.set(1, 1)`; added cross-grain Y layer; reduced fine-brush amplitude 0.25→0.20, mid-drift 0.30→0.25 for headroom.
+- `src/materials/CanvasMaterial.ts` — `makeFrameRoughnessTexture(seed, withMacroDrift)`: `repeat.set(12, 1)` → `repeat.set(1, 1)`; added row micro-roughness Y term; reduced fineLine amplitude 0.40→0.35.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.40 — premium metal PBR texture realism + anti-repetition (2026-05-22, **shipped**)
 

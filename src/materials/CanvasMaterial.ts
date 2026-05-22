@@ -81,12 +81,14 @@ export class CanvasMaterial {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
         // Layer 1: fine brushed grain (high frequency, low amplitude)
-        const fineBrush = Math.sin(x * 0.18 + seed * 0.37) * 0.25;
+        const fineBrush = Math.sin(x * 0.18 + seed * 0.37) * 0.20;
         // Layer 2: mid-frequency streak modulation
-        const midDrift  = Math.sin(x * 0.07 + seed * 0.71) * 0.30;
+        const midDrift  = Math.sin(x * 0.07 + seed * 0.71) * 0.25;
         // Layer 3: 1-D low-frequency warp (removes cadence during slow pan)
         const macroWarp = Math.sin(x * 0.021 + seed * 1.13) * 0.15;
-        const combined  = 0.5 + fineBrush + midDrift + macroWarp;
+        // Layer 4: cross-grain component — subtle Y variation breaks the pure-stripe pattern
+        const crossGrain = Math.sin(y * 0.13 + seed * 0.61) * 0.07;
+        const combined  = 0.5 + fineBrush + midDrift + macroWarp + crossGrain;
         data[idx + 0] = 128;
         data[idx + 1] = Math.max(0, Math.min(255, Math.round(combined * 255)));
         data[idx + 2] = 255;
@@ -97,7 +99,11 @@ export class CanvasMaterial {
     texture.colorSpace = THREE.LinearSRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(12, 1);
+    // v0.42 fix: ExtrudeGeometry uses WorldUVGenerator — UV coords are raw world values
+    // (not normalised 0-1). The ring shape spans ~4.4 world units in X. With repeat=1
+    // that gives ~4 grain cycles across the frame width — natural, non-repetitive.
+    // The previous value of 12 produced 12 × 4.4 = 52.8 cycles = the dense stripe artifact.
+    texture.repeat.set(1, 1);
     texture.needsUpdate = true;
     return texture;
   }
@@ -115,10 +121,12 @@ export class CanvasMaterial {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
         // Fine variation (primary roughness band)
-        const fineLine   = Math.sin(x * 0.22 + seed * 0.53) * 0.4;
+        const fineLine   = Math.sin(x * 0.22 + seed * 0.53) * 0.35;
         // Macro drift layer -- broad, very subtle (P-03: +-0.05 roughness swing)
         const macroDrift = withMacroDrift ? Math.sin(x * 0.04 + seed * 0.89) * 0.12 : 0;
-        const v = 0.5 + fineLine + macroDrift;
+        // Cross-grain micro-roughness row variation — breaks the pure column-stripe look
+        const fineCross  = Math.sin(y * 0.17 + seed * 0.47) * 0.05;
+        const v = 0.5 + fineLine + macroDrift + fineCross;
         // Additional low-frequency breakup from P-03 formula
         const driftSwing = withMacroDrift
           ? Math.round(
@@ -136,7 +144,8 @@ export class CanvasMaterial {
     texture.colorSpace = THREE.LinearSRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(12, 1);
+    // v0.42 fix: match normal map — repeat.set(1,1) for world-space UV coords from ExtrudeGeometry.
+    texture.repeat.set(1, 1);
     texture.needsUpdate = true;
     return texture;
   }
