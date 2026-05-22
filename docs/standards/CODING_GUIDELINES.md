@@ -1,5 +1,10 @@
 # FREYRAUM coding guidelines
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 rendering/preload coding guideline
+
+For any future startup smoothness fix, separate and log: fetch/decode, CPU cache, procedural generation, material binding, shader compile, GPU upload draw, final composer render, browser presentation, and UI/control prebuild. Do not enable user entry until the final render path has presented full-size frames behind the opaque loader.
+
 
 
 ## v0.23 performance coding guideline

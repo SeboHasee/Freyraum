@@ -1,5 +1,12 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — NeutralToneMapping, RAF-before-reveal pre-rendering, navigation lambda 3.5, 12-particle wander keyframe; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 documentation requirement — preload claims must prove presented frames
+
+Any future documentation that says the gallery is “fully loaded”, “fully preloaded”, “smooth on first use”, or “rendering behind the loading screen” must include the exact readiness boundary. It must state whether the claim covers network fetch, decode, procedural generation, material apply, shader compile, GPU texture upload, final post-processing render, browser presentation, and UI/control prebuild.
+
+Do not mark the v0.29 user complaint as shipped until docs can cite diagnostics proving: RAF started before loader reveal, at least two full-size frames were presented behind the opaque overlay, all artworks were warmed through the final render path, and no post-entry warm queue remained for the target gallery.
+
 
 
 ## v0.23 documentation requirement — performance claims

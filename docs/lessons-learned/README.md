@@ -1,5 +1,10 @@
 # Lessons learned docs
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 lesson index update
+
+See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.29 planning lessons` for the new rules: loaded is not presented, RAF must run under the loader, tiny prewarm is not final-frame proof, and color fidelity must be verified across the full render pipeline.
+
 
 
 ## v0.23 — Performance/Preloading Planning Audit

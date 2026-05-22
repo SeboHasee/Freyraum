@@ -1,5 +1,10 @@
 # Architecture docs
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 — planned loading-screen ownership architecture
+
+The current planning target is a strict boot gate: loading overlay stays active until the main RAF loop is running, the final-size composer path has presented frames, every painting has been drawn through the production path, and first-use UI/control states have been prebuilt. See `../../plan.md § v0.29` and `../../FINDINGS.md § v0.29`.
+
 
 
 ## v0.23 — Performance/Preloading Planning Audit

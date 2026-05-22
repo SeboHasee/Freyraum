@@ -1,5 +1,10 @@
 # AI feedback loop
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 feedback-loop note
+
+When user feedback says a shipped preload/fidelity fix still fails, immediately downgrade the claim to planned/follow-up in docs, audit the current source against the claim, and add diagnostics-driven acceptance checks. v0.29 does this for painting darkness, loading-screen ownership, entry glitching, and first-use lag.
+
 
 
 ## v0.23 — Performance/Preloading Planning Audit

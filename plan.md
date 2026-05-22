@@ -1,5 +1,113 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps resolved).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 — Loading-screen ownership of the complete first render + artwork fidelity re-audit (2026-05-22, **planned/docs-only**)
+
+Runtime status: **planned only**. No runtime code changed in this pass. This section supersedes the v0.28 preload/flash confidence statements because current user feedback reports the same symptoms are still visible: paintings remain too dark, first entry still glitches, and the website still lags until elements are used the first time.
+
+### Problem statement (v0.29 user feedback)
+
+1. Paintings are still too dark and do not look original.
+2. The complete website and all elements are not fully preloaded; first use still lags.
+3. A glitch is still visible when entering the main page.
+4. The main page is not fully built, rendered, and loaded while the loading screen is visible.
+5. The main page and **all paintings must be loaded with the loading screen** so the first visible frame and first interactions are smooth.
+
+### Research-backed constraints
+
+- Three.js `LoadingManager`/texture-loading completion only proves network/decode completion; it does **not** prove that textures, materials, render targets, or post-processing passes are resident on the GPU.
+- `renderer.compile()` / `compileAsync()` pre-warms scene materials and shader programs, but texture upload can still be deferred until a material using that texture is actually drawn.
+- Three.js/WebGL texture upload stutter is commonly solved by drawing every required material/texture at least once under an opaque loading overlay, often with an offscreen render target or hidden warm scene.
+- For JPG/PNG/WebP artwork, texture color space must remain `THREE.SRGBColorSpace`, renderer output must remain `THREE.SRGBColorSpace`, and tone mapping must preserve artistic intent. Neutral tone mapping is a good baseline, but the plan must verify lighting/material/bloom exposure are not still darkening the final composed image.
+- A loading screen cannot claim full readiness until the real canvas has already produced a complete full-resolution frame and a second frame has been presented behind the opaque overlay.
+
+References to re-check during implementation: Three.js LoadingManager docs, Three.js WebGLRenderer compile/compileAsync docs, Three.js color-management manual, Three.js forum texture pre-warm guidance, Khronos PBR Neutral tone-mapping notes.
+
+### Current-source audit findings
+
+| ID | Finding | Current evidence | Risk |
+|----|---------|------------------|------|
+| Y-01 | v0.28 RAF-before-reveal claim is not actually true in current source | `src/main.ts` starts `await loadingOverlay.reveal()` before the `animate` function is declared; rAF starts only after reveal returns | The main scene is not actively rendering during the overlay wait/fade, so a stretched prewarm frame or clear-color flash can still appear |
+| Y-02 | `prewarmComposer()` warms the composer at 4×4 and restores size before reveal | `src/main.ts` runs composer prewarm before `gallery-canvas--ready`; no full-resolution presentation-proof frame is required before CTA | Browser can reveal a stale tiny render target or an unpresented full-size canvas |
+| Y-03 | Readiness ledger checks loaded/generated/warmed flags but not visible-frame presentation | `getFullGalleryReadinessSummary()` reports texture/material readiness, not that the actual main canvas has painted at viewport size | Diagnostics can say ready while the user still sees first visible work |
+| Y-04 | GPU warming binds each artwork in the main mesh, but no separate residency proof validates every material variant after post-processing | `warmArtworkForGPU()` marks `gpuWarmed`; composer render path and final visible frame are not part of the per-artwork contract | First navigation can still trigger upload/shader/composer work |
+| Y-05 | Painting darkness could still come from lighting/material/bloom/composer stack, not only tone mapping | Renderer uses `NeutralToneMapping`, but final output also passes through lighting/material/post-processing | Dark/high-contrast paintings may still deviate from source values |
+| Y-06 | UI/control/DOM first-use paths are not included in the loading readiness contract | Prior fixes covered CTA hover, but not every control/timeline/info-panel/layout state | First interaction on timeline, nav, settings, info panel, or quality changes can still create layout/style work |
+
+### Gap index
+
+| ID | Short description | File(s) to change | Status |
+|----|-------------------|-------------------|--------|
+| Y-01 | Make `animate` available before the loading overlay waits for user entry | `src/main.ts` | Planned |
+| Y-02 | Start the real RAF loop while the loading screen is still fully opaque | `src/main.ts` | Planned |
+| Y-03 | Require full-size first-frame and second-frame presentation before CTA | `src/main.ts`, `RendererManager.ts` if helper needed | Planned |
+| Y-04 | Build an all-artwork GPU residency sweep that draws every artwork/material through the same final render path | `GalleryManager.ts`, `main.ts`, `PostProcessing.ts` | Planned |
+| Y-05 | Add a color-fidelity verification pass for renderer, textures, lighting, material, bloom, and post-processing exposure | `RendererManager.ts`, `TextureManager.ts`, `PaintingMaterial.ts`, `PostProcessing.ts`, `main.ts` | Planned |
+| Y-06 | Prebuild/premeasure main-page DOM and interactive controls under the loading overlay | `main.ts`, `Timeline.ts`, `InfoPanel.ts`, `PreferencesPanel.ts`, `main.scss` | Planned |
+| Y-07 | Replace “ready” copy with a hard readiness gate backed by diagnostics | `main.ts`, docs | Planned |
+| Y-08 | Add acceptance diagnostics and manual QA protocol for zero-glitch entry | `main.ts`, `Diagnostics` consumers, docs | Planned |
+
+### Implementation plan
+
+1. **Reorder boot so animation exists before reveal waits**
+   - Move the animation-loop function assignment before the loading overlay can wait for the start button.
+   - Start RAF while the loading screen is still fully opaque.
+   - Keep input disabled until the readiness contract passes.
+   - Acceptance: during the full loading-screen wait, diagnostics show RAF frames rendering at normal viewport size behind the overlay.
+
+2. **Add a presented-frame gate**
+   - After all texture/material/shader warm work, require at least two real RAF ticks at the final canvas size.
+   - The gate must run after composer size restoration, canvas ready-class application, and active artwork restoration.
+   - Acceptance: CTA is not shown until the final canvas has rendered and presented real frames behind the overlay.
+
+3. **Make every painting GPU-resident before entry**
+   - Iterate through every artwork under the overlay, bind the exact texture/material set used at runtime, draw it through the production render path, and restore the active artwork.
+   - Keep progress visible and diagnostics detailed for each artwork: albedo, authored PBR, procedural fallback, material apply, shader compile, GPU draw, composer draw.
+   - Acceptance: strict mode reports zero unresolved artworks and zero post-entry warm queue work for normal galleries.
+
+4. **Warm post-processing and final presentation path at real size**
+   - Keep tiny prewarm only as an early shader compile aid.
+   - Add a final full-size composer render under the opaque overlay to prove the actual visible pass chain is ready.
+   - Acceptance: no stretched 4×4 output, no clear-color flash, no first bloom/FXAA/composer stall after entry.
+
+5. **Re-audit artwork color fidelity end to end**
+   - Verify all color image textures use `SRGBColorSpace`; data maps stay linear.
+   - Confirm renderer output color space remains sRGB.
+   - Recheck tone mapping, exposure, material light response, bloom threshold/strength, ambient/key light intensity, and any CSS/canvas opacity interactions.
+   - Compare representative source images against rendered output with a documented screenshot/manual QA protocol.
+   - Acceptance: paintings match the source artwork as closely as the current PBR presentation allows, without artificial shadow crush.
+
+6. **Prebuild and premeasure website chrome under the overlay**
+   - Force layout/style readiness for timeline, nav buttons, info panel, settings panel, quality controls, hover/focus states, and first open/close paths before CTA.
+   - Do not visually reveal these states to the user; perform work under the opaque overlay and restore final closed/idle state.
+   - Acceptance: first timeline hover/click, nav click, settings open, and info-panel update do not cause a first-use hitch.
+
+7. **Upgrade diagnostics and release gates**
+   - Add boot diagnostics for `pre-entry-raf-start`, `first-full-frame-rendered`, `second-full-frame-presented`, `all-artworks-final-path-warmed`, `ui-prebuild-complete`, and `entry-cta-enabled`.
+   - Include counts and durations so support can prove whether the loading screen actually owned the work.
+   - Acceptance: a single diagnostics export can show that no load/render/build work remained after entry.
+
+8. **Validation protocol**
+   - Run existing lint/build after implementation.
+   - Test with a fresh browser profile/cache disabled and with a normal cached profile.
+   - Record a Chrome Performance trace from page load through first navigation; acceptance is no grey flash, no stretched frame, no long first interaction, and no texture/shader upload events after entry.
+   - Manually compare dark and bright paintings against source images.
+
+### Non-goals for v0.29
+
+- Do not add new dependencies unless an existing browser/Three.js API cannot satisfy the readiness proof.
+- Do not reduce painting resolution or material fidelity to hide performance issues.
+- Do not weaken the strict preload contract for normal galleries.
+- Do not claim “fully fixed” until diagnostics and manual visual QA prove zero post-entry first-use work.
+
+### Open questions for implementation
+
+- Should very large customer galleries still block entry until every artwork is resident, or should the UI explicitly show a longer “all artworks preparing” loading phase with no bounded fallback?
+- Should bloom be disabled or reduced for artwork planes if it contributes to perceived darkness or contrast deviation?
+- Should a debug-only rendered-vs-source comparison helper be added, or should this remain a manual QA checklist?
+
+---
+
 
 
 ## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)

@@ -1,5 +1,24 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps resolved).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 — Loading-screen full-render contract plan (2026-05-22, **planned/docs-only**)
+
+### Status
+
+Planned only. No runtime code changed in this pass.
+
+### Added
+
+- New Y-series plan for making the loading screen own the complete first render: RAF before reveal wait, full-size presented-frame gate, all-artwork final-path GPU warm, UI/control prebuild, and readiness diagnostics.
+- New source audit documenting why the v0.28 RAF/preload confidence was insufficient: current RAF starts after `loadingOverlay.reveal()` resolves, so the main page is not continuously rendered behind the loader.
+- New color-fidelity re-audit requirements covering texture color spaces, renderer output, tone mapping, material lighting, bloom/post-processing, and source-vs-render visual QA.
+
+### Validation
+
+- Documentation-only update; runtime lint/build not run.
+
+---
+
 
 
 ## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)

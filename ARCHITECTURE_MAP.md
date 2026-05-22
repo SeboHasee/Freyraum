@@ -1,5 +1,12 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — NeutralToneMapping, RAF-before-reveal pre-rendering, navigation lambda 3.5, 12-particle wander keyframe; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 planned boot/render architecture note
+
+The next preload fix should treat startup readiness as a boot pipeline, not a set of isolated warm calls. Ownership remains split across `main.ts` orchestration, `GalleryManager` artwork/material readiness, `TextureManager` texture loading/upload support, `RendererManager` renderer/color setup, `PostProcessing` final pass readiness, and UI modules for DOM/control prebuild.
+
+Planned architecture boundary: the loading overlay may enable entry only after the production render path has produced full-size presented frames and all paintings have been drawn through that path. `plan.md § v0.29` defines the Y-series slices.
+
 
 
 ## v0.23 performance/preloading architecture note

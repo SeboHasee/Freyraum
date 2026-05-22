@@ -1,5 +1,24 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — NeutralToneMapping, RAF-before-reveal pre-rendering, navigation lambda 3.5, 12-particle wander keyframe; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## 2026-05-22 — v0.29 planning lessons
+
+### Lesson 68 — Loaded is not presented
+
+A readiness ledger can show textures, materials, shaders, and GPU warm flags while the user still sees a stale canvas or stretched prewarm frame. Future rule: entry readiness must include at least one full-size render and one subsequent presentation interval before the loader CTA appears.
+
+### Lesson 69 — RAF must run while the loader is waiting, not only after it disappears
+
+Starting RAF after `loadingOverlay.reveal()` resolves means the scene is not drawing during the entire user-wait and fade-out window. Future rule: the animation loop must exist and run under the opaque overlay before user entry is possible.
+
+### Lesson 70 — Tiny prewarm renders are not final-frame proof
+
+A 4×4 composer prewarm is useful for shader compilation, but it is not evidence that the final viewport-sized canvas is ready. Future rule: always follow tiny shader prewarm with final-size render/presentation gates before reveal.
+
+### Lesson 71 — Color fidelity is a full pipeline property
+
+Neutral tone mapping and sRGB textures are necessary but not sufficient. Lighting, material response, bloom, exposure, post-processing, and CSS/canvas opacity can still make paintings appear darker than the source. Future rule: dark-artwork complaints require end-to-end visual QA, not only renderer-setting changes.
+
 
 
 ## 2026-05-22 — v0.28 lessons

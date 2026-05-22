@@ -1,5 +1,12 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — NeutralToneMapping, RAF-before-reveal pre-rendering, navigation lambda 3.5, 12-particle wander keyframe; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 — handoff status: loading-screen/full-render fix is planned, not shipped (2026-05-22)
+
+Customer-facing status: **do not claim this is fixed yet**. The latest feedback says paintings remain too dark, entry still glitches, and first-use lag remains. The current implementation still starts the main RAF loop after `loadingOverlay.reveal()` resolves, so the page is not continuously rendering behind the loading screen during the full wait/fade.
+
+Next implementation must follow `plan.md § v0.29`: start RAF under the opaque loader, require full-size presented frames before the CTA, warm every painting through the final render path, prebuild UI chrome, and re-audit artwork color fidelity end to end.
+
 
 
 ## v0.27 — shipped (2026-05-22) — Startup smoothness + loading/AA remediation

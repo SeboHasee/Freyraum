@@ -1,5 +1,10 @@
 # Refactor prompt
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 current context
+
+Latest planning status: loading-screen/full-render ownership and artwork color fidelity are open follow-up work. Future coding agents must consult `plan.md § v0.29` and `FINDINGS.md § v0.29` before claiming startup preload, first-frame smoothness, or original-looking painting color is solved.
+
 
 
 ## v0.23 — Performance/Preloading Planning Audit

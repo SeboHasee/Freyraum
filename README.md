@@ -1,5 +1,12 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps resolved).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 — current plan: loading screen must own the complete first render (2026-05-22, planned)
+
+Current status: **planned/docs-only**. User feedback says the v0.28 preload/fidelity work is still not sufficient: paintings still look too dark, first entry can still glitch, and parts of the site still lag on first use.
+
+The new plan in `plan.md § v0.29` requires the loading screen to block entry until the real main page is already rendered at full size, every painting has been drawn through the final render path, post-processing has presented full frames, and first-use UI/control work has been prebuilt under the opaque overlay. `FINDINGS.md § v0.29` records the source audit and online research behind this plan.
+
 
 
 ## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)

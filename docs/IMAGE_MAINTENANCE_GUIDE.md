@@ -1,5 +1,10 @@
 # FREYRAUM — Image Maintenance Guide
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — NeutralToneMapping, RAF-before-reveal pre-rendering, navigation lambda 3.5, 12-particle wander keyframe; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 customer-facing status note — preload/fidelity follow-up planned
+
+The latest technical plan treats startup smoothness and painting brightness as an open follow-up, not a shipped fix. The next implementation must keep the loading screen visible until the main page, controls, and every painting have been rendered/prepared behind it, and must re-check dark painting fidelity against the original source images.
+
 
 
 ## v0.23 — Performance/Preloading Planning Audit

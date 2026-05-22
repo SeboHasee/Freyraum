@@ -1,5 +1,10 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — NeutralToneMapping, RAF-before-reveal pre-rendering, navigation lambda 3.5, 12-particle wander keyframe; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 preload/fidelity planning rule
+
+When addressing loading-screen smoothness or painting fidelity, do not rely on “loaded” or “compiled” as sufficient proof. Require diagnostics for full-size presented frames, final-path artwork warm coverage, post-processing readiness, UI/control prebuild, and source-vs-render color checks before describing the site as smooth or original-looking.
+
 
 
 ## v0.23 performance documentation rule

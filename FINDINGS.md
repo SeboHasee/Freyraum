@@ -1,5 +1,56 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.28 shipped — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps resolved).
+> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+
+## v0.29 — Loading-screen full-render contract re-audit (2026-05-22, **planned/docs-only**)
+
+### Status
+
+Documentation/planning only. No runtime code changed in this pass. The current user report supersedes the v0.28 confidence statement: paintings can still appear too dark, entry can still glitch, and first-use lag can still appear after the loading screen.
+
+### Online research findings
+
+- Three.js asset loading completion is not the same as GPU readiness. Texture fetch/decode can complete while upload to VRAM remains deferred until the texture is first used in a draw.
+- `renderer.compile()` / `compileAsync()` helps shader readiness but does not guarantee every texture has been uploaded; drawing the material that owns the texture is the reliable warm path.
+- Standard WebGL/Three.js startup practice for zero first-use stutter is: load with `LoadingManager`, compile shaders/materials, render every critical material/texture at least once under an opaque loader, then reveal only after real frames have been presented.
+- For artwork fidelity, sRGB source images must be marked as `SRGBColorSpace`, renderer output must be sRGB, and tone mapping/exposure must not add unintended contrast. `NeutralToneMapping` is a good low-distortion baseline, but lighting/material/post-processing still need verification.
+
+Research references used for the plan: Three.js LoadingManager documentation, Three.js WebGLRenderer compile/compileAsync documentation, Three.js color-management manual, Three.js forum discussion on texture pre-warming/upload stutter, and Khronos PBR Neutral tone-mapping notes.
+
+### Source audit findings
+
+| ID | Source | Finding |
+|----|--------|---------|
+| Y-01 | `src/main.ts:942-950`, `src/main.ts:1342-1395` | The current code removes loading state and awaits `loadingOverlay.reveal()` before `animate` is declared; RAF starts only after reveal resolves. This means the main scene is not continuously rendering behind the overlay during the wait/fade. |
+| Y-02 | `src/main.ts:923-932` | `postProcessing.prewarmComposer()` renders at a tiny warm size and is followed by only one drain frame. There is no hard gate proving a full-size final composer frame has been presented before entry. |
+| Y-03 | `src/gallery/GalleryManager.ts:789-810` | Full-gallery readiness counts six readiness flags, but it does not represent real visible-frame presentation or final post-processing path residency. |
+| Y-04 | `src/gallery/GalleryManager.ts:850+`, `src/main.ts:830-848` | Artwork GPU warming binds materials and renders during warm loops, but the acceptance log does not prove every artwork has been drawn through the final full-size composer path immediately before reveal. |
+| Y-05 | `src/core/RendererManager.ts:46-55`, `src/gallery/TextureManager.ts`, `src/materials/ProceduralTextureFactory.ts` | Color-space setup is directionally correct, but the dark-painting complaint requires rechecking the entire pipeline: texture role, lighting, material, bloom, tone mapping, exposure, and final CSS/canvas opacity. |
+| Y-06 | `src/main.ts`, `src/timeline/Timeline.ts`, `src/ui/InfoPanel.ts`, `src/ui/PreferencesPanel.ts` | Loading readiness does not yet include first-use DOM/style/layout paths for all website controls and panel states. |
+
+### Required diagnostics for the next implementation
+
+- `pre-entry-raf-start` — proves RAF starts before the loader can be dismissed.
+- `first-full-frame-rendered` — records viewport size, pixel ratio, active artwork, and composer size.
+- `second-full-frame-presented` — proves at least one browser presentation interval passed after the first full render.
+- `all-artworks-final-path-warmed` — records total artworks, warmed artworks, failures, duration, and render path.
+- `ui-prebuild-complete` — records prepared controls/panels/hover/focus states.
+- `entry-cta-enabled` — emitted only after all prior gates pass.
+
+### Acceptance checks
+
+- No visible grey flash, stretched 4×4 frame, blank canvas, or late artwork pop-in during overlay fade.
+- First main-page frame already contains the final gallery composition at full viewport size.
+- First navigation to any painting performs no texture load, procedural map generation, shader compile, or GPU upload.
+- First hover/click/open on timeline, nav buttons, settings, and info panel has no first-use hitch.
+- Dark and bright paintings visually match source files as closely as the intended PBR frame allows.
+- Diagnostics export confirms zero unresolved artworks and no post-entry warm queue in strict normal-gallery mode.
+
+### Validation
+
+- Not run: docs-only planning update. Runtime lint/build remain required when Y-series code changes are implemented.
+
+---
+
 
 
 ## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)
