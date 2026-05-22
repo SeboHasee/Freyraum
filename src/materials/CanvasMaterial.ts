@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 
-// v0.44 — GLSL procedural brushed-metal fragment functions.
+// v0.45 — GLSL procedural brushed-metal fragment functions.
 // Prepended to shader.fragmentShader in onBeforeCompile so they are available
 // in all injection sites below.
 const FRAME_FRAG_FUNCTIONS = /* glsl */ `
-// v0.44 brushed-metal procedural normal & roughness
+// v0.45 brushed-metal procedural normal & roughness
+// Sources:
+//   Inigo Quilez, iquilezles.org/articles/fbm/ (domain warping, irrational FBM)
+//   Khronos GLSL ES 3.00 spec §8.14 (fwidth — WebGL2 built-in, Three.js r152+)
+//   Adobe Substance / Marmoset PBR guide: satin brushed Al = roughness 0.35-0.45
 
 uniform float uFrameSeed;
 uniform float uBaseRoughness;
@@ -20,73 +24,67 @@ float frmNoise(vec2 p) {
   f = f * f * (3.0 - 2.0 * f);
   float n = i.x + i.y * 57.0;
   return mix(
-    mix(frmHash(n), frmHash(n + 1.0), f.x),
+    mix(frmHash(n),        frmHash(n + 1.0),  f.x),
     mix(frmHash(n + 57.0), frmHash(n + 58.0), f.x),
     f.y
   );
 }
 
-// 4-octave FBM — anisotropic: X stretched relative to Y
-float frmFbm(vec2 p) {
+// Domain-warped aperiodic FBM (Quilez technique)
+float frmBrushedFbm(vec2 p) {
+  float wx = frmNoise(p * 0.35 + vec2(15.6,  28.1));
+  float wy = frmNoise(p * 0.35 + vec2(-67.8, 39.2));
+  p += (vec2(wx, wy) - 0.5) * 0.40;
   float v = 0.0;
-  float a = 0.5;
-  for (int i = 0; i < 4; i++) {
-    v += a * frmNoise(p);
-    p = p * mat2(2.1, 0.0, 0.0, 2.0);
-    a *= 0.5;
-  }
+  v += 0.5000 * frmNoise(vec2(p.x * 1.000, p.y * 14.000));
+  v += 0.2500 * frmNoise(vec2(p.x * 2.014, p.y * 28.192) + 1.618);
+  v += 0.1250 * frmNoise(vec2(p.x * 4.041, p.y * 56.518) + 3.141);
+  v += 0.0625 * frmNoise(vec2(p.x * 8.126, p.y * 113.36) + 7.389);
   return v;
 }
 
-// Ridged noise → sharp bright lines (individual scratches)
-float frmRidge(vec2 p) {
-  return 1.0 - abs(2.0 * frmFbm(p) - 1.0);
+// Derivative-aware scratch lines (fwidth: GLSL ES 3.0, WebGL2 built-in)
+float frmScratchRow(vec2 p, float density, float localSeed) {
+  float row  = floor(p.y * density);
+  float rh   = frmHash(row + localSeed * 137.619);
+  if (rh > 0.15) return 0.0;
+  float lineY = (row + rh * 3.5) / density;
+  float dist  = abs(p.y - lineY);
+  float fw    = fwidth(p.y);
+  float width = max(fw * 0.8, 0.0015 + frmHash(row + localSeed * 71.33) * 0.003);
+  float inten = 0.4 + frmHash(row + localSeed * 23.71) * 0.6;
+  float xFade = frmNoise(vec2(p.x * 0.28, row * 0.5)) * 0.5 + 0.5;
+  return smoothstep(width, 0.0, dist) * inten * xFade;
 }
 
-// Anti-tile: per-cell random UV offset (Heitz/Neyret 2018)
-vec2 frmTileOffset(vec2 p, float freq) {
-  vec2 cell = floor(p * freq);
-  float h = frmHash(cell.x + cell.y * 137.0);
-  return vec2(fract(h * 1234.5), fract(h * 9876.5));
+float frmScratchLayer(vec2 p, float seed) {
+  float fine   = frmScratchRow(p, 110.0, seed);
+  float medium = frmScratchRow(p,  32.0, seed + 5.11);
+  float deep   = frmScratchRow(p,   7.0, seed + 11.37);
+  return clamp(fine * 0.25 + medium * 0.45 + deep * 0.65, 0.0, 1.0);
 }
 
-// Tangent-space normal from anisotropic height-field finite difference
-vec3 frmBrushedNormal(vec2 uv, float seed) {
-  // Low X-frequency = long horizontal grain sweeps; moderate Y-frequency
-  vec2 sc = vec2(uv.x * 1.2 + seed * 0.07, uv.y * 14.0 + seed * 0.13);
-
-  // Two anti-tiled samples blended via smooth low-frequency mask
-  vec2 off0 = frmTileOffset(uv, 1.5);
-  vec2 off1 = frmTileOffset(uv + 0.17, 1.5);
-  float blend = frmNoise(uv * 2.3);
-
-  float h0  = frmFbm(sc + off0 * 3.0)
-            + frmRidge(sc * vec2(4.0, 0.05) + off0) * 0.12;
-  float h0x = frmFbm((sc + vec2(0.02, 0.0)) + off0 * 3.0);
-  float h0y = frmFbm((sc + vec2(0.0, 0.02)) + off0 * 3.0);
-
-  float h1  = frmFbm(sc + off1 * 3.0)
-            + frmRidge(sc * vec2(4.0, 0.05) + off1) * 0.12;
-  float h1x = frmFbm((sc + vec2(0.02, 0.0)) + off1 * 3.0);
-  float h1y = frmFbm((sc + vec2(0.0, 0.02)) + off1 * 3.0);
-
-  float h  = mix(h0,  h1,  blend);
-  float hx = mix(h0x, h1x, blend);
-  float hy = mix(h0y, h1y, blend);
-
-  // Finite differences → tangent-space gradient; 8.0 controls relief strength
-  vec2 grad = vec2(h - hx, h - hy) * 8.0;
-  return normalize(vec3(grad, 1.0));
+// Layered normal: FBM grain + scratch impulses, eps=0.004 for close-view sharpness
+vec3 frmBrushedNormal(vec2 p, float seed) {
+  float eps = 0.004;
+  float hg  = frmBrushedFbm(p);
+  float hgx = frmBrushedFbm(p + vec2(eps, 0.0));
+  float hgy = frmBrushedFbm(p + vec2(0.0, eps));
+  float hs  = frmScratchLayer(p,                  seed);
+  float hsx = frmScratchLayer(p + vec2(eps, 0.0), seed);
+  float hsy = frmScratchLayer(p + vec2(0.0, eps), seed);
+  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 6.0;
+  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 5.0;
+  return normalize(vec3(gradG + gradS, 1.0));
 }
 `;
 
-// Replaces #include <normal_fragment_maps> — computes procedural normal and
-// transforms it from tangent space to view space using Three.js r166's local
-// tbn matrix (created because the frame geometry has tangent attributes and
-// the material has a normalMap set, enabling USE_TANGENT in the shader).
+// Replaces #include <normal_fragment_maps> — computes procedural normal using
+// object-space position varying and transforms it from tangent space to view
+// space using Three.js r166's local tbn matrix.
 const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
 {
-  vec3 proceduralN = frmBrushedNormal(vUv, uFrameSeed);
+  vec3 proceduralN = frmBrushedNormal(vFrameLocalPos.xy, uFrameSeed);
   normal = normalize(tbn * proceduralN);
 }
 `;
@@ -196,25 +194,50 @@ export class CanvasMaterial {
     });
 
     material.onBeforeCompile = (shader) => {
+      // 1. Shared uniforms
       Object.assign(shader.uniforms, uniforms);
-      // Prepend helper functions so they are visible at all injection sites.
+
+      // 2. Inject object-space position varying
+      shader.vertexShader   = 'varying vec3 vFrameLocalPos;\n' + shader.vertexShader;
+      shader.fragmentShader = 'varying vec3 vFrameLocalPos;\n' + shader.fragmentShader;
+      shader.vertexShader   = shader.vertexShader.replace(
+        'void main() {',
+        'void main() {\n  vFrameLocalPos = position;'
+      );
+
+      // 3. Prepend helper GLSL functions
       shader.fragmentShader = FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
-      // Replace standard normal-map sampling with our procedural computation.
+
+      // 4. Procedural normal (tbn = Three.js r166 local mat3; do NOT use vTBN)
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <normal_fragment_maps>',
         FRAME_FRAG_NORMAL_REPLACE
       );
-      // Replace roughness-map sampling with FBM-driven variation.
+
+      // 5. Roughness variation using object-space position
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <roughnessmap_fragment>',
         `float roughnessFactor = uBaseRoughness
-           + frmFbm(vec2(vUv.x * 1.2, vUv.y * 5.0) + uFrameSeed * 0.5) * 0.12
-           - 0.06;`
+           + frmBrushedFbm(vFrameLocalPos.xy + uFrameSeed * 0.5) * 0.07
+           - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.04
+           - 0.03;
+         roughnessFactor = clamp(roughnessFactor, 0.18, 0.72);`
       );
-      console.debug('[CanvasMaterial] frame-shader-compiled', { preset: preset.id, seed });
+
+      console.debug('[CanvasMaterial] frame-shader-compiled', {
+        version: 'v0.45',
+        preset: preset.id,
+        seed,
+        frameRoughness: preset.frameRoughness,
+        frameAnisotropy: preset.frameAnisotropy,
+        frameClearcoat: preset.frameClearcoat,
+        domainWarp: true,
+        scratchLayer: true,
+        eps: 0.004,
+      });
     };
     // Unique cache key per artwork seed so Three.js compiles distinct programs.
-    material.customProgramCacheKey = () => `frame-v0.44-${seed}`;
+    material.customProgramCacheKey = () => `frame-v0.45-${seed}`;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;

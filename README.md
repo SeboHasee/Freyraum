@@ -1,19 +1,17 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.45 upgraded to full technical coding plan with GLSL/TS code and 2026-verified sources; runtime still v0.44.1 until implemented).
+> Last full markdown audit: 2026-05-22 (v0.45 shipped; lint/build pass).
 
-## v0.45 — Technical Coding Plan: Zero-Visible-Tiling Brushed-Metal Frame (2026-05-22, **planned / docs-only**)
+## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
 
-Current status: **planned, not shipped**. v0.44.1 restored the GLSL frame path. v0.45 is the next pass: zero perceptible tiles, sharper close-zoom scratches, slightly rougher less shiny finish.
+Current status: **shipped and validated**.
 
-Technical approach (see `plan.md § v0.45` for full code):
+- Domain-warped aperiodic FBM (`frmBrushedFbm`) replaces `frmFbm + frmTileOffset + frmRidge` — no hash-cell grid, no repeating cadence.
+- `vFrameLocalPos` object-space position varying injected via `onBeforeCompile` vertex shader; all GLSL uses object-space XY.
+- Three density bands of derivative-aware scratch primitives (`frmScratchLayer`): fine (110/unit), medium (32/unit), deep (7/unit). `fwidth`-based AA keeps scratches sub-pixel-stable during camera movement.
+- `frmBrushedNormal` rewritten: layered FBM + scratch gradients, eps = 0.004 (was 0.02) for close-zoom sharpness.
+- PBR roughness raised to satin-brushed Al range: high 0.28→0.35, balanced 0.38→0.44, battery 0.48→0.52.
 
-- **Vertex varying injection** (`vFrameLocalPos`): inject object-space position via `onBeforeCompile` vertex shader replacement of `void main() {`.
-- **Domain-warped FBM** (`frmBrushedFbm`): replace `frmFbm + frmTileOffset` with Quilez domain warp pattern (`p += noise_field(p) * 0.40`) + 4 irrational-ratio octaves. Eliminates hash-cell grid structure.
-- **Scratch primitives** (`frmScratchLayer`): three density bands (fine/medium/deep) with `fwidth`-based anti-aliasing so scratches stay sub-pixel-stable during camera movement.
-- **Layered normal** (`frmBrushedNormal`): eps = 0.004 (was 0.02) for close-zoom sharpness; separate FBM and scratch gradients with independent strength tuning.
-- **PBR roughness update** (`quality.ts`): high 0.28→0.35, balanced 0.38→0.44, battery 0.48→0.52 (satin-brushed Al range per Adobe Substance PBR guide 2024).
-
-Reference sources: Inigo Quilez iquilezles.org (domain warp), Khronos GLSL ES 3.00 §8.14 (fwidth), Adobe Substance PBR guide (roughness calibration), Three.js docs (onBeforeCompile).
+See `CHANGELOG.md § v0.45` and `FINDINGS.md § v0.45` for full detail.
 
 
 ## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)

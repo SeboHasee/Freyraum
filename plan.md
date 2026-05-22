@@ -1,9 +1,9 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.45 upgraded to full technical coding plan with GLSL/TS code, verified against 2026 sources; runtime still v0.44.1 until implemented).
+> Last full markdown audit: 2026-05-22 (v0.45 shipped; runtime updated, lint/build pass).
 
-## v0.45 — Technical Coding Plan: Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **planned / docs-only**)
+## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
 
-Runtime status: **planned only**. Current runtime remains v0.44.1 (`tbn` hotfix shipped). This section is the complete technical implementation specification with actual GLSL and TypeScript code.
+Runtime status: **shipped**. lint and build pass.
 
 ### Goal
 
@@ -398,12 +398,12 @@ Browser console: `[CanvasMaterial] frame-shader-compiled { version: 'v0.45', ...
 
 ### Documentation boundary
 
-This v0.45 section is a **future implementation plan**. Current runtime remains v0.44.1. Until v0.45 code is shipped and validated, customer-facing docs must describe: "frame is visible with GLSL procedural grain; v0.45 zero-tiling / sharper scratches / slightly-rougher metal is planned."
+v0.45 is shipped and validated. Current runtime is v0.45. Customer-facing docs describe: "frame shows zero-tile-cadence GLSL domain-warped brushed metal with derivative-aware scratch primitives."
 
 
 ## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)
 
-Runtime status: **shipped. v0.44 is the current runtime.**
+Runtime status: **shipped. Superseded by v0.45.**
 
 ### Problem statement
 

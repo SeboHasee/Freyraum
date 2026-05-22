@@ -1,5 +1,5 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.45 upgraded to full technical coding plan with GLSL/TS code and 2026-verified sources; runtime still v0.44.1 until implemented).
+> Last full markdown audit: 2026-05-22 (v0.45 shipped; runtime updated, lint/build pass).
 
 ## 2026-05-22 — v0.45 technical coding plan lessons
 

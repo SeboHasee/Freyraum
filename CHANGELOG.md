@@ -1,33 +1,37 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.45 upgraded to full technical coding plan with GLSL/TS code and 2026-verified sources; runtime still v0.44.1 until implemented).
+> Last full markdown audit: 2026-05-22 (v0.45 shipped; runtime updated, lint/build pass).
 
-## v0.45 — Technical Coding Plan: Zero-Visible-Tiling Brushed-Metal (2026-05-22, **planned / docs-only**)
+## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
 
 ### Status
 
-Planning and research documentation only. No runtime code changed in this pass. Full technical specification with actual GLSL and TypeScript code is now in `plan.md § v0.45` and `FINDINGS.md § v0.45`.
+Shipped. Runtime code updated; lint and build pass.
 
-### What changed in this pass (docs upgrade from high-level to technical)
+### Problem (remaining after v0.44)
 
-- **`plan.md`**: Replaced high-level v0.45 outline with a full technical coding plan including:
-  - Complete `FRAME_FRAG_FUNCTIONS` GLSL replacement (domain-warped FBM, scratch primitives, layered normal)
-  - Complete `onBeforeCompile` TypeScript block with vertex varying injection
-  - Exact `quality.ts` roughness/clearcoat values per preset
-  - Source citations for each technique (Quilez domain warp, Khronos fwidth spec, Adobe PBR guide, Three.js docs)
-- **`FINDINGS.md`**: Added v0.44 code audit (line-by-line issue identification with file:line references), plus extended research findings with verified 2026 sources.
-- **`CHANGELOG.md`**, **`README.md`**, **`LESSONS_LEARNED.md`**: Updated to reflect the upgrade from docs-only outline to full technical spec.
+The v0.44 GLSL frame path still showed:
+1. **Visible hash-cell grid** on long bars — `frmTileOffset` used 0.67-unit cells, ~9 visible boundaries on side bars.
+2. **Large-scale periodicity** — `frmFbm` used near-exact 2x octave scaling; Y-axis exact-integer multiples could produce faint large-scale structure.
+3. **Blobs instead of scratches** — `frmRidge` produced wide blobs; no fine individual scratch primitives.
+4. **Eps too coarse** — finite-difference epsilon 0.02 = 10% of frame bar width, washing out close-zoom detail.
+5. **Too shiny** — `frameRoughness: 0.28` is in polished-aluminium range, not satin/brushed.
 
-### Planned runtime changes (not yet implemented)
+### Changes shipped
 
-1. **`CanvasMaterial.ts`** — Replace `FRAME_FRAG_FUNCTIONS` with domain-warped FBM + scratch layer + layered normal function. Rewrite `onBeforeCompile` to inject `vFrameLocalPos` vertex varying and use it in all GLSL.
-2. **`quality.ts`** — Raise `frameRoughness` and lower `frameClearcoat` per preset to satin-metal PBR range.
-3. **`customProgramCacheKey`** — Bump to `frame-v0.45-${seed}`.
+| Slice | File | Change |
+|-------|------|--------|
+| V45-01 | `src/materials/CanvasMaterial.ts` | `onBeforeCompile` now injects `vFrameLocalPos` object-space position varying in vertex shader; all GLSL uses `vFrameLocalPos.xy` instead of `vUv`. |
+| V45-02 | `src/materials/CanvasMaterial.ts` | `FRAME_FRAG_FUNCTIONS`: replaced `frmFbm + frmRidge + frmTileOffset` with `frmBrushedFbm` — domain-warped aperiodic FBM (Quilez technique) with 4 irrational-ratio octaves. Eliminates hash-cell grid and near-integer octave alignment. |
+| V45-03 | `src/materials/CanvasMaterial.ts` | Added `frmScratchRow` + `frmScratchLayer`: three density bands (fine 110/unit, medium 32/unit, deep 7/unit) with `fwidth`-based AA. Scratches are sub-pixel-stable. |
+| V45-04 | `src/materials/CanvasMaterial.ts` | `frmBrushedNormal` rewritten: layered FBM + scratch gradients, eps = 0.004 (was 0.02) for close-zoom sharpness. |
+| V45-05 | `src/config/quality.ts` | high: 0.28→0.35, clearcoat 0.18→0.12, anisotropy 0.70→0.65; balanced: 0.38→0.44, clearcoat 0.14→0.10; battery: 0.48→0.52 (satin-brushed Al range). |
+| V45-06 | `src/materials/CanvasMaterial.ts` | `customProgramCacheKey` bumped to `frame-v0.45-${seed}`. Roughness injection uses `vFrameLocalPos.xy`. |
 
-### Validation (pending implementation)
+### Validation
 
-- `npm run lint`
-- `npm run build`
-- Browser console: `[CanvasMaterial] frame-shader-compiled { version: 'v0.45', ... }` — no WebGL errors.
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- Browser console: `[CanvasMaterial] frame-shader-compiled { version: 'v0.45', domainWarp: true, scratchLayer: true, eps: 0.004, ... }` — no WebGL errors.
 
 
 ## v0.44 — GLSL shader-injection brushed-metal (2026-05-22, **shipped**)

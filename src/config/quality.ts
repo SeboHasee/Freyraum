@@ -175,10 +175,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.40 P-04: near-mirror brushed, strong directional highlight.
-    frameRoughness: 0.28,
-    frameAnisotropy: 0.7,
-    frameClearcoat: 0.18,
+    // v0.45 P-04: satin-brushed range (Adobe Substance PBR guide: 0.35–0.45).
+    frameRoughness: 0.35,
+    frameAnisotropy: 0.65,
+    frameClearcoat: 0.12,
     frameBevelEnabled: true,
   },
   balanced: {
@@ -218,10 +218,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.40 P-04: satin brushed -- most museum-natural.
-    frameRoughness: 0.38,
+    // v0.45 P-04: mid satin range.
+    frameRoughness: 0.44,
     frameAnisotropy: 0.55,
-    frameClearcoat: 0.14,
+    frameClearcoat: 0.10,
     frameBevelEnabled: true,
   },
   battery: {
@@ -260,8 +260,8 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.40 P-04: no anisotropy (cost), flat-matte acceptable.
-    frameRoughness: 0.48,
+    // v0.45 P-04: matte satin.
+    frameRoughness: 0.52,
     frameAnisotropy: 0.0,
     frameClearcoat: 0.0,
     frameBevelEnabled: false,

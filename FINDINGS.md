@@ -1,7 +1,7 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.45 upgraded to full technical coding plan with GLSL/TS code and verified source citations; runtime still v0.44.1 until implemented).
+> Last full markdown audit: 2026-05-22 (v0.45 shipped; runtime updated, lint/build pass).
 
-## v0.45 — Technical Audit: v0.44 Code Review and Implementation Research (2026-05-22, **planned / docs-only**)
+## v0.45 — Technical Audit: v0.44 Code Review and Implementation Research (2026-05-22, **shipped**)
 
 ### v0.44 Code Audit Results
 
