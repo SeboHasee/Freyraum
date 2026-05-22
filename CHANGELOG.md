@@ -1,5 +1,30 @@
 # CHANGELOG
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
 > Last full markdown audit: 2026-05-22 (v0.53 shipped: flat-normal redesign, roughness grain, higher anisotropy).
+
+## v0.56 — UX/readability/accessibility audit pass A (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime shell/accessibility code updated; lint and build pass.
+
+### Added
+
+- `src/main.ts`: canvas assistive description via `aria-describedby` + screen-reader-only help text.
+- `src/styles/main.scss`: reusable `.sr-only` utility class.
+- `app.html`: `noscript` fallback notice for non-JS environments.
+- `index.html`: redirect status message and user-controlled auto-redirect cancel button.
+
+### Changed
+
+- `src/ui/NavigationControls.ts`: localized nav labels/titles to German for language consistency and clearer screen-reader output.
+- `src/ui/Topbar.ts`: semantic heading for brand and German badge copy.
+- `index.html`: removed forced `meta refresh` redirect in favor of cancellable JavaScript redirect flow.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.53 — flat-normal brushed metal redesign (2026-05-22, **shipped**)
 

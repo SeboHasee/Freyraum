@@ -1,5 +1,48 @@
 # FREYRAUM Plan
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
 > Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **in progress**)
+
+Runtime status: **partially implemented in this pass** (navigation/local-preview/canvas accessibility improvements shipped; broader enhancements remain open).
+
+### Audit scope
+
+1. User-friendliness of navigation and first-run guidance.
+2. Readability and language consistency (`lang="de"` + UI labels).
+3. Accessibility of interactive 3D canvas and redirect behavior.
+4. Performance and perceived performance guardrails.
+
+### Research-backed findings addressed in this pass
+
+1. Timed auto-redirects via `meta refresh` reduce user control and can impair accessibility.
+2. Icon-only buttons require explicit accessible names and clear discoverability.
+3. Interactive canvas surfaces should provide descriptive assistive text and keyboard hints.
+4. Language consistency improves readability and screen-reader pronunciation when `lang` is German.
+
+### Implemented slices (v0.56-A)
+
+1. **A-01 — Navigation control accessibility/readability**
+   - Localized nav landmark and button labels to German.
+   - Added button `title` hints for arrow-only controls.
+2. **A-02 — Topbar readability semantics**
+   - Converted brand element to semantic heading (`h1`).
+   - Localized badge copy to German.
+3. **A-03 — Canvas assistive guidance**
+   - Added `aria-describedby` for the gallery canvas.
+   - Injected screen-reader-only helper text with keyboard/navigation hints.
+4. **A-04 — Local preview redirect usability**
+   - Removed hard `meta refresh`.
+   - Added controllable JavaScript redirect with stop action and live status.
+5. **A-05 — Progressive enhancement fallback**
+   - Added `noscript` message to `app.html`.
+
+### Remaining plan slices (v0.56-B, open)
+
+1. Add a dedicated keyboard-shortcuts help affordance in the UI (discoverable via button and `?`).
+2. Add explicit focus-visible styling review for all interactive controls and high-contrast mode checks.
+3. Run a Lighthouse/Web Vitals evidence pass and store measured before/after metrics in `FINDINGS.md`.
+4. Revisit font loading strategy (self-host or subset) to reduce third-party dependency overhead.
 
 ## v0.47 — modern gallery metal refinement after screenshot review (2026-05-22, **shipped**)
 

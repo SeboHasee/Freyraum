@@ -1,5 +1,17 @@
 # Freyraum
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
 > Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.56 — website quality audit (2026-05-22, **in progress**)
+
+Current status: **initial improvements shipped**.
+
+- Improved accessibility and language consistency in core UI chrome (navigation + topbar).
+- Added assistive instructions for the interactive 3D canvas.
+- Replaced forced local-preview meta refresh with a user-controllable redirect flow.
+- Added `noscript` fallback text for JavaScript-disabled usage.
+
+See `plan.md` (`v0.56`) and `FINDINGS.md` (`v0.56`) for full audit scope, research-backed rationale, and open follow-ups.
 
 ## v0.47 — modern gallery frame metal realism pass (2026-05-22, **shipped**)
 

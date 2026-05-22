@@ -1,5 +1,35 @@
 # FINDINGS
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
 > Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.56 — website quality audit findings (2026-05-22, **in progress**)
+
+### Primary issues found
+
+1. `index.html` used immediate `meta refresh`, giving users no redirect control.
+2. Navigation controls used English labels despite German page language.
+3. Main interactive canvas had `aria-label` but lacked a descriptive instruction target.
+4. Main app shell had no JavaScript-disabled fallback message.
+
+### Online research summary applied
+
+1. WCAG timing/interruption guidance favors user-controlled redirects over forced timed refresh.
+2. WAI/MDN guidance for icon-only controls requires explicit accessible labels.
+3. Canvas/WebGL accessibility guidance recommends supplemental textual instructions and keyboard hints.
+4. Keyboard help discoverability is important for complex interactive experiences.
+
+### Implemented outcome (this pass)
+
+1. Replaced `meta refresh` with cancelable scripted redirect + live status text.
+2. Localized nav ARIA labels/titles and topbar copy to German.
+3. Added canvas `aria-describedby` helper with screen-reader-only interaction instructions.
+4. Added `noscript` fallback text for JS-disabled environments.
+
+### Open findings
+
+1. Keyboard-shortcuts help overlay is still missing.
+2. A measured Lighthouse/Web Vitals evidence run should be added for before/after benchmarking.
+3. Webfont loading can still be optimized further (subsetting/self-hosting strategy).
 
 ## v0.47 — follow-up analysis: elegant modern gallery metal read (2026-05-22, **shipped**)
 

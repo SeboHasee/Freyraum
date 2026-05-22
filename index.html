@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="FREYRAUM — lokale Kundenvorschau" />
-  <meta http-equiv="refresh" content="0; url=./customer-preview/app.html" />
   <title>freyraum — lokale Vorschau wird geöffnet</title>
   <style>
     :root {
@@ -71,6 +70,25 @@
       box-shadow: 0 14px 45px rgba(0, 0, 0, 0.08);
     }
 
+    button {
+      margin-top: 12px;
+      min-height: 44px;
+      padding: 0 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(18, 23, 27, 0.18);
+      background: rgba(255, 255, 255, 0.7);
+      color: #151b20;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    #redirect-status {
+      margin-top: 20px;
+      margin-bottom: 0;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
     code {
       padding: 2px 6px;
       border-radius: 8px;
@@ -90,6 +108,20 @@
       die ohne lokalen Entwicklungsserver per Doppelklick funktioniert.
     </p>
     <a href="./customer-preview/app.html">FREYRAUM Vorschau öffnen →</a>
+    <p id="redirect-status" aria-live="polite">Automatische Weiterleitung in Kürze …</p>
+    <button type="button" id="cancel-redirect">Automatische Weiterleitung stoppen</button>
   </main>
+  <script>
+    const statusEl = document.getElementById('redirect-status');
+    const cancelBtn = document.getElementById('cancel-redirect');
+    let redirectTimer = window.setTimeout(() => {
+      window.location.href = './customer-preview/app.html';
+    }, 1500);
+    cancelBtn?.addEventListener('click', () => {
+      window.clearTimeout(redirectTimer);
+      redirectTimer = 0;
+      if (statusEl) statusEl.textContent = 'Automatische Weiterleitung gestoppt.';
+    });
+  </script>
 </body>
 </html>

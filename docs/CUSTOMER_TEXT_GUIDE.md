@@ -1,4 +1,5 @@
 # FREYRAUM — How to import painting text (v0.18 — shipped)
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
 > Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
 
 ## v0.29 customer-facing status note — preload/fidelity follow-up shipped

@@ -798,6 +798,13 @@ async function main(): Promise<void> {
   const canvas = rendererManager.renderer.domElement;
   canvas.setAttribute('aria-label', 'Interaktive Galerie');
   canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-describedby', 'freyraum-canvas-help');
+  const canvasA11yHelp = document.createElement('p');
+  canvasA11yHelp.id = 'freyraum-canvas-help';
+  canvasA11yHelp.className = 'sr-only';
+  canvasA11yHelp.textContent =
+    'Interaktive 3D-Galerie. Navigation: Pfeiltasten links und rechts oder die Navigationsbuttons. Zoomen: Plus- und Minus-Buttons.';
+  app.appendChild(canvasA11yHelp);
 
   // v0.11 — unified canvas interaction replaced MouseInteraction,
   // ZoomPan, and TouchInteraction (removed in v0.17 dead-code cleanup).
