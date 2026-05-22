@@ -2,6 +2,23 @@
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
 > Last full markdown audit: 2026-05-22 (v0.53 shipped: flat-normal redesign, roughness grain, higher anisotropy).
 
+## v0.56.1 — merge-ready markdown synchronization (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Documentation-only pass; runtime code unchanged.
+
+### Changed
+
+- Refreshed markdown audit stamp wording to align with the current v0.56-A shipped status and v0.56-B open follow-ups.
+- Added explicit merge-readiness snapshots/checklists in `plan.md`, `README.md`, and `FINDINGS.md`.
+- Clarified that repository state is ready for merge/commit of documentation updates.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
 ## v0.56 — UX/readability/accessibility audit pass A (2026-05-22, **shipped**)
 
 ### Status

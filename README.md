@@ -1,6 +1,6 @@
 # Freyraum
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
 
 ## v0.56 — website quality audit (2026-05-22, **in progress**)
 
@@ -12,6 +12,12 @@ Current status: **initial improvements shipped**.
 - Added `noscript` fallback text for JavaScript-disabled usage.
 
 See `plan.md` (`v0.56`) and `FINDINGS.md` (`v0.56`) for full audit scope, research-backed rationale, and open follow-ups.
+
+### Merge readiness snapshot (2026-05-22)
+
+- Documentation for current shipped scope (v0.56-A) and future scope (v0.56-B) is synchronized.
+- Markdown audit banner is refreshed across repository docs for this pass.
+- Validation baseline for merge readiness: `npm run lint` and `npm run build` pass.
 
 ## v0.47 — modern gallery frame metal realism pass (2026-05-22, **shipped**)
 

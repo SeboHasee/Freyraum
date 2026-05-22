@@ -1,8 +1,8 @@
 # FREYRAUM Plan
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
 
-## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **in progress**)
+## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **partially shipped**)
 
 Runtime status: **partially implemented in this pass** (navigation/local-preview/canvas accessibility improvements shipped; broader enhancements remain open).
 
@@ -43,6 +43,13 @@ Runtime status: **partially implemented in this pass** (navigation/local-preview
 2. Add explicit focus-visible styling review for all interactive controls and high-contrast mode checks.
 3. Run a Lighthouse/Web Vitals evidence pass and store measured before/after metrics in `FINDINGS.md`.
 4. Revisit font loading strategy (self-host or subset) to reduce third-party dependency overhead.
+
+### Merge-readiness checklist (v0.56 docs sync)
+
+- Runtime scope for v0.56-A is documented as shipped in `CHANGELOG.md`, `README.md`, and `FINDINGS.md`.
+- Future-only items remain clearly labeled as open v0.56-B follow-ups (not yet shipped).
+- Validation baseline recorded: `npm run lint` and `npm run build` pass in this repository state.
+- Repository is ready for merge/commit of this docs sync; no runtime code changes are included in this pass.
 
 ## v0.47 — modern gallery metal refinement after screenshot review (2026-05-22, **shipped**)
 

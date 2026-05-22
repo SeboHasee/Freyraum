@@ -1,6 +1,6 @@
 # FINDINGS
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
 
 ## v0.56 — website quality audit findings (2026-05-22, **in progress**)
 
@@ -30,6 +30,12 @@
 1. Keyboard-shortcuts help overlay is still missing.
 2. A measured Lighthouse/Web Vitals evidence run should be added for before/after benchmarking.
 3. Webfont loading can still be optimized further (subsetting/self-hosting strategy).
+
+### Merge-readiness evidence (docs pass)
+
+1. Shipped vs open boundaries are explicit: v0.56-A shipped, v0.56-B still planned.
+2. Documentation now carries a consistent markdown-audit stamp for this pass.
+3. Baseline validation for merge readiness re-run: `npm run lint` and `npm run build` pass.
 
 ## v0.47 — follow-up analysis: elegant modern gallery metal read (2026-05-22, **shipped**)
 
