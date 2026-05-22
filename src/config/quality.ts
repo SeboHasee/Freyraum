@@ -175,10 +175,11 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.47: elegant satin-metal retune for modern gallery framing.
-    frameRoughness: 0.44,
-    frameAnisotropy: 0.45,
-    frameClearcoat: 0.10,
+    // v0.53: high anisotropy (0.85) + semi-gloss roughness (0.28) for realistic
+    // satin brushed-metal. Directional sheen is provided by anisotropy, not bumps.
+    frameRoughness: 0.28,
+    frameAnisotropy: 0.85,
+    frameClearcoat: 0.12,
     frameBevelEnabled: true,
   },
   balanced: {
@@ -218,9 +219,9 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.47: softer directional response with reduced specular harshness.
-    frameRoughness: 0.53,
-    frameAnisotropy: 0.30,
+    // v0.53: moderate anisotropy (0.60) + semi-gloss roughness (0.38).
+    frameRoughness: 0.38,
+    frameAnisotropy: 0.60,
     frameClearcoat: 0.08,
     frameBevelEnabled: true,
   },

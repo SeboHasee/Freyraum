@@ -1,34 +1,44 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.52 shipped: fix brushed-metal grain density and domain warp for realistic appearance).
+> Last full markdown audit: 2026-05-22 (v0.53 shipped: flat-normal redesign, roughness grain, higher anisotropy).
 
-## v0.52 — fix brushed-metal UV frequencies (2026-05-22, **shipped**)
+## v0.53 — flat-normal brushed metal redesign (2026-05-22, **shipped**)
 
 ### Status
 
 Shipped. Runtime code updated; lint and build pass.
 
-### Root cause
+### Root cause of visible lines (v0.51–v0.52)
 
-The v0.51 FBM used only 18 cycles across the bar width in its first octave,
-creating ~18 individually visible parallel lines that looked like pencil marks.
-Domain warp was too weak (0.06) to break up regularity. The scratch layer
-(density 72/28/9 with 3% activation) added more visible parallel grooves.
-
-Real brushed metal has very fine, dense, irregular grain (100+ grooves across
-a typical bar width) that reads as a directional satin sheen rather than
-individually distinguishable lines.
+Any FBM with a Y-component gradient (`barUV.y * N` where N > ~2) creates
+visible ridges in the normal map that the eye sees as parallel lines.
+Raising the frequency (v0.52) made this **worse** — more, finer lines.
+The approach was physically wrong: real brushed metal is optically flat.
+The "brushed" appearance comes from anisotropic specular reflection
+spreading highlights along the brush direction, not from surface bumps.
 
 ### Changed
 
 - `src/materials/CanvasMaterial.ts`:
-  - FBM first-octave across-frequency raised from 18 → 120 (5 octaves now)
-  - Domain warp uses anisotropic scaling and triple-layer warping, strength
-    increased from 0.06 to 0.12 (across) for irregularity
-  - Scratch layer: density raised to 200/60/18, activation lowered to 1.5%,
-    amplitude halved — scratches are now sparse accents, not visible grid lines
-  - Normal epsilon reduced from 0.004 → 0.001 for high-frequency detail
-  - Normal gradient scale reduced from 1.8/1.0 → 0.8/0.5 for subtle sheen
-  - Version bumped to v0.52
+  - `frmBrushedFbm`: height now varies ONLY along bar (X direction).
+    Y frequency kept below 6 so gradient is negligible. No across ridges.
+  - Added `frmRoughnessGrain`: high X frequency (28–115 cycles/unit),
+    very low Y frequency. Creates fine sparkle/shimmer along brush direction
+    without any visible lines.
+  - `frmScratchLayer` replaced by `frmScratchLine`: scratches now run
+    ALONG the bar (X segments), placed at random Y positions. Sparse (1.8%).
+  - `frmBrushedNormal`: gradient multiplier 0.8 → 0.08 (nearly flat surface).
+    Epsilon 0.001 → 0.010 (correct scale for low-frequency height function).
+  - Roughness fragment uses `frmRoughnessGrain` ± 0.030, not FBM bumps.
+  - Version bumped to v0.53.
+- `src/config/quality.ts`:
+  - high: `frameAnisotropy` 0.45 → 0.85, `frameRoughness` 0.44 → 0.28.
+  - balanced: `frameAnisotropy` 0.30 → 0.60, `frameRoughness` 0.53 → 0.38.
+  - battery: unchanged (anisotropy=0, roughness=0.60).
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 
   45° miter cut to assign vertices cleanly to one bar.

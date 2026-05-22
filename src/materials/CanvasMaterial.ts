@@ -1,16 +1,17 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 
-// v0.52 — GLSL procedural brushed-metal fragment functions.
-// Now consumes per-vertex bar-local UVs (vFrameUV) computed on the CPU,
-// eliminating the distance-field frmBarBrushCoords() that caused concentric
-// square artifacts at corners.
-// v0.52 fixes: increased grain density (120+ cycles across bar) and domain
-// warp strength to eliminate visible parallel lines; real brushed metal has
-// very fine, dense, irregular grain that reads as a satin sheen.
+// v0.53 — GLSL procedural brushed-metal fragment functions.
+// Root-cause fix: the FBM was varying height in the ACROSS direction (Y),
+// which creates visible parallel ridges no matter the frequency.
+// Real brushed metal is optically flat — the brushed appearance comes
+// entirely from anisotropic specular reflection, not surface bumps.
+// v0.53: height varies only ALONG the bar (X), with negligible Y gradient.
+// Roughness sparkle (fine along-direction variation) handles the grain shimmer.
 const FRAME_FRAG_FUNCTIONS = /* glsl */ `
-// v0.52 brushed-metal procedural normal & roughness
-// Uses vertex-attribute bar coordinates instead of distance-field remapping.
+// v0.53 brushed-metal procedural normal & roughness
+// barUV.x = world-space position along bar length (~-2.2 to 2.2)
+// barUV.y = 0..1 normalized across bar width
 
 uniform float uFrameSeed;
 uniform float uBaseRoughness;
@@ -31,74 +32,72 @@ float frmNoise(vec2 p) {
   );
 }
 
-// Domain-warped aperiodic FBM (Quilez technique)
-// Now takes bar-local coords directly (along, across) from the varying.
-// along = world-space position along bar length (~-2.2 to 2.2)
-// across = normalized 0-1 across bar width
-// For realistic brushed metal: very dense grain across (many fine lines
-// running along brushing direction) with slow variation along.
+// Height varies ONLY along the bar (X direction).
+// Y (across) frequency is kept very low (< 2) so its gradient is negligible
+// and produces no visible horizontal/vertical line ridges.
 float frmBrushedFbm(vec2 barUV) {
-  // Strong domain warp to break up regularity of parallel lines
-  float wx = frmNoise(barUV * vec2(0.7, 3.0) + vec2(15.6,  28.1));
-  float wy = frmNoise(barUV * vec2(0.7, 3.0) + vec2(-67.8, 39.2));
-  float wz = frmNoise(barUV * vec2(1.1, 5.0) + vec2(42.3, -11.7));
-  vec2 q = barUV + (vec2(wx, wy) - 0.5) * vec2(0.04, 0.12) + vec2(0.0, (wz - 0.5) * 0.08);
-
-  // High across-frequency (120+) creates very fine grain lines;
-  // low along-frequency keeps them running smoothly along the bar.
+  // Domain warp in X only to break periodicity along bar
+  float wx = frmNoise(vec2(barUV.x * 0.6 + 15.6, barUV.y * 0.4 + 28.1));
+  float qx = barUV.x + (wx - 0.5) * 0.30;
   float v = 0.0;
-  v += 0.5000 * frmNoise(vec2(q.x * 1.8, q.y * 120.0));
-  v += 0.2500 * frmNoise(vec2(q.x * 3.7, q.y * 243.0) + 1.618);
-  v += 0.1250 * frmNoise(vec2(q.x * 7.3, q.y * 487.0) + 3.141);
-  v += 0.0625 * frmNoise(vec2(q.x * 14.8, q.y * 971.0) + 7.389);
-  v += 0.0312 * frmNoise(vec2(q.x * 29.0, q.y * 1950.0) + 11.31);
+  v += 0.5000 * frmNoise(vec2(qx * 2.5,  barUV.y * 0.7));
+  v += 0.2500 * frmNoise(vec2(qx * 5.1,  barUV.y * 1.4) + 1.618);
+  v += 0.1250 * frmNoise(vec2(qx * 10.3, barUV.y * 2.8) + 3.141);
+  v += 0.0625 * frmNoise(vec2(qx * 20.7, barUV.y * 5.6) + 7.389);
   return v;
 }
 
-// Derivative-aware scratch lines using bar-local coords
-// Scratches are sparse, random, and subtle — they should NOT create
-// visible parallel lines. Only a few isolated deep scratches per bar.
-float frmScratchRow(vec2 barUV, float density, float localSeed) {
-  float row  = floor(barUV.y * density);
-  float rh   = frmHash(row + localSeed * 137.619);
-  // Very sparse: only 1.5% of rows have a scratch (was 3%)
-  if (rh > 0.015) return 0.0;
-  float lineY = (row + 0.22 + rh * 0.56) / density;
+// Fine roughness grain running along the brush direction.
+// High X frequency creates the characteristic shimmer/sparkle of satin metal.
+// Very low Y frequency — no across variation = no lines.
+float frmRoughnessGrain(vec2 barUV, float seed) {
+  float wx = frmNoise(vec2(barUV.x * 1.1 + seed * 13.7, barUV.y * 0.3 + seed * 7.3));
+  float qx = barUV.x + (wx - 0.5) * 0.18;
+  float v = 0.0;
+  v += 0.5000 * frmNoise(vec2(qx * 28.0, barUV.y * 1.5));
+  v += 0.3000 * frmNoise(vec2(qx * 57.0, barUV.y * 3.0) + seed * 0.37);
+  v += 0.2000 * frmNoise(vec2(qx * 115.0, barUV.y * 6.0) + seed * 0.71);
+  return v;
+}
+
+// Sparse isolated scratches: each is a random segment along the bar length.
+// Scratches run ALONG the brush direction (X), not across.
+// Very sparse (< 2% of possible scratch slots) so they never look like a grid.
+float frmScratchLine(vec2 barUV, float density, float localSeed) {
+  // Divide bar into X segments
+  float seg   = floor(barUV.x * density);
+  float sh    = frmHash(seg + localSeed * 137.619);
+  if (sh > 0.018) return 0.0;  // only ~1.8% of segments have a scratch
+  // Random Y position for this scratch within the bar
+  float lineY = 0.1 + frmHash(seg + localSeed * 53.27) * 0.8;
   float dist  = abs(barUV.y - lineY);
   float fw    = fwidth(barUV.y);
-  float width = max(fw * 0.4, 0.0002 + frmHash(row + localSeed * 71.33) * 0.0005);
-  float inten = 0.02 + frmHash(row + localSeed * 23.71) * 0.04;
-  float densityFade = 1.0 - smoothstep(0.55, 1.25, fw * density);
-  float segFreq = 1.80 + density * 0.012;
-  float segCell = floor(barUV.x * segFreq + frmHash(row + localSeed * 19.93) * 2.0);
-  float segAlive = step(frmHash(segCell + row * 7.13 + localSeed * 101.77), 0.50);
-  float segPhase = fract(barUV.x * segFreq);
-  float segShape = smoothstep(0.08, 0.22, segPhase) * (1.0 - smoothstep(0.74, 0.94, segPhase));
-  float xFade = frmNoise(vec2(barUV.x * 0.45, row * 0.38)) * 0.12 + 0.88;
-  return smoothstep(width, 0.0, dist) * inten * xFade * densityFade * segAlive * segShape;
+  float width = max(fw * 0.5, 0.0003 + frmHash(seg + localSeed * 71.33) * 0.0006);
+  float inten = 0.015 + frmHash(seg + localSeed * 23.71) * 0.025;
+  // Scratch is a partial segment (not the full width)
+  float segPhase = fract(barUV.x * density);
+  float shape = smoothstep(0.12, 0.30, segPhase) * (1.0 - smoothstep(0.65, 0.90, segPhase));
+  return smoothstep(width, 0.0, dist) * inten * shape;
 }
 
 float frmScratchLayer(vec2 barUV, float seed) {
-  float fine   = frmScratchRow(barUV, 200.0, seed);
-  float medium = frmScratchRow(barUV, 60.0, seed + 5.11);
-  float deep   = frmScratchRow(barUV, 18.0, seed + 11.37);
-  return clamp(fine * 0.06 + medium * 0.05 + deep * 0.04, 0.0, 0.18);
+  float a = frmScratchLine(barUV,  8.0, seed);
+  float b = frmScratchLine(barUV, 14.0, seed + 5.11);
+  float c = frmScratchLine(barUV, 22.0, seed + 11.37);
+  return clamp(a * 0.06 + b * 0.05 + c * 0.04, 0.0, 0.14);
 }
 
-// Layered normal from FBM grain + scratch impulses
-// Uses small epsilon for the high-frequency grain, produces subtle
-// normal perturbation that creates satin/brushed sheen rather than deep lines.
+// Normal: nearly flat surface with very slight FBM perturbation.
+// The brushed-metal visual effect is provided by the anisotropy parameter,
+// NOT by surface bumps. Keep gradient very small to avoid visible ridges.
 vec3 frmBrushedNormal(vec2 barUV, float seed) {
-  float eps = 0.001;
-  float hg  = frmBrushedFbm(barUV);
-  float hgx = frmBrushedFbm(barUV + vec2(eps, 0.0));
-  float hgy = frmBrushedFbm(barUV + vec2(0.0, eps));
-  float hs  = frmScratchLayer(barUV,                  seed);
-  float hsx = frmScratchLayer(barUV + vec2(eps, 0.0), seed);
-  float hsy = frmScratchLayer(barUV + vec2(0.0, eps), seed);
-  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 0.8;
-  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 0.5;
-  return normalize(vec3(gradG + gradS, 1.0));
+  float eps = 0.010;
+  float h0 = frmBrushedFbm(barUV);
+  float hx = frmBrushedFbm(barUV + vec2(eps, 0.0));
+  float hy = frmBrushedFbm(barUV + vec2(0.0, eps));
+  // 0.08 multiplier = nearly flat; just enough for subtle grain micro-texture
+  vec2 grad = vec2(h0 - hx, h0 - hy) / eps * 0.08;
+  return normalize(vec3(grad, 1.0));
 }
 `;
 
@@ -241,30 +240,33 @@ export class CanvasMaterial {
         FRAME_FRAG_NORMAL_REPLACE
       );
 
-      // 5. Roughness variation using bar-local coords (same space as normal)
+      // 5. Roughness variation: fine grain running along brush direction.
+      // frmRoughnessGrain has high X frequency / low Y frequency = sparkle, no lines.
+      // Scratches deepen roughness very slightly where they exist.
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <roughnessmap_fragment>',
-         `float roughnessFactor = uBaseRoughness
-            + frmBrushedFbm(vFrameUV) * 0.014
-            - frmScratchLayer(vFrameUV, uFrameSeed) * 0.007
-            + 0.018;
-          roughnessFactor = clamp(roughnessFactor, 0.38, 0.72);`
+         `float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
+          float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
+          float roughnessFactor = uBaseRoughness
+            + (roughnessGrain - 0.5) * 0.030
+            + roughnessScratch * 0.015;
+          roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);`
       );
 
       console.debug('[CanvasMaterial] frame-shader-compiled', {
-        version: 'v0.52',
+        version: 'v0.53',
         preset: preset.id,
         seed,
         frameRoughness: preset.frameRoughness,
         frameAnisotropy: preset.frameAnisotropy,
         frameClearcoat: preset.frameClearcoat,
         coordinateMode: 'vertex-attribute-barUV',
-        domainWarp: true,
-        scratchLayer: true,
+        normalApproach: 'nearly-flat-along-only',
+        roughnessGrain: 'along-direction-sparkle',
       });
     };
     // Unique cache key per artwork seed so Three.js compiles distinct programs.
-    material.customProgramCacheKey = () => `frame-v0.52-${seed}`;
+    material.customProgramCacheKey = () => `frame-v0.53-${seed}`;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;
@@ -299,10 +301,10 @@ export class CanvasMaterial {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _frameBounds: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
   ): void {
-    // v0.52: No-op. Frame coordinates are now baked into the geometry attribute
+    // v0.53: No-op. Frame coordinates are now baked into the geometry attribute
     // (aFrameUV) and no longer depend on runtime uniforms. The geometry itself
     // is rebuilt when aspect changes, which regenerates the attribute.
-    console.debug('[CanvasMaterial] frame-geometry-uniforms-noop (v0.52 attribute-based)');
+    console.debug('[CanvasMaterial] frame-geometry-uniforms-noop (v0.53 attribute-based)');
   }
 
   dispose(): void {
