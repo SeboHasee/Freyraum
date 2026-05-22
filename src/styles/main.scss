@@ -1101,14 +1101,6 @@ button {
   }
 }
 
-// v0.25 U-01: flex order ensures prev is first child, no explicit left offset needed
-.timeline__arrow--prev {
-}
-
-// v0.25 U-01: next arrow order is natural after list; no explicit right offset needed
-.timeline__arrow--next {
-}
-
 // v0.25 U-04: counter is the last flex child in the timeline row — no longer
 // absolutely positioned, sits naturally at the tail of the flex container.
 .timeline__counter {

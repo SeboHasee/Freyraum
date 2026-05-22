@@ -854,10 +854,26 @@ async function main(): Promise<void> {
     batchCap: warmProfile.postRevealBatchCap,
   });
 
-  // v0.25 T-05/T-02: Drain 3 consecutive RAF frames between warm-loop end and
-  // shader prewarm so the GPU fully flushes its upload queue before the next
-  // phase begins and CTA cannot activate while the GPU is still working.
-  await rafDrain(3);
+  // v0.25 T-05/T-02/T-06: Drain 3 consecutive RAF frames between warm-loop end
+  // and shader prewarm so the GPU fully flushes its upload queue before the
+  // next phase begins and CTA cannot activate while the GPU is still working.
+  // Emit start/complete diagnostics with duration for release validation.
+  const warmFlushFrames = 3;
+  const warmFlushStart = performance.now();
+  diagnostics.info('boot', 'gpu-warm-flush-start', 'Starting post-warm GPU drain frames before shader prewarm', {
+    frames: warmFlushFrames,
+    artworkCount,
+    pendingCount: fullReadinessSummary.pendingCount,
+    preloadMode: fullReadinessSummary.preloadMode,
+  });
+  await rafDrain(warmFlushFrames);
+  diagnostics.info('boot', 'gpu-warm-flush-complete', 'Post-warm GPU drain frames completed', {
+    frames: warmFlushFrames,
+    durationMs: performance.now() - warmFlushStart,
+    artworkCount,
+    pendingCount: fullReadinessSummary.pendingCount,
+    preloadMode: fullReadinessSummary.preloadMode,
+  });
 
   loadingOverlay.setStatus('Shader werden vorbereitet');
   loadingOverlay.setProgress(97);

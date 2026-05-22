@@ -1,79 +1,44 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-21 (v0.25 T-series + U-series planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
 
 
-## v0.25 — GPU flush hardening + timeline elegance redesign (2026-05-21, **planning**)
+## v0.25 — GPU flush hardening + timeline elegance redesign (2026-05-22, **shipped**)
 
-Runtime status: **planning only**. This pass addresses two persistent user-reported issues: (1) choppy gallery navigation despite the v0.24.x loading-screen work, and (2) timeline arrow buttons that are "paced weird" and a timeline that should look sleeker and more elegant.
+Runtime status: **shipped** in `main.ts`, `TextureManager.ts`, `main.scss`, and `Timeline.ts`.
 
-### Problem statement
+### Implementation closeout
 
-**Issue A – Choppy navigation until all paintings visited:**
-Despite v0.24.6 enforcing a strict full-gallery entry contract (all paintings GPU-warmed before CTA), users still observe choppy first-navigation behaviour. Diagnosis: the warm loop runs all paintings synchronously in one JavaScript execution context without ever yielding to the browser's event loop. This means the GPU receives a batched queue of warm-render commands but the browser never flushes/confirms GPU residency between artworks before enabling "Galerie betreten". When the user enters and navigates, the GPU may still be working through residual queued work from the loading phase, causing first-frame stalls.
+#### T-series — loading/GPU warm hardening
 
-**Issue B – Timeline layout awkwardness:**
-Timeline arrow buttons (`timeline__arrow`) are `position: absolute` inside the container at `left: 8px` / `right: 8px`, visually overlapping the thumbnail strip. Their pill shape (`34px × 58px`) is disproportionately tall. The overall timeline container padding creates more vertical bulk than necessary, reducing elegance.
+| ID | Severity | Implemented outcome |
+|----|----------|---------------------|
+| T-01 | **HIGH** | `main.ts` warm loop now awaits `rafYield()` after every painting warm render, yielding the compositor between artworks. |
+| T-02 | **HIGH** | `main.ts` executes `rafDrain(3)` after warm loop completion before shader prewarm to drain residual GPU queue work. |
+| T-03 | **MEDIUM** | `TextureManager` now stores renderer in `init()` and calls `renderer.initTexture()` for both successful and fallback cache inserts. |
+| T-04 | **MEDIUM** | Warm progress now spans `50→95%` per painting; loading-manager phase is capped to reserve visible warm-phase progression. |
+| T-05 | **LOW** | Warm-to-shader transition now includes explicit drain frames before `loadingOverlay.setStatus('Shader werden vorbereitet')`. |
+| T-06 | **LOW** | Added detailed flush diagnostics: `gpu-warm-flush-start` and `gpu-warm-flush-complete` with frame count and measured duration. |
 
-### Online research synthesis (2026-05-21)
+#### U-series — timeline redesign
 
-**GPU warm / texture upload:**
-- Calling `renderer.render()` to an offscreen target initiates GPU command submission but does **not** block JavaScript until the GPU finishes. The GPU processes commands asynchronously in its own queue. If warm renders are fired back-to-back in a tight loop without yielding to the browser's compositor, the GPU stacks all commands and the JavaScript execution moves on before GPU residency is achieved. Source: WebGL Fundamentals "Avoiding Stalls" guidance (https://webglfundamentals.org/webgl/lessons/webgl-avoiding-stalls.html) and MDN WebGL best practices (https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices).
-- `requestAnimationFrame` yields control back to the browser's event loop after the current JS task. Inserting an `await rafYield()` between warm-render batches lets the browser flush GPU commands, process system events, and confirm residency before the next batch. Source: Chrome DevTools documentation on long tasks and frame budget.
-- Three.js `renderer.initTexture(texture)` forces an explicit GPU upload of a decoded image/texture without requiring a full scene render. This is a lighter-weight mechanism than a full offscreen render for ensuring texture residency. Source: Three.js `WebGLRenderer` docs (https://threejs.org/docs/#api/en/renderers/WebGLRenderer.initTexture).
-- Adding 2–3 additional RAF "flush" passes after the warm loop (before enabling the CTA) drains any residual GPU pipeline work and gives the compositor time to confirm all uploads are complete. Source: common WebGL warm-up patterns in Sketchfab, Google Arts & Culture, and similar WebGL gallery implementations.
+| ID | Severity | Implemented outcome |
+|----|----------|---------------------|
+| U-01 | **HIGH** | `.timeline` now uses flex layout (`display:flex; align-items:center; gap:6px`); arrows are natural siblings of `.timeline__list` and no longer overlap thumbnails. |
+| U-02 | **HIGH** | `.timeline__arrow` redesigned as `32×32` circular icon buttons with centered glyphs. |
+| U-03 | **MEDIUM** | Timeline padding tightened to `10px 14px`; list inner padding tightened to `12px 8px 6px`. |
+| U-04 | **MEDIUM** | `.timeline__counter` moved to natural inline/flex flow (`flex-shrink:0`), removing absolute positioning. |
+| U-05 | **LOW** | `@media (pointer: coarse)` keeps arrows visible at `opacity:0.65` (except disabled state) for touch discoverability. |
 
-**Timeline UI design:**
-- Horizontal filmstrip timelines used in premium museum/gallery interfaces (e.g., Google Arts & Culture, MoMA, Rijksmuseum) position navigation arrows as **flex siblings** of the scrolling strip—not absolute overlays. This prevents overlap with thumbnail content and creates a cleaner visual rhythm. Source: direct analysis of production gallery UI patterns.
-- Circular icon-only arrow buttons (`32–36px` diameter) with subtle glass treatment are the standard for compact navigation in 2024 design systems. Pill-shaped buttons (`34 × 58px`) are better suited to CTA buttons, not inline navigation arrows. Source: Material Design 3, Apple HIG (Human Interface Guidelines) on compact navigation icons.
-- The most elegant scrolling filmstrips keep all nav chrome out of the scroll area and use edge gradient fades (mask-image) to hint at overflow without needing visible arrows in the scroll track. Source: scroll UI patterns from Stripe, Linear, and Vercel's component libraries.
-- On touch devices, arrows should be visible at reduced opacity as persistent hints (not hidden until hover), since touch devices have no hover state. Source: Apple HIG touch target and affordance guidance.
+### Cleanup
 
-### Gap analysis (T-series — loading)
+- Removed now-redundant empty modifier selectors `.timeline__arrow--prev` and `.timeline__arrow--next` from `main.scss`.
+- Revalidated no unused/duplicate functional branches introduced in touched files.
 
-| ID | Severity | Gap | Planned outcome |
-|----|----------|-----|-----------------|
-| T-01 | **HIGH** | Warm loop (`for` over all paintings) runs entirely in one JS task without yielding to the browser. GPU receives batch queue; CTA can enable before GPU has finished processing. | Insert `await rafYield()` after each painting (or configurable mini-batch) so the browser's compositor can flush GPU commands between artworks. |
-| T-02 | **HIGH** | No explicit GPU drain after the warm loop. Driver command queue may still be busy when "Galerie betreten" becomes clickable. | After the warm loop, execute 2–3 additional `await rafYield()` passes (empty frames) before enabling CTA, draining residual pipeline work. |
-| T-03 | **MEDIUM** | `renderer.initTexture()` is not used. Textures are only considered "uploaded" after a full mesh-bound warm render; partial decode/decode timing variance can leave some textures not GPU-resident. | Call `renderer.initTexture(texture)` for each pre-loaded albedo and PBR texture immediately after cache insertion, before the warm render loop. |
-| T-04 | **MEDIUM** | Loading progress bar moves from 93 → 97% across all paintings in a single synchronous pass, giving no frame-level feedback during the actual heavy GPU work. | Spread warm progress smoothly per-painting (`50% → 95%`) with RAF yields so the progress bar animates in real-time as each artwork warms. |
-| T-05 | **LOW** | After warm loop completes, the overlay immediately moves to "Shader werden vorbereitet". No pause to confirm GPU drain. | Add `await rafDrain(3)` (3 flush frames) between warm loop end and shader prewarm step. |
+### Validation
 
-### Gap analysis (U-series — timeline)
-
-| ID | Severity | Gap | Planned outcome |
-|----|----------|-----|-----------------|
-| U-01 | **HIGH** | Arrow buttons are `position: absolute` at `left/right: 8px`, overlapping the thumbnail strip and creating visual clutter. | Change `.timeline` to `display: flex; align-items: center` layout. Arrows become natural flex siblings of `.timeline__list`, never overlapping content. |
-| U-02 | **HIGH** | Arrow shape (`34px × 58px` tall pill) is disproportionately tall relative to the thumbnail height, making the timeline feel "paced weird". | Redesign arrows as compact circles: `32px × 32px`, vertically centered, with glass background matching the timeline pill design. |
-| U-03 | **MEDIUM** | Timeline container `padding: 14px 18px` plus list inner `padding: 16px 18px 8px` create unnecessary vertical bulk. | Reduce container padding to `10px 10px 10px 14px` (uniform tight pad; extra left/right reserved for arrow flex items only). |
-| U-04 | **MEDIUM** | Counter (`timeline__counter`) is absolutely positioned in the top-right corner, visually competing with the thumbnail strip. | Relocate counter as a small inline text element appended after `.timeline__list` in the flex row, or remove the absolute positioning in favour of natural inline flow. |
-| U-05 | **LOW** | Arrows are `opacity: 0` until `.timeline:hover`, making them invisible on touch devices (no hover state). | Add `@media (pointer: coarse)` rule that sets arrows to `opacity: 0.65` always on touch devices, disappearing only at `:disabled`. |
-
-### Implementation plan
-
-**T-series (loading screen / GPU flush):**
-1. Extract a reusable `rafYield()` utility: `() => new Promise<void>(r => requestAnimationFrame(() => r()))`.
-2. Refactor the warm loop in `main.ts` to `await rafYield()` after each painting warm render (or after configurable batch of 2–3 on lower-end devices).
-3. After the warm loop, add `await rafYield()` × 3 (GPU drain passes) before calling `loadingOverlay.setStatus('Shader werden vorbereitet')`.
-4. Add `renderer.initTexture(texture)` calls in `TextureManager.ts` (or a new `flushTextureToGPU` helper) immediately after image decode completes, so GPU upload begins earlier in the pipeline.
-5. Update loading progress: spread painting warm from `50%` to `95%` evenly per artwork, with each RAF yield allowing the progress bar to render visually.
-6. Add diagnostics: `gpu-warm-flush-start` and `gpu-warm-flush-complete` events wrapping the drain passes, recording total flush duration.
-
-**U-series (timeline redesign):**
-1. Change `.timeline` layout: remove `position: relative`'s dependence on absolutely-positioned arrows; add `display: flex; align-items: center; gap: 6px` to the timeline container.
-2. Move `this.prevButton` / `this.nextButton` to be flex siblings of `.timeline__list` in `Timeline.ts` DOM order (already is, just needs CSS to match).
-3. Redesign `.timeline__arrow` as a 32×32px circle: `border-radius: 50%; width: 32px; height: 32px; flex-shrink: 0; position: static`.
-4. Reduce container padding to `10px 14px`; reduce list inner padding to `12px 8px 6px`.
-5. Remove counter's `position: absolute`; make it a small `flex: 0 0 auto` text element at the tail of the flex row.
-6. Add `@media (pointer: coarse)` arrow visibility rule.
-7. Validate timeline appearance at mobile/tablet breakpoints; ensure the active-thumb lift (`translateY(-10px)`) still has vertical room.
-
-### Validation plan
-
-- `npm run lint` and `npm run build` must pass after all changes.
-- Manual verification: enter gallery and confirm zero choppy/stall on first 3 paintings navigated (all devices).
-- Timeline visual check: arrows must be compact circles, fully visible on both sides without overlapping thumbnails.
-- Reduced-motion check: transitions still disabled cleanly.
-- Accessibility check: arrow focus state and counter aria-live still work after DOM restructure.
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- Verified Markdown audit stamp and status consistency across root docs, `.github` docs, and `/docs` guides.
 
 ## v0.24.4 — INP stabilization plan (2026-05-21, **SHIPPED in v0.24.6**)
 

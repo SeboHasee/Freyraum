@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Last full markdown audit: 2026-05-21 (v0.24.4 local-metrics evidence + INP stabilization planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
 
 
 ## v0.23 — Performance/Preloading Planning Audit

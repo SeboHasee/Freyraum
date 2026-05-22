@@ -1,18 +1,20 @@
 # Freyraum
-> Last full markdown audit: 2026-05-21 (v0.25 T-series + U-series planning pass; all Markdown files refreshed).
+> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
 
 
-## v0.25 — GPU warm flush hardening + timeline redesign (2026-05-21, planning)
+## v0.25 — GPU warm flush hardening + timeline redesign (2026-05-22, shipped)
 
-**Status: planning/documentation only; runtime remains v0.24.6.**
+**Status: shipped in runtime code.**
 
-Two persistent issues root-caused and planned:
+v0.25 is now fully implemented and validated:
 
-1. **Choppy navigation (T-series)**: The v0.24.6 warm loop fires all painting warm renders back-to-back in one JS task with no `requestAnimationFrame` yield. The GPU receives a batched command queue and may still be draining when "Galerie betreten" activates. Fix: per-painting `rafYield()` in the warm loop, 3-frame GPU drain pass before CTA, and proactive `renderer.initTexture()` upload for all pre-loaded textures.
+1. **Choppy navigation fix (T-series):** warm loop now yields one RAF per painting (`rafYield()`), GPU drain uses 3-frame flush (`rafDrain(3)`), proactive `renderer.initTexture()` upload is enabled for loaded/fallback textures, and loading progress is visibly spread across `50%→95%`. Added detailed drain diagnostics: `gpu-warm-flush-start` and `gpu-warm-flush-complete` with measured duration.
 
-2. **Timeline layout (U-series)**: Arrow buttons are `position: absolute`, overlapping the thumbnail strip. Their pill shape (`34 × 58px`) is too tall for compact navigation. Fix: flex-sibling arrows, `32 × 32px` circular buttons, tighter overall padding, inline counter, touch-device arrow visibility.
+2. **Timeline elegance redesign (U-series):** arrows are now compact `32 × 32px` circular flex siblings (no absolute overlap), counter is inline at the row tail, spacing is tightened, and touch devices keep arrows visible at `opacity: 0.65`.
 
-See `plan.md § v0.25` for the full T-series and U-series gap analysis and implementation plan, and `FINDINGS.md § v0.25` for source-evidence and online research citations.
+3. **Cleanup:** removed redundant empty timeline arrow modifier CSS blocks and revalidated no functional regressions.
+
+See `plan.md § v0.25` for the full implementation closeout and `FINDINGS.md § v0.25` for as-built evidence.
 
 ## v0.24.6 — True preload completion + INP stabilization (2026-05-21, shipped)
 

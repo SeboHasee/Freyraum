@@ -1,8 +1,8 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-21 (v0.25 T-series + U-series shipped).
+> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
 
 
-## v0.25 — GPU warm flush hardening + timeline elegance redesign (2026-05-21, **shipped**)
+## v0.25 — GPU warm flush hardening + timeline elegance redesign (2026-05-22, **shipped**)
 
 ### Summary
 
@@ -20,6 +20,7 @@ Two persistent user-reported issues fixed:
 - **`main.ts`** (warm loop): `await rafYield()` after each `warmArtwork()` call so the browser compositor flushes GPU commands between paintings (T-01).
 - **`main.ts`** (warm loop progress): range changed from `93%→97%` to `50%→95%`; loading-manager texture-phase caps lowered accordingly (`onProgress` → 48 %, `onLoad` → 50 %) so the warm loop has visible room to animate (T-04).
 - **`main.ts`** (post-warm drain): `await rafDrain(3)` inserted between warm-loop end and shader prewarm step, draining the GPU upload queue before the next phase and before "Galerie betreten" is enabled (T-02, T-05).
+- **`main.ts`** (flush diagnostics): added `gpu-warm-flush-start` and `gpu-warm-flush-complete` diagnostics around `rafDrain(3)` with frame count and measured flush duration in ms (T-06).
 - **`TextureManager.ts`** (`init`): renderer reference now stored as `this.renderer` (T-03).
 - **`TextureManager.ts`** (`loadForRole`): `this.renderer?.initTexture(texture)` called immediately after every successful or fallback texture cache insertion to proactively upload the texture to the GPU (T-03).
 
@@ -28,7 +29,7 @@ Two persistent user-reported issues fixed:
 - **`main.scss`** (`.timeline`): `display: flex; align-items: center; gap: 6px` added so arrows and counter are natural flex row siblings; padding reduced to `10px 14px` (U-01, U-03).
 - **`main.scss`** (`.timeline__list`): `flex: 1 1 0; min-width: 0` added so the list fills available space between the arrows; padding reduced to `12px 8px 6px` (U-01, U-03).
 - **`main.scss`** (`.timeline__arrow`): `position: absolute` removed; resized to `32 × 32 px`; `border-radius: 50%`; `display: flex; align-items: center; justify-content: center` for glyph centering (U-01, U-02).
-- **`main.scss`** (`.timeline__arrow--prev`, `--next`): removed redundant `left`/`right` offsets (no longer needed after flex layout) (U-01).
+- **`main.scss`** (`.timeline__arrow--prev`, `--next`): removed redundant absolute-position offset logic and cleaned up now-empty modifier blocks (U-01 cleanup).
 - **`main.scss`** (`.timeline__counter`): `position: absolute` removed; `flex-shrink: 0` added; counter now sits at the tail of the flex row (U-04).
 - **`main.scss`** (`@media (pointer: coarse)`): new rule in `.timeline__arrow` shows arrows at `opacity: 0.65` always on touch/stylus devices so they are discoverable without hover (U-05).
 
