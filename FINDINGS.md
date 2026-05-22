@@ -1,6 +1,28 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
 
+
+## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, shipped)
+
+### Status
+
+Runtime shipped. Loading overlay centering/motion refinements and strict all-artwork preload startup contract are implemented.
+
+### As-built evidence
+
+| ID | Source | Finding |
+|----|--------|---------|
+| V-01 | `src/gallery/GalleryManager.ts` | `FULL_PRELOAD_SAFETY_CAP` now uses `Number.MAX_SAFE_INTEGER`, effectively disabling bounded fallback in normal runtime operation. |
+| V-02 | `src/gallery/GalleryManager.ts` | `getFullGalleryReadinessSummary()` now always reports strict preload mode (`memoryCapApplied: false`, `preloadMode: 'strict'`, `overflowArtworkCount: 0`). |
+| V-03 | `src/main.ts` | Loading particles now carry per-instance `--particle-delay`, `--particle-drift-x`, `--particle-drift-y` values. |
+| V-04 | `src/styles/main.scss` | `.loading-particle` runs layered `loading-float` + `loading-pulse` keyframes with staggered delay and drift-variable motion. |
+| V-05 | `src/styles/main.scss` | `.loading-wordmark` now centers with explicit block layout and no text-indent drift offset. |
+| V-06 | `src/main.ts` | Ready-state hint now says `Alle Inhalte sind vollständig vorbereitet.` to match strict preload contract. |
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.25 — GPU warm flush hardening + timeline elegance redesign (2026-05-22, shipped)
 

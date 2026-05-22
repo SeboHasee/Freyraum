@@ -1,6 +1,27 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
 
+
+## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, **shipped**)
+
+### Summary
+
+Loading screen polish and startup smoothness were refined so branding is centered, particles remain visibly animated, and startup preload stays in strict all-artworks mode before entry.
+
+### Changed
+
+- **`src/gallery/GalleryManager.ts`**: `FULL_PRELOAD_SAFETY_CAP` is now `Number.MAX_SAFE_INTEGER`, keeping full-startup preload in strict mode for normal galleries and preventing bounded fallback behavior.
+- **`src/gallery/GalleryManager.ts`** (`getFullGalleryReadinessSummary`): reports strict-mode preload summary (`memoryCapApplied: false`, `preloadMode: 'strict'`, `overflowArtworkCount: 0`) to align with the new all-artworks preload contract.
+- **`src/main.ts`** (`createLoadingOverlay`): particle config expanded with per-particle delay and drift vectors to drive richer overlay motion.
+- **`src/main.ts`** (`reveal`): final hint copy now confirms full readiness (`Alle Inhalte sind vollständig vorbereitet.`).
+- **`src/styles/main.scss`** (`.loading-wordmark`): removed indent drift and enforced explicit centered block layout.
+- **`src/styles/main.scss`** (`.loading-particle`): added multi-track animation (float + pulse), staggered delays, and drift-variable keyframes for continuously animated particles.
+- **Markdown docs**: audit banner and top status references refreshed for v0.26 across repository Markdown files.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.25 — GPU warm flush hardening + timeline elegance redesign (2026-05-22, **shipped**)
 

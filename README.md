@@ -1,6 +1,19 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
 
+
+## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, shipped)
+
+**Status: shipped in runtime code.**
+
+v0.26 is now fully implemented and validated:
+
+1. **Strict startup preload for smooth entry:** full-startup preload cap now uses `Number.MAX_SAFE_INTEGER`, keeping startup in strict full-gallery preload mode for normal runtime usage so entry does not depend on bounded fallback behavior.
+2. **Centered loading branding:** loading wordmark centering was corrected by removing indent drift and enforcing a centered block layout.
+3. **Animated particles:** loading particles now run layered float + pulse animations with independent drift vectors and staggered delays for visibly active motion.
+4. **Ready-state truthfulness:** CTA-ready hint now explicitly states full preparation (`Alle Inhalte sind vollständig vorbereitet.`).
+
+See `plan.md § v0.26` for implementation closeout and `FINDINGS.md § v0.26` for as-built evidence.
 
 ## v0.25 — GPU warm flush hardening + timeline redesign (2026-05-22, shipped)
 

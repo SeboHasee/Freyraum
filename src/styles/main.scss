@@ -1242,11 +1242,16 @@ button {
 }
 
 .loading-wordmark {
+  display: block;
+  width: 100%;
+  margin: 0 auto;
   font-size: clamp(36px, 9vw, 58px);
   line-height: 0.95;
   font-weight: 700;
   letter-spacing: 0.18em;
-  text-indent: 0.18em;
+  text-align: center;
+  text-indent: 0;
+  padding-left: 0.18em;
 }
 
 .loading-subtitle {
@@ -1340,7 +1345,12 @@ button {
   border-radius: 50%;
   background: radial-gradient(circle, var(--particle-color, rgba(181, 154, 106, 0.12)) 0%, transparent 68%);
   filter: blur(2px);
-  animation: loading-float var(--particle-duration, 8s) ease-in-out infinite alternate;
+  opacity: 0.7;
+  will-change: transform, opacity;
+  animation:
+    loading-float var(--particle-duration, 8s) ease-in-out infinite alternate,
+    loading-pulse calc(var(--particle-duration, 8s) * 0.85) ease-in-out infinite;
+  animation-delay: var(--particle-delay, 0s), var(--particle-delay, 0s);
 }
 
 .webgl-restore-status {
@@ -1365,8 +1375,13 @@ button {
 }
 
 @keyframes loading-float {
-  from { transform: translate3d(-12px, 8px, 0) scale(0.96); }
-  to { transform: translate3d(14px, -16px, 0) scale(1.08); }
+  from { transform: translate3d(calc(var(--particle-drift-x, 16px) * -1), calc(var(--particle-drift-y, -16px) * -1), 0) scale(0.94); }
+  to { transform: translate3d(var(--particle-drift-x, 16px), var(--particle-drift-y, -16px), 0) scale(1.08); }
+}
+
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 0.95; }
 }
 
 // =============================================================================

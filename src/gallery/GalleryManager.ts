@@ -114,13 +114,12 @@ const NAV_SEED_SCALE = 0.88;
 const MAX_SMOOTHING_DT = 0.1;
 
 /**
- * v0.24.2 Q-01: Hard safety cap for full-gallery PBR preload under the loading
- * overlay. All artworks up to this index will have their authored texture sets
- * loaded before "Galerie betreten" is enabled, guaranteeing zero cold paths
- * on first navigation. Artworks beyond this cap (extreme galleries) fall back
- * to the idle prefetch sweep. Raised from the former PBR_PRELOAD_LIMIT of 15.
+ * v0.26 V-01: Full-startup preload target now covers every artwork so the
+ * loading overlay resolves only after all authored texture sets are prepared.
+ * Keep this at MAX_SAFE_INTEGER to preserve existing cap-aware logic branches
+ * while effectively disabling bounded fallback for normal gallery sizes.
  */
-const FULL_PRELOAD_SAFETY_CAP = 50;
+const FULL_PRELOAD_SAFETY_CAP = Number.MAX_SAFE_INTEGER;
 
 /** Roles that can be filled in by the procedural factory when no authored map exists. */
 const PROCEDURAL_ROLES: PaintingMapRole[] = [
@@ -790,7 +789,7 @@ export class GalleryManager {
     const fullyReadyCount = r.filter(
       (e) => e.albedoLoaded && e.pbrLoaded && e.proceduralReady && e.materialApplied && e.shaderCompiled && e.gpuWarmed
     ).length;
-    const overflowArtworkCount = Math.max(0, this.artworks.length - FULL_PRELOAD_SAFETY_CAP);
+    const overflowArtworkCount = 0;
     const unresolvedArtworkIds = r
       .filter((e) => !(e.albedoLoaded && e.pbrLoaded && e.proceduralReady && e.materialApplied && e.shaderCompiled && e.gpuWarmed))
       .map((e) => e.artworkId);
@@ -801,8 +800,8 @@ export class GalleryManager {
       gpuWarmedCount: r.filter((e) => e.gpuWarmed).length,
       pbrLoadedCount: r.filter((e) => e.pbrLoaded).length,
       proceduralReadyCount: r.filter((e) => e.proceduralReady).length,
-      memoryCapApplied: this.artworks.length > FULL_PRELOAD_SAFETY_CAP,
-      preloadMode: overflowArtworkCount > 0 ? 'bounded-fallback' : 'strict',
+      memoryCapApplied: false,
+      preloadMode: 'strict',
       unresolvedArtworkIds,
       overflowArtworkCount,
     };

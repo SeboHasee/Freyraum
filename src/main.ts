@@ -287,15 +287,15 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   overlay.setAttribute('aria-live', 'polite');
   overlay.setAttribute('aria-label', 'Galerie wird geladen');
 
-  const particles = [
-    ['12%', '18%', '180px', 'rgba(181, 154, 106, 0.12)', '8s'],
-    ['78%', '14%', '220px', 'rgba(200, 214, 229, 0.10)', '10s'],
-    ['18%', '76%', '260px', 'rgba(200, 214, 229, 0.08)', '12s'],
-    ['82%', '72%', '190px', 'rgba(181, 154, 106, 0.10)', '9s'],
-    ['50%', '8%', '150px', 'rgba(181, 154, 106, 0.08)', '11s'],
-    ['48%', '92%', '210px', 'rgba(200, 214, 229, 0.07)', '13s'],
+  const particles: Array<[string, string, string, string, string, string, string, string]> = [
+    ['12%', '18%', '180px', 'rgba(181, 154, 106, 0.14)', '8s', '0s', '20px', '-24px'],
+    ['78%', '14%', '220px', 'rgba(200, 214, 229, 0.11)', '10s', '-1.4s', '-18px', '26px'],
+    ['18%', '76%', '260px', 'rgba(200, 214, 229, 0.10)', '12s', '-2.6s', '24px', '-18px'],
+    ['82%', '72%', '190px', 'rgba(181, 154, 106, 0.11)', '9s', '-0.8s', '-20px', '-16px'],
+    ['50%', '8%', '150px', 'rgba(181, 154, 106, 0.09)', '11s', '-3.2s', '16px', '22px'],
+    ['48%', '92%', '210px', 'rgba(200, 214, 229, 0.08)', '13s', '-2.1s', '-22px', '-20px'],
   ];
-  particles.forEach(([x, y, size, color, duration]) => {
+  particles.forEach(([x, y, size, color, duration, delay, driftX, driftY]) => {
     const particle = document.createElement('span');
     particle.className = 'loading-particle';
     particle.setAttribute('aria-hidden', 'true');
@@ -304,6 +304,9 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
     particle.style.setProperty('--particle-size', size);
     particle.style.setProperty('--particle-color', color);
     particle.style.setProperty('--particle-duration', duration);
+    particle.style.setProperty('--particle-delay', delay);
+    particle.style.setProperty('--particle-drift-x', driftX);
+    particle.style.setProperty('--particle-drift-y', driftY);
     overlay.appendChild(particle);
   });
 
@@ -357,7 +360,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
       startButton.disabled = false;
       startButton.classList.add('is-visible');
       subtitle.textContent = 'Galerie bereit — zum Starten klicken';
-      hint.textContent = 'Alle Kunstwerke sind vorbereitet.';
+      hint.textContent = 'Alle Inhalte sind vollständig vorbereitet.';
       overlay.setAttribute('aria-label', 'Galerie bereit — zum Starten klicken');
       return new Promise<void>((resolve) => {
         let entered = false;

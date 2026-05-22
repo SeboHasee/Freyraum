@@ -1,6 +1,27 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
 
+
+## v0.26 — Loading overlay centering + full-preload strictness (2026-05-22, **shipped**)
+
+Runtime status: **shipped** in `main.ts`, `GalleryManager.ts`, and `main.scss`.
+
+### Implementation closeout
+
+#### V-series — loading experience and smoothness uplift
+
+| ID | Severity | Implemented outcome |
+|----|----------|---------------------|
+| V-01 | **HIGH** | Full-startup preload cap switched to `Number.MAX_SAFE_INTEGER`, keeping startup in strict mode so all authored artwork texture sets are prepared before entry. |
+| V-02 | **HIGH** | Loading overlay branding centering refined: `.loading-wordmark` now uses explicit centered block layout without offset indent drift. |
+| V-03 | **MEDIUM** | Loading particles upgraded with independent drift vectors, phase delays, and pulse opacity animation for continuously visible motion. |
+| V-04 | **MEDIUM** | Overlay readiness copy now states full preparation (`Alle Inhalte sind vollständig vorbereitet.`) once CTA unlocks. |
+| V-05 | **LOW** | Repository Markdown status references refreshed for v0.26 rollout and full-audit consistency. |
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.25 — GPU flush hardening + timeline elegance redesign (2026-05-22, **shipped**)
 

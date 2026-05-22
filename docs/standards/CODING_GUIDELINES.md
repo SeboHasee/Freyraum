@@ -1,5 +1,5 @@
 # FREYRAUM coding guidelines
-> Last full markdown audit: 2026-05-22 (v0.25 implementation + deep documentation refresh; all Markdown files revalidated).
+> Last full markdown audit: 2026-05-22 (v0.26 loading overlay refinement + strict preload update; all Markdown files revalidated).
 
 
 ## v0.23 performance coding guideline
