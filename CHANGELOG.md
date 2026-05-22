@@ -1,6 +1,6 @@
 # CHANGELOG
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.53 shipped: flat-normal redesign, roughness grain, higher anisotropy).
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
 
 ## v0.56.1 — merge-ready markdown synchronization (2026-05-22, **shipped**)
 
