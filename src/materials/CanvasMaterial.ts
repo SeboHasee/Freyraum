@@ -81,9 +81,9 @@ vec3 frmBrushedNormal(vec2 uv, float seed) {
 `;
 
 // Replaces #include <normal_fragment_maps> — computes procedural normal and
-// transforms it from tangent space to view space using the vTBN varying
-// (present because the frame geometry has tangent attributes and the material
-// has a normalMap set, enabling USE_TANGENT in the compiled shader).
+// transforms it from tangent space to view space using Three.js r166's local
+// tbn matrix (created because the frame geometry has tangent attributes and
+// the material has a normalMap set, enabling USE_TANGENT in the shader).
 const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
 {
   vec3 proceduralN = frmBrushedNormal(vUv, uFrameSeed);
