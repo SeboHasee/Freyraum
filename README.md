@@ -1,5 +1,15 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+
+## v0.39 — frame alignment + metal detail refinement (2026-05-22, **shipped**)
+
+Current status: **shipped**.
+
+- Frame geometry is now rebuilt per artwork aspect so the inner opening stays aligned with each painting size.
+- Paintings are now seated slightly behind the frame front plane so they no longer visually sit on top of the frame.
+- Frame metal finish now includes both brushed normal variation and a dedicated roughness detail map for a more realistic metallic surface response.
+
+See `plan.md § v0.39` and `FINDINGS.md § v0.39` for scope, implementation notes, and validation.
 
 ## v0.29 — realistic metallic PBR frame (2026-05-22, **shipped**)
 

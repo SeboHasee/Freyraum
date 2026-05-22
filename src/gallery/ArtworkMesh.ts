@@ -25,6 +25,10 @@ export class ArtworkMesh {
   readonly material: PaintingMaterial;
   private readonly frameMaterial: THREE.MeshPhysicalMaterial;
   private readonly canvasMaterial: CanvasMaterial;
+  private readonly frameBorder = 0.2;
+  private readonly frameDepth = 0.28;
+  private readonly frameInnerClearance = 0.02;
+  private readonly artworkInset = 0.016;
   private _artworkAspect = 1;
   private _artworkWidth = 4;
   private _artworkHeight = 5.7;
@@ -45,7 +49,7 @@ export class ArtworkMesh {
     this.currentSegments = preset.artworkSegments;
     this.currentFrameBevelEnabled = preset.frameBevelEnabled;
 
-    const frameGeo = this.makeFrameGeometry(this.currentFrameBevelEnabled);
+    const frameGeo = this.makeFrameGeometry(this.currentFrameBevelEnabled, this._artworkWidth, this._artworkHeight);
     this.frameMaterial = this.canvasMaterial.createFrameMaterial(preset);
     this.frameMesh = new THREE.Mesh(frameGeo, this.frameMaterial);
     this.group.add(this.frameMesh);
@@ -53,7 +57,7 @@ export class ArtworkMesh {
     const artGeo = this.makeArtworkGeometry(this.currentSegments);
     this.material = new PaintingMaterial(preset);
     this.artworkMesh = new THREE.Mesh(artGeo, this.material);
-    this.artworkMesh.position.z = 0.145;
+    this.artworkMesh.position.z = -this.artworkInset;
     this.group.add(this.artworkMesh);
 
     scene.add(this.group);
@@ -76,14 +80,18 @@ export class ArtworkMesh {
     return geo;
   }
 
-  private makeFrameGeometry(bevelEnabled: boolean): THREE.BufferGeometry {
-    if (!bevelEnabled) return new THREE.BoxGeometry(4.4, 6.2, 0.28);
+  private makeFrameGeometry(bevelEnabled: boolean, artworkWidth: number, artworkHeight: number): THREE.BufferGeometry {
+    const outerW = artworkWidth + this.frameBorder * 2;
+    const outerH = artworkHeight + this.frameBorder * 2;
+    const innerW = artworkWidth + this.frameInnerClearance;
+    const innerH = artworkHeight + this.frameInnerClearance;
+    if (!bevelEnabled) {
+      const geometry = new THREE.BoxGeometry(outerW, outerH, this.frameDepth);
+      geometry.translate(0, 0, -this.frameDepth / 2);
+      return geometry;
+    }
 
     const shape = new THREE.Shape();
-    const outerW = 4.4;
-    const outerH = 6.2;
-    const innerW = 4.0;
-    const innerH = 5.8;
     shape.moveTo(-outerW / 2, -outerH / 2);
     shape.lineTo(outerW / 2, -outerH / 2);
     shape.lineTo(outerW / 2, outerH / 2);
@@ -98,7 +106,7 @@ export class ArtworkMesh {
     hole.closePath();
     shape.holes.push(hole);
 
-    const depth = 0.28;
+    const depth = this.frameDepth;
     const geometry = new THREE.ExtrudeGeometry(shape, {
       depth,
       bevelEnabled: true,
@@ -110,6 +118,12 @@ export class ArtworkMesh {
     return geometry;
   }
 
+  private replaceFrameGeometry(bevelEnabled: boolean): void {
+    const oldGeo = this.frameMesh.geometry;
+    this.frameMesh.geometry = this.makeFrameGeometry(bevelEnabled, this._artworkWidth, this._artworkHeight);
+    oldGeo.dispose();
+  }
+
   private applyFramePreset(preset: QualityPreset): void {
     this.frameMaterial.roughness = preset.frameRoughness;
     this.frameMaterial.clearcoat = preset.frameClearcoat;
@@ -119,10 +133,8 @@ export class ArtworkMesh {
 
   private ensureFrameGeometryForPreset(preset: QualityPreset): void {
     if (preset.frameBevelEnabled === this.currentFrameBevelEnabled) return;
-    const oldGeo = this.frameMesh.geometry;
     this.currentFrameBevelEnabled = preset.frameBevelEnabled;
-    this.frameMesh.geometry = this.makeFrameGeometry(this.currentFrameBevelEnabled);
-    oldGeo.dispose();
+    this.replaceFrameGeometry(this.currentFrameBevelEnabled);
   }
 
   applyPreset(preset: QualityPreset): void {
@@ -181,9 +193,7 @@ export class ArtworkMesh {
 
     this.artworkMesh.scale.set(width / 4.0, height / 5.7, 1);
 
-    const frameW = width + 0.4;
-    const frameH = height + 0.4;
-    this.frameMesh.scale.set(frameW / 4.4, frameH / 6.2, 1);
+    this.replaceFrameGeometry(this.currentFrameBevelEnabled);
 
     // v0.08: expose aspect computation for diagnostics in GalleryManager.
     this._lastAspectSource = aspectSource;

@@ -4,6 +4,7 @@ import type { QualityPreset } from '../config/quality';
 export class CanvasMaterial {
   private normalTexture: THREE.Texture | null = null;
   private frameNormalTexture: THREE.Texture | null = null;
+  private frameRoughnessTexture: THREE.Texture | null = null;
 
   async loadNormalTexture(): Promise<THREE.Texture> {
     if (this.normalTexture) return this.normalTexture;
@@ -77,7 +78,7 @@ export class CanvasMaterial {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
         const groove = Math.sin(x * frequency) * amplitude;
-        const noise = (Math.random() - 0.5) * 4;
+        const noise = (Math.sin(x * 0.23 + y * 0.91) + Math.cos(x * 1.31 - y * 0.37)) * 1.5;
         data[idx + 0] = 128;
         data[idx + 1] = Math.max(0, Math.min(255, Math.round(128 + groove + noise)));
         data[idx + 2] = 255;
@@ -95,11 +96,41 @@ export class CanvasMaterial {
     return texture;
   }
 
+  private getFrameRoughnessTexture(): THREE.Texture {
+    if (this.frameRoughnessTexture) return this.frameRoughnessTexture;
+
+    const size = 128;
+    const data = new Uint8Array(size * size * 4);
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const idx = (y * size + x) * 4;
+        const brushedBand = Math.sin(x * 0.42) * 14;
+        const microNoise = Math.sin(x * 1.73 + y * 0.19) * 4 + Math.cos(x * 0.13 - y * 1.11) * 3;
+        const roughness = Math.max(0, Math.min(255, Math.round(170 + brushedBand + microNoise)));
+        data[idx + 0] = roughness;
+        data[idx + 1] = roughness;
+        data[idx + 2] = roughness;
+        data[idx + 3] = 255;
+      }
+    }
+
+    const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    texture.colorSpace = THREE.LinearSRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(12, 1);
+    texture.needsUpdate = true;
+    this.frameRoughnessTexture = texture;
+    return texture;
+  }
+
   createFrameMaterial(preset: QualityPreset): THREE.MeshPhysicalMaterial {
     const frameNormal = this.getFrameNormalTexture();
+    const frameRoughness = this.getFrameRoughnessTexture();
     return new THREE.MeshPhysicalMaterial({
       color: 0xe8eaeb,
       roughness: preset.frameRoughness,
+      roughnessMap: frameRoughness,
       metalness: 1.0,
       clearcoat: preset.frameClearcoat,
       clearcoatRoughness: 0.2,
@@ -113,5 +144,6 @@ export class CanvasMaterial {
   dispose(): void {
     this.normalTexture?.dispose();
     this.frameNormalTexture?.dispose();
+    this.frameRoughnessTexture?.dispose();
   }
 }

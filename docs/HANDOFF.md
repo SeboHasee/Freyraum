@@ -1,5 +1,5 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
 
 ## v0.29 — handoff status: realistic metallic frame pass is shipped (2026-05-22)
 

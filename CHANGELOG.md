@@ -1,5 +1,25 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+
+## v0.39 — frame alignment + metal detail refinement (2026-05-22, **shipped**)
+
+### Status
+
+Runtime implementation shipped.
+
+### Changed
+
+- **`src/gallery/ArtworkMesh.ts`:** Reworked frame geometry sizing to be artwork-aspect-aware at geometry build time instead of post-scale distortion.
+- **`src/gallery/ArtworkMesh.ts`:** Paintings are now inset behind the frame front face to prevent the “painting sits on top of frame” look.
+- **`src/materials/CanvasMaterial.ts`:** Added deterministic brushed roughness detail map and applied it as `roughnessMap` to frame material for richer metallic micro-surface response.
+- **`src/materials/CanvasMaterial.ts`:** Refined frame normal microvariation generator to deterministic directional detail.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.29 — realistic metallic PBR frame (2026-05-22, **shipped**)
 

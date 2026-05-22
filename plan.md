@@ -1,5 +1,29 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+
+## v0.39 — frame alignment + metal detail refinement — IMPLEMENTATION CLOSEOUT (2026-05-22, shipped)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+Some frames are not correctly aligned with paintings, so parts of the painting visually sit over frame edges. The frame also needs richer realistic metal detail.
+
+### Delivered scope
+
+| ID | Area | Outcome |
+|----|------|---------|
+| A-01 | `ArtworkMesh` frame sizing | Frame geometry now uses current artwork dimensions directly, avoiding scaling mismatch artifacts. |
+| A-02 | `ArtworkMesh` depth alignment | Painting plane is inset behind the frame front surface so the frame reads in front of the artwork. |
+| M-09 | `CanvasMaterial` frame roughness detail | Added procedural brushed roughness texture and applied it to frame `roughnessMap`. |
+| M-10 | `CanvasMaterial` deterministic micro normal | Replaced random normal noise with deterministic directional variation for stable brushed-metal detail. |
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.29 — realistic metallic PBR frame — IMPLEMENTATION CLOSEOUT (2026-05-22, shipped)
 

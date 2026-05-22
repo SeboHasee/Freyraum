@@ -1,5 +1,30 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+
+## v0.39 — frame alignment + metal detail refinement (2026-05-22, **shipped**)
+
+### Status
+
+Shipped in runtime code and validated.
+
+### Findings addressed
+
+- **F-ALN-01 (alignment drift):** Frame opening fit was based on fixed base dimensions plus mesh scaling; for some aspect ranges this produced subtle mismatch where painting edges visually overrode frame edges.
+- **F-ALN-02 (depth ordering):** Painting plane sat in front of the frame front plane, creating a clear “paint on top of frame” artifact.
+- **F-MTL-01 (microdetail realism):** Frame used a brushed normal map only; roughness response stayed too uniform and less realistic under changing light/view angles.
+
+### As-built evidence
+
+- `src/gallery/ArtworkMesh.ts`: frame geometry now derives outer/inner dimensions from current artwork width/height and is rebuilt when aspect changes.
+- `src/gallery/ArtworkMesh.ts`: artwork mesh z-offset now seats canvas slightly behind the frame front plane.
+- `src/materials/CanvasMaterial.ts`: added `getFrameRoughnessTexture()` and wired `roughnessMap` into frame material.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.29 — realistic metallic PBR frame — IMPLEMENTATION FINDINGS (2026-05-22, **shipped**)
 
