@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 
-// v0.46 — GLSL procedural brushed-metal fragment functions.
+// v0.47 — GLSL procedural brushed-metal fragment functions.
 // Prepended to shader.fragmentShader in onBeforeCompile so they are available
 // in all injection sites below.
 const FRAME_FRAG_FUNCTIONS = /* glsl */ `
-// v0.46 brushed-metal procedural normal & roughness
+// v0.47 brushed-metal procedural normal & roughness
 // Sources:
 //   Inigo Quilez, iquilezles.org/articles/fbm/ (domain warping, irrational FBM)
 //   Khronos GLSL ES 3.00 spec §8.14 (fwidth — WebGL2 built-in, Three.js r152+)
@@ -30,44 +30,55 @@ float frmNoise(vec2 p) {
   );
 }
 
+// Approximates local bar direction on a rectangular ring:
+// x = along bar length, y = across bar width.
+vec2 frmBarBrushCoords(vec2 p) {
+  float side = step(abs(p.y), abs(p.x));
+  float along = mix(p.x, p.y, side);
+  float across = mix(p.y, p.x, side);
+  return vec2(along, across);
+}
+
 // Domain-warped aperiodic FBM (Quilez technique)
 float frmBrushedFbm(vec2 p) {
-  float wx = frmNoise(p * 0.35 + vec2(15.6,  28.1));
-  float wy = frmNoise(p * 0.35 + vec2(-67.8, 39.2));
-  p += (vec2(wx, wy) - 0.5) * 0.22;
+  vec2 q = frmBarBrushCoords(p);
+  float wx = frmNoise(q * 0.20 + vec2(15.6,  28.1));
+  float wy = frmNoise(q * 0.20 + vec2(-67.8, 39.2));
+  q += (vec2(wx, wy) - 0.5) * 0.10;
   float v = 0.0;
-  v += 0.5000 * frmNoise(vec2(p.x * 2.800, p.y * 18.000));
-  v += 0.2500 * frmNoise(vec2(p.x * 5.639, p.y * 36.341) + 1.618);
-  v += 0.1250 * frmNoise(vec2(p.x * 11.277, p.y * 71.093) + 3.141);
-  v += 0.0625 * frmNoise(vec2(p.x * 22.907, p.y * 139.777) + 7.389);
+  v += 0.5000 * frmNoise(vec2(q.x * 0.550, q.y * 14.000));
+  v += 0.2500 * frmNoise(vec2(q.x * 1.103, q.y * 28.173) + 1.618);
+  v += 0.1250 * frmNoise(vec2(q.x * 2.211, q.y * 56.114) + 3.141);
+  v += 0.0625 * frmNoise(vec2(q.x * 4.428, q.y * 112.417) + 7.389);
   return v;
 }
 
 // Derivative-aware scratch lines (fwidth: GLSL ES 3.0, WebGL2 built-in)
 float frmScratchRow(vec2 p, float density, float localSeed) {
-  float row  = floor(p.y * density);
+  vec2 q = frmBarBrushCoords(p);
+  float row  = floor(q.y * density);
   float rh   = frmHash(row + localSeed * 137.619);
-  if (rh > 0.09) return 0.0;
+  if (rh > 0.035) return 0.0;
   float lineY = (row + 0.22 + rh * 0.56) / density;
-  float dist  = abs(p.y - lineY);
-  float fw    = fwidth(p.y);
-  float width = max(fw * 0.75, 0.0009 + frmHash(row + localSeed * 71.33) * 0.0018);
-  float inten = 0.18 + frmHash(row + localSeed * 23.71) * 0.42;
+  float dist  = abs(q.y - lineY);
+  float fw    = fwidth(q.y);
+  float width = max(fw * 0.65, 0.0006 + frmHash(row + localSeed * 71.33) * 0.0012);
+  float inten = 0.06 + frmHash(row + localSeed * 23.71) * 0.11;
   float densityFade = 1.0 - smoothstep(0.55, 1.25, fw * density);
-  float segFreq = 1.2 + density * 0.012;
-  float segCell = floor(p.x * segFreq + frmHash(row + localSeed * 19.93) * 2.0);
+  float segFreq = 0.75 + density * 0.004;
+  float segCell = floor(q.x * segFreq + frmHash(row + localSeed * 19.93) * 2.0);
   float segAlive = step(frmHash(segCell + row * 7.13 + localSeed * 101.77), 0.66);
-  float segPhase = fract(p.x * segFreq);
+  float segPhase = fract(q.x * segFreq);
   float segShape = smoothstep(0.02, 0.18, segPhase) * (1.0 - smoothstep(0.78, 0.96, segPhase));
-  float xFade = frmNoise(vec2(p.x * 0.33, row * 0.45)) * 0.35 + 0.65;
+  float xFade = frmNoise(vec2(q.x * 0.20, row * 0.38)) * 0.22 + 0.78;
   return smoothstep(width, 0.0, dist) * inten * xFade * densityFade * segAlive * segShape;
 }
 
 float frmScratchLayer(vec2 p, float seed) {
-  float fine   = frmScratchRow(p, 86.0, seed);
-  float medium = frmScratchRow(p, 24.0, seed + 5.11);
-  float deep   = frmScratchRow(p,  4.5, seed + 11.37);
-  return clamp(fine * 0.16 + medium * 0.30 + deep * 0.22, 0.0, 1.0);
+  float fine   = frmScratchRow(p, 48.0, seed);
+  float medium = frmScratchRow(p, 18.0, seed + 5.11);
+  float deep   = frmScratchRow(p,  5.0, seed + 11.37);
+  return clamp(fine * 0.10 + medium * 0.14 + deep * 0.10, 0.0, 0.45);
 }
 
 // Layered normal: FBM grain + scratch impulses, eps=0.004 for close-view sharpness
@@ -79,8 +90,8 @@ vec3 frmBrushedNormal(vec2 p, float seed) {
   float hs  = frmScratchLayer(p,                  seed);
   float hsx = frmScratchLayer(p + vec2(eps, 0.0), seed);
   float hsy = frmScratchLayer(p + vec2(0.0, eps), seed);
-  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 4.1;
-  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 2.8;
+  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 2.2;
+  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 1.4;
   return normalize(vec3(gradG + gradS, 1.0));
 }
 `;
@@ -188,15 +199,15 @@ export class CanvasMaterial {
     };
 
     const material = new THREE.MeshPhysicalMaterial({
-      color: 0xe8eaeb,
+      color: 0xd6d8db,
       roughness: preset.frameRoughness,
       metalness: 1.0,
       clearcoat: preset.frameClearcoat,
-      clearcoatRoughness: 0.2,
+      clearcoatRoughness: 0.28,
       anisotropy: preset.frameAnisotropy,
       anisotropyRotation: Math.PI / 2,
       normalMap: flatNormal,
-      normalScale: new THREE.Vector2(0.30, 0.30),
+      normalScale: new THREE.Vector2(0.18, 0.18),
     });
 
     material.onBeforeCompile = (shader) => {
@@ -223,27 +234,28 @@ export class CanvasMaterial {
       // 5. Roughness variation using object-space position
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <roughnessmap_fragment>',
-        `float roughnessFactor = uBaseRoughness
-           + frmBrushedFbm(vFrameLocalPos.xy * vec2(0.75, 1.15) + uFrameSeed * 0.31) * 0.035
-           - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.018
-           - 0.01;
-         roughnessFactor = clamp(roughnessFactor, 0.24, 0.68);`
+         `float roughnessFactor = uBaseRoughness
+           + frmBrushedFbm(vFrameLocalPos.xy * vec2(0.82, 1.08) + uFrameSeed * 0.27) * 0.018
+           - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.009
+           + 0.026;
+         roughnessFactor = clamp(roughnessFactor, 0.34, 0.78);`
       );
 
       console.debug('[CanvasMaterial] frame-shader-compiled', {
-        version: 'v0.46',
+        version: 'v0.47',
         preset: preset.id,
         seed,
         frameRoughness: preset.frameRoughness,
         frameAnisotropy: preset.frameAnisotropy,
         frameClearcoat: preset.frameClearcoat,
         domainWarp: true,
+        barBrushCoords: true,
         scratchLayer: true,
         eps: 0.004,
       });
     };
     // Unique cache key per artwork seed so Three.js compiles distinct programs.
-    material.customProgramCacheKey = () => `frame-v0.46-${seed}`;
+    material.customProgramCacheKey = () => `frame-v0.47-${seed}`;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;

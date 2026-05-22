@@ -175,10 +175,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.46: slightly wider satin spread to suppress harsh zebra highlights.
-    frameRoughness: 0.38,
-    frameAnisotropy: 0.60,
-    frameClearcoat: 0.12,
+    // v0.47: elegant satin-metal retune for modern gallery framing.
+    frameRoughness: 0.44,
+    frameAnisotropy: 0.45,
+    frameClearcoat: 0.10,
     frameBevelEnabled: true,
   },
   balanced: {
@@ -218,10 +218,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.46: slightly rougher mid-tier satin spread.
-    frameRoughness: 0.47,
-    frameAnisotropy: 0.50,
-    frameClearcoat: 0.10,
+    // v0.47: softer directional response with reduced specular harshness.
+    frameRoughness: 0.53,
+    frameAnisotropy: 0.30,
+    frameClearcoat: 0.08,
     frameBevelEnabled: true,
   },
   battery: {
@@ -260,8 +260,8 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.46: matte satin with reduced band contrast.
-    frameRoughness: 0.54,
+    // v0.47: matte gallery-safe fallback for low-power hardware.
+    frameRoughness: 0.60,
     frameAnisotropy: 0.0,
     frameClearcoat: 0.0,
     frameBevelEnabled: false,
