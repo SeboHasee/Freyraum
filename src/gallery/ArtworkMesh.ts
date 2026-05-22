@@ -244,6 +244,7 @@ export class ArtworkMesh {
     this.frameMaterial.roughness = preset.frameRoughness;
     this.frameMaterial.clearcoat = preset.frameClearcoat;
     this.frameMaterial.anisotropy = preset.frameAnisotropy;
+    this.canvasMaterial.refreshFramePresetUniforms(this.frameMaterial, preset);
     this.frameMaterial.needsUpdate = true;
   }
 

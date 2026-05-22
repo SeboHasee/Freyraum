@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 
+type FrameShaderUniforms = {
+  uFrameSeed: { value: number };
+  uBaseRoughness: { value: number };
+};
+
 // v0.53 — GLSL procedural brushed-metal fragment functions.
 // Root-cause fix: the FBM was varying height in the ACROSS direction (Y),
 // which creates visible parallel ridges no matter the frequency.
@@ -202,7 +207,7 @@ export class CanvasMaterial {
     this.frameFlatNormal?.dispose();
     this.frameFlatNormal = flatNormal;
 
-    const uniforms = {
+    const uniforms: FrameShaderUniforms = {
       uFrameSeed:     { value: seed * 0.00390625 },
       uBaseRoughness: { value: preset.frameRoughness },
     };
@@ -287,12 +292,20 @@ export class CanvasMaterial {
    * next frame.
    */
   refreshFrameUniforms(material: THREE.MeshPhysicalMaterial, seed: number): void {
-    const u = material.userData.frameUniforms as
-      | { uFrameSeed: { value: number } }
-      | undefined;
+    const u = material.userData.frameUniforms as FrameShaderUniforms | undefined;
     if (!u) return;
     u.uFrameSeed.value = seed * 0.00390625;
     console.debug('[CanvasMaterial] frame-uniforms-refreshed', { seed });
+  }
+
+  refreshFramePresetUniforms(material: THREE.MeshPhysicalMaterial, preset: QualityPreset): void {
+    const u = material.userData.frameUniforms as FrameShaderUniforms | undefined;
+    if (!u) return;
+    u.uBaseRoughness.value = preset.frameRoughness;
+    console.debug('[CanvasMaterial] frame-preset-uniforms-refreshed', {
+      preset: preset.id,
+      frameRoughness: preset.frameRoughness,
+    });
   }
 
   refreshFrameGeometryUniforms(
