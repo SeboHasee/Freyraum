@@ -89,6 +89,79 @@ interface WarmProfile {
   postRevealBatchCap: number;
 }
 
+interface UiPrewarmResult {
+  elementsMeasured: number;
+  temporarilyOpenedPanels: number;
+}
+
+function rendererSizeSnapshot(renderer: THREE.WebGLRenderer): { width: number; height: number; pixelRatio: number } {
+  const size = new THREE.Vector2();
+  renderer.getSize(size);
+  return {
+    width: size.x,
+    height: size.y,
+    pixelRatio: renderer.getPixelRatio(),
+  };
+}
+
+function prewarmInteractiveChrome(
+  app: HTMLElement,
+  diagnostics: ReturnType<typeof getDiagnostics>
+): UiPrewarmResult {
+  const selectors = [
+    '.topbar',
+    '.info-panel',
+    '.nav-controls',
+    '.nav-btn',
+    '.zoom-controls',
+    '.zoom-btn',
+    '.prefs',
+    '.prefs__trigger',
+    '.timeline',
+    '.timeline__arrow',
+    '.timeline__counter',
+    '.timeline__thumb',
+    '.audio-controls',
+    '.audio-controls button',
+    '.fullscreen-btn',
+  ];
+  let elementsMeasured = 0;
+  for (const selector of selectors) {
+    app.querySelectorAll<HTMLElement>(selector).forEach((el) => {
+      void el.offsetWidth;
+      void el.offsetHeight;
+      void el.getBoundingClientRect();
+      void getComputedStyle(el).opacity;
+      elementsMeasured += 1;
+    });
+  }
+
+  let temporarilyOpenedPanels = 0;
+  const prefsPanel = app.querySelector<HTMLElement>('.prefs__panel');
+  if (prefsPanel?.hidden) {
+    prefsPanel.hidden = false;
+    prefsPanel.style.visibility = 'hidden';
+    prefsPanel.style.pointerEvents = 'none';
+    void prefsPanel.offsetHeight;
+    prefsPanel.querySelectorAll<HTMLElement>('input, label, fieldset, legend, h2, p').forEach((el) => {
+      void el.offsetHeight;
+      void getComputedStyle(el).fontSize;
+      elementsMeasured += 1;
+    });
+    prefsPanel.hidden = true;
+    prefsPanel.style.removeProperty('visibility');
+    prefsPanel.style.removeProperty('pointer-events');
+    temporarilyOpenedPanels += 1;
+  }
+
+  diagnostics.info('boot', 'ui-prebuild-complete', 'Interactive chrome prebuilt under loading overlay', {
+    elementsMeasured,
+    temporarilyOpenedPanels,
+  });
+
+  return { elementsMeasured, temporarilyOpenedPanels };
+}
+
 function deriveWarmProfile(caps: DeviceCapabilities, artworkCount: number): WarmProfile {
   const isPhone =
     caps.layoutTier === 'phone-small' ||
@@ -802,6 +875,20 @@ async function main(): Promise<void> {
     galleryManager.markGpuWarmed(index, performance.now() - start, reason);
     return true;
   };
+  const warmArtworkFinalPath = (index: number, reason: string): boolean => {
+    const start = performance.now();
+    if (!galleryManager.warmArtworkForGPU(index, reason)) return false;
+    postProcessing.render();
+    galleryManager.markGpuWarmed(index, performance.now() - start, reason);
+    diagnostics.debug('boot', 'artwork-final-path-warm', 'Artwork rendered through final post-processing path under loading overlay', {
+      index,
+      artworkId: artworks[index]?.id,
+      reason,
+      durationMs: Math.round((performance.now() - start) * 10) / 10,
+      renderer: rendererSizeSnapshot(rendererManager.renderer),
+    });
+    return true;
+  };
   const warmOrder = galleryManager.getBudgetedWarmOrder(0);
 
   // v0.24.2 Q-01/Q-02: Enforce strict all-paintings-ready contract before CTA.
@@ -930,6 +1017,33 @@ async function main(): Promise<void> {
   postProcessing.prewarmComposer(ppSize.x, ppSize.y);
   diagnostics.info('boot', 'composer-prewarm-complete', 'EffectComposer shader prewarm complete');
   await rafDrain(1);
+
+  loadingOverlay.setStatus('Finale Darstellung wird vorbereitet');
+  loadingOverlay.setProgress(98);
+  const finalPathStart = performance.now();
+  let finalPathWarmed = 0;
+  for (let i = 0; i < fullWarmTargets.length; i += 1) {
+    if (warmArtworkFinalPath(fullWarmTargets[i], 'overlay-final-path-warm')) finalPathWarmed += 1;
+    await rafYield();
+  }
+  warmArtworkFinalPath(galleryManager.index, 'restore-active-after-final-path-warm');
+  diagnostics.info('boot', 'all-artworks-final-path-warmed', 'All artworks rendered through final post-processing path under loading overlay', {
+    artworkCount,
+    warmed: finalPathWarmed,
+    targetCount: fullWarmTargets.length,
+    durationMs: Math.round((performance.now() - finalPathStart) * 10) / 10,
+    renderer: rendererSizeSnapshot(rendererManager.renderer),
+  });
+
+  loadingOverlay.setStatus('Bedienelemente werden vorbereitet');
+  const timelinePrewarm = await timeline.prewarmUnderOverlay();
+  const uiPrewarm = prewarmInteractiveChrome(app, diagnostics);
+  diagnostics.info('boot', 'entry-prebuild-complete', 'Main page, controls, timeline, and final render path are prebuilt under loading overlay', {
+    timeline: timelinePrewarm,
+    ui: uiPrewarm,
+    artworkCount,
+  });
+
   loadingOverlay.setProgress(100);
   // v0.24.3 R-04 / v0.27 W-05: Align status text with actual preload contract.
   // Strict mode: all artworks fully prepared before entry.
@@ -941,14 +1055,8 @@ async function main(): Promise<void> {
   }
   rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
   rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
-  // v0.28 X-02 fix: the render loop must start AFTER `animate` is defined
-  // (line ~1351). The original X-02 scheduled rAF here, but `animate` is only
-  // assigned after `await loadingOverlay.reveal()` resolves — so the first
-  // frame would call undefined, crashing the loop. The canvas then permanently
-  // shows the 4×4 prewarmComposer output stretched to fill the viewport.
-  // RAF is now scheduled immediately after `animate` is assigned below.
-  await loadingOverlay.reveal();
-  loadingOverlay.dispose();
+  // v0.29 Y-01/Y-02: reveal is intentionally delayed until after the real RAF
+  // loop is defined, started, and observed presenting full-size frames below.
   // v0.24.2: All artworks were warmed pre-reveal, so warmCursor starts at warmOrder.length.
   // continueWarmQueue exits immediately and disposes the render target.
   let warmCursor = warmOrder.length;
@@ -1391,8 +1499,34 @@ async function main(): Promise<void> {
     postProcessing.render();
   };
 
-  // v0.28 X-02 fix — start the render loop now that `animate` is defined.
+  // v0.29 Y-01/Y-02 — start the real production render loop while the loading
+  // overlay is still opaque and before the enter CTA can be clicked.
   rafId = requestAnimationFrame(animate);
+  diagnostics.info('boot', 'pre-entry-raf-start', 'Production RAF started under loading overlay before entry CTA', {
+    artworkCount,
+    renderer: rendererSizeSnapshot(rendererManager.renderer),
+  });
+  await rafYield();
+  diagnostics.info('boot', 'first-full-frame-rendered', 'First full-size production frame rendered under loading overlay', {
+    activeArtwork: artworks[galleryManager.index]?.id,
+    renderer: rendererSizeSnapshot(rendererManager.renderer),
+  });
+  await rafYield();
+  diagnostics.info('boot', 'second-full-frame-presented', 'Second full-size production frame presented under loading overlay; entry CTA may now be enabled', {
+    activeArtwork: artworks[galleryManager.index]?.id,
+    renderer: rendererSizeSnapshot(rendererManager.renderer),
+  });
+  diagnostics.info('boot', 'entry-cta-enabled', 'Loading screen readiness gate complete; enabling entry CTA', {
+    artworkCount,
+    pendingCount: fullReadinessSummary.pendingCount,
+    finalPathWarmed,
+    timelinePrewarm,
+    uiPrewarm,
+    renderer: rendererSizeSnapshot(rendererManager.renderer),
+  });
+
+  await loadingOverlay.reveal();
+  loadingOverlay.dispose();
 
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {

@@ -323,6 +323,44 @@ export class Timeline {
     }
   }
 
+  async prewarmUnderOverlay(): Promise<{ thumbsReady: number; imagesDecoded: number; imagesFailed: number }> {
+    const decodePromises: Array<Promise<'decoded' | 'failed'>> = [];
+    for (let i = 0; i < this.artworks.length; i += 1) {
+      const thumb = this.ensureThumb(i);
+      if (!thumb) continue;
+      const img = thumb.querySelector<HTMLImageElement>('.timeline__img');
+      if (!img) continue;
+      img.loading = 'eager';
+      void thumb.offsetWidth;
+      void thumb.getBoundingClientRect();
+      if (typeof img.decode === 'function') {
+        decodePromises.push(img.decode().then(() => 'decoded' as const).catch(() => 'failed' as const));
+      }
+    }
+    void this.el.offsetHeight;
+    void this.listEl.scrollWidth;
+    void getComputedStyle(this.el).opacity;
+    const decoded = await Promise.allSettled(decodePromises);
+    let imagesDecoded = 0;
+    let imagesFailed = 0;
+    decoded.forEach((result) => {
+      if (result.status === 'fulfilled' && result.value === 'decoded') imagesDecoded += 1;
+      else imagesFailed += 1;
+    });
+    this.updateScrollState();
+    this.diagnostics.info('timeline', 'prewarm-under-overlay', 'Timeline DOM and thumbnail images prebuilt under loading overlay', {
+      thumbsReady: this.thumbs.filter(Boolean).length,
+      imagesDecoded,
+      imagesFailed,
+      virtualized: this.virtualized,
+    });
+    return {
+      thumbsReady: this.thumbs.filter(Boolean).length,
+      imagesDecoded,
+      imagesFailed,
+    };
+  }
+
   onSelect(cb: (index: number) => void): void {
     this.onSelectCallback = cb;
   }

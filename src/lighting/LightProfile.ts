@@ -164,7 +164,10 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
   },
 };
 
-export const DEFAULT_LIGHT_PROFILE: LightProfileId = 'gallery-soft';
+// v0.29 Y-05: default to the objective, daylight-balanced profile so
+// first-time visitors see paintings as close to the source artwork as the
+// current PBR material allows. Warmer/dramatic profiles remain selectable.
+export const DEFAULT_LIGHT_PROFILE: LightProfileId = 'museum-neutral';
 
 export function getLightProfile(id: LightProfileId): LightProfile {
   return LIGHT_PROFILES[id] ?? LIGHT_PROFILES[DEFAULT_LIGHT_PROFILE];
