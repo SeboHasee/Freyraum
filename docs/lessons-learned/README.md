@@ -1,5 +1,9 @@
 # Lessons learned docs
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## v0.45 lesson index update
+
+See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.45 frame realism planning lessons` for the key rules: no visible cadence after GLSL migration, derivative-aware scratch primitives for close zoom, and verifying Three.js shader variable names against installed shader chunks.
 
 ## v0.29 lesson index update
 

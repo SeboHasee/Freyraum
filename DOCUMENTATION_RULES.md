@@ -1,5 +1,9 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## v0.45 documentation pass
+
+- 2026-05-22 (documentation): v0.45 frame realism research plan documented. Scope is planned only: zero visible frame tiling/repetition, sharper derivative-aware scratches, continuous frame-space procedural coordinates, slightly higher roughness/lower shine, and Three.js r166 `tbn` compatibility. No runtime code changed in this pass.
 
 ## v0.40 documentation pass
 

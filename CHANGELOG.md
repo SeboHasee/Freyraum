@@ -1,5 +1,30 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection brushed-metal; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## v0.45 — zero-visible-tiling brushed-metal research plan (2026-05-22, **planned / docs-only**)
+
+### Status
+
+Planning and research documentation only. No runtime shader/material code changed in this pass.
+
+### Requested target
+
+- Remove all visible tiles, repeated scratch clusters, regular bands, and procedural cadence from the frame.
+- Make close-zoom detail sharper, more pronounced, and more realistic/high-resolution.
+- Make the metal slightly rougher / less shiny while retaining brushed anisotropic character.
+
+### Documentation changes
+
+- Added detailed v0.45 plan in `plan.md`.
+- Added research findings in `FINDINGS.md`.
+- Updated README, architecture, handoff, lessons, and documentation status notes with the planned/current-state boundary.
+- Corrected docs to use Three.js r166's local `tbn` matrix naming rather than outdated `vTBN` language.
+
+### Validation
+
+- Documentation-only validation: `git diff --check`.
+
+---
 
 ## v0.44 — GLSL shader-injection brushed-metal (2026-05-22, **shipped**)
 
@@ -24,7 +49,7 @@ The frame still showed visible horizontal banding (6–8 regular light/dark stri
 | S-03 | `src/materials/CanvasMaterial.ts` | Removed `makeFrameNormalTexture`, `makeFrameRoughnessTexture`, `latticeHash`, `valueNoise2d`, `scratchHeight` private methods. Removed `frameNormalTexture`, `frameRoughnessTexture` fields. Removed `roughnessMap` from material constructor. |
 | S-04 | `src/materials/CanvasMaterial.ts` | Replaced `refreshFrameTextures()` with `refreshFrameUniforms(material, seed)` — updates only the `uFrameSeed` float uniform; no texture disposal or re-upload. |
 | S-05 | `src/gallery/ArtworkMesh.ts` | `updateFrameSeed()` now calls `refreshFrameUniforms` instead of `refreshFrameTextures`. Removed unused `currentPreset` field. |
-| S-06 | `src/gallery/ArtworkMesh.ts` | `makeFrameGeometry()` now calls `geometry.computeTangents()` so `USE_TANGENT` is defined in the compiled shader and `vTBN` is a varying available for the GLSL injection. |
+| S-06 | `src/gallery/ArtworkMesh.ts` | `makeFrameGeometry()` now calls `geometry.computeTangents()` so `USE_TANGENT` is defined in the compiled shader and local `tbn` matrix is available available for the GLSL injection. |
 
 ### Validation
 

@@ -1,5 +1,11 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## v0.45 planned frame-material architecture note
+
+The next frame-quality pass should treat procedural frame surfacing as a shader-owned subsystem inside `CanvasMaterial`: continuous frame-space coordinates, aperiodic multi-domain grain, derivative-aware scratch primitives, roughness modulation, and compile diagnostics. Preset policy remains in `quality.ts`; geometry/tangent ownership remains in `ArtworkMesh`.
+
+Important boundary: Three.js r166 creates a local `tbn` matrix in the fragment shader. Any future `onBeforeCompile` normal replacement must use `tbn`, not `vTBN`.
 
 ## v0.40 planned frame-texture architecture note
 

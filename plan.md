@@ -1,5 +1,152 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection brushed-metal; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## v0.45 — zero-visible-tiling high-resolution brushed-metal frame (2026-05-22, **planned / docs-only**)
+
+Runtime status: **planned only**. This pass documents the next implementation target; it does **not** claim the runtime already has zero visible tiling. Current runtime remains the v0.44 GLSL frame path plus the v0.44.1 shader-name hotfix (`tbn`, not `vTBN`).
+
+### Goal
+
+Make the metallic frame read as premium high-resolution brushed metal at normal distance and during close zoom:
+
+1. **Zero visible tiles or repeating cadence** — no horizontal bands, no grid/cell boundaries, no repeating scratch clusters, no repeated dark/light waves on side or bottom bars.
+2. **Sharper, more pronounced, realistic detail** — individual scratches and micro-abrasions stay crisp at close zoom, but remain anti-aliased and stable during movement.
+3. **Slightly rougher / less shiny finish** — reduce the chrome-like highlight while keeping directional brushed-metal anisotropy.
+4. **No texture-memory regression** — keep the frame procedural in GLSL; do not return to repeating DataTextures.
+
+### Non-goals
+
+- Do not change painting color management, tone mapping, bloom, or artwork material response.
+- Do not introduce external runtime texture assets for the frame unless a later authored-material option is explicitly approved.
+- Do not weaken the v0.44.1 frame visibility fix; the shader must use Three.js r166's local `tbn` matrix.
+
+### Deep research summary
+
+| Topic | Research conclusion | Implementation consequence |
+|-------|---------------------|----------------------------|
+| Brushed-metal appearance | Real brushed metal combines broad directional grain, many fine parallel abrasions, sparse deeper scratches, and roughness variation. Single-frequency noise looks synthetic. | Use layered domains: macro grain, mid streaks, fine abrasion, individual scratch impulses, and roughness breakup. |
+| Repetition avoidance | Any explicit texture repeat, modulo, tiled DataTexture, or visible hash-cell cadence can become a pattern on long frame bars. Stochastic tiling helps, but visible cells can still appear if the blend domain is too coarse. | Use continuous object/world-space coordinates, irrational frequency ratios, multiple decorrelated domains, and domain warping. Avoid visible tile-cell blending as the primary pattern source. |
+| High-resolution zoom | Procedural per-fragment detail is resolution-independent, but high-frequency lines need derivative-aware filtering to avoid shimmer and moiré. | Add fine scratch layers with `fwidth`-aware line width / intensity clamping and keep the normal finite-difference epsilon small enough for close views. |
+| PBR roughness | Brushed metal commonly sits in a roughness range around 0.35–0.55 for non-chrome flat panels; values below ~0.25 read too polished unless intentionally mirror-like. | Raise preset frame roughness slightly and reduce clearcoat/roughness contrast so the frame is less shiny. |
+| Three.js r166 shader hook | `MeshPhysicalMaterial.onBeforeCompile` keeps PMREM/IBL and physical lighting intact. In r166, `normal_fragment_begin` creates local `mat3 tbn`; there is no `vTBN` varying. | Keep the v0.44.1 fix: procedural tangent-space normals must transform with `normal = normalize(tbn * proceduralN);`. |
+
+Reference sources used for this plan:
+
+- Three.js local source in `node_modules/three/src/renderers/shaders/ShaderChunk/normal_fragment_begin.glsl.js` and `normal_fragment_maps.glsl.js` — verified `tbn` is local in r166.
+- Three.js `Material.onBeforeCompile` documentation / shader customization practice.
+- The Book of Shaders, Chapter 13 — FBM as the standard multi-octave procedural noise model.
+- Heitz & Neyret, 2018 — stochastic / histogram-preserving tiling research for anti-repetition strategies.
+- Marmoset / Adobe Substance PBR metal-roughness guidance — roughness/anisotropy calibration and avoiding chrome-like metals.
+
+### Proposed implementation slices
+
+#### V45-01 — Add continuous frame-space coordinates
+
+Inject a vertex varying for object-space or world-space frame coordinates before fragment shading. Use this as the primary procedural domain instead of relying only on `vUv`.
+
+Acceptance:
+- The procedural generator has no `fract(uv)`, no repeating texture sample, and no modulo-based visible tile boundary.
+- Front, side, and bevel surfaces receive stable coordinates without sudden seams across the visible frame face.
+
+#### V45-02 — Replace coarse anti-tile cell jitter with aperiodic multi-domain sampling
+
+Replace the current two-offset low-frequency tile jitter with decorrelated, non-repeating domains:
+
+- 3–4 coordinate domains using irrational scale ratios and seed offsets.
+- Low-amplitude domain warp from a separate macro noise field.
+- No large hash cells that can show as square/rectangular zones.
+- No repeated blend mask cadence aligned with the frame bars.
+
+Acceptance:
+- No visible tile/cell boundaries when zooming or orbiting.
+- No repeated scratch clusters over the bottom bar or vertical bars.
+
+#### V45-03 — Add sharper scratch primitives
+
+Add a dedicated scratch layer separate from FBM:
+
+- Sparse hashed line-segment scratches aligned mostly with the brushing direction.
+- Randomized length, width, phase, opacity, and slight angle drift per scratch.
+- Multiple density bands: fine abrasion, medium scratches, rare deeper cuts.
+- Derivative-aware line width using `fwidth` so scratches remain crisp but do not shimmer.
+
+Acceptance:
+- Close zoom shows individual high-resolution scratches, not blurry blobs.
+- Movement does not create crawling alias artifacts.
+
+#### V45-04 — Upgrade height-to-normal generation
+
+Replace the current height finite differences with a cleaner layered height model:
+
+- Separate macro/mid/fine height components.
+- Smaller finite-difference epsilon for close-view sharpness.
+- Adjustable strength per layer so fine scratches affect specular response without making the frame look dented.
+
+Acceptance:
+- Detail reads through lighting and glancing highlights.
+- The frame remains physically plausible; no noisy “sandpaper” look.
+
+#### V45-05 — Improve roughness modulation
+
+Use procedural roughness that matches the new scratch model:
+
+- Higher base roughness per preset.
+- Subtle darker/glossier highlights only along individual scratches.
+- Broader roughness breakup at low contrast to avoid plastic uniformity.
+- Clamp roughness to a safe range so extreme shiny pixels do not dominate.
+
+Target preset direction:
+
+| Preset | Current base roughness | Planned base roughness direction | Other shine controls |
+|--------|------------------------|----------------------------------|----------------------|
+| high | `0.28` | about `0.34–0.36` | reduce clearcoat, keep anisotropy but slightly softer |
+| balanced | `0.38` | about `0.44–0.46` | reduce clearcoat, lower roughness contrast |
+| battery | `0.48` | about `0.52–0.56` | remains simple/matte, no anisotropy cost |
+
+Acceptance:
+- Frame is still metallic, but no longer chrome-like or overly glossy.
+- Specular highlights are directional and controlled, not broad mirror patches.
+
+#### V45-06 — Add diagnostics and shader compile logging
+
+Keep the user's logging expectation by adding diagnostic logs for the implemented pass:
+
+- Selected frame procedural version.
+- Preset roughness/clearcoat/anisotropy values.
+- Shader compile hook success.
+- Seed/domain settings.
+
+Acceptance:
+- Console diagnostics make it possible to confirm the v0.45 shader path is active.
+- No noisy per-frame logging.
+
+#### V45-07 — Visual QA checklist
+
+Manual visual checks required after implementation:
+
+1. High preset, balanced preset, battery preset.
+2. Portrait and landscape artworks.
+3. Close zoom on bottom frame bar, left/right bars, and bevel corners.
+4. Slow camera movement to detect shimmer/crawling.
+5. High-contrast lighting profile and museum-neutral lighting profile.
+6. Compare against v0.44: fewer repeats, sharper scratches, less shiny finish.
+
+#### V45-08 — Validation
+
+Required validation after implementation:
+
+- `npm run lint`
+- `npm run build`
+- Browser console check: no shader compile errors.
+- Manual screenshot/video review for zero visible repetition.
+
+### Acceptance definition for “zero visible tiles”
+
+This is a perceptual rendering target, not a mathematical claim that no procedural function can ever repeat at infinity. The implementation passes when, across the shipped gallery camera distances and close zoom inspection, reviewers cannot identify repeating tile boundaries, repeated scratch clusters, rectangular hash cells, or regular stripe cadence on the frame.
+
+### Documentation boundary
+
+This v0.45 section is a **future implementation plan**. Until runtime code changes are shipped and validated, customer-facing docs must describe the current state as: v0.44.1 frame rendering is visible and improved, but v0.45 zero-visible-tiling / sharper-close-detail / slightly-rougher-metal work is still planned.
 
 ## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)
 
@@ -117,7 +264,7 @@ vec3 frmBrushedNormal(vec2 uv, float seed) {
 {
   vec3 proceduralN = frmBrushedNormal(vUv, uFrameSeed);
   // Transform tangent-space normal to view space using TBN from vertex shader
-  normal = normalize(vTBN * proceduralN);
+  normal = normalize(tbn * proceduralN);
 }
 ```
 

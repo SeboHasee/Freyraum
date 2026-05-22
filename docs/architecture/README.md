@@ -1,5 +1,11 @@
 # Architecture docs
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## v0.45 — planned frame shader architecture
+
+The v0.45 plan keeps frame realism inside the existing Three.js `MeshPhysicalMaterial.onBeforeCompile` path, but upgrades the procedural domain: continuous frame-space coordinates, aperiodic multi-domain grain, derivative-aware scratch primitives, and roughness/clearcoat tuning. See `../../plan.md § v0.45` and `../../FINDINGS.md § v0.45`.
+
+Compatibility rule: Three.js r166 uses local `tbn` in the fragment shader; do not use `vTBN` in future injections.
 
 ## v0.29 — shipped loading-screen ownership architecture
 

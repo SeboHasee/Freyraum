@@ -1,5 +1,19 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection brushed-metal; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## 2026-05-22 — v0.45 frame realism planning lessons
+
+### Lesson 77 — Removing texture tiles is not the same as removing visible cadence
+
+Moving from DataTextures to GLSL removes hard texture-wrap seams, but coarse hash cells, blend masks, or repeated coordinate domains can still become visible on long flat frame bars. Future rule: anti-repetition plans must check for repeated clusters, grid/cell boundaries, and stripe cadence, not only texture tile seams.
+
+### Lesson 78 — Close-zoom metal detail needs derivative-aware scratch primitives
+
+FBM grain alone reads as soft noise under close inspection. Future rule: premium brushed metal needs explicit individual scratch primitives with varied length/width/intensity and `fwidth`-aware filtering so details are sharp without shimmer.
+
+### Lesson 79 — Three.js shader docs must match the installed shader chunks
+
+In Three.js r166 the tangent-to-view matrix is a local `tbn` variable, not `vTBN`. Future rule: when documenting shader injections, verify names against the installed `node_modules/three/src/renderers/shaders/ShaderChunk` files before writing implementation plans.
 
 ## 2026-05-22 — v0.44 GLSL injection lesson
 
@@ -7,9 +21,9 @@
 
 Any DataTexture with `RepeatWrapping` will show a seam at every tile boundary. If the UV range forces multiple tiles (e.g., world-space UVs on a 6-unit ring with `repeat.set(1,1)` → 6 tiles → 6 seams), the banding is always visible regardless of noise quality or octave count. The only clean fix is per-fragment GLSL (`onBeforeCompile` injection) where the UV coordinate increases monotonically and there is no tiling boundary.
 
-### Lesson 76 — `onBeforeCompile` requires a normalMap to emit `vTBN`
+### Lesson 76 — `onBeforeCompile` requires a normalMap/tangents to create local `tbn`
 
-`USE_TANGENT` and the `vTBN` varying are only emitted by Three.js when the geometry has a tangent attribute AND the material has a `normalMap` (or anisotropy). When replacing the normal map sampling via `onBeforeCompile`, set a minimal flat 1×1 DataTexture as `normalMap` to ensure the shader defines are correct, and call `geometry.computeTangents()` on the frame geometry.
+`USE_TANGENT` is emitted and the local `tbn` matrix is created by Three.js when the geometry has a tangent attribute AND the material has a `normalMap` (or anisotropy). When replacing the normal map sampling via `onBeforeCompile`, set a minimal flat 1×1 DataTexture as `normalMap` to ensure the shader defines are correct, and call `geometry.computeTangents()` on the frame geometry.
 
 ## 2026-05-22 — v0.41 battery bug lesson
 

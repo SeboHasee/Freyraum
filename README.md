@@ -1,5 +1,19 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection brushed-metal; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## v0.45 — zero-visible-tiling frame realism plan (2026-05-22, **planned / docs-only**)
+
+Current status: **planned, not shipped**. v0.44.1 restored the GLSL frame path and it looks substantially better, but the next target is stricter: no perceptible tiles/repeating cadence, sharper close-zoom scratches, and a slightly rougher less shiny brushed-metal finish.
+
+Planned direction:
+
+- Move the frame pattern to continuous frame-space coordinates rather than relying only on `vUv`.
+- Replace coarse hash-cell anti-tiling with aperiodic multi-domain noise and domain warping so no cell boundaries or repeated clusters are visible.
+- Add derivative-aware individual scratch primitives for crisp high-resolution detail during close zoom.
+- Raise frame roughness slightly and reduce clearcoat so the metal remains premium but less chrome-like.
+- Keep the Three.js r166 shader compatibility fix: use local `tbn`, not `vTBN`.
+
+See `plan.md § v0.45` for the detailed implementation plan and `FINDINGS.md § v0.45` for research notes.
 
 ## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)
 
@@ -8,7 +22,7 @@ Current status: **shipped and validated**.
 - Replaced all DataTexture frame generators with `onBeforeCompile` GLSL injection: 4-octave FBM, ridged-noise scratches, and hash-based anti-tiling (Heitz/Neyret 2018).
 - Per-fragment procedural normal replaces `#include <normal_fragment_maps>`; per-fragment roughness replaces roughnessMap sampling. No texture tiles, no tiling boundary, no seams.
 - Seed update on navigation is now a single float uniform write (`uFrameSeed`) with zero GPU allocation — no texture disposal or re-upload.
-- Frame geometry calls `geometry.computeTangents()` to ensure the `vTBN` varying is available for the GLSL injection.
+- Frame geometry calls `geometry.computeTangents()` to ensure the local `tbn` matrix is available for the GLSL injection.
 - Horizontal banding (Bug 4), coarse-only grain (Bug 5), and missing scratch component (Bug 6) all eliminated.
 
 See `CHANGELOG.md § v0.44` and `FINDINGS.md § v0.44` for full detail.

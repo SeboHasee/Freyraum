@@ -1,5 +1,13 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+
+## v0.45 — handoff status: frame realism follow-up planned (2026-05-22, docs-only)
+
+Customer-facing status: **planned, not shipped**. The frame is visible again and improved after v0.44.1, but the next quality target is stricter: no visible repetition/tiles, sharper close-zoom brushed-metal scratches, and a slightly rougher less shiny finish.
+
+If a customer reports subtle repeated frame patterns or too much shine, classify it as the known v0.45 planned rendering refinement. Do not describe v0.45 as shipped until runtime code is implemented and validated.
+
+References: `../plan.md § v0.45`, `../FINDINGS.md § v0.45`.
 
 ## v0.41 — handoff status: battery preset painting bug fixed (2026-05-22, shipped)
 
