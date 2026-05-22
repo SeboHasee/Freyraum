@@ -175,9 +175,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    frameRoughness: 0.22,
-    frameAnisotropy: 0.75,
-    frameClearcoat: 0.2,
+    // v0.40 P-04: near-mirror brushed, strong directional highlight.
+    frameRoughness: 0.28,
+    frameAnisotropy: 0.7,
+    frameClearcoat: 0.18,
     frameBevelEnabled: true,
   },
   balanced: {
@@ -217,9 +218,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    frameRoughness: 0.35,
-    frameAnisotropy: 0.5,
-    frameClearcoat: 0.16,
+    // v0.40 P-04: satin brushed -- most museum-natural.
+    frameRoughness: 0.38,
+    frameAnisotropy: 0.55,
+    frameClearcoat: 0.14,
     frameBevelEnabled: true,
   },
   battery: {
@@ -258,7 +260,8 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    frameRoughness: 0.5,
+    // v0.40 P-04: no anisotropy (cost), flat-matte acceptable.
+    frameRoughness: 0.48,
     frameAnisotropy: 0.0,
     frameClearcoat: 0.0,
     frameBevelEnabled: false,

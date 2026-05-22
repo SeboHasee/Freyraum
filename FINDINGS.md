@@ -1,5 +1,5 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR shipped; lint/build pass).
 
 ## v0.41 — battery preset painting invisible bug fix + detailed PBR plan (2026-05-22, **shipped**)
 
@@ -46,47 +46,28 @@ geometry.translate(0, 0, -depth);
 
 ---
 
-## v0.40 — premium metal texture realism + repetition research (2026-05-22, **docs-only**)
+## v0.40 — premium metal PBR texture realism + anti-repetition (2026-05-22, **shipped**)
 
 ### Status
 
-Research and planning complete. No runtime code changes in this pass.
+Runtime implementation shipped; lint/build pass.
 
-### Current-state observation (source audit)
+### Implementation evidence
 
-- `src/materials/CanvasMaterial.ts` currently generates deterministic procedural frame normal/roughness textures with fixed `texture.repeat.set(12, 1)` for both maps.
-- This produces consistent brushed directionality, but the repeated tile cadence can still read as synthetic on prolonged frame spans and under glancing light.
-
-### Premium texture sourcing research (online)
-
-Recommended premium-first libraries for production-ready metal PBR sets:
-
-1. **Poliigon** — premium metal materials with multi-map PBR packs and high-resolution options.
-2. **Quixel Megascans** — scanned real-world metal surfaces with strong realism and broad variety.
-3. **Adobe Substance 3D Assets** — editable/scalable material ecosystem suitable for premium custom look-dev.
-
-### “Natural but premium” metal recipe (research synthesis)
-
-- Keep the frame fully metallic (`metalness = 1.0`) and avoid over-bright or pure-white base colors.
-- Use controlled roughness bands (premium brushed metal typically in the low-to-mid range, not mirror-polished and not chalk-matte).
-- Preserve anisotropy for directional highlights, but avoid extreme values that look synthetic.
-- Combine **micro detail** (fine brushing) with **macro variation** (broad roughness drift) to avoid procedural sameness.
-
-### Anti-repetition strategy for this codebase
-
-1. Add a second low-frequency roughness modulation layer (large-scale breakup).
-2. Introduce per-artwork deterministic seed offsets for frame roughness/normal synthesis.
-3. Keep directional brushed detail but vary phase/frequency slightly per artwork to reduce visible periodicity.
-4. Optionally blend two compatible brushed variants (cross-fade mask) for hero galleries.
-5. Keep intensity subtle; realism drops quickly when noise contrast is too aggressive.
-
-### Source links consulted
-
-- https://www.poliigon.com
-- https://quixel.com/megascans
-- https://substance3d.adobe.com/assets
-- Unreal Engine tiling-breakup reference (via research tool): https://docs.unrealengine.com/5.0/en-US/tiling-breakup-techniques-in-unreal-engine/
-- Blender principled/anisotropy reference (via research tool): https://docs.blender.org/manual/en/latest/render/shader_nodes/shader/principled.html
+| Slice | File | Change |
+|-------|------|--------|
+| P-01 | `src/materials/CanvasMaterial.ts` | `makeFrameNormalTexture(seed)` — 256×256 RGBA DataTexture with three sinusoidal layers (fine/mid/macro). |
+| P-01 | `src/materials/CanvasMaterial.ts` | `makeFrameRoughnessTexture(seed, withMacroDrift)` — 128×128 RGBA DataTexture with fine band + optional macro drift. |
+| P-02 | `src/materials/CanvasMaterial.ts` | `createFrameMaterial(preset, seed)` — seed parameter wired through to both texture generators. |
+| P-02 | `src/materials/CanvasMaterial.ts` | `refreshFrameTextures(material, preset, seed)` — in-place texture swap for navigation seed changes. |
+| P-02 | `src/gallery/ArtworkMesh.ts` | Constructor accepts `artworkIndex = 0`; `artworkSeed = artworkIndex % 256`. |
+| P-02 | `src/gallery/ArtworkMesh.ts` | `updateFrameSeed(artworkIndex)` — no-ops if seed unchanged, else calls `refreshFrameTextures`. |
+| P-03 | `src/materials/CanvasMaterial.ts` | Macro drift baked into roughness texture for non-battery presets; two low-frequency sinusoidal terms give ±0.05 roughness swing. |
+| P-04 | `src/config/quality.ts` | high: 0.28/0.7/0.18; balanced: 0.38/0.55/0.14; battery: 0.48/0/0. |
+| P-05 | `src/materials/CanvasMaterial.ts` | `withMacroDrift = preset.id !== 'battery'` — battery skips drift generation. |
+| P-06 | `src/materials/CanvasMaterial.ts` | `[CanvasMaterial] frame-material-created` / `frame-textures-refreshed` debug logs. |
+| P-06 | `src/gallery/ArtworkMesh.ts` | `[ArtworkMesh] artwork-frame-seed` debug log in constructor and `updateFrameSeed`. |
+| — | `src/gallery/GalleryManager.ts` | `showArtwork` and `warmArtworkForGPU` call `artworkMesh.updateFrameSeed(index)`. |
 
 ### Validation
 

@@ -3,8 +3,8 @@ import type { QualityPreset } from '../config/quality';
 
 export class CanvasMaterial {
   private normalTexture: THREE.Texture | null = null;
-  private frameNormalTexture: THREE.Texture | null = null;
-  private frameRoughnessTexture: THREE.Texture | null = null;
+  private frameNormalTexture: THREE.DataTexture | null = null;
+  private frameRoughnessTexture: THREE.DataTexture | null = null;
 
   async loadNormalTexture(): Promise<THREE.Texture> {
     if (this.normalTexture) return this.normalTexture;
@@ -66,67 +66,103 @@ export class CanvasMaterial {
     return mat;
   }
 
-  private getFrameNormalTexture(): THREE.Texture {
-    if (this.frameNormalTexture) return this.frameNormalTexture;
+  // ── v0.40 multi-scale seeded frame texture generators ────────────────────
 
-    const size = 128;
+  /**
+   * P-01: Three-layer brushed normal map. Each layer has a distinct spatial
+   * frequency so two visual bands are always visible under a normal-map debug
+   * overlay. The seed offsets every layer's phase so adjacent artworks never
+   * show a phase-aligned surface.
+   */
+  private makeFrameNormalTexture(seed: number): THREE.DataTexture {
+    const size = 256;
     const data = new Uint8Array(size * size * 4);
-    const frequency = 0.6;
-    const amplitude = 12;
-
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
-        const groove = Math.sin(x * frequency) * amplitude;
-        const noise = (Math.sin(x * 0.23 + y * 0.91) + Math.cos(x * 1.31 - y * 0.37)) * 1.5;
+        // Layer 1: fine brushed grain (high frequency, low amplitude)
+        const fineBrush = Math.sin(x * 0.18 + seed * 0.37) * 0.25;
+        // Layer 2: mid-frequency streak modulation
+        const midDrift  = Math.sin(x * 0.07 + seed * 0.71) * 0.30;
+        // Layer 3: 1-D low-frequency warp (removes cadence during slow pan)
+        const macroWarp = Math.sin(x * 0.021 + seed * 1.13) * 0.15;
+        const combined  = 0.5 + fineBrush + midDrift + macroWarp;
         data[idx + 0] = 128;
-        data[idx + 1] = Math.max(0, Math.min(255, Math.round(128 + groove + noise)));
+        data[idx + 1] = Math.max(0, Math.min(255, Math.round(combined * 255)));
         data[idx + 2] = 255;
         data[idx + 3] = 255;
       }
     }
-
     const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
     texture.colorSpace = THREE.LinearSRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(12, 1);
     texture.needsUpdate = true;
-    this.frameNormalTexture = texture;
     return texture;
   }
 
-  private getFrameRoughnessTexture(): THREE.Texture {
-    if (this.frameRoughnessTexture) return this.frameRoughnessTexture;
-
+  /**
+   * P-01/P-03: Two-layer roughness map. Fine variation keeps per-pixel
+   * micro-surface alive; macro drift (non-battery only) eliminates the
+   * repetitive cadence visible under slow camera pan. Both layers are seeded
+   * so phase never aligns across adjacent frames.
+   */
+  private makeFrameRoughnessTexture(seed: number, withMacroDrift: boolean): THREE.DataTexture {
     const size = 128;
     const data = new Uint8Array(size * size * 4);
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
-        const brushedBand = Math.sin(x * 0.42) * 14;
-        const microNoise = Math.sin(x * 1.73 + y * 0.19) * 4 + Math.cos(x * 0.13 - y * 1.11) * 3;
-        const roughness = Math.max(0, Math.min(255, Math.round(170 + brushedBand + microNoise)));
+        // Fine variation (primary roughness band)
+        const fineLine   = Math.sin(x * 0.22 + seed * 0.53) * 0.4;
+        // Macro drift layer -- broad, very subtle (P-03: +-0.05 roughness swing)
+        const macroDrift = withMacroDrift ? Math.sin(x * 0.04 + seed * 0.89) * 0.12 : 0;
+        const v = 0.5 + fineLine + macroDrift;
+        // Additional low-frequency breakup from P-03 formula
+        const driftSwing = withMacroDrift
+          ? Math.round(
+              (Math.sin(x * 0.098 + seed * 1.17) * 0.5 + Math.sin(x * 0.041 + seed * 0.63) * 0.3) * 18
+            )
+          : 0;
+        const roughness = Math.max(0, Math.min(255, Math.round(v * 255) + driftSwing));
         data[idx + 0] = roughness;
         data[idx + 1] = roughness;
         data[idx + 2] = roughness;
         data[idx + 3] = 255;
       }
     }
-
     const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
     texture.colorSpace = THREE.LinearSRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
     texture.repeat.set(12, 1);
     texture.needsUpdate = true;
-    this.frameRoughnessTexture = texture;
     return texture;
   }
 
-  createFrameMaterial(preset: QualityPreset): THREE.MeshPhysicalMaterial {
-    const frameNormal = this.getFrameNormalTexture();
-    const frameRoughness = this.getFrameRoughnessTexture();
+  /**
+   * P-02: Creates the initial frame material with seeded textures.
+   * Each artwork receives a distinct seed so frame surfaces never appear
+   * phase-aligned across the gallery wall. Seed 0 is deterministic and
+   * stable across page loads.
+   */
+  createFrameMaterial(preset: QualityPreset, seed = 0): THREE.MeshPhysicalMaterial {
+    const withMacroDrift = preset.id !== 'battery';
+    const frameNormal = this.makeFrameNormalTexture(seed);
+    const frameRoughness = this.makeFrameRoughnessTexture(seed, withMacroDrift);
+    // Dispose any previously tracked textures before replacing them.
+    this.frameNormalTexture?.dispose();
+    this.frameRoughnessTexture?.dispose();
+    this.frameNormalTexture = frameNormal;
+    this.frameRoughnessTexture = frameRoughness;
+
+    // P-06: diagnostic log so the active frame configuration is visible in the console.
+    console.debug('[CanvasMaterial] frame-material-created', {
+      preset: preset.id, seed, macroDrift: withMacroDrift,
+      frameRoughness: preset.frameRoughness, frameAnisotropy: preset.frameAnisotropy,
+    });
+
     return new THREE.MeshPhysicalMaterial({
       color: 0xe8eaeb,
       roughness: preset.frameRoughness,
@@ -138,6 +174,28 @@ export class CanvasMaterial {
       anisotropyRotation: Math.PI / 2,
       normalMap: frameNormal,
       normalScale: new THREE.Vector2(0.08, 0.08),
+    });
+  }
+
+  /**
+   * P-02: Updates the existing frame material's normal and roughness textures
+   * in-place for a new artwork seed. Called by ArtworkMesh when navigating
+   * to a different artwork so the frame surface phase changes without
+   * disposing the material or re-uploading geometry.
+   */
+  refreshFrameTextures(material: THREE.MeshPhysicalMaterial, preset: QualityPreset, seed: number): void {
+    const withMacroDrift = preset.id !== 'battery';
+    const newNormal = this.makeFrameNormalTexture(seed);
+    const newRoughness = this.makeFrameRoughnessTexture(seed, withMacroDrift);
+    this.frameNormalTexture?.dispose();
+    this.frameRoughnessTexture?.dispose();
+    this.frameNormalTexture = newNormal;
+    this.frameRoughnessTexture = newRoughness;
+    material.normalMap = newNormal;
+    material.roughnessMap = newRoughness;
+    material.needsUpdate = true;
+    console.debug('[CanvasMaterial] frame-textures-refreshed', {
+      preset: preset.id, seed, macroDrift: withMacroDrift,
     });
   }
 

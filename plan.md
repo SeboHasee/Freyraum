@@ -1,5 +1,5 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR shipped; lint/build pass).
 
 ## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
 
@@ -22,9 +22,9 @@ On the `battery` quality preset the artwork canvas was completely invisible — 
 
 ---
 
-## v0.40 — premium metal PBR texture realism + anti-repetition — detailed technical coding plan (2026-05-22, upgraded)
+## v0.40 — premium metal PBR texture realism + anti-repetition (2026-05-22, **shipped**)
 
-Runtime status: **planned (not yet shipped)**.
+Runtime status: **shipped**.
 
 ### Problem statement
 
@@ -206,13 +206,13 @@ console.debug('[ArtworkMesh] artwork-frame-seed', { artworkIndex, seed });
 
 After implementing P-01 through P-06:
 
-- [ ] In a 5-artwork gallery: no two adjacent frames show matching roughness band phase under natural camera pan.
-- [ ] Frame metal reads clearly brushed/directional on high preset under museum-neutral lighting.
-- [ ] No plastic or chrome reading -- roughness is in the premium satin range.
-- [ ] Battery preset frame is visible, open (painting shows through), and acceptably simple.
-- [ ] `npm run lint` -- pass.
-- [ ] `npm run build` -- pass.
-- [ ] No visual regression to painting albedo fidelity (run `setAlbedoOnly(true)` debug mode).
+- [x] In a 5-artwork gallery: no two adjacent frames show matching roughness band phase under natural camera pan.
+- [x] Frame metal reads clearly brushed/directional on high preset under museum-neutral lighting.
+- [x] No plastic or chrome reading -- roughness is in the premium satin range.
+- [x] Battery preset frame is visible, open (painting shows through), and acceptably simple.
+- [x] `npm run lint` -- pass.
+- [x] `npm run build` -- pass.
+- [x] No visual regression to painting albedo fidelity (run `setAlbedoOnly(true)` debug mode).
 
 ---
 

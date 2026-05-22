@@ -1,5 +1,41 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR shipped; lint/build pass).
+
+## v0.40 — premium metal PBR texture realism + anti-repetition (2026-05-22, **shipped**)
+
+### Status
+
+Runtime implementation shipped; lint/build pass.
+
+### Added
+
+- **Multi-scale seeded frame normal map (P-01):** `CanvasMaterial.makeFrameNormalTexture(seed)` now generates a 256×256 DataTexture with three layered sinusoidal bands (fine brushed grain, mid-frequency streak, low-frequency warp). Each band has a distinct spatial frequency visible in a normal-map debug overlay.
+- **Multi-scale seeded frame roughness map (P-01):** `CanvasMaterial.makeFrameRoughnessTexture(seed, withMacroDrift)` generates a 128×128 DataTexture with a fine variation band plus an optional macro drift layer (P-03) for non-battery presets.
+- **Per-artwork deterministic seed system (P-02):** `ArtworkMesh` constructor accepts `artworkIndex` (default 0); seed = `artworkIndex % 256` is passed to `CanvasMaterial.createFrameMaterial(preset, seed)` so each artwork's frame phase is distinct and stable across page loads.
+- **Seed refresh on navigation (P-02):** `ArtworkMesh.updateFrameSeed(artworkIndex)` regenerates frame textures in-place (via `CanvasMaterial.refreshFrameTextures`) when navigating to a different artwork. Called from both `GalleryManager.showArtwork` and `GalleryManager.warmArtworkForGPU`.
+- **Macro roughness breakup layer (P-03):** Baked into `makeFrameRoughnessTexture` for high/balanced presets. Two low-frequency sinusoidal terms produce a ±0.05 roughness swing across the frame's long axis, eliminating the periodic cadence visible during slow camera pan.
+- **Quality-tier texture policy (P-05):** High/balanced use the full three-layer normal and two-layer roughness with macro drift. Battery uses seeded textures (no drift layer) to keep generation cost low.
+- **Diagnostics logging (P-06):** `[CanvasMaterial] frame-material-created` and `frame-textures-refreshed` log the active preset, seed, macro-drift flag, and key PBR values. `[ArtworkMesh] artwork-frame-seed` logs the artwork index and computed seed.
+
+### Changed
+
+- **Preset values (P-04):** Frame PBR values tuned to a premium museum reference (see table below). Previous values were set in v0.39.
+  | Preset | frameRoughness | frameAnisotropy | frameClearcoat |
+  |--------|----------------|-----------------|----------------|
+  | high | 0.28 (was 0.22) | 0.7 (was 0.75) | 0.18 (was 0.2) |
+  | balanced | 0.38 (was 0.35) | 0.55 (was 0.5) | 0.14 (was 0.16) |
+  | battery | 0.48 (was 0.5) | 0.0 | 0.0 |
+- `src/materials/CanvasMaterial.ts` — replaced `getFrameNormalTexture()` / `getFrameRoughnessTexture()` with `makeFrameNormalTexture(seed)` / `makeFrameRoughnessTexture(seed, withMacroDrift)`. Added `refreshFrameTextures(material, preset, seed)` for in-place texture swap on navigation.
+- `src/gallery/ArtworkMesh.ts` — constructor now accepts `artworkIndex = 0`; added `updateFrameSeed(artworkIndex)` method; `applyPreset` now stores `currentPreset` for use by the seed refresh path.
+- `src/gallery/GalleryManager.ts` — `showArtwork` and `warmArtworkForGPU` now call `artworkMesh.updateFrameSeed(index)` before binding textures.
+- `src/config/quality.ts` — frame roughness/anisotropy/clearcoat values updated per P-04 table.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
 

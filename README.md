@@ -1,5 +1,14 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR shipped; lint/build pass).
+
+## v0.40 — premium metal PBR texture realism + anti-repetition (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Multi-scale seeded frame texture generation: normal map uses three layered sinusoidal bands (fine grain + mid streak + low-frequency warp), roughness map uses two bands plus an optional macro drift layer for non-battery presets.
+- Per-artwork deterministic seed system: each artwork's frame shows a distinct, stable texture phase so no two adjacent artworks appear phase-aligned. Seed is `artworkIndex % 256`, refreshed on every navigation.
+- Calibrated PBR preset values: high `roughness=0.28/anisotropy=0.7/clearcoat=0.18`, balanced `0.38/0.55/0.14`, battery `0.48/0/0`.
+- Diagnostics logging: `[CanvasMaterial]` and `[ArtworkMesh]` debug entries expose active seed, preset, and macro-drift flag per artwork.
 
 ## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
 
@@ -7,16 +16,6 @@ Current status: **shipped and validated**.
 
 - Fixed critical battery preset bug: the painting canvas was completely invisible on the lowest quality tier. Root cause was `makeFrameGeometry()` using a solid `BoxGeometry` (no center hole) that fully occluded the artwork plane. Now uses the same ring-shaped `ExtrudeGeometry` path as all other presets, with `bevelEnabled:false` for battery (no chamfer, but open center).
 - Upgraded `plan.md § v0.40` to a detailed technical coding plan with TypeScript code samples for all implementation slices (P-01 through P-07).
-
-## v0.40 — premium metal PBR texture research + anti-repetition strategy (2026-05-22, **docs-only**)
-
-Current status: **documentation/planning only; runtime remains v0.39**.
-
-- Researched premium high-detail metal PBR libraries for production-quality frame surfaces (Poliigon, Quixel Megascans, Adobe Substance 3D Assets).
-- Documented a practical “premium but natural” material recipe: measured albedo range, controlled roughness bands, directional anisotropy, and layered macro+micro roughness variation.
-- Documented anti-repetition tactics for large visible frame surfaces: multi-scale detail maps, macro roughness breakup, seed-based per-artwork variation, and optional triplanar/world-space blending for edge cases.
-
-See `plan.md § v0.40` for implementation slices and `FINDINGS.md § v0.40` for research notes and source links.
 
 ## v0.39 — frame alignment + metal detail refinement (2026-05-22, **shipped**)
 

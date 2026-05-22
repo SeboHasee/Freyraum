@@ -34,6 +34,8 @@ export class ArtworkMesh {
   private _artworkHeight = 5.7;
   private currentSegments: number;
   private currentFrameBevelEnabled: boolean;
+  private currentPreset: QualityPreset;
+  private artworkSeed: number;
   private readonly scene: THREE.Scene;
   /** Density coefficient for detail-normal tiling (tiles per world unit). */
   private readonly detailTilesPerWorldUnit = 2.0;
@@ -42,15 +44,17 @@ export class ArtworkMesh {
   /** v0.08: the manifest dimensions used in the last updateAspect() call, if any. */
   private _lastManifestDimensions: { width: number; height: number } | null = null;
 
-  constructor(scene: THREE.Scene, preset: QualityPreset) {
+  constructor(scene: THREE.Scene, preset: QualityPreset, artworkIndex = 0) {
     this.scene = scene;
     this.canvasMaterial = new CanvasMaterial();
+    this.currentPreset = preset;
+    this.artworkSeed = artworkIndex % 256;
     this.group = new THREE.Group();
     this.currentSegments = preset.artworkSegments;
     this.currentFrameBevelEnabled = preset.frameBevelEnabled;
 
     const frameGeo = this.makeFrameGeometry(this.currentFrameBevelEnabled, this._artworkWidth, this._artworkHeight);
-    this.frameMaterial = this.canvasMaterial.createFrameMaterial(preset);
+    this.frameMaterial = this.canvasMaterial.createFrameMaterial(preset, this.artworkSeed);
     this.frameMesh = new THREE.Mesh(frameGeo, this.frameMaterial);
     this.group.add(this.frameMesh);
 
@@ -59,6 +63,9 @@ export class ArtworkMesh {
     this.artworkMesh = new THREE.Mesh(artGeo, this.material);
     this.artworkMesh.position.z = -this.artworkInset;
     this.group.add(this.artworkMesh);
+
+    // P-06: log the initial frame seed for diagnostics.
+    console.debug('[ArtworkMesh] artwork-frame-seed', { artworkIndex, seed: this.artworkSeed });
 
     scene.add(this.group);
   }
@@ -137,6 +144,7 @@ export class ArtworkMesh {
   }
 
   applyPreset(preset: QualityPreset): void {
+    this.currentPreset = preset;
     // The material always reflects the latest preset, even when segments do not change.
     this.material.applyPreset(preset);
     this.applyFramePreset(preset);
@@ -153,8 +161,20 @@ export class ArtworkMesh {
   }
 
   /**
-   * Resizes both the artwork mesh and the frame to match the artwork's aspect
-   * ratio. Works for every aspect (portrait, landscape, square, ultrawide).
+   * P-02: Updates the frame surface textures for a new artwork index. Called
+   * by GalleryManager when navigating so each artwork's frame shows a distinct
+   * but deterministic texture phase. No-ops when the seed is unchanged.
+   */
+  updateFrameSeed(artworkIndex: number): void {
+    const seed = artworkIndex % 256;
+    if (seed === this.artworkSeed) return;
+    this.artworkSeed = seed;
+    this.canvasMaterial.refreshFrameTextures(this.frameMaterial, this.currentPreset, seed);
+    // P-06: log seed change for diagnostics.
+    console.debug('[ArtworkMesh] artwork-frame-seed', { artworkIndex, seed });
+  }
+
+  /**
    *
    * Frame thickness is added uniformly (0.4 world units on each axis) so the
    * frame margin is visually consistent for any aspect.

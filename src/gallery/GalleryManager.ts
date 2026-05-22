@@ -652,6 +652,9 @@ export class GalleryManager {
       proceduralMs: proceduralGenerated ? this.now() - proceduralStart : 0,
     });
 
+    // P-02 v0.40: update frame surface seed so each artwork shows a distinct
+    // deterministic texture phase, preventing phase alignment across the gallery.
+    this.artworkMesh.updateFrameSeed(index);
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
     this.markReadiness(index, 'materialApplied', 'show-artwork');
@@ -888,6 +891,7 @@ export class GalleryManager {
       }
     }
 
+    this.artworkMesh.updateFrameSeed(index);
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
     this.markReadiness(index, 'proceduralReady', reason);
