@@ -1,5 +1,26 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.37 shipped — add OutputPass for correct sRGB output; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — disable FXAA on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.38 — Disable FXAA on high/balanced to restore v0.25 image response (2026-05-22, **shipped**)
+
+### Problem
+
+Even after fixing EffectComposer output conversion, users still reported that only the two upper-tier presets (`high`, `balanced`) looked too dark with altered overall contrast/colors compared to v0.25. `battery` remained unaffected.
+
+### Root cause
+
+The regression window starts at v0.27, where FXAA was introduced and enabled only on `high` and `balanced`. `battery` keeps FXAA disabled. The user-observed split exactly matched this preset gate.
+
+### Changed
+
+- **`src/config/quality.ts`:** Set `fxaaEnabled` to `false` on `high` and `balanced` (already `false` on `battery`).
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.37 — Fix darkness/contrast shift on high and balanced presets (2026-05-22, **shipped**)
 

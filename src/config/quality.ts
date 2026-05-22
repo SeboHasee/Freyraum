@@ -162,7 +162,8 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatEnabled: true,
     clearcoatStrength: 0.12,
     clearcoatRoughnessValue: 0.35,
-    fxaaEnabled: true,
+    // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
+    fxaaEnabled: false,
     albedoFidelityFill: 0.0,
   },
   balanced: {
@@ -199,7 +200,8 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatEnabled: false,
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.35,
-    fxaaEnabled: true,
+    // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
+    fxaaEnabled: false,
     albedoFidelityFill: 0.0,
   },
   battery: {
