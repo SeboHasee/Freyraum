@@ -1,7 +1,7 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+> Last full markdown audit: 2026-05-22 (v0.46 shipped: zebra-frame recovery implemented in runtime shader/material tuning).
 
-## v0.46 — zebra-like frame artifact analysis + research notes (2026-05-22, **planned**)
+## v0.46 — zebra-like frame artifact analysis + implementation results (2026-05-22, **shipped**)
 
 ### Screenshot analysis
 
@@ -29,9 +29,10 @@ From the customer screenshot:
 
 ### Outcome of this pass
 
-- Added a concrete v0.46 implementation plan in `plan.md`.
-- Synchronized markdown status text to reflect v0.46 as planned/not-shipped.
-- No runtime TypeScript/GLSL changes yet.
+- Implemented frequency/alias safety in `frmScratchRow` using `densityFade = 1.0 - smoothstep(0.55, 1.25, fw * density)` so unstable distant bands are suppressed.
+- Replaced uninterrupted scratch rows with segmented directional micro-grooves (`segAlive * segShape`) to remove zebra-like full-bar cadence.
+- Reduced macro contrast by lowering warp amplitude, scratch/normal gradient strength, and roughness modulation amplitudes.
+- Retuned satin response and stability: `normalScale 0.40→0.30`, roughness clamp `0.24..0.68`, and preset updates in `quality.ts` (high/balanced/battery).
 
 ## v0.45 — Technical Audit: v0.44 Code Review and Implementation Research (2026-05-22, **shipped**)
 

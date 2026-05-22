@@ -175,9 +175,9 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.45 P-04: satin-brushed range (Adobe Substance PBR guide: 0.35–0.45).
-    frameRoughness: 0.35,
-    frameAnisotropy: 0.65,
+    // v0.46: slightly wider satin spread to suppress harsh zebra highlights.
+    frameRoughness: 0.38,
+    frameAnisotropy: 0.60,
     frameClearcoat: 0.12,
     frameBevelEnabled: true,
   },
@@ -218,9 +218,9 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.45 P-04: mid satin range.
-    frameRoughness: 0.44,
-    frameAnisotropy: 0.55,
+    // v0.46: slightly rougher mid-tier satin spread.
+    frameRoughness: 0.47,
+    frameAnisotropy: 0.50,
     frameClearcoat: 0.10,
     frameBevelEnabled: true,
   },
@@ -260,8 +260,8 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.45 P-04: matte satin.
-    frameRoughness: 0.52,
+    // v0.46: matte satin with reduced band contrast.
+    frameRoughness: 0.54,
     frameAnisotropy: 0.0,
     frameClearcoat: 0.0,
     frameBevelEnabled: false,

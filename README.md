@@ -1,15 +1,14 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+> Last full markdown audit: 2026-05-22 (v0.46 shipped: zebra-frame recovery implemented in runtime shader/material tuning).
 
-## v0.46 — zebra-like frame artifact follow-up (2026-05-22, **planned**)
+## v0.46 — zebra-like frame artifact follow-up (2026-05-22, **shipped**)
 
-Current status: **planning/documentation only; runtime still shows zebra-like striping in customer screenshot scenarios**.
+Current status: **shipped and validated**.
 
-- Screenshot analysis confirms dominant horizontal high-contrast streaks across all bars, which read as synthetic striping instead of continuous brushed metal.
-- Follow-up plan targets physically plausible metal response: directional micro-scratches, tighter roughness variance, anti-aliased line frequencies, and reduced over-contrasty macro streak contrast.
-- Online-research-backed checklist is now documented in `plan.md § v0.46` and `FINDINGS.md § v0.46`.
-
-No runtime shader code changed in this pass.
+- Reduced macro contrast and frequency energy in the frame procedural FBM/scratch stack.
+- Added derivative-aware density fade + segmented directional micro-grooves to suppress distance alias and synthetic stripe cadence.
+- Retuned frame roughness/anisotropy (`high 0.38/0.60`, `balanced 0.47/0.50`, `battery roughness 0.54`) and narrowed roughness shader variance window.
+- Updated shader cache key + diagnostics to `v0.46`.
 
 ## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
 

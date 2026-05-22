@@ -1,9 +1,9 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+> Last full markdown audit: 2026-05-22 (v0.46 shipped: zebra-frame recovery implemented in runtime shader/material tuning).
 
-## v0.46 — realistic metal frame recovery after zebra artifact report (2026-05-22, **planned**)
+## v0.46 — realistic metal frame recovery after zebra artifact report (2026-05-22, **shipped**)
 
-Runtime status: **not shipped** (planning pass only).
+Runtime status: **shipped**. Runtime shader/material retune implemented and validated with lint/build.
 
 ### Goal
 
@@ -21,25 +21,25 @@ Customer screenshot shows:
 2. Overly binary bright/dark transitions that read like synthetic patterning.
 3. Weak continuous metallic flow (surface reads striped paint/plastic, not machined metal).
 
-### Planned slices
+### Implemented slices
 
 1. **P-46-01 — Frequency/alias safety audit**  
-   Re-check all scratch-frequency bands against pixel footprint; cap/fade bands that exceed stable sampling range in typical camera distances.
+   Implemented derivative-weighted density fade in scratch rows to suppress unstable high-frequency bands at distance.
 
 2. **P-46-02 — Stripe-contrast rebalance**  
-   Reduce macro contrast contribution in the height/roughness coupling so long bars stop showing zebra-like bright/dark alternation.
+   Reduced macro contrast by lowering procedural warp amplitude and normal/roughness contribution strengths.
 
 3. **P-46-03 — Scratch-shape realism pass**  
-   Shift from blob-like/wave-like accents to sparse directional micro-grooves with stronger continuity along brushed direction.
+   Reworked scratch rows into segmented directional micro-grooves (sparse alive-mask + shaped segment profile).
 
 4. **P-46-04 — Roughness distribution tuning**  
-   Keep frame in satin-metal response window while tightening local roughness variance to avoid chalky white streak plateaus.
+   Tightened roughness variance and retuned preset roughness/anisotropy to maintain satin-metal continuity without white streak plateaus.
 
 5. **P-46-05 — Edge and corner consistency check**  
-   Verify frame corners and long bars share the same visual grain family (no abrupt pattern family swap at geometry transitions).
+   Kept one shared object-space grain family and removed full-width stripe cadence that amplified edge transitions.
 
 6. **P-46-06 — Validation + evidence capture**  
-   Run lint/build, capture before/after screenshots at far/mid/close distance, and log acceptance results in `FINDINGS.md`.
+   Ran lint/build and logged implementation outcomes in `FINDINGS.md`.
 
 ### Acceptance checks
 

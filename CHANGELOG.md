@@ -1,26 +1,28 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+> Last full markdown audit: 2026-05-22 (v0.46 shipped: zebra-frame recovery implemented in runtime shader/material tuning).
 
-## v0.46 — realistic metal frame follow-up planning (2026-05-22, **documentation only**)
+## v0.46 — realistic metal frame zebra recovery (2026-05-22, **shipped**)
 
 ### Status
 
-Planned only. Runtime code unchanged in this pass.
+Shipped. Runtime code updated; lint and build pass.
 
 ### Added
 
-- New screenshot-driven root-problem write-up for the reported zebra-like frame appearance.
-- New v0.46 plan section (`plan.md`) defining recovery slices for realistic brushed-metal response.
-- New v0.46 findings section (`FINDINGS.md`) with visual analysis and online research summary.
+- Derivative-aware scratch density fade (`fw * density`) to suppress unstable high-frequency bands at distance.
+- Directional segmented scratch primitives replacing long uninterrupted stripe rows.
+- Lower macro-contrast procedural normal/roughness coupling for satin continuity in highlight zones.
 
 ### Changed
 
-- Refreshed markdown audit banner text across repository `.md` files to the v0.46 planning state.
-- Updated `README.md` top status to reflect that this is a follow-up planning pass and the issue is still open in runtime.
+- `src/materials/CanvasMaterial.ts`: v0.46 procedural retune (reduced warp amplitude, rebalanced octave bands, sparse micro-groove scratches, lower normal strength, tighter roughness variance, cache key `frame-v0.46-*`).
+- `src/config/quality.ts`: v0.46 satin retune (`high roughness 0.38 anisotropy 0.60`, `balanced roughness 0.47 anisotropy 0.50`, `battery roughness 0.54`).
+- Updated top markdown status sections to v0.46 shipped state.
 
 ### Validation
 
-- Baseline and final docs-pass validation: `npm run lint` — pass, `npm run build` — pass.
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
 
