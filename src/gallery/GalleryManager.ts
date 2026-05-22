@@ -85,7 +85,9 @@ const INSPECTION_OVERSCROLL_Y = 0.6;
  * | camera pan            |  5.0 |  ~600 ms   |
  */
 const LAMBDA_HOVER_ROTATION = 12.0;
-const LAMBDA_NAV_POSITION = 2.5;
+// v0.28 X-03 — Raised from 2.5 (~1200 ms settle) to 3.5 (~860 ms settle).
+// Reduces perceptible lag on painting navigation while retaining organic feel.
+const LAMBDA_NAV_POSITION = 3.5;
 const LAMBDA_NAV_SCALE = 3.0;
 const LAMBDA_CAMERA_ZOOM = 4.0;
 const LAMBDA_CAMERA_PAN = 5.0;

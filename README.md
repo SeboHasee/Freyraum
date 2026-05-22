@@ -1,6 +1,18 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.28 planned — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps documented below).
 
+
+## v0.28 — Painting fidelity + background preloading + particle enhancement (planned)
+
+**Status: planned — implementation in progress.**
+
+1. **Painting fidelity (X-01):** Switch `ACESFilmicToneMapping → NeutralToneMapping` at `exposure = 1.0` to restore faithful colour reproduction for artistically dark/high-contrast paintings.
+2. **Background preloading / flash elimination (X-02):** Start RAF render loop before overlay reveal so the gallery renders continuously behind the opaque overlay; eliminates grey-flash on overlay fade-out.
+3. **Navigation lag (X-03):** Raise `LAMBDA_NAV_POSITION 2.5 → 3.5` for ~860 ms settle (was ~1200 ms); X-02 also eliminates RAF cold-start lag on first navigation.
+4. **Particle wander (X-04):** 8→12 particles, duration 8–14 s → 3–6 s, replace 2-stop `loading-float` keyframe with 4-stop `loading-wander` with per-particle random multi-axis drift properties.
+5. **Overlay architecture (X-05):** Confirmed correct — no change needed.
+
+See `plan.md § v0.28` and `FINDINGS.md § v0.28` for root-cause analysis, research findings, and implementation specification.
 
 ## v0.27 — Startup smoothness + loading/AA remediation (2026-05-22, **shipped**)
 

@@ -1,8 +1,119 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.28 planned — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps documented below).
 
 
-## v0.27 — Startup smoothness + loading/AA remediation (2026-05-22, **shipped**)
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **planned**)
+
+### Status
+
+X-series gaps identified from deep code audit and online research. Not yet shipped.
+
+### Problem statement (current user feedback)
+
+- Paintings are now artistically dark/high-contrast; they must appear as close to original as possible.
+- On main-page load, a visible glitch/flash appears for a split second before the paintings display.
+- Navigation in the main-page painting selection is still laggy.
+- Loading-screen particles should move in more random patterns and more quickly.
+- The main page and gallery must be completely loaded and rendering in the background while the loading screen is visible, so the loading screen fully blocks the view but everything is already preloaded.
+
+---
+
+### Deep code audit findings (2026-05-22)
+
+Full source audit of: `src/core/RendererManager.ts`, `src/main.ts` (1406 lines), `src/gallery/GalleryManager.ts`, `src/styles/main.scss`.
+
+---
+
+#### X-01 — ACESFilmic tone mapping darkens already-dark artwork
+
+**Root cause:** `RendererManager.ts` line 49–50:
+```typescript
+this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+this.renderer.toneMappingExposure = 1.45;
+```
+ACES Filmic applies an aggressive S-curve that compresses highlights and crushes shadow midtones. For paintings that are artistically dark and high-contrast, this further boosts contrast and deviates significantly from the artist's intended output. With `toneMappingExposure = 1.45` the over-bright input is then mapped through the S-curve which exaggerates its dark regions even more.
+
+**Research:** Three.js r163+ ships `THREE.NeutralToneMapping` (Khronos PBR Neutral, https://github.com/KhronosGroup/ToneMapping). It is designed specifically for faithful reproduction of original artwork colors: minimal deviation from the linear input below 1.0, graceful soft rolloff above 1.0. No S-curve contrast boost. Three.js r166 (this project) has it available.
+
+For maximum fidelity on already-dark paintings, `THREE.NeutralToneMapping` at `toneMappingExposure = 1.0` is the correct choice. References: [Three.js Color Management](https://threejs.org/docs/#manual/en/introduction/Color-management), [Khronos PBR Neutral specification](https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/README.md).
+
+**Fix (X-01):**
+- `src/core/RendererManager.ts`: `renderer.toneMapping = THREE.NeutralToneMapping`
+- `renderer.toneMappingExposure = 1.0`
+
+---
+
+#### X-02 — RAF render loop starts AFTER overlay dismissal — gallery not rendered during fade
+
+**Root cause:** `src/main.ts` line 1367:
+```typescript
+rafId = requestAnimationFrame(animate);
+```
+This is called AFTER `await loadingOverlay.reveal()` resolves. `reveal()` waits for the user to click "Galerie betreten" AND then waits 1300 ms for the overlay's CSS `opacity: 0` fade to complete before resolving. During those 1300 ms of fade-out, the WebGL canvas:
+
+1. Has `gallery-canvas--ready` applied (line 920–921), meaning it is transitioning from `opacity: 0` to `opacity: 1` (1.4s CSS transition)
+2. Shows only the renderer clear color `0xdfe5e9` — the last canvas content was erased when `prewarmComposer(4, 4)` called `renderer.setSize(4, 4)` then restored to full size (line 906-908), which clears the canvas framebuffer
+3. The RAF loop has not started, so no scene render has occurred at full resolution
+
+**Observed symptom:** As the loading overlay fades (z-index 200, opacity CSS transition), the canvas below becomes visible showing the gray clear color for ~200–400 ms until the first `animate()` frame fires. User sees a "glitch/flash" of gray before the gallery appears.
+
+**Research:** The standard fix for WebGL loading-screen flash ([MDN Canvas API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API), [Three.js Loading Manager docs](https://threejs.org/docs/#api/en/loaders/managers/LoadingManager)) is to start the render loop before the loading overlay is dismissed, so the scene is already drawing during the fade-out. With the overlay at `z-index: 200` and `background: #0d0d0e` (fully opaque), the user cannot see through it while the gallery renders behind it.
+
+**Fix (X-02):**
+In `src/main.ts`:
+1. Declare `let pageInactive = false` earlier (move from line 1106 to ~line 658)
+2. Forward-declare `let animate!: (now: number) => void` and `let rafId: number` near the top of `main()`
+3. Add `rafId = requestAnimationFrame((now) => animate(now))` BEFORE `await loadingOverlay.reveal()` — safe because the first RAF callback fires ~16 ms later, by which time `animate` is fully assigned
+4. Change `const animate = ...` to `animate = ...` (assignment rather than const declaration)
+5. Remove the original `rafId = requestAnimationFrame(animate)` at line 1367
+
+This makes the gallery render continuously behind the opaque overlay. When the user clicks and the overlay fades, the gallery is already running at full quality — zero flash.
+
+---
+
+#### X-03 — Navigation lag: RAF cold start + loose damping
+
+**Root cause:** Two compounding factors:
+1. RAF loop not running during loading (fixed by X-02): GalleryManager's smoothDamp state has never been updated, so the first navigation after reveal runs from a cold position/scale state
+2. `LAMBDA_NAV_POSITION = 2.5` (line 88 of `GalleryManager.ts`) gives a 95% settle time of `3 / 2.5 = 1200 ms` — on slow hardware where frames drop, this can feel like genuine lag rather than intentional spring animation
+
+**Research:** For a museum-quality gallery where transitions are intentional but still feel responsive, a λ in the range 3.0–4.0 (settle 750–1000 ms) is the target. Three.js community practice (gsap FLIP gallery examples, three.js journey gallery demos) uses 600–900 ms settle for artwork position transitions. Raising λ from 2.5 to 3.5 reduces settle from 1200 ms to ~860 ms without losing the smooth organic feel.
+
+**Fix (X-03):**
+- X-02 fix eliminates cold-start lag entirely
+- `src/gallery/GalleryManager.ts`: raise `LAMBDA_NAV_POSITION` from `2.5` to `3.5`
+
+---
+
+#### X-04 — Loading particles: too regular, too slow
+
+**Root cause:** `src/styles/main.scss` `@keyframes loading-float` has only two stops (from → to):
+```scss
+@keyframes loading-float {
+  from { transform: translate3d(calc(var(--particle-drift-x, 16px) * -1), ...) scale(0.94); }
+  to   { transform: translate3d(var(--particle-drift-x, 16px), ...) scale(1.08); }
+}
+```
+This produces a single sinusoidal pendulum motion with `ease-in-out` — perfectly predictable and mechanical-looking. Duration 8–14 s is also very slow.
+
+**Research:** CSS multi-stop keyframe animations with per-particle custom properties can produce organic random-feeling paths (CSS Tricks, MDN Animation docs). Using 4 independent waypoints (0%, 28%, 62%, 100%) where each particle has unique X/Y offsets at every stop creates a winding, non-repeating-looking path. Duration 3–5 s with `linear` per-keyframe easing avoids the slow build-up of `ease-in-out`. Per-particle random secondary and tertiary drift vectors injected from JS provide true uniqueness.
+
+**Fix (X-04):**
+- `src/main.ts`: raise particle count 8 → 12; add `--particle-drift-x2/y2` and `--particle-drift-x3/y3` custom properties per particle; reduce durations to 3–6 s; randomize secondary and tertiary offsets with wider range ±60–100 px
+- `src/styles/main.scss`: replace `loading-float` 2-stop with new `loading-wander` 4-stop keyframe using all three drift variable pairs; remove `loading-float` reference
+
+---
+
+#### X-05 — Overlay architecture already correct (confirmed)
+
+**Confirmed correct:** `.loading-overlay` has `position: fixed; inset: 0; background: #0d0d0e; z-index: 200`. Canvas is `position: fixed; inset: 0` with no explicit z-index (rendered below overlay in stacking order). Canvas starts with `gallery-canvas--loading` (opacity: 0). With X-02, the gallery renders behind the fully opaque overlay from the start of the warm phase. When `gallery-canvas--ready` is applied at line 920, the canvas transitions to opacity: 1 while still hidden behind the opaque overlay. When the user clicks, the overlay fades smoothly to reveal an already-rendered gallery. No architectural change needed.
+
+### Validation
+
+- [ ] `npm run lint` — pending
+- [ ] `npm run build` — pending
+
+
 
 ### Status
 

@@ -1,5 +1,182 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.28 planned — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps documented below).
+
+
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **planned**)
+
+Runtime status: **in progress** — gaps identified, code changes not yet applied.
+
+### Problem statement (v0.28 user feedback)
+
+1. Paintings are now artistically dark/high-contrast; they must render as close to the original as possible.
+2. On main-page load there is a visible glitch/flash for a split second before the paintings appear.
+3. Navigation in the main-page painting selection is still laggy.
+4. Loading-screen particles should move faster and in more random patterns.
+5. The main page and gallery must be completely loaded and rendering in the background while the loading screen is fully visible.
+
+### Gap index
+
+| ID  | Short description                                      | File(s)                                              | Status   |
+|-----|--------------------------------------------------------|------------------------------------------------------|----------|
+| X-01 | ACESFilmic tone mapping crushes dark artwork          | `src/core/RendererManager.ts`                        | pending  |
+| X-02 | RAF loop starts after overlay dismiss → canvas flash  | `src/main.ts`                                        | pending  |
+| X-03 | Navigation lag: loose damping + RAF cold start        | `src/gallery/GalleryManager.ts`                      | pending  |
+| X-04 | Particles too slow and too regular                    | `src/main.ts`, `src/styles/main.scss`                | pending  |
+| X-05 | Overlay architecture (confirm correct, no change)     | `src/styles/main.scss`                               | ✓ confirmed |
+
+---
+
+### X-01 — Switch ACESFilmic → NeutralToneMapping for painting fidelity
+
+**Root cause:** `RendererManager.ts` lines 49–50 use `THREE.ACESFilmicToneMapping` at `exposure = 1.45`. ACES Filmic applies a strong S-curve that compresses shadow midtones and boosts contrast — appropriate for photorealistic scenes but destructive for artworks that are intentionally dark and high-contrast by the artist, as it further deviates the rendered output from the original color values.
+
+**Research findings (online):**
+- Three.js r163 added `THREE.NeutralToneMapping` (the Khronos PBR Neutral tone mapper). The [Khronos ToneMapping README](https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/README.md) explicitly states: *"designed to minimise colour distortion from the creative intent"*, with near-identity response below 1.0 and soft rolloff above.
+- For paintings and artwork that must appear faithful to the artist's creation, `NeutralToneMapping` is the correct choice over ACES.
+- The [Three.js Color Management guide](https://threejs.org/docs/#manual/en/introduction/Color-management) confirms NeutralToneMapping as the recommendation for minimal-alteration scenarios.
+- Three.js r166 (this project) has `THREE.NeutralToneMapping = 7` in `src/constants.js`. ✓
+
+**Implementation:**
+```typescript
+// src/core/RendererManager.ts — line 49–50
+this.renderer.toneMapping = THREE.NeutralToneMapping;  // was ACESFilmicToneMapping
+this.renderer.toneMappingExposure = 1.0;               // was 1.45
+```
+
+**Acceptance:** Paintings rendered with neutral/original brightness; no artificial shadow crush; highlight rolloff gentle not aggressive.
+
+---
+
+### X-02 — Start RAF render loop before overlay reveal to eliminate canvas flash
+
+**Root cause:** `src/main.ts` line 1367:
+```typescript
+rafId = requestAnimationFrame(animate);
+```
+This runs AFTER `await loadingOverlay.reveal()` resolves. `reveal()` waits for user click + 1300 ms CSS fade-out. During the fade-out:
+- Canvas `.gallery-canvas--ready` (opacity: 0→1, 1.4 s transition) starts at line 920
+- But the canvas framebuffer shows only the renderer clear color (`0xdfe5e9`) — `prewarmComposer(4, 4)` called `setSize(4, 4)` then `setSize(fullW, fullH)` which clears the canvas
+- No `animate()` frame has yet rendered the scene
+- User sees the gray clear color "flash" through during overlay fade
+
+**Fix pattern (JavaScript forward-declaration):**
+TypeScript supports a definite-assignment assertion `!` on a `let` binding (`let animate!: (now: number) => void`) to silence TS2454 "variable used before assignment". The forward-reference closure `() => animate(now)` is safe: the RAF callback fires at the next display frame (~16 ms), well after the current synchronous tick finishes, by which time `animate` has been fully assigned.
+
+**Implementation:**
+```typescript
+// Near top of main() — forward declare (move pageInactive here too):
+let pageInactive = false;
+let animate!: (now: number) => void;
+let rafId: number;
+
+// [... all preload / warmup code ...]
+
+// BEFORE await loadingOverlay.reveal():
+rafId = requestAnimationFrame((now) => animate(now));  // ← NEW: start rendering behind overlay
+
+await loadingOverlay.reveal();
+
+// [... later, where animate was const animate = ...]
+animate = (now: number): void => {
+  // ... existing RAF body unchanged ...
+};
+
+// REMOVE old:  rafId = requestAnimationFrame(animate);  ← DELETE this line
+```
+
+**Acceptance:** Gallery renders continuously behind opaque overlay; overlay fade-out reveals already-running gallery; no gray flash visible.
+
+---
+
+### X-03 — Fix navigation lag: tighten smoothing lambda
+
+**Root cause:**
+1. Cold-start gap: RAF loop not running during overlay phase means GalleryManager's smoothDamp state starts from a zero-iteration baseline. First navigation after reveal has an unexpected catch-up motion. Fixed by X-02.
+2. Loose lambda: `LAMBDA_NAV_POSITION = 2.5` yields a 95% settle time of `3 / 2.5 ≈ 1200 ms` which at low frame rates feels genuinely laggy rather than smoothly intentional.
+
+**Research findings (online):**
+- Typical museum-quality WebGL gallery demos (Three.js Journey gallery, GSAP FLIP gallery examples) use position λ in the range 3.0–4.5 for artwork focus transitions — yielding 670–1000 ms settle.
+- For "snappy but still organic" feel without losing the museum aesthetic: λ = 3.5 → settle ≈ 860 ms. This is the target.
+
+**Implementation:**
+```typescript
+// src/gallery/GalleryManager.ts — line 88
+private static readonly LAMBDA_NAV_POSITION = 3.5;  // was 2.5
+```
+
+**Acceptance:** Artwork navigation responds noticeably faster; selection still animates organically; no snap/jump feel.
+
+---
+
+### X-04 — Replace 2-stop particle drift with 4-stop random wander
+
+**Root cause:** `@keyframes loading-float` has only two stops (from → to), creating a single perfect sinusoidal with `ease-in-out`. Particle durations 8–14 s are slow. Each particle has only two drift custom properties (`--particle-drift-x`, `--particle-drift-y`), producing symmetric predictable paths.
+
+**Research findings (online):**
+- CSS multi-stop keyframes with per-particle injected custom properties simulate pseudo-random wander paths: 4 waypoints at 0%, ~28%, ~62%, 100% with independent X/Y drift at each stop creates a bent, non-symmetric path. ([MDN CSS Animations](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_animations/Using_CSS_animations), CSS Tricks particle animation articles)
+- Animation duration 3–5 s with the keyframe body using `linear` (not `ease-in-out`) keeps motion constant-speed and more energetic.
+- Staggered `animation-delay` values spread across the full duration so particles are never synchronized.
+
+**Implementation — JS (src/main.ts):**
+- Raise particle count from 8 to 12
+- Per particle, generate and assign:
+  - `--particle-drift-x` / `--particle-drift-y` (waypoint 1, existing)
+  - `--particle-drift-x2` / `--particle-drift-y2` (waypoint 2, new)
+  - `--particle-drift-x3` / `--particle-drift-y3` (waypoint 3, new)
+  - Duration range: 3000–6000 ms (was 8000–14000 ms)
+  - Drift magnitudes: ±40–90 px (was ±18–32 px)
+  - Stagger delay range widened to cover full duration span
+
+**Implementation — CSS (src/styles/main.scss):**
+```scss
+@keyframes loading-wander {
+  0%   { transform: translate3d(
+           calc(var(--particle-drift-x, 20px) * -1),
+           calc(var(--particle-drift-y, 15px) * -1),
+           0) scale(0.92); }
+  28%  { transform: translate3d(
+           var(--particle-drift-x2, 30px),
+           calc(var(--particle-drift-y2, -20px)),
+           0) scale(1.06); }
+  62%  { transform: translate3d(
+           calc(var(--particle-drift-x3, -25px)),
+           var(--particle-drift-y3, 35px),
+           0) scale(0.96); }
+  100% { transform: translate3d(
+           var(--particle-drift-x, 20px),
+           var(--particle-drift-y, 15px),
+           0) scale(1.10); }
+}
+```
+- Replace `animation-name: loading-float` with `loading-wander` on `.loading-particle`
+- Remove `@keyframes loading-float`
+
+**Acceptance:** Particles move in visibly non-regular, winding, non-symmetric paths; motion is clearly faster and more energetic than before; no two particles follow the same apparent path.
+
+---
+
+### X-05 — Background preloading: overlay architecture confirmed correct
+
+**Confirmed:** With X-02 applied, the main page and gallery render continuously behind the opaque overlay throughout the entire loading phase. Overlay architecture is already correct: `position: fixed; inset: 0; background: #0d0d0e; z-index: 200`. The canvas renders at `z-index: auto` (below overlay). All artworks are GPU-warmed before `reveal()` is called (strict preload contract, `FULL_PRELOAD_SAFETY_CAP = Number.MAX_SAFE_INTEGER`). No architectural change needed beyond X-02.
+
+**No code change for X-05 specifically.**
+
+---
+
+### Implementation order
+
+1. X-01 — `RendererManager.ts` (smallest, fully isolated)
+2. X-02 — `main.ts` (forward-declare animate, start RAF before reveal)
+3. X-03 — `GalleryManager.ts` (single constant change)
+4. X-04 — `main.ts` + `main.scss` (particle count + wander keyframe)
+5. Validate: `npm run lint`, `npm run build`
+
+### Open questions
+
+- Verify `THREE.NeutralToneMapping` constant name in `node_modules/three/src/constants.js` before committing X-01.
+- λ = 3.5 is the initial target; may raise to 4.0 if still perceived as laggy at low frame rates.
+
+---
 
 
 ## v0.27 — Startup smoothness + loading/AA deep technical audit and remediation plan (2026-05-22, **shipped**)

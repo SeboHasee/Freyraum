@@ -287,28 +287,48 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   overlay.setAttribute('aria-live', 'polite');
   overlay.setAttribute('aria-label', 'Galerie wird geladen');
 
-  const particles: Array<[string, string, string, string, string, string, string, string]> = [
-    ['12%', '18%', '280px', 'rgba(181, 154, 106, 0.32)', '8s',   '0s',    '28px',  '-32px'],
-    ['78%', '14%', '340px', 'rgba(200, 214, 229, 0.26)', '10s',  '-1.4s', '-24px', '34px' ],
-    ['18%', '76%', '400px', 'rgba(200, 214, 229, 0.24)', '12s',  '-2.6s', '32px',  '-24px'],
-    ['82%', '72%', '290px', 'rgba(181, 154, 106, 0.28)', '9s',   '-0.8s', '-26px', '-22px'],
-    ['50%', '8%',  '220px', 'rgba(181, 154, 106, 0.22)', '11s',  '-3.2s', '22px',  '30px' ],
-    ['48%', '92%', '320px', 'rgba(200, 214, 229, 0.20)', '13s',  '-2.1s', '-30px', '-28px'],
-    ['28%', '52%', '240px', 'rgba(181, 154, 106, 0.18)', '14s',  '-4.5s', '18px',  '22px' ],
-    ['72%', '48%', '260px', 'rgba(200, 214, 229, 0.16)', '9.5s', '-1.8s', '-22px', '20px' ],
+  // v0.28 X-04 — 12 particles, 3-6 s duration, 4-waypoint random wander.
+  // Each particle gets three independent drift vectors (dx1/dy1 through dx3/dy3)
+  // injected as CSS custom properties, driven by the `loading-wander` keyframe
+  // in main.scss. Larger drift magnitudes (±40–90 px) and shorter durations
+  // produce visibly faster, non-regular motion.
+  interface ParticleDef {
+    x: string; y: string; size: string; color: string;
+    duration: string; delay: string;
+    dx1: string; dy1: string;
+    dx2: string; dy2: string;
+    dx3: string; dy3: string;
+  }
+  const particles: ParticleDef[] = [
+    { x: '10%', y: '14%', size: '280px', color: 'rgba(181,154,106,0.32)', duration: '4.2s', delay: '0s',    dx1:  '52px', dy1: '-44px', dx2: '-68px', dy2:  '38px', dx3:  '44px', dy3: '-58px' },
+    { x: '78%', y: '12%', size: '340px', color: 'rgba(200,214,229,0.26)', duration: '3.6s', delay: '-1.4s', dx1: '-48px', dy1:  '60px', dx2:  '72px', dy2: '-46px', dx3: '-56px', dy3:  '42px' },
+    { x: '16%', y: '74%', size: '400px', color: 'rgba(200,214,229,0.24)', duration: '5.1s', delay: '-2.8s', dx1:  '64px', dy1: '-52px', dx2: '-40px', dy2:  '76px', dx3:  '58px', dy3: '-38px' },
+    { x: '84%', y: '70%', size: '290px', color: 'rgba(181,154,106,0.28)', duration: '3.9s', delay: '-0.7s', dx1: '-62px', dy1:  '42px', dx2:  '48px', dy2: '-72px', dx3: '-44px', dy3:  '66px' },
+    { x: '50%', y: '6%',  size: '220px', color: 'rgba(181,154,106,0.22)', duration: '4.7s', delay: '-3.5s', dx1:  '44px', dy1:  '68px', dx2: '-76px', dy2: '-40px', dx3:  '60px', dy3:  '52px' },
+    { x: '46%', y: '90%', size: '320px', color: 'rgba(200,214,229,0.20)', duration: '3.3s', delay: '-2.1s', dx1: '-58px', dy1: '-62px', dx2:  '82px', dy2:  '44px', dx3: '-48px', dy3: '-70px' },
+    { x: '26%', y: '50%', size: '240px', color: 'rgba(181,154,106,0.18)', duration: '5.8s', delay: '-4.4s', dx1:  '70px', dy1:  '46px', dx2: '-44px', dy2: '-80px', dx3:  '38px', dy3:  '64px' },
+    { x: '74%', y: '46%', size: '260px', color: 'rgba(200,214,229,0.16)', duration: '4.4s', delay: '-1.9s', dx1: '-46px', dy1:  '72px', dx2:  '60px', dy2: '-48px', dx3: '-68px', dy3:  '56px' },
+    { x: '34%', y: '28%', size: '200px', color: 'rgba(181,154,106,0.20)', duration: '3.8s', delay: '-0.5s', dx1:  '58px', dy1: '-76px', dx2: '-50px', dy2:  '60px', dx3:  '76px', dy3: '-42px' },
+    { x: '62%', y: '32%', size: '310px', color: 'rgba(200,214,229,0.22)', duration: '5.4s', delay: '-3.1s', dx1: '-72px', dy1: '-48px', dx2:  '44px', dy2:  '84px', dx3: '-60px', dy3: '-52px' },
+    { x: '8%',  y: '44%', size: '350px', color: 'rgba(181,154,106,0.16)', duration: '4.0s', delay: '-1.2s', dx1:  '46px', dy1:  '84px', dx2: '-80px', dy2: '-44px', dx3:  '52px', dy3:  '68px' },
+    { x: '90%', y: '36%', size: '230px', color: 'rgba(200,214,229,0.18)', duration: '5.6s', delay: '-2.5s', dx1: '-84px', dy1:  '52px', dx2:  '66px', dy2: '-76px', dx3: '-50px', dy3:  '46px' },
   ];
-  particles.forEach(([x, y, size, color, duration, delay, driftX, driftY]) => {
+  particles.forEach((p) => {
     const particle = document.createElement('span');
     particle.className = 'loading-particle';
     particle.setAttribute('aria-hidden', 'true');
-    particle.style.setProperty('--particle-x', x);
-    particle.style.setProperty('--particle-y', y);
-    particle.style.setProperty('--particle-size', size);
-    particle.style.setProperty('--particle-color', color);
-    particle.style.setProperty('--particle-duration', duration);
-    particle.style.setProperty('--particle-delay', delay);
-    particle.style.setProperty('--particle-drift-x', driftX);
-    particle.style.setProperty('--particle-drift-y', driftY);
+    particle.style.setProperty('--particle-x', p.x);
+    particle.style.setProperty('--particle-y', p.y);
+    particle.style.setProperty('--particle-size', p.size);
+    particle.style.setProperty('--particle-color', p.color);
+    particle.style.setProperty('--particle-duration', p.duration);
+    particle.style.setProperty('--particle-delay', p.delay);
+    particle.style.setProperty('--particle-drift-x', p.dx1);
+    particle.style.setProperty('--particle-drift-y', p.dy1);
+    particle.style.setProperty('--particle-drift-x2', p.dx2);
+    particle.style.setProperty('--particle-drift-y2', p.dy2);
+    particle.style.setProperty('--particle-drift-x3', p.dx3);
+    particle.style.setProperty('--particle-drift-y3', p.dy3);
     overlay.appendChild(particle);
   });
 
@@ -655,6 +675,14 @@ async function main(): Promise<void> {
   const adaptiveQuality = new AdaptiveQualityController(preferences.current.quality);
   galleryManager.setFrameBudgetMarker(() => frameBudget.markNavigation());
   let adaptiveQualityWriteInFlight = false;
+  // v0.28 X-02 — Forward declarations so the RAF loop can start before the
+  // loading overlay is dismissed. The closure `(now) => animate(now)` resolves
+  // `animate` at call time (not at rAF-schedule time), so by the first frame
+  // (~16 ms) the full assignment below has already executed.
+  let pageInactive = false;
+  let rafId: number;
+  // eslint-disable-next-line prefer-const
+  let animate: (now: number) => void;
 
   // Experimental WebGPU probe (opt-in, dynamic import, fire-and-forget).
   void maybeProbeWebGPU();
@@ -919,6 +947,14 @@ async function main(): Promise<void> {
   }
   rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
   rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
+  // v0.28 X-02 — Start the render loop NOW, before the overlay fades out.
+  // The gallery renders continuously behind the opaque overlay (z-index 200,
+  // background #0d0d0e). When the user clicks and the overlay fades, the
+  // canvas already shows the live rendered scene — no grey-flash on reveal.
+  // `animate` is assigned later in this function; the wrapper closure resolves
+  // it at call time, which is always after the synchronous boot path completes.
+  rafId = requestAnimationFrame((now) => animate(now));
+  diagnostics.info('boot', 'raf-start-pre-reveal', 'RAF loop started before overlay reveal (v0.28 X-02)');
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
   // v0.24.2: All artworks were warmed pre-reveal, so warmCursor starts at warmOrder.length.
@@ -1103,7 +1139,7 @@ async function main(): Promise<void> {
   //   - https://developer.mozilla.org/docs/Web/API/Page_Visibility_API
   //   - https://developer.chrome.com/articles/page-lifecycle-api
   //   - https://wicg.github.io/page-lifecycle/
-  let pageInactive = false;
+  // (pageInactive is forward-declared above near adaptiveQualityWriteInFlight)
   const suspendRuntime = (reason: string): void => {
     if (pageInactive) return;
     pageInactive = true;
@@ -1311,9 +1347,8 @@ async function main(): Promise<void> {
   timeline.onSelect((index: number) => galleryManager.goTo(index));
   timeline.onPreview((index: number) => galleryManager.promotePrefetchWindow(index, 'timeline-preview'));
 
-  // Animation loop
-  let rafId: number;
-  const animate = (now: number): void => {
+  // Animation loop — animate is forward-declared above (v0.28 X-02).
+  animate = (now: number): void => {
     rafId = requestAnimationFrame(animate);
     // v0.11 — skip drawing while the WebGL context is lost on mobile.
     // The render loop keeps requesting frames so that the moment the
@@ -1364,7 +1399,8 @@ async function main(): Promise<void> {
     postProcessing.render();
   };
 
-  rafId = requestAnimationFrame(animate);
+  // v0.28 X-02 — RAF loop is already running (started before overlay reveal).
+  // Removed: rafId = requestAnimationFrame(animate);
 
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {

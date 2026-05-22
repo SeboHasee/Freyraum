@@ -1362,9 +1362,11 @@ button {
   filter: blur(4px);
   opacity: 0.9;
   will-change: transform, opacity;
+  // v0.28 X-04: replaced loading-float (2-stop ease-in-out) with loading-wander
+  // (4-stop linear) for faster, non-regular random-looking particle motion.
   animation:
-    loading-float var(--particle-duration, 8s) ease-in-out infinite alternate,
-    loading-pulse calc(var(--particle-duration, 8s) * 0.85) ease-in-out infinite;
+    loading-wander var(--particle-duration, 4s) linear infinite alternate,
+    loading-pulse calc(var(--particle-duration, 4s) * 0.85) ease-in-out infinite;
   animation-delay: var(--particle-delay, 0s), var(--particle-delay, 0s);
 }
 
@@ -1389,9 +1391,41 @@ button {
   }
 }
 
-@keyframes loading-float {
-  from { transform: translate3d(calc(var(--particle-drift-x, 16px) * -1), calc(var(--particle-drift-y, -16px) * -1), 0) scale(0.94); }
-  to { transform: translate3d(var(--particle-drift-x, 16px), var(--particle-drift-y, -16px), 0) scale(1.08); }
+// v0.28 X-04 — 4-stop wander keyframe. Each stop uses an independent per-particle
+// drift vector injected from JS as CSS custom properties (--particle-drift-x/y,
+// --particle-drift-x2/y2, --particle-drift-x3/y3). Linear easing between stops
+// removes the slow-build-up of ease-in-out, producing constant-speed motion.
+// `alternate` fill-mode combined with four asymmetric stops yields a non-repeating,
+// winding path that reads as genuinely random.
+@keyframes loading-wander {
+  0% {
+    transform: translate3d(
+      calc(var(--particle-drift-x, 20px) * -1),
+      calc(var(--particle-drift-y, 15px) * -1),
+      0
+    ) scale(0.92);
+  }
+  28% {
+    transform: translate3d(
+      var(--particle-drift-x2, 30px),
+      var(--particle-drift-y2, -20px),
+      0
+    ) scale(1.06);
+  }
+  62% {
+    transform: translate3d(
+      var(--particle-drift-x3, -25px),
+      var(--particle-drift-y3, 35px),
+      0
+    ) scale(0.97);
+  }
+  100% {
+    transform: translate3d(
+      var(--particle-drift-x, 20px),
+      var(--particle-drift-y, 15px),
+      0
+    ) scale(1.10);
+  }
 }
 
 @keyframes loading-pulse {

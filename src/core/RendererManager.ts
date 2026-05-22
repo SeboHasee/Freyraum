@@ -46,8 +46,12 @@ export class RendererManager {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.45;
+    // v0.28 X-01 — NeutralToneMapping (Khronos PBR Neutral, r163+) preserves
+    // original artwork colours: near-identity below 1.0, gentle rolloff above.
+    // ACESFilmicToneMapping was crushing dark/high-contrast paintings by applying
+    // an aggressive S-curve on top of the artist's intentional colour values.
+    this.renderer.toneMapping = THREE.NeutralToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.setClearColor(0xdfe5e9);
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
