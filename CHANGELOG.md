@@ -1,5 +1,29 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — disable FXAA on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 planning pass — realistic, elegant metallic PBR frame roadmap documented; lint/build pass).
+
+## v0.29 — realistic metallic frame roadmap documentation (2026-05-22, docs-only planning)
+
+### Status
+
+Planning/documentation update only. Runtime code unchanged in this pass.
+
+### Added
+
+- Documented a dedicated v0.29 plan for realistic, modern, elegant metallic painting frames that remain non-distracting and painting-first.
+- Added online research synthesis covering PBR metallic response, brushed finish guidance, reflection control, and frame-focused gallery lighting constraints.
+- Added vertical implementation slices and acceptance gates for upcoming frame-realism work.
+
+### Changed
+
+- Refreshed top-level status docs (`README.md`, `plan.md`, `FINDINGS.md`, `docs/HANDOFF.md`) to reflect the new v0.29 planning pass.
+- Updated shared markdown audit banner across repository markdown files for this documentation sync.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.38 — Disable FXAA on high/balanced to restore v0.25 image response (2026-05-22, **shipped**)
 

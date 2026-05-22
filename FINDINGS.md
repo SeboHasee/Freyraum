@@ -1,5 +1,55 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 planning pass — realistic, elegant metallic PBR frame roadmap documented; lint/build pass).
+
+## v0.29 — realistic metallic frame research findings (2026-05-22, planning)
+
+### Status
+
+Planning/research only in this pass; runtime code unchanged.
+
+### Online research highlights
+
+1. **Metal realism comes from physically plausible response, not high contrast tricks.**
+   - PBR references consistently place metallic frames in full-metal workflows with realism tuned by roughness and micro-surface detail.
+   - Practical implication: avoid emissive or contrast-boost shortcuts that can make frames look synthetic.
+
+2. **Brushed modern metals need restrained roughness + directional microstructure.**
+   - Research ranges cluster around moderate roughness for elegant brushed finishes, avoiding near-mirror polish that causes visual noise.
+   - Practical implication: target a soft, premium sheen rather than glossy showroom chrome.
+
+3. **Environment reflections are a first-order dependency for believable metal.**
+   - Real-time rendering guidance repeatedly emphasizes HDR/environment map quality and prefiltered reflections (PMREM path) for metallic credibility.
+   - Practical implication: frame tuning must be validated with the real gallery lighting/reflection stack, not isolated material previews.
+
+4. **Edge definition strongly affects perceived quality.**
+   - Bevel/chamfer transitions are necessary for realistic metallic edge highlights; razor-sharp edges read as low-quality CG.
+   - Practical implication: subtle geometry refinement is required alongside material tuning.
+
+5. **Museum-display guidance aligns with a non-distracting frame strategy.**
+   - Soft/diffuse lighting, neutral finishes, and controlled specular hotspots are repeatedly recommended to keep art dominant.
+   - Practical implication: frame highlights must be bounded and evaluated against artwork readability, not only frame beauty in isolation.
+
+### Working parameter guidance for upcoming implementation
+
+- Use neutral modern-metal albedo families (e.g., brushed aluminum / muted titanium style ranges).
+- Keep metallic behavior physically plausible and rely on controlled roughness bands for elegance.
+- Keep frame-only micro-normal/roughness detail subtle to avoid shimmer and aliasing.
+- Define a hard anti-distraction threshold in acceptance checks (frame cannot pull focus from central painting content at normal viewing distance).
+
+### Sources consulted
+
+- Three.js docs/manual on color management and physical materials.
+- Three.js guidance on compile/warm/reflection pipeline behavior.
+- Khronos/Filament PBR material property documentation for metallic value conventions.
+- Industry guidance on anisotropic/brushed-metal shading behavior.
+- Gallery/museum lighting recommendations for minimizing frame glare and distraction.
+
+### Validation in this pass
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.38 — Rendering parity follow-up (2026-05-22, **shipped**)
 

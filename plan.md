@@ -1,5 +1,84 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 planning pass — realistic, elegant metallic PBR frame roadmap documented; lint/build pass).
+
+## v0.29 — realistic metallic frame plan (2026-05-22, planning only)
+
+Runtime status: **planning/documentation only**; no runtime frame-material changes are shipped in this pass.
+
+### Problem statement
+
+Frames should look realistic, modern, elegant, and clearly metallic with 3D PBR shading, but must never visually overpower the painting content.
+
+### Goals
+
+1. Upgrade frame materials from "generic glossy" to physically plausible metal response.
+2. Preserve painting-first visual hierarchy under all supported quality presets.
+3. Add subtle geometric depth cues (bevel/chamfer highlights) for believable frame form.
+4. Keep startup and interaction smooth while introducing richer frame shading.
+
+### Non-goals
+
+1. No ornate or attention-seeking decorative frame language.
+2. No mirror-like chrome settings that create aggressive glare hotspots.
+3. No regressions to painting color fidelity or first-interaction smoothness.
+
+### Online research synthesis (implementation constraints)
+
+- PBR metal workflow should keep frame `metalness` near full-metal values and drive realism mainly through roughness, micro-normal detail, and environment reflections rather than high emissive/contrast tricks.
+- Brushed modern metal is typically achieved with mid roughness (not mirror polish), directional micro-structure, and controlled anisotropic-like highlight behavior where available.
+- Realistic metal quality depends heavily on neutral, believable environment lighting and prefiltered reflections (PMREM-style pipeline).
+- To keep frames non-distracting, gallery lighting guidance recommends diffuse key/fill balance, limited specular hotspot intensity, restrained frame width/profile, and neutral metal tones.
+- Edge definition (small bevel transitions) is critical: perfectly sharp edges read as synthetic and reduce believable metallic highlights.
+
+### Gap index
+
+| ID | Gap | Target area | Status |
+|----|-----|-------------|--------|
+| M-01 | Frame material response lacks calibrated metallic roughness ranges per preset | `src/config/quality.ts`, frame material pipeline | planned |
+| M-02 | Frame geometry depth cues are too weak for premium modern-metal perception | frame mesh/profile generation path | planned |
+| M-03 | Reflection intensity is not bounded against painting-first hierarchy | lighting + post-processing contracts | planned |
+| M-04 | Brushed-metal microstructure directionality not represented | frame normal/roughness detail pipeline | planned |
+| M-05 | No explicit anti-distraction acceptance criteria for frames | diagnostics + QA protocol | planned |
+| M-06 | Potential preset drift between high/balanced/battery frame appearance | quality preset parity checks | planned |
+| M-07 | Missing deterministic visual benchmark set for dark/bright paintings | test-gallery references | planned |
+| M-08 | Documentation not yet aligned to this frame-focused roadmap | repository markdown set | done (this pass) |
+
+### Vertical-slice implementation roadmap
+
+1. **Material calibration slice**
+   - Define target metallic/roughness bands for each supported frame finish (e.g., brushed aluminum, dark titanium, soft champagne).
+   - Lock a safe default finish that is elegant and neutral.
+
+2. **Geometry realism slice**
+   - Introduce subtle bevel/chamfer profile improvements so frame edges catch light naturally without becoming thick or decorative.
+
+3. **Micro-detail slice**
+   - Add restrained frame-only normal/roughness micro-detail to avoid flat CG look; keep amplitude low to prevent sparkle/noise.
+
+4. **Lighting/reflection control slice**
+   - Cap frame highlight intensity and reflection influence so paintings remain primary focal point.
+   - Verify behavior under existing light profiles and quality presets.
+
+5. **Performance + stability slice**
+   - Ensure frame enhancements do not reintroduce first-use shader stalls or measurable interaction hitches.
+
+6. **Acceptance + diagnostics slice**
+   - Add explicit pass/fail criteria: frame readability at multiple angles, no highlight blowout near painting center, no perceived distraction in side-by-side comparisons.
+
+### Validation plan
+
+- Run existing repository checks (`npm run lint`, `npm run build`) after implementation work.
+- Perform before/after visual checks on dark, high-contrast, and bright paintings.
+- Confirm frame realism improvements remain subtle and museum-appropriate rather than stylized.
+
+### Reference set for implementation
+
+- Three.js color management and physically based material documentation.
+- Khronos/Filament PBR material value references for metallic workflows.
+- Industry guidance on brushed-metal anisotropy and reflection shaping.
+- Gallery lighting best practices for non-distracting display framing.
+
+---
 
 ## v0.38 — Rendering parity closeout (2026-05-22, **shipped**)
 

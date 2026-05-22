@@ -1,5 +1,13 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 planning pass — realistic, elegant metallic PBR frame roadmap documented; lint/build pass).
+
+## v0.29 — handoff status: realistic metallic frame pass is planned (2026-05-22)
+
+Customer-facing status: **planned, not yet shipped**.
+
+A new v0.29 roadmap is documented to make painting frames more realistic and visually elegant with physically based metallic shading while keeping paintings as the clear focal point. The implementation will prioritize modern brushed-metal aesthetics, subtle 3D edge depth, and bounded reflections so frame highlights never dominate artwork content.
+
+References: `plan.md § v0.29 — realistic metallic frame plan` and `FINDINGS.md § v0.29 — realistic metallic frame research findings`.
 
 ## v0.29 — handoff status: loading-screen/full-render fix is shipped (2026-05-22)
 
