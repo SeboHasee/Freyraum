@@ -1,8 +1,23 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.28 shipped — NeutralToneMapping, RAF-before-reveal pre-rendering, navigation lambda 3.5, 12-particle wander keyframe; all Markdown files updated).
 
 
-## 2026-05-22 — v0.27 lessons
+## 2026-05-22 — v0.28 lessons
+
+### Lesson 65 — NeutralToneMapping for artwork fidelity
+
+`THREE.ACESFilmicToneMapping` applies an aggressive S-curve designed for photorealistic scenes. For artwork galleries where paintings are intentionally dark or high-contrast, this destroys the artist's colour intent. **Future rule:** always use `THREE.NeutralToneMapping` (Khronos PBR Neutral, Three.js r163+) with `exposure = 1.0` when the goal is faithful reproduction of original artwork colours.
+
+### Lesson 66 — Start RAF render loop before overlay dismiss
+
+When a loading overlay fades out with a CSS opacity transition, any canvas below must already be rendering. Starting the RAF loop after the overlay begins fading reveals the clear color (grey flash). **Future rule:** forward-declare the animate function and call `requestAnimationFrame` before `await overlay.reveal()` so the scene is fully pre-rendered behind the opaque overlay during the entire loading phase.
+
+### Lesson 67 — Pre-rendering behind loading screen validates preload contract
+
+With RAF running before reveal, the full gallery (all artworks, textures, shaders) renders continuously behind the loading screen. This makes the preload contract verifiable at runtime: if any artwork is not yet GPU-warmed, it shows as a missing frame behind the overlay rather than after user entry. **Future rule:** always ensure the scene is actively rendering during the loading phase — this proves the preload contract rather than trusting it on faith.
+
+
+
 
 ### Lesson 62 — EffectComposer silently bypasses native antialias
 

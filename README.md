@@ -1,16 +1,16 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.28 planned — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps documented below).
+> Last full markdown audit: 2026-05-22 (v0.28 shipped — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps resolved).
 
 
-## v0.28 — Painting fidelity + background preloading + particle enhancement (planned)
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)
 
-**Status: planned — implementation in progress.**
+**Status: shipped in runtime code.**
 
-1. **Painting fidelity (X-01):** Switch `ACESFilmicToneMapping → NeutralToneMapping` at `exposure = 1.0` to restore faithful colour reproduction for artistically dark/high-contrast paintings.
-2. **Background preloading / flash elimination (X-02):** Start RAF render loop before overlay reveal so the gallery renders continuously behind the opaque overlay; eliminates grey-flash on overlay fade-out.
-3. **Navigation lag (X-03):** Raise `LAMBDA_NAV_POSITION 2.5 → 3.5` for ~860 ms settle (was ~1200 ms); X-02 also eliminates RAF cold-start lag on first navigation.
-4. **Particle wander (X-04):** 8→12 particles, duration 8–14 s → 3–6 s, replace 2-stop `loading-float` keyframe with 4-stop `loading-wander` with per-particle random multi-axis drift properties.
-5. **Overlay architecture (X-05):** Confirmed correct — no change needed.
+1. **Painting fidelity (X-01):** Switched `ACESFilmicToneMapping → NeutralToneMapping` at `exposure = 1.0` to restore faithful colour reproduction for artistically dark/high-contrast paintings.
+2. **Background preloading / flash elimination (X-02):** RAF render loop starts before overlay reveal so the gallery renders continuously behind the opaque overlay; eliminates grey-flash on overlay fade-out. Main page and gallery are fully pre-rendered while the loading screen is visible.
+3. **Navigation lag (X-03):** Raised `LAMBDA_NAV_POSITION 2.5 → 3.5` for ~860 ms settle (was ~1200 ms); X-02 also eliminates RAF cold-start lag on first navigation.
+4. **Particle wander (X-04):** 8→12 particles, duration 8–14 s → 3–6 s, replaced 2-stop `loading-float` keyframe with 4-stop `loading-wander` with per-particle random multi-axis drift properties.
+5. **Overlay architecture (X-05):** Confirmed correct — no change needed. Everything is pre-rendered behind the loading screen.
 
 See `plan.md § v0.28` and `FINDINGS.md § v0.28` for root-cause analysis, research findings, and implementation specification.
 

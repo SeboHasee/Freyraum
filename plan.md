@@ -1,10 +1,10 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.28 planned — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps documented below).
+> Last full markdown audit: 2026-05-22 (v0.28 shipped — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps resolved).
 
 
-## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **planned**)
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)
 
-Runtime status: **in progress** — gaps identified, code changes not yet applied.
+Runtime status: **shipped** in `src/core/RendererManager.ts`, `src/main.ts`, `src/gallery/GalleryManager.ts`, `src/styles/main.scss`.
 
 ### Problem statement (v0.28 user feedback)
 
@@ -18,10 +18,10 @@ Runtime status: **in progress** — gaps identified, code changes not yet applie
 
 | ID  | Short description                                      | File(s)                                              | Status   |
 |-----|--------------------------------------------------------|------------------------------------------------------|----------|
-| X-01 | ACESFilmic tone mapping crushes dark artwork          | `src/core/RendererManager.ts`                        | pending  |
-| X-02 | RAF loop starts after overlay dismiss → canvas flash  | `src/main.ts`                                        | pending  |
-| X-03 | Navigation lag: loose damping + RAF cold start        | `src/gallery/GalleryManager.ts`                      | pending  |
-| X-04 | Particles too slow and too regular                    | `src/main.ts`, `src/styles/main.scss`                | pending  |
+| X-01 | ACESFilmic tone mapping crushes dark artwork          | `src/core/RendererManager.ts`                        | ✓ shipped |
+| X-02 | RAF loop starts after overlay dismiss → canvas flash  | `src/main.ts`                                        | ✓ shipped |
+| X-03 | Navigation lag: loose damping + RAF cold start        | `src/gallery/GalleryManager.ts`                      | ✓ shipped |
+| X-04 | Particles too slow and too regular                    | `src/main.ts`, `src/styles/main.scss`                | ✓ shipped |
 | X-05 | Overlay architecture (confirm correct, no change)     | `src/styles/main.scss`                               | ✓ confirmed |
 
 ---

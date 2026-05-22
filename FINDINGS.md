@@ -1,12 +1,12 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.28 planned — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps documented below).
+> Last full markdown audit: 2026-05-22 (v0.28 shipped — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps resolved).
 
 
-## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **planned**)
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)
 
 ### Status
 
-X-series gaps identified from deep code audit and online research. Not yet shipped.
+X-series gaps shipped. All code changes applied and validated (`npm run lint` — pass, `npm run build` — pass).
 
 ### Problem statement (current user feedback)
 
@@ -110,8 +110,8 @@ This produces a single sinusoidal pendulum motion with `ease-in-out` — perfect
 
 ### Validation
 
-- [ ] `npm run lint` — pending
-- [ ] `npm run build` — pending
+- [x] `npm run lint` — pass
+- [x] `npm run build` — pass
 
 
 

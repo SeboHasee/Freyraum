@@ -1,20 +1,25 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.28 planned — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps documented below).
+> Last full markdown audit: 2026-05-22 (v0.28 shipped — painting fidelity, background preloading, flash elimination, navigation lag, particle wander; X-series gaps resolved).
 
 
-## v0.28 — Painting fidelity + background preloading + particle enhancement (planned)
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)
 
 ### Status
 
-Planned. X-01..X-04 gaps identified and specified; implementation in progress.
+Shipped. X-01..X-04 implemented and validated; lint and build pass.
 
-### Planned changes
+### Changed
 
-- **X-01 (RendererManager.ts):** Switch `THREE.ACESFilmicToneMapping → THREE.NeutralToneMapping`; reduce `toneMappingExposure 1.45 → 1.0`. Restores faithful colour representation for artistically dark/high-contrast paintings.
-- **X-02 (main.ts):** Forward-declare `animate` and start `requestAnimationFrame((now) => animate(now))` before `await loadingOverlay.reveal()`. Gallery renders continuously behind the opaque overlay; eliminates canvas grey-flash visible during overlay fade-out.
-- **X-03 (GalleryManager.ts):** Raise `LAMBDA_NAV_POSITION 2.5 → 3.5`. Reduces 95% settle time from ~1200 ms to ~860 ms for snappier, still-organic painting navigation.
-- **X-04 (main.ts + main.scss):** Increase loading particle count 8 → 12; reduce duration range 8–14 s → 3–6 s; add 3-waypoint per-particle random drift custom properties; replace `loading-float` 2-stop keyframe with `loading-wander` 4-stop wander keyframe for visibly non-regular, faster particle motion.
-- **X-05 (no change):** Confirmed existing overlay architecture (`position: fixed; background: #0d0d0e; z-index: 200`) fully blocks the canvas view. With X-02, the gallery is already rendering behind the overlay throughout loading.
+- **`src/core/RendererManager.ts` (X-01):** Switched `THREE.ACESFilmicToneMapping → THREE.NeutralToneMapping`; reduced `toneMappingExposure 1.45 → 1.0`. Restores faithful colour representation for artistically dark/high-contrast paintings — near-identity below 1.0, gentle rolloff above.
+- **`src/main.ts` (X-02):** Forward-declared `animate` and started `requestAnimationFrame((now) => animate(now))` before `await loadingOverlay.reveal()`. Gallery now renders continuously behind the opaque overlay; eliminates canvas grey-flash visible during overlay fade-out. Main page and gallery are fully pre-rendered while the loading screen is visible.
+- **`src/gallery/GalleryManager.ts` (X-03):** Raised `LAMBDA_NAV_POSITION 2.5 → 3.5`. Reduces 95% settle time from ~1200 ms to ~860 ms for snappier, still-organic painting navigation. Combined with X-02, RAF cold-start lag on first navigation is eliminated.
+- **`src/main.ts` + `src/styles/main.scss` (X-04):** Increased loading particle count 8 → 12; reduced duration range 8–14 s → 3–6 s; added 3-waypoint per-particle random drift custom properties (`--particle-drift-x2/y2/x3/y3`); replaced `loading-float` 2-stop keyframe with `loading-wander` 4-stop wander keyframe for visibly non-regular, faster particle motion.
+- **X-05 (no code change):** Confirmed existing overlay architecture (`position: fixed; background: #0d0d0e; z-index: 200`) fully blocks the canvas view. With X-02, everything is pre-rendered behind the overlay throughout loading.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ---
 

@@ -1,5 +1,5 @@
 # FREYRAUM — How to import painting text (v0.18 — shipped)
-> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.28 shipped — NeutralToneMapping, RAF-before-reveal pre-rendering, navigation lambda 3.5, 12-particle wander keyframe; all Markdown files updated).
 
 
 ## v0.23 — Performance/Preloading Planning Audit
