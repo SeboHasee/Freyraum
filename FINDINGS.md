@@ -1,48 +1,113 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.29 planning pass — realistic, elegant metallic PBR frame roadmap documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 technical code audit — 8 gaps identified with file:line citations and TypeScript patch guidance; lint/build pass).
 
-## v0.29 — realistic metallic frame research findings (2026-05-22, planning)
+## v0.29 — realistic metallic PBR frame — CODE AUDIT FINDINGS (2026-05-22, planning)
 
 ### Status
 
-Planning/research only in this pass; runtime code unchanged.
+Technical code audit complete. Runtime code unchanged in this pass. All findings below are confirmed against the current source tree.
 
-### Online research highlights
+### Audit scope
 
-1. **Metal realism comes from physically plausible response, not high contrast tricks.**
-   - PBR references consistently place metallic frames in full-metal workflows with realism tuned by roughness and micro-surface detail.
-   - Practical implication: avoid emissive or contrast-boost shortcuts that can make frames look synthetic.
+Files read in full: `src/materials/CanvasMaterial.ts`, `src/gallery/ArtworkMesh.ts`, `src/core/SceneManager.ts`, `src/config/quality.ts`, `src/lighting/LightProfile.ts`, `src/lighting/LightingSetup.ts`, `src/core/RendererManager.ts`, `src/materials/ProceduralTextureFactory.ts`, `src/materials/PaintingMaterial.ts`.
 
-2. **Brushed modern metals need restrained roughness + directional microstructure.**
-   - Research ranges cluster around moderate roughness for elegant brushed finishes, avoiding near-mirror polish that causes visual noise.
-   - Practical implication: target a soft, premium sheen rather than glossy showroom chrome.
+---
 
-3. **Environment reflections are a first-order dependency for believable metal.**
-   - Real-time rendering guidance repeatedly emphasizes HDR/environment map quality and prefiltered reflections (PMREM path) for metallic credibility.
-   - Practical implication: frame tuning must be validated with the real gallery lighting/reflection stack, not isolated material previews.
+### Finding F-M-01 — No PMREM / scene.environment (CRITICAL)
 
-4. **Edge definition strongly affects perceived quality.**
-   - Bevel/chamfer transitions are necessary for realistic metallic edge highlights; razor-sharp edges read as low-quality CG.
-   - Practical implication: subtle geometry refinement is required alongside material tuning.
+**Evidence:** `src/core/SceneManager.ts` lines 1–37. The constructor creates only `this.scene` and `this.camera`. `scene.environment` is never assigned.
 
-5. **Museum-display guidance aligns with a non-distracting frame strategy.**
-   - Soft/diffuse lighting, neutral finishes, and controlled specular hotspots are repeatedly recommended to keep art dominant.
-   - Practical implication: frame highlights must be bounded and evaluated against artwork readability, not only frame beauty in isolation.
+**Impact:** `THREE.MeshPhysicalMaterial` sources IBL specular from `scene.environment`. When it is `null`, the metallic specular term evaluates to black regardless of metalness. The current frame at `metalness:0.03` is invisible to this issue because the metalness is so low, but any upgrade to `metalness:1.0` would produce a completely dark frame without fixing this first.
 
-### Working parameter guidance for upcoming implementation
+**Required fix:** `PMREMGenerator` + `THREE.RoomEnvironment` in SceneManager constructor. Full TypeScript code in plan.md M-01.
 
-- Use neutral modern-metal albedo families (e.g., brushed aluminum / muted titanium style ranges).
-- Keep metallic behavior physically plausible and rely on controlled roughness bands for elegance.
-- Keep frame-only micro-normal/roughness detail subtle to avoid shimmer and aliasing.
-- Define a hard anti-distraction threshold in acceptance checks (frame cannot pull focus from central painting content at normal viewing distance).
+---
 
-### Sources consulted
+### Finding F-M-02 — Frame material is near-zero metal (CRITICAL)
 
-- Three.js docs/manual on color management and physical materials.
-- Three.js guidance on compile/warm/reflection pipeline behavior.
-- Khronos/Filament PBR material property documentation for metallic value conventions.
-- Industry guidance on anisotropic/brushed-metal shading behavior.
-- Gallery/museum lighting recommendations for minimizing frame glare and distraction.
+**Evidence:** `src/materials/CanvasMaterial.ts:66–73`:
+```
+color: 0xe7e1d7,   roughness: 0.52,   metalness: 0.03,   clearcoat: 0.18
+```
+The color `0xe7e1d7` is a warm beige (R=231, G=225, B=215). At `metalness=0.03` the material is 97% dielectric — it behaves as painted plaster with a thin lacquer, not metal. The warm hue reinforces a canvas/linen look.
+
+**Impact:** Frame reads as neutral gypsum prop, not as a premium metallic frame.
+
+**Required fix:** `metalness: 1.0`, `color: 0xe8eaeb` (brushed aluminum per Filament reference sRGB 0.913/0.921/0.925), roughness tiered per quality preset. Full patch in plan.md M-02.
+
+---
+
+### Finding F-M-03 — No anisotropy on frame material (HIGH)
+
+**Evidence:** `src/materials/CanvasMaterial.ts:66–73` — no `anisotropy` or `anisotropyRotation` property. Three.js r163+ supports these natively on `MeshPhysicalMaterial` (maps to `KHR_materials_anisotropy`).
+
+**Impact:** Brushed metal has a characteristic elongated specular highlight (elongated perpendicular to the brushing direction). Without anisotropy all metallic specular reads as a circular lobe — this is a visible quality marker that distinguishes CG metal from real metal.
+
+**Required fix:** `anisotropy: preset.frameAnisotropy`, `anisotropyRotation: Math.PI/2`. High=0.75, balanced=0.50, battery=0.0. Full patch in plan.md M-03.
+
+---
+
+### Finding F-M-04 — Frame geometry is a plain flat box (HIGH)
+
+**Evidence:** `src/gallery/ArtworkMesh.ts:46`:
+```typescript
+const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.18);
+```
+`BoxGeometry` produces perfectly 90° edges. Face normals transition instantly from front-face to side-face with no intermediate chamfer geometry.
+
+**Impact:** Metallic materials derive their edge highlights from face-normal interpolation near bevel geometry. With 90° hard edges there is no normal ramp — the edge appears as a black/dark seam rather than a bright metallic catch-light. This is the second most visible quality signal after IBL.
+
+**Required fix:** Replace with `ExtrudeGeometry` using a rectangular shape with hole (inner artwork cutout) and `bevelEnabled: true, bevelSize: 0.018, bevelSegments: 2`. Full TypeScript code in plan.md M-04. Battery preset falls back to BoxGeometry via `preset.frameBevelEnabled`.
+
+---
+
+### Finding F-M-05 — No frame normal map or brushed texture (MEDIUM)
+
+**Evidence:** `src/materials/CanvasMaterial.createFrameMaterial()` — no `normalMap` assigned. The frame face reads as a perfectly smooth surface.
+
+**Impact:** Real brushed metal frames have fine linear micro-grooves that break up specular into a soft shimmering sheen. Without any micro-detail the frame face reads as CG-smooth, even with correct IBL and anisotropy.
+
+**Required fix:** Add `'frameNormal'` role to `ProceduralTextureFactory`, generate horizontal sine-wave normal pattern. Apply as `normalMap` with `normalScale = (0.08, 0.08)`. Full generator code in plan.md M-05.
+
+---
+
+### Finding F-M-06 — QualityPreset has no frame PBR fields (MEDIUM)
+
+**Evidence:** `src/config/quality.ts:15–120`. The `QualityPreset` interface has painting material parameters (`normalStrength`, `clearcoatEnabled`, `parallaxEnabled`, etc.) but zero frame-specific fields. The frame material is constructed once with hardcoded values and never updated.
+
+**Impact:** All three quality presets (high/balanced/battery) produce identical frame appearance. Battery preset should sacrifice anisotropy and bevel to stay cheap; high preset should invest in them.
+
+**Required fix:** Add `frameRoughness`, `frameAnisotropy`, `frameClearcoat`, `frameBevelEnabled` to interface and all three preset definitions. Values in plan.md M-06.
+
+---
+
+### Finding F-M-07 — applyPreset() does not update frame material (MEDIUM)
+
+**Evidence:** `src/gallery/ArtworkMesh.ts:77–89`. `applyPreset()` calls `this.material.applyPreset(preset)` (painting material) but never touches `this.frameMaterial`. The frame material object reference is stored as `private readonly frameMaterial: THREE.MeshPhysicalMaterial` (line 26) but there is no method to update it after construction.
+
+**Impact:** Switching from `high` to `battery` via the quality control changes painting rendering but leaves the frame at its construction-time parameters — including anisotropy and roughness. After M-06 adds frame params to presets, this wiring must also exist.
+
+**Required fix:** 3-line addition to `applyPreset()` body after line 79. Full patch in plan.md M-07.
+
+---
+
+### Finding F-M-08 — Frame Z-depth is too shallow (LOW)
+
+**Evidence:** `src/gallery/ArtworkMesh.ts:46` — `BoxGeometry(4.4, 6.2, 0.18)`. Depth of 0.18 world units. Artwork positioned at `z = 0.095` (line 54).
+
+**Impact:** A depth of 0.18 at the scale of a ~4 unit wide painting reads as a very thin sliver when seen at any angle other than perfectly front-on. Museum-quality frames have significant depth (20–40 mm at real scale). Increasing depth to 0.28 gives better 3D presence and widens the area where bevel catch-lights can be seen.
+
+**Required fix:** Change `0.18` → `0.28` and `artworkMesh.position.z = 0.095` → `0.145`. Full note in plan.md M-08.
+
+---
+
+### Online research synthesis (implementation constraints)
+
+- **Aluminum base color:** Filament PBR chart lists sRGB (0.913, 0.921, 0.925) for polished aluminum. For a slightly warm brushed finish, `0xE8EAEB` is appropriate.
+- **Roughness bands for elegant brushed metal:** 0.15–0.25 = premium polished sheen; 0.25–0.40 = brushed/satin; 0.40–0.60 = matte diffuse. Target: high=0.22, balanced=0.35, battery=0.50.
+- **Anisotropy:** Disney BRDF and KHR_materials_anisotropy both support 0..1 range. Values above 0.8 produce very stretched highlights that look synthetic. 0.6–0.75 reads as "clearly brushed" without being exaggerated.
+- **PMREM:** `THREE.RoomEnvironment` + `PMREMGenerator` is the standard Three.js indoor neutral environment. `environmentIntensity: 0.55` keeps IBL softer than direct key lights, so the painting still looks lit rather than reflector-lit.
+- **No tone mapping:** `THREE.NoToneMapping` (current in `RendererManager.ts`) means linear values pass directly to output. Material calibration must account for this — no ACES S-curve means dark values stay dark; frame roughness values targeting "polished" must be slightly higher than they would under ACES to avoid over-bright specular.
 
 ### Validation in this pass
 

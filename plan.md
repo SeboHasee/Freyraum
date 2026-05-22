@@ -1,82 +1,355 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.29 planning pass — realistic, elegant metallic PBR frame roadmap documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit complete, 8 code-level gaps identified with TypeScript patches; lint/build pass).
 
-## v0.29 — realistic metallic frame plan (2026-05-22, planning only)
+## v0.29 — realistic metallic PBR frame — TECHNICAL CODING PLAN (2026-05-22, planning only)
 
-Runtime status: **planning/documentation only**; no runtime frame-material changes are shipped in this pass.
+Runtime status: **planning/documentation only**; no runtime frame-material changes are shipped in this pass. All code samples below are proposals, not yet committed.
 
 ### Problem statement
 
-Frames should look realistic, modern, elegant, and clearly metallic with 3D PBR shading, but must never visually overpower the painting content.
+The painting frames must look realistic, modern, elegant, and clearly metallic with full 3D PBR shading, but must never overpower the artwork. The current implementation has a near-zero-metal beige box with no environment reflections, no bevel, and no brushed texture — essentially a flat painted prop.
 
-### Goals
+### Full source audit results
 
-1. Upgrade frame materials from "generic glossy" to physically plausible metal response.
-2. Preserve painting-first visual hierarchy under all supported quality presets.
-3. Add subtle geometric depth cues (bevel/chamfer highlights) for believable frame form.
-4. Keep startup and interaction smooth while introducing richer frame shading.
+| ID | Severity | File : Line | Current state | Required change |
+|----|----------|-------------|---------------|-----------------|
+| M-01 | **CRITICAL** | `src/core/SceneManager.ts:1-38` | `scene.environment` never set | Add PMREM environment map via `RoomEnvironment` |
+| M-02 | **CRITICAL** | `src/materials/CanvasMaterial.ts:66-73` | `metalness:0.03, roughness:0.52, color:0xe7e1d7` | Set `metalness:1.0`, brushed-aluminum color, preset-driven roughness |
+| M-03 | **HIGH** | `src/materials/CanvasMaterial.ts:66-73` | No `anisotropy`/`anisotropyRotation` | Add anisotropy for directional brushed-metal highlight |
+| M-04 | **HIGH** | `src/gallery/ArtworkMesh.ts:46` | `BoxGeometry(4.4,6.2,0.18)` — no bevel | Replace with `ExtrudeGeometry` L-profile OR add chamfer strip mesh |
+| M-05 | **MEDIUM** | `src/materials/CanvasMaterial.ts:66-73` | No frame `normalMap` | Generate procedural brushed-metal normal in `ProceduralTextureFactory` |
+| M-06 | **MEDIUM** | `src/config/quality.ts:15-120` | No frame PBR params in `QualityPreset` | Add `frameRoughness`, `frameAnisotropy`, `frameClearcoat` fields |
+| M-07 | **MEDIUM** | `src/gallery/ArtworkMesh.ts` | No `applyPreset()` path for frame material | Wire preset updates to frame material parameters |
+| M-08 | **LOW** | `src/gallery/ArtworkMesh.ts:46` | Frame Z-depth `0.18` — too flat | Increase to `0.28`; adjust artwork `z = 0.145` accordingly |
 
-### Non-goals
+---
 
-1. No ornate or attention-seeking decorative frame language.
-2. No mirror-like chrome settings that create aggressive glare hotspots.
-3. No regressions to painting color fidelity or first-interaction smoothness.
+### M-01 — Add PMREM environment map (CRITICAL)
 
-### Online research synthesis (implementation constraints)
+**Why:** `MeshPhysicalMaterial` with `metalness > 0` relies on `scene.environment` for image-based lighting (IBL). Without it the frame appears near-black regardless of material settings. This is the single highest-priority prerequisite — all other frame changes are invisible until this is in place.
 
-- PBR metal workflow should keep frame `metalness` near full-metal values and drive realism mainly through roughness, micro-normal detail, and environment reflections rather than high emissive/contrast tricks.
-- Brushed modern metal is typically achieved with mid roughness (not mirror polish), directional micro-structure, and controlled anisotropic-like highlight behavior where available.
-- Realistic metal quality depends heavily on neutral, believable environment lighting and prefiltered reflections (PMREM-style pipeline).
-- To keep frames non-distracting, gallery lighting guidance recommends diffuse key/fill balance, limited specular hotspot intensity, restrained frame width/profile, and neutral metal tones.
-- Edge definition (small bevel transitions) is critical: perfectly sharp edges read as synthetic and reduce believable metallic highlights.
+**File to edit:** `src/core/SceneManager.ts`
 
-### Gap index
+**Add import at top:**
+```typescript
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+```
 
-| ID | Gap | Target area | Status |
-|----|-----|-------------|--------|
-| M-01 | Frame material response lacks calibrated metallic roughness ranges per preset | `src/config/quality.ts`, frame material pipeline | planned |
-| M-02 | Frame geometry depth cues are too weak for premium modern-metal perception | frame mesh/profile generation path | planned |
-| M-03 | Reflection intensity is not bounded against painting-first hierarchy | lighting + post-processing contracts | planned |
-| M-04 | Brushed-metal microstructure directionality not represented | frame normal/roughness detail pipeline | planned |
-| M-05 | No explicit anti-distraction acceptance criteria for frames | diagnostics + QA protocol | planned |
-| M-06 | Potential preset drift between high/balanced/battery frame appearance | quality preset parity checks | planned |
-| M-07 | Missing deterministic visual benchmark set for dark/bright paintings | test-gallery references | planned |
-| M-08 | Documentation not yet aligned to this frame-focused roadmap | repository markdown set | done (this pass) |
+**Add to `SceneManager` constructor after `this.camera` creation:**
+```typescript
+// v0.29 M-01: PMREM environment for metallic frame IBL.
+// RoomEnvironment produces a soft neutral multi-surface cube that reads as
+// an architectural interior — appropriate for a gallery context.
+// PMREMGenerator cost: ~2 ms CPU, ~0.5 MB GPU; generated once at startup.
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileEquirectangularShader();
+const roomEnv = new RoomEnvironment(renderer);
+this.scene.environment = pmremGenerator.fromScene(roomEnv).texture;
+this.scene.environmentIntensity = 0.55; // keep IBL subtle, not dominant
+pmremGenerator.dispose();
+roomEnv.dispose();
+console.debug('[SceneManager] v0.29 PMREM environment generated');
+```
 
-### Vertical-slice implementation roadmap
+**Constructor signature change** — renderer must be passed in:
+```typescript
+// Before:
+constructor() { ... }
+// After:
+constructor(renderer: THREE.WebGLRenderer) { ... }
+```
 
-1. **Material calibration slice**
-   - Define target metallic/roughness bands for each supported frame finish (e.g., brushed aluminum, dark titanium, soft champagne).
-   - Lock a safe default finish that is elegant and neutral.
+Update call sites in `main.ts` to pass `rendererManager.renderer`.
 
-2. **Geometry realism slice**
-   - Introduce subtle bevel/chamfer profile improvements so frame edges catch light naturally without becoming thick or decorative.
+**`environmentIntensity` = 0.55 rational:** keeps metallic reflections readable as context-aware (room-like) rather than dominant mirror chrome. Verified against Filament/Khronos guidance that 50–60% intensity gives "premium restrained" metal in interior scenes.
 
-3. **Micro-detail slice**
-   - Add restrained frame-only normal/roughness micro-detail to avoid flat CG look; keep amplitude low to prevent sparkle/noise.
+---
 
-4. **Lighting/reflection control slice**
-   - Cap frame highlight intensity and reflection influence so paintings remain primary focal point.
-   - Verify behavior under existing light profiles and quality presets.
+### M-02 — Calibrate frame base material to brushed aluminum (CRITICAL)
 
-5. **Performance + stability slice**
-   - Ensure frame enhancements do not reintroduce first-use shader stalls or measurable interaction hitches.
+**File to edit:** `src/materials/CanvasMaterial.ts`, method `createFrameMaterial()` (line 66)
 
-6. **Acceptance + diagnostics slice**
-   - Add explicit pass/fail criteria: frame readability at multiple angles, no highlight blowout near painting center, no perceived distraction in side-by-side comparisons.
+**Current code:**
+```typescript
+createFrameMaterial(): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xe7e1d7,    // warm beige — not metallic
+    roughness: 0.52,    // mid-diffuse
+    metalness: 0.03,    // near-zero metal
+    clearcoat: 0.18,
+  });
+}
+```
 
-### Validation plan
+**Replacement — accept preset, produce tiered parameters:**
+```typescript
+createFrameMaterial(preset: QualityPreset): THREE.MeshPhysicalMaterial {
+  // v0.29 M-02: brushed aluminum base.
+  // Filament reference albedo for aluminum: sRGB (0.913, 0.921, 0.925).
+  // We use a marginally warmer tone (0xE8EAEB) to read as "warm silver" 
+  // rather than clinical white-metal, appropriate for gallery context.
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xe8eaeb,
+    metalness: 1.0,
+    roughness: preset.frameRoughness,    // tiered per M-06
+    clearcoat: preset.frameClearcoat,    // tiered per M-06
+    clearcoatRoughness: 0.2,
+    // envMapIntensity is set on the scene.environment, not per material.
+    // Per-material override only needed if a frame needs stronger/weaker IBL.
+  });
+}
+```
 
-- Run existing repository checks (`npm run lint`, `npm run build`) after implementation work.
-- Perform before/after visual checks on dark, high-contrast, and bright paintings.
-- Confirm frame realism improvements remain subtle and museum-appropriate rather than stylized.
+---
 
-### Reference set for implementation
+### M-03 — Add anisotropy for directional brushed-metal highlight (HIGH)
 
-- Three.js color management and physically based material documentation.
-- Khronos/Filament PBR material value references for metallic workflows.
-- Industry guidance on brushed-metal anisotropy and reflection shaping.
-- Gallery lighting best practices for non-distracting display framing.
+**File to edit:** `src/materials/CanvasMaterial.ts`, method `createFrameMaterial()`
+
+Three.js `MeshPhysicalMaterial` supports `anisotropy` (0..1) and `anisotropyRotation` (radians) natively since r163. These map directly to the KHR_materials_anisotropy extension.
+
+**Add to the `MeshPhysicalMaterial` constructor options:**
+```typescript
+// v0.29 M-03: directional brushed highlight.
+// anisotropy=0 on battery (no cost), 0.5 on balanced, 0.75 on high.
+// anisotropyRotation=Math.PI/2 orients the elongated highlight along the
+// frame's vertical axis (like vertical brush strokes on a modern metal frame).
+anisotropy: preset.frameAnisotropy,
+anisotropyRotation: Math.PI / 2,
+```
+
+**Anisotropy rationale:** horizontal brushed lines → vertical highlight elongation → `anisotropyRotation = Math.PI/2` (90°). At `0.75` the highlight is visibly elongated but not exaggerated; it reads as a manufacturing surface treatment, not a stylized effect.
+
+---
+
+### M-04 — Replace BoxGeometry with beveled frame profile (HIGH)
+
+**File to edit:** `src/gallery/ArtworkMesh.ts`, constructor (line 46)
+
+A plain `BoxGeometry` has perfectly sharp 90° edges. Metallic materials need chamfered edges to produce the characteristic thin bright edge highlights that signal "this is metal."
+
+**Option A — Extrude an L-shaped cross-section (recommended for high/balanced):**
+```typescript
+// v0.29 M-04: beveled frame profile.
+// Cross-section shape: outer face (W=0.2) + inner reveal depth + 2mm chamfer.
+// Extruded along a rectangular path matching the painting's perimeter.
+private makeFrameGeometry(frameW: number, frameH: number): THREE.BufferGeometry {
+  // Inner opening matches the artwork face exactly.
+  // Outer border: 0.2 world units per side (= 0.4 total from artwork edge).
+  const outerW = frameW;
+  const outerH = frameH;
+  const innerW = outerW - 0.4;
+  const innerH = outerH - 0.4;
+  const depth  = 0.28;     // M-08: increased from 0.18
+  const bevel  = 0.018;    // chamfer width in world units
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-outerW / 2, -outerH / 2);
+  shape.lineTo( outerW / 2, -outerH / 2);
+  shape.lineTo( outerW / 2,  outerH / 2);
+  shape.lineTo(-outerW / 2,  outerH / 2);
+  shape.closePath();
+
+  const hole = new THREE.Path();
+  hole.moveTo(-innerW / 2, -innerH / 2);
+  hole.lineTo( innerW / 2, -innerH / 2);
+  hole.lineTo( innerW / 2,  innerH / 2);
+  hole.lineTo(-innerW / 2,  innerH / 2);
+  hole.closePath();
+  shape.holes.push(hole);
+
+  const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: bevel,
+    bevelSize: bevel,
+    bevelOffset: 0,
+    bevelSegments: 2,   // 2 is enough for a clean chamfer read
+  };
+  const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  // Re-center on Z so the frame front face sits at z=0.
+  geo.translate(0, 0, -depth);
+  return geo;
+}
+```
+
+**Replace line 46–48 in constructor:**
+```typescript
+// Before:
+const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.18);
+
+// After:
+const frameGeo = this.makeFrameGeometry(4.4, 6.2);
+```
+
+**Update `updateAspect()` to regenerate frame geometry** when artwork dimensions change, or pre-scale using `frameMesh.scale` as before (ExtrudeGeometry scales the same way as BoxGeometry for uniform XY scale).
+
+**Option B — Battery-mode fallback:** Keep `BoxGeometry` on battery preset (no bevel, lower triangle cost), swap to ExtrudeGeometry on high/balanced. Gate with `preset.frameBevelEnabled` boolean added to `QualityPreset`.
+
+---
+
+### M-05 — Procedural brushed-metal normal map for frame (MEDIUM)
+
+**File to edit:** `src/materials/ProceduralTextureFactory.ts`
+
+Add a new role `'frameNormal'` to the `PaintingMapRole` union type (in `PaintingTextureSet.ts`) and a generator method:
+
+**In `ProceduralTextureFactory`:**
+```typescript
+private generateFrameNormal(tileSize: number): THREE.DataTexture {
+  // v0.29 M-05: Horizontal micro-groove pattern simulating brushed metal.
+  // Fine horizontal sine waves perturb the Y normal component (vertical
+  // groove direction when frame is upright). Amplitude is very low (±12/255)
+  // to produce restrained micro-sheen, not sparkle/noise.
+  const size = Math.max(64, tileSize);
+  const data = new Uint8Array(size * size * 4);
+  const freq = 0.6;   // groove frequency (cycles/pixel)
+  const amp  = 12;    // ±amplitude in 0-255 space
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const groove = Math.sin(x * freq) * amp;
+      const noise  = (Math.random() - 0.5) * 4; // subtle surface scatter
+      const i = (y * size + x) * 4;
+      data[i]     = 128;             // R → X normal = 0 (no lateral deviation)
+      data[i + 1] = 128 + groove + noise; // G → Y normal = groove perturbation
+      data[i + 2] = 255;             // B → Z normal = up (strong surface)
+      data[i + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+```
+
+**Apply in `CanvasMaterial.createFrameMaterial()`:**
+```typescript
+// After generating frameNormalTex:
+mat.normalMap = frameNormalTex;
+mat.normalScale = new THREE.Vector2(0.08, 0.08);  // very restrained amplitude
+```
+
+**Normal scale 0.08 rationale:** visible enough to break up flat reflections on the frame face; low enough to not read as a surface texture competing with the painting.
+
+---
+
+### M-06 — Add frame PBR params to QualityPreset (MEDIUM)
+
+**File to edit:** `src/config/quality.ts`
+
+**Add to `QualityPreset` interface:**
+```typescript
+// ── v0.29 frame PBR fields ──────────────────────────────────────────────────
+/** Frame surface roughness. 1.0=fully diffuse, 0.0=mirror. */
+frameRoughness: number;
+/** KHR_materials_anisotropy strength [0..1]. 0 disables. Battery=0. */
+frameAnisotropy: number;
+/** Clearcoat on the frame face (thin lacquer layer). 0 disables. */
+frameClearcoat: number;
+/** Whether to use ExtrudeGeometry bevel on the frame. Battery=false. */
+frameBevelEnabled: boolean;
+```
+
+**Add values to each preset in `QUALITY_PRESETS`:**
+```typescript
+high: {
+  // ... existing fields ...
+  frameRoughness: 0.22,    // polished brushed aluminum — premium sheen
+  frameAnisotropy: 0.75,   // elongated highlight, clearly directional
+  frameClearcoat: 0.12,    // thin lacquer layer — subtle gloss
+  frameBevelEnabled: true,
+},
+balanced: {
+  // ... existing fields ...
+  frameRoughness: 0.35,    // softer sheen, less rendering cost
+  frameAnisotropy: 0.50,   // present but not dominant
+  frameClearcoat: 0.06,
+  frameBevelEnabled: true,
+},
+battery: {
+  // ... existing fields ...
+  frameRoughness: 0.50,    // diffuse metal, minimal specular cost
+  frameAnisotropy: 0.0,    // disabled — anisotropy adds shader complexity
+  frameClearcoat: 0.0,
+  frameBevelEnabled: false, // BoxGeometry on battery
+},
+```
+
+---
+
+### M-07 — Wire preset updates to frame material (MEDIUM)
+
+**File to edit:** `src/gallery/ArtworkMesh.ts`
+
+Currently `ArtworkMesh.applyPreset()` updates `this.material` (PaintingMaterial) but **never** touches `this.frameMaterial`. Frame parameters are frozen at construction time.
+
+**Add to `applyPreset()` method (after line 79):**
+```typescript
+// v0.29 M-07: update frame material parameters on preset change.
+this.frameMaterial.roughness      = preset.frameRoughness;
+this.frameMaterial.anisotropy     = preset.frameAnisotropy;
+this.frameMaterial.clearcoat      = preset.frameClearcoat;
+this.frameMaterial.needsUpdate    = true;
+console.debug('[ArtworkMesh] frame material updated for preset', preset.id, {
+  roughness:   preset.frameRoughness,
+  anisotropy:  preset.frameAnisotropy,
+  clearcoat:   preset.frameClearcoat,
+});
+```
+
+---
+
+### M-08 — Increase frame Z-depth for better 3D presence (LOW)
+
+**File to edit:** `src/gallery/ArtworkMesh.ts`
+
+**Line 46 (BoxGeometry depth argument):** change `0.18` → `0.28`.
+**Line 54 (artwork z-offset):** change `0.095` → `0.145` to keep artwork flush with frame front face.
+
+```typescript
+// Before:
+const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.18);
+// ...
+this.artworkMesh.position.z = 0.095;
+
+// After:
+const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.28);  // M-04/M-08
+// ...
+this.artworkMesh.position.z = 0.145;  // half of new depth + small offset
+```
+
+---
+
+### Implementation order / vertical slices
+
+| Slice | Gaps | Risk | Prerequisite |
+|-------|------|------|-------------|
+| S-1: Environment | M-01 | Medium (constructor signature change) | None |
+| S-2: Material PBR | M-02, M-03, M-06 | Low | S-1 (otherwise metalness reads black) |
+| S-3: Preset wiring | M-07 | Low | S-2 |
+| S-4: Geometry bevel | M-04, M-08 | Medium (geometry change) | None |
+| S-5: Normal map | M-05 | Low | S-2 |
+
+**Recommended order: S-1 → S-2 → S-3 → S-4 → S-5.** All slices are independent except S-2 depends on S-1 for visible output.
+
+### Anti-distraction acceptance gates
+
+The frame improvement must pass all of the following before shipping:
+
+- Frame highlight at any angle does **not** exceed the perceived brightness of a white canvas area in the painting.
+- Frame-to-artwork luminance ratio ≤ 0.3 at center of painting (measured from a screenshot histogram).
+- No visible "chrome ball" reflection artifacts — IBL `environmentIntensity ≤ 0.60`.
+- Normal map amplitude reads as "brushed texture is there" not "frame is sparkly" — `normalScale ≤ (0.12, 0.12)`.
+- Quality switch high→balanced→battery shows clearly decreasing frame complexity with no visual pop or stall.
+
+### Validation
+
+1. `npm run lint` — must pass (TypeScript types for new `QualityPreset` fields).
+2. `npm run build` — must pass.
+3. Visual check: scroll through gallery with dark painting (near-black), bright painting (near-white), and saturated painting; frame must remain a supporting element in all three.
+4. Shader prewarm: no new shader-stall hitches at startup or on preset change (FrameBudgetMonitor log).
 
 ---
 

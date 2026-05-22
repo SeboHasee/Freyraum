@@ -1,5 +1,5 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.29 planning pass — realistic, elegant metallic PBR frame roadmap documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit, 8 code-level gaps with TypeScript patches; lint/build pass).
 
 ## v0.29 — handoff status: realistic metallic frame pass is planned (2026-05-22)
 

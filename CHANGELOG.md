@@ -1,7 +1,7 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.29 planning pass — realistic, elegant metallic PBR frame roadmap documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit complete, 8 code-level gaps with TypeScript patches; lint/build pass).
 
-## v0.29 — realistic metallic frame roadmap documentation (2026-05-22, docs-only planning)
+## v0.29 — realistic metallic PBR frame — technical coding plan (2026-05-22, docs-only)
 
 ### Status
 
@@ -9,14 +9,23 @@ Planning/documentation update only. Runtime code unchanged in this pass.
 
 ### Added
 
-- Documented a dedicated v0.29 plan for realistic, modern, elegant metallic painting frames that remain non-distracting and painting-first.
-- Added online research synthesis covering PBR metallic response, brushed finish guidance, reflection control, and frame-focused gallery lighting constraints.
-- Added vertical implementation slices and acceptance gates for upcoming frame-realism work.
+- Full code audit of frame pipeline: read `CanvasMaterial.ts`, `ArtworkMesh.ts`, `SceneManager.ts`, `quality.ts`, `LightProfile.ts`, `LightingSetup.ts`, `RendererManager.ts`, `ProceduralTextureFactory.ts`, `PaintingMaterial.ts`.
+- Identified 8 code-level gaps (M-01..M-08) with file:line citations confirming current state.
+- Wrote technical implementation patches for each gap in `plan.md` including TypeScript and GLSL code samples.
+- Documented anti-distraction acceptance gates and implementation order in `plan.md`.
 
 ### Changed
 
-- Refreshed top-level status docs (`README.md`, `plan.md`, `FINDINGS.md`, `docs/HANDOFF.md`) to reflect the new v0.29 planning pass.
-- Updated shared markdown audit banner across repository markdown files for this documentation sync.
+- Replaced high-level v0.29 gap index in `plan.md` with full technical coding plan (TypeScript code samples, concrete parameter values, file:line citations for every gap).
+- Updated `FINDINGS.md` with code-level audit evidence for each of the 8 gaps (file:line citations + impact analysis).
+- Updated markdown audit banners across all tracked files to this technical pass.
+
+### Key audit findings (docs; no code change)
+
+- `SceneManager.ts`: `scene.environment` is never set → metallic IBL reads black without M-01 fix.
+- `CanvasMaterial.ts:66–73`: `metalness=0.03, roughness=0.52` — frame is dielectric plaster, not metal.
+- `ArtworkMesh.ts:46`: `BoxGeometry(4.4,6.2,0.18)` — no bevel, no chamfer, metallic edge highlights impossible.
+- `quality.ts:15–120`: No frame PBR fields in `QualityPreset` — frame cannot be tiered per preset.
 
 ### Validation
 
