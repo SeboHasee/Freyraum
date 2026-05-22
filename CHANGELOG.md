@@ -1,21 +1,26 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
-## v0.29 — Loading-screen full-render contract plan (2026-05-22, **planned/docs-only**)
+## v0.29 — Loading-screen full-render contract (2026-05-22, **shipped**)
 
 ### Status
 
-Planned only. No runtime code changed in this pass.
+Shipped. Runtime code implemented and validated; lint and build pass.
 
-### Added
+### Changed
 
-- New Y-series plan for making the loading screen own the complete first render: RAF before reveal wait, full-size presented-frame gate, all-artwork final-path GPU warm, UI/control prebuild, and readiness diagnostics.
-- New source audit documenting why the v0.28 RAF/preload confidence was insufficient: current RAF starts after `loadingOverlay.reveal()` resolves, so the main page is not continuously rendered behind the loader.
-- New color-fidelity re-audit requirements covering texture color spaces, renderer output, tone mapping, material lighting, bloom/post-processing, and source-vs-render visual QA.
+- **`src/main.ts`:** Delays loading-overlay reveal until after the production RAF loop is scheduled under the opaque overlay and two full-size frames are observed.
+- **`src/main.ts`:** Adds final-path all-artwork warming: every painting is bound and rendered through the real post-processing composer before entry.
+- **`src/main.ts`:** Adds UI chrome prebuild for nav, timeline, info panel, settings panel, audio controls, fullscreen button, and hidden preferences-panel layout.
+- **`src/timeline/Timeline.ts`:** Adds `prewarmUnderOverlay()` to instantiate all thumbnails, switch them to eager loading, decode images where supported, and premeasure timeline layout.
+- **`src/lighting/LightProfile.ts`:** Changes first-visit default lighting from `gallery-soft` to `museum-neutral` for more objective, daylight-balanced artwork fidelity.
+- **Diagnostics:** Adds `ui-prebuild-complete`, `all-artworks-final-path-warmed`, `pre-entry-raf-start`, `first-full-frame-rendered`, `second-full-frame-presented`, and `entry-cta-enabled`.
+- **Preview output:** Rebuilt `customer-preview/freyraum-gallery.js`.
 
 ### Validation
 
-- Documentation-only update; runtime lint/build not run.
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ---
 

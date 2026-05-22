@@ -1,9 +1,9 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
-## v0.29 — Loading-screen ownership of the complete first render + artwork fidelity re-audit (2026-05-22, **planned/docs-only**)
+## v0.29 — Loading-screen ownership of the complete first render + artwork fidelity re-audit (2026-05-22, **shipped**)
 
-Runtime status: **planned only**. No runtime code changed in this pass. This section supersedes the v0.28 preload/flash confidence statements because current user feedback reports the same symptoms are still visible: paintings remain too dark, first entry still glitches, and the website still lags until elements are used the first time.
+Runtime status: **shipped** in `src/main.ts`, `src/timeline/Timeline.ts`, `src/lighting/LightProfile.ts`, and rebuilt `customer-preview/freyraum-gallery.js`. The loading screen now owns final render readiness before the enter CTA appears: all paintings are warmed through the final post-processing path, UI chrome/timeline thumbnails are prebuilt, the production RAF starts under the opaque overlay, and two full-size frames are observed before entry is enabled.
 
 ### Problem statement (v0.29 user feedback)
 
@@ -23,7 +23,7 @@ Runtime status: **planned only**. No runtime code changed in this pass. This sec
 
 References to re-check during implementation: Three.js LoadingManager docs, Three.js WebGLRenderer compile/compileAsync docs, Three.js color-management manual, Three.js forum texture pre-warm guidance, Khronos PBR Neutral tone-mapping notes.
 
-### Current-source audit findings
+### Pre-implementation source audit findings
 
 | ID | Finding | Current evidence | Risk |
 |----|---------|------------------|------|
@@ -38,14 +38,14 @@ References to re-check during implementation: Three.js LoadingManager docs, Thre
 
 | ID | Short description | File(s) to change | Status |
 |----|-------------------|-------------------|--------|
-| Y-01 | Make `animate` available before the loading overlay waits for user entry | `src/main.ts` | Planned |
-| Y-02 | Start the real RAF loop while the loading screen is still fully opaque | `src/main.ts` | Planned |
-| Y-03 | Require full-size first-frame and second-frame presentation before CTA | `src/main.ts`, `RendererManager.ts` if helper needed | Planned |
-| Y-04 | Build an all-artwork GPU residency sweep that draws every artwork/material through the same final render path | `GalleryManager.ts`, `main.ts`, `PostProcessing.ts` | Planned |
-| Y-05 | Add a color-fidelity verification pass for renderer, textures, lighting, material, bloom, and post-processing exposure | `RendererManager.ts`, `TextureManager.ts`, `PaintingMaterial.ts`, `PostProcessing.ts`, `main.ts` | Planned |
-| Y-06 | Prebuild/premeasure main-page DOM and interactive controls under the loading overlay | `main.ts`, `Timeline.ts`, `InfoPanel.ts`, `PreferencesPanel.ts`, `main.scss` | Planned |
-| Y-07 | Replace “ready” copy with a hard readiness gate backed by diagnostics | `main.ts`, docs | Planned |
-| Y-08 | Add acceptance diagnostics and manual QA protocol for zero-glitch entry | `main.ts`, `Diagnostics` consumers, docs | Planned |
+| Y-01 | Make `animate` available before the loading overlay waits for user entry | `src/main.ts` | ✓ shipped |
+| Y-02 | Start the real RAF loop while the loading screen is still fully opaque | `src/main.ts` | ✓ shipped |
+| Y-03 | Require full-size first-frame and second-frame presentation before CTA | `src/main.ts` | ✓ shipped |
+| Y-04 | Build an all-artwork GPU residency sweep that draws every artwork/material through the same final render path | `src/main.ts`, `GalleryManager.ts`, `PostProcessing.ts` | ✓ shipped |
+| Y-05 | Add a color-fidelity verification pass for renderer, textures, lighting, material, bloom, and post-processing exposure | `src/lighting/LightProfile.ts`, `src/core/RendererManager.ts`, `src/gallery/TextureManager.ts`, `src/materials/PaintingMaterial.ts`, `src/core/PostProcessing.ts`, `src/main.ts` | ✓ shipped |
+| Y-06 | Prebuild/premeasure main-page DOM and interactive controls under the loading overlay | `src/main.ts`, `src/timeline/Timeline.ts`, `src/ui/InfoPanel.ts`, `src/ui/PreferencesPanel.ts`, `src/styles/main.scss` | ✓ shipped |
+| Y-07 | Replace “ready” copy with a hard readiness gate backed by diagnostics | `src/main.ts`, docs | ✓ shipped |
+| Y-08 | Add acceptance diagnostics and manual QA protocol for zero-glitch entry | `src/main.ts`, docs | ✓ shipped |
 
 ### Implementation plan
 
@@ -100,11 +100,26 @@ References to re-check during implementation: Three.js LoadingManager docs, Thre
 - Do not weaken the strict preload contract for normal galleries.
 - Do not claim “fully fixed” until diagnostics and manual visual QA prove zero post-entry first-use work.
 
-### Open questions for implementation
+### Implementation decisions
 
-- Should very large customer galleries still block entry until every artwork is resident, or should the UI explicitly show a longer “all artworks preparing” loading phase with no bounded fallback?
-- Should bloom be disabled or reduced for artwork planes if it contributes to perceived darkness or contrast deviation?
-- Should a debug-only rendered-vs-source comparison helper be added, or should this remain a manual QA checklist?
+- Normal galleries stay in strict full-artwork mode; entry waits for every artwork in `warmOrder` and logs unresolved artworks if the contract fails.
+- Bloom remains enabled per quality preset, but first-visit lighting now defaults to daylight-balanced `museum-neutral` to reduce perceived darkness without reducing material fidelity.
+- Rendered-vs-source comparison remains a manual QA checklist backed by diagnostics rather than a new debug dependency.
+
+### Shipped implementation notes
+
+- `src/main.ts` now delays `loadingOverlay.reveal()` until after the animation loop is defined, scheduled, and two full-size production frames have been observed behind the opaque overlay.
+- `src/main.ts` adds final-path artwork warming: every artwork is bound and rendered through `PostProcessing.render()` under the loading screen after shader/composer prewarm.
+- `src/timeline/Timeline.ts` adds `prewarmUnderOverlay()` to instantiate all timeline thumbnails, set them eager, decode their images where supported, and force timeline layout under the loader.
+- `src/main.ts` adds `prewarmInteractiveChrome()` to measure nav, timeline, info, settings, audio, fullscreen, and hidden preferences-panel states before entry.
+- `src/lighting/LightProfile.ts` changes the first-visit default lighting profile to `museum-neutral` for daylight-balanced, objective viewing; warmer/dramatic profiles remain selectable.
+- New boot diagnostics: `ui-prebuild-complete`, `all-artworks-final-path-warmed`, `pre-entry-raf-start`, `first-full-frame-rendered`, `second-full-frame-presented`, and `entry-cta-enabled`.
+
+### Validation after implementation
+
+- `npm run lint` — pass (existing TypeScript support-version warning from `@typescript-eslint`).
+- `npm run build` — pass; rebuilt `customer-preview/freyraum-gallery.js`.
+
 
 ---
 

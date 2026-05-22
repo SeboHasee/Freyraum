@@ -1,7 +1,7 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
-## 2026-05-22 — v0.29 planning lessons
+## 2026-05-22 — v0.29 shipped lessons
 
 ### Lesson 68 — Loaded is not presented
 

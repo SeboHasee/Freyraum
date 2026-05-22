@@ -1,9 +1,9 @@
 # FREYRAUM — How to import painting text (v0.18 — shipped)
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
-## v0.29 customer-facing status note — preload/fidelity follow-up planned
+## v0.29 customer-facing status note — preload/fidelity follow-up shipped
 
-The latest technical plan treats startup smoothness and painting brightness as an open follow-up, not a shipped fix. The next implementation must keep the loading screen visible until the main page, controls, and every painting have been rendered/prepared behind it, and must re-check dark painting fidelity against the original source images.
+The v0.29 implementation keeps the loading screen visible until the main page, controls, timeline thumbnails, and every painting have been rendered/prepared behind it. First-visit lighting now uses the daylight-balanced `museum-neutral` profile for more objective painting brightness.
 
 
 

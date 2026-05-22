@@ -1,9 +1,9 @@
 # AI feedback loop
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
 ## v0.29 feedback-loop note
 
-When user feedback says a shipped preload/fidelity fix still fails, immediately downgrade the claim to planned/follow-up in docs, audit the current source against the claim, and add diagnostics-driven acceptance checks. v0.29 does this for painting darkness, loading-screen ownership, entry glitching, and first-use lag.
+When user feedback says a shipped preload/fidelity fix still fails, immediately downgrade the claim to follow-up in docs, audit the current source against the claim, add diagnostics-driven acceptance checks, then flip docs back to shipped only after implementation and validation. v0.29 is the shipped example for painting darkness, loading-screen ownership, entry glitching, and first-use lag.
 
 
 

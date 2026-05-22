@@ -1,9 +1,9 @@
 # Architecture prompt
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
 ## v0.29 current context
 
-Latest planning status: loading-screen/full-render ownership and artwork color fidelity are open follow-up work. Future coding agents must consult `plan.md § v0.29` and `FINDINGS.md § v0.29` before claiming startup preload, first-frame smoothness, or original-looking painting color is solved.
+Latest planning status: loading-screen/full-render ownership and artwork color fidelity are shipped work. Future coding agents should consult `plan.md § v0.29` and `FINDINGS.md § v0.29` for the shipped readiness diagnostics and validation boundaries.
 
 
 

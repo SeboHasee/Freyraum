@@ -1,11 +1,11 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
-## v0.29 — current plan: loading screen must own the complete first render (2026-05-22, planned)
+## v0.29 — shipped update: loading screen owns the complete first render (2026-05-22)
 
-Current status: **planned/docs-only**. User feedback says the v0.28 preload/fidelity work is still not sufficient: paintings still look too dark, first entry can still glitch, and parts of the site still lag on first use.
+Current status: **shipped**. v0.29 implements the loading-screen readiness gate: every painting is drawn through the final post-processing path, timeline/control chrome is prebuilt, the production RAF runs under the opaque overlay, and two full-size frames are observed before the enter CTA appears.
 
-The new plan in `plan.md § v0.29` requires the loading screen to block entry until the real main page is already rendered at full size, every painting has been drawn through the final render path, post-processing has presented full frames, and first-use UI/control work has been prebuilt under the opaque overlay. `FINDINGS.md § v0.29` records the source audit and online research behind this plan.
+See `plan.md § v0.29` and `FINDINGS.md § v0.29` for diagnostics, source audit, and validation notes. Runtime validation: `npm run lint` and `npm run build` pass.
 
 
 
@@ -690,7 +690,7 @@ npm run lint
 
 This repository now follows a documentation-first rule for future development.
 
-- [`plan.md`](./plan.md) — current plan, implemented work, v0.01 vertical slices, and reserved future-pass scope
+- [`plan.md`](./plan.md) — shipped update, implemented work, v0.01 vertical slices, and reserved future-pass scope
 - [`CHANGELOG.md`](./CHANGELOG.md) — shipped changes by version/date
 - [`FINDINGS.md`](./FINDINGS.md) — technical findings, caveats, and validation notes
 - [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md) — required documentation process for future work

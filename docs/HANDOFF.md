@@ -1,11 +1,11 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
-## v0.29 — handoff status: loading-screen/full-render fix is planned, not shipped (2026-05-22)
+## v0.29 — handoff status: loading-screen/full-render fix is shipped (2026-05-22)
 
-Customer-facing status: **do not claim this is fixed yet**. The latest feedback says paintings remain too dark, entry still glitches, and first-use lag remains. The current implementation still starts the main RAF loop after `loadingOverlay.reveal()` resolves, so the page is not continuously rendering behind the loading screen during the full wait/fade.
+Customer-facing status: **shipped and validated**. v0.29 now starts the production RAF under the opaque loading overlay, requires two full-size presented frames before the enter CTA appears, warms every painting through the final render path, prebuilds UI chrome/timeline thumbnails, and defaults first-visit lighting to `museum-neutral` for more objective artwork fidelity.
 
-Next implementation must follow `plan.md § v0.29`: start RAF under the opaque loader, require full-size presented frames before the CTA, warm every painting through the final render path, prebuild UI chrome, and re-audit artwork color fidelity end to end.
+Validation: `npm run lint` and `npm run build` pass. If a customer still reports entry glitches or dark paintings, collect `window.__FREYRAUM_DIAGNOSTICS__.exportJson()` and check for `entry-cta-enabled`, `second-full-frame-presented`, and `all-artworks-final-path-warmed`.
 
 
 

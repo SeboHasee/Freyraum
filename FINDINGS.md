@@ -1,11 +1,11 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.29 planning — loading-screen full-render contract, all-paintings GPU residency, artwork color-fidelity re-audit, and verification diagnostics; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
 
-## v0.29 — Loading-screen full-render contract re-audit (2026-05-22, **planned/docs-only**)
+## v0.29 — Loading-screen full-render contract implementation (2026-05-22, **shipped**)
 
 ### Status
 
-Documentation/planning only. No runtime code changed in this pass. The current user report supersedes the v0.28 confidence statement: paintings can still appear too dark, entry can still glitch, and first-use lag can still appear after the loading screen.
+Shipped in runtime code. The v0.29 Y-series plan is implemented: the loading screen now gates entry on final-path all-artwork warming, UI prebuild, production RAF startup, and two full-size presented frames. Painting fidelity was improved by changing first-visit lighting to the objective `museum-neutral` profile.
 
 ### Online research findings
 
@@ -16,7 +16,7 @@ Documentation/planning only. No runtime code changed in this pass. The current u
 
 Research references used for the plan: Three.js LoadingManager documentation, Three.js WebGLRenderer compile/compileAsync documentation, Three.js color-management manual, Three.js forum discussion on texture pre-warming/upload stutter, and Khronos PBR Neutral tone-mapping notes.
 
-### Source audit findings
+### Pre-implementation source audit findings
 
 | ID | Source | Finding |
 |----|--------|---------|
@@ -27,7 +27,7 @@ Research references used for the plan: Three.js LoadingManager documentation, Th
 | Y-05 | `src/core/RendererManager.ts:46-55`, `src/gallery/TextureManager.ts`, `src/materials/ProceduralTextureFactory.ts` | Color-space setup is directionally correct, but the dark-painting complaint requires rechecking the entire pipeline: texture role, lighting, material, bloom, tone mapping, exposure, and final CSS/canvas opacity. |
 | Y-06 | `src/main.ts`, `src/timeline/Timeline.ts`, `src/ui/InfoPanel.ts`, `src/ui/PreferencesPanel.ts` | Loading readiness does not yet include first-use DOM/style/layout paths for all website controls and panel states. |
 
-### Required diagnostics for the next implementation
+### Shipped readiness diagnostics
 
 - `pre-entry-raf-start` — proves RAF starts before the loader can be dismissed.
 - `first-full-frame-rendered` — records viewport size, pixel ratio, active artwork, and composer size.
@@ -45,9 +45,21 @@ Research references used for the plan: Three.js LoadingManager documentation, Th
 - Dark and bright paintings visually match source files as closely as the intended PBR frame allows.
 - Diagnostics export confirms zero unresolved artworks and no post-entry warm queue in strict normal-gallery mode.
 
+### As-built evidence
+
+| ID | Source | Outcome |
+|----|--------|---------|
+| Y-01/Y-02 | `src/main.ts` | `loadingOverlay.reveal()` now runs after `animate` is defined and `requestAnimationFrame(animate)` has been scheduled under the opaque overlay. |
+| Y-03 | `src/main.ts` | Added `first-full-frame-rendered` and `second-full-frame-presented` gates before `entry-cta-enabled`. |
+| Y-04 | `src/main.ts` | Added `warmArtworkFinalPath()` and `all-artworks-final-path-warmed`, rendering every artwork through `postProcessing.render()` before entry. |
+| Y-05 | `src/lighting/LightProfile.ts` | Default lighting changed from `gallery-soft` to `museum-neutral` for daylight-balanced first-visit artwork fidelity. |
+| Y-06 | `src/main.ts`, `src/timeline/Timeline.ts` | Added UI/control measurement prebuild plus eager timeline thumbnail construction/decode under the loading overlay. |
+| Y-07/Y-08 | `src/main.ts` | Added detailed readiness diagnostics for support/export verification. |
+
 ### Validation
 
-- Not run: docs-only planning update. Runtime lint/build remain required when Y-series code changes are implemented.
+- `npm run lint` — pass (existing TypeScript support-version warning from `@typescript-eslint`).
+- `npm run build` — pass; rebuilt `customer-preview/freyraum-gallery.js`.
 
 ---
 
