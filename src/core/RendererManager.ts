@@ -46,8 +46,11 @@ export class RendererManager {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.45;
+    // No tone mapping — the scene does not use HDR rendering, so any
+    // tone-mapping curve (ACES, Neutral, etc.) only washes out textures,
+    // reduces contrast and shifts hues away from the source artwork.
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.setClearColor(0xdfe5e9);
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;

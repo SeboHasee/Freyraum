@@ -1,5 +1,26 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.34 shipped — revert shaders/lighting to v0.27 state; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.35 shipped — remove ACES tone mapping; lint/build pass).
+
+## v0.35 — Remove ACES tone mapping (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Problem
+
+ACESFilmicToneMapping washes out textures, reduces contrast, and shifts hues. The scene does not use HDR rendering, so tone mapping is unnecessary and harmful to source artwork fidelity.
+
+### Changed
+
+- **`src/core/RendererManager.ts`:** Switched from `THREE.ACESFilmicToneMapping` (exposure 1.45) to `THREE.NoToneMapping` (exposure 1.0). Colours now pass through unchanged from the shader to the canvas.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.34 — Revert shaders and lighting to v0.27 state (2026-05-22, **shipped**)
 
