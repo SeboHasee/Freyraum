@@ -62,12 +62,12 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
     id: 'gallery-soft',
     label: 'Galerie weich',
     description: 'Warm-soft museum lighting from the upper left.',
-    ambientIntensity: 1.0,
+    ambientIntensity: 1.6,
     ambientKelvin: 4000,
     keys: [
       {
         kelvin: 3200,
-        intensity: 30,
+        intensity: 80,
         position: { x: -3, y: 5, z: 4 },
         angle: 0.42,
         penumbra: 0.9,
@@ -76,7 +76,7 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
     ],
     accent: {
       kelvin: 4500,
-      intensity: 3,
+      intensity: 5,
       position: { x: 5, y: -2, z: 6 },
       decay: 2.0,
     },
@@ -110,15 +110,14 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
     id: 'museum-neutral',
     label: 'Museum neutral',
     description: 'Daylight-balanced even illumination for objective viewing.',
-    // v0.32: lowered ambient + keys so the emissive albedo-fill dominates and
-    // paintings reproduce the source file colour/contrast faithfully. The
-    // remaining lit contribution adds only subtle dimensionality.
-    ambientIntensity: 1.2,
+    // v0.33: restored lighting to properly illuminate the frame while the
+    // painting stays flat (near-zero normalStrength prevents non-uniform shading).
+    ambientIntensity: 2.2,
     ambientKelvin: 5500,
     keys: [
       {
         kelvin: 5500,
-        intensity: 25,
+        intensity: 70,
         position: { x: -6, y: 4, z: 6 },
         angle: 0.5,
         penumbra: 0.95,
@@ -126,7 +125,7 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
       },
       {
         kelvin: 5500,
-        intensity: 18,
+        intensity: 50,
         position: { x: 6, y: 4, z: 6 },
         angle: 0.5,
         penumbra: 0.95,

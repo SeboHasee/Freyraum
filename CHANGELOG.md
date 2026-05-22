@@ -1,5 +1,32 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.32 shipped — source-faithful colour reproduction; NoToneMapping + high albedo fill; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.33 shipped — flat painting surface + proper frame lighting; lint/build pass).
+
+## v0.33 — Flat painting surface + frame lighting fix (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Problem
+
+1. Paintings on high/balanced still had non-uniform brightness (normal maps created contrast variation across the surface despite high emissive fill).
+2. Frame looked dark/unshaded because scene lighting was too low.
+
+### Root cause
+
+Battery preset looked correct because it has zero normal influence → uniform light response. Higher presets had normalStrength 0.7/0.45 which caused directional-light–driven brightness variation across the painting.
+
+### Changed
+
+- **`src/config/quality.ts`:** Reduced `normalStrength` from 0.7/0.45 → 0.05/0.05 and `detailNormalStrength` from 0.6/0.4 → 0.03/0.03 on high/balanced. Disabled `grazingBoostEnabled` on both. Painting surface now responds uniformly to lighting (like battery) while still keeping parallax/self-shadow structures for subtle depth.
+- **`src/lighting/LightProfile.ts`:** Raised museum-neutral ambient 1.2 → 2.2 and keys 25/18 → 70/50. gallery-soft ambient 1.0 → 1.6 and key 30 → 80. Frame now receives adequate illumination.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.32 — Source-faithful colour reproduction (2026-05-22, **shipped**)
 
