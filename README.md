@@ -1,5 +1,14 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.46 shipped: zebra-frame recovery implemented in runtime shader/material tuning).
+> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.47 — modern gallery frame metal realism pass (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Retuned frame shader coordinates so brushed direction follows each frame bar (side bars no longer read as zebra stripes).
+- Reduced scratch occupancy, normal intensity, and roughness contrast to keep highlights elegant and physically plausible.
+- Updated satin-metal preset targets (`high 0.44/0.45`, `balanced 0.53/0.30`, `battery roughness 0.60`) for calmer gallery-grade reflections.
+- Updated shader cache key + diagnostics to `v0.47`.
 
 ## v0.46 — zebra-like frame artifact follow-up (2026-05-22, **shipped**)
 

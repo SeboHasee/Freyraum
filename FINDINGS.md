@@ -1,5 +1,31 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.46 shipped: zebra-frame recovery implemented in runtime shader/material tuning).
+> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.47 — follow-up analysis: elegant modern gallery metal read (2026-05-22, **shipped**)
+
+### Screenshot interpretation
+
+1. Remaining artifact looked like broad zebra bars, especially on vertical frame segments.
+2. Highlight rolloff was too binary (hard white/grey alternation), reading synthetic rather than machined satin metal.
+
+### Root-cause boundary
+
+- Pattern orientation was tied to global XY axes, so side bars received cross-bar stripe energy.
+- Scratch layer occupancy/contrast remained too high for gallery-distance perception.
+- Roughness modulation still dipped too glossy in highlighted bands.
+
+### Online research summary (this pass)
+
+1. Brushed metal realism depends on directional anisotropy alignment plus controlled roughness spread, not high-contrast stripe masks.
+2. Satin gallery-grade brushed aluminum/stainless typically sits in moderate roughness ranges with restrained directional highlights.
+3. Layered micro-detail should stay subtle; over-strong scratch masks quickly read as printed patterning.
+
+### Implemented outcome
+
+- Added `frmBarBrushCoords` so grain/scratch coordinates align with frame-bar orientation.
+- Lowered warp and gradient strengths; reduced scratch occupancy/intensity and normal scaling.
+- Lifted roughness floor and narrowed modulation for smoother, elegant metal response.
+- Updated quality presets for calmer highlights across high/balanced/battery.
 
 ## v0.46 — zebra-like frame artifact analysis + implementation results (2026-05-22, **shipped**)
 

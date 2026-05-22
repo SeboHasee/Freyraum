@@ -1,5 +1,9 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.47 frame-realism rule
+
+When tuning metallic frames from screenshot feedback, verify brush-direction mapping across all frame bars and prefer subtle satin continuity over high-contrast stripe visibility.
 
 ## v0.40 material-fidelity planning rule
 

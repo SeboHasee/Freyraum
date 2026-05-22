@@ -1,5 +1,27 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.46 shipped: zebra-frame recovery implemented in runtime shader/material tuning).
+> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.47 — modern gallery metal frame realism retune (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code updated; lint and build pass.
+
+### Added
+
+- Bar-aware brush coordinate remap (`frmBarBrushCoords`) so procedural grain/scratches follow frame bar direction instead of global scene axes.
+- Softer directional scratch layering tuned for satin gallery metal (lower occupancy/intensity and lower normal contribution).
+
+### Changed
+
+- `src/materials/CanvasMaterial.ts`: v0.47 shader/material retune (reduced warp strength, lower normal scale, darker silver base color, tighter roughness shaping, cache key `frame-v0.47-*`).
+- `src/config/quality.ts`: v0.47 preset retune (`high roughness/anisotropy 0.44/0.45`, `balanced 0.53/0.30`, `battery roughness 0.60`) for an elegant, less harsh highlight response.
+- Markdown status banners refreshed to v0.47 shipped.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.46 — realistic metal frame zebra recovery (2026-05-22, **shipped**)
 

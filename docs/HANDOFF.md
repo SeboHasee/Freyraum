@@ -1,13 +1,15 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
 
-## v0.45 — handoff status: frame realism follow-up planned (2026-05-22, docs-only)
+## v0.47 — handoff status: modern gallery frame realism retune shipped (2026-05-22)
 
-Customer-facing status: **planned, not shipped**. The frame is visible again and improved after v0.44.1, but the next quality target is stricter: no visible repetition/tiles, sharper close-zoom brushed-metal scratches, and a slightly rougher less shiny finish.
+Customer-facing status: **shipped and validated**.
 
-If a customer reports subtle repeated frame patterns or too much shine, classify it as the known v0.45 planned rendering refinement. Do not describe v0.45 as shipped until runtime code is implemented and validated.
+- Frame metal was retuned for a softer satin read and reduced zebra striping on side/top/bottom bars.
+- Procedural brush coordinates now follow frame-bar direction, improving realism in close views and highlight flow.
+- Preset roughness/anisotropy was adjusted for a calmer, elegant modern gallery frame response.
 
-References: `../plan.md § v0.45`, `../FINDINGS.md § v0.45`.
+References: `../plan.md § v0.47`, `../FINDINGS.md § v0.47`.
 
 ## v0.41 — handoff status: battery preset painting bug fixed (2026-05-22, shipped)
 

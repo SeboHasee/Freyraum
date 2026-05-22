@@ -1,5 +1,27 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.46 shipped: zebra-frame recovery implemented in runtime shader/material tuning).
+> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.47 — modern gallery metal refinement after screenshot review (2026-05-22, **shipped**)
+
+Runtime status: **shipped**. Shader/material refinement implemented and validated.
+
+### Goal
+
+Keep the frame metallic and premium while removing the remaining zebra-like cross-banding and hard highlight plateaus.
+
+### Implemented slices
+
+1. **P-47-01 — Bar-aligned brush coordinates**  
+   Added a bar-aware coordinate remap for procedural frame surfacing so side and top/bottom bars share physically plausible directional flow.
+
+2. **P-47-02 — Scratch subtlety pass**  
+   Reduced scratch occupancy, width contrast, and gradient strength to avoid synthetic stripe masks.
+
+3. **P-47-03 — Satin elegance retune**  
+   Lowered normal intensity, increased base roughness floor, and retuned quality presets for a modern gallery frame look.
+
+4. **P-47-04 — Docs sync + validation**  
+   Updated status docs and reran lint/build validation.
 
 ## v0.46 — realistic metal frame recovery after zebra artifact report (2026-05-22, **shipped**)
 

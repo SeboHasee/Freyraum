@@ -1,5 +1,9 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+
+## v0.47 documentation pass
+
+- 2026-05-22 (runtime + documentation): shipped frame realism follow-up with bar-aligned brushed-metal shader coordinates, softer satin response, and reduced zebra-style banding; synchronized markdown status sections accordingly.
 
 ## v0.46 documentation pass
 
