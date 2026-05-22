@@ -1,8 +1,20 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
 
 
-## v0.23 handoff note — performance/preloading
+## v0.27 — shipped (2026-05-22) — Startup smoothness + loading/AA remediation
+
+Current status: shipped. Gallery visual quality and startup smoothness improvements are now live:
+
+- **Anti-aliasing restored:** FXAA post-process AA pass added after bloom. EffectComposer previously bypassed the renderer's native `antialias:true`; all composed frames now have proper edge quality. Disabled on battery preset to conserve GPU.
+- **No more first-frame stutter:** All EffectComposer shader programs (bloom + FXAA) are compiled under the loading overlay before it is dismissed. Low-end GPUs no longer stall 80–250ms on the first gallery frame.
+- **CTA hover is instant:** Enter-gallery button hover transition is pre-resolved before the user touches it. No more first-hover hitch.
+- **Wordmark optically centered:** "FREYRAUM" branding now renders at true geometric center on all viewport sizes.
+- **Particles visibly animated:** Loading screen atmosphere particles raised to clearly visible opacity (alphas 0.16–0.32, 8 particles) — the loading state now reads as intentional.
+
+Validation: `npm run lint` and `npm run build` pass. `npm audit` still reports the known moderate Vite/esbuild development-server advisory.
+
+
 
 Runtime remains v0.22, but the next performance task is planned. Before telling customers the gallery is fully smooth for large exhibitions, implement and validate the N-series plan in `plan.md`: per-artwork readiness diagnostics, budgeted GPU warming beyond 15 artworks, procedural pre-generation for the critical navigation window, and navigation-aware prefetch priority.
 

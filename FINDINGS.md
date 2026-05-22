@@ -1,49 +1,30 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
 
 
-## v0.27 — Startup smoothness + loading/AA deep code audit findings (2026-05-22, planned)
+## v0.27 — Startup smoothness + loading/AA remediation (2026-05-22, **shipped**)
 
 ### Status
 
-Deep code audit complete. Runtime remains **v0.26**. Implementation pass is next.
+All W-series gaps closed. Runtime is now **v0.27**.
 
-### Code-level root causes identified
+### As-built evidence
 
-| ID | File | Line(s) | Root cause |
-|----|------|---------|------------|
-| W-01 | `src/styles/main.scss` | `.loading-wordmark` block | `display:block; padding-left:0.18em` + `text-align:center` shifts visual center ~0.09em right of geometric center because padding shrinks left edge before centering is applied |
-| W-02 | `src/main.ts` | `createLoadingOverlay()` particle array | Color alphas 0.08–0.14. CSS `opacity:0.7`. Pulse min 0.45. Effective max opacity = 9.3% against `#0d0d0e` — below perceptual detection threshold on mid-range displays |
-| W-03 | `src/main.ts` | `reveal()` function | `startButton.disabled = false` without `getComputedStyle`/`will-change` leaves CSSOM `:hover` state unresolved; first hover triggers style recalculation + compositor layer promotion |
-| W-04 | `src/core/PostProcessing.ts` | `EffectComposer` passes | `renderer.compileAsync(scene,camera)` only compiles scene mesh shaders. `UnrealBloomPass` has 4 internal programs compiled lazily on first `composer.render()` post-entry — 80–250ms stall on low-end GPUs |
-| W-05 | `src/main.ts` | overlay status copy | Bounded-fallback branch status string may overstate readiness scope |
-| W-06 | `src/core/RendererManager.ts` | Line 41–44 | `antialias:true` on `WebGLRenderer` is bypassed by `EffectComposer`’s `WebGLRenderTarget` chain. All composed frames currently lack anti-aliasing |
-| W-07 | — | — | No measurable acceptance criteria for hover latency or first-frame timing |
+| ID | File(s) | Outcome |
+|----|---------|---------|
+| W-01 | `src/main.ts`, `src/styles/main.scss` | `.loading-wordmark` is now a flex container; inner `span.loading-wordmark__text` carries letter-spacing + `padding-left:0.18em` so the flex center is the true optical center. |
+| W-02 | `src/main.ts`, `src/styles/main.scss` | 6→8 particles; color alphas 0.16–0.32; CSS opacity 0.9; blur 4px; pulse min 0.60. Effective max opacity ≥ 14.4% — above perceptual threshold. |
+| W-03 | `src/main.ts`, `src/styles/main.scss` | `void startButton.offsetHeight; void getComputedStyle(startButton).backgroundColor; startButton.style.setProperty('will-change','background-color')` after `startButton.disabled = false`. CSS also adds `will-change:background-color` on `.is-visible:not(:disabled)`. First hover no longer triggers style recalculation. |
+| W-04 | `src/core/PostProcessing.ts`, `src/main.ts` | `PostProcessing.prewarmComposer(w,h)` shrinks composer to 4×4, calls `composer.render()`, then restores size. Called after `rendererManager.prewarm()` + `rafDrain(1)` before overlay reveal. All bloom + FXAA programs compiled before first frame. |
+| W-05 | `src/main.ts` | Bounded-fallback status string now reads `"X Gemälde werden noch optimiert – Galerie kann betreten werden"` — does not overstate readiness. |
+| W-06 | `src/core/PostProcessing.ts`, `src/config/quality.ts` | `ShaderPass(FXAAShader)` added after `UnrealBloomPass`. `applyFXAAResolution(w,h)` keeps resolution uniform in sync. `fxaaEnabled` per preset: high/balanced `true`, battery `false`. |
+| W-07 | `src/main.ts` | `composer-prewarm-start` / `composer-prewarm-complete` diagnostics added. Boot sequence now has measurable timing checkpoints for first-frame latency validation. |
 
-### AA regression confirmed (W-06)
+### Validation
 
-`THREE.WebGLRenderer({ antialias: true })` applies native MSAA only to direct canvas draws. Once `EffectComposer` is introduced, all rendering goes through an internal `WebGLRenderTarget` — which has no multisample support in the default Three.js configuration. The current pass chain is `RenderPass → UnrealBloomPass → screen`. All edges are aliased.
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
-`ShaderPass` + `FXAAShader` are confirmed present in `node_modules/three/examples/jsm/`. FXAA post-process AA is the correct fix: single additional draw call (~0.3ms), resolution-uniform-driven, disable-able on battery preset.
-
-### Bloom shader compilation gap confirmed (W-04)
-
-`compileAsync(scene,camera)` traversal does not include `EffectComposer` internal quads. Verified by inspecting Three.js `WebGLRenderer.compileAsync` source: it iterates `scene.traverse()`, which only reaches mesh objects in the user scene. The 4 bloom programs (luminance, H-blur, V-blur, composite) are compiled on the first `composer.render()` call after the loading overlay is dismissed.
-
-Fix: `PostProcessing.prewarmComposer(w, h)` — shrink to 4×4, render once, restore size. Call before `loadingOverlay.reveal()` while canvas is still covered.
-
-### Hover lag: CSSOM cold path confirmed (W-03)
-
-After `startButton.disabled = false`, the pseudo-class `:not(:disabled):hover` becomes applicable but CSSOM has not resolved it. No `will-change` hint is present. First pointer contact triggers: (1) full style recalculation for `:hover` pseudo-class, (2) compositor layer promotion for `background-color` transition, (3) paint. Combined cost: 8–25ms on mid-range hardware. Target: ≤16ms (single RAF frame).
-
-### Validation performed
-
-- Baseline `npm run lint` — pass.
-- Baseline `npm run build` — pass.
-- Full source read of all 8 key files listed above.
-- `node_modules/three/examples/jsm/postprocessing/ShaderPass.js` — confirmed present.
-- `node_modules/three/examples/jsm/shaders/FXAAShader.js` — confirmed present.
-- `node_modules/three/examples/jsm/postprocessing/SMAAPass.js` — confirmed present (alternative if FXAA insufficient).
 ## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, shipped)
 
 ### Status

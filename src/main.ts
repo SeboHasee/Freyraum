@@ -288,12 +288,14 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   overlay.setAttribute('aria-label', 'Galerie wird geladen');
 
   const particles: Array<[string, string, string, string, string, string, string, string]> = [
-    ['12%', '18%', '180px', 'rgba(181, 154, 106, 0.14)', '8s', '0s', '20px', '-24px'],
-    ['78%', '14%', '220px', 'rgba(200, 214, 229, 0.11)', '10s', '-1.4s', '-18px', '26px'],
-    ['18%', '76%', '260px', 'rgba(200, 214, 229, 0.10)', '12s', '-2.6s', '24px', '-18px'],
-    ['82%', '72%', '190px', 'rgba(181, 154, 106, 0.11)', '9s', '-0.8s', '-20px', '-16px'],
-    ['50%', '8%', '150px', 'rgba(181, 154, 106, 0.09)', '11s', '-3.2s', '16px', '22px'],
-    ['48%', '92%', '210px', 'rgba(200, 214, 229, 0.08)', '13s', '-2.1s', '-22px', '-20px'],
+    ['12%', '18%', '280px', 'rgba(181, 154, 106, 0.32)', '8s',   '0s',    '28px',  '-32px'],
+    ['78%', '14%', '340px', 'rgba(200, 214, 229, 0.26)', '10s',  '-1.4s', '-24px', '34px' ],
+    ['18%', '76%', '400px', 'rgba(200, 214, 229, 0.24)', '12s',  '-2.6s', '32px',  '-24px'],
+    ['82%', '72%', '290px', 'rgba(181, 154, 106, 0.28)', '9s',   '-0.8s', '-26px', '-22px'],
+    ['50%', '8%',  '220px', 'rgba(181, 154, 106, 0.22)', '11s',  '-3.2s', '22px',  '30px' ],
+    ['48%', '92%', '320px', 'rgba(200, 214, 229, 0.20)', '13s',  '-2.1s', '-30px', '-28px'],
+    ['28%', '52%', '240px', 'rgba(181, 154, 106, 0.18)', '14s',  '-4.5s', '18px',  '22px' ],
+    ['72%', '48%', '260px', 'rgba(200, 214, 229, 0.16)', '9.5s', '-1.8s', '-22px', '20px' ],
   ];
   particles.forEach(([x, y, size, color, duration, delay, driftX, driftY]) => {
     const particle = document.createElement('span');
@@ -314,7 +316,12 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   card.className = 'loading-card';
   const wordmark = document.createElement('div');
   wordmark.className = 'loading-wordmark';
-  wordmark.textContent = 'FREYRAUM';
+  // v0.27 W-01: inner span carries letter-spacing + padding-left so the
+  // flex parent can center the inline box without optical drift.
+  const wordmarkText = document.createElement('span');
+  wordmarkText.className = 'loading-wordmark__text';
+  wordmarkText.textContent = 'FREYRAUM';
+  wordmark.appendChild(wordmarkText);
   const subtitle = document.createElement('div');
   subtitle.className = 'loading-subtitle';
   subtitle.textContent = 'Galerie wird geladen';
@@ -359,6 +366,15 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
       window.clearInterval(hintTimer);
       startButton.disabled = false;
       startButton.classList.add('is-visible');
+      // v0.27 W-03: Force CSSOM resolution of the :hover rule and compositor
+      // layer promotion immediately after the button becomes interactive.
+      // This eliminates the style-recalc spike on first pointer contact.
+      void startButton.offsetHeight;
+      void getComputedStyle(startButton).backgroundColor;
+      startButton.style.setProperty('will-change', 'background-color');
+      startButton.addEventListener('click', () => {
+        startButton.style.removeProperty('will-change');
+      }, { once: true });
       subtitle.textContent = 'Galerie bereit — zum Starten klicken';
       hint.textContent = 'Alle Inhalte sind vollständig vorbereitet.';
       overlay.setAttribute('aria-label', 'Galerie bereit — zum Starten klicken');
@@ -882,12 +898,22 @@ async function main(): Promise<void> {
   loadingOverlay.setProgress(97);
   await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
   galleryManager.markAllShaderCompiled('boot-prewarm');
+  // v0.27 W-04: Force-compile all EffectComposer pass shaders (bloom + FXAA)
+  // before the overlay is dismissed. UnrealBloomPass has 4 internal programs
+  // that compile lazily on the first composer.render(); this call drives that
+  // compilation while the canvas is still covered by the loading overlay.
+  const ppSize = new THREE.Vector2();
+  rendererManager.renderer.getSize(ppSize);
+  diagnostics.info('boot', 'composer-prewarm-start', 'Starting EffectComposer shader prewarm (bloom+FXAA passes)');
+  postProcessing.prewarmComposer(ppSize.x, ppSize.y);
+  diagnostics.info('boot', 'composer-prewarm-complete', 'EffectComposer shader prewarm complete');
+  await rafDrain(1);
   loadingOverlay.setProgress(100);
-  // v0.24.3 R-04: Align status text with actual preload contract mode.
-  // Strict mode: all artworks were fully prepared before entry.
-  // Bounded-fallback: overflow artworks are completing in the background.
+  // v0.24.3 R-04 / v0.27 W-05: Align status text with actual preload contract.
+  // Strict mode: all artworks fully prepared before entry.
+  // Bounded-fallback: overflow artworks still completing in background — state explicitly.
   if (fullReadinessSummary.preloadMode === 'bounded-fallback') {
-    loadingOverlay.setStatus(`Galerie bereit – ${fullReadinessSummary.overflowArtworkCount} Gemälde werden im Hintergrund optimiert`);
+    loadingOverlay.setStatus(`${fullReadinessSummary.overflowArtworkCount} Gemälde werden noch optimiert – Galerie kann betreten werden`);
   } else {
     loadingOverlay.setStatus('Galerie bereit');
   }

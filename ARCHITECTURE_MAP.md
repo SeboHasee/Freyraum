@@ -1,5 +1,5 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
 
 
 ## v0.23 performance/preloading architecture note
@@ -170,7 +170,7 @@ FREYRAUM is a Vite + strict TypeScript + three.js customer-preview application f
 
 - `src/core/RendererManager.ts`: WebGL renderer setup, quality preset application, pixel ratio, context-loss diagnostics, shader pre-warm, renderer snapshots, idempotent disposal.
 - `src/core/SceneManager.ts`: scene/camera setup and aspect updates.
-- `src/core/PostProcessing.ts`: post-processing chain and resize/render ownership.
+- `src/core/PostProcessing.ts`: post-processing chain (`RenderPass → UnrealBloomPass → ShaderPass(FXAA)`) with resize, preset toggle (`fxaaEnabled`), composer prewarm, and render ownership.
 - `src/rendering/RenderBackend.ts`: progressive rendering capability probes.
 
 ## Gallery domain

@@ -1,26 +1,27 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
 
 
-## v0.27 — Startup smoothness + loading/AA deep technical audit (2026-05-22, **planned**)
+## v0.27 — Startup smoothness + loading/AA remediation (2026-05-22, **shipped**)
 
 ### Summary
 
-Deep code audit pass: full source analysis of 8 core files. Root causes for all W-series gaps confirmed with file/line evidence and TypeScript/SCSS code fixes prepared. Implementation pass is ready to execute.
+Implementation pass completing all W-series gaps identified in the deep code audit. FXAA AA restores edge quality bypassed by EffectComposer. Bloom shaders are now pre-compiled before overlay dismiss. Enter CTA hover cold path is eliminated. Wordmark is optically centered via flex layout. Particles are visually salient with raised alphas, opacity, blur, and count.
 
 ### Changed
 
-- **`plan.md`**: v0.27 section replaced with deep technical audit — includes code-level root cause analysis, TypeScript + SCSS fix snippets for W-01 through W-06, updated gap table with file/line evidence, full implementation checklist, and validation plan.
-- **`FINDINGS.md`**: v0.27 section replaced with deep audit findings — confirmed AA regression (W-06), bloom shader compilation gap (W-04), hover lag CSSOM cold path (W-03), wordmark centering drift (W-01), particle opacity below threshold (W-02).
-- **All Markdown docs**: audit banner updated to reflect deep audit pass.
-
-### Key findings
-
-- W-06 (AA): `antialias:true` bypassed by EffectComposer. Fix: `ShaderPass(FXAAShader)` + `fxaaEnabled` per preset.
-- W-04 (bloom stall): 4 UnrealBloomPass shaders not covered by `compileAsync`. Fix: `PostProcessing.prewarmComposer()`.
-- W-03 (hover lag): No CSSOM prewarm after CTA activation. Fix: `getComputedStyle` + `will-change` force.
-- W-01 (centering): `padding-left` on block container drifts visual center. Fix: flex + inner span.
-- W-02 (particles): <10% effective opacity. Fix: raise alphas, sizes, blur, pulse floor.
+- **`src/config/quality.ts`** (`QualityPreset` interface + presets): added `fxaaEnabled: boolean`; `high: true`, `balanced: true`, `battery: false`.
+- **`src/core/PostProcessing.ts`**: imported `ShaderPass` + `FXAAShader`; added `fxaaPass` field and `applyFXAAResolution(w,h)` helper; FXAA pass appended after bloom in constructor; `resize()` now updates FXAA resolution uniform; `applyPreset()` toggles `fxaaPass.enabled`; added `prewarmComposer(w,h)` method (shrink to 4×4 → render → restore).
+- **`src/main.ts`** (`createLoadingOverlay`): particle count raised 6→8, all color alphas raised to 0.16–0.32, sizes to 220–400px with updated drift offsets (W-02).
+- **`src/main.ts`** (`createLoadingOverlay`): wordmark now uses flex parent + inner `span.loading-wordmark__text` carrying letter-spacing and padding-left (W-01).
+- **`src/main.ts`** (`reveal`): `offsetHeight` + `getComputedStyle` + `will-change` injected after `startButton.disabled = false` to eliminate CSSOM `:hover` cold path (W-03).
+- **`src/main.ts`** (boot sequence): `postProcessing.prewarmComposer()` + `rafDrain(1)` called after `rendererManager.prewarm()` and before `loadingOverlay.reveal()`; `composer-prewarm-start`/`composer-prewarm-complete` diagnostics emitted (W-04).
+- **`src/main.ts`** (boot sequence): bounded-fallback status string tightened to state explicitly that artworks are still being optimised rather than overstating readiness (W-05).
+- **`src/styles/main.scss`** (`.loading-wordmark`): replaced `display:block` + `padding-left` + `text-align:center` with `display:flex; align-items:center; justify-content:center`; letter-spacing and padding-left moved to new `.loading-wordmark__text` inner span (W-01).
+- **`src/styles/main.scss`** (`.loading-start-btn`): added `&.is-visible:not(:disabled) { will-change: background-color }` for compositor layer pre-promotion (W-03).
+- **`src/styles/main.scss`** (`.loading-particle`): opacity raised `0.7→0.9`, blur raised `2px→4px` (W-02).
+- **`src/styles/main.scss`** (`@keyframes loading-pulse`): minimum opacity raised `0.45→0.60` (W-02).
+- **Markdown docs**: all audit banners and v0.27 status sections updated to shipped.
 
 ### Validation
 

@@ -1242,15 +1242,22 @@ button {
 }
 
 .loading-wordmark {
-  display: block;
+  // v0.27 W-01: flex container centers the inline text box without the
+  // optical drift caused by padding-left on a display:block element.
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  margin: 0 auto;
   font-size: clamp(36px, 9vw, 58px);
   line-height: 0.95;
   font-weight: 700;
+}
+
+.loading-wordmark__text {
+  // v0.27 W-01: letter-spacing + compensating padding-left live on the
+  // inline box so text-align:center sees a symmetric element.
+  display: inline-block;
   letter-spacing: 0.18em;
-  text-align: center;
-  text-indent: 0;
   padding-left: 0.18em;
 }
 
@@ -1313,6 +1320,12 @@ button {
     transform: translateY(0);
   }
 
+  // v0.27 W-03: promote the button to a compositor layer as soon as it
+  // becomes interactive so the first hover transition is GPU-composited.
+  &.is-visible:not(:disabled) {
+    will-change: background-color;
+  }
+
   &:disabled {
     cursor: default;
   }
@@ -1344,8 +1357,10 @@ button {
   top: var(--particle-y, 50%);
   border-radius: 50%;
   background: radial-gradient(circle, var(--particle-color, rgba(181, 154, 106, 0.12)) 0%, transparent 68%);
-  filter: blur(2px);
-  opacity: 0.7;
+  // v0.27 W-02: opacity 0.9 and blur 4px raise effective visibility above the
+  // perceptual threshold (prior: 0.7 × 0.14 × 0.45 = 4.4% max effective alpha).
+  filter: blur(4px);
+  opacity: 0.9;
   will-change: transform, opacity;
   animation:
     loading-float var(--particle-duration, 8s) ease-in-out infinite alternate,
@@ -1380,8 +1395,10 @@ button {
 }
 
 @keyframes loading-pulse {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 0.95; }
+  // v0.27 W-02: raise minimum opacity from 0.45 to 0.60 so particles remain
+  // visible at their trough against the dark background.
+  0%, 100% { opacity: 0.60; }
+  50% { opacity: 1.0; }
 }
 
 // =============================================================================

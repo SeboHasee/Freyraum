@@ -1,10 +1,10 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
 
 
-## v0.27 — Startup smoothness + loading/AA deep technical audit and remediation plan (2026-05-22, **planned**)
+## v0.27 — Startup smoothness + loading/AA deep technical audit and remediation plan (2026-05-22, **shipped**)
 
-Runtime status: **planned**, not yet shipped. Deep code audit completed 2026-05-22.
+Runtime status: **shipped** in `src/core/PostProcessing.ts`, `src/config/quality.ts`, `src/main.ts`, `src/styles/main.scss`.
 
 ### Problem statement (current user feedback)
 

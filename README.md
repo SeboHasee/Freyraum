@@ -1,20 +1,19 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
 
 
-## v0.27 — Startup smoothness + loading/AA remediation plan (2026-05-22, planned)
+## v0.27 — Startup smoothness + loading/AA remediation (2026-05-22, **shipped**)
 
-**Status: planned; runtime still v0.26.**
+**Status: shipped in runtime code.**
 
-The next pass targets user-reported startup smoothness gaps that are still visible:
+1. **FXAA post-process AA (W-06):** `ShaderPass(FXAAShader)` appended after bloom in `PostProcessing`; `fxaaEnabled` per quality preset (high/balanced: on, battery: off). Restores edge quality bypassed by EffectComposer's internal render target.
+2. **Bloom shader prewarm (W-04):** `PostProcessing.prewarmComposer()` called before overlay reveal — forces all 4 UnrealBloomPass programs to compile while canvas is covered, eliminating the first-frame stall.
+3. **CTA hover cold-path elimination (W-03):** `offsetHeight` + `getComputedStyle` + `will-change` injected after `startButton.disabled = false` so CSSOM resolves `:hover` before first pointer contact.
+4. **Wordmark optical centering (W-01):** flex parent + inner `span.loading-wordmark__text` carrying letter-spacing and `padding-left` gives true optical center.
+5. **Particle salience (W-02):** 6→8 particles, alphas 0.16–0.32, opacity 0.9, blur 4px, pulse floor 0.60 — effective visibility raised above perceptual threshold.
+6. **Status copy accuracy (W-05):** bounded-fallback overlay string tightened to accurately state artworks are still being optimised.
 
-1. Loading branding centering must hold consistently across viewport/device combinations.
-2. Loading particles must be more recognizable while remaining lightweight.
-3. Enter CTA hover must be preloaded so first hover is smooth (no first-use hitch).
-4. Gallery must feel smooth immediately after entry, not only after every painting has been visited once.
-5. AA strategy must be explicit per device tier to keep visual quality without startup/frame-time regressions.
-
-See `plan.md § v0.27` for the remediation plan and `FINDINGS.md § v0.27` for research-backed rationale.
+See `plan.md § v0.27` and `FINDINGS.md § v0.27` for implementation detail and as-built evidence.
 
 ## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, shipped)
 

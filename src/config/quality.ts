@@ -100,6 +100,15 @@ export interface QualityPreset {
   clearcoatStrength: number;
   /** Clearcoat roughness; lower values read glossier, higher values read satin. */
   clearcoatRoughnessValue: number;
+
+  // ── v0.27 post-process AA field ───────────────────────────────────────────
+  /**
+   * Whether an FXAA ShaderPass is appended after the bloom pass.
+   * EffectComposer renders to an internal WebGLRenderTarget which bypasses the
+   * renderer's native `antialias: true`. FXAA restores edge quality at ~0.3ms.
+   * Disabled on `battery` preset to reduce GPU load.
+   */
+  fxaaEnabled: boolean;
 }
 
 export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
@@ -145,6 +154,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatEnabled: true,
     clearcoatStrength: 0.12,
     clearcoatRoughnessValue: 0.35,
+    fxaaEnabled: true,
   },
   balanced: {
     id: 'balanced',
@@ -180,6 +190,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatEnabled: false,
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.35,
+    fxaaEnabled: true,
   },
   battery: {
     id: 'battery',
@@ -215,6 +226,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatEnabled: false,
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.0,
+    fxaaEnabled: false,
   },
 };
 

@@ -1,8 +1,22 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.27 deep code audit + technical plan with code snippets; all Markdown files updated).
+> Last full markdown audit: 2026-05-22 (v0.27 shipped — FXAA AA, bloom prewarm, CSSOM hover prewarm, wordmark flex, particle salience; all Markdown files updated).
 
 
-## 2026-05-21 — v0.23 performance audit lessons
+## 2026-05-22 — v0.27 lessons
+
+### Lesson 62 — EffectComposer silently bypasses native antialias
+
+`THREE.WebGLRenderer({ antialias: true })` applies MSAA only to direct canvas draws. Once `EffectComposer` is introduced, the pass chain renders to an internal `WebGLRenderTarget` that has no multisample support. The renderer's `antialias` flag becomes a no-op. **Future rule:** whenever `EffectComposer` is used, always add an explicit post-process AA pass (FXAA/SMAA) as the final pass in the chain; never rely on `antialias: true` alone.
+
+### Lesson 63 — compileAsync does not cover EffectComposer pass shaders
+
+`renderer.compileAsync(scene, camera)` traverses `scene.traverse()` which only reaches user mesh objects. `EffectComposer` pass shaders (e.g. UnrealBloomPass's 4 internal programs) are stored on the `EffectComposer` passes themselves, not in the scene graph. They compile lazily on the first `composer.render()`. **Future rule:** always call an explicit `prewarmComposer()` (render at minimal size while covered) before the loading overlay is dismissed, any time an `EffectComposer` with multi-pass bloom or other heavy passes is used.
+
+### Lesson 64 — Pseudo-class :hover rules must be CSSOM-resolved before user interaction
+
+After enabling a previously-disabled button, the browser has not yet resolved applicable `:hover` pseudo-class styles or promoted the element to a compositor layer. First hover triggers style recalculation + layer promotion. **Future rule:** force CSSOM resolution with `void element.offsetHeight; void getComputedStyle(element).propertyName;` and set `will-change` immediately after the button becomes interactive, then remove `will-change` after first click.
+
+
 
 ### Lesson 60 — Loaded is not the same as GPU-ready
 
