@@ -131,18 +131,15 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     shadows: true,
     artworkSegments: 180,
     shaderVariant: 'painting-high',
-    // v0.33: near-zero normal strength so the painting surface stays flat
-    // (uniform lighting response) even under brighter scene lights. This
-    // prevents normal maps from creating non-uniform contrast.
-    normalStrength: 0.05,
-    detailNormalStrength: 0.03,
+    normalStrength: 0.7,
+    detailNormalStrength: 0.6,
     // v0.03: parallax handles depth on high; bump is disabled to prevent
     // double-stacking relief amplitude (single source of truth per preset).
     bumpStrength: 0.0,
     specularStrength: 0.28,
     anisotropyDivisor: 1,
     aoEnabled: true,
-    grazingBoostEnabled: false,
+    grazingBoostEnabled: true,
     detailNormalEnabled: true,
     proceduralTileSize: 1024,
     proceduralInspectionTileSize: 2048,
@@ -166,7 +163,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.12,
     clearcoatRoughnessValue: 0.35,
     fxaaEnabled: true,
-    albedoFidelityFill: 0.72,
+    albedoFidelityFill: 0.0,
   },
   balanced: {
     id: 'balanced',
@@ -179,13 +176,13 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     shadows: true,
     artworkSegments: 120,
     shaderVariant: 'painting-balanced',
-    normalStrength: 0.05,
-    detailNormalStrength: 0.03,
+    normalStrength: 0.45,
+    detailNormalStrength: 0.4,
     bumpStrength: 0.025,
     specularStrength: 0.3,
     anisotropyDivisor: 2,
     aoEnabled: false,
-    grazingBoostEnabled: false,
+    grazingBoostEnabled: true,
     detailNormalEnabled: true,
     proceduralTileSize: 512,
     proceduralInspectionTileSize: 0,
@@ -203,7 +200,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.35,
     fxaaEnabled: true,
-    albedoFidelityFill: 0.72,
+    albedoFidelityFill: 0.0,
   },
   battery: {
     id: 'battery',
@@ -240,7 +237,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatStrength: 0.0,
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
-    albedoFidelityFill: 0.72,
+    albedoFidelityFill: 0.0,
   },
 };
 

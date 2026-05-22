@@ -1,5 +1,28 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.33 shipped — flat painting surface + proper frame lighting; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.34 shipped — revert shaders/lighting to v0.27 state; lint/build pass).
+
+## v0.34 — Revert shaders and lighting to v0.27 state (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. All rendering reverted to pre-v0.28 state; lint and build pass.
+
+### Problem
+
+Versions v0.28–v0.33 progressively broke the painting rendering: switched tone mapping away from ACESFilmic, injected an emissive albedo-fill that flattened paintings, reduced normal strength to near-zero, disabled grazing boost, and repeatedly tweaked lighting. Result: everything looked flat and too dark.
+
+### Changed
+
+- **`src/core/RendererManager.ts`:** Restored `THREE.ACESFilmicToneMapping` with `toneMappingExposure = 1.45` (was NoToneMapping/1.0 since v0.32).
+- **`src/config/quality.ts`:** Restored `normalStrength` to 0.7/0.45/0.25 (high/balanced/battery), `detailNormalStrength` to 0.6/0.4/0.0, re-enabled `grazingBoostEnabled` on high and balanced, set `albedoFidelityFill` to 0.0 across all presets (disables the v0.30 emissive bypass).
+- **`src/lighting/LightProfile.ts`:** Restored museum-neutral (ambient 0.8, keys 60/40) and gallery-soft (ambient 0.6, key 100) to values appropriate for ACESFilmic at 1.45 exposure.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.33 — Flat painting surface + frame lighting fix (2026-05-22, **shipped**)
 
