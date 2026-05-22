@@ -1,5 +1,37 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.45 shipped; runtime updated, lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+
+## v0.46 — zebra-like frame artifact analysis + research notes (2026-05-22, **planned**)
+
+### Screenshot analysis
+
+From the customer screenshot:
+1. The frame contains strong horizontal streak bands across top, side, and bottom segments.
+2. Bright/dark transitions are too abrupt and too regular at macro scale, producing a zebra-like read.
+3. Surface response lacks believable layered metal behavior (continuous grain + sparse scratches + controlled roughness), especially in bright highlight zones.
+
+### Likely rendering failure boundary
+
+- The current frame pattern energy is too concentrated in visible mid/macro frequencies.
+- Some detail bands likely exceed stable screen sampling at distance, so anti-aliasing/derivative weighting is insufficient.
+- Roughness/normal coupling appears to over-amplify linear streak structures in direct highlight regions.
+
+### Online research summary (this session)
+
+1. **Procedural stripe/line layers must be derivative-aware** (`fwidth`, frequency-aware smoothing) to prevent alias-crawl and stripe hardening at distance.  
+   Source reviewed via web search summary: GPU procedural AA guidance and shader anti-aliasing references (GPU Gems and Book of Shaders materials).
+
+2. **Brushed metal needs anisotropic directional behavior plus controlled roughness spread**, not just high-contrast line masks.  
+   Source reviewed via web search summary: Three.js `MeshPhysicalMaterial` anisotropy/clearcoat practical guidance and common pitfalls.
+
+3. **Realistic brushed metal works best with layered micro-detail** (dense fine grain + sparse medium/deep scratches) while suppressing dominant periodic macro bands.  
+   Source reviewed via web search summary: real-time PBR brushed-metal workflow guidance (roughness-window and micro-scratch layering best practices).
+
+### Outcome of this pass
+
+- Added a concrete v0.46 implementation plan in `plan.md`.
+- Synchronized markdown status text to reflect v0.46 as planned/not-shipped.
+- No runtime TypeScript/GLSL changes yet.
 
 ## v0.45 — Technical Audit: v0.44 Code Review and Implementation Research (2026-05-22, **shipped**)
 

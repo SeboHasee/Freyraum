@@ -1,5 +1,5 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.45 shipped; runtime updated, lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
 
 ## 2026-05-22 — v0.45 technical coding plan lessons
 

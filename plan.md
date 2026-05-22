@@ -1,5 +1,52 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.45 shipped; runtime updated, lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+
+## v0.46 — realistic metal frame recovery after zebra artifact report (2026-05-22, **planned**)
+
+Runtime status: **not shipped** (planning pass only).
+
+### Goal
+
+Make the frame read as physically plausible brushed/satin metal in motion and close zoom, without zebra-like striping.
+
+### Non-goals
+
+- No changes to painting tone mapping, artwork color pipeline, bloom policy, or gallery UX.
+- No external texture assets in this pass; stay procedural in current material path.
+
+### Screenshot-driven problem statement
+
+Customer screenshot shows:
+1. Repeated high-contrast horizontal streak clusters across all frame bars.
+2. Overly binary bright/dark transitions that read like synthetic patterning.
+3. Weak continuous metallic flow (surface reads striped paint/plastic, not machined metal).
+
+### Planned slices
+
+1. **P-46-01 — Frequency/alias safety audit**  
+   Re-check all scratch-frequency bands against pixel footprint; cap/fade bands that exceed stable sampling range in typical camera distances.
+
+2. **P-46-02 — Stripe-contrast rebalance**  
+   Reduce macro contrast contribution in the height/roughness coupling so long bars stop showing zebra-like bright/dark alternation.
+
+3. **P-46-03 — Scratch-shape realism pass**  
+   Shift from blob-like/wave-like accents to sparse directional micro-grooves with stronger continuity along brushed direction.
+
+4. **P-46-04 — Roughness distribution tuning**  
+   Keep frame in satin-metal response window while tightening local roughness variance to avoid chalky white streak plateaus.
+
+5. **P-46-05 — Edge and corner consistency check**  
+   Verify frame corners and long bars share the same visual grain family (no abrupt pattern family swap at geometry transitions).
+
+6. **P-46-06 — Validation + evidence capture**  
+   Run lint/build, capture before/after screenshots at far/mid/close distance, and log acceptance results in `FINDINGS.md`.
+
+### Acceptance checks
+
+- From normal gallery view, frame shows no obvious zebra-strip rhythm.
+- At close zoom, detail reads as metallic abrasion/scratches, not periodic paint-like lines.
+- During camera movement, highlights remain stable (no line crawl/flicker).
+- Lint and build pass.
 
 ## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
 

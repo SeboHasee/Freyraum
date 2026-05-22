@@ -1,5 +1,26 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.45 shipped; runtime updated, lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.46 planned: zebra-frame artifact analyzed, realistic-metal research added, implementation plan documented; runtime unchanged until code pass).
+
+## v0.46 — realistic metal frame follow-up planning (2026-05-22, **documentation only**)
+
+### Status
+
+Planned only. Runtime code unchanged in this pass.
+
+### Added
+
+- New screenshot-driven root-problem write-up for the reported zebra-like frame appearance.
+- New v0.46 plan section (`plan.md`) defining recovery slices for realistic brushed-metal response.
+- New v0.46 findings section (`FINDINGS.md`) with visual analysis and online research summary.
+
+### Changed
+
+- Refreshed markdown audit banner text across repository `.md` files to the v0.46 planning state.
+- Updated `README.md` top status to reflect that this is a follow-up planning pass and the issue is still open in runtime.
+
+### Validation
+
+- Baseline and final docs-pass validation: `npm run lint` — pass, `npm run build` — pass.
 
 ## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
 
