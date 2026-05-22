@@ -1,5 +1,27 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.47 shipped: frame metal realism retuned with bar-aligned brushing, softer satin highlights, and reduced zebra banding).
+> Last full markdown audit: 2026-05-22 (v0.48 shipped: frame UV mapping corrected with edge-aware bar coordinates and aspect-synced shader bounds).
+
+## v0.48 — frame UV mapping correction + metal continuity (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code updated; lint and build pass.
+
+### Added
+
+- `src/materials/CanvasMaterial.ts`: frame shader uniforms `uFrameOuterHalf` and `uFrameInnerHalf` for explicit rectangular-ring bounds.
+- `src/gallery/ArtworkMesh.ts`: `getFrameBounds(...)` helper and runtime refresh hook for frame-geometry bounds after aspect updates.
+
+### Changed
+
+- `src/materials/CanvasMaterial.ts`: replaced origin-dominance bar coordinate mapping with edge-aware bar-local coordinates (`frmBarBrushCoords`) to avoid stretched/wrong-looking frame UV behavior across different artwork aspects.
+- `src/materials/CanvasMaterial.ts`: frame program cache key bumped to `frame-v0.48-*`.
+- `src/gallery/ArtworkMesh.ts`: `createFrameMaterial(...)` now receives frame bounds and updates shader bounds when frame geometry is rebuilt.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.47 — modern gallery metal frame realism retune (2026-05-22, **shipped**)
 

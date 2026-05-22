@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 
-// v0.47 — GLSL procedural brushed-metal fragment functions.
+// v0.48 — GLSL procedural brushed-metal fragment functions.
 // Prepended to shader.fragmentShader in onBeforeCompile so they are available
 // in all injection sites below.
 const FRAME_FRAG_FUNCTIONS = /* glsl */ `
-// v0.47 brushed-metal procedural normal & roughness
+// v0.48 brushed-metal procedural normal & roughness
 // Sources:
 //   Inigo Quilez, iquilezles.org/articles/fbm/ (domain warping, irrational FBM)
 //   Khronos GLSL ES 3.00 spec §8.14 (fwidth — WebGL2 built-in, Three.js r152+)
@@ -13,6 +13,8 @@ const FRAME_FRAG_FUNCTIONS = /* glsl */ `
 
 uniform float uFrameSeed;
 uniform float uBaseRoughness;
+uniform vec2 uFrameOuterHalf;
+uniform vec2 uFrameInnerHalf;
 
 float frmHash(float n) {
   return fract(sin(n) * 43758.5453123);
@@ -30,12 +32,22 @@ float frmNoise(vec2 p) {
   );
 }
 
-// Approximates local bar direction on a rectangular ring:
-// x = along bar length, y = across bar width.
+// Rectangular-ring local coordinates:
+// x = along bar length, y = normalized across-bar width (-1..1).
 vec2 frmBarBrushCoords(vec2 p) {
-  float side = step(abs(p.y), abs(p.x));
-  float along = mix(p.x, p.y, side);
-  float across = mix(p.y, p.x, side);
+  vec2 absP = abs(p);
+  vec2 toOuter = uFrameOuterHalf - absP;
+  vec2 toInner = absP - uFrameInnerHalf;
+  vec2 edgeDist = min(toOuter, toInner);
+  float verticalBar = step(edgeDist.x, edgeDist.y);
+
+  float along = mix(p.x, p.y, verticalBar);
+  float acrossNorm = mix(
+    (absP.y - uFrameInnerHalf.y) / max(uFrameOuterHalf.y - uFrameInnerHalf.y, 0.0001),
+    (absP.x - uFrameInnerHalf.x) / max(uFrameOuterHalf.x - uFrameInnerHalf.x, 0.0001),
+    verticalBar
+  );
+  float across = clamp(acrossNorm, 0.0, 1.0) * 2.0 - 1.0;
   return vec2(along, across);
 }
 
@@ -181,7 +193,11 @@ export class CanvasMaterial {
    * DataTexture generation has been removed — normal and roughness are now
    * computed entirely per-fragment in GLSL (no tiling boundary, no seams).
    */
-  createFrameMaterial(preset: QualityPreset, seed = 0): THREE.MeshPhysicalMaterial {
+  createFrameMaterial(
+    preset: QualityPreset,
+    seed = 0,
+    frameBounds?: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
+  ): THREE.MeshPhysicalMaterial {
     // Minimal 1×1 flat normal map: required so Three.js emits the
     // TANGENTSPACE_NORMALMAP and USE_TANGENT shader defines, which make the
     // vTBN varying available in the fragment shader for our GLSL injection.
@@ -193,9 +209,16 @@ export class CanvasMaterial {
     this.frameFlatNormal?.dispose();
     this.frameFlatNormal = flatNormal;
 
+    const bounds = frameBounds ?? {
+      outerHalf: new THREE.Vector2(2.2, 3.05),
+      innerHalf: new THREE.Vector2(2.01, 2.86),
+    };
+
     const uniforms = {
       uFrameSeed:     { value: seed * 0.00390625 },
       uBaseRoughness: { value: preset.frameRoughness },
+      uFrameOuterHalf: { value: bounds.outerHalf.clone() },
+      uFrameInnerHalf: { value: bounds.innerHalf.clone() },
     };
 
     const material = new THREE.MeshPhysicalMaterial({
@@ -242,7 +265,7 @@ export class CanvasMaterial {
       );
 
       console.debug('[CanvasMaterial] frame-shader-compiled', {
-        version: 'v0.47',
+        version: 'v0.48',
         preset: preset.id,
         seed,
         frameRoughness: preset.frameRoughness,
@@ -251,11 +274,13 @@ export class CanvasMaterial {
         domainWarp: true,
         barBrushCoords: true,
         scratchLayer: true,
+        frameOuterHalf: [bounds.outerHalf.x, bounds.outerHalf.y],
+        frameInnerHalf: [bounds.innerHalf.x, bounds.innerHalf.y],
         eps: 0.004,
       });
     };
     // Unique cache key per artwork seed so Three.js compiles distinct programs.
-    material.customProgramCacheKey = () => `frame-v0.47-${seed}`;
+    material.customProgramCacheKey = () => `frame-v0.48-${seed}`;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;
@@ -281,6 +306,25 @@ export class CanvasMaterial {
     if (!u) return;
     u.uFrameSeed.value = seed * 0.00390625;
     console.debug('[CanvasMaterial] frame-uniforms-refreshed', { seed });
+  }
+
+  refreshFrameGeometryUniforms(
+    material: THREE.MeshPhysicalMaterial,
+    frameBounds: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
+  ): void {
+    const u = material.userData.frameUniforms as
+      | {
+          uFrameOuterHalf: { value: THREE.Vector2 };
+          uFrameInnerHalf: { value: THREE.Vector2 };
+        }
+      | undefined;
+    if (!u) return;
+    u.uFrameOuterHalf.value.copy(frameBounds.outerHalf);
+    u.uFrameInnerHalf.value.copy(frameBounds.innerHalf);
+    console.debug('[CanvasMaterial] frame-geometry-uniforms-refreshed', {
+      outerHalf: [frameBounds.outerHalf.x, frameBounds.outerHalf.y],
+      innerHalf: [frameBounds.innerHalf.x, frameBounds.innerHalf.y],
+    });
   }
 
   dispose(): void {

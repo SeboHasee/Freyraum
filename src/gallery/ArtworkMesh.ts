@@ -52,7 +52,11 @@ export class ArtworkMesh {
     this.currentFrameBevelEnabled = preset.frameBevelEnabled;
 
     const frameGeo = this.makeFrameGeometry(this.currentFrameBevelEnabled, this._artworkWidth, this._artworkHeight);
-    this.frameMaterial = this.canvasMaterial.createFrameMaterial(preset, this.artworkSeed);
+    this.frameMaterial = this.canvasMaterial.createFrameMaterial(
+      preset,
+      this.artworkSeed,
+      this.getFrameBounds(this._artworkWidth, this._artworkHeight)
+    );
     this.frameMesh = new THREE.Mesh(frameGeo, this.frameMaterial);
     this.group.add(this.frameMesh);
 
@@ -123,6 +127,19 @@ export class ArtworkMesh {
     // and the vTBN varying, which the onBeforeCompile GLSL injection depends on.
     geometry.computeTangents();
     return geometry;
+  }
+
+  private getFrameBounds(artworkWidth: number, artworkHeight: number): { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 } {
+    return {
+      outerHalf: new THREE.Vector2(
+        (artworkWidth + this.frameBorder * 2) / 2,
+        (artworkHeight + this.frameBorder * 2) / 2
+      ),
+      innerHalf: new THREE.Vector2(
+        (artworkWidth + this.frameInnerClearance) / 2,
+        (artworkHeight + this.frameInnerClearance) / 2
+      ),
+    };
   }
 
   private replaceFrameGeometry(bevelEnabled: boolean): void {
@@ -214,6 +231,10 @@ export class ArtworkMesh {
     this.artworkMesh.scale.set(width / 4.0, height / 5.7, 1);
 
     this.replaceFrameGeometry(this.currentFrameBevelEnabled);
+    this.canvasMaterial.refreshFrameGeometryUniforms(
+      this.frameMaterial,
+      this.getFrameBounds(width, height)
+    );
 
     // v0.08: expose aspect computation for diagnostics in GalleryManager.
     this._lastAspectSource = aspectSource;
