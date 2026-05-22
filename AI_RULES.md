@@ -1,5 +1,9 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## v0.40 material-fidelity planning rule
+
+When documenting metal/material upgrades, explicitly distinguish shipped runtime behavior from research-only plans, and include anti-repetition constraints (macro variation, per-instance variation, and subtle intensity bounds) before declaring a surface “premium” or “natural.”
 
 ## v0.29 preload/fidelity planning rule
 

@@ -1,5 +1,15 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## v0.40 — premium metal PBR texture research + anti-repetition strategy (2026-05-22, **docs-only**)
+
+Current status: **documentation/planning only; runtime remains v0.39**.
+
+- Researched premium high-detail metal PBR libraries for production-quality frame surfaces (Poliigon, Quixel Megascans, Adobe Substance 3D Assets).
+- Documented a practical “premium but natural” material recipe: measured albedo range, controlled roughness bands, directional anisotropy, and layered macro+micro roughness variation.
+- Documented anti-repetition tactics for large visible frame surfaces: multi-scale detail maps, macro roughness breakup, seed-based per-artwork variation, and optional triplanar/world-space blending for edge cases.
+
+See `plan.md § v0.40` for implementation slices and `FINDINGS.md § v0.40` for research notes and source links.
 
 ## v0.39 — frame alignment + metal detail refinement (2026-05-22, **shipped**)
 

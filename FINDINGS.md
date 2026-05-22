@@ -1,5 +1,54 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## v0.40 — premium metal texture realism + repetition research (2026-05-22, **docs-only**)
+
+### Status
+
+Research and planning complete. No runtime code changes in this pass.
+
+### Current-state observation (source audit)
+
+- `src/materials/CanvasMaterial.ts` currently generates deterministic procedural frame normal/roughness textures with fixed `texture.repeat.set(12, 1)` for both maps.
+- This produces consistent brushed directionality, but the repeated tile cadence can still read as synthetic on prolonged frame spans and under glancing light.
+
+### Premium texture sourcing research (online)
+
+Recommended premium-first libraries for production-ready metal PBR sets:
+
+1. **Poliigon** — premium metal materials with multi-map PBR packs and high-resolution options.
+2. **Quixel Megascans** — scanned real-world metal surfaces with strong realism and broad variety.
+3. **Adobe Substance 3D Assets** — editable/scalable material ecosystem suitable for premium custom look-dev.
+
+### “Natural but premium” metal recipe (research synthesis)
+
+- Keep the frame fully metallic (`metalness = 1.0`) and avoid over-bright or pure-white base colors.
+- Use controlled roughness bands (premium brushed metal typically in the low-to-mid range, not mirror-polished and not chalk-matte).
+- Preserve anisotropy for directional highlights, but avoid extreme values that look synthetic.
+- Combine **micro detail** (fine brushing) with **macro variation** (broad roughness drift) to avoid procedural sameness.
+
+### Anti-repetition strategy for this codebase
+
+1. Add a second low-frequency roughness modulation layer (large-scale breakup).
+2. Introduce per-artwork deterministic seed offsets for frame roughness/normal synthesis.
+3. Keep directional brushed detail but vary phase/frequency slightly per artwork to reduce visible periodicity.
+4. Optionally blend two compatible brushed variants (cross-fade mask) for hero galleries.
+5. Keep intensity subtle; realism drops quickly when noise contrast is too aggressive.
+
+### Source links consulted
+
+- https://www.poliigon.com
+- https://quixel.com/megascans
+- https://substance3d.adobe.com/assets
+- Unreal Engine tiling-breakup reference (via research tool): https://docs.unrealengine.com/5.0/en-US/tiling-breakup-techniques-in-unreal-engine/
+- Blender principled/anisotropy reference (via research tool): https://docs.blender.org/manual/en/latest/render/shader_nodes/shader/principled.html
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.39 — frame alignment + metal detail refinement (2026-05-22, **shipped**)
 

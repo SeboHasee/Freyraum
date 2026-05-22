@@ -1,5 +1,39 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## v0.40 — premium metal PBR texture realism + anti-repetition implementation plan (2026-05-22, docs-only)
+
+Runtime status: **planned (not yet shipped)**.
+
+### Problem statement
+
+The frame metal finish reads repetitive and less natural in some views. We need a premium, detailed metal look that stays realistic and elegant without overpowering artwork.
+
+### Planned implementation slices
+
+| ID | Area | Planned outcome |
+|----|------|-----------------|
+| P-01 | Premium asset baseline | Add optional “premium frame texture pack” slot (base/normal/roughness/metalness) sourced from a licensed high-detail library. |
+| P-02 | Hybrid procedural + authored detail | Keep procedural brushed directionality as fallback, but allow authored premium textures to drive hero-quality microdetail. |
+| P-03 | Repetition breakup | Add macro roughness modulation + per-artwork deterministic variation seed so repeated patterns are less obvious. |
+| P-04 | Material calibration | Tune frame roughness/anisotropy/clearcoat against museum-neutral lighting to keep metal premium but not mirror-like. |
+| P-05 | Quality-tier policy | High/balanced use richer variation path; battery keeps cheaper path with reduced variation cost. |
+| P-06 | Diagnostics | Add detailed frame-material diagnostics (active texture mode, seed, roughness modulation strength, repetition controls). |
+| P-07 | Validation pass | Run lint/build and visual QA checklist under multiple artwork aspect ratios and camera angles. |
+
+### Acceptance checks
+
+- Frame no longer shows obvious repeating cadence during slow camera motion.
+- Metallic highlights remain directional and premium-looking, not noisy or plastic.
+- Painting remains the visual priority; frame realism supports, not dominates.
+- Battery preset retains acceptable performance and stable appearance.
+
+### Not in this pass
+
+- No runtime rendering/material code changes were made in v0.40.
+- This entry documents the implementation-ready plan only.
+
+---
 
 ## v0.39 — frame alignment + metal detail refinement — IMPLEMENTATION CLOSEOUT (2026-05-22, shipped)
 

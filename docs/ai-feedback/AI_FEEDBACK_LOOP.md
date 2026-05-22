@@ -1,5 +1,5 @@
 # AI feedback loop
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
 
 ## v0.29 feedback-loop note
 

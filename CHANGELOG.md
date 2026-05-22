@@ -1,5 +1,28 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## v0.40 — premium metal PBR research + documentation sync (2026-05-22, **docs-only**)
+
+### Status
+
+Documentation/research pass completed. Runtime code unchanged.
+
+### Added
+
+- Consolidated online research findings for premium metal PBR sourcing and natural-looking material creation workflow.
+- New implementation plan for reducing metallic texture repetition while preserving premium realism.
+
+### Changed
+
+- Updated `README.md`, `FINDINGS.md`, `plan.md`, and `docs/HANDOFF.md` with v0.40 research and rollout direction.
+- Refreshed markdown audit stamp across all repository `.md` files.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.39 — frame alignment + metal detail refinement (2026-05-22, **shipped**)
 

@@ -1,5 +1,9 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## v0.40 planned frame-texture architecture note
+
+The next metal-quality pass should treat frame surfacing as a hybrid pipeline: authored premium texture-set input (optional) + procedural fallback + deterministic anti-repetition modulation. Keep ownership in `CanvasMaterial` for texture synthesis/material wiring, with preset policy in `quality.ts` and diagnostics emitted through existing diagnostics utilities.
 
 ## v0.29 shipped boot/render architecture note
 

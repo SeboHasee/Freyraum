@@ -1,5 +1,9 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## v0.40 documentation pass
+
+- 2026-05-22 (documentation): v0.40 premium metal PBR research sync completed. Audited current frame material implementation (`CanvasMaterial`/`ArtworkMesh`), gathered online references for premium metal texture sourcing and anti-repetition techniques, documented findings in `FINDINGS.md`, added an implementation-ready roadmap in `plan.md`, updated top-level status docs, and refreshed markdown audit stamps across all `.md` files. Validation rerun: `npm run lint`, `npm run build`. No runtime code changed.
 
 ## v0.29 documentation requirement — preload claims must prove presented frames
 

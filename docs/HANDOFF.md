@@ -1,5 +1,19 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## v0.40 — handoff status: premium metal texture research completed (2026-05-22, docs-only)
+
+Customer-facing status: **research and plan completed; runtime currently still uses the shipped v0.39 frame material path**.
+
+What is now ready:
+
+- Premium source shortlist for high-detail metal PBR assets (Poliigon, Quixel Megascans, Adobe Substance 3D Assets).
+- Practical implementation plan for a natural premium metal finish with reduced visible repetition.
+- Clear anti-repetition rollout slices and acceptance checks in `plan.md § v0.40`.
+
+If customers still report “repetitive frame metal”, classify as **known open enhancement** tied to v0.40 implementation work (not yet shipped).
+
+References: `FINDINGS.md § v0.40`, `plan.md § v0.40`.
 
 ## v0.29 — handoff status: realistic metallic frame pass is shipped (2026-05-22)
 

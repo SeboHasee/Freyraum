@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.39 frame alignment + metallic microdetail shipped; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+
+## 2026-05-22 — v0.40 docs-only metal realism lessons
+
+### Lesson 72 — Premium metal realism needs macro + micro variation
+
+Directional brushed microdetail alone is not enough for large visible frame spans. Future rule: combine fine brush detail with low-frequency roughness breakup so the material stays believable at both close and medium viewing distances.
+
+### Lesson 73 — “More detail” can still look fake when cadence is periodic
+
+Deterministic repeating patterns can remain obvious even when normal/roughness maps are high quality. Future rule: add deterministic per-artwork variation seeds and phase/frequency offsets to suppress repeated cadence without introducing random flicker.
 
 ## 2026-05-22 — v0.29 shipped lessons
 
