@@ -194,9 +194,9 @@ export class CanvasMaterial {
   createFrameMaterial(
     preset: QualityPreset,
     seed = 0,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _frameBounds?: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
   ): THREE.MeshPhysicalMaterial {
+    void _frameBounds;
     // Minimal 1×1 flat normal map: required so Three.js emits the
     // TANGENTSPACE_NORMALMAP and USE_TANGENT shader defines, which make the
     // vTBN varying available in the fragment shader for our GLSL injection.
@@ -311,11 +311,11 @@ export class CanvasMaterial {
   }
 
   refreshFrameGeometryUniforms(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _material: THREE.MeshPhysicalMaterial,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _frameBounds: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
   ): void {
+    void _material;
+    void _frameBounds;
     // v0.53: No-op. Frame coordinates are now baked into the geometry attribute
     // (aFrameUV) and no longer depend on runtime uniforms. The geometry itself
     // is rebuilt when aspect changes, which regenerates the attribute.
