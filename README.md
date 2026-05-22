@@ -1,5 +1,12 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+
+## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Fixed critical battery preset bug: the painting canvas was completely invisible on the lowest quality tier. Root cause was `makeFrameGeometry()` using a solid `BoxGeometry` (no center hole) that fully occluded the artwork plane. Now uses the same ring-shaped `ExtrudeGeometry` path as all other presets, with `bevelEnabled:false` for battery (no chamfer, but open center).
+- Upgraded `plan.md § v0.40` to a detailed technical coding plan with TypeScript code samples for all implementation slices (P-01 through P-07).
 
 ## v0.40 — premium metal PBR texture research + anti-repetition strategy (2026-05-22, **docs-only**)
 

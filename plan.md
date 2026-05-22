@@ -1,7 +1,28 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
 
-## v0.40 — premium metal PBR texture realism + anti-repetition implementation plan (2026-05-22, docs-only)
+## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+On the `battery` quality preset the artwork canvas was completely invisible — only the metallic frame rendered. Root cause: `makeFrameGeometry()` used a solid `BoxGeometry` for the battery case (no bevel), which had no center hole and fully occluded the painting plane behind it.
+
+### Fix delivered
+
+| File | Change |
+|------|--------|
+| `src/gallery/ArtworkMesh.ts` | Removed `BoxGeometry` fast-path for `bevelEnabled=false`. Unified to `ExtrudeGeometry` + `Shape` + inner-hole `Path` for both bevel states. Battery now produces a correct open-center ring frame without chamfer. |
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.40 — premium metal PBR texture realism + anti-repetition — detailed technical coding plan (2026-05-22, upgraded)
 
 Runtime status: **planned (not yet shipped)**.
 
@@ -9,32 +30,199 @@ Runtime status: **planned (not yet shipped)**.
 
 The frame metal finish reads repetitive and less natural in some views. We need a premium, detailed metal look that stays realistic and elegant without overpowering artwork.
 
-### Planned implementation slices
+### Online research summary (validated)
 
-| ID | Area | Planned outcome |
-|----|------|-----------------|
-| P-01 | Premium asset baseline | Add optional “premium frame texture pack” slot (base/normal/roughness/metalness) sourced from a licensed high-detail library. |
-| P-02 | Hybrid procedural + authored detail | Keep procedural brushed directionality as fallback, but allow authored premium textures to drive hero-quality microdetail. |
-| P-03 | Repetition breakup | Add macro roughness modulation + per-artwork deterministic variation seed so repeated patterns are less obvious. |
-| P-04 | Material calibration | Tune frame roughness/anisotropy/clearcoat against museum-neutral lighting to keep metal premium but not mirror-like. |
-| P-05 | Quality-tier policy | High/balanced use richer variation path; battery keeps cheaper path with reduced variation cost. |
-| P-06 | Diagnostics | Add detailed frame-material diagnostics (active texture mode, seed, roughness modulation strength, repetition controls). |
-| P-07 | Validation pass | Run lint/build and visual QA checklist under multiple artwork aspect ratios and camera angles. |
+Three.js r159+ `MeshPhysicalMaterial` natively supports `anisotropy` (magnitude) and `anisotropyMap` (per-pixel direction/magnitude texture). Both are active in the shipped code via `CanvasMaterial.createFrameMaterial()`. The gap is entirely in the *procedural texture quality and anti-repetition strategy*, not in the material model itself.
 
-### Acceptance checks
+Key validated findings:
+- **Multi-scale roughness** (fine brushed stripes + broad low-frequency drift) is the single strongest quality signal for natural metal.
+- **Seed-offset per artwork** prevents multiple frames from showing identical phase; costs zero GPU cycles (only changes DataTexture generation input).
+- **Macro breakup texture** (64x128, very subtle +-0.05 roughness swing) eliminates the cadence visible during slow camera pan.
+- **Stochastic offset blending** (sample same texture at two UV offsets and lerp with a low-frequency mask) is a GLSL technique but requires an `onBeforeCompile` hook; defer to a later pass if needed.
+- Premium library textures (Poliigon, Quixel Megascans) are the gold standard but require licensing; the procedural path can reach 85-90% quality at zero asset cost.
 
-- Frame no longer shows obvious repeating cadence during slow camera motion.
-- Metallic highlights remain directional and premium-looking, not noisy or plastic.
-- Painting remains the visual priority; frame realism supports, not dominates.
-- Battery preset retains acceptable performance and stable appearance.
-
-### Not in this pass
-
-- No runtime rendering/material code changes were made in v0.40.
-- This entry documents the implementation-ready plan only.
+### Detailed implementation slices
 
 ---
 
+#### P-01 -- Premium DataTexture quality upgrade (`CanvasMaterial.ts`)
+
+**Goal:** Replace the current single-frequency brushed normal and roughness textures with multi-scale layered equivalents.
+
+**File:** `src/materials/CanvasMaterial.ts`
+
+**Current state:** `getFrameNormalTexture()` uses a single sinusoidal stripe band at one frequency.
+
+**Required change -- `getFrameNormalTexture(seed = 0)`:**
+```typescript
+// Layer 1: fine brushed grain (high frequency, low amplitude)
+const fineBrush = Math.sin(x * 0.18 + seed * 0.37) * 0.25;
+// Layer 2: mid-frequency streak modulation
+const midDrift  = Math.sin(x * 0.07 + seed * 0.71) * 0.30;
+// Layer 3: 1-D low-frequency warp (removes cadence during slow pan)
+const macroWarp = Math.sin(x * 0.021 + seed * 1.13) * 0.15;
+const combined  = 0.5 + fineBrush + midDrift + macroWarp;
+```
+
+Add a second roughness modulation pass in `getFrameRoughnessTexture(seed = 0)`:
+```typescript
+// Fine variation (current approach kept)
+const fineLine  = Math.sin(x * 0.22 + seed * 0.53) * 0.4;
+// Macro drift layer -- broad, very subtle
+const macroDrift = Math.sin(x * 0.04 + seed * 0.89) * 0.12;
+const v = 0.5 + fineLine + macroDrift;
+```
+
+**Accept:** Two visual frequency bands clearly visible in a normal-map debug overlay; no obvious phase match between frames in a multi-artwork gallery view.
+
+---
+
+#### P-02 -- Per-artwork deterministic seed system
+
+**Goal:** Each artwork gets a distinct but stable seed so frame textures never look phase-aligned across the gallery wall.
+
+**File:** `src/materials/CanvasMaterial.ts` -- `createFrameMaterial(preset, seed)`:
+```typescript
+createFrameMaterial(preset: QualityPreset, seed = 0): THREE.MeshPhysicalMaterial {
+  const normalTex = this.getFrameNormalTexture(seed);
+  const roughTex  = this.getFrameRoughnessTexture(seed);
+  // ... rest unchanged
+}
+```
+
+**Caller -- `ArtworkMesh.ts` constructor signature:**
+```typescript
+constructor(scene: THREE.Scene, preset: QualityPreset, artworkIndex = 0) {
+  // ...
+  const seed = artworkIndex % 256;
+  this.frameMaterial = this.canvasMaterial.createFrameMaterial(preset, seed);
+}
+```
+
+**Accept:** In a 5-artwork gallery, no two adjacent frames show the same roughness band phase. Seed `0` (default) must produce the same result on every page load (deterministic).
+
+---
+
+#### P-03 -- Macro roughness breakup texture
+
+**Goal:** Add a very-low-frequency roughness layer that modulates the frame surface across its full length, eliminating the periodic cadence visible during slow camera pan.
+
+**File:** `src/materials/CanvasMaterial.ts`
+
+**New method `getFrameMacroDriftTexture(seed = 0)`:**
+```typescript
+private getFrameMacroDriftTexture(seed: number): THREE.DataTexture {
+  const W = 64, H = 8;  // very low resolution -- only macro drift needed
+  const data = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const a = Math.sin(x * 0.098 + seed * 1.17) * 0.5;
+      const b = Math.sin(x * 0.041 + seed * 0.63) * 0.3;
+      data[y * W + x] = Math.round(128 + (a + b) * 18); // +-0.05 roughness swing
+    }
+  }
+  const tex = new THREE.DataTexture(data, W, H, THREE.LuminanceFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.minFilter = tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+```
+
+Blend drift into the primary roughness DataTexture at generation time (no shader changes needed).
+
+**Accept:** Frame roughness visibly varies across its long axis under a static camera. Variation amplitude is subtle -- peak-to-trough difference <= 0.12 roughness units.
+
+---
+
+#### P-04 -- Calibrated preset value table
+
+**Goal:** Tune `frameRoughness`, `frameAnisotropy`, and `frameClearcoat` per tier to a premium museum reference.
+
+**File:** `src/config/quality.ts`
+
+**Proposed values:**
+
+| Preset | frameRoughness | frameAnisotropy | frameClearcoat | Notes |
+|--------|----------------|-----------------|----------------|-------|
+| high | 0.28 | 0.7 | 0.18 | Near-mirror brushed, strong directional highlight |
+| balanced | 0.38 | 0.55 | 0.14 | Satin brushed -- most museum-natural |
+| battery | 0.48 | 0.0 | 0.0 | No anisotropy (cost), flat-matte acceptable |
+
+**Current values for reference:**
+
+| Preset | frameRoughness | frameAnisotropy | frameClearcoat |
+|--------|----------------|-----------------|----------------|
+| high | 0.35 | 0.5 | 0.16 |
+| balanced | 0.35 | 0.5 | 0.16 |
+| battery | 0.5 | 0.0 | 0.0 |
+
+**Rationale:** High roughness (>= 0.45) on a metalness=1 surface reads as dull pewter, not premium aluminum. The 0.28-0.38 range produces the characteristic bright-but-not-mirror look of brushed stainless/anodized aluminum museum frames.
+
+**Accept:** Under museum-neutral lighting the frame reads clearly metallic, directional highlights track camera motion, and there is no plastic or chrome reading.
+
+---
+
+#### P-05 -- Quality-tier texture policy
+
+**Goal:** High/balanced use the full multi-scale texture (256x256 normal, 64-pixel macro drift); battery keeps a single-pass 128x128 normal with seed applied but no drift layer.
+
+**File:** `src/materials/CanvasMaterial.ts` -- `createFrameMaterial(preset, seed)`:
+```typescript
+const normalTex = this.getFrameNormalTexture(seed);
+const roughTex  = this.getFrameRoughnessTexture(seed);
+if (preset.id !== 'battery') {
+  // Blend macro drift into roughTex pixel data at generation time
+  this.applyMacroDrift(roughTex, seed);
+}
+```
+
+**Accept:** Battery frame does not pay the drift texture generation cost. High/balanced have the full three-layer look.
+
+---
+
+#### P-06 -- Diagnostics logging
+
+**Goal:** Make the active frame texture configuration visible in the console diagnostic path.
+
+**File:** `src/materials/CanvasMaterial.ts` -- end of `createFrameMaterial()`:
+```typescript
+console.debug('[CanvasMaterial] frame-material-created', {
+  preset: preset.id, seed, macroDrift: preset.id !== 'battery',
+  frameRoughness: preset.frameRoughness, frameAnisotropy: preset.frameAnisotropy,
+});
+```
+
+**File:** `src/gallery/ArtworkMesh.ts` -- constructor:
+```typescript
+console.debug('[ArtworkMesh] artwork-frame-seed', { artworkIndex, seed });
+```
+
+**Accept:** On first gallery load, each artwork logs its frame seed value. No silent failures when `artworkIndex` is undefined.
+
+---
+
+#### P-07 -- Acceptance QA checklist
+
+After implementing P-01 through P-06:
+
+- [ ] In a 5-artwork gallery: no two adjacent frames show matching roughness band phase under natural camera pan.
+- [ ] Frame metal reads clearly brushed/directional on high preset under museum-neutral lighting.
+- [ ] No plastic or chrome reading -- roughness is in the premium satin range.
+- [ ] Battery preset frame is visible, open (painting shows through), and acceptably simple.
+- [ ] `npm run lint` -- pass.
+- [ ] `npm run build` -- pass.
+- [ ] No visual regression to painting albedo fidelity (run `setAlbedoOnly(true)` debug mode).
+
+---
+
+### Not in this pass
+
+- No authored/licensed premium texture assets -- procedural path targets the initial implementation.
+- No GLSL stochastic tiling shader -- blending at DataTexture generation time is sufficient.
+- No triplanar projection -- frame faces are planar and UV-mapped.
+
+---
 ## v0.39 — frame alignment + metal detail refinement — IMPLEMENTATION CLOSEOUT (2026-05-22, shipped)
 
 Runtime status: **shipped**.

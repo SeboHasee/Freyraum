@@ -1,5 +1,12 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+
+## v0.41 — handoff status: battery preset painting bug fixed (2026-05-22, shipped)
+
+Customer-facing status: **shipped and validated**.
+
+- Fixed: on the battery (lowest) quality preset, artworks were invisible — only the frame showed. This is now corrected; all presets render the painting correctly.
+- Frame geometry is now structurally consistent across all quality tiers (ring-shaped, open center).
 
 ## v0.40 — handoff status: premium metal texture research completed (2026-05-22, docs-only)
 

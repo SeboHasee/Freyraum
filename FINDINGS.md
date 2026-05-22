@@ -1,5 +1,50 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+
+## v0.41 — battery preset painting invisible bug fix + detailed PBR plan (2026-05-22, **shipped**)
+
+### Status
+
+Bug fixed in runtime code; plan.md v0.40 upgraded to detailed technical coding plan. Lint/build pass.
+
+### Battery preset painting invisible — root cause analysis
+
+**Symptom:** On the `battery` quality preset, artworks showed only the metallic frame; the painting canvas was completely invisible.
+
+**Root cause:** `ArtworkMesh.makeFrameGeometry()` had a fast-path for `bevelEnabled = false` (used exclusively by `battery`) that returned a `THREE.BoxGeometry(outerW, outerH, frameDepth)`. This box covered the **entire** outer frame rectangle — there was no hole cut for the canvas opening. Because the artwork plane (`artworkMesh.position.z = -0.016`) sits slightly behind the frame's front face (`z = 0`), it was completely occluded by the solid frame box.
+
+For `bevelEnabled = true` (all other presets), the code used `THREE.ExtrudeGeometry` with a `THREE.Path` hole punching the canvas area out — the correct ring-shaped frame. Battery was the only preset that never exercised this path.
+
+**Fix (v0.41):** Removed the `BoxGeometry` branch entirely. Both `bevelEnabled` states now go through `ExtrudeGeometry` with a center hole. For battery the `bevelEnabled: false` option simply skips the chamfer geometry, producing a simpler but correctly open frame. No shader, texture, or material changes were needed.
+
+**File changed:** `src/gallery/ArtworkMesh.ts` — `makeFrameGeometry()`.
+
+**Code diff (simplified):**
+```typescript
+// BEFORE (battery path — solid box, no hole):
+if (!bevelEnabled) {
+  const geometry = new THREE.BoxGeometry(outerW, outerH, this.frameDepth);
+  geometry.translate(0, 0, -this.frameDepth / 2);
+  return geometry;
+}
+
+// AFTER (unified path — ring with hole, bevel optional):
+const shape = new THREE.Shape(); // outer rect
+shape.holes.push(hole);          // inner cutout
+const geometry = new THREE.ExtrudeGeometry(shape, {
+  depth,
+  bevelEnabled,                  // false for battery = no chamfer, but hole is present
+  ...(bevelEnabled ? { bevelThickness: 0.018, bevelSize: 0.018, bevelSegments: 2 } : {}),
+});
+geometry.translate(0, 0, -depth);
+```
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.40 — premium metal texture realism + repetition research (2026-05-22, **docs-only**)
 

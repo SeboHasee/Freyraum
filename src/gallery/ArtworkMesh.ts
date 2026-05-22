@@ -85,12 +85,11 @@ export class ArtworkMesh {
     const outerH = artworkHeight + this.frameBorder * 2;
     const innerW = artworkWidth + this.frameInnerClearance;
     const innerH = artworkHeight + this.frameInnerClearance;
-    if (!bevelEnabled) {
-      const geometry = new THREE.BoxGeometry(outerW, outerH, this.frameDepth);
-      geometry.translate(0, 0, -this.frameDepth / 2);
-      return geometry;
-    }
 
+    // v0.41 fix: always use a ring-shaped ExtrudeGeometry so the painting is
+    // visible through the frame's center opening. The previous battery path
+    // used BoxGeometry(outerW, outerH, …) — a solid rectangle that completely
+    // blocked the artwork plane behind it.
     const shape = new THREE.Shape();
     shape.moveTo(-outerW / 2, -outerH / 2);
     shape.lineTo(outerW / 2, -outerH / 2);
@@ -109,10 +108,10 @@ export class ArtworkMesh {
     const depth = this.frameDepth;
     const geometry = new THREE.ExtrudeGeometry(shape, {
       depth,
-      bevelEnabled: true,
-      bevelThickness: 0.018,
-      bevelSize: 0.018,
-      bevelSegments: 2,
+      bevelEnabled,
+      ...(bevelEnabled
+        ? { bevelThickness: 0.018, bevelSize: 0.018, bevelSegments: 2 }
+        : {}),
     });
     geometry.translate(0, 0, -depth);
     return geometry;

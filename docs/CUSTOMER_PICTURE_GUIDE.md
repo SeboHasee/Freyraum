@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
 
 ## v0.29 customer-facing status note — preload/fidelity follow-up shipped
 

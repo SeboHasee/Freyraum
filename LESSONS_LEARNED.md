@@ -1,7 +1,13 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
 
-## 2026-05-22 — v0.40 docs-only metal realism lessons
+## 2026-05-22 — v0.41 battery bug lesson
+
+### Lesson 74 — Fast-path geometry shortcuts can create invisible meshes
+
+When a code path skips the standard geometry construction (e.g., using `BoxGeometry` instead of `ExtrudeGeometry` with a hole), the resulting mesh may occlude other scene objects entirely. Future rule: frame geometry must always be a ring with an inner cutout — never a solid rectangle — regardless of quality tier or bevel setting.
+
+
 
 ### Lesson 72 — Premium metal realism needs macro + micro variation
 

@@ -1,21 +1,21 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.40 premium metal PBR research documented; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
 
-## v0.40 — premium metal PBR research + documentation sync (2026-05-22, **docs-only**)
+## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
 
 ### Status
 
-Documentation/research pass completed. Runtime code unchanged.
+Bug fix shipped in runtime code; lint/build pass.
 
-### Added
+### Fixed
 
-- Consolidated online research findings for premium metal PBR sourcing and natural-looking material creation workflow.
-- New implementation plan for reducing metallic texture repetition while preserving premium realism.
+- **Battery preset painting invisible:** On the lowest performance tier, artworks showed only the frame — the painting canvas was completely invisible. Root cause: `ArtworkMesh.makeFrameGeometry()` used a `BoxGeometry` (solid rectangle, no hole) for the battery `bevelEnabled=false` path, which fully covered and occluded the painting plane behind it. Fixed by unifying both bevel states to use `ExtrudeGeometry` with an inner `Path` hole, as the high/balanced path already did. Battery gets `bevelEnabled:false` (no chamfer) but has the correct open center.
 
 ### Changed
 
-- Updated `README.md`, `FINDINGS.md`, `plan.md`, and `docs/HANDOFF.md` with v0.40 research and rollout direction.
-- Refreshed markdown audit stamp across all repository `.md` files.
+- `src/gallery/ArtworkMesh.ts` — `makeFrameGeometry()` refactored: removed `BoxGeometry` fast-path, unified to single `ExtrudeGeometry` + shape-with-hole path for all presets.
+- Upgraded `plan.md § v0.40` from high-level docs-only plan to detailed technical coding plan with TypeScript code samples (P-01 through P-07).
+- Updated `FINDINGS.md § v0.41` with complete battery bug root-cause analysis and fix diff.
 
 ### Validation
 
