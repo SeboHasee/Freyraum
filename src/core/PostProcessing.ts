@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import type { QualityPreset } from '../config/quality';
 
@@ -40,6 +41,16 @@ export class PostProcessing {
     this.applyFXAAResolution(window.innerWidth, window.innerHeight);
     this.fxaaPass.enabled = preset.fxaaEnabled ?? true;
     this.composer.addPass(this.fxaaPass);
+
+    // v0.37: OutputPass applies tone mapping + linear→sRGB color space
+    // conversion for the final canvas output. Without this, when any
+    // ShaderPass (bloom/FXAA) is the last enabled pass, linear values are
+    // written directly to the sRGB canvas — causing darker, contrast-shifted
+    // rendering on high and balanced presets (where bloom/FXAA are active).
+    // Battery mode was unaffected because only RenderPass ran, and
+    // renderer.render() handles the conversion internally.
+    const outputPass = new OutputPass();
+    this.composer.addPass(outputPass);
   }
 
   applyPreset(preset: QualityPreset): void {

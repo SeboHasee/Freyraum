@@ -1,5 +1,26 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.36 shipped — raise lighting for NoToneMapping; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.37 shipped — add OutputPass for correct sRGB output; lint/build pass).
+
+## v0.37 — Fix darkness/contrast shift on high and balanced presets (2026-05-22, **shipped**)
+
+### Problem
+
+Paintings appeared too dark with altered contrast and colors on the "high" and "balanced" quality presets (but NOT on "battery"). The issue was introduced in v0.27 when FXAA was added via EffectComposer. When bloom or FXAA passes are active, the final ShaderPass writes linear-space values directly to the sRGB canvas without proper gamma conversion. Battery mode was unaffected because only RenderPass is active, and `renderer.render()` handles color space conversion internally.
+
+### Root cause
+
+Three.js r166 requires an `OutputPass` at the end of the EffectComposer chain to apply tone mapping and linear→sRGB color space conversion. Without it, any active ShaderPass (bloom/FXAA) as the last enabled pass outputs uncorrected linear values to the display — causing darker, lower-contrast, hue-shifted rendering.
+
+### Changed
+
+- **`src/core/PostProcessing.ts`:** Added `OutputPass` (from `three/examples/jsm/postprocessing/OutputPass.js`) as the final pass in the EffectComposer chain. This ensures correct color space output regardless of which passes are enabled.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.36 — Raise lighting to match v0.26 brightness (2026-05-22, **shipped**)
 
