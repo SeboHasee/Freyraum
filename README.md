@@ -1,11 +1,11 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
 
-## v0.29 — shipped update: loading screen owns the complete first render (2026-05-22)
+## v0.38 — shipped update: color/contrast parity hardening (2026-05-22)
 
-Current status: **shipped**. v0.29 implements the loading-screen readiness gate: every painting is drawn through the final post-processing path, timeline/control chrome is prebuilt, the production RAF runs under the opaque overlay, and two full-size frames are observed before the enter CTA appears.
+Current status: **shipped**. v0.37/v0.38 complete the rendering parity fixes for upper-tier presets: the post-processing chain now ends with `OutputPass` (correct linear→sRGB output), and FXAA is disabled on `high`/`balanced` to restore v0.25-like contrast/color response.
 
-See `plan.md § v0.29` and `FINDINGS.md § v0.29` for diagnostics, source audit, and validation notes. Runtime validation: `npm run lint` and `npm run build` pass.
+See `CHANGELOG.md` entries for **v0.37** and **v0.38** for root cause, implementation, and validation details. Runtime validation: `npm run lint` and `npm run build` pass.
 
 
 

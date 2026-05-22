@@ -1,5 +1,17 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.38 — Rendering parity closeout (2026-05-22, **shipped**)
+
+Runtime status: **shipped** in `src/core/PostProcessing.ts`, `src/config/quality.ts`, and `CHANGELOG.md`.
+
+Closeout summary:
+
+1. **Composer output correctness:** `OutputPass` is now the final EffectComposer pass, ensuring correct display-space output.
+2. **Preset-specific parity fix:** `fxaaEnabled` is now disabled on `high` and `balanced` (battery already disabled), matching the observed regression boundary and restoring v0.25-like color/contrast response.
+3. **Validation:** `npm run lint` and `npm run build` pass.
+
+---
 
 ## v0.29 — Loading-screen ownership of the complete first render + artwork fidelity re-audit (2026-05-22, **shipped**)
 

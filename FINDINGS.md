@@ -1,5 +1,24 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.38 — Rendering parity follow-up (2026-05-22, **shipped**)
+
+### Status
+
+Shipped in runtime code. The parity follow-up is implemented: `OutputPass` is present at the end of the EffectComposer chain and FXAA is disabled on `high`/`balanced`, matching the observed preset-specific regression window and restoring v0.25-style color/contrast behavior.
+
+### As-built evidence
+
+- `src/core/PostProcessing.ts`: imports and appends `OutputPass` as final composer pass.
+- `src/config/quality.ts`: `fxaaEnabled` is `false` on `high`, `balanced`, and `battery`.
+- `CHANGELOG.md` v0.37/v0.38: shipped problem/root-cause/validation records.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.29 — Loading-screen full-render contract implementation (2026-05-22, **shipped**)
 

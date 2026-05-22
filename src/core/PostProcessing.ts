@@ -36,7 +36,7 @@ export class PostProcessing {
     this.bloomPass.enabled = preset.bloomStrength > 0;
     this.composer.addPass(this.bloomPass);
 
-    // v0.27 W-06: append FXAA as final post-process pass.
+    // v0.27 W-06: append FXAA pass before the final OutputPass.
     this.fxaaPass = new ShaderPass(FXAAShader);
     this.applyFXAAResolution(window.innerWidth, window.innerHeight);
     this.fxaaPass.enabled = preset.fxaaEnabled ?? true;
@@ -108,4 +108,3 @@ export class PostProcessing {
     this.fxaaPass.material.uniforms['resolution'].value.set(1 / (w * pr), 1 / (h * pr));
   }
 }
-
