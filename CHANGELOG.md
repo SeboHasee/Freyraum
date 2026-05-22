@@ -1,5 +1,26 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.29 shipped — loading-screen-owned RAF, final-path all-painting warm, full-size presented-frame gate, UI prebuild, and museum-neutral default lighting; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.30 shipped — brighter albedo-preserving painting fill, lighter default quality costs, repeated-hitch adaptive downgrade detection; lint/build pass).
+
+## v0.30 — Painting fidelity + smoother frame pacing (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Changed
+
+- **`src/materials/PaintingMaterial.ts` + `src/config/quality.ts`:** Adds a subtle albedo-fidelity fill so paintings keep more of the source image brightness while retaining PBR depth/varnish response.
+- **`src/lighting/LightProfile.ts`:** Brightens display lighting for `gallery-soft` and `museum-neutral` so default viewing is less dark.
+- **`src/config/quality.ts`:** Reduces default GPU pressure by lowering high/balanced DPR caps, bloom strength, high geometry density, and high parallax/self-shadow steps.
+- **`src/utils/FrameBudgetMonitor.ts` + `src/utils/AdaptiveQualityController.ts` + `src/main.ts`:** Treats repeated severe hitch frames as a downgrade signal and logs the severe-frame count for diagnostics.
+- **Preview output:** Rebuilt `customer-preview/freyraum-gallery.js`.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.29 — Loading-screen full-render contract (2026-05-22, **shipped**)
 
