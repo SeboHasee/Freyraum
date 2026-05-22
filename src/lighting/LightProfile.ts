@@ -62,12 +62,12 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
     id: 'gallery-soft',
     label: 'Galerie weich',
     description: 'Warm-soft museum lighting from the upper left.',
-    ambientIntensity: 0.6,
+    ambientIntensity: 1.0,
     ambientKelvin: 4000,
     keys: [
       {
         kelvin: 3200,
-        intensity: 100,
+        intensity: 150,
         position: { x: -3, y: 5, z: 4 },
         angle: 0.42,
         penumbra: 0.9,
@@ -76,7 +76,7 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
     ],
     accent: {
       kelvin: 4500,
-      intensity: 5,
+      intensity: 8,
       position: { x: 5, y: -2, z: 6 },
       decay: 2.0,
     },
@@ -110,12 +110,12 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
     id: 'museum-neutral',
     label: 'Museum neutral',
     description: 'Daylight-balanced even illumination for objective viewing.',
-    ambientIntensity: 0.8,
+    ambientIntensity: 1.4,
     ambientKelvin: 5500,
     keys: [
       {
         kelvin: 5500,
-        intensity: 60,
+        intensity: 90,
         position: { x: -6, y: 4, z: 6 },
         angle: 0.5,
         penumbra: 0.95,
@@ -123,7 +123,7 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
       },
       {
         kelvin: 5500,
-        intensity: 40,
+        intensity: 60,
         position: { x: 6, y: 4, z: 6 },
         angle: 0.5,
         penumbra: 0.95,

@@ -1,5 +1,22 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.35 shipped — remove ACES tone mapping; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.36 shipped — raise lighting for NoToneMapping; lint/build pass).
+
+## v0.36 — Raise lighting to match v0.26 brightness (2026-05-22, **shipped**)
+
+### Problem
+
+Paintings appeared too dark after removing ACES tone mapping. The old light values were tuned for ACES at exposure 1.45 which effectively multiplied brightness by ~1.45x. Without that boost, scenes were underlit.
+
+### Changed
+
+- **`src/lighting/LightProfile.ts`:** Raised museum-neutral ambient 0.8 → 1.4, keys 60/40 → 90/60. Raised gallery-soft ambient 0.6 → 1.0, key 100 → 150, accent 5 → 8. Compensates for the removed ACES exposure boost so paintings render at v0.26-equivalent brightness.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.35 — Remove ACES tone mapping (2026-05-22, **shipped**)
 
