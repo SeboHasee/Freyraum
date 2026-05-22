@@ -22,6 +22,8 @@ export interface FrameBudgetSample {
   rollingFps: number;
   /** True when the most recent N samples are above the budget. */
   belowBudget: boolean;
+  /** Number of severe hitch frames in the rolling window. */
+  severeFrameCount: number;
   /** True when recently marked by a navigation/preset change. */
   inCooldown: boolean;
 }
@@ -35,6 +37,10 @@ export interface FrameBudgetMonitorOptions {
   emaAlpha?: number;
   /** Cooldown after a marker (ms). Default 600. */
   cooldownMs?: number;
+  /** Frame duration that counts as a visible hitch. Default 33ms. */
+  severeFrameMs?: number;
+  /** Severe hitches in the rolling window that should trigger mitigation. */
+  severeFrameLimit?: number;
 }
 
 export class FrameBudgetMonitor {
@@ -49,12 +55,16 @@ export class FrameBudgetMonitor {
   readonly windowSize: number;
   readonly emaAlpha: number;
   readonly cooldownMs: number;
+  readonly severeFrameMs: number;
+  readonly severeFrameLimit: number;
 
   constructor(opts: FrameBudgetMonitorOptions) {
     this.budgetMs = opts.budgetMs;
     this.windowSize = Math.max(8, opts.windowSize ?? 60);
     this.emaAlpha = opts.emaAlpha ?? 0.1;
     this.cooldownMs = opts.cooldownMs ?? 600;
+    this.severeFrameMs = opts.severeFrameMs ?? 33;
+    this.severeFrameLimit = opts.severeFrameLimit ?? 5;
     this.samples.length = this.windowSize;
     this.samples.fill(this.budgetMs);
   }
@@ -82,12 +92,15 @@ export class FrameBudgetMonitor {
     this.rolling = sum / Math.max(1, usable);
     this.ema = this.ema + this.emaAlpha * (clamped - this.ema);
 
-    return this.snapshot(clamped, /* count above budget */ this.countAboveBudget());
+    return this.snapshot(clamped, this.countAboveBudget(), this.countSevereFrames());
   }
 
   /** Reset cooldown for an upcoming spike. */
   markNavigation(): void {
     this.cooldownUntil = (typeof performance !== 'undefined' ? performance.now() : 0) + this.cooldownMs;
+  }
+  markReadinessWork(): void {
+    this.markNavigation();
   }
   markPresetChange(): void {
     this.markNavigation();
@@ -102,16 +115,28 @@ export class FrameBudgetMonitor {
     return count;
   }
 
-  private snapshot(dtMs: number, aboveCount: number): FrameBudgetSample {
+  private countSevereFrames(): number {
+    const usable = this.filled ? this.windowSize : this.writeIndex;
+    let count = 0;
+    for (let i = 0; i < usable; i += 1) {
+      if (this.samples[i] >= this.severeFrameMs) count += 1;
+    }
+    return count;
+  }
+
+  private snapshot(dtMs: number, aboveCount: number, severeFrameCount = 0): FrameBudgetSample {
     const now = typeof performance !== 'undefined' ? performance.now() : 0;
     const inCooldown = now < this.cooldownUntil;
+    const sustainedOverBudget = aboveCount > this.windowSize * 0.7;
+    const repeatedSevereHitches = severeFrameCount >= this.severeFrameLimit;
     return {
       dtMs,
       emaMs: this.ema,
       rollingMs: this.rolling,
       rollingFps: 1000 / Math.max(0.1, this.rolling),
       // > 70 % of the rolling window over budget triggers the warning.
-      belowBudget: aboveCount > this.windowSize * 0.7,
+      belowBudget: sustainedOverBudget || repeatedSevereHitches,
+      severeFrameCount,
       inCooldown,
     };
   }
@@ -125,7 +150,8 @@ export class FrameBudgetMonitor {
       emaMs: this.ema,
       rollingMs: this.rolling,
       rollingFps: 1000 / Math.max(0.1, this.rolling),
-      belowBudget: this.countAboveBudget() > this.windowSize * 0.7,
+      belowBudget: this.countAboveBudget() > this.windowSize * 0.7 || this.countSevereFrames() >= this.severeFrameLimit,
+      severeFrameCount: this.countSevereFrames(),
       inCooldown,
     };
   }

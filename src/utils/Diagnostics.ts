@@ -98,9 +98,12 @@ function consoleThresholdForMode(mode: DiagnosticsMode): DiagnosticLevel {
   }
 }
 
-function serializeValue(value: unknown, depth = 0): unknown {
+function serializeValue(value: unknown, depth = 0, seen?: WeakSet<object>): unknown {
   if (value === null || value === undefined) return value;
   if (depth > 3) return '[max-depth]';
+  if (typeof value === 'function') return `[function ${(value as { name?: string }).name || 'anonymous'}]`;
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'symbol') return value.toString();
   if (value instanceof Error) {
     return {
       name: value.name,
@@ -108,11 +111,15 @@ function serializeValue(value: unknown, depth = 0): unknown {
       stack: value.stack,
     };
   }
-  if (Array.isArray(value)) return value.map((item) => serializeValue(item, depth + 1));
+  if (Array.isArray(value)) return value.map((item) => serializeValue(item, depth + 1, seen));
   if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const seenRefs = seen ?? new WeakSet<object>();
+    if (seenRefs.has(obj)) return '[circular]';
+    seenRefs.add(obj);
     const out: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = serializeValue(entry, depth + 1);
+    for (const [key, entry] of Object.entries(obj)) {
+      out[key] = serializeValue(entry, depth + 1, seenRefs);
     }
     return out;
   }
@@ -127,6 +134,7 @@ class Diagnostics {
   private mode: DiagnosticsMode;
   private readonly dedupe = new Map<string, { entryId: number; lastSeen: number }>();
   private globalHandlersInstalled = false;
+  private handlingGlobalError = false;
 
   constructor() {
     this.mode = readQueryMode() ?? readStoredMode() ?? 'default';
@@ -150,18 +158,34 @@ class Diagnostics {
     this.globalHandlersInstalled = true;
 
     window.addEventListener('error', (event) => {
-      this.error('window', 'uncaught-error', event.message || 'Uncaught window error', {
-        filename: event.filename,
-        lineno: event.lineno,
-        colno: event.colno,
-        error: event.error,
-      });
+      if (this.handlingGlobalError) return;
+      this.handlingGlobalError = true;
+      try {
+        this.error('window', 'uncaught-error', event.message || 'Uncaught window error', {
+          filename: event.filename,
+          lineno: event.lineno,
+          colno: event.colno,
+          error: event.error,
+        });
+      } catch (err) {
+        console.error('[freyraum][diagnostics][error] Failed to handle global window error', err);
+      } finally {
+        this.handlingGlobalError = false;
+      }
     });
 
     window.addEventListener('unhandledrejection', (event) => {
-      this.error('window', 'unhandled-rejection', 'Unhandled promise rejection', {
-        reason: event.reason,
-      });
+      if (this.handlingGlobalError) return;
+      this.handlingGlobalError = true;
+      try {
+        this.error('window', 'unhandled-rejection', 'Unhandled promise rejection', {
+          reason: event.reason,
+        });
+      } catch (err) {
+        console.error('[freyraum][diagnostics][error] Failed to handle unhandled rejection', err);
+      } finally {
+        this.handlingGlobalError = false;
+      }
     });
   }
 
@@ -262,6 +286,14 @@ class Diagnostics {
   }
 
   private push(level: DiagnosticLevel, scope: string, event: string, message: string, data?: unknown): void {
+    let safeData: unknown;
+    try {
+      safeData = data === undefined ? undefined : serializeValue(data);
+    } catch (err) {
+      safeData = {
+        serializationError: err instanceof Error ? err.message : String(err),
+      };
+    }
     const now = performance.now();
     const dedupeKey = `${level}|${scope}|${event}|${message}`;
     const dedupeHit = this.dedupe.get(dedupeKey);
@@ -282,7 +314,7 @@ class Diagnostics {
       scope,
       event,
       message,
-      data: data === undefined ? undefined : serializeValue(data),
+      data: safeData,
       repeatCount: 1,
     };
 
@@ -293,7 +325,11 @@ class Diagnostics {
     this.dedupe.set(dedupeKey, { entryId: entry.id, lastSeen: now });
 
     if (LEVEL_RANK[level] >= LEVEL_RANK[consoleThresholdForMode(this.mode)]) {
-      this.printEntry(entry);
+      try {
+        this.printEntry(entry);
+      } catch (err) {
+        console.error('[freyraum][diagnostics][error] Failed to print diagnostic entry', err);
+      }
     }
   }
 
@@ -312,11 +348,19 @@ class Diagnostics {
     if (hasData) {
       // Use a collapsed group so the message is visible at a glance but the
       // full payload expands on demand. This keeps the console readable.
-      console.groupCollapsed(prefix, meta);
-      logFn('data:', entry.data);
-      console.groupEnd();
+      try {
+        console.groupCollapsed(prefix, meta);
+        logFn('data:', entry.data);
+        console.groupEnd();
+      } catch {
+        logFn(prefix, meta, entry.data);
+      }
     } else {
-      logFn(prefix, meta);
+      try {
+        logFn(prefix, meta);
+      } catch {
+        console.log(prefix, meta);
+      }
     }
   }
 }

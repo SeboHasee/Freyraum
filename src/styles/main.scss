@@ -138,6 +138,24 @@ canvas {
   touch-action: none;
 }
 
+.gallery-canvas {
+  transition: opacity 1.4s var(--ease-gallery-out),
+    filter 1.4s var(--ease-gallery-out),
+    transform 1.4s var(--ease-gallery-out);
+}
+
+.gallery-canvas--loading {
+  opacity: 0;
+  filter: blur(12px);
+  transform: scale(1.015);
+}
+
+.gallery-canvas--ready {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1);
+}
+
 // -----------------------------------------------------------------------------
 // Universal focus ring
 // -----------------------------------------------------------------------------
@@ -354,6 +372,17 @@ button {
   &:active::before {
     transform: scale(0.96);
   }
+
+  // v0.20.6 — avoid the dark browser-default focus halo seen during
+  // keyboard navigation while keeping a clear custom focus affordance.
+  &:focus-visible {
+    outline: none;
+  }
+
+  &:focus-visible::before {
+    background: var(--glass-bg-strong);
+    box-shadow: var(--shadow-soft), 0 0 0 3px rgba(255, 255, 255, 0.8);
+  }
 }
 
 // =============================================================================
@@ -410,6 +439,165 @@ button {
 
 .zoom-controls__icon {
   line-height: 1;
+}
+
+// =============================================================================
+// Audio controls (main-page mute + volume, top-right cluster)
+// =============================================================================
+// Hidden via `hidden` attribute when no audio source is available; shown as a
+// low-profile glass pill aligned with the top-right utility controls.
+//
+// v0.20.2 / v0.20.3 Slice D — placement tokens for collision-aware layout.
+// The top/right offsets are derived from shared safe-area variables so
+// responsive overrides only need to touch the token definitions.
+
+.audio-controls {
+  position: fixed;
+  // Placement tokens: override these in media queries for responsive behavior.
+  top: var(--audio-ctrl-top, calc(var(--chrome-top) + 20px));
+  right: var(--audio-ctrl-right, calc(146px + var(--safe-right)));
+  display: flex;
+  align-items: center;
+  gap: 0;
+  z-index: 100;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 22px;
+  padding: 0 8px 0 0;
+  min-height: 44px;
+  box-shadow: var(--shadow-soft);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.audio-controls__btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.55);
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    background: var(--glass-bg-strong);
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  // Muted state: icon dimmed.
+  &--muted {
+    color: var(--text-muted);
+  }
+
+  // Autoplay blocked: button pulses gently to invite a tap.
+  &--blocked {
+    animation: audio-blocked-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes audio-blocked-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+
+// Small dot indicator shown on the button when autoplay is blocked.
+.audio-controls__indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  pointer-events: none;
+  animation: audio-indicator-pop 0.3s var(--ease-spring) both;
+}
+
+@keyframes audio-indicator-pop {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+.audio-controls__btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+
+  svg { display: block; }
+}
+
+.audio-controls__slider-wrap {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding-left: 6px;
+  padding-right: 2px;
+}
+
+// Compact horizontal volume slider. Uses accent colour for the thumb.
+.audio-controls__slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 84px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--volume-pct, 50%),
+    rgba(0, 0, 0, 0.12) var(--volume-pct, 50%),
+    rgba(0, 0, 0, 0.12) 100%
+  );
+  outline: none;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  &::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+    transition: transform var(--dur-fast) var(--ease-out);
+  }
+
+  &::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+  }
+
+  &:hover:not(:disabled)::-webkit-slider-thumb {
+    transform: scale(1.2);
+  }
 }
 
 // =============================================================================
@@ -650,6 +838,39 @@ button {
   gap: 2px;
 }
 
+.prefs__range {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 6px 4px;
+
+  input[type='range'] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+}
+
+.prefs__range-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.prefs__range-value {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: right;
+}
+
+.prefs__note {
+  margin: 6px 6px 2px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 .prefs__toggle-title,
 .prefs__radio-title {
   font-size: 13px;
@@ -748,9 +969,24 @@ button {
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  padding: 14px 18px;
+  // v0.25 U-03: tighter vertical padding reduces excess height
+  padding: 10px 14px;
   z-index: 100;
   box-shadow: var(--shadow-soft);
+  // v0.25 U-01: flex row so arrows and counter are natural siblings of the list
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  --timeline-mask-left: transparent 0, #000 0;
+  --timeline-mask-right: #000 100%, transparent 100%;
+
+  &.timeline--at-start {
+    --timeline-mask-left: #000 0;
+  }
+
+  &.timeline--at-end {
+    --timeline-mask-right: #000 100%;
+  }
 }
 
 .timeline__list {
@@ -767,7 +1003,12 @@ button {
   // horizontal gutters used by native scroll snapping and JS centering.
   scroll-padding-inline: 32px;
   -webkit-overflow-scrolling: touch;
-  padding: 16px 18px 8px;
+  // v0.25 U-03: reduced padding; U-01: flex:1 fills space between arrows
+  padding: 12px 8px 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
+  -webkit-mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
 
   &::-webkit-scrollbar {
     display: none;
@@ -778,6 +1019,8 @@ button {
   flex-shrink: 0;
   scroll-snap-align: center;
   scroll-margin-inline: 32px;
+  width: clamp(90px, 15vw, 150px);
+  height: clamp(57px, 9.5vw, 95px);
 }
 
 .timeline__thumb {
@@ -787,8 +1030,8 @@ button {
   border-radius: var(--radius-md);
   overflow: hidden;
   cursor: pointer;
-  width: 150px;
-  height: 95px;
+  width: 100%;
+  height: 100%;
   transition: transform var(--dur-timeline) var(--ease-gallery-out),
     box-shadow var(--dur-timeline) var(--ease-gallery-out),
     border-color var(--dur-control) var(--ease-out);
@@ -811,6 +1054,65 @@ button {
     outline: 3px solid var(--focus-ring);
     outline-offset: 3px;
   }
+}
+
+.timeline__arrow {
+  // v0.25 U-01: natural flex sibling — no longer absolutely positioned
+  flex-shrink: 0;
+  // v0.25 U-02: 32×32 px circle replacing 34×58 px pill
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  background: var(--glass-bg-strong);
+  color: var(--text-strong);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  // Center the arrow glyph
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .timeline:hover &,
+  .timeline:focus-within & {
+    opacity: 1;
+  }
+
+  &:disabled {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &:focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px;
+    opacity: 1;
+  }
+
+  // v0.25 U-05: always show arrows on touch devices (no hover available)
+  @media (pointer: coarse) {
+    opacity: 0.65;
+
+    &:disabled {
+      opacity: 0;
+    }
+  }
+}
+
+// v0.25 U-04: counter is the last flex child in the timeline row — no longer
+// absolutely positioned, sits naturally at the tail of the flex container.
+.timeline__counter {
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(17, 24, 29, 0.72);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  pointer-events: none;
 }
 
 .timeline__frame {
@@ -910,12 +1212,13 @@ button {
 .loading-overlay {
   position: fixed;
   inset: 0;
-  background: var(--bg1);
+  background: #0d0d0e;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   z-index: 200;
-  transition: opacity var(--dur-reveal) var(--ease-gallery-out);
+  transition: opacity 1.2s var(--ease-gallery-out);
 
   &.is-hidden {
     opacity: 0;
@@ -923,19 +1226,213 @@ button {
   }
 }
 
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 2px solid var(--bg3);
-  border-top-color: var(--text);
-  border-radius: 50%;
-  // v0.15 — calmer spinner. 0.8s → 1.4s for a less anxious loading feel.
-  // The reduced-motion block below disables this animation entirely.
-  animation: spin 1.4s linear infinite;
+.loading-card {
+  position: relative;
+  z-index: 2;
+  width: min(460px, calc(100vw - 48px));
+  padding: clamp(32px, 7vw, 54px);
+  border-radius: 28px;
+  border: 1px solid rgba(240, 234, 224, 0.16);
+  background: rgba(18, 18, 20, 0.8);
+  backdrop-filter: blur(20px) saturate(135%);
+  -webkit-backdrop-filter: blur(20px) saturate(135%);
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.48);
+  text-align: center;
+  color: #f0eae0;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.loading-wordmark {
+  // v0.27 W-01: flex container centers the inline text box without the
+  // optical drift caused by padding-left on a display:block element.
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  font-size: clamp(36px, 9vw, 58px);
+  line-height: 0.95;
+  font-weight: 700;
+}
+
+.loading-wordmark__text {
+  // v0.27 W-01: letter-spacing + compensating padding-left live on the
+  // inline box so text-align:center sees a symmetric element.
+  display: inline-block;
+  letter-spacing: 0.18em;
+  padding-left: 0.18em;
+}
+
+.loading-subtitle {
+  margin-top: 14px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(240, 234, 224, 0.7);
+}
+
+.loading-progress-track {
+  width: min(320px, 100%);
+  height: 7px;
+  margin: 34px auto 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(240, 234, 224, 0.12);
+}
+
+.loading-progress-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #b59a6a, #c8d6e5);
+  transition: width 260ms var(--ease-out);
+}
+
+.loading-progress-pct {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(240, 234, 224, 0.86);
+}
+
+.loading-hint {
+  min-height: 20px;
+  margin-top: 20px;
+  font-size: 13px;
+  color: rgba(240, 234, 224, 0.66);
+}
+
+.loading-start-btn {
+  margin-top: 2rem;
+  padding: 0.9rem 2.4rem;
+  border: 1.5px solid #b59a6a;
+  border-radius: 4px;
+  background: transparent;
+  color: #f0eae0;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.6s ease, transform 0.6s ease, background 0.2s ease;
+
+  &.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  // v0.27 W-03: promote the button to a compositor layer as soon as it
+  // becomes interactive so the first hover transition is GPU-composited.
+  &.is-visible:not(:disabled) {
+    will-change: background-color;
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:not(:disabled):hover {
+    background: rgba(181, 154, 106, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #b59a6a;
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+
+    &.is-visible {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+.loading-particle {
+  position: absolute;
+  width: var(--particle-size, 160px);
+  height: var(--particle-size, 160px);
+  left: var(--particle-x, 50%);
+  top: var(--particle-y, 50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--particle-color, rgba(181, 154, 106, 0.12)) 0%, transparent 68%);
+  // v0.27 W-02: opacity 0.9 and blur 4px raise effective visibility above the
+  // perceptual threshold (prior: 0.7 × 0.14 × 0.45 = 4.4% max effective alpha).
+  filter: blur(4px);
+  opacity: 0.9;
+  will-change: transform, opacity;
+  // v0.28 X-04: replaced loading-float (2-stop ease-in-out) with loading-wander
+  // (4-stop linear) for faster, non-regular random-looking particle motion.
+  animation:
+    loading-wander var(--particle-duration, 4s) linear infinite alternate,
+    loading-pulse calc(var(--particle-duration, 4s) * 0.85) ease-in-out infinite;
+  animation-delay: var(--particle-delay, 0s), var(--particle-delay, 0s);
+}
+
+.webgl-restore-status {
+  position: fixed;
+  left: 50%;
+  top: calc(22px + var(--safe-top));
+  transform: translateX(-50%);
+  z-index: 260;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(18, 18, 20, 0.84);
+  color: #f0eae0;
+  border: 1px solid rgba(240, 234, 224, 0.18);
+  box-shadow: var(--shadow-soft);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+
+  &.is-visible {
+    opacity: 1;
+  }
+}
+
+// v0.28 X-04 — 4-stop wander keyframe. Each stop uses an independent per-particle
+// drift vector injected from JS as CSS custom properties (--particle-drift-x/y,
+// --particle-drift-x2/y2, --particle-drift-x3/y3). Linear easing between stops
+// removes the slow-build-up of ease-in-out, producing constant-speed motion.
+// `alternate` fill-mode combined with four asymmetric stops yields a non-repeating,
+// winding path that reads as genuinely random.
+@keyframes loading-wander {
+  0% {
+    transform: translate3d(
+      calc(var(--particle-drift-x, 20px) * -1),
+      calc(var(--particle-drift-y, 15px) * -1),
+      0
+    ) scale(0.92);
+  }
+  28% {
+    transform: translate3d(
+      var(--particle-drift-x2, 30px),
+      var(--particle-drift-y2, -20px),
+      0
+    ) scale(1.06);
+  }
+  62% {
+    transform: translate3d(
+      var(--particle-drift-x3, -25px),
+      var(--particle-drift-y3, 35px),
+      0
+    ) scale(0.97);
+  }
+  100% {
+    transform: translate3d(
+      var(--particle-drift-x, 20px),
+      var(--particle-drift-y, 15px),
+      0
+    ) scale(1.10);
+  }
+}
+
+@keyframes loading-pulse {
+  // v0.27 W-02: raise minimum opacity from 0.45 to 0.60 so particles remain
+  // visible at their trough against the dark background.
+  0%, 100% { opacity: 0.60; }
+  50% { opacity: 1.0; }
 }
 
 // =============================================================================
@@ -1017,6 +1514,8 @@ button {
   .nav-btn,
   .zoom-controls,
   .zoom-controls__btn,
+  .audio-controls,
+  .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger,
   .prefs__panel,
@@ -1027,6 +1526,7 @@ button {
 
   .nav-btn,
   .zoom-controls__btn,
+  .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger {
     color: var(--text-strong);
@@ -1043,10 +1543,9 @@ button {
 // Reduced motion
 // =============================================================================
 :root[data-motion='reduced'] {
-  .loading-spinner {
+  .loading-particle {
     animation: none;
-    border-top-color: var(--bg3);
-    border-left-color: var(--text);
+    display: none;
   }
 
   .timeline__skeleton {
@@ -1057,6 +1556,7 @@ button {
   .info-panel,
   .nav-btn,
   .zoom-controls__btn,
+  .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger,
   .timeline__thumb {
@@ -1066,11 +1566,18 @@ button {
   .prefs__panel {
     animation: none;
   }
+
+  .audio-controls__btn--blocked {
+    animation: none;
+  }
+  .audio-controls__indicator {
+    animation: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion='full']) {
-    .loading-spinner { animation: none; }
+    .loading-particle { display: none; }
     .timeline__skeleton { animation: none; }
     .prefs__panel { animation: none; }
   }
@@ -1155,7 +1662,19 @@ button {
     right: calc(66px + var(--safe-right));
   }
 
-  .timeline__thumb {
+  // v0.20.2 / v0.20.3 Slice D — narrow phone: hide the volume slider so the
+  // control stays compact and never overlaps the nav buttons. Mute button
+  // remains fully accessible; users can adjust volume in the settings panel.
+  .audio-controls__slider-wrap {
+    display: none;
+  }
+
+  // Keep the top-right cluster compact on narrow phones.
+  .audio-controls {
+    --audio-ctrl-right: calc(126px + var(--safe-right));
+  }
+
+  .timeline__item {
     width: 120px;
     height: 76px;
   }
@@ -1250,6 +1769,8 @@ button {
   .nav-btn,
   .zoom-controls,
   .zoom-controls__btn,
+  .audio-controls,
+  .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger,
   .prefs__panel,
@@ -1267,6 +1788,7 @@ button {
 .topbar,
 .info-panel,
 .zoom-controls,
+.audio-controls,
 .fullscreen-btn,
 .prefs__panel,
 .timeline,
@@ -1283,6 +1805,6 @@ button {
 
 // The animated loading spinner additionally benefits from `style`
 // containment because the rotation keyframes never affect ancestors.
-.loading-spinner {
+.loading-particle {
   contain: strict;
 }

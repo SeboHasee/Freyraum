@@ -1,4 +1,36 @@
 # FREYRAUM AI rules
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.29 preload/fidelity planning rule
+
+When addressing loading-screen smoothness or painting fidelity, do not rely on “loaded” or “compiled” as sufficient proof. Require diagnostics for full-size presented frames, final-path artwork warm coverage, post-processing readiness, UI/control prebuild, and source-vs-render color checks before describing the site as smooth or original-looking.
+
+
+
+## v0.23 performance documentation rule
+
+When auditing or implementing preload/performance changes, distinguish these states explicitly: fetched/decoded texture, authored PBR set loaded, procedural maps generated, material variant compiled, and texture uploaded to GPU. Do not call a path “fully smooth” or “jank-free” unless diagnostics prove no first-navigation work remains for the target gallery size.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
+
+Current status: shipped. Runtime now preloads albedo plus PBR texture sets for the first 15 artworks under the loading overlay, warms each cached artwork texture set on the GPU before reveal, keeps the branded loader visible for at least 500 ms, and waits for the accessible "Galerie betreten" button before entering the gallery. Validation: `npm run lint` and `npm run build` passed after implementation; `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory that requires a semver-major upgrade.
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
+
+## v0.20.3 — Audio implementation planning constraints (2026-05-20)
+
+Implemented in v0.20.4.
+
+## v0.20 — Audio workflow reliability shipped (2026-05-20)
+
+Background-audio workflow is now implemented. Preserve one-click customer launchers, warning-first importer behavior for invalid audio assets, and diagnostics-backed autoplay/lifecycle handling for ongoing maintenance.
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
@@ -10,7 +42,7 @@ Hard constraints for AI-assisted work in this repository.
 
 - Keep `src/main.ts` as the orchestration layer; do not move feature logic there unless it wires existing modules together.
 - Keep rendering infrastructure in `src/core/`, gallery/domain behavior in `src/gallery/`, material fidelity in `src/materials/`, and DOM controls in `src/ui/` or `src/timeline/`.
-- Keep customer artwork import logic in `scripts/` and preserve friendly Node compatibility errors.
+- Keep customer artwork/audio import logic in `scripts/` and preserve friendly Node compatibility errors.
 - Do not treat `customer-preview/` as source of truth. It is rebuilt output.
 
 ## Forbidden patterns

@@ -3,6 +3,7 @@ import { DEFAULT_QUALITY_PRESET, QUALITY_PRESETS } from '../config/quality';
 import type { LightProfileId } from '../lighting/LightProfile';
 import { DEFAULT_LIGHT_PROFILE, LIGHT_PROFILES } from '../lighting/LightProfile';
 import { createScopedDiagnostics } from './Diagnostics';
+import { DEFAULT_AUDIO_GAIN, MAX_EFFECTIVE_AUDIO_GAIN } from '../audio/volumeMapping';
 
 /**
  * Central user-preference store for accessibility and performance choices.
@@ -21,6 +22,10 @@ export interface Preferences {
   quality: QualityPresetId;
   /** v0.03: artistic lighting profile (display vs. inspection). */
   lighting: LightProfileId;
+  /** v0.19: background audio mute state. */
+  audioMuted: boolean;
+  /** v0.19+: background audio effective gain (0..0.30). */
+  audioVolume: number;
 }
 
 export type PreferenceListener = (prefs: Preferences) => void;
@@ -42,7 +47,14 @@ function readStored(): Partial<Preferences> {
 
 function writeStored(prefs: Preferences): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...prefs,
+        // Startup invariant: every fresh open must begin unmuted.
+        audioMuted: false,
+      } satisfies Preferences)
+    );
   } catch {
     diagnostics.warn('storage-write-failed', 'Could not persist preferences to localStorage');
   }
@@ -76,13 +88,45 @@ export class PreferencesStore {
 
     const contrastMode: ContrastMode = stored.contrastMode === 'high' ? 'high' : 'auto';
 
+    let audioVolume =
+      typeof stored.audioVolume === 'number' && Number.isFinite(stored.audioVolume)
+        ? Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, stored.audioVolume))
+        : DEFAULT_AUDIO_GAIN;
+
+    const shouldNormalizeZeroVolume =
+      typeof stored.audioVolume === 'number' &&
+      Number.isFinite(stored.audioVolume) &&
+      stored.audioVolume <= 0;
+
+    if (shouldNormalizeZeroVolume) {
+      audioVolume = DEFAULT_AUDIO_GAIN;
+      diagnostics.warn('audio-volume-normalized', 'Normalized stored zero-volume state to startup default', {
+        key: STORAGE_KEY,
+        stored: stored.audioVolume,
+        normalizedTo: audioVolume,
+      });
+    }
+
     this.prefs = {
       reducedMotion: stored.reducedMotion ?? detectSystemReducedMotion(),
       highContrast: contrastMode === 'high' ? true : detectSystemHighContrast(),
       contrastMode,
       quality,
       lighting,
+      audioMuted: false, // always start unmuted regardless of stored state
+      audioVolume,
     };
+
+    const shouldNormalizeMutedPreference = stored.audioMuted !== false;
+    if (shouldNormalizeZeroVolume || shouldNormalizeMutedPreference) {
+      writeStored(this.prefs);
+      diagnostics.info('audio-startup-normalized', 'Normalized persisted startup audio state', {
+        storedMuted: stored.audioMuted,
+        storedVolume: stored.audioVolume,
+        normalizedMuted: this.prefs.audioMuted,
+        normalizedVolume: this.prefs.audioVolume,
+      });
+    }
 
     this.motionMedia?.addEventListener?.('change', this.handleSystemMotionChange);
     this.contrastMedia?.addEventListener?.('change', this.handleSystemContrastChange);
@@ -130,6 +174,47 @@ export class PreferencesStore {
     if (!(id in LIGHT_PROFILES)) return;
     this.prefs.lighting = id;
     this.emit();
+  }
+
+  setAudioMuted(value: boolean): void {
+    this.prefs.audioMuted = value;
+    this.emit();
+  }
+
+  setAudioVolume(value: number): void {
+    this.prefs.audioVolume = Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, value));
+    this.emit();
+  }
+
+  normalizeStartupAudio(reason: string, notifyListeners = true): void {
+    const normalizedVolume = this.prefs.audioVolume > 0 ? this.prefs.audioVolume : DEFAULT_AUDIO_GAIN;
+    const changed = this.prefs.audioMuted || this.prefs.audioVolume !== normalizedVolume;
+    this.prefs = {
+      ...this.prefs,
+      audioMuted: false,
+      audioVolume: normalizedVolume,
+    };
+
+    if (changed) {
+      diagnostics.info('audio-startup-reset', 'Reset audio to startup defaults', {
+        reason,
+        audioMuted: this.prefs.audioMuted,
+        audioVolume: this.prefs.audioVolume,
+      });
+    } else {
+      diagnostics.debug('audio-startup-reset-skip', 'Startup audio already matches required defaults', {
+        reason,
+        audioMuted: this.prefs.audioMuted,
+        audioVolume: this.prefs.audioVolume,
+      });
+    }
+
+    if (notifyListeners) {
+      this.emit();
+      return;
+    }
+
+    writeStored(this.prefs);
   }
 
   /**

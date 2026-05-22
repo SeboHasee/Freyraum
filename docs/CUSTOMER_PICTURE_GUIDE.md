@@ -1,9 +1,45 @@
 # FREYRAUM — Customer Picture Guide
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
 
-Welcome! This guide explains how to put your pictures into the FREYRAUM gallery.
+## v0.29 customer-facing status note — preload/fidelity follow-up shipped
 
-You do **not** need to use a code editor, the terminal, or any technical tool.
-You only ever touch one folder and one button.
+The v0.29 implementation keeps the loading screen visible until the main page, controls, timeline thumbnails, and every painting have been rendered/prepared behind it. First-visit lighting now uses the daylight-balanced `museum-neutral` profile for more objective painting brightness.
+
+
+
+## v0.23 — Performance/Preloading Planning Audit
+
+This Markdown file was refreshed during the 2026-05-21 all-docs sync. The current runtime is still v0.22; the open performance work is documented in `plan.md § v0.23`, with source-referenced audit notes in `FINDINGS.md § v0.23`. Key boundary: v0.22 improves the first 15 artworks, but large-gallery GPU warming, synchronous procedural map generation, and best-effort idle prefetch remain planned N-series work.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
+
+Current status: shipped. Runtime now preloads albedo plus PBR texture sets for the first 15 artworks under the loading overlay, warms each cached artwork texture set on the GPU before reveal, keeps the branded loader visible for at least 500 ms, and waits for the accessible "Galerie betreten" button before entering the gallery. Validation: `npm run lint` and `npm run build` passed after implementation; `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory that requires a semver-major upgrade.
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
+
+## v0.19 background music workflow (shipped)
+
+Add calm background music files in:
+
+```text
+customer-audio/inbox/
+  calm-track.mp3
+  calm-track.ogg
+  calm-track.m4a
+  calm-track.wav
+```
+
+- Supported audio types: **MP3**, **OGG**, **M4A**, **WAV**
+- Unsupported audio files are listed in the report and ignored (no hard failure)
+- If multiple supported files exist, the importer uses deterministic precedence and runtime still performs compatibility probing
+- In the website, open the settings gear and use **Ton stummschalten** + **Lautstärke** controls
 
 
 ## UI fix note (v0.16.2 follow-up implemented)
@@ -122,15 +158,16 @@ Your support person sets these up once. After that, you only do the steps below.
 ## How to update your gallery
 
 1. Open the FREYRAUM folder.
-2. Open the folder called **`customer-artworks`**, then the folder called **`inbox`**.
-3. Drag your pictures into the **inbox** folder.
-   - You can put in as many pictures as you want.
-   - Any size or shape works: portrait, landscape, square, very wide, etc.
-4. Go back to the FREYRAUM folder and double-click **`Update Gallery`**:
-   - On macOS: `Update Gallery.command`
-   - On Windows: `Update Gallery.bat`
-5. A short report opens automatically when the update is done.
-6. Double-click **`index.html`** (in the FREYRAUM folder) to view the updated gallery.
+2. Open the folder called **`customer-artworks`**, then **`inbox`**.
+3. Drag your pictures into the artwork **inbox** folder.
+    - You can put in as many pictures as you want.
+    - Any size or shape works: portrait, landscape, square, very wide, etc.
+4. (Optional) Open **`customer-audio/inbox`** and add one or more calm background tracks (`.mp3`, `.ogg`, `.m4a`, `.wav`).
+5. Go back to the FREYRAUM folder and double-click **`Update Gallery`**:
+    - On macOS: `Update Gallery.command`
+    - On Windows: `Update Gallery.bat`
+6. A short report opens automatically when the update is done.
+7. Double-click **`index.html`** (in the FREYRAUM folder) to view the updated gallery.
 
 That's the whole workflow.
 
@@ -145,6 +182,12 @@ Cannot show in any browser (skipped with a clear message): **camera RAW** files
 
 If you only have HEIC pictures from your iPhone, ask your support person to convert them
 to JPG, or change your iPhone setting to take JPG photos.
+
+## Which background music file types work
+
+Best supported: **MP3**, **OGG**, **M4A**, **WAV**.
+
+Other audio formats are listed under `Unsupported audio files` in the update report and ignored without breaking the gallery.
 
 ## How the gallery picks titles
 
@@ -167,10 +210,12 @@ It runs a small script that:
 1. Looks in **`customer-artworks/inbox/`** for your pictures.
 2. Reads each picture's size (width × height) and creates a friendly title.
 3. Copies a working copy into **`customer-preview/images/`**.
-4. Writes a list of all imported pictures into:
+4. Looks in **`customer-audio/inbox/`** for supported background music files and copies them into **`customer-preview/audio/`**.
+5. Writes a list of all imported pictures into:
    - `customer-artworks/artworks.json` (human-readable)
    - `customer-preview/customer-artworks.js` (used by the gallery)
-5. Writes a plain-language report to `customer-artworks/last-import-report.txt`.
+   - `customer-preview/customer-audio.js` (used by the gallery for background music)
+6. Writes a plain-language report to `customer-artworks/last-import-report.txt`.
 
 Your original picture files are never changed or deleted.
 
@@ -210,8 +255,10 @@ the button will recreate them on the next run:
 - `customer-artworks/last-import-report.txt`
 - `customer-preview/images/`
 - `customer-preview/customer-artworks.js`
+- `customer-preview/audio/`
+- `customer-preview/customer-audio.js`
 
-You only need to touch **`customer-artworks/inbox/`**.
+You only need to touch **`customer-artworks/inbox/`** and optionally **`customer-audio/inbox/`**.
 
 ## What happens if I do nothing
 

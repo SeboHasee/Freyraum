@@ -1,4 +1,216 @@
 # Freyraum
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.38 — shipped update: color/contrast parity hardening (2026-05-22)
+
+Current status: **shipped**. v0.37/v0.38 complete the rendering parity fixes for upper-tier presets: the post-processing chain now ends with `OutputPass` (correct linear→sRGB output), and FXAA is disabled on `high`/`balanced` to restore v0.25-like contrast/color response.
+
+See `CHANGELOG.md` entries for **v0.37** and **v0.38** for root cause, implementation, and validation details. Runtime validation: `npm run lint` and `npm run build` pass.
+
+
+
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)
+
+**Status: shipped in runtime code.**
+
+1. **Painting fidelity (X-01):** Switched `ACESFilmicToneMapping → NeutralToneMapping` at `exposure = 1.0` to restore faithful colour reproduction for artistically dark/high-contrast paintings.
+2. **Background preloading / flash elimination (X-02):** RAF render loop starts before overlay reveal so the gallery renders continuously behind the opaque overlay; eliminates grey-flash on overlay fade-out. Main page and gallery are fully pre-rendered while the loading screen is visible.
+3. **Navigation lag (X-03):** Raised `LAMBDA_NAV_POSITION 2.5 → 3.5` for ~860 ms settle (was ~1200 ms); X-02 also eliminates RAF cold-start lag on first navigation.
+4. **Particle wander (X-04):** 8→12 particles, duration 8–14 s → 3–6 s, replaced 2-stop `loading-float` keyframe with 4-stop `loading-wander` with per-particle random multi-axis drift properties.
+5. **Overlay architecture (X-05):** Confirmed correct — no change needed. Everything is pre-rendered behind the loading screen.
+
+See `plan.md § v0.28` and `FINDINGS.md § v0.28` for root-cause analysis, research findings, and implementation specification.
+
+## v0.27 — Startup smoothness + loading/AA remediation (2026-05-22, **shipped**)
+
+**Status: shipped in runtime code.**
+
+1. **FXAA post-process AA (W-06):** `ShaderPass(FXAAShader)` appended after bloom in `PostProcessing`; `fxaaEnabled` per quality preset (high/balanced: on, battery: off). Restores edge quality bypassed by EffectComposer's internal render target.
+2. **Bloom shader prewarm (W-04):** `PostProcessing.prewarmComposer()` called before overlay reveal — forces all 4 UnrealBloomPass programs to compile while canvas is covered, eliminating the first-frame stall.
+3. **CTA hover cold-path elimination (W-03):** `offsetHeight` + `getComputedStyle` + `will-change` injected after `startButton.disabled = false` so CSSOM resolves `:hover` before first pointer contact.
+4. **Wordmark optical centering (W-01):** flex parent + inner `span.loading-wordmark__text` carrying letter-spacing and `padding-left` gives true optical center.
+5. **Particle salience (W-02):** 6→8 particles, alphas 0.16–0.32, opacity 0.9, blur 4px, pulse floor 0.60 — effective visibility raised above perceptual threshold.
+6. **Status copy accuracy (W-05):** bounded-fallback overlay string tightened to accurately state artworks are still being optimised.
+
+See `plan.md § v0.27` and `FINDINGS.md § v0.27` for implementation detail and as-built evidence.
+
+## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, shipped)
+
+**Status: shipped in runtime code.**
+
+v0.26 is now fully implemented and validated:
+
+1. **Strict startup preload for smooth entry:** full-startup preload cap now uses `Number.MAX_SAFE_INTEGER`, keeping startup in strict full-gallery preload mode for normal runtime usage so entry does not depend on bounded fallback behavior.
+2. **Centered loading branding:** loading wordmark centering was corrected by removing indent drift and enforcing a centered block layout.
+3. **Animated particles:** loading particles now run layered float + pulse animations with independent drift vectors and staggered delays for visibly active motion.
+4. **Ready-state truthfulness:** CTA-ready hint now explicitly states full preparation (`Alle Inhalte sind vollständig vorbereitet.`).
+
+See `plan.md § v0.26` for implementation closeout and `FINDINGS.md § v0.26` for as-built evidence.
+
+## v0.25 — GPU warm flush hardening + timeline redesign (2026-05-22, shipped)
+
+**Status: shipped in runtime code.**
+
+v0.25 is now fully implemented and validated:
+
+1. **Choppy navigation fix (T-series):** warm loop now yields one RAF per painting (`rafYield()`), GPU drain uses 3-frame flush (`rafDrain(3)`), proactive `renderer.initTexture()` upload is enabled for loaded/fallback textures, and loading progress is visibly spread across `50%→95%`. Added detailed drain diagnostics: `gpu-warm-flush-start` and `gpu-warm-flush-complete` with measured duration.
+
+2. **Timeline elegance redesign (U-series):** arrows are now compact `32 × 32px` circular flex siblings (no absolute overlap), counter is inline at the row tail, spacing is tightened, and touch devices keep arrows visible at `opacity: 0.65`.
+
+3. **Cleanup:** removed redundant empty timeline arrow modifier CSS blocks and revalidated no functional regressions.
+
+See `plan.md § v0.25` for the full implementation closeout and `FINDINGS.md § v0.25` for as-built evidence.
+
+## v0.24.6 — True preload completion + INP stabilization (2026-05-21, shipped)
+
+**Status: shipped in runtime code.**
+
+v0.24.6 implemented R-series (true preload completion) and S-series (INP stabilization). Key additions: `preloadMode` strict/bounded-fallback contract, `unresolvedArtworkIds` diagnostic, overflow artwork `near-next` queue, mode-aware overlay copy, `setInteractionActive()` prefetch throttle during pointer windows, `markInteractionFrame()` per-window telemetry, and INP acceptance boot diagnostic.
+
+## v0.24.4 — local metrics evidence + INP planning (2026-05-21, docs-only)
+
+**Status: planning/documentation only; runtime remains v0.24.2.**
+
+New local Web Vitals evidence was added: **LCP 1.85 s (good)**, **CLS 0.00 (good)**, but **INP 1,024 ms (poor)**. The worst interactions are pointer events on the gallery canvas, with dominant presentation delay and very low handler processing time. This indicates an interaction-frame rendering/presentation bottleneck rather than input-handler CPU load.
+
+See `FINDINGS.md § v0.24.4` for the metrics interpretation and `plan.md § v0.24.4` for the INP stabilization plan.
+
+## v0.24.3 — loading completeness re-audit (2026-05-21, docs-only)
+
+**Status: planning/documentation only; runtime remains v0.24.2.**
+
+The startup issue is still reproducible in customer usage: the loading screen can report readiness while some expensive work still occurs on first interaction. This pass adds a focused root-cause analysis, fresh online research notes, and a new remediation plan to eliminate “loads on first use” behavior.
+
+See `plan.md § v0.24.3` for the new remediation plan and `FINDINGS.md § v0.24.3` for research-backed findings.
+
+## v0.24.2 — shipped (2026-05-21) — strict all-paintings-ready entry gate
+
+**Status: shipped in runtime code.**
+
+v0.24.2 enforced a strict pre-entry contract for the warm target order, raised authored PBR preload guardrails to `FULL_PRELOAD_SAFETY_CAP = 50`, added pre-entry full-gallery readiness diagnostics, and warmed artworks before CTA reveal.
+
+## v0.24.1 — shipped (2026-05-21) — first-visit smoothness hardening
+
+**Status: shipped in runtime code and rebuilt preview output.**
+
+v0.24.1 implements the deep smoothness plan: entry now uses a strict readiness contract for a device-aware warm target set before the CTA reveals, prefetch scheduling is lane-based (`critical-now`, `near-next`, `background`) with starvation protection, procedural follow-up generation is queued via idle chunks, post-reveal warm work is frame-budgeted with batch caps, and navigation now emits explicit cold/hot readiness verdict diagnostics.
+
+Large-gallery behavior is now profile-driven from detected device capabilities (layout tier/pointer/DPR), so mobile-heavy galleries keep the entry responsive while still front-loading critical first navigation smoothness.
+
+## v0.23.1 — shipped (2026-05-21) — Performance + Preloading
+
+**Status: shipped in runtime code and rebuilt preview output.** The v0.23 N-series implementation now records per-artwork readiness, prepares the critical navigation window before reveal, continues the remaining GPU warm queue with an offscreen render target and frame budget, promotes navigation/timeline targets ahead of the idle sweep, and keeps adaptive quality from downgrading while readiness jobs are active. Diagnostics also report ImageBitmap decode support, future KTX2/Basis pipeline status, and 4/15/20/50 artwork validation buckets.
+
+Validation after implementation: `npm run lint` ✅ and `npm run build` ✅. `npm audit --audit-level=moderate` remains the known Vite/esbuild development-server advisory requiring a semver-major upgrade.
+
+## v0.23 — planning audit (2026-05-21) — Performance + Preloading
+
+**Status: planning/documentation only; runtime still v0.22.** A fresh audit confirms why navigation can still feel choppy after the loading screen: v0.22 warms all artworks only up to 15 items, large galleries continue after reveal via best-effort idle prefetch, and missing procedural maps are still generated synchronously on first use. The new N-series plan in `plan.md` prioritizes a measured readiness ledger, budgeted GPU warm queue, critical-window procedural pre-generation, navigation-aware prefetch, and future ImageBitmap/KTX2 research.
+
+See `FINDINGS.md § v0.23` for the audit table and `plan.md § v0.23` for the implementation plan.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
+
+**Status: shipped in runtime code and documentation.**
+
+After v0.21, first navigation to each painting could still hick-up because PBR texture sets for artworks 2–N were loaded and uploaded only on demand. v0.22 reduces that gap for the capped warm/preload window:
+
+1. **Full PBR pre-load (L-01):** `GalleryManager.init()` now preloads albedo plus authored PBR texture sets under the loading overlay. `PBR_PRELOAD_LIMIT = 15` protects large galleries from mobile OOM while the idle sweep remains as a second-chance retry for skipped/failed sets.
+2. **GPU warm-all artworks (L-02):** Galleries up to `GPU_WARM_LIMIT = 15` bind each cached artwork texture set and render once under the overlay to force CPU→VRAM upload before users can navigate. Larger galleries keep the v0.21 single-artwork warm fallback.
+3. **"Galerie betreten" press-to-start (L-03):** The loading screen reaches 100%, shows an accessible gold CTA button, stops hint cycling, and only reveals after user action. Audio recovery listeners are registered before the CTA click so the button gesture can start blocked audio cleanly.
+4. **Minimum branded loading duration (L-05):** Boot waits on `Promise.all([galleryManager.init(), delay(500)])`, so fast local previews no longer flash past the branded loader.
+
+Implementation touched `src/gallery/GalleryManager.ts`, `src/gallery/TextureManager.ts`, `src/main.ts`, `src/styles/main.scss`, and rebuilt `customer-preview/`. Validation after implementation: `npm run lint` ✅ and `npm run build` ✅. `npm audit --audit-level=moderate` remains the known Vite/esbuild development-server advisory requiring a semver-major upgrade.
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+### Validation and residual risk
+
+- Baseline before code changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Final validation after v0.21 implementation and docs sync: `npm run lint` and `npm run build` passed.
+- Security audit: `npm audit --audit-level=moderate` still reports the pre-existing moderate Vite/esbuild development-server advisory; the available fix requires a breaking Vite major upgrade and was left as a separate dependency-upgrade task.
+
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (shipped, 2026-05-21)
+
+Current status: **shipped**. A deep code audit and online research session revealed 7 preloading/loading-screen gaps (G-01 through G-07), 7 further gaps around tab switching smoothness and 16K high-resolution image support (H-01 through H-07), 4 global pointer tracking gaps (I-01 through I-04), and 6 timeline scalability gaps (J-01 through J-06). Full implementation plans are in `plan.md § v0.21`. Research notes and findings are in `FINDINGS.md § 2026-05-21`.
+
+Shipped changes:
+- Branded interactive loading screen (dark glass theme, wordmark, real progress bar, particles, hint texts, reveal animation)
+- Shader prewarm wired into boot path (fix G-01)
+- Audio `preload='auto'` for gapless first-play (fix G-02)
+- Adjacent artwork PBR prefetch via `requestIdleCallback` (fix G-03)
+- GPU texture warm render pass before overlay hides (fix G-06)
+- Idle sweep of all remaining artwork PBR maps (fix G-07)
+- LightingSetup inter-frame delta clamp to prevent key-light jump on tab resume (fix H-01)
+- TextureManager oversized-texture diagnostic warning (fix H-03)
+- PaintingMaterial GLSL `highp` precision guard for large UV detail tiling (fix H-04)
+- Importer updated to 16K norm: four-tier resolution guidance, updated GPU memory thresholds (fix H-05)
+- **Global hover rotation tracking**: painting tilt tracks the cursor across the timeline, settings panel, nav buttons, and all other UI elements — not just the canvas (fix I-01 through I-04)
+- **Timeline scroll arrows**: left/right page-scroll buttons with auto-hide at scroll boundaries (fix J-02)
+- **Artwork counter**: "3 / 20" indicator chip in timeline bar with ARIA live announce (fix J-03)
+- **Virtual rendering window**: for 20+ artwork galleries, only instantiate visible thumbnail DOM nodes (fix J-01)
+- **Edge fade gradients**: CSS mask-image fades on both ends of the timeline strip to indicate off-screen content (fix J-04)
+- **Responsive thumb sizing**: timeline thumbnails scale from 90px (mobile) to 150px (desktop) via `clamp()` (fix J-05)
+
+
+
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
+
+## v0.20.6 — Audio stabilization + UI polish (implemented, 2026-05-21)
+
+Latest pass addressed the current customer-reported runtime/audio polish issues:
+
+1. audio no longer dips/cuts during routine settings changes caused by redundant play restarts,
+2. autoplay-blocked states now retry on first user interaction (including arrow-key navigation),
+3. startup mute default remains unmuted,
+4. top-right audio control sizing was tuned to better match fullscreen/settings controls,
+5. keyboard focus on nav arrow buttons no longer shows the dark circular artifact.
+
+Details: `plan.md § v0.20.6`, `FINDINGS.md § 2026-05-21 — v0.20.6 implementation findings`.
+
+## v0.20.5 — Audio regression audit (2026-05-21, substantially resolved)
+
+Current status: **substantially resolved** as of v0.20.7 code audit. The blocking regressions documented here were addressed across v0.20.6 and the corrected `volumeMapping.ts` linear mapping implementation. See `plan.md § v0.20.7` and `FINDINGS.md § 2026-05-21 — v0.20.7 deep code audit` for the confirmed-correct list and remaining minor gaps (F-01 through F-10).
+
+## v0.20.3 — Technical planning hardening pass (2026-05-20, planning only)
+
+Current status: **implemented in v0.20.4**.
+
+Canonical plan: `plan.md § v0.20.2`  
+Research and code-audit notes: `FINDINGS.md § 2026-05-20 (v0.20.2 planning audit)`
+
+## v0.20 — Audio playback fix + main-page controls + sidecar cache-bust (2026-05-20)
+
+Three bugs fixed in v0.20:
+
+1. **Audio not playing (CORS block):** Removed `crossOrigin = 'anonymous'` from `BackgroundAudioManager`. Chromium-family browsers assign `null` origin to `file://` pages, causing all audio element CORS requests to fail. Audio now loads and plays correctly.
+2. **Main-page audio controls:** v0.20 added a glass-pill `AudioControls` widget for quick mute/unmute and volume access. The originally shipped bottom-left placement is now under follow-up in `v0.20.5` because that location has been reported as wrong.
+3. **Sidecar text stale after re-import:** Importer now stamps `?t=<timestamp>` on script src tags in `app.html` after every run, bypassing Chromium's file:// disk cache.
+
+Current runtime status: **fully implemented**. Importer support, `file://` playback fix, volume mapping, state model, and control placement are all correct and confirmed by the v0.20.7 code audit.
+
+Implementation details: `plan.md § v0.20` | Research: `FINDINGS.md § 2026-05-20 (v0.20)`
+
+## v0.20.1 — Full markdown audit and sync (docs-only, 2026-05-20)
+
+- Ran a full markdown consistency check across all repository `.md` files.
+- Updated every markdown file with a shared audit stamp and refreshed top-level status notes.
+- Revalidated baseline health during audit: `npm install`, `npm run lint`, `npm run build`.
+- Recorded findings and release notes in `FINDINGS.md` and `CHANGELOG.md`.
+
+## v0.19 — Calm background music workflow (implemented, 2026-05-20)
+
+Customer-managed background audio is now integrated into the one-click `Update Gallery` workflow, with deterministic importer payloads, runtime compatibility selection, mute/volume controls, and lifecycle-aware playback handling.
+
+Current runtime status: **fully implemented**. The preferences/audio payload architecture, startup loudness, mute recovery, slider sync, and control placement are all correct and confirmed by the v0.20.7 code audit.
+
+Implementation details: `plan.md § v0.19`
+Research/notes: `FINDINGS.md § 2026-05-20 (v0.19 implementation)`
 
 ## v0.18 — Customer painting text sidecars (shipped, 2026-05-20)
 
@@ -478,7 +690,7 @@ npm run lint
 
 This repository now follows a documentation-first rule for future development.
 
-- [`plan.md`](./plan.md) — current plan, implemented work, v0.01 vertical slices, and reserved future-pass scope
+- [`plan.md`](./plan.md) — shipped update, implemented work, v0.01 vertical slices, and reserved future-pass scope
 - [`CHANGELOG.md`](./CHANGELOG.md) — shipped changes by version/date
 - [`FINDINGS.md`](./FINDINGS.md) — technical findings, caveats, and validation notes
 - [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md) — required documentation process for future work

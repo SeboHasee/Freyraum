@@ -1,4 +1,736 @@
 # CHANGELOG
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — disable FXAA on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.38 — Disable FXAA on high/balanced to restore v0.25 image response (2026-05-22, **shipped**)
+
+### Problem
+
+Even after fixing EffectComposer output conversion, users still reported that only the two upper-tier presets (`high`, `balanced`) looked too dark with altered overall contrast/colors compared to v0.25. `battery` remained unaffected.
+
+### Root cause
+
+The regression window starts at v0.27, where FXAA was introduced and enabled only on `high` and `balanced`. `battery` keeps FXAA disabled. The user-observed split exactly matched this preset gate.
+
+### Changed
+
+- **`src/config/quality.ts`:** Set `fxaaEnabled` to `false` on `high` and `balanced` (already `false` on `battery`).
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.37 — Fix darkness/contrast shift on high and balanced presets (2026-05-22, **shipped**)
+
+### Problem
+
+Paintings appeared too dark with altered contrast and colors on the "high" and "balanced" quality presets (but NOT on "battery"). The issue was introduced in v0.27 when FXAA was added via EffectComposer. When bloom or FXAA passes are active, the final ShaderPass writes linear-space values directly to the sRGB canvas without proper gamma conversion. Battery mode was unaffected because only RenderPass is active, and `renderer.render()` handles color space conversion internally.
+
+### Root cause
+
+Three.js r166 requires an `OutputPass` at the end of the EffectComposer chain to apply tone mapping and linear→sRGB color space conversion. Without it, any active ShaderPass (bloom/FXAA) as the last enabled pass outputs uncorrected linear values to the display — causing darker, lower-contrast, hue-shifted rendering.
+
+### Changed
+
+- **`src/core/PostProcessing.ts`:** Added `OutputPass` (from `three/examples/jsm/postprocessing/OutputPass.js`) as the final pass in the EffectComposer chain. This ensures correct color space output regardless of which passes are enabled.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.36 — Raise lighting to match v0.26 brightness (2026-05-22, **shipped**)
+
+### Problem
+
+Paintings appeared too dark after removing ACES tone mapping. The old light values were tuned for ACES at exposure 1.45 which effectively multiplied brightness by ~1.45x. Without that boost, scenes were underlit.
+
+### Changed
+
+- **`src/lighting/LightProfile.ts`:** Raised museum-neutral ambient 0.8 → 1.4, keys 60/40 → 90/60. Raised gallery-soft ambient 0.6 → 1.0, key 100 → 150, accent 5 → 8. Compensates for the removed ACES exposure boost so paintings render at v0.26-equivalent brightness.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.35 — Remove ACES tone mapping (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Problem
+
+ACESFilmicToneMapping washes out textures, reduces contrast, and shifts hues. The scene does not use HDR rendering, so tone mapping is unnecessary and harmful to source artwork fidelity.
+
+### Changed
+
+- **`src/core/RendererManager.ts`:** Switched from `THREE.ACESFilmicToneMapping` (exposure 1.45) to `THREE.NoToneMapping` (exposure 1.0). Colours now pass through unchanged from the shader to the canvas.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.34 — Revert shaders and lighting to v0.27 state (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. All rendering reverted to pre-v0.28 state; lint and build pass.
+
+### Problem
+
+Versions v0.28–v0.33 progressively broke the painting rendering: switched tone mapping away from ACESFilmic, injected an emissive albedo-fill that flattened paintings, reduced normal strength to near-zero, disabled grazing boost, and repeatedly tweaked lighting. Result: everything looked flat and too dark.
+
+### Changed
+
+- **`src/core/RendererManager.ts`:** Restored `THREE.ACESFilmicToneMapping` with `toneMappingExposure = 1.45` (was NoToneMapping/1.0 since v0.32).
+- **`src/config/quality.ts`:** Restored `normalStrength` to 0.7/0.45/0.25 (high/balanced/battery), `detailNormalStrength` to 0.6/0.4/0.0, re-enabled `grazingBoostEnabled` on high and balanced, set `albedoFidelityFill` to 0.0 across all presets (disables the v0.30 emissive bypass).
+- **`src/lighting/LightProfile.ts`:** Restored museum-neutral (ambient 0.8, keys 60/40) and gallery-soft (ambient 0.6, key 100) to values appropriate for ACESFilmic at 1.45 exposure.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.33 — Flat painting surface + frame lighting fix (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Problem
+
+1. Paintings on high/balanced still had non-uniform brightness (normal maps created contrast variation across the surface despite high emissive fill).
+2. Frame looked dark/unshaded because scene lighting was too low.
+
+### Root cause
+
+Battery preset looked correct because it has zero normal influence → uniform light response. Higher presets had normalStrength 0.7/0.45 which caused directional-light–driven brightness variation across the painting.
+
+### Changed
+
+- **`src/config/quality.ts`:** Reduced `normalStrength` from 0.7/0.45 → 0.05/0.05 and `detailNormalStrength` from 0.6/0.4 → 0.03/0.03 on high/balanced. Disabled `grazingBoostEnabled` on both. Painting surface now responds uniformly to lighting (like battery) while still keeping parallax/self-shadow structures for subtle depth.
+- **`src/lighting/LightProfile.ts`:** Raised museum-neutral ambient 1.2 → 2.2 and keys 25/18 → 70/50. gallery-soft ambient 1.0 → 1.6 and key 30 → 80. Frame now receives adequate illumination.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.32 — Source-faithful colour reproduction (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Problem
+
+Paintings on the site appeared much higher contrast and darker than the original source files: highlights blown out to white, purple/blue tones crushed to near-black, reds over-saturated.
+
+### Changed
+
+- **`src/core/RendererManager.ts`:** Switched from `NeutralToneMapping` to `NoToneMapping` (identity pass-through). Any tone-mapping curve, even the mild Khronos PBR Neutral, applies an S-curve that increases contrast and shifts colour away from the source. With the albedo-fill path keeping total luminance in [0,1], no rolloff is needed. Exposure reset to 1.0.
+- **`src/config/quality.ts`:** Raised `albedoFidelityFill` from 0.38/0.34/0.28 → 0.72 across all presets. The emissive (unlit) channel now dominates, reproducing the source image faithfully while the remaining lit contribution adds only subtle dimensionality.
+- **`src/lighting/LightProfile.ts`:** Dramatically reduced museum-neutral key lights (100/70 → 25/18) and ambient (2.8 → 1.2). gallery-soft key (150 → 30) and ambient (1.8 → 1.0). This prevents directional lighting from pushing colour values above 1.0 and introducing contrast.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.31 — Painting brightness & contrast correction (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Changed
+
+- **`src/config/quality.ts`:** Raised `albedoFidelityFill` from 0.20/0.18/0.14 → 0.38/0.34/0.28 across high/balanced/battery presets so more of the original source brightness passes through unlit.
+- **`src/lighting/LightProfile.ts`:** Raised museum-neutral ambient from 2.2 → 2.8 and reduced key-light intensities from 130/90 → 100/70 to flatten contrast.
+- **`src/core/RendererManager.ts`:** Raised tone-mapping exposure from 1.0 → 1.1 to lift overall image brightness.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.30 — Painting fidelity + smoother frame pacing (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Changed
+
+- **`src/materials/PaintingMaterial.ts` + `src/config/quality.ts`:** Adds a subtle albedo-fidelity fill so paintings keep more of the source image brightness while retaining PBR depth/varnish response.
+- **`src/lighting/LightProfile.ts`:** Brightens display lighting for `gallery-soft` and `museum-neutral` so default viewing is less dark.
+- **`src/config/quality.ts`:** Reduces default GPU pressure by lowering high/balanced DPR caps, bloom strength, high geometry density, and high parallax/self-shadow steps.
+- **`src/utils/FrameBudgetMonitor.ts` + `src/utils/AdaptiveQualityController.ts` + `src/main.ts`:** Treats repeated severe hitch frames as a downgrade signal and logs the severe-frame count for diagnostics.
+- **Preview output:** Rebuilt `customer-preview/freyraum-gallery.js`.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.29 — Loading-screen full-render contract (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Changed
+
+- **`src/main.ts`:** Delays loading-overlay reveal until after the production RAF loop is scheduled under the opaque overlay and two full-size frames are observed.
+- **`src/main.ts`:** Adds final-path all-artwork warming: every painting is bound and rendered through the real post-processing composer before entry.
+- **`src/main.ts`:** Adds UI chrome prebuild for nav, timeline, info panel, settings panel, audio controls, fullscreen button, and hidden preferences-panel layout.
+- **`src/timeline/Timeline.ts`:** Adds `prewarmUnderOverlay()` to instantiate all thumbnails, switch them to eager loading, decode images where supported, and premeasure timeline layout.
+- **`src/lighting/LightProfile.ts`:** Changes first-visit default lighting from `gallery-soft` to `museum-neutral` for more objective, daylight-balanced artwork fidelity.
+- **Diagnostics:** Adds `ui-prebuild-complete`, `all-artworks-final-path-warmed`, `pre-entry-raf-start`, `first-full-frame-rendered`, `second-full-frame-presented`, and `entry-cta-enabled`.
+- **Preview output:** Rebuilt `customer-preview/freyraum-gallery.js`.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+
+
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. X-01..X-04 implemented and validated; lint and build pass.
+
+### Changed
+
+- **`src/core/RendererManager.ts` (X-01):** Switched `THREE.ACESFilmicToneMapping → THREE.NeutralToneMapping`; reduced `toneMappingExposure 1.45 → 1.0`. Restores faithful colour representation for artistically dark/high-contrast paintings — near-identity below 1.0, gentle rolloff above.
+- **`src/main.ts` (X-02):** Forward-declared `animate` and started `requestAnimationFrame((now) => animate(now))` before `await loadingOverlay.reveal()`. Gallery now renders continuously behind the opaque overlay; eliminates canvas grey-flash visible during overlay fade-out. Main page and gallery are fully pre-rendered while the loading screen is visible.
+- **`src/gallery/GalleryManager.ts` (X-03):** Raised `LAMBDA_NAV_POSITION 2.5 → 3.5`. Reduces 95% settle time from ~1200 ms to ~860 ms for snappier, still-organic painting navigation. Combined with X-02, RAF cold-start lag on first navigation is eliminated.
+- **`src/main.ts` + `src/styles/main.scss` (X-04):** Increased loading particle count 8 → 12; reduced duration range 8–14 s → 3–6 s; added 3-waypoint per-particle random drift custom properties (`--particle-drift-x2/y2/x3/y3`); replaced `loading-float` 2-stop keyframe with `loading-wander` 4-stop wander keyframe for visibly non-regular, faster particle motion.
+- **X-05 (no code change):** Confirmed existing overlay architecture (`position: fixed; background: #0d0d0e; z-index: 200`) fully blocks the canvas view. With X-02, everything is pre-rendered behind the overlay throughout loading.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+
+## v0.27 — Startup smoothness + loading/AA remediation (2026-05-22, **shipped**)
+
+### Summary
+
+Implementation pass completing all W-series gaps identified in the deep code audit. FXAA AA restores edge quality bypassed by EffectComposer. Bloom shaders are now pre-compiled before overlay dismiss. Enter CTA hover cold path is eliminated. Wordmark is optically centered via flex layout. Particles are visually salient with raised alphas, opacity, blur, and count.
+
+### Changed
+
+- **`src/config/quality.ts`** (`QualityPreset` interface + presets): added `fxaaEnabled: boolean`; `high: true`, `balanced: true`, `battery: false`.
+- **`src/core/PostProcessing.ts`**: imported `ShaderPass` + `FXAAShader`; added `fxaaPass` field and `applyFXAAResolution(w,h)` helper; FXAA pass appended after bloom in constructor; `resize()` now updates FXAA resolution uniform; `applyPreset()` toggles `fxaaPass.enabled`; added `prewarmComposer(w,h)` method (shrink to 4×4 → render → restore).
+- **`src/main.ts`** (`createLoadingOverlay`): particle count raised 6→8, all color alphas raised to 0.16–0.32, sizes to 220–400px with updated drift offsets (W-02).
+- **`src/main.ts`** (`createLoadingOverlay`): wordmark now uses flex parent + inner `span.loading-wordmark__text` carrying letter-spacing and padding-left (W-01).
+- **`src/main.ts`** (`reveal`): `offsetHeight` + `getComputedStyle` + `will-change` injected after `startButton.disabled = false` to eliminate CSSOM `:hover` cold path (W-03).
+- **`src/main.ts`** (boot sequence): `postProcessing.prewarmComposer()` + `rafDrain(1)` called after `rendererManager.prewarm()` and before `loadingOverlay.reveal()`; `composer-prewarm-start`/`composer-prewarm-complete` diagnostics emitted (W-04).
+- **`src/main.ts`** (boot sequence): bounded-fallback status string tightened to state explicitly that artworks are still being optimised rather than overstating readiness (W-05).
+- **`src/styles/main.scss`** (`.loading-wordmark`): replaced `display:block` + `padding-left` + `text-align:center` with `display:flex; align-items:center; justify-content:center`; letter-spacing and padding-left moved to new `.loading-wordmark__text` inner span (W-01).
+- **`src/styles/main.scss`** (`.loading-start-btn`): added `&.is-visible:not(:disabled) { will-change: background-color }` for compositor layer pre-promotion (W-03).
+- **`src/styles/main.scss`** (`.loading-particle`): opacity raised `0.7→0.9`, blur raised `2px→4px` (W-02).
+- **`src/styles/main.scss`** (`@keyframes loading-pulse`): minimum opacity raised `0.45→0.60` (W-02).
+- **Markdown docs**: all audit banners and v0.27 status sections updated to shipped.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+## v0.26 — Loading overlay centering + strict full preload polish (2026-05-22, **shipped**)
+
+### Summary
+
+Loading screen polish and startup smoothness were refined so branding is centered, particles remain visibly animated, and startup preload stays in strict all-artworks mode before entry.
+
+### Changed
+
+- **`src/gallery/GalleryManager.ts`**: `FULL_PRELOAD_SAFETY_CAP` is now `Number.MAX_SAFE_INTEGER`, keeping full-startup preload in strict mode for normal galleries and preventing bounded fallback behavior.
+- **`src/gallery/GalleryManager.ts`** (`getFullGalleryReadinessSummary`): reports strict-mode preload summary (`memoryCapApplied: false`, `preloadMode: 'strict'`, `overflowArtworkCount: 0`) to align with the new all-artworks preload contract.
+- **`src/main.ts`** (`createLoadingOverlay`): particle config expanded with per-particle delay and drift vectors to drive richer overlay motion.
+- **`src/main.ts`** (`reveal`): final hint copy now confirms full readiness (`Alle Inhalte sind vollständig vorbereitet.`).
+- **`src/styles/main.scss`** (`.loading-wordmark`): removed indent drift and enforced explicit centered block layout.
+- **`src/styles/main.scss`** (`.loading-particle`): added multi-track animation (float + pulse), staggered delays, and drift-variable keyframes for continuously animated particles.
+- **Markdown docs**: audit banner and top status references refreshed for v0.26 across repository Markdown files.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+## v0.25 — GPU warm flush hardening + timeline elegance redesign (2026-05-22, **shipped**)
+
+### Summary
+
+Two persistent user-reported issues fixed:
+
+1. **GPU flush / loading screen**: warm loop now yields one RAF frame between each painting render (`rafYield()`), allowing the GPU to flush its command queue and the browser to paint incremental progress bar updates. Three drain frames added after the warm loop and before shader prewarm. `renderer.initTexture()` called immediately after each decoded texture is cached. Loading progress now spans 50 %→95 % during the warm phase (previously 93 %→97 %, invisible).
+
+2. **Timeline arrow elegance**: arrows redesigned as `32 × 32 px` glass circles and made natural flex siblings of the scroll list (removing `position: absolute` overlap). Counter moved to inline flex tail. Padding tightened. Touch devices show arrows at 65 % opacity always.
+
+### Changed
+
+#### T-series — GPU warm / loading screen
+
+- **`main.ts`** (`rafYield`, `rafDrain`): Added `rafYield()` (one RAF frame) and `rafDrain(n)` (n frames) helpers at module scope (T-01, T-02, T-05).
+- **`main.ts`** (warm loop): `await rafYield()` after each `warmArtwork()` call so the browser compositor flushes GPU commands between paintings (T-01).
+- **`main.ts`** (warm loop progress): range changed from `93%→97%` to `50%→95%`; loading-manager texture-phase caps lowered accordingly (`onProgress` → 48 %, `onLoad` → 50 %) so the warm loop has visible room to animate (T-04).
+- **`main.ts`** (post-warm drain): `await rafDrain(3)` inserted between warm-loop end and shader prewarm step, draining the GPU upload queue before the next phase and before "Galerie betreten" is enabled (T-02, T-05).
+- **`main.ts`** (flush diagnostics): added `gpu-warm-flush-start` and `gpu-warm-flush-complete` diagnostics around `rafDrain(3)` with frame count and measured flush duration in ms (T-06).
+- **`TextureManager.ts`** (`init`): renderer reference now stored as `this.renderer` (T-03).
+- **`TextureManager.ts`** (`loadForRole`): `this.renderer?.initTexture(texture)` called immediately after every successful or fallback texture cache insertion to proactively upload the texture to the GPU (T-03).
+
+#### U-series — Timeline elegance redesign
+
+- **`main.scss`** (`.timeline`): `display: flex; align-items: center; gap: 6px` added so arrows and counter are natural flex row siblings; padding reduced to `10px 14px` (U-01, U-03).
+- **`main.scss`** (`.timeline__list`): `flex: 1 1 0; min-width: 0` added so the list fills available space between the arrows; padding reduced to `12px 8px 6px` (U-01, U-03).
+- **`main.scss`** (`.timeline__arrow`): `position: absolute` removed; resized to `32 × 32 px`; `border-radius: 50%`; `display: flex; align-items: center; justify-content: center` for glyph centering (U-01, U-02).
+- **`main.scss`** (`.timeline__arrow--prev`, `--next`): removed redundant absolute-position offset logic and cleaned up now-empty modifier blocks (U-01 cleanup).
+- **`main.scss`** (`.timeline__counter`): `position: absolute` removed; `flex-shrink: 0` added; counter now sits at the tail of the flex row (U-04).
+- **`main.scss`** (`@media (pointer: coarse)`): new rule in `.timeline__arrow` shows arrows at `opacity: 0.65` always on touch/stylus devices so they are discoverable without hover (U-05).
+
+### Validation
+
+- `npm run lint` — clean (0 errors, 0 warnings in project code).
+- `npm run build` — clean (TypeScript typecheck + Vite bundle).
+- Runtime: v0.25.
+
+
+## v0.24.6 — True preload completion + INP stabilization (2026-05-21, **shipped**)
+
+### Changed
+
+#### v0.24.3 R-series — True preload completion
+
+- **GalleryManager.ts** (`FullGalleryReadinessResult`): Extended interface with three new fields: `preloadMode` (`'strict' | 'bounded-fallback'`), `unresolvedArtworkIds` (list of artwork IDs not yet at all 6 readiness stages), `overflowArtworkCount` (artworks beyond safety cap).
+- **GalleryManager.ts** (`getFullGalleryReadinessSummary()`): Populates new fields. `preloadMode` is `'strict'` when `artworks.length ≤ FULL_PRELOAD_SAFETY_CAP`; `'bounded-fallback'` when gallery exceeds the cap. `unresolvedArtworkIds` enumerates every pending artwork by ID (R-01, R-03).
+- **GalleryManager.ts** (`init()`): Overflow artworks (index ≥ `FULL_PRELOAD_SAFETY_CAP`) are now enqueued as `near-next` prefetch jobs immediately after the strict preload pass, giving them a deterministic completion path instead of relying solely on the opportunistic idle sweep (R-02).
+- **main.ts**: Pre-CTA log (`full-gallery-ready`) now includes `preloadMode`, `overflowArtworkCount` (R-01).
+- **main.ts**: Added `entry-unresolved-artworks` diagnostic before CTA enablement that lists every unresolved artwork ID; severity is `warn` in strict mode (contract failure) and `info` in bounded-fallback mode (expected) (R-03).
+- **main.ts**: Added `inp-acceptance-target` boot diagnostic recording the INP baseline (`1,024 ms`) and good-range target (`200 ms`) for release validation (S-04).
+- **main.ts**: Loading overlay "ready" text is now mode-aware: strict mode shows `Galerie bereit`; bounded-fallback mode shows `Galerie bereit – N Gemälde werden im Hintergrund optimiert` (R-04).
+
+#### v0.24.4 S-series — INP stabilization
+
+- **GalleryManager.ts**: Added `setInteractionActive(active: boolean)` public method. While active, non-`critical-now` prefetch queue jobs are deferred — the queue runner exits when it encounters a deferred job and is restarted automatically on `setInteractionActive(false)`. This keeps the main thread free for render/present cycles during pointer windows (S-01, S-02).
+- **GalleryManager.ts**: Added `markInteractionFrame(dtMs: number)` public method. Accumulates per-frame CPU time, frame count, and dropped-frame count (dt > 33 ms) for the current interaction window (S-03).
+- **GalleryManager.ts**: `setInteractionActive(false)` emits a structured `interaction-end` diagnostic with `durationMs`, `frameCount`, `avgFrameMs`, `droppedFrames`, `droppedFramePct` for every closed interaction window (S-03).
+- **main.ts**: Added window-level `pointerdown`/`pointerup`/`pointercancel` listeners that open/close an interaction window via `galleryManager.setInteractionActive()`. Window closes after a 200 ms cooldown following the last pointer-up/cancel (S-01, S-02).
+- **main.ts** (`animate()`): Calls `galleryManager.markInteractionFrame(sample.dtMs)` every frame so interaction-window telemetry is accurate (S-03).
+- **main.ts** (`beforeunload`): Cleans up the three new interaction listeners and the cooldown timer (S-01).
+
+### Closes plan gaps
+
+- **R-01** ✅ `preloadMode` + `overflowArtworkCount` expose the active preload contract to diagnostics and UX.
+- **R-02** ✅ Overflow artworks queued as `near-next` for deterministic post-init completion.
+- **R-03** ✅ Structured unresolved-artwork list logged before CTA; severity differentiated by mode.
+- **R-04** ✅ Loading status text aligned with preload mode.
+- **R-05** — deferred; KTX2/Basis migration requires importer pipeline work beyond this pass.
+- **R-06** — acceptance criteria captured via `inp-acceptance-target` diagnostic; gallery-size bucket tests remain a manual validation step.
+- **S-01** ✅ Interaction-mode prefetch throttle: non-`critical-now` jobs paused during active pointer windows.
+- **S-02** ✅ Interaction window policy implemented with 200 ms cooldown.
+- **S-03** ✅ Per-interaction frame telemetry: CPU ms, dropped frames, avg frame time logged on every window close.
+- **S-04** ✅ INP acceptance target emitted as boot diagnostic.
+- **S-05** ✅ Post-entry optimization status copy visible in bounded-fallback mode.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- `npm audit` — known moderate Vite/esbuild advisory (pre-existing, unrelated).
+
+
+## v0.24.5 — Diagnostics recursion hardening (2026-05-21)
+
+### Fixed
+
+- Hardened `src/utils/Diagnostics.ts` serialization to safely handle circular references and non-serializable values (`function`, `symbol`, `bigint`) without recursive crashes.
+- Added re-entrancy guards around global `error` and `unhandledrejection` handlers so diagnostics cannot recursively log their own failures.
+- Wrapped diagnostics print path in fail-safe guards so console/group logging failures no longer crash runtime.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+## v0.24.3 — Loading completeness re-audit + remediation plan (docs-only, 2026-05-21)
+
+### Changed
+
+- Added a new v0.24.3 root-cause findings section in `FINDINGS.md` focused on why “ready” can still precede full first-use smoothness in capped/overflow gallery scenarios.
+- Added a new v0.24.3 remediation plan in `plan.md` (R-series) defining strict vs fallback preload modes, deterministic completion requirements, and acceptance criteria.
+- Updated `README.md` top status to reflect current runtime truth (`v0.24.2 shipped`, `v0.24.3 planning/docs-only`) and linked the new plan/findings sections.
+- Refreshed markdown audit stamp across repository Markdown files.
+
+### Validation and residual risk
+
+- Documentation-only pass; no runtime code changed.
+- Runtime preload-completeness fix remains pending implementation of the v0.24.3 plan.
+
+## v0.24.2 — Strict full-gallery entry contract (2026-05-21)
+
+### Changed
+
+- **GalleryManager.ts**: Replaced `PBR_PRELOAD_LIMIT = 15` with `FULL_PRELOAD_SAFETY_CAP = 50`. All authored PBR texture sets are now preloaded during `init()` under the loading overlay — not just the first 15. Artworks beyond the safety cap (extreme exhibitions) fall back to the idle prefetch sweep.
+- **GalleryManager.ts**: Exported new `FullGalleryReadinessResult` interface and added `getFullGalleryReadinessSummary()` method that aggregates per-artwork readiness ledger into a concise pre-entry audit report (total, fullyReadyCount, gpuWarmedCount, pbrLoadedCount, proceduralReadyCount, memoryCapApplied).
+- **main.ts**: Removed the device-capped `entryWarmTargets` warm model. The pre-entry GPU warm loop now iterates over the complete `warmOrder` (all artworks in priority order). "Galerie betreten" is only enabled after every artwork has been GPU-warmed.
+- **main.ts**: Loading overlay now shows `Gemälde X / Y wird vorbereitet` for each artwork during the full warm pass, so users see deterministic per-painting progress.
+- **main.ts**: Entry readiness contract now covers all artworks (`fullWarmTargets = warmOrder`), not the former subset. Retry loop resolves remaining stragglers.
+- **main.ts**: `getFullGalleryReadinessSummary()` is logged with event `full-gallery-ready` immediately before CTA enablement, providing a machine-readable pre-entry diagnostics proof.
+- **main.ts**: `warmCursor` starts at `warmOrder.length` post-reveal; `continueWarmQueue` exits on first RAF tick and disposes the warm render target immediately.
+
+### Closes plan gaps
+
+- **Q-01** ✅ Strict all-paintings-ready contract before CTA (no more subset warm model).
+- **Q-02** ✅ Memory guardrail: `FULL_PRELOAD_SAFETY_CAP = 50` prevents unbounded preload on extreme galleries.
+- **Q-03** ✅ Deterministic completion: sequential `ensureEntryReadiness` with bounded retry loop (no idle-only dependency).
+- **Q-04** ✅ Pre-entry diagnostics: `full-gallery-ready` log with per-stage counts before reveal.
+- **Q-06** ✅ UX status text shows painting-by-painting progress.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- `npm audit` — known moderate Vite/esbuild advisory (pre-existing, unrelated).
+
+
+
+## v0.24.1 — Runtime smoothness hardening (2026-05-21)
+
+### Changed
+
+- Implemented a strict pre-entry readiness contract: CTA reveal now waits for a device-aware warm target set to finish critical readiness stages.
+- Added device-capability warm profiles (radius, pre-entry warm count, post-reveal frame budget, batch caps) to balance smoothness and responsiveness on large/mobile galleries.
+- Refactored prefetch scheduling to explicit lanes (`critical-now`, `near-next`, `background`) with starvation-aware queue ranking.
+- Deferred adjacent procedural pre-generation into queued idle chunks to reduce bursty same-frame main-thread work.
+- Added per-navigation cold/hot readiness verdict diagnostics to prove whether interactions still triggered cold readiness work.
+
+### Validation and residual risk
+
+- `npm run lint` passed.
+- `npm run build` passed and rebuilt `customer-preview/freyraum-gallery.js`.
+- `npm audit --audit-level=moderate` remains the known Vite/esbuild advisory requiring a semver-major tooling upgrade.
+
+## v0.24 — Deep loading/performance planning + full markdown refresh (docs-only, 2026-05-21)
+
+### Changed
+
+- Added a new v0.24 plan focused on eliminating remaining first-visit gallery lag after entry.
+- Consolidated deeper online research notes for render/upload scheduling, idle-work chunking, and compressed/deferred texture pipeline options.
+- Refreshed all repository Markdown files with the new v0.24 audit stamp and updated cross-references.
+
+### Validation and residual risk
+
+- Documentation-only pass; no runtime code changed.
+- Baseline repository validation before docs updates: `npm install`, `npm run lint`, and `npm run build` passed.
+- Runtime smoothness fix remains pending implementation of the v0.24 plan.
+
+## v0.23.1 — Performance/Preloading implementation (2026-05-21)
+
+### Changed
+
+- Added a per-artwork readiness ledger covering albedo, authored PBR, procedural maps, material apply, shader compile, and GPU warm state.
+- Replaced the fixed `GPU_WARM_LIMIT = 15` fallback with a budgeted warm order that prepares the critical navigation window before reveal and continues safely through an offscreen render target after entry.
+- Pre-generates procedural maps for current ±2 artworks, promotes next/previous/timeline targets ahead of the idle sweep, and keeps adaptive-quality cooldown active while readiness work is pending.
+- Added startup diagnostics for ImageBitmap decode support, future KTX2/Basis importer planning, and 4/15/20/50 artwork validation buckets.
+
+### Validation and residual risk
+
+- Baseline before changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Post-implementation validation: `npm run lint` and `npm run build` passed.
+- `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory; the available automated remediation requires a semver-major tooling upgrade and remains a separate maintenance task.
+
+## v0.23 — Performance/Preloading Planning Audit (docs-only, 2026-05-21)
+
+### Changed
+
+- Refreshed all Markdown files to document the remaining navigation-stutter root causes after v0.22.
+- Added the N-series performance/preloading plan to `plan.md`.
+- Added source-referenced findings to `FINDINGS.md` covering large-gallery GPU warm gaps, synchronous procedural generation, idle-prefetch limits, shader/readiness diagnostics, and adaptive-quality cooldown timing.
+
+### Validation and residual risk
+
+- Documentation-only pass; no runtime code changed.
+- Runtime validation is deferred to the N-series implementation pass. Known `npm audit --audit-level=moderate` Vite/esbuild advisory remains a separate tooling upgrade.
+
+## v0.22 — Improved Preloading: Capped PBR Pre-Load + "Galerie betreten" (SHIPPED)
+
+**Status: shipped in runtime code, rebuilt preview output, and all Markdown docs.**
+
+### Fixed
+
+- Preloaded authored PBR texture sets during `GalleryManager.init()` under the loading overlay, capped by `PBR_PRELOAD_LIMIT = 15` to avoid large-gallery memory spikes.
+- Added synchronous `GalleryManager.warmArtworkForGPU(index)` plus `TextureManager.getForRole(url, role)` so cached texture sets can be bound without network fetches and uploaded to GPU via hidden render passes.
+- Warmed every artwork up to `GPU_WARM_LIMIT = 15` before reveal; larger galleries keep the single-artwork fallback and continue idle PBR prefetching.
+- Replaced automatic overlay dismissal with an accessible "Galerie betreten" button. `LoadingOverlayControls.reveal()` now returns `Promise<void>`, stops hint cycling, focuses the CTA, and resolves only after user entry.
+- Registered audio recovery listeners before the start-button gesture, preserving the first click/Enter/Space as a browser-compatible AudioContext start opportunity.
+- Added a 500 ms minimum branded loading duration and remapped progress: GPU warm 93–97%, shader prewarm 97–99%, ready 100%.
+
+### Validation and residual risk
+
+- Baseline before changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Post-implementation validation: `npm run lint` and `npm run build` passed.
+- `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory; available automated remediation requires a semver-major tooling upgrade and remains a separate maintenance task.
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+### Validation and residual risk
+
+- Baseline before code changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Final validation after v0.21 implementation and docs sync: `npm run lint` and `npm run build` passed.
+- Security audit: `npm audit --audit-level=moderate` still reports the pre-existing moderate Vite/esbuild development-server advisory; the available fix requires a breaking Vite major upgrade and was left as a separate dependency-upgrade task.
+
+## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (2026-05-21, shipped)
+
+### Shipped (original scope — G-01 through G-07)
+
+- **Interactive loading screen:** Replace plain white spinner with dark-themed FREYRAUM branded overlay: wordmark, real-progress bar wired to Three.js `LoadingManager`, cycling German hint texts, floating ambient particle glows, and an elegant scale+unblur gallery reveal on completion.
+- **Shader prewarm:** Move `RendererManager.prewarm()` call to BEFORE loading overlay hides and `await` it — currently called as fire-and-forget `void` AFTER the overlay hides at `src/main.ts:695`. Fix eliminates first-interaction shader-compile stutter (G-01, corrected 2026-05-21).
+- **Audio full preload:** Change `BackgroundAudioManager` audio element from `preload='metadata'` to `preload='auto'` so audio frames are buffered at boot — eliminates audible gap on first play (G-02).
+- **Adjacent artwork prefetch:** After artwork N is shown, speculatively prefetch PBR maps for artworks N±1 and N±2 using `requestIdleCallback` — eliminates cold-navigation lag (G-03).
+- **GPU texture warm pass:** Perform a hidden render pass after all textures load but before the overlay hides — forces CPU→GPU texture upload so first artwork render has no stall (G-06).
+- **Idle full-prefetch sweep:** After first artwork reveals, use `requestIdleCallback` to progressively preload all remaining artwork PBR maps during browser idle time (G-07).
+- **`<link rel="preload">` hints:** Add font preload hints to `app.html` `<head>` (G-05).
+
+### Shipped / documented (extension — H-01 through H-07)
+
+- **LightingSetup delta clamp (H-01):** Prevent key-light position jump on tab resume by clamping the inter-frame delta to 100 ms in `LightingSetup.update()`, matching the existing `GalleryManager.MAX_SMOOTHING_DT` pattern.
+- **WebGL context restore UI (H-02):** Add optional callback in `RendererManager.onContextChange()` so `main.ts` can show a brief "Grafik wird wiederhergestellt …" status during context loss on mobile.
+- **TextureManager oversized-texture guard (H-03):** Add `private maxTextureSize = 0` field (currently not stored), assign in `init()`, and emit `diagnostics.warn('texture-oversized', …)` when a loaded texture exceeds the device limit (H-03 corrected 2026-05-21: field was never stored, only logged).
+- **PaintingMaterial GLSL highp precision guard (H-04):** Inject `#ifdef GL_FRAGMENT_PRECISION_HIGH / precision highp float` block into PaintingMaterial shader to prevent UV seaming on high-resolution artworks with large detail tiling factors on mobile.
+- **Importer 16K norm update (H-05):** Replace single `MAX_RECOMMENDED_DIMENSION = 4096` with a four-tier threshold system (≤ 4096 all-safe / ≤ 8192 modern-mobile+desktop / ≤ 16384 high-end-desktop / > 16384 hard-block). Updated GPU memory thresholds: 85 MB / 341 MB / 1024 MB.
+- **Importer NPOT diagnostic (H-06):** Add silent internal note for NPOT dimensions (not customer-visible). WebGL 2.0 handles NPOT correctly; note is advisory for future WebGL 1.0 fallback awareness.
+- **LOD/tiled streaming (H-07, future):** Document the LOD pipeline architecture (thumb/preview/hires manifest + progressive swap) for when zoom depth requires full 16K detail. Documented as a future boundary; no runtime implementation in this pass.
+
+### Shipped (extension — I-01 through I-04: global pointer tracking)
+
+- **Global hover rotation (I-01):** Register `window.addEventListener('pointermove', ...)` for hover rotation so the painting tilt tracks the cursor even when it is over the timeline strip, settings/preferences panel, nav buttons, topbar, or any other overlay element.
+- **Legacy mousemove global (I-02):** Move the Touch Events fallback `mousemove` listener from the canvas to `window` — same hover-rotation fix for legacy browsers.
+- **Global drag fallback (I-03):** Add window-level `pointermove` / `pointerup` listeners during active canvas panning as a safety net for cases where `setPointerCapture` is silently not honoured by an overlay element.
+- **Touch drag off-canvas (I-04):** In the Touch Events fallback path, register a global `touchmove` listener during active panning so a finger that drifts over the timeline or another overlay does not interrupt the drag.
+
+### Shipped / documented (extension — J-01 through J-06: timeline scalability)
+
+- **Virtual rendering window (J-01):** For galleries with > 20 artworks, only instantiate DOM nodes for visible + ±5 buffer thumbnails; remaining positions hold skeleton placeholders. Extends the render window on scroll.
+- **Timeline scroll arrows (J-02):** Add left/right arrow buttons that appear on hover over the timeline; each click scrolls by ~80% of the visible width; arrows auto-hide when at the respective scroll boundary.
+- **Artwork counter (J-03):** Add a "3 / 20" counter chip in the top-right corner of the timeline bar, updated on every navigation, with `aria-live="polite"` for screen readers.
+- **Edge fade gradients (J-04):** Apply CSS `mask-image` linear gradient on both ends of the timeline list so users see a fade indicating more content; fade adjusts dynamically at scroll boundaries.
+- **Responsive thumb sizing (J-05):** Replace fixed `150×95px` with `clamp(90px, 15vw, 150px)` × `clamp(57px, 9.5vw, 95px)` so thumbs scale from mobile to 4K.
+- **Group/page navigation (J-06, future):** Document the grouped/paginated timeline design for 50+ artwork galleries. Documented as a future boundary; no runtime implementation in this pass.
+
+### Source audit corrections + new gaps (K-series, 2026-05-21)
+
+- **G-01 corrected:** Plan previously stated "prewarm never called". Source shows it IS called at `src/main.ts:695` but as `void` (non-awaited) ~250 lines after the overlay already hides. Fix requires moving the `await`-ed call to before `loadingOverlay.classList.add('is-hidden')`.
+- **H-03 corrected:** Plan previously stated "`maxTextureSize` stored but never consulted". Source shows `TextureManager` has NO `private maxTextureSize` field — the value is only logged in `init()`. Fix requires adding the field before `warnIfOversized()` can be implemented.
+- **K-01 (new):** `CanvasInteraction.dispose()` must be updated to remove global `window` listeners added by I-01..I-04 patches.
+- **K-02 (new):** `Timeline.dispose()` must clear `this.thumbs` array to allow GC of button elements and their listeners.
+- **K-03 (new):** `prefetchAdjacentArtworks()` method does not exist in `GalleryManager` — G-03 patch must add it as a new private method.
+
+### Runtime code shipped in this pass.
+
+
+
+## v0.20.8 — Complete v0.20 implementation + markdown sync (2026-05-21)
+
+### Fixed
+
+- Closed the remaining v0.20.7 audio/control gaps: capped fade targets, enriched volume diagnostics, selective preferences slider patching, percent-aware slider accessibility text, recovery diagnostics, extended first-interaction playback recovery, manager-local unmute playback, percentage-valued slider CSS, and shorter loop fallback fade.
+
+### Changed
+
+- Refreshed every tracked Markdown file with the v0.20.8 shipped-status audit so docs no longer describe v0.20 audio as an open regression.
+
+## v0.20.7 — Full technical audit + gap-closure coding plan (2026-05-21, docs-only)
+
+### Changed
+
+- Performed a full line-by-line code audit of all v0.20 audio and control source files.
+- Confirmed that all v0.20.5 blocking regressions (state corruption, wrong mapping contract, startup muted, control placement) are resolved in the current codebase.
+- Added 10 new technical findings (F-01 through F-10) with file:line references and TypeScript/SCSS code patches to `plan.md`.
+- Reclassified v0.20.5 status from "planning only" to "substantially resolved".
+- Updated `FINDINGS.md` with a new audit section listing confirmed-correct items and open gaps with priority ratings.
+- Refreshed all markdown audit stamps to v0.20.7.
+
+### Runtime code changed in this pass.
+
+## v0.20.6 — Audio stabilization + UI polish (2026-05-21)
+
+### Fixed
+
+- Prevented audio cut-offs during settings changes by skipping redundant `play()` transitions when background audio is already playing.
+- Hardened mute handling to ignore no-op mute writes, reducing unnecessary envelope transitions.
+- Added first-interaction autoplay recovery retry (`pointerdown`, arrow keys, Space/Enter) when autoplay was blocked and mute is off.
+- Kept startup mute preference default unmuted (`audioMuted: false`) so fresh loads do not persist muted state.
+- Removed the dark circular keyboard-focus artifact on nav arrow buttons with explicit `.nav-btn:focus-visible` styling.
+
+### Changed
+
+- Refined `.audio-controls` sizing/padding and slider width in `src/styles/main.scss` so the audio control visually aligns better with settings/fullscreen controls.
+- Updated markdown status stamp/context to v0.20.6.
+
+## v0.20.5 — Audio regression audit + recovery plan (2026-05-21, docs-only)
+
+### Changed
+
+- Reclassified the v0.20.4 audio pass as incomplete after a fresh code audit against the reported customer failures.
+- Added a new recovery plan for the remaining audio bugs in `plan.md`.
+- Logged confirmed root causes and acceptance coverage in `FINDINGS.md`.
+- Refreshed repository markdown so docs no longer claim the current audio behavior is fully fixed.
+
+### Confirmed issues
+
+- `BackgroundAudioManager.play()` and the `volumechange` listener currently overwrite the stored target gain with transient fade-to-zero values, which can make startup, autoplay recovery, and unmute behave like 0% volume.
+- `src/audio/volumeMapping.ts` currently implements the wrong mapping contract for the stated requirement; UI `50%` should equal `15%` effective gain because the intended effective range is `0..30%`, not `0..100%`.
+- Main-page audio controls are still documented and implemented in the same bottom-left position even though that placement has been reported as wrong.
+
+## v0.20.4 — Volume mapping, slider continuity, fade envelope, responsive layout (2026-05-20)
+
+### Added
+
+- **`src/audio/volumeMapping.ts`** — new volume display↔gain mapping utility.
+  - `displayPercentToGain(percent)`: power-curve mapping so 50% display → ~15% effective gain (calm ambient baseline).
+  - `gainToDisplayPercent(gain)`: deterministic inverse.
+  - `DEFAULT_AUDIO_GAIN` constant (≈ 0.152) used as the new startup default.
+  - Source: https://www.dr-lex.be/info-stuff/volumecontrols.html
+
+### Changed
+
+- **`src/utils/preferences.ts`** — default `audioVolume` changed from `0.35` (linear 35%) to `DEFAULT_AUDIO_GAIN` (≈ 0.152, mapped from display 50%). First-launch audio is now calm by default. Legacy stored values continue to be read as effective gain with no migration needed.
+- **`src/audio/BackgroundAudioManager.ts`** — added rAF-based fade envelope (Slice C):
+  - `startFade(target, durationMs, label, onComplete?)` drives a per-frame volume ramp.
+  - `cancelFade()` stops any in-progress ramp before starting a new one.
+  - `FADE_IN_MS = 300` applied on `play()` start.
+  - `FADE_OUT_MS = 200` applied on `pause()` and `setMuted(true)`.
+  - `LOOP_RESTART_FADE_MS = 150` applied before the `ended`-fallback loop restart.
+  - Added diagnostics events: `audio-fade-start`, `audio-fade-cancel`, `audio-fade-complete`, `audio-volume-map`, `audio-resume-attempt`.
+- **`src/ui/PreferencesPanel.ts`** — refactored to in-place DOM patch model (Slice B):
+  - Panel is built once (`buildPanel()`); `patchPanel()` only updates mutable states (checked, value, textContent).
+  - `isVolumeDragging` guard: structural re-patches are suppressed while the user drags the slider. Display label and track fill are updated in-place.
+  - `pointerdown`/`pointerup`/`pointercancel` guard lifecycle is complete; keyboard slider updates remain fully live.
+  - Volume slider now uses `displayPercentToGain`/`gainToDisplayPercent` mapping.
+  - Audio status element uses `hidden` attribute pattern instead of conditional re-render.
+- **`src/ui/AudioControls.ts`** — volume slider now uses `gainToDisplayPercent` for display and `displayPercentToGain` on input; sets `--volume-pct` CSS property for track fill.
+- **`src/styles/main.scss`** — Slice D placement and responsive improvements:
+  - `.audio-controls` now uses `--audio-ctrl-bottom` and `--audio-ctrl-left` CSS tokens (fall back to previous values); responsive overrides only need to change tokens.
+  - Fixed `--volume-pct` CSS default from `35%` (invalid unit in `calc`) to `50` (unitless, matching new default display percent).
+  - `@media (max-width: 599px)` now collapses `.audio-controls__slider-wrap` to keep the control compact and non-overlapping on narrow phones.
+
+### Validation
+
+- `npm run lint` ✅
+- `npm run build` ✅
+
+## v0.20.3 — Technical plan hardening + markdown sync (2026-05-20, docs-only)
+
+### Planned
+
+- Expanded the latest audio-focused roadmap into a deeper technical implementation plan:
+  - formal volume display↔effective-gain mapping contract,
+  - PreferencesPanel in-place slider continuity refactor guidance,
+  - BackgroundAudioManager fade-envelope transition model,
+  - responsive control-placement policy and diagnostics expansion.
+- Added explicit coding-slice sequencing and acceptance checks for the next implementation PR.
+
+### Documentation
+
+- Added v0.20.3 technical audit findings to `FINDINGS.md`.
+- Added v0.20.3 technical planning section to `plan.md`.
+- Updated top-level status references in `README.md`, `docs/HANDOFF.md`, and `DOCUMENTATION_RULES.md`.
+- Refreshed markdown audit stamp text across repository `.md` files.
+
+## v0.20.2 — Audio UX follow-up plan (2026-05-20, docs-only planning pass)
+
+### Planned
+
+- Define a new startup-volume behavior: audio enabled by default with calm effective loudness and a display mapping where UI `50%` corresponds to the requested lower baseline.
+- Rework main-page mute/volume control placement according to discoverability, accessibility, and touch-target guidance.
+- Fix settings-panel volume slider continuity so dragging remains continuous and does not degrade to click-step behavior.
+- Add fade-in/fade-out handling to reduce clip/click artifacts at loop/toggle boundaries.
+
+### Documentation
+
+- Added v0.20.2 planning detail to `plan.md`.
+- Logged supporting code-audit and online UX findings in `FINDINGS.md`.
+- Updated top-level status notes in `README.md` and `docs/HANDOFF.md`.
+- Refreshed markdown audit stamp across all repository `.md` files.
+
+## v0.20.1 — Full markdown audit and sync (2026-05-20, docs-only)
+
+### Changed
+
+- Completed a full markdown consistency pass across all repository `.md` files.
+- Added a shared audit stamp to every markdown file and refreshed top status labels to align with shipped v0.20 state.
+- Updated customer/developer guidance phrasing where stale v0.19-only wording remained.
+
+### Validation
+
+- `npm install` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+## v0.20 — Audio playback fix + main-page controls + sidecar cache-bust (2026-05-20)
+
+### Fixed
+
+- **Audio not playing on file:// origin:** Removed `crossOrigin = 'anonymous'` from `BackgroundAudioManager`. Chromium-family browsers treat `file://` pages as `null` origin; the CORS attribute triggered a rejected cross-origin request that silently blocked all audio loading. Audio now loads and plays correctly when the gallery is opened locally.
+- **Sidecar text stale after re-import:** `import-artworks.mjs` now updates `customer-preview/app.html` on every import run, stamping `?t=<timestamp>` on the `customer-artworks.js` and `customer-audio.js` script src attributes. This forces Chromium's `file://` cache to treat each run as a new resource URL, ensuring updated sidecar text is always applied.
+
+### Added
+
+- **Main-page audio controls** (`src/ui/AudioControls.ts`): subtle glass-pill widget fixed to bottom-left, symmetric to ZoomControls. Shows mute/unmute button and compact volume slider. Hidden when no audio source is imported. Pulsing indicator appears when autoplay is blocked — clicking activates playback within the user gesture. Full accessibility labels (aria-label, aria-pressed, title) and reduced-motion / high-contrast adaptations.
+- Improved `BackgroundAudioManager` error event handler to log `MediaError.code` and `MediaError.message` for easier future diagnosis.
+
+## v0.19 — Background audio workflow (2026-05-20, implemented)
+
+### Added / Changed
+
+- `scripts/import-artworks.mjs` now imports customer audio from `customer-audio/inbox`, copies supported files to `customer-preview/audio`, emits `customer-preview/customer-audio.js`, and writes report sections for selected/ignored/unsupported/no-audio outcomes.
+- `scripts/write-local-preview.mjs` now injects `customer-audio.js` into preview HTML and writes a fallback audio stub when no generated file exists yet.
+- Added `src/audio/BackgroundAudioManager.ts` for runtime audio ownership (source selection, autoplay handling, loop fallback, diagnostics, lifecycle suspend/resume, disposal).
+- `src/main.ts` now sanitizes injected audio payloads, wires manager lifecycle into existing runtime lifecycle hooks, and syncs UI status messaging.
+- `src/utils/preferences.ts` now persists `audioMuted` + `audioVolume` in `freyraum.preferences.v1`.
+- `src/ui/PreferencesPanel.ts` and `src/styles/main.scss` now include mute + volume controls and autoplay status note rendering.
+
+### Documentation
+
+- Updated v0.19 status across repository markdown files from planned to implemented and added shipped workflow details to customer/developer docs.
+
+### Validation
+
+- `npm run lint` ✅
+- `npm run build` ✅
 
 ## v0.18 — Customer painting text sidecars (2026-05-20, implemented)
 
@@ -62,6 +794,10 @@ Planning/docs only. The sidecar-text workflow was fully audited in
 implementation pass above.
 
 ## Unreleased
+
+### Historical note (v0.19 planning audit — 2026-05-20)
+
+- The pre-implementation v0.19 planning audit has been superseded by the shipped implementation entry above.
 
 ### Documentation (v0.18 final audited plan — 2026-05-20)
 

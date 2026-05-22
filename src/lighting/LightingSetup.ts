@@ -9,6 +9,8 @@ import {
   kelvinToColor,
 } from './LightProfile';
 
+const MAX_LIGHTING_DT_MS = 100;
+
 /**
  * v0.02 lighting system. Builds a small pool of Three.js light objects and
  * applies the active {@link LightProfile} to them. Profile switches reuse
@@ -26,6 +28,8 @@ export class LightingSetup {
   private accent: THREE.PointLight | null = null;
   private profile: LightProfile;
   private animate = true;
+  private lastUpdateTime = 0;
+  private animatedTime = 0;
 
   constructor(scene: THREE.Scene, preset: QualityPreset, profileId: LightProfileId = DEFAULT_LIGHT_PROFILE) {
     this.scene = scene;
@@ -67,13 +71,17 @@ export class LightingSetup {
 
   update(time: number): void {
     if (!this.animate || !this.profile.animateAllowed) return;
+    if (this.lastUpdateTime > 0) {
+      this.animatedTime += Math.min(time - this.lastUpdateTime, MAX_LIGHTING_DT_MS);
+    }
+    this.lastUpdateTime = time;
     // Gentle horizontal drift on the primary key light. Drift amplitude is
     // smaller in v0.03 because the new gallery-soft key sits closer to the
     // painting, so a 0.6 unit drift would be too perceptible.
     const primary = this.spots[0];
     if (!primary) return;
     const baseX = this.profile.keys[0]?.position.x ?? -3;
-    primary.position.x = baseX + Math.sin(time * 0.0002) * 0.25;
+    primary.position.x = baseX + Math.sin(this.animatedTime * 0.0002) * 0.25;
   }
 
   dispose(): void {

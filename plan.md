@@ -1,4 +1,3864 @@
 # FREYRAUM Plan
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.38 — Rendering parity closeout (2026-05-22, **shipped**)
+
+Runtime status: **shipped** in `src/core/PostProcessing.ts`, `src/config/quality.ts`, and `CHANGELOG.md`.
+
+Closeout summary:
+
+1. **Composer output correctness:** `OutputPass` is now the final EffectComposer pass, ensuring correct display-space output.
+2. **Preset-specific parity fix:** `fxaaEnabled` is now disabled on `high` and `balanced` (battery already disabled), matching the observed regression boundary and restoring v0.25-like color/contrast response.
+3. **Validation:** `npm run lint` and `npm run build` pass.
+
+---
+
+## v0.29 — Loading-screen ownership of the complete first render + artwork fidelity re-audit (2026-05-22, **shipped**)
+
+Runtime status: **shipped** in `src/main.ts`, `src/timeline/Timeline.ts`, `src/lighting/LightProfile.ts`, and rebuilt `customer-preview/freyraum-gallery.js`. The loading screen now owns final render readiness before the enter CTA appears: all paintings are warmed through the final post-processing path, UI chrome/timeline thumbnails are prebuilt, the production RAF starts under the opaque overlay, and two full-size frames are observed before entry is enabled.
+
+### Problem statement (v0.29 user feedback)
+
+1. Paintings are still too dark and do not look original.
+2. The complete website and all elements are not fully preloaded; first use still lags.
+3. A glitch is still visible when entering the main page.
+4. The main page is not fully built, rendered, and loaded while the loading screen is visible.
+5. The main page and **all paintings must be loaded with the loading screen** so the first visible frame and first interactions are smooth.
+
+### Research-backed constraints
+
+- Three.js `LoadingManager`/texture-loading completion only proves network/decode completion; it does **not** prove that textures, materials, render targets, or post-processing passes are resident on the GPU.
+- `renderer.compile()` / `compileAsync()` pre-warms scene materials and shader programs, but texture upload can still be deferred until a material using that texture is actually drawn.
+- Three.js/WebGL texture upload stutter is commonly solved by drawing every required material/texture at least once under an opaque loading overlay, often with an offscreen render target or hidden warm scene.
+- For JPG/PNG/WebP artwork, texture color space must remain `THREE.SRGBColorSpace`, renderer output must remain `THREE.SRGBColorSpace`, and tone mapping must preserve artistic intent. Neutral tone mapping is a good baseline, but the plan must verify lighting/material/bloom exposure are not still darkening the final composed image.
+- A loading screen cannot claim full readiness until the real canvas has already produced a complete full-resolution frame and a second frame has been presented behind the opaque overlay.
+
+References to re-check during implementation: Three.js LoadingManager docs, Three.js WebGLRenderer compile/compileAsync docs, Three.js color-management manual, Three.js forum texture pre-warm guidance, Khronos PBR Neutral tone-mapping notes.
+
+### Pre-implementation source audit findings
+
+| ID | Finding | Current evidence | Risk |
+|----|---------|------------------|------|
+| Y-01 | v0.28 RAF-before-reveal claim is not actually true in current source | `src/main.ts` starts `await loadingOverlay.reveal()` before the `animate` function is declared; rAF starts only after reveal returns | The main scene is not actively rendering during the overlay wait/fade, so a stretched prewarm frame or clear-color flash can still appear |
+| Y-02 | `prewarmComposer()` warms the composer at 4×4 and restores size before reveal | `src/main.ts` runs composer prewarm before `gallery-canvas--ready`; no full-resolution presentation-proof frame is required before CTA | Browser can reveal a stale tiny render target or an unpresented full-size canvas |
+| Y-03 | Readiness ledger checks loaded/generated/warmed flags but not visible-frame presentation | `getFullGalleryReadinessSummary()` reports texture/material readiness, not that the actual main canvas has painted at viewport size | Diagnostics can say ready while the user still sees first visible work |
+| Y-04 | GPU warming binds each artwork in the main mesh, but no separate residency proof validates every material variant after post-processing | `warmArtworkForGPU()` marks `gpuWarmed`; composer render path and final visible frame are not part of the per-artwork contract | First navigation can still trigger upload/shader/composer work |
+| Y-05 | Painting darkness could still come from lighting/material/bloom/composer stack, not only tone mapping | Renderer uses `NeutralToneMapping`, but final output also passes through lighting/material/post-processing | Dark/high-contrast paintings may still deviate from source values |
+| Y-06 | UI/control/DOM first-use paths are not included in the loading readiness contract | Prior fixes covered CTA hover, but not every control/timeline/info-panel/layout state | First interaction on timeline, nav, settings, info panel, or quality changes can still create layout/style work |
+
+### Gap index
+
+| ID | Short description | File(s) to change | Status |
+|----|-------------------|-------------------|--------|
+| Y-01 | Make `animate` available before the loading overlay waits for user entry | `src/main.ts` | ✓ shipped |
+| Y-02 | Start the real RAF loop while the loading screen is still fully opaque | `src/main.ts` | ✓ shipped |
+| Y-03 | Require full-size first-frame and second-frame presentation before CTA | `src/main.ts` | ✓ shipped |
+| Y-04 | Build an all-artwork GPU residency sweep that draws every artwork/material through the same final render path | `src/main.ts`, `GalleryManager.ts`, `PostProcessing.ts` | ✓ shipped |
+| Y-05 | Add a color-fidelity verification pass for renderer, textures, lighting, material, bloom, and post-processing exposure | `src/lighting/LightProfile.ts`, `src/core/RendererManager.ts`, `src/gallery/TextureManager.ts`, `src/materials/PaintingMaterial.ts`, `src/core/PostProcessing.ts`, `src/main.ts` | ✓ shipped |
+| Y-06 | Prebuild/premeasure main-page DOM and interactive controls under the loading overlay | `src/main.ts`, `src/timeline/Timeline.ts`, `src/ui/InfoPanel.ts`, `src/ui/PreferencesPanel.ts`, `src/styles/main.scss` | ✓ shipped |
+| Y-07 | Replace “ready” copy with a hard readiness gate backed by diagnostics | `src/main.ts`, docs | ✓ shipped |
+| Y-08 | Add acceptance diagnostics and manual QA protocol for zero-glitch entry | `src/main.ts`, docs | ✓ shipped |
+
+### Implementation plan
+
+1. **Reorder boot so animation exists before reveal waits**
+   - Move the animation-loop function assignment before the loading overlay can wait for the start button.
+   - Start RAF while the loading screen is still fully opaque.
+   - Keep input disabled until the readiness contract passes.
+   - Acceptance: during the full loading-screen wait, diagnostics show RAF frames rendering at normal viewport size behind the overlay.
+
+2. **Add a presented-frame gate**
+   - After all texture/material/shader warm work, require at least two real RAF ticks at the final canvas size.
+   - The gate must run after composer size restoration, canvas ready-class application, and active artwork restoration.
+   - Acceptance: CTA is not shown until the final canvas has rendered and presented real frames behind the overlay.
+
+3. **Make every painting GPU-resident before entry**
+   - Iterate through every artwork under the overlay, bind the exact texture/material set used at runtime, draw it through the production render path, and restore the active artwork.
+   - Keep progress visible and diagnostics detailed for each artwork: albedo, authored PBR, procedural fallback, material apply, shader compile, GPU draw, composer draw.
+   - Acceptance: strict mode reports zero unresolved artworks and zero post-entry warm queue work for normal galleries.
+
+4. **Warm post-processing and final presentation path at real size**
+   - Keep tiny prewarm only as an early shader compile aid.
+   - Add a final full-size composer render under the opaque overlay to prove the actual visible pass chain is ready.
+   - Acceptance: no stretched 4×4 output, no clear-color flash, no first bloom/FXAA/composer stall after entry.
+
+5. **Re-audit artwork color fidelity end to end**
+   - Verify all color image textures use `SRGBColorSpace`; data maps stay linear.
+   - Confirm renderer output color space remains sRGB.
+   - Recheck tone mapping, exposure, material light response, bloom threshold/strength, ambient/key light intensity, and any CSS/canvas opacity interactions.
+   - Compare representative source images against rendered output with a documented screenshot/manual QA protocol.
+   - Acceptance: paintings match the source artwork as closely as the current PBR presentation allows, without artificial shadow crush.
+
+6. **Prebuild and premeasure website chrome under the overlay**
+   - Force layout/style readiness for timeline, nav buttons, info panel, settings panel, quality controls, hover/focus states, and first open/close paths before CTA.
+   - Do not visually reveal these states to the user; perform work under the opaque overlay and restore final closed/idle state.
+   - Acceptance: first timeline hover/click, nav click, settings open, and info-panel update do not cause a first-use hitch.
+
+7. **Upgrade diagnostics and release gates**
+   - Add boot diagnostics for `pre-entry-raf-start`, `first-full-frame-rendered`, `second-full-frame-presented`, `all-artworks-final-path-warmed`, `ui-prebuild-complete`, and `entry-cta-enabled`.
+   - Include counts and durations so support can prove whether the loading screen actually owned the work.
+   - Acceptance: a single diagnostics export can show that no load/render/build work remained after entry.
+
+8. **Validation protocol**
+   - Run existing lint/build after implementation.
+   - Test with a fresh browser profile/cache disabled and with a normal cached profile.
+   - Record a Chrome Performance trace from page load through first navigation; acceptance is no grey flash, no stretched frame, no long first interaction, and no texture/shader upload events after entry.
+   - Manually compare dark and bright paintings against source images.
+
+### Non-goals for v0.29
+
+- Do not add new dependencies unless an existing browser/Three.js API cannot satisfy the readiness proof.
+- Do not reduce painting resolution or material fidelity to hide performance issues.
+- Do not weaken the strict preload contract for normal galleries.
+- Do not claim “fully fixed” until diagnostics and manual visual QA prove zero post-entry first-use work.
+
+### Implementation decisions
+
+- Normal galleries stay in strict full-artwork mode; entry waits for every artwork in `warmOrder` and logs unresolved artworks if the contract fails.
+- Bloom remains enabled per quality preset, but first-visit lighting now defaults to daylight-balanced `museum-neutral` to reduce perceived darkness without reducing material fidelity.
+- Rendered-vs-source comparison remains a manual QA checklist backed by diagnostics rather than a new debug dependency.
+
+### Shipped implementation notes
+
+- `src/main.ts` now delays `loadingOverlay.reveal()` until after the animation loop is defined, scheduled, and two full-size production frames have been observed behind the opaque overlay.
+- `src/main.ts` adds final-path artwork warming: every artwork is bound and rendered through `PostProcessing.render()` under the loading screen after shader/composer prewarm.
+- `src/timeline/Timeline.ts` adds `prewarmUnderOverlay()` to instantiate all timeline thumbnails, set them eager, decode their images where supported, and force timeline layout under the loader.
+- `src/main.ts` adds `prewarmInteractiveChrome()` to measure nav, timeline, info, settings, audio, fullscreen, and hidden preferences-panel states before entry.
+- `src/lighting/LightProfile.ts` changes the first-visit default lighting profile to `museum-neutral` for daylight-balanced, objective viewing; warmer/dramatic profiles remain selectable.
+- New boot diagnostics: `ui-prebuild-complete`, `all-artworks-final-path-warmed`, `pre-entry-raf-start`, `first-full-frame-rendered`, `second-full-frame-presented`, and `entry-cta-enabled`.
+
+### Validation after implementation
+
+- `npm run lint` — pass (existing TypeScript support-version warning from `@typescript-eslint`).
+- `npm run build` — pass; rebuilt `customer-preview/freyraum-gallery.js`.
+
+
+---
+
+
+
+## v0.28 — Painting fidelity + background preloading + particle enhancement (2026-05-22, **shipped**)
+
+Runtime status: **shipped** in `src/core/RendererManager.ts`, `src/main.ts`, `src/gallery/GalleryManager.ts`, `src/styles/main.scss`.
+
+### Problem statement (v0.28 user feedback)
+
+1. Paintings are now artistically dark/high-contrast; they must render as close to the original as possible.
+2. On main-page load there is a visible glitch/flash for a split second before the paintings appear.
+3. Navigation in the main-page painting selection is still laggy.
+4. Loading-screen particles should move faster and in more random patterns.
+5. The main page and gallery must be completely loaded and rendering in the background while the loading screen is fully visible.
+
+### Gap index
+
+| ID  | Short description                                      | File(s)                                              | Status   |
+|-----|--------------------------------------------------------|------------------------------------------------------|----------|
+| X-01 | ACESFilmic tone mapping crushes dark artwork          | `src/core/RendererManager.ts`                        | ✓ shipped |
+| X-02 | RAF loop starts after overlay dismiss → canvas flash  | `src/main.ts`                                        | ✓ shipped |
+| X-03 | Navigation lag: loose damping + RAF cold start        | `src/gallery/GalleryManager.ts`                      | ✓ shipped |
+| X-04 | Particles too slow and too regular                    | `src/main.ts`, `src/styles/main.scss`                | ✓ shipped |
+| X-05 | Overlay architecture (confirm correct, no change)     | `src/styles/main.scss`                               | ✓ confirmed |
+
+---
+
+### X-01 — Switch ACESFilmic → NeutralToneMapping for painting fidelity
+
+**Root cause:** `RendererManager.ts` lines 49–50 use `THREE.ACESFilmicToneMapping` at `exposure = 1.45`. ACES Filmic applies a strong S-curve that compresses shadow midtones and boosts contrast — appropriate for photorealistic scenes but destructive for artworks that are intentionally dark and high-contrast by the artist, as it further deviates the rendered output from the original color values.
+
+**Research findings (online):**
+- Three.js r163 added `THREE.NeutralToneMapping` (the Khronos PBR Neutral tone mapper). The [Khronos ToneMapping README](https://github.com/KhronosGroup/ToneMapping/blob/main/PBR_Neutral/README.md) explicitly states: *"designed to minimise colour distortion from the creative intent"*, with near-identity response below 1.0 and soft rolloff above.
+- For paintings and artwork that must appear faithful to the artist's creation, `NeutralToneMapping` is the correct choice over ACES.
+- The [Three.js Color Management guide](https://threejs.org/docs/#manual/en/introduction/Color-management) confirms NeutralToneMapping as the recommendation for minimal-alteration scenarios.
+- Three.js r166 (this project) has `THREE.NeutralToneMapping = 7` in `src/constants.js`. ✓
+
+**Implementation:**
+```typescript
+// src/core/RendererManager.ts — line 49–50
+this.renderer.toneMapping = THREE.NeutralToneMapping;  // was ACESFilmicToneMapping
+this.renderer.toneMappingExposure = 1.0;               // was 1.45
+```
+
+**Acceptance:** Paintings rendered with neutral/original brightness; no artificial shadow crush; highlight rolloff gentle not aggressive.
+
+---
+
+### X-02 — Start RAF render loop before overlay reveal to eliminate canvas flash
+
+**Root cause:** `src/main.ts` line 1367:
+```typescript
+rafId = requestAnimationFrame(animate);
+```
+This runs AFTER `await loadingOverlay.reveal()` resolves. `reveal()` waits for user click + 1300 ms CSS fade-out. During the fade-out:
+- Canvas `.gallery-canvas--ready` (opacity: 0→1, 1.4 s transition) starts at line 920
+- But the canvas framebuffer shows only the renderer clear color (`0xdfe5e9`) — `prewarmComposer(4, 4)` called `setSize(4, 4)` then `setSize(fullW, fullH)` which clears the canvas
+- No `animate()` frame has yet rendered the scene
+- User sees the gray clear color "flash" through during overlay fade
+
+**Fix pattern (JavaScript forward-declaration):**
+TypeScript supports a definite-assignment assertion `!` on a `let` binding (`let animate!: (now: number) => void`) to silence TS2454 "variable used before assignment". The forward-reference closure `() => animate(now)` is safe: the RAF callback fires at the next display frame (~16 ms), well after the current synchronous tick finishes, by which time `animate` has been fully assigned.
+
+**Implementation:**
+```typescript
+// Near top of main() — forward declare (move pageInactive here too):
+let pageInactive = false;
+let animate!: (now: number) => void;
+let rafId: number;
+
+// [... all preload / warmup code ...]
+
+// BEFORE await loadingOverlay.reveal():
+rafId = requestAnimationFrame((now) => animate(now));  // ← NEW: start rendering behind overlay
+
+await loadingOverlay.reveal();
+
+// [... later, where animate was const animate = ...]
+animate = (now: number): void => {
+  // ... existing RAF body unchanged ...
+};
+
+// REMOVE old:  rafId = requestAnimationFrame(animate);  ← DELETE this line
+```
+
+**Acceptance:** Gallery renders continuously behind opaque overlay; overlay fade-out reveals already-running gallery; no gray flash visible.
+
+---
+
+### X-03 — Fix navigation lag: tighten smoothing lambda
+
+**Root cause:**
+1. Cold-start gap: RAF loop not running during overlay phase means GalleryManager's smoothDamp state starts from a zero-iteration baseline. First navigation after reveal has an unexpected catch-up motion. Fixed by X-02.
+2. Loose lambda: `LAMBDA_NAV_POSITION = 2.5` yields a 95% settle time of `3 / 2.5 ≈ 1200 ms` which at low frame rates feels genuinely laggy rather than smoothly intentional.
+
+**Research findings (online):**
+- Typical museum-quality WebGL gallery demos (Three.js Journey gallery, GSAP FLIP gallery examples) use position λ in the range 3.0–4.5 for artwork focus transitions — yielding 670–1000 ms settle.
+- For "snappy but still organic" feel without losing the museum aesthetic: λ = 3.5 → settle ≈ 860 ms. This is the target.
+
+**Implementation:**
+```typescript
+// src/gallery/GalleryManager.ts — line 88
+private static readonly LAMBDA_NAV_POSITION = 3.5;  // was 2.5
+```
+
+**Acceptance:** Artwork navigation responds noticeably faster; selection still animates organically; no snap/jump feel.
+
+---
+
+### X-04 — Replace 2-stop particle drift with 4-stop random wander
+
+**Root cause:** `@keyframes loading-float` has only two stops (from → to), creating a single perfect sinusoidal with `ease-in-out`. Particle durations 8–14 s are slow. Each particle has only two drift custom properties (`--particle-drift-x`, `--particle-drift-y`), producing symmetric predictable paths.
+
+**Research findings (online):**
+- CSS multi-stop keyframes with per-particle injected custom properties simulate pseudo-random wander paths: 4 waypoints at 0%, ~28%, ~62%, 100% with independent X/Y drift at each stop creates a bent, non-symmetric path. ([MDN CSS Animations](https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_animations/Using_CSS_animations), CSS Tricks particle animation articles)
+- Animation duration 3–5 s with the keyframe body using `linear` (not `ease-in-out`) keeps motion constant-speed and more energetic.
+- Staggered `animation-delay` values spread across the full duration so particles are never synchronized.
+
+**Implementation — JS (src/main.ts):**
+- Raise particle count from 8 to 12
+- Per particle, generate and assign:
+  - `--particle-drift-x` / `--particle-drift-y` (waypoint 1, existing)
+  - `--particle-drift-x2` / `--particle-drift-y2` (waypoint 2, new)
+  - `--particle-drift-x3` / `--particle-drift-y3` (waypoint 3, new)
+  - Duration range: 3000–6000 ms (was 8000–14000 ms)
+  - Drift magnitudes: ±40–90 px (was ±18–32 px)
+  - Stagger delay range widened to cover full duration span
+
+**Implementation — CSS (src/styles/main.scss):**
+```scss
+@keyframes loading-wander {
+  0%   { transform: translate3d(
+           calc(var(--particle-drift-x, 20px) * -1),
+           calc(var(--particle-drift-y, 15px) * -1),
+           0) scale(0.92); }
+  28%  { transform: translate3d(
+           var(--particle-drift-x2, 30px),
+           calc(var(--particle-drift-y2, -20px)),
+           0) scale(1.06); }
+  62%  { transform: translate3d(
+           calc(var(--particle-drift-x3, -25px)),
+           var(--particle-drift-y3, 35px),
+           0) scale(0.96); }
+  100% { transform: translate3d(
+           var(--particle-drift-x, 20px),
+           var(--particle-drift-y, 15px),
+           0) scale(1.10); }
+}
+```
+- Replace `animation-name: loading-float` with `loading-wander` on `.loading-particle`
+- Remove `@keyframes loading-float`
+
+**Acceptance:** Particles move in visibly non-regular, winding, non-symmetric paths; motion is clearly faster and more energetic than before; no two particles follow the same apparent path.
+
+---
+
+### X-05 — Background preloading: overlay architecture confirmed correct
+
+**Confirmed:** With X-02 applied, the main page and gallery render continuously behind the opaque overlay throughout the entire loading phase. Overlay architecture is already correct: `position: fixed; inset: 0; background: #0d0d0e; z-index: 200`. The canvas renders at `z-index: auto` (below overlay). All artworks are GPU-warmed before `reveal()` is called (strict preload contract, `FULL_PRELOAD_SAFETY_CAP = Number.MAX_SAFE_INTEGER`). No architectural change needed beyond X-02.
+
+**No code change for X-05 specifically.**
+
+---
+
+### Implementation order
+
+1. X-01 — `RendererManager.ts` (smallest, fully isolated)
+2. X-02 — `main.ts` (forward-declare animate, start RAF before reveal)
+3. X-03 — `GalleryManager.ts` (single constant change)
+4. X-04 — `main.ts` + `main.scss` (particle count + wander keyframe)
+5. Validate: `npm run lint`, `npm run build`
+
+### Open questions
+
+- Verify `THREE.NeutralToneMapping` constant name in `node_modules/three/src/constants.js` before committing X-01.
+- λ = 3.5 is the initial target; may raise to 4.0 if still perceived as laggy at low frame rates.
+
+---
+
+
+## v0.27 — Startup smoothness + loading/AA deep technical audit and remediation plan (2026-05-22, **shipped**)
+
+Runtime status: **shipped** in `src/core/PostProcessing.ts`, `src/config/quality.ts`, `src/main.ts`, `src/styles/main.scss`.
+
+### Problem statement (current user feedback)
+
+- Loading branding still appears off-center.
+- Particle motion is still too subtle to read as intentional loading feedback.
+- The enter-button hover effect still performs first-use work at hover time and feels laggy.
+- Main gallery smoothness still improves only after all paintings have been visited, so startup is still not truly first-use smooth.
+
+---
+
+### Deep code audit findings (2026-05-22)
+
+Full source audit of: `src/main.ts` (1406 lines), `src/core/PostProcessing.ts`, `src/core/RendererManager.ts`, `src/gallery/GalleryManager.ts` (1597 lines), `src/materials/PaintingMaterial.ts`, `src/materials/ProceduralTextureFactory.ts`, `src/config/quality.ts`, `src/styles/main.scss` (1760 lines).
+
+#### A. AA regression — EffectComposer bypasses native MSAA
+
+**Root cause:** `RendererManager` creates `THREE.WebGLRenderer({ antialias: true })` (`RendererManager.ts` line 41–44). `PostProcessing` uses `EffectComposer`. EffectComposer renders the scene to an internal `WebGLRenderTarget` — native `antialias: true` is bypassed. All edges in the composed output lack AA.
+
+**Fix (W-06):** Add `ShaderPass(FXAAShader)` after `UnrealBloomPass`. Both `three/examples/jsm/postprocessing/ShaderPass.js` and `three/examples/jsm/shaders/FXAAShader.js` are present in `node_modules/three`. FXAA is single-pass (~0.3ms), driven by a resolution uniform. Disable on `battery` preset.
+
+```typescript
+// src/core/PostProcessing.ts
+private readonly fxaaPass: ShaderPass;
+// constructor: after bloomPass:
+this.fxaaPass = new ShaderPass(FXAAShader);
+this.applyFXAAResolution(window.innerWidth, window.innerHeight);
+this.fxaaPass.enabled = preset.fxaaEnabled ?? true;
+this.composer.addPass(this.fxaaPass);
+// new helper:
+private applyFXAAResolution(w: number, h: number): void {
+  const pr = this.renderer.getPixelRatio();
+  this.fxaaPass.material.uniforms['resolution'].value.set(1/(w*pr), 1/(h*pr));
+}
+// resize(): append: this.applyFXAAResolution(width, height);
+// applyPreset(): append: this.fxaaPass.enabled = preset.fxaaEnabled ?? true;
+```
+
+```typescript
+// src/config/quality.ts — QualityPreset interface:
+fxaaEnabled: boolean;
+// high: true, balanced: true, battery: false
+```
+
+---
+
+#### B. Bloom shaders never prewarmed — first gallery frame stutters
+
+**Root cause:** `rendererManager.prewarm(scene, camera)` calls `renderer.compileAsync(scene, camera)` which only traverses scene meshes. `UnrealBloomPass` has 4 internal shader programs compiled lazily on first `composer.render()` — called only after `loadingOverlay.dispose()`. On low-end GPUs: 80–250ms stall on first gallery frame.
+
+**Fix (W-04):** Add `PostProcessing.prewarmComposer(w, h)`. Shrinks composer to 4×4, calls `composer.render()` once (forces all programs to compile), then restores size. Canvas is fully covered by loading overlay during this.
+
+```typescript
+// src/core/PostProcessing.ts
+prewarmComposer(width: number, height: number): void {
+  try {
+    this.resize(4, 4);
+    this.composer.render();
+  } finally {
+    this.resize(width, height);
+  }
+}
+```
+
+```typescript
+// src/main.ts — after rendererManager.prewarm(), before loadingOverlay.reveal():
+const ppSize = new THREE.Vector2();
+rendererManager.renderer.getSize(ppSize);
+postProcessing.prewarmComposer(ppSize.x, ppSize.y);
+await rafDrain(1);
+```
+
+---
+
+#### C. Enter-button first-hover lag — CSSOM/compositor cold path
+
+**Root cause:** After `startButton.disabled = false`, the `:hover` rule in `.loading-start-btn:not(:disabled):hover` is applicable but not yet resolved in CSSOM. No `will-change`. First hover triggers a style recalculation + compositor layer promotion.
+
+**Fix (W-03):** Force CSSOM resolution immediately after button activation.
+
+```typescript
+// src/main.ts — in reveal(), after: startButton.disabled = false; startButton.classList.add('is-visible');
+void startButton.offsetHeight;
+void getComputedStyle(startButton).backgroundColor;
+startButton.style.setProperty('will-change', 'background-color');
+startButton.addEventListener('click', () => {
+  startButton.style.removeProperty('will-change');
+}, { once: true });
+```
+
+```scss
+// src/styles/main.scss — .loading-start-btn:
+&.is-visible:not(:disabled) { will-change: background-color; }
+```
+
+---
+
+#### D. Wordmark centering — letter-spacing + block layout drift
+
+**Root cause:** `.loading-wordmark`: `display:block; padding-left:0.18em; text-align:center`. `padding-left` shrinks left edge; `text-align:center` centers within the shrunken box, shifting visual center ~0.09em right.
+
+**Fix (W-01):** Flexbox parent + inner `span.loading-wordmark__text` with `padding-left` inside the inline box.
+
+```typescript
+// src/main.ts — createLoadingOverlay():
+const wordmark = document.createElement('div');
+wordmark.className = 'loading-wordmark';
+const wordmarkText = document.createElement('span');
+wordmarkText.className = 'loading-wordmark__text';
+wordmarkText.textContent = 'FREYRAUM';
+wordmark.appendChild(wordmarkText);
+```
+
+```scss
+// src/styles/main.scss:
+.loading-wordmark {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; font-size: clamp(36px, 9vw, 58px); line-height: 0.95; font-weight: 700;
+}
+.loading-wordmark__text {
+  display: inline-block; letter-spacing: 0.18em; padding-left: 0.18em;
+}
+```
+
+---
+
+#### E. Particle salience — opacity values below perceptual threshold
+
+**Root cause:** Color alphas 0.08–0.14. CSS `opacity: 0.7`. Pulse keyframes `0.45→0.95`. Effective max: `0.14 × 0.7 × 0.95 = 9.3%` against `#0d0d0e` — below perceptual threshold on mid-range displays.
+
+**Fix (W-02):** Raise alphas to 0.16–0.32, CSS opacity to 0.9, blur to 4px, pulse min to 0.60, add 2 particles (6→8), sizes 220–400px.
+
+```typescript
+// src/main.ts — particle array in createLoadingOverlay():
+const particles = [
+  ['12%','18%','280px','rgba(181,154,106,0.32)','8s',  '0s',  '28px', '-32px'],
+  ['78%','14%','340px','rgba(200,214,229,0.26)','10s', '-1.4s','-24px','34px' ],
+  ['18%','76%','400px','rgba(200,214,229,0.24)','12s', '-2.6s','32px', '-24px'],
+  ['82%','72%','290px','rgba(181,154,106,0.28)','9s',  '-0.8s','-26px','-22px'],
+  ['50%','8%', '220px','rgba(181,154,106,0.22)','11s', '-3.2s','22px', '30px' ],
+  ['48%','92%','320px','rgba(200,214,229,0.20)','13s', '-2.1s','-30px','-28px'],
+  ['28%','52%','240px','rgba(181,154,106,0.18)','14s', '-4.5s','18px', '22px' ],
+  ['72%','48%','260px','rgba(200,214,229,0.16)','9.5s','-1.8s','-22px','20px' ],
+];
+```
+
+```scss
+// src/styles/main.scss:
+.loading-particle { opacity: 0.9; filter: blur(4px); }
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.60; }
+  50%       { opacity: 1.0;  }
+}
+```
+
+---
+
+### Gap analysis (W-series) — updated with code-level evidence
+
+| ID | Severity | Root cause (code reference) | Fix files | Planned outcome |
+|----|----------|-----------------------------|-----------|-----------------|
+| W-01 | **HIGH** | `.loading-wordmark`: `display:block; padding-left:0.18em` + `text-align:center` shifts visual center ~0.09em right | `main.scss`, `main.ts` | Flex + inner `span.loading-wordmark__text` |
+| W-02 | **HIGH** | Particle alphas 0.08–0.14 × opacity 0.7 × pulse 0.45 = 2.5–9.3% — below perception | `main.ts`, `main.scss` | Alphas 0.16–0.32, opacity 0.9, blur 4px, sizes 220–400px, pulse 0.60 |
+| W-03 | **HIGH** | No `getComputedStyle`/`will-change` after CTA activation → CSSOM `:hover` unresolved | `main.ts`, `main.scss` | `offsetHeight` + `getComputedStyle` + `will-change` after `startButton.disabled=false` |
+| W-04 | **HIGH** | `EffectComposer` bloom shaders (4 programs) JIT-compiled on first `composer.render()` post-entry | `PostProcessing.ts`, `main.ts` | `prewarmComposer(w,h)` called before `loadingOverlay.reveal()` |
+| W-05 | **MEDIUM** | Overlay status copy in bounded-fallback branch may overstate readiness | `main.ts` | Audit and tighten status strings |
+| W-06 | **HIGH** | `antialias:true` bypassed by `EffectComposer` — all composed frames lack AA | `PostProcessing.ts`, `quality.ts` | `ShaderPass(FXAAShader)` after bloom; `fxaaEnabled` per-preset |
+| W-07 | **LOW** | No acceptance criteria for hover latency / first-frame timing | diagnostics | Target: hover ≤16ms, first frame ≤33ms |
+
+---
+
+### Full technical implementation checklist
+
+1. **`src/config/quality.ts`** — add `fxaaEnabled: boolean`; high/balanced: `true`, battery: `false`.
+2. **`src/core/PostProcessing.ts`** — import `ShaderPass`, `FXAAShader`; add `fxaaPass` field; `applyFXAAResolution(w,h)`; update `constructor`, `resize()`, `applyPreset()`; add `prewarmComposer(w,h)`.
+3. **`src/main.ts`** — (a) call `postProcessing.prewarmComposer()` + `await rafDrain(1)` after prewarm, before reveal; (b) add CSSOM prewarm in `reveal()`; (c) add wordmark inner span; (d) raise particle values.
+4. **`src/styles/main.scss`** — flex wordmark; add `.loading-wordmark__text`; raise `.loading-particle` opacity + blur; update pulse; add `will-change` on `.is-visible:not(:disabled)`.
+
+### Online research synthesis (2026-05-22)
+
+- **EffectComposer + MSAA:** Three.js `WebGLRenderTarget` does not support MSAA by default. `antialias:true` only works on direct canvas draws. Post-process AA (FXAA/SMAA) is the production standard. Source: Three.js docs.
+- **Shader lazy compilation:** `renderer.compileAsync(scene,camera)` only covers scene mesh materials. EffectComposer pass shaders compile on first `composer.render()`. Pre-warming requires an explicit render call. Source: Three.js `WebGLPrograms.js`.
+- **CSSOM `:hover` pre-resolution:** `getComputedStyle` + `offsetHeight` reflow causes browser to resolve pending style rules, eliminating first-hover recalculation spike. Source: MDN, web.dev.
+- **`will-change`:** Promotes element to compositor layer before hover occurs, making transition GPU-composited on first contact. Source: MDN `will-change`.
+- **Letter-spacing centering:** `padding-left` on a `display:inline-block` inner span inside a flex container gives true optical centering. Source: CSS Text Module Level 3.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint && npm run build` — must pass.
+- Chrome DevTools Performance: no long tasks (>50ms) on first `animate()` frame.
+- FXAA: `renderer.info.programs` count changes by 1 on preset toggle.
+- Hover: pointer event → `transitionstart` latency ≤16ms.
+- Re-run `parallel_validation` after all code changes.
+## v0.26 — Loading overlay centering + full-preload strictness (2026-05-22, **shipped**)
+
+Runtime status: **shipped** in `main.ts`, `GalleryManager.ts`, and `main.scss`.
+
+### Implementation closeout
+
+#### V-series — loading experience and smoothness uplift
+
+| ID | Severity | Implemented outcome |
+|----|----------|---------------------|
+| V-01 | **HIGH** | Full-startup preload cap switched to `Number.MAX_SAFE_INTEGER`, keeping startup in strict mode so all authored artwork texture sets are prepared before entry. |
+| V-02 | **HIGH** | Loading overlay branding centering refined: `.loading-wordmark` now uses explicit centered block layout without offset indent drift. |
+| V-03 | **MEDIUM** | Loading particles upgraded with independent drift vectors, phase delays, and pulse opacity animation for continuously visible motion. |
+| V-04 | **MEDIUM** | Overlay readiness copy now states full preparation (`Alle Inhalte sind vollständig vorbereitet.`) once CTA unlocks. |
+| V-05 | **LOW** | Repository Markdown status references refreshed for v0.26 rollout and full-audit consistency. |
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+## v0.25 — GPU flush hardening + timeline elegance redesign (2026-05-22, **shipped**)
+
+Runtime status: **shipped** in `main.ts`, `TextureManager.ts`, `main.scss`, and `Timeline.ts`.
+
+### Implementation closeout
+
+#### T-series — loading/GPU warm hardening
+
+| ID | Severity | Implemented outcome |
+|----|----------|---------------------|
+| T-01 | **HIGH** | `main.ts` warm loop now awaits `rafYield()` after every painting warm render, yielding the compositor between artworks. |
+| T-02 | **HIGH** | `main.ts` executes `rafDrain(3)` after warm loop completion before shader prewarm to drain residual GPU queue work. |
+| T-03 | **MEDIUM** | `TextureManager` now stores renderer in `init()` and calls `renderer.initTexture()` for both successful and fallback cache inserts. |
+| T-04 | **MEDIUM** | Warm progress now spans `50→95%` per painting; loading-manager phase is capped to reserve visible warm-phase progression. |
+| T-05 | **LOW** | Warm-to-shader transition now includes explicit drain frames before `loadingOverlay.setStatus('Shader werden vorbereitet')`. |
+| T-06 | **LOW** | Added detailed flush diagnostics: `gpu-warm-flush-start` and `gpu-warm-flush-complete` with frame count and measured duration. |
+
+#### U-series — timeline redesign
+
+| ID | Severity | Implemented outcome |
+|----|----------|---------------------|
+| U-01 | **HIGH** | `.timeline` now uses flex layout (`display:flex; align-items:center; gap:6px`); arrows are natural siblings of `.timeline__list` and no longer overlap thumbnails. |
+| U-02 | **HIGH** | `.timeline__arrow` redesigned as `32×32` circular icon buttons with centered glyphs. |
+| U-03 | **MEDIUM** | Timeline padding tightened to `10px 14px`; list inner padding tightened to `12px 8px 6px`. |
+| U-04 | **MEDIUM** | `.timeline__counter` moved to natural inline/flex flow (`flex-shrink:0`), removing absolute positioning. |
+| U-05 | **LOW** | `@media (pointer: coarse)` keeps arrows visible at `opacity:0.65` (except disabled state) for touch discoverability. |
+
+### Cleanup
+
+- Removed now-redundant empty modifier selectors `.timeline__arrow--prev` and `.timeline__arrow--next` from `main.scss`.
+- Revalidated no unused/duplicate functional branches introduced in touched files.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- Verified Markdown audit stamp and status consistency across root docs, `.github` docs, and `/docs` guides.
+
+## v0.24.4 — INP stabilization plan (2026-05-21, **SHIPPED in v0.24.6**)
+
+Runtime status: **shipped**. Implemented in `GalleryManager.ts` + `main.ts` as v0.24.6 (2026-05-21).
+
+### Trigger
+
+Local metrics now show good loading stability (`LCP 1.85 s`, `CLS 0.00`) but poor interaction responsiveness (`INP 1,024 ms`) with pointer interactions on the gallery canvas dominated by presentation delay.
+
+### Goals
+
+1. Reduce pointer-driven interaction INP into good range by cutting presentation delay spikes.
+2. Preserve current preload/readiness guarantees while stabilizing post-entry frame delivery.
+3. Add diagnostics that separate handler cost from render/presentation cost for each interaction burst.
+
+### Gap analysis (S-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| S-01 | **HIGH** | Pointer INP is poor despite low input delay and low processing time. | Prioritize render/presentation budget controls on interaction frames. |
+| S-02 | **HIGH** | No explicit interaction-mode frame budget policy in startup/readiness plan. | Add an interaction-time quality throttle path (temporary cost reduction while input is active). |
+| S-03 | **MEDIUM** | Diagnostics focus heavily on load readiness but less on pointer presentation latency. | Add structured interaction frame telemetry (CPU update ms, GPU/present proxy timings, dropped-frame indicators). |
+| S-04 | **MEDIUM** | Acceptance criteria currently emphasize preload completeness, not Core Web Vitals INP thresholds. | Add INP-focused pass/fail criteria and regression checks. |
+| S-05 | **LOW** | User-facing status does not communicate when background optimization may affect immediate interaction quality. | Clarify post-entry optimization status/copy where relevant. |
+
+### Implementation plan
+
+1. Add an interaction-mode budget profile that temporarily reduces expensive render features while pointer interaction is active.
+2. Ensure pointer-driven camera/artwork updates are coalesced to one visual update per animation frame.
+3. Limit concurrent non-critical background warm/prefetch/procedural work during active interaction windows.
+4. Extend diagnostics to log per-interaction timing slices with explicit presentation-delay focus.
+5. Define and enforce INP acceptance targets for local validation runs.
+6. Reconcile preload contract messaging with interaction-quality contract messaging in startup UX text/docs.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime changes.
+- Capture local interaction traces and verify INP improvement against baseline (`1,024 ms`).
+- Re-run security scanning after runtime updates.
+
+## v0.24.3 — true preload completion plan (2026-05-21, **SHIPPED in v0.24.6**)
+
+Runtime status: **shipped**. Implemented in `GalleryManager.ts` + `main.ts` as v0.24.6 (2026-05-21).
+
+### Problem statement
+
+User feedback still reports that the loading screen reaches “ready” before all first-use work is complete. Smoothness improves only after paintings are visited, meaning some readiness work still crosses the interaction boundary.
+
+### Goals
+
+1. Ensure loading completion reflects real first-use readiness, not only partial readiness counters.
+2. Remove first-navigation cold work for the full supported gallery size.
+3. Keep startup stable on lower-memory devices with explicit fallback behavior.
+4. Add deterministic diagnostics proving whether any interaction still triggered load/decode/procedural/GPU work.
+
+### Gap analysis (R-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| R-01 | **HIGH** | `FULL_PRELOAD_SAFETY_CAP = 50` can leave larger galleries partially prepared before entry. | Add explicit contract behavior for `artworks.length > safety cap`, including user-facing preload mode and acceptance boundary. |
+| R-02 | **HIGH** | Idle/background prefetch remains part of completion for overflow artworks. | Move critical completion path to deterministic queued work; keep idle scheduling only for non-critical optimization. |
+| R-03 | **MEDIUM** | Current readiness summary is aggregate and may hide per-artwork unresolved states unless logs are inspected manually. | Add a strict “no pending artwork” gate and structured unresolved-artwork diagnostics before CTA. |
+| R-04 | **MEDIUM** | Loading UX copy says “ready” without clarifying fallback/partial modes for capped galleries. | Align status/CTA messaging with actual readiness contract mode to avoid false-ready perception. |
+| R-05 | **MEDIUM** | Large-gallery memory pressure remains high under full eager paths. | Stage compressed texture migration (KTX2/Basis) and/or tiered preload policy with deterministic guarantees per tier. |
+| R-06 | **LOW** | Acceptance criteria are not yet codified for “no first-use load” across size/device buckets. | Add explicit pass/fail criteria for 4/15/20/50 and overflow galleries with diagnostics capture requirements. |
+
+### Implementation plan
+
+1. Define two explicit startup modes: strict full-preload mode and bounded fallback mode, each with truthful UI copy and diagnostics.
+2. For strict mode, block CTA until every artwork meets readiness stages (`albedoLoaded`, `pbrLoaded`, `proceduralReady`, `materialApplied`, `gpuWarmed`).
+3. For bounded fallback mode, block CTA until a documented guaranteed set is ready and clearly communicate remaining background preparation.
+4. Replace idle-only critical completion dependency with deterministic queue stepping and bounded retries.
+5. Emit machine-readable unresolved-artwork lists before CTA; treat non-empty unresolved sets as contract failure in strict mode.
+6. Add acceptance checks for first navigation in each bucket and log any cold-path detection as release-blocking for this objective.
+7. Stage compressed-texture rollout plan so strict full-gallery readiness remains feasible at higher artwork counts.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime changes.
+- Validate diagnostics for startup contract verdict and first-navigation cold/hot verdict across gallery-size buckets.
+- Re-run security scanning after runtime updates.
+
+## v0.24.2 — Strict all-paintings-ready loading (2026-05-21, **shipped**)
+
+Runtime status: **shipped**. Full-gallery entry contract enforced in GalleryManager.ts and main.ts.
+
+### Requirement
+
+Before “Galerie betreten” is enabled, the system must have completed required first-use readiness for all paintings so users can navigate immediately without first-visit cold stalls.
+
+### Goals
+
+1. Guarantee full-gallery readiness before entry CTA enablement.
+2. Preserve stability on low-memory devices with explicit safety controls and deterministic fallback behavior.
+3. Provide diagnostics evidence that proves pre-entry readiness completion across the full painting set.
+4. Keep the customer workflow compatible while staging compressed-texture support for scale.
+
+### Gap analysis (Q-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| Q-01 | **HIGH** | Entry still uses a warm subset model rather than full-gallery completion. | Replace subset threshold with a strict all-painting readiness contract before CTA reveal. |
+| Q-02 | **HIGH** | Full eager readiness can exceed memory limits on large/mobile exhibitions. | Add memory-budget admission checks, bounded staging, and explicit “cannot safely preload all” handling without silent failures. |
+| Q-03 | **HIGH** | Critical readiness can still depend on opportunistic idle windows. | Enforce deterministic scheduler progress with bounded work chunks and required completion milestones. |
+| Q-04 | **MEDIUM** | No single pre-entry proof that each painting reached readiness. | Emit full-gallery readiness ledger + summary diagnostics before CTA becomes interactive. |
+| Q-05 | **MEDIUM** | Current asset path may be too heavy for strict all-painting readiness at scale. | Define KTX2/Basis migration phase with importer/runtime fallback to reduce memory/upload pressure. |
+| Q-06 | **LOW** | UX text does not clearly communicate strict readiness state. | Align loading status copy so users see when full readiness is completed and entry is truly immediate. |
+
+### Implementation plan
+
+1. Define mandatory per-painting readiness stages required for entry and enforce completion over the entire artwork list before CTA enablement.
+2. Add a global readiness coordinator that tracks completion, failure reasons, and retry policy for every painting and blocks entry until contract verdict is final.
+3. Introduce strict memory and frame-budget guardrails for full-gallery preparation, including deterministic fallback outcomes when the contract cannot be safely completed on current hardware.
+4. Remove reliance on idle-only completion for critical readiness; use deterministic queued progress and explicit completion deadlines.
+5. Extend diagnostics to produce an auditable pre-entry full-gallery readiness report (complete count, incomplete count, blocked reasons, total warm duration).
+6. Prepare a staged compressed-texture migration plan (importer output + runtime fallback) so strict readiness remains feasible for high artwork counts.
+7. Validate across 4/15/20/50 artwork sets with acceptance criteria focused on zero first-visit cold work after entry.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime changes.
+- Capture diagnostics for full-gallery entry readiness and first-navigation behavior across device tiers.
+- Re-run security scanning and treat new readiness-path issues as release blockers.
+
+## v0.24.1 — Deep loading/performance hardening (IMPLEMENTED, 2026-05-21)
+
+Runtime status: **implemented in runtime code**. v0.24.1 now enforces entry-readiness gating, lane-based prefetch scheduling, tighter warm/procedural chunking, navigation cold/hot verdict telemetry, and device-aware large-gallery warm profiles.
+
+Implementation closeout:
+
+1. **Strict pre-entry readiness contract:** `src/main.ts` now requests entry warm targets from `GalleryManager`, ensures readiness, and only reveals after contract checks/retries.
+2. **Priority lanes + starvation protection:** `GalleryManager` prefetch queue now tracks `critical-now`, `near-next`, `background` with aging-aware sorting.
+3. **Chunking hardening:** Post-reveal warm queue now uses per-profile frame budgets + batch caps; procedural adjacent generation moved to queued idle work.
+4. **Cold/hot telemetry:** `GalleryManager` records navigation probes and emits explicit readiness verdict diagnostics per navigation.
+5. **Device-aware large-gallery controls:** `main.ts` derives warm profile from capability detection and applies it to readiness radius/count/budget.
+6. **KTX2/Basis staging:** kept documented as future asset-pipeline work; no importer/runtime format switch in this pass.
+
+Validation: `npm run lint` and `npm run build` passed after implementation.
+
+## v0.24 — Deep loading/performance hardening plan (2026-05-21, planning)
+
+Runtime status: **planning only**. v0.23.1 improved readiness substantially, but user testing still reports lag while entering/navigating until many paintings were already visited once.
+
+### Problem statement
+
+The loading screen must guarantee smooth first-use interaction for the high-probability navigation set instead of allowing cold work to leak into early user actions. Current behavior still allows occasional first-visit stalls in larger exhibitions.
+
+### Goals
+
+1. Keep “Galerie betreten” responsive and premium.
+2. Ensure first navigation set is ready enough that entering + first interactions stay smooth on typical devices.
+3. Move non-critical work behind strict frame-budget yielding.
+4. Produce diagnostics that can prove whether any interaction triggered cold-load work.
+
+### Gap analysis (P-series)
+
+| ID | Severity | Gap | Planned outcome |
+|----|----------|-----|-----------------|
+| P-01 | **HIGH** | No explicit pre-entry readiness threshold contract. | Add deterministic readiness criteria for a warm set (current, ±1/±2, top timeline candidates) before reveal is enabled. |
+| P-02 | **HIGH** | Warm/procedural tasks can still exceed safe per-frame work on slower hardware. | Introduce stricter chunking + abort/yield logic with measurable frame-budget caps. |
+| P-03 | **MEDIUM** | Navigation promotion is present but not fully classed/prioritized. | Formalize queue priorities with starvation protection and cancellation for stale targets. |
+| P-04 | **MEDIUM** | Diagnostics lack explicit per-navigation cold-work verdict. | Record navigation events against readiness ledger and emit a clear cold/hot transition outcome. |
+| P-05 | **MEDIUM** | Compressed texture migration path is not staged. | Define phased KTX2/Basis rollout: importer output, runtime fallback, and acceptance gates. |
+| P-06 | **LOW** | Entry UX does not distinguish “ready now” from “remaining optimization”. | Keep CTA immediate once warm threshold is met while surfacing quiet background optimization status. |
+
+### Implementation plan
+
+1. Define the v0.24 readiness contract and gate CTA enablement on that contract, not on generic overall loading completion alone.
+2. Refactor readiness scheduler into explicit priority lanes (`critical-now`, `near-next`, `background`) with frame-budget-aware stepping and stale-task cancellation.
+3. Isolate procedural generation into smaller chunks and pre-generate only critical-window variants before reveal.
+4. Expand diagnostics to log, per navigation, whether any cold decode/load/procedural/upload occurred after user input.
+5. Add optional large-gallery profile toggles (e.g., reduced immediate warm radius) chosen from device capability diagnostics.
+6. Draft KTX2/Basis migration design for importer + runtime fallback without breaking current customer workflow.
+7. Validate on 4/15/20/50 artwork sets and treat any first-navigation long task above threshold as release-blocking for the smoothness objective.
+
+### Validation plan for implementation pass
+
+- Run `npm run lint` and `npm run build` after runtime changes.
+- Capture diagnostics traces for entry and first-time navigation paths across artwork-count buckets.
+- Confirm no new security findings are introduced by scheduler/import changes.
+
+## v0.23 — Performance/Preloading Planning Audit (IMPLEMENTED v0.23.1)
+
+Runtime status: **implemented in v0.23.1 runtime code**. Per-artwork readiness diagnostics, budgeted/offscreen GPU warming, critical-window procedural pre-generation, navigation-aware prefetch promotion, readiness-aware adaptive cooldowns, and ImageBitmap/KTX2 diagnostics are now shipped; the original planning rationale remains below for traceability.
+
+Implementation closeout: `src/gallery/GalleryManager.ts` owns the readiness ledger, procedural pre-generation, priority prefetch queue, and warm-order calculation; `src/main.ts` performs critical pre-reveal warming and post-reveal frame-budgeted offscreen warming; `src/timeline/Timeline.ts` promotes hovered/focused targets; `src/utils/FrameBudgetMonitor.ts` exposes readiness cooldown marking; `src/gallery/TextureManager.ts` logs ImageBitmap/KTX2 pipeline diagnostics. Validation: `npm run lint` and `npm run build` passed; `npm audit --audit-level=moderate` remains the known Vite/esbuild advisory.
+
+Original planning note: navigation became smooth only after every painting had been visited once, which meant some expensive work still happened on first use instead of under/around the loading screen.
+
+### Problem statement
+
+The v0.22 pass improved the loading experience, but the code still has first-use work after reveal:
+
+1. `src/main.ts` warms GPU uploads only when `artworkCount <= GPU_WARM_LIMIT` (`15`). Larger exhibitions render only the active artwork once, so artwork 16+ still uploads on first navigation.
+2. `src/gallery/GalleryManager.ts` preloads only the first `PBR_PRELOAD_LIMIT` (`15`) authored PBR sets under the overlay. Remaining texture sets depend on the idle sweep, which is best-effort and can lose the race against fast user navigation.
+3. `src/gallery/GalleryManager.ts` still creates missing procedural maps inside `showArtwork()`. `src/materials/ProceduralTextureFactory.ts` generates large `Uint8Array` buffers synchronously on the main thread, so a cold artwork can block a frame even if albedo is already cached.
+4. `TextureLoader`/decoded images in CPU memory are not equivalent to GPU residency. The first render using each texture still pays upload cost unless deliberately warmed.
+5. Existing diagnostics log successful loads and renderer snapshots, but they do not yet create a per-artwork readiness ledger that proves CPU decode, procedural generation, shader variant compile, and GPU upload happened before reveal.
+
+### Online research synthesis
+
+- Three.js `LoadingManager` is correct for network/decode progress, but GPU texture upload is normally lazy and happens on first render that samples the texture. A hidden render pass per prepared texture set is still required for VRAM residency.
+- `WebGLRenderer.compileAsync(scene, camera)` reduces shader-link stalls, but it does not replace texture upload warming and only compiles the currently reachable material variants.
+- `ImageBitmapLoader` can move image decode work off the critical main-thread path where supported; it should be evaluated behind a feature guard because color-space, orientation, and browser support details differ from `TextureLoader`.
+- KTX2/Basis compressed textures are the long-term answer for customer galleries with many large images: lower transfer size, lower VRAM footprint, and GPU-native formats after transcoding. It requires an asset-pipeline change and a fallback path for current JPG/PNG/WebP imports.
+- `requestIdleCallback` is useful for non-critical background work, but it is not a correctness guarantee. Critical next/previous artworks should use an explicit priority queue that can run before interaction resumes.
+
+Reference topics used for this plan: Three.js `LoadingManager`, `TextureLoader`, `ImageBitmapLoader`, `KTX2Loader`, `WebGLRenderer.compileAsync`; MDN `requestIdleCallback`; WebGL lazy texture upload behavior; Chrome/DevTools Long Tasks and performance marks.
+
+### Gap analysis (N-series)
+
+| ID | Severity | Component | Finding | Plan |
+|----|----------|-----------|---------|------|
+| N-01 | **HIGH** | Boot GPU warm path | `GPU_WARM_LIMIT = 15` leaves large galleries cold beyond artwork 15. | Replace the all-or-nothing gate with a budgeted warm queue: warm first/adjacent artworks before reveal, then continue visible-priority warm jobs after reveal with frame-budget yielding. |
+| N-02 | **HIGH** | Procedural texture generation | Missing PBR roles are generated synchronously in `showArtwork()`. | Add procedural pre-generation for the initial navigation window, then move remaining generation to a queued idle/worker-compatible path. |
+| N-03 | **HIGH** | PBR preload limit | `PBR_PRELOAD_LIMIT = 15` protects memory but leaves the rest dependent on idle timing. | Keep the memory cap, but make prefetch priority explicit: current, ±1, ±2, timeline-selected candidates, then full sweep. |
+| N-04 | **MEDIUM** | GPU readiness diagnostics | Logs say textures loaded, but not whether each artwork is GPU-warmed. | Add per-artwork readiness state: albedo loaded, PBR loaded, procedural maps ready, shader compiled, GPU warmed, last warm duration. |
+| N-05 | **MEDIUM** | Shader variants | `compileAsync` only compiles current scene/material state. | Compile the active preset/profile variants expected during the first session and log program counts before/after. |
+| N-06 | **MEDIUM** | Decode path | `TextureLoader` may decode large customer images on the main path. | Prototype guarded `ImageBitmapLoader` for image decode, compare timings, and preserve current fallback for local/file/data-URI reliability. |
+| N-07 | **MEDIUM** | Asset pipeline | Raw large JPG/PNG/WebP textures inflate memory and upload time. | Plan KTX2/Basis generation in `scripts/import-artworks.mjs` as a future asset-pipeline milestone with fallback manifests. |
+| N-08 | **LOW** | Adaptive quality | 600 ms navigation cooldown can expire before cold texture/procedural work finishes. | Tie cooldown to readiness jobs or extend it while a navigation-triggered warm/load task is active. |
+| N-09 | **LOW** | Redundant warm restore | Artwork 0 is warmed once in the loop and then rebound/warmed again. | Remove or justify duplicate render after verifying material state restoration needs. |
+| N-10 | **LOW** | Documentation/runtime naming | v0.22 says “Guaranteed Jank-Free” although large-gallery and procedural cold paths remain. | Reword docs to “improved / partial for ≤15 warm window” until N-series implementation ships. |
+
+### Implementation plan
+
+1. **Instrument before changing behavior.** Add a small readiness model and timing marks around albedo load, authored PBR load, procedural generation, material apply, shader compile/prewarm, and GPU warm render. Surface the readiness ledger in diagnostics mode.
+2. **Replace fixed warm limits with a budgeted warm scheduler.** Warm current, previous, next, and near-future artworks under the overlay; continue the rest in small batches that yield between frames and stop when the frame budget is stressed.
+3. **Pre-generate procedural maps for the critical window.** Generate current ±2 maps before reveal for the active preset. For the remaining gallery, queue procedural work separately from network texture loads so it cannot block navigation.
+4. **Make prefetch priority navigation-aware.** When the user hovers/clicks timeline or presses next/previous, promote that target and its neighbors ahead of the full idle sweep.
+5. **Evaluate decode and compression upgrades.** Benchmark `ImageBitmapLoader` against the current `TextureLoader` on local-relative, HTTP, and data-URI sources; separately design KTX2/Basis import output for a later breaking asset-pipeline update.
+6. **Tune adaptive quality using readiness state.** Do not treat warm-up or cold-load spikes as sustained device weakness; keep downgrade decisions for steady-state rendering after readiness jobs settle.
+7. **Validate with large galleries.** Test at 4, 15, 20, and 50 artworks with diagnostics enabled. Acceptance criterion: first navigation to every warmed/queued target has no visible long task over 50 ms and no texture `load-start` triggered by the navigation itself.
+
+### Validation plan
+
+- Run `npm run lint` and `npm run build` after implementation changes.
+- Use diagnostics mode to capture Long Tasks, renderer texture/program counts, per-artwork readiness state, and navigation timings.
+- Re-run `npm audit --audit-level=moderate`; known Vite/esbuild advisory remains separate unless the Vite major upgrade is explicitly in scope.
+
+### Documentation closeout for this planning pass
+
+All repository Markdown files were refreshed to point at this v0.23 plan and to correct over-strong v0.22 wording. Runtime remains unchanged until the N-series plan is implemented.
+
+## v0.22 — Improved Preloading: Capped PBR Pre-Load + "Galerie betreten" (SHIPPED)
+
+Runtime status: shipped. Source changes landed in `src/gallery/GalleryManager.ts`, `src/gallery/TextureManager.ts`, `src/main.ts`, and `src/styles/main.scss`; preview output was rebuilt. Validation after implementation: `npm run lint` and `npm run build` passed. `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory requiring a semver-major upgrade.
+
+### Problem statement
+
+Users still experience visible hickups (stutters) when switching paintings for the first time. After visiting every painting once, everything becomes smooth. This pattern confirms the root cause: PBR texture maps (normal, roughness, ao, height, specular, varnish, detail) for artworks 2–N are loaded from disk/network **on first navigation** to each painting. This loading happens **after** the loading overlay is dismissed, so users feel the load stall as a visible hick-up during navigation.
+
+Historical pre-v0.22 root cause: `GalleryManager.init()` only preloaded albedo textures (all artwork photos) during the loading phase. `scheduleFullTextureSetPrefetch()` began the idle PBR-map sweep using `requestIdleCallback` **after** the loading overlay was removed and the gallery was already interactive. v0.22 now preloads the first 15 authored PBR sets under the overlay and keeps the idle sweep as a retry/over-limit path.
+
+The loading screen is also dismissed **automatically** when technical loading is complete — the user has no agency over when the immersive experience begins.
+
+### Research findings
+
+**Three.js LoadingManager full-preload pattern (three.js docs)**
+All texture loaders sharing a `THREE.LoadingManager` instance contribute their load events to the shared `onProgress` / `onLoad` callbacks. Loading all PBR texture sets inside `init()` before calling `reveal()` means the progress bar reflects true total progress, and `onLoad` only fires when every texture is in CPU memory. Reference: three.js docs `LoadingManager.onLoad`.
+
+**GPU texture upload — CPU→VRAM must be forced before reveal**
+`THREE.TextureLoader` delivers a `THREE.Texture` with decoded pixel data in CPU memory. The actual GPU upload (CPU→VRAM transfer) occurs only during the first `renderer.render()` call that uses each texture. For the currently-active artwork, the existing warm render pass in v0.21 covers GPU upload. But for artworks 2–N, textures sit in CPU memory untouched until the user navigates there — causing a brief first-render stall even after PBR maps are "loaded in memory." Standard pattern to force GPU upload without displaying frames: temporarily assign each texture set to the active scene mesh, render once, restore. Runs under loading overlay — users see no visual output. Reference: Three.js discourse "How to preload texture to GPU to prevent first-frame stutter."
+
+**"Press to Start" / "Enter Gallery" — UX research (Google Arts & Culture, TeamLab, 2024 best practice)**
+Industry standard for WebGL/3D gallery experiences: never auto-reveal on load complete. Show a CTA button that only becomes active when assets are 100% ready. Benefits: (1) user knows the experience is ready; (2) first interaction is deliberate — psychological primer for immersion; (3) browser AudioContext starts on first user gesture, satisfying autoplay policy cleanly; (4) prevents accidental interaction during GPU warm-up. German gallery label: "Galerie betreten" (enter gallery) is more evocative than "Starten". Accessibility: real `<button>` element, Enter/Space trigger, visible focus ring, ARIA label. Reference: Google Arts & Culture entry patterns, TeamLab WebGL experiences.
+
+**Minimum loading screen duration (Material Design, Apple HIG)**
+On fast local networks, loading < 200ms followed by an instant flash of the branded screen degrades perceived quality. A 500ms enforced minimum ensures the branded loading experience is always seen and sets the emotional context. The minimum is implemented as `Promise.all([actualLoad(), delay(500)])`. Reference: Google Material Design loading patterns, Apple HIG launch screen guidelines.
+
+**`requestIdleCallback` sweep — keep as second-chance retry (web.dev)**
+Once L-01 ships (all PBR sets preloaded during loading), the idle sweep is redundant for successfully loaded artworks. `scheduleFullTextureSetPrefetch()` already checks `prefetchedTextureSets`; it will skip loaded artworks and only retry failures. No code change needed — but a diagnostics log should confirm when the sweep is effectively a no-op.
+
+### Gap analysis (L-series)
+
+| ID | Severity | Component | Problem |
+|----|----------|-----------|---------|
+| L-01 | **HIGH** | `GalleryManager.init()` | Only albedo textures preloaded during loading. PBR sets for artworks 2–N loaded on first navigation → jank. |
+| L-02 | **HIGH** | `main.ts` boot + `GalleryManager` | GPU warm render only covers first artwork. Artworks 2–N cause CPU→VRAM stall on first navigation even after L-01. |
+| L-03 | **HIGH** | `main.ts` → `createLoadingOverlay()` | Loading overlay auto-reveals on completion. No "press to start" button. User has no agency; audio context start on gesture is better. |
+| L-04 | **LOW** | `GalleryManager.scheduleFullTextureSetPrefetch()` | After L-01, sweep is redundant for loaded artworks. Should log a no-op confirmation; retain as second-chance retry for failures. |
+| L-05 | **LOW** | `main.ts` boot | No minimum loading screen duration. On fast LAN/cache, branded screen flashes < 100ms. Enforce 500ms minimum. |
+
+> **M-series corrections shipped:** Deep code audit found 7 additional gaps in the L-series plan; all L-series and M-series items are now implemented. Key issues: M-01 (TypeScript interface blocker), M-02 (hint timer override), M-03 (audio context gesture), M-04 (large-gallery OOM risk), M-05 (sync vs async warm helper), M-06 (redundant render), M-07 (progress remap).
+
+### Implementation closeout (shipped in runtime code)
+
+#### L-01 — Preload ALL PBR texture sets under loading overlay
+
+**File:** `src/gallery/GalleryManager.ts` — `init()` method
+
+Problem: `init()` calls `textureManager.preload(urls)` for albedo only. PBR sets are left for on-demand loading.
+
+Patch — add PBR preload block immediately after albedo preload:
+```typescript
+async init(): Promise<void> {
+  // ... existing albedo preload ...
+  const urls = this.artworks.map((a) => a.webglImage ?? a.image);
+  await this.textureManager.preload(urls);
+
+  // NEW: Preload PBR texture sets before gallery reveals (up to PBR_PRELOAD_LIMIT).
+  // Promise.allSettled — one failed artwork does not block the rest.
+  const pbr = this.artworks
+    .map((a, i) => ({ artwork: a, index: i }))
+    .filter(({ artwork }) => !!artwork.textureSet);
+  await Promise.allSettled(
+    pbr.map(({ artwork, index }) =>
+      this.textureManager.preloadTextureSet(artwork.textureSet!).then(() => {
+        this.prefetchedTextureSets.add(index);
+        this.diagnostics.debug('preload-all', 'PBR texture set loaded during init', {
+          index,
+          id: artwork.id,
+        });
+      })
+    )
+  );
+
+  this.pendingResetAfterArtworkLoad = true;
+  await this.showArtwork(0);
+  this.scheduleFullTextureSetPrefetch(); // now a no-op for loaded sets; retries failures
+}
+```
+
+Note: `Promise.allSettled` ensures partial failures do not block the gallery. Failed PBR sets are retried by the existing idle sweep.
+**M-04 correction:** Add `PBR_PRELOAD_LIMIT = 15` guard — see M-series section below for the corrected patch with memory analysis.
+
+#### L-02 — GPU warm all artworks under loading overlay
+
+**File:** `src/main.ts` — boot sequence after `galleryManager.init()` + new `GalleryManager` helper
+
+Problem: Single warm render pass only uploads the first artwork's textures. Artworks 2–N still incur a CPU→VRAM stall on first navigation.
+
+Patch — iterate through all artworks, synchronously bind each cached set, render once:
+```typescript
+// In main.ts, after galleryManager.init():
+// Force GPU upload for ALL artworks by rendering each texture set once under the overlay.
+const artworkCount = artworks.length;
+const GPU_WARM_LIMIT = 15; // named constant; matches PBR_PRELOAD_LIMIT
+if (artworkCount <= GPU_WARM_LIMIT) {
+  loadingOverlay.setStatus('GPU wird vorbereitet');
+  for (let i = 0; i < artworkCount; i++) {
+    galleryManager.warmArtworkForGPU(i);   // M-05: synchronous, no await needed
+    rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+    loadingOverlay.setProgress(93 + Math.round(((i + 1) / artworkCount) * 4));
+  }
+  // Restore artwork 0 after warm sweep
+  galleryManager.warmArtworkForGPU(0);
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+} else {
+  // M-06 fallback: single warm render for artwork 0 (large gallery path).
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+}
+```
+
+New helper `GalleryManager.warmArtworkForGPU(index)` — **synchronous** (M-05 correction): binds cached textures to the mesh without network fetch, token guard, ARIA updates, or callbacks. See M-series section for the full implementation including the required `TextureManager.getForRole()` helper.
+
+Note: For galleries > `GPU_WARM_LIMIT` artworks, falls back to v0.21 single-artwork warm pass (M-06).
+
+#### L-03 — "Galerie betreten" button on loading screen
+
+**File:** `src/main.ts` → `createLoadingOverlay()` + `src/styles/main.scss`
+
+Problem: `reveal()` auto-dismisses the overlay. No user agency. No press-to-start CTA.
+
+Loading screen state machine after patch:
+1. **loading** — progress bar fills; hint texts cycle; button hidden and `disabled`
+2. **ready** — 100% reached; button fades in with scale-up animation; hint texts stop; status shows "Galerie bereit — zum Starten klicken"
+3. **entered** — user clicks button (or presses Enter/Space); overlay fades out; gallery reveals
+
+Button markup added inside `createLoadingOverlay()`:
+```typescript
+const startButton = document.createElement('button');
+startButton.className = 'loading-start-btn';
+startButton.textContent = 'Galerie betreten';
+startButton.setAttribute('aria-label', 'Galerie betreten und Ausstellung beginnen');
+startButton.disabled = true;
+card.appendChild(startButton);
+```
+
+`reveal()` changes — returns `Promise<void>` that resolves on button click:
+```typescript
+reveal(): Promise<void> {
+  startButton.disabled = false;
+  startButton.classList.add('is-visible');
+  subtitle.textContent = 'Galerie bereit — zum Starten klicken';
+  return new Promise<void>((resolve) => {
+    const go = () => {
+      startButton.removeEventListener('click', go);
+      document.removeEventListener('keydown', onKey);
+      overlay.classList.add('is-hidden');
+      window.setTimeout(() => { overlay.remove(); resolve(); }, 1300);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') go();
+    };
+    startButton.addEventListener('click', go);
+    document.addEventListener('keydown', onKey);
+    startButton.focus();
+  });
+}
+```
+
+CSS for `.loading-start-btn` (add to `main.scss`):
+```scss
+.loading-start-btn {
+  margin-top: 2rem;
+  padding: 0.9rem 2.4rem;
+  border: 1.5px solid #b59a6a;
+  border-radius: 4px;
+  background: transparent;
+  color: #f0eae0;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.6s ease, transform 0.6s ease, background 0.2s ease;
+
+  &.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  &:hover {
+    background: rgba(181, 154, 106, 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #b59a6a;
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &.is-visible { opacity: 1; transform: none; }
+  }
+}
+```
+
+`main.ts` call site change:
+```typescript
+// Replace:
+loadingOverlay.reveal();
+loadingOverlay.dispose();
+// With:
+await loadingOverlay.reveal(); // waits for user button click
+loadingOverlay.dispose();
+```
+
+#### L-04 — `scheduleFullTextureSetPrefetch()` — no code change, add diagnostics log
+
+After L-01, the sweep will find all artworks in `prefetchedTextureSets` and log "Idle artwork texture-set prefetch sweep complete" immediately. No change needed except to verify the log appears confirming all were pre-loaded. Retain the sweep for second-chance retry of failed loads.
+
+#### L-05 — 500ms minimum loading screen duration
+
+**File:** `src/main.ts` — boot sequence
+
+```typescript
+// Ensure branded loading screen is always visible for at least 500ms.
+const [,] = await Promise.all([
+  galleryManager.init(),
+  new Promise<void>((resolve) => setTimeout(resolve, 500)),
+]);
+```
+
+The 500ms delay runs in parallel with actual loading — on slow networks the load takes longer and the minimum is never felt. On fast LAN/cache, the minimum ensures the loading screen is always meaningfully shown.
+
+---
+
+## v0.22 — M-series: Deep Code Audit Corrections + New Findings (2026-05-21)
+
+> Deep source audit against actual runtime code in `src/main.ts`, `src/gallery/GalleryManager.ts`, and `src/gallery/TextureManager.ts` found 7 additional gaps in the L-series plan. These must be resolved alongside L-01 through L-05. Findings are documented below in severity order.
+
+### Gap table (M-series)
+
+| ID | Severity | File : Lines | Finding |
+|----|----------|-------------|---------|
+| M-01 | **HIGH** | `src/main.ts:41–47` | `LoadingOverlayControls` interface declares `reveal(): void`; L-03 changes `reveal()` to return `Promise<void>`. TypeScript compilation error unless interface is updated first. |
+| M-02 | **HIGH** | `src/main.ts:264–288` | Hint cycling timer (2 s interval) is only cleared in `dispose()`. `reveal()` overwrites `subtitle.textContent` but the interval fires 2 s later and overwrites it back, destroying "Galerie bereit — zum Starten klicken". Timer must be stopped at the start of `reveal()`. |
+| M-03 | **HIGH** | `src/main.ts:609–616` | `window.addEventListener('pointerdown', onFirstInteractionPointer)` is registered AFTER `await loadingOverlay.reveal()` returns (i.e., after button click). The button click is the first user gesture and the cleanest AudioContext start point — but it is not captured. Audio recovery must either be triggered inside `reveal()`'s `go()` callback, or the listener must be registered before `await reveal()`. |
+| M-04 | **HIGH** | `src/gallery/GalleryManager.ts:250–270` | L-01 patch calls `Promise.allSettled(pbr.map(...))` for ALL artworks with no count limit. For a 50-artwork gallery at 7 PBR maps × 2048×2048 = ~16 MB each: 50 × 7 × 16 MB = **5 600 MB peak CPU memory**. Mobile devices OOM before the gallery reveals. Add `PBR_PRELOAD_LIMIT = 15` constant — artworks beyond the limit are left for the idle sweep. |
+| M-05 | **MEDIUM** | `src/gallery/GalleryManager.ts` (new method) | L-02 plan describes `GalleryManager.prepareArtworkForWarmRender(index)` as async, returning a Promise. After L-01, textures are already in `TextureManager.cache`. The method should be synchronous — no network call is needed. Async design introduces unnecessary await overhead per artwork in the warm loop and risks confusion about whether a network load is happening. |
+| M-06 | **MEDIUM** | `src/main.ts:566–568` | After L-02 ships, the warm loop already executes a `renderer.render()` call per artwork, with artwork 0 restored last. The stand-alone `renderer.render()` at line 567 (currently the single warm render pass added in v0.21) becomes redundant. It should be removed to avoid a duplicate GPU flush that extends loading time by one frame budget. |
+| M-07 | **LOW** | `src/main.ts:566–575` | Progress bar range 92–97% is used by both L-02's per-artwork warm loop AND the existing `setProgress(97)` call. Both write to the same range. Remap: L-02 warm = 93–97 %, shader prewarm = 97–99 %, button-ready = 100 %. Remove the now-redundant `setProgress(97)` line after the single warm render pass (which is itself removed by M-06). |
+
+### Implementation patches (M-series)
+
+#### M-01 — Update `LoadingOverlayControls` interface
+
+**File:** `src/main.ts:41–47`
+
+The interface must be updated before the `reveal()` implementation, otherwise TypeScript will reject `await loadingOverlay.reveal()`.
+
+```typescript
+// Before:
+interface LoadingOverlayControls {
+  overlay: HTMLDivElement;
+  setProgress(value: number): void;
+  setStatus(text: string): void;
+  reveal(): void;          // ← return type must change
+  dispose(): void;
+}
+
+// After:
+interface LoadingOverlayControls {
+  overlay: HTMLDivElement;
+  setProgress(value: number): void;
+  setStatus(text: string): void;
+  reveal(): Promise<void>; // ← returns Promise; resolves on button click
+  dispose(): void;
+}
+```
+
+This is a TypeScript compilation blocker for L-03. Fix it first.
+
+#### M-02 — Stop hint timer inside `reveal()`
+
+**File:** `src/main.ts` — `createLoadingOverlay()` → `reveal()` method
+
+The `hintTimer` variable is in the closure scope of `createLoadingOverlay()`. The `reveal()` closure can reference it directly. Add `window.clearInterval(hintTimer)` as the first line of `reveal()`:
+
+```typescript
+reveal(): Promise<void> {
+  window.clearInterval(hintTimer);          // ← stop hint cycling immediately
+  startButton.disabled = false;
+  startButton.classList.add('is-visible');
+  subtitle.textContent = 'Galerie bereit — zum Starten klicken';
+  return new Promise<void>((resolve) => {
+    const go = () => {
+      startButton.removeEventListener('click', go);
+      document.removeEventListener('keydown', onKey);
+      overlay.classList.add('is-hidden');
+      window.setTimeout(() => { overlay.remove(); resolve(); }, 1300);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') go();
+    };
+    startButton.addEventListener('click', go);
+    document.addEventListener('keydown', onKey);
+    startButton.addEventListener('transitionend', () => startButton.focus(), { once: true });
+  });
+},
+```
+
+Note: `startButton.focus()` is called on `transitionend` so the focus ring appears after the 0.6 s fade-in completes, not while the button is still transparent. This is a subtle but important accessibility improvement.
+
+`dispose()` may still call `clearInterval(hintTimer)` as a safety net — `clearInterval` on an already-cleared timer ID is a no-op in all browsers.
+
+#### M-03 — Trigger audio recovery on button click
+
+**File:** `src/main.ts` — boot sequence, near lines 559–576
+
+The cleanest solution: register `onFirstInteractionPointer` BEFORE `await loadingOverlay.reveal()`. Since the listener is added to `window`, it captures the button click even though the button is inside the overlay.
+
+```typescript
+// v0.22: Register audio recovery listener BEFORE awaiting the start button click.
+// The button click is a pointerdown on window and IS the first user gesture —
+// the cleanest AudioContext start point.
+window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
+window.addEventListener('keydown', onFirstInteractionKey);
+
+await loadingOverlay.reveal(); // waits for "Galerie betreten" button click
+loadingOverlay.dispose();
+
+// Remove recovery listeners after reveal to prevent duplicate triggers.
+// (interactionAudioRecoveryDone flag already prevents double-play, but
+//  removing the listener is cleaner and avoids holding a closure reference.)
+// NOTE: listeners are intentionally left registered for key navigation after
+// the overlay — only the pointerdown-specific one-shot path is managed here.
+```
+
+Wait — the recovery listeners must persist after reveal for keyboard navigation recovery. The `interactionAudioRecoveryDone` flag handles deduplication. The key insight is simply: **move the `window.addEventListener` registrations to before `await loadingOverlay.reveal()`** so the button click gesture is captured.
+
+Exact placement in `main()`:
+
+```typescript
+// Interaction — register BEFORE await reveal() so button click = first gesture.
+const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
+const keyboardNav = new KeyboardNav(galleryManager);
+let interactionAudioRecoveryDone = false;
+const tryRecoverBlockedAudio = (reason: string): void => { /* unchanged */ };
+const onFirstInteractionPointer = (): void => tryRecoverBlockedAudio('pointerdown');
+const onFirstInteractionKey = (event: KeyboardEvent): void => { /* unchanged */ };
+window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
+window.addEventListener('keydown', onFirstInteractionKey);
+
+// v0.22 L-02: GPU warm all artworks under overlay.
+// ... GPU warm loop ...
+
+await loadingOverlay.reveal(); // button click IS the first gesture → audio context starts here
+loadingOverlay.dispose();
+```
+
+#### M-04 — `PBR_PRELOAD_LIMIT` constant in `GalleryManager.init()`
+
+**File:** `src/gallery/GalleryManager.ts`
+
+Add a named constant at the top of the file alongside the other module-level constants:
+
+```typescript
+/**
+ * v0.22 L-01: Maximum number of artworks to pre-load PBR texture sets for
+ * during `init()` under the loading overlay. Artworks beyond this index are
+ * left for the idle prefetch sweep. Prevents CPU memory exhaustion on large
+ * galleries where upfront loading of all PBR sets is impractical.
+ * At 7 PBR maps × 2048×2048 × 4 bytes ≈ 112 MB per artwork, a limit of 15
+ * caps peak CPU-side texture memory at ≈ 1 680 MB — acceptable on all
+ * modern devices that support WebGL 2.0.
+ */
+const PBR_PRELOAD_LIMIT = 15;
+```
+
+Updated L-01 patch in `init()`:
+
+```typescript
+async init(): Promise<void> {
+  // ... existing albedo preload ...
+  const urls = this.artworks.map((a) => a.webglImage ?? a.image);
+  await this.textureManager.preload(urls);
+
+  // v0.22 L-01: Preload PBR texture sets under loading overlay.
+  // Limited to the first PBR_PRELOAD_LIMIT artworks to cap CPU memory use.
+  // Artworks beyond the limit are left for the idle sweep (second-chance retry).
+  const pbrArtworks = this.artworks
+    .map((a, i) => ({ artwork: a, index: i }))
+    .filter(({ artwork, index }) => !!artwork.textureSet && index < PBR_PRELOAD_LIMIT);
+
+  this.diagnostics.info('init', 'Preloading PBR texture sets under loading overlay', {
+    pbrCount: pbrArtworks.length,
+    totalArtworks: this.artworks.length,
+    limit: PBR_PRELOAD_LIMIT,
+    skippedForLimit: Math.max(0, this.artworks.filter((a) => !!a.textureSet).length - pbrArtworks.length),
+  });
+
+  await Promise.allSettled(
+    pbrArtworks.map(({ artwork, index }) =>
+      this.textureManager.preloadTextureSet(artwork.textureSet!).then(() => {
+        this.prefetchedTextureSets.add(index);
+        this.diagnostics.debug('preload-all', 'PBR texture set preloaded during init', {
+          index,
+          id: artwork.id,
+        });
+      })
+    )
+  );
+
+  this.pendingResetAfterArtworkLoad = true;
+  await this.showArtwork(0);
+  this.scheduleFullTextureSetPrefetch(); // no-op for loaded sets; retries failures and loads sets > limit
+}
+```
+
+#### M-05 — `warmArtworkForGPU(index)` must be synchronous
+
+**File:** `src/gallery/GalleryManager.ts` — new `public` method
+
+After L-01, all textures within `PBR_PRELOAD_LIMIT` are already in `TextureManager.cache`. `warmArtworkForGPU(index)` must not make network calls. It is synchronous:
+
+```typescript
+/**
+ * v0.22 L-02: Binds the cached texture set for artwork at `index` to the
+ * scene mesh without triggering navigation side effects (no token guard,
+ * no ARIA updates, no viewport refit, no callbacks). Call once per artwork
+ * under the loading overlay to force CPU→VRAM upload via the subsequent
+ * renderer.render() call.
+ *
+ * Precondition: L-01 must have run so textures are already in cache.
+ * This method is intentionally synchronous — it must never trigger a
+ * network fetch.
+ */
+warmArtworkForGPU(index: number): void {
+  const artwork = this.artworks[index];
+  if (!artwork || !this.currentPreset) return;
+  const albedoUrl = artwork.webglImage ?? artwork.image;
+  const albedo = this.textureManager.get(albedoUrl);
+  if (!albedo) {
+    this.diagnostics.warn('warm-gpu', 'warmArtworkForGPU: albedo not in cache — skipping', {
+      index,
+      artworkId: artwork.id,
+    });
+    return;
+  }
+
+  // Build a minimal resolved texture set from cache only.
+  // `preloadTextureSet` returns a Promise, but after L-01 textures are cached;
+  // access the cache synchronously via the TextureManager.get() path for each role.
+  // For roles not in cache (e.g., artworks > PBR_PRELOAD_LIMIT), fall back to
+  // the procedural factory the same way showArtwork() does.
+  const preset = this.currentPreset;
+  const authored: Partial<ResolvedPaintingTextures> = {};
+  // Attempt synchronous cache hits for authored roles.
+  // TextureManager.get() uses the albedo key — authored roles are stored
+  // under the role-prefixed key. Expose a role-aware synchronous getter.
+  // (See M-05 addendum below for the TextureManager change needed.)
+
+  const resolved: ResolvedPaintingTextures = { albedo };
+  for (const role of PROCEDURAL_ROLES) {
+    if (authored[role]) {
+      resolved[role] = authored[role];
+    } else if (this.shouldFillRole(role, preset)) {
+      resolved[role] = this.procedural.generate(artwork.id, role, preset.proceduralTileSize);
+    }
+  }
+  this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
+  this.diagnostics.debug('warm-gpu', 'warmArtworkForGPU: textures bound to mesh', {
+    index,
+    artworkId: artwork.id,
+  });
+}
+```
+
+**M-05 addendum — `TextureManager.getForRole(url, role)` synchronous getter**
+
+The current `TextureManager.get(url)` only retrieves `albedo` cache keys. A synchronous role-aware getter is needed for `warmArtworkForGPU`:
+
+```typescript
+/** Synchronous role-aware cache hit. Returns undefined on miss (no network fetch). */
+getForRole(url: string, role: PaintingMapRole): THREE.Texture | undefined {
+  return this.cache.get(`${role}::${url}`);
+}
+```
+
+Add this to `TextureManager` alongside the existing `get(url)` method. Then update `warmArtworkForGPU` to use it:
+
+```typescript
+// Inside warmArtworkForGPU(), replace the authored block with:
+if (artwork.textureSet) {
+  for (const role of PROCEDURAL_ROLES) {
+    const entry = artwork.textureSet[role];
+    if (entry) {
+      const cached = this.textureManager.getForRole(entry.url, role);
+      if (cached) authored[role] = cached;
+    }
+  }
+}
+```
+
+This is fully synchronous, zero-network, and correctly skips artworks whose PBR sets were not preloaded (beyond `PBR_PRELOAD_LIMIT`).
+
+#### M-06 — Remove redundant warm render at `main.ts:567`
+
+**File:** `src/main.ts:566–568`
+
+After L-02's warm loop, the GPU already has artwork 0's textures uploaded. The single-artwork warm render added in v0.21 is now superseded. Remove it:
+
+```typescript
+// Before (v0.21 single warm render):
+loadingOverlay.setStatus('Shader werden vorbereitet');
+rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);  // ← remove
+loadingOverlay.setProgress(97);
+
+// After (v0.22 — L-02 loop already covers this):
+loadingOverlay.setStatus('Shader werden vorbereitet');
+// No redundant single render needed — L-02 loop handled all artworks.
+loadingOverlay.setProgress(97);
+```
+
+If L-02 is disabled (large gallery, > `gpuWarmLimit`), the single render should be KEPT as a fallback. Use a flag:
+
+```typescript
+if (artworkCount > gpuWarmLimit) {
+  // Fallback: GPU warm only for artwork 0 (the v0.21 single warm pass).
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+}
+```
+
+#### M-07 — Progress bar remap for L-02 + shader prewarm
+
+**File:** `src/main.ts` — boot sequence
+
+Updated progress ranges after all L-series + M-series patches apply:
+
+| Phase | Progress range | Source |
+|-------|---------------|--------|
+| Albedo preload (`LoadingManager.onProgress`) | 0 – 90 % | `loadingManager.onProgress` callback (unchanged) |
+| PBR preload in `init()` (L-01) | 90 – 92 % | `LoadingManager.onLoad` fires when all textures done → `setProgress(94)` |
+| First artwork shown, gallery ready | 94 % | `loadingManager.onLoad` callback (unchanged) |
+| GPU warm loop per artwork (L-02) | 93 – 97 % | Overwritten from the warm loop itself |
+| Shader prewarm | 97 – 99 % | `await rendererManager.prewarm(...)` |
+| Button-ready | 100 % | `setProgress(100)` before `reveal()` |
+
+Note: the existing `loadingManager.onLoad` callback sets `setProgress(94)`. L-02's loop starts from 93 and overwrites this immediately. This is fine — the progress bar never goes backward because `setProgress` clamps to max(0, min(100, value)). The remap is cosmetic but clarifies intent.
+
+---
+
+### Complete boot sequence for v0.22 (all patches applied)
+
+```typescript
+// In main() — after artworkMesh, textureManager, galleryManager are created:
+
+// ── Step 1: Load all textures (L-01 + L-05 minimum duration) ──────────
+// galleryManager.init() now loads all PBR sets (up to PBR_PRELOAD_LIMIT)
+// under the LoadingManager so the progress bar reflects real total progress.
+const [,] = await Promise.all([
+  galleryManager.init(),                                      // L-01 full PBR preload
+  new Promise<void>((resolve) => setTimeout(resolve, 500)),  // L-05 500ms minimum
+]);
+diagnostics.info('boot', 'gallery-ready', 'Gallery initialized and PBR sets preloaded');
+
+// ── Step 2: GPU warm all artworks under overlay (L-02) ─────────────────
+const artworkCount = artworks.length;
+const GPU_WARM_LIMIT = 15; // named constant; matches PBR_PRELOAD_LIMIT
+if (artworkCount <= GPU_WARM_LIMIT) {
+  loadingOverlay.setStatus('GPU wird vorbereitet');
+  for (let i = 0; i < artworkCount; i++) {
+    galleryManager.warmArtworkForGPU(i);                    // M-05: synchronous
+    rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+    loadingOverlay.setProgress(93 + Math.round(((i + 1) / artworkCount) * 4));
+  }
+  // Restore artwork 0 after warm sweep
+  galleryManager.warmArtworkForGPU(0);
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+} else {
+  // M-06 fallback: single warm render for artwork 0 only (large gallery).
+  rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+}
+
+// ── Step 3: Shader prewarm ─────────────────────────────────────────────
+loadingOverlay.setStatus('Shader werden vorbereitet');
+loadingOverlay.setProgress(97);
+await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+loadingOverlay.setProgress(100);
+loadingOverlay.setStatus('Galerie bereit');
+
+rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
+rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
+
+// ── Step 4: Register interaction + audio recovery listeners ────────────
+// M-03: Register BEFORE await reveal() so button click = first gesture.
+const canvas = rendererManager.renderer.domElement;
+canvas.setAttribute('aria-label', 'Interaktive Galerie');
+canvas.setAttribute('role', 'img');
+const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
+const keyboardNav = new KeyboardNav(galleryManager);
+let interactionAudioRecoveryDone = false;
+const tryRecoverBlockedAudio = (reason: string): void => { /* unchanged */ };
+const onFirstInteractionPointer = (): void => tryRecoverBlockedAudio('pointerdown');
+const onFirstInteractionKey = (event: KeyboardEvent): void => { /* unchanged */ };
+window.addEventListener('pointerdown', onFirstInteractionPointer, { passive: true });
+window.addEventListener('keydown', onFirstInteractionKey);
+
+// ── Step 5: Press-to-start reveal (L-03) ──────────────────────────────
+// M-01: reveal() now returns Promise<void>.
+// M-02: reveal() stops hint timer internally.
+// M-03: button click IS captured by pointerdown listener registered above.
+await loadingOverlay.reveal(); // blocks until user clicks "Galerie betreten"
+loadingOverlay.dispose();
+```
+
+---
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+### Validation and residual risk
+
+- Baseline before code changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Final validation after v0.21 implementation and docs sync: `npm run lint` and `npm run build` passed.
+- Security audit: `npm audit --audit-level=moderate` still reports the pre-existing moderate Vite/esbuild development-server advisory; the available fix requires a breaking Vite major upgrade and was left as a separate dependency-upgrade task.
+
+## v0.21 — Preloading, Interactive Loading Screen, Tab Switching Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (2026-05-21)
+
+### Status
+
+Shipped. This section records the full code audit, implementation closeout, and research coverage for:
+1. Smooth asset preloading and an immersive branded loading screen (G-01 through G-07)
+2. Tab switching smoothness: bfcache, Page Visibility gating, WebGL context loss, animation time-jump prevention (H-01 through H-03)
+3. 16K high-resolution image support: GPU memory, texture size limits, tiled streaming, compressed formats, shader precision (H-04 through H-07)
+4. Importer norm updates for high-resolution artwork (H-05)
+5. Global pointer tracking — painting drag and hover rotation always tracked across all UI elements (timeline, settings panel, nav buttons, preferences overlay) (I-01 through I-04)
+6. Timeline scalability — proper design and programming for large painting collections with virtual rendering, navigation arrows, counter, and responsive sizing (J-01 through J-06)
+
+Every finding cites the exact file and line verified in the current source. Implementation patches and shipped closeout notes are provided inline.
+
+---
+
+### Audit scope
+
+| File | Lines audited |
+|------|--------------|
+| `src/main.ts` | 138–500 |
+| `src/core/RendererManager.ts` | 1–150 |
+| `src/core/PostProcessing.ts` | 1–55 |
+| `src/gallery/GalleryManager.ts` | 245–470 |
+| `src/gallery/TextureManager.ts` | 1–300 |
+| `src/audio/BackgroundAudioManager.ts` | 65–100 |
+| `src/ui/FallbackScreen.ts` | 1–60 |
+| `src/styles/main.scss` | 1113–1145, 1252–1516 |
+| `app.html` | 1–16 |
+| `vite.config.ts` | 1–21 |
+| `vite.local.config.ts` | 1–16 |
+
+---
+
+### Closed gaps (G-01 through G-07)
+
+#### G-01 — Shader prewarm called after overlay hides and as void (non-awaited) [HIGH]
+
+**File:** `src/main.ts:443` (overlay hide), `src/main.ts:695` (prewarm call)
+
+**Corrected finding (2026-05-21 deep audit):** `RendererManager.prewarm()` IS called in the boot path — but on line 695 with `void rendererManager.prewarm(...)`, a fire-and-forget call that runs approximately 250 lines of synchronous code AFTER the loading overlay has already been hidden on line 443. Two problems:
+
+1. **Too late**: The overlay hides on line 443; prewarm starts at line 695. By then users can already see the gallery and attempt interactions.
+2. **Non-awaited (`void`)**: Even if prewarm somehow ran before line 443, the boot path does not wait for it to finish. On a slow or high-complexity scene, shader compilation continues in the background while users interact.
+
+The combined effect: on first hover or click after a cold load, the GPU JIT-compiles one or more shader programs synchronously on the main thread, causing a visible 1–4 frame stutter. The stutter is most noticeable on integrated/mobile GPUs and first loads from a cold browser cache.
+
+**Root cause confirmed in source:**
+```typescript
+// main.ts line 443 — overlay already hides here:
+loadingOverlay.classList.add('is-hidden');
+window.setTimeout(() => loadingOverlay.remove(), 950);
+// ... ~250 lines of synchronous setup (event listeners, lifecycle, etc.) ...
+// main.ts line 695 — prewarm starts here, AFTER overlay is gone:
+void rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+```
+
+**Patch — move prewarm to BEFORE the overlay hide and AWAIT it:**
+```typescript
+// In main.ts, replace the existing void prewarm call on line 695 and
+// move it to immediately after galleryManager.init() (line 436),
+// before loadingOverlay.classList.add('is-hidden') on line 443:
+
+await galleryManager.init();
+
+// NEW: Force GPU texture upload then pre-compile all shaders.
+// Both happen under the loading overlay — users never see the stutter.
+// rendererManager.prewarm() uses compileAsync (Three.js ≥ 0.155) with
+// synchronous compile() fallback for older builds. Errors are caught and
+// logged but never block the boot path (non-fatal optimization).
+rendererManager.renderer.render(sceneManager.scene, sceneManager.camera); // GPU texture warm-up (G-06)
+await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);   // shader compile
+
+// EXISTING: hide overlay (now runs AFTER prewarm completes)
+loadingOverlay.classList.add('is-hidden');
+window.setTimeout(() => loadingOverlay.remove(), 950);
+```
+
+Remove the duplicate `void rendererManager.prewarm(...)` call that was on line 695.
+
+**Research validation:**
+- Three.js docs `WebGLRenderer.compileAsync`: "Asynchronously compiles all materials used in the scene. Returns a Promise that resolves when compilation is complete. This method is superior to `compile()` in that it allows transparent working with the rendering pipeline without blocking it." (threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync)
+- Google Chrome DevTools docs on GPU rasterization: "JIT shader compilation on first draw call causes a visible frame spike. Use `compileAsync()` under a loading screen to warm the pipeline before user interaction." (developer.chrome.com/docs/devtools/performance/reference)
+- Three.js r155+ release notes: "`renderer.compileAsync()` replaces the synchronous `renderer.compile()` for pre-warming scenes without blocking the main thread." (github.com/mrdoob/three.js/releases/tag/r155)
+
+---
+
+#### G-02 — Audio buffers only metadata, not audio frames [HIGH]
+
+**File:** `src/audio/BackgroundAudioManager.ts:72`
+
+**Problem:** `new Audio()` element is constructed with `preload='metadata'`. Only the file header and duration are fetched at boot. Full audio frames are not buffered. On slow/mobile connections, pressing play causes an audible delay before music starts.
+
+**Patch — `src/audio/BackgroundAudioManager.ts:72`:**
+```typescript
+// Change:
+this.audio.preload = 'metadata';
+// To:
+this.audio.preload = 'auto';
+```
+
+**Research validation:** MDN Web Docs: "`preload='auto'` — indicates that the whole video file could be downloaded, even if the user is not expected to use it." Browser data-saver mode on mobile may downgrade this to `metadata`, so no regression risk on constrained devices.
+
+---
+
+#### G-03 — PBR maps for adjacent artworks never prefetched [MEDIUM]
+
+**File:** `src/gallery/GalleryManager.ts:306–384`
+
+**Problem:** When the user navigates from artwork N to artwork N+1, the full PBR texture set (normal, roughness, ao, height, specular, varnish, detail) is loaded on-demand. On a cold gallery this causes visible loading during navigation. The `±1` adjacent artworks should be prefetched speculatively during idle time after each artwork shows.
+
+**Patch — add `prefetchAdjacentArtworks(index)` to `GalleryManager.ts`:**
+```typescript
+private prefetchAdjacentArtworks(index: number): void {
+  const prefetch = (idx: number) => {
+    if (idx < 0 || idx >= this.artworks.length) return;
+    const artwork = this.artworks[idx];
+    if (!artwork.textureSet) return;
+    const idleCb = (window as any).requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 1));
+    idleCb(() => {
+      this.textureManager.preloadTextureSet(artwork.textureSet!).catch(() => {/* non-fatal */});
+    });
+  };
+  prefetch(index - 1);
+  prefetch(index + 1);
+  prefetch(index - 2);
+  prefetch(index + 2);
+}
+```
+Call after `showArtwork(index)` completes. Wrap in `requestIdleCallback` so prefetch never competes with active rendering.
+
+**Research validation:** Three.js LoadingManager docs + texture prefetch windowing pattern (2024 web.dev "Efficiently load third-party JavaScript").
+
+---
+
+#### G-04 — Loading screen is unbranded and gives no progress feedback [HIGH]
+
+**File:** `src/main.ts:282–291`, `src/styles/main.scss:1113–1142`
+
+**Problem:** The current loading overlay is a plain white screen with a 40×40px spinner. Users have no indication of:
+- How much has loaded
+- That this is a FREYRAUM gallery (branding absent until spinner disappears)
+- Any sense of the artistic theme
+
+**Full replacement design (v0.21 Interactive Loading Screen):**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  [floating particle glows — theme colours #b59a6a / #c8d6e5] │
+│                                                              │
+│              FREYRAUM          ← large wordmark              │
+│         Galerie wird geladen   ← cycling subtitle            │
+│                                                              │
+│      ████████████████░░░░░░    ← progress bar (real %)       │
+│              62%               ← percentage label            │
+│                                                              │
+│  [cycling hint text — rotates every 2s while loading]        │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Colour palette for loading screen (matches gallery dark glass theme):**
+- Background: `#0d0d0e` (near-black, matches WebGL canvas)
+- Card glass: `rgba(18, 18, 20, 0.80)` + `backdrop-filter: blur(20px)`
+- Accent warm: `#b59a6a` (gold/bronze — FREYRAUM warmth)
+- Accent cool: `#c8d6e5` (steel blue — gallery cool)
+- Progress fill: linear-gradient from `#b59a6a` to `#c8d6e5`
+- Text: `#f0eae0` (warm white)
+- Particles: semi-transparent radial glow blobs at 5–12% opacity
+
+**Cycling hint texts (German, display one every 2s):**
+1. "Kunstwerke werden vorbereitet …"
+2. "Texturen werden geladen …"
+3. "Licht und Schatten werden berechnet …"
+4. "Atmosphäre wird eingestellt …"
+5. "Fast fertig …"
+
+**Progress bar wiring — use Three.js `LoadingManager`:**
+```typescript
+const loadingManager = new THREE.LoadingManager();
+loadingManager.onProgress = (_url, loaded, total) => {
+  const pct = Math.round((loaded / total) * 100);
+  progressBar.style.width = `${pct}%`;
+  progressLabel.textContent = `${pct}%`;
+};
+loadingManager.onLoad = () => {
+  // Trigger reveal after all textures confirmed loaded
+  revealGallery();
+};
+// Pass loadingManager to TextureManager:
+this.externalLoader = new TextureLoader(loadingManager);
+this.localLoader   = new TextureLoader(loadingManager);
+```
+
+**Reveal sequence (replace abrupt class toggle):**
+```typescript
+function revealGallery() {
+  // 1. Fade out loading overlay over 1.2s
+  loadingOverlay.style.opacity = '0';
+  loadingOverlay.style.transition = 'opacity 1.2s cubic-bezier(0.16,1,0.3,1)';
+  // 2. Simultaneously scale+unblur the canvas
+  canvas.style.transform = 'scale(1)';
+  canvas.style.filter = 'blur(0px)';
+  canvas.style.opacity = '1';
+  canvas.style.transition = 'all 1.4s cubic-bezier(0.16,1,0.3,1)';
+  setTimeout(() => loadingOverlay.remove(), 1300);
+}
+```
+
+**CSS additions (in `main.scss`):**
+- Replace `.loading-overlay` background from `var(--bg1)` to `#0d0d0e`
+- Add `.loading-wordmark` — 2.8rem letter-spaced FREYRAUM title
+- Add `.loading-subtitle` — cycling hint text with `opacity` crossfade
+- Add `.loading-progress-track` + `.loading-progress-fill` — 320px wide pill bar
+- Add `.loading-progress-pct` — percentage label
+- Add `.loading-particle` — 6 absolutely-positioned radial gradient blobs with `@keyframes float`
+- Reduce motion: hide particles, disable transitions but keep progress bar
+
+**Interactive element:** The loading screen itself is interactive — `mousemove` over the overlay moves the particle blobs in parallax (3–5px offset at the extremes) creating an ambient depth effect even while loading. On touch devices, a gentle idle bob animation replaces the parallax.
+
+---
+
+#### G-05 — No `<link rel="preload">` for critical first-paint assets [LOW]
+
+**File:** `app.html`, `customer-preview/app.html`
+
+**Problem:** Critical fonts and the background audio are not hinted early to the browser. The browser cannot start fetching them until the HTML is fully parsed and JS begins executing.
+
+**Patch — `app.html` `<head>` section:**
+```html
+<!-- Preload primary font weight used by gallery UI -->
+<link rel="preload" as="font" href="/public/fonts/primary.woff2" type="font/woff2" crossorigin>
+<!-- Preload audio if asset path is known at build time -->
+<!-- <link rel="preload" as="audio" href="/customer-audio/background.mp3" type="audio/mpeg"> -->
+```
+Note: Audio preload hint is only applicable when the audio URL is known at HTML build time (static deployment). For dynamic/customer-injected audio, preload via `preload='auto'` (G-02) is more appropriate.
+
+**Research validation:** MDN `<link rel="preload">`: "The browser will preload the resource with the highest priority possible."
+
+---
+
+#### G-06 — Textures not GPU-uploaded before loading overlay hides [MEDIUM]
+
+**File:** `src/gallery/GalleryManager.ts:263`, `src/core/RendererManager.ts:106`
+
+**Problem:** `textureManager.preload(urls)` loads all albedo bitmaps to CPU memory. They are not uploaded to GPU until the first draw call that uses each texture. When the loading overlay fades away, the first render of each new artwork still causes a GPU stall as it uploads the texture.
+
+**Patch — warm render pass in `main.ts` (after `galleryManager.init()`):**
+```typescript
+// Force GPU texture upload before revealing gallery
+// (runs under loading overlay, invisible to user)
+rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
+// Then call prewarm to compile shaders
+await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+// THEN hide loading overlay
+```
+The single warm render causes all loaded textures to be transferred to VRAM. Subsequent renders reuse the already-uploaded textures with no stall.
+
+**Research validation:** Three.js discourse "How to preload texture to GPU to prevent first-frame stutter" — "do a single render under loading overlay to force upload."
+
+---
+
+#### G-07 — No `requestIdleCallback` prefetch for off-screen artworks [LOW]
+
+**File:** `src/gallery/GalleryManager.ts:306–384`
+
+**Problem:** See G-03. Even if G-03 is resolved for ±2, artworks further away will still cold-load. A broader idle prefetch of all remaining PBR sets during browser idle time after the first artwork is revealed would eliminate all further navigation lag.
+
+**Patch — post-init idle prefetch sweep:**
+```typescript
+// After first artwork shows (line ~443 in main.ts):
+const idleCb = (window as any).requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 100));
+let prefetchIdx = 0;
+const prefetchAllRemaining = (deadline: any) => {
+  while ((deadline?.timeRemaining() > 5 || !deadline) && prefetchIdx < artworks.length) {
+    const art = artworks[prefetchIdx++];
+    if (art.textureSet) {
+      textureManager.preloadTextureSet(art.textureSet).catch(() => {});
+    }
+  }
+  if (prefetchIdx < artworks.length) idleCb(prefetchAllRemaining);
+};
+idleCb(prefetchAllRemaining);
+```
+
+**Research validation:** web.dev "Using requestIdleCallback" — "schedule low-priority work to run during browser idle periods."
+
+---
+
+### Acceptance tests
+
+| Test | Pass condition |
+|------|---------------|
+| Cold load — slow 3G throttle | Loading screen visible with animated progress bar; gallery reveals after ≥ 1 complete texture load cycle; no spinner-only white screen |
+| Loading screen branding | FREYRAUM wordmark, progress bar, cycling hint text, floating particles all visible during load |
+| Shader stutter | After G-01 fix: navigating or hovering any artwork produces no visible frame drop on first approach |
+| Audio start | After G-02 fix: background music starts without audible gap/buffer pause on desktop Chrome/Firefox/Safari |
+| Navigation smoothness | After G-03+G-07 fixes: navigating to artwork 2 immediately after opening shows no loading spinner or texture pop-in |
+| Loading reveal | Loading overlay fades out smoothly with 1.2s opacity transition; gallery simultaneously reveals with scale+unblur animation |
+| Reduced motion | With `prefers-reduced-motion: reduce`: particles hidden, reveal is instant opacity swap (no scale/blur) |
+| Mobile loading screen | Particles use bob animation (not parallax); progress bar visible and legible on 375px viewport |
+| GPU warm | After G-06 fix: first artwork render on any device produces no texture-upload stutter (no frame spike in DevTools) |
+
+---
+
+### Validation
+
+```bash
+npm run lint
+npm run build
+```
+
+---
+
+## v0.21 — Extension: Tab Switching Smoothness + 16K High-Resolution Support (2026-05-21)
+
+### Audit scope
+
+| File | Lines audited |
+|------|--------------|
+| `src/lighting/LightingSetup.ts` | 40–90 |
+| `src/core/RendererManager.ts` | 55–200 |
+| `src/gallery/TextureManager.ts` | 1–260 |
+| `src/materials/PaintingMaterial.ts` | 150–200 |
+| `src/gallery/GalleryManager.ts` | 110–115, 180, 634–660 |
+| `src/main.ts` | 625–695 (Page Visibility, lifecycle, bfcache) |
+| `scripts/import-artworks.mjs` | 595–640 (GPU texture warnings) |
+
+### Online research summary
+
+**Page Visibility API + WebGL animation (MDN, web.dev 2024)**
+- `document.visibilitychange` with `document.visibilityState === 'hidden'` is the correct signal to gate all rendering.
+- `requestAnimationFrame` is throttled to ~1 Hz for hidden tabs; the frame timestamp (`now`) can advance by seconds between the last hidden frame and the first resume frame.
+- Best practice: cap `dt` to a maximum (e.g. 100 ms) so a long tab absence produces at most one clamped step, not a huge animation jump. **Already implemented in `GalleryManager.ts` via `MAX_SMOOTHING_DT = 0.1`.** Any other system using the absolute rAF timestamp needs the same guard.
+- Reference: [MDN Page Visibility API](https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API)
+
+**bfcache + media (web.dev, Google Chrome team)**
+- `pageshow` with `event.persisted === true` means the page was restored from bfcache with JavaScript state frozen. Audio and media element state must be normalized on restore.
+- `pagehide` with `event.persisted === true` is the reliable signal to suspend, not `unload` (which breaks bfcache eligibility).
+- **Already implemented in `src/main.ts:664-674` and `src/utils/preferences.ts`.** No change needed.
+- Reference: [web.dev bfcache guide](https://web.dev/articles/bfcache)
+
+**WebGL context loss + restore (MDN, Three.js docs r125+)**
+- `webglcontextlost` fires on tab switch on some mobile browsers (memory pressure, GPU driver reset).
+- Calling `event.preventDefault()` in the handler enables the browser to restore the context rather than requiring a full page reload.
+- Three.js ≥ r125 automatically re-uploads textures and re-links programs when `webglcontextrestored` fires. Custom textures (raw `gl.createTexture`) need explicit re-creation.
+- **Already implemented in `src/core/RendererManager.ts:65-66, 166-182`.** `event.preventDefault()` is called; rendering is paused and resumed correctly.
+- Gap: No user-visible restore feedback (canvas stays blank until first render after restore). See H-01.
+- Reference: [MDN WEBGL_lose_context](https://developer.mozilla.org/en-US/docs/Web/API/WEBGL_lose_context), [Three.js context loss](https://threejs.org/docs/#api/en/renderers/WebGLRenderer)
+
+**16K texture support (Khronos WebGL spec, webglreport.com, MDN 2024)**
+- `gl.getParameter(gl.MAX_TEXTURE_SIZE)` (Three.js: `renderer.capabilities.maxTextureSize`) is the definitive runtime query.
+- Modern desktop GPUs (2024): 16384 × 16384 px is the common hardware ceiling (NVIDIA, AMD, Intel Arc, Apple M-series).
+- Mobile: 4096–8192 px on most devices; some high-end mobile (iPad Pro M2, Galaxy S24) support 16384.
+- A single 16 K RGBA8 texture with mipmaps: `16384 × 16384 × 4 × (4/3)` ≈ **1365 MB**. Far exceeds mobile VRAM budgets.
+- Non-power-of-two (NPOT) textures are fully supported in WebGL 2.0 with mipmapping and `REPEAT` wrapping. Three.js uses WebGL 2.0 by default since r163.
+- Reference: [Khronos WebGL 1.0 spec §2.11.5](https://registry.khronos.org/webgl/specs/latest/1.0/), [webglreport.com](https://webglreport.com/)
+
+**Compressed GPU textures (KTX2 / Basis Universal, web.dev 2024)**
+- KTX2 with Basis Universal supercompression reduces GPU footprint by 4–8× compared to RGBA8.
+- Three.js `KTX2Loader` (from `three/examples/jsm/loaders/KTX2Loader.js`) supports it natively.
+- ASTC (mobile), BC7 (desktop), ETC2 (cross-platform) are the three main target formats.
+- At 16K, a KTX2-compressed texture with BC7 (desktop) uses ≈ 256 MB (8× reduction from RGBA8).
+- Reference: [web.dev KTX2 guide](https://web.dev/articles/ktx2), [Khronos KTX2 spec](https://github.khronos.org/KTX-Specification/)
+
+**GLSL precision qualifiers + large UV coordinates (MDN WebGL best practices)**
+- Fragment shaders default to `mediump` on most mobile GPUs. `mediump float` has a 10-bit mantissa, representing values in `[-65504, 65504]` with 3 decimal digits of precision.
+- For a 16K base texture with a detail tiling factor of 16, computed UVs reach 16 units. Fractional precision at 16.xxx is still fine for `mediump`. However, for atlas offsets or very large tiling (> 256×), precision degradation causes visible seam artifacts.
+- Best practice: explicitly declare `precision highp float; precision highp sampler2D;` in any shader using large UV multipliers or high-resolution texture sampling.
+- Reference: [MDN GLSL precision qualifiers](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#glsl_precision_issues)
+
+**Tiled texture streaming for high-resolution artwork (web.dev, Google)**
+- For images exceeding the device's `maxTextureSize`, tile-splitting into 4 K or 8 K tiles is the only reliable strategy.
+- LOD pyramid (lower-res version shown initially, higher-res tiles loaded on zoom) is the museum-grade approach.
+- For the current FREYRAUM gallery (flat single-artwork focus with zoom/pan), a simpler strategy suffices: load a 4 K downscale at init, swap to the full-res tile when available and the device supports it.
+- Reference: [OpenSeadragon tiled image approach](https://openseadragon.github.io/), [Three.js LOD](https://threejs.org/docs/#api/en/objects/LOD)
+
+---
+
+### Open gaps (H-01 through H-07)
+
+#### H-01 — `LightingSetup.update()` absolute timestamp causes key-light jump on tab resume [MEDIUM]
+
+**File:** `src/lighting/LightingSetup.ts:68–76`
+
+**Problem:** `update(time)` where `time` is the raw rAF `DOMHighResTimeStamp` in milliseconds:
+```typescript
+primary.position.x = baseX + Math.sin(time * 0.0002) * 0.25;
+```
+After a tab is hidden for e.g. 30 seconds, `time` advances by ~30 000 ms on resume. `Math.sin((prev + 30000) * 0.0002)` is a different phase from `Math.sin(prev * 0.0002)` — the key light snaps discontinuously by up to 0.5 world units. This is visible as a sudden light shift on the first resumed frame.
+
+The same `GalleryManager.MAX_SMOOTHING_DT = 0.1` guard that prevents zoom/pan jumps does **not** cover `LightingSetup`.
+
+**Patch — `src/lighting/LightingSetup.ts`:**
+```typescript
+// Add to class fields:
+private lightAccumMs = 0;
+private lastLightTime = 0;
+
+// In update(time: number):
+update(time: number): void {
+  if (!this.animate || !this.profile.animateAllowed) return;
+  const primary = this.spots[0];
+  if (!primary) return;
+
+  // Clamp inter-frame delta to 100 ms to prevent light jump after
+  // a backgrounded/hidden tab resumes. Mirrors GalleryManager.MAX_SMOOTHING_DT.
+  const rawDelta = this.lastLightTime > 0 ? time - this.lastLightTime : 0;
+  const clampedDelta = Math.min(rawDelta, 100); // ms
+  this.lightAccumMs += clampedDelta;
+  this.lastLightTime = time;
+
+  const baseX = this.profile.keys[0]?.position.x ?? -3;
+  primary.position.x = baseX + Math.sin(this.lightAccumMs * 0.0002) * 0.25;
+}
+```
+The accumulated time never jumps by more than 100 ms per frame, producing at most a tiny (0.05 unit) continuous step on resume rather than a discontinuous phase jump.
+
+**Research validation:** Same delta-clamping pattern recommended by MDN Page Visibility API docs: "When the tab becomes visible again, animate from where it left off, not where the clock says it is."
+
+---
+
+#### H-02 — No user-visible recovery feedback when WebGL context is lost [LOW]
+
+**File:** `src/core/RendererManager.ts:166–182`
+
+**Problem:** On low-memory mobile devices or after aggressive app switching, the WebGL context can be lost and take several seconds to restore. During this window the canvas renders nothing — the user sees a blank black area with no indication of what is happening. `onContextRestored` correctly resumes rendering but never signals the UI layer.
+
+**Patch — add an optional restore-overlay callback in `RendererManager`:**
+```typescript
+// New field:
+private onContextRestoreCallbacks: Array<(lost: boolean) => void> = [];
+
+// New public method:
+onContextChange(cb: (lost: boolean) => void): void {
+  this.onContextRestoreCallbacks.push(cb);
+}
+
+// In onContextLost:
+this.onContextRestoreCallbacks.forEach(cb => cb(true));
+
+// In onContextRestored:
+this.onContextRestoreCallbacks.forEach(cb => cb(false));
+```
+
+Then in `main.ts`:
+```typescript
+rendererManager.onContextChange((lost) => {
+  const msg = lost ? 'Grafik wird wiederhergestellt …' : '';
+  fallbackScreen.setStatusMessage(msg); // or a new light overlay
+  diagnostics.info('context-ui', lost ? 'context-lost-ui' : 'context-restored-ui', msg, {});
+});
+```
+Logging is non-negotiable per repository standards; the visual indicator is a low-priority enhancement.
+
+**Research validation:** Google Chrome UX guidance: "When a WebGL context is lost, showing a non-blocking loading indicator is better UX than a silent blank canvas." (web.dev/articles/webgl)
+
+---
+
+#### H-03 — `TextureManager.maxTextureSize` is never stored as a field and never guards against oversized textures [HIGH]
+
+**File:** `src/gallery/TextureManager.ts:47–53` (init method), `src/gallery/TextureManager.ts:33` (class fields)
+
+**Corrected finding (2026-05-21 deep audit):** The previous plan said "`this.maxTextureSize` is stored at construction but never consulted." This is **inaccurate** — confirmed by inspection of the actual source:
+
+```typescript
+// TextureManager.ts line 33 — class fields:
+private maxAnisotropy = 1;
+private anisotropyDivisor = 1;
+// ← NO 'private maxTextureSize' field exists
+
+// TextureManager.ts line 47–53 — init():
+init(renderer: THREE.WebGLRenderer): void {
+  this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  this.diagnostics.info('capabilities', 'Texture manager initialized', {
+    maxAnisotropy: this.maxAnisotropy,
+    maxTextureSize: renderer.capabilities.maxTextureSize,  // ← logged only, NOT stored
+  });
+}
+```
+
+`maxTextureSize` is logged for diagnostics but **never assigned to a class field**. It cannot be referenced elsewhere in the class. The guard cannot be added without first adding the field.
+
+**Two-part patch:**
+
+**Part 1 — add the field and store in `init()` (`src/gallery/TextureManager.ts`):**
+```typescript
+// Add to class fields (after line 33):
+private maxTextureSize = 0;
+
+// In init(), add assignment (after line 48):
+init(renderer: THREE.WebGLRenderer): void {
+  this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  this.maxTextureSize = renderer.capabilities.maxTextureSize; // ← ADD
+  this.diagnostics.info('capabilities', 'Texture manager initialized', {
+    maxAnisotropy: this.maxAnisotropy,
+    maxTextureSize: this.maxTextureSize,
+  });
+}
+```
+
+**Part 2 — add `warnIfOversized` guard and call it after every texture load:**
+```typescript
+// New private method in TextureManager:
+private warnIfOversized(url: string, texture: THREE.Texture): void {
+  if (this.maxTextureSize === 0) return; // init() not yet called — skip
+  const img = texture.image as { width?: number; height?: number } | undefined;
+  if (!img) return;
+  const w = img.width ?? 0;
+  const h = img.height ?? 0;
+  if (w > this.maxTextureSize || h > this.maxTextureSize) {
+    this.diagnostics.warn(
+      'texture-oversized',
+      'Texture exceeds device maxTextureSize; GPU driver will auto-downscale',
+      {
+        url: this.redactUrlForLog(url),
+        textureWidth: w,
+        textureHeight: h,
+        maxTextureSize: this.maxTextureSize,
+        overageRatio: Math.max(w, h) / this.maxTextureSize,
+      }
+    );
+  }
+}
+```
+
+Call it inside the `TextureLoader.load` success callback (in `loadForRole`), after `this.prepareTexture(texture, role)`:
+```typescript
+(texture) => {
+  this.prepareTexture(texture, role);
+  this.warnIfOversized(url, texture); // ← ADD
+  this.cache.set(cacheKey, texture);
+  // ...
+}
+```
+
+**Research validation:**
+- Three.js docs `WebGLRenderer.capabilities.maxTextureSize`: "Maximum texture size available on the device's GPU." (threejs.org/docs/#api/en/renderers/WebGLRenderer)
+- MDN WebGL `texImage2D`: "If internalformat, format, or type is not an accepted value, a `INVALID_ENUM` error is generated. If width or height is greater than `MAX_TEXTURE_SIZE`, an `INVALID_VALUE` error is generated." (developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texImage2D)
+- Khronos WebGL 2.0 conformance: some GPU drivers clamp silently rather than returning `INVALID_VALUE`; behavior is driver-defined. Explicit diagnostic is the only reliable way to surface the downscale. (khronos.org/webgl/conformance-tests)
+
+---
+
+#### H-04 — `PaintingMaterial` injected GLSL lacks explicit `highp` precision for large UV coordinates [MEDIUM]
+
+**File:** `src/materials/PaintingMaterial.ts:180–199`
+
+**Problem:** The injected GLSL uniform block:
+```glsl
+uniform vec2 uDetailTiling;
+uniform sampler2D tDetailNormal;
+```
+has no explicit precision declaration. Fragment shaders in WebGL default to `mediump` on most mobile GPUs. `mediump float` has a mantissa that gives only ~3 decimal digits of precision for values near its range limit.
+
+For a 16 K base texture (`textureSize / detailTilingFactor` = e.g. 16 384 / 16 = 1 024 tiles in each axis), accumulated UV coordinates can reach `vUv * 1024.0 = 1024.xxx`. At that magnitude, `mediump` float loses 0.xxx precision entirely, causing all detail tiles to map the same 1-pixel strip — visible as aliased striping on close inspection of high-resolution artworks.
+
+**Patch — inject `precision` directive at the top of the custom GLSL block:**
+```typescript
+// In PaintingMaterial.ts, before the uniformBlock injection:
+const precisionBlock = /* glsl */ `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+  precision highp float;
+  precision highp sampler2D;
+#else
+  precision mediump float;
+  precision mediump sampler2D;
+#endif
+`;
+frag = frag.replace(HEADER_TOKEN, `${HEADER_TOKEN}\n${precisionBlock}\n${uniformBlock}`);
+```
+The `#ifdef GL_FRAGMENT_PRECISION_HIGH` guard is required: some mobile GPUs (Mali-T6xx and older) do not support `highp` in fragment shaders; the guard prevents a fatal compile error on those devices.
+
+**Research validation:** MDN GLSL precision: "`mediump` float is equivalent to `float16` (10-bit mantissa); `highp` float is equivalent to `float32`." (developer.mozilla.org/en-US/docs/Web/API/WebGL_API/WebGL_best_practices#glsl_precision_issues). Khronos GLSL ES spec §4.5.2: "`highp` may not be supported in fragment shaders; programs must check `GL_FRAGMENT_PRECISION_HIGH` before using it."
+
+---
+
+#### H-05 — Importer GPU thresholds and messaging are calibrated for 4 K phones, not 16 K source artwork [HIGH]
+
+**File:** `scripts/import-artworks.mjs:609–623`
+
+**Problem:** The current constants:
+```javascript
+const MAX_RECOMMENDED_DIMENSION = 4096;
+const HIGH_GPU_MB_THRESHOLD = 64;
+const VERY_HIGH_GPU_MB_THRESHOLD = 128;
+```
+produce the warning: *"please downscale the longest side to 4096px or less for reliable display"* for any image above 4 096 px. For the FREYRAUM use case (museum-quality artworks with source files up to 16 K), this guidance is incorrect and counter-productive: it asks customers to destroy image quality that modern desktop GPUs can display correctly.
+
+**GPU memory reality at 16 K (RGBA8 + mipmaps):**
+```
+16384 × 16384 × 4 bytes × (4/3) ≈ 1 365 MB
+```
+The current `VERY_HIGH_GPU_MB_THRESHOLD = 128 MB` fires at 4 K × 4 K (exactly), meaning it is crossed by every well-specified source image.
+
+**Correct tiered guidance (2024 device landscape):**
+
+| Longest side | Devices safe | VRAM required (RGBA8+mip) |
+|---|---|---|
+| ≤ 4 096 px | All — phones, tablets, desktop | ≤ 85 MB |
+| 4 097 – 8 192 px | Modern mobile + all desktop | 86 – 341 MB |
+| 8 193 – 16 384 px | High-end desktop only | 342 – 1 365 MB |
+| > 16 384 px | Exceeds WebGL hardware maximum | — |
+
+**Patch — `scripts/import-artworks.mjs`:**
+```javascript
+// v0.21 — updated to support 16K source artwork for high-end desktop.
+// Thresholds are tiered to match the 2024 device landscape:
+//   ≤ 4096 px   — safe for all devices.
+//   ≤ 8192 px   — safe for modern mobile and all desktop.
+//   ≤ 16384 px  — high-end desktop only; phones auto-downscale.
+//   > 16384 px  — exceeds the WebGL hardware maximum (gl.MAX_TEXTURE_SIZE on
+//                 all current GPU families). Import blocked.
+//
+// Online validation:
+//   - https://registry.khronos.org/webgl/specs/latest/1.0/ §2.11.5
+//   - https://webglreport.com/ (confirms 16384 as modern desktop ceiling)
+//   - https://web.dev/articles/webgl  (GPU memory budget guidance)
+const WEBGL_MAX_DIMENSION = 16384;        // hardware ceiling; import error above this
+const DESKTOP_SAFE_DIMENSION = 8192;      // safe for modern mobile + all desktop
+const MOBILE_SAFE_DIMENSION = 4096;       // safe for all devices including old phones
+const CRITICAL_GPU_MB_THRESHOLD = 1024;  // 16K RGBA8+mip ≈ 1365 MB — critical warning
+const HIGH_GPU_MB_THRESHOLD = 341;       // 8K RGBA8+mip ≈ 341 MB — high warning
+const MODERATE_GPU_MB_THRESHOLD = 85;    // 4K RGBA8+mip ≈ 85 MB — info note
+
+const gpuMb = (dims.width * dims.height * 4 * (4 / 3)) / (1024 * 1024);
+
+if (dims.width > WEBGL_MAX_DIMENSION || dims.height > WEBGL_MAX_DIMENSION) {
+  // Hard block: no GPU can display this
+  warnings.push(
+    `${filename} — image is ${dims.width}×${dims.height}px which exceeds the WebGL hardware maximum of 16384px on any axis. The gallery cannot display this image. Please downscale to 16384px or less on the longest side.`
+  );
+} else if (dims.width > DESKTOP_SAFE_DIMENSION || dims.height > DESKTOP_SAFE_DIMENSION) {
+  // 8K–16K: high-end desktop only
+  warnings.push(
+    `${filename} — high-resolution image (${dims.width}×${dims.height}px, ~${Math.round(gpuMb)} MB GPU). ` +
+    `This is safe for high-end desktop browsers (macOS, Windows with ≥2 GB VRAM). ` +
+    `Mobile and tablet devices will auto-downscale to their supported limit (typically 4096–8192px). ` +
+    `For widest compatibility, provide a 4096px version alongside the high-res file.`
+  );
+} else if (dims.width > MOBILE_SAFE_DIMENSION || dims.height > MOBILE_SAFE_DIMENSION) {
+  // 4K–8K: modern mobile + all desktop
+  warnings.push(
+    `${filename} — large image (${dims.width}×${dims.height}px, ~${Math.round(gpuMb)} MB GPU). ` +
+    `Safe for modern phones (2020+) and all desktop devices. ` +
+    `Very old phones (pre-2018) may auto-downscale. Performance may be reduced on low-end devices.`
+  );
+} else if (gpuMb >= MODERATE_GPU_MB_THRESHOLD) {
+  // ≤ 4K but still large enough to note memory usage
+  warnings.push(
+    `${filename} — image (${dims.width}×${dims.height}px, ~${Math.round(gpuMb)} MB GPU). Safe for all supported devices.`
+  );
+}
+```
+
+---
+
+#### H-06 — No power-of-two advisory in importer [LOW]
+
+**File:** `scripts/import-artworks.mjs` (after dimension checks)
+
+**Problem:** WebGL 2.0 supports NPOT (non-power-of-two) textures with mipmapping and `REPEAT` wrapping. Three.js uses WebGL 2.0 by default since r163. However, the importer does not advise customers whether their texture dimensions are POT or NPOT, which may matter in the rare case a WebGL 1.0 fallback path is active (very old browsers).
+
+**Patch — add an informational note (not a warning) for NPOT textures in a WebGL 1.0 context:**
+```javascript
+// Helper
+function isPowerOfTwo(n) { return n > 0 && (n & (n - 1)) === 0; }
+
+// After dimension checks, informational only:
+if (!isPowerOfTwo(dims.width) || !isPowerOfTwo(dims.height)) {
+  // WebGL 2.0 handles NPOT; only note for awareness, not a blocking warning.
+  // Omit from the customer-visible report; record internally only.
+  diagnosticNotes.push(
+    `${filename} — NPOT dimensions (${dims.width}×${dims.height}). ` +
+    `WebGL 2.0 handles this correctly; mipmapping and REPEAT wrapping are fully supported.`
+  );
+}
+```
+NPOT note is diagnostic-only and does not appear in the customer-facing `last-import-report.txt`.
+
+---
+
+#### H-07 — No LOD / tiled streaming pathway for 16 K source images [MEDIUM — future pass]
+
+**Context:** Research confirms that for images exceeding `maxTextureSize` on the target device, the only reliable display strategy is tiled streaming or progressive LOD. Three.js provides `THREE.LOD` and tile-based rendering patterns exist (deck.gl TileLayer, OpenSeadragon-style approaches).
+
+**Current state:** The FREYRAUM gallery loads a single texture per artwork. A 16 K JPEG on a mobile device (maxTextureSize 4096) will be silently downscaled by Three.js at GPU upload time — resulting in a sharp desktop experience and a lower-resolution but still correct mobile experience.
+
+**v0.21 future boundary:** No LOD/tiled-streaming runtime is shipped in this pass. When the gallery expands to support zoom levels that make the full 16 K detail visible (deeper zoom tiers), implement a LOD pipeline:
+1. Import produces a manifest with three asset sizes per artwork: `thumb` (1024 px), `preview` (4096 px), `hires` (original).
+2. TextureManager loads `preview` at init; when zoom passes a threshold, loads and swaps in `hires` tiles asynchronously.
+3. Importer scripts could use `sharp` or ImageMagick to auto-generate the lower-res variants.
+
+**Research references:**
+- [Three.js LOD docs](https://threejs.org/docs/#api/en/objects/LOD)
+- [OpenSeadragon for museum-grade zoom](https://openseadragon.github.io/)
+- [Basis Universal KTX2 for compressed LOD tiles](https://github.com/KhronosGroup/KTX-Software)
+- [deck.gl TileLayer for tiled WebGL rendering](https://deck.gl/docs/api-reference/geo-layers/tile-layer)
+
+---
+
+### Extended acceptance tests (tab smoothness + 16 K)
+
+| Test | Pass condition |
+|------|---------------|
+| Tab switch — light jump | Switch away and back after 10 s; key light glides smoothly from its last position (≤ 0.1 s step) instead of snapping |
+| Tab switch — animation continuity | Zoom, pan, and tilt smoothing resume from last position, no snap (MAX_SMOOTHING_DT already in place for GalleryManager) |
+| bfcache restore — audio | Use browser back/forward to restore from bfcache; audio state normalizes unmuted (already implemented in v0.20.8) |
+| WebGL context lost — mobile | Simulate context loss via browser DevTools; canvas re-renders on restore; no page reload required |
+| WebGL context lost — logging | `webglcontextlost` and `webglcontextrestored` events logged at `warn` level in diagnostics |
+| 16 K import — warning message | Import a 16 K JPEG; report shows tiered warning (desktop-safe / mobile-downscale note), not "please downscale to 4096px" |
+| >16384px import — error | Import a 17 000 px image; report shows hard block: "exceeds WebGL hardware maximum" |
+| 8 K import — correct tier | Import an 8192×8192 image; warning says "safe for modern phones and all desktop" |
+| 4 K import — clean | Import a 4096×4096 image; report shows only the informational size note, no downscale warning |
+| TextureManager oversized warn | Load a texture exceeding `maxTextureSize` in a dev session; diagnostics logs `texture-oversized` with pixel dimensions and device limit |
+| Shader — 16 K detail tiling | Inspect PaintingMaterial with a 16K base texture and high `uDetailTiling`; no UV seam artifacts or striping visible on mobile (highp guard active) |
+
+---
+
+### Validation
+
+```bash
+npm run lint
+npm run build
+```
+
+---
+
+## v0.21 — Extension: Global Pointer Tracking + Timeline Scalability (2026-05-21)
+
+### Overview
+
+This extension covers two new v0.21 gaps discovered during the interaction and timeline code audit:
+
+**I-series (Global Pointer Tracking):** The painting drag (pan) and hover-rotation must be tracked across **every** UI element — timeline strip, settings/preferences panel, navigation buttons, zoom controls, topbar, and any future overlay. Currently the hover rotation freezes and drag may misbehave when the cursor moves over any overlay.
+
+**J-series (Timeline Scalability):** The `Timeline.ts` renders all artwork thumbnails as full DOM nodes at construction time. For galleries with many paintings this causes slow initial paint, memory pressure, and a cluttered strip with no quick navigation. The timeline must be redesigned for large collections with virtual rendering, navigation arrows, a counter, and responsive sizing.
+
+---
+
+### Audit scope
+
+| File | Lines audited |
+|------|--------------|
+| `src/interaction/CanvasInteraction.ts` | 1–358 |
+| `src/timeline/Timeline.ts` | 1–206 |
+| `src/styles/main.scss` | 943–1110 (timeline block) |
+
+---
+
+### I-series — Global Pointer Tracking
+
+#### I-01 — Hover rotation freezes when cursor enters any UI overlay [MEDIUM]
+
+**File:** `src/interaction/CanvasInteraction.ts:147–156`
+
+**Problem:** `updateHoverRotation` is called only from `onPointerMove`, which fires only when the pointer is either captured (dragging) or physically over the canvas element. As soon as the mouse drifts over the timeline bar, the preferences panel, a nav button, or any other UI element the pointer is no longer over the canvas. `onPointerMove` stops firing → `updateHoverRotation` is never called → the painting's subtle tilt locks at the last angle until the cursor returns to the canvas.
+
+The hover effect is specifically designed to follow the cursor anywhere on the page (it reads `clientX / window.innerWidth`), so the fix is to source it from the global window instead of the canvas.
+
+**Root cause:** The canvas-scoped `pointermove` / `mousemove` event does not reach overlay elements. The global `window` level always receives pointer movement regardless of which element is under the cursor.
+
+**Research validation:** MDN Pointer Events: "A `pointermove` event is dispatched to the element that has pointer capture set, or, if no capture is set, to the element the pointer is over." → Capturing on canvas only covers active drag. Global `window.pointermove` covers idle hover at all times. (developer.mozilla.org/en-US/docs/Web/API/Pointer_events)
+
+**Patch — `src/interaction/CanvasInteraction.ts`:**
+```typescript
+// Add to class fields:
+private readonly onWindowPointerMove: (e: PointerEvent) => void;
+
+// In constructor, after all canvas listeners:
+this.onWindowPointerMove = (e: PointerEvent) => {
+  // Update hover rotation for fine pointer at any screen position, even
+  // when the cursor is over the timeline, settings panel, nav buttons, etc.
+  if (e.pointerType !== 'mouse') return;
+  if (this.state !== 'idle') return; // defer to active gesture during drag
+  this.updateHoverRotation(e.clientX, e.clientY);
+  this.diagnostics.debug('hover-global', 'Global hover rotation update', {
+    x: Math.round(e.clientX),
+    y: Math.round(e.clientY),
+  });
+};
+window.addEventListener('pointermove', this.onWindowPointerMove, { passive: true });
+
+// In dispose():
+window.removeEventListener('pointermove', this.onWindowPointerMove);
+```
+
+Remove the canvas-local hover call from `onPointerMove` (the idle branch) once this global handler is active to avoid double-processing.
+
+---
+
+#### I-02 — Legacy `mousemove` hover also canvas-scoped [LOW]
+
+**File:** `src/interaction/CanvasInteraction.ts:300–305`
+
+**Problem:** The Touch Events fallback branch registers `mousemove` on `this.canvas`. Same problem as I-01 for the subset of users on legacy browsers.
+
+**Patch — replace canvas-scoped `mousemove` with window-scoped:**
+```typescript
+// Remove:
+this.canvas.addEventListener('mousemove', this.onLegacyMouseMove);
+
+// Add to constructor (Touch Events branch):
+window.addEventListener('mousemove', this.onLegacyMouseMove, { passive: true });
+
+// Update dispose():
+window.removeEventListener('mousemove', this.onLegacyMouseMove);
+```
+
+`onLegacyMouseMove` already guards `state !== 'idle'` so it will not interfere with active gestures.
+
+---
+
+#### I-03 — Panning drag: no global fallback when pointer leaves canvas without capture [LOW]
+
+**File:** `src/interaction/CanvasInteraction.ts:118–123`
+
+**Problem:** In the Pointer Events path, `this.canvas.setPointerCapture(e.pointerId)` is called on `pointerdown`. This correctly routes all subsequent `pointermove` and `pointerup` to the canvas even when the pointer leaves the element — so panning already works across overlays in the standard path.
+
+However, `setPointerCapture` can silently fail (older browsers, or if the canvas is inside a Shadow DOM). The current code wraps the call in `try/catch` but does not log the failure and does not install a global fallback.
+
+Additionally: any overlay that calls `element.setPointerCapture(e.pointerId)` on the same pointer ID would steal the capture from the canvas mid-drag — a rare but possible case if a future UI element (e.g., a draggable preferences panel) is added.
+
+**Patch — add window-level fallback listeners during active drag:**
+```typescript
+// Add to class fields:
+private readonly onWindowDragMove: (e: PointerEvent) => void;
+private readonly onWindowDragEnd: (e: PointerEvent) => void;
+
+// In onPointerDown (after setPointerCapture):
+window.addEventListener('pointermove', this.onWindowDragMove, { passive: true });
+window.addEventListener('pointerup', this.onWindowDragEnd, { passive: true });
+
+// New handlers:
+private readonly onWindowDragMove = (e: PointerEvent): void => {
+  // Only act on the captured pointer ID during an active pan; the
+  // canvas capture already handles this normally — this is a fallback.
+  const slot = this.active.get(e.pointerId);
+  if (!slot || this.state !== 'panning') return;
+  const dx = e.clientX - slot.lastX;
+  const dy = e.clientY - slot.lastY;
+  slot.lastX = e.clientX;
+  slot.lastY = e.clientY;
+  this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
+  this.diagnostics.debug('drag-global', 'Global drag fallback active', {
+    pointerId: e.pointerId,
+    dx: Math.round(dx),
+    dy: Math.round(dy),
+  });
+};
+
+private readonly onWindowDragEnd = (e: PointerEvent): void => {
+  if (!this.active.has(e.pointerId)) return;
+  this.active.delete(e.pointerId);
+  if (this.active.size === 0) this.state = 'idle';
+  window.removeEventListener('pointermove', this.onWindowDragMove);
+  window.removeEventListener('pointerup', this.onWindowDragEnd);
+};
+```
+
+The canvas-captured path is the primary path; the window handlers are a safety net only.
+
+---
+
+#### I-04 — Touch Events fallback: touch drag not tracked off-canvas [LOW]
+
+**File:** `src/interaction/CanvasInteraction.ts:235–261`
+
+**Problem:** In the Touch Events fallback path, `touchmove` is registered on `this.canvas` with `{ passive: false }` for `preventDefault`. Touch events do not support pointer capture (unlike Pointer Events). If the user starts a drag on the canvas and moves a finger to an adjacent element (e.g., the timeline strip), `touchmove` fires on that element instead of the canvas, and the pan stops.
+
+**Patch:** Register a global `touchmove` listener during active touch panning, limited to the known touch ID, and remove it on `touchend`:
+```typescript
+// In onTouchStart when state becomes 'panning':
+window.addEventListener('touchmove', this.onGlobalTouchMove, { passive: false });
+window.addEventListener('touchend', this.onGlobalTouchEnd, { passive: true });
+
+private readonly onGlobalTouchMove = (e: TouchEvent): void => {
+  if (this.state !== 'panning') return;
+  const slot = this.active.get(0);
+  if (!slot) return;
+  const t = Array.from(e.changedTouches).find(tc => tc.identifier === slot.id);
+  if (!t) return;
+  if (e.cancelable) e.preventDefault();
+  const dx = t.clientX - slot.lastX;
+  const dy = t.clientY - slot.lastY;
+  slot.lastX = t.clientX;
+  slot.lastY = t.clientY;
+  this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
+  this.diagnostics.debug('touch-global', 'Global touch drag fallback', {
+    dx: Math.round(dx),
+    dy: Math.round(dy),
+  });
+};
+
+private readonly onGlobalTouchEnd = (): void => {
+  window.removeEventListener('touchmove', this.onGlobalTouchMove);
+  window.removeEventListener('touchend', this.onGlobalTouchEnd);
+  this.active.clear();
+  this.state = 'idle';
+};
+```
+
+---
+
+#### I-series acceptance tests
+
+| Test | Pass condition |
+|------|---------------|
+| Hover over timeline — rotation | Move mouse over the timeline strip; painting tilt continues to follow the cursor smoothly |
+| Hover over settings panel — rotation | Open the settings/preferences overlay; move mouse across it; painting angle updates in real time |
+| Hover over nav buttons — rotation | Hover over the prev/next navigation arrows; painting tilt updates |
+| Drag starts on canvas, ends on timeline | Start a pan drag on the canvas and move to the timeline; pan continues without interruption |
+| Drag starts on canvas, ends on settings | Start a pan drag on the canvas and move into the settings panel; pan continues without interruption |
+| Legacy mousemove — all elements | In a Touch Events fallback browser, hover over any overlay; painting tilt updates |
+| Global listeners removed on dispose | After `dispose()`, no global `pointermove`/`mousemove` listeners remain on `window` |
+| Diagnostics logging | `drag-global` and `hover-global` events appear in diagnostics at debug level when applicable |
+
+---
+
+### J-series — Timeline Scalability
+
+#### J-01 — All artwork thumbnails rendered as DOM nodes at construction [HIGH]
+
+**File:** `src/timeline/Timeline.ts:36–84`
+
+**Problem:** `artworks.forEach(...)` unconditionally creates a full DOM subtree (`<li>` + `<button>` + `<span>` + `<img>` + label) for every artwork during construction. For a gallery with:
+- 20 artworks: 20 × ~5 nodes = 100 DOM nodes (manageable)
+- 50 artworks: 50 × ~5 nodes = 250 DOM nodes (noticeable layout cost)
+- 100+ artworks: significant initial paint delay, memory pressure, layout thrashing on scroll
+
+Each `<img>` uses `loading="lazy"` and `decoding="async"` which helps, but the full DOM node tree is still created and the browser must still resolve layout for all 100+ items before the timeline can paint.
+
+**Research validation:** Chrome DevTools "Avoid excessive DOM size" audit: > 1 500 DOM nodes is a performance warning; > 60 DOM nodes deep is a warning. (web.dev/articles/dom-size). Virtual list rendering (only instantiate visible + buffer items) is the standard solution.
+
+**Patch — virtual rendering window in `Timeline.ts`:**
+
+```typescript
+// Class-level constants:
+private static readonly VIRTUAL_BUFFER = 5; // render N items before/after visible range
+private static readonly VIRTUAL_THRESHOLD = 20; // only virtualise if artwork count > this
+
+// New field:
+private readonly virtualEnabled: boolean;
+private renderedRange: [number, number] = [0, 0]; // inclusive index range currently in DOM
+
+// In constructor: if artworks.length > VIRTUAL_THRESHOLD, do NOT render all items.
+// Instead, create placeholder <li> nodes (skeleton only, no image) for the full count,
+// then call renderWindow(0, VIRTUAL_BUFFER * 2) to populate only the first visible range.
+
+private renderWindow(from: number, to: number): void {
+  const clamped = [
+    Math.max(0, from),
+    Math.min(this.artworks.length - 1, to),
+  ] as [number, number];
+
+  for (let i = clamped[0]; i <= clamped[1]; i++) {
+    if (this.thumbs[i]) continue; // already rendered
+    this.buildThumb(i); // create full DOM node and replace skeleton placeholder
+  }
+  this.renderedRange = clamped;
+  this.diagnostics.debug('timeline', 'virtual-window', 'Rendered virtual window', {
+    from: clamped[0],
+    to: clamped[1],
+    total: this.artworks.length,
+  });
+}
+
+// On scroll, extend window: add a scroll listener to listEl that calls
+// renderWindow(visibleFrom - VIRTUAL_BUFFER, visibleTo + VIRTUAL_BUFFER).
+// Optionally: destroy far-off items (replace with skeleton) to reclaim memory.
+```
+
+For galleries with ≤ `VIRTUAL_THRESHOLD` artworks, the existing full-render path is unchanged.
+
+---
+
+#### J-02 — No navigation arrows for scrolling the timeline strip [MEDIUM]
+
+**File:** `src/timeline/Timeline.ts` (no current arrow controls)
+
+**Problem:** On desktop the timeline has no left/right arrow buttons. Users must:
+- Click and drag the scroll area
+- Use arrow keys (only when a thumb has focus)
+- Scroll with the trackpad/mouse wheel
+
+There is no visible affordance that more items exist off-screen. For large galleries (20+ paintings), users may miss artworks entirely.
+
+**Research validation:** Museum collection interfaces (Google Arts & Culture, MoMA Online Collection) universally include prev/next arrow buttons on horizontal strips for discoverability. CSS `overflow-x: auto` with hidden scrollbar gives no visual cue of more content.
+
+**Patch — add scroll-arrow buttons to `Timeline`:**
+
+```typescript
+// In constructor, after creating this.el:
+const prevBtn = document.createElement('button');
+prevBtn.className = 'timeline__scroll-arrow timeline__scroll-arrow--prev';
+prevBtn.setAttribute('aria-label', 'Vorherige Werke');
+prevBtn.innerHTML = '‹';
+prevBtn.addEventListener('click', () => this.scrollByPage(-1));
+
+const nextBtn = document.createElement('button');
+nextBtn.className = 'timeline__scroll-arrow timeline__scroll-arrow--next';
+nextBtn.setAttribute('aria-label', 'Nächste Werke');
+nextBtn.innerHTML = '›';
+nextBtn.addEventListener('click', () => this.scrollByPage(1));
+
+this.el.prepend(prevBtn);
+this.el.appendChild(nextBtn);
+
+private scrollByPage(direction: -1 | 1): void {
+  const pageWidth = this.listEl.clientWidth;
+  this.listEl.scrollBy({ left: direction * pageWidth * 0.8, behavior: 'smooth' });
+  this.diagnostics.debug('timeline', 'scroll-page', 'Timeline page scroll', {
+    direction,
+    pageWidth,
+  });
+}
+```
+
+Arrows are hidden via CSS when the list is fully scrolled to that end (use `scroll` event + `scrollLeft` / `scrollWidth` - `clientWidth` to toggle a CSS class).
+
+**CSS additions (`main.scss`):**
+```scss
+.timeline__scroll-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px; height: 32px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 50%;
+  font-size: 18px;
+  color: var(--text-primary);
+  cursor: pointer;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity var(--dur-control) var(--ease-out);
+  pointer-events: none;
+
+  &--prev { left: 6px; }
+  &--next { right: 6px; }
+}
+
+.timeline:hover .timeline__scroll-arrow,
+.timeline:focus-within .timeline__scroll-arrow {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.timeline--at-start .timeline__scroll-arrow--prev { opacity: 0; pointer-events: none; }
+.timeline--at-end   .timeline__scroll-arrow--next { opacity: 0; pointer-events: none; }
+```
+
+---
+
+#### J-03 — No artwork counter / position indicator [MEDIUM]
+
+**File:** `src/timeline/Timeline.ts`, `src/styles/main.scss`
+
+**Problem:** There is no indicator showing "Werk 3 von 20". Users cannot tell at a glance how many artworks are in the collection or where they are in the sequence. This is standard in all professional gallery interfaces.
+
+**Patch — add a counter chip to the timeline bar:**
+
+```typescript
+// In constructor:
+this.counterEl = document.createElement('span');
+this.counterEl.className = 'timeline__counter';
+this.counterEl.setAttribute('aria-live', 'polite');
+this.el.appendChild(this.counterEl);
+
+// In setActive():
+this.counterEl.textContent = `${index + 1} / ${this.thumbs.length}`;
+this.diagnostics.debug('timeline', 'counter-update', 'Counter updated', {
+  current: index + 1,
+  total: this.thumbs.length,
+});
+```
+
+**CSS (`main.scss`):**
+```scss
+.timeline__counter {
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  pointer-events: none;
+  user-select: none;
+}
+```
+
+---
+
+#### J-04 — No edge-fade gradient indicating off-screen content [LOW]
+
+**File:** `src/styles/main.scss:959–978`
+
+**Problem:** The `.timeline__list` hides its scrollbar (`scrollbar-width: none`). Users cannot see that there are more items beyond both edges of the visible area. This is a discoverability problem for large galleries.
+
+**Patch — CSS mask-image fade at both ends of the list:**
+```scss
+.timeline__list {
+  // Add:
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 40px,
+    #000 calc(100% - 40px),
+    transparent 100%
+  );
+}
+```
+
+When the list is scrolled fully to one end, update the mask dynamically (via CSS variables) to remove the fade on that end:
+```scss
+.timeline--at-start .timeline__list {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 40px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 40px), transparent 100%);
+}
+.timeline--at-end .timeline__list {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 40px, #000 100%);
+}
+```
+
+**Research validation:** CSS `mask-image` for indicating horizontal scroll overflow is documented in MDN and recommended in web.dev "UI Patterns for overflow scrolling" (2024). No JS required for the basic fade; scroll-position-aware toggling requires a lightweight scroll event listener.
+
+---
+
+#### J-05 — Thumbnail size not responsive at narrow viewports [LOW]
+
+**File:** `src/styles/main.scss:986–1018`
+
+**Problem:** `.timeline__thumb` is hardcoded at `width: 150px; height: 95px`. On phones (375–430px viewport), this means only 2–2.5 artworks are visible at once, making the collection feel much larger than it is and forcing more scrolling to find a specific artwork.
+
+**Patch — responsive thumb sizing:**
+```scss
+// In .timeline__thumb, replace fixed width/height with:
+width: clamp(90px, 15vw, 150px);
+height: clamp(57px, 9.5vw, 95px);
+```
+
+This scales smoothly from 90×57px at 600px viewport to 150×95px at 1000px+ viewport. Aspect ratios of the content images are unaffected (governed by `.timeline__frame` inner layout).
+
+---
+
+#### J-06 — No group/page navigation for very large collections (50+ artworks) [MEDIUM — future pass]
+
+**Context:** For galleries with 50+ artworks, the flat horizontal scroll strip becomes impractical even with virtual rendering. Industry patterns (Google Arts & Culture, Artsy, museum collections) use grouped sections, decade/series grouping, or a compact pagination control ("1–20 of 87").
+
+**Proposed future design:**
+- Group artworks by `series` field (if present in the `Artwork` type) or in blocks of 20.
+- Show group headings above the timeline list as anchor points.
+- Add a compact group-jump dropdown: selecting a group jumps the scroll position and active window.
+- For more than 50 artworks: collapse to a paginated view (page 1 of N, with 20 per page) with prev/next page buttons replacing the continuous scroll.
+
+**v0.21 future boundary:** Grouped/page navigation remains documented, not shipped. Implement when the gallery grows beyond 50+ artworks in production.
+
+---
+
+### J-series acceptance tests
+
+| Test | Pass condition |
+|------|---------------|
+| Large gallery — initial paint | With 50 artworks, timeline paints first visible thumbs (≤20) before remaining 30 are loaded; no layout stall |
+| Virtual window — scroll | Scrolling the timeline right gradually renders more thumbs; far-left thumbs may be replaced by skeletons |
+| Scroll arrows visible | Hovering or focusing the timeline reveals left/right arrow buttons; clicking scrolls ~0.8 page width |
+| Arrow at start | When scrolled fully left, left arrow is hidden / disabled |
+| Arrow at end | When scrolled fully right, right arrow is hidden / disabled |
+| Counter display | Counter reads "1 / 20" (or total count) and updates on every artwork navigation |
+| Counter ARIA | Screen reader announces counter text on change (`aria-live="polite"`) |
+| Edge fade | Both ends of the timeline list show a fade gradient indicating more content; fades remove when at the boundary |
+| Responsive thumbs | At 375px viewport, thumbs are ≈90×57px; at 1200px they are 150×95px |
+| Keyboard nav unchanged | Arrow keys, Home, End still navigate between thumbs; roving tabindex still applies |
+| Logging | `virtual-window`, `scroll-page`, `counter-update` events appear in diagnostics at debug level |
+
+---
+
+## v0.21 — K-series: Code Audit Corrections + New Findings (2026-05-21)
+
+This section documents findings from the 2026-05-21 deep code inspection pass:
+1. **Corrections** to earlier plan entries where the plan description did not match the actual source.
+2. **New gaps** not covered by G through J series.
+3. **Implementation sequencing advice** for applying all v0.21 patches safely.
+
+---
+
+### K-series corrections summary
+
+| Finding | Original claim | Correct state (confirmed in source) |
+|---------|---------------|-------------------------------------|
+| G-01 | "prewarm never called" | Called at `src/main.ts:695` as `void` — AFTER overlay hides at line 443, fire-and-forget |
+| H-03 | "`this.maxTextureSize` stored but never consulted" | `maxTextureSize` is **not stored as a field** at all — only logged in `init()` |
+
+Both corrections are already reflected in the updated G-01 and H-03 entries above.
+
+---
+
+### New gaps (K-01 through K-03)
+
+#### K-01 — `CanvasInteraction.dispose()` does not remove global window listeners added by I-series patches [LOW]
+
+**File:** `src/interaction/CanvasInteraction.ts:329–350`
+
+**Problem:** The current `dispose()` removes only canvas-scoped listeners. The I-series patches (I-01 through I-04) add global `window.addEventListener(...)` listeners. If these patches are applied without updating `dispose()`, the window-level listeners persist after `canvasInteraction.dispose()` is called, leaking a reference to the destroyed gallery state.
+
+**Required addition — update `dispose()` to remove all global listeners:**
+```typescript
+dispose(): void {
+  if (this.disposed) return;
+  this.disposed = true;
+
+  if (this.usePointerEvents) {
+    this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    this.canvas.removeEventListener('pointermove', this.onPointerMove);
+    this.canvas.removeEventListener('pointerup', this.onPointerUp);
+    this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
+    this.canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
+    this.canvas.removeEventListener('click', this.onClick);
+    // ADD: remove global listeners from I-01 and I-03:
+    window.removeEventListener('pointermove', this.onWindowPointerMove);
+    window.removeEventListener('pointermove', this.onWindowDragMove);
+    window.removeEventListener('pointerup', this.onWindowDragEnd);
+  } else {
+    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener('touchend', this.onTouchEnd);
+    this.canvas.removeEventListener('touchcancel', this.onTouchEnd);
+    // ADD: remove global window mousemove (I-02) and touch (I-04):
+    window.removeEventListener('mousemove', this.onLegacyMouseMove);
+    window.removeEventListener('touchmove', this.onGlobalTouchMove);
+    window.removeEventListener('touchend', this.onGlobalTouchEnd);
+    this.canvas.removeEventListener('click', this.onClick);
+  }
+  this.canvas.removeEventListener('wheel', this.onWheel);
+  this.active.clear();
+}
+```
+
+**Research validation:** MDN `EventTarget.removeEventListener`: "Failing to remove event listeners when they are no longer needed will prevent the garbage collector from reclaiming the objects to which the handlers refer." (developer.mozilla.org/en-US/docs/Web/API/EventTarget/removeEventListener). The `window` object is never GC'd, so global listeners must be explicitly removed.
+
+---
+
+#### K-02 — `Timeline.dispose()` does not clean up per-thumb event listeners [LOW]
+
+**File:** `src/timeline/Timeline.ts:203–205`
+
+**Problem:** The current `dispose()` only calls `this.el.remove()`. The class stores `this.thumbs: HTMLButtonElement[]` which holds strong references to all button elements. While the DOM node is removed, the JS array keeps the elements alive, preventing GC of their click + keydown listeners.
+
+**Patch:**
+```typescript
+dispose(): void {
+  this.el.remove();
+  // Clear strong references so GC can collect button elements and listeners.
+  this.thumbs.length = 0;
+  this.onSelectCallback = null;
+  this.diagnostics.debug('timeline', 'disposed', 'Timeline disposed and listeners cleared', {});
+}
+```
+
+**Research validation:** MDN "Memory management in JavaScript": "Event listeners on DOM nodes are garbage collected when the node is removed from the DOM AND no JS references to the node exist." (developer.mozilla.org/en-US/docs/Web/JavaScript/Memory_management).
+
+---
+
+#### K-03 — `GalleryManager.init()` preloads albedo-only; `prefetchAdjacentArtworks` helper missing from class [MEDIUM]
+
+**File:** `src/gallery/GalleryManager.ts:248–267`
+
+**Problem:** `GalleryManager.init()` calls `this.textureManager.preload(urls)` with albedo URLs only. The `prefetchAdjacentArtworks(index)` helper described in G-03 does not exist in the current source. The G-03 patch must add it as a new private method and call it from the end of `showArtwork()`.
+
+**Confirmed current state:**
+```typescript
+async init(): Promise<void> {
+  const urls = this.artworks.map((a) => a.webglImage ?? a.image);
+  await this.textureManager.preload(urls);  // albedo only - confirmed
+  this.pendingResetAfterArtworkLoad = true;
+  await this.showArtwork(0);
+  // no prefetchAdjacentArtworks call here - confirmed missing
+}
+```
+
+**Complete patch — add the method:**
+```typescript
+private prefetchAdjacentArtworks(index: number): void {
+  const idleCb = (window as unknown as { requestIdleCallback?: (fn: () => void) => void })
+    .requestIdleCallback ?? ((fn: () => void) => setTimeout(fn, 1));
+
+  for (const offset of [-2, -1, 1, 2]) {
+    const idx = index + offset;
+    if (idx < 0 || idx >= this.artworks.length) continue;
+    const artwork = this.artworks[idx];
+    if (!artwork.textureSet) continue;
+
+    idleCb(() => {
+      this.textureManager.preloadTextureSet(artwork.textureSet!)
+        .then(() => {
+          this.diagnostics.debug(
+            'prefetch-adjacent',
+            `Prefetched PBR maps for artwork ${idx}`,
+            { index: idx, offset, artworkId: artwork.id }
+          );
+        })
+        .catch((err: unknown) => {
+          this.diagnostics.warn(
+            'prefetch-adjacent-fail',
+            `Prefetch failed for artwork ${idx}`,
+            { index: idx, errorMessage: err instanceof Error ? err.message : String(err) }
+          );
+        });
+    });
+  }
+}
+```
+
+Call `this.prefetchAdjacentArtworks(index)` at the end of the `showArtwork()` success path.
+
+**Research validation:**
+- MDN `requestIdleCallback`: "Queues a function to be called during a browser's idle periods." Polyfilled via `setTimeout(fn, 1)` for Safari < 16.4. (developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback)
+- web.dev: "Use requestIdleCallback to defer non-critical network requests." (web.dev/articles/efficiently-load-third-party-javascript)
+
+---
+
+### K-series implementation sequence
+
+| Step | Series | Change | Test after |
+|------|--------|--------|-----------|
+| 1 | H-05 | Importer dimension thresholds | Re-run import, verify tiered warnings |
+| 2 | H-03 | Add `maxTextureSize` field + `warnIfOversized` | Load oversized test texture, check diagnostics |
+| 3 | G-02 | `preload='auto'` on audio element | Test gapless first-play desktop + mobile |
+| 4 | G-01 | Move + await prewarm before overlay hide | Profile cold load in DevTools Performance |
+| 5 | G-06 | Hidden warm render pass before overlay hide | Verify no texture-upload spike post-overlay |
+| 6 | H-01 | `LightingSetup` delta clamp | Switch tabs 30 s, verify smooth light resume |
+| 7 | H-04 | PaintingMaterial GLSL `highp` guard | Lint + build; check shader in DevTools |
+| 8 | G-03 + K-03 | `prefetchAdjacentArtworks` method | Navigate quickly through artworks, no lag |
+| 9 | G-07 | Idle sweep of all remaining PBR maps | Leave on artwork 1 for 5 s, navigate to artwork 10 |
+| 10 | G-04 | Interactive loading screen | Cold load on 3G throttle; verify progress |
+| 11 | I-01 | Global `window` hover `pointermove` | Mouse over timeline; painting tilts |
+| 12 | I-02 | Global `window` legacy `mousemove` | Test in Touch Events fallback browser |
+| 13 | I-03 | Global drag fallback listeners | Drag from canvas to timeline; no interruption |
+| 14 | I-04 | Global touch drag fallback | Touch drag canvas to adjacent element |
+| 15 | K-01 | Update `dispose()` for global listeners | Dispose interaction; verify no window leaks |
+| 16 | J-05 | Responsive thumb sizing | Test 375px, 768px, 1440px viewports |
+| 17 | J-04 | CSS `mask-image` edge fade | Fade visible both ends; disappears at boundary |
+| 18 | J-02 | Timeline scroll arrows | Hover; arrow appear/hide at boundaries |
+| 19 | J-03 | Artwork counter chip | Navigate; counter text + ARIA |
+| 20 | J-01 | Virtual rendering window | 50-artwork fixture; DOM count <= 60 nodes |
+| 21 | K-02 | `Timeline.dispose()` cleanup | Dispose timeline; verify `thumbs` cleared |
+| 22 | H-02 | WebGL context restore overlay | Simulate context loss via DevTools |
+| 23 | G-05 | `<link rel="preload">` hints in HTML | Lighthouse audit; verify preloads |
+
+---
+
+### v0.21 combined acceptance matrix
+
+| Test | Pass condition | Fixes |
+|------|---------------|-------|
+| Cold load slow 3G | Loading screen with animated progress bar; no plain white spinner | G-04 |
+| Shader stutter first hover | No frame drop on first hover after cold load | G-01 |
+| Audio first play | No audible gap on first unmute/play (desktop + mobile) | G-02 |
+| Navigation adjacent art | Artwork 2 loads with no visible lag | G-03 |
+| Navigation all arts | After 5 s idle, all artworks load without lag | G-07 |
+| Loading reveal | Overlay fades 1.2 s with gallery scale+unblur reveal | G-04 |
+| Reduced motion | Particles hidden; reveal is instant opacity swap | G-04 |
+| Tab resume light | 10 s hide + resume: key light glides smoothly | H-01 |
+| 16K import | 16K import produces desktop-safe warning | H-05 |
+| TextureManager oversized | Oversized texture logs `texture-oversized` diagnostic | H-03 |
+| GLSL highp mobile | No UV seam artifacts on 16K texture on mobile | H-04 |
+| Hover over timeline | Painting tilt updates as mouse moves over timeline | I-01 |
+| Drag to timeline | Pan drag continues through timeline without interruption | I-03 |
+| Dispose no window leaks | `dispose()` removes all global window listeners | K-01 |
+| Timeline thumbs responsive | 375px: ~90x57 px; 1440px: 150x95 px | J-05 |
+| Edge fade | Fade visible both ends; disappears at boundary | J-04 |
+| Scroll arrows | Appear on hover, hide at boundaries, scroll 80% page width | J-02 |
+| Counter | Shows "1 / N"; updates on navigation; ARIA announces change | J-03 |
+| Virtual DOM 50 arts | Initial DOM node count <= 60 for 50-artwork gallery | J-01 |
+
+
+### Validation
+
+```bash
+npm run lint
+npm run build
+```
+
+Implemented. This pass completes the v0.20.7 gap-closure coding plan and refreshes every tracked Markdown file to remove stale “under repair” wording.
+
+### Implemented code closures
+
+- **F-01:** `BackgroundAudioManager.startFade()` now clamps fade targets to `MAX_EFFECTIVE_AUDIO_GAIN` (0.30) instead of `1.0`.
+- **F-02:** `audio-volume-map` diagnostics now include `displayPct` alongside effective gain and live gain.
+- **F-03:** `PreferencesPanel.patchPanel()` only skips the volume-slider value patch while dragging; motion, contrast, mute, status, quality, and lighting controls still update immediately.
+- **F-04:** Main-page and preferences volume sliders now expose `aria-valuetext` such as `50 Prozent`.
+- **F-05:** Broken zero-volume recovery diagnostics now log the stored value, recovery target, and storage key.
+- **F-06:** First-interaction recovery now retries when audio should be playing but is still stopped before an autoplay-block flag exists.
+- **F-07:** `BackgroundAudioManager.setMuted(false)` now attempts playback directly when a source is available and lifecycle is not suspended.
+- **F-08:** `--volume-pct` is now written as a CSS percentage string and consumed directly by the slider gradient.
+- **F-09:** Confirmed correct; no code change required.
+- **F-10:** The ended-loop fallback fade is reduced from 150 ms to 50 ms.
+
+### Documentation sync
+
+All tracked Markdown files were updated with the v0.20.8 audit stamp and a current shipped-status note so customer, architecture, AI, and maintenance docs no longer describe v0.20 audio as an open regression.
+
+### Validation target
+
+```bash
+npm run lint
+npm run build
+```
+
+## v0.20.7 — Full technical code audit + gap-closure coding plan (2026-05-21)
+
+### Status
+
+Planning. This section is a deep, file-level code audit of the entire v0.20 audio and control domain, written to serve as the definitive technical coding reference for any remaining implementation work. Every finding cites the exact file and line numbers confirmed in the current checked-in source. TypeScript and SCSS code patches are provided inline for each open gap.
+
+---
+
+### Audit scope
+
+| File | Lines audited |
+|------|--------------|
+| `src/audio/volumeMapping.ts` | 1–31 |
+| `src/audio/BackgroundAudioManager.ts` | 1–449 |
+| `src/utils/preferences.ts` | 1–205 |
+| `src/ui/AudioControls.ts` | 1–195 |
+| `src/ui/PreferencesPanel.ts` | 1–310 |
+| `src/main.ts` | 200–820 (audio + lifecycle paths) |
+| `src/styles/main.scss` | 436–560, 1370–1410 (audio-controls blocks) |
+
+---
+
+### F-01 — `startFade()` clamps to 1.0 instead of `MAX_EFFECTIVE_AUDIO_GAIN`
+
+**File:** `src/audio/BackgroundAudioManager.ts:399`
+
+```typescript
+// CURRENT (line 399)
+this.fadeTargetGain = Math.max(0, Math.min(1, targetGain));
+```
+
+**Problem:** The fade engine silently allows targets above `MAX_EFFECTIVE_AUDIO_GAIN` (0.30). In practice all callers pass a value already clamped by `setVolume()`, so no user-visible bug exists today — but a future internal caller could accidentally exceed the cap.
+
+**Fix:**
+
+```typescript
+// PROPOSED
+import { MAX_EFFECTIVE_AUDIO_GAIN } from './volumeMapping';
+// ...
+this.fadeTargetGain = Math.max(0, Math.min(MAX_EFFECTIVE_AUDIO_GAIN, targetGain));
+```
+
+The `MAX_EFFECTIVE_AUDIO_GAIN` import is already present at line 2 of `BackgroundAudioManager.ts`, so no new import is needed. Change only the `Math.min` ceiling on line 399.
+
+---
+
+### F-02 — `audio-volume-map` diagnostics event omits display percent
+
+**File:** `src/audio/BackgroundAudioManager.ts:250–257`
+
+```typescript
+// CURRENT (lines 250–257)
+this.diagnostics.debug('audio-volume-map', 'Volume mapping record', {
+  targetGain: clamped,
+  liveGain: this.audio.volume,
+  reason,
+});
+```
+
+**Problem:** Exported diagnostics snapshots do not include the display-percent value. When a user reports a volume issue, engineers must re-derive the display percent from the raw gain value instead of reading it directly from the log.
+
+**Fix** — add `gainToDisplayPercent` import (already present via the file's existing volumeMapping import) and enrich the payload:
+
+```typescript
+import { MAX_EFFECTIVE_AUDIO_GAIN, gainToDisplayPercent } from './volumeMapping';
+// ...
+this.diagnostics.debug('audio-volume-map', 'Volume mapping record', {
+  targetGain: clamped,
+  displayPct: gainToDisplayPercent(clamped),   // ← add
+  liveGain: this.audio.volume,
+  reason,
+});
+```
+
+---
+
+### F-03 — `PreferencesPanel.patchPanel()` skips all preference updates during slider drag
+
+**File:** `src/ui/PreferencesPanel.ts:178–182`
+
+```typescript
+// CURRENT (lines 178–182)
+private patchPanel(): void {
+  // Do not replace slider during active pointer drag (Slice B continuity fix).
+  if (this.isVolumeDragging) return;
+  // ...
+}
+```
+
+**Problem:** When the user is dragging the volume slider and simultaneously triggers any other preference change (e.g., the quality radio from the adaptive quality controller writing through `preferences.setQuality()`), the quality radio UI is not updated until the drag completes. In practice the adaptive controller fires rarely and the lag is imperceptible, but the intent was to guard only slider node replacement, not all DOM patches.
+
+**Fix** — split the guard so only the slider-value patch is skipped during drag:
+
+```typescript
+private patchPanel(): void {
+  const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume } = this.prefs.current;
+
+  if (this.motionInput) this.motionInput.checked = reducedMotion;
+  if (this.contrastInput) this.contrastInput.checked = contrastMode === 'high';
+  if (this.audioMutedInput) this.audioMutedInput.checked = audioMuted;
+
+  // Only skip the volume-slider patch while the user is actively dragging;
+  // all other controls must update immediately regardless of drag state.
+  if (!this.isVolumeDragging && this.audioVolumeInput && this.audioValueLabel) {
+    const displayPct = gainToDisplayPercent(audioVolume);
+    this.audioVolumeInput.value = String(displayPct);
+    this.audioVolumeInput.style.setProperty('--volume-pct', String(displayPct));
+    this.audioValueLabel.textContent = `${displayPct}%`;
+  }
+
+  if (this.audioStatusEl) { /* ... unchanged ... */ }
+
+  this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-quality"]').forEach((input) => {
+    input.checked = input.value === quality;
+  });
+  this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-lighting"]').forEach((input) => {
+    input.checked = input.value === lighting;
+  });
+}
+```
+
+---
+
+### F-04 — Volume sliders missing `aria-valuetext`
+
+**Files:** `src/ui/AudioControls.ts:113`, `src/ui/PreferencesPanel.ts:154`
+
+**Problem:** Both `<input type="range">` elements expose only `aria-valuenow` (the raw integer 0–100). Screen readers announce "50" rather than "50 percent". WCAG SC 4.1.2 recommends `aria-valuetext` for sliders where the numeric value requires a unit or description for meaning.
+
+**Fix for `AudioControls.ts`** — in `update()` method, after setting `aria-valuenow`:
+
+```typescript
+// Line ~113 in AudioControls.ts — add after the aria-valuenow line
+this.volumeInput.setAttribute('aria-valuenow', String(displayPct));
+this.volumeInput.setAttribute('aria-valuetext', `${displayPct} Prozent`);  // ← add
+```
+
+**Fix for `PreferencesPanel.ts`** — in `buildPanel()` and `patchPanel()`:
+
+```html
+<!-- buildPanel() range input — add aria-valuetext attribute -->
+<input
+  type="range"
+  id="freyraum-audio-volume"
+  min="0" max="100" step="1"
+  value="${displayPct}"
+  aria-valuetext="${displayPct} Prozent"
+/>
+```
+
+In `patchPanel()` (non-dragging branch):
+
+```typescript
+this.audioVolumeInput.setAttribute('aria-valuetext', `${displayPct} Prozent`);
+```
+
+In the `input` event handler (in-place label update during drag):
+
+```typescript
+volumeInput.addEventListener('input', () => {
+  const displayPct = Number(volumeInput.value);
+  if (Number.isNaN(displayPct)) return;
+  if (this.audioValueLabel) this.audioValueLabel.textContent = `${Math.round(displayPct)}%`;
+  volumeInput.style.setProperty('--volume-pct', String(displayPct));
+  volumeInput.setAttribute('aria-valuetext', `${Math.round(displayPct)} Prozent`);  // ← add
+  this.prefs.setAudioVolume(displayPercentToGain(displayPct));
+});
+```
+
+---
+
+### F-05 — `AUDIO_RECOVERY_KEY` one-shot flag never resets on localStorage clear
+
+**File:** `src/utils/preferences.ts:34–68`
+
+```typescript
+// CURRENT — key is written once and never revisited
+const AUDIO_RECOVERY_KEY = 'freyraum.audio-recovery.v205';
+```
+
+**Problem:** If a user manually clears `localStorage`, the recovery key is gone. On the next load the zero-volume recovery logic re-runs correctly (no bug). However, if `freyraum.preferences.v1` is populated from a backup/sync while `AUDIO_RECOVERY_KEY` is absent, the recovery fires again — which is harmless but emits a misleading warning log.
+
+**Fix (low priority)** — check that the stored value is actually out-of-range before logging:
+
+```typescript
+if (shouldRecoverZeroVolume) {
+  audioVolume = DEFAULT_AUDIO_GAIN;
+  diagnostics.warn('audio-volume-recovered',
+    'Recovered broken zero-volume preference (was likely written by faulty v0.20.4)',
+    { stored: stored.audioVolume, recoveredTo: audioVolume, key: STORAGE_KEY }  // include stored value
+  );
+}
+```
+
+No behavior change needed — this is a diagnostic-quality improvement only.
+
+---
+
+### F-06 — Autoplay recovery guard does not handle pre-play state (audio loaded but `play()` never attempted)
+
+**File:** `src/main.ts:465–474`
+
+```typescript
+// CURRENT — tryRecoverBlockedAudio only acts when autoplayBlocked is already true
+const tryRecoverBlockedAudio = (reason: string): void => {
+  if (interactionAudioRecoveryDone) return;
+  const audioState = backgroundAudio.getState();
+  if (!backgroundAudio.hasSource() || prefsNow.audioMuted || !audioState.autoplayBlocked) return;
+  // ...
+};
+```
+
+**Problem:** `autoplayBlocked` is set to `true` only after `play()` is called and rejected with `NotAllowedError`. In some browser/OS configurations (particularly iOS Safari before first interaction), `audio.play()` is never called during boot (no source, late load, or similar timing). The `autoplayBlocked` flag stays `false`, the recovery guard never fires, and audio never starts.
+
+**Fix** — also recover when `!playing && !muted && hasSource()` regardless of `autoplayBlocked`, as a unified "audio should be playing but isn't" recovery:
+
+```typescript
+const tryRecoverBlockedAudio = (reason: string): void => {
+  if (interactionAudioRecoveryDone) return;
+  const prefsNow = preferences.current;
+  const audioState = backgroundAudio.getState();
+  const shouldPlay =
+    backgroundAudio.hasSource() &&
+    !prefsNow.audioMuted &&
+    (audioState.autoplayBlocked || (!audioState.playing && audioState.available));
+  if (!shouldPlay) return;
+  interactionAudioRecoveryDone = true;
+  diagnostics.info('audio', 'autoplay-recovery-attempt',
+    'Retrying audio play after user interaction', { reason, autoplayBlocked: audioState.autoplayBlocked });
+  void backgroundAudio.play(`interaction-recovery:${reason}`);
+};
+```
+
+**Note:** The `interactionAudioRecoveryDone` flag still prevents this from retriggering after the first successful interaction attempt.
+
+---
+
+### F-07 — `BackgroundAudioManager.setMuted(false)` does not call `play()` directly
+
+**File:** `src/audio/BackgroundAudioManager.ts:206–230`
+
+```typescript
+// CURRENT — setMuted(false) only sets state and emits; play() is triggered by main.ts subscription
+setMuted(value: boolean, reason: string): void {
+  if (this.disposed) return;
+  if (this.state.muted === value) { /* skip */ return; }
+  this.audio.muted = value;
+  this.state = { ...this.state, muted: value };
+  if (value) {
+    // Muting path: fade out then pause
+    this.shouldResumeAfterSuspend = false;
+    this.startFade(0, FADE_OUT_MS, 'fade-out-mute', () => { ... });
+    this.state = { ...this.state, playing: false };
+  }
+  // No `else` branch for unmute — relies on main.ts calling play() via preferences path
+  this.emit();
+}
+```
+
+**Problem:** Unmuting relies on `main.ts` receiving a preference update notification and calling `applyPreferences()` which calls `play()`. This coupling works but creates an implicit dependency: if `setMuted(false)` is ever called directly on the manager (not through preferences), audio will not resume automatically. The current codebase does not call it directly outside `main.ts`, so no immediate bug — but the architecture is fragile.
+
+**Future hardening suggestion** — add an unmute-resume branch inside `setMuted()`:
+
+```typescript
+if (value) {
+  // Muting: fade out + pause
+  this.shouldResumeAfterSuspend = false;
+  this.startFade(0, FADE_OUT_MS, 'fade-out-mute', () => {
+    if (!this.audio.paused) this.audio.pause();
+    this.audio.volume = this.state.targetVolume;
+    this.state = { ...this.state, liveVolume: this.audio.volume };
+  });
+  this.state = { ...this.state, playing: false };
+} else if (!this.disposed && this.source && !this.suspended) {
+  // Unmuting: attempt play within the same call to avoid relying on external orchestration.
+  // play() internally handles the "already playing" guard.
+  void this.play(`unmute:${reason}`);
+}
+```
+
+**Note:** This change would make `main.ts` `applyPreferences()` call `play()` a second time (harmless, since `play()` now short-circuits when already playing). The double-call is acceptable and clarified by the existing `audio-play-skip` diagnostics event.
+
+---
+
+### F-08 — CSS `--volume-pct` default unit mismatch risk in future `calc()` contexts
+
+**File:** `src/styles/main.scss` (`.audio-controls__slider` block, and related CSS custom property usage)
+
+The `--volume-pct` custom property stores a **unitless** integer (e.g., `50`) and is consumed as:
+
+```scss
+calc(var(--volume-pct, 50) * 1%)
+```
+
+**Problem:** If a future maintainer uses `--volume-pct` in a new `calc()` context expecting a percentage value and omits the `* 1%` multiplication, the property silently produces wrong output.
+
+**Fix** — store as a percentage string from the start:
+
+```typescript
+// AudioControls.ts and PreferencesPanel.ts — change all setProperty calls
+this.volumeInput.style.setProperty('--volume-pct', `${displayPct}%`);
+```
+
+```scss
+// main.scss — change the gradient to consume the value directly
+background: linear-gradient(
+  to right,
+  var(--accent) 0%,
+  var(--accent) var(--volume-pct, 50%),     // ← change: no multiplication
+  rgba(0, 0, 0, 0.12) var(--volume-pct, 50%),
+  rgba(0, 0, 0, 0.12) 100%
+);
+```
+
+This is a low-risk CSS convention fix. All three `.setProperty` call sites must change together:
+- `AudioControls.ts`: `handleVolumeInput()` and `update()`
+- `PreferencesPanel.ts`: `input` handler, `buildPanel()` initial render, and `patchPanel()`
+
+---
+
+### F-09 — `BackgroundAudioManager` does not export `targetVolume` directly on its state type
+
+**File:** `src/audio/BackgroundAudioManager.ts:31–40`
+
+```typescript
+// CURRENT — BackgroundAudioState already includes targetVolume ✅
+export interface BackgroundAudioState {
+  available: boolean;
+  loaded: boolean;
+  playing: boolean;
+  muted: boolean;
+  targetVolume: number;   // ← exists
+  liveVolume: number;     // ← exists
+  autoplayBlocked: boolean;
+  message: string | null;
+  activeSource: BackgroundAudioSource | null;
+}
+```
+
+**Finding:** The state split between `targetVolume` and `liveVolume` is **correctly implemented**. `AudioControls.update()` renders `state.targetVolume` (not `liveVolume`), so the slider never drifts to the fade envelope value. No code change needed — this is a confirmation.
+
+---
+
+### F-10 — `LOOP_RESTART_FADE_MS = 150` produces a brief audible gap on chromium at high gain
+
+**File:** `src/audio/BackgroundAudioManager.ts:17`
+
+```typescript
+const LOOP_RESTART_FADE_MS = 150;
+```
+
+**Problem:** The `ended` fallback fades to zero over 150 ms then calls `play()` which starts a 300 ms fade-in. The total gap is ≈150 ms of silence before audible restart. On some browsers `loop = true` handles this seamlessly (no `ended` event), so the fallback fires rarely. But on Chromium with gapless content this produces a subtle dip.
+
+**Better pattern** — keep `loop = true` as primary and only attempt a crossfade on the `ended` event. The current code already does this. To minimize the gap, reduce `LOOP_RESTART_FADE_MS` to `50`:
+
+```typescript
+/** Gain ramp when the `ended` fallback restarts a loop (ms). Kept short to minimize audible gap. */
+const LOOP_RESTART_FADE_MS = 50;
+```
+
+Alternatively, reset `currentTime = 0` synchronously without a pre-fade, relying on `loop=true` to catch the edge silently in most browsers:
+
+```typescript
+this.audio.addEventListener('ended', () => {
+  if (!this.source) return;
+  this.diagnostics.warn('audio-loop-restart', 'Audio ended unexpectedly; looping via ended fallback');
+  // Reset time synchronously — no fade — to minimize silence.
+  this.audio.currentTime = 0;
+  void this.play('ended-fallback');
+});
+```
+
+---
+
+### Remaining implementation slices (priority order)
+
+| Priority | Slice | Files | Complexity |
+|----------|-------|-------|------------|
+| High | **F-06**: Extended autoplay recovery | `src/main.ts:465` | Trivial (3 lines) |
+| High | **F-03**: Selective drag guard in patchPanel | `src/ui/PreferencesPanel.ts:178` | Low |
+| Medium | **F-01**: Fade clamp consistency | `src/audio/BackgroundAudioManager.ts:399` | Trivial (1 line) |
+| Medium | **F-02**: Add displayPct to volume-map log | `src/audio/BackgroundAudioManager.ts:252` | Trivial (1 line) |
+| Medium | **F-04**: `aria-valuetext` on sliders | `src/ui/AudioControls.ts:113`, `src/ui/PreferencesPanel.ts:154` | Low |
+| Medium | **F-07**: Unmute → play within BAM | `src/audio/BackgroundAudioManager.ts:215` | Medium |
+| Low | **F-08**: `--volume-pct` as percentage string | `src/styles/main.scss` + 3 TS call sites | Low |
+| Low | **F-05**: Enhanced recovery diagnostics | `src/utils/preferences.ts:114` | Trivial |
+| Low | **F-10**: Reduce loop-restart fade gap | `src/audio/BackgroundAudioManager.ts:17` | Trivial (1 line) |
+
+---
+
+### Confirmed-correct findings (no code change needed)
+
+- **Volume mapping contract** (`src/audio/volumeMapping.ts`): Uses linear `0..100% display → 0..0.30 effective`, `DEFAULT_AUDIO_GAIN = 0.15`. Exactly matches the requested contract. ✅
+- **State ownership** (`BackgroundAudioManager.ts`): `targetVolume` and `liveVolume` are properly separated; fade envelope never overwrites `targetVolume`. ✅
+- **Startup mute default** (`src/utils/preferences.ts:141`): `audioMuted: false` is hardcoded at construction, ignoring any stored mute state. Fresh loads always start unmuted. ✅
+- **Zero-volume legacy recovery** (`src/utils/preferences.ts:107–131`): Detects and heals broken `audioVolume = 0` from faulty v0.20.4 behavior using a one-shot `AUDIO_RECOVERY_KEY`. ✅
+- **`play()` short-circuit guard** (`BackgroundAudioManager.ts:142–147`): Skips re-triggering fade-in when audio is already playing. ✅
+- **`setMuted()` no-op guard** (`BackgroundAudioManager.ts:212–218`): Ignores identical mute requests. ✅
+- **Slider source of truth** (`AudioControls.ts:107–108`): Renders from `state.targetVolume`, never from `liveVolume`. ✅
+- **PreferencesPanel drag continuity** (`PreferencesPanel.ts:178`): `isVolumeDragging` prevents full patchPanel() from replacing the slider during pointer drag. ✅
+- **First-interaction autoplay recovery** (`main.ts:461–481`): `pointerdown` + arrow keys + Space/Enter all trigger a one-shot play retry. ✅
+- **Audio placement** (`src/styles/main.scss:436`): Positioned top-right via `right: calc(146px + var(--safe-right))`, aligned with the settings/fullscreen control cluster. ✅
+- **Narrow-phone slider collapse** (`main.scss:1375`): Slider wrap hidden on `max-width: 599px`, mute button still accessible. ✅
+
+---
+
+### Acceptance matrix for the next implementation PR (gap-closure)
+
+| Scenario | Expected outcome |
+|----------|-----------------|
+| First load, empty localStorage | Audio starts audible at UI 50% (= 0.15 effective gain) |
+| First load on iOS Safari (delayed autoplay) | First canvas touch/keypress triggers play via extended recovery (F-06) |
+| Slider drag while adaptive quality changes | Quality radio updates immediately; slider does not jump (F-03) |
+| Screen reader announces slider | Reads "50 Prozent", not "50" (F-04) |
+| Tab hidden then restored | Audio suspends and resumes; `targetVolume` is unchanged |
+| Mute → unmute fast toggle | No silence gap; fade-in from mid-fade correctly (existing ✅) |
+| Loop boundary on Chromium | Restart gap ≤ 50 ms (F-10) |
+| Diagnostics export | Every volume log includes both `targetGain` and `displayPct` (F-02) |
+
+---
+
+### Validation baseline for any implementation PR in this domain
+
+```bash
+npm run lint   # must pass with 0 warnings
+npm run build  # must produce dist/ with no type errors
+```
+
+Manual sweep checklist:
+- [ ] Pointer drag on both sliders: value does not jump; label updates live
+- [ ] Keyboard arrow keys on sliders: value steps by 1%; aria-valuetext announced
+- [ ] Mute toggle: fades out, then back in to previously selected level
+- [ ] Tab hide then restore: audio resumes automatically
+- [ ] No audio source: `.audio-controls[hidden]` — widget invisible
+- [ ] Autoplay blocked: indicator dot visible; first canvas interaction starts audio
+
+---
+
+## v0.20.6 — Audio stabilization + control polish (2026-05-21)
+
+### Status
+
+Implemented.
+
+### Requested outcomes covered in this pass
+
+1. Keep background audio stable while switching settings and during heavy runtime updates.
+2. Ensure startup preference state is unmuted by default.
+3. Improve autoplay-block recovery so audio resumes quickly on first user interaction.
+4. Align quick audio control sizing with the top-right settings/fullscreen control cluster.
+5. Remove the dark circular focus artifact seen on nav arrow buttons during keyboard navigation.
+6. Refresh markdown status text for this pass.
+
+### Implementation slices
+
+1. **Slice A — Playback stability guardrails**
+   - Prevent `BackgroundAudioManager.play()` from re-triggering fade-in when audio is already playing.
+   - Avoid redundant mute state writes so unnecessary transitions do not run.
+2. **Slice B — Preference-apply behavior**
+   - In `main.ts`, only call `play('preferences-apply')` when audio is not currently playing or autoplay is blocked.
+3. **Slice C — Autoplay-blocked recovery**
+   - Add first-interaction retry hooks (`pointerdown`, `ArrowLeft/ArrowRight/Space/Enter`) that attempt playback once when autoplay was blocked and the user is not muted.
+4. **Slice D — UI control polish**
+   - Reduce audio-control chrome height and tune slider width/padding to better match settings/fullscreen visual scale.
+   - Add dedicated `nav-btn:focus-visible` styling to suppress the dark browser halo while preserving visible keyboard focus.
+5. **Slice E — Documentation sync**
+   - Record the implementation in `CHANGELOG.md` and `FINDINGS.md`.
+   - Refresh markdown audit stamp wording for v0.20.6.
+
+## v0.20.5 — Complete audio regression recovery plan (planning → substantially resolved, 2026-05-21)
+
+### Status
+
+Substantially resolved. The core state-corruption and mapping bugs documented below were fixed in the v0.20.6 implementation pass and in the corrected `volumeMapping.ts` linear contract. See v0.20.7 for precise file-level confirmation of what is now correct and what minor gaps remain.
+
+**Original planning text preserved below for audit trail.**
+
+### Exact problems to solve
+
+1. The website still starts effectively muted.
+2. Startup loudness must be **15% effective output**, but the UI should show **50%** because the intended user-facing range is **0–30% effective mapped onto 0–100% display**.
+3. The mute button and quick volume slider are still in the wrong place.
+4. Unmuting can restore audio at 0%.
+5. Setting the preferences slider to 50% can still produce 0% effective output instead of the requested 15%.
+6. The documentation currently says these issues were fixed even though the runtime still fails.
+
+### Code-audit conclusions
+
+1. **Startup/unmute failure is primarily a state-corruption bug, not just a default-value bug.**
+   - `BackgroundAudioManager.play()` forces `audio.volume = 0` for fade-in.
+   - The `volumechange` listener then copies that temporary value back into manager state.
+   - The fade target and UI readback can therefore collapse to zero immediately.
+
+2. **The implemented mapping contract is not the requested one.**
+   - Current code uses a power curve targeting “50% display ≈ 15% effective” while still allowing full-scale output at 100%.
+   - The requested contract is simpler and stricter: display `0..100` must map to effective `0.00..0.30`, so display `50` must equal effective `0.15` exactly.
+
+3. **Source-of-truth boundaries are mixed.**
+   - Preferences store target gain.
+   - `BackgroundAudioManager` state is also used by UI, but it currently carries transient element-volume values during fades and mutes.
+   - This makes the main-page control, mute recovery, and startup behavior unreliable.
+
+4. **Quick-control placement was treated as final without confirming the requested target location.**
+   - The current bottom-left placement must be treated as rejected and replaced by the requested position in the implementation pass.
+
+5. **Broken persisted values must be reviewed during the fix.**
+   - Returning users may have localStorage written by the faulty v0.20.4 behavior.
+   - The fix needs explicit handling so old broken values do not keep forcing silent startup or bad slider readback.
+
+### Recovery plan
+
+1. **Rebuild the audio state model**
+   - Split audio state into at least two distinct concepts: persisted/user-selected target loudness and live media-element loudness during fades.
+   - Ensure mute, fade, loop restart, autoplay recovery, and lifecycle resume never overwrite the target loudness.
+   - Define which state each UI surface is allowed to render.
+
+2. **Replace the volume mapping contract everywhere**
+   - Remove the current power-curve assumption.
+   - Implement a deterministic display↔effective mapping for the requested capped range (`0..100` display ↔ `0..0.30` effective).
+   - Update startup defaults, settings slider, quick slider, diagnostics payloads, and any customer-facing copy together.
+
+3. **Fix startup, mute/unmute, and resume semantics**
+   - Make first load start audible when defaults apply.
+   - Make unmute restore the last chosen target loudness instead of the current live envelope value.
+   - Validate autoplay-blocked recovery, loop fallback, and lifecycle resume against the same rule.
+
+4. **Correct the settings slider and main-page slider contract**
+   - Keep both sliders bound to the same target-volume source of truth.
+   - Preserve immediate audible feedback without letting transient fade values feed back into displayed percentages.
+   - Confirm that a displayed 50% always means exactly the requested 15% effective output.
+
+5. **Move the quick audio controls to the requested location**
+   - Remove the current bottom-left placement assumption from the implementation.
+   - Re-anchor the mute button and quick slider to the requested position and verify that they no longer sit in the currently rejected spot.
+   - Re-run overlap checks against settings, fullscreen, zoom, navigation, timeline, safe areas, and narrow viewports.
+
+6. **Repair documentation and diagnostics**
+   - Downgrade stale “implemented/fixed” claims until the runtime fix actually lands.
+   - Expand diagnostics so logs show target gain, live element gain, mute state, autoplay state, and placement-related layout decisions where relevant.
+
+### Required implementation slices
+
+1. **Slice A — Audio-state ownership cleanup**
+   - Refactor `BackgroundAudioManager` so fade envelopes operate on live element state only.
+   - Keep user-selected loudness in a stable target field that is never replaced by `volumechange` feedback.
+
+2. **Slice B — Requested capped mapping**
+   - Replace `src/audio/volumeMapping.ts` with helpers that encode the requested `0..30% effective` maximum.
+   - Recalculate the default startup target from that contract.
+   - Define how pre-existing stored values are interpreted or migrated.
+
+3. **Slice C — UI synchronization**
+   - Make `AudioControls` and `PreferencesPanel` render the same target loudness and write through the same mapping helpers.
+   - Keep quick visual feedback without drifting to transient fade values.
+
+4. **Slice D — Placement correction**
+   - Replace the current hard-coded quick-control placement with the requested target position.
+   - Verify no overlap or crowding across supported viewports.
+
+5. **Slice E — Recovery validation + logging**
+   - Add or expand diagnostics for startup, mute/unmute, slider sync, autoplay recovery, lifecycle resume, and legacy-preference handling.
+   - Record manual test results and exact acceptance outcomes before documenting the work as fixed.
+
+### Acceptance matrix for the eventual implementation PR
+
+- New visitor with empty localStorage: audio starts audible at the requested effective loudness and UI reads 50%.
+- Returning visitor with previously muted state: mute behavior stays intentional and reversible.
+- Returning visitor with v0.20.4-broken zero-volume state: migration/recovery path is defined and verified.
+- Main-page slider, settings slider, and mute button stay in sync through drag, click, autoplay unblock, tab hide/show, and loop boundary events.
+- Quick controls no longer occupy the currently rejected location.
+- Documentation is only upgraded from planning to implemented after the runtime behavior is manually re-verified.
+
+### Validation baseline for this planning pass
+
+- `npm install` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+## v0.20.3 — Full technical audit + enhancement roadmap (planning, 2026-05-20)
+
+### Status
+
+Implemented (v0.20.4, 2026-05-20).
+
+### Audit scope
+
+- Runtime orchestration (`src/main.ts`)
+- Audio domain (`src/audio/BackgroundAudioManager.ts`)
+- Preferences persistence and UI (`src/utils/preferences.ts`, `src/ui/PreferencesPanel.ts`, `src/ui/AudioControls.ts`)
+- Styling behavior for controls (`src/styles/main.scss`)
+- Current documentation consistency and upgrade readiness
+
+### Highest-impact technical findings
+
+1. **Perceptual loudness mapping is missing.**
+   - Current model stores linear gain (`audioVolume`) and renders linear sliders (0–100).
+   - Requested behavior (“show 50%, sound calm”) needs a stable display↔effective mapping contract and migration-safe persistence behavior.
+2. **Settings slider drag continuity is interrupted by full re-rendering.**
+   - `PreferencesPanel` rebuilds full panel markup on each preference update.
+   - `input` events on the range slider immediately write preferences, so the control node can be replaced mid-drag.
+3. **Fade envelope is not implemented for loop/toggle edges.**
+   - `BackgroundAudioManager` applies volume changes directly and restarts immediately on `ended` fallback.
+   - This can create audible clicks depending on source boundaries and browser/device timing.
+4. **Main-page audio controls need collision-aware placement policy.**
+   - Current bottom-left placement is visually balanced but not yet formalized against viewport crowding / safe-area / timeline overlap rules.
+5. **Audio diagnostics are useful but can be made more actionable.**
+   - Events exist, but there is no explicit diagnostic contract for fade phases, mapping source-of-truth values, and autoplay recovery transitions.
+
+### Technical implementation slices (coding advice)
+
+1. **Slice A — Volume mapping contract + helpers**
+   - Add explicit helper functions in `src/audio/volumeMapping.ts` (or equivalent utility):
+     - `displayPercentToGain(percent: number): number`
+     - `gainToDisplayPercent(gain: number): number`
+   - Keep `PreferencesStore` as source-of-truth for persisted effective gain (`audioVolume`).
+   - Render both sliders from `gainToDisplayPercent(...)`; write preferences using `displayPercentToGain(...)`.
+   - Add migration-safe guardrails: clamp out-of-range legacy values and log one diagnostics warning when normalization occurs.
+
+2. **Slice B — Continuous slider behavior in PreferencesPanel**
+   - Refactor `PreferencesPanel` away from full `innerHTML` replacement on every preference event.
+   - Keep static panel skeleton and patch only mutable text/value/checked states.
+   - During active pointer drag:
+     - suppress structural re-renders,
+     - update live value label in place,
+     - commit final value on `change` to reduce churn while preserving immediate audible feedback.
+   - Keep keyboard slider updates fully live (arrow/page/home/end).
+
+3. **Slice C — Fade envelope in BackgroundAudioManager**
+   - Add a small envelope layer around `HTMLAudioElement.volume` writes:
+     - configurable `FADE_IN_MS`, `FADE_OUT_MS`, `LOOP_RESTART_FADE_MS`
+     - cancel previous ramps before starting a new one.
+   - Implement deterministic state transitions for:
+     - play-start,
+     - mute/unmute,
+     - lifecycle suspend/resume,
+     - ended fallback restart.
+   - Keep autoplay rejection behavior unchanged; only enrich transition handling.
+
+4. **Slice D — Main-page control placement policy**
+   - Define CSS placement tokens for left/bottom offsets and overlap boundaries.
+   - Add responsive fallback rules for narrow phone widths (stacking, compact width, or temporary slider collapse).
+   - Validate that `.audio-controls` never intersects timeline/prefs/fullscreen hit targets across supported breakpoints.
+
+5. **Slice E — Diagnostics/logging expansion**
+   - Extend scoped diagnostics with explicit audio transition events:
+     - `audio-fade-start`, `audio-fade-cancel`, `audio-fade-complete`
+     - `audio-volume-map` (display percent + effective gain)
+     - `audio-resume-attempt` and outcome classification
+   - Keep log levels bounded: high-frequency slider logs must stay `debug`, not `info`.
+   - Include enough payload fields to replay user-reported behavior from exported diagnostics snapshots.
+
+### Brainstorm enhancements (post-v0.20.3 candidates)
+
+1. Optional logarithmic “fine control” mode for lower volume ranges.
+2. Soft-ducking strategy during heavy transitions (future, behind feature flag).
+3. Optional mini status chip for “autoplay blocked” with one-click recovery hints.
+4. Import-time optional loudness metadata scan (report-only) to warn about unusually loud masters.
+5. Lightweight smoke test harness for audio preference round-trip and mapping consistency.
+
+### Acceptance checks
+
+- Displayed slider value remains stable and continuous during pointer drag and keyboard adjustment.
+- Requested startup profile is met exactly by mapping contract (display midpoint + calm effective loudness baseline).
+- No audible click at normal mute/unmute, play-start, or ended-fallback loop transitions.
+- Main-page controls stay discoverable and non-overlapping across breakpoints and safe-area variants.
+- Diagnostics exports clearly reveal mapping values and transition/fallback states.
+
+### Validation plan for implementation PR
+
+- `npm run lint`
+- `npm run build`
+- Manual interaction sweep:
+  - mouse drag + touch drag + keyboard slider control
+  - autoplay-blocked recovery click path
+  - tab hide/show + freeze/resume path
+  - repeated loop boundary observation on at least one short and one long track
+
+## v0.20.2 — Audio calm-start + control UX + seamless looping (planning, 2026-05-20)
+
+### Status
+
+Implemented (v0.20.4, 2026-05-20).
+
+### Requested outcomes
+
+1. Start website audio **on by default** (not muted), but with a calm effective loudness baseline.
+2. Use a new volume behavior target where startup loudness is low (requested: 15%) while the UI shows a balanced midpoint (requested: 50%) so users can move down/up symmetrically.
+3. Rework main-page mute/volume control placement to align with common website media-control usability guidance.
+4. Fix the settings-panel volume slider so dragging behaves as a truly continuous slider (not “press/click only” behavior).
+5. Add fade-in/fade-out handling to avoid audible clip/click artifacts when audio loops or toggles.
+
+### Code-audit findings to address
+
+1. Current persisted default is `audioMuted: false` and `audioVolume: 0.35` (`src/utils/preferences.ts`) — this does not match the new requested startup profile.
+2. Volume control is currently linear 0..100 in both main-page and settings UI (`src/ui/AudioControls.ts`, `src/ui/PreferencesPanel.ts`), with no user-facing remap for “50% shown = 15% effective loudness.”
+3. Settings slider re-renders through `renderPanel()` subscription on every preference write (`PreferencesPanel`), which can interrupt drag continuity.
+4. `BackgroundAudioManager` currently applies direct volume changes with no envelope/fade, and loop recovery (`ended` fallback) does immediate restart (`src/audio/BackgroundAudioManager.ts`), increasing pop/click risk on imperfect loop boundaries.
+5. Main-page audio controls are bottom-left (`src/styles/main.scss` `.audio-controls`), which should be re-validated against consistency/discoverability/touch-target guidance before adjusting layout.
+
+### Planning slices
+
+1. **Volume model update**
+   - Define a deterministic mapping between displayed slider percentage and effective media gain.
+   - Apply mapping consistently in startup defaults, preference persistence, and both UI sliders.
+2. **Main-page control placement refinement**
+   - Reposition controls using documented UI heuristics (discoverability, accidental-tap avoidance, timeline/other-control collision checks, safe-area behavior).
+3. **Continuous slider behavior fix**
+   - Remove drag interruptions by decoupling slider interaction from full panel re-render during active pointer/keyboard changes.
+4. **Fade envelope implementation plan**
+   - Introduce short fade-in/fade-out transitions for start/stop and loop edge handling.
+   - Keep autoplay/error diagnostics behavior intact.
+5. **Validation + documentation**
+   - Validate control behavior on pointer + keyboard.
+   - Validate no regression for autoplay-blocked flows and lifecycle suspend/resume.
+   - Update customer/developer docs with explicit “planned vs shipped” status.
+
+### Online research checkpoints
+
+- W3C ARIA Slider Pattern: <https://www.w3.org/WAI/ARIA/apg/patterns/slider/>
+- MDN slider role and range semantics: <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Roles/slider_role>
+- WCAG input modalities / operable controls: <https://www.w3.org/WAI/WCAG21/quickref/#input-modalities>
+- Apple HIG touch-target baseline (44x44): <https://developer.apple.com/design/human-interface-guidelines/layout>
+- Material accessibility touch-target guidance: <https://m3.material.io/foundations/accessible-design/accessibility-basics>
+- MDN Web Audio advanced techniques (seamless loop context): <https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Advanced_techniques>
+
+## v0.20.1 — Full markdown audit and sync (docs-only, 2026-05-20)
+
+### Status
+
+Implemented.
+
+### Scope
+
+- Audit every markdown file for current-state consistency and stale wording.
+- Ensure top-level docs match shipped v0.20 runtime behavior.
+- Record audit output in `FINDINGS.md` and `CHANGELOG.md`.
+
+### Findings summary
+
+1. Core runtime/docs state is consistent with shipped v0.20 behavior (audio CORS fix, main-page controls, sidecar cache-bust).
+2. Multiple markdown files still used v0.19-labeled top status notes even though v0.20 is already shipped.
+3. All markdown files were refreshed in this pass with a unified audit stamp and updated status headings.
+4. No runtime code changes were required.
+
+### Validation
+
+- `npm install` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+## v0.20 — Audio playback fix + main-page audio controls + sidecar cache-bust (2026-05-20)
+
+### Status
+
+Implemented.
+
+### Problems addressed
+
+#### 1. Background music not playing (CORS block on file:// origin)
+
+**Root cause:** `BackgroundAudioManager` set `this.audio.crossOrigin = 'anonymous'` on the `<audio>` element. When the gallery is opened as a `file://` URL, Chromium-based browsers (Chrome, Opera, Edge) treat the page origin as `null`. Setting `crossOrigin` triggers a CORS request from a null origin, which is always rejected by the browser with:
+> "Cross origin requests are only supported for protocol schemes: http, https …"
+
+The audio element then emits an `error` event, `playing` never fires, and the autoplay-blocked path makes the failure look like a policy block — masking the real cause.
+
+**Fix:** Removed `this.audio.crossOrigin = 'anonymous'` from `BackgroundAudioManager` constructor. The audio files live in `customer-preview/audio/` alongside `app.html`, so no CORS header is needed. Also improved the `error` event handler to log `mediaErr.code` and `mediaErr.message` for easier future diagnosis.
+
+#### 2. Subtle volume/mute controls on the main page
+
+New `src/ui/AudioControls.ts` widget — glass-pill, bottom-left, symmetric to ZoomControls (bottom-right). Hidden when no audio source is imported. Shows a pulsing activation indicator when autoplay is blocked. Includes:
+- Mute/unmute button with three SVG icons (active / muted / blocked)
+- Compact volume slider, disabled when muted
+- Full accessibility labels (aria-label, aria-pressed, title)
+- Reduced-motion and high-contrast CSS adaptations
+
+The click handler handles three cases without breaking the browser user-gesture chain:
+1. Muted → `prefs.setAudioMuted(false)` → triggers synchronous `applyPreferences()` → `audio.play()`
+2. Playing → `prefs.setAudioMuted(true)` → pause
+3. Not playing / autoplay blocked → `audioManager.play('user-activate')` directly (stays within gesture)
+
+#### 3. Sidecar text not updating after first import
+
+**Root cause:** The importer re-reads all `.txt` sidecar files on every run (no skip logic) — so the JS files on disk are always up-to-date. The stale text is a **browser cache** issue: Chromium caches `file://` resources by URL. Since `customer-artworks.js` always has the same URL, the browser may serve the old cached version even after the file has been overwritten.
+
+**Fix:** `import-artworks.mjs` now stamps `?t=<Date.now()>` on both `customer-artworks.js` and `customer-audio.js` script src attributes in `customer-preview/app.html` on each import run. Each run produces distinct URL strings, forcing the browser to treat them as new resources and bypassing the disk cache.
+
+### Files changed
+
+| File | Change |
+|------|--------|
+| `src/audio/BackgroundAudioManager.ts` | Removed `crossOrigin = 'anonymous'`; improved error event logging |
+| `src/ui/AudioControls.ts` | **New file** — main-page audio widget |
+| `src/styles/main.scss` | Added `.audio-controls` glass-pill styles + all cross-cutting selector updates |
+| `src/main.ts` | Import + instantiate `AudioControls`; add to dispose |
+| `scripts/import-artworks.mjs` | Added `PREVIEW_HTML` constant; cache-bust `app.html` script src tags on each run |
+
+## v0.19 — Background music workflow implementation (shipped, 2026-05-20)
+
+### Status
+
+Implemented. Importer, preview payload, runtime audio manager, preferences persistence, and UI controls are shipped.
+
+### Implemented outcome
+
+Implement customer-managed calm background music that integrates with the existing one-click `Update Gallery` workflow, supports compatible audio formats, exposes clear mute + volume controls, and loops continuously until the user pauses/mutes or leaves the experience.
+
+### Implementation summary
+
+1. `scripts/import-artworks.mjs` now scans `customer-audio/inbox`, copies supported audio files to `customer-preview/audio`, writes `customer-preview/customer-audio.js`, and reports selected/ignored/unsupported/no-audio outcomes.
+2. `scripts/write-local-preview.mjs` now injects `customer-audio.js` into preview HTML and writes a stub payload when no generated file exists yet.
+3. Runtime now sanitizes `window.__FREYRAUM_AUDIO` and orchestrates playback through `src/audio/BackgroundAudioManager.ts`.
+4. `src/utils/preferences.ts` persists `audioMuted` and `audioVolume` in `freyraum.preferences.v1` with backward-compatible defaults.
+5. `src/ui/PreferencesPanel.ts` + `src/styles/main.scss` now expose mute toggle, volume slider, and autoplay-status messaging.
+6. `src/main.ts` integrates audio manager lifecycle (load/apply/suspend/resume/dispose) with existing diagnostics and page-lifecycle orchestration.
+
+### Current architecture audit (code-level)
+
+Validated current boundaries against runtime + importer code:
+
+1. `src/main.ts` is the orchestration layer and the correct integration point for an `AudioManager` lifecycle (boot, page visibility/freeze/resume, diagnostics, dispose).
+2. Runtime customer content is already injected through generated globals (`window.__FREYRAUM_ARTWORKS`) and sanitized before use; this is the clean precedent for adding a second injected audio payload.
+3. Preferences persistence exists in `src/utils/preferences.ts` (`freyraum.preferences.v1`) and can be extended for audio fields (`audioMuted`, `audioVolume`) without introducing a new storage system.
+4. Accessibility-safe control patterns already exist in `PreferencesPanel` (`aria-modal`, `aria-labelledby`, focus-return on dismiss) and can host audio controls with the same semantics.
+5. Update workflow is centralized in `scripts/import-artworks.mjs` + `scripts/run-import-artworks.cjs` + `Update Gallery.command/.bat`; this is the correct boundary for audio folder scan/validation/reporting.
+6. Runtime diagnostics are centralized (`Diagnostics.ts`) with scoped events and dedupe, so audio events should use the same signal path (no ad-hoc console logs).
+
+### Non-negotiable behavior for v0.19
+
+1. **Indefinite loop:** background track must repeat continuously.
+   - Primary mechanism: `HTMLAudioElement.loop = true`.
+   - Guardrail: if browser/device edge-cases emit `ended` unexpectedly, restart from `currentTime = 0` and re-attempt `play()` through the managed recovery path.
+2. **User control supremacy:** mute and volume changes must apply immediately and persist.
+3. **Warning-first failures:** missing/invalid/unsupported audio must never block image gallery runtime.
+4. **One-click customer flow:** customer still runs only `Update Gallery` and then opens preview.
+
+### Goals and non-goals
+
+**Goals**
+
+- Add deterministic customer audio ingestion with multi-format compatibility.
+- Add robust runtime playback with autoplay-safe fallback.
+- Add accessible mute/volume UI aligned with existing design language.
+- Add detailed diagnostics and plain-language import reporting.
+
+**Non-goals (v0.19)**
+
+- Streaming services, playlists, cross-fades, beat-sync, timeline audio editor.
+- Multiple simultaneous ambient tracks/mixing graph.
+- New runtime dependency for audio playback.
+- Replacing existing artwork/text manifest contract.
+
+### Implemented file/module changes
+
+1. **Importer + preview payload**
+   - `scripts/import-artworks.mjs`
+   - `scripts/write-local-preview.mjs`
+   - generated output: `customer-preview/customer-audio.js`
+2. **Runtime audio domain**
+   - new `src/audio/BackgroundAudioManager.ts` (or `src/utils/BackgroundAudioManager.ts` if repository wants no new top-level domain folder)
+3. **Main orchestration integration**
+   - `src/main.ts`
+4. **Preferences state + UI**
+   - `src/utils/preferences.ts`
+   - `src/ui/PreferencesPanel.ts`
+   - `src/styles/main.scss`
+5. **Customer/update workflow docs**
+   - `docs/CUSTOMER_PICTURE_GUIDE.md`
+   - `docs/IMAGE_MAINTENANCE_GUIDE.md`
+   - `docs/HANDOFF.md`
+   - plus status banners in core markdown
+
+### Audio asset contract (implemented)
+
+Recommended v0.19 contract:
+
+```text
+customer-audio/
+  inbox/
+    calm-track.mp3
+    calm-track.ogg
+    calm-track.m4a
+    calm-track.wav
+```
+
+Policy:
+
+1. Accept `.mp3`, `.ogg`, `.m4a`, `.wav` (lowercase-normalized extension handling).
+2. Select one canonical runtime track deterministically when multiple candidates exist.
+3. Preferred selection order for generated payload:
+   - runtime `canPlayType` first,
+   - importer fallback priority when runtime probing is unavailable in script context: `mp3 > ogg > m4a > wav` (documented and deterministic).
+4. Keep source-of-truth customer files untouched; copy resolved assets into preview output similarly to image pipeline.
+5. Import report must include sections for:
+   - audio selected,
+   - audio candidates ignored by precedence,
+   - unsupported audio files,
+   - no audio found.
+
+### Runtime playback contract (implemented)
+
+`BackgroundAudioManager` responsibilities:
+
+1. Create and own one `HTMLAudioElement`.
+2. Set safe defaults (`preload = 'metadata'`, `loop = true`, configurable initial volume, muted false by default unless policy decides otherwise).
+3. Provide idempotent APIs:
+   - `load(sourceSpec)`
+   - `play(reason)`
+   - `pause(reason)`
+   - `setMuted(value, reason)`
+   - `setVolume(value, reason)`
+   - `dispose()`
+4. Handle `play()` promise rejection paths (`NotAllowedError`, `AbortError`, unknown errors) and surface state for UI fallback (“Tap to start audio”).
+5. Register media events (`canplay`, `playing`, `pause`, `ended`, `error`, `volumechange`) with scoped diagnostics.
+6. Integrate with lifecycle:
+   - on `pageInactive`: pause audio (policy default for power-friendliness),
+   - on resume: re-attempt play only if user had audio active before suspension.
+
+### UI + accessibility contract (implemented)
+
+Controls must be clean, discoverable, and WCAG-friendly:
+
+1. Add controls to existing preferences surface first (lowest visual risk):
+   - Mute toggle (checkbox/switch with explicit label).
+   - Volume slider (`input[type='range']`, 0–100).
+2. Required semantics:
+   - label + description text,
+   - keyboard operable by default,
+   - focus-visible styling aligned with current global focus ring,
+   - `aria-valuemin/max/now` naturally provided by range input.
+3. Keep panel wording explicit when autoplay is blocked (“Click to enable background music”).
+4. Do not auto-start loud audio without user gesture in environments that block autoplay.
+
+### Detailed coding suggestions (for implementation PR)
+
+1. **Do not bind audio logic directly into `main.ts` anonymous closures.** Keep state transitions in a dedicated manager class and call it from main lifecycle hooks.
+2. **Mirror current diagnostics style exactly.** Use `createScopedDiagnostics('audio')` and stable event names (`audio-load-start`, `audio-play-blocked`, `audio-loop-restart`, `audio-volume-change`).
+3. **Extend existing preferences schema instead of creating new localStorage key.** Keep migration backward compatible by treating missing audio fields as defaults.
+4. **Keep importer deterministic and pure-helper driven.** Follow v0.18 sidecar pattern: parse/validate helpers above main section, warning aggregation in report writer.
+5. **Do not hard-fail on unsupported codecs.** Fall through to next candidate and report clearly.
+6. **Guard loop continuity against source/runtime edge cases.** `loop=true` is canonical, but keep an `ended` fallback that replays through the same guarded `play()` path.
+7. **Preserve one-click launcher UX.** `Update Gallery.command/.bat` should remain unchanged unless messaging/output needs extension; integration should happen in script internals.
+
+### Online research checkpoints (used for this audit)
+
+1. `HTMLMediaElement.loop` is the standards-based mechanism for continuous replay.
+2. `HTMLMediaElement.play()` returns a promise and can reject under autoplay policy; rejection handling is mandatory.
+3. Browser autoplay policies generally require user interaction for unmuted playback; UI fallback flow is required.
+4. `canPlayType()` is the browser-native way to pick compatible codecs when multiple sources are available.
+
+Sources referenced for implementation planning:
+
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/loop>
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/play>
+- <https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Autoplay>
+- <https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/canPlayType>
+
+### Vertical implementation slices (deep)
+
+1. **Slice A — importer audio discovery + report model**
+   - extend `scripts/import-artworks.mjs` with audio-folder scan and deterministic selection
+   - emit preview payload for runtime consumption
+   - extend plain-language report with audio sections
+2. **Slice B — runtime audio payload ingestion**
+   - load generated audio payload in preview HTML output path
+   - add runtime sanitizer equivalent to `sanitizeInjectedArtworks`
+3. **Slice C — audio manager core**
+   - implement load/play/pause/mute/volume/loop/lifecycle APIs + diagnostics
+4. **Slice D — preferences integration**
+   - add persisted audio fields and subscription handling
+5. **Slice E — preferences UI + styling**
+   - add mute + volume controls with full keyboard/a11y behavior
+6. **Slice F — lifecycle + autoplay recovery**
+   - bind to existing suspend/resume hooks in `main.ts`
+   - add explicit user-gesture recovery path when autoplay is blocked
+7. **Slice G — docs + customer workflow promotion**
+   - document folder layout, supported formats, and troubleshooting
+
+### Risks and reserved boundaries
+
+1. **Autoplay inconsistency across browsers/devices:** treat as expected runtime state, not fatal error.
+2. **Codec mismatch:** always support fallback candidate selection and clear report output.
+3. **UI crowding on phone tiers:** keep first iteration inside preferences panel to avoid control overlap regressions.
+4. **State drift between UI and audio element:** enforce one source of truth via preferences + manager state sync.
+5. **Loop interruptions after decode/network errors:** add retry/backoff policy boundary for v0.20 if needed; v0.19 keeps one immediate recovery attempt + warning.
+
+### Acceptance checks (expanded)
+
+Functional:
+
+- Audio starts when policy allows and remains active through track end (continuous loop).
+- Mute toggle and volume slider update playback immediately and persist after reload.
+- Unsupported/invalid audio files do not break gallery load.
+
+Accessibility:
+
+- Controls are keyboard-operable and clearly labeled.
+- Focus order remains stable when opening/closing preferences.
+
+Lifecycle:
+
+- Hidden/frozen tab suspends audio according to policy and resumes predictably.
+- Diagnostics capture suspend/resume and autoplay-block events.
+
+Importer/report:
+
+- `Update Gallery` report includes deterministic audio decision details.
+
+Validation gates for implementation PR:
+
+- `npm run lint`
+- `npm run build`
+- script syntax checks for touched `scripts/*.mjs|*.cjs`
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 

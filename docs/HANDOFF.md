@@ -1,4 +1,107 @@
 # FREYRAUM customer handoff guide
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.29 — handoff status: loading-screen/full-render fix is shipped (2026-05-22)
+
+Customer-facing status: **shipped and validated**. v0.29 now starts the production RAF under the opaque loading overlay, requires two full-size presented frames before the enter CTA appears, warms every painting through the final render path, prebuilds UI chrome/timeline thumbnails, and defaults first-visit lighting to `museum-neutral` for more objective artwork fidelity.
+
+Validation: `npm run lint` and `npm run build` pass. If a customer still reports entry glitches or dark paintings, collect `window.__FREYRAUM_DIAGNOSTICS__.exportJson()` and check for `entry-cta-enabled`, `second-full-frame-presented`, and `all-artworks-final-path-warmed`.
+
+
+
+## v0.27 — shipped (2026-05-22) — Startup smoothness + loading/AA remediation
+
+Current status: shipped. Gallery visual quality and startup smoothness improvements are now live:
+
+- **Anti-aliasing restored:** FXAA post-process AA pass added after bloom. EffectComposer previously bypassed the renderer's native `antialias:true`; all composed frames now have proper edge quality. Disabled on battery preset to conserve GPU.
+- **No more first-frame stutter:** All EffectComposer shader programs (bloom + FXAA) are compiled under the loading overlay before it is dismissed. Low-end GPUs no longer stall 80–250ms on the first gallery frame.
+- **CTA hover is instant:** Enter-gallery button hover transition is pre-resolved before the user touches it. No more first-hover hitch.
+- **Wordmark optically centered:** "FREYRAUM" branding now renders at true geometric center on all viewport sizes.
+- **Particles visibly animated:** Loading screen atmosphere particles raised to clearly visible opacity (alphas 0.16–0.32, 8 particles) — the loading state now reads as intentional.
+
+Validation: `npm run lint` and `npm run build` pass. `npm audit` still reports the known moderate Vite/esbuild development-server advisory.
+
+
+
+Runtime remains v0.22, but the next performance task is planned. Before telling customers the gallery is fully smooth for large exhibitions, implement and validate the N-series plan in `plan.md`: per-artwork readiness diagnostics, budgeted GPU warming beyond 15 artworks, procedural pre-generation for the critical navigation window, and navigation-aware prefetch priority.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
+
+Current status: shipped. Runtime now preloads albedo plus PBR texture sets for the first 15 artworks under the loading overlay, warms each cached artwork texture set on the GPU before reveal, keeps the branded loader visible for at least 500 ms, and waits for the accessible "Galerie betreten" button before entering the gallery. Validation: `npm run lint` and `npm run build` passed after implementation; `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory that requires a semver-major upgrade.
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+### Validation and residual risk
+
+- Baseline before code changes: `npm install`, `npm run lint`, and `npm run build` passed.
+- Final validation after v0.21 implementation and docs sync: `npm run lint` and `npm run build` passed.
+- Security audit: `npm audit --audit-level=moderate` still reports the pre-existing moderate Vite/esbuild development-server advisory; the available fix requires a breaking Vite major upgrade and was left as a separate dependency-upgrade task.
+
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
+
+## v0.20.6 — Audio stabilization follow-up implemented (2026-05-21)
+
+Current handoff status for the reported audio/UI follow-up:
+
+- startup defaults remain unmuted,
+- runtime no longer re-triggers unnecessary play fades during normal preference churn,
+- autoplay-blocked playback now gets a one-shot retry on first user interaction (including arrow-key navigation),
+- quick audio control sizing and nav-arrow focus visuals were polished.
+
+Reference: `plan.md § v0.20.6`, `FINDINGS.md § 2026-05-21 — v0.20.6 implementation findings`.
+
+## v0.20.5 — Audio regression follow-up (2026-05-21, substantially resolved)
+
+All previously reported customer-visible audio regressions are **confirmed resolved** as of the v0.20.7 code audit:
+
+- startup loudness: ✅ correct (UI 50% = 15% effective)
+- mute/unmute restores to target: ✅ `targetVolume` never overwritten by fade
+- slider source of truth: ✅ both sliders read `targetVolume`
+- quick control placement: ✅ top-right cluster, confirmed in `src/styles/main.scss:436`
+
+Ten quality-improvement items (F-01 through F-10) are documented with TypeScript code patches in `plan.md § v0.20.7`.
+
+Current handoff rule: describe background audio as **fully implemented and verified**. Canonical references: `plan.md § v0.20.7` and `FINDINGS.md § 2026-05-21 — v0.20.7 deep code audit`.
+
+## v0.20.3 technical audio enhancement roadmap — implemented in v0.20.4
+
+## v0.20.2 audio UX follow-up — implemented in v0.20.4
+
+## v0.20 audio + sidecar fixes — implemented (2026-05-20)
+
+Three fixes shipped in v0.20, but the runtime audio UX now has a documented follow-up in `v0.20.5`:
+
+1. **Audio plays correctly from file:// origin.** Previous CORS misconfiguration prevented audio loading in Chrome/Opera/Edge. Fixed — music plays immediately on first user interaction or autoplay (when browser allows it).
+2. **Sidecar text always up-to-date.** Every `Update Gallery` run now cache-busts the gallery script URLs so updated painting text appears immediately without needing to clear the browser cache.
+3. **Main-page mute/volume controls.** A quick-control widget was added in v0.20, but its current location and runtime loudness behavior are still under follow-up and must not be described as final.
+
+**Updated checklist for customer audio (v0.20):**
+
+- Put music files into `customer-audio/inbox` (`.mp3`, `.ogg`, `.m4a`, `.wav`).
+- Run `Update Gallery`.
+- Open `customer-preview/app.html` (double-click or use the `.command`/`.bat` launcher).
+- Audio importer, startup loudness, mute recovery, slider sync, and control placement are all confirmed correct by the v0.20.7 code audit.
+- If audio behavior looks wrong, collect diagnostics and treat it as an open regression rather than expected final behavior.
+
+## v0.19 background music workflow — implemented (2026-05-20)
+
+Background-audio workflow is live: customers place compatible audio files in `customer-audio/inbox` and use the existing `Update Gallery` flow.
+
+Current status: **fully shipped**. Audio importer flow, controls, startup loudness, mute recovery, slider sync, and placement are all confirmed correct by the v0.20.7 code audit.
+
+Canonical implementation reference: `plan.md § v0.19`
+
+Quick handoff checklist for customer audio:
+
+- Put music files into `customer-audio/inbox` (`.mp3`, `.ogg`, `.m4a`, `.wav`).
+- Run `Update Gallery`.
+- Confirm `customer-artworks/last-import-report.txt` contains the audio sections (`Audio selected`, `Audio candidates ignored by precedence`, `Unsupported audio files`).
+- In preview, audio controls exist in the settings panel and via a quick-control widget, but the current quick-control placement and runtime loudness behavior are not yet final.
 
 ## v0.18 sidecar text — implemented (2026-05-20)
 
@@ -18,7 +121,7 @@ unchanged. Missing or invalid sidecars never fail the import; they are
 surfaced through the existing plain-language report.
 
 This document supports presenting FREYRAUM to customers and onboarding new
-contributors. **Current runtime status: v0.17 easy-wins pass implemented (on top of v0.16, v0.15, and v0.14).**
+contributors. **Current runtime status: v0.20 implemented (on top of v0.19, v0.18, v0.17, v0.16, v0.15, and v0.14).**
 
 ## AI/contributor context
 
@@ -634,3 +737,8 @@ The following items are intentionally not implemented in v0.01:
 - WebGPU production renderer parity and VR path after the v0.02 experimental probe.
 - Multilingual content pipeline and i18n.
 - Analytics, telemetry, and persisted view positions.
+
+## v0.24 status note (2026-05-21)
+
+Performance/loading smoothness hardening is currently in planning (`plan.md § v0.24`). Runtime remains v0.23.1 while this deeper plan is implemented and verified.
+

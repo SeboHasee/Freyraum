@@ -26,11 +26,14 @@ export interface RendererSnapshot {
   preset: string;
 }
 
+export type RendererContextState = 'lost' | 'restored';
+
 export class RendererManager {
   readonly renderer: THREE.WebGLRenderer;
   private preset: QualityPreset;
   private renderPaused = false;
   private disposed = false;
+  private contextChangeCallback: ((state: RendererContextState) => void) | null = null;
 
   constructor(container: HTMLElement, preset: QualityPreset) {
     this.preset = preset;
@@ -43,8 +46,11 @@ export class RendererManager {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.45;
+    // No tone mapping — the scene does not use HDR rendering, so any
+    // tone-mapping curve (ACES, Neutral, etc.) only washes out textures,
+    // reduces contrast and shifts hues away from the source artwork.
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.toneMappingExposure = 1.0;
     this.renderer.setClearColor(0xdfe5e9);
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -90,6 +96,10 @@ export class RendererManager {
    *  should skip drawing during this window. */
   isRenderPaused(): boolean {
     return this.renderPaused;
+  }
+
+  onContextChange(callback: ((state: RendererContextState) => void) | null): void {
+    this.contextChangeCallback = callback;
   }
 
   /**
@@ -166,6 +176,7 @@ export class RendererManager {
   private onContextLost = (event: Event): void => {
     event.preventDefault();
     this.renderPaused = true;
+    this.contextChangeCallback?.('lost');
     diagnostics.warn('context-lost', 'WebGL context lost; render paused until restoration', {
       width: this.renderer.domElement.width,
       height: this.renderer.domElement.height,
@@ -179,6 +190,7 @@ export class RendererManager {
     // for the framebuffer to be allocated at the right size.
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(getOptimalPixelRatio(this.preset.pixelRatioCap));
+    this.contextChangeCallback?.('restored');
     diagnostics.info('context-restored', 'WebGL context restored', {});
   };
 
@@ -192,6 +204,7 @@ export class RendererManager {
     const canvas = this.renderer.domElement;
     canvas.removeEventListener('webglcontextlost', this.onContextLost as EventListener, false);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored as EventListener, false);
+    this.contextChangeCallback = null;
     this.renderer.dispose();
   }
 }

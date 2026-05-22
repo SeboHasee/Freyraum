@@ -23,15 +23,20 @@ export class TextureManager {
    * CORS request for local files, causing the texture upload to fail silently
    * and the fallback gradient to appear instead.
    */
-  private readonly externalLoader = new THREE.TextureLoader();
+  private readonly externalLoader: THREE.TextureLoader;
   /**
    * v0.08: Loader used for relative paths, data URIs, and file:// resources.
    * No crossOrigin attribute is set so the browser treats the image as
    * same-origin and the WebGL texture upload succeeds.
    */
-  private readonly localLoader = new THREE.TextureLoader();
+  private readonly localLoader: THREE.TextureLoader;
   private maxAnisotropy = 1;
+  private maxTextureSize = 0;
   private anisotropyDivisor = 1;
+  /** v0.25 T-03: stored renderer reference used for proactive GPU texture upload via initTexture(). */
+  private renderer: THREE.WebGLRenderer | null = null;
+  private readonly imageBitmapDecodeSupported =
+    typeof createImageBitmap === 'function' && typeof THREE.ImageBitmapLoader === 'function';
   /**
    * v0.08: tracks which cache keys resolved to the generated fallback texture
    * rather than the real customer image. Used by GalleryManager to emit a
@@ -39,16 +44,25 @@ export class TextureManager {
    */
   private readonly fallbackKeys = new Set<string>();
 
-  constructor() {
+  constructor(loadingManager: THREE.LoadingManager = THREE.DefaultLoadingManager) {
+    this.externalLoader = new THREE.TextureLoader(loadingManager);
+    this.localLoader = new THREE.TextureLoader(loadingManager);
     this.externalLoader.setCrossOrigin('anonymous');
     // localLoader intentionally has no crossOrigin set.
   }
 
   init(renderer: THREE.WebGLRenderer): void {
+    this.renderer = renderer;
     this.maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+    this.maxTextureSize = renderer.capabilities.maxTextureSize;
     this.diagnostics.info('capabilities', 'Texture manager initialized', {
       maxAnisotropy: this.maxAnisotropy,
-      maxTextureSize: renderer.capabilities.maxTextureSize,
+      maxTextureSize: this.maxTextureSize,
+      imageBitmapDecodeSupported: this.imageBitmapDecodeSupported,
+      imageBitmapStatus: this.imageBitmapDecodeSupported
+        ? 'available-for-guarded-benchmark'
+        : 'unsupported-or-unavailable',
+      compressedTexturePipeline: 'ktx2-basis-future-importer-milestone',
     });
   }
 
@@ -139,9 +153,13 @@ export class TextureManager {
         (texture) => {
           this.prepareTexture(texture, role);
           this.cache.set(cacheKey, texture);
+          // v0.25 T-03: proactively push the decoded texture to the GPU so the
+          // compositor can drain the upload queue before the warm render loop.
+          this.renderer?.initTexture(texture);
           const img = texture.image as HTMLImageElement | ImageBitmap | { width?: number; height?: number };
           const w = 'naturalWidth' in img ? (img.naturalWidth || img.width || 0) : (img.width || 0);
           const h = 'naturalHeight' in img ? (img.naturalHeight || img.height || 0) : (img.height || 0);
+          this.warnIfOversized(role, urlForLog, urlType, w, h);
           this.diagnostics.info('load-success', `Loaded ${role} texture`, {
             url: urlForLog,
             urlType,
@@ -161,6 +179,8 @@ export class TextureManager {
           });
           const fallback = this.createFallbackTexture(url);
           this.cache.set(cacheKey, fallback);
+          // v0.25 T-03: upload fallback texture to GPU immediately.
+          this.renderer?.initTexture(fallback);
           this.fallbackKeys.add(cacheKey);
           resolve(fallback);
         }
@@ -214,6 +234,11 @@ export class TextureManager {
       });
     }
     return tex;
+  }
+
+  /** Synchronous role-aware cache hit. Returns undefined on miss (no network fetch). */
+  getForRole(url: string, role: PaintingMapRole): THREE.Texture | undefined {
+    return this.cache.get(`${role}::${url}`);
   }
 
   /**
@@ -286,6 +311,25 @@ export class TextureManager {
     const texture = new THREE.CanvasTexture(canvas);
     this.prepareTexture(texture, 'albedo');
     return texture;
+  }
+
+  private warnIfOversized(
+    role: PaintingMapRole,
+    url: string,
+    urlType: ReturnType<TextureManager['classifyUrlType']>,
+    width: number,
+    height: number
+  ): void {
+    if (this.maxTextureSize <= 0 || (width <= this.maxTextureSize && height <= this.maxTextureSize)) return;
+    this.diagnostics.warn('texture-oversized', 'Loaded texture exceeds device MAX_TEXTURE_SIZE', {
+      role,
+      url,
+      urlType,
+      width,
+      height,
+      maxTextureSize: this.maxTextureSize,
+      likelyBrowserDownscale: true,
+    });
   }
 
   private hash(value: string): number {

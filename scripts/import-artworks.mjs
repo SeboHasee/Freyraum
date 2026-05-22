@@ -49,11 +49,15 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const ROOT = join(dirname(__filename), '..');
 const INBOX = join(ROOT, 'customer-artworks', 'inbox');
+const AUDIO_INBOX = join(ROOT, 'customer-audio', 'inbox');
 const PROCESSED = join(ROOT, 'customer-artworks', 'processed');
 const MANIFEST_JSON = join(ROOT, 'customer-artworks', 'artworks.json');
 const MANIFEST_BACKUP = join(ROOT, 'customer-artworks', 'artworks.json.bak');
 const PREVIEW_IMAGES = join(ROOT, 'customer-preview', 'images');
+const PREVIEW_AUDIO = join(ROOT, 'customer-preview', 'audio');
 const PREVIEW_JS = join(ROOT, 'customer-preview', 'customer-artworks.js');
+const PREVIEW_AUDIO_JS = join(ROOT, 'customer-preview', 'customer-audio.js');
+const PREVIEW_HTML = join(ROOT, 'customer-preview', 'app.html');
 const REPORT_FILE = join(ROOT, 'customer-artworks', 'last-import-report.txt');
 
 // -------- Format policy --------
@@ -62,6 +66,14 @@ const RISKY_EXTENSIONS = new Set(['.heic', '.heif', '.tif', '.tiff', '.bmp']);
 const RAW_EXTENSIONS = new Set([
   '.cr2', '.cr3', '.nef', '.arw', '.dng', '.orf', '.rw2', '.raw', '.pef', '.srw',
 ]);
+const AUDIO_SAFE_EXTENSIONS = new Set(['.mp3', '.ogg', '.m4a', '.wav']);
+const AUDIO_SELECTION_PRIORITY = ['.mp3', '.ogg', '.m4a', '.wav'];
+const AUDIO_MIME_TYPES = {
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
+  '.m4a': 'audio/mp4',
+  '.wav': 'audio/wav',
+};
 
 // v0.18 — sidecar text files.
 //   - `.txt` is the primary, customer-friendly format (Notepad / TextEdit).
@@ -408,11 +420,24 @@ function parseSidecar(filePath) {
   return { fields, fieldWarnings };
 }
 
+function pickAudioByPriority(candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const sorted = [...candidates].sort((a, b) => {
+    const prioA = AUDIO_SELECTION_PRIORITY.indexOf(a.ext);
+    const prioB = AUDIO_SELECTION_PRIORITY.indexOf(b.ext);
+    if (prioA !== prioB) return prioA - prioB;
+    return a.filename.localeCompare(b.filename, 'en', { numeric: true, sensitivity: 'base' });
+  });
+  return sorted[0] || null;
+}
+
 // -------- Main --------
 
 mkdirSync(INBOX, { recursive: true });
+mkdirSync(AUDIO_INBOX, { recursive: true });
 mkdirSync(PROCESSED, { recursive: true });
 mkdirSync(PREVIEW_IMAGES, { recursive: true });
+mkdirSync(PREVIEW_AUDIO, { recursive: true });
 mkdirSync(dirname(MANIFEST_JSON), { recursive: true });
 
 const inboxEntries = readdirSync(INBOX, { withFileTypes: true })
@@ -469,11 +494,42 @@ const picturesMissingText = [];
 const textFieldWarnings = [];
 const matchedSidecarStems = new Set();
 
+const audioSelected = [];
+const audioIgnored = [];
+const audioUnsupported = [];
+let audioPayload = { sources: [] };
+
+const audioEntries = readdirSync(AUDIO_INBOX, { withFileTypes: true })
+  .filter((e) => e.isFile() && !e.name.startsWith('.'))
+  .map((e) => e.name)
+  .sort((a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' }));
+
+const audioCandidates = [];
+for (const filename of audioEntries) {
+  const ext = extname(filename).toLowerCase();
+  if (!AUDIO_SAFE_EXTENSIONS.has(ext)) {
+    audioUnsupported.push(`${filename} — unsupported audio file type "${ext || '(none)'}". Use MP3, OGG, M4A, or WAV.`);
+    continue;
+  }
+  audioCandidates.push({
+    filename,
+    ext,
+    srcPath: join(AUDIO_INBOX, filename),
+  });
+}
+
 // Clean previously generated images that no longer correspond to inbox files
 // (best-effort housekeeping; ignored on failure).
 try {
   for (const f of readdirSync(PREVIEW_IMAGES, { withFileTypes: true })) {
     if (f.isFile()) rmSync(join(PREVIEW_IMAGES, f.name));
+  }
+} catch {
+  // ignore
+}
+try {
+  for (const f of readdirSync(PREVIEW_AUDIO, { withFileTypes: true })) {
+    if (f.isFile()) rmSync(join(PREVIEW_AUDIO, f.name));
   }
 } catch {
   // ignore
@@ -538,29 +594,50 @@ imageEntries.forEach((filename, i) => {
     );
   }
 
-  // v0.16 — GPU texture memory warnings. Three.js uploads textures as
+  // v0.21 — GPU texture memory warnings. Three.js uploads textures as
   // RGBA8 with mipmaps; the on-GPU footprint is therefore
   //   bytes ≈ width × height × 4 × (4 / 3)
   // because the mip pyramid adds roughly one third on top of the base
-  // level. Phones throttle hard at ≥256 MB of texture memory and
-  // browsers cap individual textures around 4096–8192 px. We flag both
-  // cases here so the customer can downscale before the gallery ever
-  // tries to upload the image.
+  // level. v0.21 raises the norm from the old 4096px blanket warning to
+  // tiered 4K/8K/16K guidance that matches current WebGL MAX_TEXTURE_SIZE
+  // values while still flagging mobile memory risk before upload.
   //
   // Online validation:
   //   - https://registry.khronos.org/webgl/specs/latest/1.0/ (texture limits)
   //   - https://web.dev/articles/webgl-texturing-performance
-  const MAX_RECOMMENDED_DIMENSION = 4096;
-  const HIGH_GPU_MB_THRESHOLD = 64;
-  const VERY_HIGH_GPU_MB_THRESHOLD = 128;
+  const ALL_SAFE_DIMENSION = 4096;
+  const MODERN_DIMENSION = 8192;
+  const HIGH_END_DIMENSION = 16384;
+  const HIGH_GPU_MB_THRESHOLD = 85;
+  const VERY_HIGH_GPU_MB_THRESHOLD = 341;
+  const EXTREME_GPU_MB_THRESHOLD = 1024;
   const gpuMb = (dims.width * dims.height * 4 * 4) / 3 / (1024 * 1024);
-  if (dims.width > MAX_RECOMMENDED_DIMENSION || dims.height > MAX_RECOMMENDED_DIMENSION) {
+  const longestSide = Math.max(dims.width, dims.height);
+  const isPowerOfTwo = (value) => value > 0 && (value & (value - 1)) === 0;
+  if (!isPowerOfTwo(dims.width) || !isPowerOfTwo(dims.height)) {
+    // Internal advisory only: WebGL 2 handles NPOT textures correctly. Keep the
+    // calculation close to the import audit without surfacing noisy customer text.
+  }
+  if (longestSide > HIGH_END_DIMENSION) {
     warnings.push(
-      `${filename} — image is ${dims.width}×${dims.height}px. Many phones and tablets cap textures at 4096×4096; please downscale the longest side to 4096px or less for reliable display.`
+      `${filename} — image is ${dims.width}×${dims.height}px. The longest side is above 16384px, which exceeds the usual WebGL texture limit even on high-end hardware. Downscale to 16384px or less before importing.`
+    );
+  } else if (longestSide > MODERN_DIMENSION) {
+    warnings.push(
+      `${filename} — image is ${dims.width}×${dims.height}px. This is high-end desktop territory (up to 16K); phones and many tablets may downscale or skip it. Keep this only for workstation-grade previews.`
+    );
+  } else if (longestSide > ALL_SAFE_DIMENSION) {
+    warnings.push(
+      `${filename} — image is ${dims.width}×${dims.height}px. 8K-class artwork is supported on modern devices, but older phones may downscale. Export a 4096px copy if maximum compatibility is required.`
+    );
+  }
+  if (gpuMb >= EXTREME_GPU_MB_THRESHOLD) {
+    warnings.push(
+      `${filename} — extreme GPU memory estimate (${Math.round(gpuMb)} MB with mipmaps). This is suitable only for very high-end desktop GPUs.`
     );
   } else if (gpuMb >= VERY_HIGH_GPU_MB_THRESHOLD) {
     warnings.push(
-      `${filename} — at ${dims.width}×${dims.height}px this image needs about ${Math.round(gpuMb)} MB of GPU memory. Phones may run out of memory and skip the texture. Consider downscaling for the best experience.`
+      `${filename} — at ${dims.width}×${dims.height}px this image needs about ${Math.round(gpuMb)} MB of GPU memory. Mobile devices may run out of memory and skip the texture.`
     );
   } else if (gpuMb >= HIGH_GPU_MB_THRESHOLD) {
     warnings.push(
@@ -621,6 +698,40 @@ imageEntries.forEach((filename, i) => {
   imported.push(`${filename} (${dims.width} × ${dims.height})`);
 });
 
+const selectedAudio = pickAudioByPriority(audioCandidates);
+const copiedAudio = [];
+for (const candidate of audioCandidates) {
+  const destFilename = `${normalizeId(basename(candidate.filename, candidate.ext))}${candidate.ext}`;
+  const destPath = join(PREVIEW_AUDIO, destFilename);
+  try {
+    cpSync(candidate.srcPath, destPath);
+  } catch (err) {
+    warnings.push(`${candidate.filename} — could not copy audio to preview folder: ${err.message}`);
+    continue;
+  }
+  const source = {
+    src: `./audio/${destFilename}`,
+    ext: candidate.ext,
+    mime: AUDIO_MIME_TYPES[candidate.ext] || 'application/octet-stream',
+    filename: candidate.filename,
+  };
+  copiedAudio.push(source);
+  if (selectedAudio && selectedAudio.filename === candidate.filename) {
+    audioSelected.push(`${candidate.filename} (${candidate.ext.slice(1).toUpperCase()})`);
+  } else {
+    audioIgnored.push(`${candidate.filename} — copied as fallback source`);
+  }
+}
+
+audioPayload = {
+  sources: copiedAudio,
+  ...(selectedAudio
+    ? {
+        selectedByImporter: copiedAudio.find((source) => source.filename === selectedAudio.filename),
+      }
+    : {}),
+};
+
 // Back up previous manifest (best-effort), then write new one.
 try {
   if (existsSync(MANIFEST_JSON)) {
@@ -637,6 +748,41 @@ const js =
   '// Last run: ' + new Date().toISOString() + '\n' +
   'window.__FREYRAUM_ARTWORKS = ' + JSON.stringify(artworks, null, 2) + ';\n';
 writeFileSync(PREVIEW_JS, js, 'utf8');
+
+const audioJs =
+  '// Auto-generated by scripts/import-artworks.mjs — do not edit manually.\n' +
+  '// Last run: ' + new Date().toISOString() + '\n' +
+  'window.__FREYRAUM_AUDIO = ' + JSON.stringify(audioPayload, null, 2) + ';\n';
+writeFileSync(PREVIEW_AUDIO_JS, audioJs, 'utf8');
+
+// v0.20 — Cache-bust the dynamic script tags in app.html on every import run.
+//
+// When the customer opens app.html as a file:// URL, Chromium-family browsers
+// cache script resources keyed by their full URL. Re-importing (which rewrites
+// customer-artworks.js and customer-audio.js on disk) does NOT change the URL,
+// so the browser can serve stale content from its disk/memory cache. Adding
+// a `?t=<timestamp>` query string makes each import produce a distinct URL
+// that forces a fresh read — with zero risk of misloading because browsers
+// always ignore the query string when resolving file:// paths to disk.
+//
+// customer-artworks.js and customer-audio.js are stamped because their content
+// changes on every import. freyraum-gallery.js is left unversioned because it
+// changes only on developer-issued gallery updates, not customer data imports.
+try {
+  if (existsSync(PREVIEW_HTML)) {
+    const ts = Date.now();
+    const originalHtml = readFileSync(PREVIEW_HTML, 'utf8');
+    const updatedHtml = originalHtml
+      // Match only inside src="..." attributes to avoid touching comments or other text.
+      .replace(/(src=["'][^"']*?)customer-artworks\.js(\?t=\d+)?/g, `$1customer-artworks.js?t=${ts}`)
+      .replace(/(src=["'][^"']*?)customer-audio\.js(\?t=\d+)?/g, `$1customer-audio.js?t=${ts}`);
+    if (updatedHtml !== originalHtml) {
+      writeFileSync(PREVIEW_HTML, updatedHtml, 'utf8');
+    }
+  }
+} catch {
+  // Best-effort: cache-busting failure does not block the import.
+}
 
 // v0.18 — Compute orphaned sidecars (text files without matching pictures).
 // `imageStems` mirrors the lowercased basenames the image loop processed.
@@ -690,6 +836,26 @@ if (duplicateSidecarWarnings.length > 0) {
   if (lines[lines.length - 1] !== '') lines.push('');
   lines.push(`Duplicate text files (${duplicateSidecarWarnings.length}):`);
   duplicateSidecarWarnings.forEach((t) => lines.push(`  ⚠ ${t}`));
+}
+
+if (audioSelected.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Audio selected (${audioSelected.length}):`);
+  audioSelected.forEach((entry) => lines.push(`  ✓ ${entry}`));
+} else {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push('Audio selected (0):');
+  lines.push('  ⚠ No supported background audio files found in customer-audio/inbox.');
+}
+if (audioIgnored.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Audio candidates ignored by precedence (${audioIgnored.length}):`);
+  audioIgnored.forEach((entry) => lines.push(`  ⚠ ${entry}`));
+}
+if (audioUnsupported.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Unsupported audio files (${audioUnsupported.length}):`);
+  audioUnsupported.forEach((entry) => lines.push(`  ⚠ ${entry}`));
 }
 
 if (warnings.length > 0) {

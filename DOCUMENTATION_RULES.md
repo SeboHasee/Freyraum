@@ -1,4 +1,32 @@
 # DOCUMENTATION RULES
+> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+
+## v0.29 documentation requirement — preload claims must prove presented frames
+
+Any future documentation that says the gallery is “fully loaded”, “fully preloaded”, “smooth on first use”, or “rendering behind the loading screen” must include the exact readiness boundary. It must state whether the claim covers network fetch, decode, procedural generation, material apply, shader compile, GPU texture upload, final post-processing render, browser presentation, and UI/control prebuild.
+
+v0.29 is marked shipped because runtime code now emits diagnostics proving: RAF started before loader reveal, at least two full-size frames were presented behind the opaque overlay, all artworks were warmed through the final render path, and no post-entry warm queue remained for the target gallery.
+
+
+
+## v0.23 documentation requirement — performance claims
+
+Performance documentation must name the coverage boundary. If a fix is capped by artwork count, memory budget, quality preset, or browser API support, state the cap and the fallback behavior. Use `plan.md` for open performance plans and `FINDINGS.md` for source-referenced audit evidence.
+
+## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
+
+Current status: shipped. Runtime now preloads albedo plus PBR texture sets for the first 15 artworks under the loading overlay, warms each cached artwork texture set on the GPU before reveal, keeps the branded loader visible for at least 500 ms, and waits for the accessible "Galerie betreten" button before entering the gallery. Validation: `npm run lint` and `npm run build` passed after implementation; `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory that requires a semver-major upgrade.
+
+## v0.21 — implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
+
+
+## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
+
+Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
+
+## v0.20 — Full documentation check-up (2026-05-20, audit complete)
 
 ## v0.18 — Customer sidecar text shipped (2026-05-20)
 
@@ -57,6 +85,16 @@ When adding future implementation plans for rendering, performance, shaders, Web
 - performance planning must explicitly state measurement strategy, fidelity-preservation boundaries, compatibility/fallback behavior, and resource ownership/disposal assumptions
 
 ## Latest documentation pass
+
+- 2026-05-21 (documentation): v0.20.5 audio regression audit completed. Re-ran `npm install`, `npm run lint`, and `npm run build`; confirmed that the current runtime still fails the reported startup-volume, mute/unmute, slider-sync, and control-placement expectations. Added a detailed recovery plan to `plan.md`, logged root causes and acceptance checks in `FINDINGS.md`, and refreshed repository markdown so docs no longer claim the current audio behavior is fully fixed. No runtime code changed.
+
+- 2026-05-20 (documentation): v0.20.3 technical planning hardening completed. Audited `src/main.ts`, `BackgroundAudioManager`, `PreferencesStore`, `PreferencesPanel`, `AudioControls`, and related SCSS boundaries; expanded `plan.md` with implementation-ready coding slices (volume mapping contract, slider continuity refactor, fade envelope transitions, control-placement policy, diagnostics expansion). Logged deep findings in `FINDINGS.md`, updated top-level status docs, and refreshed markdown audit stamp text across all `.md` files. No runtime code changed.
+
+- 2026-05-20 (documentation): v0.20.2 audio UX follow-up planning sync completed. Added a dedicated planning section for calm-start audio defaults, UI-vs-effective volume mapping, control-placement refinement, settings-slider continuity, and fade envelope handling. Logged code-audit and online research findings in `FINDINGS.md`. Updated top-level status notes and refreshed markdown audit stamp across all `.md` files. No runtime code changed.
+
+- 2026-05-20 (documentation): v0.20.1 full markdown audit completed. Every repository markdown file was re-checked and updated with a shared audit stamp plus refreshed top status notes to keep v0.20 context consistent. Validation rerun in this audit session: `npm install`, `npm run lint`, `npm run build`. No runtime code changed.
+
+- 2026-05-20 (implemented): v0.19 background-audio workflow shipped. Added importer audio ingestion (`customer-audio/inbox`), generated preview payload (`customer-preview/customer-audio.js`), preview HTML/stub wiring, runtime `BackgroundAudioManager` with diagnostics + loop fallback + autoplay handling + lifecycle suspend/resume integration, persisted `audioMuted`/`audioVolume` preferences, and preferences-panel mute/volume controls with status messaging. Validated with `npm run lint` and `npm run build`.
 
 - 2026-05-20 (implemented): v0.18 customer sidecar text shipped. `scripts/import-artworks.mjs` now reads same-basename `.txt` sidecars (`.md` accepted as backup, `.txt` wins on duplicates) and merges customer-facing fields (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`, `tags`, `surfaceProfile`) into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. `customer-artworks/last-import-report.txt` gained `Text applied`, `Pictures missing text`, `Text files without matching pictures`, `Text fields needing attention`, and `Duplicate text files` sections. `docs/CUSTOMER_TEXT_GUIDE.md` rewritten as the shipped how-to-import-text walkthrough. `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` aligned with the shipped parser contract. All v0.18 banners across `README.md`, `CHANGELOG.md`, `plan.md`, `FINDINGS.md`, `docs/HANDOFF.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `docs/CUSTOMER_PICTURE_GUIDE.md`, `DOCUMENTATION_RULES.md`, `ARCHITECTURE_MAP.md`, `AI_RULES.md`, and `LESSONS_LEARNED.md` updated from "planned" to "shipped". Validated `npm run lint`, `npm run build`, and a fixture importer run covering matched/missing/orphan/duplicate sidecars plus invalid `Year`/`Surface`/blank `Alt`/multi-line `Description`.
 
