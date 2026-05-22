@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 
-// v0.48 — GLSL procedural brushed-metal fragment functions.
+// v0.49 — GLSL procedural brushed-metal fragment functions.
 // Prepended to shader.fragmentShader in onBeforeCompile so they are available
 // in all injection sites below.
 const FRAME_FRAG_FUNCTIONS = /* glsl */ `
-// v0.48 brushed-metal procedural normal & roughness
+// v0.49 brushed-metal procedural normal & roughness
 // Sources:
 //   Inigo Quilez, iquilezles.org/articles/fbm/ (domain warping, irrational FBM)
 //   Khronos GLSL ES 3.00 spec §8.14 (fwidth — WebGL2 built-in, Three.js r152+)
@@ -56,12 +56,12 @@ float frmBrushedFbm(vec2 p) {
   vec2 q = frmBarBrushCoords(p);
   float wx = frmNoise(q * 0.20 + vec2(15.6,  28.1));
   float wy = frmNoise(q * 0.20 + vec2(-67.8, 39.2));
-  q += (vec2(wx, wy) - 0.5) * 0.10;
+  q += (vec2(wx, wy) - 0.5) * 0.06;
   float v = 0.0;
-  v += 0.5000 * frmNoise(vec2(q.x * 0.550, q.y * 14.000));
-  v += 0.2500 * frmNoise(vec2(q.x * 1.103, q.y * 28.173) + 1.618);
-  v += 0.1250 * frmNoise(vec2(q.x * 2.211, q.y * 56.114) + 3.141);
-  v += 0.0625 * frmNoise(vec2(q.x * 4.428, q.y * 112.417) + 7.389);
+  v += 0.5000 * frmNoise(vec2(q.x * 0.820, q.y * 18.000));
+  v += 0.2500 * frmNoise(vec2(q.x * 1.647, q.y * 36.173) + 1.618);
+  v += 0.1250 * frmNoise(vec2(q.x * 3.299, q.y * 72.114) + 3.141);
+  v += 0.0625 * frmNoise(vec2(q.x * 6.614, q.y * 144.417) + 7.389);
   return v;
 }
 
@@ -70,40 +70,40 @@ float frmScratchRow(vec2 p, float density, float localSeed) {
   vec2 q = frmBarBrushCoords(p);
   float row  = floor(q.y * density);
   float rh   = frmHash(row + localSeed * 137.619);
-  if (rh > 0.035) return 0.0;
+  if (rh > 0.030) return 0.0;
   float lineY = (row + 0.22 + rh * 0.56) / density;
   float dist  = abs(q.y - lineY);
   float fw    = fwidth(q.y);
-  float width = max(fw * 0.65, 0.0006 + frmHash(row + localSeed * 71.33) * 0.0012);
-  float inten = 0.06 + frmHash(row + localSeed * 23.71) * 0.11;
+  float width = max(fw * 0.55, 0.0004 + frmHash(row + localSeed * 71.33) * 0.0008);
+  float inten = 0.04 + frmHash(row + localSeed * 23.71) * 0.07;
   float densityFade = 1.0 - smoothstep(0.55, 1.25, fw * density);
-  float segFreq = 0.75 + density * 0.004;
+  float segFreq = 2.50 + density * 0.020;
   float segCell = floor(q.x * segFreq + frmHash(row + localSeed * 19.93) * 2.0);
   float segAlive = step(frmHash(segCell + row * 7.13 + localSeed * 101.77), 0.66);
   float segPhase = fract(q.x * segFreq);
-  float segShape = smoothstep(0.02, 0.18, segPhase) * (1.0 - smoothstep(0.78, 0.96, segPhase));
-  float xFade = frmNoise(vec2(q.x * 0.20, row * 0.38)) * 0.22 + 0.78;
+  float segShape = smoothstep(0.08, 0.22, segPhase) * (1.0 - smoothstep(0.74, 0.94, segPhase));
+  float xFade = frmNoise(vec2(q.x * 0.45, row * 0.38)) * 0.12 + 0.88;
   return smoothstep(width, 0.0, dist) * inten * xFade * densityFade * segAlive * segShape;
 }
 
 float frmScratchLayer(vec2 p, float seed) {
-  float fine   = frmScratchRow(p, 48.0, seed);
-  float medium = frmScratchRow(p, 18.0, seed + 5.11);
-  float deep   = frmScratchRow(p,  5.0, seed + 11.37);
-  return clamp(fine * 0.10 + medium * 0.14 + deep * 0.10, 0.0, 0.45);
+  float fine   = frmScratchRow(p, 72.0, seed);
+  float medium = frmScratchRow(p, 28.0, seed + 5.11);
+  float deep   = frmScratchRow(p,  9.0, seed + 11.37);
+  return clamp(fine * 0.12 + medium * 0.10 + deep * 0.06, 0.0, 0.38);
 }
 
 // Layered normal: FBM grain + scratch impulses, eps=0.004 for close-view sharpness
 vec3 frmBrushedNormal(vec2 p, float seed) {
-  float eps = 0.004;
+  float eps = 0.0035;
   float hg  = frmBrushedFbm(p);
   float hgx = frmBrushedFbm(p + vec2(eps, 0.0));
   float hgy = frmBrushedFbm(p + vec2(0.0, eps));
   float hs  = frmScratchLayer(p,                  seed);
   float hsx = frmScratchLayer(p + vec2(eps, 0.0), seed);
   float hsy = frmScratchLayer(p + vec2(0.0, eps), seed);
-  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 2.2;
-  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 1.4;
+  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 1.9;
+  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 1.1;
   return normalize(vec3(gradG + gradS, 1.0));
 }
 `;
@@ -230,7 +230,7 @@ export class CanvasMaterial {
       anisotropy: preset.frameAnisotropy,
       anisotropyRotation: Math.PI / 2,
       normalMap: flatNormal,
-      normalScale: new THREE.Vector2(0.18, 0.18),
+      normalScale: new THREE.Vector2(0.14, 0.14),
     });
 
     material.onBeforeCompile = (shader) => {
@@ -258,14 +258,14 @@ export class CanvasMaterial {
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <roughnessmap_fragment>',
          `float roughnessFactor = uBaseRoughness
-           + frmBrushedFbm(vFrameLocalPos.xy * vec2(0.82, 1.08) + uFrameSeed * 0.27) * 0.018
-           - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.009
-           + 0.026;
-         roughnessFactor = clamp(roughnessFactor, 0.34, 0.78);`
+            + frmBrushedFbm(vFrameLocalPos.xy * vec2(0.82, 1.08) + uFrameSeed * 0.27) * 0.012
+            - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.006
+            + 0.020;
+          roughnessFactor = clamp(roughnessFactor, 0.40, 0.76);`
       );
 
       console.debug('[CanvasMaterial] frame-shader-compiled', {
-        version: 'v0.48',
+        version: 'v0.49',
         preset: preset.id,
         seed,
         frameRoughness: preset.frameRoughness,
@@ -274,13 +274,14 @@ export class CanvasMaterial {
         domainWarp: true,
         barBrushCoords: true,
         scratchLayer: true,
+        fineDetailRetune: true,
         frameOuterHalf: [bounds.outerHalf.x, bounds.outerHalf.y],
         frameInnerHalf: [bounds.innerHalf.x, bounds.innerHalf.y],
-        eps: 0.004,
+        eps: 0.0035,
       });
     };
     // Unique cache key per artwork seed so Three.js compiles distinct programs.
-    material.customProgramCacheKey = () => `frame-v0.48-${seed}`;
+    material.customProgramCacheKey = () => `frame-v0.49-${seed}`;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;

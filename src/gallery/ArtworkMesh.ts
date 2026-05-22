@@ -119,7 +119,7 @@ export class ArtworkMesh {
       depth,
       bevelEnabled,
       ...(bevelEnabled
-        ? { bevelThickness: 0.018, bevelSize: 0.018, bevelSegments: 2 }
+        ? { bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1 }
         : {}),
     });
     geometry.translate(0, 0, -depth);
@@ -146,6 +146,14 @@ export class ArtworkMesh {
     const oldGeo = this.frameMesh.geometry;
     this.frameMesh.geometry = this.makeFrameGeometry(bevelEnabled, this._artworkWidth, this._artworkHeight);
     oldGeo.dispose();
+    console.debug('[ArtworkMesh] frame-geometry-replaced', {
+      bevelEnabled,
+      bevelThickness: bevelEnabled ? 0.012 : 0,
+      bevelSize: bevelEnabled ? 0.012 : 0,
+      bevelSegments: bevelEnabled ? 1 : 0,
+      artworkWidth: this._artworkWidth,
+      artworkHeight: this._artworkHeight,
+    });
   }
 
   private applyFramePreset(preset: QualityPreset): void {

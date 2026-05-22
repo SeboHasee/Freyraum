@@ -1,5 +1,26 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.48 shipped: frame UV mapping corrected with edge-aware bar coordinates and aspect-synced shader bounds).
+> Last full markdown audit: 2026-05-22 (v0.49 shipped: simplified frame edges with finer brushed-metal micro-detail retune).
+
+## v0.49 — simpler frame edges + finer metal detail (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code updated; lint and build pass.
+
+### Added
+
+- `src/gallery/ArtworkMesh.ts`: detailed debug log for frame geometry replacement (bevel params + artwork dimensions).
+- `src/materials/CanvasMaterial.ts`: extended shader compile logging for fine-detail retune diagnostics.
+
+### Changed
+
+- `src/gallery/ArtworkMesh.ts`: simplified beveled frame edge profile (`bevelThickness`/`bevelSize` 0.012 and `bevelSegments` 1) for cleaner, less busy corners.
+- `src/materials/CanvasMaterial.ts`: v0.49 brushed-metal shader retune toward finer micro-detail (denser but thinner scratches, lower normal amplitude, calmer roughness modulation, smaller epsilon for sharper micro relief, cache key `frame-v0.49-*`).
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.48 — frame UV mapping correction + metal continuity (2026-05-22, **shipped**)
 
