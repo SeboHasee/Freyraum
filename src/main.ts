@@ -3,7 +3,7 @@ import './styles/main.scss';
 import * as THREE from 'three';
 
 import { artworks as builtInArtworks, type Artwork } from './config/artworks';
-import { getQualityPreset } from './config/quality';
+import { getQualityPreset, type QualityPresetId } from './config/quality';
 import { getLightProfile } from './lighting/LightProfile';
 import { RendererManager } from './core/RendererManager';
 import { SceneManager } from './core/SceneManager';
@@ -41,6 +41,7 @@ const MIN_LOADING_SCREEN_MS = 500;
 const DEFAULT_GPU_WARM_CRITICAL_COUNT = 5;
 const DEFAULT_GPU_WARM_FRAME_BUDGET_MS = 8;
 const DEFAULT_GPU_WARM_BATCH_CAP = 2;
+const QUALITY_PREWARM_IDS: readonly QualityPresetId[] = ['high', 'balanced', 'battery'];
 
 /**
  * v0.25 T-01/T-02/T-05: Yields to the browser compositor for one animation
@@ -1007,6 +1008,55 @@ async function main(): Promise<void> {
   loadingOverlay.setProgress(97);
   await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
   galleryManager.markAllShaderCompiled('boot-prewarm');
+  // v0.55: Prewarm non-active quality variants (high/balanced/battery) under
+  // the loading overlay so frame + painting shader permutations are compiled
+  // before entry. This avoids first-switch JIT stalls while keeping startup
+  // cost bounded by warming only one representative artwork per variant.
+  const activeQualityId = preferences.current.quality;
+  const qualityVariants = QUALITY_PREWARM_IDS.filter((id) => id !== activeQualityId);
+  if (qualityVariants.length > 0) {
+    const variantWarmIndex = galleryManager.index;
+    const variantWarmStart = performance.now();
+    diagnostics.info('boot', 'quality-variant-prewarm-start', 'Prewarming non-active quality shader variants under loading overlay', {
+      activeQuality: activeQualityId,
+      variants: qualityVariants,
+      artworkIndex: variantWarmIndex,
+      artworkId: artworks[variantWarmIndex]?.id,
+    });
+    for (const qualityId of qualityVariants) {
+      const variantStart = performance.now();
+      const variantPreset = getQualityPreset(qualityId);
+      rendererManager.applyPreset(variantPreset);
+      postProcessing.applyPreset(variantPreset);
+      lightingSetup.applyPreset(variantPreset);
+      artworkMesh.applyPreset(variantPreset);
+      galleryManager.applyPreset(variantPreset);
+      galleryManager.warmArtworkForGPU(variantWarmIndex, `overlay-quality-variant-${qualityId}`);
+      await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+      diagnostics.debug('boot', 'quality-variant-prewarmed', 'Quality shader variant prewarmed', {
+        quality: qualityId,
+        artworkIndex: variantWarmIndex,
+        artworkId: artworks[variantWarmIndex]?.id,
+        durationMs: Math.round((performance.now() - variantStart) * 10) / 10,
+        renderer: rendererSizeSnapshot(rendererManager.renderer),
+      });
+      await rafYield();
+    }
+    const activePreset = getQualityPreset(activeQualityId);
+    rendererManager.applyPreset(activePreset);
+    postProcessing.applyPreset(activePreset);
+    lightingSetup.applyPreset(activePreset);
+    artworkMesh.applyPreset(activePreset);
+    galleryManager.applyPreset(activePreset);
+    galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-quality-variant-prewarm');
+    await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+    diagnostics.info('boot', 'quality-variant-prewarm-complete', 'All non-active quality shader variants prewarmed under loading overlay', {
+      activeQuality: activeQualityId,
+      variantsWarmed: qualityVariants,
+      durationMs: Math.round((performance.now() - variantWarmStart) * 10) / 10,
+      renderer: rendererSizeSnapshot(rendererManager.renderer),
+    });
+  }
   // v0.27 W-04: Force-compile all EffectComposer pass shaders (bloom + FXAA)
   // before the overlay is dismissed. UnrealBloomPass has 4 internal programs
   // that compile lazily on the first composer.render(); this call drives that
