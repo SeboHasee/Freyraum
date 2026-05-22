@@ -114,12 +114,12 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
     id: 'museum-neutral',
     label: 'Museum neutral',
     description: 'Daylight-balanced even illumination for objective viewing.',
-    ambientIntensity: 2.2,
+    ambientIntensity: 2.8,
     ambientKelvin: 5500,
     keys: [
       {
         kelvin: 5500,
-        intensity: 130,
+        intensity: 100,
         position: { x: -6, y: 4, z: 6 },
         angle: 0.5,
         penumbra: 0.95,
@@ -127,7 +127,7 @@ export const LIGHT_PROFILES: Record<LightProfileId, LightProfile> = {
       },
       {
         kelvin: 5500,
-        intensity: 90,
+        intensity: 70,
         position: { x: 6, y: 4, z: 6 },
         angle: 0.5,
         penumbra: 0.95,

@@ -1,5 +1,24 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.30 shipped — brighter albedo-preserving painting fill, lighter default quality costs, repeated-hitch adaptive downgrade detection; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.31 shipped — further painting brightness/contrast fix; lint/build pass).
+
+## v0.31 — Painting brightness & contrast correction (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code implemented and validated; lint and build pass.
+
+### Changed
+
+- **`src/config/quality.ts`:** Raised `albedoFidelityFill` from 0.20/0.18/0.14 → 0.38/0.34/0.28 across high/balanced/battery presets so more of the original source brightness passes through unlit.
+- **`src/lighting/LightProfile.ts`:** Raised museum-neutral ambient from 2.2 → 2.8 and reduced key-light intensities from 130/90 → 100/70 to flatten contrast.
+- **`src/core/RendererManager.ts`:** Raised tone-mapping exposure from 1.0 → 1.1 to lift overall image brightness.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.30 — Painting fidelity + smoother frame pacing (2026-05-22, **shipped**)
 

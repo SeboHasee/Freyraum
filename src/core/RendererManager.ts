@@ -51,7 +51,7 @@ export class RendererManager {
     // ACESFilmicToneMapping was crushing dark/high-contrast paintings by applying
     // an aggressive S-curve on top of the artist's intentional colour values.
     this.renderer.toneMapping = THREE.NeutralToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMappingExposure = 1.1;
     this.renderer.setClearColor(0xdfe5e9);
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
