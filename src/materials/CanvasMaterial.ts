@@ -39,13 +39,14 @@ vec2 frmBarBrushCoords(vec2 p) {
   vec2 toOuter = uFrameOuterHalf - absP;
   vec2 toInner = absP - uFrameInnerHalf;
   vec2 edgeDist = min(toOuter, toInner);
-  float verticalBar = step(edgeDist.x, edgeDist.y);
+  float edgeDelta = edgeDist.y - edgeDist.x;
+  float edgeBlend = smoothstep(-0.02, 0.02, edgeDelta);
 
-  float along = mix(p.x, p.y, verticalBar);
+  float along = mix(p.x, p.y, edgeBlend);
   float acrossNorm = mix(
     (absP.y - uFrameInnerHalf.y) / max(uFrameOuterHalf.y - uFrameInnerHalf.y, 0.0001),
     (absP.x - uFrameInnerHalf.x) / max(uFrameOuterHalf.x - uFrameInnerHalf.x, 0.0001),
-    verticalBar
+    edgeBlend
   );
   float across = clamp(acrossNorm, 0.0, 1.0) * 2.0 - 1.0;
   return vec2(along, across);
@@ -230,7 +231,7 @@ export class CanvasMaterial {
       anisotropy: preset.frameAnisotropy,
       anisotropyRotation: Math.PI / 2,
       normalMap: flatNormal,
-      normalScale: new THREE.Vector2(0.14, 0.14),
+      normalScale: new THREE.Vector2(0.22, 0.22),
     });
 
     material.onBeforeCompile = (shader) => {
@@ -265,7 +266,7 @@ export class CanvasMaterial {
       );
 
       console.debug('[CanvasMaterial] frame-shader-compiled', {
-        version: 'v0.49',
+        version: 'v0.50',
         preset: preset.id,
         seed,
         frameRoughness: preset.frameRoughness,
@@ -275,13 +276,14 @@ export class CanvasMaterial {
         barBrushCoords: true,
         scratchLayer: true,
         fineDetailRetune: true,
+        cornerBlendFix: true,
         frameOuterHalf: [bounds.outerHalf.x, bounds.outerHalf.y],
         frameInnerHalf: [bounds.innerHalf.x, bounds.innerHalf.y],
         eps: 0.0035,
       });
     };
     // Unique cache key per artwork seed so Three.js compiles distinct programs.
-    material.customProgramCacheKey = () => `frame-v0.49-${seed}`;
+    material.customProgramCacheKey = () => `frame-v0.50-${seed}`;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;
