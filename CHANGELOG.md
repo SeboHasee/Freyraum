@@ -1,7 +1,7 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.51 shipped: vertex-attribute frame UVs replace distance-field coordinate mapping).
+> Last full markdown audit: 2026-05-22 (v0.52 shipped: fix brushed-metal grain density and domain warp for realistic appearance).
 
-## v0.51 — vertex-attribute frame UVs (2026-05-22, **shipped**)
+## v0.52 — fix brushed-metal UV frequencies (2026-05-22, **shipped**)
 
 ### Status
 
@@ -9,28 +9,41 @@ Shipped. Runtime code updated; lint and build pass.
 
 ### Root cause
 
-The previous frame shader derived bar-local coordinates via a per-fragment
-distance-field (`frmBarBrushCoords()`). At corners where two bars meet, this
-produced concentric square contour rings ("tunnel effect"). The artifact was
-a coordinate-system bug, not a detail-strength issue.
+The v0.51 FBM used only 18 cycles across the bar width in its first octave,
+creating ~18 individually visible parallel lines that looked like pencil marks.
+Domain warp was too weak (0.06) to break up regularity. The scratch layer
+(density 72/28/9 with 3% activation) added more visible parallel grooves.
+
+Real brushed metal has very fine, dense, irregular grain (100+ grooves across
+a typical bar width) that reads as a directional satin sheen rather than
+individually distinguishable lines.
 
 ### Changed
 
-- `src/gallery/ArtworkMesh.ts`: new `assignFrameBarUVs()` computes per-vertex
-  bar-local (along, across) attribute `aFrameUV` on the CPU. Corners use a
+- `src/materials/CanvasMaterial.ts`:
+  - FBM first-octave across-frequency raised from 18 → 120 (5 octaves now)
+  - Domain warp uses anisotropic scaling and triple-layer warping, strength
+    increased from 0.06 to 0.12 (across) for irregularity
+  - Scratch layer: density raised to 200/60/18, activation lowered to 1.5%,
+    amplitude halved — scratches are now sparse accents, not visible grid lines
+  - Normal epsilon reduced from 0.004 → 0.001 for high-frequency detail
+  - Normal gradient scale reduced from 1.8/1.0 → 0.8/0.5 for subtle sheen
+  - Version bumped to v0.52
+
+
   45° miter cut to assign vertices cleanly to one bar.
 - `src/materials/CanvasMaterial.ts`: shader injection rewired to consume
   `vFrameUV` varying instead of object-space position. Removed
   `frmBarBrushCoords()`, `uFrameOuterHalf`, `uFrameInnerHalf` uniforms.
   `refreshFrameGeometryUniforms()` is now a no-op (geometry rebuild handles
-  aspect changes). Cache key updated to `frame-v0.51-*`.
+  aspect changes). Cache key updated to `frame-v0.52-*`.
 
 ### Validation
 
 - `npm run lint` — pass.
 - `npm run build` — pass.
 
-## v0.50 — corner blend smoothing (2026-05-22, superseded by v0.51)
+## v0.50 — corner blend smoothing (2026-05-22, superseded by v0.52)
 
 ### Changed
 
