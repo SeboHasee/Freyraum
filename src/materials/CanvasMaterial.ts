@@ -1,20 +1,16 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 
-// v0.49 — GLSL procedural brushed-metal fragment functions.
-// Prepended to shader.fragmentShader in onBeforeCompile so they are available
-// in all injection sites below.
+// v0.51 — GLSL procedural brushed-metal fragment functions.
+// Now consumes per-vertex bar-local UVs (vFrameUV) computed on the CPU,
+// eliminating the distance-field frmBarBrushCoords() that caused concentric
+// square artifacts at corners.
 const FRAME_FRAG_FUNCTIONS = /* glsl */ `
-// v0.49 brushed-metal procedural normal & roughness
-// Sources:
-//   Inigo Quilez, iquilezles.org/articles/fbm/ (domain warping, irrational FBM)
-//   Khronos GLSL ES 3.00 spec §8.14 (fwidth — WebGL2 built-in, Three.js r152+)
-//   Adobe Substance / Marmoset PBR guide: satin brushed Al = roughness 0.35-0.45
+// v0.51 brushed-metal procedural normal & roughness
+// Uses vertex-attribute bar coordinates instead of distance-field remapping.
 
 uniform float uFrameSeed;
 uniform float uBaseRoughness;
-uniform vec2 uFrameOuterHalf;
-uniform vec2 uFrameInnerHalf;
 
 float frmHash(float n) {
   return fract(sin(n) * 43758.5453123);
@@ -32,32 +28,13 @@ float frmNoise(vec2 p) {
   );
 }
 
-// Rectangular-ring local coordinates:
-// x = along bar length, y = normalized across-bar width (-1..1).
-vec2 frmBarBrushCoords(vec2 p) {
-  vec2 absP = abs(p);
-  vec2 toOuter = uFrameOuterHalf - absP;
-  vec2 toInner = absP - uFrameInnerHalf;
-  vec2 edgeDist = min(toOuter, toInner);
-  float edgeDelta = edgeDist.y - edgeDist.x;
-  float edgeBlend = smoothstep(-0.02, 0.02, edgeDelta);
-
-  float along = mix(p.x, p.y, edgeBlend);
-  float acrossNorm = mix(
-    (absP.y - uFrameInnerHalf.y) / max(uFrameOuterHalf.y - uFrameInnerHalf.y, 0.0001),
-    (absP.x - uFrameInnerHalf.x) / max(uFrameOuterHalf.x - uFrameInnerHalf.x, 0.0001),
-    edgeBlend
-  );
-  float across = clamp(acrossNorm, 0.0, 1.0) * 2.0 - 1.0;
-  return vec2(along, across);
-}
-
 // Domain-warped aperiodic FBM (Quilez technique)
-float frmBrushedFbm(vec2 p) {
-  vec2 q = frmBarBrushCoords(p);
-  float wx = frmNoise(q * 0.20 + vec2(15.6,  28.1));
-  float wy = frmNoise(q * 0.20 + vec2(-67.8, 39.2));
-  q += (vec2(wx, wy) - 0.5) * 0.06;
+// Now takes bar-local coords directly (along, across) from the varying.
+float frmBrushedFbm(vec2 barUV) {
+  // Domain warp for aperiodic appearance
+  float wx = frmNoise(barUV * 0.20 + vec2(15.6,  28.1));
+  float wy = frmNoise(barUV * 0.20 + vec2(-67.8, 39.2));
+  vec2 q = barUV + (vec2(wx, wy) - 0.5) * 0.06;
   float v = 0.0;
   v += 0.5000 * frmNoise(vec2(q.x * 0.820, q.y * 18.000));
   v += 0.2500 * frmNoise(vec2(q.x * 1.647, q.y * 36.173) + 1.618);
@@ -66,55 +43,53 @@ float frmBrushedFbm(vec2 p) {
   return v;
 }
 
-// Derivative-aware scratch lines (fwidth: GLSL ES 3.0, WebGL2 built-in)
-float frmScratchRow(vec2 p, float density, float localSeed) {
-  vec2 q = frmBarBrushCoords(p);
-  float row  = floor(q.y * density);
+// Derivative-aware scratch lines using bar-local coords
+float frmScratchRow(vec2 barUV, float density, float localSeed) {
+  float row  = floor(barUV.y * density);
   float rh   = frmHash(row + localSeed * 137.619);
   if (rh > 0.030) return 0.0;
   float lineY = (row + 0.22 + rh * 0.56) / density;
-  float dist  = abs(q.y - lineY);
-  float fw    = fwidth(q.y);
+  float dist  = abs(barUV.y - lineY);
+  float fw    = fwidth(barUV.y);
   float width = max(fw * 0.55, 0.0004 + frmHash(row + localSeed * 71.33) * 0.0008);
   float inten = 0.04 + frmHash(row + localSeed * 23.71) * 0.07;
   float densityFade = 1.0 - smoothstep(0.55, 1.25, fw * density);
   float segFreq = 2.50 + density * 0.020;
-  float segCell = floor(q.x * segFreq + frmHash(row + localSeed * 19.93) * 2.0);
+  float segCell = floor(barUV.x * segFreq + frmHash(row + localSeed * 19.93) * 2.0);
   float segAlive = step(frmHash(segCell + row * 7.13 + localSeed * 101.77), 0.66);
-  float segPhase = fract(q.x * segFreq);
+  float segPhase = fract(barUV.x * segFreq);
   float segShape = smoothstep(0.08, 0.22, segPhase) * (1.0 - smoothstep(0.74, 0.94, segPhase));
-  float xFade = frmNoise(vec2(q.x * 0.45, row * 0.38)) * 0.12 + 0.88;
+  float xFade = frmNoise(vec2(barUV.x * 0.45, row * 0.38)) * 0.12 + 0.88;
   return smoothstep(width, 0.0, dist) * inten * xFade * densityFade * segAlive * segShape;
 }
 
-float frmScratchLayer(vec2 p, float seed) {
-  float fine   = frmScratchRow(p, 72.0, seed);
-  float medium = frmScratchRow(p, 28.0, seed + 5.11);
-  float deep   = frmScratchRow(p,  9.0, seed + 11.37);
+float frmScratchLayer(vec2 barUV, float seed) {
+  float fine   = frmScratchRow(barUV, 72.0, seed);
+  float medium = frmScratchRow(barUV, 28.0, seed + 5.11);
+  float deep   = frmScratchRow(barUV,  9.0, seed + 11.37);
   return clamp(fine * 0.12 + medium * 0.10 + deep * 0.06, 0.0, 0.38);
 }
 
-// Layered normal: FBM grain + scratch impulses, eps=0.004 for close-view sharpness
-vec3 frmBrushedNormal(vec2 p, float seed) {
-  float eps = 0.0035;
-  float hg  = frmBrushedFbm(p);
-  float hgx = frmBrushedFbm(p + vec2(eps, 0.0));
-  float hgy = frmBrushedFbm(p + vec2(0.0, eps));
-  float hs  = frmScratchLayer(p,                  seed);
-  float hsx = frmScratchLayer(p + vec2(eps, 0.0), seed);
-  float hsy = frmScratchLayer(p + vec2(0.0, eps), seed);
-  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 1.9;
-  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 1.1;
+// Layered normal from FBM grain + scratch impulses
+vec3 frmBrushedNormal(vec2 barUV, float seed) {
+  float eps = 0.004;
+  float hg  = frmBrushedFbm(barUV);
+  float hgx = frmBrushedFbm(barUV + vec2(eps, 0.0));
+  float hgy = frmBrushedFbm(barUV + vec2(0.0, eps));
+  float hs  = frmScratchLayer(barUV,                  seed);
+  float hsx = frmScratchLayer(barUV + vec2(eps, 0.0), seed);
+  float hsy = frmScratchLayer(barUV + vec2(0.0, eps), seed);
+  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 1.8;
+  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 1.0;
   return normalize(vec3(gradG + gradS, 1.0));
 }
 `;
 
 // Replaces #include <normal_fragment_maps> — computes procedural normal using
-// object-space position varying and transforms it from tangent space to view
-// space using Three.js r166's local tbn matrix.
+// bar-local UV varying and transforms from tangent space to view space via tbn.
 const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
 {
-  vec3 proceduralN = frmBrushedNormal(vFrameLocalPos.xy, uFrameSeed);
+  vec3 proceduralN = frmBrushedNormal(vFrameUV, uFrameSeed);
   normal = normalize(tbn * proceduralN);
 }
 `;
@@ -197,7 +172,8 @@ export class CanvasMaterial {
   createFrameMaterial(
     preset: QualityPreset,
     seed = 0,
-    frameBounds?: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _frameBounds?: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
   ): THREE.MeshPhysicalMaterial {
     // Minimal 1×1 flat normal map: required so Three.js emits the
     // TANGENTSPACE_NORMALMAP and USE_TANGENT shader defines, which make the
@@ -210,16 +186,9 @@ export class CanvasMaterial {
     this.frameFlatNormal?.dispose();
     this.frameFlatNormal = flatNormal;
 
-    const bounds = frameBounds ?? {
-      outerHalf: new THREE.Vector2(2.2, 3.05),
-      innerHalf: new THREE.Vector2(2.01, 2.86),
-    };
-
     const uniforms = {
       uFrameSeed:     { value: seed * 0.00390625 },
       uBaseRoughness: { value: preset.frameRoughness },
-      uFrameOuterHalf: { value: bounds.outerHalf.clone() },
-      uFrameInnerHalf: { value: bounds.innerHalf.clone() },
     };
 
     const material = new THREE.MeshPhysicalMaterial({
@@ -231,19 +200,19 @@ export class CanvasMaterial {
       anisotropy: preset.frameAnisotropy,
       anisotropyRotation: Math.PI / 2,
       normalMap: flatNormal,
-      normalScale: new THREE.Vector2(0.22, 0.22),
+      normalScale: new THREE.Vector2(1.0, 1.0),
     });
 
     material.onBeforeCompile = (shader) => {
       // 1. Shared uniforms
       Object.assign(shader.uniforms, uniforms);
 
-      // 2. Inject object-space position varying
-      shader.vertexShader   = 'varying vec3 vFrameLocalPos;\n' + shader.vertexShader;
-      shader.fragmentShader = 'varying vec3 vFrameLocalPos;\n' + shader.fragmentShader;
-      shader.vertexShader   = shader.vertexShader.replace(
+      // 2. Inject bar-local UV varying from the aFrameUV vertex attribute
+      shader.vertexShader = 'attribute vec2 aFrameUV;\nvarying vec2 vFrameUV;\n' + shader.vertexShader;
+      shader.fragmentShader = 'varying vec2 vFrameUV;\n' + shader.fragmentShader;
+      shader.vertexShader = shader.vertexShader.replace(
         'void main() {',
-        'void main() {\n  vFrameLocalPos = position;'
+        'void main() {\n  vFrameUV = aFrameUV;'
       );
 
       // 3. Prepend helper GLSL functions
@@ -255,35 +224,30 @@ export class CanvasMaterial {
         FRAME_FRAG_NORMAL_REPLACE
       );
 
-      // 5. Roughness variation using object-space position
+      // 5. Roughness variation using bar-local coords (same space as normal)
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <roughnessmap_fragment>',
          `float roughnessFactor = uBaseRoughness
-            + frmBrushedFbm(vFrameLocalPos.xy * vec2(0.82, 1.08) + uFrameSeed * 0.27) * 0.012
-            - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.006
-            + 0.020;
-          roughnessFactor = clamp(roughnessFactor, 0.40, 0.76);`
+            + frmBrushedFbm(vFrameUV) * 0.014
+            - frmScratchLayer(vFrameUV, uFrameSeed) * 0.007
+            + 0.018;
+          roughnessFactor = clamp(roughnessFactor, 0.38, 0.72);`
       );
 
       console.debug('[CanvasMaterial] frame-shader-compiled', {
-        version: 'v0.50',
+        version: 'v0.51',
         preset: preset.id,
         seed,
         frameRoughness: preset.frameRoughness,
         frameAnisotropy: preset.frameAnisotropy,
         frameClearcoat: preset.frameClearcoat,
+        coordinateMode: 'vertex-attribute-barUV',
         domainWarp: true,
-        barBrushCoords: true,
         scratchLayer: true,
-        fineDetailRetune: true,
-        cornerBlendFix: true,
-        frameOuterHalf: [bounds.outerHalf.x, bounds.outerHalf.y],
-        frameInnerHalf: [bounds.innerHalf.x, bounds.innerHalf.y],
-        eps: 0.0035,
       });
     };
     // Unique cache key per artwork seed so Three.js compiles distinct programs.
-    material.customProgramCacheKey = () => `frame-v0.50-${seed}`;
+    material.customProgramCacheKey = () => `frame-v0.51-${seed}`;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;
@@ -291,6 +255,7 @@ export class CanvasMaterial {
     console.debug('[CanvasMaterial] frame-material-created', {
       preset: preset.id, seed,
       frameRoughness: preset.frameRoughness, frameAnisotropy: preset.frameAnisotropy,
+      coordinateMode: 'vertex-attribute-barUV',
     });
 
     return material;
@@ -312,22 +277,15 @@ export class CanvasMaterial {
   }
 
   refreshFrameGeometryUniforms(
-    material: THREE.MeshPhysicalMaterial,
-    frameBounds: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _material: THREE.MeshPhysicalMaterial,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _frameBounds: { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 }
   ): void {
-    const u = material.userData.frameUniforms as
-      | {
-          uFrameOuterHalf: { value: THREE.Vector2 };
-          uFrameInnerHalf: { value: THREE.Vector2 };
-        }
-      | undefined;
-    if (!u) return;
-    u.uFrameOuterHalf.value.copy(frameBounds.outerHalf);
-    u.uFrameInnerHalf.value.copy(frameBounds.innerHalf);
-    console.debug('[CanvasMaterial] frame-geometry-uniforms-refreshed', {
-      outerHalf: [frameBounds.outerHalf.x, frameBounds.outerHalf.y],
-      innerHalf: [frameBounds.innerHalf.x, frameBounds.innerHalf.y],
-    });
+    // v0.51: No-op. Frame coordinates are now baked into the geometry attribute
+    // (aFrameUV) and no longer depend on runtime uniforms. The geometry itself
+    // is rebuilt when aspect changes, which regenerates the attribute.
+    console.debug('[CanvasMaterial] frame-geometry-uniforms-noop (v0.51 attribute-based)');
   }
 
   dispose(): void {

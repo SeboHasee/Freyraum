@@ -123,10 +123,94 @@ export class ArtworkMesh {
         : {}),
     });
     geometry.translate(0, 0, -depth);
+
+    // v0.51: Generate per-vertex frame bar UV attribute.
+    // Each vertex gets (along, across) where:
+    //   along  = position along the bar's length direction (world units)
+    //   across = 0 at inner edge, 1 at outer edge (normalized bar width)
+    // This replaces the broken distance-field frmBarBrushCoords() shader mapping
+    // that created concentric-square tunnel artifacts at corners.
+    this.assignFrameBarUVs(geometry, outerW, outerH, innerW, innerH);
+
     // v0.44: tangents are required so Three.js emits the USE_TANGENT define
     // and the vTBN varying, which the onBeforeCompile GLSL injection depends on.
     geometry.computeTangents();
+
+    console.debug('[ArtworkMesh] frame-geometry-built', {
+      outerW, outerH, innerW, innerH,
+      vertexCount: geometry.getAttribute('position').count,
+      hasFrameUV: !!geometry.getAttribute('aFrameUV'),
+      bevelEnabled,
+    });
+
     return geometry;
+  }
+
+  /**
+   * v0.51: Assigns per-vertex `aFrameUV` attribute to the frame geometry.
+   * For each vertex (x, y), determines which bar (top/bottom/left/right) it
+   * belongs to and computes linear (along, across) coordinates.
+   *
+   * At corners (where both dx > 0 and dy > 0), we pick the dominant bar based
+   * on which direction the vertex extends further past the inner edge. This
+   * produces a clean 45° miter transition instead of the concentric-square
+   * distance-field artifact.
+   */
+  private assignFrameBarUVs(
+    geometry: THREE.BufferGeometry,
+    outerW: number, outerH: number,
+    innerW: number, innerH: number
+  ): void {
+    const posAttr = geometry.getAttribute('position');
+    const count = posAttr.count;
+    const uvData = new Float32Array(count * 2);
+
+    const innerHalfW = innerW / 2;
+    const innerHalfH = innerH / 2;
+    const barWidthX = (outerW - innerW) / 2; // horizontal bar thickness
+    const barWidthY = (outerH - innerH) / 2; // vertical bar thickness
+
+    for (let i = 0; i < count; i++) {
+      const x = posAttr.getX(i);
+      const y = posAttr.getY(i);
+
+      const absX = Math.abs(x);
+      const absY = Math.abs(y);
+
+      // Distance past the inner edge in each direction
+      const dx = absX - innerHalfW; // > 0 means in left/right bar zone
+      const dy = absY - innerHalfH; // > 0 means in top/bottom bar zone
+
+      let along: number;
+      let across: number;
+
+      // Determine bar membership:
+      // - If only dy > 0: horizontal bar (top/bottom)
+      // - If only dx > 0: vertical bar (left/right)
+      // - If both > 0 (corner): pick bar with larger normalized penetration
+      // - If neither > 0: inside hole (shouldn't exist), default to horizontal
+
+      const dxNorm = dx / Math.max(barWidthX, 0.001);
+      const dyNorm = dy / Math.max(barWidthY, 0.001);
+
+      if (dyNorm > dxNorm) {
+        // Horizontal bar (top or bottom) — brush runs along X
+        along = x;
+        across = Math.max(0, Math.min(1, dy / Math.max(barWidthY, 0.001)));
+      } else {
+        // Vertical bar (left or right) — brush runs along Y
+        along = y;
+        across = Math.max(0, Math.min(1, dx / Math.max(barWidthX, 0.001)));
+      }
+
+      uvData[i * 2] = along;
+      uvData[i * 2 + 1] = across;
+    }
+
+    geometry.setAttribute(
+      'aFrameUV',
+      new THREE.BufferAttribute(uvData, 2)
+    );
   }
 
   private getFrameBounds(artworkWidth: number, artworkHeight: number): { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 } {

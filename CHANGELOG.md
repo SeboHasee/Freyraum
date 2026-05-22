@@ -1,5 +1,40 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.49 shipped: simplified frame edges with finer brushed-metal micro-detail retune).
+> Last full markdown audit: 2026-05-22 (v0.51 shipped: vertex-attribute frame UVs replace distance-field coordinate mapping).
+
+## v0.51 — vertex-attribute frame UVs (2026-05-22, **shipped**)
+
+### Status
+
+Shipped. Runtime code updated; lint and build pass.
+
+### Root cause
+
+The previous frame shader derived bar-local coordinates via a per-fragment
+distance-field (`frmBarBrushCoords()`). At corners where two bars meet, this
+produced concentric square contour rings ("tunnel effect"). The artifact was
+a coordinate-system bug, not a detail-strength issue.
+
+### Changed
+
+- `src/gallery/ArtworkMesh.ts`: new `assignFrameBarUVs()` computes per-vertex
+  bar-local (along, across) attribute `aFrameUV` on the CPU. Corners use a
+  45° miter cut to assign vertices cleanly to one bar.
+- `src/materials/CanvasMaterial.ts`: shader injection rewired to consume
+  `vFrameUV` varying instead of object-space position. Removed
+  `frmBarBrushCoords()`, `uFrameOuterHalf`, `uFrameInnerHalf` uniforms.
+  `refreshFrameGeometryUniforms()` is now a no-op (geometry rebuild handles
+  aspect changes). Cache key updated to `frame-v0.51-*`.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+## v0.50 — corner blend smoothing (2026-05-22, superseded by v0.51)
+
+### Changed
+
+- Smoothstep corner blending and normalScale 0.22 — superseded.
 
 ## v0.49 — simpler frame edges + finer metal detail (2026-05-22, **shipped**)
 
