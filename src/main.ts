@@ -675,14 +675,8 @@ async function main(): Promise<void> {
   const adaptiveQuality = new AdaptiveQualityController(preferences.current.quality);
   galleryManager.setFrameBudgetMarker(() => frameBudget.markNavigation());
   let adaptiveQualityWriteInFlight = false;
-  // v0.28 X-02 — Forward declarations so the RAF loop can start before the
-  // loading overlay is dismissed. The closure `(now) => animate(now)` resolves
-  // `animate` at call time (not at rAF-schedule time), so by the first frame
-  // (~16 ms) the full assignment below has already executed.
   let pageInactive = false;
   let rafId: number;
-  // eslint-disable-next-line prefer-const
-  let animate: (now: number) => void;
 
   // Experimental WebGPU probe (opt-in, dynamic import, fire-and-forget).
   void maybeProbeWebGPU();
@@ -947,14 +941,12 @@ async function main(): Promise<void> {
   }
   rendererManager.renderer.domElement.classList.remove('gallery-canvas--loading');
   rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
-  // v0.28 X-02 — Start the render loop NOW, before the overlay fades out.
-  // The gallery renders continuously behind the opaque overlay (z-index 200,
-  // background #0d0d0e). When the user clicks and the overlay fades, the
-  // canvas already shows the live rendered scene — no grey-flash on reveal.
-  // `animate` is assigned later in this function; the wrapper closure resolves
-  // it at call time, which is always after the synchronous boot path completes.
-  rafId = requestAnimationFrame((now) => animate(now));
-  diagnostics.info('boot', 'raf-start-pre-reveal', 'RAF loop started before overlay reveal (v0.28 X-02)');
+  // v0.28 X-02 fix: the render loop must start AFTER `animate` is defined
+  // (line ~1351). The original X-02 scheduled rAF here, but `animate` is only
+  // assigned after `await loadingOverlay.reveal()` resolves — so the first
+  // frame would call undefined, crashing the loop. The canvas then permanently
+  // shows the 4×4 prewarmComposer output stretched to fill the viewport.
+  // RAF is now scheduled immediately after `animate` is assigned below.
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
   // v0.24.2: All artworks were warmed pre-reveal, so warmCursor starts at warmOrder.length.
@@ -1347,8 +1339,8 @@ async function main(): Promise<void> {
   timeline.onSelect((index: number) => galleryManager.goTo(index));
   timeline.onPreview((index: number) => galleryManager.promotePrefetchWindow(index, 'timeline-preview'));
 
-  // Animation loop — animate is forward-declared above (v0.28 X-02).
-  animate = (now: number): void => {
+  // Animation loop
+  const animate = (now: number): void => {
     rafId = requestAnimationFrame(animate);
     // v0.11 — skip drawing while the WebGL context is lost on mobile.
     // The render loop keeps requesting frames so that the moment the
@@ -1399,8 +1391,8 @@ async function main(): Promise<void> {
     postProcessing.render();
   };
 
-  // v0.28 X-02 — RAF loop is already running (started before overlay reveal).
-  // Removed: rafId = requestAnimationFrame(animate);
+  // v0.28 X-02 fix — start the render loop now that `animate` is defined.
+  rafId = requestAnimationFrame(animate);
 
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {
