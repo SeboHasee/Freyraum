@@ -1,57 +1,35 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.44 research pass — GLSL shader-injection plan documented; lint/build pass on v0.43).
+> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection brushed-metal; lint/build pass).
 
-## v0.44 — GLSL shader-injection brushed-metal (2026-05-22, **planned — not yet shipped**)
+## v0.44 — GLSL shader-injection brushed-metal (2026-05-22, **shipped**)
 
 ### Status
 
-Research and plan complete. Runtime code not yet changed — v0.43 is the current shipped state.
+Shipped. Runtime code updated; lint and build pass.
 
 ### Problem (remaining after v0.43)
 
-The frame still shows visible horizontal banding (6–8 regular light/dark stripes across the bottom/side bars). The metal lacks micro-detail (no individual scratches, no fine-grain surface texture). Both issues trace to the `DataTexture + RepeatWrapping` approach: any non-seamlessly-tiling DataTexture produces a visible seam every time the texture tile repeats, and the v0.43 value-noise texture is not seamlessly periodic.
+The frame still showed visible horizontal banding (6–8 regular light/dark stripes across the bottom/side bars) and lacked micro-detail (no individual scratches, no fine-grain surface texture). Both issues trace to the `DataTexture + RepeatWrapping` approach: any non-seamlessly-tiling DataTexture produces a visible seam every time the texture tile repeats, and the v0.43 value-noise texture is not seamlessly periodic.
 
 ### Root cause (see FINDINGS.md § v0.44)
 
-`THREE.ExtrudeGeometry` uses `WorldUVGenerator` → raw world-Y coordinate as UV.y. The frame ring spans ~6.1 world units in Y. With `texture.repeat.set(1,1)`, the DataTexture repeats every 1 world unit → ~6 tiles vertically. The v0.43 noise is not seamlessly periodic at the 256-pixel tile boundary → 6 seams = 6 visible horizontal bands.
+`THREE.ExtrudeGeometry` uses `WorldUVGenerator` → raw world-Y coordinate as UV.y. The frame ring spans ~6.1 world units in Y. With `texture.repeat.set(1,1)`, the DataTexture repeats every 1 world unit → ~6 tiles vertically → 6 seams = 6 visible horizontal bands.
 
-### Planned changes
+### Changes shipped
 
 | Slice | File | Change |
 |-------|------|--------|
-| S-01 | `src/materials/CanvasMaterial.ts` | Add `FRAME_VERT_GLSL` and `FRAME_FRAG_GLSL` string constants with self-contained brushed-metal GLSL (hash21, FBM, ridgedNoise, brushedMetalNormal). |
-| S-02 | `src/materials/CanvasMaterial.ts` | In `createFrameMaterial()`: attach `onBeforeCompile` to the returned `MeshPhysicalMaterial`. Hook injects GLSL at `#include <normal_fragment_maps>` for per-fragment procedural normal and at roughness map sampling for procedural roughness variation. |
-| S-03 | `src/materials/CanvasMaterial.ts` | Pass seed and preset roughness as `uniforms` on the shader so each artwork has distinct grain phase without regenerating any buffer. |
-| S-04 | `src/materials/CanvasMaterial.ts` | Remove `makeFrameNormalTexture`, `makeFrameRoughnessTexture`, `frameNormalTexture`, `frameRoughnessTexture` fields — DataTextures no longer needed. |
-| S-05 | `src/materials/CanvasMaterial.ts` | Remove `refreshFrameTextures()` — replace with `refreshFrameUniforms(material, seed)` that only updates the `uSeed` uniform (no texture disposal/regeneration). |
-| S-06 | `src/gallery/ArtworkMesh.ts` | Update `updateFrameSeed()` to call `refreshFrameUniforms` instead of `refreshFrameTextures`. |
+| S-01 | `src/materials/CanvasMaterial.ts` | Added `FRAME_FRAG_FUNCTIONS` GLSL constant: `frmHash`, `frmNoise`, `frmFbm` (4-octave), `frmRidge`, `frmTileOffset`, `frmBrushedNormal`. Added `FRAME_FRAG_NORMAL_REPLACE` GLSL constant. Added `uniform float uFrameSeed; uniform float uBaseRoughness;` declarations. |
+| S-02 | `src/materials/CanvasMaterial.ts` | `createFrameMaterial()` now sets `onBeforeCompile` that prepends GLSL, replaces `#include <normal_fragment_maps>` with procedural brushed normal, and replaces `#include <roughnessmap_fragment>` with FBM-driven roughness. Sets `customProgramCacheKey` per artwork seed. |
+| S-03 | `src/materials/CanvasMaterial.ts` | Removed `makeFrameNormalTexture`, `makeFrameRoughnessTexture`, `latticeHash`, `valueNoise2d`, `scratchHeight` private methods. Removed `frameNormalTexture`, `frameRoughnessTexture` fields. Removed `roughnessMap` from material constructor. |
+| S-04 | `src/materials/CanvasMaterial.ts` | Replaced `refreshFrameTextures()` with `refreshFrameUniforms(material, seed)` — updates only the `uFrameSeed` float uniform; no texture disposal or re-upload. |
+| S-05 | `src/gallery/ArtworkMesh.ts` | `updateFrameSeed()` now calls `refreshFrameUniforms` instead of `refreshFrameTextures`. Removed unused `currentPreset` field. |
+| S-06 | `src/gallery/ArtworkMesh.ts` | `makeFrameGeometry()` now calls `geometry.computeTangents()` so `USE_TANGENT` is defined in the compiled shader and `vTBN` is a varying available for the GLSL injection. |
 
-### GLSL technique (researched)
+### Validation
 
-**FBM (fractal Brownian motion) — 4 octaves:**
-- Octave 1: coarse grain (long horizontal sweeps, low X frequency)
-- Octave 2: medium grain (~2× frequency, 0.5× amplitude)
-- Octave 3: fine grain (~4× frequency, 0.25× amplitude)
-- Octave 4: micro grain (~8× frequency, 0.125× amplitude)
-
-Sum of 4 octaves covers all visible scale bands. No single dominant frequency → no visible periodic banding regardless of UV tiling.
-
-**Ridged noise (individual scratches):**
-Ridge = `1.0 - abs(2.0 * fbm - 1.0)` — inverts the FBM range to produce sharp bright peaks (scratches) with wide dark troughs. Applied at high X-frequency / very low Y-frequency to give thin individual scratches running across the grain direction. Blended at ~10–15% weight into the normal height field.
-
-**Hash-based anti-tiling (tile-cell jitter):**
-Sample the noise at two UV offsets (offset by `hash2(floor(uv * tileFreq))`), blend between them using a smooth low-frequency mask. Even if the UV wraps, the random offset per tile cell breaks any visible seam cadence. This is the technique described in:
-- Heitz & Neyret 2018 "High-Performance By-Example Noise using a Histogram-Preserving Blending Operator" (SIGGRAPH 2018)
-- Alexandre Pestana "Anti-tiling technique" (2019, blog)
-
-**`onBeforeCompile` injection (Three.js standard pattern):**
-Three.js `MeshPhysicalMaterial` exposes `material.onBeforeCompile(shader)` which runs once before the first GPU compilation. GLSL chunks are prepended/replaced in `shader.fragmentShader` using `String.replace('#include <normal_fragment_maps>', ...)`. This is the documented production approach for procedural materials in Three.js (discourse.threejs.org, r/threejs, Three.js examples repo).
-
-### Validation plan
-
-- `npm run lint` — must pass.
-- `npm run build` — must pass.
-- Visual: no visible horizontal banding; natural random scratches; each artwork shows distinct grain.
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ---
 

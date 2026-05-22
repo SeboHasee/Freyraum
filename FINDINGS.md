@@ -1,7 +1,7 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.44 research pass — GLSL shader-injection plan documented; lint/build pass on v0.43).
+> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection implemented; lint/build pass).
 
-## v0.44 — remaining horizontal banding + missing micro-detail (2026-05-22, **research complete / not yet shipped**)
+## v0.44 — remaining horizontal banding + missing micro-detail (2026-05-22, **shipped**)
 
 ### Symptom
 
@@ -78,36 +78,27 @@ A per-fragment GLSL generator has no texture tiles to repeat. The input coordina
 
 The DataTexture approach can only be fixed with either (a) seamless tiling (periodic noise generation), which limits achievable quality, or (b) replacing it with GLSL injection — option (b) is strictly better.
 
-### Solution architecture for v0.44
+### Solution shipped
 
-Replace the `DataTexture` generators with `onBeforeCompile` GLSL injection:
+`onBeforeCompile` GLSL injection implemented in `CanvasMaterial.ts`:
+- `FRAME_FRAG_FUNCTIONS`: 4-octave FBM + ridged noise + anti-tile hash jitter, declared as top-level GLSL constants prepended to the fragment shader.
+- `FRAME_FRAG_NORMAL_REPLACE`: replaces `#include <normal_fragment_maps>` — procedural normal via `frmBrushedNormal(vUv, uFrameSeed)` → `normalize(vTBN * proceduralN)`.
+- Roughness: replaces `#include <roughnessmap_fragment>` with `uBaseRoughness + frmFbm(...) * 0.12`.
+- DataTexture generators (`makeFrameNormalTexture`, `makeFrameRoughnessTexture`, `latticeHash`, `valueNoise2d`, `scratchHeight`) removed entirely.
+- `refreshFrameTextures` replaced by `refreshFrameUniforms` — only updates `uFrameSeed` float on navigation (zero GPU allocation).
+- Frame geometry now calls `geometry.computeTangents()` to ensure `USE_TANGENT` is defined and `vTBN` is a varying.
 
-```
-MeshPhysicalMaterial
-  + onBeforeCompile(shader):
-      prepend: hash21, valueNoise2d, fbm4, ridgedNoise, brushedMetalNormal
-      replace: '#include <normal_fragment_maps>'
-             → procedural normal from brushedMetalNormal(vUv, uSeed)
-      replace: roughnessMap sampling
-             → uBaseRoughness + fbm2(vUv scaled) * 0.12
-      add uniform: uSeed (float, per-artwork deterministic float)
-      add uniform: uBaseRoughness (float, from preset.frameRoughness)
-```
-
-Roughness stays per-fragment; `roughnessMap` DataTexture removed. Seed update on navigation = only update the `uSeed` uniform (single float, zero GPU allocation).
-
-### Files impacted
+### Files changed
 
 | File | Change |
 |------|--------|
-| `src/materials/CanvasMaterial.ts` | Add GLSL constants, wire `onBeforeCompile`, remove DataTexture fields and generators, replace `refreshFrameTextures` with `refreshFrameUniforms` |
-| `src/gallery/ArtworkMesh.ts` | Update `updateFrameSeed` to call `refreshFrameUniforms` |
+| `src/materials/CanvasMaterial.ts` | Added GLSL constants, wired `onBeforeCompile`, removed DataTexture fields and generators, replaced `refreshFrameTextures` with `refreshFrameUniforms` |
+| `src/gallery/ArtworkMesh.ts` | Added `geometry.computeTangents()` to frame geometry, updated `updateFrameSeed` to call `refreshFrameUniforms`, removed unused `currentPreset` field |
 
 ### Validation
 
-- `npm run lint` — pass required.
-- `npm run build` — pass required.
-- Visual: no horizontal bands; natural individual scratches visible under studio light; grain varies between artworks.
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ---
 

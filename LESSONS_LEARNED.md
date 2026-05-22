@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.41 battery painting bug fixed + v0.40 plan upgraded to detailed technical coding plan; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection brushed-metal; lint/build pass).
+
+## 2026-05-22 — v0.44 GLSL injection lesson
+
+### Lesson 75 — DataTexture + RepeatWrapping cannot produce seamless brushed metal
+
+Any DataTexture with `RepeatWrapping` will show a seam at every tile boundary. If the UV range forces multiple tiles (e.g., world-space UVs on a 6-unit ring with `repeat.set(1,1)` → 6 tiles → 6 seams), the banding is always visible regardless of noise quality or octave count. The only clean fix is per-fragment GLSL (`onBeforeCompile` injection) where the UV coordinate increases monotonically and there is no tiling boundary.
+
+### Lesson 76 — `onBeforeCompile` requires a normalMap to emit `vTBN`
+
+`USE_TANGENT` and the `vTBN` varying are only emitted by Three.js when the geometry has a tangent attribute AND the material has a `normalMap` (or anisotropy). When replacing the normal map sampling via `onBeforeCompile`, set a minimal flat 1×1 DataTexture as `normalMap` to ensure the shader defines are correct, and call `geometry.computeTangents()` on the frame geometry.
 
 ## 2026-05-22 — v0.41 battery bug lesson
 

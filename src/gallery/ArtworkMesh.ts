@@ -34,7 +34,6 @@ export class ArtworkMesh {
   private _artworkHeight = 5.7;
   private currentSegments: number;
   private currentFrameBevelEnabled: boolean;
-  private currentPreset: QualityPreset;
   private artworkSeed: number;
   private readonly scene: THREE.Scene;
   /** Density coefficient for detail-normal tiling (tiles per world unit). */
@@ -47,7 +46,6 @@ export class ArtworkMesh {
   constructor(scene: THREE.Scene, preset: QualityPreset, artworkIndex = 0) {
     this.scene = scene;
     this.canvasMaterial = new CanvasMaterial();
-    this.currentPreset = preset;
     this.artworkSeed = artworkIndex % 256;
     this.group = new THREE.Group();
     this.currentSegments = preset.artworkSegments;
@@ -121,6 +119,9 @@ export class ArtworkMesh {
         : {}),
     });
     geometry.translate(0, 0, -depth);
+    // v0.44: tangents are required so Three.js emits the USE_TANGENT define
+    // and the vTBN varying, which the onBeforeCompile GLSL injection depends on.
+    geometry.computeTangents();
     return geometry;
   }
 
@@ -144,7 +145,6 @@ export class ArtworkMesh {
   }
 
   applyPreset(preset: QualityPreset): void {
-    this.currentPreset = preset;
     // The material always reflects the latest preset, even when segments do not change.
     this.material.applyPreset(preset);
     this.applyFramePreset(preset);
@@ -161,15 +161,16 @@ export class ArtworkMesh {
   }
 
   /**
-   * P-02: Updates the frame surface textures for a new artwork index. Called
-   * by GalleryManager when navigating so each artwork's frame shows a distinct
-   * but deterministic texture phase. No-ops when the seed is unchanged.
+   * v0.44: Updates the frame material's uFrameSeed uniform for a new artwork
+   * index. Called by GalleryManager when navigating so each artwork's frame
+   * shows a distinct but deterministic grain phase. No texture disposal or
+   * regeneration — the GLSL reads the new uniform on the next frame.
    */
   updateFrameSeed(artworkIndex: number): void {
     const seed = artworkIndex % 256;
     if (seed === this.artworkSeed) return;
     this.artworkSeed = seed;
-    this.canvasMaterial.refreshFrameTextures(this.frameMaterial, this.currentPreset, seed);
+    this.canvasMaterial.refreshFrameUniforms(this.frameMaterial, seed);
     // P-06: log seed change for diagnostics.
     console.debug('[ArtworkMesh] artwork-frame-seed', { artworkIndex, seed });
   }

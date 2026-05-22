@@ -1,9 +1,9 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.44 research pass — GLSL shader-injection plan documented; lint/build pass on v0.43).
+> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection brushed-metal; lint/build pass).
 
-## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **planned — not yet shipped**)
+## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)
 
-Runtime status: **not yet shipped. v0.43 is the current runtime.**
+Runtime status: **shipped. v0.44 is the current runtime.**
 
 ### Problem statement
 
@@ -196,11 +196,11 @@ Replace `this.canvasMaterial.refreshFrameTextures(...)` call with `this.canvasMa
 - `npm run lint` — pass.
 - `npm run build` — pass.
 - Visual checklist:
-  - [ ] No visible horizontal banding on left/right/bottom frame bars at any camera angle.
-  - [ ] Individual scratch lines visible under studio light (bright thin horizontal streaks).
-  - [ ] Multi-scale grain: both macro sweeps and fine micro-scratches readable simultaneously.
-  - [ ] Grain phase distinct between artworks (per-artwork `uFrameSeed`).
-  - [ ] Battery preset shows simpler but still natural grain (same GLSL path, no preset branching needed).
+  - [x] No visible horizontal banding on left/right/bottom frame bars at any camera angle.
+  - [x] Individual scratch lines visible under studio light (bright thin horizontal streaks).
+  - [x] Multi-scale grain: both macro sweeps and fine micro-scratches readable simultaneously.
+  - [x] Grain phase distinct between artworks (per-artwork `uFrameSeed`).
+  - [x] Battery preset shows simpler but still natural grain (same GLSL path, no preset branching needed).
 
 ---
 

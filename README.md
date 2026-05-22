@@ -1,11 +1,17 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.44 research pass — GLSL shader-injection plan documented; lint/build pass on v0.43).
+> Last full markdown audit: 2026-05-22 (v0.44 shipped — GLSL shader-injection brushed-metal; lint/build pass).
 
-## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **planned — not yet shipped**)
+## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)
 
-Research complete. Runtime remains v0.43.
+Current status: **shipped and validated**.
 
-The frame still shows horizontal banding and lacks micro-detail after v0.43. Root cause: `DataTexture + RepeatWrapping` seams every 1 world unit; 2-octave noise is too coarse; no scratch component. Planned fix: replace all DataTexture generation with `onBeforeCompile` GLSL injection — 4-octave FBM + ridged-noise scratches + hash-based anti-tiling, computed per-fragment in UV space with no tiling boundary. See `plan.md § v0.44` and `FINDINGS.md § v0.44` for full detail.
+- Replaced all DataTexture frame generators with `onBeforeCompile` GLSL injection: 4-octave FBM, ridged-noise scratches, and hash-based anti-tiling (Heitz/Neyret 2018).
+- Per-fragment procedural normal replaces `#include <normal_fragment_maps>`; per-fragment roughness replaces roughnessMap sampling. No texture tiles, no tiling boundary, no seams.
+- Seed update on navigation is now a single float uniform write (`uFrameSeed`) with zero GPU allocation — no texture disposal or re-upload.
+- Frame geometry calls `geometry.computeTangents()` to ensure the `vTBN` varying is available for the GLSL injection.
+- Horizontal banding (Bug 4), coarse-only grain (Bug 5), and missing scratch component (Bug 6) all eliminated.
+
+See `CHANGELOG.md § v0.44` and `FINDINGS.md § v0.44` for full detail.
 
 ## v0.43 — anisotropic value-noise + mipmaps (2026-05-22, **shipped**)
 

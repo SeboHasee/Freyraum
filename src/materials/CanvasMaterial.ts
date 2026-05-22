@@ -1,10 +1,101 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 
+// v0.44 — GLSL procedural brushed-metal fragment functions.
+// Prepended to shader.fragmentShader in onBeforeCompile so they are available
+// in all injection sites below.
+const FRAME_FRAG_FUNCTIONS = /* glsl */ `
+// v0.44 brushed-metal procedural normal & roughness
+
+uniform float uFrameSeed;
+uniform float uBaseRoughness;
+
+float frmHash(float n) {
+  return fract(sin(n) * 43758.5453123);
+}
+
+float frmNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n = i.x + i.y * 57.0;
+  return mix(
+    mix(frmHash(n), frmHash(n + 1.0), f.x),
+    mix(frmHash(n + 57.0), frmHash(n + 58.0), f.x),
+    f.y
+  );
+}
+
+// 4-octave FBM — anisotropic: X stretched relative to Y
+float frmFbm(vec2 p) {
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    v += a * frmNoise(p);
+    p = p * mat2(2.1, 0.0, 0.0, 2.0);
+    a *= 0.5;
+  }
+  return v;
+}
+
+// Ridged noise → sharp bright lines (individual scratches)
+float frmRidge(vec2 p) {
+  return 1.0 - abs(2.0 * frmFbm(p) - 1.0);
+}
+
+// Anti-tile: per-cell random UV offset (Heitz/Neyret 2018)
+vec2 frmTileOffset(vec2 p, float freq) {
+  vec2 cell = floor(p * freq);
+  float h = frmHash(cell.x + cell.y * 137.0);
+  return vec2(fract(h * 1234.5), fract(h * 9876.5));
+}
+
+// Tangent-space normal from anisotropic height-field finite difference
+vec3 frmBrushedNormal(vec2 uv, float seed) {
+  // Low X-frequency = long horizontal grain sweeps; moderate Y-frequency
+  vec2 sc = vec2(uv.x * 1.2 + seed * 0.07, uv.y * 14.0 + seed * 0.13);
+
+  // Two anti-tiled samples blended via smooth low-frequency mask
+  vec2 off0 = frmTileOffset(uv, 1.5);
+  vec2 off1 = frmTileOffset(uv + 0.17, 1.5);
+  float blend = frmNoise(uv * 2.3);
+
+  float h0  = frmFbm(sc + off0 * 3.0)
+            + frmRidge(sc * vec2(4.0, 0.05) + off0) * 0.12;
+  float h0x = frmFbm((sc + vec2(0.02, 0.0)) + off0 * 3.0);
+  float h0y = frmFbm((sc + vec2(0.0, 0.02)) + off0 * 3.0);
+
+  float h1  = frmFbm(sc + off1 * 3.0)
+            + frmRidge(sc * vec2(4.0, 0.05) + off1) * 0.12;
+  float h1x = frmFbm((sc + vec2(0.02, 0.0)) + off1 * 3.0);
+  float h1y = frmFbm((sc + vec2(0.0, 0.02)) + off1 * 3.0);
+
+  float h  = mix(h0,  h1,  blend);
+  float hx = mix(h0x, h1x, blend);
+  float hy = mix(h0y, h1y, blend);
+
+  // Finite differences → tangent-space gradient; 8.0 controls relief strength
+  vec2 grad = vec2(h - hx, h - hy) * 8.0;
+  return normalize(vec3(grad, 1.0));
+}
+`;
+
+// Replaces #include <normal_fragment_maps> — computes procedural normal and
+// transforms it from tangent space to view space using the vTBN varying
+// (present because the frame geometry has tangent attributes and the material
+// has a normalMap set, enabling USE_TANGENT in the compiled shader).
+const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
+{
+  vec3 proceduralN = frmBrushedNormal(vUv, uFrameSeed);
+  normal = normalize(vTBN * proceduralN);
+}
+`;
+
 export class CanvasMaterial {
   private normalTexture: THREE.Texture | null = null;
-  private frameNormalTexture: THREE.DataTexture | null = null;
-  private frameRoughnessTexture: THREE.DataTexture | null = null;
+  // v0.44: flat dummy normal map — ensures TANGENTSPACE_NORMALMAP / USE_TANGENT
+  // shader defines are present so the vTBN varying is emitted.
+  private frameFlatNormal: THREE.DataTexture | null = null;
 
   async loadNormalTexture(): Promise<THREE.Texture> {
     if (this.normalTexture) return this.normalTexture;
@@ -66,186 +157,93 @@ export class CanvasMaterial {
     return mat;
   }
 
-  // ── v0.43 noise-based realistic brushed-metal frame textures ─────────────
+  // ── v0.44 GLSL-injected brushed-metal frame ──────────────────────────────
 
   /**
-   * Bilinear value noise. Returns a smooth 0..1 value at (x, y) for the
-   * given integer seed. Identical implementation to ProceduralTextureFactory
-   * so the two classes can share the same deterministic lattice.
-   */
-  private latticeHash(ix: number, iy: number, seed: number): number {
-    let h = (seed * 1664525 + ix * 1013904223) >>> 0;
-    h = (h ^ (iy * 1540483477)) >>> 0;
-    h = (h ^ (h >>> 16)) >>> 0;
-    h = Math.imul(h, 0x45d9f3b) >>> 0;
-    h = (h ^ (h >>> 16)) >>> 0;
-    return (h >>> 0) / 0xffffffff;
-  }
-
-  private valueNoise2d(x: number, y: number, seed: number): number {
-    const xi = Math.floor(x) | 0;
-    const yi = Math.floor(y) | 0;
-    const xf = x - xi;
-    const yf = y - yi;
-    const ux = xf * xf * (3 - 2 * xf);
-    const uy = yf * yf * (3 - 2 * yf);
-    const h00 = this.latticeHash(xi,     yi,     seed);
-    const h10 = this.latticeHash(xi + 1, yi,     seed);
-    const h01 = this.latticeHash(xi,     yi + 1, seed);
-    const h11 = this.latticeHash(xi + 1, yi + 1, seed);
-    return (
-      h00 * (1 - ux) * (1 - uy) +
-      h10 * ux       * (1 - uy) +
-      h01 * (1 - ux) * uy       +
-      h11 * ux       * uy
-    );
-  }
-
-  /**
-   * Anisotropic height field for brushed-metal scratches.
-   * Low X-frequency = long horizontal streaks.
-   * Higher Y-frequency = fine cross-section detail within each rail strip.
-   * Two octaves keep the generation fast while covering both fine and broad variation.
-   */
-  private scratchHeight(x: number, y: number, seed: number): number {
-    const fine = this.valueNoise2d(x * 0.006, y * 0.25, seed)        * 0.60;
-    const mid  = this.valueNoise2d(x * 0.002, y * 0.08, seed + 37)   * 0.40;
-    return fine + mid;
-  }
-
-  /**
-   * Brushed-metal normal map derived from the anisotropic scratch height field
-   * via finite differences. Both Nx (R) and Ny (G) are computed so the surface
-   * responds correctly to light from any angle. Mipmaps and linear filtering
-   * prevent the aliasing (pixelation) that occurred with NearestFilter defaults.
-   */
-  private makeFrameNormalTexture(seed: number): THREE.DataTexture {
-    const size = 256;
-    const data = new Uint8Array(size * size * 4);
-    for (let y = 0; y < size; y += 1) {
-      for (let x = 0; x < size; x += 1) {
-        const idx = (y * size + x) * 4;
-        // Finite-difference surface gradient → tangent-space normals
-        const h  = this.scratchHeight(x,     y,     seed);
-        const hx = this.scratchHeight(x + 1, y,     seed);
-        const hy = this.scratchHeight(x,     y + 1, seed);
-        const nx = (h - hx) * 100;
-        const ny = (h - hy) * 100;
-        data[idx + 0] = Math.max(0, Math.min(255, (128 + nx) | 0));
-        data[idx + 1] = Math.max(0, Math.min(255, (128 + ny) | 0));
-        data[idx + 2] = 255;
-        data[idx + 3] = 255;
-      }
-    }
-    const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-    texture.colorSpace = THREE.LinearSRGBColorSpace;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    // v0.42 fix: world-space UVs from ExtrudeGeometry — repeat.set(1,1) for natural tiling.
-    texture.repeat.set(1, 1);
-    texture.minFilter = THREE.LinearMipMapLinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.generateMipmaps = true;
-    texture.needsUpdate = true;
-    return texture;
-  }
-
-  /**
-   * Roughness map derived from the same anisotropic noise.
-   * withMacroDrift adds a second broad octave so high/balanced presets show
-   * smooth roughness gradients along the rails, not uniform flat grey.
-   */
-  private makeFrameRoughnessTexture(seed: number, withMacroDrift: boolean): THREE.DataTexture {
-    const size = 128;
-    const data = new Uint8Array(size * size * 4);
-    for (let y = 0; y < size; y += 1) {
-      for (let x = 0; x < size; x += 1) {
-        const idx = (y * size + x) * 4;
-        const fine  = this.valueNoise2d(x * 0.006, y * 0.25, seed + 200)  * 0.28;
-        const drift = withMacroDrift
-          ? this.valueNoise2d(x * 0.002, y * 0.06, seed + 250) * 0.14
-          : 0;
-        const v = 0.48 + fine + drift;
-        const r = Math.max(0, Math.min(255, (v * 255) | 0));
-        data[idx + 0] = r;
-        data[idx + 1] = r;
-        data[idx + 2] = r;
-        data[idx + 3] = 255;
-      }
-    }
-    const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-    texture.colorSpace = THREE.LinearSRGBColorSpace;
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(1, 1);
-    texture.minFilter = THREE.LinearMipMapLinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.generateMipmaps = true;
-    texture.needsUpdate = true;
-    return texture;
-  }
-
-  /**
-   * P-02: Creates the initial frame material with seeded textures.
-   * Each artwork receives a distinct seed so frame surfaces never appear
-   * phase-aligned across the gallery wall. Seed 0 is deterministic and
-   * stable across page loads.
+   * Creates the frame material with `onBeforeCompile` GLSL injection.
+   * Each artwork receives a distinct seed (passed as `uFrameSeed` uniform)
+   * so grain phase varies across the gallery without regenerating any buffer.
+   * DataTexture generation has been removed — normal and roughness are now
+   * computed entirely per-fragment in GLSL (no tiling boundary, no seams).
    */
   createFrameMaterial(preset: QualityPreset, seed = 0): THREE.MeshPhysicalMaterial {
-    const withMacroDrift = preset.id !== 'battery';
-    const frameNormal = this.makeFrameNormalTexture(seed);
-    const frameRoughness = this.makeFrameRoughnessTexture(seed, withMacroDrift);
-    // Dispose any previously tracked textures before replacing them.
-    this.frameNormalTexture?.dispose();
-    this.frameRoughnessTexture?.dispose();
-    this.frameNormalTexture = frameNormal;
-    this.frameRoughnessTexture = frameRoughness;
+    // Minimal 1×1 flat normal map: required so Three.js emits the
+    // TANGENTSPACE_NORMALMAP and USE_TANGENT shader defines, which make the
+    // vTBN varying available in the fragment shader for our GLSL injection.
+    const flatNormal = new THREE.DataTexture(
+      new Uint8Array([128, 128, 255, 255]),
+      1, 1, THREE.RGBAFormat
+    );
+    flatNormal.needsUpdate = true;
+    this.frameFlatNormal?.dispose();
+    this.frameFlatNormal = flatNormal;
 
-    // P-06: diagnostic log so the active frame configuration is visible in the console.
-    console.debug('[CanvasMaterial] frame-material-created', {
-      preset: preset.id, seed, macroDrift: withMacroDrift,
-      frameRoughness: preset.frameRoughness, frameAnisotropy: preset.frameAnisotropy,
-    });
+    const uniforms = {
+      uFrameSeed:     { value: seed * 0.00390625 },
+      uBaseRoughness: { value: preset.frameRoughness },
+    };
 
-    return new THREE.MeshPhysicalMaterial({
+    const material = new THREE.MeshPhysicalMaterial({
       color: 0xe8eaeb,
       roughness: preset.frameRoughness,
-      roughnessMap: frameRoughness,
       metalness: 1.0,
       clearcoat: preset.frameClearcoat,
       clearcoatRoughness: 0.2,
       anisotropy: preset.frameAnisotropy,
       anisotropyRotation: Math.PI / 2,
-      normalMap: frameNormal,
+      normalMap: flatNormal,
       normalScale: new THREE.Vector2(0.40, 0.40),
     });
+
+    material.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, uniforms);
+      // Prepend helper functions so they are visible at all injection sites.
+      shader.fragmentShader = FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
+      // Replace standard normal-map sampling with our procedural computation.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <normal_fragment_maps>',
+        FRAME_FRAG_NORMAL_REPLACE
+      );
+      // Replace roughness-map sampling with FBM-driven variation.
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <roughnessmap_fragment>',
+        `float roughnessFactor = uBaseRoughness
+           + frmFbm(vec2(vUv.x * 1.2, vUv.y * 5.0) + uFrameSeed * 0.5) * 0.12
+           - 0.06;`
+      );
+      console.debug('[CanvasMaterial] frame-shader-compiled', { preset: preset.id, seed });
+    };
+    // Unique cache key per artwork seed so Three.js compiles distinct programs.
+    material.customProgramCacheKey = () => `frame-v0.44-${seed}`;
+
+    // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
+    material.userData.frameUniforms = uniforms;
+
+    console.debug('[CanvasMaterial] frame-material-created', {
+      preset: preset.id, seed,
+      frameRoughness: preset.frameRoughness, frameAnisotropy: preset.frameAnisotropy,
+    });
+
+    return material;
   }
 
   /**
-   * P-02: Updates the existing frame material's normal and roughness textures
-   * in-place for a new artwork seed. Called by ArtworkMesh when navigating
-   * to a different artwork so the frame surface phase changes without
-   * disposing the material or re-uploading geometry.
+   * Updates only the `uFrameSeed` uniform for an existing frame material.
+   * Called by ArtworkMesh when navigating to a different artwork. No texture
+   * disposal or regeneration — the GLSL reads the new seed immediately on the
+   * next frame.
    */
-  refreshFrameTextures(material: THREE.MeshPhysicalMaterial, preset: QualityPreset, seed: number): void {
-    const withMacroDrift = preset.id !== 'battery';
-    const newNormal = this.makeFrameNormalTexture(seed);
-    const newRoughness = this.makeFrameRoughnessTexture(seed, withMacroDrift);
-    this.frameNormalTexture?.dispose();
-    this.frameRoughnessTexture?.dispose();
-    this.frameNormalTexture = newNormal;
-    this.frameRoughnessTexture = newRoughness;
-    material.normalMap = newNormal;
-    material.roughnessMap = newRoughness;
-    material.needsUpdate = true;
-    console.debug('[CanvasMaterial] frame-textures-refreshed', {
-      preset: preset.id, seed, macroDrift: withMacroDrift,
-    });
+  refreshFrameUniforms(material: THREE.MeshPhysicalMaterial, seed: number): void {
+    const u = material.userData.frameUniforms as
+      | { uFrameSeed: { value: number } }
+      | undefined;
+    if (!u) return;
+    u.uFrameSeed.value = seed * 0.00390625;
+    console.debug('[CanvasMaterial] frame-uniforms-refreshed', { seed });
   }
 
   dispose(): void {
     this.normalTexture?.dispose();
-    this.frameNormalTexture?.dispose();
-    this.frameRoughnessTexture?.dispose();
+    this.frameFlatNormal?.dispose();
   }
 }
