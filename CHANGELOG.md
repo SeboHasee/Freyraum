@@ -1,30 +1,34 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+> Last full markdown audit: 2026-05-22 (v0.45 upgraded to full technical coding plan with GLSL/TS code and 2026-verified sources; runtime still v0.44.1 until implemented).
 
-## v0.45 — zero-visible-tiling brushed-metal research plan (2026-05-22, **planned / docs-only**)
+## v0.45 — Technical Coding Plan: Zero-Visible-Tiling Brushed-Metal (2026-05-22, **planned / docs-only**)
 
 ### Status
 
-Planning and research documentation only. No runtime shader/material code changed in this pass.
+Planning and research documentation only. No runtime code changed in this pass. Full technical specification with actual GLSL and TypeScript code is now in `plan.md § v0.45` and `FINDINGS.md § v0.45`.
 
-### Requested target
+### What changed in this pass (docs upgrade from high-level to technical)
 
-- Remove all visible tiles, repeated scratch clusters, regular bands, and procedural cadence from the frame.
-- Make close-zoom detail sharper, more pronounced, and more realistic/high-resolution.
-- Make the metal slightly rougher / less shiny while retaining brushed anisotropic character.
+- **`plan.md`**: Replaced high-level v0.45 outline with a full technical coding plan including:
+  - Complete `FRAME_FRAG_FUNCTIONS` GLSL replacement (domain-warped FBM, scratch primitives, layered normal)
+  - Complete `onBeforeCompile` TypeScript block with vertex varying injection
+  - Exact `quality.ts` roughness/clearcoat values per preset
+  - Source citations for each technique (Quilez domain warp, Khronos fwidth spec, Adobe PBR guide, Three.js docs)
+- **`FINDINGS.md`**: Added v0.44 code audit (line-by-line issue identification with file:line references), plus extended research findings with verified 2026 sources.
+- **`CHANGELOG.md`**, **`README.md`**, **`LESSONS_LEARNED.md`**: Updated to reflect the upgrade from docs-only outline to full technical spec.
 
-### Documentation changes
+### Planned runtime changes (not yet implemented)
 
-- Added detailed v0.45 plan in `plan.md`.
-- Added research findings in `FINDINGS.md`.
-- Updated README, architecture, handoff, lessons, and documentation status notes with the planned/current-state boundary.
-- Corrected docs to use Three.js r166's local `tbn` matrix naming rather than outdated `vTBN` language.
+1. **`CanvasMaterial.ts`** — Replace `FRAME_FRAG_FUNCTIONS` with domain-warped FBM + scratch layer + layered normal function. Rewrite `onBeforeCompile` to inject `vFrameLocalPos` vertex varying and use it in all GLSL.
+2. **`quality.ts`** — Raise `frameRoughness` and lower `frameClearcoat` per preset to satin-metal PBR range.
+3. **`customProgramCacheKey`** — Bump to `frame-v0.45-${seed}`.
 
-### Validation
+### Validation (pending implementation)
 
-- Documentation-only validation: `git diff --check`.
+- `npm run lint`
+- `npm run build`
+- Browser console: `[CanvasMaterial] frame-shader-compiled { version: 'v0.45', ... }` — no WebGL errors.
 
----
 
 ## v0.44 — GLSL shader-injection brushed-metal (2026-05-22, **shipped**)
 

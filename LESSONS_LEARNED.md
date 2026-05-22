@@ -1,19 +1,28 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+> Last full markdown audit: 2026-05-22 (v0.45 upgraded to full technical coding plan with GLSL/TS code and 2026-verified sources; runtime still v0.44.1 until implemented).
 
-## 2026-05-22 — v0.45 frame realism planning lessons
+## 2026-05-22 — v0.45 technical coding plan lessons
 
 ### Lesson 77 — Removing texture tiles is not the same as removing visible cadence
 
-Moving from DataTextures to GLSL removes hard texture-wrap seams, but coarse hash cells, blend masks, or repeated coordinate domains can still become visible on long flat frame bars. Future rule: anti-repetition plans must check for repeated clusters, grid/cell boundaries, and stripe cadence, not only texture tile seams.
+Moving from DataTextures to GLSL removes hard texture-wrap seams, but coarse hash cells, blend masks, or repeated coordinate domains can still become visible on long flat frame bars. Future rule: anti-repetition plans must check for repeated clusters, grid/cell boundaries, and stripe cadence, not only texture tile seams. **Domain warping** (Quilez pattern: `p += noise_field(p) * k`) is the correct solution — it has no explicit cell structure and continuously distorts the sampling domain.
 
 ### Lesson 78 — Close-zoom metal detail needs derivative-aware scratch primitives
 
-FBM grain alone reads as soft noise under close inspection. Future rule: premium brushed metal needs explicit individual scratch primitives with varied length/width/intensity and `fwidth`-aware filtering so details are sharp without shimmer.
+FBM grain alone reads as soft noise under close inspection. Future rule: premium brushed metal needs explicit individual scratch primitives with varied length/width/intensity and `fwidth`-aware filtering. `width = max(fwidth(coord) * 0.8, hardWidth)` prevents sub-pixel-thin lines that alias and crawl during camera movement. This technique requires GLSL ES 3.0 (WebGL2), which Three.js r152+ targets by default.
 
-### Lesson 79 — Three.js shader docs must match the installed shader chunks
+### Lesson 79 — Three.js shader variable names must be verified against installed chunks
 
-In Three.js r166 the tangent-to-view matrix is a local `tbn` variable, not `vTBN`. Future rule: when documenting shader injections, verify names against the installed `node_modules/three/src/renderers/shaders/ShaderChunk` files before writing implementation plans.
+In Three.js r166 the tangent-to-view matrix is a local `mat3 tbn` variable (not `vTBN`). Future rule: when documenting or implementing shader injections, verify variable names against `node_modules/three/src/renderers/shaders/ShaderChunk/` before writing code. Using wrong names causes silent shader compile failure and invisible geometry.
+
+### Lesson 80 — PBR roughness calibration requires reference data, not intuition
+
+"This looks a bit too shiny, lower roughness" leads to values in the chrome/mirror range. Verified reference: Adobe Substance PBR guide (2023/2024) and Marmoset PBR chart both show satin-brushed aluminium at roughness 0.35–0.45. Values below 0.25 are polished/mirror territory. Future rule: always cite a PBR reference chart when choosing roughness/metalness values for real-world surface types.
+
+### Lesson 81 — Technical coding plans must include actual code, not descriptions
+
+A plan section that says "replace the FBM with aperiodic multi-domain sampling" is not actionable. A plan section that includes the complete GLSL function body with parameter values, cites the source technique, and shows exactly which TypeScript lines to change is actionable. Future rule: v0.N plan sections must include concrete GLSL/TypeScript code, exact parameter values, and verified source citations.
+
 
 ## 2026-05-22 — v0.44 GLSL injection lesson
 

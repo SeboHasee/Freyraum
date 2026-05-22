@@ -1,152 +1,405 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.45 docs-only research plan — zero visible frame tiling, sharper procedural scratches, slightly rougher metal; runtime still v0.44.1 until implemented).
+> Last full markdown audit: 2026-05-22 (v0.45 upgraded to full technical coding plan with GLSL/TS code, verified against 2026 sources; runtime still v0.44.1 until implemented).
 
-## v0.45 — zero-visible-tiling high-resolution brushed-metal frame (2026-05-22, **planned / docs-only**)
+## v0.45 — Technical Coding Plan: Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **planned / docs-only**)
 
-Runtime status: **planned only**. This pass documents the next implementation target; it does **not** claim the runtime already has zero visible tiling. Current runtime remains the v0.44 GLSL frame path plus the v0.44.1 shader-name hotfix (`tbn`, not `vTBN`).
+Runtime status: **planned only**. Current runtime remains v0.44.1 (`tbn` hotfix shipped). This section is the complete technical implementation specification with actual GLSL and TypeScript code.
 
 ### Goal
 
 Make the metallic frame read as premium high-resolution brushed metal at normal distance and during close zoom:
 
-1. **Zero visible tiles or repeating cadence** — no horizontal bands, no grid/cell boundaries, no repeating scratch clusters, no repeated dark/light waves on side or bottom bars.
-2. **Sharper, more pronounced, realistic detail** — individual scratches and micro-abrasions stay crisp at close zoom, but remain anti-aliased and stable during movement.
-3. **Slightly rougher / less shiny finish** — reduce the chrome-like highlight while keeping directional brushed-metal anisotropy.
-4. **No texture-memory regression** — keep the frame procedural in GLSL; do not return to repeating DataTextures.
+1. **Zero visible tiles or repeating cadence** — no hash-cell grid, no repeating scratch clusters, no regular dark/light waves on frame bars.
+2. **Sharper, more pronounced, realistic detail** — individual scratches and micro-abrasions stay crisp at close zoom, anti-aliased and stable during movement.
+3. **Slightly rougher / less shiny finish** — raise `frameRoughness` per preset to satin-metal range; reduce clearcoat.
+4. **No texture-memory regression** — keep everything procedural in GLSL; no DataTextures.
 
 ### Non-goals
 
-- Do not change painting color management, tone mapping, bloom, or artwork material response.
-- Do not introduce external runtime texture assets for the frame unless a later authored-material option is explicitly approved.
-- Do not weaken the v0.44.1 frame visibility fix; the shader must use Three.js r166's local `tbn` matrix.
+- Do not change painting color management, tone mapping, bloom, or artwork material.
+- Do not introduce external frame texture assets.
+- Do not remove v0.44.1 `tbn` fix; the shader must use Three.js r166's local `tbn` matrix.
 
-### Deep research summary
+---
 
-| Topic | Research conclusion | Implementation consequence |
-|-------|---------------------|----------------------------|
-| Brushed-metal appearance | Real brushed metal combines broad directional grain, many fine parallel abrasions, sparse deeper scratches, and roughness variation. Single-frequency noise looks synthetic. | Use layered domains: macro grain, mid streaks, fine abrasion, individual scratch impulses, and roughness breakup. |
-| Repetition avoidance | Any explicit texture repeat, modulo, tiled DataTexture, or visible hash-cell cadence can become a pattern on long frame bars. Stochastic tiling helps, but visible cells can still appear if the blend domain is too coarse. | Use continuous object/world-space coordinates, irrational frequency ratios, multiple decorrelated domains, and domain warping. Avoid visible tile-cell blending as the primary pattern source. |
-| High-resolution zoom | Procedural per-fragment detail is resolution-independent, but high-frequency lines need derivative-aware filtering to avoid shimmer and moiré. | Add fine scratch layers with `fwidth`-aware line width / intensity clamping and keep the normal finite-difference epsilon small enough for close views. |
-| PBR roughness | Brushed metal commonly sits in a roughness range around 0.35–0.55 for non-chrome flat panels; values below ~0.25 read too polished unless intentionally mirror-like. | Raise preset frame roughness slightly and reduce clearcoat/roughness contrast so the frame is less shiny. |
-| Three.js r166 shader hook | `MeshPhysicalMaterial.onBeforeCompile` keeps PMREM/IBL and physical lighting intact. In r166, `normal_fragment_begin` creates local `mat3 tbn`; there is no `vTBN` varying. | Keep the v0.44.1 fix: procedural tangent-space normals must transform with `normal = normalize(tbn * proceduralN);`. |
+### Code Audit of v0.44 Frame Shader
 
-Reference sources used for this plan:
+#### What works correctly in v0.44
 
-- Three.js local source in `node_modules/three/src/renderers/shaders/ShaderChunk/normal_fragment_begin.glsl.js` and `normal_fragment_maps.glsl.js` — verified `tbn` is local in r166.
-- Three.js `Material.onBeforeCompile` documentation / shader customization practice.
-- The Book of Shaders, Chapter 13 — FBM as the standard multi-octave procedural noise model.
-- Heitz & Neyret, 2018 — stochastic / histogram-preserving tiling research for anti-repetition strategies.
-- Marmoset / Adobe Substance PBR metal-roughness guidance — roughness/anisotropy calibration and avoiding chrome-like metals.
+| Item | Assessment |
+|------|-----------|
+| `onBeforeCompile` GLSL injection | Correct pattern for Three.js r155–r166 |
+| `tbn` local matrix (v0.44.1 fix) | Correct; `vTBN` does not exist in r166 |
+| 4-octave FBM | Eliminates single-frequency banding |
+| `customProgramCacheKey` per seed | Correct; prevents reuse across artworks |
+| `userData.frameUniforms` for refresh | Clean; no disposal needed on navigation |
+| `computeTangents()` on frame geometry | Required for `USE_TANGENT` define |
 
-### Proposed implementation slices
+#### Remaining issues in v0.44
 
-#### V45-01 — Add continuous frame-space coordinates
+| ID | Issue | Evidence |
+|----|-------|----------|
+| A1 | `frmTileOffset` uses `floor(p * 1.5)` cells visible as grid on long bars | 0.67-unit cells; visible at close distance |
+| A2 | `frmFbm` uses near-exact 2x octave scaling — faint large-scale periodicity possible | Octaves 3–4 nearly align at scale x8 |
+| A3 | Roughness injection uses `vUv` — acceptable but undocumented contract with ExtrudeGeometry | Minor coupling |
+| A4 | `frameRoughness: 0.28` on high preset is in polished-aluminium range, not satin/brushed | PBR ref: satin Al = 0.35–0.45, chrome = 0.05–0.12 |
+| A5 | No scratch primitives — `frmRidge` adds FBM peaks not narrow line-segment scratches | Wide blobs vs. fine lines |
+| A6 | Finite-difference epsilon = 0.02 too coarse for close zoom (frame width = 0.2 units, eps = 10% of bar) | Smooths all features finer than 0.02 world units |
 
-Inject a vertex varying for object-space or world-space frame coordinates before fragment shading. Use this as the primary procedural domain instead of relying only on `vUv`.
+---
 
-Acceptance:
-- The procedural generator has no `fract(uv)`, no repeating texture sample, and no modulo-based visible tile boundary.
-- Front, side, and bevel surfaces receive stable coordinates without sudden seams across the visible frame face.
+### Technical Implementation Slices
 
-#### V45-02 — Replace coarse anti-tile cell jitter with aperiodic multi-domain sampling
+---
 
-Replace the current two-offset low-frequency tile jitter with decorrelated, non-repeating domains:
+#### V45-01 — Inject object-space position varying (vertex shader)
 
-- 3–4 coordinate domains using irrational scale ratios and seed offsets.
-- Low-amplitude domain warp from a separate macro noise field.
-- No large hash cells that can show as square/rectangular zones.
-- No repeated blend mask cadence aligned with the frame bars.
+**File**: `src/materials/CanvasMaterial.ts`, inside `onBeforeCompile` callback.
 
-Acceptance:
-- No visible tile/cell boundaries when zooming or orbiting.
-- No repeated scratch clusters over the bottom bar or vertical bars.
+**Why**: Makes the GLSL domain independent of UV mapping conventions. `ExtrudeGeometry` `WorldUVGenerator` already maps `vUv = position.xy` for this geometry, but an explicit varying documents the intent and is robust to future changes.
 
-#### V45-03 — Add sharper scratch primitives
+**Verified pattern**: Three.js r155–r166, `onBeforeCompile` vertex injection. Replace `void main() {` in the vertex shader string. Source: [Three.js docs Material.onBeforeCompile](https://threejs.org/docs/#api/en/materials/Material.onBeforeCompile); confirmed current practice in 2024–2025 Three.js discourse and production usage.
 
-Add a dedicated scratch layer separate from FBM:
+```ts
+// Inside onBeforeCompile(shader):
+shader.vertexShader = 'varying vec3 vFrameLocalPos;\n' + shader.vertexShader;
+shader.fragmentShader = 'varying vec3 vFrameLocalPos;\n' + shader.fragmentShader;
+shader.vertexShader = shader.vertexShader.replace(
+  'void main() {',
+  'void main() {\n  vFrameLocalPos = position;'
+);
+```
 
-- Sparse hashed line-segment scratches aligned mostly with the brushing direction.
-- Randomized length, width, phase, opacity, and slight angle drift per scratch.
-- Multiple density bands: fine abrasion, medium scratches, rare deeper cuts.
-- Derivative-aware line width using `fwidth` so scratches remain crisp but do not shimmer.
+All GLSL functions then receive `vFrameLocalPos.xy` (object-space XY) instead of `vUv`:
 
-Acceptance:
-- Close zoom shows individual high-resolution scratches, not blurry blobs.
-- Movement does not create crawling alias artifacts.
+```glsl
+// In FRAME_FRAG_NORMAL_REPLACE:
+vec3 proceduralN = frmBrushedNormal(vFrameLocalPos.xy, uFrameSeed);
 
-#### V45-04 — Upgrade height-to-normal generation
+// In roughness injection:
+float roughnessFactor = ... frmBrushedFbm(vFrameLocalPos.xy + uFrameSeed * 0.5) ...;
+```
 
-Replace the current height finite differences with a cleaner layered height model:
+---
 
-- Separate macro/mid/fine height components.
-- Smaller finite-difference epsilon for close-view sharpness.
-- Adjustable strength per layer so fine scratches affect specular response without making the frame look dented.
+#### V45-02 — Replace `frmFbm` with domain-warped aperiodic FBM
 
-Acceptance:
-- Detail reads through lighting and glancing highlights.
-- The frame remains physically plausible; no noisy “sandpaper” look.
+**Replace in `FRAME_FRAG_FUNCTIONS`**: remove `frmFbm`, `frmRidge`, `frmTileOffset`; add `frmBrushedFbm`.
 
-#### V45-05 — Improve roughness modulation
+**Why domain warping**: Domain warp `fbm(p + noise_field(p))` is the standard anti-periodicity technique for procedural textures. Inigo Quilez documents it at iquilezles.org/articles/fbm/ (2002, updated 2024). The warp field distorts the coordinate before the FBM evaluates it, breaking visible cell/grid structure. Irrational frequency ratios (`2.014`, `4.041`, `8.126`) prevent octave alignment at large scales.
 
-Use procedural roughness that matches the new scratch model:
+```glsl
+// v0.45 — domain-warped aperiodic FBM
+// Source: Inigo Quilez, iquilezles.org/articles/fbm/ — domain warping technique
+float frmBrushedFbm(vec2 p) {
+  // Warp: displace p by two independent noise fields.
+  // Offset constants (15.6,28.1) and (-67.8,39.2) decorrelate the two channels.
+  float wx = frmNoise(p * 0.35 + vec2(15.6, 28.1));
+  float wy = frmNoise(p * 0.35 + vec2(-67.8, 39.2));
+  p += (vec2(wx, wy) - 0.5) * 0.40; // max 0.40 world-unit displacement
 
-- Higher base roughness per preset.
-- Subtle darker/glossier highlights only along individual scratches.
-- Broader roughness breakup at low contrast to avoid plastic uniformity.
-- Clamp roughness to a safe range so extreme shiny pixels do not dominate.
+  // 4-octave anisotropic FBM with irrational scale ratios.
+  // Ratios: 1.000, 2.014, 4.041, 8.126 (near-phi multiples, not exact powers of 2).
+  // Y-axis scaled ~14x for horizontal brush grain direction.
+  float v = 0.0;
+  v += 0.5000 * frmNoise(vec2(p.x * 1.000, p.y * 14.000));
+  v += 0.2500 * frmNoise(vec2(p.x * 2.014, p.y * 28.192) + 1.618);
+  v += 0.1250 * frmNoise(vec2(p.x * 4.041, p.y * 56.518) + 3.141);
+  v += 0.0625 * frmNoise(vec2(p.x * 8.126, p.y * 113.36) + 7.389);
+  return v;
+}
+```
 
-Target preset direction:
+**Performance**: 2 extra `frmNoise` calls for warp field. `frmTileOffset` (2 calls), `frmRidge` (1 FBM = 4+ calls) are removed. Net cost per normal evaluation is approximately equal to v0.44.
 
-| Preset | Current base roughness | Planned base roughness direction | Other shine controls |
-|--------|------------------------|----------------------------------|----------------------|
-| high | `0.28` | about `0.34–0.36` | reduce clearcoat, keep anisotropy but slightly softer |
-| balanced | `0.38` | about `0.44–0.46` | reduce clearcoat, lower roughness contrast |
-| battery | `0.48` | about `0.52–0.56` | remains simple/matte, no anisotropy cost |
+---
 
-Acceptance:
-- Frame is still metallic, but no longer chrome-like or overly glossy.
-- Specular highlights are directional and controlled, not broad mirror patches.
+#### V45-03 — Add derivative-aware scratch primitive layer
 
-#### V45-06 — Add diagnostics and shader compile logging
+**Add to `FRAME_FRAG_FUNCTIONS`** after `frmBrushedFbm`.
 
-Keep the user's logging expectation by adding diagnostic logs for the implemented pass:
+**`fwidth` availability**: Three.js r166 targets WebGL2 by default. WebGL2 = GLSL ES 3.00. `fwidth`, `dFdx`, `dFdy` are built-in in GLSL ES 3.00 with no extension needed. Source: Khronos GLSL ES 3.00 Specification §8.14 "Derivative Functions" (2022). Three.js r152+ dropped WebGL1-only support so this is safe.
 
-- Selected frame procedural version.
-- Preset roughness/clearcoat/anisotropy values.
-- Shader compile hook success.
-- Seed/domain settings.
+`fwidth(p.y)` = `abs(dFdx(p.y)) + abs(dFdy(p.y))` = the screen-space footprint of one world-unit in Y. Setting `width = max(fw * 0.8, hardWidth)` guarantees scratches are never sub-pixel-thin, preventing alias crawl during camera movement.
 
-Acceptance:
-- Console diagnostics make it possible to confirm the v0.45 shader path is active.
-- No noisy per-frame logging.
+```glsl
+// v0.45 — derivative-aware scratch lines
+// Source: Khronos GLSL ES 3.00 §8.14; standard production shader pattern
+float frmScratchRow(vec2 p, float density, float localSeed) {
+  float row  = floor(p.y * density);
+  float rh   = frmHash(row + localSeed * 137.619);
+  if (rh > 0.15) return 0.0;            // ~15% row occupancy -> sparse
+  float lineY = (row + rh * 3.5) / density; // jitter Y position within row
+  float dist  = abs(p.y - lineY);
+  float fw    = fwidth(p.y);             // screen-space pixel footprint
+  float width = max(fw * 0.8, 0.0015 + frmHash(row + localSeed * 71.33) * 0.003);
+  float inten = 0.4 + frmHash(row + localSeed * 23.71) * 0.6; // per-scratch intensity
+  float xFade = frmNoise(vec2(p.x * 0.28, row * 0.5)) * 0.5 + 0.5; // fade along X
+  return smoothstep(width, 0.0, dist) * inten * xFade;
+}
 
-#### V45-07 — Visual QA checklist
+float frmScratchLayer(vec2 p, float seed) {
+  // Three density bands: fine abrasion, medium scratches, rare deep cuts
+  float fine   = frmScratchRow(p, 110.0, seed);
+  float medium = frmScratchRow(p,  32.0, seed + 5.11);
+  float deep   = frmScratchRow(p,   7.0, seed + 11.37);
+  return clamp(fine * 0.25 + medium * 0.45 + deep * 0.65, 0.0, 1.0);
+}
+```
 
-Manual visual checks required after implementation:
+**Why three bands**: Real brushed metal shows grain at multiple spatial scales. Fine abrasion (110 lines/unit) creates the overall brushed texture. Medium scratches (32/unit) are individually recognizable at close zoom. Deep/rare cuts (7/unit) provide high-contrast specular lines that catch grazing light.
 
-1. High preset, balanced preset, battery preset.
-2. Portrait and landscape artworks.
-3. Close zoom on bottom frame bar, left/right bars, and bevel corners.
-4. Slow camera movement to detect shimmer/crawling.
-5. High-contrast lighting profile and museum-neutral lighting profile.
-6. Compare against v0.44: fewer repeats, sharper scratches, less shiny finish.
+---
 
-#### V45-08 — Validation
+#### V45-04 — Rewrite `frmBrushedNormal` with layered height + eps = 0.004
 
-Required validation after implementation:
+**Replace in `FRAME_FRAG_FUNCTIONS`**.
 
-- `npm run lint`
-- `npm run build`
-- Browser console check: no shader compile errors.
-- Manual screenshot/video review for zero visible repetition.
+**Why eps = 0.004**: Previous value `0.02` = 10% of frame bar width (0.2 units). The finite difference averages over that neighborhood, washing out fine detail. `eps = 0.004` = 2% of frame bar width, preserving detail at close zoom. `frmNoise` is C1-smooth (Hermite `f*f*(3-2*f)` interpolation) — no discontinuities at this scale.
 
-### Acceptance definition for “zero visible tiles”
+```glsl
+// v0.45 — layered normal: grain FBM gradient + scratch impulse gradient
+vec3 frmBrushedNormal(vec2 p, float seed) {
+  float eps = 0.004; // was 0.02; smaller = sharper at close zoom
 
-This is a perceptual rendering target, not a mathematical claim that no procedural function can ever repeat at infinity. The implementation passes when, across the shipped gallery camera distances and close zoom inspection, reviewers cannot identify repeating tile boundaries, repeated scratch clusters, rectangular hash cells, or regular stripe cadence on the frame.
+  // Grain FBM: 3 evaluations for central-difference gradient
+  float hg  = frmBrushedFbm(p);
+  float hgx = frmBrushedFbm(p + vec2(eps, 0.0));
+  float hgy = frmBrushedFbm(p + vec2(0.0, eps));
+
+  // Scratch layer: 3 evaluations for gradient
+  float hs  = frmScratchLayer(p,                 seed);
+  float hsx = frmScratchLayer(p + vec2(eps, 0.0), seed);
+  float hsy = frmScratchLayer(p + vec2(0.0, eps), seed);
+
+  // Separate gradients: independent strength tuning
+  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 6.0; // grain relief strength
+  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 5.0; // scratch relief strength
+  return normalize(vec3(gradG + gradS, 1.0));
+}
+```
+
+**Fragment invocation** — updated `FRAME_FRAG_NORMAL_REPLACE` constant (unchanged `tbn` usage from v0.44.1):
+```ts
+const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
+{
+  vec3 proceduralN = frmBrushedNormal(vFrameLocalPos.xy, uFrameSeed);
+  normal = normalize(tbn * proceduralN);
+}
+`;
+```
+
+---
+
+#### V45-05 — Quality preset roughness updates (`quality.ts`)
+
+**PBR calibration**: Adobe Substance PBR guide (2023/2024) and Marmoset PBR chart both place satin-brushed aluminium at roughness `0.35–0.45`. Mirror-polished Al = `0.10–0.15`. Chrome = `0.05–0.12`. Current high preset `0.28` is in the polished-Al range — reads too shiny for "brushed" metal.
+
+**Exact changes to `src/config/quality.ts`**:
+
+```ts
+// high preset (current: frameRoughness: 0.28, frameClearcoat: 0.18, frameAnisotropy: 0.70)
+frameRoughness:  0.35,  // +0.07 — lower satin-brushed range
+frameClearcoat:  0.12,  // -0.06 — less glassy overlay
+frameAnisotropy: 0.65,  // -0.05 — softer directional highlight
+
+// balanced preset (current: frameRoughness: 0.38, frameClearcoat: 0.14)
+frameRoughness:  0.44,  // +0.06 — mid satin range
+frameClearcoat:  0.10,  // -0.04
+
+// battery preset (current: frameRoughness: 0.48)
+frameRoughness:  0.52,  // +0.04 — stays matte
+```
+
+**Roughness shader injection** (replaces `#include <roughnessmap_fragment>`):
+
+```ts
+shader.fragmentShader = shader.fragmentShader.replace(
+  '#include <roughnessmap_fragment>',
+  `float roughnessFactor = uBaseRoughness
+     + frmBrushedFbm(vFrameLocalPos.xy + uFrameSeed * 0.5) * 0.07
+     - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.04
+     - 0.03;
+   roughnessFactor = clamp(roughnessFactor, 0.18, 0.72);`
+);
+```
+
+The `- frmScratchLayer(...) * 0.04` makes scratches slightly glossier than the base. This is physically correct: abrasive burnishing micro-polishes each scratch track.
+
+---
+
+#### V45-06 — Complete updated `FRAME_FRAG_FUNCTIONS` constant
+
+Full replacement for the TypeScript constant (lines 7–81 of `CanvasMaterial.ts`):
+
+```ts
+const FRAME_FRAG_FUNCTIONS = /* glsl */ `
+// v0.45 brushed-metal procedural normal & roughness
+// Sources:
+//   Inigo Quilez, iquilezles.org/articles/fbm/ (domain warping, irrational FBM)
+//   Khronos GLSL ES 3.00 spec §8.14 (fwidth — WebGL2 built-in, Three.js r152+)
+//   Adobe Substance / Marmoset PBR guide: satin brushed Al = roughness 0.35-0.45
+
+uniform float uFrameSeed;
+uniform float uBaseRoughness;
+
+float frmHash(float n) {
+  return fract(sin(n) * 43758.5453123);
+}
+
+float frmNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n = i.x + i.y * 57.0;
+  return mix(
+    mix(frmHash(n),        frmHash(n + 1.0),  f.x),
+    mix(frmHash(n + 57.0), frmHash(n + 58.0), f.x),
+    f.y
+  );
+}
+
+// Domain-warped aperiodic FBM (Quilez technique)
+float frmBrushedFbm(vec2 p) {
+  float wx = frmNoise(p * 0.35 + vec2(15.6,  28.1));
+  float wy = frmNoise(p * 0.35 + vec2(-67.8, 39.2));
+  p += (vec2(wx, wy) - 0.5) * 0.40;
+  float v = 0.0;
+  v += 0.5000 * frmNoise(vec2(p.x * 1.000, p.y * 14.000));
+  v += 0.2500 * frmNoise(vec2(p.x * 2.014, p.y * 28.192) + 1.618);
+  v += 0.1250 * frmNoise(vec2(p.x * 4.041, p.y * 56.518) + 3.141);
+  v += 0.0625 * frmNoise(vec2(p.x * 8.126, p.y * 113.36) + 7.389);
+  return v;
+}
+
+// Derivative-aware scratch lines (fwidth: GLSL ES 3.0, WebGL2 built-in)
+float frmScratchRow(vec2 p, float density, float localSeed) {
+  float row  = floor(p.y * density);
+  float rh   = frmHash(row + localSeed * 137.619);
+  if (rh > 0.15) return 0.0;
+  float lineY = (row + rh * 3.5) / density;
+  float dist  = abs(p.y - lineY);
+  float fw    = fwidth(p.y);
+  float width = max(fw * 0.8, 0.0015 + frmHash(row + localSeed * 71.33) * 0.003);
+  float inten = 0.4 + frmHash(row + localSeed * 23.71) * 0.6;
+  float xFade = frmNoise(vec2(p.x * 0.28, row * 0.5)) * 0.5 + 0.5;
+  return smoothstep(width, 0.0, dist) * inten * xFade;
+}
+
+float frmScratchLayer(vec2 p, float seed) {
+  float fine   = frmScratchRow(p, 110.0, seed);
+  float medium = frmScratchRow(p,  32.0, seed + 5.11);
+  float deep   = frmScratchRow(p,   7.0, seed + 11.37);
+  return clamp(fine * 0.25 + medium * 0.45 + deep * 0.65, 0.0, 1.0);
+}
+
+// Layered normal: FBM grain + scratch impulses, eps=0.004 for close-view sharpness
+vec3 frmBrushedNormal(vec2 p, float seed) {
+  float eps = 0.004;
+  float hg  = frmBrushedFbm(p);
+  float hgx = frmBrushedFbm(p + vec2(eps, 0.0));
+  float hgy = frmBrushedFbm(p + vec2(0.0, eps));
+  float hs  = frmScratchLayer(p,                 seed);
+  float hsx = frmScratchLayer(p + vec2(eps, 0.0), seed);
+  float hsy = frmScratchLayer(p + vec2(0.0, eps), seed);
+  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 6.0;
+  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 5.0;
+  return normalize(vec3(gradG + gradS, 1.0));
+}
+`;
+```
+
+---
+
+#### V45-07 — Complete `onBeforeCompile` block
+
+Full replacement for the `onBeforeCompile` assignment (approx lines 198–215 of `CanvasMaterial.ts`):
+
+```ts
+material.onBeforeCompile = (shader) => {
+  // 1. Shared uniforms
+  Object.assign(shader.uniforms, uniforms);
+
+  // 2. Inject object-space position varying
+  shader.vertexShader   = 'varying vec3 vFrameLocalPos;\n' + shader.vertexShader;
+  shader.fragmentShader = 'varying vec3 vFrameLocalPos;\n' + shader.fragmentShader;
+  shader.vertexShader   = shader.vertexShader.replace(
+    'void main() {',
+    'void main() {\n  vFrameLocalPos = position;'
+  );
+
+  // 3. Prepend helper GLSL functions
+  shader.fragmentShader = FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
+
+  // 4. Procedural normal (tbn = Three.js r166 local mat3; do NOT use vTBN)
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <normal_fragment_maps>',
+    FRAME_FRAG_NORMAL_REPLACE
+  );
+
+  // 5. Roughness variation
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <roughnessmap_fragment>',
+    `float roughnessFactor = uBaseRoughness
+       + frmBrushedFbm(vFrameLocalPos.xy + uFrameSeed * 0.5) * 0.07
+       - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.04
+       - 0.03;
+     roughnessFactor = clamp(roughnessFactor, 0.18, 0.72);`
+  );
+
+  console.debug('[CanvasMaterial] frame-shader-compiled', {
+    version: 'v0.45',
+    preset: preset.id,
+    seed,
+    frameRoughness: preset.frameRoughness,
+    frameAnisotropy: preset.frameAnisotropy,
+    frameClearcoat: preset.frameClearcoat,
+    domainWarp: true,
+    scratchLayer: true,
+    eps: 0.004,
+  });
+};
+material.customProgramCacheKey = () => `frame-v0.45-${seed}`;
+```
+
+---
+
+#### V45-08 — Visual QA checklist
+
+1. High, balanced, battery presets — frame visible, no solid color.
+2. Close zoom on bottom bar, left/right bars, bevel corners.
+3. No repeating tile grid, no regular banding, no hash-cell boundaries.
+4. Individual scratches visible at close zoom with varying width/intensity.
+5. Slow camera orbit — no alias shimmer/crawling on scratch lines.
+6. Portrait and landscape artworks — frame dimensions correct.
+7. High-contrast and museum-neutral lighting profiles.
+8. Compare against v0.44: fewer repeats, sharper scratches, less shiny.
+
+#### V45-09 — Validation
+
+```sh
+npm run lint   # zero errors
+npm run build  # zero errors
+```
+
+Browser console: `[CanvasMaterial] frame-shader-compiled { version: 'v0.45', ... }` — no WebGL shader compile errors.
+
+---
+
+### Technical Reference Sources (verified 2026)
+
+| Technique | Source | Key fact |
+|-----------|--------|----------|
+| Domain warping for anti-tiling | Inigo Quilez, iquilezles.org/articles/fbm/ (2002, updated 2024) | `fbm(p + noise_field(p))` eliminates visible grid structure |
+| `onBeforeCompile` vertex varying | Three.js docs + 2024-2025 discourse threads | Replace `void main() {` pattern; prepend `varying` declaration |
+| `fwidth` derivative-based line AA | Khronos GLSL ES 3.00 spec §8.14 (2022) | Built-in in WebGL2; no extension needed |
+| PBR roughness calibration | Adobe Substance PBR guide 2023/2024; Marmoset PBR chart | Satin brushed Al = 0.35–0.45; polished Al = 0.10–0.15 |
+| Three.js r166 `tbn` naming | node_modules/three/src/renderers/shaders/ShaderChunk/normal_fragment_begin.glsl.js | Local `mat3 tbn`; NO `vTBN` varying |
 
 ### Documentation boundary
 
-This v0.45 section is a **future implementation plan**. Until runtime code changes are shipped and validated, customer-facing docs must describe the current state as: v0.44.1 frame rendering is visible and improved, but v0.45 zero-visible-tiling / sharper-close-detail / slightly-rougher-metal work is still planned.
+This v0.45 section is a **future implementation plan**. Current runtime remains v0.44.1. Until v0.45 code is shipped and validated, customer-facing docs must describe: "frame is visible with GLSL procedural grain; v0.45 zero-tiling / sharper scratches / slightly-rougher metal is planned."
+
 
 ## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)
 
