@@ -66,13 +66,58 @@ export class CanvasMaterial {
     return mat;
   }
 
-  // ── v0.40 multi-scale seeded frame texture generators ────────────────────
+  // ── v0.43 noise-based realistic brushed-metal frame textures ─────────────
 
   /**
-   * P-01: Three-layer brushed normal map. Each layer has a distinct spatial
-   * frequency so two visual bands are always visible under a normal-map debug
-   * overlay. The seed offsets every layer's phase so adjacent artworks never
-   * show a phase-aligned surface.
+   * Bilinear value noise. Returns a smooth 0..1 value at (x, y) for the
+   * given integer seed. Identical implementation to ProceduralTextureFactory
+   * so the two classes can share the same deterministic lattice.
+   */
+  private latticeHash(ix: number, iy: number, seed: number): number {
+    let h = (seed * 1664525 + ix * 1013904223) >>> 0;
+    h = (h ^ (iy * 1540483477)) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    h = Math.imul(h, 0x45d9f3b) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return (h >>> 0) / 0xffffffff;
+  }
+
+  private valueNoise2d(x: number, y: number, seed: number): number {
+    const xi = Math.floor(x) | 0;
+    const yi = Math.floor(y) | 0;
+    const xf = x - xi;
+    const yf = y - yi;
+    const ux = xf * xf * (3 - 2 * xf);
+    const uy = yf * yf * (3 - 2 * yf);
+    const h00 = this.latticeHash(xi,     yi,     seed);
+    const h10 = this.latticeHash(xi + 1, yi,     seed);
+    const h01 = this.latticeHash(xi,     yi + 1, seed);
+    const h11 = this.latticeHash(xi + 1, yi + 1, seed);
+    return (
+      h00 * (1 - ux) * (1 - uy) +
+      h10 * ux       * (1 - uy) +
+      h01 * (1 - ux) * uy       +
+      h11 * ux       * uy
+    );
+  }
+
+  /**
+   * Anisotropic height field for brushed-metal scratches.
+   * Low X-frequency = long horizontal streaks.
+   * Higher Y-frequency = fine cross-section detail within each rail strip.
+   * Two octaves keep the generation fast while covering both fine and broad variation.
+   */
+  private scratchHeight(x: number, y: number, seed: number): number {
+    const fine = this.valueNoise2d(x * 0.006, y * 0.25, seed)        * 0.60;
+    const mid  = this.valueNoise2d(x * 0.002, y * 0.08, seed + 37)   * 0.40;
+    return fine + mid;
+  }
+
+  /**
+   * Brushed-metal normal map derived from the anisotropic scratch height field
+   * via finite differences. Both Nx (R) and Ny (G) are computed so the surface
+   * responds correctly to light from any angle. Mipmaps and linear filtering
+   * prevent the aliasing (pixelation) that occurred with NearestFilter defaults.
    */
   private makeFrameNormalTexture(seed: number): THREE.DataTexture {
     const size = 256;
@@ -80,17 +125,14 @@ export class CanvasMaterial {
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
-        // Layer 1: fine brushed grain (high frequency, low amplitude)
-        const fineBrush = Math.sin(x * 0.18 + seed * 0.37) * 0.20;
-        // Layer 2: mid-frequency streak modulation
-        const midDrift  = Math.sin(x * 0.07 + seed * 0.71) * 0.25;
-        // Layer 3: 1-D low-frequency warp (removes cadence during slow pan)
-        const macroWarp = Math.sin(x * 0.021 + seed * 1.13) * 0.15;
-        // Layer 4: cross-grain component — subtle Y variation breaks the pure-stripe pattern
-        const crossGrain = Math.sin(y * 0.13 + seed * 0.61) * 0.07;
-        const combined  = 0.5 + fineBrush + midDrift + macroWarp + crossGrain;
-        data[idx + 0] = 128;
-        data[idx + 1] = Math.max(0, Math.min(255, Math.round(combined * 255)));
+        // Finite-difference surface gradient → tangent-space normals
+        const h  = this.scratchHeight(x,     y,     seed);
+        const hx = this.scratchHeight(x + 1, y,     seed);
+        const hy = this.scratchHeight(x,     y + 1, seed);
+        const nx = (h - hx) * 100;
+        const ny = (h - hy) * 100;
+        data[idx + 0] = Math.max(0, Math.min(255, (128 + nx) | 0));
+        data[idx + 1] = Math.max(0, Math.min(255, (128 + ny) | 0));
         data[idx + 2] = 255;
         data[idx + 3] = 255;
       }
@@ -99,20 +141,19 @@ export class CanvasMaterial {
     texture.colorSpace = THREE.LinearSRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    // v0.42 fix: ExtrudeGeometry uses WorldUVGenerator — UV coords are raw world values
-    // (not normalised 0-1). The ring shape spans ~4.4 world units in X. With repeat=1
-    // that gives ~4 grain cycles across the frame width — natural, non-repetitive.
-    // The previous value of 12 produced 12 × 4.4 = 52.8 cycles = the dense stripe artifact.
+    // v0.42 fix: world-space UVs from ExtrudeGeometry — repeat.set(1,1) for natural tiling.
     texture.repeat.set(1, 1);
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = true;
     texture.needsUpdate = true;
     return texture;
   }
 
   /**
-   * P-01/P-03: Two-layer roughness map. Fine variation keeps per-pixel
-   * micro-surface alive; macro drift (non-battery only) eliminates the
-   * repetitive cadence visible under slow camera pan. Both layers are seeded
-   * so phase never aligns across adjacent frames.
+   * Roughness map derived from the same anisotropic noise.
+   * withMacroDrift adds a second broad octave so high/balanced presets show
+   * smooth roughness gradients along the rails, not uniform flat grey.
    */
   private makeFrameRoughnessTexture(seed: number, withMacroDrift: boolean): THREE.DataTexture {
     const size = 128;
@@ -120,23 +161,15 @@ export class CanvasMaterial {
     for (let y = 0; y < size; y += 1) {
       for (let x = 0; x < size; x += 1) {
         const idx = (y * size + x) * 4;
-        // Fine variation (primary roughness band)
-        const fineLine   = Math.sin(x * 0.22 + seed * 0.53) * 0.35;
-        // Macro drift layer -- broad, very subtle (P-03: +-0.05 roughness swing)
-        const macroDrift = withMacroDrift ? Math.sin(x * 0.04 + seed * 0.89) * 0.12 : 0;
-        // Cross-grain micro-roughness row variation — breaks the pure column-stripe look
-        const fineCross  = Math.sin(y * 0.17 + seed * 0.47) * 0.05;
-        const v = 0.5 + fineLine + macroDrift + fineCross;
-        // Additional low-frequency breakup from P-03 formula
-        const driftSwing = withMacroDrift
-          ? Math.round(
-              (Math.sin(x * 0.098 + seed * 1.17) * 0.5 + Math.sin(x * 0.041 + seed * 0.63) * 0.3) * 18
-            )
+        const fine  = this.valueNoise2d(x * 0.006, y * 0.25, seed + 200)  * 0.28;
+        const drift = withMacroDrift
+          ? this.valueNoise2d(x * 0.002, y * 0.06, seed + 250) * 0.14
           : 0;
-        const roughness = Math.max(0, Math.min(255, Math.round(v * 255) + driftSwing));
-        data[idx + 0] = roughness;
-        data[idx + 1] = roughness;
-        data[idx + 2] = roughness;
+        const v = 0.48 + fine + drift;
+        const r = Math.max(0, Math.min(255, (v * 255) | 0));
+        data[idx + 0] = r;
+        data[idx + 1] = r;
+        data[idx + 2] = r;
         data[idx + 3] = 255;
       }
     }
@@ -144,8 +177,10 @@ export class CanvasMaterial {
     texture.colorSpace = THREE.LinearSRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    // v0.42 fix: match normal map — repeat.set(1,1) for world-space UV coords from ExtrudeGeometry.
     texture.repeat.set(1, 1);
+    texture.minFilter = THREE.LinearMipMapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.generateMipmaps = true;
     texture.needsUpdate = true;
     return texture;
   }
@@ -182,7 +217,7 @@ export class CanvasMaterial {
       anisotropy: preset.frameAnisotropy,
       anisotropyRotation: Math.PI / 2,
       normalMap: frameNormal,
-      normalScale: new THREE.Vector2(0.08, 0.08),
+      normalScale: new THREE.Vector2(0.40, 0.40),
     });
   }
 
