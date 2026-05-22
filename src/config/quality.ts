@@ -117,6 +117,16 @@ export interface QualityPreset {
    * still supplies depth, normals, and varnish response.
    */
   albedoFidelityFill: number;
+
+  // ── v0.29 frame PBR fields ────────────────────────────────────────────────
+  /** Frame surface roughness (0 mirror .. 1 fully diffuse). */
+  frameRoughness: number;
+  /** Frame anisotropy strength (0 disables directional brushed highlight). */
+  frameAnisotropy: number;
+  /** Frame clearcoat intensity. */
+  frameClearcoat: number;
+  /** Whether the frame should use beveled geometry. */
+  frameBevelEnabled: boolean;
 }
 
 export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
@@ -165,6 +175,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
+    frameRoughness: 0.22,
+    frameAnisotropy: 0.75,
+    frameClearcoat: 0.2,
+    frameBevelEnabled: true,
   },
   balanced: {
     id: 'balanced',
@@ -203,6 +217,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
+    frameRoughness: 0.35,
+    frameAnisotropy: 0.5,
+    frameClearcoat: 0.16,
+    frameBevelEnabled: true,
   },
   battery: {
     id: 'battery',
@@ -240,6 +258,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
+    frameRoughness: 0.5,
+    frameAnisotropy: 0.0,
+    frameClearcoat: 0.0,
+    frameBevelEnabled: false,
   },
 };
 

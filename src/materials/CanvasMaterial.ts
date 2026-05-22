@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import type { QualityPreset } from '../config/quality';
 
 export class CanvasMaterial {
   private normalTexture: THREE.Texture | null = null;
+  private frameNormalTexture: THREE.Texture | null = null;
 
   async loadNormalTexture(): Promise<THREE.Texture> {
     if (this.normalTexture) return this.normalTexture;
@@ -63,16 +65,53 @@ export class CanvasMaterial {
     return mat;
   }
 
-  createFrameMaterial(): THREE.MeshPhysicalMaterial {
+  private getFrameNormalTexture(): THREE.Texture {
+    if (this.frameNormalTexture) return this.frameNormalTexture;
+
+    const size = 128;
+    const data = new Uint8Array(size * size * 4);
+    const frequency = 0.6;
+    const amplitude = 12;
+
+    for (let y = 0; y < size; y += 1) {
+      for (let x = 0; x < size; x += 1) {
+        const idx = (y * size + x) * 4;
+        const groove = Math.sin(x * frequency) * amplitude;
+        const noise = (Math.random() - 0.5) * 4;
+        data[idx + 0] = 128;
+        data[idx + 1] = Math.max(0, Math.min(255, Math.round(128 + groove + noise)));
+        data[idx + 2] = 255;
+        data[idx + 3] = 255;
+      }
+    }
+
+    const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+    texture.colorSpace = THREE.LinearSRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(12, 1);
+    texture.needsUpdate = true;
+    this.frameNormalTexture = texture;
+    return texture;
+  }
+
+  createFrameMaterial(preset: QualityPreset): THREE.MeshPhysicalMaterial {
+    const frameNormal = this.getFrameNormalTexture();
     return new THREE.MeshPhysicalMaterial({
-      color: 0xe7e1d7,
-      roughness: 0.52,
-      metalness: 0.03,
-      clearcoat: 0.18,
+      color: 0xe8eaeb,
+      roughness: preset.frameRoughness,
+      metalness: 1.0,
+      clearcoat: preset.frameClearcoat,
+      clearcoatRoughness: 0.2,
+      anisotropy: preset.frameAnisotropy,
+      anisotropyRotation: Math.PI / 2,
+      normalMap: frameNormal,
+      normalScale: new THREE.Vector2(0.08, 0.08),
     });
   }
 
   dispose(): void {
     this.normalTexture?.dispose();
+    this.frameNormalTexture?.dispose();
   }
 }

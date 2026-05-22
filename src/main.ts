@@ -642,7 +642,7 @@ async function main(): Promise<void> {
     }, 1200);
   });
 
-  const sceneManager = new SceneManager();
+  const sceneManager = new SceneManager(rendererManager.renderer);
   const postProcessing = new PostProcessing(
     rendererManager.renderer,
     sceneManager.scene,

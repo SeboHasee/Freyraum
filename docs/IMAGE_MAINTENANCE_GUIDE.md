@@ -1,5 +1,5 @@
 # FREYRAUM — Image Maintenance Guide
-> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit, 8 code-level gaps with TypeScript patches; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
 
 ## v0.29 customer-facing status note — preload/fidelity follow-up shipped
 

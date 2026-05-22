@@ -1,9 +1,9 @@
 # Lessons learned docs
-> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit, 8 code-level gaps with TypeScript patches; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
 
 ## v0.29 lesson index update
 
-See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.29 planning lessons` for the new rules: loaded is not presented, RAF must run under the loader, tiny prewarm is not final-frame proof, and color fidelity must be verified across the full render pipeline.
+See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.29 implementation lessons` for the key rules: metallic PBR upgrades must include IBL + geometry + material + preset wiring, and shipped claims require runtime validation.
 
 
 

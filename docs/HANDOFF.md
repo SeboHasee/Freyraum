@@ -1,13 +1,13 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit, 8 code-level gaps with TypeScript patches; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
 
-## v0.29 — handoff status: realistic metallic frame pass is planned (2026-05-22)
+## v0.29 — handoff status: realistic metallic frame pass is shipped (2026-05-22)
 
-Customer-facing status: **planned, not yet shipped**.
+Customer-facing status: **shipped and validated**.
 
-A new v0.29 roadmap is documented to make painting frames more realistic and visually elegant with physically based metallic shading while keeping paintings as the clear focal point. The implementation will prioritize modern brushed-metal aesthetics, subtle 3D edge depth, and bounded reflections so frame highlights never dominate artwork content.
+The complete v0.29 frame pass is now live: PMREM room IBL, metallic brushed frame material, anisotropic highlights, procedural brushed micro-normal, deeper frame depth, beveled geometry on high/balanced with battery fallback, and preset-driven frame material/geometry updates.
 
-References: `plan.md § v0.29 — realistic metallic frame plan` and `FINDINGS.md § v0.29 — realistic metallic frame research findings`.
+References: `plan.md § v0.29` and `FINDINGS.md § v0.29`.
 
 ## v0.29 — handoff status: loading-screen/full-render fix is shipped (2026-05-22)
 
@@ -749,4 +749,3 @@ The following items are intentionally not implemented in v0.01:
 ## v0.24 status note (2026-05-21)
 
 Performance/loading smoothness hardening is currently in planning (`plan.md § v0.24`). Runtime remains v0.23.1 while this deeper plan is implemented and verified.
-

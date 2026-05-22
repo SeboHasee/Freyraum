@@ -1,22 +1,18 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit, 8 code-level gaps with TypeScript patches; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
 
-## v0.29 — realistic metallic PBR frame — technical coding plan (2026-05-22, planning only)
+## v0.29 — realistic metallic PBR frame (2026-05-22, **shipped**)
 
-Current status: **planning/documentation only**; runtime remains at latest shipped state.
+Current status: **shipped in runtime code**.
 
-Full source code audit completed for the frame rendering pipeline. 8 code-level gaps identified with TypeScript/GLSL patches:
+The complete v0.29 frame pass is implemented:
 
-- **M-01 (CRITICAL):** `SceneManager.ts` — add PMREM environment via `RoomEnvironment` (prerequisite for all metallic IBL).
-- **M-02 (CRITICAL):** `CanvasMaterial.ts:66–73` — upgrade to `metalness:1.0`, brushed-aluminum color, preset-tiered roughness.
-- **M-03 (HIGH):** `CanvasMaterial.ts` — add `anisotropy` + `anisotropyRotation` for directional brushed-metal highlight.
-- **M-04 (HIGH):** `ArtworkMesh.ts:46` — replace `BoxGeometry` with beveled `ExtrudeGeometry` for realistic edge catch-lights.
-- **M-05 (MEDIUM):** `ProceduralTextureFactory.ts` — generate horizontal sine-wave `frameNormal` map for micro-grooves.
-- **M-06 (MEDIUM):** `quality.ts` — add `frameRoughness`, `frameAnisotropy`, `frameClearcoat`, `frameBevelEnabled` per preset.
-- **M-07 (MEDIUM):** `ArtworkMesh.applyPreset()` — wire preset updates to frame material parameters.
-- **M-08 (LOW):** `ArtworkMesh.ts:46` — increase Z-depth `0.18→0.28` for better 3D presence.
+- **M-01:** Scene now uses PMREM + `RoomEnvironment` for metallic IBL.
+- **M-02/M-03/M-05:** Frame material is now brushed-metal (`metalness:1.0`) with preset-driven roughness/clearcoat/anisotropy plus procedural brushed normal detail.
+- **M-04/M-08:** Frame geometry now supports beveled profile (high/balanced) with deeper frame depth (`0.28`) and adjusted artwork Z placement.
+- **M-06/M-07:** Quality presets now include frame PBR controls and `ArtworkMesh.applyPreset()` updates frame material/geometry at runtime.
 
-See `plan.md § v0.29 — realistic metallic PBR frame — TECHNICAL CODING PLAN` for TypeScript code samples and `FINDINGS.md § v0.29` for code-level audit evidence.
+See `plan.md § v0.29` and `FINDINGS.md § v0.29` for implementation closeout and validation notes.
 
 ## v0.38 — shipped update: color/contrast parity hardening (2026-05-22)
 

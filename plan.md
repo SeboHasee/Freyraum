@@ -1,9 +1,9 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit complete, 8 code-level gaps identified with TypeScript patches; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
 
-## v0.29 — realistic metallic PBR frame — TECHNICAL CODING PLAN (2026-05-22, planning only)
+## v0.29 — realistic metallic PBR frame — IMPLEMENTATION CLOSEOUT (2026-05-22, shipped)
 
-Runtime status: **planning/documentation only**; no runtime frame-material changes are shipped in this pass. All code samples below are proposals, not yet committed.
+Runtime status: **shipped**. The full M-01..M-08 frame plan is implemented and validated in runtime code.
 
 ### Problem statement
 

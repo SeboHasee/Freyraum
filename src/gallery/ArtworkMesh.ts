@@ -29,6 +29,7 @@ export class ArtworkMesh {
   private _artworkWidth = 4;
   private _artworkHeight = 5.7;
   private currentSegments: number;
+  private currentFrameBevelEnabled: boolean;
   private readonly scene: THREE.Scene;
   /** Density coefficient for detail-normal tiling (tiles per world unit). */
   private readonly detailTilesPerWorldUnit = 2.0;
@@ -42,16 +43,17 @@ export class ArtworkMesh {
     this.canvasMaterial = new CanvasMaterial();
     this.group = new THREE.Group();
     this.currentSegments = preset.artworkSegments;
+    this.currentFrameBevelEnabled = preset.frameBevelEnabled;
 
-    const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.18);
-    this.frameMaterial = this.canvasMaterial.createFrameMaterial();
+    const frameGeo = this.makeFrameGeometry(this.currentFrameBevelEnabled);
+    this.frameMaterial = this.canvasMaterial.createFrameMaterial(preset);
     this.frameMesh = new THREE.Mesh(frameGeo, this.frameMaterial);
     this.group.add(this.frameMesh);
 
     const artGeo = this.makeArtworkGeometry(this.currentSegments);
     this.material = new PaintingMaterial(preset);
     this.artworkMesh = new THREE.Mesh(artGeo, this.material);
-    this.artworkMesh.position.z = 0.095;
+    this.artworkMesh.position.z = 0.145;
     this.group.add(this.artworkMesh);
 
     scene.add(this.group);
@@ -74,9 +76,60 @@ export class ArtworkMesh {
     return geo;
   }
 
+  private makeFrameGeometry(bevelEnabled: boolean): THREE.BufferGeometry {
+    if (!bevelEnabled) return new THREE.BoxGeometry(4.4, 6.2, 0.28);
+
+    const shape = new THREE.Shape();
+    const outerW = 4.4;
+    const outerH = 6.2;
+    const innerW = 4.0;
+    const innerH = 5.8;
+    shape.moveTo(-outerW / 2, -outerH / 2);
+    shape.lineTo(outerW / 2, -outerH / 2);
+    shape.lineTo(outerW / 2, outerH / 2);
+    shape.lineTo(-outerW / 2, outerH / 2);
+    shape.closePath();
+
+    const hole = new THREE.Path();
+    hole.moveTo(-innerW / 2, -innerH / 2);
+    hole.lineTo(innerW / 2, -innerH / 2);
+    hole.lineTo(innerW / 2, innerH / 2);
+    hole.lineTo(-innerW / 2, innerH / 2);
+    hole.closePath();
+    shape.holes.push(hole);
+
+    const depth = 0.28;
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth,
+      bevelEnabled: true,
+      bevelThickness: 0.018,
+      bevelSize: 0.018,
+      bevelSegments: 2,
+    });
+    geometry.translate(0, 0, -depth);
+    return geometry;
+  }
+
+  private applyFramePreset(preset: QualityPreset): void {
+    this.frameMaterial.roughness = preset.frameRoughness;
+    this.frameMaterial.clearcoat = preset.frameClearcoat;
+    this.frameMaterial.anisotropy = preset.frameAnisotropy;
+    this.frameMaterial.needsUpdate = true;
+  }
+
+  private ensureFrameGeometryForPreset(preset: QualityPreset): void {
+    if (preset.frameBevelEnabled === this.currentFrameBevelEnabled) return;
+    const oldGeo = this.frameMesh.geometry;
+    this.currentFrameBevelEnabled = preset.frameBevelEnabled;
+    this.frameMesh.geometry = this.makeFrameGeometry(this.currentFrameBevelEnabled);
+    oldGeo.dispose();
+  }
+
   applyPreset(preset: QualityPreset): void {
     // The material always reflects the latest preset, even when segments do not change.
     this.material.applyPreset(preset);
+    this.applyFramePreset(preset);
+    this.ensureFrameGeometryForPreset(preset);
 
     if (preset.artworkSegments === this.currentSegments) return;
     this.currentSegments = preset.artworkSegments;

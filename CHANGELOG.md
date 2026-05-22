@@ -1,31 +1,32 @@
 # CHANGELOG
-> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit complete, 8 code-level gaps with TypeScript patches; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
 
-## v0.29 — realistic metallic PBR frame — technical coding plan (2026-05-22, docs-only)
+## v0.29 — realistic metallic PBR frame (2026-05-22, **shipped**)
 
 ### Status
 
-Planning/documentation update only. Runtime code unchanged in this pass.
+Runtime implementation shipped. All frame pipeline gaps M-01..M-08 are now closed in source.
 
 ### Added
 
-- Full code audit of frame pipeline: read `CanvasMaterial.ts`, `ArtworkMesh.ts`, `SceneManager.ts`, `quality.ts`, `LightProfile.ts`, `LightingSetup.ts`, `RendererManager.ts`, `ProceduralTextureFactory.ts`, `PaintingMaterial.ts`.
-- Identified 8 code-level gaps (M-01..M-08) with file:line citations confirming current state.
-- Wrote technical implementation patches for each gap in `plan.md` including TypeScript and GLSL code samples.
-- Documented anti-distraction acceptance gates and implementation order in `plan.md`.
+- PMREM environment IBL setup in `SceneManager` with `RoomEnvironment`.
+- New frame PBR preset fields in `quality.ts`: `frameRoughness`, `frameAnisotropy`, `frameClearcoat`, `frameBevelEnabled`.
+- Brushed-metal frame material in `CanvasMaterial` (`metalness:1.0`, anisotropy, procedural brushed normal map).
+- Beveled frame geometry path in `ArtworkMesh` plus battery fallback box geometry.
 
 ### Changed
 
-- Replaced high-level v0.29 gap index in `plan.md` with full technical coding plan (TypeScript code samples, concrete parameter values, file:line citations for every gap).
-- Updated `FINDINGS.md` with code-level audit evidence for each of the 8 gaps (file:line citations + impact analysis).
-- Updated markdown audit banners across all tracked files to this technical pass.
+- `main.ts` now passes renderer into `SceneManager` for PMREM generation.
+- `ArtworkMesh.applyPreset()` now updates frame material and swaps frame geometry when preset bevel policy changes.
+- Frame depth increased from `0.18` to `0.28`; artwork Z offset adjusted to `0.145`.
+- Markdown status updated to reflect shipped v0.29 runtime implementation.
 
-### Key audit findings (docs; no code change)
+### Key implementation outcomes
 
-- `SceneManager.ts`: `scene.environment` is never set → metallic IBL reads black without M-01 fix.
-- `CanvasMaterial.ts:66–73`: `metalness=0.03, roughness=0.52` — frame is dielectric plaster, not metal.
-- `ArtworkMesh.ts:46`: `BoxGeometry(4.4,6.2,0.18)` — no bevel, no chamfer, metallic edge highlights impossible.
-- `quality.ts:15–120`: No frame PBR fields in `QualityPreset` — frame cannot be tiered per preset.
+- Metallic frame reflections now read through stable room IBL instead of black specular.
+- Frame finish now reads as brushed metal, not matte plaster.
+- High/balanced presets now render beveled frame catch-lights; battery keeps cheaper box geometry.
+- Preset switching now updates frame shading and geometry deterministically.
 
 ### Validation
 

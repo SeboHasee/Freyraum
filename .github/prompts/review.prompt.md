@@ -1,9 +1,9 @@
 # Review prompt
-> Last full markdown audit: 2026-05-22 (v0.29 technical coding plan — full source audit, 8 code-level gaps with TypeScript patches; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
 
 ## v0.29 current context
 
-Latest planning status: loading-screen/full-render ownership and artwork color fidelity are shipped work. Future coding agents should consult `plan.md § v0.29` and `FINDINGS.md § v0.29` for the shipped readiness diagnostics and validation boundaries.
+Latest v0.29 status: metallic frame runtime implementation is shipped (M-01..M-08 complete). Future coding agents should consult `plan.md § v0.29` and `FINDINGS.md § v0.29` for as-built details and validation boundaries.
 
 
 

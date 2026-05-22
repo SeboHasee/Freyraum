@@ -1,11 +1,11 @@
 # FINDINGS
-> Last full markdown audit: 2026-05-22 (v0.29 technical code audit — 8 gaps identified with file:line citations and TypeScript patch guidance; lint/build pass).
+> Last full markdown audit: 2026-05-22 (v0.29 runtime implementation shipped — metallic PBR frame M-01..M-08 completed; lint/build pass).
 
-## v0.29 — realistic metallic PBR frame — CODE AUDIT FINDINGS (2026-05-22, planning)
+## v0.29 — realistic metallic PBR frame — IMPLEMENTATION FINDINGS (2026-05-22, **shipped**)
 
 ### Status
 
-Technical code audit complete. Runtime code unchanged in this pass. All findings below are confirmed against the current source tree.
+Implementation complete. Runtime code now includes all eight frame upgrades (M-01..M-08): PMREM environment IBL, metallic/anisotropic/brushed frame material, beveled geometry path with battery fallback, frame quality preset controls, preset-driven frame updates, and increased frame depth.
 
 ### Audit scope
 
