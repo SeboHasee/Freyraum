@@ -40,7 +40,6 @@ export class ZoomControls {
     btn.type = 'button';
     btn.className = className;
     btn.setAttribute('aria-label', ariaLabel);
-    btn.title = ariaLabel;
 
     const icon = document.createElement('span');
     icon.className = 'zoom-controls__icon';

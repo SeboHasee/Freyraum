@@ -1,6 +1,6 @@
 # Architecture docs
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
 ## v0.47 — shipped frame shader architecture
 

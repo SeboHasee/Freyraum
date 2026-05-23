@@ -1,6 +1,10 @@
 # DOCUMENTATION RULES
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+
+## v0.58 documentation pass
+
+- 2026-05-23 (runtime + documentation): Implemented topbar UI uniformity refactor (Option B + premium enhancements). Restructured `Topbar.ts` into left/right groups, restyled help button as 44px glass circle with SVG icon, added accessible tooltip, entrance animations, and `prefers-reduced-motion` support. All markdown files refreshed to v0.58 shipped status.
 
 ## v0.47 documentation pass
 

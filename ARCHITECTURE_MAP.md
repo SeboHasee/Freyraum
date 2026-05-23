@@ -1,6 +1,14 @@
 # FREYRAUM architecture map
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.58 shipped: topbar UI uniformity with left/right group structure, SVG icon button, accessible tooltip.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+
+## v0.58 UI architecture additions
+
+`src/ui/Topbar.ts` now uses a two-group layout: `.topbar__left` (brand + badge) and `.topbar__right` (help button + tooltip). Both groups receive `pointer-events: auto` while the parent `.topbar` remains passthrough (`pointer-events: none`) for 3D canvas interaction.
+
+The help button is now a standalone 44×44px glass button with inline SVG icon (no longer extends `.nav-btn`). An accessible tooltip (`role="tooltip"`, `aria-describedby`) is rendered as a sibling in `.topbar__right` and shown via CSS `:hover + .topbar__tooltip` / `:focus-visible + .topbar__tooltip`.
+
+Future utility buttons (settings, notifications) should be added to `.topbar__right` following the same pattern: 44px glass circle, inline SVG, adjacent tooltip.
 
 ## v0.47 shipped frame-material architecture note
 

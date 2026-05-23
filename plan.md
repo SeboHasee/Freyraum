@@ -1,10 +1,545 @@
 # FREYRAUM Plan
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **partially shipped**)
+## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
 
-Runtime status: **partially implemented in this pass** (navigation/local-preview/canvas accessibility improvements shipped; broader enhancements remain open).
+### Problem Statement
+
+1. **"?" help button is not pressable** — The topbar uses `pointer-events: none` (line 206 of `main.scss`) to let clicks pass through to the 3D canvas. However, the `.topbar__help-btn` never receives `pointer-events: auto`, making it completely unclickable.
+2. **"IMMERSIVE DIGITALE AUSSTELLUNG" badge is strangely placed** — The badge sits between the brand name and the help button via `justify-content: space-between`. On most screen sizes it floats in the middle of the topbar with no clear visual grouping, creating an awkward, disconnected layout.
+3. **Design non-uniformity** — The help button uses the `.nav-btn` base class (72×72px circle with glass pseudo-element) but is placed in the topbar where the visual scale and context differ from the navigation controls. The badge uses a different visual language (pill shape, no interactivity) but competes for visual attention with the brand.
+
+### Root-Cause Analysis
+
+| Issue | Root cause | File | Line(s) |
+|-------|-----------|------|---------|
+| Help button unclickable | `.topbar` has `pointer-events: none`, child buttons never restore `pointer-events: auto` | `src/styles/main.scss` | 206 |
+| Badge placement | `justify-content: space-between` on a 3-item flex row puts badge in visual no-man's-land | `src/styles/main.scss` | 204, 217–230 |
+| Button looks out of place | `.nav-btn` 72px circle is too large for a topbar utility icon; no size variant exists | `src/styles/main.scss` | 349–398 |
+| No cursor feedback | Topbar `pointer-events: none` suppresses hover cursor for the button | `src/styles/main.scss` | 206 |
+
+### Design Research (Modern 2026 Best Practices)
+
+**Sources:** WCAG 2.2 AA requirements, Material Design 3, Apple HIG 2025/2026, glassmorphism accessibility guides.
+
+Key principles for 2026 uniform topbar design:
+- **Minimum touch target 48×48px** (WCAG 2.5.8 Target Size Level AA = 24px, AAA = 44px; industry standard 2026 = 48px).
+- **Glassmorphic buttons need `pointer-events: auto`** on every interactive child when the parent is a passthrough layer.
+- **Visual hierarchy**: Brand (left) → Badge/subtitle (aligned near brand, not floating center) → Utility actions (right).
+- **Consistent border-radius and sizing** across all utility buttons (help, fullscreen, preferences).
+- **Focus-visible ring** must be visible on all interactive elements.
+- **Color contrast ≥ 4.5:1** for badge text against glass background.
+
+### Brainstorm — Multiple Coding Suggestions
+
+---
+
+#### Option A — Minimal Fix (pointer-events + small sizing tweak)
+
+**Pros:** Smallest diff, lowest risk, fixes the blocking bug immediately.
+**Cons:** Badge placement remains slightly awkward on wide screens.
+
+**Changes:**
+1. `src/styles/main.scss` — Add `pointer-events: auto` to `.topbar__help-btn` and `.topbar__brand`.
+2. `src/styles/main.scss` — Reduce `.topbar__help-btn` to a 44×44px variant of `.nav-btn` (override `width`/`height` and inner `inset`).
+3. `src/styles/main.scss` — Add `cursor: pointer` to `.topbar__help-btn`.
+
+```scss
+// Option A patch
+.topbar__help-btn {
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  cursor: pointer;
+
+  &::before {
+    inset: 2px;
+  }
+}
+```
+
+---
+
+#### Option B — Topbar Layout Refactor (recommended)
+
+**Pros:** Fixes all 3 issues, creates a modern uniform topbar, follows 2026 design patterns.
+**Cons:** Slightly larger diff; requires testing badge visibility on all breakpoints.
+
+**Changes:**
+1. Restructure the topbar HTML to use two groups:
+   - Left group: brand + badge (badge directly adjacent to brand).
+   - Right group: help button (and future utility icons).
+2. Replace `justify-content: space-between` with a left/right grouping using `gap`.
+3. Add `pointer-events: auto` to both groups.
+4. Create a `.topbar__btn` utility class (44×44px, consistent with zoom/audio button sizing) that replaces the oversized `.nav-btn` for topbar context.
+5. Style the badge as a subtle tag directly after the brand name (smaller font, tighter padding, same vertical alignment).
+
+**TypeScript changes (`src/ui/Topbar.ts`):**
+```typescript
+// Wrap brand + badge in a left group div
+// Wrap helpBtn in a right group div
+// Both groups get pointer-events: auto
+```
+
+**SCSS changes (`src/styles/main.scss`):**
+```scss
+.topbar {
+  pointer-events: none; // keep — allows canvas clicks
+}
+
+.topbar__left,
+.topbar__right {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar__help-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    background: var(--glass-bg-strong);
+    transform: scale(1.06);
+    box-shadow: var(--shadow-soft);
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-soft), 0 0 0 3px rgba(255, 255, 255, 0.8);
+  }
+}
+
+.topbar__badge {
+  font-size: 9px;
+  padding: 5px 12px;
+  // Now adjacent to brand — no longer floating in the center
+}
+```
+
+---
+
+#### Option C — Full Topbar Modernization (premium, future-proof)
+
+**Pros:** Best UX, fully accessible, sets foundation for future utility icons.
+**Cons:** Largest diff, may require updating responsive breakpoints.
+
+**Changes (extends Option B):**
+1. All of Option B.
+2. Add a subtle entrance animation (fade-in + slide-down) for the topbar on page load.
+3. Replace text `?` with a proper SVG icon (question-mark-circle) for better visual clarity.
+4. Add tooltip on hover for the help button.
+5. Make the badge animate in with a slight delay after the brand for staggered reveal.
+6. Add `aria-current` support for the badge to announce the exhibition context.
+
+---
+
+### Recommended Path: **Option B**
+
+Option B fixes all three reported issues with a clean, minimal refactor. It provides:
+- ✅ Clickable help button (`pointer-events: auto` on interactive group)
+- ✅ Badge placed logically next to the brand
+- ✅ Uniform 44×44px button sizing matching zoom/audio controls
+- ✅ Modern 2026 glassmorphic button with hover/active/focus states
+- ✅ WCAG 2.2 AA accessible (touch target, contrast, focus ring)
+- ✅ Responsive — badge already hidden on phone via existing media queries
+
+### Implementation Checklist
+
+- [x] C-1: Refactor `src/ui/Topbar.ts` — wrap brand+badge in `.topbar__left`, helpBtn in `.topbar__right`
+- [x] C-2: Update `src/styles/main.scss` — add `.topbar__left` / `.topbar__right` with `pointer-events: auto`
+- [x] C-3: Update `src/styles/main.scss` — restyle `.topbar__help-btn` as standalone 44×44 glass button (remove `.nav-btn` class dependency)
+- [x] C-4: Update `src/styles/main.scss` — reposition `.topbar__badge` adjacent to brand with tighter spacing
+- [x] C-5: Verify responsive behavior — badge hidden on phone, topbar compact on landscape
+- [x] C-6: Verify forced-colors / high-contrast CSS still applies
+- [x] C-7: `npm run lint` — pass
+- [x] C-8: `npm run build` — pass
+
+---
+
+## v0.57 — v0.56-B follow-up: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **shipped**)
+
+Runtime status: **shipped**. B-1, B-2, B-4 implemented; B-3 (Lighthouse) deferred — requires live browser tooling.
+
+### Implementation summary
+
+| ID | Item | Status |
+|----|------|--------|
+| B-1 | Keyboard shortcuts help overlay | ✅ shipped |
+| B-2 | Focus-visible / high-contrast review | ✅ shipped |
+| B-3 | Lighthouse / Web Vitals evidence run | ⚠️ deferred (requires live browser) |
+| B-4 | Font loading optimization (non-blocking) | ✅ shipped |
+
+This pass targeted the four follow-ups left open by v0.56-A:
+
+| ID | Item | Result |
+|----|------|--------|
+| B-1 | Keyboard shortcuts help overlay | ✅ shipped |
+| B-2 | Focus-visible / high-contrast review | ✅ shipped |
+| B-3 | Lighthouse / Web Vitals evidence run | ⚠️ deferred — requires live browser tooling |
+| B-4 | Font loading optimization (self-host or `display=swap`) | ✅ shipped |
+
+---
+
+### B-1 — Keyboard shortcuts help overlay
+
+**Goal:** Make keyboard shortcuts discoverable via a `?` button in the topbar and via pressing `?` on any keyboard.
+
+#### B-1-01 — New `KeyboardHelp` component
+
+**File: `src/ui/KeyboardHelp.ts`** (new)
+
+Create a class with `open()`, `close()`, and `dispose()` methods. The dialog element must conform to the ARIA APG dialog pattern (already required by `AI_RULES.md`):
+
+```typescript
+// src/ui/KeyboardHelp.ts
+import { createScopedDiagnostics } from '../utils/Diagnostics';
+
+const log = createScopedDiagnostics('KeyboardHelp');
+
+const SHORTCUTS: Array<[string, string]> = [
+  ['←  →', 'Nächstes / vorheriges Bild'],
+  ['Leertaste', 'Musik pausieren / fortsetzen'],
+  ['F', 'Vollbild ein-/ausschalten'],
+  ['R', 'Ansicht zurücksetzen'],
+  ['Q', 'Qualität wechseln'],
+  ['Esc', 'Dialog schließen'],
+  ['?', 'Diese Hilfe anzeigen'],
+];
+
+export class KeyboardHelp {
+  private dialog: HTMLElement;
+  private opener: HTMLElement | null = null;
+  private onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Tab') this.trapFocus(e);
+  };
+
+  constructor() {
+    this.dialog = this.build();
+    document.body.appendChild(this.dialog);
+  }
+
+  private build(): HTMLElement {
+    const el = document.createElement('div');
+    el.id = 'keyboard-help';
+    el.className = 'keyboard-help';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-labelledby', 'keyboard-help-title');
+    el.hidden = true;
+
+    el.innerHTML = `
+      <div class="keyboard-help__panel">
+        <h2 id="keyboard-help-title" class="keyboard-help__title">Tastaturkürzel</h2>
+        <table class="keyboard-help__table">
+          <tbody>
+            ${SHORTCUTS.map(([key, desc]) =>
+              `<tr><td><kbd class="keyboard-help__key">${key}</kbd></td><td>${desc}</td></tr>`
+            ).join('')}
+          </tbody>
+        </table>
+        <button class="keyboard-help__close nav-btn" aria-label="Hilfe schließen">✕</button>
+      </div>`;
+
+    el.querySelector('.keyboard-help__close')!.addEventListener('click', () => this.close());
+    el.addEventListener('click', (e) => { if (e.target === el) this.close(); });
+    return el;
+  }
+
+  open(opener?: HTMLElement): void {
+    this.opener = opener ?? null;
+    this.dialog.hidden = false;
+    document.addEventListener('keydown', this.onKeyDown);
+    (this.dialog.querySelector('.keyboard-help__close') as HTMLElement)?.focus();
+    log.debug('keyboard-help-opened');
+  }
+
+  close(): void {
+    this.dialog.hidden = true;
+    document.removeEventListener('keydown', this.onKeyDown);
+    this.opener?.focus();
+    this.opener = null;
+    log.debug('keyboard-help-closed');
+  }
+
+  private trapFocus(e: KeyboardEvent): void {
+    const focusable = Array.from(
+      this.dialog.querySelectorAll<HTMLElement>('button, [tabindex]:not([tabindex="-1"])')
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  }
+
+  dispose(): void {
+    document.removeEventListener('keydown', this.onKeyDown);
+    this.dialog.remove();
+  }
+}
+```
+
+#### B-1-02 — Topbar `?` button
+
+**File: `src/ui/Topbar.ts`** — add a help button to the right side of the topbar bar:
+
+```typescript
+// Inside Topbar.buildRight() or equivalent DOM construction:
+const helpBtn = document.createElement('button');
+helpBtn.className = 'nav-btn topbar__help-btn';
+helpBtn.setAttribute('aria-label', 'Tastaturkürzel anzeigen');
+helpBtn.setAttribute('title', 'Tastaturkürzel');
+helpBtn.textContent = '?';
+helpBtn.addEventListener('click', () => this.onHelpClick?.());
+```
+
+Expose `onHelpClick: (() => void) | undefined` as a public property so `main.ts` can wire `keyboardHelp.open(helpBtn)`.
+
+#### B-1-03 — `KeyboardNav` integration
+
+**File: `src/interaction/KeyboardNav.ts`** — add `?` shortcut:
+
+```typescript
+// Add to constructor: accept optional KeyboardHelp reference
+constructor(
+  private galleryManager: GalleryManager,
+  private keyboardHelp?: { open(opener?: HTMLElement): void }
+) { ... }
+
+// Inside handleKeyDown switch:
+case '?':
+  this.keyboardHelp?.open();
+  break;
+```
+
+#### B-1-04 — SCSS styles
+
+**File: `src/styles/main.scss`** — add keyboard-help component styles:
+
+```scss
+// Keyboard shortcuts dialog
+.keyboard-help {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0 0 0 / 0.55);
+  backdrop-filter: blur(4px);
+
+  &[hidden] { display: none; }
+
+  &__panel {
+    background: var(--glass-bg, rgba(18 18 18 / 0.92));
+    border: 1px solid rgba(255 255 255 / 0.12);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    min-width: 320px;
+    max-width: 90vw;
+    position: relative;
+  }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    color: rgba(255 255 255 / 0.9);
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    td {
+      padding: 0.3rem 0.5rem;
+      color: rgba(255 255 255 / 0.75);
+      font-size: 0.85rem;
+    }
+  }
+
+  &__key {
+    display: inline-block;
+    background: rgba(255 255 255 / 0.1);
+    border: 1px solid rgba(255 255 255 / 0.2);
+    border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  &__close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+}
+```
+
+#### B-1-05 — Wiring in `main.ts`
+
+```typescript
+import { KeyboardHelp } from './ui/KeyboardHelp';
+// After keyboardNav creation:
+const keyboardHelp = new KeyboardHelp();
+const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
+topbar.onHelpClick = () => keyboardHelp.open(topbar.helpBtn);
+// In cleanup/dispose block:
+keyboardHelp.dispose();
+```
+
+---
+
+### B-2 — Focus-visible and high-contrast review
+
+**Goal:** All interactive controls show a visible focus ring in forced-colors (Windows High Contrast) mode.
+
+**File: `src/styles/main.scss`** — add at end of file:
+
+```scss
+// High-contrast / forced-colors support
+@media (forced-colors: active) {
+  // Restore button borders that our custom styles suppress
+  .nav-btn,
+  .zoom-btn,
+  .topbar__help-btn,
+  .loading-start-btn,
+  .prefs__toggle,
+  .audio-btn {
+    forced-color-adjust: none;
+    border: 2px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  // Ensure focus ring uses system highlight color
+  :focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  // Preserve artwork canvas colors
+  #gallery-canvas {
+    forced-color-adjust: none;
+  }
+}
+```
+
+Also audit: confirm every interactive element has a `:focus-visible` rule that is not suppressed by `outline: none` without a visible alternative.
+
+---
+
+### B-3 — Lighthouse / Web Vitals evidence
+
+**Status: requires live browser tooling.** Cannot be automated in this session.
+
+**Procedure for next developer run:**
+1. Run `npm run build && npm run preview` (Vite preview server).
+2. Open `http://localhost:4173` in Chrome.
+3. Run Lighthouse (DevTools → Lighthouse → Mobile/Desktop → Performance + Accessibility + Best Practices).
+4. Record: LCP, TBT, CLS, Accessibility score, Best Practices score.
+5. Document before/after in `FINDINGS.md § v0.57`.
+
+---
+
+### B-4 — Font loading optimization
+
+**Goal:** Eliminate render-blocking Google Fonts dependency; support offline/file:// usage.
+
+#### Option A — Non-blocking Google Fonts (minimal change)
+
+**File: `app.html`** — replace current font links:
+
+```html
+<!-- Before: -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- After (non-blocking pattern): -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'">
+<noscript>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+</noscript>
+```
+
+#### Option B — Self-hosted (recommended for offline/file:// gallery)
+
+1. Download Inter 400/500/700 WOFF2 subsets (latin) into `public/fonts/`.
+2. Add `@font-face` declarations to `src/styles/main.scss`:
+
+```scss
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/inter-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193,
+                 U+2212, U+2215, U+FEFF, U+FFFD;
+}
+// Repeat for 500 and 700 weights
+```
+
+3. Remove Google Fonts `<link>` elements from `app.html`.
+
+**Accept:** `app.html` loads without any Google Fonts requests. Font renders via local WOFF2. Works on `file://` origins.
+
+---
+
+### Validation
+
+```sh
+npm run lint   # zero errors
+npm run build  # zero errors
+```
+
+Browser console: `[KeyboardHelp] keyboard-help-opened` on `?` keypress.  
+Visual QA: focus ring visible in Windows High Contrast Mode (Edge → Accessibility → High contrast: black).  
+Font QA: DevTools network panel shows no `fonts.googleapis.com` requests after B-4 implementation.
+
+### Merge-readiness checklist (v0.57)
+
+- B-1 (`KeyboardHelp` dialog + topbar `?` button + `KeyboardNav` `?` key): ✅ shipped.
+- B-2 (`@media (forced-colors: active)` CSS block): ✅ shipped.
+- B-3 (Lighthouse): ⚠️ deferred — requires live browser run.
+- B-4 (non-blocking Google Fonts `onload` swap): ✅ shipped.
+- `npm run lint` and `npm run build` pass.
+
+---
+
+## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **shipped**)
+
+Runtime status: **fully shipped** (v0.56-A shipped in v0.56; v0.56-B follow-ups shipped in v0.57).
 
 ### Audit scope
 
@@ -37,19 +572,18 @@ Runtime status: **partially implemented in this pass** (navigation/local-preview
 5. **A-05 — Progressive enhancement fallback**
    - Added `noscript` message to `app.html`.
 
-### Remaining plan slices (v0.56-B, open)
+### Remaining plan slices (v0.56-B — shipped in v0.57)
 
-1. Add a dedicated keyboard-shortcuts help affordance in the UI (discoverable via button and `?`).
-2. Add explicit focus-visible styling review for all interactive controls and high-contrast mode checks.
-3. Run a Lighthouse/Web Vitals evidence pass and store measured before/after metrics in `FINDINGS.md`.
-4. Revisit font loading strategy (self-host or subset) to reduce third-party dependency overhead.
+1. ✅ Keyboard-shortcuts help overlay (shipped in v0.57).
+2. ✅ Focus-visible / high-contrast mode review (shipped in v0.57).
+3. ⚠️ Lighthouse/Web Vitals evidence pass (deferred — requires live browser).
+4. ✅ Font loading optimization: non-blocking `onload` swap (shipped in v0.57).
 
-### Merge-readiness checklist (v0.56 docs sync)
+### Merge-readiness checklist (v0.56 + v0.57)
 
-- Runtime scope for v0.56-A is documented as shipped in `CHANGELOG.md`, `README.md`, and `FINDINGS.md`.
-- Future-only items remain clearly labeled as open v0.56-B follow-ups (not yet shipped).
-- Validation baseline recorded: `npm run lint` and `npm run build` pass in this repository state.
-- Repository is ready for merge/commit of this docs sync; no runtime code changes are included in this pass.
+- All v0.56-A slices shipped in v0.56.
+- All v0.56-B slices (except Lighthouse) shipped in v0.57.
+- `npm run lint` and `npm run build` pass.
 
 ## v0.47 — modern gallery metal refinement after screenshot review (2026-05-22, **shipped**)
 

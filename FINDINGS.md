@@ -1,6 +1,122 @@
 # FINDINGS
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.59 shipped: hover-state float fix, keyboard-help contrast fix (WCAG 2.2 AA).
+> Last full markdown audit: 2026-05-23 (v0.59 shipped).
+
+## v0.59 — Hover state + control-info contrast fixes (2026-05-23, **shipped**)
+
+### Issues resolved
+
+| # | Issue | Severity | Root cause | Fix applied |
+|---|-------|----------|------------|-------------|
+| 1 | `?` button visually "pops" / floats above topbar on hover | **High** | `transform: scale(1.08)` applied directly to the element (not a `::before` pseudo-element); causes the whole button to scale and lift out of the topbar row | Removed scale from hover; background+shadow elevation only. Active/press still uses `scale(0.94)` for tactile feedback |
+| 2 | Keyboard-help control info window is illegible (white text on white background) | **Critical** | `keyboard-help__panel` used `background: var(--glass-bg, …)`. The CSS variable `--glass-bg` resolves to `rgba(255,255,255,0.76)` (light frosted), but all text was hard-coded white → near-zero contrast | Force explicit dark surface `rgba(19,25,29,0.96)` — never inherits the light token. Achieves ≥7:1 (WCAG AAA) |
+
+### 2026 accessibility research findings
+
+#### Hover states — what the standards say
+
+**WCAG 2.2 SC 1.4.11 Non-text Contrast (AA)**  
+UI component boundaries and their interactive states must have ≥3:1 contrast ratio against adjacent colours. A scale transform that causes a button to visually detach from its container can confuse orientation and violates the "predictable" principle.
+
+**WCAG 2.2 SC 2.5.8 Target Size Minimum (AA) — NEW in 2.2**  
+Minimum 24×24 CSS pixels. Scale-up on hover must not shrink the actual hit area (it doesn't here, but is a common pitfall with `transform: scale`).
+
+**Material Design 3 / Apple HIG 2025–2026 consensus**  
+- Hover: use background fill change + subtle shadow elevation. Signal "this is interactive" without moving the element.
+- Active/press: use `scale(0.92–0.96)` to simulate physical depression. This is the _only_ state that should translate the element.
+- Avoid lifting / scaling-up on hover in fixed headers — it breaks visual anchoring and reads as an error to users.
+
+#### Modal dialog contrast — layered surface pattern
+
+**WCAG 2.2 SC 1.4.3 Contrast Minimum (AA): 4.5:1 for normal text**  
+White `rgba(255,255,255,0.95)` on `rgba(255,255,255,0.76)` ≈ 1.05:1 — catastrophic failure.  
+White `rgba(255,255,255,0.95)` on `rgba(19,25,29,0.96)` ≈ 14.7:1 — exceeds AAA (7:1).
+
+**2026 layered-surface pattern (W3C Accessible Color Systems, Material Design 3, Radix UI)**  
+Light UI surfaces (`--glass-bg`) are correct for cards, panels, and navigation. Dark surfaces are correct for modal overlays — they layer clearly over the dimmed backdrop, reduce eye strain, and never have the contrast failure that arises when a light surface carries white text.
+
+**Practical rule**: when a UI element applies white or near-white text, its background must be explicitly set to a dark value — never rely on a design-token that might resolve to a light colour in the current theme.
+
+#### Sources
+- [WCAG 2.2 — SC 1.4.3 Contrast Minimum](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+- [WCAG 2.2 — SC 1.4.11 Non-text Contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
+- [WCAG 2.2 — SC 2.5.8 Target Size Minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+- [Material Design 3 — States (hover, pressed, focused)](https://m3.material.io/foundations/interaction/states/overview)
+- [Apple HIG 2025 — Buttons & Microinteractions](https://developer.apple.com/design/human-interface-guidelines/buttons)
+- [Radix UI Accessible Color Systems](https://www.radix-ui.com/colors)
+- [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
+
+---
+
+## v0.58 — Topbar UI uniformity findings (2026-05-23, **shipped**)
+
+### Issues resolved
+
+| # | Issue | Severity | Fix applied |
+|---|-------|----------|-------------|
+| 1 | "?" help button not clickable | **Critical** | `.topbar__right` group adds `pointer-events: auto` |
+| 2 | Badge strangely placed | **Medium** | Badge moved to `.topbar__left` adjacent to brand; `gap: 14px` |
+| 3 | Help button too large | **Low** | Removed `.nav-btn` class; standalone 44×44px glass button with SVG icon |
+| 4 | No hover cursor | **Low** | `cursor: pointer` + interactive group restores full pointer behavior |
+
+### Premium 2026 enhancements applied
+
+| Enhancement | Implementation |
+|-------------|----------------|
+| SVG icon (question-mark-circle) | Inline SVG replaces text `?` for crisp scaling |
+| Accessible tooltip | `role="tooltip"` + `aria-describedby`, visible on hover/focus |
+| Entrance animation | `@keyframes topbar-enter` fade+slide, staggered badge reveal |
+| Micro-interactions | Scale hover (1.08), active press (0.94), shadow elevation |
+| Reduced motion | `prefers-reduced-motion` disables all animations/transitions |
+| Future-proof structure | `.topbar__right` ready for additional utility buttons |
+
+### 2026 design research sources
+
+- WCAG 2.2 AA Target Size (Level AA = 24px minimum, industry standard = 44–48px)
+- Material Design 3 icon button specifications
+- Apple HIG 2025/2026 glassmorphism patterns
+- CSS `backdrop-filter` with `@supports` fallback pattern
+- `prefers-reduced-motion` media query for inclusive animation
+- Container queries and variable fonts for responsive premium typography
+
+## v0.57 — implementation findings (2026-05-23, **shipped**)
+
+### Items implemented
+
+| ID | Item | Status | Files changed |
+|----|------|--------|---------------|
+| B-1 | Keyboard shortcuts help overlay | ✅ shipped | `src/ui/KeyboardHelp.ts` (new), `src/ui/Topbar.ts`, `src/interaction/KeyboardNav.ts`, `src/styles/main.scss`, `src/main.ts` |
+| B-2 | Focus-visible / high-contrast review | ✅ shipped | `src/styles/main.scss` — `@media (forced-colors: active)` block added |
+| B-3 | Lighthouse / Web Vitals evidence | ⚠️ deferred | Requires live browser tooling; see procedure below |
+| B-4 | Font loading optimization | ✅ shipped | `app.html` — blocking `<link rel="stylesheet">` replaced with `onload` non-blocking pattern |
+
+### B-3 deferred: Lighthouse / Web Vitals procedure
+
+Run when browser tooling is available:
+1. `npm run build && npm run preview` (Vite preview server).
+2. Open `http://localhost:4173` in Chrome.
+3. DevTools → Lighthouse → Mobile/Desktop → Performance + Accessibility + Best Practices.
+4. Record: LCP, TBT, CLS, Accessibility score, Best Practices score.
+5. Document results in a new `FINDINGS.md § v0.57 Lighthouse` section.
+
+### Long-standing deferred items (correctly deferred)
+
+| ID | Item | Reason for deferral |
+|----|------|---------------------|
+| H-07 | LOD / tiled streaming for 16 K images | Requires new asset pipeline, tiling runtime, format conversion — no current need |
+| J-06 | Group/page navigation for 50+ artwork galleries | Gallery stays well under 50 artworks for the foreseeable future |
+
+### Codebase state after v0.57
+
+- `src/ui/` now has 9 components: `AudioControls`, `FallbackScreen`, `FullscreenButton`, `HintText`, `InfoPanel`, `KeyboardHelp`, `NavigationControls`, `PreferencesPanel`, `Topbar`, `ZoomControls`.
+- `app.html` no longer emits a render-blocking Google Fonts request; font loads asynchronously via `onload` swap.
+- `src/styles/main.scss` now includes `@media (forced-colors: active)` block restoring button borders and focus ring in Windows High Contrast Mode.
+- All keyboard shortcuts (`← →`, `+`/`-`, `R`, `F`, `?`) are discoverable via the help dialog.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.56 — website quality audit findings (2026-05-22, **in progress**)
 

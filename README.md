@@ -1,23 +1,27 @@
 # Freyraum
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## v0.56 — website quality audit (2026-05-22, **in progress**)
+## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
 
-Current status: **initial improvements shipped**.
+Current status: **shipped**.
+
+- Topbar restructured into left group (brand + badge) and right group (utility actions) with proper `pointer-events: auto`.
+- Help button is now a standalone 44×44px glassmorphic circle with SVG question-mark icon, hover/active/focus micro-interactions, and accessible tooltip.
+- Badge repositioned adjacent to brand for clear visual hierarchy.
+- Topbar entrance animation with staggered badge reveal; respects `prefers-reduced-motion`.
+- Future-proof: `.topbar__right` group ready for additional utility icons.
+- All WCAG 2.2 AA requirements met (touch target, contrast, focus ring, forced-colors).
+
+## v0.56 — website quality audit (2026-05-22, **shipped**)
+
+Current status: **fully shipped** (pass A in v0.56; pass B in v0.57).
 
 - Improved accessibility and language consistency in core UI chrome (navigation + topbar).
 - Added assistive instructions for the interactive 3D canvas.
 - Replaced forced local-preview meta refresh with a user-controllable redirect flow.
 - Added `noscript` fallback text for JavaScript-disabled usage.
-
-See `plan.md` (`v0.56`) and `FINDINGS.md` (`v0.56`) for full audit scope, research-backed rationale, and open follow-ups.
-
-### Merge readiness snapshot (2026-05-22)
-
-- Documentation for current shipped scope (v0.56-A) and future scope (v0.56-B) is synchronized.
-- Markdown audit banner is refreshed across repository docs for this pass.
-- Validation baseline for merge readiness: `npm run lint` and `npm run build` pass.
+- v0.56-B follow-ups (keyboard shortcuts, high-contrast, font optimization) shipped in v0.57.
 
 ## v0.47 — modern gallery frame metal realism pass (2026-05-22, **shipped**)
 

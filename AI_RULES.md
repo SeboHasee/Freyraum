@@ -1,6 +1,16 @@
 # FREYRAUM AI rules
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.58 shipped: topbar UI uniformity with left/right grouping, SVG icon, accessible tooltip, premium micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+
+## v0.58 topbar/utility-button rule
+
+All topbar utility buttons must be 44×44px standalone glass circles with inline SVG icons (`aria-hidden="true"`), `aria-label`, and an adjacent `role="tooltip"` element connected via `aria-describedby`. Buttons must have `pointer-events: auto` (either directly or via a parent group). Never use the `.nav-btn` class for topbar utility buttons — it is reserved for the 72px navigation controls.
+
+When adding new topbar actions, append them to `.topbar__right`. Maintain `prefers-reduced-motion` support for any transitions or animations.
+
+## v0.57 font rule
+
+All fonts used in the production gallery must be self-hosted in `public/fonts/` with `@font-face` declarations in `main.scss`. Do not use render-blocking `<link rel="stylesheet">` CDN font links in `app.html`. Google Fonts CDN may be used in development `.env.local` setups only.
 
 ## v0.47 frame-realism rule
 

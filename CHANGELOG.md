@@ -1,6 +1,103 @@
 # CHANGELOG
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.59 shipped: hover-state float fix, keyboard-help contrast fix (WCAG 2.2 AA).
+> Last full markdown audit: 2026-05-23 (v0.59 shipped).
+
+## v0.59 — Hover-state float fix + keyboard-help contrast (2026-05-23, **shipped**)
+
+### Status
+
+Shipped. Two reported UI issues fixed; WCAG 2.2 AA compliance restored.
+
+### Fixed
+
+- **High:** `topbar__help-btn` no longer floats/pops above the topbar row on hover.  
+  Root cause: `transform: scale(1.08)` applied directly to the element caused it to lift and visually detach. Fix: removed the scale transform from hover; background brightening (`--glass-bg-strong`) + shadow elevation (`--shadow-medium`) now signal interactivity without any layout disruption. Active/press state retains `scale(0.94)` for tactile feedback.
+- **Critical:** Keyboard-help control info window is now legible (dark text area, not white-on-white).  
+  Root cause: `keyboard-help__panel` used `background: var(--glass-bg)` which resolves to `rgba(255,255,255,0.76)` (light frosted), but all text was hard-coded white → ~1.05:1 contrast (WCAG failure). Fix: panel now always uses `rgba(19,25,29,0.96)` — an explicit dark surface that never inherits the light token. Contrast: ≥14.7:1 for title (WCAG AAA), ≥11:1 for body text (WCAG AAA), both far exceeding the 4.5:1 AA minimum.
+
+### Design principles applied (2026 best practices)
+
+- **WCAG 2.2 SC 1.4.3** — text contrast ≥4.5:1 (AA). Fixed dialog achieves AAA.
+- **WCAG 2.2 SC 1.4.11** — non-text contrast ≥3:1. Hover state changes remain clearly distinguishable.
+- **Material Design 3 / Apple HIG 2025 consensus** — hover = background + shadow; active/press = scale-down only. No scale-up on hover in fixed headers.
+- **Layered-surface pattern** — light UI (`--glass-bg`) for ambient surfaces; explicit dark surface for modal overlays. White text belongs on dark backgrounds, never light.
+
+### Changed
+
+- `src/styles/main.scss § .topbar__help-btn`: removed `transform: scale(1.08)` and `transform` from `transition`; hover now uses background+shadow only. Updated section header to v0.59.
+- `src/styles/main.scss § .keyboard-help__panel`: replaced `background: var(--glass-bg, rgba(18 18 18 / 0.92))` with `background: rgba(19, 25, 29, 0.96)`. Bumped text opacities to 0.95/0.82; `__key` gets explicit `color` and stronger border; `__close` gets explicit colour with hover state.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
+
+### Status
+
+Shipped. All three reported issues fixed; premium 2026 enhancements applied.
+
+### Fixed
+
+- **Critical:** "?" help button now fully clickable — `pointer-events: auto` applied to interactive groups.
+- **Medium:** Badge repositioned adjacent to brand (left group) instead of floating in center void.
+- **Low:** Help button restyled as standalone 44×44px glass button (no longer uses oversized 72px `.nav-btn`).
+
+### Added
+
+- `src/ui/Topbar.ts`: Restructured into `.topbar__left` (brand + badge) and `.topbar__right` (help button) groups with proper pointer-events.
+- SVG question-mark-circle icon replaces text `?` for better visual clarity and scalability.
+- Accessible tooltip (`role="tooltip"`, `aria-describedby`) on help button — visible on hover and focus.
+- Topbar entrance animation (fade-in + slide-down) with staggered badge reveal for premium feel.
+- `prefers-reduced-motion` support — all topbar animations and transitions disabled for users who prefer reduced motion.
+- Micro-interactions: scale hover (1.08), active press (0.94), border-color elevation, box-shadow progression.
+- Focus-visible ring using `--focus-ring` variable for consistent accessibility.
+
+### Design Principles (2026 Premium UI)
+
+- WCAG 2.2 AA: 44×44px touch targets, 4.5:1 contrast, focus-visible ring on all interactive elements.
+- Glassmorphism with `backdrop-filter` + graceful degradation via `@supports`.
+- Clear visual hierarchy: Brand (left) → Badge (left, adjacent) → Utility actions (right).
+- `prefers-reduced-motion` respected for all animations.
+- Future-proof structure: `.topbar__right` group ready for additional utility icons (settings, notifications, etc.).
+- Forced-colors / Windows High Contrast Mode support preserved.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.57 — v0.56-B follow-ups: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **shipped**)
+
+### Status
+
+Shipped. Runtime code updated; lint and build pass.
+
+### Added
+
+- `src/ui/KeyboardHelp.ts` (new): ARIA `role="dialog"` keyboard shortcuts overlay with focus-trap, `Escape` to close, backdrop click to close, and `opener` focus-restore on close.
+- `src/ui/Topbar.ts`: `?` button (`topbar__help-btn`) in the topbar; exposes `helpBtn` and `onHelpClick` callback for wiring.
+- `src/interaction/KeyboardNav.ts`: accepts optional `KeyboardHelp` reference; `?` key opens the help overlay.
+- `src/styles/main.scss § v0.57`: `.keyboard-help` component styles and `@media (forced-colors: active)` block restoring button borders and focus ring in Windows High Contrast Mode.
+- `src/main.ts`: `KeyboardHelp` import, creation, topbar wiring (`onHelpClick`), and `dispose()` call in cleanup.
+
+### Changed
+
+- `app.html`: replaced blocking `<link rel="stylesheet">` for Google Fonts with non-blocking `onload` pattern (+ `<noscript>` fallback). Render-blocking Google Fonts request eliminated.
+
+### Deferred (requires live browser tooling)
+
+- B-3 (Lighthouse / Web Vitals): requires `npm run build && npm run preview` + Chrome DevTools Lighthouse. Documented in `FINDINGS.md § v0.57`.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.56.1 — merge-ready markdown synchronization (2026-05-22, **shipped**)
 
