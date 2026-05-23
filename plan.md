@@ -1,6 +1,181 @@
 # FREYRAUM Plan
-> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts). B-3 (Lighthouse) deferred.
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 in progress: topbar UI uniformity, help button fix, badge layout.
+> Last full markdown audit: 2026-05-23 (v0.58 in progress).
+
+## v0.58 — Topbar UI Uniformity & Help Button Fix (2026-05-23, **in progress**)
+
+### Problem Statement
+
+1. **"?" help button is not pressable** — The topbar uses `pointer-events: none` (line 206 of `main.scss`) to let clicks pass through to the 3D canvas. However, the `.topbar__help-btn` never receives `pointer-events: auto`, making it completely unclickable.
+2. **"IMMERSIVE DIGITALE AUSSTELLUNG" badge is strangely placed** — The badge sits between the brand name and the help button via `justify-content: space-between`. On most screen sizes it floats in the middle of the topbar with no clear visual grouping, creating an awkward, disconnected layout.
+3. **Design non-uniformity** — The help button uses the `.nav-btn` base class (72×72px circle with glass pseudo-element) but is placed in the topbar where the visual scale and context differ from the navigation controls. The badge uses a different visual language (pill shape, no interactivity) but competes for visual attention with the brand.
+
+### Root-Cause Analysis
+
+| Issue | Root cause | File | Line(s) |
+|-------|-----------|------|---------|
+| Help button unclickable | `.topbar` has `pointer-events: none`, child buttons never restore `pointer-events: auto` | `src/styles/main.scss` | 206 |
+| Badge placement | `justify-content: space-between` on a 3-item flex row puts badge in visual no-man's-land | `src/styles/main.scss` | 204, 217–230 |
+| Button looks out of place | `.nav-btn` 72px circle is too large for a topbar utility icon; no size variant exists | `src/styles/main.scss` | 349–398 |
+| No cursor feedback | Topbar `pointer-events: none` suppresses hover cursor for the button | `src/styles/main.scss` | 206 |
+
+### Design Research (Modern 2026 Best Practices)
+
+**Sources:** WCAG 2.2 AA requirements, Material Design 3, Apple HIG 2025/2026, glassmorphism accessibility guides.
+
+Key principles for 2026 uniform topbar design:
+- **Minimum touch target 48×48px** (WCAG 2.5.8 Target Size Level AA = 24px, AAA = 44px; industry standard 2026 = 48px).
+- **Glassmorphic buttons need `pointer-events: auto`** on every interactive child when the parent is a passthrough layer.
+- **Visual hierarchy**: Brand (left) → Badge/subtitle (aligned near brand, not floating center) → Utility actions (right).
+- **Consistent border-radius and sizing** across all utility buttons (help, fullscreen, preferences).
+- **Focus-visible ring** must be visible on all interactive elements.
+- **Color contrast ≥ 4.5:1** for badge text against glass background.
+
+### Brainstorm — Multiple Coding Suggestions
+
+---
+
+#### Option A — Minimal Fix (pointer-events + small sizing tweak)
+
+**Pros:** Smallest diff, lowest risk, fixes the blocking bug immediately.
+**Cons:** Badge placement remains slightly awkward on wide screens.
+
+**Changes:**
+1. `src/styles/main.scss` — Add `pointer-events: auto` to `.topbar__help-btn` and `.topbar__brand`.
+2. `src/styles/main.scss` — Reduce `.topbar__help-btn` to a 44×44px variant of `.nav-btn` (override `width`/`height` and inner `inset`).
+3. `src/styles/main.scss` — Add `cursor: pointer` to `.topbar__help-btn`.
+
+```scss
+// Option A patch
+.topbar__help-btn {
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  cursor: pointer;
+
+  &::before {
+    inset: 2px;
+  }
+}
+```
+
+---
+
+#### Option B — Topbar Layout Refactor (recommended)
+
+**Pros:** Fixes all 3 issues, creates a modern uniform topbar, follows 2026 design patterns.
+**Cons:** Slightly larger diff; requires testing badge visibility on all breakpoints.
+
+**Changes:**
+1. Restructure the topbar HTML to use two groups:
+   - Left group: brand + badge (badge directly adjacent to brand).
+   - Right group: help button (and future utility icons).
+2. Replace `justify-content: space-between` with a left/right grouping using `gap`.
+3. Add `pointer-events: auto` to both groups.
+4. Create a `.topbar__btn` utility class (44×44px, consistent with zoom/audio button sizing) that replaces the oversized `.nav-btn` for topbar context.
+5. Style the badge as a subtle tag directly after the brand name (smaller font, tighter padding, same vertical alignment).
+
+**TypeScript changes (`src/ui/Topbar.ts`):**
+```typescript
+// Wrap brand + badge in a left group div
+// Wrap helpBtn in a right group div
+// Both groups get pointer-events: auto
+```
+
+**SCSS changes (`src/styles/main.scss`):**
+```scss
+.topbar {
+  pointer-events: none; // keep — allows canvas clicks
+}
+
+.topbar__left,
+.topbar__right {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.topbar__help-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    background: var(--glass-bg-strong);
+    transform: scale(1.06);
+    box-shadow: var(--shadow-soft);
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-soft), 0 0 0 3px rgba(255, 255, 255, 0.8);
+  }
+}
+
+.topbar__badge {
+  font-size: 9px;
+  padding: 5px 12px;
+  // Now adjacent to brand — no longer floating in the center
+}
+```
+
+---
+
+#### Option C — Full Topbar Modernization (premium, future-proof)
+
+**Pros:** Best UX, fully accessible, sets foundation for future utility icons.
+**Cons:** Largest diff, may require updating responsive breakpoints.
+
+**Changes (extends Option B):**
+1. All of Option B.
+2. Add a subtle entrance animation (fade-in + slide-down) for the topbar on page load.
+3. Replace text `?` with a proper SVG icon (question-mark-circle) for better visual clarity.
+4. Add tooltip on hover for the help button.
+5. Make the badge animate in with a slight delay after the brand for staggered reveal.
+6. Add `aria-current` support for the badge to announce the exhibition context.
+
+---
+
+### Recommended Path: **Option B**
+
+Option B fixes all three reported issues with a clean, minimal refactor. It provides:
+- ✅ Clickable help button (`pointer-events: auto` on interactive group)
+- ✅ Badge placed logically next to the brand
+- ✅ Uniform 44×44px button sizing matching zoom/audio controls
+- ✅ Modern 2026 glassmorphic button with hover/active/focus states
+- ✅ WCAG 2.2 AA accessible (touch target, contrast, focus ring)
+- ✅ Responsive — badge already hidden on phone via existing media queries
+
+### Implementation Checklist
+
+- [ ] C-1: Refactor `src/ui/Topbar.ts` — wrap brand+badge in `.topbar__left`, helpBtn in `.topbar__right`
+- [ ] C-2: Update `src/styles/main.scss` — add `.topbar__left` / `.topbar__right` with `pointer-events: auto`
+- [ ] C-3: Update `src/styles/main.scss` — restyle `.topbar__help-btn` as standalone 44×44 glass button (remove `.nav-btn` class dependency)
+- [ ] C-4: Update `src/styles/main.scss` — reposition `.topbar__badge` adjacent to brand with tighter spacing
+- [ ] C-5: Verify responsive behavior — badge hidden on phone, topbar compact on landscape
+- [ ] C-6: Verify forced-colors / high-contrast CSS still applies
+- [ ] C-7: `npm run lint` — pass
+- [ ] C-8: `npm run build` — pass
+
+---
 
 ## v0.57 — v0.56-B follow-up: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **shipped**)
 

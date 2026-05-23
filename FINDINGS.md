@@ -1,6 +1,28 @@
 # FINDINGS
-> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts). B-3 (Lighthouse) deferred.
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 in progress: topbar UI uniformity, help button clickability, badge layout fix.
+> Last full markdown audit: 2026-05-23 (v0.58 in progress).
+
+## v0.58 — Topbar UI uniformity findings (2026-05-23, **in progress**)
+
+### Issues identified
+
+| # | Issue | Severity | Root cause |
+|---|-------|----------|-----------|
+| 1 | "?" help button is not clickable | **Critical** | `.topbar` uses `pointer-events: none` (line 206); `.topbar__help-btn` never restores `pointer-events: auto` |
+| 2 | "IMMERSIVE DIGITALE AUSSTELLUNG" badge looks strangely placed | **Medium** | `justify-content: space-between` on 3-item flex row positions badge in dead-center void |
+| 3 | Help button too large/out of place | **Low** | Uses `.nav-btn` class (72×72px) designed for navigation controls, not topbar utility actions |
+| 4 | No hover cursor on help button | **Low** | Inherited `pointer-events: none` suppresses all pointer interaction including cursor |
+
+### Design uniformity analysis
+
+The current topbar violates several 2026 UI uniformity principles:
+- **Inconsistent button sizing**: Nav buttons = 72px, zoom/audio = 44px, help button = 72px (should be 44px in topbar context).
+- **Badge floating**: The badge sits between brand and help button with no clear visual grouping, appearing disconnected.
+- **Non-interactive appearance**: Without `pointer-events: auto` and cursor feedback, the help button appears decorative rather than interactive.
+
+### Fix approach (Option B — topbar layout refactor)
+
+Restructure topbar HTML into left group (brand + badge) and right group (help button). Add `pointer-events: auto` to both groups. Restyle help button as 44×44px standalone glass button matching zoom/audio control visual language. See `plan.md § v0.58` for full implementation details.
 
 ## v0.57 — implementation findings (2026-05-23, **shipped**)
 

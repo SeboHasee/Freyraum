@@ -1,6 +1,33 @@
 # CHANGELOG
-> v0.57 shipped: keyboard shortcuts help overlay (B-1), forced-colors/focus-visible CSS (B-2), non-blocking font loading (B-4).
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 in progress: topbar UI uniformity, help button clickability fix, badge layout.
+> Last full markdown audit: 2026-05-23 (v0.58 in progress).
+
+## v0.58 — Topbar UI Uniformity & Help Button Fix (2026-05-23, **in progress**)
+
+### Status
+
+In progress. Technical plan created; implementation pending.
+
+### To Fix
+
+- **Critical:** "?" help button unclickable due to missing `pointer-events: auto` on topbar interactive children.
+- **Medium:** "IMMERSIVE DIGITALE AUSSTELLUNG" badge awkwardly placed in center of topbar.
+- **Low:** Help button uses oversized 72px `.nav-btn` style inappropriate for topbar utility context.
+
+### Planned Changes
+
+- `src/ui/Topbar.ts`: Restructure into left group (brand + badge) and right group (help button) with `pointer-events: auto`.
+- `src/styles/main.scss`: Add `.topbar__left` / `.topbar__right` grouping styles; restyle `.topbar__help-btn` as 44×44px glass button; reposition badge adjacent to brand.
+
+### Design Principles Applied
+
+- 2026 modern glassmorphism with accessibility (WCAG 2.2 AA).
+- 48px minimum touch targets for all interactive elements.
+- Uniform button sizing across utility controls (44px).
+- Clear visual hierarchy: Brand → Badge → Utility actions (right-aligned).
+- Focus-visible ring, hover/active states on all buttons.
+
+---
 
 ## v0.57 — v0.56-B follow-ups: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **shipped**)
 
