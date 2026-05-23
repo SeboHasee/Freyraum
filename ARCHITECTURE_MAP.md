@@ -1,12 +1,14 @@
 # FREYRAUM architecture map
-> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts).
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 shipped: topbar UI uniformity with left/right group structure, SVG icon button, accessible tooltip.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## v0.57 UI architecture additions
+## v0.58 UI architecture additions
 
-`src/ui/KeyboardHelp.ts` is now a self-contained dialog component with `open()`, `close()`, and `dispose()` lifecycle, following the existing `src/ui/` pattern. Wired in `main.ts`: instantiated, passed to `KeyboardNav` as an optional reference, and `Topbar.onHelpClick` triggers `keyboardHelp.open(topbar.helpBtn)`.
+`src/ui/Topbar.ts` now uses a two-group layout: `.topbar__left` (brand + badge) and `.topbar__right` (help button + tooltip). Both groups receive `pointer-events: auto` while the parent `.topbar` remains passthrough (`pointer-events: none`) for 3D canvas interaction.
 
-Font loading architecture: `app.html` now uses the non-blocking Google Fonts `onload` swap pattern. Blocking `<link rel="stylesheet">` for Google Fonts removed.
+The help button is now a standalone 44×44px glass button with inline SVG icon (no longer extends `.nav-btn`). An accessible tooltip (`role="tooltip"`, `aria-describedby`) is rendered as a sibling in `.topbar__right` and shown via CSS `:hover + .topbar__tooltip` / `:focus-visible + .topbar__tooltip`.
+
+Future utility buttons (settings, notifications) should be added to `.topbar__right` following the same pattern: 44px glass circle, inline SVG, adjacent tooltip.
 
 ## v0.47 shipped frame-material architecture note
 

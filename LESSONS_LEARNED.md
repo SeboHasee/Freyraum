@@ -1,16 +1,20 @@
 # FREYRAUM lessons learned
-> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts).
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## 2026-05-23 — v0.57 implementation lessons
+## 2026-05-23 — v0.58 implementation lessons
 
-### Lesson 84 — Keyboard shortcuts need a discoverable affordance, not just key bindings
+### Lesson 86 — Passthrough layers must explicitly restore pointer-events on interactive children
 
-Implementing `KeyboardNav.ts` with arrow/space/escape bindings is necessary but not sufficient. Users who do not already know the shortcuts will never discover them. Future rule: any keyboard shortcut implementation must ship alongside a discoverable help affordance (`?` button and `?` key) and a dialog listing all active shortcuts.
+A `pointer-events: none` overlay that lets clicks through to a 3D canvas must add `pointer-events: auto` to every interactive child or group. Missing this single declaration makes buttons completely unclickable with no visual feedback. Future rule: when using passthrough layers, create explicit interactive groups (`pointer-events: auto`) and verify every button receives pointer events.
 
-### Lesson 85 — Third-party font CDN breaks offline and file:// gallery operation
+### Lesson 87 — SVG icons scale better than text characters for utility buttons
 
-Loading Inter from `fonts.googleapis.com` works for web deployments but silently fails on `file://` origins (CORS/null-origin policy) and in offline environments. Future rule: fonts used in the gallery must be self-hosted in `public/fonts/` with `@font-face` declarations; Google Fonts CDN links should only be retained as a documented fallback or removed entirely.
+Text `?` depends on font metrics, varies across platforms, and requires additional sizing overrides. An inline SVG icon (`aria-hidden="true"`) with explicit viewBox renders identically everywhere, scales with the button, and separates visual from semantic meaning (handled by `aria-label`). Future rule: use inline SVG for all utility/icon buttons; reserve text content for labeled action buttons.
+
+### Lesson 88 — Topbar utility buttons should not reuse navigation button classes
+
+Navigation buttons (`.nav-btn`, 72px) serve a different UX context than topbar utility actions. Reusing `.nav-btn` for a small topbar icon creates visual inconsistency and forces overrides. Future rule: create purpose-specific button variants for each layout context (topbar 44px, navigation 72px, zoom/audio 44px grouped).
 
 ## 2026-05-22 — v0.47 frame realism lessons
 

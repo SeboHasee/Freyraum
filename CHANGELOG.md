@@ -1,31 +1,42 @@
 # CHANGELOG
-> v0.58 in progress: topbar UI uniformity, help button clickability fix, badge layout.
-> Last full markdown audit: 2026-05-23 (v0.58 in progress).
+> v0.58 shipped: topbar UI uniformity, help button clickability, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## v0.58 — Topbar UI Uniformity & Help Button Fix (2026-05-23, **in progress**)
+## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
 
 ### Status
 
-In progress. Technical plan created; implementation pending.
+Shipped. All three reported issues fixed; premium 2026 enhancements applied.
 
-### To Fix
+### Fixed
 
-- **Critical:** "?" help button unclickable due to missing `pointer-events: auto` on topbar interactive children.
-- **Medium:** "IMMERSIVE DIGITALE AUSSTELLUNG" badge awkwardly placed in center of topbar.
-- **Low:** Help button uses oversized 72px `.nav-btn` style inappropriate for topbar utility context.
+- **Critical:** "?" help button now fully clickable — `pointer-events: auto` applied to interactive groups.
+- **Medium:** Badge repositioned adjacent to brand (left group) instead of floating in center void.
+- **Low:** Help button restyled as standalone 44×44px glass button (no longer uses oversized 72px `.nav-btn`).
 
-### Planned Changes
+### Added
 
-- `src/ui/Topbar.ts`: Restructure into left group (brand + badge) and right group (help button) with `pointer-events: auto`.
-- `src/styles/main.scss`: Add `.topbar__left` / `.topbar__right` grouping styles; restyle `.topbar__help-btn` as 44×44px glass button; reposition badge adjacent to brand.
+- `src/ui/Topbar.ts`: Restructured into `.topbar__left` (brand + badge) and `.topbar__right` (help button) groups with proper pointer-events.
+- SVG question-mark-circle icon replaces text `?` for better visual clarity and scalability.
+- Accessible tooltip (`role="tooltip"`, `aria-describedby`) on help button — visible on hover and focus.
+- Topbar entrance animation (fade-in + slide-down) with staggered badge reveal for premium feel.
+- `prefers-reduced-motion` support — all topbar animations and transitions disabled for users who prefer reduced motion.
+- Micro-interactions: scale hover (1.08), active press (0.94), border-color elevation, box-shadow progression.
+- Focus-visible ring using `--focus-ring` variable for consistent accessibility.
 
-### Design Principles Applied
+### Design Principles (2026 Premium UI)
 
-- 2026 modern glassmorphism with accessibility (WCAG 2.2 AA).
-- 48px minimum touch targets for all interactive elements.
-- Uniform button sizing across utility controls (44px).
-- Clear visual hierarchy: Brand → Badge → Utility actions (right-aligned).
-- Focus-visible ring, hover/active states on all buttons.
+- WCAG 2.2 AA: 44×44px touch targets, 4.5:1 contrast, focus-visible ring on all interactive elements.
+- Glassmorphism with `backdrop-filter` + graceful degradation via `@supports`.
+- Clear visual hierarchy: Brand (left) → Badge (left, adjacent) → Utility actions (right).
+- `prefers-reduced-motion` respected for all animations.
+- Future-proof structure: `.topbar__right` group ready for additional utility icons (settings, notifications, etc.).
+- Forced-colors / Windows High Contrast Mode support preserved.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ---
 

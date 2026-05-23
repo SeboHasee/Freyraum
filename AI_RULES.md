@@ -1,12 +1,12 @@
 # FREYRAUM AI rules
-> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts).
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 shipped: topbar UI uniformity with left/right grouping, SVG icon, accessible tooltip, premium micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## v0.57 keyboard/accessibility rule
+## v0.58 topbar/utility-button rule
 
-When adding a keyboard shortcut, always pair it with: (a) a visible `?` button in the topbar linking to a help dialog, (b) `?` or `Shift+?` key binding in `KeyboardNav`, and (c) the full shortcut list in the help dialog body. Do not consider keyboard shortcuts "shipped" if there is no discoverable help UI.
+All topbar utility buttons must be 44×44px standalone glass circles with inline SVG icons (`aria-hidden="true"`), `aria-label`, and an adjacent `role="tooltip"` element connected via `aria-describedby`. Buttons must have `pointer-events: auto` (either directly or via a parent group). Never use the `.nav-btn` class for topbar utility buttons — it is reserved for the 72px navigation controls.
 
-When adding any `role="dialog"`, it must include `aria-modal="true"`, `aria-labelledby` pointing at a heading, and focus must be trapped while open and returned to the opener on close.
+When adding new topbar actions, append them to `.topbar__right`. Maintain `prefers-reduced-motion` support for any transitions or animations.
 
 ## v0.57 font rule
 

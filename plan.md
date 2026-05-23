@@ -1,8 +1,8 @@
 # FREYRAUM Plan
-> v0.58 in progress: topbar UI uniformity, help button fix, badge layout.
-> Last full markdown audit: 2026-05-23 (v0.58 in progress).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## v0.58 — Topbar UI Uniformity & Help Button Fix (2026-05-23, **in progress**)
+## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
 
 ### Problem Statement
 
@@ -166,14 +166,14 @@ Option B fixes all three reported issues with a clean, minimal refactor. It prov
 
 ### Implementation Checklist
 
-- [ ] C-1: Refactor `src/ui/Topbar.ts` — wrap brand+badge in `.topbar__left`, helpBtn in `.topbar__right`
-- [ ] C-2: Update `src/styles/main.scss` — add `.topbar__left` / `.topbar__right` with `pointer-events: auto`
-- [ ] C-3: Update `src/styles/main.scss` — restyle `.topbar__help-btn` as standalone 44×44 glass button (remove `.nav-btn` class dependency)
-- [ ] C-4: Update `src/styles/main.scss` — reposition `.topbar__badge` adjacent to brand with tighter spacing
-- [ ] C-5: Verify responsive behavior — badge hidden on phone, topbar compact on landscape
-- [ ] C-6: Verify forced-colors / high-contrast CSS still applies
-- [ ] C-7: `npm run lint` — pass
-- [ ] C-8: `npm run build` — pass
+- [x] C-1: Refactor `src/ui/Topbar.ts` — wrap brand+badge in `.topbar__left`, helpBtn in `.topbar__right`
+- [x] C-2: Update `src/styles/main.scss` — add `.topbar__left` / `.topbar__right` with `pointer-events: auto`
+- [x] C-3: Update `src/styles/main.scss` — restyle `.topbar__help-btn` as standalone 44×44 glass button (remove `.nav-btn` class dependency)
+- [x] C-4: Update `src/styles/main.scss` — reposition `.topbar__badge` adjacent to brand with tighter spacing
+- [x] C-5: Verify responsive behavior — badge hidden on phone, topbar compact on landscape
+- [x] C-6: Verify forced-colors / high-contrast CSS still applies
+- [x] C-7: `npm run lint` — pass
+- [x] C-8: `npm run build` — pass
 
 ---
 

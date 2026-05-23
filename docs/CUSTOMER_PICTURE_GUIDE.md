@@ -1,6 +1,6 @@
 # FREYRAUM — Customer Picture Guide
-> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts).
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
 ## v0.29 customer-facing status note — preload/fidelity follow-up shipped
 

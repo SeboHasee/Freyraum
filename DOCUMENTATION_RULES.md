@@ -1,10 +1,10 @@
 # DOCUMENTATION RULES
-> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts).
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## v0.57 documentation pass
+## v0.58 documentation pass
 
-- 2026-05-23 (documentation): open-items audit completed. Full code and MD file audit performed. All four v0.56-B follow-up items confirmed unimplemented. Technical plan with implementation-ready code added to `plan.md § v0.57`. Audit findings added to `FINDINGS.md § v0.57`. Markdown audit stamps refreshed across all 16 project MD files to 2026-05-23. No runtime code changed.
+- 2026-05-23 (runtime + documentation): Implemented topbar UI uniformity refactor (Option B + premium enhancements). Restructured `Topbar.ts` into left/right groups, restyled help button as 44px glass circle with SVG icon, added accessible tooltip, entrance animations, and `prefers-reduced-motion` support. All markdown files refreshed to v0.58 shipped status.
 
 ## v0.47 documentation pass
 

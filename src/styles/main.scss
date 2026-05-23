@@ -204,6 +204,35 @@ button {
   justify-content: space-between;
   z-index: 100;
   pointer-events: none;
+  animation: topbar-enter var(--dur-slow, 0.5s) var(--ease-out) both;
+}
+
+@keyframes topbar-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Left group: brand + badge — logically grouped, clickthrough restored
+.topbar__left {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+// Right group: utility actions — clickthrough restored
+.topbar__right {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
 }
 
 .topbar__brand {
@@ -215,7 +244,7 @@ button {
 }
 
 .topbar__badge {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -225,8 +254,41 @@ button {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-pill);
-  padding: 8px 18px;
+  padding: 6px 14px;
   pointer-events: none;
+  animation: badge-enter var(--dur-slow, 0.5s) var(--ease-out) 0.15s both;
+}
+
+@keyframes badge-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+// Accessible tooltip for topbar utility buttons
+.topbar__tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--text);
+  color: var(--text-inverse);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm, 8px);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-soft);
+  z-index: 101;
 }
 
 // =============================================================================
@@ -1592,6 +1654,10 @@ button {
     .loading-particle { display: none; }
     .timeline__skeleton { animation: none; }
     .prefs__panel { animation: none; }
+    .topbar { animation: none; }
+    .topbar__badge { animation: none; }
+    .topbar__help-btn { transition: none; }
+    .topbar__tooltip { transition: none; }
   }
 }
 
@@ -1883,9 +1949,61 @@ button {
   }
 }
 
-// Topbar help button
+// =============================================================================
+// v0.58 — Topbar help button (standalone 44×44 glass button)
+// =============================================================================
 .topbar__help-btn {
-  margin-left: auto;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-soft);
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: var(--glass-bg-strong);
+    border-color: var(--glass-border-strong);
+    transform: scale(1.08);
+    box-shadow: var(--shadow-medium);
+  }
+
+  &:hover + .topbar__tooltip {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  &:active {
+    transform: scale(0.94);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-soft), 0 0 0 3px var(--focus-ring);
+  }
+
+  &:focus-visible + .topbar__tooltip {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 // =============================================================================

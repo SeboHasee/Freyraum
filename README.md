@@ -1,17 +1,17 @@
 # Freyraum
-> v0.57 shipped: keyboard shortcuts help overlay (B-1), forced-colors/focus-visible CSS (B-2), non-blocking font loading (B-4).
-> Last full markdown audit: 2026-05-23 (v0.57 shipped).
+> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
+> Last full markdown audit: 2026-05-23 (v0.58 shipped).
 
-## v0.57 — v0.56-B follow-ups: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **shipped**)
+## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
 
 Current status: **shipped**.
 
-- `KeyboardHelp` dialog: press `?` or click the `?` button in the topbar to see all keyboard shortcuts. ARIA dialog pattern with focus-trap and opener focus-restore.
-- `KeyboardNav`: wired to `KeyboardHelp`; `?` key opens the overlay.
-- `Topbar`: `?` help button added to the right side of the topbar bar.
-- `src/styles/main.scss`: `.keyboard-help` component styles + `@media (forced-colors: active)` block for Windows High Contrast Mode.
-- `app.html`: Google Fonts now loads non-blocking (`onload` swap pattern); render-blocking request eliminated.
-- B-3 (Lighthouse/Web Vitals): deferred — requires live browser run. See `FINDINGS.md § v0.57`.
+- Topbar restructured into left group (brand + badge) and right group (utility actions) with proper `pointer-events: auto`.
+- Help button is now a standalone 44×44px glassmorphic circle with SVG question-mark icon, hover/active/focus micro-interactions, and accessible tooltip.
+- Badge repositioned adjacent to brand for clear visual hierarchy.
+- Topbar entrance animation with staggered badge reveal; respects `prefers-reduced-motion`.
+- Future-proof: `.topbar__right` group ready for additional utility icons.
+- All WCAG 2.2 AA requirements met (touch target, contrast, focus ring, forced-colors).
 
 ## v0.56 — website quality audit (2026-05-22, **shipped**)
 
