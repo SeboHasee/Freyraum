@@ -1,8 +1,8 @@
 # FREYRAUM lessons learned
-> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
-> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts).
+> Last full markdown audit: 2026-05-23 (v0.57 shipped).
 
-## 2026-05-23 — v0.57 open-items audit lessons
+## 2026-05-23 — v0.57 implementation lessons
 
 ### Lesson 84 — Keyboard shortcuts need a discoverable affordance, not just key bindings
 

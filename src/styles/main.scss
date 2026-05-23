@@ -1820,3 +1820,100 @@ button {
 .loading-particle {
   contain: strict;
 }
+
+// =============================================================================
+// v0.57 — Keyboard shortcuts help dialog (B-1)
+// =============================================================================
+
+.keyboard-help {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0 0 0 / 0.55);
+  backdrop-filter: blur(4px);
+
+  &[hidden] { display: none; }
+
+  &__panel {
+    background: var(--glass-bg, rgba(18 18 18 / 0.92));
+    border: 1px solid rgba(255 255 255 / 0.12);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    min-width: 320px;
+    max-width: 90vw;
+    position: relative;
+  }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    color: rgba(255 255 255 / 0.9);
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    td {
+      padding: 0.3rem 0.5rem;
+      color: rgba(255 255 255 / 0.75);
+      font-size: 0.85rem;
+    }
+  }
+
+  &__key {
+    display: inline-block;
+    background: rgba(255 255 255 / 0.1);
+    border: 1px solid rgba(255 255 255 / 0.2);
+    border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  &__close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+}
+
+// Topbar help button
+.topbar__help-btn {
+  margin-left: auto;
+}
+
+// =============================================================================
+// v0.57 — High-contrast / forced-colors support (B-2)
+// =============================================================================
+
+@media (forced-colors: active) {
+  // Restore button borders that our custom styles suppress
+  .nav-btn,
+  .zoom-btn,
+  .topbar__help-btn,
+  .loading-start-btn,
+  .prefs__toggle,
+  .audio-btn {
+    forced-color-adjust: none;
+    border: 2px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  // Ensure focus ring uses system highlight color
+  :focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  // Preserve artwork canvas colors
+  #gallery-canvas {
+    forced-color-adjust: none;
+  }
+}

@@ -1,12 +1,12 @@
 # FREYRAUM architecture map
-> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
-> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts).
+> Last full markdown audit: 2026-05-23 (v0.57 shipped).
 
-## v0.57 planned UI architecture note
+## v0.57 UI architecture additions
 
-The next planned UI addition is `src/ui/KeyboardHelp.ts`: a self-contained dialog component with `open()`, `close()`, and `dispose()` lifecycle. It follows the existing `src/ui/` pattern (class, DOM construction in constructor, public lifecycle methods, `createScopedDiagnostics`). Wiring: `main.ts` instantiates it and passes a reference to `KeyboardNav`; `Topbar.ts` exposes a `?` button with `onHelpClick` callback.
+`src/ui/KeyboardHelp.ts` is now a self-contained dialog component with `open()`, `close()`, and `dispose()` lifecycle, following the existing `src/ui/` pattern. Wired in `main.ts`: instantiated, passed to `KeyboardNav` as an optional reference, and `Topbar.onHelpClick` triggers `keyboardHelp.open(topbar.helpBtn)`.
 
-Font loading architecture: `app.html` currently uses Google Fonts CDN (render-blocking). v0.57 plan targets self-hosted WOFF2 in `public/fonts/` with `@font-face` in `main.scss` to support offline/file:// operation.
+Font loading architecture: `app.html` now uses the non-blocking Google Fonts `onload` swap pattern. Blocking `<link rel="stylesheet">` for Google Fonts removed.
 
 ## v0.47 shipped frame-material architecture note
 

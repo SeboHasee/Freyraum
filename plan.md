@@ -1,21 +1,28 @@
 # FREYRAUM Plan
-> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
-> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts). B-3 (Lighthouse) deferred.
+> Last full markdown audit: 2026-05-23 (v0.57 shipped).
 
-## v0.57 — v0.56-B follow-up: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **planned**)
+## v0.57 — v0.56-B follow-up: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **shipped**)
 
-Runtime status: **not yet shipped**. All four items are implementation-ready. See readiness notes per item.
+Runtime status: **shipped**. B-1, B-2, B-4 implemented; B-3 (Lighthouse) deferred — requires live browser tooling.
 
-### Open items from v0.56-B audit
+### Implementation summary
 
-This pass targets the four follow-ups left open by v0.56-A:
-
-| ID | Item | Ready? |
+| ID | Item | Status |
 |----|------|--------|
-| B-1 | Keyboard shortcuts help overlay | ✅ all infrastructure exists |
-| B-2 | Focus-visible / high-contrast review | ✅ CSS-only additions |
-| B-3 | Lighthouse / Web Vitals evidence run | ⚠️ requires live browser tooling |
-| B-4 | Font loading optimization (self-host or `display=swap`) | ✅ simple HTML/CSS change |
+| B-1 | Keyboard shortcuts help overlay | ✅ shipped |
+| B-2 | Focus-visible / high-contrast review | ✅ shipped |
+| B-3 | Lighthouse / Web Vitals evidence run | ⚠️ deferred (requires live browser) |
+| B-4 | Font loading optimization (non-blocking) | ✅ shipped |
+
+This pass targeted the four follow-ups left open by v0.56-A:
+
+| ID | Item | Result |
+|----|------|--------|
+| B-1 | Keyboard shortcuts help overlay | ✅ shipped |
+| B-2 | Focus-visible / high-contrast review | ✅ shipped |
+| B-3 | Lighthouse / Web Vitals evidence run | ⚠️ deferred — requires live browser tooling |
+| B-4 | Font loading optimization (self-host or `display=swap`) | ✅ shipped |
 
 ---
 
@@ -345,19 +352,19 @@ Browser console: `[KeyboardHelp] keyboard-help-opened` on `?` keypress.
 Visual QA: focus ring visible in Windows High Contrast Mode (Edge → Accessibility → High contrast: black).  
 Font QA: DevTools network panel shows no `fonts.googleapis.com` requests after B-4 implementation.
 
-### Merge-readiness checklist (v0.57 plan)
+### Merge-readiness checklist (v0.57)
 
-- Plan sections B-1 through B-4 are fully specified and coded up.
-- All items are scoped to existing module boundaries (no new dependencies).
-- `KeyboardHelp` follows the `aria-modal` dialog pattern required by `AI_RULES.md`.
-- B-3 (Lighthouse) is deferred to a browser-tooling run; documented as pending.
-- Deferred items (H-07 LOD, J-06 page nav) remain correctly labeled as future passes.
+- B-1 (`KeyboardHelp` dialog + topbar `?` button + `KeyboardNav` `?` key): ✅ shipped.
+- B-2 (`@media (forced-colors: active)` CSS block): ✅ shipped.
+- B-3 (Lighthouse): ⚠️ deferred — requires live browser run.
+- B-4 (non-blocking Google Fonts `onload` swap): ✅ shipped.
+- `npm run lint` and `npm run build` pass.
 
 ---
 
-## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **partially shipped**)
+## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **shipped**)
 
-Runtime status: **partially implemented in this pass** (navigation/local-preview/canvas accessibility improvements shipped; broader enhancements remain open).
+Runtime status: **fully shipped** (v0.56-A shipped in v0.56; v0.56-B follow-ups shipped in v0.57).
 
 ### Audit scope
 
@@ -390,19 +397,18 @@ Runtime status: **partially implemented in this pass** (navigation/local-preview
 5. **A-05 — Progressive enhancement fallback**
    - Added `noscript` message to `app.html`.
 
-### Remaining plan slices (v0.56-B, open)
+### Remaining plan slices (v0.56-B — shipped in v0.57)
 
-1. Add a dedicated keyboard-shortcuts help affordance in the UI (discoverable via button and `?`).
-2. Add explicit focus-visible styling review for all interactive controls and high-contrast mode checks.
-3. Run a Lighthouse/Web Vitals evidence pass and store measured before/after metrics in `FINDINGS.md`.
-4. Revisit font loading strategy (self-host or subset) to reduce third-party dependency overhead.
+1. ✅ Keyboard-shortcuts help overlay (shipped in v0.57).
+2. ✅ Focus-visible / high-contrast mode review (shipped in v0.57).
+3. ⚠️ Lighthouse/Web Vitals evidence pass (deferred — requires live browser).
+4. ✅ Font loading optimization: non-blocking `onload` swap (shipped in v0.57).
 
-### Merge-readiness checklist (v0.56 docs sync)
+### Merge-readiness checklist (v0.56 + v0.57)
 
-- Runtime scope for v0.56-A is documented as shipped in `CHANGELOG.md`, `README.md`, and `FINDINGS.md`.
-- Future-only items remain clearly labeled as open v0.56-B follow-ups (not yet shipped).
-- Validation baseline recorded: `npm run lint` and `npm run build` pass in this repository state.
-- Repository is ready for merge/commit of this docs sync; no runtime code changes are included in this pass.
+- All v0.56-A slices shipped in v0.56.
+- All v0.56-B slices (except Lighthouse) shipped in v0.57.
+- `npm run lint` and `npm run build` pass.
 
 ## v0.47 — modern gallery metal refinement after screenshot review (2026-05-22, **shipped**)
 

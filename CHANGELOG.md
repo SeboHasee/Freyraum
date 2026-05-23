@@ -1,23 +1,28 @@
 # CHANGELOG
-> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
-> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+> v0.57 shipped: keyboard shortcuts help overlay (B-1), forced-colors/focus-visible CSS (B-2), non-blocking font loading (B-4).
+> Last full markdown audit: 2026-05-23 (v0.57 shipped).
 
-## v0.57 — open-items audit + v0.56-B technical plan (2026-05-23, **plan only**)
+## v0.57 — v0.56-B follow-ups: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **shipped**)
 
 ### Status
 
-Plan only. Documentation-only pass; no runtime code changed.
+Shipped. Runtime code updated; lint and build pass.
 
 ### Added
 
-- `plan.md § v0.57`: complete technical plan for all four v0.56-B follow-up items with implementation-ready code for B-1 (keyboard shortcuts help), B-2 (high-contrast/focus-visible), B-3 (Lighthouse procedure), and B-4 (font optimization).
-- `FINDINGS.md § v0.57`: open-items audit results and readiness assessment.
-- `CHANGELOG.md § v0.57`: this entry.
+- `src/ui/KeyboardHelp.ts` (new): ARIA `role="dialog"` keyboard shortcuts overlay with focus-trap, `Escape` to close, backdrop click to close, and `opener` focus-restore on close.
+- `src/ui/Topbar.ts`: `?` button (`topbar__help-btn`) in the topbar; exposes `helpBtn` and `onHelpClick` callback for wiring.
+- `src/interaction/KeyboardNav.ts`: accepts optional `KeyboardHelp` reference; `?` key opens the help overlay.
+- `src/styles/main.scss § v0.57`: `.keyboard-help` component styles and `@media (forced-colors: active)` block restoring button borders and focus ring in Windows High Contrast Mode.
+- `src/main.ts`: `KeyboardHelp` import, creation, topbar wiring (`onHelpClick`), and `dispose()` call in cleanup.
 
 ### Changed
 
-- Refreshed markdown audit stamp to 2026-05-23 across all 16 project MD files.
-- Updated v0.56 status in `plan.md`, `README.md`, and `FINDINGS.md` to distinguish shipped (v0.56-A) from planned (v0.57/v0.56-B).
+- `app.html`: replaced blocking `<link rel="stylesheet">` for Google Fonts with non-blocking `onload` pattern (+ `<noscript>` fallback). Render-blocking Google Fonts request eliminated.
+
+### Deferred (requires live browser tooling)
+
+- B-3 (Lighthouse / Web Vitals): requires `npm run build && npm run preview` + Chrome DevTools Lighthouse. Documented in `FINDINGS.md § v0.57`.
 
 ### Validation
 

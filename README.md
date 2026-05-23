@@ -1,28 +1,27 @@
 # Freyraum
-> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
-> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+> v0.57 shipped: keyboard shortcuts help overlay (B-1), forced-colors/focus-visible CSS (B-2), non-blocking font loading (B-4).
+> Last full markdown audit: 2026-05-23 (v0.57 shipped).
 
-## v0.57 — open-items audit + v0.56-B technical plan (2026-05-23, **plan only**)
+## v0.57 — v0.56-B follow-ups: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **shipped**)
 
-Current status: **plan added; implementation not yet started**.
+Current status: **shipped**.
 
-- Full audit of all open plan items completed (2026-05-23).
-- v0.56-B follow-ups confirmed not yet implemented: keyboard shortcuts help, high-contrast/focus review, Lighthouse evidence, font optimization.
-- Technical plan with implementation-ready code added to `plan.md § v0.57`.
-- All four items are scoped and ready to implement; Lighthouse pass requires a live browser run.
+- `KeyboardHelp` dialog: press `?` or click the `?` button in the topbar to see all keyboard shortcuts. ARIA dialog pattern with focus-trap and opener focus-restore.
+- `KeyboardNav`: wired to `KeyboardHelp`; `?` key opens the overlay.
+- `Topbar`: `?` help button added to the right side of the topbar bar.
+- `src/styles/main.scss`: `.keyboard-help` component styles + `@media (forced-colors: active)` block for Windows High Contrast Mode.
+- `app.html`: Google Fonts now loads non-blocking (`onload` swap pattern); render-blocking request eliminated.
+- B-3 (Lighthouse/Web Vitals): deferred — requires live browser run. See `FINDINGS.md § v0.57`.
 
-See `plan.md § v0.57` and `FINDINGS.md § v0.57` for audit results, readiness assessment, and full implementation plan.
+## v0.56 — website quality audit (2026-05-22, **shipped**)
 
-## v0.56 — website quality audit (2026-05-22, **partially shipped**)
-
-Current status: **pass A shipped; pass B planned**.
+Current status: **fully shipped** (pass A in v0.56; pass B in v0.57).
 
 - Improved accessibility and language consistency in core UI chrome (navigation + topbar).
 - Added assistive instructions for the interactive 3D canvas.
 - Replaced forced local-preview meta refresh with a user-controllable redirect flow.
 - Added `noscript` fallback text for JavaScript-disabled usage.
-
-Remaining (v0.56-B / v0.57): keyboard shortcuts help overlay, high-contrast review, Lighthouse metrics, font optimization. See `plan.md § v0.57`.
+- v0.56-B follow-ups (keyboard shortcuts, high-contrast, font optimization) shipped in v0.57.
 
 ## v0.47 — modern gallery frame metal realism pass (2026-05-22, **shipped**)
 

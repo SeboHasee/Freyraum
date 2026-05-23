@@ -12,10 +12,15 @@ function isTypingTarget(target: EventTarget | null): boolean {
 
 export class KeyboardNav {
   private readonly galleryManager: GalleryManager;
+  private readonly keyboardHelp: { open(opener?: HTMLElement): void } | undefined;
   private fullscreenTarget: HTMLElement = document.documentElement;
 
-  constructor(galleryManager: GalleryManager) {
+  constructor(
+    galleryManager: GalleryManager,
+    keyboardHelp?: { open(opener?: HTMLElement): void }
+  ) {
     this.galleryManager = galleryManager;
+    this.keyboardHelp = keyboardHelp;
     window.addEventListener('keydown', this.handleKeyDown);
   }
 
@@ -61,6 +66,10 @@ export class KeyboardNav {
       case 'F':
         e.preventDefault();
         this.toggleFullscreen();
+        break;
+      case '?':
+        e.preventDefault();
+        this.keyboardHelp?.open();
         break;
     }
   };

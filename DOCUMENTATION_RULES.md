@@ -1,6 +1,6 @@
 # DOCUMENTATION RULES
-> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
-> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+> v0.57 shipped: B-1 (keyboard shortcuts overlay), B-2 (forced-colors CSS), B-4 (non-blocking fonts).
+> Last full markdown audit: 2026-05-23 (v0.57 shipped).
 
 ## v0.57 documentation pass
 

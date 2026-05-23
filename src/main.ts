@@ -24,6 +24,7 @@ import { AudioControls } from './ui/AudioControls';
 import { showFallbackScreen } from './ui/FallbackScreen';
 import { Timeline } from './timeline/Timeline';
 import { KeyboardNav } from './interaction/KeyboardNav';
+import { KeyboardHelp } from './ui/KeyboardHelp';
 import { CanvasInteraction } from './interaction/CanvasInteraction';
 import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
 import { PreferencesStore } from './utils/preferences';
@@ -812,7 +813,9 @@ async function main(): Promise<void> {
   // Fixed Bug 2 (passive pinch) and Bug 3 (duplicate synthetic mouse
   // events after touch).
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
-  const keyboardNav = new KeyboardNav(galleryManager);
+  const keyboardHelp = new KeyboardHelp();
+  const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
+  topbar.onHelpClick = () => keyboardHelp.open(topbar.helpBtn);
   // v0.20.6 — autoplay-recovery helper: if browser blocks initial autoplay,
   // retry once on first trusted user interaction while keeping user mute
   // preference authoritative.
@@ -1621,6 +1624,7 @@ async function main(): Promise<void> {
     preferences.dispose();
     canvasInteraction.dispose();
     keyboardNav.dispose();
+    keyboardHelp.dispose();
     topbar.dispose();
     infoPanel.dispose();
     navControls.dispose();
