@@ -1956,6 +1956,12 @@ button {
     position: absolute;
     top: 0.75rem;
     right: 0.75rem;
+    // Override nav-btn's 72×72 size — this is a compact close button
+    width: 32px;
+    height: 32px;
+    min-width: unset;
+    min-height: unset;
+    font-size: 16px;
     // Ensure close button is visible on the dark panel
     color: rgba(255 255 255 / 0.7);
 

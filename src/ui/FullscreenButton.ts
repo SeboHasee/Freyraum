@@ -14,7 +14,6 @@ export class FullscreenButton {
     this.btn.className = 'fullscreen-btn';
     this.btn.setAttribute('aria-pressed', 'false');
     this.btn.setAttribute('aria-label', 'Vollbild umschalten');
-    this.btn.title = 'Vollbild umschalten (F)';
 
     this.btn.innerHTML = `
       <span class="fullscreen-btn__icon" aria-hidden="true">

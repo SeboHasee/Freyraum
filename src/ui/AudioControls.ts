@@ -98,7 +98,6 @@ export class AudioControls {
       label = 'Hintergrundmusik abspielen';
     }
     this.muteBtn.setAttribute('aria-label', label);
-    this.muteBtn.title = label;
     this.muteBtn.setAttribute('aria-pressed', playing && !muted ? 'true' : 'false');
 
     // Speaker SVG icon.
