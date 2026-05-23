@@ -1,6 +1,16 @@
 # FREYRAUM lessons learned
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+
+## 2026-05-23 — v0.57 open-items audit lessons
+
+### Lesson 84 — Keyboard shortcuts need a discoverable affordance, not just key bindings
+
+Implementing `KeyboardNav.ts` with arrow/space/escape bindings is necessary but not sufficient. Users who do not already know the shortcuts will never discover them. Future rule: any keyboard shortcut implementation must ship alongside a discoverable help affordance (`?` button and `?` key) and a dialog listing all active shortcuts.
+
+### Lesson 85 — Third-party font CDN breaks offline and file:// gallery operation
+
+Loading Inter from `fonts.googleapis.com` works for web deployments but silently fails on `file://` origins (CORS/null-origin policy) and in offline environments. Future rule: fonts used in the gallery must be self-hosted in `public/fonts/` with `@font-face` declarations; Google Fonts CDN links should only be retained as a documented fallback or removed entirely.
 
 ## 2026-05-22 — v0.47 frame realism lessons
 

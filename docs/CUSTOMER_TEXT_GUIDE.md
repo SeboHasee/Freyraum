@@ -1,6 +1,6 @@
 # FREYRAUM — How to import painting text (v0.18 — shipped)
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
 
 ## v0.29 customer-facing status note — preload/fidelity follow-up shipped
 

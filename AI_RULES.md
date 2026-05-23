@@ -1,6 +1,16 @@
 # FREYRAUM AI rules
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+
+## v0.57 keyboard/accessibility rule
+
+When adding a keyboard shortcut, always pair it with: (a) a visible `?` button in the topbar linking to a help dialog, (b) `?` or `Shift+?` key binding in `KeyboardNav`, and (c) the full shortcut list in the help dialog body. Do not consider keyboard shortcuts "shipped" if there is no discoverable help UI.
+
+When adding any `role="dialog"`, it must include `aria-modal="true"`, `aria-labelledby` pointing at a heading, and focus must be trapped while open and returned to the opener on close.
+
+## v0.57 font rule
+
+All fonts used in the production gallery must be self-hosted in `public/fonts/` with `@font-face` declarations in `main.scss`. Do not use render-blocking `<link rel="stylesheet">` CDN font links in `app.html`. Google Fonts CDN may be used in development `.env.local` setups only.
 
 ## v0.47 frame-realism rule
 

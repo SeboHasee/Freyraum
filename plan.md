@@ -1,6 +1,359 @@
 # FREYRAUM Plan
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+
+## v0.57 — v0.56-B follow-up: keyboard shortcuts, focus/contrast, font optimization (2026-05-23, **planned**)
+
+Runtime status: **not yet shipped**. All four items are implementation-ready. See readiness notes per item.
+
+### Open items from v0.56-B audit
+
+This pass targets the four follow-ups left open by v0.56-A:
+
+| ID | Item | Ready? |
+|----|------|--------|
+| B-1 | Keyboard shortcuts help overlay | ✅ all infrastructure exists |
+| B-2 | Focus-visible / high-contrast review | ✅ CSS-only additions |
+| B-3 | Lighthouse / Web Vitals evidence run | ⚠️ requires live browser tooling |
+| B-4 | Font loading optimization (self-host or `display=swap`) | ✅ simple HTML/CSS change |
+
+---
+
+### B-1 — Keyboard shortcuts help overlay
+
+**Goal:** Make keyboard shortcuts discoverable via a `?` button in the topbar and via pressing `?` on any keyboard.
+
+#### B-1-01 — New `KeyboardHelp` component
+
+**File: `src/ui/KeyboardHelp.ts`** (new)
+
+Create a class with `open()`, `close()`, and `dispose()` methods. The dialog element must conform to the ARIA APG dialog pattern (already required by `AI_RULES.md`):
+
+```typescript
+// src/ui/KeyboardHelp.ts
+import { createScopedDiagnostics } from '../utils/Diagnostics';
+
+const log = createScopedDiagnostics('KeyboardHelp');
+
+const SHORTCUTS: Array<[string, string]> = [
+  ['←  →', 'Nächstes / vorheriges Bild'],
+  ['Leertaste', 'Musik pausieren / fortsetzen'],
+  ['F', 'Vollbild ein-/ausschalten'],
+  ['R', 'Ansicht zurücksetzen'],
+  ['Q', 'Qualität wechseln'],
+  ['Esc', 'Dialog schließen'],
+  ['?', 'Diese Hilfe anzeigen'],
+];
+
+export class KeyboardHelp {
+  private dialog: HTMLElement;
+  private opener: HTMLElement | null = null;
+  private onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') this.close();
+    if (e.key === 'Tab') this.trapFocus(e);
+  };
+
+  constructor() {
+    this.dialog = this.build();
+    document.body.appendChild(this.dialog);
+  }
+
+  private build(): HTMLElement {
+    const el = document.createElement('div');
+    el.id = 'keyboard-help';
+    el.className = 'keyboard-help';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-labelledby', 'keyboard-help-title');
+    el.hidden = true;
+
+    el.innerHTML = `
+      <div class="keyboard-help__panel">
+        <h2 id="keyboard-help-title" class="keyboard-help__title">Tastaturkürzel</h2>
+        <table class="keyboard-help__table">
+          <tbody>
+            ${SHORTCUTS.map(([key, desc]) =>
+              `<tr><td><kbd class="keyboard-help__key">${key}</kbd></td><td>${desc}</td></tr>`
+            ).join('')}
+          </tbody>
+        </table>
+        <button class="keyboard-help__close nav-btn" aria-label="Hilfe schließen">✕</button>
+      </div>`;
+
+    el.querySelector('.keyboard-help__close')!.addEventListener('click', () => this.close());
+    el.addEventListener('click', (e) => { if (e.target === el) this.close(); });
+    return el;
+  }
+
+  open(opener?: HTMLElement): void {
+    this.opener = opener ?? null;
+    this.dialog.hidden = false;
+    document.addEventListener('keydown', this.onKeyDown);
+    (this.dialog.querySelector('.keyboard-help__close') as HTMLElement)?.focus();
+    log.debug('keyboard-help-opened');
+  }
+
+  close(): void {
+    this.dialog.hidden = true;
+    document.removeEventListener('keydown', this.onKeyDown);
+    this.opener?.focus();
+    this.opener = null;
+    log.debug('keyboard-help-closed');
+  }
+
+  private trapFocus(e: KeyboardEvent): void {
+    const focusable = Array.from(
+      this.dialog.querySelectorAll<HTMLElement>('button, [tabindex]:not([tabindex="-1"])')
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault(); first.focus();
+    }
+  }
+
+  dispose(): void {
+    document.removeEventListener('keydown', this.onKeyDown);
+    this.dialog.remove();
+  }
+}
+```
+
+#### B-1-02 — Topbar `?` button
+
+**File: `src/ui/Topbar.ts`** — add a help button to the right side of the topbar bar:
+
+```typescript
+// Inside Topbar.buildRight() or equivalent DOM construction:
+const helpBtn = document.createElement('button');
+helpBtn.className = 'nav-btn topbar__help-btn';
+helpBtn.setAttribute('aria-label', 'Tastaturkürzel anzeigen');
+helpBtn.setAttribute('title', 'Tastaturkürzel');
+helpBtn.textContent = '?';
+helpBtn.addEventListener('click', () => this.onHelpClick?.());
+```
+
+Expose `onHelpClick: (() => void) | undefined` as a public property so `main.ts` can wire `keyboardHelp.open(helpBtn)`.
+
+#### B-1-03 — `KeyboardNav` integration
+
+**File: `src/interaction/KeyboardNav.ts`** — add `?` shortcut:
+
+```typescript
+// Add to constructor: accept optional KeyboardHelp reference
+constructor(
+  private galleryManager: GalleryManager,
+  private keyboardHelp?: { open(opener?: HTMLElement): void }
+) { ... }
+
+// Inside handleKeyDown switch:
+case '?':
+  this.keyboardHelp?.open();
+  break;
+```
+
+#### B-1-04 — SCSS styles
+
+**File: `src/styles/main.scss`** — add keyboard-help component styles:
+
+```scss
+// Keyboard shortcuts dialog
+.keyboard-help {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0 0 0 / 0.55);
+  backdrop-filter: blur(4px);
+
+  &[hidden] { display: none; }
+
+  &__panel {
+    background: var(--glass-bg, rgba(18 18 18 / 0.92));
+    border: 1px solid rgba(255 255 255 / 0.12);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    min-width: 320px;
+    max-width: 90vw;
+    position: relative;
+  }
+
+  &__title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    color: rgba(255 255 255 / 0.9);
+  }
+
+  &__table {
+    width: 100%;
+    border-collapse: collapse;
+
+    td {
+      padding: 0.3rem 0.5rem;
+      color: rgba(255 255 255 / 0.75);
+      font-size: 0.85rem;
+    }
+  }
+
+  &__key {
+    display: inline-block;
+    background: rgba(255 255 255 / 0.1);
+    border: 1px solid rgba(255 255 255 / 0.2);
+    border-radius: 4px;
+    padding: 0.1rem 0.45rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  &__close {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+}
+```
+
+#### B-1-05 — Wiring in `main.ts`
+
+```typescript
+import { KeyboardHelp } from './ui/KeyboardHelp';
+// After keyboardNav creation:
+const keyboardHelp = new KeyboardHelp();
+const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
+topbar.onHelpClick = () => keyboardHelp.open(topbar.helpBtn);
+// In cleanup/dispose block:
+keyboardHelp.dispose();
+```
+
+---
+
+### B-2 — Focus-visible and high-contrast review
+
+**Goal:** All interactive controls show a visible focus ring in forced-colors (Windows High Contrast) mode.
+
+**File: `src/styles/main.scss`** — add at end of file:
+
+```scss
+// High-contrast / forced-colors support
+@media (forced-colors: active) {
+  // Restore button borders that our custom styles suppress
+  .nav-btn,
+  .zoom-btn,
+  .topbar__help-btn,
+  .loading-start-btn,
+  .prefs__toggle,
+  .audio-btn {
+    forced-color-adjust: none;
+    border: 2px solid ButtonText;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+
+  // Ensure focus ring uses system highlight color
+  :focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  // Preserve artwork canvas colors
+  #gallery-canvas {
+    forced-color-adjust: none;
+  }
+}
+```
+
+Also audit: confirm every interactive element has a `:focus-visible` rule that is not suppressed by `outline: none` without a visible alternative.
+
+---
+
+### B-3 — Lighthouse / Web Vitals evidence
+
+**Status: requires live browser tooling.** Cannot be automated in this session.
+
+**Procedure for next developer run:**
+1. Run `npm run build && npm run preview` (Vite preview server).
+2. Open `http://localhost:4173` in Chrome.
+3. Run Lighthouse (DevTools → Lighthouse → Mobile/Desktop → Performance + Accessibility + Best Practices).
+4. Record: LCP, TBT, CLS, Accessibility score, Best Practices score.
+5. Document before/after in `FINDINGS.md § v0.57`.
+
+---
+
+### B-4 — Font loading optimization
+
+**Goal:** Eliminate render-blocking Google Fonts dependency; support offline/file:// usage.
+
+#### Option A — Non-blocking Google Fonts (minimal change)
+
+**File: `app.html`** — replace current font links:
+
+```html
+<!-- Before: -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+<!-- After (non-blocking pattern): -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'">
+<noscript>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+</noscript>
+```
+
+#### Option B — Self-hosted (recommended for offline/file:// gallery)
+
+1. Download Inter 400/500/700 WOFF2 subsets (latin) into `public/fonts/`.
+2. Add `@font-face` declarations to `src/styles/main.scss`:
+
+```scss
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/inter-400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+                 U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193,
+                 U+2212, U+2215, U+FEFF, U+FFFD;
+}
+// Repeat for 500 and 700 weights
+```
+
+3. Remove Google Fonts `<link>` elements from `app.html`.
+
+**Accept:** `app.html` loads without any Google Fonts requests. Font renders via local WOFF2. Works on `file://` origins.
+
+---
+
+### Validation
+
+```sh
+npm run lint   # zero errors
+npm run build  # zero errors
+```
+
+Browser console: `[KeyboardHelp] keyboard-help-opened` on `?` keypress.  
+Visual QA: focus ring visible in Windows High Contrast Mode (Edge → Accessibility → High contrast: black).  
+Font QA: DevTools network panel shows no `fonts.googleapis.com` requests after B-4 implementation.
+
+### Merge-readiness checklist (v0.57 plan)
+
+- Plan sections B-1 through B-4 are fully specified and coded up.
+- All items are scoped to existing module boundaries (no new dependencies).
+- `KeyboardHelp` follows the `aria-modal` dialog pattern required by `AI_RULES.md`.
+- B-3 (Lighthouse) is deferred to a browser-tooling run; documented as pending.
+- Deferred items (H-07 LOD, J-06 page nav) remain correctly labeled as future passes.
+
+---
 
 ## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **partially shipped**)
 

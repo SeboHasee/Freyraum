@@ -1,23 +1,28 @@
 # Freyraum
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
 
-## v0.56 — website quality audit (2026-05-22, **in progress**)
+## v0.57 — open-items audit + v0.56-B technical plan (2026-05-23, **plan only**)
 
-Current status: **initial improvements shipped**.
+Current status: **plan added; implementation not yet started**.
+
+- Full audit of all open plan items completed (2026-05-23).
+- v0.56-B follow-ups confirmed not yet implemented: keyboard shortcuts help, high-contrast/focus review, Lighthouse evidence, font optimization.
+- Technical plan with implementation-ready code added to `plan.md § v0.57`.
+- All four items are scoped and ready to implement; Lighthouse pass requires a live browser run.
+
+See `plan.md § v0.57` and `FINDINGS.md § v0.57` for audit results, readiness assessment, and full implementation plan.
+
+## v0.56 — website quality audit (2026-05-22, **partially shipped**)
+
+Current status: **pass A shipped; pass B planned**.
 
 - Improved accessibility and language consistency in core UI chrome (navigation + topbar).
 - Added assistive instructions for the interactive 3D canvas.
 - Replaced forced local-preview meta refresh with a user-controllable redirect flow.
 - Added `noscript` fallback text for JavaScript-disabled usage.
 
-See `plan.md` (`v0.56`) and `FINDINGS.md` (`v0.56`) for full audit scope, research-backed rationale, and open follow-ups.
-
-### Merge readiness snapshot (2026-05-22)
-
-- Documentation for current shipped scope (v0.56-A) and future scope (v0.56-B) is synchronized.
-- Markdown audit banner is refreshed across repository docs for this pass.
-- Validation baseline for merge readiness: `npm run lint` and `npm run build` pass.
+Remaining (v0.56-B / v0.57): keyboard shortcuts help overlay, high-contrast review, Lighthouse metrics, font optimization. See `plan.md § v0.57`.
 
 ## v0.47 — modern gallery frame metal realism pass (2026-05-22, **shipped**)
 

@@ -1,6 +1,28 @@
 # CHANGELOG
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+
+## v0.57 — open-items audit + v0.56-B technical plan (2026-05-23, **plan only**)
+
+### Status
+
+Plan only. Documentation-only pass; no runtime code changed.
+
+### Added
+
+- `plan.md § v0.57`: complete technical plan for all four v0.56-B follow-up items with implementation-ready code for B-1 (keyboard shortcuts help), B-2 (high-contrast/focus-visible), B-3 (Lighthouse procedure), and B-4 (font optimization).
+- `FINDINGS.md § v0.57`: open-items audit results and readiness assessment.
+- `CHANGELOG.md § v0.57`: this entry.
+
+### Changed
+
+- Refreshed markdown audit stamp to 2026-05-23 across all 16 project MD files.
+- Updated v0.56 status in `plan.md`, `README.md`, and `FINDINGS.md` to distinguish shipped (v0.56-A) from planned (v0.57/v0.56-B).
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.56.1 — merge-ready markdown synchronization (2026-05-22, **shipped**)
 

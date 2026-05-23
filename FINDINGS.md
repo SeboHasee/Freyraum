@@ -1,6 +1,50 @@
 # FINDINGS
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+
+## v0.57 — open-items code audit and readiness assessment (2026-05-23, **plan added**)
+
+### Audit scope
+
+Full audit of `plan.md` open items, all source files in `src/`, and all 16 project MD files.
+
+### Open items confirmed
+
+| ID | Item | Status | File(s) |
+|----|------|--------|---------|
+| B-1 | Keyboard shortcuts help overlay | ❌ not implemented | No `KeyboardHelp.ts` in `src/ui/`; no `?` button in `Topbar.ts` |
+| B-2 | Focus-visible / high-contrast review | ❌ not implemented | `src/styles/main.scss` has `focus-visible` rules but no `@media (forced-colors: active)` block |
+| B-3 | Lighthouse / Web Vitals evidence | ❌ not run | No metrics recorded in `FINDINGS.md`; requires live browser run |
+| B-4 | Font loading optimization | ❌ not implemented | `app.html` still loads Inter via blocking Google Fonts CDN link |
+
+### Readiness assessment
+
+| ID | Ready to implement? | Reasoning |
+|----|---------------------|-----------|
+| B-1 | ✅ yes | `src/interaction/KeyboardNav.ts` is complete; `src/ui/` modal pattern established; `.sr-only`, `aria-modal`, focus-trap patterns documented in `AI_RULES.md` |
+| B-2 | ✅ yes | Pure CSS addition; no runtime logic; all existing `:focus-visible` selectors are compatible |
+| B-3 | ⚠️ browser tooling needed | Requires `npm run build && npm run preview` then Lighthouse in Chrome DevTools |
+| B-4 | ✅ yes | Non-blocking Google Fonts pattern (Option A) is a 3-line HTML change; self-hosted (Option B) adds WOFF2 assets to `public/fonts/` |
+
+### Long-standing deferred items (correctly deferred)
+
+| ID | Item | Reason for deferral |
+|----|------|---------------------|
+| H-07 | LOD / tiled streaming for 16 K images | Requires new asset pipeline, tiling runtime, format conversion — no current need |
+| J-06 | Group/page navigation for 50+ artwork galleries | Gallery stays well under 50 artworks for the foreseeable future |
+
+### Codebase findings
+
+- `src/ui/` has 8 components: `AudioControls`, `FallbackScreen`, `FullscreenButton`, `HintText`, `InfoPanel`, `NavigationControls`, `PreferencesPanel`, `Topbar`, `ZoomControls`. No `KeyboardHelp`.
+- All MD files carry v0.56 audit stamps (now updated to v0.57/2026-05-23 in this pass).
+- `app.html` loads Inter from `fonts.googleapis.com` — render-blocking on first cold load; breaks on `file://` if network unavailable.
+- SCSS has `focus-visible` coverage for most interactive elements but no forced-colors media query.
+- Keyboard shortcuts exist in `KeyboardNav.ts` (arrows, space, escape) and debug mode (a/s) but are undiscoverable.
+
+### Validation baseline
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
 
 ## v0.56 — website quality audit findings (2026-05-22, **in progress**)
 

@@ -1,6 +1,10 @@
 # DOCUMENTATION RULES
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+
+## v0.57 documentation pass
+
+- 2026-05-23 (documentation): open-items audit completed. Full code and MD file audit performed. All four v0.56-B follow-up items confirmed unimplemented. Technical plan with implementation-ready code added to `plan.md § v0.57`. Audit findings added to `FINDINGS.md § v0.57`. Markdown audit stamps refreshed across all 16 project MD files to 2026-05-23. No runtime code changed.
 
 ## v0.47 documentation pass
 

@@ -1,6 +1,12 @@
 # FREYRAUM architecture map
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> v0.57 doc-sync: reviewed during open-items audit on 2026-05-23.
+> Last full markdown audit: 2026-05-23 (v0.57 plan added: v0.56-B follow-ups planned — keyboard shortcuts, focus/contrast, font optimization).
+
+## v0.57 planned UI architecture note
+
+The next planned UI addition is `src/ui/KeyboardHelp.ts`: a self-contained dialog component with `open()`, `close()`, and `dispose()` lifecycle. It follows the existing `src/ui/` pattern (class, DOM construction in constructor, public lifecycle methods, `createScopedDiagnostics`). Wiring: `main.ts` instantiates it and passes a reference to `KeyboardNav`; `Topbar.ts` exposes a `?` button with `onHelpClick` callback.
+
+Font loading architecture: `app.html` currently uses Google Fonts CDN (render-blocking). v0.57 plan targets self-hosted WOFF2 in `public/fonts/` with `@font-face` in `main.scss` to support offline/file:// operation.
 
 ## v0.47 shipped frame-material architecture note
 
