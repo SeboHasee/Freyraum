@@ -1,9 +1,18 @@
 # Lessons learned docs
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## v0.47 lesson index update
+
+See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.47 frame realism lessons` for the key rules: align brush direction to frame geometry and keep metal detail restrained for elegant satin behavior.
+
+## v0.45 lesson index update
+
+See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.45 frame realism planning lessons` for the key rules: no visible cadence after GLSL migration, derivative-aware scratch primitives for close zoom, and verifying Three.js shader variable names against installed shader chunks.
 
 ## v0.29 lesson index update
 
-See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.29 planning lessons` for the new rules: loaded is not presented, RAF must run under the loader, tiny prewarm is not final-frame proof, and color fidelity must be verified across the full render pipeline.
+See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.29 implementation lessons` for the key rules: metallic PBR upgrades must include IBL + geometry + material + preset wiring, and shipped claims require runtime validation.
 
 
 

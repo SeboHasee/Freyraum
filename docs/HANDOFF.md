@@ -1,5 +1,45 @@
 # FREYRAUM customer handoff guide
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## v0.47 — handoff status: modern gallery frame realism retune shipped (2026-05-22)
+
+Customer-facing status: **shipped and validated**.
+
+- Frame metal was retuned for a softer satin read and reduced zebra striping on side/top/bottom bars.
+- Procedural brush coordinates now follow frame-bar direction, improving realism in close views and highlight flow.
+- Preset roughness/anisotropy was adjusted for a calmer, elegant modern gallery frame response.
+
+References: `../plan.md § v0.47`, `../FINDINGS.md § v0.47`.
+
+## v0.41 — handoff status: battery preset painting bug fixed (2026-05-22, shipped)
+
+Customer-facing status: **shipped and validated**.
+
+- Fixed: on the battery (lowest) quality preset, artworks were invisible — only the frame showed. This is now corrected; all presets render the painting correctly.
+- Frame geometry is now structurally consistent across all quality tiers (ring-shaped, open center).
+
+## v0.40 — handoff status: premium metal texture research completed (2026-05-22, docs-only)
+
+Customer-facing status: **research and plan completed; runtime currently still uses the shipped v0.39 frame material path**.
+
+What is now ready:
+
+- Premium source shortlist for high-detail metal PBR assets (Poliigon, Quixel Megascans, Adobe Substance 3D Assets).
+- Practical implementation plan for a natural premium metal finish with reduced visible repetition.
+- Clear anti-repetition rollout slices and acceptance checks in `plan.md § v0.40`.
+
+If customers still report “repetitive frame metal”, classify as **known open enhancement** tied to v0.40 implementation work (not yet shipped).
+
+References: `FINDINGS.md § v0.40`, `plan.md § v0.40`.
+
+## v0.29 — handoff status: realistic metallic frame pass is shipped (2026-05-22)
+
+Customer-facing status: **shipped and validated**.
+
+The complete v0.29 frame pass is now live: PMREM room IBL, metallic brushed frame material, anisotropic highlights, procedural brushed micro-normal, deeper frame depth, beveled geometry on high/balanced with battery fallback, and preset-driven frame material/geometry updates.
+
+References: `plan.md § v0.29` and `FINDINGS.md § v0.29`.
 
 ## v0.29 — handoff status: loading-screen/full-render fix is shipped (2026-05-22)
 
@@ -741,4 +781,3 @@ The following items are intentionally not implemented in v0.01:
 ## v0.24 status note (2026-05-21)
 
 Performance/loading smoothness hardening is currently in planning (`plan.md § v0.24`). Runtime remains v0.23.1 while this deeper plan is implemented and verified.
-

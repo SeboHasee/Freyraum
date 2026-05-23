@@ -1,5 +1,1439 @@
 # FREYRAUM Plan
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## v0.56 — website audit: user friendliness, readability, accessibility, performance (2026-05-22, **partially shipped**)
+
+Runtime status: **partially implemented in this pass** (navigation/local-preview/canvas accessibility improvements shipped; broader enhancements remain open).
+
+### Audit scope
+
+1. User-friendliness of navigation and first-run guidance.
+2. Readability and language consistency (`lang="de"` + UI labels).
+3. Accessibility of interactive 3D canvas and redirect behavior.
+4. Performance and perceived performance guardrails.
+
+### Research-backed findings addressed in this pass
+
+1. Timed auto-redirects via `meta refresh` reduce user control and can impair accessibility.
+2. Icon-only buttons require explicit accessible names and clear discoverability.
+3. Interactive canvas surfaces should provide descriptive assistive text and keyboard hints.
+4. Language consistency improves readability and screen-reader pronunciation when `lang` is German.
+
+### Implemented slices (v0.56-A)
+
+1. **A-01 — Navigation control accessibility/readability**
+   - Localized nav landmark and button labels to German.
+   - Added button `title` hints for arrow-only controls.
+2. **A-02 — Topbar readability semantics**
+   - Converted brand element to semantic heading (`h1`).
+   - Localized badge copy to German.
+3. **A-03 — Canvas assistive guidance**
+   - Added `aria-describedby` for the gallery canvas.
+   - Injected screen-reader-only helper text with keyboard/navigation hints.
+4. **A-04 — Local preview redirect usability**
+   - Removed hard `meta refresh`.
+   - Added controllable JavaScript redirect with stop action and live status.
+5. **A-05 — Progressive enhancement fallback**
+   - Added `noscript` message to `app.html`.
+
+### Remaining plan slices (v0.56-B, open)
+
+1. Add a dedicated keyboard-shortcuts help affordance in the UI (discoverable via button and `?`).
+2. Add explicit focus-visible styling review for all interactive controls and high-contrast mode checks.
+3. Run a Lighthouse/Web Vitals evidence pass and store measured before/after metrics in `FINDINGS.md`.
+4. Revisit font loading strategy (self-host or subset) to reduce third-party dependency overhead.
+
+### Merge-readiness checklist (v0.56 docs sync)
+
+- Runtime scope for v0.56-A is documented as shipped in `CHANGELOG.md`, `README.md`, and `FINDINGS.md`.
+- Future-only items remain clearly labeled as open v0.56-B follow-ups (not yet shipped).
+- Validation baseline recorded: `npm run lint` and `npm run build` pass in this repository state.
+- Repository is ready for merge/commit of this docs sync; no runtime code changes are included in this pass.
+
+## v0.47 — modern gallery metal refinement after screenshot review (2026-05-22, **shipped**)
+
+Runtime status: **shipped**. Shader/material refinement implemented and validated.
+
+### Goal
+
+Keep the frame metallic and premium while removing the remaining zebra-like cross-banding and hard highlight plateaus.
+
+### Implemented slices
+
+1. **P-47-01 — Bar-aligned brush coordinates**  
+   Added a bar-aware coordinate remap for procedural frame surfacing so side and top/bottom bars share physically plausible directional flow.
+
+2. **P-47-02 — Scratch subtlety pass**  
+   Reduced scratch occupancy, width contrast, and gradient strength to avoid synthetic stripe masks.
+
+3. **P-47-03 — Satin elegance retune**  
+   Lowered normal intensity, increased base roughness floor, and retuned quality presets for a modern gallery frame look.
+
+4. **P-47-04 — Docs sync + validation**  
+   Updated status docs and reran lint/build validation.
+
+## v0.46 — realistic metal frame recovery after zebra artifact report (2026-05-22, **shipped**)
+
+Runtime status: **shipped**. Runtime shader/material retune implemented and validated with lint/build.
+
+### Goal
+
+Make the frame read as physically plausible brushed/satin metal in motion and close zoom, without zebra-like striping.
+
+### Non-goals
+
+- No changes to painting tone mapping, artwork color pipeline, bloom policy, or gallery UX.
+- No external texture assets in this pass; stay procedural in current material path.
+
+### Screenshot-driven problem statement
+
+Customer screenshot shows:
+1. Repeated high-contrast horizontal streak clusters across all frame bars.
+2. Overly binary bright/dark transitions that read like synthetic patterning.
+3. Weak continuous metallic flow (surface reads striped paint/plastic, not machined metal).
+
+### Implemented slices
+
+1. **P-46-01 — Frequency/alias safety audit**  
+   Implemented derivative-weighted density fade in scratch rows to suppress unstable high-frequency bands at distance.
+
+2. **P-46-02 — Stripe-contrast rebalance**  
+   Reduced macro contrast by lowering procedural warp amplitude and normal/roughness contribution strengths.
+
+3. **P-46-03 — Scratch-shape realism pass**  
+   Reworked scratch rows into segmented directional micro-grooves (sparse alive-mask + shaped segment profile).
+
+4. **P-46-04 — Roughness distribution tuning**  
+   Tightened roughness variance and retuned preset roughness/anisotropy to maintain satin-metal continuity without white streak plateaus.
+
+5. **P-46-05 — Edge and corner consistency check**  
+   Kept one shared object-space grain family and removed full-width stripe cadence that amplified edge transitions.
+
+6. **P-46-06 — Validation + evidence capture**  
+   Ran lint/build and logged implementation outcomes in `FINDINGS.md`.
+
+### Acceptance checks
+
+- From normal gallery view, frame shows no obvious zebra-strip rhythm.
+- At close zoom, detail reads as metallic abrasion/scratches, not periodic paint-like lines.
+- During camera movement, highlights remain stable (no line crawl/flicker).
+- Lint and build pass.
+
+## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
+
+Runtime status: **shipped**. lint and build pass.
+
+### Goal
+
+Make the metallic frame read as premium high-resolution brushed metal at normal distance and during close zoom:
+
+1. **Zero visible tiles or repeating cadence** — no hash-cell grid, no repeating scratch clusters, no regular dark/light waves on frame bars.
+2. **Sharper, more pronounced, realistic detail** — individual scratches and micro-abrasions stay crisp at close zoom, anti-aliased and stable during movement.
+3. **Slightly rougher / less shiny finish** — raise `frameRoughness` per preset to satin-metal range; reduce clearcoat.
+4. **No texture-memory regression** — keep everything procedural in GLSL; no DataTextures.
+
+### Non-goals
+
+- Do not change painting color management, tone mapping, bloom, or artwork material.
+- Do not introduce external frame texture assets.
+- Do not remove v0.44.1 `tbn` fix; the shader must use Three.js r166's local `tbn` matrix.
+
+---
+
+### Code Audit of v0.44 Frame Shader
+
+#### What works correctly in v0.44
+
+| Item | Assessment |
+|------|-----------|
+| `onBeforeCompile` GLSL injection | Correct pattern for Three.js r155–r166 |
+| `tbn` local matrix (v0.44.1 fix) | Correct; `vTBN` does not exist in r166 |
+| 4-octave FBM | Eliminates single-frequency banding |
+| `customProgramCacheKey` per seed | Correct; prevents reuse across artworks |
+| `userData.frameUniforms` for refresh | Clean; no disposal needed on navigation |
+| `computeTangents()` on frame geometry | Required for `USE_TANGENT` define |
+
+#### Remaining issues in v0.44
+
+| ID | Issue | Evidence |
+|----|-------|----------|
+| A1 | `frmTileOffset` uses `floor(p * 1.5)` cells visible as grid on long bars | 0.67-unit cells; visible at close distance |
+| A2 | `frmFbm` uses near-exact 2x octave scaling — faint large-scale periodicity possible | Octaves 3–4 nearly align at scale x8 |
+| A3 | Roughness injection uses `vUv` — acceptable but undocumented contract with ExtrudeGeometry | Minor coupling |
+| A4 | `frameRoughness: 0.28` on high preset is in polished-aluminium range, not satin/brushed | PBR ref: satin Al = 0.35–0.45, chrome = 0.05–0.12 |
+| A5 | No scratch primitives — `frmRidge` adds FBM peaks not narrow line-segment scratches | Wide blobs vs. fine lines |
+| A6 | Finite-difference epsilon = 0.02 too coarse for close zoom (frame width = 0.2 units, eps = 10% of bar) | Smooths all features finer than 0.02 world units |
+
+---
+
+### Technical Implementation Slices
+
+---
+
+#### V45-01 — Inject object-space position varying (vertex shader)
+
+**File**: `src/materials/CanvasMaterial.ts`, inside `onBeforeCompile` callback.
+
+**Why**: Makes the GLSL domain independent of UV mapping conventions. `ExtrudeGeometry` `WorldUVGenerator` already maps `vUv = position.xy` for this geometry, but an explicit varying documents the intent and is robust to future changes.
+
+**Verified pattern**: Three.js r155–r166, `onBeforeCompile` vertex injection. Replace `void main() {` in the vertex shader string. Source: [Three.js docs Material.onBeforeCompile](https://threejs.org/docs/#api/en/materials/Material.onBeforeCompile); confirmed current practice in 2024–2025 Three.js discourse and production usage.
+
+```ts
+// Inside onBeforeCompile(shader):
+shader.vertexShader = 'varying vec3 vFrameLocalPos;\n' + shader.vertexShader;
+shader.fragmentShader = 'varying vec3 vFrameLocalPos;\n' + shader.fragmentShader;
+shader.vertexShader = shader.vertexShader.replace(
+  'void main() {',
+  'void main() {\n  vFrameLocalPos = position;'
+);
+```
+
+All GLSL functions then receive `vFrameLocalPos.xy` (object-space XY) instead of `vUv`:
+
+```glsl
+// In FRAME_FRAG_NORMAL_REPLACE:
+vec3 proceduralN = frmBrushedNormal(vFrameLocalPos.xy, uFrameSeed);
+
+// In roughness injection:
+float roughnessFactor = ... frmBrushedFbm(vFrameLocalPos.xy + uFrameSeed * 0.5) ...;
+```
+
+---
+
+#### V45-02 — Replace `frmFbm` with domain-warped aperiodic FBM
+
+**Replace in `FRAME_FRAG_FUNCTIONS`**: remove `frmFbm`, `frmRidge`, `frmTileOffset`; add `frmBrushedFbm`.
+
+**Why domain warping**: Domain warp `fbm(p + noise_field(p))` is the standard anti-periodicity technique for procedural textures. Inigo Quilez documents it at iquilezles.org/articles/fbm/ (2002, updated 2024). The warp field distorts the coordinate before the FBM evaluates it, breaking visible cell/grid structure. Irrational frequency ratios (`2.014`, `4.041`, `8.126`) prevent octave alignment at large scales.
+
+```glsl
+// v0.45 — domain-warped aperiodic FBM
+// Source: Inigo Quilez, iquilezles.org/articles/fbm/ — domain warping technique
+float frmBrushedFbm(vec2 p) {
+  // Warp: displace p by two independent noise fields.
+  // Offset constants (15.6,28.1) and (-67.8,39.2) decorrelate the two channels.
+  float wx = frmNoise(p * 0.35 + vec2(15.6, 28.1));
+  float wy = frmNoise(p * 0.35 + vec2(-67.8, 39.2));
+  p += (vec2(wx, wy) - 0.5) * 0.40; // max 0.40 world-unit displacement
+
+  // 4-octave anisotropic FBM with irrational scale ratios.
+  // Ratios: 1.000, 2.014, 4.041, 8.126 (near-phi multiples, not exact powers of 2).
+  // Y-axis scaled ~14x for horizontal brush grain direction.
+  float v = 0.0;
+  v += 0.5000 * frmNoise(vec2(p.x * 1.000, p.y * 14.000));
+  v += 0.2500 * frmNoise(vec2(p.x * 2.014, p.y * 28.192) + 1.618);
+  v += 0.1250 * frmNoise(vec2(p.x * 4.041, p.y * 56.518) + 3.141);
+  v += 0.0625 * frmNoise(vec2(p.x * 8.126, p.y * 113.36) + 7.389);
+  return v;
+}
+```
+
+**Performance**: 2 extra `frmNoise` calls for warp field. `frmTileOffset` (2 calls), `frmRidge` (1 FBM = 4+ calls) are removed. Net cost per normal evaluation is approximately equal to v0.44.
+
+---
+
+#### V45-03 — Add derivative-aware scratch primitive layer
+
+**Add to `FRAME_FRAG_FUNCTIONS`** after `frmBrushedFbm`.
+
+**`fwidth` availability**: Three.js r166 targets WebGL2 by default. WebGL2 = GLSL ES 3.00. `fwidth`, `dFdx`, `dFdy` are built-in in GLSL ES 3.00 with no extension needed. Source: Khronos GLSL ES 3.00 Specification §8.14 "Derivative Functions" (2022). Three.js r152+ dropped WebGL1-only support so this is safe.
+
+`fwidth(p.y)` = `abs(dFdx(p.y)) + abs(dFdy(p.y))` = the screen-space footprint of one world-unit in Y. Setting `width = max(fw * 0.8, hardWidth)` guarantees scratches are never sub-pixel-thin, preventing alias crawl during camera movement.
+
+```glsl
+// v0.45 — derivative-aware scratch lines
+// Source: Khronos GLSL ES 3.00 §8.14; standard production shader pattern
+float frmScratchRow(vec2 p, float density, float localSeed) {
+  float row  = floor(p.y * density);
+  float rh   = frmHash(row + localSeed * 137.619);
+  if (rh > 0.15) return 0.0;            // ~15% row occupancy -> sparse
+  float lineY = (row + rh * 3.5) / density; // jitter Y position within row
+  float dist  = abs(p.y - lineY);
+  float fw    = fwidth(p.y);             // screen-space pixel footprint
+  float width = max(fw * 0.8, 0.0015 + frmHash(row + localSeed * 71.33) * 0.003);
+  float inten = 0.4 + frmHash(row + localSeed * 23.71) * 0.6; // per-scratch intensity
+  float xFade = frmNoise(vec2(p.x * 0.28, row * 0.5)) * 0.5 + 0.5; // fade along X
+  return smoothstep(width, 0.0, dist) * inten * xFade;
+}
+
+float frmScratchLayer(vec2 p, float seed) {
+  // Three density bands: fine abrasion, medium scratches, rare deep cuts
+  float fine   = frmScratchRow(p, 110.0, seed);
+  float medium = frmScratchRow(p,  32.0, seed + 5.11);
+  float deep   = frmScratchRow(p,   7.0, seed + 11.37);
+  return clamp(fine * 0.25 + medium * 0.45 + deep * 0.65, 0.0, 1.0);
+}
+```
+
+**Why three bands**: Real brushed metal shows grain at multiple spatial scales. Fine abrasion (110 lines/unit) creates the overall brushed texture. Medium scratches (32/unit) are individually recognizable at close zoom. Deep/rare cuts (7/unit) provide high-contrast specular lines that catch grazing light.
+
+---
+
+#### V45-04 — Rewrite `frmBrushedNormal` with layered height + eps = 0.004
+
+**Replace in `FRAME_FRAG_FUNCTIONS`**.
+
+**Why eps = 0.004**: Previous value `0.02` = 10% of frame bar width (0.2 units). The finite difference averages over that neighborhood, washing out fine detail. `eps = 0.004` = 2% of frame bar width, preserving detail at close zoom. `frmNoise` is C1-smooth (Hermite `f*f*(3-2*f)` interpolation) — no discontinuities at this scale.
+
+```glsl
+// v0.45 — layered normal: grain FBM gradient + scratch impulse gradient
+vec3 frmBrushedNormal(vec2 p, float seed) {
+  float eps = 0.004; // was 0.02; smaller = sharper at close zoom
+
+  // Grain FBM: 3 evaluations for central-difference gradient
+  float hg  = frmBrushedFbm(p);
+  float hgx = frmBrushedFbm(p + vec2(eps, 0.0));
+  float hgy = frmBrushedFbm(p + vec2(0.0, eps));
+
+  // Scratch layer: 3 evaluations for gradient
+  float hs  = frmScratchLayer(p,                 seed);
+  float hsx = frmScratchLayer(p + vec2(eps, 0.0), seed);
+  float hsy = frmScratchLayer(p + vec2(0.0, eps), seed);
+
+  // Separate gradients: independent strength tuning
+  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 6.0; // grain relief strength
+  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 5.0; // scratch relief strength
+  return normalize(vec3(gradG + gradS, 1.0));
+}
+```
+
+**Fragment invocation** — updated `FRAME_FRAG_NORMAL_REPLACE` constant (unchanged `tbn` usage from v0.44.1):
+```ts
+const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
+{
+  vec3 proceduralN = frmBrushedNormal(vFrameLocalPos.xy, uFrameSeed);
+  normal = normalize(tbn * proceduralN);
+}
+`;
+```
+
+---
+
+#### V45-05 — Quality preset roughness updates (`quality.ts`)
+
+**PBR calibration**: Adobe Substance PBR guide (2023/2024) and Marmoset PBR chart both place satin-brushed aluminium at roughness `0.35–0.45`. Mirror-polished Al = `0.10–0.15`. Chrome = `0.05–0.12`. Current high preset `0.28` is in the polished-Al range — reads too shiny for "brushed" metal.
+
+**Exact changes to `src/config/quality.ts`**:
+
+```ts
+// high preset (current: frameRoughness: 0.28, frameClearcoat: 0.18, frameAnisotropy: 0.70)
+frameRoughness:  0.35,  // +0.07 — lower satin-brushed range
+frameClearcoat:  0.12,  // -0.06 — less glassy overlay
+frameAnisotropy: 0.65,  // -0.05 — softer directional highlight
+
+// balanced preset (current: frameRoughness: 0.38, frameClearcoat: 0.14)
+frameRoughness:  0.44,  // +0.06 — mid satin range
+frameClearcoat:  0.10,  // -0.04
+
+// battery preset (current: frameRoughness: 0.48)
+frameRoughness:  0.52,  // +0.04 — stays matte
+```
+
+**Roughness shader injection** (replaces `#include <roughnessmap_fragment>`):
+
+```ts
+shader.fragmentShader = shader.fragmentShader.replace(
+  '#include <roughnessmap_fragment>',
+  `float roughnessFactor = uBaseRoughness
+     + frmBrushedFbm(vFrameLocalPos.xy + uFrameSeed * 0.5) * 0.07
+     - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.04
+     - 0.03;
+   roughnessFactor = clamp(roughnessFactor, 0.18, 0.72);`
+);
+```
+
+The `- frmScratchLayer(...) * 0.04` makes scratches slightly glossier than the base. This is physically correct: abrasive burnishing micro-polishes each scratch track.
+
+---
+
+#### V45-06 — Complete updated `FRAME_FRAG_FUNCTIONS` constant
+
+Full replacement for the TypeScript constant (lines 7–81 of `CanvasMaterial.ts`):
+
+```ts
+const FRAME_FRAG_FUNCTIONS = /* glsl */ `
+// v0.45 brushed-metal procedural normal & roughness
+// Sources:
+//   Inigo Quilez, iquilezles.org/articles/fbm/ (domain warping, irrational FBM)
+//   Khronos GLSL ES 3.00 spec §8.14 (fwidth — WebGL2 built-in, Three.js r152+)
+//   Adobe Substance / Marmoset PBR guide: satin brushed Al = roughness 0.35-0.45
+
+uniform float uFrameSeed;
+uniform float uBaseRoughness;
+
+float frmHash(float n) {
+  return fract(sin(n) * 43758.5453123);
+}
+
+float frmNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n = i.x + i.y * 57.0;
+  return mix(
+    mix(frmHash(n),        frmHash(n + 1.0),  f.x),
+    mix(frmHash(n + 57.0), frmHash(n + 58.0), f.x),
+    f.y
+  );
+}
+
+// Domain-warped aperiodic FBM (Quilez technique)
+float frmBrushedFbm(vec2 p) {
+  float wx = frmNoise(p * 0.35 + vec2(15.6,  28.1));
+  float wy = frmNoise(p * 0.35 + vec2(-67.8, 39.2));
+  p += (vec2(wx, wy) - 0.5) * 0.40;
+  float v = 0.0;
+  v += 0.5000 * frmNoise(vec2(p.x * 1.000, p.y * 14.000));
+  v += 0.2500 * frmNoise(vec2(p.x * 2.014, p.y * 28.192) + 1.618);
+  v += 0.1250 * frmNoise(vec2(p.x * 4.041, p.y * 56.518) + 3.141);
+  v += 0.0625 * frmNoise(vec2(p.x * 8.126, p.y * 113.36) + 7.389);
+  return v;
+}
+
+// Derivative-aware scratch lines (fwidth: GLSL ES 3.0, WebGL2 built-in)
+float frmScratchRow(vec2 p, float density, float localSeed) {
+  float row  = floor(p.y * density);
+  float rh   = frmHash(row + localSeed * 137.619);
+  if (rh > 0.15) return 0.0;
+  float lineY = (row + rh * 3.5) / density;
+  float dist  = abs(p.y - lineY);
+  float fw    = fwidth(p.y);
+  float width = max(fw * 0.8, 0.0015 + frmHash(row + localSeed * 71.33) * 0.003);
+  float inten = 0.4 + frmHash(row + localSeed * 23.71) * 0.6;
+  float xFade = frmNoise(vec2(p.x * 0.28, row * 0.5)) * 0.5 + 0.5;
+  return smoothstep(width, 0.0, dist) * inten * xFade;
+}
+
+float frmScratchLayer(vec2 p, float seed) {
+  float fine   = frmScratchRow(p, 110.0, seed);
+  float medium = frmScratchRow(p,  32.0, seed + 5.11);
+  float deep   = frmScratchRow(p,   7.0, seed + 11.37);
+  return clamp(fine * 0.25 + medium * 0.45 + deep * 0.65, 0.0, 1.0);
+}
+
+// Layered normal: FBM grain + scratch impulses, eps=0.004 for close-view sharpness
+vec3 frmBrushedNormal(vec2 p, float seed) {
+  float eps = 0.004;
+  float hg  = frmBrushedFbm(p);
+  float hgx = frmBrushedFbm(p + vec2(eps, 0.0));
+  float hgy = frmBrushedFbm(p + vec2(0.0, eps));
+  float hs  = frmScratchLayer(p,                 seed);
+  float hsx = frmScratchLayer(p + vec2(eps, 0.0), seed);
+  float hsy = frmScratchLayer(p + vec2(0.0, eps), seed);
+  vec2 gradG = vec2(hg - hgx, hg - hgy) / eps * 6.0;
+  vec2 gradS = vec2(hs - hsx, hs - hsy) / eps * 5.0;
+  return normalize(vec3(gradG + gradS, 1.0));
+}
+`;
+```
+
+---
+
+#### V45-07 — Complete `onBeforeCompile` block
+
+Full replacement for the `onBeforeCompile` assignment (approx lines 198–215 of `CanvasMaterial.ts`):
+
+```ts
+material.onBeforeCompile = (shader) => {
+  // 1. Shared uniforms
+  Object.assign(shader.uniforms, uniforms);
+
+  // 2. Inject object-space position varying
+  shader.vertexShader   = 'varying vec3 vFrameLocalPos;\n' + shader.vertexShader;
+  shader.fragmentShader = 'varying vec3 vFrameLocalPos;\n' + shader.fragmentShader;
+  shader.vertexShader   = shader.vertexShader.replace(
+    'void main() {',
+    'void main() {\n  vFrameLocalPos = position;'
+  );
+
+  // 3. Prepend helper GLSL functions
+  shader.fragmentShader = FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
+
+  // 4. Procedural normal (tbn = Three.js r166 local mat3; do NOT use vTBN)
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <normal_fragment_maps>',
+    FRAME_FRAG_NORMAL_REPLACE
+  );
+
+  // 5. Roughness variation
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <roughnessmap_fragment>',
+    `float roughnessFactor = uBaseRoughness
+       + frmBrushedFbm(vFrameLocalPos.xy + uFrameSeed * 0.5) * 0.07
+       - frmScratchLayer(vFrameLocalPos.xy, uFrameSeed) * 0.04
+       - 0.03;
+     roughnessFactor = clamp(roughnessFactor, 0.18, 0.72);`
+  );
+
+  console.debug('[CanvasMaterial] frame-shader-compiled', {
+    version: 'v0.45',
+    preset: preset.id,
+    seed,
+    frameRoughness: preset.frameRoughness,
+    frameAnisotropy: preset.frameAnisotropy,
+    frameClearcoat: preset.frameClearcoat,
+    domainWarp: true,
+    scratchLayer: true,
+    eps: 0.004,
+  });
+};
+material.customProgramCacheKey = () => `frame-v0.45-${seed}`;
+```
+
+---
+
+#### V45-08 — Visual QA checklist
+
+1. High, balanced, battery presets — frame visible, no solid color.
+2. Close zoom on bottom bar, left/right bars, bevel corners.
+3. No repeating tile grid, no regular banding, no hash-cell boundaries.
+4. Individual scratches visible at close zoom with varying width/intensity.
+5. Slow camera orbit — no alias shimmer/crawling on scratch lines.
+6. Portrait and landscape artworks — frame dimensions correct.
+7. High-contrast and museum-neutral lighting profiles.
+8. Compare against v0.44: fewer repeats, sharper scratches, less shiny.
+
+#### V45-09 — Validation
+
+```sh
+npm run lint   # zero errors
+npm run build  # zero errors
+```
+
+Browser console: `[CanvasMaterial] frame-shader-compiled { version: 'v0.45', ... }` — no WebGL shader compile errors.
+
+---
+
+### Technical Reference Sources (verified 2026)
+
+| Technique | Source | Key fact |
+|-----------|--------|----------|
+| Domain warping for anti-tiling | Inigo Quilez, iquilezles.org/articles/fbm/ (2002, updated 2024) | `fbm(p + noise_field(p))` eliminates visible grid structure |
+| `onBeforeCompile` vertex varying | Three.js docs + 2024-2025 discourse threads | Replace `void main() {` pattern; prepend `varying` declaration |
+| `fwidth` derivative-based line AA | Khronos GLSL ES 3.00 spec §8.14 (2022) | Built-in in WebGL2; no extension needed |
+| PBR roughness calibration | Adobe Substance PBR guide 2023/2024; Marmoset PBR chart | Satin brushed Al = 0.35–0.45; polished Al = 0.10–0.15 |
+| Three.js r166 `tbn` naming | node_modules/three/src/renderers/shaders/ShaderChunk/normal_fragment_begin.glsl.js | Local `mat3 tbn`; NO `vTBN` varying |
+
+### Documentation boundary
+
+v0.45 is shipped and validated. Current runtime is v0.45. Customer-facing docs describe: "frame shows zero-tile-cadence GLSL domain-warped brushed metal with derivative-aware scratch primitives."
+
+
+## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)
+
+Runtime status: **shipped. Superseded by v0.45.**
+
+### Problem statement
+
+After v0.43 (anisotropic value-noise + mipmaps), the frame still shows:
+1. **Horizontal banding** — regular alternating light/dark stripes across the left/right/bottom bars (~6 visible repetitions).
+2. **Missing micro-detail** — no sharp individual scratches, no multi-scale grain, no fine-surface texture.
+
+Root causes are documented in full in `FINDINGS.md § v0.44`.
+
+Short form:
+- `DataTexture + RepeatWrapping` seams every 1 world unit. The ring spans 6.1 world units in Y → 6 seams → 6 bands. No seamlessly-tiling noise approach can be made as good as per-fragment GLSL.
+- 2-octave value noise is too coarse; no scratch component.
+
+### Online research summary
+
+| Technique | Source | Conclusion |
+|-----------|--------|------------|
+| FBM 4-octave anisotropic | The Book of Shaders §13; GLSL FBM reference shaders | Standard for multi-scale grain; eliminates dominant-band repetition |
+| Ridged noise (scratches) | Production PBR shader libraries; Shadertoy metal shaders | `1 - abs(2*fbm - 1)` inverts FBM to sharp bright peaks = individual scratches |
+| `onBeforeCompile` injection | Three.js discourse; Three.js examples repo | Documented production approach for custom GLSL in MeshPhysicalMaterial without losing IBL/PMREM |
+| Hash-based UV jitter (Heitz/Neyret 2018) | SIGGRAPH 2018 paper; Alexandre Pestana blog | 3-tap random-offset blend breaks any periodic seam cadence |
+| Per-fragment GLSL (no DataTexture) | Three.js community, production museum viz tools | Eliminates tiling entirely; only per-fragment UV coordinate monotonically increases |
+
+### Detailed implementation slices
+
+---
+
+#### S-01 — GLSL constants (`CanvasMaterial.ts`)
+
+Add two top-of-file TypeScript string constants:
+
+**`FRAME_FRAG_FUNCTIONS`** — prepended to `shader.fragmentShader` in `onBeforeCompile`. Contains:
+
+```glsl
+// --- v0.44 brushed-metal procedural normal ---
+
+float frmHash(float n) {
+  return fract(sin(n) * 43758.5453123);
+}
+
+float frmNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n = i.x + i.y * 57.0;
+  return mix(
+    mix(frmHash(n), frmHash(n + 1.0), f.x),
+    mix(frmHash(n + 57.0), frmHash(n + 58.0), f.x),
+    f.y
+  );
+}
+
+// 4-octave FBM — anisotropic: X stretched 8× relative to Y
+float frmFbm(vec2 p) {
+  float v = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    v += a * frmNoise(p);
+    p = p * mat2(2.1, 0.0, 0.0, 2.0);   // 2× per octave, slight X/Y ratio drift
+    a *= 0.5;
+  }
+  return v;
+}
+
+// Ridged noise → sharp bright lines (individual scratches)
+float frmRidge(vec2 p) {
+  return 1.0 - abs(2.0 * frmFbm(p) - 1.0);
+}
+
+// Anti-tile: sample at two hash-offset cells, blend
+vec2 frmTileOffset(vec2 p, float freq) {
+  vec2 cell = floor(p * freq);
+  float h = frmHash(cell.x + cell.y * 137.0);
+  return vec2(fract(h * 1234.5), fract(h * 9876.5));
+}
+
+// Tangent-space normal from height-field finite difference
+vec3 frmBrushedNormal(vec2 uv, float seed) {
+  // Anisotropic scale: very low X-frequency (long horizontal grain), moderate Y
+  vec2 sc = vec2(uv.x * 1.2 + seed * 0.07, uv.y * 14.0 + seed * 0.13);
+
+  // Anti-tiling: two samples with different cell offsets
+  vec2 off0 = frmTileOffset(uv, 1.5);
+  vec2 off1 = frmTileOffset(uv + 0.17, 1.5);
+  float blend = frmNoise(uv * 2.3);  // smooth blend mask
+
+  float h0  = frmFbm(sc + off0 * 3.0)
+            + frmRidge(sc * vec2(4.0, 0.05) + off0) * 0.12;
+  float h0x = frmFbm((sc + vec2(0.02, 0.0)) + off0 * 3.0);
+  float h0y = frmFbm((sc + vec2(0.0, 0.02)) + off0 * 3.0);
+
+  float h1  = frmFbm(sc + off1 * 3.0)
+            + frmRidge(sc * vec2(4.0, 0.05) + off1) * 0.12;
+  float h1x = frmFbm((sc + vec2(0.02, 0.0)) + off1 * 3.0);
+  float h1y = frmFbm((sc + vec2(0.0, 0.02)) + off1 * 3.0);
+
+  // Blend between two anti-tiled samples
+  float h  = mix(h0,  h1,  blend);
+  float hx = mix(h0x, h1x, blend);
+  float hy = mix(h0y, h1y, blend);
+
+  // Finite differences → local tangent-space gradient
+  vec2 grad = vec2(h - hx, h - hy) * 8.0;   // 8.0 = normalScale control
+  return normalize(vec3(grad, 1.0));
+}
+```
+
+**`FRAME_FRAG_NORMAL_REPLACE`** — the string that replaces `#include <normal_fragment_maps>` in the compiled shader:
+
+```glsl
+{
+  vec3 proceduralN = frmBrushedNormal(vUv, uFrameSeed);
+  // Transform tangent-space normal to view space using TBN from vertex shader
+  normal = normalize(tbn * proceduralN);
+}
+```
+
+---
+
+#### S-02 — `onBeforeCompile` wiring (`CanvasMaterial.ts`, `createFrameMaterial`)
+
+```typescript
+const uniforms = {
+  uFrameSeed:      { value: seed * 0.00390625 },  // seed/256 → [0,1)
+  uBaseRoughness:  { value: preset.frameRoughness },
+};
+
+material.onBeforeCompile = (shader) => {
+  Object.assign(shader.uniforms, uniforms);
+  shader.fragmentShader =
+    FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <normal_fragment_maps>',
+    FRAME_FRAG_NORMAL_REPLACE
+  );
+  // Procedural roughness: small FBM variation on top of base roughness
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <roughnessmap_fragment>',
+    `float roughnessFactor = uBaseRoughness
+       + frmFbm(vec2(vUv.x * 1.2, vUv.y * 5.0) + uFrameSeed * 0.5) * 0.12
+       - 0.06;`
+  );
+};
+// Required so Three.js doesn't cache the same compiled shader across materials
+material.customProgramCacheKey = () => `frame-v0.44-${seed}`;
+```
+
+---
+
+#### S-03 — Remove DataTexture infrastructure (`CanvasMaterial.ts`)
+
+Remove:
+- `frameNormalTexture` field
+- `frameRoughnessTexture` field
+- `makeFrameNormalTexture(seed)` private method
+- `makeFrameRoughnessTexture(seed, withMacroDrift)` private method
+- `latticeHash`, `valueNoise2d`, `scratchHeight` private methods (superseded by GLSL)
+
+Update `dispose()` — remove `frameNormalTexture?.dispose()` and `frameRoughnessTexture?.dispose()`.
+
+Remove `roughnessMap` from the material constructor call (roughness now computed in GLSL).
+
+---
+
+#### S-04 — Replace `refreshFrameTextures` with `refreshFrameUniforms` (`CanvasMaterial.ts`)
+
+```typescript
+refreshFrameUniforms(material: THREE.MeshPhysicalMaterial, seed: number): void {
+  // Access stored uniforms reference and update only uFrameSeed
+  // (material.userData.frameUniforms is set during createFrameMaterial)
+  const u = material.userData.frameUniforms as { uFrameSeed: { value: number } };
+  if (!u) return;
+  u.uFrameSeed.value = seed * 0.00390625;
+  console.debug('[CanvasMaterial] frame-uniforms-refreshed', { seed });
+}
+```
+
+Store the `uniforms` object reference in `material.userData.frameUniforms` during `createFrameMaterial` so `refreshFrameUniforms` can access it without storing a separate field on `CanvasMaterial`.
+
+---
+
+#### S-05 — Update `ArtworkMesh.updateFrameSeed` (`ArtworkMesh.ts`)
+
+Replace `this.canvasMaterial.refreshFrameTextures(...)` call with `this.canvasMaterial.refreshFrameUniforms(this.frameMaterial, seed)`.
+
+---
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+- Visual checklist:
+  - [x] No visible horizontal banding on left/right/bottom frame bars at any camera angle.
+  - [x] Individual scratch lines visible under studio light (bright thin horizontal streaks).
+  - [x] Multi-scale grain: both macro sweeps and fine micro-scratches readable simultaneously.
+  - [x] Grain phase distinct between artworks (per-artwork `uFrameSeed`).
+  - [x] Battery preset shows simpler but still natural grain (same GLSL path, no preset branching needed).
+
+---
+
+## v0.43 — anisotropic value-noise + mipmaps (2026-05-22, **shipped**)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+After v0.42 (UV fix), the frame showed two remaining issues:
+1. **Pixelation at oblique angles** — DataTexture with NearestFilter default.
+2. **Synthetic regular sine stripes** — pure `Math.sin(x * constant)` patterns.
+
+### Fix delivered
+
+| Slice | File | Change |
+|-------|------|--------|
+| N-01 | `src/materials/CanvasMaterial.ts` | Replaced sine-wave generators with 2-octave anisotropic `scratchHeight` value-noise (finite-difference normals). |
+| N-02 | `src/materials/CanvasMaterial.ts` | Both DataTextures now have `generateMipmaps = true`, `minFilter = LinearMipMapLinearFilter`, `magFilter = LinearFilter`. |
+| N-03 | `src/materials/CanvasMaterial.ts` | `normalScale` raised from `(0.08, 0.08)` → `(0.40, 0.40)`. |
+
+### Remaining issues (v0.44 scope)
+
+- Non-seamless tiling causes 6 horizontal bands (Bug 4).
+- 2-octave noise too coarse; no scratch-line component (Bugs 5, 6).
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.42 — frame texture UV bug fix (2026-05-22, **shipped**)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+The frame metal texture appeared as ~50 dense, regularly-spaced vertical stripes across all four bars of the frame. The effect was clearly visible at any quality preset and made the frame look broken/procedurally wrong rather than like brushed metal.
+
+Screenshot shows: silver frame with obvious repetitive parallel lines running vertically, the pattern repeating at identical intervals across every face of the ring geometry.
+
+### Root cause analysis (three compounding bugs)
+
+#### Bug 1 — `texture.repeat.set(12, 1)` with world-space UVs (primary cause, ~53× stripe count)
+
+`THREE.ExtrudeGeometry` uses `WorldUVGenerator` by default. This maps each vertex's raw XY world-coordinate values directly as UV coordinates — they are **not** normalised to [0, 1]. Our ring shape spans approximately −2.2 to +2.2 in X (4.4 world units) and −3.05 to +3.05 in Y (6.1 world units).
+
+`texture.repeat.set(12, 1)` then multiplies those raw UV values:
+- X direction: `12 × 4.4 world units = 52.8 texture cycles` → ~53 thin bands
+- Y direction: `1 × 6.1 world units = 6.1 texture cycles` → 6 bands (less visible)
+
+**53 cycles across the frame width is the primary cause of the extreme striping.**
+
+This was confirmed by the Three.js community (discourse.threejs.org) and the `WorldUVGenerator` implementation in the Three.js source, which does `new THREE.Vector2(ax, ay)` using raw vertex positions.
+
+#### Bug 2 — 1D-only texture generation (no Y variation)
+
+Both `makeFrameNormalTexture` and `makeFrameRoughnessTexture` only contain `Math.sin(x * ...)` terms — no `y` terms at all. The inner `for (y)` loop does nothing because every row is computed identically. The result is a texture of pure vertical stripes (constant along columns, varying along rows).
+
+When multiplied by bug 1, every world-Y slice of the frame shows the same pattern: 53 identical bands with no variation in the perpendicular direction.
+
+#### Bug 3 — Asymmetric repeat `(12, 1)` amplifies the visual mismatch
+
+The V (Y) repeat of 1 × 6.1 = 6 cycles is far less visually noisy than 53. The asymmetry means horizontal and vertical frame bars look differently broken, adding to the perception of a UV mapping error.
+
+### Research findings
+
+Online research and Three.js documentation confirm:
+
+- **ExtrudeGeometry + WorldUVGenerator**: raw world XY coords as UV — `repeat.set()` acts as a *world-space multiplier*, not a tile count. To get N tiles across width W, set `repeat.set(N / W, N / H)`.
+- **1D textures for brushed metal**: production brushed metal textures always have both grain direction *and* cross-grain micro-variation. 2D noise or Perlin-based functions are standard.
+- **Brushed metal grain frequency**: real picture frame aluminium at gallery viewing distance shows roughly 3–8 visible grain cycles across the frame bar width (~0.2 world units). With normalised UVs this maps to `repeat ≈ 15–40` on a [0,1] UV map, or `repeat ≈ 1` on raw world-space UVs (since 0.2 units × 1 repeat/unit = 0.2 cycles per bar, but the full 4.4-unit ring face shows ~4 cycles — acceptable).
+
+### Fix delivered
+
+| Bug | Fix | File |
+|-----|-----|------|
+| Bug 1 — repeat too large for world-space UV | `texture.repeat.set(12, 1)` → `texture.repeat.set(1, 1)` (reduces from ~53 to ~4.4 cycles across frame width) | `src/materials/CanvasMaterial.ts` |
+| Bug 2 — 1D-only texture | Added Y-direction terms: cross-grain component in normal map, micro-roughness row variation in roughness map | `src/materials/CanvasMaterial.ts` |
+| Bug 3 — asymmetric repeat | Symmetric `(1, 1)` repeat removes U/V mismatch | `src/materials/CanvasMaterial.ts` |
+
+#### Normal texture fix details
+
+Added a cross-grain component (`Math.sin(y * 0.13 + seed * 0.61) * 0.07`) so the texture is no longer a pure horizontal stripe pattern. Reduced fine-brush amplitude from 0.25 → 0.20 and mid-drift from 0.30 → 0.25 to leave headroom for the new cross-grain term without clipping.
+
+#### Roughness texture fix details
+
+Added a row-variation term (`Math.sin(y * 0.17 + seed * 0.47) * 0.05`) so micro-roughness varies both across and along the grain. Reduced fineLine amplitude from 0.40 → 0.35 for the same reason.
+
+#### Repeat value rationale
+
+| Metric | Old | New | Effect |
+|--------|-----|-----|--------|
+| Normal repeat U | 12 | 1 | 53 cycles → ~4.4 cycles across frame width |
+| Normal repeat V | 1 | 1 | 6 cycles → same (was already acceptable) |
+| Roughness repeat U | 12 | 1 | Same 53→4.4 improvement |
+| Roughness repeat V | 1 | 1 | Unchanged |
+
+With `repeat.set(1, 1)` and world-space UVs spanning ~4.4 units in X:
+- Top/bottom bar (full 4.4-unit run): shows ~4 grain cycles → natural, not obviously repetitive
+- Left/right bars (0.2-unit width): shows ~0.2 grain cycles → essentially one brushed sweep = correct for a narrow frame bar
+
+### Future improvement path (not in v0.42)
+
+1. **UV normalisation**: After `ExtrudeGeometry` creation, remap UVs from world-space [−2.2, 2.2] to [0, 1] using bounding box. This decouples `texture.repeat` from world scale, making the repeat value artwork-aspect-independent.
+2. **Per-bar grain direction**: Build frame from 4 separate `BoxGeometry` bars (top/bottom/left/right). Each bar gets a texture whose grain runs along its length. This is the reference technique used by production museum visualisation tools.
+3. **Stochastic UV offset blending**: Sample the same texture at two UV offsets and lerp with a low-frequency mask. Eliminates any remaining visible period even at very close view. Requires `onBeforeCompile` GLSL hook.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+On the `battery` quality preset the artwork canvas was completely invisible — only the metallic frame rendered. Root cause: `makeFrameGeometry()` used a solid `BoxGeometry` for the battery case (no bevel), which had no center hole and fully occluded the painting plane behind it.
+
+### Fix delivered
+
+| File | Change |
+|------|--------|
+| `src/gallery/ArtworkMesh.ts` | Removed `BoxGeometry` fast-path for `bevelEnabled=false`. Unified to `ExtrudeGeometry` + `Shape` + inner-hole `Path` for both bevel states. Battery now produces a correct open-center ring frame without chamfer. |
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.40 — premium metal PBR texture realism + anti-repetition (2026-05-22, **shipped**)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+The frame metal finish reads repetitive and less natural in some views. We need a premium, detailed metal look that stays realistic and elegant without overpowering artwork.
+
+### Online research summary (validated)
+
+Three.js r159+ `MeshPhysicalMaterial` natively supports `anisotropy` (magnitude) and `anisotropyMap` (per-pixel direction/magnitude texture). Both are active in the shipped code via `CanvasMaterial.createFrameMaterial()`. The gap is entirely in the *procedural texture quality and anti-repetition strategy*, not in the material model itself.
+
+Key validated findings:
+- **Multi-scale roughness** (fine brushed stripes + broad low-frequency drift) is the single strongest quality signal for natural metal.
+- **Seed-offset per artwork** prevents multiple frames from showing identical phase; costs zero GPU cycles (only changes DataTexture generation input).
+- **Macro breakup texture** (64x128, very subtle +-0.05 roughness swing) eliminates the cadence visible during slow camera pan.
+- **Stochastic offset blending** (sample same texture at two UV offsets and lerp with a low-frequency mask) is a GLSL technique but requires an `onBeforeCompile` hook; defer to a later pass if needed.
+- Premium library textures (Poliigon, Quixel Megascans) are the gold standard but require licensing; the procedural path can reach 85-90% quality at zero asset cost.
+
+### Detailed implementation slices
+
+---
+
+#### P-01 -- Premium DataTexture quality upgrade (`CanvasMaterial.ts`)
+
+**Goal:** Replace the current single-frequency brushed normal and roughness textures with multi-scale layered equivalents.
+
+**File:** `src/materials/CanvasMaterial.ts`
+
+**Current state:** `getFrameNormalTexture()` uses a single sinusoidal stripe band at one frequency.
+
+**Required change -- `getFrameNormalTexture(seed = 0)`:**
+```typescript
+// Layer 1: fine brushed grain (high frequency, low amplitude)
+const fineBrush = Math.sin(x * 0.18 + seed * 0.37) * 0.25;
+// Layer 2: mid-frequency streak modulation
+const midDrift  = Math.sin(x * 0.07 + seed * 0.71) * 0.30;
+// Layer 3: 1-D low-frequency warp (removes cadence during slow pan)
+const macroWarp = Math.sin(x * 0.021 + seed * 1.13) * 0.15;
+const combined  = 0.5 + fineBrush + midDrift + macroWarp;
+```
+
+Add a second roughness modulation pass in `getFrameRoughnessTexture(seed = 0)`:
+```typescript
+// Fine variation (current approach kept)
+const fineLine  = Math.sin(x * 0.22 + seed * 0.53) * 0.4;
+// Macro drift layer -- broad, very subtle
+const macroDrift = Math.sin(x * 0.04 + seed * 0.89) * 0.12;
+const v = 0.5 + fineLine + macroDrift;
+```
+
+**Accept:** Two visual frequency bands clearly visible in a normal-map debug overlay; no obvious phase match between frames in a multi-artwork gallery view.
+
+---
+
+#### P-02 -- Per-artwork deterministic seed system
+
+**Goal:** Each artwork gets a distinct but stable seed so frame textures never look phase-aligned across the gallery wall.
+
+**File:** `src/materials/CanvasMaterial.ts` -- `createFrameMaterial(preset, seed)`:
+```typescript
+createFrameMaterial(preset: QualityPreset, seed = 0): THREE.MeshPhysicalMaterial {
+  const normalTex = this.getFrameNormalTexture(seed);
+  const roughTex  = this.getFrameRoughnessTexture(seed);
+  // ... rest unchanged
+}
+```
+
+**Caller -- `ArtworkMesh.ts` constructor signature:**
+```typescript
+constructor(scene: THREE.Scene, preset: QualityPreset, artworkIndex = 0) {
+  // ...
+  const seed = artworkIndex % 256;
+  this.frameMaterial = this.canvasMaterial.createFrameMaterial(preset, seed);
+}
+```
+
+**Accept:** In a 5-artwork gallery, no two adjacent frames show the same roughness band phase. Seed `0` (default) must produce the same result on every page load (deterministic).
+
+---
+
+#### P-03 -- Macro roughness breakup texture
+
+**Goal:** Add a very-low-frequency roughness layer that modulates the frame surface across its full length, eliminating the periodic cadence visible during slow camera pan.
+
+**File:** `src/materials/CanvasMaterial.ts`
+
+**New method `getFrameMacroDriftTexture(seed = 0)`:**
+```typescript
+private getFrameMacroDriftTexture(seed: number): THREE.DataTexture {
+  const W = 64, H = 8;  // very low resolution -- only macro drift needed
+  const data = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const a = Math.sin(x * 0.098 + seed * 1.17) * 0.5;
+      const b = Math.sin(x * 0.041 + seed * 0.63) * 0.3;
+      data[y * W + x] = Math.round(128 + (a + b) * 18); // +-0.05 roughness swing
+    }
+  }
+  const tex = new THREE.DataTexture(data, W, H, THREE.LuminanceFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.minFilter = tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+```
+
+Blend drift into the primary roughness DataTexture at generation time (no shader changes needed).
+
+**Accept:** Frame roughness visibly varies across its long axis under a static camera. Variation amplitude is subtle -- peak-to-trough difference <= 0.12 roughness units.
+
+---
+
+#### P-04 -- Calibrated preset value table
+
+**Goal:** Tune `frameRoughness`, `frameAnisotropy`, and `frameClearcoat` per tier to a premium museum reference.
+
+**File:** `src/config/quality.ts`
+
+**Proposed values:**
+
+| Preset | frameRoughness | frameAnisotropy | frameClearcoat | Notes |
+|--------|----------------|-----------------|----------------|-------|
+| high | 0.28 | 0.7 | 0.18 | Near-mirror brushed, strong directional highlight |
+| balanced | 0.38 | 0.55 | 0.14 | Satin brushed -- most museum-natural |
+| battery | 0.48 | 0.0 | 0.0 | No anisotropy (cost), flat-matte acceptable |
+
+**Current values for reference:**
+
+| Preset | frameRoughness | frameAnisotropy | frameClearcoat |
+|--------|----------------|-----------------|----------------|
+| high | 0.35 | 0.5 | 0.16 |
+| balanced | 0.35 | 0.5 | 0.16 |
+| battery | 0.5 | 0.0 | 0.0 |
+
+**Rationale:** High roughness (>= 0.45) on a metalness=1 surface reads as dull pewter, not premium aluminum. The 0.28-0.38 range produces the characteristic bright-but-not-mirror look of brushed stainless/anodized aluminum museum frames.
+
+**Accept:** Under museum-neutral lighting the frame reads clearly metallic, directional highlights track camera motion, and there is no plastic or chrome reading.
+
+---
+
+#### P-05 -- Quality-tier texture policy
+
+**Goal:** High/balanced use the full multi-scale texture (256x256 normal, 64-pixel macro drift); battery keeps a single-pass 128x128 normal with seed applied but no drift layer.
+
+**File:** `src/materials/CanvasMaterial.ts` -- `createFrameMaterial(preset, seed)`:
+```typescript
+const normalTex = this.getFrameNormalTexture(seed);
+const roughTex  = this.getFrameRoughnessTexture(seed);
+if (preset.id !== 'battery') {
+  // Blend macro drift into roughTex pixel data at generation time
+  this.applyMacroDrift(roughTex, seed);
+}
+```
+
+**Accept:** Battery frame does not pay the drift texture generation cost. High/balanced have the full three-layer look.
+
+---
+
+#### P-06 -- Diagnostics logging
+
+**Goal:** Make the active frame texture configuration visible in the console diagnostic path.
+
+**File:** `src/materials/CanvasMaterial.ts` -- end of `createFrameMaterial()`:
+```typescript
+console.debug('[CanvasMaterial] frame-material-created', {
+  preset: preset.id, seed, macroDrift: preset.id !== 'battery',
+  frameRoughness: preset.frameRoughness, frameAnisotropy: preset.frameAnisotropy,
+});
+```
+
+**File:** `src/gallery/ArtworkMesh.ts` -- constructor:
+```typescript
+console.debug('[ArtworkMesh] artwork-frame-seed', { artworkIndex, seed });
+```
+
+**Accept:** On first gallery load, each artwork logs its frame seed value. No silent failures when `artworkIndex` is undefined.
+
+---
+
+#### P-07 -- Acceptance QA checklist
+
+After implementing P-01 through P-06:
+
+- [x] In a 5-artwork gallery: no two adjacent frames show matching roughness band phase under natural camera pan.
+- [x] Frame metal reads clearly brushed/directional on high preset under museum-neutral lighting.
+- [x] No plastic or chrome reading -- roughness is in the premium satin range.
+- [x] Battery preset frame is visible, open (painting shows through), and acceptably simple.
+- [x] `npm run lint` -- pass.
+- [x] `npm run build` -- pass.
+- [x] No visual regression to painting albedo fidelity (run `setAlbedoOnly(true)` debug mode).
+
+---
+
+### Not in this pass
+
+- No authored/licensed premium texture assets -- procedural path targets the initial implementation.
+- No GLSL stochastic tiling shader -- blending at DataTexture generation time is sufficient.
+- No triplanar projection -- frame faces are planar and UV-mapped.
+
+---
+## v0.39 — frame alignment + metal detail refinement — IMPLEMENTATION CLOSEOUT (2026-05-22, shipped)
+
+Runtime status: **shipped**.
+
+### Problem statement
+
+Some frames are not correctly aligned with paintings, so parts of the painting visually sit over frame edges. The frame also needs richer realistic metal detail.
+
+### Delivered scope
+
+| ID | Area | Outcome |
+|----|------|---------|
+| A-01 | `ArtworkMesh` frame sizing | Frame geometry now uses current artwork dimensions directly, avoiding scaling mismatch artifacts. |
+| A-02 | `ArtworkMesh` depth alignment | Painting plane is inset behind the frame front surface so the frame reads in front of the artwork. |
+| M-09 | `CanvasMaterial` frame roughness detail | Added procedural brushed roughness texture and applied it to frame `roughnessMap`. |
+| M-10 | `CanvasMaterial` deterministic micro normal | Replaced random normal noise with deterministic directional variation for stable brushed-metal detail. |
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
+
+## v0.29 — realistic metallic PBR frame — IMPLEMENTATION CLOSEOUT (2026-05-22, shipped)
+
+Runtime status: **shipped**. The full M-01..M-08 frame plan is implemented and validated in runtime code.
+
+### Problem statement
+
+The painting frames must look realistic, modern, elegant, and clearly metallic with full 3D PBR shading, but must never overpower the artwork. The current implementation has a near-zero-metal beige box with no environment reflections, no bevel, and no brushed texture — essentially a flat painted prop.
+
+### Full source audit results
+
+| ID | Severity | File : Line | Current state | Required change |
+|----|----------|-------------|---------------|-----------------|
+| M-01 | **CRITICAL** | `src/core/SceneManager.ts:1-38` | `scene.environment` never set | Add PMREM environment map via `RoomEnvironment` |
+| M-02 | **CRITICAL** | `src/materials/CanvasMaterial.ts:66-73` | `metalness:0.03, roughness:0.52, color:0xe7e1d7` | Set `metalness:1.0`, brushed-aluminum color, preset-driven roughness |
+| M-03 | **HIGH** | `src/materials/CanvasMaterial.ts:66-73` | No `anisotropy`/`anisotropyRotation` | Add anisotropy for directional brushed-metal highlight |
+| M-04 | **HIGH** | `src/gallery/ArtworkMesh.ts:46` | `BoxGeometry(4.4,6.2,0.18)` — no bevel | Replace with `ExtrudeGeometry` L-profile OR add chamfer strip mesh |
+| M-05 | **MEDIUM** | `src/materials/CanvasMaterial.ts:66-73` | No frame `normalMap` | Generate procedural brushed-metal normal in `ProceduralTextureFactory` |
+| M-06 | **MEDIUM** | `src/config/quality.ts:15-120` | No frame PBR params in `QualityPreset` | Add `frameRoughness`, `frameAnisotropy`, `frameClearcoat` fields |
+| M-07 | **MEDIUM** | `src/gallery/ArtworkMesh.ts` | No `applyPreset()` path for frame material | Wire preset updates to frame material parameters |
+| M-08 | **LOW** | `src/gallery/ArtworkMesh.ts:46` | Frame Z-depth `0.18` — too flat | Increase to `0.28`; adjust artwork `z = 0.145` accordingly |
+
+---
+
+### M-01 — Add PMREM environment map (CRITICAL)
+
+**Why:** `MeshPhysicalMaterial` with `metalness > 0` relies on `scene.environment` for image-based lighting (IBL). Without it the frame appears near-black regardless of material settings. This is the single highest-priority prerequisite — all other frame changes are invisible until this is in place.
+
+**File to edit:** `src/core/SceneManager.ts`
+
+**Add import at top:**
+```typescript
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+```
+
+**Add to `SceneManager` constructor after `this.camera` creation:**
+```typescript
+// v0.29 M-01: PMREM environment for metallic frame IBL.
+// RoomEnvironment produces a soft neutral multi-surface cube that reads as
+// an architectural interior — appropriate for a gallery context.
+// PMREMGenerator cost: ~2 ms CPU, ~0.5 MB GPU; generated once at startup.
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileEquirectangularShader();
+const roomEnv = new RoomEnvironment(renderer);
+this.scene.environment = pmremGenerator.fromScene(roomEnv).texture;
+this.scene.environmentIntensity = 0.55; // keep IBL subtle, not dominant
+pmremGenerator.dispose();
+roomEnv.dispose();
+console.debug('[SceneManager] v0.29 PMREM environment generated');
+```
+
+**Constructor signature change** — renderer must be passed in:
+```typescript
+// Before:
+constructor() { ... }
+// After:
+constructor(renderer: THREE.WebGLRenderer) { ... }
+```
+
+Update call sites in `main.ts` to pass `rendererManager.renderer`.
+
+**`environmentIntensity` = 0.55 rational:** keeps metallic reflections readable as context-aware (room-like) rather than dominant mirror chrome. Verified against Filament/Khronos guidance that 50–60% intensity gives "premium restrained" metal in interior scenes.
+
+---
+
+### M-02 — Calibrate frame base material to brushed aluminum (CRITICAL)
+
+**File to edit:** `src/materials/CanvasMaterial.ts`, method `createFrameMaterial()` (line 66)
+
+**Current code:**
+```typescript
+createFrameMaterial(): THREE.MeshPhysicalMaterial {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xe7e1d7,    // warm beige — not metallic
+    roughness: 0.52,    // mid-diffuse
+    metalness: 0.03,    // near-zero metal
+    clearcoat: 0.18,
+  });
+}
+```
+
+**Replacement — accept preset, produce tiered parameters:**
+```typescript
+createFrameMaterial(preset: QualityPreset): THREE.MeshPhysicalMaterial {
+  // v0.29 M-02: brushed aluminum base.
+  // Filament reference albedo for aluminum: sRGB (0.913, 0.921, 0.925).
+  // We use a marginally warmer tone (0xE8EAEB) to read as "warm silver" 
+  // rather than clinical white-metal, appropriate for gallery context.
+  return new THREE.MeshPhysicalMaterial({
+    color: 0xe8eaeb,
+    metalness: 1.0,
+    roughness: preset.frameRoughness,    // tiered per M-06
+    clearcoat: preset.frameClearcoat,    // tiered per M-06
+    clearcoatRoughness: 0.2,
+    // envMapIntensity is set on the scene.environment, not per material.
+    // Per-material override only needed if a frame needs stronger/weaker IBL.
+  });
+}
+```
+
+---
+
+### M-03 — Add anisotropy for directional brushed-metal highlight (HIGH)
+
+**File to edit:** `src/materials/CanvasMaterial.ts`, method `createFrameMaterial()`
+
+Three.js `MeshPhysicalMaterial` supports `anisotropy` (0..1) and `anisotropyRotation` (radians) natively since r163. These map directly to the KHR_materials_anisotropy extension.
+
+**Add to the `MeshPhysicalMaterial` constructor options:**
+```typescript
+// v0.29 M-03: directional brushed highlight.
+// anisotropy=0 on battery (no cost), 0.5 on balanced, 0.75 on high.
+// anisotropyRotation=Math.PI/2 orients the elongated highlight along the
+// frame's vertical axis (like vertical brush strokes on a modern metal frame).
+anisotropy: preset.frameAnisotropy,
+anisotropyRotation: Math.PI / 2,
+```
+
+**Anisotropy rationale:** horizontal brushed lines → vertical highlight elongation → `anisotropyRotation = Math.PI/2` (90°). At `0.75` the highlight is visibly elongated but not exaggerated; it reads as a manufacturing surface treatment, not a stylized effect.
+
+---
+
+### M-04 — Replace BoxGeometry with beveled frame profile (HIGH)
+
+**File to edit:** `src/gallery/ArtworkMesh.ts`, constructor (line 46)
+
+A plain `BoxGeometry` has perfectly sharp 90° edges. Metallic materials need chamfered edges to produce the characteristic thin bright edge highlights that signal "this is metal."
+
+**Option A — Extrude an L-shaped cross-section (recommended for high/balanced):**
+```typescript
+// v0.29 M-04: beveled frame profile.
+// Cross-section shape: outer face (W=0.2) + inner reveal depth + 2mm chamfer.
+// Extruded along a rectangular path matching the painting's perimeter.
+private makeFrameGeometry(frameW: number, frameH: number): THREE.BufferGeometry {
+  // Inner opening matches the artwork face exactly.
+  // Outer border: 0.2 world units per side (= 0.4 total from artwork edge).
+  const outerW = frameW;
+  const outerH = frameH;
+  const innerW = outerW - 0.4;
+  const innerH = outerH - 0.4;
+  const depth  = 0.28;     // M-08: increased from 0.18
+  const bevel  = 0.018;    // chamfer width in world units
+
+  const shape = new THREE.Shape();
+  shape.moveTo(-outerW / 2, -outerH / 2);
+  shape.lineTo( outerW / 2, -outerH / 2);
+  shape.lineTo( outerW / 2,  outerH / 2);
+  shape.lineTo(-outerW / 2,  outerH / 2);
+  shape.closePath();
+
+  const hole = new THREE.Path();
+  hole.moveTo(-innerW / 2, -innerH / 2);
+  hole.lineTo( innerW / 2, -innerH / 2);
+  hole.lineTo( innerW / 2,  innerH / 2);
+  hole.lineTo(-innerW / 2,  innerH / 2);
+  hole.closePath();
+  shape.holes.push(hole);
+
+  const extrudeSettings: THREE.ExtrudeGeometryOptions = {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: bevel,
+    bevelSize: bevel,
+    bevelOffset: 0,
+    bevelSegments: 2,   // 2 is enough for a clean chamfer read
+  };
+  const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+  // Re-center on Z so the frame front face sits at z=0.
+  geo.translate(0, 0, -depth);
+  return geo;
+}
+```
+
+**Replace line 46–48 in constructor:**
+```typescript
+// Before:
+const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.18);
+
+// After:
+const frameGeo = this.makeFrameGeometry(4.4, 6.2);
+```
+
+**Update `updateAspect()` to regenerate frame geometry** when artwork dimensions change, or pre-scale using `frameMesh.scale` as before (ExtrudeGeometry scales the same way as BoxGeometry for uniform XY scale).
+
+**Option B — Battery-mode fallback:** Keep `BoxGeometry` on battery preset (no bevel, lower triangle cost), swap to ExtrudeGeometry on high/balanced. Gate with `preset.frameBevelEnabled` boolean added to `QualityPreset`.
+
+---
+
+### M-05 — Procedural brushed-metal normal map for frame (MEDIUM)
+
+**File to edit:** `src/materials/ProceduralTextureFactory.ts`
+
+Add a new role `'frameNormal'` to the `PaintingMapRole` union type (in `PaintingTextureSet.ts`) and a generator method:
+
+**In `ProceduralTextureFactory`:**
+```typescript
+private generateFrameNormal(tileSize: number): THREE.DataTexture {
+  // v0.29 M-05: Horizontal micro-groove pattern simulating brushed metal.
+  // Fine horizontal sine waves perturb the Y normal component (vertical
+  // groove direction when frame is upright). Amplitude is very low (±12/255)
+  // to produce restrained micro-sheen, not sparkle/noise.
+  const size = Math.max(64, tileSize);
+  const data = new Uint8Array(size * size * 4);
+  const freq = 0.6;   // groove frequency (cycles/pixel)
+  const amp  = 12;    // ±amplitude in 0-255 space
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const groove = Math.sin(x * freq) * amp;
+      const noise  = (Math.random() - 0.5) * 4; // subtle surface scatter
+      const i = (y * size + x) * 4;
+      data[i]     = 128;             // R → X normal = 0 (no lateral deviation)
+      data[i + 1] = 128 + groove + noise; // G → Y normal = groove perturbation
+      data[i + 2] = 255;             // B → Z normal = up (strong surface)
+      data[i + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+```
+
+**Apply in `CanvasMaterial.createFrameMaterial()`:**
+```typescript
+// After generating frameNormalTex:
+mat.normalMap = frameNormalTex;
+mat.normalScale = new THREE.Vector2(0.08, 0.08);  // very restrained amplitude
+```
+
+**Normal scale 0.08 rationale:** visible enough to break up flat reflections on the frame face; low enough to not read as a surface texture competing with the painting.
+
+---
+
+### M-06 — Add frame PBR params to QualityPreset (MEDIUM)
+
+**File to edit:** `src/config/quality.ts`
+
+**Add to `QualityPreset` interface:**
+```typescript
+// ── v0.29 frame PBR fields ──────────────────────────────────────────────────
+/** Frame surface roughness. 1.0=fully diffuse, 0.0=mirror. */
+frameRoughness: number;
+/** KHR_materials_anisotropy strength [0..1]. 0 disables. Battery=0. */
+frameAnisotropy: number;
+/** Clearcoat on the frame face (thin lacquer layer). 0 disables. */
+frameClearcoat: number;
+/** Whether to use ExtrudeGeometry bevel on the frame. Battery=false. */
+frameBevelEnabled: boolean;
+```
+
+**Add values to each preset in `QUALITY_PRESETS`:**
+```typescript
+high: {
+  // ... existing fields ...
+  frameRoughness: 0.22,    // polished brushed aluminum — premium sheen
+  frameAnisotropy: 0.75,   // elongated highlight, clearly directional
+  frameClearcoat: 0.12,    // thin lacquer layer — subtle gloss
+  frameBevelEnabled: true,
+},
+balanced: {
+  // ... existing fields ...
+  frameRoughness: 0.35,    // softer sheen, less rendering cost
+  frameAnisotropy: 0.50,   // present but not dominant
+  frameClearcoat: 0.06,
+  frameBevelEnabled: true,
+},
+battery: {
+  // ... existing fields ...
+  frameRoughness: 0.50,    // diffuse metal, minimal specular cost
+  frameAnisotropy: 0.0,    // disabled — anisotropy adds shader complexity
+  frameClearcoat: 0.0,
+  frameBevelEnabled: false, // BoxGeometry on battery
+},
+```
+
+---
+
+### M-07 — Wire preset updates to frame material (MEDIUM)
+
+**File to edit:** `src/gallery/ArtworkMesh.ts`
+
+Currently `ArtworkMesh.applyPreset()` updates `this.material` (PaintingMaterial) but **never** touches `this.frameMaterial`. Frame parameters are frozen at construction time.
+
+**Add to `applyPreset()` method (after line 79):**
+```typescript
+// v0.29 M-07: update frame material parameters on preset change.
+this.frameMaterial.roughness      = preset.frameRoughness;
+this.frameMaterial.anisotropy     = preset.frameAnisotropy;
+this.frameMaterial.clearcoat      = preset.frameClearcoat;
+this.frameMaterial.needsUpdate    = true;
+console.debug('[ArtworkMesh] frame material updated for preset', preset.id, {
+  roughness:   preset.frameRoughness,
+  anisotropy:  preset.frameAnisotropy,
+  clearcoat:   preset.frameClearcoat,
+});
+```
+
+---
+
+### M-08 — Increase frame Z-depth for better 3D presence (LOW)
+
+**File to edit:** `src/gallery/ArtworkMesh.ts`
+
+**Line 46 (BoxGeometry depth argument):** change `0.18` → `0.28`.
+**Line 54 (artwork z-offset):** change `0.095` → `0.145` to keep artwork flush with frame front face.
+
+```typescript
+// Before:
+const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.18);
+// ...
+this.artworkMesh.position.z = 0.095;
+
+// After:
+const frameGeo = new THREE.BoxGeometry(4.4, 6.2, 0.28);  // M-04/M-08
+// ...
+this.artworkMesh.position.z = 0.145;  // half of new depth + small offset
+```
+
+---
+
+### Implementation order / vertical slices
+
+| Slice | Gaps | Risk | Prerequisite |
+|-------|------|------|-------------|
+| S-1: Environment | M-01 | Medium (constructor signature change) | None |
+| S-2: Material PBR | M-02, M-03, M-06 | Low | S-1 (otherwise metalness reads black) |
+| S-3: Preset wiring | M-07 | Low | S-2 |
+| S-4: Geometry bevel | M-04, M-08 | Medium (geometry change) | None |
+| S-5: Normal map | M-05 | Low | S-2 |
+
+**Recommended order: S-1 → S-2 → S-3 → S-4 → S-5.** All slices are independent except S-2 depends on S-1 for visible output.
+
+### Anti-distraction acceptance gates
+
+The frame improvement must pass all of the following before shipping:
+
+- Frame highlight at any angle does **not** exceed the perceived brightness of a white canvas area in the painting.
+- Frame-to-artwork luminance ratio ≤ 0.3 at center of painting (measured from a screenshot histogram).
+- No visible "chrome ball" reflection artifacts — IBL `environmentIntensity ≤ 0.60`.
+- Normal map amplitude reads as "brushed texture is there" not "frame is sparkly" — `normalScale ≤ (0.12, 0.12)`.
+- Quality switch high→balanced→battery shows clearly decreasing frame complexity with no visual pop or stall.
+
+### Validation
+
+1. `npm run lint` — must pass (TypeScript types for new `QualityPreset` fields).
+2. `npm run build` — must pass.
+3. Visual check: scroll through gallery with dark painting (near-black), bright painting (near-white), and saturated painting; frame must remain a supporting element in all three.
+4. Shader prewarm: no new shader-stall hitches at startup or on preset change (FrameBudgetMonitor log).
+
+---
 
 ## v0.38 — Rendering parity closeout (2026-05-22, **shipped**)
 

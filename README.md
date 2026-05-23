@@ -1,5 +1,112 @@
 # Freyraum
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## v0.56 — website quality audit (2026-05-22, **in progress**)
+
+Current status: **initial improvements shipped**.
+
+- Improved accessibility and language consistency in core UI chrome (navigation + topbar).
+- Added assistive instructions for the interactive 3D canvas.
+- Replaced forced local-preview meta refresh with a user-controllable redirect flow.
+- Added `noscript` fallback text for JavaScript-disabled usage.
+
+See `plan.md` (`v0.56`) and `FINDINGS.md` (`v0.56`) for full audit scope, research-backed rationale, and open follow-ups.
+
+### Merge readiness snapshot (2026-05-22)
+
+- Documentation for current shipped scope (v0.56-A) and future scope (v0.56-B) is synchronized.
+- Markdown audit banner is refreshed across repository docs for this pass.
+- Validation baseline for merge readiness: `npm run lint` and `npm run build` pass.
+
+## v0.47 — modern gallery frame metal realism pass (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Retuned frame shader coordinates so brushed direction follows each frame bar (side bars no longer read as zebra stripes).
+- Reduced scratch occupancy, normal intensity, and roughness contrast to keep highlights elegant and physically plausible.
+- Updated satin-metal preset targets (`high 0.44/0.45`, `balanced 0.53/0.30`, `battery roughness 0.60`) for calmer gallery-grade reflections.
+- Updated shader cache key + diagnostics to `v0.47`.
+
+## v0.46 — zebra-like frame artifact follow-up (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Reduced macro contrast and frequency energy in the frame procedural FBM/scratch stack.
+- Added derivative-aware density fade + segmented directional micro-grooves to suppress distance alias and synthetic stripe cadence.
+- Retuned frame roughness/anisotropy (`high 0.38/0.60`, `balanced 0.47/0.50`, `battery roughness 0.54`) and narrowed roughness shader variance window.
+- Updated shader cache key + diagnostics to `v0.46`.
+
+## v0.45 — Zero-Visible-Tiling High-Resolution Brushed-Metal Frame (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Domain-warped aperiodic FBM (`frmBrushedFbm`) replaces `frmFbm + frmTileOffset + frmRidge` — no hash-cell grid, no repeating cadence.
+- `vFrameLocalPos` object-space position varying injected via `onBeforeCompile` vertex shader; all GLSL uses object-space XY.
+- Three density bands of derivative-aware scratch primitives (`frmScratchLayer`): fine (110/unit), medium (32/unit), deep (7/unit). `fwidth`-based AA keeps scratches sub-pixel-stable during camera movement.
+- `frmBrushedNormal` rewritten: layered FBM + scratch gradients, eps = 0.004 (was 0.02) for close-zoom sharpness.
+- PBR roughness raised to satin-brushed Al range: high 0.28→0.35, balanced 0.38→0.44, battery 0.48→0.52.
+
+See `CHANGELOG.md § v0.45` and `FINDINGS.md § v0.45` for full detail.
+
+
+## v0.44 — GLSL shader-injected brushed-metal frame (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Replaced all DataTexture frame generators with `onBeforeCompile` GLSL injection: 4-octave FBM, ridged-noise scratches, and hash-based anti-tiling (Heitz/Neyret 2018).
+- Per-fragment procedural normal replaces `#include <normal_fragment_maps>`; per-fragment roughness replaces roughnessMap sampling. No texture tiles, no tiling boundary, no seams.
+- Seed update on navigation is now a single float uniform write (`uFrameSeed`) with zero GPU allocation — no texture disposal or re-upload.
+- Frame geometry calls `geometry.computeTangents()` to ensure the local `tbn` matrix is available for the GLSL injection.
+- Horizontal banding (Bug 4), coarse-only grain (Bug 5), and missing scratch component (Bug 6) all eliminated.
+
+See `CHANGELOG.md § v0.44` and `FINDINGS.md § v0.44` for full detail.
+
+## v0.43 — anisotropic value-noise + mipmaps (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Replaced synthetic sine-wave frame texture generators with 2-octave anisotropic value-noise + finite-difference normal computation.
+- Fixed pixelation: DataTextures now use `generateMipmaps = true`, `LinearMipMapLinearFilter`, `LinearFilter`.
+- Raised `normalScale` from `(0.08, 0.08)` to `(0.40, 0.40)` so grain is visible under IBL lighting.
+
+Remaining: horizontal banding (tiling seams) and missing scratch micro-detail — addressed in v0.44 plan.
+
+
+
+- Fixed critical frame texture artifact: ~53 dense vertical stripes eliminated across all frame bars. Root cause was `texture.repeat.set(12, 1)` combined with `THREE.ExtrudeGeometry`'s world-space UV coordinates (raw world values, not normalised). `12 × 4.4 world units = 52.8 texture cycles` → 53 thin bands. Fixed to `repeat.set(1, 1)`.
+- Fixed 1D-only texture generation: both frame normal and roughness maps previously had no Y variation (every row was identical). Added cross-grain Y terms to produce proper 2D surface variation.
+- Frame now shows ~4 natural grain cycles across its width; the brushed metal finish is clearly readable without obvious tiling.
+
+## v0.41 — battery preset painting invisible bug fix (2026-05-22, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Fixed critical battery preset bug: the painting canvas was completely invisible on the lowest quality tier. Root cause was `makeFrameGeometry()` using a solid `BoxGeometry` (no center hole) that fully occluded the artwork plane. Now uses the same ring-shaped `ExtrudeGeometry` path as all other presets, with `bevelEnabled:false` for battery (no chamfer, but open center).
+- Upgraded `plan.md § v0.40` to a detailed technical coding plan with TypeScript code samples for all implementation slices (P-01 through P-07).
+
+## v0.39 — frame alignment + metal detail refinement (2026-05-22, **shipped**)
+
+Current status: **shipped**.
+
+- Frame geometry is now rebuilt per artwork aspect so the inner opening stays aligned with each painting size.
+- Paintings are now seated slightly behind the frame front plane so they no longer visually sit on top of the frame.
+- Frame metal finish now includes both brushed normal variation and a dedicated roughness detail map for a more realistic metallic surface response.
+
+See `plan.md § v0.39` and `FINDINGS.md § v0.39` for scope, implementation notes, and validation.
+
+## v0.29 — realistic metallic PBR frame (2026-05-22, **shipped**)
+
+Current status: **shipped in runtime code**.
+
+The complete v0.29 frame pass is implemented:
+
+- **M-01:** Scene now uses PMREM + `RoomEnvironment` for metallic IBL.
+- **M-02/M-03/M-05:** Frame material is now brushed-metal (`metalness:1.0`) with preset-driven roughness/clearcoat/anisotropy plus procedural brushed normal detail.
+- **M-04/M-08:** Frame geometry now supports beveled profile (high/balanced) with deeper frame depth (`0.28`) and adjusted artwork Z placement.
+- **M-06/M-07:** Quality presets now include frame PBR controls and `ArtworkMesh.applyPreset()` updates frame material/geometry at runtime.
+
+See `plan.md § v0.29` and `FINDINGS.md § v0.29` for implementation closeout and validation notes.
 
 ## v0.38 — shipped update: color/contrast parity hardening (2026-05-22)
 

@@ -6,17 +6,19 @@ export class NavigationControls {
   constructor(container: HTMLElement) {
     this.el = document.createElement('nav');
     this.el.className = 'nav-controls';
-    this.el.setAttribute('aria-label', 'Gallery navigation');
+    this.el.setAttribute('aria-label', 'Galerie-Navigation');
 
     const prevBtn = document.createElement('button');
     prevBtn.className = 'nav-btn';
-    prevBtn.setAttribute('aria-label', 'Previous artwork');
+    prevBtn.setAttribute('aria-label', 'Vorheriges Werk');
+    prevBtn.title = 'Vorheriges Werk';
     prevBtn.textContent = '←';
     prevBtn.addEventListener('click', () => this.onPrevCallback?.());
 
     const nextBtn = document.createElement('button');
     nextBtn.className = 'nav-btn';
-    nextBtn.setAttribute('aria-label', 'Next artwork');
+    nextBtn.setAttribute('aria-label', 'Nächstes Werk');
+    nextBtn.title = 'Nächstes Werk';
     nextBtn.textContent = '→';
     nextBtn.addEventListener('click', () => this.onNextCallback?.());
 

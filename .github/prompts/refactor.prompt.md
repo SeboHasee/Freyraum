@@ -1,9 +1,10 @@
 # Refactor prompt
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
 
 ## v0.29 current context
 
-Latest planning status: loading-screen/full-render ownership and artwork color fidelity are shipped work. Future coding agents should consult `plan.md § v0.29` and `FINDINGS.md § v0.29` for the shipped readiness diagnostics and validation boundaries.
+Latest v0.29 status: metallic frame runtime implementation is shipped (M-01..M-08 complete). Future coding agents should consult `plan.md § v0.29` and `FINDINGS.md § v0.29` for as-built details and validation boundaries.
 
 
 

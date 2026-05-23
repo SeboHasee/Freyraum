@@ -1,5 +1,22 @@
 # DOCUMENTATION RULES
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## v0.47 documentation pass
+
+- 2026-05-22 (runtime + documentation): shipped frame realism follow-up with bar-aligned brushed-metal shader coordinates, softer satin response, and reduced zebra-style banding; synchronized markdown status sections accordingly.
+
+## v0.46 documentation pass
+
+- 2026-05-22 (documentation): customer-reported zebra-like frame artifact analyzed from screenshot evidence, online research notes collected, and a new v0.46 realistic-metal recovery plan added. This pass is documentation-only; runtime rendering code remains unchanged.
+
+## v0.45 documentation pass
+
+- 2026-05-22 (documentation): v0.45 frame realism research plan documented. Scope is planned only: zero visible frame tiling/repetition, sharper derivative-aware scratches, continuous frame-space procedural coordinates, slightly higher roughness/lower shine, and Three.js r166 `tbn` compatibility. No runtime code changed in this pass.
+
+## v0.40 documentation pass
+
+- 2026-05-22 (documentation): v0.40 premium metal PBR research sync completed. Audited current frame material implementation (`CanvasMaterial`/`ArtworkMesh`), gathered online references for premium metal texture sourcing and anti-repetition techniques, documented findings in `FINDINGS.md`, added an implementation-ready roadmap in `plan.md`, updated top-level status docs, and refreshed markdown audit stamps across all `.md` files. Validation rerun: `npm run lint`, `npm run build`. No runtime code changed.
 
 ## v0.29 documentation requirement — preload claims must prove presented frames
 

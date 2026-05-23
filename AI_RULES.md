@@ -1,5 +1,14 @@
 # FREYRAUM AI rules
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## v0.47 frame-realism rule
+
+When tuning metallic frames from screenshot feedback, verify brush-direction mapping across all frame bars and prefer subtle satin continuity over high-contrast stripe visibility.
+
+## v0.40 material-fidelity planning rule
+
+When documenting metal/material upgrades, explicitly distinguish shipped runtime behavior from research-only plans, and include anti-repetition constraints (macro variation, per-instance variation, and subtle intensity bounds) before declaring a surface “premium” or “natural.”
 
 ## v0.29 preload/fidelity planning rule
 

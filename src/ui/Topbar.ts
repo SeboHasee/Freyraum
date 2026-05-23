@@ -6,8 +6,8 @@ export class Topbar {
     this.el.className = 'topbar';
     this.el.setAttribute('role', 'banner');
     this.el.innerHTML = `
-      <div class="topbar__brand" aria-label="Freyraum">freyraum</div>
-      <div class="topbar__badge" role="note">IMMERSIVE DIGITAL EXHIBITION</div>
+      <h1 class="topbar__brand">freyraum</h1>
+      <div class="topbar__badge" role="note">IMMERSIVE DIGITALE AUSSTELLUNG</div>
     `;
     container.appendChild(this.el);
   }

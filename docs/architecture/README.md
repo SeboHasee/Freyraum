@@ -1,5 +1,16 @@
 # Architecture docs
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## v0.47 — shipped frame shader architecture
+
+The shipped refinement keeps `MeshPhysicalMaterial.onBeforeCompile` as the extension point and adds bar-orientation-aware procedural coordinates before grain/scratch evaluation. See `../../plan.md § v0.47` and `../../FINDINGS.md § v0.47`.
+
+## v0.45 — planned frame shader architecture
+
+The v0.45 plan keeps frame realism inside the existing Three.js `MeshPhysicalMaterial.onBeforeCompile` path, but upgrades the procedural domain: continuous frame-space coordinates, aperiodic multi-domain grain, derivative-aware scratch primitives, and roughness/clearcoat tuning. See `../../plan.md § v0.45` and `../../FINDINGS.md § v0.45`.
+
+Compatibility rule: Three.js r166 uses local `tbn` in the fragment shader; do not use `vTBN` in future injections.
 
 ## v0.29 — shipped loading-screen ownership architecture
 

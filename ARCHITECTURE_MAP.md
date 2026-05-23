@@ -1,5 +1,20 @@
 # FREYRAUM architecture map
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## v0.47 shipped frame-material architecture note
+
+Frame surfacing remains shader-owned in `CanvasMaterial`, now with a bar-aligned coordinate transform (`frmBarBrushCoords`) before FBM/scratch evaluation. Preset policy stays in `quality.ts`; geometry/tangent ownership remains in `ArtworkMesh`.
+
+## v0.45 planned frame-material architecture note
+
+The next frame-quality pass should treat procedural frame surfacing as a shader-owned subsystem inside `CanvasMaterial`: continuous frame-space coordinates, aperiodic multi-domain grain, derivative-aware scratch primitives, roughness modulation, and compile diagnostics. Preset policy remains in `quality.ts`; geometry/tangent ownership remains in `ArtworkMesh`.
+
+Important boundary: Three.js r166 creates a local `tbn` matrix in the fragment shader. Any future `onBeforeCompile` normal replacement must use `tbn`, not `vTBN`.
+
+## v0.40 planned frame-texture architecture note
+
+The next metal-quality pass should treat frame surfacing as a hybrid pipeline: authored premium texture-set input (optional) + procedural fallback + deterministic anti-repetition modulation. Keep ownership in `CanvasMaterial` for texture synthesis/material wiring, with preset policy in `quality.ts` and diagnostics emitted through existing diagnostics utilities.
 
 ## v0.29 shipped boot/render architecture note
 

@@ -1,5 +1,65 @@
 # FREYRAUM lessons learned
-> Last full markdown audit: 2026-05-22 (v0.38 shipped — OutputPass color-space fix + FXAA disabled on high/balanced for v0.25 color/contrast parity; lint/build pass).
+> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
+> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+
+## 2026-05-22 — v0.47 frame realism lessons
+
+### Lesson 82 — Direction must follow geometry, not world axes
+
+For rectangular frame rings, procedural brush/scratch direction should be mapped to local bar orientation (top/bottom vs side bars). World-axis-only stripe domains can look acceptable on one bar and visibly wrong on the others.
+
+### Lesson 83 — Elegant metal reads from restraint
+
+When brushed-metal detail is already present, lowering scratch occupancy and roughness/normal contrast often improves realism more than adding new noise layers. Gallery framing should prioritize stable satin highlight rolloff over high-contrast micro-pattern visibility.
+
+## 2026-05-22 — v0.45 technical coding plan lessons
+
+### Lesson 77 — Removing texture tiles is not the same as removing visible cadence
+
+Moving from DataTextures to GLSL removes hard texture-wrap seams, but coarse hash cells, blend masks, or repeated coordinate domains can still become visible on long flat frame bars. Future rule: anti-repetition plans must check for repeated clusters, grid/cell boundaries, and stripe cadence, not only texture tile seams. **Domain warping** (Quilez pattern: `p += noise_field(p) * k`) is the correct solution — it has no explicit cell structure and continuously distorts the sampling domain.
+
+### Lesson 78 — Close-zoom metal detail needs derivative-aware scratch primitives
+
+FBM grain alone reads as soft noise under close inspection. Future rule: premium brushed metal needs explicit individual scratch primitives with varied length/width/intensity and `fwidth`-aware filtering. `width = max(fwidth(coord) * 0.8, hardWidth)` prevents sub-pixel-thin lines that alias and crawl during camera movement. This technique requires GLSL ES 3.0 (WebGL2), which Three.js r152+ targets by default.
+
+### Lesson 79 — Three.js shader variable names must be verified against installed chunks
+
+In Three.js r166 the tangent-to-view matrix is a local `mat3 tbn` variable (not `vTBN`). Future rule: when documenting or implementing shader injections, verify variable names against `node_modules/three/src/renderers/shaders/ShaderChunk/` before writing code. Using wrong names causes silent shader compile failure and invisible geometry.
+
+### Lesson 80 — PBR roughness calibration requires reference data, not intuition
+
+"This looks a bit too shiny, lower roughness" leads to values in the chrome/mirror range. Verified reference: Adobe Substance PBR guide (2023/2024) and Marmoset PBR chart both show satin-brushed aluminium at roughness 0.35–0.45. Values below 0.25 are polished/mirror territory. Future rule: always cite a PBR reference chart when choosing roughness/metalness values for real-world surface types.
+
+### Lesson 81 — Technical coding plans must include actual code, not descriptions
+
+A plan section that says "replace the FBM with aperiodic multi-domain sampling" is not actionable. A plan section that includes the complete GLSL function body with parameter values, cites the source technique, and shows exactly which TypeScript lines to change is actionable. Future rule: v0.N plan sections must include concrete GLSL/TypeScript code, exact parameter values, and verified source citations.
+
+
+## 2026-05-22 — v0.44 GLSL injection lesson
+
+### Lesson 75 — DataTexture + RepeatWrapping cannot produce seamless brushed metal
+
+Any DataTexture with `RepeatWrapping` will show a seam at every tile boundary. If the UV range forces multiple tiles (e.g., world-space UVs on a 6-unit ring with `repeat.set(1,1)` → 6 tiles → 6 seams), the banding is always visible regardless of noise quality or octave count. The only clean fix is per-fragment GLSL (`onBeforeCompile` injection) where the UV coordinate increases monotonically and there is no tiling boundary.
+
+### Lesson 76 — `onBeforeCompile` requires a normalMap/tangents to create local `tbn`
+
+`USE_TANGENT` is emitted and the local `tbn` matrix is created by Three.js when the geometry has a tangent attribute AND the material has a `normalMap` (or anisotropy). When replacing the normal map sampling via `onBeforeCompile`, set a minimal flat 1×1 DataTexture as `normalMap` to ensure the shader defines are correct, and call `geometry.computeTangents()` on the frame geometry.
+
+## 2026-05-22 — v0.41 battery bug lesson
+
+### Lesson 74 — Fast-path geometry shortcuts can create invisible meshes
+
+When a code path skips the standard geometry construction (e.g., using `BoxGeometry` instead of `ExtrudeGeometry` with a hole), the resulting mesh may occlude other scene objects entirely. Future rule: frame geometry must always be a ring with an inner cutout — never a solid rectangle — regardless of quality tier or bevel setting.
+
+
+
+### Lesson 72 — Premium metal realism needs macro + micro variation
+
+Directional brushed microdetail alone is not enough for large visible frame spans. Future rule: combine fine brush detail with low-frequency roughness breakup so the material stays believable at both close and medium viewing distances.
+
+### Lesson 73 — “More detail” can still look fake when cadence is periodic
+
+Deterministic repeating patterns can remain obvious even when normal/roughness maps are high quality. Future rule: add deterministic per-artwork variation seeds and phase/frequency offsets to suppress repeated cadence without introducing random flicker.
 
 ## 2026-05-22 — v0.29 shipped lessons
 
