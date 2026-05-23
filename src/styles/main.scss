@@ -270,27 +270,6 @@ button {
   }
 }
 
-// Accessible tooltip for topbar utility buttons
-.topbar__tooltip {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  background: var(--text);
-  color: var(--text-inverse);
-  font-size: 11px;
-  font-weight: 500;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm, 8px);
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(-4px);
-  transition: opacity var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
-  box-shadow: var(--shadow-soft);
-  z-index: 101;
-}
-
 // =============================================================================
 // Info panel
 // =============================================================================
@@ -1657,7 +1636,6 @@ button {
     .topbar { animation: none; }
     .topbar__badge { animation: none; }
     .topbar__help-btn { transition: none; }
-    .topbar__tooltip { transition: none; }
   }
 }
 
@@ -2012,11 +1990,6 @@ button {
     box-shadow: var(--shadow-medium);
   }
 
-  &:hover + .topbar__tooltip {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
   // Active/press: subtle scale-down gives tactile press feedback
   // without any "lifting" that would break the topbar layout.
   &:active {
@@ -2026,11 +1999,6 @@ button {
   &:focus-visible {
     outline: none;
     box-shadow: var(--shadow-soft), 0 0 0 3px var(--focus-ring);
-  }
-
-  &:focus-visible + .topbar__tooltip {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
