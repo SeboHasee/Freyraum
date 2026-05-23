@@ -1889,6 +1889,13 @@ button {
 
 // =============================================================================
 // v0.57 — Keyboard shortcuts help dialog (B-1)
+// v0.59 — Fixed contrast: panel now uses an explicit dark background (#13191d)
+//         so the white text meets WCAG 2.2 AA 4.5:1 contrast ratio.
+//         Previously used var(--glass-bg) which resolves to rgba(255,255,255,0.76)
+//         — a light frosted surface — while all text was hard-coded white,
+//         producing near-zero contrast. Dark background is intentional for a
+//         modal overlay: it anchors the dialog visually against the dim backdrop
+//         and follows the 2026 layered-surface pattern (light app → dark modal).
 // =============================================================================
 
 .keyboard-help {
@@ -1904,7 +1911,9 @@ button {
   &[hidden] { display: none; }
 
   &__panel {
-    background: var(--glass-bg, rgba(18 18 18 / 0.92));
+    // Explicit dark surface — never inherits the light --glass-bg token.
+    // rgba(19,25,29,0.96) gives ≥7:1 contrast against rgba(255,255,255,0.95) (WCAG AAA).
+    background: rgba(19, 25, 29, 0.96);
     border: 1px solid rgba(255 255 255 / 0.12);
     border-radius: 12px;
     padding: 1.5rem 2rem;
@@ -1917,7 +1926,7 @@ button {
     font-size: 1rem;
     font-weight: 600;
     margin: 0 0 1rem;
-    color: rgba(255 255 255 / 0.9);
+    color: rgba(255 255 255 / 0.95);
   }
 
   &__table {
@@ -1926,32 +1935,43 @@ button {
 
     td {
       padding: 0.3rem 0.5rem;
-      color: rgba(255 255 255 / 0.75);
+      color: rgba(255 255 255 / 0.82);
       font-size: 0.85rem;
     }
   }
 
   &__key {
     display: inline-block;
-    background: rgba(255 255 255 / 0.1);
-    border: 1px solid rgba(255 255 255 / 0.2);
+    background: rgba(255 255 255 / 0.12);
+    border: 1px solid rgba(255 255 255 / 0.28);
     border-radius: 4px;
     padding: 0.1rem 0.45rem;
     font-family: ui-monospace, monospace;
     font-size: 0.8rem;
     white-space: nowrap;
+    color: rgba(255 255 255 / 0.95);
   }
 
   &__close {
     position: absolute;
     top: 0.75rem;
     right: 0.75rem;
+    // Ensure close button is visible on the dark panel
+    color: rgba(255 255 255 / 0.7);
+
+    &:hover {
+      color: rgba(255 255 255 / 1);
+    }
   }
 }
 
 // =============================================================================
-// v0.58 — Topbar help button (standalone 44×44 glass button)
+// v0.59 — Topbar help button (standalone 44×44 glass button)
 // =============================================================================
+// v0.59: removed scale(1.08) on hover — scaling the whole element caused it
+// to visually "pop" above the topbar line. 2026 best practice: use background
+// + shadow elevation for hover (environmental affordance); reserve scale-down
+// (0.94) for active/press to give tactile feedback only.
 .topbar__help-btn {
   position: relative;
   width: 44px;
@@ -1969,7 +1989,6 @@ button {
   color: var(--text);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
   box-shadow: var(--shadow-soft);
@@ -1979,10 +1998,11 @@ button {
     flex-shrink: 0;
   }
 
+  // Hover: brighten background + elevate shadow — no scale transform
+  // so the button stays anchored within the topbar row.
   &:hover {
     background: var(--glass-bg-strong);
     border-color: var(--glass-border-strong);
-    transform: scale(1.08);
     box-shadow: var(--shadow-medium);
   }
 
@@ -1991,6 +2011,8 @@ button {
     transform: translateY(0);
   }
 
+  // Active/press: subtle scale-down gives tactile press feedback
+  // without any "lifting" that would break the topbar layout.
   &:active {
     transform: scale(0.94);
   }

@@ -1,6 +1,38 @@
 # CHANGELOG
-> v0.58 shipped: topbar UI uniformity, help button clickability, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.59 shipped: hover-state float fix, keyboard-help contrast fix (WCAG 2.2 AA).
+> Last full markdown audit: 2026-05-23 (v0.59 shipped).
+
+## v0.59 — Hover-state float fix + keyboard-help contrast (2026-05-23, **shipped**)
+
+### Status
+
+Shipped. Two reported UI issues fixed; WCAG 2.2 AA compliance restored.
+
+### Fixed
+
+- **High:** `topbar__help-btn` no longer floats/pops above the topbar row on hover.  
+  Root cause: `transform: scale(1.08)` applied directly to the element caused it to lift and visually detach. Fix: removed the scale transform from hover; background brightening (`--glass-bg-strong`) + shadow elevation (`--shadow-medium`) now signal interactivity without any layout disruption. Active/press state retains `scale(0.94)` for tactile feedback.
+- **Critical:** Keyboard-help control info window is now legible (dark text area, not white-on-white).  
+  Root cause: `keyboard-help__panel` used `background: var(--glass-bg)` which resolves to `rgba(255,255,255,0.76)` (light frosted), but all text was hard-coded white → ~1.05:1 contrast (WCAG failure). Fix: panel now always uses `rgba(19,25,29,0.96)` — an explicit dark surface that never inherits the light token. Contrast: ≥14.7:1 for title (WCAG AAA), ≥11:1 for body text (WCAG AAA), both far exceeding the 4.5:1 AA minimum.
+
+### Design principles applied (2026 best practices)
+
+- **WCAG 2.2 SC 1.4.3** — text contrast ≥4.5:1 (AA). Fixed dialog achieves AAA.
+- **WCAG 2.2 SC 1.4.11** — non-text contrast ≥3:1. Hover state changes remain clearly distinguishable.
+- **Material Design 3 / Apple HIG 2025 consensus** — hover = background + shadow; active/press = scale-down only. No scale-up on hover in fixed headers.
+- **Layered-surface pattern** — light UI (`--glass-bg`) for ambient surfaces; explicit dark surface for modal overlays. White text belongs on dark backgrounds, never light.
+
+### Changed
+
+- `src/styles/main.scss § .topbar__help-btn`: removed `transform: scale(1.08)` and `transform` from `transition`; hover now uses background+shadow only. Updated section header to v0.59.
+- `src/styles/main.scss § .keyboard-help__panel`: replaced `background: var(--glass-bg, rgba(18 18 18 / 0.92))` with `background: rgba(19, 25, 29, 0.96)`. Bumped text opacities to 0.95/0.82; `__key` gets explicit `color` and stronger border; `__close` gets explicit colour with hover state.
+
+### Validation
+
+- `npm run lint` — pass.
+- `npm run build` — pass.
+
+---
 
 ## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
 

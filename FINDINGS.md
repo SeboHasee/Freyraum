@@ -1,6 +1,52 @@
 # FINDINGS
-> v0.58 shipped: topbar UI uniformity, help button clickability, badge layout, premium 2026 polish.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.59 shipped: hover-state float fix, keyboard-help contrast fix (WCAG 2.2 AA).
+> Last full markdown audit: 2026-05-23 (v0.59 shipped).
+
+## v0.59 — Hover state + control-info contrast fixes (2026-05-23, **shipped**)
+
+### Issues resolved
+
+| # | Issue | Severity | Root cause | Fix applied |
+|---|-------|----------|------------|-------------|
+| 1 | `?` button visually "pops" / floats above topbar on hover | **High** | `transform: scale(1.08)` applied directly to the element (not a `::before` pseudo-element); causes the whole button to scale and lift out of the topbar row | Removed scale from hover; background+shadow elevation only. Active/press still uses `scale(0.94)` for tactile feedback |
+| 2 | Keyboard-help control info window is illegible (white text on white background) | **Critical** | `keyboard-help__panel` used `background: var(--glass-bg, …)`. The CSS variable `--glass-bg` resolves to `rgba(255,255,255,0.76)` (light frosted), but all text was hard-coded white → near-zero contrast | Force explicit dark surface `rgba(19,25,29,0.96)` — never inherits the light token. Achieves ≥7:1 (WCAG AAA) |
+
+### 2026 accessibility research findings
+
+#### Hover states — what the standards say
+
+**WCAG 2.2 SC 1.4.11 Non-text Contrast (AA)**  
+UI component boundaries and their interactive states must have ≥3:1 contrast ratio against adjacent colours. A scale transform that causes a button to visually detach from its container can confuse orientation and violates the "predictable" principle.
+
+**WCAG 2.2 SC 2.5.8 Target Size Minimum (AA) — NEW in 2.2**  
+Minimum 24×24 CSS pixels. Scale-up on hover must not shrink the actual hit area (it doesn't here, but is a common pitfall with `transform: scale`).
+
+**Material Design 3 / Apple HIG 2025–2026 consensus**  
+- Hover: use background fill change + subtle shadow elevation. Signal "this is interactive" without moving the element.
+- Active/press: use `scale(0.92–0.96)` to simulate physical depression. This is the _only_ state that should translate the element.
+- Avoid lifting / scaling-up on hover in fixed headers — it breaks visual anchoring and reads as an error to users.
+
+#### Modal dialog contrast — layered surface pattern
+
+**WCAG 2.2 SC 1.4.3 Contrast Minimum (AA): 4.5:1 for normal text**  
+White `rgba(255,255,255,0.95)` on `rgba(255,255,255,0.76)` ≈ 1.05:1 — catastrophic failure.  
+White `rgba(255,255,255,0.95)` on `rgba(19,25,29,0.96)` ≈ 14.7:1 — exceeds AAA (7:1).
+
+**2026 layered-surface pattern (W3C Accessible Color Systems, Material Design 3, Radix UI)**  
+Light UI surfaces (`--glass-bg`) are correct for cards, panels, and navigation. Dark surfaces are correct for modal overlays — they layer clearly over the dimmed backdrop, reduce eye strain, and never have the contrast failure that arises when a light surface carries white text.
+
+**Practical rule**: when a UI element applies white or near-white text, its background must be explicitly set to a dark value — never rely on a design-token that might resolve to a light colour in the current theme.
+
+#### Sources
+- [WCAG 2.2 — SC 1.4.3 Contrast Minimum](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+- [WCAG 2.2 — SC 1.4.11 Non-text Contrast](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)
+- [WCAG 2.2 — SC 2.5.8 Target Size Minimum](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+- [Material Design 3 — States (hover, pressed, focused)](https://m3.material.io/foundations/interaction/states/overview)
+- [Apple HIG 2025 — Buttons & Microinteractions](https://developer.apple.com/design/human-interface-guidelines/buttons)
+- [Radix UI Accessible Color Systems](https://www.radix-ui.com/colors)
+- [WebAIM Contrast Checker](https://webaim.org/resources/contrastchecker/)
+
+---
 
 ## v0.58 — Topbar UI uniformity findings (2026-05-23, **shipped**)
 
