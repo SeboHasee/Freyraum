@@ -10,16 +10,17 @@ Planned/documented. No runtime code changes in this pass.
 
 ### Summary
 
-Added a v0.61 planning/finding pass to address customer feedback after v0.60:
+Added a v0.61 planning/finding pass to address customer feedback after v0.60. Plan and findings have been fully expanded with detailed technical specifications, exact code snippets, and verified research:
 
-- strengthen visual clues for hidden controls,
-- apply equivalent discoverability cues to left/right navigation-selection arrows,
-- and stop auto-showing painting description text on artwork change (keep hidden until user intent).
+- **P-01 — Strengthen peek strips:** Slightly increase strip thickness (3px → 4px) and pulse amplitude (max opacity 0.26 → 0.32) to improve salience without cluttering artwork.
+- **P-02 — Nav arrow idle-hint system:** `@keyframes nav-ring-pulse` (box-shadow ring, 3 iterations × 1.6s = ~4.8s total) triggered after 5s of inactivity on first session; dismissed permanently on first nav interaction via `localStorage` key `freyraum-nav-hint-seen`; disabled under `prefers-reduced-motion: reduce` and `forced-colors: active`.
+- **P-03 — Remove forced info-panel reveal on navigation:** Delete `chromeVisibility.forceReveal('info-panel')` from `handleNavigate` in `src/main.ts`.
+- **P-04 — Screen-reader artwork announcement:** Inject `#freyraum-artwork-status` `aria-live="polite"` region; update with new artwork title on each navigation change using double-rAF mutation pattern to compensate for the removed auto-reveal.
 
 ### Documentation updates
 
-- `plan.md`: new v0.61 implementation plan with scope, research-backed constraints, acceptance checks, and non-goals.
-- `FINDINGS.md`: new v0.61 code-audit + online usability/accessibility research findings with source links.
+- `plan.md`: v0.61 section fully rewritten with file-by-file change summary, exact TypeScript and SCSS code snippets, acceptance criteria table, architecture decision rationale.
+- `FINDINGS.md`: v0.61 section fully expanded with 8 research findings covering idle-hint UX pattern, WCAG 2.5.8, WAI carousel pattern, `@starting-style`, View Transitions API (future backlog), `box-shadow` animation cost, localStorage scope decision.
 
 ## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel (2026-06-04, **shipped**)
 

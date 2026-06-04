@@ -1,62 +1,333 @@
 # FREYRAUM Plan
-> v0.61 planned: strengthen discoverability cues for hidden UI (including nav arrows) and keep artwork descriptions hidden until explicit reveal.
-> Last full markdown audit: 2026-06-04 (v0.61 plan drafted from code audit + online UX/accessibility research; not yet implemented).
+> v0.61 planned: strengthen discoverability cues for hidden UI (including nav arrows idle-hint) and keep artwork descriptions hidden until explicit reveal.
+> Last full markdown audit: 2026-06-04 (v0.61 plan fully detailed with code audit + online UX/accessibility research; not yet implemented).
 
-## v0.61 — Hidden-UI Discoverability + Navigation-Arrow Clues + No Auto-Description Reveal (**planned 2026-06-04**)
+## v0.61 — Hidden-UI Discoverability + Navigation-Arrow Idle Hint + No Auto-Description Reveal (**planned 2026-06-04, updated 2026-06-04**)
+
+> **Plan revision:** This plan replaces the initial draft with a full technical specification incorporating live code audit findings and online UX/accessibility research conducted 2026-06-04. All implementation details below are verified against the actual codebase APIs. See FINDINGS.md §v0.61 for the complete research record.
+
+---
 
 ### Problem Statement
 
-Customer feedback for the shipped v0.60 behavior identified three follow-up issues:
+Customer feedback after v0.60 identified three follow-up issues:
 
-1. Hidden UI needs clearer visual clues so users can immediately tell that revealable elements exist.
-2. The same discoverability concept should also be applied to left/right navigation-selection arrows.
-3. Changing paintings must no longer auto-show the info description; it should remain hidden until user intent (hover/focus/tap).
+1. **Cue strength:** Hidden UI (timeline, info panel) needs clearer persistent visual cues so users can immediately tell that revealable elements exist — the current `peek-pulse` strip may be too subtle.
+2. **Nav arrow discoverability:** The same cue concept should also apply to the left/right navigation arrows. While the arrows are always visible in clean mode (they are NOT auto-hidden), first-time users may not notice them because they blend into the artwork background.
+3. **No auto-reveal on navigation:** Changing paintings must no longer auto-show the info description panel. The description should stay hidden until explicit user intent (hover near left edge / focus / touch / preference always-visible mode).
 
-### Current-State Audit (repository)
+---
 
-- `src/main.ts:1511` currently calls `chromeVisibility.forceReveal('info-panel')` during navigation, which auto-reveals description content whenever artwork changes.
-- `src/ui/ChromeVisibilityManager.ts` currently creates peek affordances only for timeline and info-panel (`timeline-peek-hit`, `info-panel-peek-hit`), not for navigation arrows.
-- `src/styles/main.scss` provides clean-chrome hint pulses for timeline/info panel only; there is no equivalent hint system for left/right nav arrows.
+### Current-State Code Audit (verified 2026-06-04)
 
-### Research Findings (user-friendliness, usability, accessibility)
+| File | Line | Current behavior | v0.61 action |
+|------|------|-----------------|--------------|
+| `src/main.ts` | 1511 | `chromeVisibility.forceReveal('info-panel')` inside `handleNavigate` auto-reveals description on every artwork change | **Remove** this call |
+| `src/main.ts` | 1506-1517 | `handleNavigate` has no artwork-change screen-reader announcement | **Add** `aria-live="polite"` artwork announcement so AT users know the artwork changed even without the panel opening |
+| `src/ui/NavigationControls.ts` | 1-39 | Bare class: creates `<nav class="nav-controls">` with two `<button class="nav-btn">` elements; no idle-hint mechanism | **Extend** with `enableIdleHint()` / `dismissHint()` public API |
+| `src/styles/main.scss` | 415-480 | `.nav-btn` glass circle, hover/active/focus-visible styles; no idle-hint animation | **Add** `@keyframes nav-ring-pulse`, hint-active class rule, guards |
+| `src/styles/main.scss` | 1762-1850 | peek strips (`.timeline-peek`, `.info-panel-peek`) with `peek-pulse` keyframe; no intensity variation | **Optional P-01 enhancement:** increase initial animation amplitude for first 6s using CSS custom counter or animation-iteration-count trick |
 
-- **Hidden navigation has lower discoverability without persistent cues.** NN/g recommends keeping wayfinding affordances visible and predictable; hidden controls need explicit visual hints so users know actions are available.
-  - Source: https://www.nngroup.com/articles/menu-design/
-- **Hover/focus-triggered UI must remain dismissible, hoverable, and persistent.** Any discoverability cue/reveal behavior must keep WCAG 2.2 “Content on Hover or Focus” compliance.
-  - Source: https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
-- **Arrow controls must keep robust pointer accessibility.** WCAG 2.2 target-size guidance requires at least 24×24 CSS px interactive targets (or equivalent spacing exception).
-  - Source: https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
-- **Carousel/gallery previous-next controls must use explicit accessible names and keyboard operation.** WAI guidance emphasizes clear prev/next labeling, predictable focus order, and slide/change announcement patterns.
-  - Sources: https://www.w3.org/WAI/ARIA/apg/patterns/carousel/ , https://www.w3.org/WAI/tutorials/carousels/controls/
+---
 
-### v0.61 Plan (implementation scope)
+### Architecture Decisions
 
-- **P-01 — Add discoverability cues for hidden elements**
-  - Introduce always-present but subtle cues in clean mode that indicate hidden reveal zones exist.
-  - Keep cues low-noise so artwork-first presentation remains intact.
+#### P-01 — Strengthen timeline/info-panel peek strips
 
-- **P-02 — Add equivalent cues for left/right navigation arrows**
-  - Apply the same discoverability language to prev/next controls so users can quickly identify navigation/selection affordances.
-  - Ensure cues remain visible in forced-colors mode and perceivable with reduced visual acuity.
+**Assessment after audit:** The current `peek-pulse` (opacity 0.10 → 0.26, period 2.6s) is intentionally subtle so it does not distract from artwork. The customer's "clearer cues" request is most likely addressed by the *nav arrow idle-hint* (P-02) rather than making the strips louder. Making peek strips brighter risks over-cluttering the canvas.
 
-- **P-03 — Stop automatic info description reveal on painting change**
-  - Remove automatic forced reveal behavior on navigation.
-  - Keep reveal of description tied strictly to user intent (hover, focus, touch trigger, or explicit preference mode).
+**Decision: minimal change.** Slightly increase the max opacity of the `peek-pulse` keyframe (0.26 → 0.32) and increase the strip thickness token (`--chrome-peek-width-v: 3px → 4px`, `--chrome-peek-height-h: 3px → 4px`) so strips are slightly more visible without being intrusive.
 
-- **P-04 — Preserve accessibility guarantees**
-  - Keep keyboard and screen-reader access unchanged or improved.
-  - Maintain WCAG-compliant hover/focus behavior, focus visibility, and pointer target sizing.
-  - Ensure reduced-motion and forced-colors behavior remain supported for all new cues.
+Exact diff in `src/styles/main.scss`:
 
-- **P-05 — Validation and acceptance**
-  - Re-verify lint/build.
-  - Manual QA checks for desktop hover, keyboard-only, coarse-pointer/touch, reduced motion, and forced colors.
-  - Confirm that painting changes no longer expose descriptions unless user intent triggers reveal.
+```scss
+// Token change (line ~124-125):
+--chrome-peek-width-v: 4px;      // was 3px — left-edge (info panel) strip thickness
+--chrome-peek-height-h: 4px;     // was 3px — bottom-edge (timeline) strip thickness
+
+// Keyframe change:
+@keyframes peek-pulse {
+  0%, 100% { opacity: 0.12; }    // was 0.10
+  50%       { opacity: 0.32; }   // was 0.26
+}
+```
+
+**Forced-colors guard** (already in codebase, no change needed):
+```scss
+@media (forced-colors: active) {
+  .timeline-peek,
+  .info-panel-peek {
+    background: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+  }
+}
+```
+
+---
+
+#### P-02 — Navigation arrow idle-hint system
+
+**Design rationale (research-backed):**
+
+- Nav arrows (`.nav-btn`) are always visible in clean mode — they are NOT subject to auto-hide. The issue is purely *noticeability*: the frosted-glass circles blend into some artwork backgrounds.
+- The established UX pattern for "attention hint on controls the user hasn't yet interacted with" (verified: NNGroup, Apple HIG, YouTube, Google Arts & Culture) is an idle-triggered short animation that fires once and stops permanently after first use. It MUST not repeat on every page load once the user has used navigation.
+- **Must not conflict with `prefers-reduced-motion: reduce`** — disabled entirely under that media query.
+- **Must not reduce hit area** — WCAG 2.5.8: the 72×72px buttons exceed the 24×24px minimum and must stay unchanged.
+- **Storage:** `localStorage` key `freyraum-nav-hint-seen` — persists across sessions (like the existing `alwaysShowChrome` preference). This is the correct scope: once the user discovers navigation, they never need the hint again.
+
+**Chosen animation — ring pulse on `::before`:**
+
+The `::before` pseudo-element is the glass circle background. Adding a ring/glow pulse on top of it (via `box-shadow` on `::before`) matches the existing `peek-pulse` visual language without touching layout or hit areas.
+
+```scss
+@keyframes nav-ring-pulse {
+  0%   { box-shadow: var(--shadow-medium), 0 0 0 0   rgba(255, 255, 255, 0.40); }
+  60%  { box-shadow: var(--shadow-medium), 0 0 0 12px rgba(255, 255, 255, 0.00); }
+  100% { box-shadow: var(--shadow-medium), 0 0 0 0   rgba(255, 255, 255, 0.00); }
+}
+
+// Triggered by JS adding data-nav-hint="active" to <html>
+:root[data-nav-hint='active'] .nav-btn::before {
+  animation: nav-ring-pulse 1.6s ease-out 3;   // 3 iterations = ~4.8s, then stops
+  animation-delay: 0s;
+}
+
+:root[data-nav-hint='active'] .nav-btn:last-child::before {
+  animation-delay: 0.4s;   // stagger right button slightly after left
+}
+
+// Cancel animation immediately on hover/focus (user has discovered the button)
+:root[data-nav-hint='active'] .nav-btn:hover::before,
+:root[data-nav-hint='active'] .nav-btn:focus-visible::before {
+  animation: none;
+}
+
+// Reduced motion: disable entirely
+@media (prefers-reduced-motion: reduce) {
+  :root[data-nav-hint='active'] .nav-btn::before {
+    animation: none;
+  }
+}
+
+// Forced-colors: animation is cosmetic; OK to suppress
+@media (forced-colors: active) {
+  :root[data-nav-hint='active'] .nav-btn::before {
+    animation: none;
+  }
+}
+```
+
+**TypeScript — `NavigationControls.ts` extension:**
+
+Add a new `NavIdleHint` internal helper class and expose `enableIdleHint()` / `dismissHint()` on `NavigationControls`:
+
+```typescript
+// ─── NavigationControls.ts (complete revised file) ────────────────────────────
+export class NavigationControls {
+  private readonly el: HTMLElement;
+  private readonly prevBtn: HTMLButtonElement;
+  private readonly nextBtn: HTMLButtonElement;
+  private onPrevCallback: (() => void) | null = null;
+  private onNextCallback: (() => void) | null = null;
+
+  // Nav idle hint state
+  private hintIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  private hintDismissed = false;
+  private readonly HINT_STORAGE_KEY = 'freyraum-nav-hint-seen';
+  private readonly HINT_IDLE_DELAY_MS = 5000;  // 5s after page load before hint fires
+
+  constructor(container: HTMLElement) {
+    this.el = document.createElement('nav');
+    this.el.className = 'nav-controls';
+    this.el.setAttribute('aria-label', 'Galerie-Navigation');
+
+    this.prevBtn = document.createElement('button');
+    this.prevBtn.className = 'nav-btn';
+    this.prevBtn.setAttribute('aria-label', 'Vorheriges Werk');
+    this.prevBtn.textContent = '←';
+    this.prevBtn.addEventListener('click', () => {
+      this.dismissHint();
+      this.onPrevCallback?.();
+    });
+
+    this.nextBtn = document.createElement('button');
+    this.nextBtn.className = 'nav-btn';
+    this.nextBtn.setAttribute('aria-label', 'Nächstes Werk');
+    this.nextBtn.textContent = '→';
+    this.nextBtn.addEventListener('click', () => {
+      this.dismissHint();
+      this.onNextCallback?.();
+    });
+
+    this.el.appendChild(this.prevBtn);
+    this.el.appendChild(this.nextBtn);
+    container.appendChild(this.el);
+  }
+
+  /** Start idle-hint system. Called once after app init. */
+  enableIdleHint(): void {
+    // Skip if user has already interacted with nav before
+    if (localStorage.getItem(this.HINT_STORAGE_KEY)) return;
+    // Skip if reduced-motion is active
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    this.hintIdleTimer = setTimeout(() => {
+      if (!this.hintDismissed) {
+        document.documentElement.dataset['navHint'] = 'active';
+      }
+    }, this.HINT_IDLE_DELAY_MS);
+
+    // Keyboard navigation also counts as "discovered"
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        this.dismissHint();
+        document.removeEventListener('keydown', onKeyDown);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+  }
+
+  /** Permanently dismiss the idle hint (user has used navigation). */
+  dismissHint(): void {
+    if (this.hintDismissed) return;
+    this.hintDismissed = true;
+    if (this.hintIdleTimer !== null) {
+      clearTimeout(this.hintIdleTimer);
+      this.hintIdleTimer = null;
+    }
+    delete document.documentElement.dataset['navHint'];
+    localStorage.setItem(this.HINT_STORAGE_KEY, '1');
+  }
+
+  onPrev(cb: () => void): void { this.onPrevCallback = cb; }
+  onNext(cb: () => void): void { this.onNextCallback = cb; }
+
+  dispose(): void {
+    if (this.hintIdleTimer !== null) clearTimeout(this.hintIdleTimer);
+    this.el.remove();
+  }
+}
+```
+
+**`src/main.ts` — call `enableIdleHint()` after nav setup:**
+
+```typescript
+// After: navControls.onNext(() => galleryManager.navigate(1));
+navControls.enableIdleHint();
+```
+
+---
+
+#### P-03 — Remove forced info-panel reveal on artwork change
+
+**Root cause:** `src/main.ts:1511` calls `chromeVisibility.forceReveal('info-panel')` in `handleNavigate`. This was added in v0.60 as a convenience (new artwork → show its description). But the customer wants the panel to stay hidden until explicit intent.
+
+**Change — one line removal:**
+
+```typescript
+// src/main.ts — handleNavigate (v0.60 version, before fix)
+const handleNavigate = (index: number): void => {
+  infoPanel.update(artworks[index], true);
+  timeline.setActive(index);
+  // v0.60 — surface the updated work information briefly when the artwork
+  // changes, then auto-hide again (no-op when chrome is always visible).
+  chromeVisibility.forceReveal('info-panel');  // ← REMOVE THIS LINE
+  diagnostics.info('gallery', 'navigate', 'Artwork changed', { ... });
+};
+
+// src/main.ts — handleNavigate (v0.61 version, after fix)
+const handleNavigate = (index: number): void => {
+  infoPanel.update(artworks[index], true);
+  timeline.setActive(index);
+  // v0.61: no forceReveal — description stays hidden until user intent.
+  // Screen-reader users get an artwork-change announcement instead (see below).
+  announceArtworkChange(artworks[index]?.title ?? '');
+  diagnostics.info('gallery', 'navigate', 'Artwork changed', { ... });
+};
+```
+
+---
+
+#### P-04 — Screen-reader artwork change announcement (accessibility compensation)
+
+**Why this is required:** Previously, `forceReveal('info-panel')` caused the info panel (which contains the artwork title in the DOM) to become visible, which implicitly let screen readers discover it. With `forceReveal` removed, screen-reader users navigating with keyboard (← →) would hear nothing after an artwork change — just silence. This is an accessibility regression if not compensated.
+
+**Fix:** Inject a dedicated `aria-live="polite"` region that announces the new artwork title on every navigation change. This is separate from `#freyraum-chrome-status` (which handles panel visibility state), and separate from the InfoPanel element (which remains hidden until the user reveals it).
+
+```typescript
+// src/main.ts — add near top of init block (after DOM refs are resolved):
+
+let artworkAnnouncerEl: HTMLElement | null = null;
+
+const announceArtworkChange = (title: string): void => {
+  if (!artworkAnnouncerEl) {
+    artworkAnnouncerEl = document.createElement('div');
+    artworkAnnouncerEl.id = 'freyraum-artwork-status';
+    artworkAnnouncerEl.setAttribute('aria-live', 'polite');
+    artworkAnnouncerEl.setAttribute('aria-atomic', 'true');
+    artworkAnnouncerEl.className = 'sr-only';
+    document.body.appendChild(artworkAnnouncerEl);
+  }
+  // Screen readers skip empty strings on update, so we clear first then set
+  // (double-RAF trick ensures the mutation fires as two distinct changes).
+  artworkAnnouncerEl.textContent = '';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (artworkAnnouncerEl) {
+      artworkAnnouncerEl.textContent = title ? `Aktuelles Werk: ${title}` : '';
+    }
+  }));
+};
+```
+
+**Note on double-rAF:** Some screen readers ignore `aria-live` updates that happen too quickly after each other (the DOM mutation doesn't fire a new event). Clearing to `''` and setting the new text in the next two animation frames guarantees two distinct mutation events.
+
+**Also add to dispose cleanup:**
+```typescript
+artworkAnnouncerEl?.remove();
+artworkAnnouncerEl = null;
+```
+
+---
+
+#### P-05 — Validation and acceptance criteria
+
+| Check | Method | Pass condition |
+|-------|--------|---------------|
+| Lint | `npm run lint` | Zero new errors |
+| Build | `npm run build` | Zero new errors |
+| Desktop hover | Manual / Playwright | Peek strips visible in clean mode; timeline/info panel NOT auto-revealed on nav; reveal on pointer proximity still works |
+| Keyboard only | Tab through nav buttons | Arrow buttons reachable, hint dismissed on ArrowLeft/ArrowRight; info panel reveals on Tab focus |
+| Screen reader | NVDA/VoiceOver + keyboard nav | Artwork title announced after each navigation; panel state changes still announced via `#freyraum-chrome-status` |
+| Touch/coarse pointer | Mobile viewport | Peek strips tappable; info panel NOT auto-revealed on artwork change; nav ring-pulse does NOT fire (hint skipped on first-render if localStorage key present) |
+| Reduced motion | `@media (prefers-reduced-motion: reduce)` active | No ring-pulse animation on nav buttons; peek strips are visible but static |
+| Forced colors | Windows High Contrast / forced-colors | Peek strips visible as `ButtonText`; nav ring-pulse animation suppressed (cosmetic) |
+| localStorage hint | Clear `freyraum-nav-hint-seen` from storage, idle 5s | Ring-pulse fires on both nav buttons; dismisses on first click/keypress |
+| localStorage hint 2nd visit | `freyraum-nav-hint-seen = "1"` in storage | Ring-pulse never fires |
+
+---
+
+### File-by-file Change Summary
+
+| File | Change type | Description |
+|------|------------|-------------|
+| `src/main.ts` | 1-line removal | Remove `chromeVisibility.forceReveal('info-panel')` from `handleNavigate` |
+| `src/main.ts` | ~20 lines added | `announceArtworkChange()` helper + `artworkAnnouncerEl` + call in `handleNavigate` + dispose |
+| `src/main.ts` | 1 line added | `navControls.enableIdleHint()` call after nav wiring |
+| `src/ui/NavigationControls.ts` | ~40 lines extended | Add `enableIdleHint()`, `dismissHint()`, idle timer, localStorage, keyboard listener |
+| `src/styles/main.scss` | ~30 lines added | `@keyframes nav-ring-pulse` + `:root[data-nav-hint='active']` rules + reduced-motion + forced-colors guards |
+| `src/styles/main.scss` | Token tweak | `--chrome-peek-width-v/height-h: 3px → 4px`; `peek-pulse` max opacity 0.26 → 0.32 |
+
+**Total estimated diff: ~90 lines net add / 5 lines removed.**
+
+---
 
 ### Non-Goals
 
-- No redesign of timeline structure/content.
-- No change to artwork metadata model.
+- No redesign of timeline structure or nav-controls layout.
+- No change to artwork metadata model or InfoPanel content.
+- No additional auto-hide rules for nav arrows (they stay always-visible in clean mode).
+- No `View Transitions API` integration (noted as a future enhancement in FINDINGS.md §v0.61, but out of scope for this version due to Three.js WebGL rendering surface conflict).
 - No regression to always-visible chrome defaults unless explicitly chosen in preferences.
 
 ## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel on Hover/Proximity (**shipped 2026-06-04**)

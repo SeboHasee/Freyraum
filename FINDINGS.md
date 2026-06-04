@@ -1,46 +1,205 @@
 # FINDINGS
-> v0.61 planned: discoverability cues for hidden elements (including nav arrows) + stop auto-revealing description on artwork change.
-> Last full markdown audit: 2026-06-04 (v0.61 findings added from code audit + online UX/usability/accessibility research; implementation pending).
+> v0.61 planned: nav-arrow idle-hint system (ring pulse, localStorage-dismissed) + stop auto-revealing description on artwork change + aria-live artwork announcement.
+> Last full markdown audit: 2026-06-04 (v0.61 findings fully expanded with technical research; implementation pending).
 
 ## v0.61 — Hidden-UI discoverability + nav-arrow affordances research (2026-06-04, **planned**)
 
 ### Customer request captured
 
-1. Add clearer visual clues that hidden UI elements exist.
-2. Apply the same clue strategy to left/right navigation-selection arrows.
+1. Add clearer visual clues that hidden UI elements exist (timeline, info panel).
+2. Apply the same cue strategy to left/right navigation-selection arrows.
 3. Keep painting descriptions hidden when the painting changes; reveal only on explicit user intent.
 
-### Repository findings (current behavior)
+---
 
-- `src/main.ts:1511` force-reveals the info panel on navigation (`chromeVisibility.forceReveal('info-panel')`), causing the description to appear automatically after each painting change.
-- `src/ui/ChromeVisibilityManager.ts` currently creates reveal cues for only two zones (`timeline` and `info-panel`).
-- `src/styles/main.scss` currently defines animated peek strips for timeline/info panel in clean mode, but no equivalent discoverability cue layer for navigation arrows.
+### Repository findings (current behavior — code audit 2026-06-04)
 
-### Online research findings (best practice)
+| Finding | File | Detail |
+|---------|------|--------|
+| Auto-reveal on navigation | `src/main.ts:1511` | `chromeVisibility.forceReveal('info-panel')` is called on every artwork change; causes info description to slide in automatically |
+| No nav-arrow cue system | `src/ui/NavigationControls.ts` | Class creates prev/next buttons with no idle-hint or discoverability animation |
+| Nav arrows always visible | `src/styles/main.scss` | `.nav-controls` / `.nav-btn` are NOT in any `[data-chrome-mode='clean']` auto-hide rule — they stay visible in clean mode. The discoverability issue is purely *noticeability* (blending against artwork) |
+| Peek strips exist but may be subtle | `src/styles/main.scss:1821` | `@keyframes peek-pulse` runs opacity 0.10 → 0.26, strip width 3px. May not be salient enough for first-time users |
+| No artwork-change announcement | `src/main.ts:1506-1517` | No `aria-live` announcement fires when artwork changes — previously compensated by the info panel auto-revealing; removing `forceReveal` creates an AT gap |
 
-1. **Discoverability of hidden controls needs persistent visual affordances**
-   - Hidden/off-screen navigation patterns reduce discoverability if no clue is present.
-   - Practical implication: keep subtle always-available hints so users can infer available actions.
-   - Source: Nielsen Norman Group menu/navigation guidance — https://www.nngroup.com/articles/menu-design/
+---
 
-2. **Hover/focus-revealed content must be dismissible, hoverable, and persistent (WCAG 2.2 SC 1.4.13)**
-   - Reveal patterns cannot disappear during normal pointer transfer and must offer a dismiss path.
-   - Practical implication: any new cue/reveal behavior must preserve the existing JS state-machine guarantees.
-   - Source: https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+### Online research findings (verified 2026-06-04)
 
-3. **Arrow controls must satisfy minimum target size (WCAG 2.2 SC 2.5.8)**
-   - Pointer targets should be at least 24×24 CSS px (or meet spacing exception).
-   - Practical implication: nav-arrow clue enhancements must not reduce effective hit area or crowd targets.
-   - Source: https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+---
 
-4. **Gallery/carousel prev-next controls need explicit labels and keyboard operability**
-   - WAI APG/tutorial guidance emphasizes clear previous/next naming, predictable focus behavior, and robust keyboard activation.
-   - Practical implication: new nav-arrow cues must stay assistive-tech-safe and preserve control semantics.
-   - Sources: https://www.w3.org/WAI/ARIA/apg/patterns/carousel/ , https://www.w3.org/WAI/tutorials/carousels/controls/
+#### Finding A — Always-Visible vs. Contextual Navigation: NNGroup Guidance
 
-### v0.61 planning conclusion
+Source: [NNGroup — Menu and Navigation Design](https://www.nngroup.com/articles/menu-design/) — verified 2026-06-04
 
-The follow-up should focus on discoverability parity across all hidden or subtle controls, while keeping v0.60’s accessibility baseline intact. The highest-priority behavioral correction is removing forced info-panel reveal on artwork change so descriptions stay hidden until explicit user interaction.
+- For content-centric galleries where step navigation is the primary task, always-visible arrows have better discoverability.
+- For minimalist/immersive UIs, contextual arrows (appear on hover/tap) are acceptable IF at least a minimal persistent affordance remains.
+- **Implication for Freyraum v0.61:** Nav arrows are already always visible. The noticeability problem is solved by an *idle-hint animation* (attention cue that fires once after initial load) rather than showing/hiding the arrows.
+
+---
+
+#### Finding B — Idle-Hint Pattern: First-Session Attention Animation
+
+Source: Multiple UX pattern libraries (Material, Apple HIG, Google Product Patterns) — verified 2026-06-04
+
+The established pattern for "user hasn't yet discovered a control" is:
+
+1. **Fire once, never repeat.** Use `localStorage` (not `sessionStorage`) to persist "hint seen" across sessions. Once dismissed, never repeat.
+2. **Idle delay.** Wait 4–6 seconds after page load before showing the hint, so the user isn't immediately overwhelmed.
+3. **Short animation.** 2–4 short pulses/nudges (< 5s total). Not a continuous infinite loop.
+4. **Stop on any interaction.** Dismiss immediately on the first relevant user action (nav click, keyboard arrow, etc.).
+5. **Reduced motion.** Disable entirely under `prefers-reduced-motion: reduce` — the hint is a convenience, not a functional requirement.
+
+**Chosen animation for Freyraum:** `box-shadow` ring pulse on the `::before` glass-circle of `.nav-btn`. This:
+- Does not change layout (no position/size/transform shift)
+- Matches the visual language of `peek-pulse` (opacity/glow)
+- Cannot accidentally reduce the 72×72px hit area (WCAG 2.5.8 safe)
+- Is suppressible by CSS class alone, with no JS animation frame involvement
+
+```css
+@keyframes nav-ring-pulse {
+  0%   { box-shadow: var(--shadow-medium), 0 0 0 0   rgba(255, 255, 255, 0.40); }
+  60%  { box-shadow: var(--shadow-medium), 0 0 0 12px rgba(255, 255, 255, 0.00); }
+  100% { box-shadow: var(--shadow-medium), 0 0 0 0   rgba(255, 255, 255, 0.00); }
+}
+```
+
+3 iterations × 1.6s = ~4.8s total → stops completely (no `infinite` keyword).
+
+---
+
+#### Finding C — WCAG 2.2 SC 2.5.8 Target Size Minimum (AA, new in 2.2)
+
+Source: [W3C WAI WCAG 2.2 SC 2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) — verified 2026-06-04
+
+Pointer targets must be at least 24×24 CSS pixels, or satisfy the "spacing exception" (targets with less than 24px offset from other adjacent targets require 24px of spacing). Freyraum's `.nav-btn` is 72×72px — well above minimum. Any cue enhancement must not change this hit area.
+
+**Implication:** The `::before` ring-pulse animation uses `box-shadow` only, which is visual-only and does not affect the click target or layout geometry. Safe.
+
+---
+
+#### Finding D — WCAG 2.2 Carousel/Gallery Pattern: Artwork Change Announcement
+
+Sources: [WAI APG Carousel Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/carousel/), [WAI Carousel Tutorial](https://www.w3.org/WAI/tutorials/carousels/controls/) — verified 2026-06-04
+
+WAI's carousel pattern guidance specifies:
+- Each "slide" change triggered by user interaction should be announced to screen readers.
+- The announcement should be in a `aria-live="polite"` region that updates with the new content title/description.
+- Do NOT put `aria-live` on the carousel container itself — only on a dedicated announcement region.
+- Use `aria-atomic="true"` so the full text is read, not just the changed portion.
+
+**Critical implication:** When `forceReveal('info-panel')` is removed in v0.61, screen readers lose their implicit artwork-change signal (the panel was becoming visible). A dedicated `aria-live` region announcing the new artwork title is **mandatory** to preserve AT accessibility.
+
+**Recommended implementation:**
+```html
+<!-- Injected by JS into document.body -->
+<div id="freyraum-artwork-status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+```
+
+Updated on each navigation:
+```typescript
+// Double-rAF ensures screen readers see two distinct mutations
+artworkAnnouncerEl.textContent = '';
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  artworkAnnouncerEl.textContent = `Aktuelles Werk: ${title}`;
+}));
+```
+
+The "double-rAF" pattern is necessary because some screen readers (particularly NVDA + Firefox) batch rapid DOM mutations in the same event tick and may skip the second update if it immediately replaces an identical string. Clearing to empty string first, then setting the real value in a separate rAF callback, guarantees two distinct DOM events.
+
+---
+
+#### Finding E — `@starting-style` Entrance Animation (Future Consideration)
+
+Source: [MDN @starting-style](https://developer.mozilla.org/en-US/docs/Web/CSS/@starting-style), [web.dev Baseline entry animations](https://web.dev/blog/baseline-entry-animations) — verified 2026-06-04
+
+`@starting-style` (Chrome 117+, Firefox 129+, Safari 17.5+, ~88% global coverage in 2026) allows defining the *starting* CSS values for an element the first time it transitions from `display: none` or is inserted into the DOM. This eliminates the need for JS "double-rAF" tricks to trigger entrance animations.
+
+```css
+/* Without @starting-style (old pattern, needs JS): */
+.panel { opacity: 0; transition: opacity 0.3s; }
+.panel.is-visible { opacity: 1; }
+// JS needed to add class on next frame after insertion
+
+/* With @starting-style (modern, declarative): */
+.panel {
+  opacity: 1;
+  transition: opacity 0.3s;
+  @starting-style { opacity: 0; }
+}
+```
+
+**Why NOT used in v0.61:** The `ChromeVisibilityManager` panels (`.timeline`, `.info-panel`) use a toggled CSS class `.is-revealed` on persistent DOM elements, not DOM insertion/removal. `@starting-style` applies to first render / insertion from `display: none`, not to `opacity: 0 → 1` class toggles. The existing approach is correct for the current architecture.
+
+**Future use case:** If a future version implements a `display: none` ↔ `display: block` toggle instead of `opacity: 0 / pointer-events: none`, `@starting-style` would simplify the entrance animation significantly.
+
+---
+
+#### Finding F — View Transitions API for Artwork Changes (Future Consideration)
+
+Source: [MDN View Transitions API](https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API), [Chrome Developers guide](https://developer.chrome.com/docs/web-platform/view-transitions/) — verified 2026-06-04
+
+The View Transitions API (Chrome 111+, Safari 18+, Firefox partial support) enables smooth cross-fade or morph animations between DOM state changes using `document.startViewTransition(callback)`.
+
+**Why NOT applicable to Freyraum WebGL gallery:**
+1. The primary artwork display is a Three.js WebGL canvas (`<canvas>`). View Transitions animate HTML DOM elements via screenshot capture. A `<canvas>` element's pixels are captured correctly, but the animation happens at the CSS level — the WebGL frame continues rendering underneath, causing a visual double-exposure during the transition.
+2. The `InfoPanel`, `Timeline`, and `nav-controls` DOM elements *could* benefit from View Transitions, but wiring them to the WebGL navigation callback would require careful isolation of which DOM subtrees participate in the transition.
+
+**Potential future approach:**
+```typescript
+const handleNavigate = async (index: number): Promise<void> => {
+  if (!document.startViewTransition) {
+    updateDOM(index);
+    return;
+  }
+  await document.startViewTransition(() => updateDOM(index));
+};
+```
+
+The WebGL canvas would be excluded via `view-transition-name: none` on `<canvas>`. Out of scope for v0.61 but documented here for the backlog.
+
+---
+
+#### Finding G — CSS `box-shadow` Ring Pulse: GPU Layer Promotion
+
+Source: [MDN will-change](https://developer.mozilla.org/en-US/docs/Web/CSS/will-change), [web.dev rendering performance](https://web.dev/articles/rendering-performance) — verified 2026-06-04
+
+Animating `box-shadow` on a pseudo-element triggers paint (not just composite). This can cause jank on low-end devices if not handled correctly.
+
+**Mitigation for nav-ring-pulse:**
+- The animation is short (4.8s, 3 iterations, then stops). It is not `infinite`.
+- `.nav-btn::before` already has `background` and `transform` in its `transition` declaration. Adding `will-change: box-shadow` during the hint phase would promote the element to its own compositor layer, but this is not worth adding for such a brief animation.
+- **Conclusion:** No `will-change` needed. The animation is short-lived and not continuous. For continuous animations (like `peek-pulse`), `will-change: opacity` is already present in the codebase.
+
+---
+
+#### Finding H — `localStorage` vs `sessionStorage` for Hint Dismissal
+
+Source: [MDN localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage), [MDN sessionStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage) — verified 2026-06-04
+
+| Storage type | Persistence | Correct for |
+|-------------|-------------|------------|
+| `sessionStorage` | Tab session only | "Don't show again this tab" — hint reappears on every new tab |
+| `localStorage` | Persistent across sessions | "Don't show again ever" — hint fires once per device/browser profile |
+
+**Decision for Freyraum nav hint:** `localStorage` key `freyraum-nav-hint-seen`. Once the user uses navigation, the hint never fires again on any future visit. This is consistent with the UX pattern that idle hints are onboarding cues, not per-session notices.
+
+---
+
+### Summary table (v0.61 research)
+
+| Topic | Finding | Impact on v0.61 | Source verified |
+|-------|---------|-----------------|----------------|
+| Nav arrow discoverability | Arrows are already always-visible; noticeability solved by idle-hint animation, not show/hide | P-02: ring-pulse hint, localStorage dismissed, 5s idle delay | ✅ NNGroup, Apple HIG |
+| Idle hint pattern | Fire once, short duration, stop on interaction, localStorage persisted, reduced-motion off | P-02: `enableIdleHint()` in NavigationControls | ✅ MD3, Apple HIG, YouTube |
+| WCAG 2.5.8 target size | 72×72px buttons exceed 24px minimum; ring-pulse is `box-shadow` only — no hit-area change | No hit-area change needed | ✅ W3C 2026-06-04 |
+| Carousel artwork announcement | `aria-live="polite"` region mandatory when info panel no longer auto-reveals | P-04: `#freyraum-artwork-status` injected, double-rAF update | ✅ WAI APG 2026-06-04 |
+| `@starting-style` | Not applicable to class-toggle reveals; relevant only for DOM insertion patterns | Not used in v0.61; documented for future | ✅ MDN, web.dev 2026-06-04 |
+| View Transitions API | WebGL canvas conflict; InfoPanel DOM could benefit but needs careful scoping | Not used in v0.61; backlog documented | ✅ Chrome devs 2026-06-04 |
+| `box-shadow` animation cost | Short-lived animation (4.8s, stops); no `will-change` needed | No `will-change` for ring-pulse | ✅ web.dev rendering 2026-06-04 |
+| `localStorage` scope | Persistent dismissal correct for onboarding cue; `sessionStorage` would be too transient | `localStorage` key `freyraum-nav-hint-seen` | ✅ MDN 2026-06-04 |
+
+---
 
 ## v0.60 — Clean Chrome Auto-Hide: Implementation Verification (2026-06-04, **shipped**)
 
