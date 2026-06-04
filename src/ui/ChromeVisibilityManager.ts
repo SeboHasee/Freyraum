@@ -108,6 +108,11 @@ export class ChromeVisibilityManager {
   private unsubscribePrefs: (() => void) | null = null;
   private initialised = false;
 
+  // v0.63 — Post-hint affordance "settle" phase timer. Briefly elevates the
+  // salience of the idle peek strips/chevrons after the nav onboarding hint
+  // completes, then decays back to the resting peek-pulse floor.
+  private settleTimer: ReturnType<typeof setTimeout> | null = null;
+
   constructor(
     timelineEl: HTMLElement,
     infoPanelEl: HTMLElement,
@@ -191,6 +196,14 @@ export class ChromeVisibilityManager {
     this.infoPanelPeekHit = null;
     this.srStatusEl = null;
 
+    // v0.63 — clear the settle timer and remove the settle class so no dangling
+    // timer fires after teardown and no stale class is left on appRoot.
+    if (this.settleTimer !== null) {
+      clearTimeout(this.settleTimer);
+      this.appRoot.classList.remove('affordance-settling');
+      this.settleTimer = null;
+    }
+
     this.diag.info('dispose', 'ChromeVisibilityManager disposed');
   }
 
@@ -267,11 +280,43 @@ export class ChromeVisibilityManager {
           delay: this.config.NAV_HIDE_DELAY_MS,
         });
       }
+      // v0.63 (P-03): briefly elevate the persistent idle affordances so the
+      // user's eye is guided from the onboarding hint to the resting cues.
+      this.triggerAffordanceSettle();
     });
 
     this.diag.info('register-nav', 'Nav controls registered as managed chrome surface', {
       mode: this.currentMode(),
     });
+  }
+
+  /**
+   * v0.63 (P-03) — Briefly elevate affordance salience after the nav onboarding
+   * hint completes. Adds the `affordance-settling` class to `appRoot`, which
+   * swaps the peek strips/chevrons onto the one-shot `peek-settle` animation
+   * (decays from a peak opacity back to the resting peek-pulse floor), directing
+   * the user's eye to the persistent static cues precisely when they are paying
+   * attention. The class is removed slightly after the animation ends so the
+   * `forwards` fill hands back to `peek-pulse` seamlessly.
+   *
+   * No-op under prefers-reduced-motion. The caller path already skips the hint
+   * (so `onHintFinished` never fires) under reduced motion, but the check is
+   * repeated here as a defensive gate against future callers.
+   */
+  private triggerAffordanceSettle(): void {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // Re-trigger guard: cancel any in-flight settle before restarting.
+    if (this.settleTimer !== null) {
+      clearTimeout(this.settleTimer);
+      this.appRoot.classList.remove('affordance-settling');
+    }
+    this.appRoot.classList.add('affordance-settling');
+    this.diag.debug('affordance-settle-start', 'Affordance settle phase started');
+    this.settleTimer = window.setTimeout(() => {
+      this.appRoot.classList.remove('affordance-settling');
+      this.settleTimer = null;
+      this.diag.debug('affordance-settle-end', 'Affordance settle phase complete');
+    }, 2100); // 100ms past the 2s animation so the forwards fill is fully painted
   }
 
   // ─── Private: Core State Machine ───────────────────────────────────────────

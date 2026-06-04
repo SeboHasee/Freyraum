@@ -121,7 +121,8 @@
   --chrome-nav-hide-offset: 10px;         // translateY(+) when nav hidden (v0.62)
 
   // Visual — translucent peek strips at the screen edges.
-  --chrome-peek-bg: rgba(255, 255, 255, 0.16);
+  // v0.63: floor raised 0.16 → 0.22 for reliable peripheral detection (NN/g ≥0.20).
+  --chrome-peek-bg: rgba(255, 255, 255, 0.22);
   --chrome-peek-width-v: 4px;     // left-edge (info panel) strip thickness
   --chrome-peek-height-h: 4px;    // bottom-edge (timeline) strip thickness
   --chrome-peek-length-v: min(160px, 16vh);   // left strip length
@@ -132,9 +133,10 @@
 
   // v0.62 — Micro-affordance chevrons: subtle directional cues at peek zones.
   // Kept dim by default; the peek-pulse animation brings them into view gently.
-  --chrome-affordance-color: rgba(255, 255, 255, 0.30);
-  --chrome-affordance-size: 10px;        // chevron bounding box
-  --chrome-affordance-weight: 1.5px;     // stroke width
+  // v0.63: opacity 0.30 → 0.42, size 10 → 11px, weight 1.5 → 1.8px for retina-safe lift.
+  --chrome-affordance-color: rgba(255, 255, 255, 0.42);
+  --chrome-affordance-size: 11px;        // chevron bounding box
+  --chrome-affordance-weight: 1.8px;     // stroke width
 }
 
 html,
@@ -1859,6 +1861,12 @@ button {
   margin-bottom: var(--safe-bottom);
   contain: layout paint;
   will-change: opacity;
+  // v0.63 dual-contrast: thin dark hairline keeps the white strip perceptible on
+  // light/cream painting edges; a faint light hairline keeps it readable on
+  // mid-tone edges (layered-shadow technique, GPU-composited, no WebGL cost).
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.12),
+    0 -1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .info-panel-peek {
@@ -1869,11 +1877,26 @@ button {
   margin-left: var(--safe-left);
   contain: layout paint;
   will-change: opacity;
+  // v0.63 dual-contrast: dark hairline on the outer (right) edge + faint light
+  // hairline on the inner (left) edge for visibility against any artwork.
+  box-shadow:
+    1px 0 0 rgba(0, 0, 0, 0.12),
+    -1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
 @keyframes peek-pulse {
-  0%, 100% { opacity: 0.12; }
-  50%      { opacity: 0.32; }
+  0%, 100% { opacity: 0.15; }   // v0.63: floor 0.12 → 0.15 (above detection threshold)
+  50%      { opacity: 0.40; }   // v0.63: peak 0.32 → 0.40 (raised proportionally)
+}
+
+// ── v0.63 Post-hint "settle" animation ─────────────────────────────────────
+// Replaces peek-pulse briefly after the onboarding hint finishes. Starts at an
+// elevated opacity (matching hint-active salience) and decays back to the
+// peek-pulse floor (0.15). The final frame matches peek-pulse's 0%/100% exactly
+// so the handoff back to peek-pulse is seamless (no frame jump).
+@keyframes peek-settle {
+  0%   { opacity: 0.55; }   // peak — draws the eye to the persistent cue
+  100% { opacity: 0.15; }   // matches peek-pulse 0%/100% — seamless handoff
 }
 
 // Peek strips only breathe in clean mode; hidden entirely when chrome is pinned.
@@ -1907,6 +1930,9 @@ button {
   border-radius: 1px;
   flex-shrink: 0;
   margin-bottom: 6px;  // keep clear of the strip below
+  // v0.63 dual-contrast: subtle dark halo keeps the white chevron visible on
+  // bright artwork edges. drop-shadow follows the border shape (not the box).
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.20));
 }
 
 .info-panel-chevron {
@@ -1919,6 +1945,50 @@ button {
   border-radius: 1px;
   flex-shrink: 0;
   margin-left: 6px;  // keep clear of the strip beside it
+  // v0.63 dual-contrast: subtle dark halo for visibility on bright edges.
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.20));
+}
+
+// ── v0.63 Static micro-handle bars (decoupled secondary signifier) ──────────
+// A permanently-visible static cue that does NOT pulse, so at least one marker
+// is always perceptible even when peek-pulse is at its 0%/100% opacity trough.
+// Attached to the peek-hit container (not the rotated chevron, not the animated
+// strip) so it is fully decoupled from the breathing animation.
+.timeline-peek-hit::after,
+.info-panel-peek-hit::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.18);   // static — intentionally low, never animates
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.timeline-peek-hit::after {
+  // Horizontal bar centered above the bottom strip.
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 14px);
+  transform: translateX(-50%);
+  width: 18px;
+  height: 1.5px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);  // dual-contrast dark hairline
+}
+
+.info-panel-peek-hit::after {
+  // Vertical bar centered beside the left strip.
+  top: 50%;
+  left: calc(var(--safe-left) + 14px);
+  transform: translateY(-50%);
+  width: 1.5px;
+  height: 18px;
+  box-shadow: 1px 0 0 rgba(0, 0, 0, 0.12);  // dual-contrast dark hairline
+}
+
+// The static bars must not appear when chrome is pinned visible.
+:root[data-chrome-mode='visible'] {
+  .timeline-peek-hit::after,
+  .info-panel-peek-hit::after {
+    display: none;
+  }
 }
 
 // Chevrons breathe in sync with the peek strip pulse in clean mode.
@@ -1934,6 +2004,22 @@ button {
   .timeline-chevron,
   .info-panel-chevron {
     display: none;
+  }
+}
+
+// ── v0.63 Post-hint "settle" phase ─────────────────────────────────────────
+// ChromeVisibilityManager toggles the `affordance-settling` class on appRoot
+// after the nav onboarding hint finishes. While active, peek strips and
+// chevrons run the one-shot `peek-settle` animation (0.55 → 0.15, forwards),
+// briefly elevating salience to direct the eye to the persistent idle cues,
+// then handing back to peek-pulse seamlessly. The static handle bars are not
+// animated; they stay at their resting opacity throughout.
+.affordance-settling {
+  .timeline-peek,
+  .info-panel-peek,
+  .timeline-chevron,
+  .info-panel-chevron {
+    animation: peek-settle 2s ease-out forwards;
   }
 }
 
@@ -1973,14 +2059,22 @@ button {
   .timeline-peek,
   .info-panel-peek {
     animation: none;
-    opacity: 0.18;
+    opacity: 0.22;  // v0.63: raised floor; dual-contrast box-shadow retained from base rules
   }
 
   // Chevrons remain static (no pulse) but stay visible at a comfortable opacity.
   .timeline-chevron,
   .info-panel-chevron {
     animation: none;
-    opacity: 0.25;
+    opacity: 0.30;  // v0.63: raised floor to match --chrome-affordance-color intent
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.20));  // v0.63: dual-contrast retained
+  }
+
+  // The static handle bars never animate, so they are already correct here; no
+  // settle is ever triggered under reduced motion (the hint is skipped).
+  .timeline-peek-hit::after,
+  .info-panel-peek-hit::after {
+    opacity: 0.22;
   }
 
   :root[data-nav-hint='active'] .nav-btn::before {
@@ -1995,6 +2089,7 @@ button {
     background: ButtonText;
     opacity: 1;
     forced-color-adjust: none;
+    box-shadow: none;  // v0.63: dual-contrast shadow not needed with ButtonText fill
   }
 
   // Use ButtonText for chevron borders so they remain visible in all themes.
@@ -2003,6 +2098,16 @@ button {
     border-color: ButtonText;
     opacity: 1;
     forced-color-adjust: none;
+    filter: none;  // v0.63: forced-colors renders its own contrast; drop-shadow removed
+  }
+
+  // v0.63: static handle bars rendered as ButtonText for high-contrast visibility.
+  .timeline-peek-hit::after,
+  .info-panel-peek-hit::after {
+    background: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+    box-shadow: none;
   }
 
   :root[data-nav-hint='active'] .nav-btn::before {
@@ -2292,6 +2397,18 @@ button {
     font-size: 0.8rem;
     white-space: nowrap;
     color: rgba(255 255 255 / 0.95);
+  }
+
+  // v0.63 — discoverability note: tells keyboard/AT users that moving the mouse
+  // to a screen edge reveals the otherwise-hidden chrome (closes the gap for
+  // users who never see the visual peek affordances).
+  &__hint {
+    margin: 1rem 0 0;
+    padding-top: 0.85rem;
+    border-top: 1px solid rgba(255 255 255 / 0.12);
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: rgba(255 255 255 / 0.62);
   }
 
   &__close {
