@@ -1,6 +1,33 @@
 # CHANGELOG
-> v0.66 shipped: affordance discoverability — bigger peek strips, topbar "Info" + "Zeitleiste" buttons, stronger pulse.
-> Last full markdown audit: 2026-06-04 (v0.66 documentation sync; runtime now v0.66).
+> v0.67 shipped (Phase 1): quality lock — no automatic runtime or first-run quality changes; adaptive controller is diagnostics-only.
+> Last full markdown audit: 2026-06-04 (v0.67 documentation sync; runtime now v0.67).
+
+## v0.67 — Performance stabilization + no automatic quality changes (2026-06-04, **Phase 1 shipped**)
+
+### Status
+
+**Phase 1 shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass). The large-artwork asset-pipeline / staged-loading work (P-04–P-06) and rollout validation (P-07) remain planning-only and are deferred to future phased PRs — see `plan.md`.
+
+### Problem addressed
+
+Performance settings were changing automatically at runtime (adaptive preset downgrades) and on first run (startup heuristic). The customer wants the selected quality to be authoritative, and performance work to focus on real rendering/asset optimizations rather than hidden preset changes.
+
+### Changes — quality lock (P-01, P-02, P-03)
+
+**`src/utils/AdaptiveQualityController.ts`**
+- Added a `locked` constructor flag (default `false`) and an `isLocked` getter.
+- In locked mode, `evaluate()` no longer mutates the preset or returns a downgrade. When sustained frame-budget pressure is detected it emits a throttled `quality / locked-pressure` warning (preset, rolling ms/fps, ema, severe-frame count) and returns `null`, keeping diagnostics visibility without changing quality.
+
+**`src/main.ts`**
+- Adaptive controller is now constructed locked via `AUTOMATIC_QUALITY_CHANGES_ENABLED = false`, so the render loop never calls `preferences.setQuality(...)` from performance events. Removed the `adaptiveQualityWriteInFlight` write-flag plumbing; every preference quality change is now treated as user-initiated (manual).
+- First-run startup heuristic is now diagnostics-only: it keeps the deterministic `DEFAULT_QUALITY_PRESET` and logs `quality / startup-suggestion-suppressed` with what the legacy heuristic would have suggested, instead of applying it. Stored user choices (`hasStoredQuality()`) are unaffected.
+
+### Acceptance criteria met (Phase 1)
+
+1. Runtime never changes the user quality preset automatically. ✅
+2. First-run startup does not silently switch preset. ✅
+3. Performance mitigation now prefers internal optimization over hidden preset downgrades; diagnostics surface pressure without changing quality. ✅ (asset-pipeline gains tracked under P-04–P-06)
+
 
 ## v0.66 — Affordance discoverability (2026-06-04, **shipped**)
 

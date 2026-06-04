@@ -538,21 +538,22 @@ async function main(): Promise<void> {
     dpr: initialCaps.dpr,
   });
 
-  // v0.11 — startup quality heuristic. Only applied when no stored
-  // preference exists, so user choices are always respected after the
-  // first session. Suggests `battery` on small high-DPR phones to avoid
-  // thermal throttling.
+  // v0.11 / v0.67 — startup quality heuristic is now diagnostics-only.
+  // Per the v0.67 quality-lock model, first-run startup must NOT silently
+  // switch the preset. We keep a deterministic default (the preference
+  // store's DEFAULT_QUALITY_PRESET) and only log what the legacy heuristic
+  // would have suggested, so the signal is still visible in diagnostics
+  // without changing the user's preset. Stored user choices are unaffected.
   if (!PreferencesStore.hasStoredQuality()) {
     const suggested = suggestStartupQuality();
     if (suggested !== preferences.current.quality) {
-      diagnostics.info('quality', 'startup-suggestion', 'Applying startup quality heuristic', {
-        from: preferences.current.quality,
-        to: suggested,
+      diagnostics.info('quality', 'startup-suggestion-suppressed', 'Startup quality heuristic suppressed (quality lock); keeping deterministic default', {
+        kept: preferences.current.quality,
+        wouldSuggest: suggested,
         tier: initialCaps.layoutTier,
         pointer: initialCaps.pointerPrimary,
         dpr: initialCaps.dpr,
       });
-      preferences.setQuality(suggested);
     }
   }
 
@@ -747,10 +748,18 @@ async function main(): Promise<void> {
   });
 
   // Frame budget + adaptive quality (v0.02)
+  // v0.67 — quality lock: the adaptive controller runs in locked/diagnostics-only
+  // mode. It never changes the user's selected preset at runtime; it only
+  // surfaces sustained frame-budget pressure as diagnostics. Performance
+  // mitigation must come from internal optimizations, not hidden downgrades.
+  const AUTOMATIC_QUALITY_CHANGES_ENABLED = false;
   const frameBudget = new FrameBudgetMonitor({ budgetMs: 16.7 });
-  const adaptiveQuality = new AdaptiveQualityController(preferences.current.quality);
+  const adaptiveQuality = new AdaptiveQualityController(
+    preferences.current.quality,
+    4000,
+    !AUTOMATIC_QUALITY_CHANGES_ENABLED
+  );
   galleryManager.setFrameBudgetMarker(() => frameBudget.markNavigation());
-  let adaptiveQualityWriteInFlight = false;
   let pageInactive = false;
   let rafId: number;
 
@@ -1358,7 +1367,7 @@ async function main(): Promise<void> {
   //   - https://developer.mozilla.org/docs/Web/API/Page_Visibility_API
   //   - https://developer.chrome.com/articles/page-lifecycle-api
   //   - https://wicg.github.io/page-lifecycle/
-  // (pageInactive is forward-declared above near adaptiveQualityWriteInFlight)
+  // (pageInactive is forward-declared above near the adaptive quality controller)
   const suspendRuntime = (reason: string): void => {
     if (pageInactive) return;
     pageInactive = true;
@@ -1518,7 +1527,9 @@ async function main(): Promise<void> {
   const VOLUME_CHANGE_EPSILON = 1e-6;
   const unsubscribePreferences = preferences.subscribe(() => {
     const nextPrefs = preferences.current;
-    const manual = nextPrefs.quality !== previousPrefs.quality && !adaptiveQualityWriteInFlight;
+    // v0.67 — quality lock: automatic runtime quality changes are disabled, so
+    // every quality change in the preference store is user-initiated (manual).
+    const manual = nextPrefs.quality !== previousPrefs.quality;
     const audioChanged =
       nextPrefs.audioMuted !== previousPrefs.audioMuted ||
       Math.abs(nextPrefs.audioVolume - previousPrefs.audioVolume) > VOLUME_CHANGE_EPSILON;
@@ -1588,6 +1599,10 @@ async function main(): Promise<void> {
     // accumulator while a pointer interaction window is open.
     galleryManager.markInteractionFrame(sample.dtMs);
     const downgrade = adaptiveQuality.evaluate(sample, frameBudget);
+    // v0.67 — quality lock: the controller is locked, so `evaluate` only emits
+    // diagnostics and always returns null here. This guard is retained as a
+    // safety net so that, if automatic changes are ever re-enabled, the write
+    // path still flows through the preference store the user can observe.
     if (downgrade && downgrade !== preferences.current.quality) {
       diagnostics.warn('quality', 'adaptive-downgrade', 'Adaptive quality downgrade triggered', {
         from: preferences.current.quality,
@@ -1596,14 +1611,7 @@ async function main(): Promise<void> {
         rollingMs: Math.round(sample.rollingMs * 10) / 10,
         severeFrameCount: sample.severeFrameCount,
       });
-      // Adaptive downgrade: drive the preference store so listeners pick it up
-      // and the user sees the change in the PreferencesPanel.
-      adaptiveQualityWriteInFlight = true;
-      try {
-        preferences.setQuality(downgrade);
-      } finally {
-        adaptiveQualityWriteInFlight = false;
-      }
+      preferences.setQuality(downgrade);
     }
     lightingSetup.update(now);
     // v0.15 — pass DOMHighResTimeStamp so GalleryManager.update() can

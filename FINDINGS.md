@@ -1,6 +1,22 @@
 # FINDINGS
-> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
-> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+> v0.67 shipped (Phase 1): quality lock — no automatic runtime or first-run quality changes; adaptive controller is diagnostics-only.
+> Last full markdown audit: 2026-06-04 (v0.67 documentation sync; runtime now v0.67).
+
+## v0.67 — Performance stabilization + no automatic quality changes (2026-06-04, **Phase 1 shipped**) — as-built
+
+### What changed in code
+
+1. `AdaptiveQualityController` gained a `locked` mode (+ `isLocked` getter). When locked, `evaluate()` only emits throttled `quality / locked-pressure` diagnostics and never returns a downgrade.
+2. `main.ts` constructs the controller locked (`AUTOMATIC_QUALITY_CHANGES_ENABLED = false`); the render-loop downgrade-apply path can no longer write `preferences.setQuality(...)`. The `adaptiveQualityWriteInFlight` flag was removed; quality changes are always manual.
+3. First-run startup heuristic is now diagnostics-only (`startup-suggestion-suppressed`), keeping the deterministic `DEFAULT_QUALITY_PRESET`; stored user choices are untouched.
+
+### Still open (planning only, future phased PRs)
+
+- P-04 staged large-painting loading (critical-now / near-next / background).
+- P-05 offline asset pipeline for resized tiers + KTX2/Basis compressed outputs.
+- P-06 cost-center tuning (upload scheduling, warm-queue limits, postprocessing cost).
+- P-07 rollout validation with before/after diagnostics evidence.
+
 
 ## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**) — as-built
 

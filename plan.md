@@ -2,7 +2,9 @@
 > v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
 > Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
 
-## v0.67 — Performance stabilization + no automatic quality changes (**planning only**)
+## v0.67 — Performance stabilization + no automatic quality changes (**Phase 1 shipped**)
+
+> **Phase 1 implementation closeout (runtime):** The "no automatic quality changes" core (P-01, P-02, P-03) is now implemented in runtime code under a **quality lock** model. Automatic runtime preset downgrades and first-run startup preset overrides are disabled; the adaptive controller now only surfaces sustained frame-budget pressure as diagnostics, and the user's selected quality is authoritative. `npm run lint` and `npm run build` pass. The large-artwork asset-pipeline / staged-loading work (P-04, P-05, P-06) and final rollout validation (P-07) remain **planning only** and are deferred to future phased PRs.
 
 ### Customer problem restated
 
@@ -42,27 +44,30 @@
 4. **Cap and adapt render resolution carefully** (pixel ratio + postprocessing cost), but avoid abrupt user-facing preset changes.
 5. **If adaptive behavior exists, apply hysteresis and user control first** (opt-in/locked mode), and avoid changing quality during active interaction.
 
-### v0.67 implementation plan (planning only, no runtime changes yet)
+### v0.67 implementation plan (Phase 1 P-01..P-03 shipped; P-04..P-07 planning only)
 
-1. **P-01 — Remove automatic runtime quality switching**
+1. **P-01 — Remove automatic runtime quality switching** ✅ *shipped*
    - Disable adaptive downgrade application path in the render loop.
    - Keep diagnostics visibility, but stop automatic `preferences.setQuality(...)` writes from performance monitor events.
-2. **P-02 — Stop first-run automatic quality overrides**
+   - As built: `AdaptiveQualityController` accepts a `locked` flag; in `main.ts` it is constructed locked (`AUTOMATIC_QUALITY_CHANGES_ENABLED = false`). When locked, `evaluate()` emits a throttled `quality / locked-pressure` warning and returns `null`, so no preset write occurs.
+2. **P-02 — Stop first-run automatic quality overrides** ✅ *shipped*
    - Replace startup quality auto-suggestion with deterministic default + explicit user choice.
    - Preserve stored user preference behavior exactly.
-3. **P-03 — Introduce explicit “quality lock” model**
+   - As built: first-run no longer calls `preferences.setQuality(suggested)`; it keeps `DEFAULT_QUALITY_PRESET` and logs a `quality / startup-suggestion-suppressed` diagnostic with what the legacy heuristic *would* have suggested. `hasStoredQuality()` users are unaffected.
+3. **P-03 — Introduce explicit "quality lock" model** ✅ *shipped*
    - Treat user-selected quality as authoritative unless user explicitly changes it.
    - Add clear product rule in docs and diagnostics: performance mitigation must prefer internal optimizations over preset changes.
-4. **P-04 — Rework large-painting loading strategy**
+   - As built: the lock is documented in the controller, `main.ts`, CHANGELOG, and these plan notes; `isLocked` getter exposes the mode; preference subscribe path now treats every quality change as manual.
+4. **P-04 — Rework large-painting loading strategy** *(planning only)*
    - Move from strict all-artworks-upfront strategy toward staged readiness (critical-now, near-next, background).
    - Keep entry experience smooth while reducing memory spikes and startup time.
-5. **P-05 — Add asset pipeline plan for large artwork**
+5. **P-05 — Add asset pipeline plan for large artwork** *(planning only)*
    - Define an offline conversion path for resized tiers and KTX2/Basis compressed outputs.
    - Map runtime selection logic to viewport/zoom/device capability without mutating user quality preference.
-6. **P-06 — Tune cost centers before touching visual quality presets**
+6. **P-06 — Tune cost centers before touching visual quality presets** *(planning only)*
    - Prioritize texture upload scheduling, warm queue limits, and postprocessing cost controls.
    - Validate with frame-time, memory, and interaction metrics before any preset redesign.
-7. **P-07 — Validation and rollout plan**
+7. **P-07 — Validation and rollout plan** *(planning only)*
    - Establish acceptance gates: no automatic preset changes, improved startup latency, stable frame-time on navigation, and no regression in artwork fidelity expectations.
    - Roll out in phased PRs with diagnostics-backed before/after evidence.
 
