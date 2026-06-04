@@ -1,6 +1,16 @@
 # Freyraum
-> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
-> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+
+## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Affordance strips/chevrons/handles are now slightly stronger and clearer while staying minimal.
+- Edge cues got subtle glass material polish (`linear-gradient` + `backdrop-filter`) for a more premium look.
+- Motion stays calm and guided: idle floor increased (`peek-pulse` floor `0.82`) with seamless settle handoff.
+- Reduced-motion and forced-colors support remain intact.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 
 ## v0.64 — Visual affordance hardening (2026-06-04, **shipped**)
 

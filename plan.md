@@ -1,6 +1,25 @@
 # FREYRAUM Plan
-> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
-> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+
+## v0.65 — Visual affordance prominence + polish (**shipped 2026-06-04**)
+
+> **Implementation closeout:** The request was to make hidden affordances a bit more prominent and visually pleasing, informed by Apple-like design patterns. This pass keeps the minimal chrome model but increases edge-cue readability and premium feel through stronger visual floors, softened glass material treatment, and calmer hierarchy-consistent motion.
+
+### v0.65 plan (executed)
+
+1. **P-01 — Refresh design evidence**
+   - Re-check current guidance for hidden affordance discoverability, subtle motion, and layered material contrast.
+   - Preserve content-first hierarchy and accessibility invariants.
+2. **P-02 — Raise cue salience without heavy chrome**
+   - Increase strip/chevron/handle token strength and geometry slightly.
+   - Raise animation floor so idle state remains clearly discoverable.
+3. **P-03 — Add premium material polish**
+   - Introduce restrained glass-like strip treatment (gradient + blur/saturation) with dual-contrast shadowing.
+4. **P-04 — Keep safety rails intact**
+   - Do not regress reduced-motion or forced-colors behavior.
+5. **P-05 — Validate and sync docs**
+   - Run lint/build and update markdown status/findings/changelog artifacts.
 
 ## v0.64 — Visual affordance hardening (**shipped 2026-06-04**)
 

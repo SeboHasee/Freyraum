@@ -1,6 +1,6 @@
 # FREYRAUM coding guidelines
 > v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
 
 ## v0.29 rendering/preload coding guideline
 

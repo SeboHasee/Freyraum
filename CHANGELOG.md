@@ -1,6 +1,42 @@
 # CHANGELOG
-> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
-> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+
+## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime CSS and validated (`npm run lint` + `npm run build` pass).
+
+### Research-informed intent (Apple-style)
+
+- Keep content first, controls second: cues stay small and edge-bound.
+- Improve discoverability via clearer hierarchy, not noisy UI.
+- Use subtle material/light cues (frosted + soft glow) and gentle motion.
+- Respect reduced-motion and forced-colors paths already in place.
+
+### Changes
+
+- Raised affordance visibility tokens:
+  - `--chrome-peek-bg` `0.42 → 0.52`
+  - `--chrome-peek-width-v` / `--chrome-peek-height-h` `6px → 7px`
+  - `--chrome-affordance-color` `0.72 → 0.84`
+  - `--chrome-affordance-size` `14px → 16px`
+  - `--chrome-affordance-weight` `2.4px → 2.8px`
+- Increased idle pulse floor in `peek-pulse` (`0.74 → 0.82`) and aligned `peek-settle` final frame to `0.82`.
+- Added subtle glass treatment to peek strips (`linear-gradient` + `backdrop-filter: blur(10px) saturate(125%)`) for a more premium, Apple-like material feel.
+- Strengthened dual-contrast shadows and added soft cool glow accents on strips, chevrons, and static handles.
+- Increased static-handle geometry (`18×1.5 → 20×2` and `1.5×18 → 2×20`) for clearer non-animated signifiers.
+
+### Files
+
+- `src/styles/main.scss` — v0.65 affordance prominence/polish pass.
+- `README.md`, `CHANGELOG.md`, `FINDINGS.md`, `plan.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md` — v0.65 documentation sync.
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build` ✅.
+- After edits: `npm run lint`, `npm run build` ✅.
 
 ## v0.64 — Visual affordance hardening (2026-06-04, **shipped**)
 

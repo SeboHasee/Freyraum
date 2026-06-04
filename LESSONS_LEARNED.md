@@ -1,6 +1,6 @@
 # FREYRAUM lessons learned
 > v0.60 planned: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
-> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
 
 
 ## 2026-05-23 — v0.58 implementation lessons

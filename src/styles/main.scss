@@ -123,9 +123,9 @@
   // Visual — translucent peek strips at the screen edges.
   // v0.64: the pulse animates whole-element opacity, so the RGBA alpha must be
   // high enough that `alpha × opacity-floor` remains visible on real artwork.
-  --chrome-peek-bg: rgba(255, 255, 255, 0.42);
-  --chrome-peek-width-v: 6px;     // left-edge (info panel) strip thickness
-  --chrome-peek-height-h: 6px;    // bottom-edge (timeline) strip thickness
+  --chrome-peek-bg: rgba(255, 255, 255, 0.52);
+  --chrome-peek-width-v: 7px;     // left-edge (info panel) strip thickness
+  --chrome-peek-height-h: 7px;    // bottom-edge (timeline) strip thickness
   --chrome-peek-length-v: min(220px, 22vh);   // left strip length
   --chrome-peek-length-h: min(360px, 36vw);   // bottom strip length
 
@@ -136,9 +136,9 @@
   // Kept dim by default; the peek-pulse animation brings them into view gently.
   // v0.64: raised because element opacity is animated; effective alpha now
   // remains visible at the pulse trough instead of multiplying down to ~0.06.
-  --chrome-affordance-color: rgba(255, 255, 255, 0.72);
-  --chrome-affordance-size: 14px;        // chevron bounding box
-  --chrome-affordance-weight: 2.4px;     // stroke width
+  --chrome-affordance-color: rgba(255, 255, 255, 0.84);
+  --chrome-affordance-size: 16px;        // chevron bounding box
+  --chrome-affordance-weight: 2.8px;     // stroke width
 }
 
 html,
@@ -1863,7 +1863,9 @@ button {
   width: 100%;
   height: var(--chrome-peek-height-h);
   border-radius: 2px 2px 0 0;
-  background: var(--chrome-peek-bg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.68), var(--chrome-peek-bg));
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  backdrop-filter: blur(10px) saturate(125%);
   margin-bottom: var(--safe-bottom);
   contain: layout paint;
   will-change: opacity;
@@ -1871,38 +1873,42 @@ button {
   // light/cream painting edges; a faint light hairline keeps it readable on
   // mid-tone edges (layered-shadow technique, GPU-composited, no WebGL cost).
   box-shadow:
-    0 1px 0 rgba(0, 0, 0, 0.12),
-    0 -1px 0 rgba(255, 255, 255, 0.08);
+    0 1px 0 rgba(0, 0, 0, 0.18),
+    0 -1px 0 rgba(255, 255, 255, 0.14),
+    0 0 12px rgba(181, 215, 255, 0.22);
 }
 
 .info-panel-peek {
   width: var(--chrome-peek-width-v);
   height: 100%;
   border-radius: 0 3px 3px 0;
-  background: var(--chrome-peek-bg);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.68), var(--chrome-peek-bg));
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  backdrop-filter: blur(10px) saturate(125%);
   margin-left: var(--safe-left);
   contain: layout paint;
   will-change: opacity;
   // v0.63 dual-contrast: dark hairline on the outer (right) edge + faint light
   // hairline on the inner (left) edge for visibility against any artwork.
   box-shadow:
-    1px 0 0 rgba(0, 0, 0, 0.12),
-    -1px 0 0 rgba(255, 255, 255, 0.08);
+    1px 0 0 rgba(0, 0, 0, 0.18),
+    -1px 0 0 rgba(255, 255, 255, 0.14),
+    0 0 12px rgba(181, 215, 255, 0.22);
 }
 
 @keyframes peek-pulse {
-  0%, 100% { opacity: 0.74; }   // v0.64: effective RGBA floor stays visible
+  0%, 100% { opacity: 0.82; }   // v0.65: stronger idle floor for better discoverability
   50%      { opacity: 1; }      // v0.64: pulse is a small lift, not a fade-out
 }
 
 // ── v0.63 Post-hint "settle" animation ─────────────────────────────────────
 // Replaces peek-pulse briefly after the onboarding hint finishes. Starts at an
 // elevated opacity (matching hint-active salience) and decays back to the
-// peek-pulse floor (0.15). The final frame matches peek-pulse's 0%/100% exactly
+// peek-pulse floor (0.82). The final frame matches peek-pulse's 0%/100% exactly
 // so the handoff back to peek-pulse is seamless (no frame jump).
 @keyframes peek-settle {
   0%   { opacity: 1; }      // peak — draws the eye to the persistent cue
-  100% { opacity: 0.74; }   // matches peek-pulse 0%/100% — seamless handoff
+  100% { opacity: 0.82; }   // matches peek-pulse 0%/100% — seamless handoff
 }
 
 // Peek strips only breathe in clean mode; hidden entirely when chrome is pinned.
@@ -1939,8 +1945,9 @@ button {
   // v0.63 dual-contrast: subtle dark halo keeps the white chevron visible on
   // bright artwork edges. drop-shadow follows the border shape (not the box).
   filter:
-    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45))
-    drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.18));
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.50))
+    drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.22))
+    drop-shadow(0 0 8px rgba(181, 215, 255, 0.28));
 }
 
 .info-panel-chevron {
@@ -1955,8 +1962,9 @@ button {
   margin-left: 0;
   // v0.63 dual-contrast: subtle dark halo for visibility on bright edges.
   filter:
-    drop-shadow(1px 0 1px rgba(0, 0, 0, 0.45))
-    drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.18));
+    drop-shadow(1px 0 1px rgba(0, 0, 0, 0.50))
+    drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.22))
+    drop-shadow(0 0 8px rgba(181, 215, 255, 0.28));
 }
 
 // ── v0.63 Static micro-handle bars (decoupled secondary signifier) ──────────
@@ -1968,7 +1976,7 @@ button {
 .info-panel-peek-hit::after {
   content: '';
   position: absolute;
-  background: rgba(255, 255, 255, 0.78);   // static — never multiplied by pulse opacity
+  background: rgba(255, 255, 255, 0.90);   // static — never multiplied by pulse opacity
   border-radius: 1px;
   pointer-events: none;
 }
@@ -1978,11 +1986,12 @@ button {
   left: 50%;
   bottom: calc(var(--safe-bottom) + 14px);
   transform: translateX(-50%);
-  width: 18px;
-  height: 1.5px;
+  width: 20px;
+  height: 2px;
   box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.50),
-    0 -1px 0 rgba(255, 255, 255, 0.18);
+    0 1px 1px rgba(0, 0, 0, 0.56),
+    0 -1px 0 rgba(255, 255, 255, 0.22),
+    0 0 8px rgba(181, 215, 255, 0.24);
 }
 
 .info-panel-peek-hit::after {
@@ -1990,11 +1999,12 @@ button {
   top: 50%;
   left: calc(var(--safe-left) + 14px);
   transform: translateY(-50%);
-  width: 1.5px;
-  height: 18px;
+  width: 2px;
+  height: 20px;
   box-shadow:
-    1px 0 1px rgba(0, 0, 0, 0.50),
-    -1px 0 0 rgba(255, 255, 255, 0.18);
+    1px 0 1px rgba(0, 0, 0, 0.56),
+    -1px 0 0 rgba(255, 255, 255, 0.22),
+    0 0 8px rgba(181, 215, 255, 0.24);
 }
 
 // The static bars must not appear when chrome is pinned visible.

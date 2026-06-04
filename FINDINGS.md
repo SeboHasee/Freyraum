@@ -1,6 +1,28 @@
 # FINDINGS
-> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
-> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+
+## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**) — as-built
+
+### Online best-practice synthesis (Apple-oriented)
+
+- **Hierarchy:** Keep artwork dominant; edge affordances should be visible but quiet.
+- **Material:** Frosted/translucent surfaces with controlled highlights improve legibility without heavy chrome.
+- **Motion:** Gentle, low-amplitude breathing is preferable to large attention grabs; motion should guide, not distract.
+- **Discoverability:** Persistent static markers plus soft animated cues outperform animation-only hints.
+
+### What changed in code
+
+1. Raised visual floors and geometry for strips/chevrons/handles.
+2. Increased idle pulse floor (`peek-pulse` 0.82→1) and aligned settle end to 0.82.
+3. Added subtle glass-material treatment (`linear-gradient` + `backdrop-filter`) to the edge strips.
+4. Strengthened dual-contrast + glow accents for cross-artwork readability.
+5. Kept reduced-motion and forced-colors overrides intact.
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build` passed.
+- Final validation after edits: `npm run lint`, `npm run build` passed.
 
 ## v0.64 — Visual affordance hardening (2026-06-04, **shipped**) — as-built
 

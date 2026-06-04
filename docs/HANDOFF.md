@@ -1,6 +1,16 @@
 # FREYRAUM customer handoff guide
-> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
-> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+
+## v0.65 — handoff status: visual affordance prominence + polish shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- Hidden edge cues are now a bit more prominent without adding heavy always-on chrome.
+- Visual language was polished toward an Apple-like calm premium style (subtle glass strips, clearer directional chevrons, softened glow/contrast layering).
+- Motion remains gentle and instructional; reduced-motion and forced-colors support still hold.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- Implementation: `plan.md § v0.65`, `FINDINGS.md § v0.65`, `CHANGELOG.md § v0.65`.
 
 ## v0.64 — handoff status: visual affordance hardening shipped (2026-06-04)
 

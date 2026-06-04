@@ -1,6 +1,16 @@
 # FREYRAUM architecture map
-> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
-> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+
+## v0.65 clean-chrome affordance architecture note
+
+v0.65 keeps v0.64 architecture boundaries (DOM ownership in `ChromeVisibilityManager`, styling in `src/styles/main.scss`) and applies a visual-polish layer only: stronger cue tokens, higher idle pulse floor, subtle glass material treatment for strips, and reinforced static markers.
+
+Invariants remain unchanged:
+
+- clean-mode cue visibility must remain predictable (`:root[data-chrome-mode='clean']` selectors).
+- settle selector must stay specificity-safe against clean-mode pulse rules.
+- reduced-motion and forced-colors branches must continue to override decorative motion/appearance safely.
 
 ## v0.64 clean-chrome affordance architecture note
 
