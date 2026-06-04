@@ -1,6 +1,6 @@
 # FREYRAUM customer handoff guide
-> v0.68 shipped: staged startup readiness — entry waits only for active artwork + critical view; remainder streams after entry.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+> v0.69 shipped: metal frames render with richer close-up detail (multi-scale brushed grain, clustered scratch families, per-fragment anisotropy on the high preset) while the v0.54 anti-banding guarantee and full manual quality control are preserved.
+> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
 
 ## v0.68 — handoff status: metal frame close-up realism plan (2026-06-04, docs-only)
 

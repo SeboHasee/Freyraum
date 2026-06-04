@@ -1,12 +1,57 @@
 # FREYRAUM Plan
-> v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
+> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM with derivative-aware AA, clustered scratch families, per-fragment anisotropy direction perturbation (high preset), preset-keyed shader programs (`frame-v0.69-{high|balanced|none}`). v0.54 cross-bar invariant preserved. Quality stays fully manual.
+> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
 
-## v0.68 — Metal frame close-up realism uplift (**planning/docs-only, 2026-06-04**)
+## v0.69 — Metal frame close-up realism uplift (**shipped 2026-06-04**)
 
-> **Status:** Planning only. No runtime code changes shipped in this pass.
-> **Goal:** Make frame metal read as more realistic and higher quality, especially at close zoom, while preserving the v0.54 anti-banding guarantees.
-> **Last research refresh:** 2026-06-04 — enhanced with Three.js r166 API details, concrete GLSL examples, and TypeScript coding guidance.
+> **Outcome:** The v0.68 frame-detail planning pass is now implemented. Frame metal reads as richer and more believable at close zoom while preserving the v0.54 anti-banding invariant. Quality stays fully manual; per-artwork seed remains a uniform-only update (no re-compile per artwork).
+
+### Audit deltas applied before implementation
+
+1. **M-04 — anisotropy direction is now per-fragment GLSL, not a `DataTexture`.**
+   - Three.js r166's native `material.anisotropyMap` samples from the standard `uv` channel, but the frame uses the custom `aFrameUV` attribute for bar-aligned coordinates. A `DataTexture` path would have read from the misaligned planar `uv` channel and (in the planned packing) zeroed the anisotropy strength because the `B` channel was `0` (the r166 shader multiplies direction by `polar.b`).
+   - Resolution: replace `#include <lights_physical_fragment>` (high preset only) with a copy that computes `anisotropyV` directly from `vFrameUV` via a sinusoidal perturbation of the scalar `anisotropyRotation = π/2` base direction. No texture, no UV mismatch, identical disposal surface.
+2. **Battery `frameRoughness`.** Plan stated `0.55`; runtime is `0.60`. Plan/docs aligned to runtime.
+3. **Preset switching uses a typed authoritative field.** Added `QualityPreset.frameDetailLevel: 'high' | 'balanced' | 'none'` as the authoritative compile-flag source instead of re-checking `preset.id` in shader code.
+
+### Shipped slices
+
+1. **M-01 — Extended baseline diagnostic.** `[CanvasMaterial] frame-shader-compiled` now records `version: 'v0.69'`, `frameDetailLevel`, all preset knobs, `normalGradientScale`, `fineGrainAmplitude`, `roughnessGrainAmp`, `scratchRoughnessMax`, `clusterGainEnabled`, `anisoPerFragmentEnabled`, and `cacheKey` for direct before/after diffing.
+2. **M-02 — Bounded multi-scale grain.** New `frmBrushedFbm2` (4× higher base frequency, 1/4 amplitude, identical 1-D invariant) drives a fine-detail term added to `frmBrushedNormal` on `high` (amplitude `0.006`) and `balanced` (amplitude `0.004`). Battery preset is unchanged.
+3. **M-03 — Clustered scratch families.** `frmScratchLayer` (high only) groups scratches via a coarse per-zone hash (`floor(barUV.x * 3.0 + 1.0)`) with cluster gain peaking at `2.5×` presence in ~40% of zones. Cluster gain affects visual presence only; the `+0.015` scratch roughness cap is unchanged.
+4. **M-04 — Per-fragment anisotropy direction perturbation (high only).** GLSL injection into `lights_physical_fragment` rotates the brushed direction by `±0.18 rad ≈ ±10°` along `vFrameUV.x`, providing the mid-frequency directional wander that brushed-metal sheen exhibits in reality. `vFrameUV.y` is **not** used (cross-bar invariant preserved).
+5. **M-05 — Derivative-aware AA.** `fwidth(barUV.x)` controls a `smoothstep(0.004, 0.015)` attenuation for the fine-grain normal term and a `smoothstep(0.003, 0.012)` attenuation for the roughness grain (high/balanced) — both fade toward neutral as the pixel footprint grows, eliminating distance shimmer with zero preset branching at the call site.
+6. **M-06 — Preset compile-flag branching.** New `frameDetailLevel` field on `QualityPreset` drives `#define FRAME_DETAIL_HIGH 1` (high) / `#define FRAME_DETAIL_BALANCED 1` (balanced) / no define (battery). `customProgramCacheKey` is now `'frame-v0.69-' + frameDetailLevel`, producing three distinct compiled programs total instead of one per artwork seed.
+7. **M-07 — Validation.**
+   - `npm run lint` ✅, `npm run build` ✅ (typecheck + Vite bundle + preview HTML).
+   - Bundle size: `freyraum-gallery.js` 731.54 → 739.45 kB (+7.91 kB / +1.1 %), gzip 192.07 → 194.22 kB (+2.15 kB / +1.1 %). Acceptable for the visual uplift; no other code paths touched.
+   - Cross-bar invariant: `frmBrushedFbm2` takes only `alongX` + seed-derived `yConst2`; the fine-grain term has `dFBM/dY = 0` by construction, identical to the v0.54 primary term.
+   - Per-artwork re-compile: cache key depends only on `frameDetailLevel`, so navigating between artworks still triggers a uniform update only.
+8. **M-08 — Documentation sync.** `plan.md`, `CHANGELOG.md`, `FINDINGS.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md`, and `README.md` updated to reflect shipped state, cache-key version, knob values, and the resolved audit deltas above.
+
+### Acceptance summary
+
+| Gate | Result |
+| --- | --- |
+| Lint | ✅ pass |
+| TypeScript build | ✅ pass |
+| Vite bundle | ✅ pass (+1.1 % size) |
+| v0.54 cross-bar invariant (`dFBM/dY = 0`) | ✅ preserved across primary + fine layer |
+| Per-artwork seed = uniform-only | ✅ unchanged |
+| Quality lock + no automatic preset writes | ✅ unaffected (no changes to AdaptiveQualityController) |
+| Startup gate (`boot / performance-gate`) | ✅ unaffected (frame shader compile is in the warm phase) |
+
+### Research references (online — refreshed 2026-06-04)
+
+- Khronos glTF `KHR_materials_anisotropy` (ratified): https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy
+- Three.js `MeshPhysicalMaterial` — `anisotropy`, `anisotropyMap`, `anisotropyRotation` (r153+): https://threejs.org/docs/#api/en/materials/MeshPhysicalMaterial
+- Three.js r166 `anisotropyMap` shader source (`lights_physical_fragment.glsl.js`): direction is `normalize(2.0 * polar.rg - 1) * polar.b`, sampled from the material's `anisotropyMap` UV channel (defaults to standard `uv`). This is why a `DataTexture` would have mis-sampled the frame's `aFrameUV` and why direct GLSL injection is the correct approach for frame geometry.
+- Three.js anisotropy example: https://threejs.org/examples/?q=anis#webgl_materials_physical_anisotropy
+- GLSL `fwidth()` WebGL2 spec — derivative-aware AA for procedural patterns: attenuate high-frequency terms when screen-space footprint exceeds target
+
+## v0.68 — Metal frame close-up realism uplift (**superseded by v0.69 shipped 2026-06-04**)
+
+> **Status:** Superseded. This section is retained for historical context only; the implementation shipped in v0.69 above with two audit deltas (M-04 GLSL-direct anisotropy in place of `anisotropyMap`, battery roughness aligned to the runtime `0.60`).
 
 ### Current code audit (frame path)
 

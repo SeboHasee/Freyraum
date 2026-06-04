@@ -1,6 +1,6 @@
 # Freyraum
-> v0.68 shipped (v0.67 Phase 2): staged startup readiness — the gallery becomes enterable as soon as the active artwork + nearby view is ready; the rest streams in afterwards. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
+> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM, clustered scratch families, per-fragment anisotropy direction perturbation (high preset), derivative-aware AA, preset-keyed shader programs. v0.54 cross-bar invariant preserved. Quality stays fully manual.
+> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
 
 ## v0.68 — Metal frame close-up realism plan (2026-06-04, **planning/docs-only**)
 

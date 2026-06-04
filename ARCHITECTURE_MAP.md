@@ -1,6 +1,14 @@
 # FREYRAUM architecture map
-> v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
+> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM, clustered scratches (high), per-fragment anisotropy direction (high), derivative-aware AA. v0.54 cross-bar invariant preserved.
+> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
+
+## v0.69 frame-shader invariants (updated)
+
+1. **Cross-bar gradient must remain zero.** Both `frmBrushedFbm` (primary) and `frmBrushedFbm2` (M-02 fine) take only `alongX` plus a seed-derived `yConst*` scalar. `barUV.y` is never an input to any FBM call → `dFBM/dY = 0`. Violation: any future code that adds a `barUV.y`-dependent term inside the FBMs would reintroduce v0.53-style banding.
+2. **Per-artwork seed = uniform-only.** `customProgramCacheKey()` depends on `frameDetailLevel`, not seed. Adding seed to the key would explode the Three.js program cache to one entry per artwork.
+3. **Preset compile-flag source of truth.** `QualityPreset.frameDetailLevel` (`'high' | 'balanced' | 'none'`) is the only place the detail-level branching is encoded. `onBeforeCompile` prepends `#define FRAME_DETAIL_HIGH|BALANCED` accordingly and chooses the roughness/lights-physical replacements based on it. Shader code must not read `preset.id` directly.
+4. **`anisotropyMap` is intentionally not used for the frame.** Three.js r166 native `anisotropyMap` samples from the standard `uv` channel which does not align with `aFrameUV`. Per-fragment direction perturbation is done by replacing `#include <lights_physical_fragment>` (high preset only) and computing `anisotropyV` from `vFrameUV` directly. Future contributors who reach for `material.anisotropyMap = ...` for frame work should re-read this section.
+5. **Cache-key versioning is mandatory on GLSL changes.** Bump `'frame-v0.69-…'` → `'frame-v0.70-…'` (etc.) whenever any compile-time GLSL changes, or Three.js will serve stale compiled binaries to existing materials.
 
 ## v0.68 frame-detail plan architecture note (**planning/docs-only**)
 

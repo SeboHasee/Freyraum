@@ -1,6 +1,28 @@
 # FINDINGS
-> v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
+> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM (M-02), clustered scratches (M-03), per-fragment anisotropy (M-04, high preset), derivative-aware AA (M-05), preset-keyed shader programs (M-06). v0.54 cross-bar invariant preserved.
+> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
+
+## v0.69 — Metal frame close-up realism uplift (shipped 2026-06-04)
+
+### Audit deltas surfaced during the final pass
+
+1. **`material.anisotropyMap` (r166 native) would have mis-sampled the frame.** The frame uses a custom `aFrameUV` attribute (bar-aligned along/across coordinates). Three.js r166's `anisotropyMap` shader samples from the material's `anisotropyMap` UV channel, which defaults to the standard `uv` channel — for `ExtrudeGeometry` this is a world-space planar projection that does **not** follow the bar direction. Additionally, the v0.68 planning code packed `B = 0` in the `DataTexture`, which the r166 shader uses as the direction strength multiplier (`anisotropyV *= polar.b`), collapsing anisotropy to zero. M-04 was therefore reimplemented as a direct GLSL injection in `lights_physical_fragment` reading `vFrameUV` — no `DataTexture`, no UV mismatch, no disposal surface change.
+2. **Battery `frameRoughness` documentation drift.** Plan stated `0.55`; runtime value is `0.60` in `src/config/quality.ts`. Plan and docs now match runtime.
+3. **Preset switching prefers a typed authoritative field.** `QualityPreset` gained `frameDetailLevel: 'high' | 'balanced' | 'none'` so shader compile flags are driven by an enumerated preset field, not by re-checking `preset.id` in shader-side TypeScript.
+
+### Code-verified shipped behavior
+
+- `customProgramCacheKey()` returns `'frame-v0.69-' + frameDetailLevel` → three distinct compiled programs (high / balanced / none). Per-artwork seed continues to update `uFrameSeed` only.
+- `frmBrushedFbm2` takes only `(alongX, yConst2)` where `yConst2 = frmHash(seed * 3.17) * 57.0`; combined with the v0.54 primary FBM, the cross-bar gradient `dFBM/dY` remains exactly zero for both layers.
+- M-05 uses `fwidth(vFrameUV.x)` (the bar-along derivative) — not `fwidth(barUV.y)` — so attenuation is correctly tied to brushed-direction screen frequency.
+- Battery preset (`frameDetailLevel: 'none'`) compiles a program functionally equivalent to v0.54: no `frmBrushedFbm2`, no cluster scratches, no `lights_physical_fragment` override.
+- Bundle delta: `freyraum-gallery.js` 731.54 → 739.45 kB (+1.1 %); gzip 192.07 → 194.22 kB (+1.1 %).
+
+### Validation evidence
+
+- `npm run lint` ✅
+- `npm run build` ✅ (typecheck + Vite preview + preview HTML writer)
+- Quality lock (`AUTOMATIC_QUALITY_CHANGES_ENABLED = false`) and `boot / performance-gate` schema unchanged — frame-shader compile remains in the warm phase, not on the entry-CTA critical path.
 
 ## v0.68 — Metal frame close-up realism (2026-06-04, **planning/docs-only**) — findings
 

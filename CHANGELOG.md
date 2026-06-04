@@ -1,8 +1,31 @@
 # CHANGELOG
-> v0.68 shipped (v0.67 Phase 2): staged startup readiness — the entry CTA now waits only for the active artwork + critical view; the rest streams in deterministically after entry. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
+> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM (M-02), clustered scratch families (M-03), per-fragment anisotropy direction perturbation (M-04, high preset), derivative-aware AA (M-05), preset-keyed shader programs (M-06). v0.54 cross-bar invariant preserved. Quality stays fully manual.
+> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
 
-## v0.68 — Metal frame close-up realism plan (2026-06-04, **planning/docs-only**)
+## v0.69 — Metal frame close-up realism uplift (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implements the v0.68 frame-detail plan (M-01..M-08) with two audit deltas applied before code: anisotropy direction is computed in GLSL from `vFrameUV` (not via `material.anisotropyMap`) to sidestep the standard-`uv` channel mismatch with the frame's `aFrameUV` attribute, and battery `frameRoughness` documentation aligned to the runtime value (`0.60`).
+
+### Summary
+
+- **M-01 baseline diagnostic.** `[CanvasMaterial] frame-shader-compiled` now records `version: 'v0.69'`, `frameDetailLevel`, `normalGradientScale`, `fineGrainAmplitude`, `roughnessGrainAmp`, `scratchRoughnessMax`, `clusterGainEnabled`, `anisoPerFragmentEnabled`, and `cacheKey`.
+- **M-02 multi-scale grain.** New `frmBrushedFbm2` (4× base frequency, 1/4 amplitude, identical 1-D invariant) drives a fine-detail normal term on `high` (amp `0.006`) and `balanced` (amp `0.004`).
+- **M-03 clustered scratches (high only).** Coarse per-zone hash (`floor(barUV.x * 3.0 + 1.0)`) groups scratches into wear families with `2.5×` presence peak in ~40 % of zones; the `+0.015` scratch roughness cap is unchanged.
+- **M-04 per-fragment anisotropy direction (high only).** GLSL injection in `lights_physical_fragment` rotates the brushed direction by `±0.18 rad ≈ ±10°` along `vFrameUV.x` while preserving the cross-bar invariant.
+- **M-05 derivative-aware AA.** `fwidth(vFrameUV.x)` attenuates the fine-grain normal and the roughness-grain modulation toward neutral at mid distance, eliminating shimmer with no preset branching at the call site.
+- **M-06 preset compile-flag branching.** Added `QualityPreset.frameDetailLevel: 'high' | 'balanced' | 'none'`. `#define FRAME_DETAIL_HIGH|BALANCED` selects compiled detail level; `customProgramCacheKey` is now `'frame-v0.69-' + frameDetailLevel` (three programs total, not one per artwork seed).
+- **M-07 validation.** `npm run lint` ✅, `npm run build` ✅. Bundle: 731.54 → 739.45 kB (+1.1 %), gzip 192.07 → 194.22 kB (+1.1 %). Cross-bar `dFBM/dY = 0` invariant preserved.
+- **M-08 documentation.** This entry; `plan.md`, `FINDINGS.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md`, and `README.md` synced.
+
+### Files
+
+- `src/materials/CanvasMaterial.ts` — multi-scale FBM, cluster scratches, per-preset roughness blocks, per-fragment anisotropy injection, versioned cache key, extended baseline log.
+- `src/config/quality.ts` — new `frameDetailLevel` field; `high → 'high'`, `balanced → 'balanced'`, `battery → 'none'`.
+- `plan.md`, `CHANGELOG.md`, `FINDINGS.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md`, `README.md` — synced.
+
+## v0.68 — Metal frame close-up realism plan (2026-06-04, **superseded by v0.69**)
 
 ### Status
 

@@ -127,6 +127,21 @@ export interface QualityPreset {
   frameClearcoat: number;
   /** Whether the frame should use beveled geometry. */
   frameBevelEnabled: boolean;
+
+  // ── v0.69 frame close-up realism fields ───────────────────────────────────
+  /**
+   * v0.69 (M-06): authoritative preset-level switch for the procedural frame
+   * detail budget compiled into the brushed-metal fragment shader.
+   *  - `'high'`     → primary FBM + fine-grain FBM (M-02) + clustered scratches
+   *                  (M-03) + per-fragment anisotropy direction perturbation
+   *                  (M-04) + AA grain attenuation (M-05).
+   *  - `'balanced'` → primary FBM + fine-grain FBM (M-02) only.
+   *  - `'none'`     → pure v0.54 path (primary FBM only). Battery preset.
+   * The shader compiles a different program per `frameDetailLevel` value via
+   * `#define FRAME_DETAIL_*` and `customProgramCacheKey()`; per-artwork seed
+   * still updates a uniform only (no re-compile).
+   */
+  frameDetailLevel: 'high' | 'balanced' | 'none';
 }
 
 export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
@@ -181,6 +196,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     frameAnisotropy: 0.85,
     frameClearcoat: 0.12,
     frameBevelEnabled: true,
+    frameDetailLevel: 'high',
   },
   balanced: {
     id: 'balanced',
@@ -224,6 +240,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     frameAnisotropy: 0.60,
     frameClearcoat: 0.08,
     frameBevelEnabled: true,
+    frameDetailLevel: 'balanced',
   },
   battery: {
     id: 'battery',
@@ -266,6 +283,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     frameAnisotropy: 0.0,
     frameClearcoat: 0.0,
     frameBevelEnabled: false,
+    frameDetailLevel: 'none',
   },
 };
 
