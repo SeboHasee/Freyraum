@@ -1,55 +1,190 @@
 # FREYRAUM Plan
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
 
 ## v0.68 — Metal frame close-up realism uplift (**planning/docs-only, 2026-06-04**)
 
 > **Status:** Planning only. No runtime code changes shipped in this pass.
 > **Goal:** Make frame metal read as more realistic and higher quality, especially at close zoom, while preserving the v0.54 anti-banding guarantees.
+> **Last research refresh:** 2026-06-04 — enhanced with Three.js r166 API details, concrete GLSL examples, and TypeScript coding guidance.
 
 ### Current code audit (frame path)
 
 1. **Frame material already uses physically plausible base knobs.**
-   - `MeshPhysicalMaterial` with metalness `1.0`, preset-controlled roughness/clearcoat/anisotropy (`src/materials/CanvasMaterial.ts`, `src/config/quality.ts`).
+   - `MeshPhysicalMaterial` with `metalness: 1.0`, preset-controlled `roughness`/`clearcoat`/`anisotropy`/`anisotropyRotation` (`src/materials/CanvasMaterial.ts:194–288`, `src/config/quality.ts:178–183`).
+   - High preset: `frameRoughness: 0.28`, `frameAnisotropy: 0.85`, `frameClearcoat: 0.12`.
+   - Balanced preset: `frameRoughness: 0.38`, `frameAnisotropy: 0.60`, `frameClearcoat: 0.08`.
 2. **Microstructure is intentionally constrained to avoid past artifacts.**
-   - v0.54 moved to a pure 1-D along-bar brushed normal + roughness grain to remove cross-bar banding/ridges (`src/materials/CanvasMaterial.ts`).
+   - v0.54 moved to a pure 1-D along-bar brushed FBM + roughness grain to remove cross-bar banding/ridges (`src/materials/CanvasMaterial.ts:50–107`). The invariant is: **no `barUV.y` input to any FBM call** → `dFBM/dY = 0` → zero cross-bar normal gradient.
+   - Primary FBM octaves: `qx × [2.5, 5.1, 10.3, 20.7]` with amplitudes `[0.5, 0.25, 0.125, 0.0625]`. Gradient scale `0.025` → max ~7° tilt.
 3. **Close-up limitation today: detail bandwidth is narrow.**
-   - Current normal perturbation scale and roughness modulation are intentionally subtle and use a single directional grain family with sparse scratch layering.
+   - Single grain family, gradient scale `0.025`, roughness grain amp `±0.030`, scratch roughness impact `+0.015`. Conservative by design but limits close-up richness.
 4. **Directional anisotropy is uniform per material.**
-   - The current path uses scalar anisotropy strength/rotation but no per-fragment anisotropy direction/strength map.
+   - `anisotropyRotation: Math.PI / 2` is scalar; no `anisotropyMap` is set. Three.js r166 (installed: `^0.166.1`) natively supports `material.anisotropyMap` for per-fragment direction control without `onBeforeCompile` injection.
+5. **`customProgramCacheKey` is `'frame-v0.54'`** — a single shared key. Any change to compiled GLSL (new `#define`, new function signature) requires a new cache key to avoid Three.js serving the old compiled binary.
 
-### Online research synthesis (applied to this plan)
+### Online research synthesis (applied to this plan, 2026-06-04)
 
-1. **Anisotropy direction should be spatially controllable** for brushed metal realism (Khronos `KHR_materials_anisotropy` spec: direction in RG, strength in B, tangent-space dependent).
-2. **Close-up metal quality needs multi-scale breakup** (coarse directional brush + fine micro detail), but with controlled amplitude to avoid aliasing and synthetic striping.
-3. **Mipmaps + texture anisotropic filtering are key** for preserving detail at grazing angles without shimmer (`Texture.anisotropy`, `generateMipmaps`, trilinear min filter in Three.js texture model).
-4. **PMREM/IBL quality and anisotropic BRDF assumptions matter** for convincing highlight flow on brushed surfaces (Khronos anisotropy implementation guidance).
+1. **Three.js r166 natively supports `anisotropyMap`** (installed version: `^0.166.1`). Setting `material.anisotropyMap = dataTexture` unlocks per-fragment anisotropy direction without `onBeforeCompile` shader injection. RG channels encode the tangent-space direction vector packed as `dir * 0.5 + 0.5`; strength is still controlled by `material.anisotropy`.
+2. **Anisotropy direction must be spatially variable for brushed-metal realism** (Khronos `KHR_materials_anisotropy` spec). A small procedural `DataTexture` (64×4 RGBA `UnsignedByteType`) with gentle sinusoidal direction perturbation along bar length is sufficient — no authored asset required.
+3. **Multi-scale FBM is the standard approach for close-up procedural metal**: coarse primary layer (existing, frequencies `[2.5, 5.1, 10.3, 20.7]`) + fine secondary layer at ~4× higher base frequency, amplitude ratio ≤ 1:4 to preserve the no-cross-bar gradient invariant.
+4. **Derivative-aware AA via `fwidth(barUV.x)` is the correct guard** for procedural high-frequency normals in GLSL: `fwidth()` returns the screen-space magnitude of the UV partial derivatives, so `smoothstep(0.004, 0.015, fw)` fades fine-detail contribution to zero as the view pulls back (fw ~0.004 = close zoom, fw ~0.015 = mid distance). This is a zero-cost guard that eliminates shimmer at distance without preset branching.
+5. **Clustered scratch distribution** matches real-world wear better than uniform random: use a coarse-scale `frmHash(floor(barUV.x * 3.0) + seed * N)` presence mask to group scratch lines into family zones at ~40% coverage.
+6. **`customProgramCacheKey` must be versioned when compile-time GLSL changes.** Switch from `'frame-v0.54'` to `'frame-v0.69-{preset}'` when M-02/M-03/M-05 GLSL is added. Per-seed updates remain uniform-only (no new compile needed per artwork).
+7. **PMREM/IBL quality and anisotropic BRDF assumptions matter** for convincing brushed-highlight flow. The existing PMREM environment is appropriate; no env-map changes are needed.
 
-### v0.68 execution plan (next implementation pass)
+### v0.68 execution plan (next implementation pass — with concrete coding guidance)
 
 1. **M-01 — Add diagnostics-first frame quality baseline capture**
-   - Freeze current visual baselines (normal/roughness ranges, alias hotspots, corner behavior) and add repeatable comparison checkpoints before shader changes.
+   - Extend the existing `[CanvasMaterial] frame-shader-compiled` log (`src/materials/CanvasMaterial.ts:262`) with the current knob values as an explicit baseline record before making any shader changes:
+     ```typescript
+     console.debug('[CanvasMaterial] frame-shader-compiled', {
+       version: 'v0.54',             // bump to 'v0.69' when GLSL changes
+       preset: preset.id,
+       frameRoughness: preset.frameRoughness,
+       frameAnisotropy: preset.frameAnisotropy,
+       frameClearcoat: preset.frameClearcoat,
+       // Baseline knobs (new fields):
+       normalGradientScale: 0.025,   // FRAME_FRAG_NORMAL_REPLACE gradX scale
+       roughnessGrainAmp: 0.030,     // roughnessmap_fragment grain amplitude
+       scratchRoughnessMax: 0.015,   // roughnessmap_fragment scratch cap
+       fineGrainAmplitude: 0.0,      // M-02: 0 until shipped
+       clusterGainEnabled: false,    // M-03: false until shipped
+       anisoMapEnabled: false,       // M-04: false until shipped
+       cacheKey: material.customProgramCacheKey(),
+     });
+     ```
+   - Add repeatable comparison checkpoints: screenshot both close-zoom (camera Z ≈ 0.5) and mid-distance (Z ≈ 3.5) views with `high` and `balanced` presets before any shader changes.
+
 2. **M-02 — Introduce bounded multi-scale grain model**
-   - Add a second, finer along-grain detail layer with strict amplitude clamps so close-up detail increases without reintroducing cross-bar ridges.
+   - Add `frmBrushedFbm2` to `FRAME_FRAG_FUNCTIONS` in `src/materials/CanvasMaterial.ts`. Same 1-D invariant as primary (no `barUV.y`), but ~4× higher base frequency and tighter domain warp (amplitude `0.12` vs primary `0.30`):
+     ```glsl
+     // Fine-scale grain FBM — 4× frequency, 1/4 amplitude, same 1-D invariant (no barUV.y)
+     float frmBrushedFbm2(float alongX, float yConst) {
+       float wx = frmNoise(vec2(alongX * 2.2 + 27.3, yConst + 4.0));
+       float qx = alongX + (wx - 0.5) * 0.12;
+       float v = 0.0;
+       v += 0.5000 * frmNoise(vec2(qx * 9.0,  yConst + 6.28));
+       v += 0.2500 * frmNoise(vec2(qx * 18.1, yConst + 9.42));
+       v += 0.1250 * frmNoise(vec2(qx * 36.3, yConst + 12.57));
+       return v;
+     }
+     ```
+   - Replace `frmBrushedNormal` body in `FRAME_FRAG_FUNCTIONS` (combined M-02 + M-05 guard):
+     ```glsl
+     vec3 frmBrushedNormal(vec2 barUV, float seed) {
+       float yConst  = frmHash(seed * 7.31) * 57.0;
+       float yConst2 = frmHash(seed * 3.17) * 57.0; // independent per-seed constant
+       float eps = 0.010;
+       // Primary coarse grain (unchanged v0.54 path)
+       float h0  = frmBrushedFbm(barUV.x,       yConst);
+       float hx  = frmBrushedFbm(barUV.x + eps, yConst);
+       // Fine detail grain (M-02)
+       float h0f = frmBrushedFbm2(barUV.x,       yConst2);
+       float hxf = frmBrushedFbm2(barUV.x + eps, yConst2);
+       // Derivative-aware AA: attenuate fine layer as pixel footprint grows (M-05)
+       float fw = fwidth(barUV.x);
+       float fineAttn = 1.0 - smoothstep(0.004, 0.015, fw);
+       float gradX = (h0 - hx) / eps * 0.025
+                   + (h0f - hxf) / eps * 0.006 * fineAttn;
+       return normalize(vec3(gradX, 0.0, 1.0));
+     }
+     ```
+   - Update `roughnessFactor` for high preset: raise primary amplitude `0.030 → 0.040`; the fine grain contributes an additional `+0.012` at close zoom, fading to zero at distance. Clamp remains `[0.14, 0.72]`.
+
 3. **M-03 — Improve micro-scratch realism distribution**
-   - Replace uniformly sparse scratch presence with more natural clustered-yet-bounded variation while keeping physically plausible roughness impact.
-4. **M-04 — Add per-fragment anisotropy direction support (optional path)**
-   - Add a lightweight anisotropy-direction modulation path aligned to bar-local coordinates, guarded so lower presets can keep today’s cheaper scalar behavior.
+   - Replace `frmScratchLayer` body in `FRAME_FRAG_FUNCTIONS` with a cluster-aware version. The `frmHash(floor(barUV.x * 3.0 + 1.0) * 17.0 + seed * 29.3)` call provides a coarse per-zone hash (≈every 1/3 of bar length) that groups scratches into natural family clusters:
+     ```glsl
+     float frmScratchLayer(vec2 barUV, float seed) {
+       // Natural cluster zones: ~40% of bar length has elevated scratch density
+       float clusterHash = frmHash(floor(barUV.x * 3.0 + 1.0) * 17.0 + seed * 29.3);
+       float clusterGain = 1.0 + smoothstep(0.60, 0.75, clusterHash) * 1.5;
+       float a = frmScratchLine(barUV,  8.0, seed);
+       float b = frmScratchLine(barUV, 14.0, seed + 5.11);
+       float c = frmScratchLine(barUV, 22.0, seed + 11.37);
+       return clamp((a * 0.06 + b * 0.05 + c * 0.04) * clusterGain, 0.0, 0.16);
+     }
+     ```
+   - Scratch roughness cap stays `+0.015` in `roughnessFactor` — cluster gain applies to the visual presence of the scratch line, not to its roughness impact.
+
+4. **M-04 — Add per-fragment anisotropy direction map (high preset, r166 native)**
+   - Three.js r166 supports `material.anisotropyMap` without `onBeforeCompile`. Add a procedural `DataTexture` generation helper inside `createFrameMaterial` in `src/materials/CanvasMaterial.ts`, guarded to `preset.id === 'high'` only:
+     ```typescript
+     // M-04: per-fragment anisotropy direction map (high preset only; r166 native)
+     if (preset.id === 'high') {
+       const W = 64, H = 4;
+       const anisoData = new Uint8Array(W * H * 4);
+       for (let y = 0; y < H; y++) {
+         for (let x = 0; x < W; x++) {
+           const t = x / (W - 1);
+           // Gentle sinusoidal direction perturbation along bar (±8% of full range)
+           const pert = Math.sin(t * Math.PI * 3.7 + seed * 6.28) * 0.08;
+           const r = Math.round((1.0 + pert) * 0.5 * 255); // X direction packed
+           const idx = (y * W + x) * 4;
+           anisoData[idx]     = r;    // X: brushed direction
+           anisoData[idx + 1] = 128; // Y: neutral (no cross-bar lean)
+           anisoData[idx + 2] = 0;
+           anisoData[idx + 3] = 255;
+         }
+       }
+       const anisoMap = new THREE.DataTexture(
+         anisoData, W, H, THREE.RGBAFormat, THREE.UnsignedByteType
+       );
+       anisoMap.wrapS = THREE.RepeatWrapping;
+       anisoMap.wrapT = THREE.RepeatWrapping;
+       anisoMap.needsUpdate = true;
+       material.anisotropyMap = anisoMap;
+       material.userData.anisoMap = anisoMap; // for disposal
+     }
+     ```
+   - Update `CanvasMaterial.dispose()` to call `(material.userData.anisoMap as THREE.DataTexture | undefined)?.dispose()`.
+   - Lower presets: leave `anisotropyMap` unset — scalar `anisotropy` + `anisotropyRotation: Math.PI / 2` stay as today.
+
 5. **M-05 — Strengthen anti-alias safety rails**
-   - Add derivative-aware attenuation and frequency caps for new high-frequency terms, with explicit close-zoom and mid-distance acceptance thresholds.
+   - Already integrated in M-02's `frmBrushedNormal` update via `fwidth(barUV.x)` and `smoothstep(0.004, 0.015, fw)`. The fine-layer contribution fades to zero at mid-distance (fw ≈ 0.015), so distance shimmer is eliminated without preset branching.
+   - Also guard `frmRoughnessGrain`'s two highest-frequency octaves in the `roughnessmap_fragment` injection. Add a `grainAttn` factor (same `fwidth` approach) to the roughness grain amplitude:
+     ```glsl
+     // Add to roughnessmap_fragment injection (M-05 AA guard):
+     float fw = fwidth(vFrameUV.x);
+     float grainAttn = 1.0 - smoothstep(0.003, 0.012, fw);
+     float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
+     // Attenuate high-frequency roughness grain at distance:
+     roughnessGrain = mix(roughnessGrain, 0.5, 1.0 - grainAttn); // 0.5 = neutral (no modulation)
+     float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
+     float roughnessFactor = uBaseRoughness
+       + (roughnessGrain - 0.5) * 0.040          // raised from 0.030 (high preset)
+       + roughnessScratch * 0.015;
+     roughnessFactor = clamp(roughnessFactor, 0.14, 0.72);
+     ```
+   - **`customProgramCacheKey` versioning:** Change `material.customProgramCacheKey = () => 'frame-v0.54'` to `'frame-v0.69-' + preset.id` when M-02/M-03/M-05 GLSL lands, so Three.js compiles a new program. Battery can stay `'frame-v0.69-battery'` but remain functionally identical to today's code (no fine-grain path, no cluster scratches).
+
 6. **M-06 — Retune preset policy for frame detail budget**
-   - Keep battery conservative; allocate new close-up detail primarily to high and partially to balanced with clear guardrails.
+   - **High** (`frameRoughness: 0.28`, `frameAnisotropy: 0.85`): Enable M-02 fine grain + M-03 clustered scratches + M-04 anisotropyMap. Fine normal amplitude `0.006`, roughness grain amp `0.040`, cluster gain cap `0.16`.
+   - **Balanced** (`frameRoughness: 0.38`, `frameAnisotropy: 0.60`): Enable M-02 fine grain only (`fineGrainAmplitude: 0.004`). No anisotropyMap, no cluster scratches. Roughness grain amp `0.030` (unchanged).
+   - **Battery** (`frameRoughness: 0.55`, `frameAnisotropy: 0.0`): No change — pure v0.54 path. `cacheKey: 'frame-v0.69-battery'` compiles identical GLSL to v0.54.
+   - **Compile-flag strategy for preset branching:** Prepend `#define FRAME_DETAIL_HIGH 1` (high) or `#define FRAME_DETAIL_BALANCED 1` (balanced) in `onBeforeCompile` before the `FRAME_FRAG_FUNCTIONS` string, and wrap M-02 fine-grain and M-03 cluster-scratch code in `#ifdef FRAME_DETAIL_HIGH` / `#elif FRAME_DETAIL_BALANCED` guards. This keeps program count to three (high, balanced, battery) rather than one per artwork seed.
+   - Add `frameDetailLevel: 'high' | 'balanced' | 'none'` to `QualityPreset` interface in `src/config/quality.ts` as the authoritative preset-level flag rather than re-checking `preset.id` in shader code.
+
 7. **M-07 — Validate visual/technical acceptance**
-   - Validate no return of cross-bar banding, no corner-square artifacts, stable frame pacing, and no regression of existing startup/readiness behavior.
+   - **Cross-bar banding check:** At close zoom (camera Z ≈ 0.5), rotate view to show horizontal bar; confirm no lateral banding lines. The `yConst2 = frmHash(seed * 3.17) * 57.0` constant is seed-derived and Y-invariant — verify by substituting a fixed seed and confirming uniform appearance across bar height.
+   - **Corner artifact check:** Use a uniform seed across all four frame bars and confirm no square-ring light artifacts at corners.
+   - **Frame pacing:** `high` preset at close zoom must show no new frame-budget pressure in `frame-budget` diagnostics versus v0.54 baseline.
+   - **Startup regression:** Run `?startup=entry-balanced` and confirm `boot / performance-gate` shows no change in `startupMsToEntryCta` (frame shader compile is in the warm phase, not the boot critical path).
+   - **Acceptance gate:** No regression in `npm run lint` or `npm run build`. Cross-bar banding absent. Frame time stable.
+
 8. **M-08 — Documentation + handoff sync**
-   - Ship findings/changelog/handoff updates with explicit shipped-vs-planned boundaries.
+   - Update `FINDINGS.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md`, and `README.md` with shipped vs planned boundaries, accepted knob values, and `customProgramCacheKey` version record.
+   - Extend `[CanvasMaterial] frame-shader-compiled` log with `fineGrainAmplitude`, `clusterGainEnabled`, `anisoMapEnabled`, `cacheKey`.
 
-### Research references (online)
+### Research references (online — refreshed 2026-06-04)
 
-- Khronos glTF extension: `KHR_materials_anisotropy` (ratified) — https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy
-- Three.js source docs: `MeshPhysicalMaterial` anisotropy fields — https://raw.githubusercontent.com/mrdoob/three.js/dev/src/materials/MeshPhysicalMaterial.js
-- Three.js source docs: texture anisotropy + mipmap/filter defaults — https://raw.githubusercontent.com/mrdoob/three.js/dev/src/textures/Texture.js
-- Three.js anisotropy example index page — https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/webgl_loader_gltf_anisotropy.html
+- Khronos glTF `KHR_materials_anisotropy` (ratified): https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy
+- Three.js `MeshPhysicalMaterial` — `anisotropy`, `anisotropyMap`, `anisotropyRotation` (r153+): https://threejs.org/docs/#api/en/materials/MeshPhysicalMaterial
+- Three.js r166 `anisotropyMap` native support (installed version: `^0.166.1`): no `onBeforeCompile` injection needed for direction maps
+- Three.js anisotropy example: https://threejs.org/examples/?q=anis#webgl_materials_physical_anisotropy
+- GLSL `fwidth()` WebGL2 spec — derivative-aware AA for procedural patterns: attenuate high-frequency terms when screen-space footprint exceeds target
+- Three.js `DataTexture` with `THREE.RGBAFormat` + `THREE.UnsignedByteType` for procedural direction maps
+- Khronos `KHR_materials_anisotropy` implementation note: anisotropy direction is in tangent space; valid TBN matrix required (already guaranteed by the existing `flatNormal` dummy-texture trick)
 
 ## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (**shipped 2026-06-04**)
 

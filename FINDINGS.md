@@ -1,6 +1,6 @@
 # FINDINGS
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
 
 ## v0.68 — Metal frame close-up realism (2026-06-04, **planning/docs-only**) — findings
 
@@ -8,27 +8,32 @@
 
 - This pass is analysis + planning only (no runtime shader/material code changes).
 - Objective analyzed: improve metal frame realism and detail quality at close zoom without regressing v0.54 anti-banding behavior.
+- **Research enhanced 2026-06-04:** Three.js r166 API details, concrete GLSL/TypeScript coding patterns, and per-plan-item implementation guidance added to `plan.md`.
 
-### Code-audit findings (current state)
+### Code-audit findings (current state, verified 2026-06-04)
 
-1. The frame already uses `MeshPhysicalMaterial` with metalness `1.0`, anisotropy, roughness, and clearcoat controlled per quality preset.
-2. v0.54 intentionally constrained the shader to 1-D along-bar perturbation to eliminate cross-bar banding and corner artifacts; this remains a correct invariant for realism and stability.
-3. Current microdetail is conservative: subtle normal amplitude, tight roughness window, and sparse scratches. This protects stability but limits close-up richness.
-4. Anisotropy is currently scalar per material; no per-fragment direction/strength map is used in the frame shader path.
+1. **Frame material uses physically plausible base knobs.** `MeshPhysicalMaterial` with `metalness: 1.0`; preset-controlled `roughness`, `clearcoat`, `anisotropy`, `anisotropyRotation`. High preset: `frameRoughness: 0.28`, `frameAnisotropy: 0.85`; balanced: `frameRoughness: 0.38`, `frameAnisotropy: 0.60`.
+2. **v0.54 anti-banding invariant is correctly enforced.** `frmBrushedFbm` and `frmRoughnessGrain` are purely 1-D: `barUV.y` is replaced by a seed-derived `yConst` constant in every FBM call, so `dFBM/dY = 0` exactly. This is the non-negotiable constraint all future GLSL additions must preserve.
+3. **Current microdetail is conservative.** Single grain family (primary FBM octaves `×[2.5, 5.1, 10.3, 20.7]`), gradient scale `0.025`, roughness grain amplitude `±0.030`, scratch roughness impact `+0.015 max`. Limits close-up richness but protects stability.
+4. **Anisotropy is scalar per material.** No `anisotropyMap` is set. `anisotropyRotation: Math.PI / 2` is a single uniform. Three.js r166 (installed `^0.166.1`) natively supports `material.anisotropyMap` for per-fragment direction control; no `onBeforeCompile` injection is required for this feature.
+5. **`customProgramCacheKey = 'frame-v0.54'`** — single key used by all presets and all seeds. This is correct today (seed changes a uniform, not GLSL); it must be versioned to `'frame-v0.69-{preset}'` when any new GLSL `#define` or function is added.
 
-### Online research findings (synthesized)
+### Online research findings (synthesized, 2026-06-04)
 
-1. Khronos `KHR_materials_anisotropy` confirms that brushed-metal realism improves with tangent-space anisotropy direction + strength control (RG direction, B strength), and requires valid tangent-space handling.
-2. Three.js `MeshPhysicalMaterial` explicitly supports anisotropy properties and maps for brushed-metal style materials.
-3. Three.js `Texture` model confirms the importance of anisotropic texture filtering and mipmaps for preserving high-frequency detail at oblique/grazing views.
-4. Practical close-up metal guidance converges on multi-scale detail (coarse directional structure + fine bounded breakup), with strict anti-alias controls to prevent shimmer/striping.
+1. **Three.js r166 `anisotropyMap` confirmed.** Setting `material.anisotropyMap` on `MeshPhysicalMaterial` directly drives per-fragment anisotropy direction via the Khronos `KHR_materials_anisotropy` BRDF path. RG channels encode tangent-space direction packed as `dir * 0.5 + 0.5`. B channel (strength) is ignored by Three.js — `material.anisotropy` remains the strength scalar.
+2. **`fwidth(barUV.x)` is the correct AA guard for procedural normals.** `fwidth()` returns `|dFdx| + |dFdy|` of the argument in screen space, which is proportional to the texel footprint. `smoothstep(0.004, 0.015, fw)` maps close-zoom to 0 (full detail) and mid-distance to 1 (no fine grain) without any conditional branching.
+3. **Multi-scale FBM is standard for PBR procedural metal.** Coarse primary layer + secondary at ~4× frequency, amplitude ratio ≤ 1:4. Both layers must remain Y-invariant (preserve the v0.54 invariant); only `alongX` and a seed-derived `yConst` may vary.
+4. **Clustered scratch distribution is physically motivated.** Real-world metal shows scratches in family clusters from repeated tooling events, not uniform random placement. A coarse-scale hash mask (`frmHash(floor(barUV.x * 3.0) + seed * N)`) with ~40% cluster coverage reproduces this without increasing scratch-line count.
+5. **`customProgramCacheKey` versioning and `#define`-based preset branching** are the correct strategies for managing multiple GLSL variants in `onBeforeCompile` without combinatorial program proliferation.
 
-### Resulting implementation direction
+### Resulting implementation direction (updated with coding specifics)
 
-- Keep v0.54 no-cross-bar-gradient constraint as non-negotiable.
-- Add detail in bounded layers (not by globally increasing amplitude).
-- Prioritize derivative-aware anti-alias safeguards with preset-aware cost scaling.
-- Add diagnostics-first validation so visual gains are measurable and regressions are quickly detectable.
+- **Keep v0.54 no-cross-bar-gradient constraint as non-negotiable.** Any new FBM or grain function must use a seed-derived `yConst` constant, not `barUV.y`, in all noise calls.
+- **Add detail in bounded layers.** M-02 fine grain: amplitude `0.006` (vs primary `0.025`); M-03 cluster gain: max `1.5×` with cap `0.16`. No global amplitude escalation.
+- **Derivative-aware AA (`fwidth`) is the primary shimmer guard** for all new high-frequency terms. `smoothstep(0.004, 0.015, fwidth(barUV.x))` covers close-zoom to mid-distance.
+- **Three.js r166 `anisotropyMap`** removes the need for `onBeforeCompile` injection for M-04; generate a 64×4 `DataTexture` procedurally with gentle sinusoidal direction perturbation (±8% range).
+- **`customProgramCacheKey` → `'frame-v0.69-' + preset.id`** when M-02/M-03/M-05 GLSL lands; add `#define FRAME_DETAIL_HIGH / FRAME_DETAIL_BALANCED` guards to minimise program count to three total.
+- **Diagnostics-first.** Extend `[CanvasMaterial] frame-shader-compiled` with `normalGradientScale`, `fineGrainAmplitude`, `clusterGainEnabled`, `anisoMapEnabled`, `cacheKey` before and after the implementation pass.
 
 
 ## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (2026-06-04, **shipped**) — findings

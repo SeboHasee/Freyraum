@@ -6,8 +6,14 @@
 
 Customer-facing status: **planned, not yet shipped**.
 
-- We completed a focused technical audit and online research pass for making metal frames look more realistic at close zoom.
-- A concrete v0.68 implementation plan is now documented (multi-scale detail uplift with anti-banding and anti-alias guardrails).
+- Completed a focused technical audit and online research pass for making metal frames look more realistic at close zoom.
+- **Key audit findings:** frame uses `MeshPhysicalMaterial` with `metalness: 1.0`; the v0.54 anti-banding constraint (purely 1-D FBM — no cross-bar gradient) is correct and non-negotiable; current detail bandwidth is intentionally conservative; Three.js r166 (installed) natively supports `anisotropyMap` for per-fragment direction control without custom shader injection.
+- **Concrete implementation plan now documented** (`plan.md § v0.68 — Metal frame close-up realism uplift`):
+  - M-02: `frmBrushedFbm2` fine-grain FBM (4× frequency, 1/4 amplitude, same 1-D Y-invariant)
+  - M-03: clustered scratch layer (`frmScratchLayer` cluster-gain mask, ~40% coverage, cap `0.16`)
+  - M-04: `material.anisotropyMap` — 64×4 `DataTexture` procedural direction perturbation (high preset only)
+  - M-05: `fwidth(barUV.x)` derivative-aware AA guard for all new high-frequency terms
+  - M-06: `#define FRAME_DETAIL_HIGH / BALANCED` compile flags; `customProgramCacheKey → 'frame-v0.69-{preset}'`
 - No runtime frame-shader/material changes were shipped in this docs pass.
 - References: `../plan.md § v0.68 — Metal frame close-up realism uplift`, `../FINDINGS.md § v0.68 (planning/docs-only)`.
 

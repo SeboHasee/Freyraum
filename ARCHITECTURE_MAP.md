@@ -1,21 +1,24 @@
 # FREYRAUM architecture map
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
 
 ## v0.68 frame-detail plan architecture note (**planning/docs-only**)
 
 The next frame-realism pass must keep the current ownership split:
 
 - `CanvasMaterial`: frame shading model + shader injection points + frame diagnostics.
-- `ArtworkMesh`: frame geometry/tangents and `aFrameUV` attribute generation.
-- `quality.ts`: preset-level cost/fidelity policy (`frameRoughness`, `frameAnisotropy`, `frameClearcoat`, bevel policy).
+- `ArtworkMesh`: frame geometry/tangents and `aFrameUV` vertex attribute generation.
+- `quality.ts`: preset-level cost/fidelity policy (`frameRoughness`, `frameAnisotropy`, `frameClearcoat`, bevel policy). Add `frameDetailLevel: 'high' | 'balanced' | 'none'` to drive `onBeforeCompile` `#define` selection.
 
 Invariants for the implementation pass:
 
-1. Preserve the v0.54 anti-banding constraint (no cross-bar gradient reintroduction).
-2. Treat close-up detail as bounded multi-scale additions, not global amplitude escalation.
-3. Keep battery preset conservative and explicitly budget high-frequency detail by preset.
-4. Add diagnostics for before/after comparison so visual uplift does not hide regressions in stability/perf.
+1. **Preserve the v0.54 anti-banding constraint.** No `barUV.y` input to any FBM or noise call — every new function must use a seed-derived `yConst` constant so `dFBM/dY = 0` exactly.
+2. **Treat close-up detail as bounded multi-scale additions.** M-02 fine grain amplitude `0.006` (≤ 1:4 ratio vs primary `0.025`); M-03 cluster gain capped at `0.16`; M-04 anisotropy direction perturbation ±8%.
+3. **`customProgramCacheKey` must be versioned when GLSL changes.** Change from `'frame-v0.54'` → `'frame-v0.69-' + preset.id`. Use `#define FRAME_DETAIL_HIGH` / `FRAME_DETAIL_BALANCED` guards in `onBeforeCompile` to keep program count to three (high, balanced, battery) rather than one per seed.
+4. **Three.js r166 `anisotropyMap` is the correct API for M-04.** Set `material.anisotropyMap = dataTexture` directly — no `onBeforeCompile` injection needed for per-fragment anisotropy direction. Store the reference in `material.userData.anisoMap` and dispose in `CanvasMaterial.dispose()`.
+5. **`fwidth(barUV.x)` is the AA guard for all new high-frequency terms.** `smoothstep(0.004, 0.015, fwidth(barUV.x))` covers the close-zoom to mid-distance transition without conditional branching.
+6. **Battery preset conservative.** No `#define` fine-grain path; `'frame-v0.69-battery'` compiles GLSL identical to v0.54 behavior.
+7. **Diagnostics before/after.** Extend `[CanvasMaterial] frame-shader-compiled` with `normalGradientScale`, `fineGrainAmplitude`, `clusterGainEnabled`, `anisoMapEnabled`, `cacheKey` for regression-detectable baseline records.
 
 ## v0.68 staged startup-readiness architecture note
 

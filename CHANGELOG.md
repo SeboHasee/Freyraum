@@ -1,6 +1,6 @@
 # CHANGELOG
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — the entry CTA now waits only for the active artwork + critical view; the rest streams in deterministically after entry. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail technical audit + coding guidance refresh; runtime still v0.68).
 
 ## v0.68 — Metal frame close-up realism plan (2026-06-04, **planning/docs-only**)
 
@@ -10,18 +10,18 @@
 
 ### Summary
 
-- Audited current frame shader/material path (`CanvasMaterial`, `ArtworkMesh`, quality presets) with focus on close-zoom realism limits.
-- Performed online research for anisotropic brushed-metal best practices in realtime PBR.
-- Added a new v0.68 implementation plan in `plan.md` for a bounded high-detail frame pass (multi-scale grain, improved scratch distribution, anisotropy-direction path, anti-alias safeguards, preset-aware tuning).
-- Documented findings and architecture/handoff implications across markdown docs.
+- Audited current frame shader/material path (`CanvasMaterial`, `ArtworkMesh`, quality presets) with focus on close-zoom realism limits. Key findings: purely 1-D FBM (v0.54 invariant correct), `customProgramCacheKey = 'frame-v0.54'`, no `anisotropyMap` set, roughness grain amplitude `±0.030`.
+- Performed online research for anisotropic brushed-metal best practices in realtime PBR. Key findings: Three.js r166 (installed) natively supports `material.anisotropyMap`; `fwidth(barUV.x)` is the correct derivative-aware AA guard for procedural normals; multi-scale FBM with 1:4 amplitude ratio is the standard close-up metal technique.
+- **Enhanced plan in `plan.md`** (v0.68 frame-detail section): added concrete GLSL code for M-02 fine-grain FBM (`frmBrushedFbm2`), M-03 clustered scratch layer, M-05 `fwidth` AA integration; added TypeScript API pattern for M-04 `anisotropyMap` `DataTexture` generation; added `customProgramCacheKey` versioning strategy (`'frame-v0.54'` → `'frame-v0.69-{preset}'`); added `#define FRAME_DETAIL_HIGH / BALANCED` compile-flag strategy for preset branching.
+- Documented findings and architecture/handoff implications across all markdown files.
 
 ### Files (docs only)
 
-- `plan.md`
-- `FINDINGS.md`
+- `plan.md` — v0.68 frame-detail section enhanced with concrete GLSL + TypeScript coding guidance
+- `FINDINGS.md` — extended with code-verified findings and API research details
+- `ARCHITECTURE_MAP.md` — invariants updated with API specifics and cache-key strategy
 - `CHANGELOG.md`
 - `README.md`
-- `ARCHITECTURE_MAP.md`
 - `docs/HANDOFF.md`
 
 ## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (2026-06-04, **shipped**)
