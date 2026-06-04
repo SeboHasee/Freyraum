@@ -1,6 +1,16 @@
 # Freyraum
-> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM, clustered scratch families, per-fragment anisotropy direction perturbation (high preset), derivative-aware AA, preset-keyed shader programs. v0.54 cross-bar invariant preserved. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
+> v0.70 planning pass added: macro-visible micro-scratch uplift for frame metal (docs-only). Runtime remains v0.69; no new shader behavior shipped in this docs update.
+> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+
+## v0.70 — Macro-visible micro-scratch uplift plan (2026-06-04, **planning/docs-only**)
+
+Current status: **planned, not yet shipped**.
+
+- We audited the current v0.69 frame shader and confirmed why wear can still read too subtle at macro distance: scratch occupancy is sparse, line widths are very thin, and roughness impact is tightly capped.
+- We performed an online standards/API refresh (Khronos anisotropy spec, Three.js r166 docs + shader source, Khronos `fwidth` reference) and aligned the next pass with those constraints.
+- New implementation direction in `plan.md`: introduce a separate macro-scratch lane (wider/lower-frequency) while preserving the existing micro lane and all anti-banding/anti-shimmer invariants.
+- Runtime behavior is unchanged in this update.
+- References: `plan.md § v0.70`, `FINDINGS.md § v0.70`, `CHANGELOG.md § v0.70`.
 
 ## v0.68 — Metal frame close-up realism plan (2026-06-04, **planning/docs-only**)
 

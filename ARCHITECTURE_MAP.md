@@ -1,6 +1,16 @@
 # FREYRAUM architecture map
-> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM, clustered scratches (high), per-fragment anisotropy direction (high), derivative-aware AA. v0.54 cross-bar invariant preserved.
-> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
+> v0.70 planning update: macro-visible micro-scratch uplift architecture constraints documented (docs-only). Runtime remains v0.69.
+> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+
+## v0.70 macro-scratch architecture note (**planning/docs-only**)
+
+1. **Two scratch lanes, one stability model.** The next pass should keep v0.69 micro-scratches and add a separate macro lane (wider/lower-frequency) rather than globally amplifying one lane.
+2. **Derivative AA remains mandatory.** Micro lane keeps current aggressive `fwidth(vFrameUV.x)` attenuation; macro lane may use a slower attenuation window but must still collapse at distance.
+3. **v0.54 anti-banding invariant is unchanged.** No `barUV.y` inputs in FBM/noise functions that drive normal gradients; cross-bar coordinate stays limited to positional placement of discrete scratches/masks.
+4. **Anisotropy semantics stay spec-aligned.** Any future anisotropy-map experiment must honor Khronos/Three.js channel meaning (RG direction, B strength multiplier) and UV-space alignment requirements.
+5. **Preset cost envelope remains explicit.** High gets full macro lane, balanced gets reduced macro lane, battery remains v0.54-equivalent path (`frameDetailLevel: 'none'`).
+6. **Cache key versioning remains required on compile-time GLSL changes.** Any new macros/functions for macro lane must bump frame shader cache version.
+7. **Diagnostics-first contract.** Extend frame compile logs with macro-lane knobs so visual tuning remains auditable and reversible.
 
 ## v0.69 frame-shader invariants (updated)
 

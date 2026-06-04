@@ -1,6 +1,20 @@
 # FREYRAUM customer handoff guide
-> v0.69 shipped: metal frames render with richer close-up detail (multi-scale brushed grain, clustered scratch families, per-fragment anisotropy on the high preset) while the v0.54 anti-banding guarantee and full manual quality control are preserved.
-> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
+> v0.70 planning update added: macro-visible micro-scratch uplift (docs-only). Runtime remains v0.69 in this documentation pass.
+> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+
+## v0.70 — handoff status: macro-visible micro-scratch uplift plan (2026-06-04, docs-only)
+
+Customer-facing status: **planned, not yet shipped**.
+
+- Completed a focused code audit of the current frame scratch model and confirmed why scratch wear can still look too subtle in macro framing (sparse occupancy, very small line width floor, conservative roughness contribution cap).
+- Completed an online standards/API research refresh and aligned the plan to authoritative behavior:
+  - Khronos anisotropy extension semantics (RG direction, B strength, tangent-space requirements),
+  - Three.js r166 `MeshPhysicalMaterial` anisotropy API,
+  - Three.js r166 physical shader anisotropy-map implementation,
+  - Khronos `fwidth` derivative definition used for procedural AA strategy.
+- New v0.70 plan in `../plan.md` introduces a dedicated macro-scratch lane (wider/lower-frequency) while preserving v0.54 anti-banding and v0.69 anti-shimmer safeguards.
+- No runtime frame-shader code changed in this docs update.
+- References: `../plan.md § v0.70`, `../FINDINGS.md § v0.70`, `../CHANGELOG.md § v0.70`.
 
 ## v0.68 — handoff status: metal frame close-up realism plan (2026-06-04, docs-only)
 

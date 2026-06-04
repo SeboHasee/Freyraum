@@ -1,6 +1,33 @@
 # CHANGELOG
-> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM (M-02), clustered scratch families (M-03), per-fragment anisotropy direction perturbation (M-04, high preset), derivative-aware AA (M-05), preset-keyed shader programs (M-06). v0.54 cross-bar invariant preserved. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
+> v0.70 planning pass added: macro-visible micro-scratch uplift plan (docs-only). Runtime remains v0.69 with the frame-visibility hotfix; no new shader behavior shipped in this docs update.
+> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+
+## v0.70 — Macro-visible micro-scratch uplift plan (2026-06-04, **planning/docs only**)
+
+### Status
+
+**Planning/docs only.** No runtime code changes shipped in this update.
+
+### Summary
+
+- Audited `CanvasMaterial` scratch pipeline to explain why close-view detail still reads too soft: current lines are intentionally sparse and thin (`if (sh > 0.018) return 0.0;`, width floor `0.0003..0.0009`, weighted layer contribution `0.06/0.05/0.04`) and roughness impact remains tightly capped (`+0.015`).
+- Confirmed v0.69 anti-shimmer and anti-banding constraints that must be preserved: 1-D FBM (`dFBM/dY = 0`), derivative attenuation with `fwidth(vFrameUV.x)`, and per-preset compile-flag branching.
+- Performed online research refresh and aligned the next plan to authoritative sources:
+  - Three.js r166 `MeshPhysicalMaterial` anisotropy API and map-channel semantics.
+  - Three.js r166 `lights_physical_fragment` implementation details (`anisotropyMap` direction and blue-channel strength multiplication).
+  - Khronos `KHR_materials_anisotropy` spec rules for RG direction, B strength, tangent-space requirements, and highlight-stretch direction.
+  - Khronos OpenGL `fwidth` definition (`abs(dFdx)+abs(dFdy)`) as the derivative-AA basis.
+- Added a new v0.70 execution plan in `plan.md` focused on macro-visible scratch readability without violating v0.54/v0.69 stability constraints.
+- Synced documentation across `plan.md`, `FINDINGS.md`, `ARCHITECTURE_MAP.md`, `README.md`, and `docs/HANDOFF.md`.
+
+### Files (docs only)
+
+- `plan.md`
+- `FINDINGS.md`
+- `ARCHITECTURE_MAP.md`
+- `CHANGELOG.md`
+- `README.md`
+- `docs/HANDOFF.md`
 
 ## v0.69 — Metal frame close-up realism uplift (2026-06-04, **shipped**)
 

@@ -1,6 +1,44 @@
 # FINDINGS
-> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM (M-02), clustered scratches (M-03), per-fragment anisotropy (M-04, high preset), derivative-aware AA (M-05), preset-keyed shader programs (M-06). v0.54 cross-bar invariant preserved.
-> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
+> v0.70 planning findings added: macro-visible micro-scratch uplift analysis + online research synthesis. Runtime remains v0.69 (no new shader behavior shipped in this docs update).
+> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+
+## v0.70 — Macro-visible micro-scratch uplift (planning/docs-only, 2026-06-04) — findings
+
+### Code-audit findings (current v0.69 runtime)
+
+1. **Scratch lane is intentionally sparse and subtle.**
+   - `frmScratchLine`: `if (sh > 0.018) return 0.0;` (low occupancy).
+   - Width floor is very small: `0.0003 + rand * 0.0006` (often below macro readability).
+   - Line intensity (`0.015..0.040`) is reduced again by layer weights (`0.06/0.05/0.04`).
+2. **Roughness contribution from scratches is tightly capped.**
+   - `roughnessFactor += roughnessScratch * 0.015`, then clamped.
+   - This protects plausibility but limits macro legibility of wear.
+3. **Stability rails are correct and must be preserved.**
+   - v0.54 invariant: no `barUV.y` inside FBM inputs driving normals.
+   - v0.69 derivative attenuation via `fwidth(vFrameUV.x)` already suppresses shimmer.
+4. **Resulting visual behavior:** close-up metal looks physically plausible and stable, but wear evidence can remain too quiet for “macro-visible” customer expectation.
+
+### Online research findings (authoritative sources)
+
+1. **Khronos `KHR_materials_anisotropy` (ratified)**
+   - Defines anisotropy for brushed-metal-like elongated highlights.
+   - Anisotropy texture semantics: RG = direction in tangent/bitangent space, B = strength multiplier.
+   - Tangent space is required/recommended for predictable anisotropic response.
+2. **Three.js r166 `MeshPhysicalMaterial` docs**
+   - Confirms `anisotropy`, `anisotropyMap`, and `anisotropyRotation` semantics matching Khronos model.
+3. **Three.js r166 physical shader source**
+   - `anisotropyV = anisotropyMat * normalize(2*rg - 1) * b`.
+   - Confirms blue channel scales anisotropy contribution in engine implementation.
+4. **Khronos OpenGL `fwidth` reference**
+   - `fwidth(p) = abs(dFdx(p)) + abs(dFdy(p))`.
+   - Supports current approach: derivative-driven attenuation is the right anti-alias strategy for procedural scratch detail.
+
+### Practical conclusions for the next implementation pass
+
+- Add a distinct **macro-scratch lane** (lower frequency, wider profile) instead of only amplifying existing micro lane.
+- Keep micro lane derivative-gated for shimmer control; introduce slower-distance fade for macro lane.
+- Maintain v0.54 anti-banding constraint and bounded roughness/normal budgets.
+- Preserve preset-tier cost policy: high strongest, balanced reduced, battery unchanged.
 
 ## v0.69 — Metal frame close-up realism uplift (shipped 2026-06-04)
 

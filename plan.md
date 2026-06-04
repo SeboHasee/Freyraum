@@ -1,6 +1,57 @@
 # FREYRAUM Plan
-> v0.69 shipped: metal-frame close-up realism uplift — multi-scale brushed FBM with derivative-aware AA, clustered scratch families, per-fragment anisotropy direction perturbation (high preset), preset-keyed shader programs (`frame-v0.69-{high|balanced|none}`). v0.54 cross-bar invariant preserved. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.69 frame-detail uplift shipped; runtime v0.69).
+> v0.70 planning pass added: macro-visible micro-scratch uplift for frame metal readability at close/macro views. Runtime remains v0.69 (no new shader code shipped in this docs update).
+> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+
+## v0.70 — Macro-visible micro-scratch uplift (**planned 2026-06-04, not yet shipped**)
+
+> **Outcome target:** Keep the v0.54/v0.69 stability guarantees (no cross-bar banding, no distance shimmer, bounded program variants) while making scratch evidence clearly legible at macro viewing distances.
+
+### Current-state audit (why detail still reads too soft)
+
+1. **Scratch occupancy is intentionally sparse.** In `frmScratchLine`, segments are discarded for `sh > 0.018`, so only ~1.8% of segment windows emit a line.
+2. **Scratch lines are very thin.** Width floor is `0.0003 + rand * 0.0006` (plus derivative floor), which is often below macro readability except under strong grazing highlights.
+3. **Scratch contrast is damped twice.** Per-line intensity (`0.015..0.040`) is multiplied by `frmScratchLayer` weights (`0.06/0.05/0.04`) and then only lightly affects roughness (`* 0.015`).
+4. **AA guards are strong (correct, must stay).** Fine detail and roughness grain are attenuated by `fwidth(vFrameUV.x)` as distance increases, which protects stability but can suppress visibility too early if not split into micro vs macro bands.
+
+### Online research constraints applied to this plan
+
+1. **Khronos anisotropy model:** RG channels encode direction, B encodes per-texel strength multiplier; stretched highlight direction is perpendicular to groove direction.
+2. **Three.js r166 physical shader:** `anisotropyMap` direction is computed from `2*rg-1` and multiplied by blue-channel strength before BRDF use.
+3. **Derivative AA basis:** `fwidth(p) = abs(dFdx(p)) + abs(dFdy(p))` (fragment stage) is the correct scalar for procedural anti-alias attenuation.
+4. **Implication for Freyraum:** macro-visible scratches should be introduced as a separate low-frequency lane, while existing micro lane remains derivative-gated.
+
+### v0.70 execution plan (implementation slices)
+
+1. **S-01 — Split scratch model into micro and macro lanes**
+   - Keep current fine micro-scratch lane as-is for realism.
+   - Add a new macro-scratch lane with wider profile and lower spatial frequency so scratches remain visible in close/macro framing.
+   - Macro lane remains bar-aligned and deterministic per seed.
+
+2. **S-02 — Introduce wear-zone mask for believable clustering**
+   - Add a low-frequency bar-along mask that creates sparse “wear families” (tool-contact regions), then modulate macro lane intensity by this mask.
+   - Keep high preset strongest, balanced toned down, battery unchanged.
+
+3. **S-03 — Separate normal vs roughness impact budgets**
+   - Macro lane should primarily influence roughness and secondarily normal perturbation to avoid fake deep grooves.
+   - Maintain conservative roughness clamps and keep scratch roughness contribution bounded per preset.
+
+4. **S-04 — Derivative-safe LOD blending**
+   - Keep existing `fwidth(vFrameUV.x)` attenuation for micro lane.
+   - Add an independent, slower fade window for macro lane so it survives medium-close views but still collapses at distance.
+
+5. **S-05 — Preserve anti-banding invariants**
+   - No `barUV.y` in FBM/noise paths that contribute to normal gradient fields.
+   - New scratch masks may use cross-bar placement (`barUV.y`) only for line position, not for across-bar FBM gradients.
+
+6. **S-06 — Preset policy and cache-keying**
+   - `high`: full micro + macro + strongest wear clustering.
+   - `balanced`: micro + reduced macro.
+   - `battery`: unchanged (`frameDetailLevel: 'none'` path).
+   - If compile-time macros change, bump shader cache key version.
+
+7. **S-07 — Diagnostics and acceptance**
+   - Extend frame compile diagnostics with explicit macro-lane knobs.
+   - Acceptance gates: visible macro scratches at close framing, no cross-bar banding, no shimmer regression at mid distance, unchanged startup readiness behavior.
 
 ## v0.69 — Metal frame close-up realism uplift (**shipped 2026-06-04**)
 
