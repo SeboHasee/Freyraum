@@ -1,6 +1,39 @@
 # CHANGELOG
-> v0.70 shipped: macro-visible micro-scratch uplift implemented (runtime + docs sync).
-> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
+> v0.71 shipped: UE5-inspired metal detail visibility uplift.
+> Last full markdown audit: 2026-06-04 (v0.71 shipped).
+
+## v0.71 — UE5-inspired metal detail visibility uplift (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Runtime shader changes implemented and validated (lint ✅, build ✅).
+
+### Summary
+
+All changes are in `CanvasMaterial.ts` and `quality.ts`. The core insight from Unreal Engine 5 brushed-metal materials is that **scratches expose raw shiny metal** (lower roughness) rather than making the surface rougher — this creates the dramatic specular-highlight "catch the light" effect at macro viewing distance.
+
+- **Normal gradient scale:** `0.025` → `0.085` (3.4×). Brushed grain ridges/fibers now produce a clearly visible normal tilt (max ~24° instead of ~7°).
+- **Fine grain amplitude** (high): `0.006` → `0.022`; (balanced): `0.004` → `0.016` — both ~3.7× stronger.
+- **Macro scratch normal amplitude** (high): `0.006` → `0.025`; (balanced): `0.003` → `0.014` — both ~4× stronger.
+- **Shiny-scratch roughness model (UE5):** Scratch contributions are now **subtracted** from base roughness instead of added. Scratches expose lower-roughness metal, creating bright specular highlights:
+  - High: micro `−0.065`, macro `−0.30`; roughness floor lowered to `0.06`.
+  - Balanced: micro `−0.044`, macro `−0.20`; floor `0.08`.
+  - Battery: `−0.035`; floor `0.10`.
+- **Roughness grain modulation** (high): `±0.02` → `±0.07`; (balanced): `±0.015` → `±0.05` — clearly visible surface micro-variation.
+- **Scratch presence/density:** micro threshold `1.8%` → `3.2%`; macro `4%` → `7%` — roughly 2× more scratch occurrences.
+- **Scratch line geometry:** micro width 2×, inten 2×; macro inten `0.055..0.155` (was `0.030..0.090`).
+- **Macro layer multipliers:** `(a*0.20 + b*0.16 + c*0.13)` → `(a*0.32 + b*0.26 + c*0.20)`, cap `0.35` (was `0.20`).
+- **Anisotropy direction perturbation** (high): `±10°` → `±23°` — wider directional fiber shimmer band for visible metallic grain sheen.
+- **Base roughness in quality config:** high `0.28` → `0.40`; balanced `0.38` → `0.48` — higher base roughness amplifies the contrast of shiny scratch highlights.
+- **Cache key:** `frame-v0.70-*` → `frame-v0.71-*` to force shader recompile.
+
+### Files
+
+- `src/materials/CanvasMaterial.ts`
+- `src/config/quality.ts`
+- `CHANGELOG.md`
+
+
 
 ## v0.70 — Macro-visible micro-scratch uplift (2026-06-04, **shipped**)
 
