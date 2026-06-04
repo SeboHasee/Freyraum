@@ -871,6 +871,10 @@ async function main(): Promise<void> {
   const keyboardHelp = new KeyboardHelp();
   const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
   topbar.onHelpClick = () => keyboardHelp.open(topbar.helpBtn);
+  // v0.66 — topbar chrome-toggle buttons: secondary discovery path for the
+  // Info panel and Timeline so users are never dependent on edge affordances.
+  topbar.onInfoClick = () => chromeVisibility.forceReveal('info-panel');
+  topbar.onTimelineClick = () => chromeVisibility.forceReveal('timeline');
   // v0.20.6 — autoplay-recovery helper: if browser blocks initial autoplay,
   // retry once on first trusted user interaction while keeping user mute
   // preference authoritative.

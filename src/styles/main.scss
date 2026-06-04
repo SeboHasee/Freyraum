@@ -111,7 +111,7 @@
   // (ease-out, shorter), hide is gentle (ease-in, longer).
   --dur-chrome-reveal: 0.28s;
   --dur-chrome-hide: 0.52s;
-  --dur-peek-pulse: 2.6s;
+  --dur-peek-pulse: 2.0s;   // v0.66: slightly faster pulse catches the eye quicker
   --ease-chrome-reveal: cubic-bezier(0, 0, 0.2, 1);   // Material LinearOutSlowIn
   --ease-chrome-hide: cubic-bezier(0.4, 0, 1, 1);     // Material FastOutLinearIn
 
@@ -123,22 +123,23 @@
   // Visual — translucent peek strips at the screen edges.
   // v0.64: the pulse animates whole-element opacity, so the RGBA alpha must be
   // high enough that `alpha × opacity-floor` remains visible on real artwork.
-  --chrome-peek-bg: rgba(255, 255, 255, 0.52);
-  --chrome-peek-width-v: 7px;     // left-edge (info panel) strip thickness
-  --chrome-peek-height-h: 7px;    // bottom-edge (timeline) strip thickness
-  --chrome-peek-length-v: min(220px, 22vh);   // left strip length
-  --chrome-peek-length-h: min(360px, 36vw);   // bottom strip length
+  // v0.66: strips widened for better first-glance discoverability.
+  --chrome-peek-bg: rgba(255, 255, 255, 0.58);
+  --chrome-peek-width-v: 10px;    // left-edge (info panel) strip thickness
+  --chrome-peek-height-h: 14px;   // bottom-edge (timeline) strip thickness
+  --chrome-peek-length-v: min(260px, 26vh);   // left strip length
+  --chrome-peek-length-h: min(520px, 52vw);   // bottom strip length
 
   // Touch — hit area larger than the visual strip (WCAG 2.5.8 ≥24px; 44px std).
   --chrome-peek-touch-target: 44px;
 
   // v0.62 — Micro-affordance chevrons: subtle directional cues at peek zones.
-  // Kept dim by default; the peek-pulse animation brings them into view gently.
   // v0.64: raised because element opacity is animated; effective alpha now
   // remains visible at the pulse trough instead of multiplying down to ~0.06.
-  --chrome-affordance-color: rgba(255, 255, 255, 0.84);
-  --chrome-affordance-size: 16px;        // chevron bounding box
-  --chrome-affordance-weight: 2.8px;     // stroke width
+  // v0.66: larger chevrons for quicker recognition at a glance.
+  --chrome-affordance-color: rgba(255, 255, 255, 0.90);
+  --chrome-affordance-size: 22px;        // chevron bounding box
+  --chrome-affordance-weight: 3.5px;     // stroke width
 }
 
 html,
@@ -1897,8 +1898,8 @@ button {
 }
 
 @keyframes peek-pulse {
-  0%, 100% { opacity: 0.82; }   // v0.65: stronger idle floor for better discoverability
-  50%      { opacity: 1; }      // v0.64: pulse is a small lift, not a fade-out
+  0%, 100% { opacity: 0.88; }   // v0.66: raised floor — strip is clearly visible at rest
+  50%      { opacity: 1; }      // full opacity at peak
 }
 
 // ── v0.63 Post-hint "settle" animation ─────────────────────────────────────
@@ -1908,7 +1909,7 @@ button {
 // so the handoff back to peek-pulse is seamless (no frame jump).
 @keyframes peek-settle {
   0%   { opacity: 1; }      // peak — draws the eye to the persistent cue
-  100% { opacity: 0.82; }   // matches peek-pulse 0%/100% — seamless handoff
+  100% { opacity: 0.88; }   // matches peek-pulse 0%/100% — seamless handoff (v0.66)
 }
 
 // Peek strips only breathe in clean mode; hidden entirely when chrome is pinned.
@@ -1984,10 +1985,10 @@ button {
 .timeline-peek-hit::after {
   // Horizontal bar centered above the bottom strip.
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 14px);
+  bottom: calc(var(--safe-bottom) + 18px);
   transform: translateX(-50%);
-  width: 20px;
-  height: 2px;
+  width: 32px;
+  height: 3px;
   box-shadow:
     0 1px 1px rgba(0, 0, 0, 0.56),
     0 -1px 0 rgba(255, 255, 255, 0.22),
@@ -1997,10 +1998,10 @@ button {
 .info-panel-peek-hit::after {
   // Vertical bar centered beside the left strip.
   top: 50%;
-  left: calc(var(--safe-left) + 14px);
+  left: calc(var(--safe-left) + 18px);
   transform: translateY(-50%);
-  width: 2px;
-  height: 20px;
+  width: 3px;
+  height: 32px;
   box-shadow:
     1px 0 1px rgba(0, 0, 0, 0.56),
     -1px 0 0 rgba(255, 255, 255, 0.22),
@@ -2508,14 +2509,77 @@ button {
 }
 
 // =============================================================================
-// v0.57 — High-contrast / forced-colors support (B-2)
+// v0.66 — Topbar chrome-toggle buttons (Info / Zeitleiste)
+// Pill-shaped icon+label buttons that offer a central, always-visible path to
+// reveal the hidden Info panel and Timeline, so users don't need to discover
+// the edge affordances first. Hidden when chrome is always-visible (the panels
+// are already pinned open in that mode).
 // =============================================================================
+.topbar__chrome-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-soft);
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: var(--glass-bg-strong);
+    border-color: var(--glass-border-strong);
+    box-shadow: var(--shadow-medium);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-soft), 0 0 0 3px var(--focus-ring);
+  }
+
+  // On compact phone layouts, show only the icon to save horizontal space.
+  @at-root :root[data-layout-tier='phone-small'] &,
+  :root[data-layout-tier='phone-portrait'] & {
+    padding: 0 10px;
+
+    .topbar__chrome-btn-label {
+      display: none;
+    }
+  }
+}
+
+// Chrome-toggle buttons are redundant when panels are pinned always-visible.
+:root[data-chrome-mode='visible'] .topbar__chrome-btn {
+  display: none;
+}
 
 @media (forced-colors: active) {
   // Restore button borders that our custom styles suppress
   .nav-btn,
   .zoom-btn,
   .topbar__help-btn,
+  .topbar__chrome-btn,
   .loading-start-btn,
   .prefs__toggle,
   .audio-btn {

@@ -1,6 +1,56 @@
 # CHANGELOG
-> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
-> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+> v0.66 shipped: affordance discoverability — bigger peek strips, topbar "Info" + "Zeitleiste" buttons, stronger pulse.
+> Last full markdown audit: 2026-06-04 (v0.66 documentation sync; runtime now v0.66).
+
+## v0.66 — Affordance discoverability (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass).
+
+### Problem addressed
+
+Edge affordances (peek strips + chevrons) are too subtle for first-time users who have no prior knowledge they exist. Research (NNGroup, Material Design, Apple HIG) consistently shows hidden-navigation UI needs either (a) larger, higher-contrast cues or (b) a clearly visible secondary entry point that doesn't rely on edge discovery.
+
+### Changes
+
+**CSS — bigger, more visible edge cues (`src/styles/main.scss`)**
+- `--chrome-peek-height-h` `7px → 14px` — bottom strip is now unmissable at a glance
+- `--chrome-peek-width-v` `7px → 10px` — left strip noticeably wider
+- `--chrome-peek-length-h` `min(360px, 36vw) → min(520px, 52vw)` — wider bottom strip
+- `--chrome-peek-length-v` `min(220px, 22vh) → min(260px, 26vh)` — taller left strip
+- `--chrome-affordance-size` `16px → 22px` — larger chevrons
+- `--chrome-affordance-weight` `2.8px → 3.5px` — thicker chevron strokes
+- `--chrome-affordance-color` `0.84 → 0.90` — brighter chevron fill
+- `--chrome-peek-bg` alpha `0.52 → 0.58`
+- `--dur-peek-pulse` `2.6s → 2.0s` — slightly quicker breathing catches the eye faster
+- `peek-pulse` floor `0.82 → 0.88` — strip is visibly present even at animation trough
+- `peek-settle` final frame aligned to `0.88` (seamless handoff)
+- Static handle bars grown from `20×2px → 32×3px` (both axes)
+
+**Topbar secondary entry points (`src/ui/Topbar.ts` + `src/main.ts`)**
+- Added `infoBtn` + `timelineBtn` pill-shaped glass buttons in the topbar right group
+- Each button shows a recognisable SVG icon + short text label ("Info" / "Zeitleiste")
+- On compact phone layouts the text label is hidden (icon-only to save space)
+- Buttons hidden in always-visible chrome mode (panels are already pinned open)
+- Buttons are aria-labelled and keyboard-focusable
+- Wired in `main.ts`: `topbar.onInfoClick → chromeVisibility.forceReveal('info-panel')` and `topbar.onTimelineClick → chromeVisibility.forceReveal('timeline')`
+
+**Forced-colors support**
+- `.topbar__chrome-btn` added to the `forced-colors: active` block alongside existing buttons
+
+### Files
+
+- `src/styles/main.scss` — token updates, `.topbar__chrome-btn` style
+- `src/ui/Topbar.ts` — `infoBtn`, `timelineBtn`, `onInfoClick`, `onTimelineClick`
+- `src/main.ts` — wires topbar buttons to `chromeVisibility.forceReveal`
+- `CHANGELOG.md` — this entry
+
+### Validation
+
+- `npm run lint` ✅, `npm run build` ✅
+
+
 
 ## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**)
 
