@@ -1,6 +1,6 @@
 # FREYRAUM customer handoff guide
-> v0.62 planning in progress: stronger hidden-element clues + nav-arrow post-pulse hide behavior (runtime still v0.61).
-> Last full markdown audit: 2026-06-04 (v0.62 planning sync: hidden-element clues + nav-arrow post-pulse hide; runtime still v0.61).
+> v0.62 planning in progress: technical deep-dive for hidden-element clues + nav-arrow post-pulse re-hide behavior (runtime still v0.61).
+> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
 
 ## v0.62 — handoff status: discoverability follow-up re-opened (2026-06-04, planned)
 
@@ -8,7 +8,7 @@ Customer-facing status: **planning/research only**. Runtime remains **v0.61 ship
 
 - New feedback says hidden timeline/info still need clearer visual clues.
 - New feedback requests nav arrows to disappear after onboarding pulse/idle instead of staying permanently visible.
-- v0.62 implementation plan is documented (`../plan.md § v0.62`) with supporting research (`../FINDINGS.md § v0.62`).
+- v0.62 implementation plan is now expanded with technical coding guidance (`../plan.md § v0.62`) and supporting research/brainstorm (`../FINDINGS.md § v0.62`).
 
 ## v0.61 — handoff status: discoverability follow-up shipped (2026-06-04)
 

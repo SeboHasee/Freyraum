@@ -1,6 +1,6 @@
 # FREYRAUM Plan
-> v0.62 planning in progress: stronger discoverability signifiers for hidden timeline/description and nav-arrow cue teardown after pulse.
-> Last full markdown audit: 2026-06-04 (v0.62 planning sync: hidden-element clues + nav-arrow post-pulse hide; runtime still v0.61).
+> v0.62 planning in progress: technical deep-dive for hidden chrome discoverability + nav-arrow re-hide lifecycle.
+> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
 
 ## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (**planned 2026-06-04, docs-only**)
 
@@ -10,9 +10,9 @@
 
 ### Problem Statement (customer follow-up)
 
-1. Timeline and description panel are hidden in clean mode, but users still miss that these elements exist.
-2. Navigation-arrow pulse looks good, but once the pulse ends, arrows should also disappear (matching hidden-chrome behavior) instead of staying permanently visible.
-3. Discoverability clues should remain small/subtle (e.g., transparent arrow/handle/button) but clearly communicate that more UI can be revealed.
+1. Timeline and description panel are hidden in clean mode, but users still miss that revealable UI exists.
+2. Nav-arrow onboarding pulse is useful, but arrows should re-hide after onboarding/idle instead of staying permanently visible.
+3. Discoverability clues should stay minimal and premium-looking while still clearly communicating interaction potential.
 
 ---
 
@@ -27,63 +27,115 @@
 
 ---
 
+### Technical Objectives for v0.62
+
+1. Introduce explicit but low-noise visual affordances for hidden timeline/info panel surfaces.
+2. Move nav controls into the same hidden/reveal state machine model used by clean chrome.
+3. Keep accessibility invariants strict: keyboard reachability, reduced-motion fallback, AT announcements, and target size guarantees.
+4. Ship with instrumented diagnostics to validate reveal/hide behavior and regressions quickly.
+
+---
+
 ### Online Research Summary (2026-06-04 refresh)
 
-- **Progressive disclosure works best with persistent signifiers:** hidden chrome needs a small but explicit affordance (handle/chevron/edge icon), not only ambient animation.
-- **Onboarding motion should be time-boxed:** attention animation should run briefly, then stop; persistent/infinite motion becomes noise.
-- **Reduced-motion must fully disable discovery animation:** discovery remains available through static affordances and interaction zones.
-- **Hidden-on-hover/focus components must remain reachable and dismissible:** reveal/hide interactions must preserve keyboard reachability and predictable dismissal.
-- **Touch/arrow controls must keep adequate target size whenever visible:** if controls auto-hide, revealed controls still need WCAG-compliant hit area.
+- **Progressive disclosure needs explicit signifiers, not only ambience** (NN/g progressive disclosure guidance): include persistent handles/chevrons in hidden state.
+- **Hover/focus revealed content must stay usable and dismissible** (WCAG 1.4.13): reveal windows and hide delays must avoid flicker or accidental collapse.
+- **Interaction-triggered animation must be suppressible** (WCAG 2.3.3 + `prefers-reduced-motion`): onboarding animation is optional and must degrade to static cues.
+- **Touch targets must remain sufficiently large** (WCAG 2.5.8): keep existing 72x72 nav hit area when visible; no reduced hitbox in hidden state.
+- **One-shot onboarding hints perform best when persisted** (`localStorage` pattern): hint should never loop forever or reappear every session once user interaction is observed.
 
-Research references recorded in `FINDINGS.md § v0.62`.
+Research references and source links are documented in `FINDINGS.md § v0.62`.
 
 ---
 
 ### v0.62 Implementation Plan
 
-#### P-01 — Strengthen discoverability signifiers for timeline + description
+#### P-01 — Add explicit edge affordance tokens (CSS + semantic wrappers)
 
-- Add persistent, low-contrast directional signifiers at the reveal edges:
-  - bottom-center timeline affordance (small chevron/handle)
-  - left-edge description affordance (small chevron/handle)
-- Keep current clean aesthetic by using low opacity and only slight contrast uplift on hover/focus.
-- Retain existing peek-hit zones and reveal logic so behavior remains predictable.
+**Files:** `src/styles/main.scss`, optional lightweight DOM markers in `src/main.ts` or `ChromeVisibilityManager`
 
-#### P-02 — Align nav arrows with hidden-chrome lifecycle
+- Introduce dedicated tokens for edge-affordance opacity, scale, blur, and contrast lift (`--chrome-affordance-*`) so cue tuning is isolated from existing peek-strip tokens.
+- Add compact affordance elements near the existing peek zones:
+  - timeline: bottom-center micro chevron/handle
+  - info panel: mid-left micro chevron/handle
+- Keep them decorative (`aria-hidden='true'`) unless transformed into actual controls in later iterations.
+- Reuse existing forced-colors branch with explicit `ButtonText` fallback to keep cues visible in high-contrast mode.
 
-- Move nav arrows to the same clean-mode visibility model as timeline/info panel.
-- Keep one-shot pulse onboarding, but after pulse completion return arrows to hidden state unless actively revealed by pointer/focus/touch/keyboard intent.
-- Preserve “always show chrome” preference behavior so users can opt into persistent controls.
+**Coding advice:** avoid coupling affordance visibility directly to hover selectors; bind to root data-attributes (`data-chrome-mode`, `data-chrome-reveal-*`) to keep state ownership in TS and avoid selector drift.
 
-#### P-03 — Unify reveal triggers across hidden UI surfaces
+#### P-02 — Extend hidden chrome state machine to include nav controls
 
-- Ensure timeline, info panel, and nav controls share a consistent reveal contract:
-  - reveal by proximity/focus/valid touch zone
-  - hide after inactivity delay when not hovered/focused
-  - no forced persistent visibility in clean mode
-- Keep keyboard navigation and screen-reader discoverability intact during hidden state.
+**Files:** `src/ui/ChromeVisibilityManager.ts`, `src/ui/NavigationControls.ts`, `src/main.ts`, `src/styles/main.scss`
 
-#### P-04 — Accessibility and UX hardening
+- Add a third managed target (`nav-controls`) to the reveal/hide contract currently used by timeline and info panel.
+- Introduce dedicated nav reveal channels:
+  - pointer proximity zones (left/right edge envelopes)
+  - keyboard focus (Tab/focus-visible on nav buttons)
+  - explicit interaction (ArrowLeft/ArrowRight, pointerdown on buttons)
+- Add `navControls.setHiddenMode(true|false)` or equivalent API so style toggles are explicit and testable.
+- Maintain `alwaysShowChrome` override as hard bypass to hidden mode.
 
-- Maintain reduced-motion fallback with non-animated static signifiers.
-- Preserve minimum touch target size for nav buttons while visible.
-- Validate focus-visible behavior so hidden controls never trap or obscure keyboard users.
+**Coding advice:** avoid duplicating dwell timers in `NavigationControls`; centralize timers in `ChromeVisibilityManager` and keep `NavigationControls` responsible only for DOM/class toggles and click handlers.
 
-#### P-05 — Validation + rollout
+#### P-03 — Nav onboarding hint lifecycle refactor (pulse -> re-hide)
 
-- Implement in small slices (styles + state machine + wiring).
-- Run full repository validation (`npm run lint`, `npm run build`).
-- Re-check docs to clearly mark what is planned vs shipped.
+**Files:** `src/ui/NavigationControls.ts`, `src/styles/main.scss`
+
+- Keep current one-shot onboarding pulse trigger (`enableIdleHint()`), but add explicit `onHintFinished` callback or timeout completion path that returns nav controls to hidden idle state.
+- Ensure hint is cancelled immediately on first meaningful interaction (pointer enter, focus, key nav, click).
+- Persist completion/dismissal in existing localStorage key to avoid repeat onboarding noise.
+- Under reduced-motion, skip pulse animation and expose static affordance briefly before transitioning to standard hidden behavior.
+
+**Coding advice:** tie lifecycle transitions to explicit state enum (`idle-hidden`, `hint-active`, `revealed`, `pinned`) instead of boolean flags; this avoids stale flag combinations during rapid pointer/focus changes.
+
+#### P-04 — Accessibility + resilience hardening
+
+**Files:** `src/styles/main.scss`, `src/main.ts`, `src/ui/ChromeVisibilityManager.ts`
+
+- Validate that hidden nav controls remain keyboard reachable:
+  - controls should reveal before/while focused
+  - hide must not execute while focus is inside nav container
+- Keep `aria-live` artwork announcement path from v0.61 unchanged.
+- Confirm no motion-only dependencies:
+  - all hidden surfaces have static signifier fallback
+  - reduced-motion disables pulse/keyframe hints
+- Keep nav target geometry unchanged (72x72) in all reveal states.
+
+**Coding advice:** add defensive guard in hide scheduler: if `document.activeElement` is inside target container, abort hide pass and reschedule.
+
+#### P-05 — Diagnostics + quality gates
+
+**Files:** `src/utils/diagnostics/*` and touched managers
+
+- Add structured diagnostic events for reveal state transitions (`chrome-reveal`, `chrome-hide`, `nav-hint-start`, `nav-hint-dismiss`, `nav-auto-hide`).
+- Include trigger source (`pointer`, `focus`, `keyboard`, `timeout`, `preference`) in payload for post-mortem analysis.
+- Validation gates:
+  - `npm run lint`
+  - `npm run build`
+  - manual smoke matrix: mouse, touch emulation, keyboard-only, reduced-motion, forced-colors.
+
+**Coding advice:** log edge coordinates and dwell timings only in diagnostics mode; avoid noisy console logs in production path.
+
+---
+
+### Brainstormed enhancement backlog (post-v0.62 candidates)
+
+1. **Adaptive cue intensity:** increase affordance opacity on first session and gradually lower after repeated successful reveals.
+2. **Context-aware cue placement:** shift affordance away from bright artwork regions using luminance sampling of the canvas edge strip.
+3. **Help-dialog bridge:** add one explicit line in keyboard help describing hidden chrome reveal gestures.
+4. **Telemetry-backed tuning:** collect anonymous reveal success/failure counters locally and export in diagnostics JSON for QA sessions.
+5. **Touch-first mode optimization:** larger temporary touch affordances on coarse pointers, while preserving desktop subtlety.
 
 ---
 
 ### Acceptance Criteria for v0.62 implementation
 
-1. In clean mode, users can immediately perceive that timeline and description exist via persistent small signifiers.
-2. Nav arrows pulse once (on onboarding) and then disappear when idle, matching clean-mode hidden chrome behavior.
-3. Controls reappear reliably on intended interaction (pointer/focus/touch/keyboard) and hide again after inactivity.
-4. Reduced-motion users see no onboarding animation but still get static discoverability cues.
-5. `npm run lint` and `npm run build` pass after implementation.
+1. In clean mode, timeline and info panel each show a persistent micro-affordance that is visible in default, reduced-motion, and forced-colors modes.
+2. Nav arrows run onboarding hint once (when eligible), then transition back to hidden idle state automatically.
+3. Reveal/hide behavior is consistent across timeline, info panel, and nav: proximity/focus/interaction reveal; idle timeout hides; always-visible preference bypasses hiding.
+4. Keyboard focus into hidden controls never causes focus loss or immediate hide races.
+5. Diagnostics events allow replaying reveal lifecycle decisions from logs.
+6. `npm run lint` and `npm run build` pass after implementation.
 
 ---
 

@@ -1,13 +1,14 @@
 # FINDINGS
-> v0.62 research refresh: hidden-element signifiers + nav-arrow post-pulse hide behavior planning.
-> Last full markdown audit: 2026-06-04 (v0.62 planning sync: hidden-element clues + nav-arrow post-pulse hide; runtime still v0.61).
+> v0.62 research refresh: technical deep-dive for hidden-element signifiers + nav-arrow post-pulse re-hide behavior.
+> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
 
 ## v0.62 — Hidden-element signifiers + nav-arrow post-pulse hide (2026-06-04, **planned**)
 
 ### Scope of this pass
 
 - Re-audited current v0.61 behavior for hidden timeline/info panel discoverability and nav-arrow idle-hint lifecycle.
-- Re-ran online UX/accessibility research focused on: progressive disclosure signifiers, one-shot motion hints, reduced-motion requirements, and hidden-control accessibility constraints.
+- Re-ran online UX/accessibility research focused on progressive disclosure signifiers, one-shot motion hints, reduced-motion requirements, and hidden-control accessibility constraints.
+- Added technical coding recommendations and a concrete enhancement brainstorm for v0.62 follow-up execution.
 - Produced implementation-ready planning guidance in `plan.md § v0.62`.
 
 ### Repository findings (verified in code)
@@ -21,30 +22,50 @@
 
 ### Online research findings (2026-06-04)
 
-1. **Progressive disclosure should retain clear signifiers.**
-   Hidden UI can stay minimal, but users need explicit visual clues (handles/chevrons) so controls are perceived as discoverable.
+1. **Progressive disclosure should retain explicit signifiers.**
+   Hidden UI can stay minimal, but users still need unambiguous edge affordances (handles/chevrons) so revealable regions are recognized as interactive.
    - Reference: NN/g progressive disclosure guidance (https://www.nngroup.com/articles/progressive-disclosure/)
 
-2. **Attention animation should be brief and non-looping.**
-   Discovery motion should run once or in a short bounded burst, then stop to avoid distraction and habituation.
-   - References: WCAG animation guidance + accessibility animation practice
-     - https://www.w3.org/WAI/WCAG21/Understanding/animation-from-interactions.html
-     - https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion
+2. **Attention animation should be brief, bounded, and stateful.**
+   Discovery motion should run once (or short bounded burst), then stop permanently after discovery to avoid habituation and visual fatigue.
+   - Reference: WCAG animation from interactions (https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions)
 
-3. **Reduced-motion must disable non-essential cues.**
-   Animated hints are optional affordances; they require a no-motion fallback.
-   - Reference: MDN prefers-reduced-motion
-     - https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion
+3. **Reduced-motion must fully remove non-essential animation.**
+   Animated hints are optional; static affordances must remain usable when motion is disabled by user preference.
+   - Reference: MDN prefers-reduced-motion (https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion)
 
-4. **Hidden/revealed UI must stay keyboard and hover/focus compliant.**
-   Revealed controls need persistent interaction window, dismissibility, and reliable keyboard access.
-   - Reference: WCAG 2.2 Content on Hover or Focus
-     - https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+4. **Hover/focus-revealed content needs stable interaction windows.**
+   Auto-hidden surfaces must not collapse while hovered/focused, and must remain dismissible/predictable.
+   - Reference: WCAG 2.2 Content on Hover or Focus (https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)
 
-5. **When nav buttons are visible, target-size constraints still apply.**
-   Auto-hide strategy is acceptable, but revealed controls must keep adequate hit area.
-   - Reference: WCAG 2.2 Target Size (Minimum)
-     - https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+5. **Target size constraints still govern revealed controls.**
+   Auto-hide is compatible with WCAG, but when controls are shown they must retain compliant hit geometry.
+   - Reference: WCAG 2.2 Target Size (Minimum) (https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+
+### Technical coding recommendations extracted from research
+
+1. **Use a single source of truth for reveal state.**  
+   Represent hidden-chrome lifecycle with explicit states (`hidden`, `hint`, `revealed`, `pinned`) rather than independent booleans to prevent race conditions between hover/focus/timeouts.
+
+2. **Centralize timers in the chrome manager.**  
+   Keep reveal/hide timers in `ChromeVisibilityManager` and keep `NavigationControls` focused on rendering and event forwarding.
+
+3. **Prefer data-attribute driven CSS over ad-hoc class toggles.**  
+   Root-level `data-*` state makes reveal transitions easier to reason about and debug than scattered class mutations.
+
+4. **Guard hide logic by focus containment.**  
+   Before executing hide, verify `document.activeElement` is outside the target container to prevent keyboard trap regressions.
+
+5. **Instrument reveal transitions.**  
+   Emit structured diagnostics with trigger source (`pointer`, `focus`, `keyboard`, `timeout`, `preference`) to allow reproducible QA.
+
+### Brainstorm — enhancement candidates beyond base v0.62 scope
+
+1. **Adaptive cue intensity curve:** stronger cues for first-session users, reduced intensity after repeated successful reveal interactions.
+2. **Artwork-aware affordance contrast:** compute canvas-edge luminance and auto-adjust cue opacity for bright/dark scenes.
+3. **Touch-first reveal mode:** broaden reveal zones only on coarse pointers while keeping desktop precision unchanged.
+4. **Inline discoverability hint in Keyboard Help:** short persistent instruction to reduce first-time confusion.
+5. **Replayable diagnostics export:** append hidden-chrome transition history to `window.__FREYRAUM_DIAGNOSTICS__` output for support sessions.
 
 ### Decision impact for v0.62 plan
 
