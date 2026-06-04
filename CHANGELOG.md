@@ -1,24 +1,32 @@
 # CHANGELOG
-> v0.60 planned: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
-> Last full markdown audit: 2026-06-04 (v0.60 plan written).
+> v0.60 shipped: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
+> Last full markdown audit: 2026-06-04 (v0.60 plan written, verified, and implemented).
 
-## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel (planned)
+## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel (2026-06-04, **shipped**)
 
 ### Status
 
-**Planned.** Design research complete. Full technical specification in `plan.md § v0.60`. Not yet implemented.
+**Shipped.** Design research verified against live sources; plan finalized after correcting code-snippet/API mismatches against the actual codebase; implemented, runtime-verified in a browser, and `npm run lint` + `npm run build` pass.
 
 ### Summary
 
-v0.60 introduces progressive-disclosure chrome: the timeline (bottom strip) and the painting info panel (left side) are hidden by default, revealing smoothly when the user moves the pointer near the respective screen edge or gives them keyboard focus. A subtle peek strip at each edge signals discoverability. A new "Always show UI" preference toggle in the settings panel restores the previous always-visible behavior for users who prefer it.
+v0.60 introduces progressive-disclosure chrome: the timeline (bottom strip) and the painting info panel (left side) are hidden by default, revealing smoothly when the user moves the pointer near the respective screen edge or gives them keyboard focus. A subtle peek strip at each edge signals discoverability. A new "Bedienleiste immer einblenden" preference toggle in the settings panel restores the previous always-visible behaviour for users who prefer it.
 
-### Planned changes
+### Changes
 
-- **New:** `src/ui/ChromeVisibilityManager.ts` — proximity detection, dwell timers, focus tracking, touch fallback, Escape dismiss
-- **Extend:** `src/utils/preferences.ts` — add `alwaysShowChrome` preference; mirror `data-chrome-mode` to `<html>`
-- **Extend:** `src/styles/main.scss` — `[data-chrome-mode='clean']` auto-hide rules for `.timeline` and `.info-panel`; `.timeline-peek` / `.info-panel-peek` decorative strips; `peek-pulse` keyframe; reduced-motion and forced-colors overrides
-- **Extend:** `src/ui/PreferencesPanel.ts` — add "Bedienleiste immer einblenden" checkbox
-- **Minor extend:** `src/main.ts` — init `ChromeVisibilityManager`; call `forceReveal` on navigation; dispose on cleanup
+- **New:** `src/ui/ChromeVisibilityManager.ts` — proximity detection, dwell timers (`HIDE_DELAY_MS` 2.5s), focus tracking, touch tap fallback with iOS back-swipe dead zone, viewport-leave handling, Escape dismiss, `aria-live` screen-reader region, decorative peek strips, `forceReveal()` on navigation, full `dispose()`.
+- **Extend:** `src/utils/preferences.ts` — add `alwaysShowChrome` preference (persisted); mirror `data-chrome-mode="clean|visible"` to `<html>` from `applyToDocument()` (set during construction, so there is no flash of visible chrome before JS init).
+- **Extend:** `src/styles/main.scss` — clean-chrome design tokens; `[data-chrome-mode='clean']` auto-hide rules for `.timeline` / `.info-panel` with asymmetric reveal/hide easing; `.is-revealed` overrides; `.timeline-peek` / `.info-panel-peek` strips + 44px touch hit areas; `peek-pulse` keyframe; `[data-hover='false']` coarse-pointer rules; reduced-motion, forced-colors, and short-height-landscape guards; navigation `.is-transitioning` fade-compat rule.
+- **Extend:** `src/ui/PreferencesPanel.ts` — add "Bedienleiste immer einblenden" toggle (after the contrast toggle), with in-place patch support.
+- **Minor extend:** `src/main.ts` — init `ChromeVisibilityManager` after chrome refs resolve; `forceReveal('info-panel')` on navigation; `dispose()` in cleanup.
+
+### Plan finalization corrections (verified against the real codebase)
+
+- `preferences.ts` uses the existing private `emit()` + module-level `diagnostics` (not the plan's `this.diag`/`this.persist()`/`this.notify()`); `data-chrome-mode` is mirrored in `applyToDocument()`.
+- `ScopedDiagnostics` methods take `(event, message, data?)` — three arguments; all manager log calls supply a message string.
+- `PreferencesPanel` is build-once + `patchPanel()`; the toggle was added to that pattern (the plan's `createRow()` helper does not exist).
+- `.sr-only` already exists; safe-area is already absorbed by the `--safe-*` tokens on the base `.timeline` / `.info-panel` rules, so the plan's duplicate `env()` block was intentionally omitted to avoid conflicts.
+- `app.html` already includes `viewport-fit=cover` (verify-only).
 
 ---
 

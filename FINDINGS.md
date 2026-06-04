@@ -1,6 +1,26 @@
 # FINDINGS
-> v0.60 planned: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
-> Last full markdown audit: 2026-06-04 (v0.60 plan deep-revised with live online research).
+> v0.60 shipped: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
+> Last full markdown audit: 2026-06-04 (v0.60 plan deep-revised with live online research, finalized, and implemented).
+
+## v0.60 — Clean Chrome Auto-Hide: Implementation Verification (2026-06-04, **shipped**)
+
+> The research findings below were re-verified by live online search on 2026-06-04 (WCAG 2.2 SC 1.4.13 three-part criterion confirmed against W3C; CSS `:has()` confirmed ≥90% global support) and the feature was then implemented and runtime-verified in a browser.
+
+### Verification summary
+
+- **Build/lint:** fresh `npm install`, then `npm run lint` and `npm run build` both pass on the implemented v0.60 state.
+- **Runtime (Playwright, app.html):** `data-chrome-mode="clean"` is set before paint; peek strips + `#freyraum-chrome-status` `aria-live` region are created; both panels start at `opacity:0`. Pointer-proximity to the bottom edge reveals the timeline (`opacity` → 1, `pointer-events:auto`, SR announces "Zeitleiste eingeblendet"); proximity to the left edge reveals the info panel ("Werkinformationen eingeblendet"). Escape dismisses both and clears the SR region. Toggling "Bedienleiste immer einblenden" switches `data-chrome-mode` to `visible`, pins both panels at `opacity:1`, hides the peek strips, and persists `alwaysShowChrome:true` to `localStorage`.
+- **Pre-existing, unrelated:** under software WebGL the boot logs a `GalleryManager.scheduleTextureSetPrefetch` `RangeError` and repeated `computeTangents()` warnings — both pre-date v0.60 and are outside this change's scope.
+
+### Plan→code corrections applied during finalization
+
+1. `preferences.ts` uses the existing `emit()` pattern + module-level `diagnostics`; `data-chrome-mode` mirrored in `applyToDocument()`.
+2. `ScopedDiagnostics` methods are `(event, message, data?)` — message arg supplied everywhere.
+3. `PreferencesPanel` build-once + `patchPanel()` pattern; toggle added there (no `createRow()` helper exists).
+4. `.sr-only` and `--safe-*` safe-area tokens already exist → duplicate CSS omitted to avoid conflicts.
+5. New `.info-panel.is-revealed.is-transitioning` rule preserves the navigation fade; `mouseleave`/`blur` viewport-leave handler clears trigger zones.
+
+---
 
 ## v0.60 — Clean Chrome Auto-Hide: Research Findings (2026-06-04, **planned**)
 

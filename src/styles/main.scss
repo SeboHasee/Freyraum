@@ -103,6 +103,31 @@
   // Timeline height ≈ 149px at bottom: 28px → top edge ≈ 177px. Using 200px
   // gives comfortable clearance and keeps zoom controls above the timeline too.
   --chrome-bottom: max(200px, calc(180px + var(--safe-bottom)));
+
+  // ---------------------------------------------------------------------------
+  // v0.60 — Clean Chrome auto-hide tokens
+  // ---------------------------------------------------------------------------
+  // Timing — Apple HIG "appear fast, disappear slow": reveal is snappy
+  // (ease-out, shorter), hide is gentle (ease-in, longer).
+  --dur-chrome-reveal: 0.28s;
+  --dur-chrome-hide: 0.52s;
+  --dur-peek-pulse: 2.6s;
+  --ease-chrome-reveal: cubic-bezier(0, 0, 0.2, 1);   // Material LinearOutSlowIn
+  --ease-chrome-hide: cubic-bezier(0.4, 0, 1, 1);     // Material FastOutLinearIn
+
+  // Geometry — small travel when hiding adds depth without jarring displacement.
+  --chrome-timeline-hide-offset: 14px;    // translateY(+) when hidden
+  --chrome-infopanel-hide-offset: -22px;  // translateX(-) when hidden
+
+  // Visual — translucent peek strips at the screen edges.
+  --chrome-peek-bg: rgba(255, 255, 255, 0.16);
+  --chrome-peek-width-v: 3px;     // left-edge (info panel) strip thickness
+  --chrome-peek-height-h: 3px;    // bottom-edge (timeline) strip thickness
+  --chrome-peek-length-v: min(160px, 16vh);   // left strip length
+  --chrome-peek-length-h: min(280px, 28vw);   // bottom strip length
+
+  // Touch — hit area larger than the visual strip (WCAG 2.5.8 ≥24px; 44px std).
+  --chrome-peek-touch-target: 44px;
 }
 
 html,
@@ -1660,7 +1685,207 @@ button {
 }
 
 // =============================================================================
-// v0.11 — Device-capability mirror selectors
+// v0.60 — CLEAN CHROME AUTO-HIDE
+// =============================================================================
+// The timeline (bottom) and info panel (left) are hidden by default and reveal
+// on pointer proximity, keyboard focus, or touch tap. `ChromeVisibilityManager`
+// toggles the `.is-revealed` class and sets `data-chrome-mode` on <html>
+// (mirrored early by PreferencesStore so there is no flash of visible chrome on
+// load). Safe-area handling is already provided by the `--safe-*` tokens on the
+// base `.timeline` / `.info-panel` rules, so it is not repeated here.
+
+:root[data-chrome-mode='clean'] {
+  // ── Timeline (bottom edge) ──────────────────────────────────────────────
+  .timeline {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(var(--chrome-timeline-hide-offset));
+    transition:
+      opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
+      transform var(--dur-chrome-hide) var(--ease-chrome-hide);
+  }
+
+  .timeline.is-revealed {
+    opacity: 1;
+    pointer-events: auto;
+    // Keep the existing horizontal centering transform from the base rule.
+    transform: translateX(-50%) translateY(0);
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  // ── Info panel (left edge) ──────────────────────────────────────────────
+  .info-panel {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(var(--chrome-infopanel-hide-offset));
+    transition:
+      opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
+      transform var(--dur-chrome-hide) var(--ease-chrome-hide);
+  }
+
+  .info-panel.is-revealed {
+    opacity: 1;
+    transform: translateX(0);
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  // Compact (phone-portrait) info panel becomes scrollable when revealed.
+  .info-panel--compact.is-revealed {
+    pointer-events: auto;
+  }
+
+  // Preserve the navigation content-swap fade (`.is-transitioning`, added by
+  // InfoPanel.update) even while the panel is force-revealed. Without this
+  // higher-specificity rule the `.is-revealed` opacity:1 would defeat the fade.
+  .info-panel.is-revealed.is-transitioning {
+    opacity: 0;
+    transform: translateX(0) translateY(16px);
+  }
+
+  // Focusable children: keep the browser's scroll-into-view clear of the fixed
+  // chrome so a Tab landing never lands behind a panel edge (WCAG 2.4.11).
+  .timeline a,
+  .timeline button {
+    scroll-margin-bottom: 80px;
+  }
+  .info-panel a,
+  .info-panel button {
+    scroll-margin-left: 320px;
+  }
+}
+
+// ── Peek hit areas (invisible; tappable only on coarse pointers) ───────────
+.timeline-peek-hit {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--chrome-peek-length-h);
+  height: var(--chrome-peek-touch-target);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 101;
+  pointer-events: none;
+  contain: layout paint;
+
+  @media (pointer: coarse) {
+    pointer-events: auto;
+  }
+}
+
+.info-panel-peek-hit {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: var(--chrome-peek-touch-target);
+  height: var(--chrome-peek-length-v);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 101;
+  pointer-events: none;
+  contain: layout paint;
+
+  @media (pointer: coarse) {
+    pointer-events: auto;
+  }
+}
+
+// ── Visual peek strips ─────────────────────────────────────────────────────
+.timeline-peek {
+  width: 100%;
+  height: var(--chrome-peek-height-h);
+  border-radius: 2px 2px 0 0;
+  background: var(--chrome-peek-bg);
+  margin-bottom: var(--safe-bottom);
+  contain: layout paint;
+  will-change: opacity;
+}
+
+.info-panel-peek {
+  width: var(--chrome-peek-width-v);
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+  background: var(--chrome-peek-bg);
+  margin-left: var(--safe-left);
+  contain: layout paint;
+  will-change: opacity;
+}
+
+@keyframes peek-pulse {
+  0%, 100% { opacity: 0.1; }
+  50%      { opacity: 0.26; }
+}
+
+// Peek strips only breathe in clean mode; hidden entirely when chrome is pinned.
+:root[data-chrome-mode='clean'] {
+  .timeline-peek,
+  .info-panel-peek {
+    animation: peek-pulse var(--dur-peek-pulse) ease-in-out infinite;
+  }
+}
+
+:root[data-chrome-mode='visible'] {
+  .timeline-peek-hit,
+  .info-panel-peek-hit {
+    display: none;
+  }
+}
+
+// ── Touch (coarse pointer): keep the timeline discoverable ──────────────────
+// Touch users cannot hover, so the timeline stays at low opacity baseline and a
+// tap (handled in JS) brings it to full. The info panel stays fully hidden and
+// is revealed by tapping its left-edge peek strip.
+:root[data-hover='false'][data-chrome-mode='clean'] {
+  .timeline {
+    opacity: 0.32;
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+
+  .timeline.is-revealed {
+    opacity: 1;
+    transition: opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  .info-panel {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+// ── Reduced motion: instant transitions, no breathing animation ─────────────
+// WCAG 2.3.3 — the hide/reveal slide and peek pulse are non-essential.
+@media (prefers-reduced-motion: reduce) {
+  :root[data-chrome-mode='clean'] {
+    .timeline,
+    .info-panel {
+      transition-duration: 0.001ms;
+    }
+  }
+
+  .timeline-peek,
+  .info-panel-peek {
+    animation: none;
+    opacity: 0.18;
+  }
+}
+
+// ── Forced colors: make peek strips visible in high-contrast mode ───────────
+@media (forced-colors: active) {
+  .timeline-peek,
+  .info-panel-peek {
+    background: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+  }
+}
 // =============================================================================
 // `applyDeviceCaps()` in `src/utils/device.ts` writes the following data
 // attributes onto <html>:
@@ -1751,6 +1976,14 @@ button {
   .timeline {
     visibility: hidden;
     position: absolute;
+    pointer-events: none;
+  }
+  // v0.60 — clean-chrome `.is-revealed` raises specificity and would otherwise
+  // re-enable pointer events on the hidden timeline; keep it fully inert here.
+  :root[data-chrome-mode='clean'] .timeline.is-revealed,
+  :root[data-hover='false'][data-chrome-mode='clean'] .timeline {
+    visibility: hidden;
+    opacity: 0;
     pointer-events: none;
   }
   .hint-text {

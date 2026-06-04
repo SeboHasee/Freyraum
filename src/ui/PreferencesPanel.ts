@@ -30,6 +30,7 @@ export class PreferencesPanel {
   // ── In-place patch targets (resolved once after buildPanel) ───────────────
   private motionInput: HTMLInputElement | null = null;
   private contrastInput: HTMLInputElement | null = null;
+  private chromeInput: HTMLInputElement | null = null;
   private audioMutedInput: HTMLInputElement | null = null;
   private audioVolumeInput: HTMLInputElement | null = null;
   private audioValueLabel: HTMLElement | null = null;
@@ -92,7 +93,7 @@ export class PreferencesPanel {
   // ── Panel construction (called once) ────────────────────────────────────────
 
   private buildPanel(): void {
-    const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume } = this.prefs.current;
+    const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume, alwaysShowChrome } = this.prefs.current;
 
     const qualityOptions = (Object.values(QUALITY_PRESETS) as QualityPreset[])
       .map(
@@ -147,6 +148,14 @@ export class PreferencesPanel {
           <span class="prefs__toggle-desc">Stärkere Lesbarkeit über allen Werken.</span>
         </span>
       </label>
+      <label class="prefs__toggle">
+        <input type="checkbox" id="freyraum-chrome" ${alwaysShowChrome ? 'checked' : ''} />
+        <span class="prefs__toggle-track" aria-hidden="true"></span>
+        <span class="prefs__toggle-label">
+          <span class="prefs__toggle-title">Bedienleiste immer einblenden</span>
+          <span class="prefs__toggle-desc">Zeitleiste und Werkinformationen dauerhaft anzeigen.</span>
+        </span>
+      </label>
       <fieldset class="prefs__group">
         <legend class="prefs__legend">Beleuchtung</legend>
         ${lightingOptions}
@@ -185,6 +194,7 @@ export class PreferencesPanel {
     // Cache mutable DOM references for in-place patching.
     this.motionInput = this.panel.querySelector<HTMLInputElement>('#freyraum-motion');
     this.contrastInput = this.panel.querySelector<HTMLInputElement>('#freyraum-contrast');
+    this.chromeInput = this.panel.querySelector<HTMLInputElement>('#freyraum-chrome');
     this.audioMutedInput = this.panel.querySelector<HTMLInputElement>('#freyraum-audio-muted');
     this.audioVolumeInput = this.panel.querySelector<HTMLInputElement>('#freyraum-audio-volume');
     this.audioValueLabel = this.panel.querySelector<HTMLElement>('#freyraum-audio-volume-label');
@@ -202,6 +212,10 @@ export class PreferencesPanel {
 
     this.contrastInput?.addEventListener('change', (e) => {
       this.prefs.setContrastMode((e.target as HTMLInputElement).checked ? 'high' : 'auto');
+    });
+
+    this.chromeInput?.addEventListener('change', (e) => {
+      this.prefs.setAlwaysShowChrome((e.target as HTMLInputElement).checked);
     });
 
     this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-quality"]').forEach((input) => {
@@ -268,10 +282,11 @@ export class PreferencesPanel {
   // ── In-place patch (called on every preference update) ───────────────────────
 
   private patchPanel(): void {
-    const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume } = this.prefs.current;
+    const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume, alwaysShowChrome } = this.prefs.current;
 
     if (this.motionInput) this.motionInput.checked = reducedMotion;
     if (this.contrastInput) this.contrastInput.checked = contrastMode === 'high';
+    if (this.chromeInput) this.chromeInput.checked = alwaysShowChrome;
     if (this.audioMutedInput) this.audioMutedInput.checked = audioMuted;
 
     // Do not patch slider value during active pointer drag (Slice B continuity fix).

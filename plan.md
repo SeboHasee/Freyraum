@@ -1,8 +1,16 @@
 # FREYRAUM Plan
-> v0.60 planned: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
-> Last full markdown audit: 2026-06-04 (v0.60 plan written).
+> v0.60 shipped: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
+> Last full markdown audit: 2026-06-04 (v0.60 plan written, verified online, finalized, and implemented).
 
-## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel on Hover/Proximity (planned)
+## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel on Hover/Proximity (**shipped 2026-06-04**)
+
+> **Implementation note (finalization).** The plan below is the design of record. During implementation the following snippets were adapted to the *actual* codebase APIs (the design intent is unchanged):
+> - `preferences.ts` uses the existing private `emit()` (which runs `applyToDocument()` + `writeStored()` + listeners) and the module-level `diagnostics`, not `this.diag`/`this.persist()`/`this.notify()`. `data-chrome-mode` is mirrored inside `applyToDocument()` so it is set from `PreferencesStore` construction (no flash of visible chrome before JS init).
+> - `createScopedDiagnostics(...)` returns methods with signature `(event, message, data?)`; all manager log calls pass a message string.
+> - `PreferencesPanel` is build-once-innerHTML + `patchPanel()`; the toggle was added as a `.prefs__toggle` after the contrast toggle, cached, bound, and patched — the `createRow()` helper in the draft does not exist.
+> - `.sr-only` already exists in `main.scss`; safe-area is already absorbed by the `--safe-bottom`/`--safe-left` tokens on the base `.timeline`/`.info-panel` rules, so the draft's duplicate `env()` block was omitted to avoid conflicts.
+> - `app.html` already contains `viewport-fit=cover` (verify-only).
+> - **Added edge case the draft missed:** `.info-panel.is-transitioning` (navigation content-swap fade) has lower CSS specificity than `[data-chrome-mode='clean'] .info-panel.is-revealed`; a dedicated `.is-revealed.is-transitioning` rule preserves the fade when `forceReveal` fires on navigation. A `mouseleave`/`blur` viewport-leave handler also clears trigger zones so a panel never stays revealed after the cursor exits the window while in-zone.
 
 ### Problem Statement
 
@@ -1176,25 +1184,25 @@ These are planned improvements that are **not** in scope for v0.60 but should be
 
 ### Implementation Checklist
 
-- [ ] D-1: Add `alwaysShowChrome: boolean` to `Preferences` interface + `PreferencesStore.setAlwaysShowChrome()` + `data-chrome-mode` mirror + localStorage persist
-- [ ] D-2: Add all v0.60 CSS design tokens to `:root` in `main.scss` (timing, geometry, visual tiers)
-- [ ] D-3: Add `[data-chrome-mode='clean']` auto-hide CSS for `.timeline` and `.info-panel` (opacity + transform + asymmetric transitions)
-- [ ] D-4: Add `.is-revealed` CSS overrides for both panels (opacity 1, transform 0, correct easing)
-- [ ] D-5: Add peek hit areas + visual strips CSS (`.timeline-peek-hit`, `.info-panel-peek-hit`, `.timeline-peek`, `.info-panel-peek`)
-- [ ] D-6: Add `@keyframes peek-pulse` + apply to strips in clean mode
-- [ ] D-7: Add `[data-hover='false']` coarse-pointer rules (semi-visible timeline, fully hidden info panel)
-- [ ] D-8: Add `@media (prefers-reduced-motion: reduce)` block — `transition-duration: 0.001ms`, `animation: none` on peek strips, static opacity 0.18
-- [ ] D-9: Add `@media (forced-colors: active)` overrides for peek strips (ButtonText, opacity 1)
-- [ ] D-10: Extend `@media (max-height: 499px)` rule so `.timeline.is-revealed` remains hidden
-- [ ] D-11: Add `env(safe-area-inset-bottom/left)` to `.timeline` and `.info-panel` base rules
-- [ ] D-12: Add `scroll-margin-bottom` / `scroll-margin-left` to focusable children of each panel
-- [ ] D-13: Add `.sr-only` utility class if not already present in `main.scss`
-- [ ] D-14: Verify `app.html` viewport meta includes `viewport-fit=cover`
-- [ ] D-15: Implement `src/ui/ChromeVisibilityManager.ts` — full class per TypeScript architecture above: `CHROME_CONFIG`, `PanelState`, `init()`, `dispose()`, `forceReveal()`, proximity detection, dwell timers, focus handlers, touch/iOS dead-zone guards, Escape key handler, `aria-live` region, `onRevealChange` callback
-- [ ] D-16: Update `main.ts` — import + instantiate `ChromeVisibilityManager` with `appRoot`; call `forceReveal('info-panel')` on navigation; call `dispose()` in cleanup
-- [ ] D-17: Add `alwaysShowChrome` checkbox row to `PreferencesPanel.ts` (after contrast toggle)
-- [ ] D-18: `npm run lint` — pass
-- [ ] D-19: `npm run build` — pass
+- [x] D-1: Add `alwaysShowChrome: boolean` to `Preferences` interface + `PreferencesStore.setAlwaysShowChrome()` + `data-chrome-mode` mirror + localStorage persist
+- [x] D-2: Add all v0.60 CSS design tokens to `:root` in `main.scss` (timing, geometry, visual tiers)
+- [x] D-3: Add `[data-chrome-mode='clean']` auto-hide CSS for `.timeline` and `.info-panel` (opacity + transform + asymmetric transitions)
+- [x] D-4: Add `.is-revealed` CSS overrides for both panels (opacity 1, transform 0, correct easing)
+- [x] D-5: Add peek hit areas + visual strips CSS (`.timeline-peek-hit`, `.info-panel-peek-hit`, `.timeline-peek`, `.info-panel-peek`)
+- [x] D-6: Add `@keyframes peek-pulse` + apply to strips in clean mode
+- [x] D-7: Add `[data-hover='false']` coarse-pointer rules (semi-visible timeline, fully hidden info panel)
+- [x] D-8: Add `@media (prefers-reduced-motion: reduce)` block — `transition-duration: 0.001ms`, `animation: none` on peek strips, static opacity 0.18
+- [x] D-9: Add `@media (forced-colors: active)` overrides for peek strips (ButtonText, opacity 1)
+- [x] D-10: Extend `@media (max-height: 499px)` rule so `.timeline.is-revealed` remains hidden
+- [x] D-11: Add `env(safe-area-inset-bottom/left)` to `.timeline` and `.info-panel` base rules
+- [x] D-12: Add `scroll-margin-bottom` / `scroll-margin-left` to focusable children of each panel
+- [x] D-13: Add `.sr-only` utility class if not already present in `main.scss`
+- [x] D-14: Verify `app.html` viewport meta includes `viewport-fit=cover`
+- [x] D-15: Implement `src/ui/ChromeVisibilityManager.ts` — full class per TypeScript architecture above: `CHROME_CONFIG`, `PanelState`, `init()`, `dispose()`, `forceReveal()`, proximity detection, dwell timers, focus handlers, touch/iOS dead-zone guards, Escape key handler, `aria-live` region, `onRevealChange` callback
+- [x] D-16: Update `main.ts` — import + instantiate `ChromeVisibilityManager` with `appRoot`; call `forceReveal('info-panel')` on navigation; call `dispose()` in cleanup
+- [x] D-17: Add `alwaysShowChrome` checkbox row to `PreferencesPanel.ts` (after contrast toggle)
+- [x] D-18: `npm run lint` — pass
+- [x] D-19: `npm run build` — pass
 
 ---
 

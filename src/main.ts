@@ -20,6 +20,7 @@ import { HintText } from './ui/HintText';
 import { ZoomControls } from './ui/ZoomControls';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { PreferencesPanel } from './ui/PreferencesPanel';
+import { ChromeVisibilityManager } from './ui/ChromeVisibilityManager';
 import { AudioControls } from './ui/AudioControls';
 import { showFallbackScreen } from './ui/FallbackScreen';
 import { Timeline } from './timeline/Timeline';
@@ -785,6 +786,19 @@ async function main(): Promise<void> {
   chromeRefs.navControls = app.querySelector<HTMLElement>('.nav-controls');
   chromeRefs.infoPanel = app.querySelector<HTMLElement>('.info-panel');
 
+  // v0.60 — Clean Chrome: auto-hide the timeline and info panel, revealing them
+  // on pointer proximity, keyboard focus, or touch tap. `data-chrome-mode` is
+  // already mirrored to <html> by PreferencesStore (set during construction),
+  // so the panels start hidden behind the loading overlay with no visible flash.
+  // forceReveal on navigation is wired further below in `handleNavigate`.
+  const chromeVisibility = new ChromeVisibilityManager(
+    chromeRefs.timeline!,
+    chromeRefs.infoPanel!,
+    preferences,
+    app
+  );
+  chromeVisibility.init();
+
   await Promise.all([
     galleryManager.init(),
     new Promise<void>((resolve) => window.setTimeout(resolve, MIN_LOADING_SCREEN_MS)),
@@ -1492,6 +1506,9 @@ async function main(): Promise<void> {
   const handleNavigate = (index: number): void => {
     infoPanel.update(artworks[index], true);
     timeline.setActive(index);
+    // v0.60 — surface the updated work information briefly when the artwork
+    // changes, then auto-hide again (no-op when chrome is always visible).
+    chromeVisibility.forceReveal('info-panel');
     diagnostics.info('gallery', 'navigate', 'Artwork changed', {
       index,
       artworkId: artworks[index]?.id,
@@ -1623,6 +1640,7 @@ async function main(): Promise<void> {
     diagnostics.info('boot', 'shutdown', 'Disposing FREYRAUM runtime');
     preferences.dispose();
     canvasInteraction.dispose();
+    chromeVisibility.dispose();
     keyboardNav.dispose();
     keyboardHelp.dispose();
     topbar.dispose();
