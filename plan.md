@@ -1,10 +1,41 @@
 # FREYRAUM Plan
-> v0.63 planned: hidden-affordance salience pass for clearer discoverability with minimal visual noise.
-> Last full markdown audit: 2026-06-04 (v0.63 detailed technical audit + online research refresh).
+> v0.63 shipped: hidden-affordance salience pass — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, and a keyboard-help discoverability note.
+> Last full markdown audit: 2026-06-04 (v0.63 implemented + executed; runtime now v0.63).
 
-## v0.63 — Hidden affordance salience + transparency balance (**planning 2026-06-04, docs-only**)
+## v0.64 — Adaptive & content-aware affordance intensity (**planning 2026-06-04, docs-only**)
 
-> **Planning status:** This pass is research + planning only. Runtime code remains at v0.62 until implementation is executed.
+> **Planning status:** Research + planning only. These are the v0.63 backlog brainstorms that could not be safely shipped "in one go" with v0.63 because they require new persistent state, canvas pixel readback, or interaction-envelope tuning that needs device QA. Runtime code remains at v0.63 until implementation is executed.
+
+### Carried-over backlog (deferred from v0.63)
+
+1. **Adaptive cue intensity curve (session-aware).** Increase affordance opacity for the first ~3 reveals of a session, then taper after each successful reveal. Storage: `localStorage` counter `freyraum-reveal-count`, reset on major version bump. Goal: stronger guidance for new users, near-zero chrome for experienced users. Risk: medium — adds persistent state + a new reveal-count write path in `ChromeVisibilityManager.reveal()`.
+
+2. **Artwork-edge luminance sampling (canvas contrast adaptation).** After each artwork load, sample a ~10px edge strip of the Three.js canvas, compute average sRGB luminance `L = 0.2126R + 0.7152G + 0.0722B`, and when `L > 180` switch `--chrome-affordance-color`/strip tokens to a dark variant (e.g. `rgba(0,0,0,0.35)`) for bright edges. Risk: medium-high — requires confirming pixel readback is possible without a `preserveDrawingBuffer` performance cost; otherwise use a small offscreen render target. This is the most robust long-term fix for the bright-edge failure case.
+
+3. **`@property` registered custom property for silky settle decay.** Register `--affordance-opacity-add` (`syntax: '<number>'; initial-value: 0; inherits: false`), interpolate it during settle for frame-smooth decay without a keyframe class swap. Browser support is now broad (Chrome 85+, Safari 15.4+, Firefox 128+). Risk: low-medium — gate behind `@supports` so non-supporting engines keep the v0.63 class-swap behavior.
+
+4. **Touch-first wider reveal envelope.** On `(pointer: coarse)` devices, raise `NAV_TRIGGER_BAND_PX` 220 → 300 and `TIMELINE_TRIGGER_BAND_PX` 140 → 180 via a `main.ts` config override conditioned on `matchMedia('(pointer: coarse)').matches`. Risk: low, but needs real touch-device QA to confirm the larger envelope does not cause accidental reveals.
+
+5. **Diagnostics reveal-history export.** Extend `window.__FREYRAUM_DIAGNOSTICS__.exportJson()` with a `revealHistory` array of `{panelId, reason, timestamp}` entries so QA can replay hide/reveal decision sequences post-session. Risk: low — additive instrumentation only.
+
+### Acceptance criteria for v0.64
+
+1. New users receive visibly stronger early guidance; the chrome footprint shrinks for returning users without ever fully disappearing.
+2. Affordances stay perceptible on bright/cream painting edges via content-aware contrast (luminance sampling or a robust dark fallback layer).
+3. No regression to v0.63 reduced-motion, forced-colors, or WCAG 1.4.13 guarantees.
+4. `npm run lint` and `npm run build` pass after implementation.
+
+---
+
+## v0.63 — Hidden affordance salience + transparency balance (**shipped 2026-06-04**)
+
+> **Implementation closeout:** v0.63 is now implemented in runtime code. All five plan items (P-01 … P-05) plus one folded enhancement (E-1) were executed. `npm run lint` and `npm run build` pass. See FINDINGS.md §v0.63 (as-built) and CHANGELOG.md §v0.63 for validation notes.
+
+> **As-built deviations from the original diff sketch (intentional, research-backed):**
+> - **Static handle bars relocated for true decoupling.** The original P-02 sketch placed the static micro-handle bars as `::after` on the chevron elements. Because the chevrons carry `transform: rotate(45deg)` AND the `peek-pulse` opacity animation (opacity groups the whole subtree, including pseudo-elements), an `::after` there would have been both rotated 45° and still visually pulsing — defeating the "always-visible static cue" goal. As built, the bars are `::after` on the **non-rotated, non-animated** `.timeline-peek-hit` / `.info-panel-peek-hit` containers, absolutely positioned, so they are genuinely static and decoupled from the breathing animation.
+> - **Layered dual-contrast shadows.** Online research (2026-06-04 refresh) recommends pairing a dark hairline (for light/cream edges) with a faint light hairline (for mid-tone edges). Peek strips therefore use a two-layer `box-shadow` (`rgba(0,0,0,0.12)` + `rgba(255,255,255,0.08)`) rather than a single dark line.
+> - **E-1 folded in (was backlog brainstorm #4).** A keyboard-help discoverability note was added to `KeyboardHelp.ts` because it is zero-risk, additive, and closes the discoverability gap for keyboard/AT users who never see the visual peek cues.
+
 
 ---
 
@@ -415,6 +446,8 @@ The existing forced-colors block sets `background: ButtonText; opacity: 1` on pe
 ---
 
 ### Brainstorm — enhancement candidates for post-v0.63 (backlog)
+
+> **Status (2026-06-04):** Brainstorm #4 (keyboard-help discoverability note) was folded into v0.63 as **E-1**. The remaining items below are now tracked as the **v0.64 plan** at the top of this file.
 
 These items were identified during the v0.63 audit and research pass but are explicitly out of scope for v0.63:
 

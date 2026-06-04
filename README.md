@@ -1,6 +1,17 @@
 # Freyraum
-> v0.62 shipped: hidden affordance signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
-> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
+> v0.63 shipped: hidden-affordance salience — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, keyboard-help discoverability note.
+> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63).
+
+## v0.63 — Hidden affordance salience + transparency balance (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Affordance perceptibility floor raised (peek strip, chevron color/size/stroke, and the `peek-pulse` keyframe) so hidden-control cues clear the peripheral-detection threshold without adding clutter.
+- New always-visible **static micro-handle bars** at both peek zones, decoupled from the breathing pulse, so at least one marker stays visible even at the animation trough.
+- **Dual-contrast** layered shadows on peek strips and chevrons make the white cues visible on bright/cream painting edges as well as dark ones.
+- **Post-hint "settle"** phase briefly elevates the idle affordances after the nav onboarding hint completes, guiding the eye to the persistent cues, then decays back smoothly. Reduced-motion safe.
+- Keyboard-help dialog now notes that moving the mouse to a screen edge reveals the hidden chrome (discoverability for keyboard/AT users).
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 
 ## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide (2026-06-04, **shipped**)
 

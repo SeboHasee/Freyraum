@@ -1,6 +1,18 @@
 # FREYRAUM customer handoff guide
-> v0.62 shipped: hidden affordance signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
-> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
+> v0.63 shipped: hidden-affordance salience — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, keyboard-help discoverability note.
+> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63).
+
+## v0.63 — handoff status: affordance salience shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- Hidden-control cues are now reliably noticeable on any painting — including bright/cream edges where the white peek strips used to disappear — while staying small and unobtrusive.
+- A new tiny **static handle bar** sits at the bottom and left peek zones and never blinks out, so there is always a visible "grab here" marker even between the gentle breathing pulses.
+- Cues now carry a faint dual shadow so they read against both light and dark artwork.
+- After the first-visit navigation hint, the edge cues briefly brighten then settle, gently teaching where the hidden controls live.
+- The keyboard-shortcuts dialog (press `?`) now states that moving the mouse to a screen edge reveals the timeline, navigation, and artwork info.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- Implementation: `plan.md § v0.63`, `FINDINGS.md § v0.63`, `CHANGELOG.md § v0.63`. Next-step ideas tracked in `plan.md § v0.64`.
 
 ## v0.62 — handoff status: discoverability follow-up shipped (2026-06-04)
 

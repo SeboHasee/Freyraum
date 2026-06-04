@@ -1,6 +1,41 @@
 # FINDINGS
-> v0.63 planned: hidden-affordance salience pass to make hidden controls clearly discoverable with minimal visual weight.
-> Last full markdown audit: 2026-06-04 (v0.63 detailed technical audit + online research refresh).
+> v0.63 shipped: hidden-affordance salience pass implemented — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, keyboard-help note.
+> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63).
+
+## v0.63 — Hidden affordance salience (2026-06-04, **shipped**) — as-built
+
+### Implementation outcome
+
+All five plan items (P-01 … P-05) plus one folded enhancement (E-1) were implemented and validated. `npm run lint` and `npm run build` pass.
+
+| Plan item | As-built location | Notes |
+|-----------|-------------------|-------|
+| P-01 raise floor | `src/styles/main.scss` tokens + `@keyframes peek-pulse` | peek-bg 0.22, affordance-color 0.42, size 11px, weight 1.8px, pulse 0.15→0.40 |
+| P-02 static cue + dual-contrast | `.timeline-peek-hit::after` / `.info-panel-peek-hit::after`, peek `box-shadow`, chevron `drop-shadow` | static bars moved to peek-hit containers (see deviation) |
+| P-03 settle | `ChromeVisibilityManager.triggerAffordanceSettle()` + `@keyframes peek-settle` + `.affordance-settling` | timer cleaned up in `dispose()` |
+| P-04 contrast resilience | reduced-motion + forced-colors blocks in `main.scss` | floors 0.22/0.30, forced-colors resets shadows/filters |
+| E-1 keyboard note (folded #4) | `src/ui/KeyboardHelp.ts` + `.keyboard-help__hint` | German discoverability sentence |
+
+### Intentional deviations from the original diff sketch
+
+- **Static handle bars decoupled correctly.** The sketch put the bars as `::after` on the chevron. The chevron has `transform: rotate(45deg)` and the `peek-pulse` opacity animation; opacity groups the subtree so a chevron `::after` would have been rotated 45° AND still pulsing. As built, the bars live on the **non-rotated, non-animated** `.timeline-peek-hit` / `.info-panel-peek-hit` containers (absolutely positioned), making them genuinely static and decoupled.
+- **Layered dual-contrast shadow.** Per the 2026-06-04 research refresh, peek strips use a two-layer `box-shadow` (dark `rgba(0,0,0,0.12)` for light edges + faint light `rgba(255,255,255,0.08)` for mid-tone edges) instead of a single dark hairline.
+
+### Regression checks (verified unchanged)
+
+- `shouldHide()` guard logic untouched.
+- `onPanelFocusOut` rAF + `contains(document.activeElement)` untouched.
+- Nav hint `localStorage` persistence and `HINT_ANIM_DURATION_MS` untouched.
+- `peek-pulse` keyframe name still referenced by the clean-mode selectors; `peek-settle` is a separate keyframe.
+
+### Online research refresh (2026-06-04)
+
+- Confirmed the ≥0.20 effective-opacity peripheral-detection floor and the context-aware reveal + auto-hide pattern used by Apple/Google Photos immersive viewers.
+- Confirmed the **layered dark+light shadow** technique as the recommended cross-background visibility approach (vs. `mix-blend-mode`, which is unreliable over WebGL compositing).
+- `@property`-based smooth decay is viable (broad browser support) but deferred to v0.64 behind `@supports`.
+
+---
+
 
 ## v0.63 — Hidden affordance salience research (2026-06-04, **planning/docs-only**)
 

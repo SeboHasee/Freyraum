@@ -1,6 +1,45 @@
 # CHANGELOG
-> v0.62 shipped: hidden affordance signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
-> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
+> v0.63 shipped: hidden-affordance salience — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, keyboard-help discoverability note.
+> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63).
+
+## v0.63 — Hidden affordance salience + transparency balance (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass).
+
+### Summary
+
+v0.63 makes the hidden-control affordances reliably discoverable on any artwork — including the bright/cream painting edges where the white-only cues previously vanished — while keeping the chrome footprint minimal so the painting stays the focal point.
+
+### Changes
+
+- **P-01 — Perceptibility floor raised.** `--chrome-peek-bg` 0.16 → 0.22, `--chrome-affordance-color` 0.30 → 0.42, `--chrome-affordance-size` 10 → 11px, `--chrome-affordance-weight` 1.5 → 1.8px. The `peek-pulse` keyframe floor 0.12 → 0.15 and peak 0.32 → 0.40 (NN/g ≥0.20 peripheral-detection threshold).
+- **P-02 — Decoupled static handle bars + dual-contrast.** New always-visible static micro-handle bars rendered as `::after` on the non-rotated, non-animated `.timeline-peek-hit` / `.info-panel-peek-hit` containers, so at least one marker is perceptible even at the animation trough. Peek strips gain a layered dual-contrast `box-shadow` (dark + light hairline) and chevrons gain a `drop-shadow` halo for visibility on both light and dark edges.
+- **P-03 — Post-hint "settle" phase.** After the nav onboarding hint completes, `ChromeVisibilityManager.triggerAffordanceSettle()` adds an `affordance-settling` class to the app root that swaps peek strips/chevrons onto a one-shot `peek-settle` animation (0.55 → 0.15, `forwards`), guiding the eye to the persistent cues, then handing back to `peek-pulse` seamlessly. Reduced-motion safe (no-op) and cleaned up on `dispose()`.
+- **P-04 — Contrast resilience.** Reduced-motion static floors raised (peek 0.18 → 0.22, chevrons 0.25 → 0.30) with `drop-shadow` retained; forced-colors block resets `box-shadow`/`filter` and renders the new static bars as `ButtonText`.
+- **E-1 (folded backlog #4) — Keyboard-help discoverability note.** Added a German note to the `Tastaturkürzel` dialog explaining that moving the mouse to a screen edge reveals the hidden chrome, closing the discoverability gap for keyboard/AT users.
+
+### Files
+
+- `src/styles/main.scss` — tokens, `peek-pulse`/`peek-settle` keyframes, static handle bars, dual-contrast shadows, settle class, reduced-motion + forced-colors hardening, keyboard-help hint style.
+- `src/ui/ChromeVisibilityManager.ts` — `settleTimer` field, `triggerAffordanceSettle()`, `onHintFinished` wiring, `dispose()` cleanup.
+- `src/ui/KeyboardHelp.ts` — discoverability hint paragraph.
+
+### Validation
+
+- `npm run lint` — pass (zero new warnings).
+- `npm run build` — pass (zero TypeScript errors).
+
+### As-built notes
+
+- Static bars were attached to the peek-hit containers (not the chevron `::after` as originally sketched) because the chevrons are rotated 45° and carry the pulse animation, which would have rotated and re-animated the "static" cue.
+- Dual-contrast uses a layered dark+light shadow per the 2026-06-04 research refresh (more robust on mid-tone edges than a single dark line).
+
+### Deferred to v0.64
+
+Session-aware adaptive cue intensity, artwork-edge luminance sampling, `@property` settle decay, touch-first wider reveal envelope, and diagnostics reveal-history export. See `plan.md § v0.64`.
+
 
 ## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (2026-06-04, **shipped**)
 
