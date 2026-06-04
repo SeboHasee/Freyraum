@@ -1,6 +1,28 @@
 # CHANGELOG
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — the entry CTA now waits only for the active artwork + critical view; the rest streams in deterministically after entry. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.68 documentation sync; runtime now v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+
+## v0.68 — Metal frame close-up realism plan (2026-06-04, **planning/docs-only**)
+
+### Status
+
+**Planning/docs only.** No runtime code changes shipped in this update.
+
+### Summary
+
+- Audited current frame shader/material path (`CanvasMaterial`, `ArtworkMesh`, quality presets) with focus on close-zoom realism limits.
+- Performed online research for anisotropic brushed-metal best practices in realtime PBR.
+- Added a new v0.68 implementation plan in `plan.md` for a bounded high-detail frame pass (multi-scale grain, improved scratch distribution, anisotropy-direction path, anti-alias safeguards, preset-aware tuning).
+- Documented findings and architecture/handoff implications across markdown docs.
+
+### Files (docs only)
+
+- `plan.md`
+- `FINDINGS.md`
+- `CHANGELOG.md`
+- `README.md`
+- `ARCHITECTURE_MAP.md`
+- `docs/HANDOFF.md`
 
 ## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (2026-06-04, **shipped**)
 

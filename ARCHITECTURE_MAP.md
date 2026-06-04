@@ -1,6 +1,21 @@
 # FREYRAUM architecture map
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry.
-> Last full markdown audit: 2026-06-04 (v0.68 documentation sync; runtime now v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+
+## v0.68 frame-detail plan architecture note (**planning/docs-only**)
+
+The next frame-realism pass must keep the current ownership split:
+
+- `CanvasMaterial`: frame shading model + shader injection points + frame diagnostics.
+- `ArtworkMesh`: frame geometry/tangents and `aFrameUV` attribute generation.
+- `quality.ts`: preset-level cost/fidelity policy (`frameRoughness`, `frameAnisotropy`, `frameClearcoat`, bevel policy).
+
+Invariants for the implementation pass:
+
+1. Preserve the v0.54 anti-banding constraint (no cross-bar gradient reintroduction).
+2. Treat close-up detail as bounded multi-scale additions, not global amplitude escalation.
+3. Keep battery preset conservative and explicitly budget high-frequency detail by preset.
+4. Add diagnostics for before/after comparison so visual uplift does not hide regressions in stability/perf.
 
 ## v0.68 staged startup-readiness architecture note
 

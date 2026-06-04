@@ -1,6 +1,15 @@
 # FREYRAUM customer handoff guide
-> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
-> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+> v0.68 shipped: staged startup readiness — entry waits only for active artwork + critical view; remainder streams after entry.
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+
+## v0.68 — handoff status: metal frame close-up realism plan (2026-06-04, docs-only)
+
+Customer-facing status: **planned, not yet shipped**.
+
+- We completed a focused technical audit and online research pass for making metal frames look more realistic at close zoom.
+- A concrete v0.68 implementation plan is now documented (multi-scale detail uplift with anti-banding and anti-alias guardrails).
+- No runtime frame-shader/material changes were shipped in this docs pass.
+- References: `../plan.md § v0.68 — Metal frame close-up realism uplift`, `../FINDINGS.md § v0.68 (planning/docs-only)`.
 
 ## v0.65 — handoff status: visual affordance prominence + polish shipped (2026-06-04)
 

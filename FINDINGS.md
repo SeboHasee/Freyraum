@@ -1,6 +1,35 @@
 # FINDINGS
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry.
-> Last full markdown audit: 2026-06-04 (v0.68 documentation sync; runtime now v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+
+## v0.68 — Metal frame close-up realism (2026-06-04, **planning/docs-only**) — findings
+
+### Scope and status
+
+- This pass is analysis + planning only (no runtime shader/material code changes).
+- Objective analyzed: improve metal frame realism and detail quality at close zoom without regressing v0.54 anti-banding behavior.
+
+### Code-audit findings (current state)
+
+1. The frame already uses `MeshPhysicalMaterial` with metalness `1.0`, anisotropy, roughness, and clearcoat controlled per quality preset.
+2. v0.54 intentionally constrained the shader to 1-D along-bar perturbation to eliminate cross-bar banding and corner artifacts; this remains a correct invariant for realism and stability.
+3. Current microdetail is conservative: subtle normal amplitude, tight roughness window, and sparse scratches. This protects stability but limits close-up richness.
+4. Anisotropy is currently scalar per material; no per-fragment direction/strength map is used in the frame shader path.
+
+### Online research findings (synthesized)
+
+1. Khronos `KHR_materials_anisotropy` confirms that brushed-metal realism improves with tangent-space anisotropy direction + strength control (RG direction, B strength), and requires valid tangent-space handling.
+2. Three.js `MeshPhysicalMaterial` explicitly supports anisotropy properties and maps for brushed-metal style materials.
+3. Three.js `Texture` model confirms the importance of anisotropic texture filtering and mipmaps for preserving high-frequency detail at oblique/grazing views.
+4. Practical close-up metal guidance converges on multi-scale detail (coarse directional structure + fine bounded breakup), with strict anti-alias controls to prevent shimmer/striping.
+
+### Resulting implementation direction
+
+- Keep v0.54 no-cross-bar-gradient constraint as non-negotiable.
+- Add detail in bounded layers (not by globally increasing amplitude).
+- Prioritize derivative-aware anti-alias safeguards with preset-aware cost scaling.
+- Add diagnostics-first validation so visual gains are measurable and regressions are quickly detectable.
+
 
 ## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (2026-06-04, **shipped**) — findings
 

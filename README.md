@@ -1,6 +1,15 @@
 # Freyraum
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — the gallery becomes enterable as soon as the active artwork + nearby view is ready; the rest streams in afterwards. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.68 documentation sync; runtime now v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+
+## v0.68 — Metal frame close-up realism plan (2026-06-04, **planning/docs-only**)
+
+Current status: **planned, not yet shipped**.
+
+- A focused frame-quality uplift plan was added for higher close-up realism (finer metal detail, safer anti-aliasing, preserved v0.54 anti-banding invariants).
+- This pass updates planning/findings/changelog/architecture/handoff documentation only.
+- Runtime behavior is unchanged in this entry; staged startup readiness from shipped v0.68 remains the active code path.
+- References: `plan.md § v0.68 — Metal frame close-up realism uplift`, `FINDINGS.md § v0.68 (planning/docs-only)`.
 
 ## v0.68 — Staged startup readiness (2026-06-04, **shipped**)
 

@@ -1,6 +1,55 @@
 # FREYRAUM Plan
 > v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry. Quality stays fully manual.
-> Last full markdown audit: 2026-06-04 (v0.68 technical audit refresh; runtime now v0.68).
+> Last full markdown audit: 2026-06-04 (v0.68 frame-detail planning refresh; runtime still v0.68).
+
+## v0.68 — Metal frame close-up realism uplift (**planning/docs-only, 2026-06-04**)
+
+> **Status:** Planning only. No runtime code changes shipped in this pass.
+> **Goal:** Make frame metal read as more realistic and higher quality, especially at close zoom, while preserving the v0.54 anti-banding guarantees.
+
+### Current code audit (frame path)
+
+1. **Frame material already uses physically plausible base knobs.**
+   - `MeshPhysicalMaterial` with metalness `1.0`, preset-controlled roughness/clearcoat/anisotropy (`src/materials/CanvasMaterial.ts`, `src/config/quality.ts`).
+2. **Microstructure is intentionally constrained to avoid past artifacts.**
+   - v0.54 moved to a pure 1-D along-bar brushed normal + roughness grain to remove cross-bar banding/ridges (`src/materials/CanvasMaterial.ts`).
+3. **Close-up limitation today: detail bandwidth is narrow.**
+   - Current normal perturbation scale and roughness modulation are intentionally subtle and use a single directional grain family with sparse scratch layering.
+4. **Directional anisotropy is uniform per material.**
+   - The current path uses scalar anisotropy strength/rotation but no per-fragment anisotropy direction/strength map.
+
+### Online research synthesis (applied to this plan)
+
+1. **Anisotropy direction should be spatially controllable** for brushed metal realism (Khronos `KHR_materials_anisotropy` spec: direction in RG, strength in B, tangent-space dependent).
+2. **Close-up metal quality needs multi-scale breakup** (coarse directional brush + fine micro detail), but with controlled amplitude to avoid aliasing and synthetic striping.
+3. **Mipmaps + texture anisotropic filtering are key** for preserving detail at grazing angles without shimmer (`Texture.anisotropy`, `generateMipmaps`, trilinear min filter in Three.js texture model).
+4. **PMREM/IBL quality and anisotropic BRDF assumptions matter** for convincing highlight flow on brushed surfaces (Khronos anisotropy implementation guidance).
+
+### v0.68 execution plan (next implementation pass)
+
+1. **M-01 — Add diagnostics-first frame quality baseline capture**
+   - Freeze current visual baselines (normal/roughness ranges, alias hotspots, corner behavior) and add repeatable comparison checkpoints before shader changes.
+2. **M-02 — Introduce bounded multi-scale grain model**
+   - Add a second, finer along-grain detail layer with strict amplitude clamps so close-up detail increases without reintroducing cross-bar ridges.
+3. **M-03 — Improve micro-scratch realism distribution**
+   - Replace uniformly sparse scratch presence with more natural clustered-yet-bounded variation while keeping physically plausible roughness impact.
+4. **M-04 — Add per-fragment anisotropy direction support (optional path)**
+   - Add a lightweight anisotropy-direction modulation path aligned to bar-local coordinates, guarded so lower presets can keep today’s cheaper scalar behavior.
+5. **M-05 — Strengthen anti-alias safety rails**
+   - Add derivative-aware attenuation and frequency caps for new high-frequency terms, with explicit close-zoom and mid-distance acceptance thresholds.
+6. **M-06 — Retune preset policy for frame detail budget**
+   - Keep battery conservative; allocate new close-up detail primarily to high and partially to balanced with clear guardrails.
+7. **M-07 — Validate visual/technical acceptance**
+   - Validate no return of cross-bar banding, no corner-square artifacts, stable frame pacing, and no regression of existing startup/readiness behavior.
+8. **M-08 — Documentation + handoff sync**
+   - Ship findings/changelog/handoff updates with explicit shipped-vs-planned boundaries.
+
+### Research references (online)
+
+- Khronos glTF extension: `KHR_materials_anisotropy` (ratified) — https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_anisotropy
+- Three.js source docs: `MeshPhysicalMaterial` anisotropy fields — https://raw.githubusercontent.com/mrdoob/three.js/dev/src/materials/MeshPhysicalMaterial.js
+- Three.js source docs: texture anisotropy + mipmap/filter defaults — https://raw.githubusercontent.com/mrdoob/three.js/dev/src/textures/Texture.js
+- Three.js anisotropy example index page — https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/webgl_loader_gltf_anisotropy.html
 
 ## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (**shipped 2026-06-04**)
 
