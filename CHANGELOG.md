@@ -1,6 +1,26 @@
 # CHANGELOG
-> v0.59 shipped: hover-state float fix, keyboard-help contrast fix (WCAG 2.2 AA).
-> Last full markdown audit: 2026-05-23 (v0.59 shipped).
+> v0.60 planned: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
+> Last full markdown audit: 2026-06-04 (v0.60 plan written).
+
+## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel (planned)
+
+### Status
+
+**Planned.** Design research complete. Full technical specification in `plan.md § v0.60`. Not yet implemented.
+
+### Summary
+
+v0.60 introduces progressive-disclosure chrome: the timeline (bottom strip) and the painting info panel (left side) are hidden by default, revealing smoothly when the user moves the pointer near the respective screen edge or gives them keyboard focus. A subtle peek strip at each edge signals discoverability. A new "Always show UI" preference toggle in the settings panel restores the previous always-visible behavior for users who prefer it.
+
+### Planned changes
+
+- **New:** `src/ui/ChromeVisibilityManager.ts` — proximity detection, dwell timers, focus tracking, touch fallback, Escape dismiss
+- **Extend:** `src/utils/preferences.ts` — add `alwaysShowChrome` preference; mirror `data-chrome-mode` to `<html>`
+- **Extend:** `src/styles/main.scss` — `[data-chrome-mode='clean']` auto-hide rules for `.timeline` and `.info-panel`; `.timeline-peek` / `.info-panel-peek` decorative strips; `peek-pulse` keyframe; reduced-motion and forced-colors overrides
+- **Extend:** `src/ui/PreferencesPanel.ts` — add "Bedienleiste immer einblenden" checkbox
+- **Minor extend:** `src/main.ts` — init `ChromeVisibilityManager`; call `forceReveal` on navigation; dispose on cleanup
+
+---
 
 ## v0.59 — Hover-state float fix + keyboard-help contrast (2026-05-23, **shipped**)
 

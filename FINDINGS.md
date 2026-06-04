@@ -1,6 +1,112 @@
 # FINDINGS
-> v0.59 shipped: hover-state float fix, keyboard-help contrast fix (WCAG 2.2 AA).
-> Last full markdown audit: 2026-05-23 (v0.59 shipped).
+> v0.60 planned: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
+> Last full markdown audit: 2026-06-04 (v0.60 plan written).
+
+## v0.60 — Clean Chrome Auto-Hide: Research Findings (2026-06-04, **planned**)
+
+### Problem investigated
+
+The customer wants the gallery to show paintings without persistent UI chrome. The timeline (bottom) and info panel (left) should be hidden by default and revealed only when needed (hover/proximity/focus). This required researching WCAG requirements for disappearing UI, modern browser APIs for proximity detection, and best-practice patterns from comparable museum/gallery apps.
+
+---
+
+### Finding 1 — WCAG 2.2 SC 1.4.13: Content on Hover or Focus (AA, new in 2.2)
+
+Auto-revealing UI triggered by hover must satisfy three criteria from WCAG 2.2 SC 1.4.13:
+
+1. **Dismissible** — The user can dismiss the appeared content without moving the pointer or keyboard focus (e.g., Escape key). This is mandatory.
+2. **Hoverable** — The user can move the pointer over the triggered content without the content disappearing. A pure CSS `:hover` with no overlap between trigger and panel fails this if there is any gap.
+3. **Persistent** — The content stays visible until the user dismisses it or moves focus/pointer away. A short CSS `transition-delay` is NOT sufficient; dwell logic must allow enough time for the user to move the pointer from trigger zone to panel.
+
+**Implication:** A pure CSS-only solution using `:hover` is acceptable only if the trigger zone and the panel itself overlap (no gap). Otherwise JavaScript dwell-timer management is required to satisfy criterion 2. The recommended approach for Freyraum is a `ChromeVisibilityManager` JS class with a 2500ms hide delay after pointer leaves.
+
+**Source:** [WCAG 2.2 SC 1.4.13](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)
+
+---
+
+### Finding 2 — WCAG 2.2 SC 2.4.11: Focus Not Obscured (AA, new in 2.2)
+
+When a user navigates with the keyboard, focused elements must not be **completely** hidden by author-created content. In v0.60, the panels are `opacity: 0; pointer-events: none` when hidden. They are still in the DOM and reachable via Tab. The `focusin` event must force a `reveal()` call so the panel is visible before focus lands on a child element.
+
+**Implication:** `ChromeVisibilityManager` must attach `focusin` listeners on both panels and call `reveal()` synchronously (no `requestAnimationFrame` delay) so the panel is visible by the time the browser paints the focus ring.
+
+**Source:** [WCAG 2.2 SC 2.4.11](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html)
+
+---
+
+### Finding 3 — CSS `:has()` selector for proximity-triggered reveal
+
+CSS `:has()` allows styling an ancestor based on a descendant's state: `:root:has(.timeline-trigger:hover) .timeline { opacity: 1 }`. This is a clean CSS-only approach that avoids JS for the primary reveal mechanic.
+
+Browser support in 2026:
+- Chrome 105+ ✅ (since 2022)
+- Firefox 121+ ✅ (since 2024)
+- Safari 15.4+ ✅ (since 2022)
+- Edge 105+ ✅
+
+Coverage: ≥96% of global browsers as of 2026.
+
+**Implication:** `:has()` can be used as a CSS progressive-enhancement layer on top of JS. However, it does not solve dwell timing (WCAG 1.4.13 criterion 2) and must be supplemented by JS for full compliance.
+
+**Sources:**
+- [MDN :has()](https://developer.mozilla.org/en-US/docs/Web/CSS/:has)
+- [Can I Use :has()](https://caniuse.com/css-has)
+
+---
+
+### Finding 4 — Coarse-pointer (touch) devices cannot use CSS `:hover`
+
+CSS `:hover` fires on tap on mobile but only momentarily (immediately unfires). On touch devices (`data-hover="false"` in Freyraum's device capability model), CSS hover-based reveal is unreliable. The correct approach for touch:
+
+1. Detect `pointerdown` events with `pointerType !== 'mouse'` near panel edges.
+2. Reveal the panel for a fixed dwell window (`TOUCH_REVEAL_DURATION_MS = 4000ms`).
+3. Keep the timeline at a low baseline opacity (≈0.35) on touch so it is always partially visible — touch users cannot discover hidden chrome via hovering.
+
+The existing `data-hover="true|false"` attribute on `<html>` (written by `applyDeviceCaps()` in `src/utils/device.ts`) enables this differentiation in CSS without re-querying JS.
+
+**Source:** [Pointer Events Level 3 — pointerType](https://www.w3.org/TR/pointerevents3/#dom-pointerevent-pointertype)
+
+---
+
+### Finding 5 — "Peek strip" affordances follow Apple HIG and Gestalt design principles
+
+Apple HIG 2025/2026 specifies that hidden controls in immersive experiences must have a persistent affordance so users can discover them. This is aligned with the Gestalt principle of "figure-ground" — a minimal visual cue at the edge of the frame helps users perceive the edge as an interactive region.
+
+For Freyraum: a 3px translucent white strip at the bottom edge (timeline) and left edge (info panel) serves as the affordance. A subtle opacity-breathing animation (`peek-pulse`) draws attention to the strips without being distracting.
+
+The strips must be `aria-hidden="true"` (decorative only) and `pointer-events: none` (they are not clickable; proximity detection uses pointer position, not strip click).
+
+**Source:** [Apple HIG — Immersive experiences 2025](https://developer.apple.com/design/human-interface-guidelines/)
+
+---
+
+### Finding 6 — `window` `pointermove` listener is already in use; sharing is safe
+
+`CanvasInteraction.ts` already attaches `window.addEventListener('pointermove', this.onGlobalPointerMove, { passive: true })`. Adding a second `passive` `pointermove` listener from `ChromeVisibilityManager` is safe — browser event systems support multiple listeners and `passive` ensures neither can block rendering. The cost is negligible (two lightweight function calls per mouse move event).
+
+**Source:** `src/interaction/CanvasInteraction.ts:84`
+
+---
+
+### Finding 7 — `contain: layout paint` must be updated for peek strips
+
+Freyraum uses `contain: layout paint` on all fixed chrome elements for rendering optimization (`src/styles/main.scss:1845`). The new `.timeline-peek` and `.info-panel-peek` elements should also have `contain: layout paint` to prevent their breathing animation from invalidating the paint region of surrounding elements.
+
+---
+
+### Summary table
+
+| Topic | Finding | Impact on v0.60 |
+|-------|---------|-----------------|
+| WCAG 1.4.13 | Dismissible + Hoverable + Persistent requirements | JS dwell timer + Escape key required |
+| WCAG 2.4.11 | Focus must not be obscured | `focusin` → synchronous `reveal()` |
+| CSS `:has()` | 96%+ browser support, viable CSS-only layer | Use as fallback layer; not sole solution |
+| Touch/coarse pointer | CSS `:hover` unreliable on touch | `pointerdown` + dwell + baseline opacity |
+| Peek strips | Apple HIG affordance requirement | 3px translucent breathing strips |
+| `pointermove` sharing | Multiple passive listeners are safe | No conflict with `CanvasInteraction.ts` |
+| CSS containment | Must extend to new peek elements | Add `contain: layout paint` to peek strips |
+
+---
 
 ## v0.59 — Hover state + control-info contrast fixes (2026-05-23, **shipped**)
 

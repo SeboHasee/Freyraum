@@ -1,6 +1,7 @@
 # FREYRAUM lessons learned
-> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.60 planned: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
+> Last full markdown audit: 2026-06-04 (v0.60 plan written).
+
 
 ## 2026-05-23 — v0.58 implementation lessons
 
