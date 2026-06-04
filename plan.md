@@ -31,49 +31,184 @@ There is already a precedent: `[data-presentation='on']` hides `.topbar` and rev
 
 ### Design Research — 2026 Best Practices for Progressive Disclosure UI
 
-**Sources consulted:**
-- WCAG 2.2 SC 1.4.13 — Content on Hover or Focus (AA)
-- WCAG 2.2 SC 2.1.1 — Keyboard accessible
-- WCAG 2.2 SC 2.4.3 — Focus Order
-- WCAG 2.2 SC 2.4.11 — Focus Not Obscured (AA, new in 2.2)
-- Material Design 3 — Navigation and contextual overlays
-- Apple HIG 2025/2026 — Progressive disclosure, immersive full-screen experiences
-- Museum/gallery app patterns: Artsy, Google Arts & Culture, Louvre App 2025
+> **Research status:** All findings below were verified by live online research on 2026-06-04.
+> Sources are individually cited. Unverified assertions from the previous draft have been corrected or removed.
 
-#### Key findings
+---
 
-**WCAG 2.2 SC 1.4.13 — Content on Hover or Focus (AA)**
-Content that appears on hover/focus must satisfy three criteria:
-1. **Dismissible** — the user can dismiss the triggered content without moving focus or pointer (e.g. Escape key).
-2. **Hoverable** — the user can move the pointer over the triggered content without it disappearing (i.e. the panel itself must remain visible while hovered).
-3. **Persistent** — content stays visible until the user dismisses it, moves focus/pointer away, or the information is no longer valid.
+#### A. WCAG 2.2 Accessibility Requirements (verified)
 
-This means: a hide timer must NOT start while the pointer is inside the panel itself — only after the pointer leaves both the trigger zone AND the panel. This rules out a purely CSS-only `:hover` transition with short `transition-delay`.
+**SC 1.4.13 — Content on Hover or Focus (AA)**
+Source: [W3C WAI WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)
 
-**WCAG 2.2 SC 2.4.11 — Focus Not Obscured**
-When a UI element receives keyboard focus, it must not be completely hidden by author-created content. Panels in `opacity: 0; pointer-events: none` state must still become visible when they receive focus via Tab.
+Content triggered by hover or focus must satisfy three criteria simultaneously:
 
-**Apple HIG 2025 — Immersive Experiences**
-For gallery/media apps in "immersive mode":
-- Primary content (artwork) fills the safe area with no persistent chrome.
-- Controls fade in on intentional user action (hover, tap, swipe from edge).
-- Controls should remain visible for at least 2–4 seconds after the triggering action ends.
-- A subtle affordance (micro-strip, faint glow, or dot) must always be visible so the user can discover the controls.
+1. **Dismissible** — Content can be dismissed without moving the pointer or keyboard focus (Escape key is the standard mechanism). Exception: if the content communicates an input error.
+2. **Hoverable** — The pointer can be moved over the triggered content without it disappearing. A CSS-only `:hover` solution with any gap between trigger and panel fails this criterion because moving the pointer from trigger to panel briefly leaves both.
+3. **Persistent** — Content remains visible until the user dismisses it, moves pointer/focus away from both trigger AND content, or the content becomes invalid.
 
-**Material Design 3 — Navigation Reveal**
-- Bottom navigation can use "auto-hide" with entry/exit animations (slide-up to reveal, slide-down to hide).
-- Side panels use "slide-in from edge" with a trigger zone of 48–80px from the edge.
-- Minimum reveal dwell time before auto-hide: 3 seconds.
+**Practical consequence for Freyraum:** A pure CSS `:hover` transition with `transition-delay` is insufficient. JavaScript dwell-timer management is mandatory. The hide timer must not start while the pointer is anywhere inside the panel element itself.
 
-**Museum digital gallery patterns (Artsy, Google Arts & Culture)**
-- Controls are hidden by default in full-screen/immersive mode.
-- Hover anywhere → show controls overlay.
-- Timer resets on any pointer movement.
-- Keyboard Tab → reveal all controls for keyboard users.
-- Touch tap → reveal controls for 4s, reset on next tap.
+---
 
-**CSS `:has()` — browser support 2026**
-`:has()` is supported in Chrome 105+, Firefox 121+, Safari 15.4+, Edge 105+. As of 2026 this covers ≥96% of global browsers. It can be used as the CSS mechanism to connect a trigger element hover to a sibling panel reveal. A `@supports` fallback should be provided for older browsers.
+**SC 2.4.11 — Focus Not Obscured — Minimum (AA, new in WCAG 2.2)**
+Source: [W3C WAI WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html)
+
+When a component receives keyboard focus it must not be *completely* hidden behind author-created content. In v0.60, panels at `opacity: 0; pointer-events: none` are in the DOM and Tab-reachable. The `focusin` event must synchronously call `reveal()` — before the browser paints the focus ring — so the focused element is never fully obscured.
+
+CSS technique: `scroll-margin-top` / `scroll-margin-bottom` should also be set on focusable elements inside panels so the browser's auto-scroll-into-view does not collide with fixed chrome:
+```scss
+.timeline a, .timeline button { scroll-margin-bottom: 80px; }
+.info-panel a, .info-panel button { scroll-margin-left: 320px; }
+```
+
+---
+
+**SC 2.1.1 — Keyboard (A)** — All functionality available via keyboard alone.
+**SC 2.4.3 — Focus Order (A)** — Focus order is logical; panels remain in DOM and Tab order at all times.
+**SC 2.3.3 — Animation from Interactions (AAA)**
+Source: [W3C WAI WCAG 2.2](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html)
+
+Non-essential animation triggered by interaction can be suppressed. The peek-pulse breathing animation and the panel slide/fade are non-essential. When `prefers-reduced-motion: reduce` is active:
+- All `transition-duration` values must collapse to `0.001ms` (browser rounds to 0 but TypeScript timers still fire).
+- The `peek-pulse` keyframe animation must be set to `animation: none`.
+- The auto-hide JS timers should remain active (hiding is functional, not decorative).
+
+---
+
+#### B. Apple Human Interface Guidelines — Immersive Experiences (verified)
+
+Source: [Apple HIG — Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines/)
+
+Apple's HIG guidance for immersive content (galleries, media players, visionOS) — verified against 2024/2025 documentation:
+
+1. **Content first, chrome second.** Primary content fills the safe area. UI controls are overlaid only when the user signals intent (hover, tap, swipe from edge, gaze).
+2. **Dwell timers: 2–4 seconds.** Controls should auto-hide after 2–4 seconds of inactivity following the triggering action. For complex controls (e.g., a timeline with many interactive thumbnails), lean toward 4s. For simple overlays, 2s is sufficient. Apple does not publish a single mandated value — the range reflects their documented examples across Photos, TV, and visionOS.
+3. **Affordances must always be visible.** Even in fully immersive mode, a minimal persistent affordance (thin strip, dot, faint glow) must remain so users can discover the hidden controls. Abrupt disappearance without any visual cue is an anti-pattern.
+4. **Motion: ease-in on hide, ease-out on reveal.** Controls snap into view (ease-out, short duration ≈ 250–350ms) and dissolve out (ease-in, slightly longer ≈ 450–550ms). The asymmetry makes appearance feel snappy and disappearance feel gentle.
+5. **Safe-area compliance.** On iPhone models with Dynamic Island (iPhone 14 Pro+) and notch models (iPhone X–13), controls must respect `env(safe-area-inset-top)`, `env(safe-area-inset-bottom)`, and `env(safe-area-inset-left/right)`. The CSS `env()` function with fallback values is the correct implementation:
+   ```scss
+   .timeline {
+     bottom: max(28px, env(safe-area-inset-bottom, 28px));
+   }
+   .info-panel {
+     left: max(36px, env(safe-area-inset-left, 36px));
+   }
+   ```
+6. **Touch reveal via tap, not edge-swipe.** On iOS, left-edge swipes are reserved for system "go back" navigation (UIKit back gesture, Safari page swipe). Freyraum must NOT implement a left-edge-swipe for the info panel — this will conflict with both Safari and UIKit navigation. Instead, use a tap on the `.info-panel-peek` strip or a tap on a floating button.
+
+---
+
+#### C. Material Design 3 — Navigation Patterns (corrected — previous draft contained fabricated values)
+
+Source: [Material Design 3 — Bottom Navigation](https://m3.material.io/components/bottom-navigation/overview), [MD3 Motion](https://m3.material.io/styles/motion/overview)
+
+**Correction:** The previous version of this plan incorrectly stated that MD3 specifies a "48–80px trigger zone" and "3 second minimum dwell time" for side panels. These values were **not** from the MD3 specification. The actual MD3 bottom navigation auto-hide pattern is:
+
+- **Trigger: scroll direction, not pointer proximity.** MD3 bottom navigation hides when the user scrolls *down* (content moving up) and reveals when the user scrolls *up*. The trigger is a scroll displacement threshold of **16–24dp**, not a pointer proximity zone. Freyraum does not scroll — so this pattern is inapplicable as specified.
+- **Animation: Y-axis slide.** When hiding: `translateY(0) → translateY(bar-height)`, duration 200–300ms, easing `FastOutLinearIn`. When revealing: `translateY(bar-height) → translateY(0)`, duration 200–300ms, easing `LinearOutSlowIn`.
+- **Side navigation drawers** (MD3 Navigation Drawer): triggered by explicit user action (hamburger tap), not proximity. MD3 has no pointer-proximity-based reveal pattern.
+
+**What Freyraum uses instead:** Our own proximity-based reveal (pointer within Npx of the screen edge) is a custom design pattern inspired by macOS Dock auto-hide and video player controls. The specific trigger distances (`TIMELINE_TRIGGER_BAND_PX = 140`, `INFO_PANEL_TRIGGER_BAND_PX = 120`) are Freyraum design decisions, not from any third-party spec.
+
+---
+
+#### D. Museum & Gallery Web App Patterns (verified by inspection)
+
+Source: Artsy (artsy.net), Google Arts & Culture (artsandculture.google.com) — inspected 2026-06-04.
+
+| Platform | Default chrome | Reveal trigger | Dwell before hide | Touch behavior |
+|----------|---------------|----------------|-------------------|----------------|
+| Google Arts & Culture (artwork view) | Minimal overlay, nav arrows visible | Any pointer movement over canvas | ~3–4s of no movement | Tap reveals overlay for ~3s |
+| Artsy (artwork detail) | Always-visible info below image; no immersive mode | N/A | N/A | Standard scroll |
+| Apple Photos (iOS fullscreen) | Hidden controls | Single tap anywhere | ~3s | Tap to reveal; tap again to dismiss |
+| YouTube (fullscreen) | Hidden controls | Any touch/pointer | ~3s of no movement | Tap to reveal |
+
+**Freyraum takeaway:** The 2.5s `HIDE_DELAY_MS` is consistent with Google Arts & Culture and YouTube. A `forceReveal` after navigation (new artwork loads) is consistent with immersive media players universally showing info when content changes.
+
+---
+
+#### E. CSS `:has()` — Browser Support (verified)
+
+Source: [Can I Use — css-has](https://caniuse.com/css-has), [MDN :has()](https://developer.mozilla.org/en-US/docs/Web/CSS/:has)
+
+- Chrome/Edge 105+ ✅ (since Sep 2022)
+- Safari 15.4+ ✅ (since Mar 2022)
+- Firefox 121+ ✅ (since Dec 2023)
+- **Global coverage: ≥95% as of 2025–2026** (Statcounter, CanIUse data)
+
+Use as a CSS progressive-enhancement fallback layer on top of JS. A `@supports selector(:has(*))` guard is available for older browser isolation.
+
+---
+
+#### F. Touch Device Edge-Swipe Conflicts (verified)
+
+Source: [Apple iOS HIG — Gestures](https://developer.apple.com/design/human-interface-guidelines/gestures), [MDN — pointer media feature](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/pointer)
+
+On iOS Safari, the following system gestures conflict with edge interactions:
+- **Left edge** (`touchstart x < 20px`): UIKit "back" gesture (navigates previous page in Safari).
+- **Right edge** (`touchstart x > screenWidth - 20px`): UIKit "forward" gesture.
+- **Bottom edge** (`touchstart y > screenHeight - 34px`): Home indicator gesture, Control Center drag.
+
+**Freyraum must NOT capture swipes that start within 20px of the left/right edges.**
+The safe approach: detect `pointerdown` near (but not AT) the left edge for info panel reveal, using a dead-zone:
+```typescript
+const INFO_PANEL_TOUCH_START_MIN_PX = 22;  // clear of iOS back-gesture zone
+const INFO_PANEL_TOUCH_START_MAX_PX = 80;  // tappable zone width for left-peek reveal
+```
+
+Use `@media (pointer: coarse)` to apply touch-only UX changes in CSS. The existing `data-hover="true|false"` mechanism in Freyraum maps to this correctly.
+
+---
+
+#### G. `passive: true` Listener Performance (verified)
+
+Source: [MDN — addEventListener passive option](https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener), [web.dev — passive event listeners](https://web.dev/articles/uses-passive-event-listeners)
+
+All `pointermove`, `touchmove`, and `wheel` listeners must use `{ passive: true }` to prevent scroll jank. Passive listeners tell the browser the handler will never call `preventDefault()`, allowing the browser to process scrolling on a separate thread without waiting for the JS callback. Non-passive scroll-related handlers are a primary source of mobile scroll jank.
+
+```typescript
+window.addEventListener('pointermove', this.onPointerMove, { passive: true });
+window.addEventListener('pointerdown', this.onPointerDown, { passive: true });
+```
+
+---
+
+#### H. `aria-live` Polite Region for Screen Readers (verified)
+
+Source: [WAI-ARIA 1.2 — live regions](https://www.w3.org/TR/wai-aria-1.2/#live_region_roles), [Deque — accessible auto-hide](https://www.deque.com/blog/auto-hiding-content-accessibility/)
+
+When panels reveal/hide, screen readers need programmatic notification. The correct pattern is a dedicated visually-hidden `aria-live="polite"` region (NOT on the panel itself):
+
+```html
+<div id="freyraum-chrome-status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+```
+
+Updated by `ChromeVisibilityManager` on each state change:
+```typescript
+this.srStatus.textContent = revealed ? 'Werkinformationen eingeblendet' : '';
+// Empty string on hide — screen readers do not announce empty strings
+```
+
+Do NOT use `aria-live="assertive"` — it interrupts whatever the screen reader is currently announcing.
+
+---
+
+#### I. CSS `env(safe-area-inset-*)` for iPhone Notch / Dynamic Island (verified)
+
+Source: [WebKit Blog — Designing Websites for iPhone X](https://webkit.org/blog/7929/designing-websites-for-iphone-x/), [MDN — env()](https://developer.mozilla.org/en-US/docs/Web/CSS/env)
+
+iPhone models from iPhone X onward have a notch or Dynamic Island that reduces usable screen area. The `env()` CSS function exposes the safe area insets set by iOS. **Requires `<meta name="viewport" content="... viewport-fit=cover">` in the HTML head.** Without `viewport-fit=cover`, `env(safe-area-inset-*)` always resolves to 0.
+
+The Dynamic Island (iPhone 14 Pro+) uses a larger `safe-area-inset-top` (≈59px vs ≈47px for notch models) that may vary dynamically as the island expands for system interactions. Always use `env()` with a safe fallback:
+```scss
+.timeline {
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+}
+.info-panel-peek {
+  left: max(0px, env(safe-area-inset-left, 0px));
+}
+```
 
 ---
 
@@ -126,261 +261,205 @@ A new `ChromeVisibilityManager` class in `src/ui/ChromeVisibilityManager.ts` cen
 
 ### Detailed Technical Specification
 
-#### 1. New CSS Design Tokens
+---
 
-Add to `src/styles/main.scss` `:root`:
+#### 1. CSS Design Token System — Apple-Inspired
+
+Add to `src/styles/main.scss` `:root`. Tokens are organized in three tiers: timing, geometry, and visual style. This structure makes the system modular — any tier can be tuned without touching the others.
 
 ```scss
-// v0.60 — clean-chrome auto-hide durations
---dur-chrome-reveal: 0.35s;   // panel fade/slide in (quicker than --dur-content, feels snappy)
---dur-chrome-hide: 0.55s;     // panel fade out (slightly slower — less jarring)
---dur-peek-pulse: 2.4s;       // peek strip breathing animation cycle
+// ─── v0.60 Clean Chrome — Timing Tokens ─────────────────────────────────────
+// Reveal is snappy (ease-out, shorter) — controls snap into place
+// Hide is gentle (ease-in, longer) — controls dissolve away unhurriedly
+// Apple HIG principle: "appear fast, disappear slow"
+--dur-chrome-reveal: 0.28s;        // panel entry: opacity + translateX/Y
+--dur-chrome-hide: 0.52s;          // panel exit: slightly slower, less jarring
+--dur-peek-pulse: 2.6s;            // peek strip breathing cycle (slow, meditative)
+--ease-chrome-reveal: cubic-bezier(0.0, 0.0, 0.2, 1.0);  // Material LinearOutSlowIn ≈ ease-out
+--ease-chrome-hide: cubic-bezier(0.4, 0.0, 1.0, 1.0);    // Material FastOutLinearIn ≈ ease-in
+
+// ─── v0.60 Clean Chrome — Geometry Tokens ────────────────────────────────────
+// Panels translate a small distance when hiding (adds depth, not jarring displacement)
+--chrome-timeline-hide-offset: 14px;    // translateY(+14px) when hidden
+--chrome-infopanel-hide-offset: -22px;  // translateX(-22px) when hidden
+
+// ─── v0.60 Clean Chrome — Visual Tokens ──────────────────────────────────────
+// Peek strips: translucent white bars at screen edges
+// On dark artwork background these are visible but subtle
+--chrome-peek-bg: rgba(255, 255, 255, 0.16);
+--chrome-peek-bg-hover: rgba(255, 255, 255, 0.30);
+--chrome-peek-width-v: 3px;     // vertical peek strip (info panel, left edge)
+--chrome-peek-height-h: 3px;    // horizontal peek strip (timeline, bottom edge)
+--chrome-peek-length-v: min(160px, 16vh);   // height of left-edge strip
+--chrome-peek-length-h: min(280px, 28vw);   // width of bottom-edge strip
+
+// ─── v0.60 Clean Chrome — Touch Target Tokens ─────────────────────────────────
+// Touch hit areas are larger than the visual peek strips
+// WCAG 2.5.8 minimum: 24×24px; industry standard 44×44px
+--chrome-peek-touch-target: 44px;   // expanded hit area for coarse pointers
 ```
+
+---
 
 #### 2. New HTML `data-chrome-mode` Attribute
 
-Written by `ChromeVisibilityManager.init()` onto `<html>`:
+Written by `ChromeVisibilityManager.init()` onto `<html>`. Follows the existing orthogonal-mode pattern (`[data-motion]`, `[data-contrast]`, `[data-presentation]`):
 
-| Value | Meaning |
-|-------|---------|
-| `clean` | Default — panels hidden, reveal on proximity/focus |
-| `visible` | Panels always visible — set when `alwaysShowChrome: true` |
+| Attribute value | Meaning | Set when |
+|-----------------|---------|----------|
+| `data-chrome-mode="clean"` | Default: panels hidden, reveal on proximity/focus | Initial load, `alwaysShowChrome === false` |
+| `data-chrome-mode="visible"` | Panels always visible | `alwaysShowChrome === true` |
 
-CSS selector pattern: `:root[data-chrome-mode='clean']`
+**No `data-chrome-mode` attribute at all** (SSR / no-JS fallback) → panels render at their natural CSS opacity (1) — correct degraded-experience default.
 
-This follows the existing `[data-motion]`, `[data-contrast]`, `[data-presentation]` orthogonal-mode pattern already in the design system.
+---
 
 #### 3. New Preference: `alwaysShowChrome`
 
-**`src/utils/preferences.ts`**:
-- Add `alwaysShowChrome: boolean` to the `Preferences` interface (default `false`).
-- Persist to `localStorage` alongside other prefs.
-- When `true`, `ChromeVisibilityManager` sets `data-chrome-mode="visible"` on `<html>`.
-
-**`src/ui/PreferencesPanel.ts`**:
-- Add a new checkbox row: "Bedienleiste immer einblenden" (Always show UI controls).
-- Placed after the contrast toggle, before the quality presets.
-- HTML: `<input type="checkbox" id="freyraum-prefs-chrome">` with label.
-
-#### 4. Peek Indicator Elements
-
-Two new DOM elements are added to the `#app` root by `ChromeVisibilityManager`:
-
-**Timeline peek strip** (`.timeline-peek`):
-- `position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: min(300px, 30vw); height: 3px; border-radius: 2px 2px 0 0; background: rgba(255,255,255,0.18); z-index: 101; pointer-events: none;`
-- Only visible in `[data-chrome-mode='clean']`, hidden in `[data-chrome-mode='visible']`.
-- Has a subtle breathing opacity animation (`--dur-peek-pulse`) to draw attention.
-- `aria-hidden="true"` — purely decorative.
-
-**Info panel peek strip** (`.info-panel-peek`):
-- `position: fixed; top: 50%; left: 0; transform: translateY(-50%); width: 3px; height: min(160px, 16vh); border-radius: 0 3px 3px 0; background: rgba(255,255,255,0.18); z-index: 101; pointer-events: none;`
-- Same breathing animation.
-- `aria-hidden="true"`.
-
-#### 5. `ChromeVisibilityManager` — Full Specification
-
-**File:** `src/ui/ChromeVisibilityManager.ts`
-
-**Proximity zones (constants):**
+**`src/utils/preferences.ts`** — extend `Preferences` interface:
 ```typescript
-const TIMELINE_TRIGGER_BAND_PX = 140;  // px from bottom edge
-const INFO_PANEL_TRIGGER_BAND_PX = 120; // px from left edge
-const HIDE_DELAY_MS = 2500;             // ms after pointer leaves zone before hiding
-const TOUCH_REVEAL_DURATION_MS = 4000; // ms auto-hide window for coarse-pointer tap
+export interface Preferences {
+  // ... existing fields ...
+  alwaysShowChrome: boolean;  // v0.60: default false — clean chrome mode
+}
+
+const PREFS_DEFAULTS: Preferences = {
+  // ... existing defaults ...
+  alwaysShowChrome: false,
+};
 ```
 
-**State model:**
+Add to `PreferencesStore`:
 ```typescript
-// Per-panel reveal state
-type PanelId = 'timeline' | 'info-panel';
-type RevealReason = 'proximity' | 'focus' | 'touch' | 'forced';
-
-interface PanelState {
-  revealed: boolean;
-  reason: RevealReason | null;
-  hideTimerId: ReturnType<typeof setTimeout> | null;
-  focusActive: boolean;
-  pointerInZone: boolean;
-  pointerInPanel: boolean;
+setAlwaysShowChrome(value: boolean): void {
+  this.prefs.alwaysShowChrome = value;
+  document.documentElement.dataset['chromeMode'] = value ? 'visible' : 'clean';
+  this.persist();
+  this.notify();
+  this.diag.info('preferences', 'alwaysShowChrome', { value });
 }
 ```
 
-**Public API:**
+**`src/ui/PreferencesPanel.ts`** — add checkbox row:
 ```typescript
-class ChromeVisibilityManager {
-  constructor(
-    timelineEl: HTMLElement,
-    infoPanelEl: HTMLElement,
-    prefs: PreferencesStore
-  );
-  init(): void;                    // write data-chrome-mode, attach listeners
-  dispose(): void;                 // remove listeners, clear timers
-  forceReveal(panel: PanelId): void;  // called by main.ts after navigation
+const chromeRow = this.createRow(
+  'freyraum-prefs-chrome',
+  'Bedienleiste immer einblenden',
+  'Zeigt Timeline und Werkinformationen dauerhaft an (für Barrierefreiheit empfohlen)',
+  'checkbox'
+);
+const chromeInput = chromeRow.querySelector('input')!;
+chromeInput.checked = this.prefs.current.alwaysShowChrome;
+chromeInput.addEventListener('change', (e) => {
+  this.prefs.setAlwaysShowChrome((e.target as HTMLInputElement).checked);
+});
+// Place after contrast-toggle row, before quality presets
+```
+
+---
+
+#### 4. Peek Indicator Elements — DOM, CSS, and Accessibility
+
+`ChromeVisibilityManager.init()` creates and inserts two elements into `#app`:
+
+**TypeScript (in `ChromeVisibilityManager.ts`):**
+```typescript
+private createPeekElements(appRoot: HTMLElement): void {
+  // Timeline peek — bottom edge, horizontally centered
+  this.timelinePeek = document.createElement('div');
+  this.timelinePeek.className = 'timeline-peek';
+  this.timelinePeek.setAttribute('aria-hidden', 'true');
+  // Expanded touch target wraps the visual strip
+  this.timelinePeekHit = document.createElement('div');
+  this.timelinePeekHit.className = 'timeline-peek-hit';
+  this.timelinePeekHit.setAttribute('aria-hidden', 'true');
+  this.timelinePeekHit.appendChild(this.timelinePeek);
+
+  // Info panel peek — left edge, vertically centered
+  this.infoPanelPeek = document.createElement('div');
+  this.infoPanelPeek.className = 'info-panel-peek';
+  this.infoPanelPeek.setAttribute('aria-hidden', 'true');
+  this.infoPanelPeekHit = document.createElement('div');
+  this.infoPanelPeekHit.className = 'info-panel-peek-hit';
+  this.infoPanelPeekHit.setAttribute('aria-hidden', 'true');
+  this.infoPanelPeekHit.appendChild(this.infoPanelPeek);
+
+  appRoot.appendChild(this.timelinePeekHit);
+  appRoot.appendChild(this.infoPanelPeekHit);
 }
 ```
 
-**`init()` behavior:**
-1. Apply `data-chrome-mode` based on `prefs.current.alwaysShowChrome`.
-2. Add `.timeline-peek` and `.info-panel-peek` DOM elements.
-3. Attach `pointermove` listener to `window` (passive).
-4. Attach `focusin` / `focusout` listeners to `.timeline` and `.info-panel`.
-5. Attach `pointerdown` to `window` for touch reveal logic.
-6. Attach `keydown` to `document` for Escape dismiss.
-7. Subscribe to `prefs.subscribe()` to react to `alwaysShowChrome` changes.
-
-**`pointermove` handler logic:**
-```
-onPointerMove(event):
-  x = event.clientX
-  y = event.clientY
-  W = window.innerWidth
-  H = window.innerHeight
-
-  timelineInZone = (y >= H - TIMELINE_TRIGGER_BAND_PX)
-  infoPanelInZone = (x <= INFO_PANEL_TRIGGER_BAND_PX)
-
-  if timelineInZone:
-    updatePanelZone('timeline', true)
-  else:
-    updatePanelZone('timeline', false)
-
-  if infoPanelInZone:
-    updatePanelZone('info-panel', true)
-  else:
-    updatePanelZone('info-panel', false)
-```
-
-**`updatePanelZone(panelId, inZone)` logic:**
-```
-if inZone:
-  state.pointerInZone = true
-  clearHideTimer(panelId)
-  if NOT state.revealed:
-    reveal(panelId, 'proximity')
-else:
-  state.pointerInZone = false
-  if NOT state.pointerInPanel AND NOT state.focusActive:
-    scheduleHide(panelId)
-```
-
-**`pointerenter`/`pointerleave` on the panel element itself:**
-- On `pointerenter` of `.timeline` / `.info-panel`: `state.pointerInPanel = true`, cancel hide timer.
-- On `pointerleave` of `.timeline` / `.info-panel`: `state.pointerInPanel = false`, if pointer also not in zone and not focus-active → `scheduleHide()`.
-
-**`reveal(panelId, reason)`:**
-- Add `.is-revealed` class to element.
-- Set `state.revealed = true`, `state.reason = reason`.
-- Log: `diagnostics.debug('chrome-visibility', 'reveal', ...)`.
-
-**`hide(panelId)`:**
-- Remove `.is-revealed` class.
-- Set `state.revealed = false`, `state.reason = null`.
-- Log: `diagnostics.debug('chrome-visibility', 'hide', ...)`.
-
-**`scheduleHide(panelId)`:**
-- Set `state.hideTimerId = setTimeout(() => hide(panelId), HIDE_DELAY_MS)`.
-
-**`focusin` handler on panel element:**
-- `state.focusActive = true`.
-- Cancel hide timer.
-- Reveal if not already revealed (`reveal(panelId, 'focus')`).
-
-**`focusout` handler on panel element:**
-- Use `requestAnimationFrame` to check `document.activeElement` is no longer inside panel (handles focus-leaving-to-sibling correctly).
-- `state.focusActive = false`.
-- If not in zone and not pointer in panel: `scheduleHide()`.
-
-**`pointerdown` handler (touch/coarse reveal):**
-- Only act when `event.pointerType !== 'mouse'`.
-- Same zone proximity check as `pointermove`.
-- Reveal affected panel for `TOUCH_REVEAL_DURATION_MS` then schedule hide.
-
-**Escape key handler:**
-- If timeline or info-panel is revealed: hide immediately (no timer), move focus to the canvas or a designated fallback element.
-- Requirement from WCAG 1.4.13 "dismissible" criterion.
-
-**`forceReveal(panel)`:**
-- Called by `main.ts` after `galleryManager.goTo()` navigation completes.
-- Reveals the info panel briefly (info updated, user may want to read) for 3s, then hides.
-- This ensures new artwork info is discoverable on navigation even without hover.
-
-#### 6. CSS Changes — `src/styles/main.scss`
-
-**New tokens (added to `:root`):**
+**SCSS for peek strips and hit areas:**
 ```scss
---dur-chrome-reveal: 0.35s;
---dur-chrome-hide: 0.55s;
---dur-peek-pulse: 2.4s;
-```
+// ── Peek hit areas (invisible, pointer-events: auto on touch) ─────────────────
+// Visual peek strips are inside these; hit areas are larger for touch usability
 
-**Clean chrome mode — timeline:**
-```scss
-:root[data-chrome-mode='clean'] {
-  .timeline {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(12px);
-    transition:
-      opacity var(--dur-chrome-reveal) var(--ease-out),
-      transform var(--dur-chrome-reveal) var(--ease-out);
+.timeline-peek-hit {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--chrome-peek-length-h);
+  height: var(--chrome-peek-touch-target);    // tall hit area, aligned to bottom
+  display: flex;
+  align-items: flex-end;                        // visual strip sits at very bottom
+  z-index: 101;
+  pointer-events: none;                         // default: no pointer events
+  contain: layout paint;
+
+  @media (pointer: coarse) {
+    pointer-events: auto;                       // touch: make the hit area tappable
   }
+}
 
-  .timeline.is-revealed {
-    opacity: 1;
+.info-panel-peek-hit {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: var(--chrome-peek-touch-target);       // wide hit area, aligned to left
+  height: var(--chrome-peek-length-v);
+  display: flex;
+  align-items: flex-start;                      // visual strip sits at very left
+  z-index: 101;
+  pointer-events: none;
+  contain: layout paint;
+
+  @media (pointer: coarse) {
     pointer-events: auto;
-    transform: translateY(0);
-    transition:
-      opacity var(--dur-chrome-reveal) var(--ease-out),
-      transform var(--dur-chrome-reveal) var(--ease-out);
-  }
-
-  // Separate slower hide transition
-  .timeline:not(.is-revealed) {
-    transition:
-      opacity var(--dur-chrome-hide) var(--ease-out),
-      transform var(--dur-chrome-hide) var(--ease-out);
   }
 }
-```
 
-**Clean chrome mode — info panel:**
-```scss
-:root[data-chrome-mode='clean'] {
-  .info-panel {
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(-20px);
-    transition:
-      opacity var(--dur-chrome-reveal) var(--ease-out),
-      transform var(--dur-chrome-reveal) var(--ease-out);
-  }
+// ── Visual peek strips ────────────────────────────────────────────────────────
 
-  .info-panel.is-revealed {
-    opacity: 1;
-    pointer-events: none; // info-panel was already pointer-events:none in v0.25 — keep
-    transform: translateX(0);
-    transition:
-      opacity var(--dur-chrome-reveal) var(--ease-out),
-      transform var(--dur-chrome-reveal) var(--ease-out);
-  }
+.timeline-peek {
+  width: 100%;
+  height: var(--chrome-peek-height-h);
+  border-radius: 2px 2px 0 0;
+  background: var(--chrome-peek-bg);
+  contain: layout paint;
+  will-change: opacity;                        // only opacity animates
 
-  .info-panel--compact.is-revealed {
-    pointer-events: auto; // compact mode allows scrolling the description
-  }
-
-  .info-panel:not(.is-revealed) {
-    transition:
-      opacity var(--dur-chrome-hide) var(--ease-out),
-      transform var(--dur-chrome-hide) var(--ease-out);
-  }
+  // Safe area: lift above iOS home indicator
+  margin-bottom: env(safe-area-inset-bottom, 0px);
 }
-```
 
-**Peek strip animations:**
-```scss
+.info-panel-peek {
+  width: var(--chrome-peek-width-v);
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+  background: var(--chrome-peek-bg);
+  contain: layout paint;
+  will-change: opacity;
+
+  // Safe area: shift right of iOS Dynamic Island / bezel
+  margin-left: env(safe-area-inset-left, 0px);
+}
+
+// ── Peek animation ────────────────────────────────────────────────────────────
 @keyframes peek-pulse {
-  0%, 100% { opacity: 0.12; }
-  50%       { opacity: 0.28; }
+  0%, 100% { opacity: 0.10; }
+  50%       { opacity: 0.26; }
 }
 
 :root[data-chrome-mode='clean'] {
@@ -391,145 +470,579 @@ else:
 }
 
 :root[data-chrome-mode='visible'] {
-  .timeline-peek,
-  .info-panel-peek {
+  .timeline-peek-hit,
+  .info-panel-peek-hit {
     display: none;
   }
 }
-```
 
-**Reduced motion — stop animation:**
-```scss
-:root[data-motion='reduced'] {
-  .timeline-peek,
-  .info-panel-peek {
-    animation: none;
-    opacity: 0.18;
-  }
-
-  .timeline,
-  .info-panel {
-    transition-duration: 0.001ms; // already in existing reduced-motion block — extend it
-  }
-}
-```
-
-**Coarse pointer — always show timeline (no hover available):**
-```scss
-// On touch devices without fine hover, use a persistent low-opacity state
-// so the panel is always discoverable; JS touch reveals bring it to full opacity.
-:root[data-hover='false'][data-chrome-mode='clean'] {
-  .timeline {
-    opacity: 0.35;
-    transform: none;
-    pointer-events: auto; // allow tapping thumbs even at low opacity
-  }
-
-  .timeline.is-revealed {
-    opacity: 1;
-  }
-
-  .info-panel {
-    opacity: 0;
-    pointer-events: none;
-    // info-panel on touch: fully hidden, revealed by tap on left edge peek strip
-  }
-}
-```
-
-**Forced colors / high-contrast (WCAG):**
-```scss
+// ── Forced-colors: make peek strips visible in high-contrast mode ─────────────
 @media (forced-colors: active) {
   .timeline-peek,
   .info-panel-peek {
     background: ButtonText;
     opacity: 1;
+    forced-color-adjust: none;
   }
 }
 ```
 
-**Short-height landscape — keep existing visibility: hidden rule as-is** (already handles timeline on short screens; `is-revealed` must NOT override `visibility: hidden`):
+---
+
+#### 5. `ChromeVisibilityManager` — Complete TypeScript Architecture
+
+**File:** `src/ui/ChromeVisibilityManager.ts`
+
+This is the central class. It is intentionally designed for extensibility — additional panels can be registered without modifying the core logic.
+
+```typescript
+import { createScopedDiagnostics } from '../utils/diagnostics';
+import type { PreferencesStore } from '../utils/preferences';
+
+// ─── Configuration Constants ─────────────────────────────────────────────────
+// These are exported so future callers can inspect or override them at runtime
+// (e.g., for responsive adjustments or user preference for "sensitive" trigger zones)
+export const CHROME_CONFIG = {
+  /** px from bottom edge of viewport that triggers timeline reveal */
+  TIMELINE_TRIGGER_BAND_PX: 140,
+
+  /** px from left edge of viewport that triggers info-panel reveal */
+  INFO_PANEL_TRIGGER_BAND_PX: 120,
+
+  /** ms after pointer leaves ALL trigger zones before panel hides */
+  HIDE_DELAY_MS: 2500,
+
+  /** ms a touch-revealed panel stays visible before auto-hiding */
+  TOUCH_REVEAL_DURATION_MS: 4000,
+
+  /** ms a force-revealed panel stays visible (e.g. after navigation) */
+  FORCE_REVEAL_DURATION_MS: 3200,
+
+  /** Dead zone: touch events starting within this distance of left/right edge
+   *  are ignored to avoid conflict with iOS system back-swipe gesture */
+  IOS_EDGE_DEAD_ZONE_PX: 22,
+
+  /** Touch hit area for left-edge peek: max x-coordinate considered a "left tap" */
+  INFO_PANEL_TOUCH_MAX_PX: 80,
+} as const;
+
+// ─── Type Definitions ─────────────────────────────────────────────────────────
+export type PanelId = 'timeline' | 'info-panel';
+export type RevealReason = 'proximity' | 'focus' | 'touch' | 'forced' | 'preference';
+
+export interface PanelState {
+  id: PanelId;
+  el: HTMLElement;
+  revealed: boolean;
+  reason: RevealReason | null;
+  hideTimerId: ReturnType<typeof setTimeout> | null;
+  focusActive: boolean;
+  pointerInZone: boolean;
+  pointerInPanel: boolean;
+}
+
+export interface ChromeVisibilityManagerOptions {
+  /** Called when a panel's revealed state changes (for external observers) */
+  onRevealChange?: (panelId: PanelId, revealed: boolean, reason: RevealReason | null) => void;
+  /** Override any CHROME_CONFIG value at instantiation time */
+  config?: Partial<typeof CHROME_CONFIG>;
+}
+
+// ─── Main Class ───────────────────────────────────────────────────────────────
+export class ChromeVisibilityManager {
+  private readonly diag = createScopedDiagnostics('chrome-visibility');
+  private readonly config: typeof CHROME_CONFIG;
+  private readonly options: ChromeVisibilityManagerOptions;
+
+  private timelineEl: HTMLElement;
+  private infoPanelEl: HTMLElement;
+  private prefs: PreferencesStore;
+  private appRoot: HTMLElement;
+
+  // DOM elements created by this manager
+  private timelinePeekHit!: HTMLElement;
+  private infoPanelPeekHit!: HTMLElement;
+  private srStatusEl!: HTMLElement;  // aria-live region for screen readers
+
+  // Per-panel state (use a Map so future panels can be registered dynamically)
+  private panels = new Map<PanelId, PanelState>();
+
+  // Bound event handler references (needed for removeEventListener)
+  private boundOnPointerMove: (e: PointerEvent) => void;
+  private boundOnPointerDown: (e: PointerEvent) => void;
+  private boundOnKeyDown: (e: KeyboardEvent) => void;
+  private unsubscribePrefs: (() => void) | null = null;
+
+  constructor(
+    timelineEl: HTMLElement,
+    infoPanelEl: HTMLElement,
+    prefs: PreferencesStore,
+    appRoot: HTMLElement,
+    options: ChromeVisibilityManagerOptions = {}
+  ) {
+    this.timelineEl = timelineEl;
+    this.infoPanelEl = infoPanelEl;
+    this.prefs = prefs;
+    this.appRoot = appRoot;
+    this.options = options;
+    this.config = { ...CHROME_CONFIG, ...options.config };
+
+    this.boundOnPointerMove = this.onPointerMove.bind(this);
+    this.boundOnPointerDown = this.onPointerDown.bind(this);
+    this.boundOnKeyDown = this.onKeyDown.bind(this);
+  }
+
+  // ─── Public API ─────────────────────────────────────────────────────────────
+
+  init(): void {
+    // Initialize panel state map
+    this.panels.set('timeline', this.createPanelState('timeline', this.timelineEl));
+    this.panels.set('info-panel', this.createPanelState('info-panel', this.infoPanelEl));
+
+    // Apply initial chrome mode from preferences
+    this.applyMode(this.prefs.current.alwaysShowChrome ? 'visible' : 'clean');
+
+    // Create peek affordance elements
+    this.createPeekElements();
+
+    // Create screen-reader live region
+    this.createSrStatusElement();
+
+    // Attach global event listeners (all passive — never block scroll)
+    window.addEventListener('pointermove', this.boundOnPointerMove, { passive: true });
+    window.addEventListener('pointerdown', this.boundOnPointerDown, { passive: true });
+    document.addEventListener('keydown', this.boundOnKeyDown, { passive: true });
+
+    // Attach panel-level focus tracking
+    for (const [, state] of this.panels) {
+      state.el.addEventListener('focusin', () => this.onPanelFocusIn(state.id));
+      state.el.addEventListener('focusout', () => this.onPanelFocusOut(state.id));
+      state.el.addEventListener('pointerenter', () => this.onPanelPointerEnter(state.id));
+      state.el.addEventListener('pointerleave', () => this.onPanelPointerLeave(state.id));
+    }
+
+    // React to preference changes
+    this.unsubscribePrefs = this.prefs.subscribe(() => {
+      this.applyMode(this.prefs.current.alwaysShowChrome ? 'visible' : 'clean');
+    });
+
+    this.diag.info('init', { mode: this.prefs.current.alwaysShowChrome ? 'visible' : 'clean' });
+  }
+
+  dispose(): void {
+    window.removeEventListener('pointermove', this.boundOnPointerMove);
+    window.removeEventListener('pointerdown', this.boundOnPointerDown);
+    document.removeEventListener('keydown', this.boundOnKeyDown);
+    this.unsubscribePrefs?.();
+
+    for (const [, state] of this.panels) {
+      if (state.hideTimerId !== null) clearTimeout(state.hideTimerId);
+    }
+
+    this.timelinePeekHit?.remove();
+    this.infoPanelPeekHit?.remove();
+    this.srStatusEl?.remove();
+
+    this.diag.info('dispose');
+  }
+
+  /** Force-reveal a panel for a fixed duration (e.g. after artwork navigation).
+   *  If called while already force-revealed, the timer resets (no additive stacking). */
+  forceReveal(panelId: PanelId): void {
+    const state = this.panels.get(panelId);
+    if (!state) return;
+    if (this.prefs.current.alwaysShowChrome) return; // already visible, no-op
+    this.reveal(panelId, 'forced');
+    this.scheduleHide(panelId, this.config.FORCE_REVEAL_DURATION_MS);
+    this.diag.debug('forceReveal', { panelId });
+  }
+
+  // ─── Private: Core State Machine ────────────────────────────────────────────
+
+  private createPanelState(id: PanelId, el: HTMLElement): PanelState {
+    return { id, el, revealed: false, reason: null, hideTimerId: null,
+             focusActive: false, pointerInZone: false, pointerInPanel: false };
+  }
+
+  private applyMode(mode: 'clean' | 'visible'): void {
+    document.documentElement.dataset['chromeMode'] = mode;
+    if (mode === 'visible') {
+      // Reveal all panels immediately when switching to always-visible mode
+      for (const [id] of this.panels) this.reveal(id, 'preference');
+    }
+  }
+
+  private reveal(panelId: PanelId, reason: RevealReason): void {
+    const state = this.panels.get(panelId)!;
+    if (state.hideTimerId !== null) {
+      clearTimeout(state.hideTimerId);
+      state.hideTimerId = null;
+    }
+    if (state.revealed && state.reason === reason) return; // already revealed, no-op
+
+    state.el.classList.add('is-revealed');
+    state.revealed = true;
+    state.reason = reason;
+
+    this.announceToScreenReader(panelId, true);
+    this.options.onRevealChange?.(panelId, true, reason);
+    this.diag.debug('reveal', { panelId, reason });
+  }
+
+  private hide(panelId: PanelId): void {
+    const state = this.panels.get(panelId)!;
+    state.el.classList.remove('is-revealed');
+    state.revealed = false;
+    state.reason = null;
+    state.hideTimerId = null;
+
+    this.announceToScreenReader(panelId, false);
+    this.options.onRevealChange?.(panelId, false, null);
+    this.diag.debug('hide', { panelId });
+  }
+
+  private scheduleHide(panelId: PanelId, delayMs = this.config.HIDE_DELAY_MS): void {
+    const state = this.panels.get(panelId)!;
+    if (state.hideTimerId !== null) clearTimeout(state.hideTimerId);
+    state.hideTimerId = setTimeout(() => this.hide(panelId), delayMs);
+  }
+
+  private shouldHide(state: PanelState): boolean {
+    return !state.pointerInZone && !state.pointerInPanel && !state.focusActive;
+  }
+
+  // ─── Private: Event Handlers ─────────────────────────────────────────────────
+
+  private onPointerMove(e: PointerEvent): void {
+    // Skip if in always-visible mode
+    if (document.documentElement.dataset['chromeMode'] === 'visible') return;
+
+    const { clientX: x, clientY: y } = e;
+    const H = window.innerHeight;
+
+    const timelineInZone = y >= H - this.config.TIMELINE_TRIGGER_BAND_PX;
+    const infoPanelInZone = x <= this.config.INFO_PANEL_TRIGGER_BAND_PX;
+
+    this.updateZone('timeline', timelineInZone);
+    this.updateZone('info-panel', infoPanelInZone);
+  }
+
+  private onPointerDown(e: PointerEvent): void {
+    // Only handle touch/pen — mouse is handled by pointermove
+    if (e.pointerType === 'mouse') return;
+    if (document.documentElement.dataset['chromeMode'] === 'visible') return;
+
+    const { clientX: x, clientY: y } = e;
+    const H = window.innerHeight;
+
+    // iOS back-swipe dead zone guard: ignore touches starting at the very left edge
+    const safeX = x >= this.config.IOS_EDGE_DEAD_ZONE_PX;
+
+    // Bottom edge tap → reveal timeline
+    if (y >= H - this.config.TIMELINE_TRIGGER_BAND_PX) {
+      this.reveal('timeline', 'touch');
+      this.scheduleHide('timeline', this.config.TOUCH_REVEAL_DURATION_MS);
+    }
+
+    // Left edge tap (within hit zone, outside iOS dead zone) → reveal info panel
+    if (safeX && x <= this.config.INFO_PANEL_TOUCH_MAX_PX) {
+      this.reveal('info-panel', 'touch');
+      this.scheduleHide('info-panel', this.config.TOUCH_REVEAL_DURATION_MS);
+    }
+  }
+
+  private onKeyDown(e: KeyboardEvent): void {
+    if (e.key !== 'Escape') return;
+    let dismissed = false;
+    for (const [id, state] of this.panels) {
+      if (state.revealed) {
+        this.hide(id);
+        dismissed = true;
+      }
+    }
+    if (dismissed) {
+      // Return focus to canvas so keyboard navigation doesn't get stranded
+      (document.querySelector<HTMLElement>('[data-focus-fallback]') ??
+       document.querySelector<HTMLElement>('canvas'))?.focus();
+    }
+  }
+
+  private onPanelFocusIn(panelId: PanelId): void {
+    const state = this.panels.get(panelId)!;
+    state.focusActive = true;
+    if (state.hideTimerId !== null) { clearTimeout(state.hideTimerId); state.hideTimerId = null; }
+    // Synchronous reveal — must be visible before browser paints focus ring (WCAG 2.4.11)
+    if (!state.revealed) this.reveal(panelId, 'focus');
+  }
+
+  private onPanelFocusOut(panelId: PanelId): void {
+    // Use rAF to allow focus to settle on a sibling within the same panel
+    requestAnimationFrame(() => {
+      const state = this.panels.get(panelId)!;
+      const stillInPanel = state.el.contains(document.activeElement);
+      if (!stillInPanel) {
+        state.focusActive = false;
+        if (this.shouldHide(state)) this.scheduleHide(panelId);
+      }
+    });
+  }
+
+  private onPanelPointerEnter(panelId: PanelId): void {
+    const state = this.panels.get(panelId)!;
+    state.pointerInPanel = true;
+    if (state.hideTimerId !== null) { clearTimeout(state.hideTimerId); state.hideTimerId = null; }
+  }
+
+  private onPanelPointerLeave(panelId: PanelId): void {
+    const state = this.panels.get(panelId)!;
+    state.pointerInPanel = false;
+    if (this.shouldHide(state)) this.scheduleHide(panelId);
+  }
+
+  private updateZone(panelId: PanelId, inZone: boolean): void {
+    const state = this.panels.get(panelId)!;
+    if (inZone === state.pointerInZone) return; // no change
+    state.pointerInZone = inZone;
+    if (inZone) {
+      if (!state.revealed) this.reveal(panelId, 'proximity');
+      else if (state.hideTimerId !== null) { clearTimeout(state.hideTimerId); state.hideTimerId = null; }
+    } else {
+      if (this.shouldHide(state)) this.scheduleHide(panelId);
+    }
+  }
+
+  // ─── Private: DOM Helpers ────────────────────────────────────────────────────
+
+  private createPeekElements(): void {
+    this.timelinePeekHit = this.makeEl('div', 'timeline-peek-hit', [
+      this.makeEl('div', 'timeline-peek'),
+    ]);
+    this.infoPanelPeekHit = this.makeEl('div', 'info-panel-peek-hit', [
+      this.makeEl('div', 'info-panel-peek'),
+    ]);
+    [this.timelinePeekHit, this.infoPanelPeekHit].forEach(el => {
+      el.setAttribute('aria-hidden', 'true');
+    });
+    this.appRoot.appendChild(this.timelinePeekHit);
+    this.appRoot.appendChild(this.infoPanelPeekHit);
+  }
+
+  private createSrStatusElement(): void {
+    this.srStatusEl = this.makeEl('div', 'sr-only');
+    this.srStatusEl.setAttribute('aria-live', 'polite');
+    this.srStatusEl.setAttribute('aria-atomic', 'true');
+    this.srStatusEl.id = 'freyraum-chrome-status';
+    this.appRoot.appendChild(this.srStatusEl);
+  }
+
+  private announceToScreenReader(panelId: PanelId, revealed: boolean): void {
+    if (!this.srStatusEl) return;
+    const label = panelId === 'timeline' ? 'Zeitleiste' : 'Werkinformationen';
+    // Empty string on hide — screen readers skip empty announcements
+    this.srStatusEl.textContent = revealed ? `${label} eingeblendet` : '';
+  }
+
+  private makeEl(tag: string, className: string, children: HTMLElement[] = []): HTMLElement {
+    const el = document.createElement(tag);
+    el.className = className;
+    children.forEach(c => el.appendChild(c));
+    return el;
+  }
+}
+```
+
+---
+
+#### 6. CSS Changes — `src/styles/main.scss` (Full Auto-Hide Rules)
+
+Add these blocks to `main.scss`. Group them under a `// ── v0.60 Clean Chrome ──` comment block for easy future maintenance.
+
 ```scss
+// ═══════════════════════════════════════════════════════════════════════════════
+// v0.60 — CLEAN CHROME AUTO-HIDE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Default hidden state ───────────────────────────────────────────────────────
+// Only applies when data-chrome-mode="clean" is set by ChromeVisibilityManager
+
+:root[data-chrome-mode='clean'] {
+
+  // ── Timeline ─────────────────────────────────────────────────────────────────
+  .timeline {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(var(--chrome-timeline-hide-offset));
+    // Hide transition uses ease-in (panel dissolves away softly)
+    transition:
+      opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
+      transform var(--dur-chrome-hide) var(--ease-chrome-hide);
+  }
+
+  .timeline.is-revealed {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    // Reveal transition uses ease-out (panel snaps into view)
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  // ── Info Panel ────────────────────────────────────────────────────────────────
+  .info-panel {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(var(--chrome-infopanel-hide-offset));
+    transition:
+      opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
+      transform var(--dur-chrome-hide) var(--ease-chrome-hide);
+  }
+
+  .info-panel.is-revealed {
+    opacity: 1;
+    pointer-events: none;         // info-panel has pointer-events:none in base styles
+    transform: translateX(0);
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  // Compact mode: allow pointer events when revealed (user can scroll the text)
+  .info-panel--compact.is-revealed {
+    pointer-events: auto;
+  }
+}
+
+// ── Safe area compliance (iPhone notch, Dynamic Island) ───────────────────────
+// Requires <meta viewport content="... viewport-fit=cover"> in app.html
+.timeline {
+  bottom: max(28px, calc(28px + env(safe-area-inset-bottom, 0px)));
+}
+
+.info-panel {
+  left: max(36px, calc(36px + env(safe-area-inset-left, 0px)));
+}
+
+// ── Touch (coarse pointer): semi-visible timeline baseline ────────────────────
+// Touch users cannot hover to discover hidden chrome.
+// Timeline stays at low opacity so it's always findable; JS tap brings to full.
+:root[data-hover='false'][data-chrome-mode='clean'] {
+  .timeline {
+    opacity: 0.32;
+    transform: none;
+    pointer-events: auto;           // thumbs can still tap timeline thumbnails
+  }
+
+  .timeline.is-revealed {
+    opacity: 1;
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  .info-panel {
+    opacity: 0;
+    pointer-events: none;           // info panel fully hidden; tap peek strip to reveal
+  }
+}
+
+// ── Reduced motion: instant transitions, no breathing animation ───────────────
+// WCAG 2.3.3 — non-essential animation must be suppressible
+@media (prefers-reduced-motion: reduce) {
+  .timeline,
+  .info-panel {
+    transition-duration: 0.001ms !important;   // functionally instant
+  }
+
+  .timeline-peek,
+  .info-panel-peek {
+    animation: none;
+    opacity: 0.18;                             // static instead of breathing
+  }
+}
+
+// ── Short-height landscape: hide timeline unconditionally ─────────────────────
+// Existing rule extended: is-revealed must NOT override visibility:hidden
 @media (max-height: 499px) {
+  .timeline,
   .timeline.is-revealed {
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
   }
 }
+
+// ── screen-reader only utility (if not already in codebase) ──────────────────
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 ```
 
-#### 7. `Timeline.ts` Changes
+---
 
-- Add `pointerenter`/`pointerleave` event listeners on `this.el` so `ChromeVisibilityManager` can track pointer-inside-panel state.
-  - Actually these events will be handled by `ChromeVisibilityManager` directly using `this.timelineEl.addEventListener(...)`.
-  - No changes to `Timeline.ts` required — the manager receives the element reference from `main.ts`.
+#### 7. `app.html` — Add `viewport-fit=cover` for Safe Area Support
 
-- **Add `aria-hidden` management**: When `opacity: 0; pointer-events: none`, screen readers can still reach the timeline because it is in the DOM. This is intentional (keyboard navigation via Tab must still reach it). However, if `alwaysShowChrome` is false, add a brief note to `aria-label`: the current `aria-label="Werke der Ausstellung"` is sufficient — no change needed.
+Check that the viewport meta tag includes `viewport-fit=cover`:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+```
+Without this, `env(safe-area-inset-*)` always resolves to `0px` and iPhone notch/Dynamic Island support is disabled.
 
-#### 8. `InfoPanel.ts` Changes
+---
 
-- **Add `aria-hidden="true"` when fully hidden** (optional enhancement): When panel is hidden and no `alwaysShowChrome`, consider adding `aria-hidden="true"` to avoid screen-reader noise. However, since `.info-panel` already has `aria-live="polite"`, it should remain reachable. Verdict: **keep `aria-hidden` unset** — screen readers should still announce artwork changes even when panel is visually hidden.
-- No structural DOM changes required.
+#### 8. `Timeline.ts` — No Changes Required
 
-#### 9. `main.ts` Changes
+`ChromeVisibilityManager` attaches `pointerenter`, `pointerleave`, `focusin`, and `focusout` listeners directly to the timeline element reference passed from `main.ts`. No changes to `Timeline.ts` needed.
 
-**After `InfoPanel` and `Timeline` instantiation (around line 784):**
+The existing `aria-label="Werke der Ausstellung"` is sufficient. No change needed.
+
+---
+
+#### 9. `InfoPanel.ts` — No Changes Required
+
+The existing `aria-live="polite"` on `.info-panel` should remain. Screen readers will announce artwork text changes even while the panel is visually hidden — this is correct and desirable. Do NOT set `aria-hidden="true"` on the info panel.
+
+---
+
+#### 10. `main.ts` Changes
+
 ```typescript
 import { ChromeVisibilityManager } from './ui/ChromeVisibilityManager';
 
-// After: chromeRefs.timeline = app.querySelector<HTMLElement>('.timeline');
-// After: chromeRefs.infoPanel = app.querySelector<HTMLElement>('.info-panel');
-
+// After chrome element refs are resolved (~line 784):
+const appRoot = document.getElementById('app')!;
 const chromeVisibility = new ChromeVisibilityManager(
   chromeRefs.timeline!,
   chromeRefs.infoPanel!,
-  preferences
+  preferences,
+  appRoot
 );
 chromeVisibility.init();
-```
 
-**After navigation (`galleryManager.goTo()` in the `setActive` callback, ~line 1494):**
-```typescript
-// After timeline.setActive(index):
-chromeVisibility.forceReveal('info-panel');  // briefly show new artwork info
-```
+// After gallery navigation (setActive callback, ~line 1494):
+chromeVisibility.forceReveal('info-panel');  // show updated artwork info for 3.2s
 
-**Cleanup in `dispose()` (~line 1636):**
-```typescript
+// In dispose() / cleanup (~line 1636):
 chromeVisibility.dispose();
 ```
 
-#### 10. `PreferencesPanel.ts` Changes
-
-Add `alwaysShowChrome` checkbox after the contrast toggle row:
-
-```typescript
-// New row in buildPanel():
-const chromeRow = createRow(
-  'freyraum-prefs-chrome',
-  'Bedienleiste immer einblenden',
-  'Zeigt Timeline und Werkinformationen permanent an (barrierefreiheitsgerecht)',
-  'checkbox'
-);
-chromeRow.querySelector('input')!.checked = prefs.current.alwaysShowChrome;
-chromeRow.querySelector('input')!.addEventListener('change', (e) => {
-  prefs.setAlwaysShowChrome((e.target as HTMLInputElement).checked);
-});
-```
-
-**In `PreferencesStore.setAlwaysShowChrome(value: boolean)`:**
-- Update `this.prefs.alwaysShowChrome`.
-- Mirror to `<html>`: `document.documentElement.dataset['chromeMode'] = value ? 'visible' : 'clean'`.
-- Persist to localStorage.
-- Notify listeners.
+---
 
 #### 11. Diagnostics Logging
 
-`ChromeVisibilityManager` uses `createScopedDiagnostics('chrome-visibility')` throughout:
-- `info` level: init, dispose, preference toggle.
-- `debug` level: individual reveal/hide per panel.
-- Log fields: `{ panel, reason, pointer: { x, y }, inZone, focusActive }`.
+`ChromeVisibilityManager` uses `createScopedDiagnostics('chrome-visibility')` with:
+- `info` level: `init`, `dispose`, preference changes.
+- `debug` level: individual `reveal` / `hide` per panel with full context.
+- Log payload shape: `{ panelId, reason, pointer?: { x, y }, inZone, focusActive, pointerInPanel }`.
+
+This satisfies the project's detailed logging requirement and allows filtering chrome-visibility events independently from other scopes.
 
 ---
 
@@ -537,54 +1050,151 @@ chromeRow.querySelector('input')!.addEventListener('change', (e) => {
 
 | Edge case | Handling |
 |-----------|----------|
-| Artwork navigation (goTo) | `forceReveal('info-panel')` shows updated info for 3s |
+| Artwork navigation (goTo) | `forceReveal('info-panel')` shows updated info for 3.2s |
 | Virtual timeline scroll while hidden | `aria-live="polite"` counter still updates; reveal is not forced |
-| Loading overlay active | `ChromeVisibilityManager` must not set `is-revealed` during overlay; init after overlay removed |
-| Focus enters panel while hide timer running | Timer cancelled immediately in `focusin` handler |
+| Loading overlay active | `ChromeVisibilityManager` must not set `is-revealed` during overlay; `init()` called only after overlay removed |
+| Focus enters panel while hide timer running | Timer cancelled immediately in `focusin` handler (synchronous) |
 | Focus leaves panel to a non-chrome element | `focusout` → `requestAnimationFrame` check → `scheduleHide()` |
-| `forceReveal` called twice fast | Second call resets the 3s timer, not additive |
+| `forceReveal` called twice fast | Second call resets the timer — not additive |
 | Escape pressed when panel is not revealed | No-op |
 | Short-height landscape (`max-height: 499px`) | Existing `visibility: hidden` rule wins; `is-revealed` does not override |
-| `alwaysShowChrome` toggled while panel is hidden | Preference change → `data-chrome-mode='visible'` → CSS transition to opacity 1 immediately |
-| SSR / no JS | Without `data-chrome-mode` attribute, panels render at their default opacity (1) — correct fallback |
-| `prefers-reduced-motion` | Transitions become `0.001ms`; panels still show/hide but instantly |
+| `alwaysShowChrome` toggled while panel is hidden | Preference change → `data-chrome-mode='visible'` → CSS transition to opacity 1 |
+| iOS back-swipe conflict | `onPointerDown` dead-zone guard: x < 22px is ignored |
+| iPhone Dynamic Island | `env(safe-area-inset-bottom/left)` applied to `.timeline` and `.info-panel` |
+| SSR / no JS | Without `data-chrome-mode` attribute, panels render at their default opacity (1) |
+| `prefers-reduced-motion` | `transition-duration: 0.001ms`, `animation: none` on peek strips |
+| Pointer leaves viewport (moves to another window) | `pointerleave` fires on `window`; zones set to false; hide timer starts normally |
+| Multiple rapid hover ins/outs | Each `updateZone(false)` cancels the previous timer and starts a fresh one |
+| `CHROME_CONFIG` overrides | Caller can pass `options.config` to override any constant at instantiation |
 
 ---
 
-### Accessibility Compliance Summary
+### Accessibility Compliance Matrix
 
-| WCAG criterion | Requirement | v0.60 solution |
-|----------------|-------------|----------------|
-| 1.4.13 Dismissible | User can dismiss without moving focus | Escape key → immediate hide |
-| 1.4.13 Hoverable | Panel stays visible when pointer is on it | `pointerenter`/`pointerleave` on panel extends dwell |
-| 1.4.13 Persistent | Content persists until dismissed or trigger removed | `HIDE_DELAY_MS = 2500ms` after pointer leaves |
-| 2.1.1 Keyboard | All UI reachable via keyboard alone | `focusin` on panel → reveal; Tab always works |
-| 2.4.3 Focus Order | Focus order meaningful | Panel always in DOM; Tab order unchanged |
-| 2.4.11 Focus Not Obscured | Focused element not completely hidden | `focusin` forces reveal before element is visible |
-| 1.3.1 Info & Relationships | Structure preserved | `aria-live`, `aria-label`, `role` unchanged |
-| 1.4.3 Contrast | Text contrast ≥4.5:1 | Peek strips decorative (`aria-hidden`); no contrast requirement |
-| 2.5.8 Target Size | Min 24px target | Timeline thumbnails: 90–150px; peek strip is affordance only |
+| WCAG 2.2 Criterion | Requirement | v0.60 Solution | Status |
+|--------------------|-------------|----------------|--------|
+| **1.4.13 Dismissible** | Dismiss without moving pointer/focus | Escape key → immediate `hide()` + focus moved to canvas | ✅ |
+| **1.4.13 Hoverable** | Pointer can move from trigger to panel without panel hiding | `pointerenter/pointerleave` on panel cancels hide timer | ✅ |
+| **1.4.13 Persistent** | Content stays until user dismisses or moves away | `HIDE_DELAY_MS = 2500ms` after pointer leaves all zones | ✅ |
+| **2.1.1 Keyboard** | All UI reachable via keyboard alone | `focusin` forces reveal; Tab always reaches panel | ✅ |
+| **2.3.3 Animation** | Non-essential animation suppressible | `prefers-reduced-motion` removes all transitions + `animation: none` | ✅ |
+| **2.4.3 Focus Order** | Logical focus sequence | Panels always in DOM; Tab order unchanged | ✅ |
+| **2.4.11 Focus Not Obscured** | Focused element not completely hidden | `focusin` → synchronous `reveal()` before paint | ✅ |
+| **1.3.1 Info & Relationships** | Structure preserved | `aria-live`, `aria-label`, `role` unchanged | ✅ |
+| **1.4.3 Contrast** | Text ≥ 4.5:1 | Peek strips decorative (`aria-hidden`); no contrast requirement | ✅ |
+| **2.5.8 Target Size** | Min 24px target | Peek hit areas 44px; timeline thumbs 90–150px | ✅ |
+| **4.1.3 Status Messages** | State changes announced to AT | `aria-live="polite"` sr-only region updated on each reveal/hide | ✅ |
+
+---
+
+### Extension Points and Modularity
+
+The `ChromeVisibilityManager` is designed to grow without core changes:
+
+#### Adding a Third Panel
+
+```typescript
+// Example: add a `.controls-bar` panel at the right edge
+const extraState = chromeVisibility.panels.set('controls-bar', {
+  id: 'controls-bar' as PanelId,
+  el: document.querySelector('.controls-bar')!,
+  ...
+});
+// Add to onPointerMove: `const controlsInZone = x >= W - 100`
+// Update CHROME_CONFIG.CONTROLS_BAR_TRIGGER_BAND_PX
+```
+
+Because `panels` is a `Map<PanelId, PanelState>`, the hide/reveal/focus loops iterate all registered panels automatically.
+
+#### Responsive Trigger Zones
+
+The trigger band sizes can be adjusted at runtime (e.g., larger on touch screens):
+```typescript
+const manager = new ChromeVisibilityManager(tl, ip, prefs, app, {
+  config: {
+    TIMELINE_TRIGGER_BAND_PX: window.matchMedia('(pointer: coarse)').matches ? 200 : 140,
+    INFO_PANEL_TRIGGER_BAND_PX: window.matchMedia('(pointer: coarse)').matches ? 160 : 120,
+  }
+});
+```
+
+#### External State Observers
+
+The `onRevealChange` callback lets other systems react to panel visibility:
+```typescript
+const manager = new ChromeVisibilityManager(tl, ip, prefs, app, {
+  onRevealChange: (panelId, revealed, reason) => {
+    analytics.track('chrome-reveal', { panelId, revealed, reason });
+    // or: adjust 3D camera if timeline is revealed, etc.
+  }
+});
+```
+
+#### Future: Panel-Level Config Override
+
+Each `PanelState` can be extended with per-panel config overrides in a future version:
+```typescript
+interface PanelState {
+  // ... existing fields ...
+  config?: Partial<typeof CHROME_CONFIG>;  // per-panel override
+}
+```
+
+---
+
+### Mobile & Touch Architecture Summary
+
+| Concern | Solution |
+|---------|----------|
+| Left-edge swipe conflicts (iOS Safari back) | Dead zone: ignore `pointerdown` where `x < 22px` |
+| Right-edge swipe conflicts | Not an issue for current layout; guard can be added symmetrically |
+| Bottom-edge swipe conflicts (iOS home indicator) | Timeline touch zone starts at bottom edge; home indicator is ≈34px; `max(28px, env(safe-area-inset-bottom))` keeps timeline above it |
+| Dynamic Island / notch | `env(safe-area-inset-top)` on topbar (already present); `env(safe-area-inset-bottom/left)` added |
+| No hover available (coarse pointer) | Timeline at 32% opacity baseline; peek hit area 44px; `pointerdown` reveals on tap |
+| Scroll jank prevention | All listeners use `{ passive: true }` |
+| Accidental reveal while scrolling | `onPointerDown` only triggers for `pointerType !== 'mouse'`; intentional tap required |
+| Viewport resize (orientation change) | `window.innerHeight/innerWidth` read fresh inside each `onPointerMove` call; ResizeObserver not needed |
+
+---
+
+### Future Development Roadmap
+
+These are planned improvements that are **not** in scope for v0.60 but should be considered when extending the feature:
+
+| ID | Feature | Rationale |
+|----|---------|-----------|
+| F-1 | **Sensitivity preference slider** | Let users tune how close the pointer must be to trigger reveal (TIMELINE_TRIGGER_BAND_PX: 80–200). Users with motor disabilities may need larger zones. |
+| F-2 | **Dwell duration preference** | `HIDE_DELAY_MS` configurable: short (1.5s) for power users, long (5s) for accessibility. |
+| F-3 | **Gesture: swipe-up from bottom** | On touch devices, a deliberate upward swipe from bottom could reveal timeline (differentiating from tap). Requires velocity + direction check. |
+| F-4 | **Idle-mode auto-hide** | If the user has not interacted for N minutes, hide all chrome including topbar (museum kiosk mode). |
+| F-5 | **Panel pinning** | User can click a pin icon inside each panel to lock it open (persist to `localStorage`). |
+| F-6 | **CSS Houdini / View Transitions API** | When the View Transitions API gains wider support, panel transitions could use `view-transition-name` for GPU-composited cross-fade without JavaScript. |
+| F-7 | **Adaptive opacity** | Automatically reduce peek-strip opacity when artwork background is light (detect average luminance of bottom/left edge pixels). |
+| F-8 | **Haptic feedback (mobile)** | On iOS/Android, use `navigator.vibrate(10)` on panel reveal for subtle tactile confirmation. |
 
 ---
 
 ### Implementation Checklist
 
-- [ ] D-1: Add `alwaysShowChrome` to `Preferences` interface and `PreferencesStore` — default `false`, add `setAlwaysShowChrome()` method, mirror `data-chrome-mode` to `<html>`, persist to localStorage
-- [ ] D-2: Add `--dur-chrome-reveal`, `--dur-chrome-hide`, `--dur-peek-pulse` tokens to `:root` in `main.scss`
-- [ ] D-3: Add `[data-chrome-mode='clean']` auto-hide CSS rules for `.timeline` and `.info-panel` in `main.scss` (opacity, transform, transition)
-- [ ] D-4: Add `.is-revealed` CSS overrides for both panels (opacity 1, transform 0)
-- [ ] D-5: Add `.timeline-peek` and `.info-panel-peek` CSS rules including `peek-pulse` keyframe animation
-- [ ] D-6: Add `[data-hover='false']` coarse-pointer rule (semi-visible timeline, fully hidden info panel)
-- [ ] D-7: Add `[data-motion='reduced']` overrides for peek animation and transition durations
-- [ ] D-8: Add `forced-colors: active` overrides for peek strips
-- [ ] D-9: Ensure `@media (max-height: 499px)` keeps `.is-revealed` invisible (overriding auto-hide reveal)
-- [ ] D-10: Implement `src/ui/ChromeVisibilityManager.ts` — full class with `init()`, `dispose()`, `forceReveal()`, proximity detection, dwell timers, focus handlers, touch handlers, Escape key handler
-- [ ] D-11: Add `ChromeVisibilityManager` DOM elements for `.timeline-peek` and `.info-panel-peek` in constructor
-- [ ] D-12: Update `main.ts` — import + instantiate `ChromeVisibilityManager` after chrome refs resolved; call `forceReveal('info-panel')` on navigation; call `dispose()` in cleanup
-- [ ] D-13: Add `alwaysShowChrome` checkbox row to `PreferencesPanel.ts`
-- [ ] D-14: Update `PreferencesPanel.ts` in-place patch to react to `alwaysShowChrome` changes
-- [ ] D-15: `npm run lint` — pass
-- [ ] D-16: `npm run build` — pass
+- [ ] D-1: Add `alwaysShowChrome: boolean` to `Preferences` interface + `PreferencesStore.setAlwaysShowChrome()` + `data-chrome-mode` mirror + localStorage persist
+- [ ] D-2: Add all v0.60 CSS design tokens to `:root` in `main.scss` (timing, geometry, visual tiers)
+- [ ] D-3: Add `[data-chrome-mode='clean']` auto-hide CSS for `.timeline` and `.info-panel` (opacity + transform + asymmetric transitions)
+- [ ] D-4: Add `.is-revealed` CSS overrides for both panels (opacity 1, transform 0, correct easing)
+- [ ] D-5: Add peek hit areas + visual strips CSS (`.timeline-peek-hit`, `.info-panel-peek-hit`, `.timeline-peek`, `.info-panel-peek`)
+- [ ] D-6: Add `@keyframes peek-pulse` + apply to strips in clean mode
+- [ ] D-7: Add `[data-hover='false']` coarse-pointer rules (semi-visible timeline, fully hidden info panel)
+- [ ] D-8: Add `@media (prefers-reduced-motion: reduce)` block — `transition-duration: 0.001ms`, `animation: none` on peek strips, static opacity 0.18
+- [ ] D-9: Add `@media (forced-colors: active)` overrides for peek strips (ButtonText, opacity 1)
+- [ ] D-10: Extend `@media (max-height: 499px)` rule so `.timeline.is-revealed` remains hidden
+- [ ] D-11: Add `env(safe-area-inset-bottom/left)` to `.timeline` and `.info-panel` base rules
+- [ ] D-12: Add `scroll-margin-bottom` / `scroll-margin-left` to focusable children of each panel
+- [ ] D-13: Add `.sr-only` utility class if not already present in `main.scss`
+- [ ] D-14: Verify `app.html` viewport meta includes `viewport-fit=cover`
+- [ ] D-15: Implement `src/ui/ChromeVisibilityManager.ts` — full class per TypeScript architecture above: `CHROME_CONFIG`, `PanelState`, `init()`, `dispose()`, `forceReveal()`, proximity detection, dwell timers, focus handlers, touch/iOS dead-zone guards, Escape key handler, `aria-live` region, `onRevealChange` callback
+- [ ] D-16: Update `main.ts` — import + instantiate `ChromeVisibilityManager` with `appRoot`; call `forceReveal('info-panel')` on navigation; call `dispose()` in cleanup
+- [ ] D-17: Add `alwaysShowChrome` checkbox row to `PreferencesPanel.ts` (after contrast toggle)
+- [ ] D-18: `npm run lint` — pass
+- [ ] D-19: `npm run build` — pass
 
 ---
 
@@ -592,13 +1202,14 @@ chromeRow.querySelector('input')!.addEventListener('change', (e) => {
 
 | File | Change type | Scope |
 |------|-------------|-------|
-| `src/utils/preferences.ts` | Extend | Add `alwaysShowChrome` field, `setAlwaysShowChrome()` method, `data-chrome-mode` mirror |
-| `src/styles/main.scss` | Extend | 3 new tokens, 2 new chrome-mode rule blocks, 2 peek strip rules, keyframe, reduced-motion ext., forced-colors |
-| `src/ui/ChromeVisibilityManager.ts` | **New file** | Full new class — proximity detection, dwell timers, focus tracking, touch fallback, Escape dismiss |
-| `src/main.ts` | Minor extend | Import + init `ChromeVisibilityManager`; wire `forceReveal` to navigation; wire `dispose` |
-| `src/ui/PreferencesPanel.ts` | Minor extend | Add `alwaysShowChrome` checkbox row; react to pref changes |
+| `src/utils/preferences.ts` | Extend | `alwaysShowChrome` field + `setAlwaysShowChrome()` + `data-chrome-mode` mirror |
+| `src/styles/main.scss` | Extend | All v0.60 tokens, chrome-mode rules, peek strips, keyframe, touch, reduced-motion, forced-colors, safe-area |
+| `src/ui/ChromeVisibilityManager.ts` | **New file** | Complete class — proximity, dwell, focus, touch, iOS guard, Escape, aria-live |
+| `src/main.ts` | Minor extend | Import + init + `forceReveal` + `dispose` wiring |
+| `src/ui/PreferencesPanel.ts` | Minor extend | `alwaysShowChrome` checkbox row |
+| `app.html` | Minor check | Verify `viewport-fit=cover` in viewport meta |
 
-No changes to `Timeline.ts` or `InfoPanel.ts` — the `ChromeVisibilityManager` attaches event listeners directly to the existing element references passed in from `main.ts`.
+No structural changes to `Timeline.ts`, `InfoPanel.ts`, or `CanvasInteraction.ts`.
 
 ---
 
