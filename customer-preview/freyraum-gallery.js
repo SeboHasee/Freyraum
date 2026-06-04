@@ -4632,7 +4632,6 @@ vec3 frmBrushedNormal(vec2 barUV, float seed) {
   normal = normalize(tbn * proceduralN);
 }
 `,Kp=`
-{
   float fwR = fwidth(vFrameUV.x);
   float grainAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
   float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
@@ -4644,9 +4643,7 @@ vec3 frmBrushedNormal(vec2 barUV, float seed) {
     + (roughnessGrain - 0.5) * 0.040
     + roughnessScratch * 0.015;
   roughnessFactor = clamp(roughnessFactor, 0.14, 0.72);
-}
 `,Qp=`
-{
   float fwR = fwidth(vFrameUV.x);
   float grainAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
   float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
@@ -4656,16 +4653,13 @@ vec3 frmBrushedNormal(vec2 barUV, float seed) {
     + (roughnessGrain - 0.5) * 0.030
     + roughnessScratch * 0.015;
   roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);
-}
 `,Jp=`
-{
   float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
   float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
   float roughnessFactor = uBaseRoughness
     + (roughnessGrain - 0.5) * 0.030
     + roughnessScratch * 0.015;
   roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);
-}
 `,jp=`
 PhysicalMaterial material;
 material.diffuseColor = diffuseColor.rgb * ( 1.0 - metalnessFactor );

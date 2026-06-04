@@ -163,7 +163,6 @@ const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
 // Roughness scratch cap (+0.015) is unchanged across all presets so cluster
 // gain (M-03) only affects visual presence, not BRDF roughness.
 const FRAME_FRAG_ROUGHNESS_REPLACE_HIGH = /* glsl */ `
-{
   float fwR = fwidth(vFrameUV.x);
   float grainAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
   float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
@@ -175,11 +174,9 @@ const FRAME_FRAG_ROUGHNESS_REPLACE_HIGH = /* glsl */ `
     + (roughnessGrain - 0.5) * 0.040
     + roughnessScratch * 0.015;
   roughnessFactor = clamp(roughnessFactor, 0.14, 0.72);
-}
 `;
 
 const FRAME_FRAG_ROUGHNESS_REPLACE_BALANCED = /* glsl */ `
-{
   float fwR = fwidth(vFrameUV.x);
   float grainAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
   float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
@@ -189,18 +186,15 @@ const FRAME_FRAG_ROUGHNESS_REPLACE_BALANCED = /* glsl */ `
     + (roughnessGrain - 0.5) * 0.030
     + roughnessScratch * 0.015;
   roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);
-}
 `;
 
 const FRAME_FRAG_ROUGHNESS_REPLACE_NONE = /* glsl */ `
-{
   float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
   float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
   float roughnessFactor = uBaseRoughness
     + (roughnessGrain - 0.5) * 0.030
     + roughnessScratch * 0.015;
   roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);
-}
 `;
 
 // v0.69 M-04: per-fragment anisotropy direction perturbation (high preset only).
