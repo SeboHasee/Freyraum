@@ -1,6 +1,55 @@
 # FINDINGS
-> v0.62 shipped: hidden-element signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
-> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
+> v0.63 planned: hidden-affordance salience pass to make hidden controls clearly discoverable with minimal visual weight.
+> Last full markdown audit: 2026-06-04 (v0.63 planning/documentation update; runtime currently remains v0.62).
+
+## v0.63 — Hidden affordance salience research (2026-06-04, **planning/docs-only**)
+
+### Scope of this pass
+
+- Re-validated the customer feedback: hidden control clues are still too easy to miss in practice.
+- Re-ran online UX/accessibility research focused on subtle-but-visible hidden-control signifiers.
+- Converted findings into an implementation-ready v0.63 plan in `plan.md § v0.63`.
+- No runtime code changes in this pass (planning/documentation only).
+
+### Repository findings (current baseline: v0.62)
+
+1. **Signifiers exist, but salience can still be too low.**  
+   v0.62 already adds peek strips and micro-chevrons, yet customer feedback confirms discoverability is still insufficient in some contexts.
+2. **Hint lifecycle is solid, persistent idle cue strength is the remaining gap.**  
+   Nav onboarding pulse and re-hide behavior are present; issue is mostly the post-hint idle discoverability floor.
+3. **Accessibility scaffolding is already in place.**  
+   Reduced-motion and forced-colors support exist, so v0.63 can focus on perceptibility tuning rather than architectural replacement.
+
+### Online research findings (2026-06-04 refresh)
+
+1. **Progressive disclosure requires explicit signifiers for hidden surfaces.**  
+   Hidden UI should keep persistent visual handles/markers; ambient animation alone is not a reliable discoverability mechanism.  
+   - Reference: NN/g progressive disclosure guidance (https://www.nngroup.com/articles/progressive-disclosure/)
+
+2. **Hover/focus-revealed content must stay stable and dismissible.**  
+   Auto-hidden surfaces should not collapse while users interact; reveal/hide timing must remain predictable.  
+   - Reference: WCAG 2.2 SC 1.4.13 (https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)
+
+3. **Interaction animation must be optional; static cues must carry meaning.**  
+   Discovery cues cannot depend solely on motion and should remain understandable when animation is disabled.  
+   - Reference: WCAG 2.2 SC 2.3.3 (https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html)
+
+4. **Usability constraints still apply to revealed controls.**  
+   Discoverability changes must preserve practical target usability and avoid shrinking functional interaction surfaces.  
+   - Reference: WCAG 2.2 SC 2.5.8 (https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+
+5. **Immersive gallery patterns favor “brief onboarding + persistent micro-markers.”**  
+   Keep first-session motion hints short and bounded, then rely on small static edge clues that remain continuously available.
+
+### Applied conclusions for v0.63 planning
+
+1. Increase hidden-state cue salience floor slightly (still transparent and minimal).
+2. Keep one-shot onboarding behavior, but reduce reliance on motion-only discoverability.
+3. Add layered static micro-signifiers so at least one cue remains perceptible against varied artwork.
+4. Preserve current accessibility protections as non-negotiable constraints.
+5. Validate explicitly against bright/dark artwork backgrounds, reduced-motion, and forced-colors.
+
+---
 
 ## v0.62 — Hidden-element signifiers + nav-arrow post-pulse hide (2026-06-04, **shipped**)
 

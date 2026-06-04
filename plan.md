@@ -1,6 +1,97 @@
 # FREYRAUM Plan
-> v0.62 shipped: hidden-element signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
-> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
+> v0.63 planned: hidden-affordance salience pass for clearer discoverability with minimal visual noise.
+> Last full markdown audit: 2026-06-04 (v0.63 planning/documentation update; runtime currently remains v0.62).
+
+## v0.63 — Hidden affordance salience + transparency balance (**planning 2026-06-04, docs-only**)
+
+> **Planning status:** This pass is research + planning only. Runtime code remains at v0.62 until implementation is executed.
+
+---
+
+### Problem Statement (customer feedback)
+
+1. Hidden UI controls still read as “not there” in real use.
+2. The interface needs visible clues that hidden controls exist, but cues must stay very small and transparent so the painting remains the focus.
+3. Discoverability must improve without adding visual clutter or heavy animation.
+
+---
+
+### Current-State Audit (v0.62 baseline)
+
+| Area | Current implementation | Gap seen in feedback |
+|------|-------------------------|----------------------|
+| Hidden control cues | Micro chevrons (`.timeline-chevron`, `.info-panel-chevron`) + peek strips | Cues can still be missed on complex/high-contrast paintings |
+| Nav discoverability | One-shot ring hint + re-hide lifecycle | After hint completes, persistent idle clue may still feel too weak |
+| Accessibility guards | Reduced-motion and forced-colors variants exist | Discoverability is still below perceptual threshold for some users |
+
+---
+
+### Online Research Summary (2026-06-04 refresh)
+
+1. **Hidden/progressive disclosure UI still needs explicit signifiers** (NN/g progressive disclosure guidance): decorative ambience alone is not enough for first-use discoverability.
+2. **Reveal-on-hover/focus content must remain stable and dismissible** (WCAG 2.2 SC 1.4.13): avoid flicker and accidental collapse while user is interacting.
+3. **Interaction-triggered animation must be optional** (WCAG 2.2 SC 2.3.3): keep static cues effective when motion is reduced.
+4. **Revealed controls must preserve usable hit geometry** (WCAG 2.2 SC 2.5.8): no discoverability tweak may reduce practical target usability.
+5. **Gallery/fullscreen patterns converge on “hint briefly, then rely on subtle persistent edge markers”** (industry patterns in immersive viewers): onboarding motion should be short-lived, while low-noise static markers remain.
+
+References are documented in `FINDINGS.md § v0.63`.
+
+---
+
+### v0.63 Implementation Plan
+
+#### P-01 — Raise affordance perceptibility floor (without increasing clutter)
+
+**Files:** `src/styles/main.scss`
+
+- Tune affordance token values so hidden-state cues remain visible across bright/dark artworks.
+- Keep cue geometry compact and transparent, but set a stricter minimum visibility floor.
+- Ensure reduced-motion and forced-colors branches inherit the stronger baseline.
+
+#### P-02 — Add a second ultra-subtle static signifier layer
+
+**Files:** `src/styles/main.scss`, `src/ui/ChromeVisibilityManager.ts`
+
+- Keep existing micro-chevron markers.
+- Add a secondary low-alpha edge marker (micro-handle or short edge glow) that remains visible in idle hidden state.
+- Keep all signifiers decorative (`aria-hidden`) unless promoted to real controls in a later pass.
+
+#### P-03 — Improve first-session discoverability without persistent animation noise
+
+**Files:** `src/ui/NavigationControls.ts`, `src/ui/ChromeVisibilityManager.ts`, `src/styles/main.scss`
+
+- Preserve one-shot onboarding behavior.
+- Add a short post-hint “settle” phase where persistent static markers are momentarily slightly stronger, then decay to normal baseline.
+- Keep this behavior disabled in reduced-motion mode.
+
+#### P-04 — Strengthen contrast resilience against artwork backgrounds
+
+**Files:** `src/styles/main.scss`
+
+- Add contrast-safe styling fallback so cues stay legible over both light and dark painting edges.
+- Keep visual style minimal (thin lines, low alpha, no heavy glow).
+- Verify forced-colors keeps hard-visible outlines.
+
+#### P-05 — Validation and acceptance gate
+
+**Files:** `src/styles/main.scss`, `src/ui/*`, `src/main.ts` (if touched)
+
+- Validate with:
+  - `npm run lint`
+  - `npm run build`
+  - Manual QA on bright/dark paintings, keyboard-only, reduced-motion, forced-colors, and short-height landscape.
+
+---
+
+### Acceptance Criteria for v0.63
+
+1. In clean mode, hidden timeline/info/nav affordances are immediately noticeable within 1–2 seconds of attention scan, while remaining visually light.
+2. Cues remain present and readable in reduced-motion and forced-colors modes.
+3. Discoverability improvements do not increase persistent animation load or visual dominance over artwork.
+4. Keyboard/focus interaction remains stable (no hide-while-focused regressions).
+5. `npm run lint` and `npm run build` pass after implementation.
+
+---
 
 ## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (**shipped 2026-06-04**)
 
