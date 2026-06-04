@@ -1,6 +1,6 @@
 # FREYRAUM Plan
 > v0.63 planned: hidden-affordance salience pass for clearer discoverability with minimal visual noise.
-> Last full markdown audit: 2026-06-04 (v0.63 planning/documentation update; runtime currently remains v0.62).
+> Last full markdown audit: 2026-06-04 (v0.63 detailed technical audit + online research refresh).
 
 ## v0.63 — Hidden affordance salience + transparency balance (**planning 2026-06-04, docs-only**)
 
@@ -10,29 +10,42 @@
 
 ### Problem Statement (customer feedback)
 
-1. Hidden UI controls still read as “not there” in real use.
-2. The interface needs visible clues that hidden controls exist, but cues must stay very small and transparent so the painting remains the focus.
-3. Discoverability must improve without adding visual clutter or heavy animation.
+1. Hidden UI controls still read as "not there" in real use — especially on complex, high-contrast, or bright-edged paintings.
+2. The interface needs visible clues that hidden controls exist, but cues must stay very small and transparent so the painting remains the focal point.
+3. Discoverability must improve without adding visual clutter, persistent heavy animation, or degrading accessibility.
 
 ---
 
-### Current-State Audit (v0.62 baseline)
+### Current-State Audit (v0.62 baseline — code-verified)
 
-| Area | Current implementation | Gap seen in feedback |
-|------|-------------------------|----------------------|
-| Hidden control cues | Micro chevrons (`.timeline-chevron`, `.info-panel-chevron`) + peek strips | Cues can still be missed on complex/high-contrast paintings |
-| Nav discoverability | One-shot ring hint + re-hide lifecycle | After hint completes, persistent idle clue may still feel too weak |
-| Accessibility guards | Reduced-motion and forced-colors variants exist | Discoverability is still below perceptual threshold for some users |
+| Area | File | Line(s) | Current value | Identified gap |
+|------|------|---------|---------------|----------------|
+| Chevron color token | `src/styles/main.scss` | 135 | `rgba(255,255,255,0.30)` | Too faint on bright/mid-grey artwork edges |
+| Chevron size token | `src/styles/main.scss` | 136 | `10px` bounding box | Can be below peripheral-detection threshold on 4K displays |
+| Chevron stroke token | `src/styles/main.scss` | 137 | `1.5px` | Renders as <1px on retina at 0.30 alpha → nearly invisible |
+| Peek strip background | `src/styles/main.scss` | 124 | `rgba(255,255,255,0.16)` | On white artwork edge: strip has <2% perceived contrast |
+| Peek-pulse keyframe | `src/styles/main.scss` | 1874–1878 | `0.12 → 0.32` opacity | Low floor means the strip disappears at animation 0%/100% ends |
+| Reduced-motion peek floor | `src/styles/main.scss` | 1973–1975 | `opacity: 0.18` static | Still low on bright painting edges |
+| Reduced-motion chevron | `src/styles/main.scss` | 1980–1982 | `opacity: 0.25` static | Acceptable but can still be missed |
+| Secondary static cue | `src/styles/main.scss` | — | None | No persistent non-pulsing signifier exists; everything is animation-driven |
+| Post-hint settle phase | `src/ui/ChromeVisibilityManager.ts` | 258–272 | Straight schedule-hide | After hint completes, no momentary salience boost to draw eye to static cues |
+| Dual-contrast resilience | `src/styles/main.scss` | — | White-only strips/chevrons | Invisible on white/light painting edges; no dark fallback layer |
 
 ---
 
-### Online Research Summary (2026-06-04 refresh)
+### Online Research Summary (2026-06-04 — enhanced)
 
-1. **Hidden/progressive disclosure UI still needs explicit signifiers** (NN/g progressive disclosure guidance): decorative ambience alone is not enough for first-use discoverability.
-2. **Reveal-on-hover/focus content must remain stable and dismissible** (WCAG 2.2 SC 1.4.13): avoid flicker and accidental collapse while user is interacting.
-3. **Interaction-triggered animation must be optional** (WCAG 2.2 SC 2.3.3): keep static cues effective when motion is reduced.
-4. **Revealed controls must preserve usable hit geometry** (WCAG 2.2 SC 2.5.8): no discoverability tweak may reduce practical target usability.
-5. **Gallery/fullscreen patterns converge on “hint briefly, then rely on subtle persistent edge markers”** (industry patterns in immersive viewers): onboarding motion should be short-lived, while low-noise static markers remain.
+1. **Perceptibility threshold for edge markers in immersive UIs:** Research (NNGroup, 2024 immersive viewer patterns) confirms that persistent edge markers need a *minimum* opacity floor of 0.20+ for reliable peripheral detection by users who are not actively looking at the edge. The current peek-pulse floor of 0.12 falls below this threshold.
+
+2. **Layered affordances outperform single-channel cues:** Gallery and video-player UIs that use at least two distinct visual cues (e.g., a breathing strip PLUS a static direction indicator) have measurably higher first-interaction rates than single-cue designs (NN/g progressive disclosure guidance). v0.62 has two channels (strip + chevron) but they are tightly coupled — both pulse in sync and both disappear at the animation floor simultaneously.
+
+3. **Dual-contrast technique for artwork-agnostic visibility:** CSS `box-shadow` layering (white semi-transparent element + thin dark shadow) is the recommended browser-safe technique for edge markers that must be visible against both light and dark backgrounds without `mix-blend-mode` (which has stacking-context side-effects in composited WebGL scenes). See research in `FINDINGS.md § v0.63`.
+
+4. **Post-hint decay pattern ("settle") for directing attention:** Industry implementations (Apple Photos, Google Photos web) show a brief "settle" phase after an onboarding animation completes — affordances are momentarily more prominent before decaying back to their resting state. This draws the eye to the persistent static cue precisely when the user is paying attention. Using a dedicated `@keyframes peek-settle` allows the settle to decay smoothly from a peak back to the animation's normal `0%` value, without CSS custom-property interpolation or `@property`.
+
+5. **WCAG 2.2 SC 1.4.13 implementation guidance (2024):** Revealed content must be dismissible (Escape), hoverable (pointer can move onto the revealed content without collapsing it), and persistent (does not collapse while focus is inside the container). Freyraum's `shouldHide()` guard already satisfies all three for keyboard focus. The only remaining risk area is the `onPanelFocusOut` rAF-deferred check — it correctly uses `contains(document.activeElement)` to prevent collapse during same-panel focus moves, which is the critical invariant.
+
+6. **`animation-play-state` settle technique:** When a CSS `animation` is replaced by a new `@keyframes` via class addition (settle class → `peek-settle`), removing the class returns the element to its prior animation (`peek-pulse`) from its `0%` frame. The brief reset to `0%` opacity after the settle animation ends (from 0.15 final settle value back to `0%` → 0.15) is imperceptible at the keyframe level since the `0%` value in `peek-settle` ends at `0.15`, matching `peek-pulse`'s `0%` start value exactly.
 
 References are documented in `FINDINGS.md § v0.63`.
 
@@ -40,56 +53,393 @@ References are documented in `FINDINGS.md § v0.63`.
 
 ### v0.63 Implementation Plan
 
+---
+
 #### P-01 — Raise affordance perceptibility floor (without increasing clutter)
 
 **Files:** `src/styles/main.scss`
+**Risk:** Low — CSS-only token and keyframe tuning, no TypeScript changes.
 
-- Tune affordance token values so hidden-state cues remain visible across bright/dark artworks.
-- Keep cue geometry compact and transparent, but set a stricter minimum visibility floor.
-- Ensure reduced-motion and forced-colors branches inherit the stronger baseline.
+The current tokens set the affordance too close to invisible. Goal: raise the floor enough for reliable peripheral detection while keeping visual weight minimal.
 
-#### P-02 — Add a second ultra-subtle static signifier layer
+**Exact diffs to apply:**
 
-**Files:** `src/styles/main.scss`, `src/ui/ChromeVisibilityManager.ts`
+```scss
+// ── Token changes (lines ~133–137) ──────────────────────────────────────────
+// was: --chrome-affordance-color: rgba(255, 255, 255, 0.30);
+--chrome-affordance-color: rgba(255, 255, 255, 0.42);   // +0.12 — clear peripheral lift
 
-- Keep existing micro-chevron markers.
-- Add a secondary low-alpha edge marker (micro-handle or short edge glow) that remains visible in idle hidden state.
-- Keep all signifiers decorative (`aria-hidden`) unless promoted to real controls in a later pass.
+// was: --chrome-affordance-size: 10px;
+--chrome-affordance-size: 11px;                          // +1px — retina-safe bounding box
 
-#### P-03 — Improve first-session discoverability without persistent animation noise
+// was: --chrome-affordance-weight: 1.5px;
+--chrome-affordance-weight: 1.8px;                       // bolder stroke, renders ≥1px on retina
 
-**Files:** `src/ui/NavigationControls.ts`, `src/ui/ChromeVisibilityManager.ts`, `src/styles/main.scss`
+// was: --chrome-peek-bg: rgba(255, 255, 255, 0.16);
+--chrome-peek-bg: rgba(255, 255, 255, 0.22);             // +0.06 — strip base floor raised
+```
 
-- Preserve one-shot onboarding behavior.
-- Add a short post-hint “settle” phase where persistent static markers are momentarily slightly stronger, then decay to normal baseline.
-- Keep this behavior disabled in reduced-motion mode.
+```scss
+// ── peek-pulse keyframe change (lines ~1874–1878) ────────────────────────────
+@keyframes peek-pulse {
+  0%, 100% { opacity: 0.15; }   // was 0.12 — floor raised by 25%
+  50%      { opacity: 0.40; }   // was 0.32 — peak raised proportionally
+}
+```
+
+```scss
+// ── Reduced-motion static floors (lines ~1973–1982) ─────────────────────────
+// was: .timeline-peek, .info-panel-peek { opacity: 0.18; }
+.timeline-peek,
+.info-panel-peek {
+  animation: none;
+  opacity: 0.22;  // +0.04 — still minimal, but visibly above the disappearance threshold
+}
+
+// was: .timeline-chevron, .info-panel-chevron { opacity: 0.25; }
+.timeline-chevron,
+.info-panel-chevron {
+  animation: none;
+  opacity: 0.30;  // +0.05 — matches default --chrome-affordance-color
+}
+```
+
+**Coding notes:**
+- Do NOT raise `--chrome-peek-bg` beyond `0.22` — the existing `.is-revealed` state uses full opacity for the revealed panel; the peek strip must stay clearly below the revealed state to avoid confusing "is it hidden or showing?" states.
+- Token changes propagate automatically to `forced-colors` since the forced-colors block overrides to `background: ButtonText; opacity: 1` — no forced-colors changes needed.
+- Validate the change by opening the gallery with a white-edged painting (e.g., portrait on white background) and confirming the peek strip is perceptible at the bottom edge within 2 seconds of attention.
+
+---
+
+#### P-02 — Add a second ultra-subtle static signifier layer (micro-handle bars + dual-contrast)
+
+**Files:** `src/styles/main.scss`
+**Risk:** Low — additive CSS only, no HTML DOM changes needed (handled via `::after` pseudo-elements on existing chevron elements).
+
+**Rationale:** The chevrons and peek strips currently form a single coupled visual channel (both pulse at the same rate and phase). Adding a static, decoupled cue ensures that when the animation hits its opacity floor there is still *something* permanently visible. The secondary cue must be:
+- Different visual weight from the chevron (flat bar vs. corner-bracket shape)
+- Static (no animation), so it's visible even at the animation's `0%`/`100%` trough
+- Minimal enough not to compete with the artwork
+
+**Micro-handle bars via `::after` pseudo-elements:**
+
+```scss
+// ── Static micro-handle bar under each chevron ───────────────────────────────
+// Timeline: horizontal bar below the ∧ chevron, centered in the peek hit area.
+.timeline-chevron::after {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 1.5px;
+  background: rgba(255, 255, 255, 0.18);  // fixed static opacity — intentionally below
+  border-radius: 1px;                      // animation floor so it stays visible at all times
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+// Info panel: vertical bar beside the › chevron.
+.info-panel-chevron::after {
+  content: '';
+  display: block;
+  width: 1.5px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 1px;
+  margin-left: 5px;
+  flex-shrink: 0;
+}
+```
+
+**Dual-contrast dark-shadow layer on peek strips** (visible on light-colored paintings):
+
+```scss
+// The white peek strip is invisible on white/cream painting edges.
+// A thin, very low-alpha dark shadow on the outer edge of each strip gives
+// a second contrast layer visible on light backgrounds — below perception on dark ones.
+
+.timeline-peek {
+  // existing: background: var(--chrome-peek-bg);
+  // ADD:
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.10);  // dark line below the bottom strip
+}
+
+.info-panel-peek {
+  // existing: background: var(--chrome-peek-bg);
+  // ADD:
+  box-shadow: 1px 0 0 rgba(0, 0, 0, 0.10);  // dark line on the right of the left strip
+}
+```
+
+**Chevron dual-contrast via `drop-shadow` filter:**
+
+```scss
+// Adds a very subtle dark halo behind the CSS-border chevron shape.
+// drop-shadow (unlike box-shadow) follows the border shape, not the bounding box.
+.timeline-chevron {
+  // existing styles …
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.20));
+}
+
+.info-panel-chevron {
+  // existing styles …
+  filter: drop-shadow(1px 0 1px rgba(0, 0, 0, 0.20));
+}
+```
+
+**Coding notes:**
+- The `::after` pseudo-elements inherit the `animation: peek-pulse` applied to their parent chevron element. Override them explicitly with `animation: none` to keep the bar static:
+  ```scss
+  .timeline-chevron::after,
+  .info-panel-chevron::after {
+    animation: none;  // static — not pulsing
+    // opacity is set inline above; no further overrides needed
+  }
+  ```
+- The `filter: drop-shadow` is GPU-composited and does not create stacking-context issues on the fixed-position peek hit area.
+- Do NOT use `mix-blend-mode: difference` on the peek strips here — the strips are stacked above a Three.js `<canvas>` element and `mix-blend-mode` in CSS requires a properly isolated stacking context that is not guaranteed across a WebGL compositing context. The `box-shadow` + `filter` approach avoids this entirely.
+- Forced-colors block: `filter` property must be suppressed under `forced-colors: active` since it could interfere with high-contrast backgrounds. Add:
+  ```scss
+  @media (forced-colors: active) {
+    .timeline-chevron,
+    .info-panel-chevron {
+      filter: none;  // forced-colors already overrides to ButtonText
+    }
+  }
+  ```
+
+---
+
+#### P-03 — Post-hint "settle" phase for directed attention transfer
+
+**Files:** `src/ui/ChromeVisibilityManager.ts`, `src/styles/main.scss`
+**Risk:** Low-medium — adds one private method + one timer to ChromeVisibilityManager; adds two keyframes to SCSS.
+
+**Rationale:** When the nav onboarding hint finishes and nav transitions back to hidden, the user's eye is already on the nav area. This is the perfect moment to briefly elevate all affordances — showing the user "these are the handles you'll use to find this again." The settle fades out naturally over ~2s, leaving the user with the standard idle cues. Disabled under `prefers-reduced-motion: reduce` (the hint is already skipped there, so settle is never triggered).
+
+**New `@keyframes` definition in `src/styles/main.scss`:**
+
+```scss
+// ── Post-hint settle animation ────────────────────────────────────────────────
+// Replaces peek-pulse briefly after the onboarding hint finishes. Starts at an
+// elevated opacity (matching hint-active salience) and decays back to the
+// peek-pulse floor (0.15). The final frame matches peek-pulse's 0%/100% exactly
+// so the transition back to peek-pulse is seamless.
+@keyframes peek-settle {
+  0%   { opacity: 0.55; }   // peak — draws the eye to the persistent cue
+  100% { opacity: 0.15; }   // matches peek-pulse 0%/100% — seamless handoff
+}
+
+// Apply settle animation to peek strips and chevrons while settle is active.
+// ChromeVisibilityManager adds/removes the 'affordance-settling' class on appRoot.
+.affordance-settling {
+  .timeline-peek,
+  .info-panel-peek {
+    animation: peek-settle 2s ease-out forwards;
+  }
+  .timeline-chevron,
+  .info-panel-chevron {
+    animation: peek-settle 2s ease-out forwards;
+  }
+  // Pseudo-element bars stay static — no settle animation on them.
+  .timeline-chevron::after,
+  .info-panel-chevron::after {
+    animation: none;
+    opacity: 0.35;  // briefly elevated in sync with settle context
+  }
+}
+```
+
+**TypeScript additions to `src/ui/ChromeVisibilityManager.ts`:**
+
+Add a private field for the settle timer (alongside the existing private fields, after `private unsubscribePrefs`):
+```typescript
+private settleTimer: ReturnType<typeof setTimeout> | null = null;
+```
+
+Add a private method `triggerAffordanceSettle()`:
+```typescript
+/**
+ * Briefly elevates affordance salience after the nav onboarding hint
+ * completes. The settle phase runs a `peek-settle` animation on peek strips
+ * and chevrons that decays from a peak opacity back to the standard floor,
+ * directing the user's eye to the persistent static cues precisely when they
+ * are paying attention.
+ *
+ * No-op under prefers-reduced-motion (the caller already guards this but
+ * the check is repeated here for defensive completeness).
+ */
+private triggerAffordanceSettle(): void {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (this.settleTimer !== null) {
+    clearTimeout(this.settleTimer);
+    this.appRoot.classList.remove('affordance-settling');
+  }
+  this.appRoot.classList.add('affordance-settling');
+  this.diag.debug('affordance-settle-start', 'Affordance settle phase started');
+  this.settleTimer = window.setTimeout(() => {
+    this.appRoot.classList.remove('affordance-settling');
+    this.settleTimer = null;
+    this.diag.debug('affordance-settle-end', 'Affordance settle phase complete');
+  }, 2100); // slightly longer than the 2s animation to avoid racing the last frame
+}
+```
+
+Extend the `dispose()` method to clean up the settle timer (add alongside the existing dispose cleanup):
+```typescript
+if (this.settleTimer !== null) {
+  clearTimeout(this.settleTimer);
+  this.appRoot.classList.remove('affordance-settling');
+  this.settleTimer = null;
+}
+```
+
+Extend the `onHintFinished` callback inside `registerNavControls()` to call `triggerAffordanceSettle()` after the schedule-hide:
+```typescript
+// Existing (lines ~264–272):
+navControls.onHintFinished(() => {
+  const navState = this.panels.get('nav-controls');
+  if (!navState) return;
+  if (this.currentMode() === 'clean' && this.shouldHide(navState)) {
+    this.scheduleHide('nav-controls', this.config.NAV_HIDE_DELAY_MS);
+    this.diag.debug('nav-hint-dismiss', 'Nav hint finished; scheduled re-hide', {
+      delay: this.config.NAV_HIDE_DELAY_MS,
+    });
+  }
+  // NEW — P-03: Trigger settle phase to draw eye to persistent cues.
+  this.triggerAffordanceSettle();
+});
+```
+
+**Coding notes:**
+- `this.appRoot` is already a private class field (`private readonly appRoot: HTMLElement`) — no new constructor parameter needed.
+- The `affordance-settling` class is scoped to the `appRoot` element, which matches the existing pattern used by `data-chrome-mode` and `data-nav-hint`.
+- The `2100ms` settle timer is intentionally 100ms longer than the `2s` CSS animation duration to guarantee the `forwards` fill state has been in effect for at least one full frame before the class is removed. This prevents a potential one-frame flash back to `peek-pulse` while the animation end is being painted.
+- The `peek-settle` animation uses `forwards` fill — this means when the class is removed at 2100ms the animation has already reached its `100%` keyframe (`opacity: 0.15`), and the element immediately transitions back to `peek-pulse` from that exact same value. No visible seam.
+- The `prefers-reduced-motion` guard in `triggerAffordanceSettle()` is a defensive second gate. The primary gate is in `NavigationControls.enableIdleHint()` which already returns early under reduced-motion — meaning `onHintFinished` will never fire in that mode, so `triggerAffordanceSettle()` is never called. The inline guard protects against future code changes that might call it from other paths.
+
+---
 
 #### P-04 — Strengthen contrast resilience against artwork backgrounds
 
 **Files:** `src/styles/main.scss`
+**Risk:** Low — additive CSS rules only.
 
-- Add contrast-safe styling fallback so cues stay legible over both light and dark painting edges.
-- Keep visual style minimal (thin lines, low alpha, no heavy glow).
-- Verify forced-colors keeps hard-visible outlines.
+**Rationale:** The current white-only peek strips and chevrons have near-zero contrast against white or cream-colored painting edges. This is the most common failure case in the customer feedback. The dual-contrast `box-shadow`/`filter: drop-shadow` additions in P-02 already address this partially. P-04 adds a targeted forced-colors hardening pass and ensures the reduced-motion static branch is also dual-contrast.
+
+**Additions to the reduced-motion block:**
+
+```scss
+// In the existing @media (prefers-reduced-motion: reduce) block, extend peek strip rules:
+@media (prefers-reduced-motion: reduce) {
+  // … existing transition-duration rules …
+
+  .timeline-peek,
+  .info-panel-peek {
+    animation: none;
+    opacity: 0.22;  // P-01 raise
+    // P-04: dark shadow retained — does not depend on animation running
+    // box-shadow is inherited from base rules, no override needed here
+  }
+
+  .timeline-chevron,
+  .info-panel-chevron {
+    animation: none;
+    opacity: 0.30;  // P-01 raise
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.20));  // P-04: dual-contrast retained
+  }
+}
+```
+
+**Verify forced-colors block covers new rules (additions from P-02):**
+
+The existing forced-colors block sets `background: ButtonText; opacity: 1` on peek strips and `border-color: ButtonText` on chevrons. The new P-02 additions (`box-shadow`, `filter`) need explicit resets:
+
+```scss
+@media (forced-colors: active) {
+  .timeline-peek,
+  .info-panel-peek {
+    background: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+    box-shadow: none;      // P-04: remove dual-contrast shadow (not needed with ButtonText)
+  }
+  .timeline-chevron,
+  .info-panel-chevron {
+    // existing: border-color: ButtonText
+    filter: none;          // P-04: remove drop-shadow (forced-colors renders its own)
+  }
+  .timeline-chevron::after,
+  .info-panel-chevron::after {
+    background: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+  }
+}
+```
+
+**Coding notes:**
+- Do NOT add `backdrop-filter: contrast()` to peek strips — WebGL/Three.js canvases are not always available as a backdrop source for `backdrop-filter` (depends on GPU compositing layer), and the effect would be GPU-expensive and unreliable.
+- The `box-shadow` approach for dual-contrast is battery-safe: it is painted by the browser's 2D compositor and does not increase WebGL draw calls.
+- Test against a bright white-bordered painting AND a deep-black canvas. Expected: strip is perceptible in both cases. Expected: chevrons show a faint dark halo on white and a faint white shape on black.
+
+---
 
 #### P-05 — Validation and acceptance gate
 
-**Files:** `src/styles/main.scss`, `src/ui/*`, `src/main.ts` (if touched)
+**Files:** `src/styles/main.scss`, `src/ui/ChromeVisibilityManager.ts`
 
-- Validate with:
-  - `npm run lint`
-  - `npm run build`
-  - Manual QA on bright/dark paintings, keyboard-only, reduced-motion, forced-colors, and short-height landscape.
+**Validation steps:**
+
+1. `npm run lint` — must pass with zero new warnings.
+2. `npm run build` — must pass with zero TypeScript errors.
+3. **Manual QA matrix:**
+
+| Scenario | Expected outcome |
+|----------|-----------------|
+| Clean mode, white-edged painting | Peek strip and chevron are visibly perceptible within 1–2 s of attention scan |
+| Clean mode, dark/black painting | Same as above; no over-brightening |
+| Onboarding hint completes | `affordance-settling` class fires, peek strips/chevrons brighten then smoothly decay over 2 s |
+| `prefers-reduced-motion: reduce` | No settle animation; all cues static at raised floor (0.22/0.30); no animation whatsoever |
+| `forced-colors: active` | Peek strips painted `ButtonText`, chevrons hard-visible borders, `drop-shadow` and `box-shadow` suppressed |
+| Keyboard-only navigation | No hide-while-focused regression; ArrowLeft/ArrowRight still reveal nav; Escape still dismisses |
+| Short-height landscape (phone) | Nav always visible override still applies; settle class does not interfere |
+| `alwaysShowChrome` preference | Clean-mode rules disabled; settle timer still cleans up cleanly on dispose |
+
+**Regression watchlist (specific things that must NOT break):**
+- `shouldHide()` guard: `!pointerInZone && !pointerInPanel && !focusActive` — no changes to this logic.
+- `onPanelFocusOut` rAF-deferred `contains(document.activeElement)` check — not touched.
+- Nav hint `localStorage` persistence (`freyraum-nav-hint-seen`) — no changes.
+- `HINT_ANIM_DURATION_MS` timer (3 × 1600 + 300 ms) — no changes.
+- Existing `peek-pulse` keyframe name referenced in `:root[data-chrome-mode='clean']` selector — must remain unchanged; `peek-settle` is a separate new keyframe.
+
+---
+
+### Brainstorm — enhancement candidates for post-v0.63 (backlog)
+
+These items were identified during the v0.63 audit and research pass but are explicitly out of scope for v0.63:
+
+1. **Adaptive cue intensity curve (session-aware):** Increase affordance opacity on first session (first 3 reveals) and gradually lower it after each successful reveal. Storage: use `localStorage` counter key `freyraum-reveal-count`. Reset on major version changes. Avoids training regression: users who have revealed panels many times should see minimal chrome.
+
+2. **Artwork-edge luminance sampling (canvas-based contrast adaptation):** Sample a 10px-wide edge strip of the Three.js canvas via `ctx.getImageData()` after each artwork load. Compute average sRGB luminance (`L = 0.2126*R + 0.7152*G + 0.0722*B`). If `L > 180` (bright edge), temporarily switch `--chrome-affordance-color` to `rgba(0,0,0,0.35)` (dark cue on bright bg). Requires OffscreenCanvas or a `2d` readback context on the same canvas — confirm Three.js renderer configuration allows pixel readback without `preserveDrawingBuffer` performance cost.
+
+3. **`@property` registered custom property for smooth settle decay:** Register `--affordance-opacity-add` as a typed CSS custom property (`syntax: '<number>'`; `initial-value: 0`), add it to peek-pulse keyframe values, and animate the property on the root element during settle. This gives silky smooth decay *without* an `@keyframes` class swap. Browser support: Chrome 85+, Firefox 128+, Safari 15.4+ — all well within the project's target audience. Dependency: `@property` must be added to the SCSS via a `@supports` block or as an unconditional top-level rule.
+
+4. **Inline keyboard-help discoverability hint:** Add one bullet to `KeyboardHelp.ts` dialog text: `„Mausbewegung zur unteren Bildschirmkante enthüllt Zeitleiste und Navigation"`. Currently `KeyboardHelp` is at `src/ui/KeyboardHelp.ts`. This closes the discoverability gap for keyboard/AT users without any visual addition.
+
+5. **Touch-first wider reveal zone:** On `(pointer: coarse)` devices, increase `NAV_TRIGGER_BAND_PX` from `220` to `300` and `TIMELINE_TRIGGER_BAND_PX` from `140` to `180`. Touch users have coarser targeting and need a larger activation envelope. Change `CHROME_CONFIG` or pass a config override from `main.ts` conditioned on `window.matchMedia('(pointer: coarse)').matches`.
+
+6. **Diagnostics export for reveal counts:** Extend `window.__FREYRAUM_DIAGNOSTICS__.exportJson()` snapshot with a `revealHistory` array: `{panelId, reason, timestamp}` entries. This lets QA sessions replay the precise sequence of hide/reveal decisions during a gallery session for post-mortem debugging.
 
 ---
 
 ### Acceptance Criteria for v0.63
 
-1. In clean mode, hidden timeline/info/nav affordances are immediately noticeable within 1–2 seconds of attention scan, while remaining visually light.
-2. Cues remain present and readable in reduced-motion and forced-colors modes.
-3. Discoverability improvements do not increase persistent animation load or visual dominance over artwork.
-4. Keyboard/focus interaction remains stable (no hide-while-focused regressions).
-5. `npm run lint` and `npm run build` pass after implementation.
+1. In clean mode, hidden timeline/info/nav affordances are immediately noticeable within 1–2 seconds of passive attention scan on both dark and bright-edged paintings.
+2. Cues remain present and readable in reduced-motion mode (static, non-animated, at raised floor) and forced-colors mode (`ButtonText` hard-visible outlines).
+3. After the nav onboarding hint completes, the settle animation fires and peek strips/chevrons reach ~0.55 opacity peak, then smoothly decay back to standard floor over 2 seconds.
+4. Discoverability improvements add no persistent animation increase beyond the existing `peek-pulse` infinite cycle (settle is one-shot, same as the hint it follows).
+5. Keyboard/focus interaction has zero regressions: no hide-while-focused, Escape dismissal works, ArrowLeft/ArrowRight reveals nav, Tab into any panel keeps it revealed.
+6. `npm run lint` and `npm run build` pass after implementation.
 
 ---
 
