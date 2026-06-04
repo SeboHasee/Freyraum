@@ -2,20 +2,40 @@
 > v0.67 shipped (Phase 1): quality lock — no automatic runtime or first-run quality changes; adaptive controller is diagnostics-only.
 > Last full markdown audit: 2026-06-04 (v0.67 documentation sync; runtime now v0.67).
 
-## v0.67 — Performance stabilization + no automatic quality changes (2026-06-04, **Phase 1 shipped**) — as-built
+## v0.67 — Performance stabilization + no automatic quality changes (2026-06-04, **Phase 1 shipped**) — audited findings
 
-### What changed in code
+### Audit verdict
 
-1. `AdaptiveQualityController` gained a `locked` mode (+ `isLocked` getter). When locked, `evaluate()` only emits throttled `quality / locked-pressure` diagnostics and never returns a downgrade.
-2. `main.ts` constructs the controller locked (`AUTOMATIC_QUALITY_CHANGES_ENABLED = false`); the render-loop downgrade-apply path can no longer write `preferences.setQuality(...)`. The `adaptiveQualityWriteInFlight` flag was removed; quality changes are always manual.
-3. First-run startup heuristic is now diagnostics-only (`startup-suggestion-suppressed`), keeping the deterministic `DEFAULT_QUALITY_PRESET`; stored user choices are untouched.
+Phase 1 quality-lock goals are implemented correctly in runtime code. The dominant remaining performance risk is startup strategy breadth (strict all-artworks preload/warm), not automatic quality switching.
 
-### Still open (planning only, future phased PRs)
+### Code-verified findings
 
-- P-04 staged large-painting loading (critical-now / near-next / background).
-- P-05 offline asset pipeline for resized tiers + KTX2/Basis compressed outputs.
-- P-06 cost-center tuning (upload scheduling, warm-queue limits, postprocessing cost).
-- P-07 rollout validation with before/after diagnostics evidence.
+1. **Runtime automatic quality switching is disabled as intended.**
+   - `AdaptiveQualityController.evaluate()` in locked mode emits diagnostics and returns `null` (no downgrade request).
+   - `main.ts` instantiates the controller with automatic changes off, so render-loop pressure events do not write `preferences.setQuality(...)`.
+2. **First-run quality auto-override is suppressed as intended.**
+   - First run keeps deterministic default quality; the heuristic is logged only (`startup-suggestion-suppressed`) for diagnostics visibility.
+3. **Startup work remains full-gallery and high-cost by design.**
+   - `GalleryManager.init()` preloads all albedo and all PBR texture sets.
+   - `FULL_PRELOAD_SAFETY_CAP` is effectively uncapped (`Number.MAX_SAFE_INTEGER`), so strict preload remains default behavior.
+   - `main.ts` performs full warm sweep + full final-path warm sweep before overlay reveal.
+4. **Large texture handling is detection-only.**
+   - `TextureManager.warnIfOversized(...)` warns when texture dimensions exceed device max texture size, but no adaptive downscale/tier substitution path exists.
+
+### Online research synthesis applied
+
+1. Large visual apps perform better when entry is **progressive and staged** (first usable view fast, deterministic background promotion), rather than requiring full-gallery highest-detail readiness before first interaction.
+2. Three.js-heavy galleries generally benefit from **compressed texture pipelines (KTX2/Basis + mipmaps)** to reduce transfer, decode/upload cost, and VRAM pressure.
+3. **Tiered runtime asset selection** (device/viewport/zoom aware) is preferred over always loading maximum-resolution imagery.
+4. **Prewarm scope should be probability-based** (high-likelihood paths first), with long-tail warm-up deferred post-entry.
+5. **INP/LCP-style measurable gates** should be part of phased rollout acceptance, backed by stable diagnostics schemas.
+
+### Technical recommendations for next phases
+
+- **P-04:** Introduce explicit startup readiness contracts (`entry-minimal`, `entry-balanced`) and replace uncapped preload behavior with capability-derived limits.
+- **P-05:** Add import-time output tiers and runtime manifest selection so large paintings no longer rely on single heavy source assets.
+- **P-06:** Limit pre-entry warm/final-path work to entry target set; move non-critical prewarm behind post-entry budgeted queue.
+- **P-07:** Gate rollout by hard metrics (startup ms, unresolved readiness count, interaction dropped-frame ratio) and preserve schema-stable diagnostics for before/after comparability.
 
 
 ## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**) — as-built

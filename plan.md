@@ -1,83 +1,79 @@
 # FREYRAUM Plan
-> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
-> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+> v0.67 shipped (Phase 1): quality lock — no automatic runtime or first-run quality changes; adaptive controller is diagnostics-only.
+> Last full markdown audit: 2026-06-04 (v0.67 technical audit refresh; runtime now v0.67).
 
-## v0.67 — Performance stabilization + no automatic quality changes (**Phase 1 shipped**)
+## v0.67 — Performance stabilization + no automatic quality changes (**Phase 1 shipped, Phase 2+ planned**)
 
-> **Phase 1 implementation closeout (runtime):** The "no automatic quality changes" core (P-01, P-02, P-03) is now implemented in runtime code under a **quality lock** model. Automatic runtime preset downgrades and first-run startup preset overrides are disabled; the adaptive controller now only surfaces sustained frame-budget pressure as diagnostics, and the user's selected quality is authoritative. `npm run lint` and `npm run build` pass. The large-artwork asset-pipeline / staged-loading work (P-04, P-05, P-06) and final rollout validation (P-07) remain **planning only** and are deferred to future phased PRs.
+> **Technical audit summary (code-verified 2026-06-04):** The quality-lock architecture is correctly implemented. Runtime quality no longer auto-downgrades, and first-run startup no longer auto-switches preset. The remaining performance bottleneck is startup workload strategy (strict full-gallery preload + full-gallery warm-up), not adaptive quality logic.
 
 ### Customer problem restated
 
-1. Performance settings should not change automatically during runtime.
-2. The focus should shift from automatic quality switching to real rendering and asset performance improvements.
-3. Paintings are very large, so texture and GPU pressure must be treated as first-class performance risks.
+1. Keep user-selected quality authoritative at all times.
+2. Improve real performance (startup time, interaction smoothness, memory stability) without hidden preset switching.
+3. Handle very large artwork assets with deterministic, scalable loading behavior.
 
-### Code audit findings (current runtime behavior)
+### Technical audit (as-built behavior)
 
-1. **Automatic quality downgrade is active in the render loop.**
-   - `AdaptiveQualityController.evaluate(...)` can request `high → balanced → battery` downgrades when frame budget stays below target.
-   - `main.ts` applies the downgrade immediately via `preferences.setQuality(...)` (`src/main.ts`, adaptive block around lines 1590–1606).
-2. **First-run startup quality can still auto-change.**
-   - On first run without stored preference, `suggestStartupQuality()` may override default quality (`src/main.ts` lines 545–556, `src/utils/performance.ts`).
-3. **Startup work is intentionally very heavy for full-gallery readiness.**
-   - Full albedo preload and full PBR texture-set preload are executed during init (`src/gallery/GalleryManager.ts` lines 471–500).
-   - `FULL_PRELOAD_SAFETY_CAP` is currently `Number.MAX_SAFE_INTEGER`, effectively forcing strict all-artworks preload (`src/gallery/GalleryManager.ts` line 124).
-   - Main boot additionally warms every artwork through GPU and final post-processing path before entry (`src/main.ts` lines 964–1155).
-4. **Large-texture risk exists but only warning-level handling is present.**
-   - Oversized textures are detected and logged, but there is no enforced runtime downscale pipeline (`src/gallery/TextureManager.ts` lines 316–333).
-5. **Shader/material cost is high on upper presets.**
-   - High preset combines high segments, higher pixel-ratio cap, and advanced shading features (`src/config/quality.ts`, `src/materials/PaintingMaterial.ts`, `src/gallery/ArtworkMesh.ts`).
+1. **Quality lock is active and correct.** ✅
+   - `AdaptiveQualityController` supports `locked` mode and emits diagnostics-only pressure signals (`quality / locked-pressure`) instead of downgrade requests.
+   - `main.ts` constructs the controller with automatic changes disabled (`AUTOMATIC_QUALITY_CHANGES_ENABLED = false`), so the render loop does not mutate user quality from performance events.
+2. **Startup quality override is disabled.** ✅
+   - First run keeps `DEFAULT_QUALITY_PRESET`; startup heuristic is logged as suppressed (`quality / startup-suggestion-suppressed`) instead of applied.
+3. **Startup pipeline is still intentionally heavy.** ⚠️
+   - `GalleryManager.init()` preloads all albedo + all PBR sets.
+   - `FULL_PRELOAD_SAFETY_CAP = Number.MAX_SAFE_INTEGER` effectively enforces strict full-gallery preload for normal gallery sizes.
+   - `main.ts` performs full-gallery GPU warming and final-path warming under overlay before entry.
+4. **Large texture handling is detect-and-log, not mitigate-and-adapt.** ⚠️
+   - `TextureManager.warnIfOversized(...)` logs over-limit textures but does not downscale/swap tiers.
+5. **Upper preset cost remains high by design.** ℹ️
+   - High preset retains expensive geometry/material paths (segments, anisotropy, shader feature depth), which is acceptable with quality lock but requires stronger staged-loading strategy.
 
-### Potential performance issue list (priority-ordered)
+### Online performance research synthesized for Freyraum
 
-1. Strict full-gallery preload + full-gallery GPU warm before entry can create long startup stalls and high memory pressure on large collections.
-2. Very large painting textures can exceed practical upload budgets even when within device max texture size.
-3. Runtime automatic quality downgrades create user-visible instability and perceived loss of control.
-4. Heavy shader paths on large artworks can increase frame-time spikes during navigation and profile switches.
-5. Current startup heuristic can still alter quality unexpectedly in first session.
+1. **Progressive asset readiness beats strict full upfront readiness** for large visual apps: fast first-usable view first, then deterministic background promotion.
+2. **KTX2/Basis texture compression with mipmaps** is the practical baseline for reducing texture upload time and VRAM pressure in Three.js pipelines.
+3. **Responsive texture tiering (device + viewport + zoom aware)** is preferred over single full-resolution assets.
+4. **Prewarm only high-probability render paths** before interactivity; defer low-probability variants/background artworks after entry.
+5. **INP/LCP-style metrics and structured telemetry gates** should drive rollout decisions, not subjective feel-only validation.
 
-### Online research findings applied to Freyraum planning
+### v0.67+ technical implementation plan (coding-focused)
 
-1. **Use GPU texture compression (KTX2/Basis) and multi-resolution assets** to reduce VRAM, upload time, and download size.
-2. **Keep mipmaps enabled for artwork viewed at multiple distances** and use power-of-two sizing for better sampling behavior.
-3. **Prefer progressive loading (low-res first, high-res on demand)** for large image galleries instead of forcing full highest-detail readiness up front.
-4. **Cap and adapt render resolution carefully** (pixel ratio + postprocessing cost), but avoid abrupt user-facing preset changes.
-5. **If adaptive behavior exists, apply hysteresis and user control first** (opt-in/locked mode), and avoid changing quality during active interaction.
+1. **P-04 — Replace strict startup preload with staged readiness lanes**
+   - Add an explicit startup contract mode in `GalleryManager`:
+     - `entry-minimal`: active artwork + `critical-now` neighbors only.
+     - `entry-balanced`: active + critical + bounded near-next subset.
+   - Replace `FULL_PRELOAD_SAFETY_CAP = Number.MAX_SAFE_INTEGER` with a computed cap derived from device tier + artwork count.
+   - Keep queue determinism by preserving existing lane scheduler (`critical-now`, `near-next`, `background`) and promoting only when interaction window is idle.
+   - **Coding advice:** keep all transitions diagnostics-first (`readiness-contract-selected`, `entry-ready`, `background-catchup`) with counts, ids, and elapsed ms.
 
-### v0.67 implementation plan (Phase 1 P-01..P-03 shipped; P-04..P-07 planning only)
+2. **P-05 — Introduce offline artwork tier pipeline (source → runtime tiers)**
+   - Extend import tooling to emit per-artwork tier manifest (e.g., `thumb`, `mid`, `full`) plus optional KTX2 payloads.
+   - Keep original source as archival input only; runtime should resolve through manifest-selected tier.
+   - At runtime, select tier from viewport area, DPR, and zoom intent; only promote to higher tier when the artwork is active/inspected.
+   - **Coding advice:** add strict manifest validation at boot and fail-safe fallback to current URL path if tier artifacts are missing.
 
-1. **P-01 — Remove automatic runtime quality switching** ✅ *shipped*
-   - Disable adaptive downgrade application path in the render loop.
-   - Keep diagnostics visibility, but stop automatic `preferences.setQuality(...)` writes from performance monitor events.
-   - As built: `AdaptiveQualityController` accepts a `locked` flag; in `main.ts` it is constructed locked (`AUTOMATIC_QUALITY_CHANGES_ENABLED = false`). When locked, `evaluate()` emits a throttled `quality / locked-pressure` warning and returns `null`, so no preset write occurs.
-2. **P-02 — Stop first-run automatic quality overrides** ✅ *shipped*
-   - Replace startup quality auto-suggestion with deterministic default + explicit user choice.
-   - Preserve stored user preference behavior exactly.
-   - As built: first-run no longer calls `preferences.setQuality(suggested)`; it keeps `DEFAULT_QUALITY_PRESET` and logs a `quality / startup-suggestion-suppressed` diagnostic with what the legacy heuristic *would* have suggested. `hasStoredQuality()` users are unaffected.
-3. **P-03 — Introduce explicit "quality lock" model** ✅ *shipped*
-   - Treat user-selected quality as authoritative unless user explicitly changes it.
-   - Add clear product rule in docs and diagnostics: performance mitigation must prefer internal optimizations over preset changes.
-   - As built: the lock is documented in the controller, `main.ts`, CHANGELOG, and these plan notes; `isLocked` getter exposes the mode; preference subscribe path now treats every quality change as manual.
-4. **P-04 — Rework large-painting loading strategy** *(planning only)*
-   - Move from strict all-artworks-upfront strategy toward staged readiness (critical-now, near-next, background).
-   - Keep entry experience smooth while reducing memory spikes and startup time.
-5. **P-05 — Add asset pipeline plan for large artwork** *(planning only)*
-   - Define an offline conversion path for resized tiers and KTX2/Basis compressed outputs.
-   - Map runtime selection logic to viewport/zoom/device capability without mutating user quality preference.
-6. **P-06 — Tune cost centers before touching visual quality presets** *(planning only)*
-   - Prioritize texture upload scheduling, warm queue limits, and postprocessing cost controls.
-   - Validate with frame-time, memory, and interaction metrics before any preset redesign.
-7. **P-07 — Validation and rollout plan** *(planning only)*
-   - Establish acceptance gates: no automatic preset changes, improved startup latency, stable frame-time on navigation, and no regression in artwork fidelity expectations.
-   - Roll out in phased PRs with diagnostics-backed before/after evidence.
+3. **P-06 — Reduce warm/prewarm overreach while preserving smoothness**
+   - Change pre-entry final-path warm from **all artworks** to **entry target set** only.
+   - Keep shader variant prewarm, but limit to active artwork + active quality first; move non-active quality variant warm behind first-interaction readiness gate.
+   - Add per-frame warm budget guards around overlay warm loops (max ms/frame, max artworks/frame) to prevent long main-thread monopolization.
+   - **Coding advice:** centralize warm-budget constants in one config object so diagnostics and behavior cannot diverge.
 
-### Acceptance criteria for the future implementation
+4. **P-07 — Validation gates and rollout safety**
+   - Define hard acceptance gates by diagnostics:
+     - no automatic quality writes,
+     - startup duration reduction versus v0.67 baseline,
+     - reduced unresolved readiness at entry,
+     - stable interaction frame-time and dropped-frame percentage.
+   - Roll out behind a single runtime feature flag (`startupReadinessMode`) with explicit baseline/control logs.
+   - **Coding advice:** keep log schemas stable across phases to enable direct before/after diffing from collected JSON diagnostics.
 
-1. Runtime never changes user quality preset automatically.
-2. First-run startup does not silently switch preset.
-3. Large-painting scenarios show lower startup pressure and fewer navigation hitches.
-4. Performance improvements come from pipeline/asset/runtime optimization, not hidden preset downgrades.
-5. Diagnostics provide clear evidence of stability and performance gains.
+### Acceptance criteria for next performance phase
+
+1. User quality preset remains fully manual/authoritative.
+2. Entry readiness no longer requires full-gallery full-path warming.
+3. Large-artwork sessions show lower startup latency and lower memory pressure.
+4. Interaction windows maintain stable frame pacing while background prefetch continues deterministically.
+5. Diagnostics provide phase-comparable, quantitative evidence for every rollout step.
 
 ## v0.65 — Visual affordance prominence + polish (**shipped 2026-06-04**)
 
