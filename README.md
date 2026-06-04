@@ -1,6 +1,16 @@
 # Freyraum
-> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.61 shipped: stronger hidden-UI discoverability cues, one-shot nav-arrow idle hint, and no auto info-panel reveal on artwork change.
+> Last full markdown audit: 2026-06-04 (v0.61 shipped).
+
+## v0.61 — Hidden-UI discoverability + nav-arrow idle hint (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Info panel no longer auto-reveals when the artwork changes; description stays hidden until explicit user intent.
+- A one-shot nav-arrow onboarding hint now pulses after idle delay and dismisses permanently after first nav discovery (`localStorage` persisted).
+- Screen-reader users now receive an explicit `aria-live` announcement for artwork changes, preserving accessibility after auto-reveal removal.
+- Peek-strip discoverability cues were strengthened (slightly thicker strips + stronger pulse).
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 
 ## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
 

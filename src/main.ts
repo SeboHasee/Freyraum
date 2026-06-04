@@ -790,7 +790,7 @@ async function main(): Promise<void> {
   // on pointer proximity, keyboard focus, or touch tap. `data-chrome-mode` is
   // already mirrored to <html> by PreferencesStore (set during construction),
   // so the panels start hidden behind the loading overlay with no visible flash.
-  // forceReveal on navigation is wired further below in `handleNavigate`.
+  // v0.61 removes forced info-panel reveal on artwork changes.
   const chromeVisibility = new ChromeVisibilityManager(
     chromeRefs.timeline!,
     chromeRefs.infoPanel!,
@@ -820,6 +820,41 @@ async function main(): Promise<void> {
   canvasA11yHelp.textContent =
     'Interaktive 3D-Galerie. Navigation: Pfeiltasten links und rechts oder die Navigationsbuttons. Zoomen: Plus- und Minus-Buttons.';
   app.appendChild(canvasA11yHelp);
+  let artworkAnnouncerEl: HTMLElement | null = null;
+  let artworkAnnouncerRafA: number | null = null;
+  let artworkAnnouncerRafB: number | null = null;
+  const clearArtworkAnnouncerFrames = (): void => {
+    if (artworkAnnouncerRafA !== null) {
+      cancelAnimationFrame(artworkAnnouncerRafA);
+      artworkAnnouncerRafA = null;
+    }
+    if (artworkAnnouncerRafB !== null) {
+      cancelAnimationFrame(artworkAnnouncerRafB);
+      artworkAnnouncerRafB = null;
+    }
+  };
+  const announceArtworkChange = (title: string): void => {
+    if (!artworkAnnouncerEl) {
+      artworkAnnouncerEl = document.createElement('div');
+      artworkAnnouncerEl.id = 'freyraum-artwork-status';
+      artworkAnnouncerEl.className = 'sr-only';
+      artworkAnnouncerEl.setAttribute('aria-live', 'polite');
+      artworkAnnouncerEl.setAttribute('aria-atomic', 'true');
+      app.appendChild(artworkAnnouncerEl);
+    }
+    clearArtworkAnnouncerFrames();
+    artworkAnnouncerEl.textContent = '';
+    const announcementText = title ? `Aktuelles Werk: ${title}` : 'Aktuelles Werk gewechselt';
+    artworkAnnouncerRafA = requestAnimationFrame(() => {
+      artworkAnnouncerRafA = null;
+      artworkAnnouncerRafB = requestAnimationFrame(() => {
+        artworkAnnouncerRafB = null;
+        if (artworkAnnouncerEl) {
+          artworkAnnouncerEl.textContent = announcementText;
+        }
+      });
+    });
+  };
 
   // v0.11 — unified canvas interaction replaced MouseInteraction,
   // ZoomPan, and TouchInteraction (removed in v0.17 dead-code cleanup).
@@ -1506,9 +1541,7 @@ async function main(): Promise<void> {
   const handleNavigate = (index: number): void => {
     infoPanel.update(artworks[index], true);
     timeline.setActive(index);
-    // v0.60 — surface the updated work information briefly when the artwork
-    // changes, then auto-hide again (no-op when chrome is always visible).
-    chromeVisibility.forceReveal('info-panel');
+    announceArtworkChange(artworks[index]?.title ?? '');
     diagnostics.info('gallery', 'navigate', 'Artwork changed', {
       index,
       artworkId: artworks[index]?.id,
@@ -1520,6 +1553,7 @@ async function main(): Promise<void> {
 
   navControls.onPrev(() => galleryManager.navigate(-1));
   navControls.onNext(() => galleryManager.navigate(1));
+  navControls.enableIdleHint();
 
   timeline.onSelect((index: number) => galleryManager.goTo(index));
   timeline.onPreview((index: number) => galleryManager.promotePrefetchWindow(index, 'timeline-preview'));
@@ -1645,6 +1679,9 @@ async function main(): Promise<void> {
     keyboardHelp.dispose();
     topbar.dispose();
     infoPanel.dispose();
+    clearArtworkAnnouncerFrames();
+    artworkAnnouncerEl?.remove();
+    artworkAnnouncerEl = null;
     navControls.dispose();
     zoomControls.dispose();
     fullscreenButton.dispose();

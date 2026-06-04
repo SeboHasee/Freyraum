@@ -1,26 +1,32 @@
 # CHANGELOG
-> v0.61 planned: hidden-element discoverability cues (incl. nav arrows) + no automatic info-panel reveal on artwork change.
-> Last full markdown audit: 2026-06-04 (v0.61 documentation-planning pass).
+> v0.61 shipped: hidden-element discoverability cues (incl. nav arrows) + no automatic info-panel reveal on artwork change.
+> Last full markdown audit: 2026-06-04 (v0.61 implementation + validation pass).
 
-## v0.61 — Discoverability + navigation-arrow cue follow-up plan (2026-06-04, **planned**)
+## v0.61 — Discoverability + navigation-arrow cue follow-up (2026-06-04, **shipped**)
 
 ### Status
 
-Planned/documented. No runtime code changes in this pass.
+Shipped in runtime code and validated.
 
 ### Summary
 
-Added a v0.61 planning/finding pass to address customer feedback after v0.60. Plan and findings have been fully expanded with detailed technical specifications, exact code snippets, and verified research:
+Implemented the full v0.61 follow-up after the v0.60 clean-chrome rollout:
 
-- **P-01 — Strengthen peek strips:** Slightly increase strip thickness (3px → 4px) and pulse amplitude (max opacity 0.26 → 0.32) to improve salience without cluttering artwork.
-- **P-02 — Nav arrow idle-hint system:** `@keyframes nav-ring-pulse` (box-shadow ring, 3 iterations × 1.6s = ~4.8s total) triggered after 5s of inactivity on first session; dismissed permanently on first nav interaction via `localStorage` key `freyraum-nav-hint-seen`; disabled under `prefers-reduced-motion: reduce` and `forced-colors: active`.
-- **P-03 — Remove forced info-panel reveal on navigation:** Delete `chromeVisibility.forceReveal('info-panel')` from `handleNavigate` in `src/main.ts`.
-- **P-04 — Screen-reader artwork announcement:** Inject `#freyraum-artwork-status` `aria-live="polite"` region; update with new artwork title on each navigation change using double-rAF mutation pattern to compensate for the removed auto-reveal.
+- **P-01 — Strengthen peek strips:** Increased strip thickness (`3px → 4px`) and pulse amplitude (`0.10/0.26 → 0.12/0.32`) for clearer discoverability.
+- **P-02 — Nav arrow idle-hint system:** Added one-shot `nav-ring-pulse` onboarding hint with 5s idle delay and persistent dismissal (`localStorage` key `freyraum-nav-hint-seen`), including dismissal on click, keyboard arrows, hover, or focus.
+- **P-03 — Remove forced info-panel reveal on navigation:** Removed `chromeVisibility.forceReveal('info-panel')` from `handleNavigate`, so descriptions stay hidden until explicit reveal intent.
+- **P-04 — Screen-reader artwork announcement:** Added a dedicated `#freyraum-artwork-status` `aria-live="polite"` announcer updated on every navigation with a double-rAF mutation pattern.
 
 ### Documentation updates
 
-- `plan.md`: v0.61 section fully rewritten with file-by-file change summary, exact TypeScript and SCSS code snippets, acceptance criteria table, architecture decision rationale.
-- `FINDINGS.md`: v0.61 section fully expanded with 8 research findings covering idle-hint UX pattern, WCAG 2.5.8, WAI carousel pattern, `@starting-style`, View Transitions API (future backlog), `box-shadow` animation cost, localStorage scope decision.
+- `plan.md`: v0.61 status promoted to shipped with implementation closeout summary.
+- `FINDINGS.md`: v0.61 section promoted to shipped and extended with as-built verification notes.
+- `README.md`: top status banner updated to reflect v0.61 as current shipped state.
+
+### Validation
+
+- `npm run lint` — pass
+- `npm run build` — pass
 
 ## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel (2026-06-04, **shipped**)
 

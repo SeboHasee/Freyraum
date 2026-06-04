@@ -1,10 +1,10 @@
 # FREYRAUM Plan
-> v0.61 planned: strengthen discoverability cues for hidden UI (including nav arrows idle-hint) and keep artwork descriptions hidden until explicit reveal.
-> Last full markdown audit: 2026-06-04 (v0.61 plan fully detailed with code audit + online UX/accessibility research; not yet implemented).
+> v0.61 shipped: stronger hidden-UI discoverability cues, nav-arrow idle hint, and no auto-description reveal on artwork change.
+> Last full markdown audit: 2026-06-04 (v0.61 implemented and validated in runtime code).
 
-## v0.61 — Hidden-UI Discoverability + Navigation-Arrow Idle Hint + No Auto-Description Reveal (**planned 2026-06-04, updated 2026-06-04**)
+## v0.61 — Hidden-UI Discoverability + Navigation-Arrow Idle Hint + No Auto-Description Reveal (**shipped 2026-06-04**)
 
-> **Plan revision:** This plan replaces the initial draft with a full technical specification incorporating live code audit findings and online UX/accessibility research conducted 2026-06-04. All implementation details below are verified against the actual codebase APIs. See FINDINGS.md §v0.61 for the complete research record.
+> **Implementation closeout:** v0.61 is now implemented in runtime code. `forceReveal('info-panel')` was removed from navigation, a dedicated `aria-live` artwork announcer was added, and navigation controls now include a one-shot idle hint (`localStorage` persisted, reduced-motion safe, and fully cleaned up on dispose). See FINDINGS.md §v0.61 and CHANGELOG.md §v0.61 for as-built notes and validation.
 
 ---
 

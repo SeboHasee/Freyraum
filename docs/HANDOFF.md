@@ -1,6 +1,15 @@
 # FREYRAUM customer handoff guide
-> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.61 shipped: nav-arrow idle hint + stronger hidden-UI cues + no automatic info-panel reveal on artwork change.
+> Last full markdown audit: 2026-06-04 (v0.61 shipped).
+
+## v0.61 — handoff status: discoverability follow-up shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- Artwork navigation no longer auto-opens the description panel; users reveal it intentionally (edge hover/focus/touch or always-visible preference).
+- Navigation arrows now have a one-shot onboarding pulse after idle; hint dismisses permanently after first navigation discovery and does not repeat.
+- Screen readers receive an explicit artwork-change announcement via a dedicated `aria-live` status region.
+- Validation: `npm run lint` and `npm run build` pass.
 
 ## v0.47 — handoff status: modern gallery frame realism retune shipped (2026-05-22)
 

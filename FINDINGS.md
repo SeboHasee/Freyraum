@@ -1,8 +1,15 @@
 # FINDINGS
-> v0.61 planned: nav-arrow idle-hint system (ring pulse, localStorage-dismissed) + stop auto-revealing description on artwork change + aria-live artwork announcement.
-> Last full markdown audit: 2026-06-04 (v0.61 findings fully expanded with technical research; implementation pending).
+> v0.61 shipped: nav-arrow idle-hint system (ring pulse, localStorage-dismissed) + no auto-description reveal + aria-live artwork announcement.
+> Last full markdown audit: 2026-06-04 (v0.61 implemented and validated).
 
-## v0.61 — Hidden-UI discoverability + nav-arrow affordances research (2026-06-04, **planned**)
+## v0.61 — Hidden-UI discoverability + nav-arrow affordances (2026-06-04, **shipped**)
+
+### Implementation verification (as built)
+
+- `src/main.ts`: removed `chromeVisibility.forceReveal('info-panel')` from `handleNavigate`, added `announceArtworkChange()` with a dedicated `#freyraum-artwork-status` `aria-live="polite"` region, wired `navControls.enableIdleHint()`, and added cleanup for announcer rAF handles/DOM.
+- `src/ui/NavigationControls.ts`: added one-shot idle-hint lifecycle (`enableIdleHint()` / `dismissHint()`), 5s idle delay, persistent dismissal key `freyraum-nav-hint-seen`, ArrowLeft/ArrowRight dismissal, pointer/focus discovery dismissal, and defensive storage guards.
+- `src/styles/main.scss`: increased peek-strip strength (`3px → 4px`, `peek-pulse` `0.10/0.26 → 0.12/0.32`), added `@keyframes nav-ring-pulse` and `:root[data-nav-hint='active']` rules, and suppressed the nav hint animation under `prefers-reduced-motion` and `forced-colors`.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 
 ### Customer request captured
 

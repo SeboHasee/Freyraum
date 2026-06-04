@@ -121,8 +121,8 @@
 
   // Visual — translucent peek strips at the screen edges.
   --chrome-peek-bg: rgba(255, 255, 255, 0.16);
-  --chrome-peek-width-v: 3px;     // left-edge (info panel) strip thickness
-  --chrome-peek-height-h: 3px;    // bottom-edge (timeline) strip thickness
+  --chrome-peek-width-v: 4px;     // left-edge (info panel) strip thickness
+  --chrome-peek-height-h: 4px;    // bottom-edge (timeline) strip thickness
   --chrome-peek-length-v: min(160px, 16vh);   // left strip length
   --chrome-peek-length-h: min(280px, 28vw);   // bottom strip length
 
@@ -461,6 +461,31 @@ button {
     background: var(--glass-bg-strong);
     box-shadow: var(--shadow-soft), 0 0 0 3px rgba(255, 255, 255, 0.8);
   }
+}
+
+@keyframes nav-ring-pulse {
+  0% {
+    box-shadow: var(--shadow-medium), 0 0 0 0 rgba(255, 255, 255, 0.4);
+  }
+  60% {
+    box-shadow: var(--shadow-medium), 0 0 0 12px rgba(255, 255, 255, 0);
+  }
+  100% {
+    box-shadow: var(--shadow-medium), 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+:root[data-nav-hint='active'] .nav-btn::before {
+  animation: nav-ring-pulse 1.6s ease-out 3;
+}
+
+:root[data-nav-hint='active'] .nav-btn:last-child::before {
+  animation-delay: 0.4s;
+}
+
+:root[data-nav-hint='active'] .nav-btn:hover::before,
+:root[data-nav-hint='active'] .nav-btn:focus-visible::before {
+  animation: none;
 }
 
 // =============================================================================
@@ -1819,8 +1844,8 @@ button {
 }
 
 @keyframes peek-pulse {
-  0%, 100% { opacity: 0.1; }
-  50%      { opacity: 0.26; }
+  0%, 100% { opacity: 0.12; }
+  50%      { opacity: 0.32; }
 }
 
 // Peek strips only breathe in clean mode; hidden entirely when chrome is pinned.
@@ -1875,6 +1900,10 @@ button {
     animation: none;
     opacity: 0.18;
   }
+
+  :root[data-nav-hint='active'] .nav-btn::before {
+    animation: none;
+  }
 }
 
 // ── Forced colors: make peek strips visible in high-contrast mode ───────────
@@ -1884,6 +1913,10 @@ button {
     background: ButtonText;
     opacity: 1;
     forced-color-adjust: none;
+  }
+
+  :root[data-nav-hint='active'] .nav-btn::before {
+    animation: none;
   }
 }
 // =============================================================================
