@@ -2,6 +2,78 @@
 > v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
 > Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
 
+## v0.67 — Performance stabilization + no automatic quality changes (**planning only**)
+
+### Customer problem restated
+
+1. Performance settings should not change automatically during runtime.
+2. The focus should shift from automatic quality switching to real rendering and asset performance improvements.
+3. Paintings are very large, so texture and GPU pressure must be treated as first-class performance risks.
+
+### Code audit findings (current runtime behavior)
+
+1. **Automatic quality downgrade is active in the render loop.**
+   - `AdaptiveQualityController.evaluate(...)` can request `high → balanced → battery` downgrades when frame budget stays below target.
+   - `main.ts` applies the downgrade immediately via `preferences.setQuality(...)` (`src/main.ts`, adaptive block around lines 1590–1606).
+2. **First-run startup quality can still auto-change.**
+   - On first run without stored preference, `suggestStartupQuality()` may override default quality (`src/main.ts` lines 545–556, `src/utils/performance.ts`).
+3. **Startup work is intentionally very heavy for full-gallery readiness.**
+   - Full albedo preload and full PBR texture-set preload are executed during init (`src/gallery/GalleryManager.ts` lines 471–500).
+   - `FULL_PRELOAD_SAFETY_CAP` is currently `Number.MAX_SAFE_INTEGER`, effectively forcing strict all-artworks preload (`src/gallery/GalleryManager.ts` line 124).
+   - Main boot additionally warms every artwork through GPU and final post-processing path before entry (`src/main.ts` lines 964–1155).
+4. **Large-texture risk exists but only warning-level handling is present.**
+   - Oversized textures are detected and logged, but there is no enforced runtime downscale pipeline (`src/gallery/TextureManager.ts` lines 316–333).
+5. **Shader/material cost is high on upper presets.**
+   - High preset combines high segments, higher pixel-ratio cap, and advanced shading features (`src/config/quality.ts`, `src/materials/PaintingMaterial.ts`, `src/gallery/ArtworkMesh.ts`).
+
+### Potential performance issue list (priority-ordered)
+
+1. Strict full-gallery preload + full-gallery GPU warm before entry can create long startup stalls and high memory pressure on large collections.
+2. Very large painting textures can exceed practical upload budgets even when within device max texture size.
+3. Runtime automatic quality downgrades create user-visible instability and perceived loss of control.
+4. Heavy shader paths on large artworks can increase frame-time spikes during navigation and profile switches.
+5. Current startup heuristic can still alter quality unexpectedly in first session.
+
+### Online research findings applied to Freyraum planning
+
+1. **Use GPU texture compression (KTX2/Basis) and multi-resolution assets** to reduce VRAM, upload time, and download size.
+2. **Keep mipmaps enabled for artwork viewed at multiple distances** and use power-of-two sizing for better sampling behavior.
+3. **Prefer progressive loading (low-res first, high-res on demand)** for large image galleries instead of forcing full highest-detail readiness up front.
+4. **Cap and adapt render resolution carefully** (pixel ratio + postprocessing cost), but avoid abrupt user-facing preset changes.
+5. **If adaptive behavior exists, apply hysteresis and user control first** (opt-in/locked mode), and avoid changing quality during active interaction.
+
+### v0.67 implementation plan (planning only, no runtime changes yet)
+
+1. **P-01 — Remove automatic runtime quality switching**
+   - Disable adaptive downgrade application path in the render loop.
+   - Keep diagnostics visibility, but stop automatic `preferences.setQuality(...)` writes from performance monitor events.
+2. **P-02 — Stop first-run automatic quality overrides**
+   - Replace startup quality auto-suggestion with deterministic default + explicit user choice.
+   - Preserve stored user preference behavior exactly.
+3. **P-03 — Introduce explicit “quality lock” model**
+   - Treat user-selected quality as authoritative unless user explicitly changes it.
+   - Add clear product rule in docs and diagnostics: performance mitigation must prefer internal optimizations over preset changes.
+4. **P-04 — Rework large-painting loading strategy**
+   - Move from strict all-artworks-upfront strategy toward staged readiness (critical-now, near-next, background).
+   - Keep entry experience smooth while reducing memory spikes and startup time.
+5. **P-05 — Add asset pipeline plan for large artwork**
+   - Define an offline conversion path for resized tiers and KTX2/Basis compressed outputs.
+   - Map runtime selection logic to viewport/zoom/device capability without mutating user quality preference.
+6. **P-06 — Tune cost centers before touching visual quality presets**
+   - Prioritize texture upload scheduling, warm queue limits, and postprocessing cost controls.
+   - Validate with frame-time, memory, and interaction metrics before any preset redesign.
+7. **P-07 — Validation and rollout plan**
+   - Establish acceptance gates: no automatic preset changes, improved startup latency, stable frame-time on navigation, and no regression in artwork fidelity expectations.
+   - Roll out in phased PRs with diagnostics-backed before/after evidence.
+
+### Acceptance criteria for the future implementation
+
+1. Runtime never changes user quality preset automatically.
+2. First-run startup does not silently switch preset.
+3. Large-painting scenarios show lower startup pressure and fewer navigation hitches.
+4. Performance improvements come from pipeline/asset/runtime optimization, not hidden preset downgrades.
+5. Diagnostics provide clear evidence of stability and performance gains.
+
 ## v0.65 — Visual affordance prominence + polish (**shipped 2026-06-04**)
 
 > **Implementation closeout:** The request was to make hidden affordances a bit more prominent and visually pleasing, informed by Apple-like design patterns. This pass keeps the minimal chrome model but increases edge-cue readability and premium feel through stronger visual floors, softened glass material treatment, and calmer hierarchy-consistent motion.
