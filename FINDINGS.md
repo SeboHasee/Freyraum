@@ -1,6 +1,25 @@
 # FINDINGS
-> v0.67 shipped (Phase 1): quality lock — no automatic runtime or first-run quality changes; adaptive controller is diagnostics-only.
-> Last full markdown audit: 2026-06-04 (v0.67 documentation sync; runtime now v0.67).
+> v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry.
+> Last full markdown audit: 2026-06-04 (v0.68 documentation sync; runtime now v0.68).
+
+## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (2026-06-04, **shipped**) — findings
+
+### What changed
+
+The strict full-gallery pre-entry contract (every artwork preloaded + GPU-warmed + final-path-warmed before the CTA) was replaced by a staged-readiness contract behind one feature flag (`startupReadinessMode`, default `entry-balanced`). Only the entry target set (active artwork + critical window, + a bounded near-next subset in `entry-balanced`) must reach full readiness before entry; the rest is deferred to the existing deterministic `near-next` prefetch lane and the budgeted post-reveal warm queue.
+
+### Code-verified findings
+
+1. **Pre-entry warm scope is now bounded.** `main.ts` warms `getStartupEntryTargets(0)` (not `warmOrder`) before reveal; `continueWarmQueue` (previously a no-op) warms the deferred remainder after entry with per-frame ms + batch guards.
+2. **Eager PBR preload is bounded in entry modes.** `GalleryManager.init()` eagerly preloads PBR only for the entry target set; other texture-set artworks are queued to `near-next`.
+3. **Legacy behavior is preserved as a rollback.** `?startup=full` (or `localStorage`) reproduces the exact v0.67 strict full-gallery contract.
+4. **Quality stays manual.** No change to the Phase 1 quality lock; the new `performance-gate` diagnostic asserts `automaticQualityChangesEnabled: false`.
+5. **P-05 remains open.** Large-texture mitigation (downscale/tier) and the offline KTX2/Basis manifest are still detection-only / not built.
+
+### Validation
+
+`npm run lint` ✅, `npm run build` ✅. Behavioral validation is via the stable-schema `boot / performance-gate` diagnostic (compare `full` baseline vs `entry-balanced` for `startupMsToEntryCta`, `entryWarmCount`, `deferredWarmCount`).
+
 
 ## v0.67 — Performance stabilization + no automatic quality changes (2026-06-04, **Phase 1 shipped**) — audited findings
 

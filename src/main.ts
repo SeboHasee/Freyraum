@@ -36,13 +36,21 @@ import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
 import { detectDeviceCapabilities, applyDeviceCaps, type DeviceCapabilities } from './utils/device';
 import { suggestStartupQuality } from './utils/performance';
+import {
+  resolveStartupReadinessMode,
+  computeEntryTargetCount,
+  WARM_BUDGET,
+  type StartupReadinessMode,
+} from './config/startup';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
 const MIN_LOADING_SCREEN_MS = 500;
-const DEFAULT_GPU_WARM_CRITICAL_COUNT = 5;
-const DEFAULT_GPU_WARM_FRAME_BUDGET_MS = 8;
-const DEFAULT_GPU_WARM_BATCH_CAP = 2;
+// v0.68 P-06: warm-budget defaults are centralised in `config/startup.ts`
+// (WARM_BUDGET) so runtime behaviour and diagnostics share one source of truth.
+const DEFAULT_GPU_WARM_CRITICAL_COUNT = WARM_BUDGET.defaultPreEntryWarmCount;
+const DEFAULT_GPU_WARM_FRAME_BUDGET_MS = WARM_BUDGET.defaultPostRevealFrameBudgetMs;
+const DEFAULT_GPU_WARM_BATCH_CAP = WARM_BUDGET.defaultPostRevealBatchCap;
 const QUALITY_PREWARM_IDS: readonly QualityPresetId[] = ['high', 'balanced', 'battery'];
 
 /**
@@ -506,6 +514,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
 }
 
 async function main(): Promise<void> {
+  const bootStartedAt = performance.now();
   const diagnostics = getDiagnostics();
   diagnostics.installGlobalHandlers();
   diagnostics.info('boot', 'startup', 'Starting FREYRAUM runtime');
@@ -739,6 +748,26 @@ async function main(): Promise<void> {
   galleryManager.applyPreset(initialPreset);
   const warmProfile = deriveWarmProfile(initialCaps, artworks.length);
   galleryManager.configureReadinessProfile({ criticalRadius: warmProfile.criticalRadius });
+  // v0.68 (v0.67 P-04/P-07) — staged startup readiness contract. A single
+  // feature flag (`startupReadinessMode`, default `entry-balanced`) decides
+  // whether every artwork is warmed before the entry CTA (`full`, legacy) or
+  // only the active artwork + critical window (+ a bounded near-next subset),
+  // with the remainder deterministically deferred to background prefetch lanes.
+  const startupReadinessMode: StartupReadinessMode = resolveStartupReadinessMode();
+  const entryTargetCount = computeEntryTargetCount(
+    startupReadinessMode,
+    initialCaps.layoutTier,
+    artworks.length,
+    warmProfile.criticalRadius
+  );
+  galleryManager.configureStartupReadiness({ mode: startupReadinessMode, entryTargetCount });
+  diagnostics.info('boot', 'startup-readiness-mode', 'Resolved startup readiness contract', {
+    mode: startupReadinessMode,
+    entryTargetCount,
+    artworkCount: artworks.length,
+    criticalRadius: warmProfile.criticalRadius,
+    layoutTier: initialCaps.layoutTier,
+  });
   diagnostics.info('boot', 'warm-profile', 'Applied device-aware warm profile', {
     artworkCount: artworks.length,
     layoutTier: initialCaps.layoutTier,
@@ -970,18 +999,28 @@ async function main(): Promise<void> {
   };
   const warmOrder = galleryManager.getBudgetedWarmOrder(0);
 
-  // v0.24.2 Q-01/Q-02: Enforce strict all-paintings-ready contract before CTA.
-  // Every artwork in warmOrder (all artworks, priority-ordered) must have its PBR
-  // texture set loaded, procedural maps generated, and GPU upload completed before
-  // "Galerie betreten" is enabled. This eliminates cold paths on first navigation.
-  const fullWarmTargets = warmOrder;
-  await galleryManager.ensureEntryReadiness(fullWarmTargets, 'overlay-full-gallery-contract');
+  // v0.68 (v0.67 P-04/P-06): The pre-entry warm contract covers only the entry
+  // target set (active artwork + critical window, and in `entry-balanced` a
+  // bounded near-next subset). In legacy `full` mode the entry target set is the
+  // whole gallery (`fullWarmTargets === warmOrder`), so behaviour is unchanged.
+  // The artworks beyond `fullWarmTargets` are warmed deterministically *after*
+  // entry by the budgeted `continueWarmQueue` (per-frame ms + batch guards).
+  const fullWarmTargets = galleryManager.getStartupEntryTargets(0);
+  const deferredWarmCount = Math.max(0, warmOrder.length - fullWarmTargets.length);
+  diagnostics.info('boot', 'pre-entry-warm-contract', 'Pre-entry GPU warm contract resolved', {
+    mode: startupReadinessMode,
+    warmOrderLength: warmOrder.length,
+    entryWarmCount: fullWarmTargets.length,
+    deferredWarmCount,
+    entryTargets: fullWarmTargets,
+  });
+  await galleryManager.ensureEntryReadiness(fullWarmTargets, 'overlay-entry-readiness-contract');
   loadingOverlay.setStatus('GPU wird vorbereitet');
   loadingOverlay.setProgress(50);
   for (let i = 0; i < fullWarmTargets.length; i += 1) {
     // v0.24.2 Q-06: Show per-artwork preparation progress in status text.
     loadingOverlay.setStatus(`Gemälde ${i + 1} / ${fullWarmTargets.length} wird vorbereitet`);
-    warmArtwork(fullWarmTargets[i], 'overlay-full-gallery-contract');
+    warmArtwork(fullWarmTargets[i], 'overlay-entry-readiness-contract');
     // v0.25 T-04: spread progress across the 50%→95% range so the bar
     // animates visibly during warm; one increment per painting.
     loadingOverlay.setProgress(50 + Math.round(((i + 1) / Math.max(1, fullWarmTargets.length)) * 45));
@@ -990,9 +1029,10 @@ async function main(): Promise<void> {
     await rafYield();
   }
 
-  // v0.24.2 Q-03: Deterministic completion pass — retry any paintings that did not
-  // reach full readiness in the first sweep (transient fetch failures, OOM-evicted
-  // textures, etc.). The contract covers every artwork, not just an entry subset.
+  // v0.24.2 Q-03: Deterministic completion pass — retry any entry-target painting
+  // that did not reach full readiness in the first sweep (transient fetch
+  // failures, OOM-evicted textures, etc.). The contract covers the entry target
+  // set; deferred artworks are completed post-entry by the background lanes.
   let entryContract = galleryManager.getEntryReadinessContract(fullWarmTargets);
   let entryContractPass = 0;
   const maxEntryContractPasses = Math.max(2, fullWarmTargets.length + 1);
@@ -1016,7 +1056,7 @@ async function main(): Promise<void> {
   // v0.24.2 Q-04 / v0.24.3 R-01/R-03: Pre-entry diagnostics summary — log full gallery
   // readiness ledger before CTA is enabled, including preload mode and unresolved list.
   const fullReadinessSummary: FullGalleryReadinessResult = galleryManager.getFullGalleryReadinessSummary();
-  diagnostics.info('boot', 'full-gallery-ready', 'Full-gallery readiness contract resolved; enabling entry CTA', {
+  diagnostics.info('boot', 'full-gallery-ready', 'Entry readiness contract resolved; enabling entry CTA', {
     artworkCount,
     fullyReadyCount: fullReadinessSummary.fullyReadyCount,
     pendingCount: fullReadinessSummary.pendingCount,
@@ -1025,22 +1065,25 @@ async function main(): Promise<void> {
     proceduralReadyCount: fullReadinessSummary.proceduralReadyCount,
     memoryCapApplied: fullReadinessSummary.memoryCapApplied,
     preloadMode: fullReadinessSummary.preloadMode,
+    deferredArtworkCount: fullReadinessSummary.deferredArtworkCount,
     overflowArtworkCount: fullReadinessSummary.overflowArtworkCount,
     entryContractPasses: entryContractPass,
     entryContractMaxPasses: maxEntryContractPasses,
   });
 
-  // v0.24.3 R-03: Structured unresolved-artwork gate — log every artwork ID that
-  // has not reached all 6 readiness stages so release validation can confirm zero
-  // unresolved artworks in strict mode. Non-empty list is a contract failure in strict mode.
+  // v0.24.3 R-03 / v0.68 P-04: Structured unresolved-artwork gate. In `strict`
+  // (legacy `full`) mode every artwork must be ready, so a non-empty list is a
+  // contract failure (warn). In `staged` / `bounded-fallback` modes the deferred
+  // artworks are expected to complete post-entry via background lanes (info).
   if (fullReadinessSummary.pendingCount > 0) {
     const severity = fullReadinessSummary.preloadMode === 'strict' ? 'warn' : 'info';
     diagnostics[severity]('boot', 'entry-unresolved-artworks', 'Pre-entry unresolved artworks detected', {
       pendingCount: fullReadinessSummary.pendingCount,
       unresolvedArtworkIds: fullReadinessSummary.unresolvedArtworkIds,
       preloadMode: fullReadinessSummary.preloadMode,
+      deferredArtworkCount: fullReadinessSummary.deferredArtworkCount,
       overflowArtworkCount: fullReadinessSummary.overflowArtworkCount,
-      contractSatisfied: fullReadinessSummary.preloadMode === 'bounded-fallback',
+      contractSatisfied: fullReadinessSummary.preloadMode !== 'strict',
     });
   }
 
@@ -1054,8 +1097,11 @@ async function main(): Promise<void> {
     note: 'Measure with Chrome DevTools Performance > Interactions panel or CrUX field data after deploy.',
   });
 
-  diagnostics.info('boot', 'gpu-warm-complete', 'Full pre-entry GPU warm finished; warmOrder exhausted before reveal', {
+  diagnostics.info('boot', 'gpu-warm-complete', 'Pre-entry GPU warm finished; entry target set warmed before reveal', {
     artworkCount,
+    mode: startupReadinessMode,
+    entryWarmCount: fullWarmTargets.length,
+    deferredWarmCount,
     warmOrder,
     frameBudgetMs: warmProfile.postRevealFrameBudgetMs,
     batchCap: warmProfile.postRevealBatchCap,
@@ -1155,10 +1201,12 @@ async function main(): Promise<void> {
     await rafYield();
   }
   warmArtworkFinalPath(galleryManager.index, 'restore-active-after-final-path-warm');
-  diagnostics.info('boot', 'all-artworks-final-path-warmed', 'All artworks rendered through final post-processing path under loading overlay', {
+  diagnostics.info('boot', 'all-artworks-final-path-warmed', 'Entry target artworks rendered through final post-processing path under loading overlay', {
     artworkCount,
+    mode: startupReadinessMode,
     warmed: finalPathWarmed,
     targetCount: fullWarmTargets.length,
+    deferredWarmCount,
     durationMs: Math.round((performance.now() - finalPathStart) * 10) / 10,
     renderer: rendererSizeSnapshot(rendererManager.renderer),
   });
@@ -1173,11 +1221,15 @@ async function main(): Promise<void> {
   });
 
   loadingOverlay.setProgress(100);
-  // v0.24.3 R-04 / v0.27 W-05: Align status text with actual preload contract.
-  // Strict mode: all artworks fully prepared before entry.
-  // Bounded-fallback: overflow artworks still completing in background — state explicitly.
+  // v0.24.3 R-04 / v0.27 W-05 / v0.68 P-04: Align status text with the actual
+  // preload contract.
+  // - strict (legacy full): all artworks fully prepared before entry.
+  // - staged: entry target set ready; remaining artworks stream in post-entry.
+  // - bounded-fallback: overflow artworks still completing in background.
   if (fullReadinessSummary.preloadMode === 'bounded-fallback') {
     loadingOverlay.setStatus(`${fullReadinessSummary.overflowArtworkCount} Gemälde werden noch optimiert – Galerie kann betreten werden`);
+  } else if (fullReadinessSummary.preloadMode === 'staged' && deferredWarmCount > 0) {
+    loadingOverlay.setStatus('Galerie bereit – weitere Gemälde werden im Hintergrund vorbereitet');
   } else {
     loadingOverlay.setStatus('Galerie bereit');
   }
@@ -1185,16 +1237,20 @@ async function main(): Promise<void> {
   rendererManager.renderer.domElement.classList.add('gallery-canvas--ready');
   // v0.29 Y-01/Y-02: reveal is intentionally delayed until after the real RAF
   // loop is defined, started, and observed presenting full-size frames below.
-  // v0.24.2: All artworks were warmed pre-reveal, so warmCursor starts at warmOrder.length.
-  // continueWarmQueue exits immediately and disposes the render target.
-  let warmCursor = warmOrder.length;
+  // v0.68 P-04/P-06: warmCursor starts after the entry target set. In `full`
+  // mode that equals warmOrder.length (queue is a no-op). In entry modes the
+  // budgeted post-reveal queue warms the deferred remainder with per-frame
+  // ms + batch guards so the main thread stays responsive (protects INP).
+  let warmCursor = fullWarmTargets.length;
   const continueWarmQueue = (): void => {
     if (warmCursor >= warmOrder.length) {
       warmRenderTarget.dispose();
       galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-budget-warm');
-      diagnostics.info('boot', 'gpu-warm-post-reveal', 'Post-reveal warm queue already complete (all artworks warmed pre-entry)', {
+      diagnostics.info('boot', 'gpu-warm-post-reveal', 'Post-reveal budgeted warm queue complete; all artworks warmed', {
         artworkCount,
+        mode: startupReadinessMode,
         warmed: warmOrder.length,
+        deferredWarmCount,
         readinessLedger: galleryManager.getReadinessLedger(),
       });
       return;
@@ -1653,6 +1709,32 @@ async function main(): Promise<void> {
     timelinePrewarm,
     uiPrewarm,
     renderer: rendererSizeSnapshot(rendererManager.renderer),
+  });
+
+  // v0.68 (v0.67 P-07): Stable-schema performance gate. Emits one structured,
+  // phase-comparable record so before/after rollout decisions are driven by
+  // quantitative diagnostics, not subjective feel. Keep this schema stable
+  // across phases to enable direct JSON diffing of collected diagnostics.
+  diagnostics.info('boot', 'performance-gate', 'Startup performance gate (v0.67 P-07 acceptance evidence)', {
+    schemaVersion: 1,
+    startupReadinessMode,
+    artworkCount,
+    // Gate 1: user quality preset must remain manual/authoritative.
+    automaticQualityChangesEnabled: AUTOMATIC_QUALITY_CHANGES_ENABLED,
+    activeQuality: preferences.current.quality,
+    // Gate 2: entry readiness must not require full-gallery full-path warming.
+    entryWarmCount: fullWarmTargets.length,
+    deferredWarmCount,
+    preloadMode: fullReadinessSummary.preloadMode,
+    // Gate 3 evidence: startup latency to CTA enablement.
+    startupMsToEntryCta: Math.round((performance.now() - bootStartedAt) * 10) / 10,
+    // Gate 4 evidence: post-entry budgeted warm guards (frame pacing safety).
+    postRevealFrameBudgetMs: warmProfile.postRevealFrameBudgetMs,
+    postRevealBatchCap: warmProfile.postRevealBatchCap,
+    // Gate 5: readiness ledger snapshot for unresolved/deferred accounting.
+    fullyReadyCount: fullReadinessSummary.fullyReadyCount,
+    pendingCount: fullReadinessSummary.pendingCount,
+    deferredArtworkCount: fullReadinessSummary.deferredArtworkCount,
   });
 
   await loadingOverlay.reveal();

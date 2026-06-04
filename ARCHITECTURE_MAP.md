@@ -1,6 +1,16 @@
 # FREYRAUM architecture map
-> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
-> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+> v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry.
+> Last full markdown audit: 2026-06-04 (v0.68 documentation sync; runtime now v0.68).
+
+## v0.68 staged startup-readiness architecture note
+
+The startup readiness contract is owned by one config module (`src/config/startup.ts`) and applied through `GalleryManager.configureStartupReadiness(...)` before `init()`. Invariants:
+
+- **Single feature flag.** `startupReadinessMode` (`full` | `entry-balanced` | `entry-minimal`) is the only rollout switch; resolved from `?startup=` → `localStorage` → default. `full` is the exact legacy/strict baseline.
+- **Entry target set = warm-order prefix.** `getStartupEntryTargets(0)` returns `getBudgetedWarmOrder(0).slice(0, entryTargetCount)`, so it is always a prefix of `warmOrder`. The post-reveal `continueWarmQueue` therefore resumes at `warmCursor = entryTargets.length` and warms exactly the deferred remainder — do not break this prefix relationship.
+- **Determinism.** Deferred artworks go through the existing `critical-now` / `near-next` / `background` lane scheduler; never rely on opportunistic idle callbacks alone for completion.
+- **Warm budget is centralised.** All warm-budget constants live in `WARM_BUDGET` (`src/config/startup.ts`); behaviour and diagnostics must read from there so they cannot diverge.
+- **Diagnostics schema stability.** The `boot / performance-gate` record (`schemaVersion: 1`) is the phase-comparison contract; extend additively and bump `schemaVersion` on breaking changes.
 
 ## v0.65 clean-chrome affordance architecture note
 

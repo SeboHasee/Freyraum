@@ -1,6 +1,16 @@
 # Freyraum
-> v0.65 shipped: visual affordance prominence + polish — stronger glass cues, clearer chevrons/handles, and Apple-style calm motion hierarchy.
-> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+> v0.68 shipped (v0.67 Phase 2): staged startup readiness — the gallery becomes enterable as soon as the active artwork + nearby view is ready; the rest streams in afterwards. Quality stays fully manual.
+> Last full markdown audit: 2026-06-04 (v0.68 documentation sync; runtime now v0.68).
+
+## v0.68 — Staged startup readiness (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- The entry CTA ("Galerie betreten") no longer waits for every artwork to be GPU-warmed; it waits for the active artwork + critical view (+ a bounded near-next subset). Remaining artworks stream in deterministically after entry.
+- One feature flag controls the behavior: `?startup=entry-balanced` (default), `entry-minimal`, or `full` (legacy strict, one-flag rollback). Also settable via `localStorage['freyraum:startup-readiness']`.
+- User-selected quality stays fully manual (unchanged from v0.67); a stable-schema `performance-gate` diagnostic records startup evidence each load.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- Next phase (offline): KTX2/Basis tier pipeline + per-artwork `thumb`/`mid`/`full` manifest (P-05).
 
 ## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**)
 

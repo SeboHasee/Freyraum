@@ -1,10 +1,24 @@
 # FREYRAUM Plan
-> v0.67 shipped (Phase 1): quality lock — no automatic runtime or first-run quality changes; adaptive controller is diagnostics-only.
-> Last full markdown audit: 2026-06-04 (v0.67 technical audit refresh; runtime now v0.67).
+> v0.68 shipped (v0.67 Phase 2): staged startup readiness — entry CTA waits only for the active artwork + critical view; remainder streams in deterministically after entry. Quality stays fully manual.
+> Last full markdown audit: 2026-06-04 (v0.68 technical audit refresh; runtime now v0.68).
 
-## v0.67 — Performance stabilization + no automatic quality changes (**Phase 1 shipped, Phase 2+ planned**)
+## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (**shipped 2026-06-04**)
 
-> **Technical audit summary (code-verified 2026-06-04):** The quality-lock architecture is correctly implemented. Runtime quality no longer auto-downgrades, and first-run startup no longer auto-switches preset. The remaining performance bottleneck is startup workload strategy (strict full-gallery preload + full-gallery warm-up), not adaptive quality logic.
+> **Outcome:** The actionable runtime portions of the v0.67 performance plan are now implemented and validated. The strict full-gallery pre-entry contract was replaced by a staged-readiness contract behind one feature flag (`startupReadinessMode`, default `entry-balanced`): the entry CTA now waits only for the active artwork + critical window (+ a bounded near-next subset in `entry-balanced`); every other artwork is deferred to deterministic background prefetch + budgeted post-reveal warm. `full` mode preserves the legacy strict contract as a one-flag rollback.
+
+### Shipped slices
+
+1. **P-04 — Staged readiness lanes + computed cap.** `src/config/startup.ts` (new) owns the mode + computed entry-target count; `GalleryManager.init()` eagerly preloads PBR only for the entry target set and queues the rest to `near-next`; the `FULL_PRELOAD_SAFETY_CAP = MAX_SAFE_INTEGER` is now bypassed by the computed cap in entry modes. ✅
+2. **P-06 — Reduced warm overreach.** Pre-entry GPU + final-path warm cover only the entry target set; the remainder is warmed after entry by the budgeted `continueWarmQueue` (per-frame ms + batch guards). Warm-budget constants centralised in `WARM_BUDGET`. ✅
+3. **P-07 — Validation gate + single feature flag.** One stable-schema `boot / performance-gate` diagnostic per startup (mode, entry/deferred counts, no-auto-quality-writes assertion, startup-ms-to-CTA, post-reveal budget, ledger). Rollout controlled by the single `startupReadinessMode` flag. ✅
+
+### Deferred (next, offline phase)
+
+4. **P-05 — Offline artwork tier pipeline.** Still planning-only; see the refined plan in the v0.67 section below. It requires offline KTX2/Basis re-encoding + a per-artwork tier manifest and therefore cannot be executed/validated in a runtime-only sandbox.
+
+## v0.67 — Performance stabilization + no automatic quality changes (**Phase 1 + Phase 2 shipped; P-05 planned**)
+
+> **Technical audit summary (code-verified 2026-06-04; updated for v0.68):** The quality-lock architecture is correctly implemented. Runtime quality no longer auto-downgrades, and first-run startup no longer auto-switches preset. The former startup bottleneck — strict full-gallery preload + full-gallery warm-up — is resolved by the v0.68 staged-readiness contract (P-04/P-06/P-07). The remaining open item is the offline artwork tier pipeline (P-05, KTX2/Basis + thumb/mid/full manifest).
 
 ### Customer problem restated
 
@@ -19,12 +33,12 @@
    - `main.ts` constructs the controller with automatic changes disabled (`AUTOMATIC_QUALITY_CHANGES_ENABLED = false`), so the render loop does not mutate user quality from performance events.
 2. **Startup quality override is disabled.** ✅
    - First run keeps `DEFAULT_QUALITY_PRESET`; startup heuristic is logged as suppressed (`quality / startup-suggestion-suppressed`) instead of applied.
-3. **Startup pipeline is still intentionally heavy.** ⚠️
-   - `GalleryManager.init()` preloads all albedo + all PBR sets.
-   - `FULL_PRELOAD_SAFETY_CAP = Number.MAX_SAFE_INTEGER` effectively enforces strict full-gallery preload for normal gallery sizes.
-   - `main.ts` performs full-gallery GPU warming and final-path warming under overlay before entry.
-4. **Large texture handling is detect-and-log, not mitigate-and-adapt.** ⚠️
-   - `TextureManager.warnIfOversized(...)` logs over-limit textures but does not downscale/swap tiers.
+3. **Startup pipeline breadth addressed (v0.68).** ✅
+   - `GalleryManager.init()` still preloads all albedo (one-time image decode) but now eagerly preloads PBR only for the entry target set in entry modes; the rest is deferred to the `near-next` lane.
+   - The computed entry-target cap (`computeEntryTargetCount`) replaces `FULL_PRELOAD_SAFETY_CAP = MAX_SAFE_INTEGER` for normal gallery sizes; `full` mode keeps the legacy strict behavior.
+   - `main.ts` GPU warm + final-path warm now cover the entry target set before reveal; the remainder is warmed post-entry by the budgeted `continueWarmQueue`.
+4. **Large texture handling is detect-and-log, not mitigate-and-adapt.** ⚠️ (still open — P-05)
+   - `TextureManager.warnIfOversized(...)` logs over-limit textures but does not downscale/swap tiers. Mitigation is part of the deferred offline tier pipeline (P-05).
 5. **Upper preset cost remains high by design.** ℹ️
    - High preset retains expensive geometry/material paths (segments, anisotropy, shader feature depth), which is acceptable with quality lock but requires stronger staged-loading strategy.
 
@@ -38,27 +52,30 @@
 
 ### v0.67+ technical implementation plan (coding-focused)
 
-1. **P-04 — Replace strict startup preload with staged readiness lanes**
+1. **P-04 — Replace strict startup preload with staged readiness lanes** ✅ **(shipped v0.68)**
    - Add an explicit startup contract mode in `GalleryManager`:
      - `entry-minimal`: active artwork + `critical-now` neighbors only.
      - `entry-balanced`: active + critical + bounded near-next subset.
    - Replace `FULL_PRELOAD_SAFETY_CAP = Number.MAX_SAFE_INTEGER` with a computed cap derived from device tier + artwork count.
    - Keep queue determinism by preserving existing lane scheduler (`critical-now`, `near-next`, `background`) and promoting only when interaction window is idle.
    - **Coding advice:** keep all transitions diagnostics-first (`readiness-contract-selected`, `entry-ready`, `background-catchup`) with counts, ids, and elapsed ms.
+   - **As shipped:** mode resolved in `src/config/startup.ts` (`resolveStartupReadinessMode`, default `entry-balanced`); cap = `computeEntryTargetCount(...)`; deferred artworks queued to `near-next` in `init()`. Diagnostics: `startup-readiness-mode`, `pre-entry-warm-contract`, `gpu-warm-post-reveal`.
 
-2. **P-05 — Introduce offline artwork tier pipeline (source → runtime tiers)**
-   - Extend import tooling to emit per-artwork tier manifest (e.g., `thumb`, `mid`, `full`) plus optional KTX2 payloads.
-   - Keep original source as archival input only; runtime should resolve through manifest-selected tier.
-   - At runtime, select tier from viewport area, DPR, and zoom intent; only promote to higher tier when the artwork is active/inspected.
-   - **Coding advice:** add strict manifest validation at boot and fail-safe fallback to current URL path if tier artifacts are missing.
+2. **P-05 — Introduce offline artwork tier pipeline (source → runtime tiers)** ⏳ **(planned — next offline phase)**
+   - Extend import tooling (`scripts/`) to emit a per-artwork tier manifest (`thumb`, `mid`, `full`) plus optional **KTX2/Basis** payloads with mipmaps (Three.js `KTX2Loader` + `basisu`/`ktx` encoders). KTX2/Basis is the practical baseline for cutting texture upload time and VRAM pressure, and transcodes to device-optimal GPU formats (BCn/ETC/ASTC) at runtime.
+   - Keep original source as archival input only; runtime resolves through the manifest-selected tier.
+   - At runtime, select tier from viewport area, DPR, and zoom intent; promote to a higher tier only when the artwork is active/inspected. This also supersedes the current detect-and-log-only `TextureManager.warnIfOversized(...)` with a mitigate-and-adapt path.
+   - **Coding advice:** add strict manifest validation at boot and fail-safe fallback to the current URL path when tier artifacts are missing, so the runtime never hard-depends on the offline pipeline.
+   - **Why deferred:** this is offline asset-tooling work (re-encoding + manifest generation) that cannot be meaningfully executed or validated in a runtime-only sandbox; it is split into its own phase to keep the staged-readiness change (P-04/P-06/P-07) reviewable and low-risk.
 
-3. **P-06 — Reduce warm/prewarm overreach while preserving smoothness**
+3. **P-06 — Reduce warm/prewarm overreach while preserving smoothness** ✅ **(shipped v0.68)**
    - Change pre-entry final-path warm from **all artworks** to **entry target set** only.
    - Keep shader variant prewarm, but limit to active artwork + active quality first; move non-active quality variant warm behind first-interaction readiness gate.
    - Add per-frame warm budget guards around overlay warm loops (max ms/frame, max artworks/frame) to prevent long main-thread monopolization.
    - **Coding advice:** centralize warm-budget constants in one config object so diagnostics and behavior cannot diverge.
+   - **As shipped:** pre-entry GPU + final-path warm cover only `getStartupEntryTargets(0)`; the remainder is warmed post-reveal by the budgeted `continueWarmQueue` (per-frame ms + batch caps). Warm-budget constants centralised in `WARM_BUDGET` (`src/config/startup.ts`). Non-active quality variant prewarm is unchanged (one artwork per variant — already bounded); moving it behind a first-interaction gate remains an optional future refinement.
 
-4. **P-07 — Validation gates and rollout safety**
+4. **P-07 — Validation gates and rollout safety** ✅ **(shipped v0.68)**
    - Define hard acceptance gates by diagnostics:
      - no automatic quality writes,
      - startup duration reduction versus v0.67 baseline,
@@ -66,6 +83,7 @@
      - stable interaction frame-time and dropped-frame percentage.
    - Roll out behind a single runtime feature flag (`startupReadinessMode`) with explicit baseline/control logs.
    - **Coding advice:** keep log schemas stable across phases to enable direct before/after diffing from collected JSON diagnostics.
+   - **As shipped:** single `boot / performance-gate` diagnostic (`schemaVersion: 1`) emits the gate evidence each startup; `full` mode is the explicit baseline/control. Per-interaction frame-time + dropped-frame telemetry continues via the existing `interaction-end` log.
 
 ### Acceptance criteria for next performance phase
 

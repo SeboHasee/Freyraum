@@ -1,6 +1,46 @@
 # CHANGELOG
-> v0.67 shipped (Phase 1): quality lock — no automatic runtime or first-run quality changes; adaptive controller is diagnostics-only.
-> Last full markdown audit: 2026-06-04 (v0.67 documentation sync; runtime now v0.67).
+> v0.68 shipped (v0.67 Phase 2): staged startup readiness — the entry CTA now waits only for the active artwork + critical view; the rest streams in deterministically after entry. Quality stays fully manual.
+> Last full markdown audit: 2026-06-04 (v0.68 documentation sync; runtime now v0.68).
+
+## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass). Executes the actionable runtime portions of the v0.67 performance plan (P-04, P-06, P-07). The offline KTX2/Basis tier pipeline (P-05) remains the next, offline-tooling phase — see `plan.md` (it requires offline asset re-encoding that cannot be executed/validated in a runtime-only sandbox).
+
+### Problem addressed
+
+After the v0.67 Phase 1 quality lock, the dominant remaining startup cost was strategy breadth, not adaptive quality: the entry CTA waited for a strict **full-gallery** contract — every artwork's PBR set preloaded, GPU-warmed, and final-path-warmed under the loading overlay. For large customer galleries this scales linearly and delays first interaction. Online research (web.dev INP, Three.js KTX2 guidance, NN/g progressive loading) is consistent: enable interaction as soon as the active + near view is ready, then stream the remainder while yielding per frame.
+
+### Changes — staged startup readiness (P-04, P-06, P-07)
+
+**`src/config/startup.ts` (new)**
+- Single source of truth for the startup readiness contract and warm-budget constants.
+- `StartupReadinessMode` = `full` (legacy strict) | `entry-balanced` (new default) | `entry-minimal`, resolved from a single feature flag: `?startup=` query param → `localStorage['freyraum:startup-readiness']` → default. Fail-safe (never throws).
+- `computeEntryTargetCount(...)` derives the pre-entry warm count from mode + device tier + critical radius + artwork count (replaces the `MAX_SAFE_INTEGER` cap). `WARM_BUDGET` centralises the per-frame warm-budget constants so behaviour and diagnostics cannot diverge.
+
+**`src/gallery/GalleryManager.ts`**
+- `configureStartupReadiness({ mode, entryTargetCount })` + `getStartupEntryTargets()` + `isStagedStartup`.
+- `init()` eagerly preloads PBR only for the entry target set in entry modes; every other artwork with a texture set is queued deterministically to the `near-next` lane (it streams in after entry, never blocking the CTA). `full` mode preloads the whole gallery exactly as before.
+- `getFullGalleryReadinessSummary()` is mode-aware: `preloadMode` is now `strict | staged | bounded-fallback`, and reports `deferredArtworkCount` (artworks intentionally deferred to background lanes — expected, not a contract failure).
+
+**`src/main.ts`**
+- Pre-entry GPU warm + final-path warm now cover only the entry target set (`fullWarmTargets = getStartupEntryTargets(0)`); in `full` mode this is the whole gallery (unchanged). The remaining artworks are warmed after entry by the existing budgeted `continueWarmQueue` (per-frame ms + batch guards), which previously ran as a no-op.
+- The unresolved-artwork gate treats deferred artworks as expected (`info`) in staged/bounded modes and a failure (`warn`) only in strict mode.
+- New stable-schema `boot / performance-gate` diagnostic (P-07): startup readiness mode, entry/deferred warm counts, no-auto-quality-writes assertion, startup ms to CTA, post-reveal frame budget, and readiness ledger snapshot — phase-comparable evidence for rollout decisions.
+
+### Acceptance criteria met
+
+1. User quality preset remains fully manual/authoritative (unchanged from Phase 1). ✅
+2. Entry readiness no longer requires full-gallery full-path warming (entry modes). ✅
+3. Remaining artworks complete deterministically after entry via background lanes with per-frame budget guards. ✅
+4. `full` mode preserves the legacy strict contract exactly as a one-flag rollback. ✅
+5. Phase-comparable quantitative diagnostics emitted for every startup (`performance-gate`). ✅
+
+### Deferred to the next (offline) phase
+
+- **P-05 — offline artwork tier pipeline (source → `thumb`/`mid`/`full` + KTX2/Basis with mipmaps).** Requires offline asset re-encoding (KTX2/Basis tooling) and a per-artwork tier manifest with fail-safe runtime fallback. Tracked in `plan.md`; not implementable/validatable in a runtime-only sandbox.
+
 
 ## v0.67 — Performance stabilization + no automatic quality changes (2026-06-04, **Phase 1 shipped**)
 
