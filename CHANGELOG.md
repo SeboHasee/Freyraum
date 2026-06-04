@@ -1,6 +1,41 @@
 # CHANGELOG
-> v0.63 shipped: hidden-affordance salience — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, keyboard-help discoverability note.
-> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63).
+> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
+> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+
+## v0.64 — Visual affordance hardening (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass; browser DOM/style smoke confirms clean-mode affordances are mounted, visible, animated, and correctly laid out).
+
+### Root cause analysis
+
+The affordance elements were **not missing**: `ChromeVisibilityManager.createPeekElements()` created `.timeline-peek-hit`, `.info-panel-peek-hit`, `.timeline-peek`, `.info-panel-peek`, `.timeline-chevron`, and `.info-panel-chevron`. They were **active** in clean mode and intentionally hidden only in visible/pinned chrome mode. The failure was visual/CSS:
+
+1. The pulse animated whole-element `opacity` (`0.15 → 0.40`) while the backgrounds/borders were already low-alpha RGBA tokens (`0.22` strip, `0.42` chevron). At the trough the actual effective alpha was roughly `0.22 × 0.15 = 0.033` for strips and `0.42 × 0.15 = 0.063` for chevrons — effectively invisible.
+2. The bottom timeline hit area used default row flex. Because `.timeline-peek` was `width: 100%`, the chevron was pushed beside/squeezed by the strip instead of reading as a centered cue above the bottom edge.
+3. The post-hint settle selector `.affordance-settling .timeline-peek` and reduced-motion overrides had lower specificity than `:root[data-chrome-mode='clean'] .timeline-peek`, so the intended settle/reduced-motion states could be defeated by the clean-mode pulse rule.
+
+### Changes
+
+- Raised effective visual floors by increasing RGBA tokens and changing `peek-pulse` to `0.74 → 1` (small lift instead of fade-out).
+- Increased strip thickness/length and chevron size/stroke for retina-safe visibility.
+- Fixed bottom affordance layout with `column-reverse`, centered alignment, and a visible gap between chevron and strip.
+- Strengthened static handle bars and dual-contrast shadows so a non-animated marker survives every pulse frame and bright/cream artwork edges.
+- Changed settle selector to `:root[data-chrome-mode='clean'] #app.affordance-settling ...`, qualified reduced-motion animation overrides with clean-mode specificity, and aligned `peek-settle` with the new pulse floor (`1 → 0.74`).
+- Added `peek-affordances-created` diagnostics logging when the visual affordance DOM is mounted.
+
+### Files
+
+- `src/styles/main.scss` — v0.64 visibility token/floor/layout/specificity fixes.
+- `src/ui/ChromeVisibilityManager.ts` — diagnostics log for mounted visual affordances.
+- `README.md`, `CHANGELOG.md`, `FINDINGS.md`, `plan.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md` — documentation sync.
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build` ✅.
+- After code edits: `npm run lint`, `npm run build` ✅.
+- Browser smoke: clean-mode affordance DOM exists; bottom/left cues have `display:flex`, `animation: peek-pulse`, visible opacity floor, and corrected bottom layout.
 
 ## v0.63 — Hidden affordance salience + transparency balance (2026-06-04, **shipped**)
 
@@ -36,9 +71,9 @@ v0.63 makes the hidden-control affordances reliably discoverable on any artwork 
 - Static bars were attached to the peek-hit containers (not the chevron `::after` as originally sketched) because the chevrons are rotated 45° and carry the pulse animation, which would have rotated and re-animated the "static" cue.
 - Dual-contrast uses a layered dark+light shadow per the 2026-06-04 research refresh (more robust on mid-tone edges than a single dark line).
 
-### Deferred to v0.64
+### Deferred beyond v0.64
 
-Session-aware adaptive cue intensity, artwork-edge luminance sampling, `@property` settle decay, touch-first wider reveal envelope, and diagnostics reveal-history export. See `plan.md § v0.64`.
+Session-aware adaptive cue intensity, artwork-edge luminance sampling, `@property` settle decay, touch-first wider reveal envelope, and diagnostics reveal-history export remain backlog after the v0.64 emergency visibility hardening. See `plan.md § v0.64` for the shipped fix and its v0.65 backlog.
 
 
 ## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (2026-06-04, **shipped**)

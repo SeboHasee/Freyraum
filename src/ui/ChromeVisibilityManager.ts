@@ -553,6 +553,10 @@ export class ChromeVisibilityManager {
       el.setAttribute('aria-hidden', 'true');
       this.appRoot.appendChild(el);
     }
+    this.diag.debug('peek-affordances-created', 'Visual chrome affordances mounted', {
+      timeline: ['timeline-peek', 'timeline-chevron'],
+      infoPanel: ['info-panel-peek', 'info-panel-chevron'],
+    });
   }
 
   private createSrStatusElement(): void {

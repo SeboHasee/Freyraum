@@ -1,6 +1,17 @@
 # FREYRAUM customer handoff guide
-> v0.63 shipped: hidden-affordance salience — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, keyboard-help discoverability note.
-> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63).
+> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
+> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+
+## v0.64 — handoff status: visual affordance hardening shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- The visual clues were present in the DOM but effectively invisible because translucent RGBA colors were multiplied by a very low animated opacity floor. That is fixed.
+- The bottom cue now reads correctly as a centered chevron above a bottom strip; it is no longer pushed sideways by the strip layout.
+- The first-visit settle cue now uses a selector strong enough to override the normal clean-mode pulse.
+- Static handle bars are stronger and dual-contrast, so there is always a visible clue even during the pulse trough and on bright/cream painting edges.
+- Validation: `npm run lint` ✅, `npm run build` ✅, browser DOM/style smoke ✅.
+- Implementation: `plan.md § v0.64`, `FINDINGS.md § v0.64`, `CHANGELOG.md § v0.64`.
 
 ## v0.63 — handoff status: affordance salience shipped (2026-06-04)
 
@@ -12,7 +23,7 @@ Customer-facing status: **shipped and validated**.
 - After the first-visit navigation hint, the edge cues briefly brighten then settle, gently teaching where the hidden controls live.
 - The keyboard-shortcuts dialog (press `?`) now states that moving the mouse to a screen edge reveals the timeline, navigation, and artwork info.
 - Validation: `npm run lint` ✅, `npm run build` ✅.
-- Implementation: `plan.md § v0.63`, `FINDINGS.md § v0.63`, `CHANGELOG.md § v0.63`. Next-step ideas tracked in `plan.md § v0.64`.
+- Implementation: `plan.md § v0.63`, `FINDINGS.md § v0.63`, `CHANGELOG.md § v0.63`. v0.64 supersedes the affordance visibility status with the emergency hardening fix.
 
 ## v0.62 — handoff status: discoverability follow-up shipped (2026-06-04)
 

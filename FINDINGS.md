@@ -1,6 +1,42 @@
 # FINDINGS
-> v0.63 shipped: hidden-affordance salience pass implemented — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, keyboard-help note.
-> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63).
+> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
+> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+
+## v0.64 — Visual affordance hardening (2026-06-04, **shipped**) — as-built
+
+### Answer to the customer question
+
+- **Missing completely?** No. The visual affordance DOM is created by `ChromeVisibilityManager.createPeekElements()` and appended to `#app`.
+- **Not active?** No in clean mode. The cues are active under `:root[data-chrome-mode='clean']` and intentionally suppressed only under `data-chrome-mode='visible'`.
+- **Hidden?** Partly by design in pinned/visible mode; otherwise the elements existed but were visually multiplied down to near invisibility by CSS opacity.
+- **Bugged/wrong?** Yes. The main bug was `rgba(...)` alpha multiplied by animated whole-element `opacity`; the secondary bugs were bottom flex layout and settle selector specificity.
+
+### Root causes verified in code
+
+1. **Opacity multiplication made cues effectively invisible.** v0.63 treated `peek-pulse` values as the visible floor, but CSS opacity multiplies the already-translucent RGBA fill/stroke. The strip floor was roughly `0.22 × 0.15 = 0.033`; chevrons were roughly `0.42 × 0.15 = 0.063`. That is below practical visual detection on artwork edges.
+2. **Bottom cue layout was wrong.** `.timeline-peek-hit` was a row flex container, while `.timeline-peek` had `width: 100%`. The chevron sat beside the strip instead of being centered above it.
+3. **Settle selector could lose.** `.affordance-settling .timeline-peek` and the reduced-motion selectors had lower specificity than `:root[data-chrome-mode='clean'] .timeline-peek`, so the post-hint settle and no-motion states were not guaranteed to override the clean-mode pulse.
+4. **Static bars were present but too faint.** They were technically decoupled, but `rgba(255,255,255,0.18)` plus a very light dark shadow was too subtle on bright/complex imagery.
+
+### Online research applied
+
+Current UX/accessibility guidance for hidden controls still points to the same pattern: do not hide critical controls without a visible handle; touch targets should remain at least 44px; hover-only discovery is insufficient; opacity-only cues below practical contrast thresholds are unreliable; forced-colors must use system colors. The v0.64 implementation keeps the 44px hit areas, retains forced-colors handling, and raises the effective opacity floor instead of relying on very low-alpha fade cues.
+
+### Implementation outcome
+
+| Area | v0.63 problem | v0.64 fix |
+|------|---------------|-----------|
+| Effective opacity | RGBA alpha multiplied by `opacity: 0.15` | `peek-pulse` now runs `0.74 → 1` with stronger RGBA tokens |
+| Timeline affordance layout | row flex squeezed chevron beside `width:100%` strip | `column-reverse`, centered alignment, explicit gap |
+| Post-hint settle/reduced motion | lower-specificity selectors | clean-mode-qualified selectors for settle and reduced-motion overrides |
+| Static cue | too faint on bright/complex art | higher-alpha bar + stronger dual-contrast shadows |
+| QA diagnostics | no explicit mount log | `peek-affordances-created` debug event |
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build` passed.
+- Final code validation: `npm run lint`, `npm run build` passed.
+- Browser DOM/style smoke verified both peek hit areas exist in clean mode, are displayed, have visible geometry, and run `peek-pulse` with the corrected layout.
 
 ## v0.63 — Hidden affordance salience (2026-06-04, **shipped**) — as-built
 
@@ -32,7 +68,7 @@ All five plan items (P-01 … P-05) plus one folded enhancement (E-1) were imple
 
 - Confirmed the ≥0.20 effective-opacity peripheral-detection floor and the context-aware reveal + auto-hide pattern used by Apple/Google Photos immersive viewers.
 - Confirmed the **layered dark+light shadow** technique as the recommended cross-background visibility approach (vs. `mix-blend-mode`, which is unreliable over WebGL compositing).
-- `@property`-based smooth decay is viable (broad browser support) but deferred to v0.64 behind `@supports`.
+- `@property`-based smooth decay is viable (broad browser support) but remains deferred beyond v0.64; v0.64 instead fixed the selector specificity and effective opacity floor.
 
 ---
 

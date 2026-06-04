@@ -1,29 +1,105 @@
 # FREYRAUM Plan
-> v0.63 shipped: hidden-affordance salience pass — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, and a keyboard-help discoverability note.
-> Last full markdown audit: 2026-06-04 (v0.63 implemented + executed; runtime now v0.63).
+> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
+> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
 
-## v0.64 — Adaptive & content-aware affordance intensity (**planning 2026-06-04, docs-only**)
+## v0.64 — Visual affordance hardening (**shipped 2026-06-04**)
 
-> **Planning status:** Research + planning only. These are the v0.63 backlog brainstorms that could not be safely shipped "in one go" with v0.63 because they require new persistent state, canvas pixel readback, or interaction-envelope tuning that needs device QA. Runtime code remains at v0.63 until implementation is executed.
+> **Implementation closeout:** v0.64 is now implemented in runtime code. The visual clues were present but not perceptible because the v0.63 pulse multiplied already-translucent RGBA cues down to near-invisible effective alpha. This pass fixes the effective opacity floor, bottom affordance layout, settle/reduced-motion selector specificity, static-handle salience, and diagnostics. `npm run lint` and `npm run build` pass; browser DOM/style smoke confirms visible clean-mode affordances.
 
-### Carried-over backlog (deferred from v0.63)
+### Customer problem restated
 
-1. **Adaptive cue intensity curve (session-aware).** Increase affordance opacity for the first ~3 reveals of a session, then taper after each successful reveal. Storage: `localStorage` counter `freyraum-reveal-count`, reset on major version bump. Goal: stronger guidance for new users, near-zero chrome for experienced users. Risk: medium — adds persistent state + a new reveal-count write path in `ChromeVisibilityManager.reveal()`.
+The hidden chrome still read as if there were no visual clues. The investigation needed to answer whether the clues were missing, inactive, hidden, or bugged, then make them reliably visible without reverting to always-visible heavy chrome.
 
-2. **Artwork-edge luminance sampling (canvas contrast adaptation).** After each artwork load, sample a ~10px edge strip of the Three.js canvas, compute average sRGB luminance `L = 0.2126R + 0.7152G + 0.0722B`, and when `L > 180` switch `--chrome-affordance-color`/strip tokens to a dark variant (e.g. `rgba(0,0,0,0.35)`) for bright edges. Risk: medium-high — requires confirming pixel readback is possible without a `preserveDrawingBuffer` performance cost; otherwise use a small offscreen render target. This is the most robust long-term fix for the bright-edge failure case.
+### Code audit answer
 
-3. **`@property` registered custom property for silky settle decay.** Register `--affordance-opacity-add` (`syntax: '<number>'; initial-value: 0; inherits: false`), interpolate it during settle for frame-smooth decay without a keyframe class swap. Browser support is now broad (Chrome 85+, Safari 15.4+, Firefox 128+). Risk: low-medium — gate behind `@supports` so non-supporting engines keep the v0.63 class-swap behavior.
+1. **Not missing:** `ChromeVisibilityManager.createPeekElements()` creates `.timeline-peek-hit`, `.info-panel-peek-hit`, `.timeline-peek`, `.info-panel-peek`, `.timeline-chevron`, and `.info-panel-chevron`, then appends them to `#app`.
+2. **Active in clean mode:** `:root[data-chrome-mode='clean']` applies `peek-pulse` to strips and chevrons. `data-chrome-mode='visible'` intentionally hides peek affordances because the chrome is already pinned visible.
+3. **Bugged visually:** the pulse animated whole-element `opacity`, but the strip and chevron colors were already translucent. Effective alpha therefore became `rgbaAlpha × animationOpacity`, not the intended animation opacity. v0.63 strip trough was about `0.22 × 0.15 = 0.033`; chevron trough was about `0.42 × 0.15 = 0.063`. Both are easy to miss on real artwork.
+4. **Wrong layout:** `.timeline-peek-hit` used default row flex while `.timeline-peek` used `width: 100%`, pushing the chevron beside the strip instead of centering it above the bottom edge.
+5. **Settle could be defeated:** `.affordance-settling .timeline-peek` had lower specificity than the clean-mode pulse selector, so the post-hint settle was not guaranteed to apply.
 
-4. **Touch-first wider reveal envelope.** On `(pointer: coarse)` devices, raise `NAV_TRIGGER_BAND_PX` 220 → 300 and `TIMELINE_TRIGGER_BAND_PX` 140 → 180 via a `main.ts` config override conditioned on `matchMedia('(pointer: coarse)').matches`. Risk: low, but needs real touch-device QA to confirm the larger envelope does not cause accidental reveals.
+### Online research applied
 
-5. **Diagnostics reveal-history export.** Extend `window.__FREYRAUM_DIAGNOSTICS__.exportJson()` with a `revealHistory` array of `{panelId, reason, timestamp}` entries so QA can replay hide/reveal decision sequences post-session. Risk: low — additive instrumentation only.
+- Hidden controls need visible handles/icons; do not rely on hover alone.
+- Touch hit zones should remain at least 44px. The existing hit areas keep `--chrome-peek-touch-target: 44px`.
+- Opacity-only cues below practical contrast thresholds fail on bright or complex backgrounds. v0.64 raises the **effective** opacity floor instead of only raising low-alpha tokens.
+- Forced-colors users need system colors. Existing `ButtonText` forced-colors overrides remain intact.
 
-### Acceptance criteria for v0.64
+### v0.64 implementation slices
 
-1. New users receive visibly stronger early guidance; the chrome footprint shrinks for returning users without ever fully disappearing.
-2. Affordances stay perceptible on bright/cream painting edges via content-aware contrast (luminance sampling or a robust dark fallback layer).
-3. No regression to v0.63 reduced-motion, forced-colors, or WCAG 1.4.13 guarantees.
-4. `npm run lint` and `npm run build` pass after implementation.
+#### P-01 — Fix effective opacity floor
+
+**Files:** `src/styles/main.scss`
+
+**Coding advice:** Whenever a cue uses translucent RGBA plus `opacity`, calculate the real visual floor as `rgba alpha × element opacity`. Do not document keyframe opacity as the visible floor unless the fill/stroke is fully opaque.
+
+**Implemented changes:**
+
+- `--chrome-peek-bg: rgba(255,255,255,0.42)`
+- `--chrome-affordance-color: rgba(255,255,255,0.72)`
+- `peek-pulse: 0.74 → 1` so the cue gently breathes but never fades toward disappearance
+- `peek-settle: 1 → 0.74` so settle ends exactly at the new pulse floor
+
+#### P-02 — Fix bottom affordance geometry
+
+**Files:** `src/styles/main.scss`
+
+**Coding advice:** The bottom cue is a vertical relationship: chevron above strip. Keep `.timeline-peek-hit` as `flex-direction: column-reverse`, `align-items: center`, `justify-content: flex-start`, and preserve the explicit gap. Do not return it to row flex unless the DOM order changes.
+
+**Implemented changes:**
+
+- `.timeline-peek-hit` now stacks the strip at the safe-area bottom and the chevron above it.
+- Strip thickness/length and chevron size/stroke were increased for reliable visibility on high-DPI displays.
+
+#### P-03 — Fix settle specificity
+
+**Files:** `src/styles/main.scss`
+
+**Coding advice:** Any future class that overrides clean-mode pulse must match or exceed `:root[data-chrome-mode='clean'] .timeline-peek` specificity. The current safe selector is `:root[data-chrome-mode='clean'] #app.affordance-settling ...`.
+
+**Implemented changes:**
+
+- `.affordance-settling` selector upgraded to `:root[data-chrome-mode='clean'] #app.affordance-settling`.
+- The settle animation now runs over the same elements as the clean-mode pulse and hands back seamlessly.
+
+#### P-04 — Strengthen persistent static handles
+
+**Files:** `src/styles/main.scss`
+
+**Coding advice:** Keep a non-animated channel. The `::after` handles must stay on the non-animated peek-hit containers, not on the animated/rotated chevrons.
+
+**Implemented changes:**
+
+- Static handle bars now use higher-alpha white plus stronger dark/light shadows.
+- Chevrons use stronger dual drop-shadows.
+- Reduced-motion keeps opacity at `1` because transparency is already controlled by RGBA tokens.
+
+#### P-05 — Add mount diagnostics
+
+**Files:** `src/ui/ChromeVisibilityManager.ts`
+
+**Coding advice:** Diagnose affordance failures at mount time before debugging hover/reveal state. If `peek-affordances-created` is present and the DOM nodes exist, investigate CSS mode/specificity/effective opacity rather than DOM creation.
+
+**Implemented changes:**
+
+- Added `peek-affordances-created` debug event with the mounted visual affordance classes.
+
+### Deferred v0.65 backlog
+
+These remain useful follow-ups but were not needed for the emergency visibility fix:
+
+1. **Artwork-edge luminance sampling.** Sample edge strips and switch to dark/dynamic affordance tokens on very bright artwork.
+2. **Session-aware adaptive cue intensity.** Stronger first-session guidance, tapered after successful reveals.
+3. **Diagnostics reveal-history export.** Add reveal history to diagnostics JSON for QA replay.
+4. **Touch-first wider reveal envelope.** Consider larger touch reveal bands only after real-device QA.
+
+### Acceptance criteria status
+
+1. Visual clues exist in clean mode and are visible at the pulse trough — **met**.
+2. Bottom cue is centered and directionally understandable — **met**.
+3. Static handle remains visible independently from pulse — **met**.
+4. Reduced-motion and forced-colors remain supported — **met**.
+5. `npm run lint` and `npm run build` pass — **met**.
 
 ---
 
@@ -447,7 +523,7 @@ The existing forced-colors block sets `background: ButtonText; opacity: 1` on pe
 
 ### Brainstorm — enhancement candidates for post-v0.63 (backlog)
 
-> **Status (2026-06-04):** Brainstorm #4 (keyboard-help discoverability note) was folded into v0.63 as **E-1**. The remaining items below are now tracked as the **v0.64 plan** at the top of this file.
+> **Status (2026-06-04):** Brainstorm #4 (keyboard-help discoverability note) was folded into v0.63 as **E-1**. v0.64 shipped the emergency visibility hardening; remaining adaptive/content-aware ideas are now v0.65 backlog candidates.
 
 These items were identified during the v0.63 audit and research pass but are explicitly out of scope for v0.63:
 

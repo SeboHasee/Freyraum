@@ -1,6 +1,12 @@
 # FREYRAUM architecture map
-> v0.58 shipped: topbar UI uniformity with left/right group structure, SVG icon button, accessible tooltip.
-> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63). ChromeVisibilityManager gained `triggerAffordanceSettle()` + `settleTimer` (post-hint settle phase); peek-hit containers now own static `::after` handle bars.
+> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
+> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+
+## v0.64 clean-chrome affordance architecture note
+
+Hidden chrome affordances are owned by `ChromeVisibilityManager.createPeekElements()` and styled exclusively in `src/styles/main.scss`. The v0.64 invariant is: **do not animate whole-element opacity down to a value that multiplies RGBA tokens below visible contrast**. If future work changes strip/chevron alpha, calculate effective alpha as `rgbaAlpha × elementOpacity`.
+
+The bottom timeline affordance must remain a `column-reverse` stack (`.timeline-peek` at the safe-area bottom, `.timeline-chevron` centered above it). The settle class lives on `#app`; selectors that override clean-mode pulse must include enough specificity, currently `:root[data-chrome-mode='clean'] #app.affordance-settling ...` for settle and clean-mode-qualified selectors inside `prefers-reduced-motion`.
 
 ## v0.58 UI architecture additions
 

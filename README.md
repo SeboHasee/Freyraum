@@ -1,6 +1,17 @@
 # Freyraum
-> v0.63 shipped: hidden-affordance salience — raised perceptibility floor, decoupled static handle bars, dual-contrast shadows, post-hint settle, keyboard-help discoverability note.
-> Last full markdown audit: 2026-06-04 (v0.63 implementation complete; runtime now v0.63).
+> v0.64 shipped: visual affordance hardening — fixed opacity multiplication, bottom-chevron layout, settle/reduced-motion selector specificity, stronger static handles, and diagnostics.
+> Last full markdown audit: 2026-06-04 (v0.64 implementation complete; runtime now v0.64).
+
+## v0.64 — Visual affordance hardening (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Root cause fixed: v0.63 animated whole-element `opacity` while the strip/chevron colors were already translucent RGBA values, multiplying the effective alpha down to near-invisible levels at the pulse trough.
+- Bottom affordance layout fixed: the timeline cue now uses a column-reverse flex stack, so the chevron is centered above the bottom strip instead of being squeezed sideways by the `width: 100%` strip.
+- Post-hint settle and reduced-motion fixed: override selectors now beat the clean-mode pulse selector, so settle actually runs and reduced-motion actually stops the pulse.
+- Static handle bars and dual-contrast shadows were strengthened so a non-animated cue remains visible on both bright and dark artwork edges.
+- Diagnostics now log when visual peek affordances are mounted.
+- Validation: `npm run lint` ✅, `npm run build` ✅, browser DOM/style smoke ✅.
 
 ## v0.63 — Hidden affordance salience + transparency balance (2026-06-04, **shipped**)
 
