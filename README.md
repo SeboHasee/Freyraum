@@ -1,14 +1,15 @@
 # Freyraum
-> v0.70 planning pass added: macro-visible micro-scratch uplift for frame metal (docs-only). Runtime remains v0.69; no new shader behavior shipped in this docs update.
-> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+> v0.70 technical audit pass added: implementation-ready macro-scratch blueprint (docs-only). Runtime remains v0.69; no new shader behavior shipped in this docs update.
+> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
 
 ## v0.70 — Macro-visible micro-scratch uplift plan (2026-06-04, **planning/docs-only**)
 
 Current status: **planned, not yet shipped**.
 
-- We audited the current v0.69 frame shader and confirmed why wear can still read too subtle at macro distance: scratch occupancy is sparse, line widths are very thin, and roughness impact is tightly capped.
-- We performed an online standards/API refresh (Khronos anisotropy spec, Three.js r166 docs + shader source, Khronos `fwidth` reference) and aligned the next pass with those constraints.
-- New implementation direction in `plan.md`: introduce a separate macro-scratch lane (wider/lower-frequency) while preserving the existing micro lane and all anti-banding/anti-shimmer invariants.
+- We re-audited the v0.69 frame shader and confirmed why wear still reads soft at macro distance: sparse occupancy, very thin line width floor, and conservative roughness contribution cap.
+- We refreshed online standards/source references (Khronos anisotropy spec + Three.js r166 shader chunk) and used them to tighten the plan.
+- New implementation direction in `plan.md`: explicit two-lane scratch model (micro + macro), wear-zone masking, separated roughness/normal budgets, and independent derivative attenuation windows.
+- Technical guardrail now explicit: keep frame anisotropy direction perturbation in the `vFrameUV` GLSL path; do not switch frame work to `anisotropyMap` due to standard-`uv` alignment mismatch risk.
 - Runtime behavior is unchanged in this update.
 - References: `plan.md § v0.70`, `FINDINGS.md § v0.70`, `CHANGELOG.md § v0.70`.
 
@@ -17,8 +18,8 @@ Current status: **planned, not yet shipped**.
 Current status: **planned, not yet shipped**.
 
 - Technical audit of frame shader path completed: `CanvasMaterial` uses 1-D procedural FBM (v0.54 anti-banding invariant), `customProgramCacheKey: 'frame-v0.54'`, no `anisotropyMap`.
-- Online research confirms Three.js r166 natively supports `anisotropyMap`; `fwidth()` is the correct AA guard for procedural normals; multi-scale FBM is standard close-up metal technique.
-- Concrete implementation plan with GLSL code and TypeScript API examples now documented in `plan.md` (M-02 fine grain, M-03 clustered scratches, M-04 anisotropy direction map, M-05 derivative-aware AA, M-06 preset compile flags).
+- Online research established the anisotropy/derivative constraints; v0.69 audit later clarified frame direction control should stay in `vFrameUV` GLSL (not `anisotropyMap`) for this geometry path.
+- Concrete implementation plan with GLSL-oriented guidance documented in `plan.md` (M-02 fine grain, M-03 clustered scratches, M-05 derivative-aware AA, M-06 preset compile flags; M-04 superseded by v0.69 GLSL-direction approach).
 - Runtime behavior unchanged; staged startup readiness from shipped v0.68 remains active.
 - References: `plan.md § v0.68 — Metal frame close-up realism uplift`, `FINDINGS.md § v0.68`.
 

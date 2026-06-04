@@ -1,8 +1,8 @@
 # CHANGELOG
-> v0.70 planning pass added: macro-visible micro-scratch uplift plan (docs-only). Runtime remains v0.69 with the frame-visibility hotfix; no new shader behavior shipped in this docs update.
-> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+> v0.70 plan-audit pass added: technical coding blueprint for macro-visible scratch uplift (docs-only). Runtime remains v0.69 with no shader behavior change in this docs update.
+> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
 
-## v0.70 — Macro-visible micro-scratch uplift plan (2026-06-04, **planning/docs only**)
+## v0.70 — Macro-visible micro-scratch uplift plan (2026-06-04, **planning/docs only — technical audit refresh**)
 
 ### Status
 
@@ -10,14 +10,13 @@
 
 ### Summary
 
-- Audited `CanvasMaterial` scratch pipeline to explain why close-view detail still reads too soft: current lines are intentionally sparse and thin (`if (sh > 0.018) return 0.0;`, width floor `0.0003..0.0009`, weighted layer contribution `0.06/0.05/0.04`) and roughness impact remains tightly capped (`+0.015`).
-- Confirmed v0.69 anti-shimmer and anti-banding constraints that must be preserved: 1-D FBM (`dFBM/dY = 0`), derivative attenuation with `fwidth(vFrameUV.x)`, and per-preset compile-flag branching.
-- Performed online research refresh and aligned the next plan to authoritative sources:
-  - Three.js r166 `MeshPhysicalMaterial` anisotropy API and map-channel semantics.
-  - Three.js r166 `lights_physical_fragment` implementation details (`anisotropyMap` direction and blue-channel strength multiplication).
-  - Khronos `KHR_materials_anisotropy` spec rules for RG direction, B strength, tangent-space requirements, and highlight-stretch direction.
-  - Khronos OpenGL `fwidth` definition (`abs(dFdx)+abs(dFdy)`) as the derivative-AA basis.
-- Added a new v0.70 execution plan in `plan.md` focused on macro-visible scratch readability without violating v0.54/v0.69 stability constraints.
+- Re-audited `CanvasMaterial` scratch path and confirmed the primary macro-readability bottlenecks are still sparse occupancy (`sh > 0.018` reject), ultra-thin width floor (`0.0003..0.0009`), and conservative roughness coupling (`+0.015` cap).
+- Re-verified non-negotiable v0.69 rails: 1-D FBM invariant (`dFBM/dY = 0`), derivative attenuation via `fwidth(vFrameUV.x)`, and bounded preset-compiled shader variants.
+- Performed a focused online standards/source refresh and translated it into coding advice:
+  - Khronos `KHR_materials_anisotropy` channel semantics (RG direction, B strength multiplier, tangent-space requirements).
+  - Three.js r166 `lights_physical_fragment` implementation confirms anisotropy map blue channel multiplies direction strength.
+  - Freyraum-specific implication: frame direction control should remain in GLSL injection (`vFrameUV`) rather than `anisotropyMap` (`uv` channel mismatch risk).
+- Upgraded `plan.md` v0.70 with an implementation-oriented blueprint: macro lane helper, wear-zone mask, separate roughness/normal budgets, independent derivative windows, cache-key bump rule, and explicit diagnostic fields.
 - Synced documentation across `plan.md`, `FINDINGS.md`, `ARCHITECTURE_MAP.md`, `README.md`, and `docs/HANDOFF.md`.
 
 ### Files (docs only)

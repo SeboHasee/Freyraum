@@ -1,6 +1,6 @@
 # FINDINGS
-> v0.70 planning findings added: macro-visible micro-scratch uplift analysis + online research synthesis. Runtime remains v0.69 (no new shader behavior shipped in this docs update).
-> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+> v0.70 technical audit findings added: code-level implementation guidance for macro-visible scratch uplift. Runtime remains v0.69 (no new shader behavior shipped in this docs update).
+> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
 
 ## v0.70 — Macro-visible micro-scratch uplift (planning/docs-only, 2026-06-04) — findings
 
@@ -40,6 +40,27 @@
 - Maintain v0.54 anti-banding constraint and bounded roughness/normal budgets.
 - Preserve preset-tier cost policy: high strongest, balanced reduced, battery unchanged.
 
+### Technical coding advice distilled from the audit
+
+1. **Add macro lane as a new helper, not as global multiplier edits.**
+   - Add a dedicated `frmScratchLayerMacro(...)` function in `FRAME_FRAG_FUNCTIONS`.
+   - Keep existing micro helper untouched first; combine lanes in one explicit place.
+2. **Introduce a separate wear-zone function.**
+   - Use a low-frequency along-bar hash mask (`floor(vFrameUV.x * N)` style) to cluster macro wear.
+   - Apply mask to macro lane only.
+3. **Split lane attenuation windows.**
+   - Keep current micro `fwidth(vFrameUV.x)` attenuation thresholds.
+   - Add a slower macro threshold window so macro survives at medium-close range.
+4. **Prefer roughness-led macro readability.**
+   - Strengthen macro roughness modulation first.
+   - Keep macro normal perturbation bounded to avoid fake “engraved groove” appearance.
+5. **Do not move frame anisotropy control to `material.anisotropyMap`.**
+   - Three.js r166 uses `vAnisotropyMapUv` (`uv` channel) and multiplies direction by `anisotropyMap.b`.
+   - Freyraum frame direction data is in `aFrameUV`/`vFrameUV`; GLSL injection remains the correct hook.
+6. **Bump shader cache key when compile-time macro lane GLSL lands.**
+   - Keep seed uniform-only.
+   - Version key from `frame-v0.69-*` to `frame-v0.70-*` with no per-artwork key expansion.
+
 ## v0.69 — Metal frame close-up realism uplift (shipped 2026-06-04)
 
 ### Audit deltas surfaced during the final pass
@@ -75,12 +96,12 @@
 1. **Frame material uses physically plausible base knobs.** `MeshPhysicalMaterial` with `metalness: 1.0`; preset-controlled `roughness`, `clearcoat`, `anisotropy`, `anisotropyRotation`. High preset: `frameRoughness: 0.28`, `frameAnisotropy: 0.85`; balanced: `frameRoughness: 0.38`, `frameAnisotropy: 0.60`.
 2. **v0.54 anti-banding invariant is correctly enforced.** `frmBrushedFbm` and `frmRoughnessGrain` are purely 1-D: `barUV.y` is replaced by a seed-derived `yConst` constant in every FBM call, so `dFBM/dY = 0` exactly. This is the non-negotiable constraint all future GLSL additions must preserve.
 3. **Current microdetail is conservative.** Single grain family (primary FBM octaves `×[2.5, 5.1, 10.3, 20.7]`), gradient scale `0.025`, roughness grain amplitude `±0.030`, scratch roughness impact `+0.015 max`. Limits close-up richness but protects stability.
-4. **Anisotropy is scalar per material.** No `anisotropyMap` is set. `anisotropyRotation: Math.PI / 2` is a single uniform. Three.js r166 (installed `^0.166.1`) natively supports `material.anisotropyMap` for per-fragment direction control; no `onBeforeCompile` injection is required for this feature.
+4. **Anisotropy is scalar per material.** No `anisotropyMap` is set. `anisotropyRotation: Math.PI / 2` is a single uniform. (Historical note: while r166 supports `anisotropyMap`, Freyraum frame work uses `aFrameUV`, so v0.69 correctly kept direction control in GLSL injection.)
 5. **`customProgramCacheKey = 'frame-v0.54'`** — single key used by all presets and all seeds. This is correct today (seed changes a uniform, not GLSL); it must be versioned to `'frame-v0.69-{preset}'` when any new GLSL `#define` or function is added.
 
 ### Online research findings (synthesized, 2026-06-04)
 
-1. **Three.js r166 `anisotropyMap` confirmed.** Setting `material.anisotropyMap` on `MeshPhysicalMaterial` directly drives per-fragment anisotropy direction via the Khronos `KHR_materials_anisotropy` BRDF path. RG channels encode tangent-space direction packed as `dir * 0.5 + 0.5`. B channel (strength) is ignored by Three.js — `material.anisotropy` remains the strength scalar.
+1. **Three.js r166 `anisotropyMap` semantics confirmed.** Setting `material.anisotropyMap` on `MeshPhysicalMaterial` drives per-fragment anisotropy direction via the Khronos `KHR_materials_anisotropy` BRDF path. RG channels encode tangent-space direction packed as `dir * 0.5 + 0.5`; B channel multiplies per-texel anisotropy strength in shader code.
 2. **`fwidth(barUV.x)` is the correct AA guard for procedural normals.** `fwidth()` returns `|dFdx| + |dFdy|` of the argument in screen space, which is proportional to the texel footprint. `smoothstep(0.004, 0.015, fw)` maps close-zoom to 0 (full detail) and mid-distance to 1 (no fine grain) without any conditional branching.
 3. **Multi-scale FBM is standard for PBR procedural metal.** Coarse primary layer + secondary at ~4× frequency, amplitude ratio ≤ 1:4. Both layers must remain Y-invariant (preserve the v0.54 invariant); only `alongX` and a seed-derived `yConst` may vary.
 4. **Clustered scratch distribution is physically motivated.** Real-world metal shows scratches in family clusters from repeated tooling events, not uniform random placement. A coarse-scale hash mask (`frmHash(floor(barUV.x * 3.0) + seed * N)`) with ~40% cluster coverage reproduces this without increasing scratch-line count.

@@ -1,16 +1,18 @@
 # FREYRAUM architecture map
-> v0.70 planning update: macro-visible micro-scratch uplift architecture constraints documented (docs-only). Runtime remains v0.69.
-> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+> v0.70 technical audit update: macro-visible micro-scratch implementation constraints documented (docs-only). Runtime remains v0.69.
+> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
 
 ## v0.70 macro-scratch architecture note (**planning/docs-only**)
 
 1. **Two scratch lanes, one stability model.** The next pass should keep v0.69 micro-scratches and add a separate macro lane (wider/lower-frequency) rather than globally amplifying one lane.
-2. **Derivative AA remains mandatory.** Micro lane keeps current aggressive `fwidth(vFrameUV.x)` attenuation; macro lane may use a slower attenuation window but must still collapse at distance.
+2. **Derivative AA remains mandatory and split by lane.** Micro lane keeps current aggressive `fwidth(vFrameUV.x)` attenuation; macro lane gets a slower attenuation window but must still collapse at distance.
 3. **v0.54 anti-banding invariant is unchanged.** No `barUV.y` inputs in FBM/noise functions that drive normal gradients; cross-bar coordinate stays limited to positional placement of discrete scratches/masks.
-4. **Anisotropy semantics stay spec-aligned.** Any future anisotropy-map experiment must honor Khronos/Three.js channel meaning (RG direction, B strength multiplier) and UV-space alignment requirements.
-5. **Preset cost envelope remains explicit.** High gets full macro lane, balanced gets reduced macro lane, battery remains v0.54-equivalent path (`frameDetailLevel: 'none'`).
-6. **Cache key versioning remains required on compile-time GLSL changes.** Any new macros/functions for macro lane must bump frame shader cache version.
-7. **Diagnostics-first contract.** Extend frame compile logs with macro-lane knobs so visual tuning remains auditable and reversible.
+4. **Anisotropy semantics stay spec-aligned.** Any anisotropy-map experiment must honor Khronos/Three.js channel meaning (RG direction, B strength multiplier) and UV-space alignment requirements.
+5. **Frame direction control stays on `vFrameUV`.** For frame materials, keep direction perturbation in GLSL injection (`lights_physical_fragment` replacement) unless `anisotropyMap` UV alignment is explicitly solved.
+6. **Roughness-first macro readability.** Macro lane should bias roughness modulation over large normal gradients to avoid implausible carved-groove appearance.
+7. **Preset cost envelope remains explicit.** High gets full macro lane, balanced gets reduced macro lane, battery remains v0.54-equivalent path (`frameDetailLevel: 'none'`).
+8. **Cache key versioning remains required on compile-time GLSL changes.** Any new macros/functions for macro lane must bump frame shader cache version.
+9. **Diagnostics-first contract.** Extend frame compile logs with macro-lane knobs so visual tuning remains auditable and reversible.
 
 ## v0.69 frame-shader invariants (updated)
 
@@ -28,12 +30,12 @@ The next frame-realism pass must keep the current ownership split:
 - `ArtworkMesh`: frame geometry/tangents and `aFrameUV` vertex attribute generation.
 - `quality.ts`: preset-level cost/fidelity policy (`frameRoughness`, `frameAnisotropy`, `frameClearcoat`, bevel policy). Add `frameDetailLevel: 'high' | 'balanced' | 'none'` to drive `onBeforeCompile` `#define` selection.
 
-Invariants for the implementation pass:
+Invariants for the implementation pass (historical snapshot; v0.69 supersedes anisotropy guidance):
 
 1. **Preserve the v0.54 anti-banding constraint.** No `barUV.y` input to any FBM or noise call — every new function must use a seed-derived `yConst` constant so `dFBM/dY = 0` exactly.
 2. **Treat close-up detail as bounded multi-scale additions.** M-02 fine grain amplitude `0.006` (≤ 1:4 ratio vs primary `0.025`); M-03 cluster gain capped at `0.16`; M-04 anisotropy direction perturbation ±8%.
 3. **`customProgramCacheKey` must be versioned when GLSL changes.** Change from `'frame-v0.54'` → `'frame-v0.69-' + preset.id`. Use `#define FRAME_DETAIL_HIGH` / `FRAME_DETAIL_BALANCED` guards in `onBeforeCompile` to keep program count to three (high, balanced, battery) rather than one per seed.
-4. **Three.js r166 `anisotropyMap` is the correct API for M-04.** Set `material.anisotropyMap = dataTexture` directly — no `onBeforeCompile` injection needed for per-fragment anisotropy direction. Store the reference in `material.userData.anisoMap` and dispose in `CanvasMaterial.dispose()`.
+4. **Superseded by v0.69 audit delta.** Frame anisotropy direction for this codebase should remain in the `vFrameUV` GLSL injection path, because standard `uv`-based `anisotropyMap` sampling does not align with `aFrameUV` on frame geometry.
 5. **`fwidth(barUV.x)` is the AA guard for all new high-frequency terms.** `smoothstep(0.004, 0.015, fwidth(barUV.x))` covers the close-zoom to mid-distance transition without conditional branching.
 6. **Battery preset conservative.** No `#define` fine-grain path; `'frame-v0.69-battery'` compiles GLSL identical to v0.54 behavior.
 7. **Diagnostics before/after.** Extend `[CanvasMaterial] frame-shader-compiled` with `normalGradientScale`, `fineGrainAmplitude`, `clusterGainEnabled`, `anisoMapEnabled`, `cacheKey` for regression-detectable baseline records.

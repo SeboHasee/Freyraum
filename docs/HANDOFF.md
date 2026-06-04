@@ -1,6 +1,6 @@
 # FREYRAUM customer handoff guide
-> v0.70 planning update added: macro-visible micro-scratch uplift (docs-only). Runtime remains v0.69 in this documentation pass.
-> Last full markdown audit: 2026-06-04 (v0.70 macro-scratch planning/docs pass; runtime v0.69).
+> v0.70 technical audit update added: implementation-ready macro-scratch plan guidance (docs-only). Runtime remains v0.69 in this documentation pass.
+> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
 
 ## v0.70 — handoff status: macro-visible micro-scratch uplift plan (2026-06-04, docs-only)
 
@@ -11,8 +11,9 @@ Customer-facing status: **planned, not yet shipped**.
   - Khronos anisotropy extension semantics (RG direction, B strength, tangent-space requirements),
   - Three.js r166 `MeshPhysicalMaterial` anisotropy API,
   - Three.js r166 physical shader anisotropy-map implementation,
-  - Khronos `fwidth` derivative definition used for procedural AA strategy.
-- New v0.70 plan in `../plan.md` introduces a dedicated macro-scratch lane (wider/lower-frequency) while preserving v0.54 anti-banding and v0.69 anti-shimmer safeguards.
+  - derivative-based AA (`fwidth`) as the procedural stability basis.
+- New v0.70 plan in `../plan.md` now includes technical coding slices: dedicated macro lane helper, wear-zone mask, separate roughness/normal budgets, per-lane attenuation windows, cache-key bump rule, and extended diagnostics fields.
+- Explicit architecture guardrail: frame anisotropy direction control remains in the `vFrameUV` GLSL path; do not switch to `anisotropyMap` unless UV alignment constraints are resolved.
 - No runtime frame-shader code changed in this docs update.
 - References: `../plan.md § v0.70`, `../FINDINGS.md § v0.70`, `../CHANGELOG.md § v0.70`.
 
@@ -25,7 +26,7 @@ Customer-facing status: **planned, not yet shipped**.
 - **Concrete implementation plan now documented** (`plan.md § v0.68 — Metal frame close-up realism uplift`):
   - M-02: `frmBrushedFbm2` fine-grain FBM (4× frequency, 1/4 amplitude, same 1-D Y-invariant)
   - M-03: clustered scratch layer (`frmScratchLayer` cluster-gain mask, ~40% coverage, cap `0.16`)
-  - M-04: `material.anisotropyMap` — 64×4 `DataTexture` procedural direction perturbation (high preset only)
+  - M-04 (historical, superseded): initial `material.anisotropyMap` direction-map idea was replaced in shipped v0.69 by direct `vFrameUV` GLSL anisotropy perturbation
   - M-05: `fwidth(barUV.x)` derivative-aware AA guard for all new high-frequency terms
   - M-06: `#define FRAME_DETAIL_HIGH / BALANCED` compile flags; `customProgramCacheKey → 'frame-v0.69-{preset}'`
 - No runtime frame-shader/material changes were shipped in this docs pass.
