@@ -1,6 +1,6 @@
 # FREYRAUM AI rules
 > v0.58 shipped: topbar UI uniformity with left/right grouping, SVG icon, accessible tooltip, premium micro-interactions.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> Last full markdown audit: 2026-06-04 (v0.62 planning sync: hidden-element clues + nav-arrow post-pulse hide; runtime still v0.61).
 
 ## v0.58 topbar/utility-button rule
 

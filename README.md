@@ -1,6 +1,15 @@
 # Freyraum
-> v0.61 shipped: stronger hidden-UI discoverability cues, one-shot nav-arrow idle hint, and no auto info-panel reveal on artwork change.
-> Last full markdown audit: 2026-06-04 (v0.61 shipped).
+> v0.62 planning in progress: stronger hidden-element clues + nav-arrow post-pulse hide behavior (runtime still v0.61).
+> Last full markdown audit: 2026-06-04 (v0.62 planning sync: hidden-element clues + nav-arrow post-pulse hide; runtime still v0.61).
+
+## v0.62 — Hidden-element clue hardening + nav-arrow lifecycle follow-up (2026-06-04, **planned / docs-only**)
+
+Current status: **planned only**. Runtime remains **v0.61 shipped**.
+
+- Customer feedback: hidden timeline/description still need clearer visual clues that more UI exists.
+- Customer feedback: nav-arrow onboarding pulse is good, but arrows should disappear after pulse/idle like other hidden chrome.
+- v0.62 plan now defines a unified hidden-chrome model: persistent micro-signifiers, one-shot onboarding hint, and idle re-hide for nav controls.
+- Fresh online research + code-audit findings are documented in `FINDINGS.md § v0.62`.
 
 ## v0.61 — Hidden-UI discoverability + nav-arrow idle hint (2026-06-04, **shipped**)
 

@@ -1,6 +1,59 @@
 # FINDINGS
-> v0.61 shipped: nav-arrow idle-hint system (ring pulse, localStorage-dismissed) + no auto-description reveal + aria-live artwork announcement.
-> Last full markdown audit: 2026-06-04 (v0.61 implemented and validated).
+> v0.62 research refresh: hidden-element signifiers + nav-arrow post-pulse hide behavior planning.
+> Last full markdown audit: 2026-06-04 (v0.62 planning sync: hidden-element clues + nav-arrow post-pulse hide; runtime still v0.61).
+
+## v0.62 — Hidden-element signifiers + nav-arrow post-pulse hide (2026-06-04, **planned**)
+
+### Scope of this pass
+
+- Re-audited current v0.61 behavior for hidden timeline/info panel discoverability and nav-arrow idle-hint lifecycle.
+- Re-ran online UX/accessibility research focused on: progressive disclosure signifiers, one-shot motion hints, reduced-motion requirements, and hidden-control accessibility constraints.
+- Produced implementation-ready planning guidance in `plan.md § v0.62`.
+
+### Repository findings (verified in code)
+
+1. **Hidden surfaces currently use line peeks only.**
+   `ChromeVisibilityManager` creates `.timeline-peek` and `.info-panel-peek`, which are subtle but not explicit directional affordances.
+2. **Nav hint pulse is one-shot, but visibility stays persistent.**
+   `NavigationControls.enableIdleHint()` sets `data-nav-hint='active'` for pulse animation, yet controls remain visible after animation ends.
+3. **Current behavior mismatch with new customer expectation.**
+   v0.61 intentionally kept nav arrows always visible for discoverability; new requirement asks arrows to hide again after onboarding pulse/idle.
+
+### Online research findings (2026-06-04)
+
+1. **Progressive disclosure should retain clear signifiers.**
+   Hidden UI can stay minimal, but users need explicit visual clues (handles/chevrons) so controls are perceived as discoverable.
+   - Reference: NN/g progressive disclosure guidance (https://www.nngroup.com/articles/progressive-disclosure/)
+
+2. **Attention animation should be brief and non-looping.**
+   Discovery motion should run once or in a short bounded burst, then stop to avoid distraction and habituation.
+   - References: WCAG animation guidance + accessibility animation practice
+     - https://www.w3.org/WAI/WCAG21/Understanding/animation-from-interactions.html
+     - https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion
+
+3. **Reduced-motion must disable non-essential cues.**
+   Animated hints are optional affordances; they require a no-motion fallback.
+   - Reference: MDN prefers-reduced-motion
+     - https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion
+
+4. **Hidden/revealed UI must stay keyboard and hover/focus compliant.**
+   Revealed controls need persistent interaction window, dismissibility, and reliable keyboard access.
+   - Reference: WCAG 2.2 Content on Hover or Focus
+     - https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+
+5. **When nav buttons are visible, target-size constraints still apply.**
+   Auto-hide strategy is acceptable, but revealed controls must keep adequate hit area.
+   - Reference: WCAG 2.2 Target Size (Minimum)
+     - https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+
+### Decision impact for v0.62 plan
+
+- Add persistent micro-signifiers for timeline/info edges (clearer than pulse-only strips).
+- Keep nav pulse short and onboarding-only, then transition arrows back to hidden idle state.
+- Reuse clean-mode reveal/hide state machine patterns for nav controls instead of introducing a separate behavior model.
+- Maintain reduced-motion and keyboard/screen-reader compatibility as hard requirements.
+
+---
 
 ## v0.61 — Hidden-UI discoverability + nav-arrow affordances (2026-06-04, **shipped**)
 

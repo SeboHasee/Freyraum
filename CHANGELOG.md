@@ -1,6 +1,32 @@
 # CHANGELOG
-> v0.61 shipped: hidden-element discoverability cues (incl. nav arrows) + no automatic info-panel reveal on artwork change.
-> Last full markdown audit: 2026-06-04 (v0.61 implementation + validation pass).
+> v0.62 planning in progress: hidden-element clue hardening + nav-arrow post-pulse hide follow-up.
+> Last full markdown audit: 2026-06-04 (v0.62 planning sync: hidden-element clues + nav-arrow post-pulse hide; runtime still v0.61).
+
+## v0.62 — Discoverability follow-up planning refresh (2026-06-04, **docs-only / planned**)
+
+### Status
+
+Planning/research pass only. Runtime remains **v0.61 shipped**.
+
+### Summary
+
+Captured the new customer follow-up requirements:
+
+- hidden timeline/description need clearer discoverability clues,
+- nav-arrow pulse is good but arrows should disappear after pulse/idle (matching hidden chrome),
+- provide subtle but explicit "more to discover" affordances.
+
+### Documentation updates
+
+- `plan.md`: added full v0.62 implementation plan (hidden signifiers + nav-hide lifecycle alignment).
+- `FINDINGS.md`: added fresh online research and current-state code audit for v0.62.
+- `README.md` and `docs/HANDOFF.md`: updated top status to reflect v0.62 planning while runtime remains v0.61.
+- Markdown audit stamp refreshed across repository markdown files.
+
+### Validation
+
+- `npm run lint` — pass
+- `npm run build` — pass
 
 ## v0.61 — Discoverability + navigation-arrow cue follow-up (2026-06-04, **shipped**)
 

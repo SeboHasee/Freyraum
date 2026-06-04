@@ -1,6 +1,91 @@
 # FREYRAUM Plan
-> v0.61 shipped: stronger hidden-UI discoverability cues, nav-arrow idle hint, and no auto-description reveal on artwork change.
-> Last full markdown audit: 2026-06-04 (v0.61 implemented and validated in runtime code).
+> v0.62 planning in progress: stronger discoverability signifiers for hidden timeline/description and nav-arrow cue teardown after pulse.
+> Last full markdown audit: 2026-06-04 (v0.62 planning sync: hidden-element clues + nav-arrow post-pulse hide; runtime still v0.61).
+
+## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (**planned 2026-06-04, docs-only**)
+
+> **Planning status:** This is a research-backed implementation plan only. Runtime currently remains **v0.61 shipped** until this plan is implemented.
+
+---
+
+### Problem Statement (customer follow-up)
+
+1. Timeline and description panel are hidden in clean mode, but users still miss that these elements exist.
+2. Navigation-arrow pulse looks good, but once the pulse ends, arrows should also disappear (matching hidden-chrome behavior) instead of staying permanently visible.
+3. Discoverability clues should remain small/subtle (e.g., transparent arrow/handle/button) but clearly communicate that more UI can be revealed.
+
+---
+
+### Current-State Audit (2026-06-04)
+
+| Area | File | Observed behavior |
+|------|------|-------------------|
+| Hidden-element clue | `src/ui/ChromeVisibilityManager.ts` | Timeline/info-panel use animated peek strips only; no explicit directional icon affordance |
+| Peek-strip visuals | `src/styles/main.scss` (`.timeline-peek`, `.info-panel-peek`, `@keyframes peek-pulse`) | Subtle strip pulse exists, but can still read as decorative line rather than “expand/reveal control” |
+| Arrow cue lifecycle | `src/ui/NavigationControls.ts` + `src/styles/main.scss` (`data-nav-hint='active'`) | Ring pulse is one-shot, but nav arrows remain always visible after hint completion |
+| App wiring | `src/main.ts` (`navControls.enableIdleHint()`) | Hint starts correctly, but no post-hint collapse-to-hidden state for nav controls |
+
+---
+
+### Online Research Summary (2026-06-04 refresh)
+
+- **Progressive disclosure works best with persistent signifiers:** hidden chrome needs a small but explicit affordance (handle/chevron/edge icon), not only ambient animation.
+- **Onboarding motion should be time-boxed:** attention animation should run briefly, then stop; persistent/infinite motion becomes noise.
+- **Reduced-motion must fully disable discovery animation:** discovery remains available through static affordances and interaction zones.
+- **Hidden-on-hover/focus components must remain reachable and dismissible:** reveal/hide interactions must preserve keyboard reachability and predictable dismissal.
+- **Touch/arrow controls must keep adequate target size whenever visible:** if controls auto-hide, revealed controls still need WCAG-compliant hit area.
+
+Research references recorded in `FINDINGS.md § v0.62`.
+
+---
+
+### v0.62 Implementation Plan
+
+#### P-01 — Strengthen discoverability signifiers for timeline + description
+
+- Add persistent, low-contrast directional signifiers at the reveal edges:
+  - bottom-center timeline affordance (small chevron/handle)
+  - left-edge description affordance (small chevron/handle)
+- Keep current clean aesthetic by using low opacity and only slight contrast uplift on hover/focus.
+- Retain existing peek-hit zones and reveal logic so behavior remains predictable.
+
+#### P-02 — Align nav arrows with hidden-chrome lifecycle
+
+- Move nav arrows to the same clean-mode visibility model as timeline/info panel.
+- Keep one-shot pulse onboarding, but after pulse completion return arrows to hidden state unless actively revealed by pointer/focus/touch/keyboard intent.
+- Preserve “always show chrome” preference behavior so users can opt into persistent controls.
+
+#### P-03 — Unify reveal triggers across hidden UI surfaces
+
+- Ensure timeline, info panel, and nav controls share a consistent reveal contract:
+  - reveal by proximity/focus/valid touch zone
+  - hide after inactivity delay when not hovered/focused
+  - no forced persistent visibility in clean mode
+- Keep keyboard navigation and screen-reader discoverability intact during hidden state.
+
+#### P-04 — Accessibility and UX hardening
+
+- Maintain reduced-motion fallback with non-animated static signifiers.
+- Preserve minimum touch target size for nav buttons while visible.
+- Validate focus-visible behavior so hidden controls never trap or obscure keyboard users.
+
+#### P-05 — Validation + rollout
+
+- Implement in small slices (styles + state machine + wiring).
+- Run full repository validation (`npm run lint`, `npm run build`).
+- Re-check docs to clearly mark what is planned vs shipped.
+
+---
+
+### Acceptance Criteria for v0.62 implementation
+
+1. In clean mode, users can immediately perceive that timeline and description exist via persistent small signifiers.
+2. Nav arrows pulse once (on onboarding) and then disappear when idle, matching clean-mode hidden chrome behavior.
+3. Controls reappear reliably on intended interaction (pointer/focus/touch/keyboard) and hide again after inactivity.
+4. Reduced-motion users see no onboarding animation but still get static discoverability cues.
+5. `npm run lint` and `npm run build` pass after implementation.
+
+---
 
 ## v0.61 — Hidden-UI Discoverability + Navigation-Arrow Idle Hint + No Auto-Description Reveal (**shipped 2026-06-04**)
 
