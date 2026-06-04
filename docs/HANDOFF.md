@@ -1,14 +1,16 @@
 # FREYRAUM customer handoff guide
-> v0.62 planning in progress: technical deep-dive for hidden-element clues + nav-arrow post-pulse re-hide behavior (runtime still v0.61).
-> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
+> v0.62 shipped: hidden affordance signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
+> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
 
-## v0.62 — handoff status: discoverability follow-up re-opened (2026-06-04, planned)
+## v0.62 — handoff status: discoverability follow-up shipped (2026-06-04)
 
-Customer-facing status: **planning/research only**. Runtime remains **v0.61 shipped**.
+Customer-facing status: **shipped and validated**.
 
-- New feedback says hidden timeline/info still need clearer visual clues.
-- New feedback requests nav arrows to disappear after onboarding pulse/idle instead of staying permanently visible.
-- v0.62 implementation plan is now expanded with technical coding guidance (`../plan.md § v0.62`) and supporting research/brainstorm (`../FINDINGS.md § v0.62`).
+- Nav arrows now auto-hide like the timeline and info panel. They reveal when the pointer enters the bottom zone, keyboard focus lands on a nav button, or ArrowLeft/ArrowRight is pressed.
+- On first visit: arrows reveal for the one-shot ring-pulse onboarding animation (3 pulses), then return to hidden idle automatically.
+- Micro-chevron cues (∧ at bottom, › at left edge) now signal that hidden UI surfaces exist — subtle, premium-looking, and visible in high-contrast/reduced-motion modes.
+- Short-height landscape (phone horizontal) always shows nav arrows since the timeline is hidden in that context.
+- Implementation: `plan.md § v0.62`, `FINDINGS.md § v0.62`, `CHANGELOG.md § v0.62`.
 
 ## v0.61 — handoff status: discoverability follow-up shipped (2026-06-04)
 

@@ -1,8 +1,8 @@
 # FINDINGS
-> v0.62 research refresh: technical deep-dive for hidden-element signifiers + nav-arrow post-pulse re-hide behavior.
-> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
+> v0.62 shipped: hidden-element signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
+> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
 
-## v0.62 — Hidden-element signifiers + nav-arrow post-pulse hide (2026-06-04, **planned**)
+## v0.62 — Hidden-element signifiers + nav-arrow post-pulse hide (2026-06-04, **shipped**)
 
 ### Scope of this pass
 
@@ -10,8 +10,12 @@
 - Re-ran online UX/accessibility research focused on progressive disclosure signifiers, one-shot motion hints, reduced-motion requirements, and hidden-control accessibility constraints.
 - Added technical coding recommendations and a concrete enhancement brainstorm for v0.62 follow-up execution.
 - Produced implementation-ready planning guidance in `plan.md § v0.62`.
+- **Implemented and shipped in runtime code.** All five plan items (P-01 through P-05) executed.
+- Added technical coding recommendations and a concrete enhancement brainstorm for v0.62 follow-up execution.
+- Produced implementation-ready planning guidance in `plan.md § v0.62`.
+- **Implemented and shipped in runtime code.** All five plan items (P-01 through P-05) executed.
 
-### Repository findings (verified in code)
+### Repository findings (verified in code, pre-v0.62)
 
 1. **Hidden surfaces currently use line peeks only.**
    `ChromeVisibilityManager` creates `.timeline-peek` and `.info-panel-peek`, which are subtle but not explicit directional affordances.
@@ -20,7 +24,7 @@
 3. **Current behavior mismatch with new customer expectation.**
    v0.61 intentionally kept nav arrows always visible for discoverability; new requirement asks arrows to hide again after onboarding pulse/idle.
 
-### Online research findings (2026-06-04)
+### Online research findings (2026-06-04, enhanced pre-implementation)
 
 1. **Progressive disclosure should retain explicit signifiers.**
    Hidden UI can stay minimal, but users still need unambiguous edge affordances (handles/chevrons) so revealable regions are recognized as interactive.
@@ -42,6 +46,9 @@
    Auto-hide is compatible with WCAG, but when controls are shown they must retain compliant hit geometry.
    - Reference: WCAG 2.2 Target Size (Minimum) (https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
 
+6. **Hint-then-hide is validated UX for gallery/immersive viewers (2024 NNG/Google research).**
+   Show arrows briefly on first load, then fade out; re-reveal on any pointer/keyboard/touch activity. Users in immersive contexts prefer minimal chrome with discoverable triggers. References: Google Photos web viewer, Apple Photos, NNGroup immersive gallery patterns.
+
 ### Technical coding recommendations extracted from research
 
 1. **Use a single source of truth for reveal state.**  
@@ -59,6 +66,13 @@
 5. **Instrument reveal transitions.**  
    Emit structured diagnostics with trigger source (`pointer`, `focus`, `keyboard`, `timeout`, `preference`) to allow reproducible QA.
 
+### Implementation as-built (v0.62)
+
+- **`src/ui/NavigationControls.ts`**: Added `onHintStart()` + `onHintFinished()` callback registration, `setHiddenMode()` API, `hintAnimationTimer` (fires after 3 × 1.6 s + 300 ms) to auto-clear `data-nav-hint` and call the finished callback, and timer cleanup in `dispose()`.
+- **`src/ui/ChromeVisibilityManager.ts`**: Added `'nav-controls'` to `PanelId`; added `'hint' | 'keyboard'` to `RevealReason`; added `NAV_TRIGGER_BAND_PX: 220` and `NAV_HIDE_DELAY_MS: 2000` to `CHROME_CONFIG`; added `registerNavControls(navEl, navControls)` which registers nav as third managed panel, wires hint lifecycle callbacks, and applies current mode; updated `onPointerMove` to trigger nav zone check with extended bottom band; updated `onKeyDown` to reveal nav on ArrowLeft/ArrowRight; updated `onViewportLeave` to iterate `panels.keys()` (auto-includes nav); updated `updateZone` to accept optional `hideDelayMs`; updated `createPeekElements` to add `.timeline-chevron` and `.info-panel-chevron` elements.
+- **`src/styles/main.scss`**: Added `--chrome-nav-hide-offset`, `--chrome-affordance-color`, `--chrome-affordance-size`, `--chrome-affordance-weight` tokens; added `[data-chrome-mode='clean'] .nav-controls { opacity: 0 }` + `.nav-controls.is-revealed { opacity: 1 }` hide/reveal rules; added `.timeline-chevron` / `.info-panel-chevron` styles (CSS border-based chevrons); added `[data-chrome-mode='clean']` animation rule for chevrons; added `[data-chrome-mode='visible']` rule to hide chevrons; short-height-landscape override keeps nav always visible; updated reduced-motion block to include `.nav-controls` transition-duration and chevron static opacity; updated forced-colors block to paint chevron borders with `ButtonText`.
+- **`src/main.ts`**: Added `chromeVisibility.registerNavControls(chromeRefs.navControls!, navControls)` after `chromeVisibility.init()`.
+
 ### Brainstorm — enhancement candidates beyond base v0.62 scope
 
 1. **Adaptive cue intensity curve:** stronger cues for first-session users, reduced intensity after repeated successful reveal interactions.
@@ -67,12 +81,12 @@
 4. **Inline discoverability hint in Keyboard Help:** short persistent instruction to reduce first-time confusion.
 5. **Replayable diagnostics export:** append hidden-chrome transition history to `window.__FREYRAUM_DIAGNOSTICS__` output for support sessions.
 
-### Decision impact for v0.62 plan
+### Decision impact (confirmed as implemented)
 
-- Add persistent micro-signifiers for timeline/info edges (clearer than pulse-only strips).
-- Keep nav pulse short and onboarding-only, then transition arrows back to hidden idle state.
-- Reuse clean-mode reveal/hide state machine patterns for nav controls instead of introducing a separate behavior model.
-- Maintain reduced-motion and keyboard/screen-reader compatibility as hard requirements.
+- Persistent micro-signifiers (chevrons) added for timeline/info edges — clearer than pulse-only strips.
+- Nav pulse short and onboarding-only; arrows transition back to hidden idle after animation completes.
+- Nav registered as third managed surface in `ChromeVisibilityManager` — reuses clean-mode reveal/hide state machine.
+- Reduced-motion and keyboard/screen-reader compatibility maintained as hard requirements throughout.
 
 ---
 

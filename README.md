@@ -1,15 +1,17 @@
 # Freyraum
-> v0.62 planning in progress: technical deep-dive for hidden-element clues + nav-arrow post-pulse re-hide behavior (runtime still v0.61).
-> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
+> v0.62 shipped: hidden affordance signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
+> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
 
-## v0.62 — Hidden-element clue hardening + nav-arrow lifecycle follow-up (2026-06-04, **planned / docs-only**)
+## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide (2026-06-04, **shipped**)
 
-Current status: **planned only**. Runtime remains **v0.61 shipped**.
+Current status: **shipped and validated**.
 
-- Customer feedback: hidden timeline/description still need clearer visual clues that more UI exists.
-- Customer feedback: nav-arrow onboarding pulse is good, but arrows should disappear after pulse/idle like other hidden chrome.
-- v0.62 plan now includes a deeper technical implementation strategy: state-machine cleanup, centralized reveal timers, explicit diagnostics events, and accessibility guards.
-- Fresh online research + enhancement brainstorm are documented in `FINDINGS.md § v0.62`.
+- Nav arrows now auto-hide in clean mode and participate in the same proximity/focus/keyboard reveal lifecycle as the timeline and info panel.
+- Micro-chevron affordances (∧ and ›) added at bottom and left-edge peek zones — persistent directional cues that survive reduced-motion and forced-colors modes.
+- Nav onboarding hint: hint-then-hide flow — arrows reveal for the 3-pulse ring animation, then return to hidden idle (or dismiss immediately on user interaction).
+- `ChromeVisibilityManager` extended to manage nav as a third panel: `registerNavControls()`, ArrowLeft/ArrowRight keyboard reveal channel, extended bottom proximity band.
+- Short-height landscape override keeps nav permanently visible (it is the only navigation mechanism in that context).
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 
 ## v0.61 — Hidden-UI discoverability + nav-arrow idle hint (2026-06-04, **shipped**)
 

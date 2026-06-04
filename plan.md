@@ -1,10 +1,10 @@
 # FREYRAUM Plan
-> v0.62 planning in progress: technical deep-dive for hidden chrome discoverability + nav-arrow re-hide lifecycle.
-> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
+> v0.62 shipped: hidden-element signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
+> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
 
-## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (**planned 2026-06-04, docs-only**)
+## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (**shipped 2026-06-04**)
 
-> **Planning status:** This is a research-backed implementation plan only. Runtime currently remains **v0.61 shipped** until this plan is implemented.
+> **Implementation closeout:** v0.62 is now implemented in runtime code. All five plan items (P-01 through P-05) were executed. `npm run lint` and `npm run build` pass. See FINDINGS.md §v0.62 and CHANGELOG.md §v0.62 for as-built notes and validation.
 
 ---
 

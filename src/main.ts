@@ -798,6 +798,12 @@ async function main(): Promise<void> {
     app
   );
   chromeVisibility.init();
+  // v0.62 — register nav controls as a third managed chrome surface.
+  // Nav is now auto-hidden in clean mode and participates in the same
+  // proximity/focus/keyboard reveal lifecycle as the timeline and info panel.
+  if (chromeRefs.navControls) {
+    chromeVisibility.registerNavControls(chromeRefs.navControls, navControls);
+  }
 
   await Promise.all([
     galleryManager.init(),

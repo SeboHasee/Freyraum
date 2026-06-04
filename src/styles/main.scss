@@ -118,6 +118,7 @@
   // Geometry — small travel when hiding adds depth without jarring displacement.
   --chrome-timeline-hide-offset: 14px;    // translateY(+) when hidden
   --chrome-infopanel-hide-offset: -22px;  // translateX(-) when hidden
+  --chrome-nav-hide-offset: 10px;         // translateY(+) when nav hidden (v0.62)
 
   // Visual — translucent peek strips at the screen edges.
   --chrome-peek-bg: rgba(255, 255, 255, 0.16);
@@ -128,6 +129,12 @@
 
   // Touch — hit area larger than the visual strip (WCAG 2.5.8 ≥24px; 44px std).
   --chrome-peek-touch-target: 44px;
+
+  // v0.62 — Micro-affordance chevrons: subtle directional cues at peek zones.
+  // Kept dim by default; the peek-pulse animation brings them into view gently.
+  --chrome-affordance-color: rgba(255, 255, 255, 0.30);
+  --chrome-affordance-size: 10px;        // chevron bounding box
+  --chrome-affordance-weight: 1.5px;     // stroke width
 }
 
 html,
@@ -1771,6 +1778,27 @@ button {
     transform: translateX(0) translateY(16px);
   }
 
+  // ── Nav controls (bottom-center) — v0.62 auto-hide ──────────────────────
+  // Nav arrows hide in clean mode and reveal on bottom proximity, keyboard
+  // focus, ArrowLeft/ArrowRight, or when the onboarding hint fires.
+  .nav-controls {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(var(--chrome-nav-hide-offset));
+    transition:
+      opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
+      transform var(--dur-chrome-hide) var(--ease-chrome-hide);
+  }
+
+  .nav-controls.is-revealed {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
   // Focusable children: keep the browser's scroll-into-view clear of the fixed
   // chrome so a Tab landing never lands behind a panel edge (WCAG 2.4.11).
   .timeline a,
@@ -1863,6 +1891,52 @@ button {
   }
 }
 
+// ── v0.62 Micro-affordance chevrons ────────────────────────────────────────
+// Small directional cue elements appended inside the peek hit areas by
+// ChromeVisibilityManager. They breathe with the peek-pulse animation and
+// clearly indicate the direction in which the hidden panel will slide in.
+// All chevrons are aria-hidden so screen readers are not distracted.
+.timeline-chevron {
+  // Upward-pointing chevron (^) built from CSS borders so no icon font is
+  // needed and it scales cleanly with the token.
+  width: var(--chrome-affordance-size);
+  height: var(--chrome-affordance-size);
+  border-top: var(--chrome-affordance-weight) solid var(--chrome-affordance-color);
+  border-left: var(--chrome-affordance-weight) solid var(--chrome-affordance-color);
+  transform: rotate(45deg) translateY(2px);
+  border-radius: 1px;
+  flex-shrink: 0;
+  margin-bottom: 6px;  // keep clear of the strip below
+}
+
+.info-panel-chevron {
+  // Rightward-pointing chevron (>) pointing toward the info panel slide-in.
+  width: var(--chrome-affordance-size);
+  height: var(--chrome-affordance-size);
+  border-top: var(--chrome-affordance-weight) solid var(--chrome-affordance-color);
+  border-right: var(--chrome-affordance-weight) solid var(--chrome-affordance-color);
+  transform: rotate(45deg) translateX(-2px);
+  border-radius: 1px;
+  flex-shrink: 0;
+  margin-left: 6px;  // keep clear of the strip beside it
+}
+
+// Chevrons breathe in sync with the peek strip pulse in clean mode.
+:root[data-chrome-mode='clean'] {
+  .timeline-chevron,
+  .info-panel-chevron {
+    animation: peek-pulse var(--dur-peek-pulse) ease-in-out infinite;
+  }
+}
+
+// Hidden when chrome is always visible (no need for affordance when visible).
+:root[data-chrome-mode='visible'] {
+  .timeline-chevron,
+  .info-panel-chevron {
+    display: none;
+  }
+}
+
 // ── Touch (coarse pointer): keep the timeline discoverable ──────────────────
 // Touch users cannot hover, so the timeline stays at low opacity baseline and a
 // tap (handled in JS) brings it to full. The info panel stays fully hidden and
@@ -1890,7 +1964,8 @@ button {
 @media (prefers-reduced-motion: reduce) {
   :root[data-chrome-mode='clean'] {
     .timeline,
-    .info-panel {
+    .info-panel,
+    .nav-controls {
       transition-duration: 0.001ms;
     }
   }
@@ -1901,16 +1976,31 @@ button {
     opacity: 0.18;
   }
 
+  // Chevrons remain static (no pulse) but stay visible at a comfortable opacity.
+  .timeline-chevron,
+  .info-panel-chevron {
+    animation: none;
+    opacity: 0.25;
+  }
+
   :root[data-nav-hint='active'] .nav-btn::before {
     animation: none;
   }
 }
 
-// ── Forced colors: make peek strips visible in high-contrast mode ───────────
+// ── Forced colors: make peek strips and chevrons visible in high-contrast mode
 @media (forced-colors: active) {
   .timeline-peek,
   .info-panel-peek {
     background: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+  }
+
+  // Use ButtonText for chevron borders so they remain visible in all themes.
+  .timeline-chevron,
+  .info-panel-chevron {
+    border-color: ButtonText;
     opacity: 1;
     forced-color-adjust: none;
   }
@@ -2018,6 +2108,14 @@ button {
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
+  }
+  // v0.62 — short landscape: nav is the only navigation mechanism (timeline is
+  // hidden). Force nav visible regardless of clean-mode auto-hide so users can
+  // always navigate. WCAG SC 2.5.1 — keyboard/pointer equivalence preserved.
+  :root[data-chrome-mode='clean'] .nav-controls {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
   }
   .hint-text {
     display: none;

@@ -1,5 +1,6 @@
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import type { PreferencesStore } from '../utils/preferences';
+import type { NavigationControls } from './NavigationControls';
 
 /**
  * v0.60 — Clean Chrome: auto-hide timeline and info panel.
@@ -26,8 +27,15 @@ export const CHROME_CONFIG = {
   /** px from the left edge of the viewport that triggers info-panel reveal */
   INFO_PANEL_TRIGGER_BAND_PX: 120,
 
+  /** Extended bottom band (px) that also triggers nav-controls reveal.
+   *  Must be ≥ TIMELINE_TRIGGER_BAND_PX to encompass the nav buttons above the timeline. */
+  NAV_TRIGGER_BAND_PX: 220,
+
   /** ms after the pointer leaves ALL trigger zones before a panel hides */
   HIDE_DELAY_MS: 2500,
+
+  /** ms after nav leaves trigger zone before hiding (slightly faster than panels) */
+  NAV_HIDE_DELAY_MS: 2000,
 
   /** ms a touch-revealed panel stays visible before auto-hiding */
   TOUCH_REVEAL_DURATION_MS: 4000,
@@ -44,8 +52,8 @@ export const CHROME_CONFIG = {
 } as const;
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
-export type PanelId = 'timeline' | 'info-panel';
-export type RevealReason = 'proximity' | 'focus' | 'touch' | 'forced' | 'preference';
+export type PanelId = 'timeline' | 'info-panel' | 'nav-controls';
+export type RevealReason = 'proximity' | 'focus' | 'touch' | 'forced' | 'preference' | 'hint' | 'keyboard';
 export type ChromeMode = 'clean' | 'visible';
 
 interface PanelState {
@@ -201,6 +209,71 @@ export class ChromeVisibilityManager {
     this.diag.debug('force-reveal', 'Panel force-revealed', { panelId });
   }
 
+  /**
+   * Register the navigation controls as a third managed chrome surface.
+   *
+   * After registration the nav container:
+   * - starts hidden in clean mode (CSS `[data-chrome-mode='clean'] .nav-controls`
+   *   hides it; `.is-revealed` shows it);
+   * - reveals on bottom proximity (NAV_TRIGGER_BAND_PX), keyboard focus, and
+   *   ArrowLeft/ArrowRight key presses;
+   * - participates in the onboarding hint lifecycle via the `navControls`
+   *   callbacks: the hint reveals the nav, and on completion the nav is
+   *   scheduled back to hidden.
+   *
+   * Must be called after `init()`.
+   */
+  registerNavControls(navEl: HTMLElement, navControls: NavigationControls): void {
+    if (!this.initialised) {
+      this.diag.warn('register-nav', 'registerNavControls called before init() — ignored');
+      return;
+    }
+    if (this.panels.has('nav-controls')) {
+      this.diag.warn('register-nav', 'Nav controls already registered — ignored');
+      return;
+    }
+
+    const state = this.createPanelState('nav-controls', navEl, 'Navigation');
+    this.panels.set('nav-controls', state);
+
+    // Attach per-panel DOM listeners consistent with timeline/info-panel setup.
+    navEl.addEventListener('focusin', state.onFocusIn);
+    navEl.addEventListener('focusout', state.onFocusOut);
+    navEl.addEventListener('pointerenter', state.onPointerEnter);
+    navEl.addEventListener('pointerleave', state.onPointerLeave);
+
+    // Apply current mode: in visible mode reveal immediately; in clean mode the
+    // CSS already hides the element so no JS action is needed here.
+    if (this.currentMode() === 'visible') {
+      this.reveal('nav-controls', 'preference');
+    }
+
+    // ── Hint lifecycle wiring ────────────────────────────────────────────────
+    // When the onboarding pulse is about to start, reveal the nav so the user
+    // can see the ring animation even though the nav is otherwise hidden.
+    navControls.onHintStart(() => {
+      this.reveal('nav-controls', 'hint');
+      this.diag.debug('nav-hint-start', 'Nav controls revealed for onboarding hint');
+    });
+
+    // When the hint finishes (animation complete or dismissed by interaction),
+    // schedule nav back to hidden idle — but only if no pointer/focus holds it.
+    navControls.onHintFinished(() => {
+      const navState = this.panels.get('nav-controls');
+      if (!navState) return;
+      if (this.currentMode() === 'clean' && this.shouldHide(navState)) {
+        this.scheduleHide('nav-controls', this.config.NAV_HIDE_DELAY_MS);
+        this.diag.debug('nav-hint-dismiss', 'Nav hint finished; scheduled re-hide', {
+          delay: this.config.NAV_HIDE_DELAY_MS,
+        });
+      }
+    });
+
+    this.diag.info('register-nav', 'Nav controls registered as managed chrome surface', {
+      mode: this.currentMode(),
+    });
+  }
+
   // ─── Private: Core State Machine ───────────────────────────────────────────
 
   private currentMode(): ChromeMode {
@@ -299,6 +372,11 @@ export class ChromeVisibilityManager {
 
     this.updateZone('timeline', y >= h - this.config.TIMELINE_TRIGGER_BAND_PX);
     this.updateZone('info-panel', x <= this.config.INFO_PANEL_TRIGGER_BAND_PX);
+    // Nav controls share the bottom proximity zone with an extended band that
+    // covers the button height above the timeline strip.
+    if (this.panels.has('nav-controls')) {
+      this.updateZone('nav-controls', y >= h - this.config.NAV_TRIGGER_BAND_PX, this.config.NAV_HIDE_DELAY_MS);
+    }
   }
 
   private onPointerDown(e: PointerEvent): void {
@@ -324,15 +402,25 @@ export class ChromeVisibilityManager {
 
   private onViewportLeave(): void {
     if (this.currentMode() === 'visible') return;
-    // Clear both trigger zones; hide any panel no longer pinned by focus/hover.
-    for (const id of ['timeline', 'info-panel'] as PanelId[]) {
+    // Clear ALL registered trigger zones; iterating over the panels map means
+    // nav controls are included without needing a hard-coded list.
+    for (const id of this.panels.keys()) {
       this.updateZone(id, false);
     }
   }
 
   private onKeyDown(e: KeyboardEvent): void {
-    if (e.key !== 'Escape') return;
     if (this.currentMode() === 'visible') return;
+
+    // ArrowLeft/ArrowRight: briefly reveal nav controls so the user can see
+    // the button they are activating (P-02 keyboard reveal channel).
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && this.panels.has('nav-controls')) {
+      this.reveal('nav-controls', 'keyboard');
+      this.scheduleHide('nav-controls', this.config.NAV_HIDE_DELAY_MS);
+      this.diag.debug('nav-keyboard-reveal', 'Nav controls revealed by keyboard', { key: e.key });
+    }
+
+    if (e.key !== 'Escape') return;
 
     let dismissed = false;
     for (const state of this.panels.values()) {
@@ -389,7 +477,7 @@ export class ChromeVisibilityManager {
     if (this.currentMode() === 'clean' && this.shouldHide(state)) this.scheduleHide(panelId);
   }
 
-  private updateZone(panelId: PanelId, inZone: boolean): void {
+  private updateZone(panelId: PanelId, inZone: boolean, hideDelayMs?: number): void {
     const state = this.panels.get(panelId);
     if (!state) return;
     if (inZone === state.pointerInZone) return; // no change
@@ -397,18 +485,24 @@ export class ChromeVisibilityManager {
     if (inZone) {
       this.reveal(panelId, 'proximity');
     } else if (this.shouldHide(state)) {
-      this.scheduleHide(panelId);
+      this.scheduleHide(panelId, hideDelayMs);
     }
   }
 
   // ─── Private: DOM Helpers ──────────────────────────────────────────────────
 
   private createPeekElements(): void {
+    // The chevron elements are purely decorative affordances (aria-hidden) that
+    // sit inside the peek hit areas to signal the direction of the hidden panel.
+    const timelineChevron = this.makeEl('div', 'timeline-chevron');
     this.timelinePeekHit = this.makeEl('div', 'timeline-peek-hit', [
       this.makeEl('div', 'timeline-peek'),
+      timelineChevron,
     ]);
+    const infoPanelChevron = this.makeEl('div', 'info-panel-chevron');
     this.infoPanelPeekHit = this.makeEl('div', 'info-panel-peek-hit', [
       this.makeEl('div', 'info-panel-peek'),
+      infoPanelChevron,
     ]);
     for (const el of [this.timelinePeekHit, this.infoPanelPeekHit]) {
       el.setAttribute('aria-hidden', 'true');

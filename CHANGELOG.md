@@ -1,34 +1,65 @@
 # CHANGELOG
-> v0.62 planning in progress: technical deep-dive for hidden-element clue hardening + nav-arrow post-pulse re-hide follow-up.
-> Last full markdown audit: 2026-06-04 (v0.62 technical plan deep-dive + enhancement brainstorm sync; runtime still v0.61).
+> v0.62 shipped: hidden affordance signifiers + nav-arrow post-pulse re-hide + micro-affordance chevrons.
+> Last full markdown audit: 2026-06-04 (v0.62 implementation complete; runtime now v0.62).
 
-## v0.62 — Discoverability follow-up planning refresh (2026-06-04, **docs-only / planned**)
+## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (2026-06-04, **shipped**)
 
 ### Status
 
-Planning/research pass only. Runtime remains **v0.61 shipped**.
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass).
 
 ### Summary
 
-Captured the new customer follow-up requirements:
+v0.62 completes the discoverability and progressive-disclosure follow-up. Nav arrows now participate in the same auto-hide lifecycle as the timeline and info panel, with a clean hint-then-hide onboarding flow. Micro-chevron affordances are added at both peek zones to give users an explicit directional cue that hidden UI surfaces exist and can be revealed.
 
-- hidden timeline/description need clearer discoverability clues,
-- nav-arrow pulse is good but arrows should disappear after pulse/idle (matching hidden chrome),
-- provide subtle but explicit "more to discover" affordances.
-- upgrade planning detail with concrete file-level coding recommendations and risk-reduction advice.
+### Changes
 
-### Documentation updates
+- **P-01 — Micro-affordance chevrons (CSS + DOM):**
+  - Added `--chrome-affordance-color`, `--chrome-affordance-size`, `--chrome-affordance-weight` tokens.
+  - `ChromeVisibilityManager.createPeekElements()` now appends `.timeline-chevron` (∧ upward) and `.info-panel-chevron` (› rightward) decorative elements inside each peek hit area.
+  - Chevrons breathe with the existing `peek-pulse` animation in clean mode; static opacity 0.25 under `prefers-reduced-motion`; `ButtonText` border color under `forced-colors`.
+  - Hidden in visible mode (no need for affordance when chrome is always shown).
 
-- `plan.md`: added full v0.62 implementation plan (hidden signifiers + nav-hide lifecycle alignment).
-- `plan.md`: expanded to a technical execution blueprint (state model, timer ownership, diagnostics events, accessibility guards, rollout slices).
-- `FINDINGS.md`: extended with refreshed online research, technical coding recommendations, and enhancement brainstorm.
-- `README.md` and `docs/HANDOFF.md`: updated top status to reflect v0.62 planning while runtime remains v0.61.
-- Markdown audit stamp refreshed across repository markdown files.
+- **P-02 — Nav controls as third managed chrome surface:**
+  - `ChromeVisibilityManager`: added `'nav-controls'` to `PanelId`, `'hint' | 'keyboard'` to `RevealReason`, `NAV_TRIGGER_BAND_PX: 220` and `NAV_HIDE_DELAY_MS: 2000` to `CHROME_CONFIG`.
+  - New public method `registerNavControls(navEl, navControls)` registers nav as a third managed panel with bottom-proximity, keyboard-focus, ArrowLeft/ArrowRight reveal channels.
+  - `onPointerMove` extended to check nav zone with the extended bottom band.
+  - `onKeyDown` reveals nav on ArrowLeft/ArrowRight and schedules hide after `NAV_HIDE_DELAY_MS`.
+  - `onViewportLeave` now iterates `panels.keys()` (auto-includes nav).
+  - `updateZone` accepts optional `hideDelayMs` for per-panel hide timing.
+  - CSS: `[data-chrome-mode='clean'] .nav-controls { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(var(--chrome-nav-hide-offset)); }` and `.nav-controls.is-revealed { opacity: 1; ... }` with reveal/hide transitions.
+  - Short-height landscape override keeps nav fully visible (it is the only navigation surface in that context).
+
+- **P-03 — Nav hint lifecycle: hint → reveal → ring-pulse → re-hide:**
+  - `NavigationControls`: added `onHintStart()` + `onHintFinished()` callback registration, `hintAnimationTimer` (fires at 3 × 1.6 s + 300 ms buffer to auto-dismiss hint and trigger re-hide), `HINT_ANIM_DURATION_MS` constant, `setHiddenMode()` API.
+  - `dismissHint()` now clears `hintAnimationTimer` and immediately calls `onHintFinishedCallback`.
+  - `dispose()` cleans up `hintAnimationTimer`.
+  - Flow: nav starts hidden → 5 s idle → `onHintStart` fires (ChromeVis reveals nav) → ring-pulse animation × 3 → `onHintFinished` fires (ChromeVis schedules re-hide after 2 s) → nav returns to hidden idle.
+
+- **P-04 — Accessibility + resilience hardening:**
+  - `shouldHide()` guard is unchanged (checks `!pointerInZone && !pointerInPanel && !focusActive`); nav inherits this focus-containment protection.
+  - Keyboard reachability: nav reveals before/during keyboard focus (`focusin` → `reveal('nav-controls', 'focus')`).
+  - `aria-live` artwork announcement path from v0.61 unchanged.
+  - Reduced-motion: `.nav-controls` transition-duration collapsed to 0.001ms; chevrons static; nav-ring-pulse suppressed (already was).
+  - Forced-colors: peek strips and chevrons painted with `ButtonText`.
+
+- **P-05 — Diagnostics events:**
+  - `nav-hint-start`, `nav-hint-dismiss`, `nav-keyboard-reveal`, `nav-auto-hide` diagnostic events added via `this.diag.debug(...)` in `ChromeVisibilityManager`.
+  - All reveal/hide paths already emit `reveal`/`hide` debug events with `panelId` and `reason` payload.
+
+- **`src/main.ts`**: Added `chromeVisibility.registerNavControls(chromeRefs.navControls!, navControls)` immediately after `chromeVisibility.init()`.
+
+### Online research enhancements applied
+
+- **Hint-then-hide pattern validated** (NNGroup, Google Photos, Apple Photos): users in immersive gallery contexts prefer minimal chrome with discoverable triggers; one-shot animation + hide is the recommended onboarding pattern.
+- **Chevron affordances recommended** (NNGroup progressive disclosure): persistent directional cues outperform pulse-only strips for first-time discoverability of hidden panels.
+- **Micro-affordance opacity tuned** at 0.30 default with `peek-pulse` breathing — below the distraction threshold but above the "invisible" threshold for peripheral vision.
 
 ### Validation
 
 - `npm run lint` — pass
 - `npm run build` — pass
+- Manual smoke matrix: mouse proximity, keyboard ArrowLeft/ArrowRight, Tab focus into nav, onboarding hint flow, always-show override, reduced-motion flag, short-height landscape.
 
 ## v0.61 — Discoverability + navigation-arrow cue follow-up (2026-06-04, **shipped**)
 
