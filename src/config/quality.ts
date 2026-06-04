@@ -189,10 +189,11 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.71: raised from 0.28 → 0.40 so shiny-scratch roughness contrast is visible.
-    frameRoughness: 0.40,
+    // v0.72: lowered from 0.40 (v0.71) to restore satin aluminum sheen.
+    frameRoughness: 0.23,
     frameAnisotropy: 0.85,
-    frameClearcoat: 0.12,
+    // v0.72: raised from 0.12 to add a visible gloss layer for surface depth.
+    frameClearcoat: 0.28,
     frameBevelEnabled: true,
     frameDetailLevel: 'high',
   },
@@ -233,10 +234,11 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.71: raised from 0.38 → 0.48 to improve shiny-scratch contrast.
-    frameRoughness: 0.48,
+    // v0.72: lowered from 0.48 (v0.71) to restore satin aluminum sheen.
+    frameRoughness: 0.31,
     frameAnisotropy: 0.60,
-    frameClearcoat: 0.08,
+    // v0.72: raised from 0.08 to add visible clearcoat depth.
+    frameClearcoat: 0.16,
     frameBevelEnabled: true,
     frameDetailLevel: 'balanced',
   },

@@ -1,6 +1,30 @@
 # CHANGELOG
-> v0.71 shipped: UE5-inspired metal detail visibility uplift.
-> Last full markdown audit: 2026-06-04 (v0.71 shipped).
+> v0.72 shipped: natural-scratch frame model, lower roughness, stronger clearcoat.
+> Last full markdown audit: 2026-06-04 (v0.72 shipped).
+
+## v0.72 — Natural-scratch frame model (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Runtime shader changes validated (lint ✅, build ✅).
+
+### Summary
+
+Addresses "flat and unnatural" frame appearance introduced in v0.71. The v0.71 shiny-scratch model (subtractive roughness) created mirror-like bright strips on a dull-ish base (roughness 0.40/0.48), which read as artificial rather than natural brushed aluminum.
+
+- **Scratch model reverted to additive:** Scratch marks now add a small amount of roughness (+0.025/+0.018 micro, +0.045/+0.032 macro) rather than subtracting it. Scratches disrupt the surface coating → slightly more matte, not shinier.
+- **Normal gradient scale:** `0.085` → `0.12` (41% stronger) — brushed texture is more visibly three-dimensional.
+- **Base roughness (quality.ts):** high `0.40` → `0.23`; balanced `0.48` → `0.31` — restores the satin-aluminum sheen that was lost in v0.71.
+- **Clearcoat (quality.ts):** high `0.12` → `0.28`; balanced `0.08` → `0.16` — a stronger gloss top layer adds visible specular depth and the layered look of anodized/lacquered aluminum.
+- **Roughness grain amplitude:** high `±0.07` → `±0.05`; balanced `±0.05` → `±0.035`; battery `±0.04` → `±0.03` — tighter variation keeps the satin base uniform.
+- **Anisotropy direction perturbation:** `±23°` → `±12.6°` — more consistent directional grain; less scattered shimmer.
+- **Cache key:** `frame-v0.71-*` → `frame-v0.72-*` to force shader recompile.
+
+### Files
+
+- `src/materials/CanvasMaterial.ts`
+- `src/config/quality.ts`
+- `CHANGELOG.md`
 
 ## v0.71 — UE5-inspired metal detail visibility uplift (2026-06-04, **shipped**)
 
