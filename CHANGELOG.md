@@ -1,6 +1,25 @@
 # CHANGELOG
-> v0.60 shipped: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
-> Last full markdown audit: 2026-06-04 (v0.60 plan written, verified, and implemented).
+> v0.61 planned: hidden-element discoverability cues (incl. nav arrows) + no automatic info-panel reveal on artwork change.
+> Last full markdown audit: 2026-06-04 (v0.61 documentation-planning pass).
+
+## v0.61 — Discoverability + navigation-arrow cue follow-up plan (2026-06-04, **planned**)
+
+### Status
+
+Planned/documented. No runtime code changes in this pass.
+
+### Summary
+
+Added a v0.61 planning/finding pass to address customer feedback after v0.60:
+
+- strengthen visual clues for hidden controls,
+- apply equivalent discoverability cues to left/right navigation-selection arrows,
+- and stop auto-showing painting description text on artwork change (keep hidden until user intent).
+
+### Documentation updates
+
+- `plan.md`: new v0.61 implementation plan with scope, research-backed constraints, acceptance checks, and non-goals.
+- `FINDINGS.md`: new v0.61 code-audit + online usability/accessibility research findings with source links.
 
 ## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel (2026-06-04, **shipped**)
 

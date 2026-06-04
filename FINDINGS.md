@@ -1,6 +1,46 @@
 # FINDINGS
-> v0.60 shipped: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
-> Last full markdown audit: 2026-06-04 (v0.60 plan deep-revised with live online research, finalized, and implemented).
+> v0.61 planned: discoverability cues for hidden elements (including nav arrows) + stop auto-revealing description on artwork change.
+> Last full markdown audit: 2026-06-04 (v0.61 findings added from code audit + online UX/usability/accessibility research; implementation pending).
+
+## v0.61 — Hidden-UI discoverability + nav-arrow affordances research (2026-06-04, **planned**)
+
+### Customer request captured
+
+1. Add clearer visual clues that hidden UI elements exist.
+2. Apply the same clue strategy to left/right navigation-selection arrows.
+3. Keep painting descriptions hidden when the painting changes; reveal only on explicit user intent.
+
+### Repository findings (current behavior)
+
+- `src/main.ts:1511` force-reveals the info panel on navigation (`chromeVisibility.forceReveal('info-panel')`), causing the description to appear automatically after each painting change.
+- `src/ui/ChromeVisibilityManager.ts` currently creates reveal cues for only two zones (`timeline` and `info-panel`).
+- `src/styles/main.scss` currently defines animated peek strips for timeline/info panel in clean mode, but no equivalent discoverability cue layer for navigation arrows.
+
+### Online research findings (best practice)
+
+1. **Discoverability of hidden controls needs persistent visual affordances**
+   - Hidden/off-screen navigation patterns reduce discoverability if no clue is present.
+   - Practical implication: keep subtle always-available hints so users can infer available actions.
+   - Source: Nielsen Norman Group menu/navigation guidance — https://www.nngroup.com/articles/menu-design/
+
+2. **Hover/focus-revealed content must be dismissible, hoverable, and persistent (WCAG 2.2 SC 1.4.13)**
+   - Reveal patterns cannot disappear during normal pointer transfer and must offer a dismiss path.
+   - Practical implication: any new cue/reveal behavior must preserve the existing JS state-machine guarantees.
+   - Source: https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+
+3. **Arrow controls must satisfy minimum target size (WCAG 2.2 SC 2.5.8)**
+   - Pointer targets should be at least 24×24 CSS px (or meet spacing exception).
+   - Practical implication: nav-arrow clue enhancements must not reduce effective hit area or crowd targets.
+   - Source: https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+
+4. **Gallery/carousel prev-next controls need explicit labels and keyboard operability**
+   - WAI APG/tutorial guidance emphasizes clear previous/next naming, predictable focus behavior, and robust keyboard activation.
+   - Practical implication: new nav-arrow cues must stay assistive-tech-safe and preserve control semantics.
+   - Sources: https://www.w3.org/WAI/ARIA/apg/patterns/carousel/ , https://www.w3.org/WAI/tutorials/carousels/controls/
+
+### v0.61 planning conclusion
+
+The follow-up should focus on discoverability parity across all hidden or subtle controls, while keeping v0.60’s accessibility baseline intact. The highest-priority behavioral correction is removing forced info-panel reveal on artwork change so descriptions stay hidden until explicit user interaction.
 
 ## v0.60 — Clean Chrome Auto-Hide: Implementation Verification (2026-06-04, **shipped**)
 

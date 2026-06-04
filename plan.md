@@ -1,6 +1,63 @@
 # FREYRAUM Plan
-> v0.60 shipped: clean-chrome auto-hide — timeline and info-panel reveal on hover/proximity only.
-> Last full markdown audit: 2026-06-04 (v0.60 plan written, verified online, finalized, and implemented).
+> v0.61 planned: strengthen discoverability cues for hidden UI (including nav arrows) and keep artwork descriptions hidden until explicit reveal.
+> Last full markdown audit: 2026-06-04 (v0.61 plan drafted from code audit + online UX/accessibility research; not yet implemented).
+
+## v0.61 — Hidden-UI Discoverability + Navigation-Arrow Clues + No Auto-Description Reveal (**planned 2026-06-04**)
+
+### Problem Statement
+
+Customer feedback for the shipped v0.60 behavior identified three follow-up issues:
+
+1. Hidden UI needs clearer visual clues so users can immediately tell that revealable elements exist.
+2. The same discoverability concept should also be applied to left/right navigation-selection arrows.
+3. Changing paintings must no longer auto-show the info description; it should remain hidden until user intent (hover/focus/tap).
+
+### Current-State Audit (repository)
+
+- `src/main.ts:1511` currently calls `chromeVisibility.forceReveal('info-panel')` during navigation, which auto-reveals description content whenever artwork changes.
+- `src/ui/ChromeVisibilityManager.ts` currently creates peek affordances only for timeline and info-panel (`timeline-peek-hit`, `info-panel-peek-hit`), not for navigation arrows.
+- `src/styles/main.scss` provides clean-chrome hint pulses for timeline/info panel only; there is no equivalent hint system for left/right nav arrows.
+
+### Research Findings (user-friendliness, usability, accessibility)
+
+- **Hidden navigation has lower discoverability without persistent cues.** NN/g recommends keeping wayfinding affordances visible and predictable; hidden controls need explicit visual hints so users know actions are available.
+  - Source: https://www.nngroup.com/articles/menu-design/
+- **Hover/focus-triggered UI must remain dismissible, hoverable, and persistent.** Any discoverability cue/reveal behavior must keep WCAG 2.2 “Content on Hover or Focus” compliance.
+  - Source: https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html
+- **Arrow controls must keep robust pointer accessibility.** WCAG 2.2 target-size guidance requires at least 24×24 CSS px interactive targets (or equivalent spacing exception).
+  - Source: https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html
+- **Carousel/gallery previous-next controls must use explicit accessible names and keyboard operation.** WAI guidance emphasizes clear prev/next labeling, predictable focus order, and slide/change announcement patterns.
+  - Sources: https://www.w3.org/WAI/ARIA/apg/patterns/carousel/ , https://www.w3.org/WAI/tutorials/carousels/controls/
+
+### v0.61 Plan (implementation scope)
+
+- **P-01 — Add discoverability cues for hidden elements**
+  - Introduce always-present but subtle cues in clean mode that indicate hidden reveal zones exist.
+  - Keep cues low-noise so artwork-first presentation remains intact.
+
+- **P-02 — Add equivalent cues for left/right navigation arrows**
+  - Apply the same discoverability language to prev/next controls so users can quickly identify navigation/selection affordances.
+  - Ensure cues remain visible in forced-colors mode and perceivable with reduced visual acuity.
+
+- **P-03 — Stop automatic info description reveal on painting change**
+  - Remove automatic forced reveal behavior on navigation.
+  - Keep reveal of description tied strictly to user intent (hover, focus, touch trigger, or explicit preference mode).
+
+- **P-04 — Preserve accessibility guarantees**
+  - Keep keyboard and screen-reader access unchanged or improved.
+  - Maintain WCAG-compliant hover/focus behavior, focus visibility, and pointer target sizing.
+  - Ensure reduced-motion and forced-colors behavior remain supported for all new cues.
+
+- **P-05 — Validation and acceptance**
+  - Re-verify lint/build.
+  - Manual QA checks for desktop hover, keyboard-only, coarse-pointer/touch, reduced motion, and forced colors.
+  - Confirm that painting changes no longer expose descriptions unless user intent triggers reveal.
+
+### Non-Goals
+
+- No redesign of timeline structure/content.
+- No change to artwork metadata model.
+- No regression to always-visible chrome defaults unless explicitly chosen in preferences.
 
 ## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel on Hover/Proximity (**shipped 2026-06-04**)
 
