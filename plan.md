@@ -1,80 +1,33 @@
 # FREYRAUM Plan
-> v0.70 plan-audit pass added: technical implementation blueprint for macro-visible scratch readability (docs-only). Runtime remains v0.69 (no new shader code shipped in this docs update).
-> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
+> v0.70 shipped: macro-visible scratch readability uplift implemented in runtime shader code (S-01..S-08 completed).
+> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
 
-## v0.70 — Macro-visible micro-scratch uplift (**planned 2026-06-04, not yet shipped**)
+## v0.70 — Macro-visible micro-scratch uplift (**shipped 2026-06-04**)
 
-> **Outcome target:** Keep the v0.54/v0.69 stability guarantees (no cross-bar banding, no distance shimmer, bounded program variants) while making scratch evidence clearly legible at macro viewing distances.
+> **Outcome:** v0.70 ships a dedicated macro scratch lane with wear-zone masking, split attenuation windows, roughness-first macro readability, and versioned cache/diagnostics, while preserving v0.54/v0.69 anti-banding and stability rails.
 
-### Current-state code audit (why detail still reads too soft)
+### Shipped slices
 
-1. **Scratch occupancy is intentionally sparse.** In `frmScratchLine`, segments are discarded for `sh > 0.018`, so only ~1.8% of segment windows emit a line.
-2. **Scratch lines are very thin.** Width floor is `0.0003 + rand * 0.0006` (plus derivative floor), which is often below macro readability except under strong grazing highlights.
-3. **Scratch contrast is damped twice.** Per-line intensity (`0.015..0.040`) is multiplied by `frmScratchLayer` weights (`0.06/0.05/0.04`) and then only lightly affects roughness (`* 0.015`).
-4. **AA guards are strong (correct, must stay).** Fine detail and roughness grain are attenuated by `fwidth(vFrameUV.x)` as distance increases, which protects stability but can suppress visibility too early if not split into micro vs macro bands.
+1. **S-01 — Dedicated macro scratch lane (`CanvasMaterial`).** Added `frmScratchLineMacro` + `frmScratchLayerMacro` with lower densities (`2.0..7.0`), wider width floor (`0.0016..0.0040`), and stronger line intensity (`0.030..0.090`).
+2. **S-02 — Low-frequency wear-zone mask.** Added `frmWearZoneMask(alongX, seed)` using coarse along-bar zoning + smooth interpolation; macro lane is multiplied by this mask.
+3. **S-03 — Roughness-vs-normal split.** Macro readability is roughness-led (`high` strongest, `balanced` reduced), with bounded macro normal contribution.
+4. **S-04 — Independent attenuation windows.** Micro lane keeps aggressive attenuation; macro lane uses a slower fade window (`1 - smoothstep(0.006, 0.024, fwidth(vFrameUV.x))`).
+5. **S-05 — Anti-banding invariants preserved.** No `barUV.y` added to FBM/noise paths that drive normal gradients.
+6. **S-06 — Compile flags + cache-key bump.** Added `FRAME_MACRO_SCRATCH` compile flag for high/balanced; cache key bumped to `frame-v0.70-*`.
+7. **S-07 — Diagnostics extended.** `[CanvasMaterial] frame-shader-compiled` now logs macro enabled/mode, density range, width range, macro attenuation window, and `frame-v0.70-*` cache key; explicit debug log added for reduced/off macro modes.
+8. **S-08 — Validation + docs sync.** `npm run lint` ✅ and `npm run build` ✅. Markdown docs synced to shipped status.
 
-### Online research constraints applied to this plan (2026-06-04 refresh)
+### Acceptance summary
 
-1. **Khronos anisotropy model:** RG channels encode direction, B encodes per-texel strength multiplier; stretched highlight direction is perpendicular to groove direction.
-2. **Three.js r166 physical shader:** `anisotropyMap` direction is computed from `2*rg-1` and multiplied by blue-channel strength before BRDF use.
-3. **Derivative AA basis:** `fwidth(p) = abs(dFdx(p)) + abs(dFdy(p))` (fragment stage) is the correct scalar for procedural anti-alias attenuation.
-4. **Implication for Freyraum:** because frame orientation uses `aFrameUV` (not the standard `uv` channel), direction changes for the frame should stay in the existing GLSL injection path, not in `material.anisotropyMap`.
-5. **Implication for quality/perf:** high-frequency micro lane and lower-frequency macro lane should use separate derivative windows; this keeps close readability while preventing distance shimmer.
-
-### v0.70 execution plan (technical implementation slices)
-
-1. **S-01 — Add a dedicated macro scratch lane in `FRAME_FRAG_FUNCTIONS` (`src/materials/CanvasMaterial.ts`)**
-   - Keep existing micro lane (`frmScratchLayer`) as the fine-detail component.
-   - Add a second helper (`frmScratchLayerMacro`) with:
-     - lower segment densities than micro (target range: `2.0..7.0`),
-     - wider line profile floor than micro (target range: `0.0016..0.0040`),
-     - slightly higher per-line intensity range than micro (target range: `0.030..0.090`).
-   - Keep lane deterministic per artwork by using the existing seed pipeline (`uFrameSeed` only).
-
-2. **S-02 — Drive macro visibility with a low-frequency wear-zone mask**
-   - Add `frmWearZoneMask(float alongX, float seed)` that hashes a coarse along-bar zone index (for example `floor(alongX * 1.4 + 0.5)`).
-   - Use a smooth gate (`smoothstep`) so zones transition softly, not as hard on/off blocks.
-   - Multiply macro lane by the wear mask; do **not** increase micro lane uniformly.
-   - Preset policy: `high` full mask gain, `balanced` reduced gain, `battery` unchanged path.
-
-3. **S-03 — Separate roughness-vs-normal budgets for macro lane**
-   - Macro should read primarily through roughness modulation (highlight breakup), not deep normal tilts.
-   - Target budget guidance:
-     - macro roughness contribution stronger than v0.69 micro cap,
-     - macro normal contribution ≤ about half of macro roughness visual influence.
-   - Keep explicit roughness clamps per preset; keep battery clamps unchanged.
-
-4. **S-04 — Add independent derivative attenuation windows**
-   - Keep current micro attenuation window unchanged (`fwidth(vFrameUV.x)` with aggressive fade).
-   - Add a slower macro window so macro scratches survive medium-close views and fade later than micro.
-   - Recommended approach: apply attenuation directly to lane output before combining lanes, not by globally scaling final roughness.
-
-5. **S-05 — Preserve all anti-banding invariants (non-negotiable)**
-   - No `barUV.y` inside FBM/noise paths that feed normal gradient computation.
-   - `barUV.y` may still be used for line **placement** only (distance to scratch centerline), as in the current scratch path.
-   - Any new macro helper must preserve `dFBM/dY = 0` for all FBM-based normal terms.
-
-6. **S-06 — Compile-time branching + cache-key versioning**
-   - Reuse `frameDetailLevel` as the authoritative switch.
-   - Add new compile flags for macro lane (for example `FRAME_MACRO_SCRATCH` in high/balanced only).
-   - If any GLSL compile-time content changes, bump cache key version (`frame-v0.69-*` → `frame-v0.70-*`).
-   - Keep per-artwork seed as uniform-only update; never include seed in program cache key.
-
-7. **S-07 — Extend diagnostics before shipping**
-   - Extend `[CanvasMaterial] frame-shader-compiled` logging with macro-specific fields:
-     - macro lane enabled flag,
-     - macro density range,
-     - macro width range,
-     - macro attenuation window,
-     - cache key version.
-   - Add one explicit debug log entry when macro lane is disabled by preset (`balanced` reduced / `battery` off), so behavior is auditable during QA.
-
-8. **S-08 — Validation and acceptance gates**
-   - Required checks before merge:
-     - `npm run lint` and `npm run build` pass.
-     - Visual QA on `high` + `balanced` at close and mid distances (macro readability vs shimmer).
-     - Confirm no regressions in v0.69 invariants (cross-bar banding, seed/cache behavior, startup diagnostics path).
-   - Keep this pass docs-labeled as **planned** until code + validation evidence lands.
+| Gate | Result |
+| --- | --- |
+| Lint | ✅ pass |
+| TypeScript build | ✅ pass |
+| Vite bundle | ✅ pass |
+| Cross-bar anti-banding invariant (`dFBM/dY = 0`) | ✅ preserved |
+| Per-artwork seed remains uniform-only | ✅ preserved |
+| Frame shader cache key versioning | ✅ `frame-v0.70-*` |
+| Docs status consistency | ✅ synced across key markdown files |
 
 ## v0.69 — Metal frame close-up realism uplift (**shipped 2026-06-04**)
 

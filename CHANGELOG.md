@@ -1,26 +1,28 @@
 # CHANGELOG
-> v0.70 plan-audit pass added: technical coding blueprint for macro-visible scratch uplift (docs-only). Runtime remains v0.69 with no shader behavior change in this docs update.
-> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
+> v0.70 shipped: macro-visible micro-scratch uplift implemented (runtime + docs sync).
+> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
 
-## v0.70 — Macro-visible micro-scratch uplift plan (2026-06-04, **planning/docs only — technical audit refresh**)
+## v0.70 — Macro-visible micro-scratch uplift (2026-06-04, **shipped**)
 
 ### Status
 
-**Planning/docs only.** No runtime code changes shipped in this update.
+**Shipped.** Runtime shader changes implemented and validated.
 
 ### Summary
 
-- Re-audited `CanvasMaterial` scratch path and confirmed the primary macro-readability bottlenecks are still sparse occupancy (`sh > 0.018` reject), ultra-thin width floor (`0.0003..0.0009`), and conservative roughness coupling (`+0.015` cap).
-- Re-verified non-negotiable v0.69 rails: 1-D FBM invariant (`dFBM/dY = 0`), derivative attenuation via `fwidth(vFrameUV.x)`, and bounded preset-compiled shader variants.
-- Performed a focused online standards/source refresh and translated it into coding advice:
-  - Khronos `KHR_materials_anisotropy` channel semantics (RG direction, B strength multiplier, tangent-space requirements).
-  - Three.js r166 `lights_physical_fragment` implementation confirms anisotropy map blue channel multiplies direction strength.
-  - Freyraum-specific implication: frame direction control should remain in GLSL injection (`vFrameUV`) rather than `anisotropyMap` (`uv` channel mismatch risk).
-- Upgraded `plan.md` v0.70 with an implementation-oriented blueprint: macro lane helper, wear-zone mask, separate roughness/normal budgets, independent derivative windows, cache-key bump rule, and explicit diagnostic fields.
-- Synced documentation across `plan.md`, `FINDINGS.md`, `ARCHITECTURE_MAP.md`, `README.md`, and `docs/HANDOFF.md`.
+- **S-01 macro lane added.** `CanvasMaterial` now includes a dedicated macro scratch lane (`frmScratchLayerMacro`) with lower densities (`2.0..7.0`), wider profile floor (`0.0016..0.0040`), and stronger per-line intensity.
+- **S-02 wear-zone masking added.** New `frmWearZoneMask(alongX, seed)` gates macro scratches through a low-frequency, smoothly interpolated zone hash so wear is clustered but non-blocky.
+- **S-03 roughness-vs-normal split.** Macro readability is roughness-led (`high` strongest, `balanced` reduced), while macro normal contribution stays bounded to avoid engraved-groove artifacts.
+- **S-04 split attenuation windows.** Micro lane keeps aggressive fade; macro lane uses a slower fade window (`1 - smoothstep(0.006, 0.024, fwidth(vFrameUV.x))`) to survive medium-close views without distance shimmer.
+- **S-05 anti-banding invariants preserved.** No `barUV.y` was introduced into FBM/noise paths that drive normal gradients.
+- **S-06 compile/cache updates.** Added `FRAME_MACRO_SCRATCH` compile flag for high/balanced presets and bumped cache key from `frame-v0.69-*` to `frame-v0.70-*`.
+- **S-07 diagnostics extended.** `[CanvasMaterial] frame-shader-compiled` now logs macro lane enabled/mode, density range, width range, attenuation window, and v0.70 cache key. Added explicit macro-state debug log for reduced/off modes.
+- **S-08 validation.** `npm run lint` ✅, `npm run build` ✅.
 
-### Files (docs only)
+### Files
 
+- `src/materials/CanvasMaterial.ts`
+- `src/config/quality.ts`
 - `plan.md`
 - `FINDINGS.md`
 - `ARCHITECTURE_MAP.md`

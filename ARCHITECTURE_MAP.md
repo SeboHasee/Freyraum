@@ -1,18 +1,17 @@
 # FREYRAUM architecture map
-> v0.70 technical audit update: macro-visible micro-scratch implementation constraints documented (docs-only). Runtime remains v0.69.
-> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
+> v0.70 shipped architecture update: macro-visible micro-scratch lane is implemented in runtime shader code.
+> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
 
-## v0.70 macro-scratch architecture note (**planning/docs-only**)
+## v0.70 macro-scratch architecture note (**shipped**)
 
-1. **Two scratch lanes, one stability model.** The next pass should keep v0.69 micro-scratches and add a separate macro lane (wider/lower-frequency) rather than globally amplifying one lane.
-2. **Derivative AA remains mandatory and split by lane.** Micro lane keeps current aggressive `fwidth(vFrameUV.x)` attenuation; macro lane gets a slower attenuation window but must still collapse at distance.
-3. **v0.54 anti-banding invariant is unchanged.** No `barUV.y` inputs in FBM/noise functions that drive normal gradients; cross-bar coordinate stays limited to positional placement of discrete scratches/masks.
-4. **Anisotropy semantics stay spec-aligned.** Any anisotropy-map experiment must honor Khronos/Three.js channel meaning (RG direction, B strength multiplier) and UV-space alignment requirements.
-5. **Frame direction control stays on `vFrameUV`.** For frame materials, keep direction perturbation in GLSL injection (`lights_physical_fragment` replacement) unless `anisotropyMap` UV alignment is explicitly solved.
-6. **Roughness-first macro readability.** Macro lane should bias roughness modulation over large normal gradients to avoid implausible carved-groove appearance.
-7. **Preset cost envelope remains explicit.** High gets full macro lane, balanced gets reduced macro lane, battery remains v0.54-equivalent path (`frameDetailLevel: 'none'`).
-8. **Cache key versioning remains required on compile-time GLSL changes.** Any new macros/functions for macro lane must bump frame shader cache version.
-9. **Diagnostics-first contract.** Extend frame compile logs with macro-lane knobs so visual tuning remains auditable and reversible.
+1. **Two-lane model is now live.** `CanvasMaterial` combines existing micro lane with a dedicated macro lane (`FRAME_MACRO_SCRATCH` high/balanced).
+2. **Per-lane attenuation is now explicit.** Micro lane uses aggressive attenuation; macro lane uses slower attenuation and fades later.
+3. **v0.54 anti-banding invariant is still non-negotiable.** No `barUV.y` in FBM/noise terms that feed normal gradients.
+4. **Frame direction control remains on `vFrameUV`.** High preset keeps GLSL anisotropy-direction perturbation in `lights_physical_fragment` replacement.
+5. **Roughness-first macro policy is implemented.** Macro readability is primarily roughness-driven; normal macro perturbation is bounded.
+6. **Preset envelope is explicit.** High = full macro; balanced = reduced macro; battery = macro off.
+7. **Compile/cache contract updated.** Frame shader cache key version is now `frame-v0.70-*`.
+8. **Diagnostics contract updated.** Compile logs include macro lane mode and tuning ranges.
 
 ## v0.69 frame-shader invariants (updated)
 

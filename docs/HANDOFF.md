@@ -1,20 +1,18 @@
 # FREYRAUM customer handoff guide
-> v0.70 technical audit update added: implementation-ready macro-scratch plan guidance (docs-only). Runtime remains v0.69 in this documentation pass.
-> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
+> v0.70 shipped handoff update: macro-visible micro-scratch uplift implemented in runtime and validated.
+> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
 
-## v0.70 — handoff status: macro-visible micro-scratch uplift plan (2026-06-04, docs-only)
+## v0.70 — handoff status: macro-visible micro-scratch uplift (2026-06-04, shipped)
 
-Customer-facing status: **planned, not yet shipped**.
+Customer-facing status: **shipped and validated**.
 
-- Completed a focused code audit of the current frame scratch model and confirmed why scratch wear can still look too subtle in macro framing (sparse occupancy, very small line width floor, conservative roughness contribution cap).
-- Completed an online standards/API research refresh and aligned the plan to authoritative behavior:
-  - Khronos anisotropy extension semantics (RG direction, B strength, tangent-space requirements),
-  - Three.js r166 `MeshPhysicalMaterial` anisotropy API,
-  - Three.js r166 physical shader anisotropy-map implementation,
-  - derivative-based AA (`fwidth`) as the procedural stability basis.
-- New v0.70 plan in `../plan.md` now includes technical coding slices: dedicated macro lane helper, wear-zone mask, separate roughness/normal budgets, per-lane attenuation windows, cache-key bump rule, and extended diagnostics fields.
-- Explicit architecture guardrail: frame anisotropy direction control remains in the `vFrameUV` GLSL path; do not switch to `anisotropyMap` unless UV alignment constraints are resolved.
-- No runtime frame-shader code changed in this docs update.
+- Implemented dedicated macro scratch lane in frame shader (lower density, wider lines, stronger intensity) while keeping the existing micro lane.
+- Added low-frequency wear-zone masking for macro lane so wear appears naturally clustered, not uniform.
+- Added split attenuation windows so macro detail survives medium-close viewing but still fades safely at distance.
+- Implemented roughness-first macro readability with bounded macro normal influence.
+- Added compile-time `FRAME_MACRO_SCRATCH` policy (high full, balanced reduced, battery off), bumped frame shader cache key to `frame-v0.70-*`, and extended compile diagnostics with macro fields.
+- Added explicit debug logging for macro-lane reduced/off modes to keep preset behavior auditable in QA.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 - References: `../plan.md § v0.70`, `../FINDINGS.md § v0.70`, `../CHANGELOG.md § v0.70`.
 
 ## v0.68 — handoff status: metal frame close-up realism plan (2026-06-04, docs-only)

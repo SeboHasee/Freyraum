@@ -1,65 +1,36 @@
 # FINDINGS
-> v0.70 technical audit findings added: code-level implementation guidance for macro-visible scratch uplift. Runtime remains v0.69 (no new shader behavior shipped in this docs update).
-> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
+> v0.70 implementation findings added: macro-visible micro-scratch uplift shipped in runtime shader code.
+> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
 
-## v0.70 — Macro-visible micro-scratch uplift (planning/docs-only, 2026-06-04) — findings
+## v0.70 — Macro-visible micro-scratch uplift (shipped 2026-06-04) — findings
 
-### Code-audit findings (current v0.69 runtime)
+### Code-verified implementation findings
 
-1. **Scratch lane is intentionally sparse and subtle.**
-   - `frmScratchLine`: `if (sh > 0.018) return 0.0;` (low occupancy).
-   - Width floor is very small: `0.0003 + rand * 0.0006` (often below macro readability).
-   - Line intensity (`0.015..0.040`) is reduced again by layer weights (`0.06/0.05/0.04`).
-2. **Roughness contribution from scratches is tightly capped.**
-   - `roughnessFactor += roughnessScratch * 0.015`, then clamped.
-   - This protects plausibility but limits macro legibility of wear.
-3. **Stability rails are correct and must be preserved.**
-   - v0.54 invariant: no `barUV.y` inside FBM inputs driving normals.
-   - v0.69 derivative attenuation via `fwidth(vFrameUV.x)` already suppresses shimmer.
-4. **Resulting visual behavior:** close-up metal looks physically plausible and stable, but wear evidence can remain too quiet for “macro-visible” customer expectation.
+1. **Dedicated macro lane now exists and is compile-gated.**
+   - New `frmScratchLineMacro` and `frmScratchLayerMacro` live in `FRAME_FRAG_FUNCTIONS`.
+   - Macro lane is compiled only when `FRAME_MACRO_SCRATCH` is defined (high/balanced).
+2. **Wear-zone gating is now explicit.**
+   - New `frmWearZoneMask(alongX, seed)` uses coarse along-bar zoning with smooth interpolation, then gates macro lane output.
+3. **Roughness-first macro readability is implemented.**
+   - High preset uses strongest macro roughness coupling; balanced keeps reduced macro coupling; battery path remains unchanged.
+   - Macro normal influence is intentionally much smaller than roughness influence.
+4. **Micro/macro attenuation windows are split.**
+   - Micro lane keeps aggressive attenuation.
+   - Macro lane uses a slower attenuation window and therefore stays legible longer before fading out.
+5. **v0.54 anti-banding invariant remains intact.**
+   - No new `barUV.y` dependence was added inside FBM/noise functions driving normal gradients.
+6. **Cache key and diagnostics were upgraded.**
+   - `customProgramCacheKey()` now uses `frame-v0.70-*`.
+   - Compile diagnostics now include macro lane enabled/mode + density/width/attenuation metadata and explicit reduced/off macro-state logs.
 
-### Online research findings (authoritative sources)
+### Validation evidence
 
-1. **Khronos `KHR_materials_anisotropy` (ratified)**
-   - Defines anisotropy for brushed-metal-like elongated highlights.
-   - Anisotropy texture semantics: RG = direction in tangent/bitangent space, B = strength multiplier.
-   - Tangent space is required/recommended for predictable anisotropic response.
-2. **Three.js r166 `MeshPhysicalMaterial` docs**
-   - Confirms `anisotropy`, `anisotropyMap`, and `anisotropyRotation` semantics matching Khronos model.
-3. **Three.js r166 physical shader source**
-   - `anisotropyV = anisotropyMat * normalize(2*rg - 1) * b`.
-   - Confirms blue channel scales anisotropy contribution in engine implementation.
-4. **Khronos OpenGL `fwidth` reference**
-   - `fwidth(p) = abs(dFdx(p)) + abs(dFdy(p))`.
-   - Supports current approach: derivative-driven attenuation is the right anti-alias strategy for procedural scratch detail.
+- `npm run lint` ✅
+- `npm run build` ✅ (typecheck + Vite preview + preview HTML writer)
 
-### Practical conclusions for the next implementation pass
+### Outcome
 
-- Add a distinct **macro-scratch lane** (lower frequency, wider profile) instead of only amplifying existing micro lane.
-- Keep micro lane derivative-gated for shimmer control; introduce slower-distance fade for macro lane.
-- Maintain v0.54 anti-banding constraint and bounded roughness/normal budgets.
-- Preserve preset-tier cost policy: high strongest, balanced reduced, battery unchanged.
-
-### Technical coding advice distilled from the audit
-
-1. **Add macro lane as a new helper, not as global multiplier edits.**
-   - Add a dedicated `frmScratchLayerMacro(...)` function in `FRAME_FRAG_FUNCTIONS`.
-   - Keep existing micro helper untouched first; combine lanes in one explicit place.
-2. **Introduce a separate wear-zone function.**
-   - Use a low-frequency along-bar hash mask (`floor(vFrameUV.x * N)` style) to cluster macro wear.
-   - Apply mask to macro lane only.
-3. **Split lane attenuation windows.**
-   - Keep current micro `fwidth(vFrameUV.x)` attenuation thresholds.
-   - Add a slower macro threshold window so macro survives at medium-close range.
-4. **Prefer roughness-led macro readability.**
-   - Strengthen macro roughness modulation first.
-   - Keep macro normal perturbation bounded to avoid fake “engraved groove” appearance.
-5. **Do not move frame anisotropy control to `material.anisotropyMap`.**
-   - Three.js r166 uses `vAnisotropyMapUv` (`uv` channel) and multiplies direction by `anisotropyMap.b`.
-   - Freyraum frame direction data is in `aFrameUV`/`vFrameUV`; GLSL injection remains the correct hook.
-6. **Bump shader cache key when compile-time macro lane GLSL lands.**
-   - Keep seed uniform-only.
-   - Version key from `frame-v0.69-*` to `frame-v0.70-*` with no per-artwork key expansion.
+Macro scratch evidence is now materially more legible at macro viewing distances while preserving the established v0.54/v0.69 stability rails (no cross-bar FBM gradient regression, no shader cache explosion, bounded preset variants).
 
 ## v0.69 — Metal frame close-up realism uplift (shipped 2026-06-04)
 

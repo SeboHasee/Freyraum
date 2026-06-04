@@ -6,17 +6,17 @@ type FrameShaderUniforms = {
   uBaseRoughness: { value: number };
 };
 
-// v0.69 — multi-scale brushed-metal fragment functions (M-02..M-05).
+// v0.70 — macro-visible scratch uplift (S-01..S-07).
 // Preserves the v0.54 1-D invariant (no `barUV.y` in any FBM call →
 // dFBM/dY = 0 → zero cross-bar normal gradient) while adding bounded
-// fine-scale detail, clustered scratch presence, derivative-aware AA
+// fine-scale detail, split micro/macro scratch lanes, derivative-aware AA
 // and (high preset only) per-fragment anisotropy direction perturbation.
 //
 // Preset branching is controlled by `#define FRAME_DETAIL_HIGH|BALANCED`
 // prepended by `onBeforeCompile` (M-06). Battery preset compiles neither
 // macro and produces the same program as the v0.54 path.
 const FRAME_FRAG_FUNCTIONS = /* glsl */ `
-// v0.69 brushed-metal procedural normal & roughness
+// v0.70 brushed-metal procedural normal & roughness
 // barUV.x = world-space position along bar length
 // barUV.y = 0..1 normalized across bar width (used only for scratch position)
 
@@ -119,6 +119,43 @@ float frmScratchLayer(vec2 barUV, float seed) {
 #endif
 }
 
+// v0.70 S-02: low-frequency wear-zone mask for macro scratch visibility.
+// Uses a coarse along-bar zone index with smooth transitions to avoid
+// hard on/off blocks.
+float frmWearZoneMask(float alongX, float seed) {
+  float zonePos = alongX * 1.4 + 0.5;
+  float zoneIndex = floor(zonePos);
+  float zoneBlend = smoothstep(0.0, 1.0, fract(zonePos));
+  float z0 = frmHash(zoneIndex + seed * 43.71);
+  float z1 = frmHash(zoneIndex + 1.0 + seed * 43.71);
+  float zoneHash = mix(z0, z1, zoneBlend);
+  return smoothstep(0.32, 0.82, zoneHash);
+}
+
+#if defined(FRAME_MACRO_SCRATCH)
+float frmScratchLineMacro(vec2 barUV, float density, float localSeed) {
+  float seg = floor(barUV.x * density);
+  float sh = frmHash(seg + localSeed * 149.417);
+  if (sh > 0.040) return 0.0;
+  float lineY = 0.08 + frmHash(seg + localSeed * 61.39) * 0.84;
+  float dist = abs(barUV.y - lineY);
+  float fw = fwidth(barUV.y);
+  float width = max(fw * 0.65, 0.0016 + frmHash(seg + localSeed * 79.81) * 0.0024);
+  float inten = 0.030 + frmHash(seg + localSeed * 29.57) * 0.060;
+  float segPhase = fract(barUV.x * density);
+  float shape = smoothstep(0.10, 0.26, segPhase) * (1.0 - smoothstep(0.70, 0.92, segPhase));
+  return smoothstep(width, 0.0, dist) * inten * shape;
+}
+
+float frmScratchLayerMacro(vec2 barUV, float seed) {
+  float wearMask = frmWearZoneMask(barUV.x, seed);
+  float a = frmScratchLineMacro(barUV, 2.0, seed + 2.17);
+  float b = frmScratchLineMacro(barUV, 4.2, seed + 7.43);
+  float c = frmScratchLineMacro(barUV, 7.0, seed + 13.91);
+  return clamp((a * 0.20 + b * 0.16 + c * 0.13) * wearMask, 0.0, 0.20);
+}
+#endif
+
 // Normal: purely 1-D perturbation along the bar.
 // Y gradient is zero by construction (no hy sample).
 // Primary scale 0.025 → max ≈ 7° tilt.
@@ -144,6 +181,15 @@ vec3 frmBrushedNormal(vec2 barUV, float seed) {
   #endif
   gradX += (h0f - hxf) / eps * fineAmp * fineAttn;
 #endif
+#if defined(FRAME_MACRO_SCRATCH)
+  float macroN = frmScratchLayerMacro(barUV, seed);
+  #if defined(FRAME_DETAIL_HIGH)
+    float macroNormalAmp = 0.006;
+  #else
+    float macroNormalAmp = 0.003;
+  #endif
+  gradX += macroN * macroNormalAmp;
+#endif
   return normalize(vec3(gradX, 0.0, 1.0));
 }
 `;
@@ -165,26 +211,34 @@ const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
 const FRAME_FRAG_ROUGHNESS_REPLACE_HIGH = /* glsl */ `
   float fwR = fwidth(vFrameUV.x);
   float grainAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
+  float scratchMicroAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
+  float scratchMacroAttn = 1.0 - smoothstep(0.006, 0.024, fwR);
   float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
   // Fade grain modulation to neutral (0.5) at distance — eliminates
   // high-frequency roughness aliasing without preset branching.
   roughnessGrain = mix(0.5, roughnessGrain, grainAttn);
-  float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
+  float roughnessScratchMicro = frmScratchLayer(vFrameUV, uFrameSeed) * scratchMicroAttn;
+  float roughnessScratchMacro = frmScratchLayerMacro(vFrameUV, uFrameSeed) * scratchMacroAttn;
   float roughnessFactor = uBaseRoughness
     + (roughnessGrain - 0.5) * 0.040
-    + roughnessScratch * 0.015;
+    + roughnessScratchMicro * 0.015
+    + roughnessScratchMacro * 0.036;
   roughnessFactor = clamp(roughnessFactor, 0.14, 0.72);
 `;
 
 const FRAME_FRAG_ROUGHNESS_REPLACE_BALANCED = /* glsl */ `
   float fwR = fwidth(vFrameUV.x);
   float grainAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
+  float scratchMicroAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
+  float scratchMacroAttn = 1.0 - smoothstep(0.006, 0.024, fwR);
   float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
   roughnessGrain = mix(0.5, roughnessGrain, grainAttn);
-  float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
+  float roughnessScratchMicro = frmScratchLayer(vFrameUV, uFrameSeed) * scratchMicroAttn;
+  float roughnessScratchMacro = frmScratchLayerMacro(vFrameUV, uFrameSeed) * scratchMacroAttn * 0.62;
   float roughnessFactor = uBaseRoughness
     + (roughnessGrain - 0.5) * 0.030
-    + roughnessScratch * 0.015;
+    + roughnessScratchMicro * 0.015
+    + roughnessScratchMacro * 0.024;
   roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);
 `;
 
@@ -440,9 +494,13 @@ export class CanvasMaterial {
       } else if (preset.frameDetailLevel === 'balanced') {
         detailDefine = '#define FRAME_DETAIL_BALANCED 1\n';
       }
+      const macroDefine =
+        preset.frameDetailLevel === 'high' || preset.frameDetailLevel === 'balanced'
+          ? '#define FRAME_MACRO_SCRATCH 1\n'
+          : '';
 
       // 4. Prepend helper GLSL functions
-      shader.fragmentShader = detailDefine + FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
+      shader.fragmentShader = detailDefine + macroDefine + FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
 
       // 5. Procedural normal (tbn = Three.js r166 local mat3; do NOT use vTBN)
       shader.fragmentShader = shader.fragmentShader.replace(
@@ -478,7 +536,7 @@ export class CanvasMaterial {
       }
 
       // 8. M-01: extended baseline log — explicit knob record for diff/audit.
-      const cacheKey = 'frame-v0.69-' + preset.frameDetailLevel;
+      const cacheKey = 'frame-v0.70-' + preset.frameDetailLevel;
       const fineGrainAmplitude =
         preset.frameDetailLevel === 'high'
           ? 0.006
@@ -486,8 +544,21 @@ export class CanvasMaterial {
             ? 0.004
             : 0.0;
       const roughnessGrainAmp = preset.frameDetailLevel === 'high' ? 0.040 : 0.030;
+      const macroEnabled = preset.frameDetailLevel === 'high' || preset.frameDetailLevel === 'balanced';
+      const macroStrengthMode =
+        preset.frameDetailLevel === 'high'
+          ? 'full'
+          : preset.frameDetailLevel === 'balanced'
+            ? 'reduced'
+            : 'off';
+      if (macroStrengthMode !== 'full') {
+        console.debug('[CanvasMaterial] frame-macro-lane-state', {
+          preset: preset.id,
+          mode: macroStrengthMode,
+        });
+      }
       console.debug('[CanvasMaterial] frame-shader-compiled', {
-        version: 'v0.69',
+        version: 'v0.70',
         preset: preset.id,
         frameDetailLevel: preset.frameDetailLevel,
         seed,
@@ -499,6 +570,11 @@ export class CanvasMaterial {
         fineGrainAmplitude,
         roughnessGrainAmp,
         scratchRoughnessMax: 0.015,
+        macroLaneEnabled: macroEnabled,
+        macroLaneStrengthMode: macroStrengthMode,
+        macroDensityRange: macroEnabled ? '2.0..7.0' : 'off',
+        macroWidthRange: macroEnabled ? '0.0016..0.0040' : 'off',
+        macroAttenuationWindow: macroEnabled ? '1-smoothstep(0.006,0.024,fwidth(vFrameUV.x))' : 'off',
         clusterGainEnabled: preset.frameDetailLevel === 'high',
         anisoPerFragmentEnabled: preset.frameDetailLevel === 'high',
         coordinateMode: 'vertex-attribute-barUV',
@@ -511,7 +587,7 @@ export class CanvasMaterial {
     // programs for the three GLSL variants.  Per-artwork seed only updates a
     // uniform → no re-compile per artwork.  Battery (`none`) compiles GLSL
     // functionally equivalent to the v0.54 path.
-    const cacheKey = 'frame-v0.69-' + preset.frameDetailLevel;
+    const cacheKey = 'frame-v0.70-' + preset.frameDetailLevel;
     material.customProgramCacheKey = () => cacheKey;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).

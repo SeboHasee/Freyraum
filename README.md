@@ -1,16 +1,17 @@
 # Freyraum
-> v0.70 technical audit pass added: implementation-ready macro-scratch blueprint (docs-only). Runtime remains v0.69; no new shader behavior shipped in this docs update.
-> Last full markdown audit: 2026-06-04 (v0.70 technical audit/docs pass; runtime v0.69).
+> v0.70 shipped: macro-visible micro-scratch uplift implemented in runtime shader code and synced across docs.
+> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
 
-## v0.70 — Macro-visible micro-scratch uplift plan (2026-06-04, **planning/docs-only**)
+## v0.70 — Macro-visible micro-scratch uplift (2026-06-04, **shipped**)
 
-Current status: **planned, not yet shipped**.
+Current status: **shipped and validated**.
 
-- We re-audited the v0.69 frame shader and confirmed why wear still reads soft at macro distance: sparse occupancy, very thin line width floor, and conservative roughness contribution cap.
-- We refreshed online standards/source references (Khronos anisotropy spec + Three.js r166 shader chunk) and used them to tighten the plan.
-- New implementation direction in `plan.md`: explicit two-lane scratch model (micro + macro), wear-zone masking, separated roughness/normal budgets, and independent derivative attenuation windows.
-- Technical guardrail now explicit: keep frame anisotropy direction perturbation in the `vFrameUV` GLSL path; do not switch frame work to `anisotropyMap` due to standard-`uv` alignment mismatch risk.
-- Runtime behavior is unchanged in this update.
+- Added a dedicated macro scratch lane in `CanvasMaterial` (densities `2.0..7.0`, width floor `0.0016..0.0040`, stronger line intensity) while keeping the existing micro lane.
+- Added low-frequency wear-zone masking (`frmWearZoneMask`) so macro wear appears in natural clustered zones instead of uniformly everywhere.
+- Split lane attenuation windows: micro lane keeps aggressive fade; macro lane uses a slower fade window to stay readable at medium-close distance and still collapse safely at distance.
+- Shifted macro readability to roughness-first coupling with bounded normal influence to avoid carved-groove artifacts.
+- Added compile-time macro flag (`FRAME_MACRO_SCRATCH`) for high/balanced only, bumped shader cache key to `frame-v0.70-*`, and extended compile diagnostics with macro-specific fields.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 - References: `plan.md § v0.70`, `FINDINGS.md § v0.70`, `CHANGELOG.md § v0.70`.
 
 ## v0.68 — Metal frame close-up realism plan (2026-06-04, **planning/docs-only**)

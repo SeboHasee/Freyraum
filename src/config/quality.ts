@@ -128,15 +128,14 @@ export interface QualityPreset {
   /** Whether the frame should use beveled geometry. */
   frameBevelEnabled: boolean;
 
-  // ── v0.69 frame close-up realism fields ───────────────────────────────────
+  // ── v0.70 frame macro scratch readability fields ──────────────────────────
   /**
-   * v0.69 (M-06): authoritative preset-level switch for the procedural frame
+   * v0.70: authoritative preset-level switch for the procedural frame
    * detail budget compiled into the brushed-metal fragment shader.
-   *  - `'high'`     → primary FBM + fine-grain FBM (M-02) + clustered scratches
-   *                  (M-03) + per-fragment anisotropy direction perturbation
-   *                  (M-04) + AA grain attenuation (M-05).
-   *  - `'balanced'` → primary FBM + fine-grain FBM (M-02) only.
-   *  - `'none'`     → pure v0.54 path (primary FBM only). Battery preset.
+   *  - `'high'`     → full micro + macro scratch lane, wear-zone mask,
+   *                  split attenuation windows, per-fragment anisotropy perturbation.
+   *  - `'balanced'` → macro lane enabled with reduced gain and same stability rails.
+   *  - `'none'`     → battery fallback path (no macro lane).
    * The shader compiles a different program per `frameDetailLevel` value via
    * `#define FRAME_DETAIL_*` and `customProgramCacheKey()`; per-artwork seed
    * still updates a uniform only (no re-compile).
