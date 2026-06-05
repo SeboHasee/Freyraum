@@ -128,14 +128,15 @@ export interface QualityPreset {
   /** Whether the frame should use beveled geometry. */
   frameBevelEnabled: boolean;
 
-  // ── v0.70 frame macro scratch readability fields ──────────────────────────
+  // ── v0.69 frame close-up realism fields ───────────────────────────────────
   /**
-   * v0.70: authoritative preset-level switch for the procedural frame
+   * v0.69 (M-06): authoritative preset-level switch for the procedural frame
    * detail budget compiled into the brushed-metal fragment shader.
-   *  - `'high'`     → full micro + macro scratch lane, wear-zone mask,
-   *                  split attenuation windows, per-fragment anisotropy perturbation.
-   *  - `'balanced'` → macro lane enabled with reduced gain and same stability rails.
-   *  - `'none'`     → battery fallback path (no macro lane).
+   *  - `'high'`     → primary FBM + fine-grain FBM (M-02) + clustered scratches
+   *                  (M-03) + per-fragment anisotropy direction perturbation
+   *                  (M-04) + AA grain attenuation (M-05).
+   *  - `'balanced'` → primary FBM + fine-grain FBM (M-02) only.
+   *  - `'none'`     → pure v0.54 path (primary FBM only). Battery preset.
    * The shader compiles a different program per `frameDetailLevel` value via
    * `#define FRAME_DETAIL_*` and `customProgramCacheKey()`; per-artwork seed
    * still updates a uniform only (no re-compile).
@@ -189,11 +190,11 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.72: lowered from 0.40 (v0.71) to restore satin aluminum sheen.
-    frameRoughness: 0.23,
+    // v0.53: high anisotropy (0.85) + semi-gloss roughness (0.28) for realistic
+    // satin brushed-metal. Directional sheen is provided by anisotropy, not bumps.
+    frameRoughness: 0.28,
     frameAnisotropy: 0.85,
-    // v0.72: raised from 0.12 to add a visible gloss layer for surface depth.
-    frameClearcoat: 0.28,
+    frameClearcoat: 0.12,
     frameBevelEnabled: true,
     frameDetailLevel: 'high',
   },
@@ -234,11 +235,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    // v0.72: lowered from 0.48 (v0.71) to restore satin aluminum sheen.
-    frameRoughness: 0.31,
+    // v0.53: moderate anisotropy (0.60) + semi-gloss roughness (0.38).
+    frameRoughness: 0.38,
     frameAnisotropy: 0.60,
-    // v0.72: raised from 0.08 to add visible clearcoat depth.
-    frameClearcoat: 0.16,
+    frameClearcoat: 0.08,
     frameBevelEnabled: true,
     frameDetailLevel: 'balanced',
   },
