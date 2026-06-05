@@ -46,9 +46,9 @@ export class KeyboardHelp {
             ).join('')}
           </tbody>
         </table>
+        <p class="keyboard-help__hint">Mausbewegung zum unteren oder linken Bildschirmrand enthüllt Zeitleiste, Navigation und Bildinformationen.</p>
         <button class="keyboard-help__close nav-btn" aria-label="Hilfe schließen">✕</button>
       </div>`;
-
     el.querySelector('.keyboard-help__close')!.addEventListener('click', () => this.close());
     el.addEventListener('click', (e) => {
       if (e.target === el) this.close();

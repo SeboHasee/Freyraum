@@ -1,6 +1,96 @@
 # FREYRAUM customer handoff guide
-> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.73 shipped handoff update: merge-readiness sync clarifies current active runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — handoff status: merge-readiness docs sync (2026-06-05, shipped)
+
+Customer-facing status: **shipped and validated (documentation/status sync)**.
+
+- Current active frame runtime on this branch is the v0.69 baseline (`frame-v0.69-*` cache key).
+- v0.70/v0.71/v0.72 entries remain historical release notes and are not the active runtime frame path in this branch state.
+- Top-level docs were synchronized to ensure handoff and changelog messaging now match runtime behavior.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- References: `../CHANGELOG.md § v0.73`, `../FINDINGS.md § v0.73`, `../plan.md § v0.73`.
+
+## v0.70 — handoff status: macro-visible micro-scratch uplift (2026-06-04, shipped)
+
+Customer-facing status: **shipped and validated**.
+
+- Implemented dedicated macro scratch lane in frame shader (lower density, wider lines, stronger intensity) while keeping the existing micro lane.
+- Added low-frequency wear-zone masking for macro lane so wear appears naturally clustered, not uniform.
+- Added split attenuation windows so macro detail survives medium-close viewing but still fades safely at distance.
+- Implemented roughness-first macro readability with bounded macro normal influence.
+- Added compile-time `FRAME_MACRO_SCRATCH` policy (high full, balanced reduced, battery off), bumped frame shader cache key to `frame-v0.70-*`, and extended compile diagnostics with macro fields.
+- Added explicit debug logging for macro-lane reduced/off modes to keep preset behavior auditable in QA.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- References: `../plan.md § v0.70`, `../FINDINGS.md § v0.70`, `../CHANGELOG.md § v0.70`.
+
+## v0.68 — handoff status: metal frame close-up realism plan (2026-06-04, docs-only)
+
+Customer-facing status: **planned, not yet shipped**.
+
+- Completed a focused technical audit and online research pass for making metal frames look more realistic at close zoom.
+- **Key audit findings:** frame uses `MeshPhysicalMaterial` with `metalness: 1.0`; the v0.54 anti-banding constraint (purely 1-D FBM — no cross-bar gradient) is correct and non-negotiable; current detail bandwidth is intentionally conservative; Three.js r166 (installed) natively supports `anisotropyMap` for per-fragment direction control without custom shader injection.
+- **Concrete implementation plan now documented** (`plan.md § v0.68 — Metal frame close-up realism uplift`):
+  - M-02: `frmBrushedFbm2` fine-grain FBM (4× frequency, 1/4 amplitude, same 1-D Y-invariant)
+  - M-03: clustered scratch layer (`frmScratchLayer` cluster-gain mask, ~40% coverage, cap `0.16`)
+  - M-04 (historical, superseded): initial `material.anisotropyMap` direction-map idea was replaced in shipped v0.69 by direct `vFrameUV` GLSL anisotropy perturbation
+  - M-05: `fwidth(barUV.x)` derivative-aware AA guard for all new high-frequency terms
+  - M-06: `#define FRAME_DETAIL_HIGH / BALANCED` compile flags; `customProgramCacheKey → 'frame-v0.69-{preset}'`
+- No runtime frame-shader/material changes were shipped in this docs pass.
+- References: `../plan.md § v0.68 — Metal frame close-up realism uplift`, `../FINDINGS.md § v0.68 (planning/docs-only)`.
+
+## v0.65 — handoff status: visual affordance prominence + polish shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- Hidden edge cues are now a bit more prominent without adding heavy always-on chrome.
+- Visual language was polished toward an Apple-like calm premium style (subtle glass strips, clearer directional chevrons, softened glow/contrast layering).
+- Motion remains gentle and instructional; reduced-motion and forced-colors support still hold.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- Implementation: `plan.md § v0.65`, `FINDINGS.md § v0.65`, `CHANGELOG.md § v0.65`.
+
+## v0.64 — handoff status: visual affordance hardening shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- The visual clues were present in the DOM but effectively invisible because translucent RGBA colors were multiplied by a very low animated opacity floor. That is fixed.
+- The bottom cue now reads correctly as a centered chevron above a bottom strip; it is no longer pushed sideways by the strip layout.
+- The first-visit settle cue now uses a selector strong enough to override the normal clean-mode pulse.
+- Static handle bars are stronger and dual-contrast, so there is always a visible clue even during the pulse trough and on bright/cream painting edges.
+- Validation: `npm run lint` ✅, `npm run build` ✅, browser DOM/style smoke ✅.
+- Implementation: `plan.md § v0.64`, `FINDINGS.md § v0.64`, `CHANGELOG.md § v0.64`.
+
+## v0.63 — handoff status: affordance salience shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- Hidden-control cues are now reliably noticeable on any painting — including bright/cream edges where the white peek strips used to disappear — while staying small and unobtrusive.
+- A new tiny **static handle bar** sits at the bottom and left peek zones and never blinks out, so there is always a visible "grab here" marker even between the gentle breathing pulses.
+- Cues now carry a faint dual shadow so they read against both light and dark artwork.
+- After the first-visit navigation hint, the edge cues briefly brighten then settle, gently teaching where the hidden controls live.
+- The keyboard-shortcuts dialog (press `?`) now states that moving the mouse to a screen edge reveals the timeline, navigation, and artwork info.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- Implementation: `plan.md § v0.63`, `FINDINGS.md § v0.63`, `CHANGELOG.md § v0.63`. v0.64 supersedes the affordance visibility status with the emergency hardening fix.
+
+## v0.62 — handoff status: discoverability follow-up shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- Nav arrows now auto-hide like the timeline and info panel. They reveal when the pointer enters the bottom zone, keyboard focus lands on a nav button, or ArrowLeft/ArrowRight is pressed.
+- On first visit: arrows reveal for the one-shot ring-pulse onboarding animation (3 pulses), then return to hidden idle automatically.
+- Micro-chevron cues (∧ at bottom, › at left edge) now signal that hidden UI surfaces exist — subtle, premium-looking, and visible in high-contrast/reduced-motion modes.
+- Short-height landscape (phone horizontal) always shows nav arrows since the timeline is hidden in that context.
+- Implementation: `plan.md § v0.62`, `FINDINGS.md § v0.62`, `CHANGELOG.md § v0.62`.
+
+## v0.61 — handoff status: discoverability follow-up shipped (2026-06-04)
+
+Customer-facing status: **shipped and validated**.
+
+- Artwork navigation no longer auto-opens the description panel; users reveal it intentionally (edge hover/focus/touch or always-visible preference).
+- Navigation arrows now have a one-shot onboarding pulse after idle; hint dismisses permanently after first navigation discovery and does not repeat.
+- Screen readers receive an explicit artwork-change announcement via a dedicated `aria-live` status region.
+- Validation: `npm run lint` and `npm run build` pass.
 
 ## v0.47 — handoff status: modern gallery frame realism retune shipped (2026-05-22)
 

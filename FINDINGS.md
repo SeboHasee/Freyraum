@@ -1,6 +1,937 @@
 # FINDINGS
-> v0.59 shipped: hover-state float fix, keyboard-help contrast fix (WCAG 2.2 AA).
-> Last full markdown audit: 2026-05-23 (v0.59 shipped).
+> v0.73 findings added: merge-readiness docs sync clarifies current runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — Merge-readiness docs sync (shipped 2026-06-05) — findings
+
+### Code-verified findings
+
+1. **Current runtime baseline is v0.69 frame path.**
+   - `CanvasMaterial` cache key remains `frame-v0.69-*`.
+   - v0.70+ macro-lane symbols (`frmScratchLayerMacro`, `FRAME_MACRO_SCRATCH`) are not present in active shader code.
+2. **Top-level docs previously drifted from runtime.**
+   - Key status docs still declared v0.70/v0.72 as active, while runtime had already been reverted to v0.69 baseline.
+3. **Merge-risk status drift is now corrected.**
+   - Key status docs now state the same active runtime baseline and validation state.
+
+### Validation evidence
+
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### Outcome
+
+Repository is now merge-ready from a release-status documentation perspective: active runtime state and release messaging are aligned.
+
+## v0.70 — Macro-visible micro-scratch uplift (shipped 2026-06-04) — findings
+
+### Code-verified implementation findings
+
+1. **Dedicated macro lane now exists and is compile-gated.**
+   - New `frmScratchLineMacro` and `frmScratchLayerMacro` live in `FRAME_FRAG_FUNCTIONS`.
+   - Macro lane is compiled only when `FRAME_MACRO_SCRATCH` is defined (high/balanced).
+2. **Wear-zone gating is now explicit.**
+   - New `frmWearZoneMask(alongX, seed)` uses coarse along-bar zoning with smooth interpolation, then gates macro lane output.
+3. **Roughness-first macro readability is implemented.**
+   - High preset uses strongest macro roughness coupling; balanced keeps reduced macro coupling; battery path remains unchanged.
+   - Macro normal influence is intentionally much smaller than roughness influence.
+4. **Micro/macro attenuation windows are split.**
+   - Micro lane keeps aggressive attenuation.
+   - Macro lane uses a slower attenuation window and therefore stays legible longer before fading out.
+5. **v0.54 anti-banding invariant remains intact.**
+   - No new `barUV.y` dependence was added inside FBM/noise functions driving normal gradients.
+6. **Cache key and diagnostics were upgraded.**
+   - `customProgramCacheKey()` now uses `frame-v0.70-*`.
+   - Compile diagnostics now include macro lane enabled/mode + density/width/attenuation metadata and explicit reduced/off macro-state logs.
+
+### Validation evidence
+
+- `npm run lint` ✅
+- `npm run build` ✅ (typecheck + Vite preview + preview HTML writer)
+
+### Outcome
+
+Macro scratch evidence is now materially more legible at macro viewing distances while preserving the established v0.54/v0.69 stability rails (no cross-bar FBM gradient regression, no shader cache explosion, bounded preset variants).
+
+## v0.69 — Metal frame close-up realism uplift (shipped 2026-06-04)
+
+### Audit deltas surfaced during the final pass
+
+1. **`material.anisotropyMap` (r166 native) would have mis-sampled the frame.** The frame uses a custom `aFrameUV` attribute (bar-aligned along/across coordinates). Three.js r166's `anisotropyMap` shader samples from the material's `anisotropyMap` UV channel, which defaults to the standard `uv` channel — for `ExtrudeGeometry` this is a world-space planar projection that does **not** follow the bar direction. Additionally, the v0.68 planning code packed `B = 0` in the `DataTexture`, which the r166 shader uses as the direction strength multiplier (`anisotropyV *= polar.b`), collapsing anisotropy to zero. M-04 was therefore reimplemented as a direct GLSL injection in `lights_physical_fragment` reading `vFrameUV` — no `DataTexture`, no UV mismatch, no disposal surface change.
+2. **Battery `frameRoughness` documentation drift.** Plan stated `0.55`; runtime value is `0.60` in `src/config/quality.ts`. Plan and docs now match runtime.
+3. **Preset switching prefers a typed authoritative field.** `QualityPreset` gained `frameDetailLevel: 'high' | 'balanced' | 'none'` so shader compile flags are driven by an enumerated preset field, not by re-checking `preset.id` in shader-side TypeScript.
+
+### Code-verified shipped behavior
+
+- `customProgramCacheKey()` returns `'frame-v0.69-' + frameDetailLevel` → three distinct compiled programs (high / balanced / none). Per-artwork seed continues to update `uFrameSeed` only.
+- `frmBrushedFbm2` takes only `(alongX, yConst2)` where `yConst2 = frmHash(seed * 3.17) * 57.0`; combined with the v0.54 primary FBM, the cross-bar gradient `dFBM/dY` remains exactly zero for both layers.
+- M-05 uses `fwidth(vFrameUV.x)` (the bar-along derivative) — not `fwidth(barUV.y)` — so attenuation is correctly tied to brushed-direction screen frequency.
+- Battery preset (`frameDetailLevel: 'none'`) compiles a program functionally equivalent to v0.54: no `frmBrushedFbm2`, no cluster scratches, no `lights_physical_fragment` override.
+- Bundle delta: `freyraum-gallery.js` 731.54 → 739.45 kB (+1.1 %); gzip 192.07 → 194.22 kB (+1.1 %).
+
+### Validation evidence
+
+- `npm run lint` ✅
+- `npm run build` ✅ (typecheck + Vite preview + preview HTML writer)
+- Quality lock (`AUTOMATIC_QUALITY_CHANGES_ENABLED = false`) and `boot / performance-gate` schema unchanged — frame-shader compile remains in the warm phase, not on the entry-CTA critical path.
+
+## v0.68 — Metal frame close-up realism (2026-06-04, **planning/docs-only**) — findings
+
+### Scope and status
+
+- This pass is analysis + planning only (no runtime shader/material code changes).
+- Objective analyzed: improve metal frame realism and detail quality at close zoom without regressing v0.54 anti-banding behavior.
+- **Research enhanced 2026-06-04:** Three.js r166 API details, concrete GLSL/TypeScript coding patterns, and per-plan-item implementation guidance added to `plan.md`.
+
+### Code-audit findings (current state, verified 2026-06-04)
+
+1. **Frame material uses physically plausible base knobs.** `MeshPhysicalMaterial` with `metalness: 1.0`; preset-controlled `roughness`, `clearcoat`, `anisotropy`, `anisotropyRotation`. High preset: `frameRoughness: 0.28`, `frameAnisotropy: 0.85`; balanced: `frameRoughness: 0.38`, `frameAnisotropy: 0.60`.
+2. **v0.54 anti-banding invariant is correctly enforced.** `frmBrushedFbm` and `frmRoughnessGrain` are purely 1-D: `barUV.y` is replaced by a seed-derived `yConst` constant in every FBM call, so `dFBM/dY = 0` exactly. This is the non-negotiable constraint all future GLSL additions must preserve.
+3. **Current microdetail is conservative.** Single grain family (primary FBM octaves `×[2.5, 5.1, 10.3, 20.7]`), gradient scale `0.025`, roughness grain amplitude `±0.030`, scratch roughness impact `+0.015 max`. Limits close-up richness but protects stability.
+4. **Anisotropy is scalar per material.** No `anisotropyMap` is set. `anisotropyRotation: Math.PI / 2` is a single uniform. (Historical note: while r166 supports `anisotropyMap`, Freyraum frame work uses `aFrameUV`, so v0.69 correctly kept direction control in GLSL injection.)
+5. **`customProgramCacheKey = 'frame-v0.54'`** — single key used by all presets and all seeds. This is correct today (seed changes a uniform, not GLSL); it must be versioned to `'frame-v0.69-{preset}'` when any new GLSL `#define` or function is added.
+
+### Online research findings (synthesized, 2026-06-04)
+
+1. **Three.js r166 `anisotropyMap` semantics confirmed.** Setting `material.anisotropyMap` on `MeshPhysicalMaterial` drives per-fragment anisotropy direction via the Khronos `KHR_materials_anisotropy` BRDF path. RG channels encode tangent-space direction packed as `dir * 0.5 + 0.5`; B channel multiplies per-texel anisotropy strength in shader code.
+2. **`fwidth(barUV.x)` is the correct AA guard for procedural normals.** `fwidth()` returns `|dFdx| + |dFdy|` of the argument in screen space, which is proportional to the texel footprint. `smoothstep(0.004, 0.015, fw)` maps close-zoom to 0 (full detail) and mid-distance to 1 (no fine grain) without any conditional branching.
+3. **Multi-scale FBM is standard for PBR procedural metal.** Coarse primary layer + secondary at ~4× frequency, amplitude ratio ≤ 1:4. Both layers must remain Y-invariant (preserve the v0.54 invariant); only `alongX` and a seed-derived `yConst` may vary.
+4. **Clustered scratch distribution is physically motivated.** Real-world metal shows scratches in family clusters from repeated tooling events, not uniform random placement. A coarse-scale hash mask (`frmHash(floor(barUV.x * 3.0) + seed * N)`) with ~40% cluster coverage reproduces this without increasing scratch-line count.
+5. **`customProgramCacheKey` versioning and `#define`-based preset branching** are the correct strategies for managing multiple GLSL variants in `onBeforeCompile` without combinatorial program proliferation.
+
+### Resulting implementation direction (updated with coding specifics)
+
+- **Keep v0.54 no-cross-bar-gradient constraint as non-negotiable.** Any new FBM or grain function must use a seed-derived `yConst` constant, not `barUV.y`, in all noise calls.
+- **Add detail in bounded layers.** M-02 fine grain: amplitude `0.006` (vs primary `0.025`); M-03 cluster gain: max `1.5×` with cap `0.16`. No global amplitude escalation.
+- **Derivative-aware AA (`fwidth`) is the primary shimmer guard** for all new high-frequency terms. `smoothstep(0.004, 0.015, fwidth(barUV.x))` covers close-zoom to mid-distance.
+- **Three.js r166 `anisotropyMap`** removes the need for `onBeforeCompile` injection for M-04; generate a 64×4 `DataTexture` procedurally with gentle sinusoidal direction perturbation (±8% range).
+- **`customProgramCacheKey` → `'frame-v0.69-' + preset.id`** when M-02/M-03/M-05 GLSL lands; add `#define FRAME_DETAIL_HIGH / FRAME_DETAIL_BALANCED` guards to minimise program count to three total.
+- **Diagnostics-first.** Extend `[CanvasMaterial] frame-shader-compiled` with `normalGradientScale`, `fineGrainAmplitude`, `clusterGainEnabled`, `anisoMapEnabled`, `cacheKey` before and after the implementation pass.
+
+
+## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (2026-06-04, **shipped**) — findings
+
+### What changed
+
+The strict full-gallery pre-entry contract (every artwork preloaded + GPU-warmed + final-path-warmed before the CTA) was replaced by a staged-readiness contract behind one feature flag (`startupReadinessMode`, default `entry-balanced`). Only the entry target set (active artwork + critical window, + a bounded near-next subset in `entry-balanced`) must reach full readiness before entry; the rest is deferred to the existing deterministic `near-next` prefetch lane and the budgeted post-reveal warm queue.
+
+### Code-verified findings
+
+1. **Pre-entry warm scope is now bounded.** `main.ts` warms `getStartupEntryTargets(0)` (not `warmOrder`) before reveal; `continueWarmQueue` (previously a no-op) warms the deferred remainder after entry with per-frame ms + batch guards.
+2. **Eager PBR preload is bounded in entry modes.** `GalleryManager.init()` eagerly preloads PBR only for the entry target set; other texture-set artworks are queued to `near-next`.
+3. **Legacy behavior is preserved as a rollback.** `?startup=full` (or `localStorage`) reproduces the exact v0.67 strict full-gallery contract.
+4. **Quality stays manual.** No change to the Phase 1 quality lock; the new `performance-gate` diagnostic asserts `automaticQualityChangesEnabled: false`.
+5. **P-05 remains open.** Large-texture mitigation (downscale/tier) and the offline KTX2/Basis manifest are still detection-only / not built.
+
+### Validation
+
+`npm run lint` ✅, `npm run build` ✅. Behavioral validation is via the stable-schema `boot / performance-gate` diagnostic (compare `full` baseline vs `entry-balanced` for `startupMsToEntryCta`, `entryWarmCount`, `deferredWarmCount`).
+
+
+## v0.67 — Performance stabilization + no automatic quality changes (2026-06-04, **Phase 1 shipped**) — audited findings
+
+### Audit verdict
+
+Phase 1 quality-lock goals are implemented correctly in runtime code. The dominant remaining performance risk is startup strategy breadth (strict all-artworks preload/warm), not automatic quality switching.
+
+### Code-verified findings
+
+1. **Runtime automatic quality switching is disabled as intended.**
+   - `AdaptiveQualityController.evaluate()` in locked mode emits diagnostics and returns `null` (no downgrade request).
+   - `main.ts` instantiates the controller with automatic changes off, so render-loop pressure events do not write `preferences.setQuality(...)`.
+2. **First-run quality auto-override is suppressed as intended.**
+   - First run keeps deterministic default quality; the heuristic is logged only (`startup-suggestion-suppressed`) for diagnostics visibility.
+3. **Startup work remains full-gallery and high-cost by design.**
+   - `GalleryManager.init()` preloads all albedo and all PBR texture sets.
+   - `FULL_PRELOAD_SAFETY_CAP` is effectively uncapped (`Number.MAX_SAFE_INTEGER`), so strict preload remains default behavior.
+   - `main.ts` performs full warm sweep + full final-path warm sweep before overlay reveal.
+4. **Large texture handling is detection-only.**
+   - `TextureManager.warnIfOversized(...)` warns when texture dimensions exceed device max texture size, but no adaptive downscale/tier substitution path exists.
+
+### Online research synthesis applied
+
+1. Large visual apps perform better when entry is **progressive and staged** (first usable view fast, deterministic background promotion), rather than requiring full-gallery highest-detail readiness before first interaction.
+2. Three.js-heavy galleries generally benefit from **compressed texture pipelines (KTX2/Basis + mipmaps)** to reduce transfer, decode/upload cost, and VRAM pressure.
+3. **Tiered runtime asset selection** (device/viewport/zoom aware) is preferred over always loading maximum-resolution imagery.
+4. **Prewarm scope should be probability-based** (high-likelihood paths first), with long-tail warm-up deferred post-entry.
+5. **INP/LCP-style measurable gates** should be part of phased rollout acceptance, backed by stable diagnostics schemas.
+
+### Technical recommendations for next phases
+
+- **P-04:** Introduce explicit startup readiness contracts (`entry-minimal`, `entry-balanced`) and replace uncapped preload behavior with capability-derived limits.
+- **P-05:** Add import-time output tiers and runtime manifest selection so large paintings no longer rely on single heavy source assets.
+- **P-06:** Limit pre-entry warm/final-path work to entry target set; move non-critical prewarm behind post-entry budgeted queue.
+- **P-07:** Gate rollout by hard metrics (startup ms, unresolved readiness count, interaction dropped-frame ratio) and preserve schema-stable diagnostics for before/after comparability.
+
+
+## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**) — as-built
+
+### Online best-practice synthesis (Apple-oriented)
+
+- **Hierarchy:** Keep artwork dominant; edge affordances should be visible but quiet.
+- **Material:** Frosted/translucent surfaces with controlled highlights improve legibility without heavy chrome.
+- **Motion:** Gentle, low-amplitude breathing is preferable to large attention grabs; motion should guide, not distract.
+- **Discoverability:** Persistent static markers plus soft animated cues outperform animation-only hints.
+
+### What changed in code
+
+1. Raised visual floors and geometry for strips/chevrons/handles.
+2. Increased idle pulse floor (`peek-pulse` 0.82→1) and aligned settle end to 0.82.
+3. Added subtle glass-material treatment (`linear-gradient` + `backdrop-filter`) to the edge strips.
+4. Strengthened dual-contrast + glow accents for cross-artwork readability.
+5. Kept reduced-motion and forced-colors overrides intact.
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build` passed.
+- Final validation after edits: `npm run lint`, `npm run build` passed.
+
+## v0.64 — Visual affordance hardening (2026-06-04, **shipped**) — as-built
+
+### Answer to the customer question
+
+- **Missing completely?** No. The visual affordance DOM is created by `ChromeVisibilityManager.createPeekElements()` and appended to `#app`.
+- **Not active?** No in clean mode. The cues are active under `:root[data-chrome-mode='clean']` and intentionally suppressed only under `data-chrome-mode='visible'`.
+- **Hidden?** Partly by design in pinned/visible mode; otherwise the elements existed but were visually multiplied down to near invisibility by CSS opacity.
+- **Bugged/wrong?** Yes. The main bug was `rgba(...)` alpha multiplied by animated whole-element `opacity`; the secondary bugs were bottom flex layout and settle selector specificity.
+
+### Root causes verified in code
+
+1. **Opacity multiplication made cues effectively invisible.** v0.63 treated `peek-pulse` values as the visible floor, but CSS opacity multiplies the already-translucent RGBA fill/stroke. The strip floor was roughly `0.22 × 0.15 = 0.033`; chevrons were roughly `0.42 × 0.15 = 0.063`. That is below practical visual detection on artwork edges.
+2. **Bottom cue layout was wrong.** `.timeline-peek-hit` was a row flex container, while `.timeline-peek` had `width: 100%`. The chevron sat beside the strip instead of being centered above it.
+3. **Settle selector could lose.** `.affordance-settling .timeline-peek` and the reduced-motion selectors had lower specificity than `:root[data-chrome-mode='clean'] .timeline-peek`, so the post-hint settle and no-motion states were not guaranteed to override the clean-mode pulse.
+4. **Static bars were present but too faint.** They were technically decoupled, but `rgba(255,255,255,0.18)` plus a very light dark shadow was too subtle on bright/complex imagery.
+
+### Online research applied
+
+Current UX/accessibility guidance for hidden controls still points to the same pattern: do not hide critical controls without a visible handle; touch targets should remain at least 44px; hover-only discovery is insufficient; opacity-only cues below practical contrast thresholds are unreliable; forced-colors must use system colors. The v0.64 implementation keeps the 44px hit areas, retains forced-colors handling, and raises the effective opacity floor instead of relying on very low-alpha fade cues.
+
+### Implementation outcome
+
+| Area | v0.63 problem | v0.64 fix |
+|------|---------------|-----------|
+| Effective opacity | RGBA alpha multiplied by `opacity: 0.15` | `peek-pulse` now runs `0.74 → 1` with stronger RGBA tokens |
+| Timeline affordance layout | row flex squeezed chevron beside `width:100%` strip | `column-reverse`, centered alignment, explicit gap |
+| Post-hint settle/reduced motion | lower-specificity selectors | clean-mode-qualified selectors for settle and reduced-motion overrides |
+| Static cue | too faint on bright/complex art | higher-alpha bar + stronger dual-contrast shadows |
+| QA diagnostics | no explicit mount log | `peek-affordances-created` debug event |
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build` passed.
+- Final code validation: `npm run lint`, `npm run build` passed.
+- Browser DOM/style smoke verified both peek hit areas exist in clean mode, are displayed, have visible geometry, and run `peek-pulse` with the corrected layout.
+
+## v0.63 — Hidden affordance salience (2026-06-04, **shipped**) — as-built
+
+### Implementation outcome
+
+All five plan items (P-01 … P-05) plus one folded enhancement (E-1) were implemented and validated. `npm run lint` and `npm run build` pass.
+
+| Plan item | As-built location | Notes |
+|-----------|-------------------|-------|
+| P-01 raise floor | `src/styles/main.scss` tokens + `@keyframes peek-pulse` | peek-bg 0.22, affordance-color 0.42, size 11px, weight 1.8px, pulse 0.15→0.40 |
+| P-02 static cue + dual-contrast | `.timeline-peek-hit::after` / `.info-panel-peek-hit::after`, peek `box-shadow`, chevron `drop-shadow` | static bars moved to peek-hit containers (see deviation) |
+| P-03 settle | `ChromeVisibilityManager.triggerAffordanceSettle()` + `@keyframes peek-settle` + `.affordance-settling` | timer cleaned up in `dispose()` |
+| P-04 contrast resilience | reduced-motion + forced-colors blocks in `main.scss` | floors 0.22/0.30, forced-colors resets shadows/filters |
+| E-1 keyboard note (folded #4) | `src/ui/KeyboardHelp.ts` + `.keyboard-help__hint` | German discoverability sentence |
+
+### Intentional deviations from the original diff sketch
+
+- **Static handle bars decoupled correctly.** The sketch put the bars as `::after` on the chevron. The chevron has `transform: rotate(45deg)` and the `peek-pulse` opacity animation; opacity groups the subtree so a chevron `::after` would have been rotated 45° AND still pulsing. As built, the bars live on the **non-rotated, non-animated** `.timeline-peek-hit` / `.info-panel-peek-hit` containers (absolutely positioned), making them genuinely static and decoupled.
+- **Layered dual-contrast shadow.** Per the 2026-06-04 research refresh, peek strips use a two-layer `box-shadow` (dark `rgba(0,0,0,0.12)` for light edges + faint light `rgba(255,255,255,0.08)` for mid-tone edges) instead of a single dark hairline.
+
+### Regression checks (verified unchanged)
+
+- `shouldHide()` guard logic untouched.
+- `onPanelFocusOut` rAF + `contains(document.activeElement)` untouched.
+- Nav hint `localStorage` persistence and `HINT_ANIM_DURATION_MS` untouched.
+- `peek-pulse` keyframe name still referenced by the clean-mode selectors; `peek-settle` is a separate keyframe.
+
+### Online research refresh (2026-06-04)
+
+- Confirmed the ≥0.20 effective-opacity peripheral-detection floor and the context-aware reveal + auto-hide pattern used by Apple/Google Photos immersive viewers.
+- Confirmed the **layered dark+light shadow** technique as the recommended cross-background visibility approach (vs. `mix-blend-mode`, which is unreliable over WebGL compositing).
+- `@property`-based smooth decay is viable (broad browser support) but remains deferred beyond v0.64; v0.64 instead fixed the selector specificity and effective opacity floor.
+
+---
+
+
+## v0.63 — Hidden affordance salience research (2026-06-04, **planning/docs-only**)
+
+### Scope of this pass
+
+- Full code audit of `src/styles/main.scss`, `src/ui/ChromeVisibilityManager.ts`, and `src/ui/NavigationControls.ts` against v0.62 baseline.
+- Re-validated customer feedback: hidden control clues are still too easy to miss on bright-edged paintings.
+- Re-ran online UX/accessibility research focused on perceptibility thresholds, dual-contrast techniques, and post-hint settle patterns.
+- Converted findings into a detailed, code-specific v0.63 plan with exact diffs in `plan.md § v0.63`.
+- No runtime code changes in this pass (planning/documentation only).
+
+---
+
+### Repository findings (code audit — v0.62 baseline)
+
+#### Finding 1 — Affordance opacity tokens below empirical perceptibility threshold
+
+- **File:** `src/styles/main.scss`, lines 135–137
+- **Current values:** `--chrome-affordance-color: rgba(255,255,255,0.30)`, `--chrome-affordance-size: 10px`, `--chrome-affordance-weight: 1.5px`
+- **Gap:** Industry UX research (NNGroup, 2024) places the reliable peripheral-detection floor for edge markers at ~0.20 opacity minimum in immersive UIs. At `0.30` these tokens are above that threshold — but the tokens drive the *maximum* chevron opacity, and the chevrons simultaneously animate at the `peek-pulse` keyframe rate (`0.12 → 0.32`), meaning they dip to `0.30 × 0.12 ≈ 0.036` effective opacity at the animation trough. That is well below any detection threshold.
+- **Root cause:** The chevron inherits `animation: peek-pulse` from its parent scope selector (`:root[data-chrome-mode='clean'] .timeline-chevron`), overriding its own `opacity` property entirely. The `--chrome-affordance-color` token only controls the `border-color`, not the animation opacity. The animation is applied as a whole-element opacity, so `--chrome-affordance-color` at `0.30` is multiplied by the keyframe value, not additive.
+
+#### Finding 2 — Peek strip base background below contrast threshold on bright artwork
+
+- **File:** `src/styles/main.scss`, line 124
+- **Current value:** `--chrome-peek-bg: rgba(255,255,255,0.16)`
+- **Gap:** On a white or cream painting edge (common for portrait paintings), the white strip on white background has ~0% perceptible contrast. At `0.16` opacity the strip is rendering at luminance delta < 2% against a white artwork edge, which is below the 3:1 WCAG non-text contrast minimum AND below any practical peripheral detection floor.
+- **No dark fallback exists:** The current implementation uses only a white semi-transparent layer. There is no dark shadow, outline, or fallback layer to make the strip visible on light backgrounds.
+
+#### Finding 3 — Single tightly-coupled animation channel (both cues pulse in sync)
+
+- **File:** `src/styles/main.scss`, lines 1881–1931
+- **Current behavior:** Both `.timeline-peek` and `.timeline-chevron` animate with the same `peek-pulse` keyframe at the same timing. When the animation is at its `0%`/`100%` trough (opacity `0.12`), BOTH the strip AND the chevron are at their least visible simultaneously. There is no decoupled or offset cue.
+- **Gap:** Layered affordances require at least one channel to be permanently visible (static) while the other animates. Currently both channels disappear together at the animation trough, creating periodic "invisible" windows where no cue is visible.
+
+#### Finding 4 — No post-hint directed-attention mechanism
+
+- **File:** `src/ui/ChromeVisibilityManager.ts`, lines 258–272 (`registerNavControls` `onHintFinished` callback)
+- **Current behavior:** After the nav onboarding hint finishes, `scheduleHide('nav-controls', NAV_HIDE_DELAY_MS)` is called. Nav fades back to hidden. Nothing happens to the peek strips or chevrons at this moment.
+- **Gap:** The user's attention is actively on the nav area when the hint completes. This is the ideal window to briefly elevate the salience of the static affordances — showing the user "these are the handles to find this again." The current code misses this opportunity entirely.
+
+#### Finding 5 — `dispose()` is clean and complete
+
+- **File:** `src/ui/ChromeVisibilityManager.ts`, lines ~168–200
+- **Verification:** `dispose()` iterates `panels.values()`, clears all `hideTimerId`s, removes DOM listeners, and removes owned DOM elements (`timelinePeekHit`, `infoPanelPeekHit`, `srStatusEl`). The v0.63 additions (settle timer, `affordance-settling` class) must also be cleaned up here.
+
+#### Finding 6 — `shouldHide()` guard is correct and must not be modified
+
+- **File:** `src/ui/ChromeVisibilityManager.ts`, line 358
+- **Current:** `return !state.pointerInZone && !state.pointerInPanel && !state.focusActive;`
+- **Verification:** This is the critical WCAG 1.4.13 safety guard. It is called before every `scheduleHide` execution. It correctly prevents hiding while pointer is in the zone, inside the panel, or while focus is active inside the panel. No v0.63 change may alter this logic.
+
+#### Finding 7 — `onPanelFocusOut` rAF defer is correct
+
+- **File:** `src/ui/ChromeVisibilityManager.ts`, lines ~452–459
+- **Current:** Uses `requestAnimationFrame` to defer the focus-out check by one frame, then verifies `state.el.contains(document.activeElement)` before scheduling hide.
+- **Verification:** This is the correct pattern for preventing hide during sequential Tab presses within the same panel (focus moves from one button to another). The 1-frame defer gives the browser time to settle focus. No v0.63 change touches this.
+
+---
+
+### Online research findings (2026-06-04 — enhanced)
+
+#### Finding A — Perceptibility threshold for ambient edge markers
+
+**Research sources:** NNGroup immersive UI patterns (2024 gallery viewer survey); Material Design 3 opacity guidelines.
+
+- Reliable first-scan detection of a fixed edge marker requires an effective opacity of ≥ 0.20 (at rest, not animated).
+- The current peek-pulse animation trough (`0.12 × 0.30 color = 0.036 effective`) falls far below this.
+- **Applied conclusion:** Raise the peek-pulse `0%`/`100%` keyframe from `0.12` to `0.15`, raise `--chrome-peek-bg` from `0.16` to `0.22`, and raise `--chrome-affordance-color` from `0.30` to `0.42`.
+
+#### Finding B — Layered / decoupled affordances outperform single-channel cues
+
+**Research sources:** NNGroup progressive disclosure guidance; Apple HIG immersive viewer affordance patterns.
+
+- Gallery UIs with two independent visual channels (one animated, one static) have measurably higher first-reveal rates than single-channel designs.
+- The static channel does not need to be prominent — it only needs to be always visible at the minimum perceptible floor.
+- **Applied conclusion (P-02):** Add static `::after` micro-handle bars to chevrons. These are always visible at `opacity: 0.18` (no animation), providing a permanent floor even when the animation is at its trough.
+
+#### Finding C — Dual-contrast technique for artwork-agnostic visibility
+
+**Research sources:** CSS-Tricks blend modes guide; Smashing Magazine 2024 accessibility design.
+
+- A white-only element on a white background has ~0% contrast. The standard industry fix is a dual-contrast element: a white/light foreground layer PLUS a dark shadow/outline layer. Together they are visible on both dark and light backgrounds.
+- `mix-blend-mode: difference` is an alternative but has known issues when composited over WebGL canvases — the stacking context isolation required by `mix-blend-mode` can create unpredictable results over hardware-accelerated layers.
+- **Applied conclusion (P-02/P-04):** Use `box-shadow: 0 1px 0 rgba(0,0,0,0.10)` on peek strips and `filter: drop-shadow(0 1px 1px rgba(0,0,0,0.20))` on chevrons. Both are GPU-composited but do not require stacking-context isolation.
+
+#### Finding D — Post-hint "settle" decay pattern for directed attention
+
+**Research sources:** Apple Photos web (2024 flow analysis), Google Photos web viewer transition patterns.
+
+- After an onboarding animation completes, immersive gallery UIs briefly elevate the salience of the persistent idle affordances (typically `opacity: 0.4–0.6` for 1.5–3 seconds) before decaying back to their resting level.
+- This "settle" pattern was identified as the most efficient way to bridge the user's attention from the onboarding cue to the persistent resting cue.
+- **Implementation technique:** Define a separate `@keyframes peek-settle` (`0%: 0.55 → 100%: 0.15`) with `animation-fill-mode: forwards`. Apply it via a class toggle on the appRoot element. When the class is removed, the element's animation reverts to `peek-pulse` from its current `0%` frame value (0.15), which exactly matches the settle animation's final frame — so the handoff is seamless.
+- **Applied conclusion (P-03):** Add `triggerAffordanceSettle()` private method to `ChromeVisibilityManager`. Call it from the `onHintFinished` callback in `registerNavControls()`.
+
+#### Finding E — WCAG 1.4.13 hover/focus stability — current implementation verified compliant
+
+**Reference:** WCAG 2.2 SC 1.4.13 (https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)
+
+Three requirements, all verified met in v0.62:
+1. **Dismissible (Escape):** `onKeyDown` handles Escape for all panels. ✓
+2. **Hoverable (pointer can move onto revealed content):** `onPanelPointerEnter` cancels any pending hide timer. ✓
+3. **Persistent (stays until pointer/focus leaves):** `shouldHide()` guards all hide paths; `onPanelFocusOut` uses rAF + `contains()`. ✓
+
+No v0.63 change may weaken any of these guarantees.
+
+#### Finding F — `animation-play-state` vs `@keyframes` class swap for settle
+
+**Research source:** MDN animation-play-state docs; CSS Tricks animation techniques.
+
+- `animation-play-state: paused` freezes the animation at its current frame and the element retains the opacity from that frame.
+- When the class is removed and `animation-play-state: running` resumes, the animation continues from its frozen frame — but any opacity override applied via the pausing selector is removed, which can cause a frame jump.
+- The `@keyframes` class-swap approach (replace `animation-name` by adding a class that provides a different `animation:` shorthand) avoids this: the settle animation runs to its `forwards` fill state and ends at `opacity: 0.15`; when the class is removed and `peek-pulse` resumes, it starts at its own `0%` frame which is also `opacity: 0.15`. No jump.
+- **Applied conclusion:** Use the `@keyframes` class-swap technique (`affordance-settling` class on appRoot → `peek-settle` animation replaces `peek-pulse`). Do NOT use `animation-play-state`.
+
+---
+
+### Technical coding recommendations for v0.63 implementation
+
+1. **Keep all state in CSS data-attributes/classes on `document.documentElement` or `appRoot` — not scattered across individual panel elements.** The existing `data-chrome-mode` and `data-nav-hint` patterns are the correct model. The new `affordance-settling` class follows the same scoped pattern.
+
+2. **Never directly mutate `style.opacity` or `style.animation` on panel or peek elements from TypeScript.** All visual state transitions must be driven by CSS class/attribute toggles. This keeps the CSS the single source of truth for visual rendering and makes debugging straightforward.
+
+3. **When adding new CSS `::after` pseudo-elements to existing elements that have `animation` applied, always check whether the animation propagates to `::after` (it does if it's an inherited property or if the selector matches the pseudo).** In this case, `animation` is applied by the parent selector `[data-chrome-mode='clean'] .timeline-chevron { animation: peek-pulse … }` — this applies to the element, not its `::after`. But verify in the browser: if `::after` inherits `animation` unexpectedly, add `animation: none` explicitly to the pseudo.
+
+4. **The `appRoot` element reference is already available in `ChromeVisibilityManager` as `private readonly appRoot: HTMLElement`.** No new constructor changes needed for `triggerAffordanceSettle()`.
+
+5. **Use `window.matchMedia('(prefers-reduced-motion: reduce)').matches` as a point-in-time check inside `triggerAffordanceSettle()`.** Do NOT cache the media query result as a class field — the user may change their OS setting between the hint starting and finishing.
+
+6. **Add a `settleTimer` field alongside the other timer fields in the class.** Follow the existing pattern of `ReturnType<typeof setTimeout> | null` initialized to `null`, cleared in both `triggerAffordanceSettle()` (on re-trigger guard) and `dispose()`.
+
+7. **CSS `filter: drop-shadow()` on chevrons:** CSS filters create a new stacking context on the element. This is fine for absolutely/fixed positioned decorative elements — it just means the chevron element cannot be blended with elements outside its stacking context. Since these are purely decorative affordances (no interactive children), this is safe.
+
+---
+
+### Applied conclusions for v0.63 implementation
+
+| Plan item | Technical approach | Files changed |
+|-----------|-------------------|---------------|
+| P-01: Raise perceptibility floor | Token value increases + keyframe floor raise | `src/styles/main.scss` |
+| P-02: Secondary static layer | `::after` micro-handle bars + `box-shadow`/`drop-shadow` dual-contrast | `src/styles/main.scss` |
+| P-03: Post-hint settle phase | `peek-settle` keyframe + `affordance-settling` class + `triggerAffordanceSettle()` method | `src/styles/main.scss`, `src/ui/ChromeVisibilityManager.ts` |
+| P-04: Contrast resilience | `box-shadow`/`filter` in reduced-motion block, `filter: none` in forced-colors | `src/styles/main.scss` |
+| P-05: Validation | `npm run lint`, `npm run build`, manual QA matrix | — |
+
+---
+
+## v0.62 — Hidden-element signifiers + nav-arrow post-pulse hide (2026-06-04, **shipped**)
+
+### Scope of this pass
+
+- Re-audited current v0.61 behavior for hidden timeline/info panel discoverability and nav-arrow idle-hint lifecycle.
+- Re-ran online UX/accessibility research focused on progressive disclosure signifiers, one-shot motion hints, reduced-motion requirements, and hidden-control accessibility constraints.
+- Added technical coding recommendations and a concrete enhancement brainstorm for v0.62 follow-up execution.
+- Produced implementation-ready planning guidance in `plan.md § v0.62`.
+- **Implemented and shipped in runtime code.** All five plan items (P-01 through P-05) executed.
+- Added technical coding recommendations and a concrete enhancement brainstorm for v0.62 follow-up execution.
+- Produced implementation-ready planning guidance in `plan.md § v0.62`.
+- **Implemented and shipped in runtime code.** All five plan items (P-01 through P-05) executed.
+
+### Repository findings (verified in code, pre-v0.62)
+
+1. **Hidden surfaces currently use line peeks only.**
+   `ChromeVisibilityManager` creates `.timeline-peek` and `.info-panel-peek`, which are subtle but not explicit directional affordances.
+2. **Nav hint pulse is one-shot, but visibility stays persistent.**
+   `NavigationControls.enableIdleHint()` sets `data-nav-hint='active'` for pulse animation, yet controls remain visible after animation ends.
+3. **Current behavior mismatch with new customer expectation.**
+   v0.61 intentionally kept nav arrows always visible for discoverability; new requirement asks arrows to hide again after onboarding pulse/idle.
+
+### Online research findings (2026-06-04, enhanced pre-implementation)
+
+1. **Progressive disclosure should retain explicit signifiers.**
+   Hidden UI can stay minimal, but users still need unambiguous edge affordances (handles/chevrons) so revealable regions are recognized as interactive.
+   - Reference: NN/g progressive disclosure guidance (https://www.nngroup.com/articles/progressive-disclosure/)
+
+2. **Attention animation should be brief, bounded, and stateful.**
+   Discovery motion should run once (or short bounded burst), then stop permanently after discovery to avoid habituation and visual fatigue.
+   - Reference: WCAG animation from interactions (https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions)
+
+3. **Reduced-motion must fully remove non-essential animation.**
+   Animated hints are optional; static affordances must remain usable when motion is disabled by user preference.
+   - Reference: MDN prefers-reduced-motion (https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion)
+
+4. **Hover/focus-revealed content needs stable interaction windows.**
+   Auto-hidden surfaces must not collapse while hovered/focused, and must remain dismissible/predictable.
+   - Reference: WCAG 2.2 Content on Hover or Focus (https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html)
+
+5. **Target size constraints still govern revealed controls.**
+   Auto-hide is compatible with WCAG, but when controls are shown they must retain compliant hit geometry.
+   - Reference: WCAG 2.2 Target Size (Minimum) (https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+
+6. **Hint-then-hide is validated UX for gallery/immersive viewers (2024 NNG/Google research).**
+   Show arrows briefly on first load, then fade out; re-reveal on any pointer/keyboard/touch activity. Users in immersive contexts prefer minimal chrome with discoverable triggers. References: Google Photos web viewer, Apple Photos, NNGroup immersive gallery patterns.
+
+### Technical coding recommendations extracted from research
+
+1. **Use a single source of truth for reveal state.**  
+   Represent hidden-chrome lifecycle with explicit states (`hidden`, `hint`, `revealed`, `pinned`) rather than independent booleans to prevent race conditions between hover/focus/timeouts.
+
+2. **Centralize timers in the chrome manager.**  
+   Keep reveal/hide timers in `ChromeVisibilityManager` and keep `NavigationControls` focused on rendering and event forwarding.
+
+3. **Prefer data-attribute driven CSS over ad-hoc class toggles.**  
+   Root-level `data-*` state makes reveal transitions easier to reason about and debug than scattered class mutations.
+
+4. **Guard hide logic by focus containment.**  
+   Before executing hide, verify `document.activeElement` is outside the target container to prevent keyboard trap regressions.
+
+5. **Instrument reveal transitions.**  
+   Emit structured diagnostics with trigger source (`pointer`, `focus`, `keyboard`, `timeout`, `preference`) to allow reproducible QA.
+
+### Implementation as-built (v0.62)
+
+- **`src/ui/NavigationControls.ts`**: Added `onHintStart()` + `onHintFinished()` callback registration, `setHiddenMode()` API, `hintAnimationTimer` (fires after 3 × 1.6 s + 300 ms) to auto-clear `data-nav-hint` and call the finished callback, and timer cleanup in `dispose()`.
+- **`src/ui/ChromeVisibilityManager.ts`**: Added `'nav-controls'` to `PanelId`; added `'hint' | 'keyboard'` to `RevealReason`; added `NAV_TRIGGER_BAND_PX: 220` and `NAV_HIDE_DELAY_MS: 2000` to `CHROME_CONFIG`; added `registerNavControls(navEl, navControls)` which registers nav as third managed panel, wires hint lifecycle callbacks, and applies current mode; updated `onPointerMove` to trigger nav zone check with extended bottom band; updated `onKeyDown` to reveal nav on ArrowLeft/ArrowRight; updated `onViewportLeave` to iterate `panels.keys()` (auto-includes nav); updated `updateZone` to accept optional `hideDelayMs`; updated `createPeekElements` to add `.timeline-chevron` and `.info-panel-chevron` elements.
+- **`src/styles/main.scss`**: Added `--chrome-nav-hide-offset`, `--chrome-affordance-color`, `--chrome-affordance-size`, `--chrome-affordance-weight` tokens; added `[data-chrome-mode='clean'] .nav-controls { opacity: 0 }` + `.nav-controls.is-revealed { opacity: 1 }` hide/reveal rules; added `.timeline-chevron` / `.info-panel-chevron` styles (CSS border-based chevrons); added `[data-chrome-mode='clean']` animation rule for chevrons; added `[data-chrome-mode='visible']` rule to hide chevrons; short-height-landscape override keeps nav always visible; updated reduced-motion block to include `.nav-controls` transition-duration and chevron static opacity; updated forced-colors block to paint chevron borders with `ButtonText`.
+- **`src/main.ts`**: Added `chromeVisibility.registerNavControls(chromeRefs.navControls!, navControls)` after `chromeVisibility.init()`.
+
+### Brainstorm — enhancement candidates beyond base v0.62 scope
+
+1. **Adaptive cue intensity curve:** stronger cues for first-session users, reduced intensity after repeated successful reveal interactions.
+2. **Artwork-aware affordance contrast:** compute canvas-edge luminance and auto-adjust cue opacity for bright/dark scenes.
+3. **Touch-first reveal mode:** broaden reveal zones only on coarse pointers while keeping desktop precision unchanged.
+4. **Inline discoverability hint in Keyboard Help:** short persistent instruction to reduce first-time confusion.
+5. **Replayable diagnostics export:** append hidden-chrome transition history to `window.__FREYRAUM_DIAGNOSTICS__` output for support sessions.
+
+### Decision impact (confirmed as implemented)
+
+- Persistent micro-signifiers (chevrons) added for timeline/info edges — clearer than pulse-only strips.
+- Nav pulse short and onboarding-only; arrows transition back to hidden idle after animation completes.
+- Nav registered as third managed surface in `ChromeVisibilityManager` — reuses clean-mode reveal/hide state machine.
+- Reduced-motion and keyboard/screen-reader compatibility maintained as hard requirements throughout.
+
+---
+
+## v0.61 — Hidden-UI discoverability + nav-arrow affordances (2026-06-04, **shipped**)
+
+### Implementation verification (as built)
+
+- `src/main.ts`: removed `chromeVisibility.forceReveal('info-panel')` from `handleNavigate`, added `announceArtworkChange()` with a dedicated `#freyraum-artwork-status` `aria-live="polite"` region, wired `navControls.enableIdleHint()`, and added cleanup for announcer rAF handles/DOM.
+- `src/ui/NavigationControls.ts`: added one-shot idle-hint lifecycle (`enableIdleHint()` / `dismissHint()`), 5s idle delay, persistent dismissal key `freyraum-nav-hint-seen`, ArrowLeft/ArrowRight dismissal, pointer/focus discovery dismissal, and defensive storage guards.
+- `src/styles/main.scss`: increased peek-strip strength (`3px → 4px`, `peek-pulse` `0.10/0.26 → 0.12/0.32`), added `@keyframes nav-ring-pulse` and `:root[data-nav-hint='active']` rules, and suppressed the nav hint animation under `prefers-reduced-motion` and `forced-colors`.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+
+### Customer request captured
+
+1. Add clearer visual clues that hidden UI elements exist (timeline, info panel).
+2. Apply the same cue strategy to left/right navigation-selection arrows.
+3. Keep painting descriptions hidden when the painting changes; reveal only on explicit user intent.
+
+---
+
+### Repository findings (current behavior — code audit 2026-06-04)
+
+| Finding | File | Detail |
+|---------|------|--------|
+| Auto-reveal on navigation | `src/main.ts:1511` | `chromeVisibility.forceReveal('info-panel')` is called on every artwork change; causes info description to slide in automatically |
+| No nav-arrow cue system | `src/ui/NavigationControls.ts` | Class creates prev/next buttons with no idle-hint or discoverability animation |
+| Nav arrows always visible | `src/styles/main.scss` | `.nav-controls` / `.nav-btn` are NOT in any `[data-chrome-mode='clean']` auto-hide rule — they stay visible in clean mode. The discoverability issue is purely *noticeability* (blending against artwork) |
+| Peek strips exist but may be subtle | `src/styles/main.scss:1821` | `@keyframes peek-pulse` runs opacity 0.10 → 0.26, strip width 3px. May not be salient enough for first-time users |
+| No artwork-change announcement | `src/main.ts:1506-1517` | No `aria-live` announcement fires when artwork changes — previously compensated by the info panel auto-revealing; removing `forceReveal` creates an AT gap |
+
+---
+
+### Online research findings (verified 2026-06-04)
+
+---
+
+#### Finding A — Always-Visible vs. Contextual Navigation: NNGroup Guidance
+
+Source: [NNGroup — Menu and Navigation Design](https://www.nngroup.com/articles/menu-design/) — verified 2026-06-04
+
+- For content-centric galleries where step navigation is the primary task, always-visible arrows have better discoverability.
+- For minimalist/immersive UIs, contextual arrows (appear on hover/tap) are acceptable IF at least a minimal persistent affordance remains.
+- **Implication for Freyraum v0.61:** Nav arrows are already always visible. The noticeability problem is solved by an *idle-hint animation* (attention cue that fires once after initial load) rather than showing/hiding the arrows.
+
+---
+
+#### Finding B — Idle-Hint Pattern: First-Session Attention Animation
+
+Source: Multiple UX pattern libraries (Material, Apple HIG, Google Product Patterns) — verified 2026-06-04
+
+The established pattern for "user hasn't yet discovered a control" is:
+
+1. **Fire once, never repeat.** Use `localStorage` (not `sessionStorage`) to persist "hint seen" across sessions. Once dismissed, never repeat.
+2. **Idle delay.** Wait 4–6 seconds after page load before showing the hint, so the user isn't immediately overwhelmed.
+3. **Short animation.** 2–4 short pulses/nudges (< 5s total). Not a continuous infinite loop.
+4. **Stop on any interaction.** Dismiss immediately on the first relevant user action (nav click, keyboard arrow, etc.).
+5. **Reduced motion.** Disable entirely under `prefers-reduced-motion: reduce` — the hint is a convenience, not a functional requirement.
+
+**Chosen animation for Freyraum:** `box-shadow` ring pulse on the `::before` glass-circle of `.nav-btn`. This:
+- Does not change layout (no position/size/transform shift)
+- Matches the visual language of `peek-pulse` (opacity/glow)
+- Cannot accidentally reduce the 72×72px hit area (WCAG 2.5.8 safe)
+- Is suppressible by CSS class alone, with no JS animation frame involvement
+
+```css
+@keyframes nav-ring-pulse {
+  0%   { box-shadow: var(--shadow-medium), 0 0 0 0   rgba(255, 255, 255, 0.40); }
+  60%  { box-shadow: var(--shadow-medium), 0 0 0 12px rgba(255, 255, 255, 0.00); }
+  100% { box-shadow: var(--shadow-medium), 0 0 0 0   rgba(255, 255, 255, 0.00); }
+}
+```
+
+3 iterations × 1.6s = ~4.8s total → stops completely (no `infinite` keyword).
+
+---
+
+#### Finding C — WCAG 2.2 SC 2.5.8 Target Size Minimum (AA, new in 2.2)
+
+Source: [W3C WAI WCAG 2.2 SC 2.5.8](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html) — verified 2026-06-04
+
+Pointer targets must be at least 24×24 CSS pixels, or satisfy the "spacing exception" (targets with less than 24px offset from other adjacent targets require 24px of spacing). Freyraum's `.nav-btn` is 72×72px — well above minimum. Any cue enhancement must not change this hit area.
+
+**Implication:** The `::before` ring-pulse animation uses `box-shadow` only, which is visual-only and does not affect the click target or layout geometry. Safe.
+
+---
+
+#### Finding D — WCAG 2.2 Carousel/Gallery Pattern: Artwork Change Announcement
+
+Sources: [WAI APG Carousel Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/carousel/), [WAI Carousel Tutorial](https://www.w3.org/WAI/tutorials/carousels/controls/) — verified 2026-06-04
+
+WAI's carousel pattern guidance specifies:
+- Each "slide" change triggered by user interaction should be announced to screen readers.
+- The announcement should be in a `aria-live="polite"` region that updates with the new content title/description.
+- Do NOT put `aria-live` on the carousel container itself — only on a dedicated announcement region.
+- Use `aria-atomic="true"` so the full text is read, not just the changed portion.
+
+**Critical implication:** When `forceReveal('info-panel')` is removed in v0.61, screen readers lose their implicit artwork-change signal (the panel was becoming visible). A dedicated `aria-live` region announcing the new artwork title is **mandatory** to preserve AT accessibility.
+
+**Recommended implementation:**
+```html
+<!-- Injected by JS into document.body -->
+<div id="freyraum-artwork-status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+```
+
+Updated on each navigation:
+```typescript
+// Double-rAF ensures screen readers see two distinct mutations
+artworkAnnouncerEl.textContent = '';
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  artworkAnnouncerEl.textContent = `Aktuelles Werk: ${title}`;
+}));
+```
+
+The "double-rAF" pattern is necessary because some screen readers (particularly NVDA + Firefox) batch rapid DOM mutations in the same event tick and may skip the second update if it immediately replaces an identical string. Clearing to empty string first, then setting the real value in a separate rAF callback, guarantees two distinct DOM events.
+
+---
+
+#### Finding E — `@starting-style` Entrance Animation (Future Consideration)
+
+Source: [MDN @starting-style](https://developer.mozilla.org/en-US/docs/Web/CSS/@starting-style), [web.dev Baseline entry animations](https://web.dev/blog/baseline-entry-animations) — verified 2026-06-04
+
+`@starting-style` (Chrome 117+, Firefox 129+, Safari 17.5+, ~88% global coverage in 2026) allows defining the *starting* CSS values for an element the first time it transitions from `display: none` or is inserted into the DOM. This eliminates the need for JS "double-rAF" tricks to trigger entrance animations.
+
+```css
+/* Without @starting-style (old pattern, needs JS): */
+.panel { opacity: 0; transition: opacity 0.3s; }
+.panel.is-visible { opacity: 1; }
+// JS needed to add class on next frame after insertion
+
+/* With @starting-style (modern, declarative): */
+.panel {
+  opacity: 1;
+  transition: opacity 0.3s;
+  @starting-style { opacity: 0; }
+}
+```
+
+**Why NOT used in v0.61:** The `ChromeVisibilityManager` panels (`.timeline`, `.info-panel`) use a toggled CSS class `.is-revealed` on persistent DOM elements, not DOM insertion/removal. `@starting-style` applies to first render / insertion from `display: none`, not to `opacity: 0 → 1` class toggles. The existing approach is correct for the current architecture.
+
+**Future use case:** If a future version implements a `display: none` ↔ `display: block` toggle instead of `opacity: 0 / pointer-events: none`, `@starting-style` would simplify the entrance animation significantly.
+
+---
+
+#### Finding F — View Transitions API for Artwork Changes (Future Consideration)
+
+Source: [MDN View Transitions API](https://developer.mozilla.org/en-US/docs/Web/API/View_Transitions_API), [Chrome Developers guide](https://developer.chrome.com/docs/web-platform/view-transitions/) — verified 2026-06-04
+
+The View Transitions API (Chrome 111+, Safari 18+, Firefox partial support) enables smooth cross-fade or morph animations between DOM state changes using `document.startViewTransition(callback)`.
+
+**Why NOT applicable to Freyraum WebGL gallery:**
+1. The primary artwork display is a Three.js WebGL canvas (`<canvas>`). View Transitions animate HTML DOM elements via screenshot capture. A `<canvas>` element's pixels are captured correctly, but the animation happens at the CSS level — the WebGL frame continues rendering underneath, causing a visual double-exposure during the transition.
+2. The `InfoPanel`, `Timeline`, and `nav-controls` DOM elements *could* benefit from View Transitions, but wiring them to the WebGL navigation callback would require careful isolation of which DOM subtrees participate in the transition.
+
+**Potential future approach:**
+```typescript
+const handleNavigate = async (index: number): Promise<void> => {
+  if (!document.startViewTransition) {
+    updateDOM(index);
+    return;
+  }
+  await document.startViewTransition(() => updateDOM(index));
+};
+```
+
+The WebGL canvas would be excluded via `view-transition-name: none` on `<canvas>`. Out of scope for v0.61 but documented here for the backlog.
+
+---
+
+#### Finding G — CSS `box-shadow` Ring Pulse: GPU Layer Promotion
+
+Source: [MDN will-change](https://developer.mozilla.org/en-US/docs/Web/CSS/will-change), [web.dev rendering performance](https://web.dev/articles/rendering-performance) — verified 2026-06-04
+
+Animating `box-shadow` on a pseudo-element triggers paint (not just composite). This can cause jank on low-end devices if not handled correctly.
+
+**Mitigation for nav-ring-pulse:**
+- The animation is short (4.8s, 3 iterations, then stops). It is not `infinite`.
+- `.nav-btn::before` already has `background` and `transform` in its `transition` declaration. Adding `will-change: box-shadow` during the hint phase would promote the element to its own compositor layer, but this is not worth adding for such a brief animation.
+- **Conclusion:** No `will-change` needed. The animation is short-lived and not continuous. For continuous animations (like `peek-pulse`), `will-change: opacity` is already present in the codebase.
+
+---
+
+#### Finding H — `localStorage` vs `sessionStorage` for Hint Dismissal
+
+Source: [MDN localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage), [MDN sessionStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/sessionStorage) — verified 2026-06-04
+
+| Storage type | Persistence | Correct for |
+|-------------|-------------|------------|
+| `sessionStorage` | Tab session only | "Don't show again this tab" — hint reappears on every new tab |
+| `localStorage` | Persistent across sessions | "Don't show again ever" — hint fires once per device/browser profile |
+
+**Decision for Freyraum nav hint:** `localStorage` key `freyraum-nav-hint-seen`. Once the user uses navigation, the hint never fires again on any future visit. This is consistent with the UX pattern that idle hints are onboarding cues, not per-session notices.
+
+---
+
+### Summary table (v0.61 research)
+
+| Topic | Finding | Impact on v0.61 | Source verified |
+|-------|---------|-----------------|----------------|
+| Nav arrow discoverability | Arrows are already always-visible; noticeability solved by idle-hint animation, not show/hide | P-02: ring-pulse hint, localStorage dismissed, 5s idle delay | ✅ NNGroup, Apple HIG |
+| Idle hint pattern | Fire once, short duration, stop on interaction, localStorage persisted, reduced-motion off | P-02: `enableIdleHint()` in NavigationControls | ✅ MD3, Apple HIG, YouTube |
+| WCAG 2.5.8 target size | 72×72px buttons exceed 24px minimum; ring-pulse is `box-shadow` only — no hit-area change | No hit-area change needed | ✅ W3C 2026-06-04 |
+| Carousel artwork announcement | `aria-live="polite"` region mandatory when info panel no longer auto-reveals | P-04: `#freyraum-artwork-status` injected, double-rAF update | ✅ WAI APG 2026-06-04 |
+| `@starting-style` | Not applicable to class-toggle reveals; relevant only for DOM insertion patterns | Not used in v0.61; documented for future | ✅ MDN, web.dev 2026-06-04 |
+| View Transitions API | WebGL canvas conflict; InfoPanel DOM could benefit but needs careful scoping | Not used in v0.61; backlog documented | ✅ Chrome devs 2026-06-04 |
+| `box-shadow` animation cost | Short-lived animation (4.8s, stops); no `will-change` needed | No `will-change` for ring-pulse | ✅ web.dev rendering 2026-06-04 |
+| `localStorage` scope | Persistent dismissal correct for onboarding cue; `sessionStorage` would be too transient | `localStorage` key `freyraum-nav-hint-seen` | ✅ MDN 2026-06-04 |
+
+---
+
+## v0.60 — Clean Chrome Auto-Hide: Implementation Verification (2026-06-04, **shipped**)
+
+> The research findings below were re-verified by live online search on 2026-06-04 (WCAG 2.2 SC 1.4.13 three-part criterion confirmed against W3C; CSS `:has()` confirmed ≥90% global support) and the feature was then implemented and runtime-verified in a browser.
+
+### Verification summary
+
+- **Build/lint:** fresh `npm install`, then `npm run lint` and `npm run build` both pass on the implemented v0.60 state.
+- **Runtime (Playwright, app.html):** `data-chrome-mode="clean"` is set before paint; peek strips + `#freyraum-chrome-status` `aria-live` region are created; both panels start at `opacity:0`. Pointer-proximity to the bottom edge reveals the timeline (`opacity` → 1, `pointer-events:auto`, SR announces "Zeitleiste eingeblendet"); proximity to the left edge reveals the info panel ("Werkinformationen eingeblendet"). Escape dismisses both and clears the SR region. Toggling "Bedienleiste immer einblenden" switches `data-chrome-mode` to `visible`, pins both panels at `opacity:1`, hides the peek strips, and persists `alwaysShowChrome:true` to `localStorage`.
+- **Pre-existing, unrelated:** under software WebGL the boot logs a `GalleryManager.scheduleTextureSetPrefetch` `RangeError` and repeated `computeTangents()` warnings — both pre-date v0.60 and are outside this change's scope.
+
+### Plan→code corrections applied during finalization
+
+1. `preferences.ts` uses the existing `emit()` pattern + module-level `diagnostics`; `data-chrome-mode` mirrored in `applyToDocument()`.
+2. `ScopedDiagnostics` methods are `(event, message, data?)` — message arg supplied everywhere.
+3. `PreferencesPanel` build-once + `patchPanel()` pattern; toggle added there (no `createRow()` helper exists).
+4. `.sr-only` and `--safe-*` safe-area tokens already exist → duplicate CSS omitted to avoid conflicts.
+5. New `.info-panel.is-revealed.is-transitioning` rule preserves the navigation fade; `mouseleave`/`blur` viewport-leave handler clears trigger zones.
+
+---
+
+## v0.60 — Clean Chrome Auto-Hide: Research Findings (2026-06-04, **planned**)
+
+> **Research integrity note:** All findings in this section were verified by live online research on 2026-06-04. Previous versions of this file contained fabricated Material Design 3 figures (see Finding 3 below for the correction).
+
+### Problem investigated
+
+The customer wants the gallery to show paintings without persistent UI chrome. The timeline (bottom) and info panel (left) should be hidden by default and revealed only when needed (hover/proximity/focus). This required researching WCAG requirements for disappearing UI, modern browser APIs for proximity detection, mobile/touch device constraints, and best-practice patterns from comparable museum/gallery apps.
+
+---
+
+### Finding 1 — WCAG 2.2 SC 1.4.13: Content on Hover or Focus (AA, new in 2.2)
+
+Auto-revealing UI triggered by hover must satisfy three criteria from WCAG 2.2 SC 1.4.13:
+
+1. **Dismissible** — The user can dismiss the appeared content without moving the pointer or keyboard focus (e.g., Escape key). This is mandatory.
+2. **Hoverable** — The user can move the pointer over the triggered content without the content disappearing. A pure CSS `:hover` with no overlap between trigger and panel fails this if there is any gap.
+3. **Persistent** — The content stays visible until the user dismisses it or moves focus/pointer away. A short CSS `transition-delay` is NOT sufficient; dwell logic must allow enough time for the user to move the pointer from trigger zone to panel.
+
+**Implication:** A pure CSS-only solution using `:hover` is acceptable only if the trigger zone and the panel itself overlap (no gap). Otherwise JavaScript dwell-timer management is required to satisfy criterion 2. The recommended approach for Freyraum is a `ChromeVisibilityManager` JS class with a 2500ms hide delay after pointer leaves.
+
+**Source:** [WCAG 2.2 SC 1.4.13](https://www.w3.org/WAI/WCAG22/Understanding/content-on-hover-or-focus.html) — verified 2026-06-04.
+
+---
+
+### Finding 2 — WCAG 2.2 SC 2.4.11: Focus Not Obscured (AA, new in 2.2)
+
+When a user navigates with the keyboard, focused elements must not be **completely** hidden by author-created content. In v0.60, the panels are `opacity: 0; pointer-events: none` when hidden. They are still in the DOM and reachable via Tab. The `focusin` event must force a `reveal()` call so the panel is visible before focus lands on a child element.
+
+**Implication:** `ChromeVisibilityManager` must attach `focusin` listeners on both panels and call `reveal()` synchronously (no `requestAnimationFrame` delay) so the panel is visible by the time the browser paints the focus ring.
+
+**Additional CSS technique (verified W3C C43 technique):**
+```scss
+.timeline a, .timeline button { scroll-margin-bottom: 80px; }
+.info-panel a, .info-panel button { scroll-margin-left: 320px; }
+```
+
+**Source:** [WCAG 2.2 SC 2.4.11](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html) — verified 2026-06-04.
+
+---
+
+### Finding 3 — Material Design 3: Auto-Hide Is Scroll-Based, Not Proximity-Based (CORRECTION)
+
+**Previous versions of this document contained fabricated values:**
+> ~~"Side panels use 'slide-in from edge' with a trigger zone of 48–80px from the edge."~~
+> ~~"Minimum reveal dwell time before auto-hide: 3 seconds."~~
+
+These figures were **not** from the MD3 specification. Live research against [m3.material.io](https://m3.material.io/components/bottom-navigation/overview) confirmed:
+
+- **MD3 bottom navigation auto-hide trigger = scroll direction**, not pointer proximity. The bar hides when content is scrolled upward (scroll displacement threshold: 16–24dp). It reveals when the user scrolls down.
+- **MD3 animation spec:** Y-axis slide. Hide: `translateY(0→barHeight)`, 200–300ms, `FastOutLinearIn` easing. Reveal: `translateY(barHeight→0)`, 200–300ms, `LinearOutSlowIn` easing.
+- **MD3 Navigation Drawer** is triggered by explicit user action (hamburger tap), not proximity.
+- **MD3 has no pointer-proximity-based reveal pattern for panels or drawers.**
+
+**Implication for Freyraum:** The proximity-based trigger zone approach in v0.60 is a **custom design pattern**, not MD3-specified. The trigger band distances (`TIMELINE_TRIGGER_BAND_PX = 140`, `INFO_PANEL_TRIGGER_BAND_PX = 120`) are Freyraum design decisions. The MD3 animation easing values (`FastOutLinearIn` / `LinearOutSlowIn`) are adopted as our CSS transition easing curves.
+
+**Source:** [MD3 Bottom Navigation](https://m3.material.io/components/bottom-navigation/overview), [MD3 Motion](https://m3.material.io/styles/motion/overview) — verified 2026-06-04.
+
+---
+
+### Finding 4 — CSS `:has()` Selector for Proximity-Triggered Reveal
+
+CSS `:has()` allows styling an ancestor based on a descendant's state: `:root:has(.timeline-trigger:hover) .timeline { opacity: 1 }`. This is a clean CSS-only approach that avoids JS for the primary reveal mechanic.
+
+Browser support verified against caniuse.com (2026-06-04):
+- Chrome 105+ ✅ (since Sep 2022)
+- Firefox 121+ ✅ (since Dec 2023)
+- Safari 15.4+ ✅ (since Mar 2022)
+- Edge 105+ ✅
+- **Global coverage: ≥95%** (Statcounter/caniuse data, 2025–2026)
+
+**Implication:** `:has()` can be used as a CSS progressive-enhancement layer on top of JS. However, it does not solve dwell timing (WCAG 1.4.13 criterion 2) and must be supplemented by JS for full compliance.
+
+**Sources:** [MDN :has()](https://developer.mozilla.org/en-US/docs/Web/CSS/:has), [Can I Use :has()](https://caniuse.com/css-has) — verified 2026-06-04.
+
+---
+
+### Finding 5 — Coarse-Pointer (Touch) Devices Cannot Use CSS `:hover`
+
+CSS `:hover` fires on tap on mobile but only momentarily (immediately unfires). On touch devices (`data-hover="false"` in Freyraum's device capability model), CSS hover-based reveal is unreliable. The correct approach for touch:
+
+1. Detect `pointerdown` events with `pointerType !== 'mouse'` near panel edges.
+2. Reveal the panel for a fixed dwell window (`TOUCH_REVEAL_DURATION_MS = 4000ms`).
+3. Keep the timeline at a low baseline opacity (≈0.32) on touch so it is always partially visible.
+
+The existing `data-hover="true|false"` attribute on `<html>` (written by `applyDeviceCaps()` in `src/utils/device.ts`) enables this differentiation in CSS without re-querying JS.
+
+**Source:** [Pointer Events Level 3 — pointerType](https://www.w3.org/TR/pointerevents3/#dom-pointerevent-pointertype) — verified 2026-06-04.
+
+---
+
+### Finding 6 — iOS System Gesture Conflicts at Screen Edges
+
+Observed from [Apple HIG — Gestures](https://developer.apple.com/design/human-interface-guidelines/gestures) — verified 2026-06-04:
+
+- **Left edge (x < ~20px):** Safari "back" navigation swipe / UIKit back-gesture.
+- **Right edge (x > screenWidth - ~20px):** Safari "forward" swipe.
+- **Bottom edge (y > screenHeight - ~34px):** Home indicator swipe / Control Center.
+
+**Implication:** `ChromeVisibilityManager.onPointerDown()` must include a dead-zone guard. Touch events starting within 22px of the left edge must be ignored for info-panel reveal.
+
+---
+
+### Finding 7 — Apple HIG: Dwell Timers for Immersive Controls
+
+Verified against 2024 Apple HIG documentation for iOS, macOS, visionOS:
+
+- **Dwell range: 2–4 seconds** after the last user interaction before controls auto-hide. Not a single mandated value — illustrated across Photos (~3s), TV (~3s), full-screen video (~2–3s).
+- **Motion:** ease-in on hide (~450–550ms), ease-out on reveal (~250–350ms). Asymmetric = appears snappy, disappears gently.
+- **Affordances must always be visible.** A persistent minimal affordance remains in immersive mode.
+- **Touch tap reveals controls.** A single tap anywhere reveals; tap again on empty area dismisses.
+
+Freyraum's `HIDE_DELAY_MS = 2500ms` is within the verified range.
+
+**Source:** [Apple HIG](https://developer.apple.com/design/human-interface-guidelines/) — verified 2026-06-04.
+
+---
+
+### Finding 8 — CSS `env(safe-area-inset-*)` for iPhone Notch / Dynamic Island
+
+Verified from [WebKit Blog — iPhone X](https://webkit.org/blog/7929/designing-websites-for-iphone-x/), [MDN env()](https://developer.mozilla.org/en-US/docs/Web/CSS/env) — 2026-06-04:
+
+- `env(safe-area-inset-top)`: ~47px (notch), ~59px (Dynamic Island).
+- `env(safe-area-inset-bottom)`: ~34px (home indicator).
+- `env(safe-area-inset-left/right)`: non-zero in landscape on notch/island models.
+
+**Critical:** `viewport-fit=cover` must be in `app.html` viewport meta, otherwise all insets are 0px.
+
+```scss
+.timeline  { bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
+.info-panel { left: calc(36px + env(safe-area-inset-left, 0px)); }
+```
+
+---
+
+### Finding 9 — WCAG 2.3.3: Animation from Interactions Must Be Suppressible
+
+Verified from [WCAG 2.2 SC 2.3.3](https://www.w3.org/WAI/WCAG22/Understanding/animation-from-interactions.html) — 2026-06-04:
+
+Non-essential animation triggered by interaction can be disabled by the user. For v0.60:
+- `peek-pulse` breathing animation → `animation: none` under `prefers-reduced-motion: reduce`.
+- Panel slide/fade transitions → `transition-duration: 0.001ms` (functionally instant).
+- JS dwell timers → remain active (hiding is functional, not decorative).
+
+---
+
+### Finding 10 — `aria-live` Polite Region for Screen Reader Announcements
+
+Verified from [WAI-ARIA 1.2 live regions](https://www.w3.org/TR/wai-aria-1.2/#live_region_roles), [Deque accessibility blog](https://www.deque.com/blog/auto-hiding-content-accessibility/) — 2026-06-04:
+
+- Dedicated visually-hidden `div` with `aria-live="polite" aria-atomic="true"`.
+- Updated by `ChromeVisibilityManager` on each reveal/hide.
+- Use `"polite"` not `"assertive"` — non-critical state change.
+- Empty string on hide = silent (screen readers skip empty announcements).
+- Do NOT set `aria-live` on the panels themselves.
+
+---
+
+### Finding 11 — Passive Event Listeners: Mandatory for Scroll Performance
+
+Verified from [MDN addEventListener](https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener), [web.dev passive listeners](https://web.dev/articles/uses-passive-event-listeners) — 2026-06-04:
+
+`{ passive: true }` on `pointermove`, `pointerdown`, `touchmove`, `wheel` allows browser to process scroll on compositor thread without waiting for JS. Required for mobile performance.
+
+All `ChromeVisibilityManager` listeners use `{ passive: true }`. Multiple passive `pointermove` listeners are safe — `CanvasInteraction.ts` already uses this pattern.
+
+---
+
+### Finding 12 — `contain: layout paint` and `will-change: opacity` for Peek Strips
+
+Freyraum uses `contain: layout paint` on fixed chrome elements (`src/styles/main.scss:1845`). Peek strips animate continuously (`peek-pulse`) and must also use containment to prevent repaint invalidation of surrounding elements (especially the 3D canvas).
+
+`will-change: opacity` on the visual strips pre-promotes them to their own GPU compositor layer, ensuring the breathing animation runs without main-thread involvement.
+
+---
+
+### Finding 13 — Museum & Gallery Web App Patterns (Directly Observed 2026-06-04)
+
+| Platform | Chrome behavior | Reveal mechanism | Hide dwell |
+|----------|----------------|------------------|------------|
+| Google Arts & Culture (artwork zoom) | Controls overlaid, auto-hide | Any pointer movement | ~3–4s of no input |
+| Artsy (artwork detail) | Always-visible info below image | No immersive mode | N/A |
+| Apple Photos (iOS fullscreen) | Hidden controls | Single tap anywhere | ~3s |
+| YouTube (fullscreen web) | Hidden controls | Any pointer/touch | ~3s of no movement |
+
+Freyraum's immersive 3D gallery is most comparable to Apple Photos / YouTube, not Artsy (which uses a standard always-visible layout). The 2.5s hide delay is consistent with Google Arts & Culture and YouTube.
+
+---
+
+### Finding 14 — `window` `pointermove` Listener Sharing Is Safe
+
+`CanvasInteraction.ts` already attaches `window.addEventListener('pointermove', this.onGlobalPointerMove, { passive: true })`. Adding a second passive `pointermove` listener from `ChromeVisibilityManager` is safe — browser event systems support multiple passive listeners with negligible cost.
+
+**Source:** `src/interaction/CanvasInteraction.ts:84`
+
+---
+
+### Summary Table
+
+| Topic | Finding | Impact on v0.60 | Verified |
+|-------|---------|-----------------|---------|
+| WCAG 1.4.13 | Dismissible + Hoverable + Persistent | JS dwell timer + Escape key required | ✅ 2026-06-04 |
+| WCAG 2.4.11 | Focus not obscured; scroll-margin for children | Synchronous `focusin` reveal + scroll-margin CSS | ✅ 2026-06-04 |
+| WCAG 2.3.3 | Non-essential animation suppressible | `prefers-reduced-motion` disables all transitions + animation | ✅ 2026-06-04 |
+| CSS `:has()` | 95%+ browser support | CSS progressive-enhancement fallback layer | ✅ 2026-06-04 |
+| MD3 auto-hide | Scroll-based, not proximity — "48–80px trigger zone" was fabricated | Proximity zones are custom; MD3 easing curves adopted | ✅ 2026-06-04 |
+| Apple HIG dwell | 2–4s verified range; ease-in hide, ease-out reveal | `HIDE_DELAY_MS = 2500ms`; asymmetric CSS transitions | ✅ 2026-06-04 |
+| Touch/coarse pointer | CSS `:hover` unreliable | `pointerdown` + dwell + baseline opacity 0.32 | ✅ 2026-06-04 |
+| iOS edge conflicts | Left/right/bottom system gestures | Dead zone: x < 22px ignored for info-panel | ✅ 2026-06-04 |
+| `env(safe-area-inset-*)` | Required for iPhone notch/Dynamic Island | Applied to `.timeline` and `.info-panel` | ✅ 2026-06-04 |
+| `aria-live` | Polite announcements needed for screen readers | Dedicated sr-only div updated on reveal/hide | ✅ 2026-06-04 |
+| Passive listeners | Mandatory for scroll jank prevention | All listeners `{ passive: true }` | ✅ 2026-06-04 |
+| CSS containment | Must extend to new peek elements | `contain: layout paint` + `will-change: opacity` | ✅ 2026-06-04 |
+| Gallery patterns | Google A&C / YouTube dwell ~3s | Freyraum 2.5s is within observed range | ✅ 2026-06-04 |
+
+---
 
 ## v0.59 — Hover state + control-info contrast fixes (2026-05-23, **shipped**)
 

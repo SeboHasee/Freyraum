@@ -26,6 +26,9 @@ export interface Preferences {
   audioMuted: boolean;
   /** v0.19+: background audio effective gain (0..0.30). */
   audioVolume: number;
+  /** v0.60: when true, timeline + info panel stay permanently visible
+   *  (disables clean-chrome auto-hide). Default false. */
+  alwaysShowChrome: boolean;
 }
 
 export type PreferenceListener = (prefs: Preferences) => void;
@@ -115,6 +118,7 @@ export class PreferencesStore {
       lighting,
       audioMuted: false, // always start unmuted regardless of stored state
       audioVolume,
+      alwaysShowChrome: stored.alwaysShowChrome === true,
     };
 
     const shouldNormalizeMutedPreference = stored.audioMuted !== false;
@@ -186,6 +190,20 @@ export class PreferencesStore {
     this.emit();
   }
 
+  /**
+   * v0.60 — toggle clean-chrome mode. When `false` (default) the timeline and
+   * info panel auto-hide and reveal on pointer proximity / focus. When `true`
+   * they stay permanently visible (accessibility / kiosk preference). The
+   * `data-chrome-mode` attribute is mirrored to <html> by `applyToDocument()`
+   * so SCSS reacts without extra JS, and the choice is persisted.
+   */
+  setAlwaysShowChrome(value: boolean): void {
+    if (this.prefs.alwaysShowChrome === value) return;
+    this.prefs.alwaysShowChrome = value;
+    diagnostics.info('always-show-chrome', 'Clean-chrome preference changed', { value });
+    this.emit();
+  }
+
   normalizeStartupAudio(reason: string, notifyListeners = true): void {
     const normalizedVolume = this.prefs.audioVolume > 0 ? this.prefs.audioVolume : DEFAULT_AUDIO_GAIN;
     const changed = this.prefs.audioMuted || this.prefs.audioVolume !== normalizedVolume;
@@ -245,6 +263,10 @@ export class PreferencesStore {
     root.dataset['contrast'] = this.prefs.highContrast ? 'high' : 'auto';
     root.dataset['quality'] = this.prefs.quality;
     root.dataset['lighting'] = this.prefs.lighting;
+    // v0.60: mirror clean-chrome mode so SCSS auto-hide rules apply from the
+    // very first paint (set during construction, before ChromeVisibilityManager
+    // initialises) — prevents a flash of always-visible chrome on load.
+    root.dataset['chromeMode'] = this.prefs.alwaysShowChrome ? 'visible' : 'clean';
   }
 
   dispose(): void {

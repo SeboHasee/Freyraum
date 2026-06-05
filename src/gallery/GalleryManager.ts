@@ -7,6 +7,7 @@ import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory'
 import { clamp, smoothDamp } from '../utils/math';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import type { QualityPreset } from '../config/quality';
+import type { StartupReadinessMode } from '../config/startup';
 import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/PaintingTextureSet';
 
 export type NavigationCallback = (index: number) => void;
@@ -116,10 +117,15 @@ const NAV_SEED_SCALE = 0.88;
 const MAX_SMOOTHING_DT = 0.1;
 
 /**
- * v0.26 V-01: Full-startup preload target now covers every artwork so the
- * loading overlay resolves only after all authored texture sets are prepared.
- * Keep this at MAX_SAFE_INTEGER to preserve existing cap-aware logic branches
- * while effectively disabling bounded fallback for normal gallery sizes.
+ * v0.26 V-01: Strict-preload safety cap, retained for the legacy `full`
+ * startup-readiness mode (warm/preload every artwork before entry).
+ *
+ * v0.68 (v0.67 P-04): When `startupReadinessMode` is an entry mode
+ * (`entry-balanced` / `entry-minimal`), the effective cap is the computed
+ * entry-target count instead of MAX_SAFE_INTEGER — only the entry target set is
+ * eagerly preloaded/warmed before the CTA, and the remainder is deferred to the
+ * deterministic `near-next` / `background` prefetch lanes. See
+ * `getStartupEntryTargetSet()` and `configureStartupReadiness()`.
  */
 const FULL_PRELOAD_SAFETY_CAP = Number.MAX_SAFE_INTEGER;
 
@@ -205,18 +211,27 @@ export interface FullGalleryReadinessResult {
   /** True when the gallery exceeds FULL_PRELOAD_SAFETY_CAP and capping was applied. */
   memoryCapApplied: boolean;
   /**
-   * v0.24.3 R-01: Active preload contract mode.
-   * - `strict`: all artworks ≤ FULL_PRELOAD_SAFETY_CAP; every artwork was
-   *   eagerly loaded and warmed before CTA enablement.
+   * v0.24.3 R-01 / v0.68 P-04: Active preload contract mode.
+   * - `strict`: legacy `full` mode — every artwork was eagerly loaded and
+   *   warmed before CTA enablement.
+   * - `staged`: an entry-readiness mode — only the entry target set was warmed
+   *   before entry; remaining artworks are deferred to deterministic background
+   *   lanes and complete after entry (expected, not a contract failure).
    * - `bounded-fallback`: gallery exceeds the cap; overflow artworks are
    *   queued as `near-next` and will complete in the background after entry.
    */
-  preloadMode: 'strict' | 'bounded-fallback';
+  preloadMode: 'strict' | 'staged' | 'bounded-fallback';
   /**
    * v0.24.3 R-03: IDs of artworks that have not yet reached all 6 readiness
-   * stages. Empty array means the contract is fully satisfied.
+   * stages. Empty array means the contract is fully satisfied. In `staged`
+   * mode this lists the artworks deliberately deferred to background lanes.
    */
   unresolvedArtworkIds: readonly string[];
+  /**
+   * v0.68 P-04: Number of artworks intentionally deferred to background lanes
+   * in `staged` mode (0 in `strict` mode).
+   */
+  deferredArtworkCount: number;
   /**
    * v0.24.3 R-01: Number of artworks that exceeded FULL_PRELOAD_SAFETY_CAP
    * and were not included in the strict preload pass (0 in strict mode).
@@ -300,6 +315,14 @@ export class GalleryManager {
   private prefetchQueueRunning = false;
   private prefetchSequence = 0;
   private readinessRadius = CRITICAL_NAV_RADIUS;
+  /**
+   * v0.68 P-04: Active startup readiness contract. `full` reproduces the legacy
+   * strict full-gallery preload/warm; entry modes warm only the entry target
+   * set before the CTA and defer the rest to background lanes.
+   */
+  private startupReadinessMode: StartupReadinessMode = 'full';
+  /** v0.68 P-04: Number of artworks that must reach full readiness before entry. */
+  private startupEntryTargetCount = Number.MAX_SAFE_INTEGER;
   private pendingNavigationProbe: NavigationProbe | null = null;
   private readonly proceduralQueue = new Set<number>();
   private proceduralQueueRunning = false;
@@ -421,6 +444,43 @@ export class GalleryManager {
     });
   }
 
+  /**
+   * v0.68 P-04: Configure the startup readiness contract before `init()`.
+   * In entry modes only `entryTargetCount` artworks are eagerly
+   * preloaded/warmed before the entry CTA; the remainder is deferred to the
+   * deterministic `near-next` / `background` prefetch lanes.
+   */
+  configureStartupReadiness(config: { mode: StartupReadinessMode; entryTargetCount: number }): void {
+    this.startupReadinessMode = config.mode;
+    this.startupEntryTargetCount =
+      config.mode === 'full'
+        ? this.artworks.length
+        : Math.max(1, Math.min(this.artworks.length, Math.round(config.entryTargetCount)));
+    this.diagnostics.info('startup-readiness', 'Applied startup readiness contract', {
+      mode: this.startupReadinessMode,
+      entryTargetCount: this.startupEntryTargetCount,
+      artworkCount: this.artworks.length,
+      criticalRadius: this.readinessRadius,
+    });
+  }
+
+  /**
+   * v0.68 P-04: Priority-ordered list of artwork indices that must reach full
+   * readiness before the entry CTA. `full` mode returns every artwork; entry
+   * modes return the first `startupEntryTargetCount` of the budgeted warm order
+   * (active artwork + critical window first).
+   */
+  getStartupEntryTargets(center = 0): number[] {
+    const order = this.getBudgetedWarmOrder(center);
+    if (this.startupReadinessMode === 'full') return order;
+    return order.slice(0, this.startupEntryTargetCount);
+  }
+
+  /** v0.68 P-04: True when not every artwork is part of the pre-entry contract. */
+  get isStagedStartup(): boolean {
+    return this.startupReadinessMode !== 'full' && this.startupEntryTargetCount < this.artworks.length;
+  }
+
   /** Receives preset changes from the preference store. */
   applyPreset(preset: QualityPreset): void {
     const hadPreset = this.currentPreset !== null;
@@ -477,13 +537,24 @@ export class GalleryManager {
     this.readiness.forEach((entry) => this.markReadiness(entry.index, 'albedoLoaded', 'init-preload'));
 
     const textureSetCount = this.artworks.filter((a) => !!a.textureSet).length;
+
+    // v0.68 P-04: In entry modes only the entry target set is eagerly preloaded
+    // under the overlay; the remainder is deferred to the deterministic
+    // near-next lane so it streams in after entry without ever blocking the CTA.
+    // In `full` mode the entry target set is the whole gallery, preserving the
+    // legacy strict full-gallery preload contract exactly.
+    const entryTargetSet = new Set(this.getStartupEntryTargets(0));
+    const eagerEligible = ({ artwork, index }: { artwork: Artwork; index: number }): boolean =>
+      !!artwork.textureSet && index < FULL_PRELOAD_SAFETY_CAP && entryTargetSet.has(index);
     const pbrArtworks = this.artworks
       .map((artwork, index) => ({ artwork, index }))
-      .filter(({ artwork, index }) => !!artwork.textureSet && index < FULL_PRELOAD_SAFETY_CAP);
-    this.diagnostics.info('init', 'Preloading all PBR texture sets under loading overlay (v0.24.2 full-gallery contract)', {
+      .filter(eagerEligible);
+    this.diagnostics.info('init', 'Preloading entry-target PBR texture sets under loading overlay (v0.68 staged-readiness contract)', {
+      mode: this.startupReadinessMode,
       pbrCount: pbrArtworks.length,
       textureSetCount,
       totalArtworks: this.artworks.length,
+      entryTargetCount: entryTargetSet.size,
       safetyCap: FULL_PRELOAD_SAFETY_CAP,
       cappedArtworks: Math.max(0, this.artworks.length - FULL_PRELOAD_SAFETY_CAP),
     });
@@ -499,19 +570,23 @@ export class GalleryManager {
       )
     );
 
-    // v0.24.3 R-02: Queue overflow artworks (index >= FULL_PRELOAD_SAFETY_CAP) into
-    // the near-next prefetch lane so their completion is deterministic and queued,
-    // not dependent on opportunistic idle callbacks alone.
-    const overflowArtworks = this.artworks
+    // v0.24.3 R-02 / v0.68 P-04: Queue every artwork outside the eager preload
+    // pass (overflow beyond the cap, or — in entry modes — artworks deferred
+    // past the entry target set) into the near-next prefetch lane so their
+    // completion is deterministic and queued, not dependent on opportunistic
+    // idle callbacks alone.
+    const deferredArtworks = this.artworks
       .map((artwork, index) => ({ artwork, index }))
-      .filter(({ artwork, index }) => !!artwork.textureSet && index >= FULL_PRELOAD_SAFETY_CAP);
-    if (overflowArtworks.length > 0) {
-      this.diagnostics.info('init', 'Queuing overflow artworks for deterministic near-next prefetch (v0.24.3 R-02)', {
-        overflowCount: overflowArtworks.length,
+      .filter(({ artwork, index }) => !!artwork.textureSet && !this.prefetchedTextureSets.has(index));
+    if (deferredArtworks.length > 0) {
+      this.diagnostics.info('init', 'Queuing deferred artworks for deterministic near-next prefetch (v0.68 staged-readiness)', {
+        mode: this.startupReadinessMode,
+        deferredCount: deferredArtworks.length,
+        entryTargetCount: entryTargetSet.size,
         safetyCap: FULL_PRELOAD_SAFETY_CAP,
       });
-      for (const { index } of overflowArtworks) {
-        this.scheduleTextureSetPrefetch(index, 'init-overflow-near-next', 'near-next');
+      for (const { index } of deferredArtworks) {
+        this.scheduleTextureSetPrefetch(index, 'init-staged-deferred-near-next', 'near-next');
       }
     }
 
@@ -791,13 +866,19 @@ export class GalleryManager {
    */
   getFullGalleryReadinessSummary(): FullGalleryReadinessResult {
     const r = this.readiness;
-    const fullyReadyCount = r.filter(
-      (e) => e.albedoLoaded && e.pbrLoaded && e.proceduralReady && e.materialApplied && e.shaderCompiled && e.gpuWarmed
-    ).length;
+    const isFullyReady = (e: ArtworkReadiness): boolean =>
+      e.albedoLoaded && e.pbrLoaded && e.proceduralReady && e.materialApplied && e.shaderCompiled && e.gpuWarmed;
+    const fullyReadyCount = r.filter(isFullyReady).length;
     const overflowArtworkCount = 0;
-    const unresolvedArtworkIds = r
-      .filter((e) => !(e.albedoLoaded && e.pbrLoaded && e.proceduralReady && e.materialApplied && e.shaderCompiled && e.gpuWarmed))
-      .map((e) => e.artworkId);
+    const unresolvedArtworkIds = r.filter((e) => !isFullyReady(e)).map((e) => e.artworkId);
+    // v0.68 P-04: In entry modes, artworks outside the pre-entry contract are
+    // intentionally deferred to background lanes. They count as `deferred`,
+    // not as a strict-contract failure.
+    const staged = this.isStagedStartup;
+    const entryTargetSet = staged ? new Set(this.getStartupEntryTargets(this.currentIndex)) : null;
+    const deferredArtworkCount = entryTargetSet
+      ? r.filter((e) => !entryTargetSet.has(e.index) && !isFullyReady(e)).length
+      : 0;
     return {
       totalArtworks: this.artworks.length,
       fullyReadyCount,
@@ -806,8 +887,9 @@ export class GalleryManager {
       pbrLoadedCount: r.filter((e) => e.pbrLoaded).length,
       proceduralReadyCount: r.filter((e) => e.proceduralReady).length,
       memoryCapApplied: false,
-      preloadMode: 'strict',
+      preloadMode: staged ? 'staged' : 'strict',
       unresolvedArtworkIds,
+      deferredArtworkCount,
       overflowArtworkCount,
     };
   }

@@ -6,22 +6,17 @@ type FrameShaderUniforms = {
   uBaseRoughness: { value: number };
 };
 
-// v0.54 — GLSL procedural brushed-metal fragment functions.
-// v0.54 root-cause fix for cross-bar banding:
-//   v0.53 still fed barUV.y (the across-bar coordinate) into every octave of
-//   the FBM (frequencies 0.7, 1.4, 2.8, 5.6).  The normal computation then
-//   sampled a Y-direction finite difference, picking up those across-bar
-//   variations and tilting the surface normal perpendicularly to the grain.
-//   That tilt produced the visible parallel bands seen in all aspect ratios.
+// v0.69 — multi-scale brushed-metal fragment functions (M-02..M-05).
+// Preserves the v0.54 1-D invariant (no `barUV.y` in any FBM call →
+// dFBM/dY = 0 → zero cross-bar normal gradient) while adding bounded
+// fine-scale detail, clustered scratch presence, derivative-aware AA
+// and (high preset only) per-fragment anisotropy direction perturbation.
 //
-//   Fix: replace barUV.y in every FBM/noise call with a seed-derived
-//   constant (yConst).  The function is now purely 1-D in the along (X)
-//   direction.  dFBM/dY = 0 exactly → no Y-gradient → no cross-bar bands.
-//   A different yConst per artwork seed still gives unique grain per frame.
-//   The gradient scale is also reduced (0.08 → 0.025) so the normals are
-//   genuinely subtle and don't create visible step ridges at any zoom level.
+// Preset branching is controlled by `#define FRAME_DETAIL_HIGH|BALANCED`
+// prepended by `onBeforeCompile` (M-06). Battery preset compiles neither
+// macro and produces the same program as the v0.54 path.
 const FRAME_FRAG_FUNCTIONS = /* glsl */ `
-// v0.54 brushed-metal procedural normal & roughness
+// v0.69 brushed-metal procedural normal & roughness
 // barUV.x = world-space position along bar length
 // barUV.y = 0..1 normalized across bar width (used only for scratch position)
 
@@ -58,6 +53,22 @@ float frmBrushedFbm(float alongX, float yConst) {
   return v;
 }
 
+#if defined(FRAME_DETAIL_HIGH) || defined(FRAME_DETAIL_BALANCED)
+// v0.69 M-02: fine-scale 1-D brushed FBM. Same invariant as primary
+// (no barUV.y), ~4× higher base frequency, tighter domain warp.
+// Amplitude is capped in 'frmBrushedNormal' to 0.25× the primary
+// scale to preserve subtlety.
+float frmBrushedFbm2(float alongX, float yConst) {
+  float wx = frmNoise(vec2(alongX * 2.2 + 27.3, yConst + 4.0));
+  float qx = alongX + (wx - 0.5) * 0.12;
+  float v = 0.0;
+  v += 0.5000 * frmNoise(vec2(qx * 9.0,  yConst + 6.28));
+  v += 0.2500 * frmNoise(vec2(qx * 18.1, yConst + 9.42));
+  v += 0.1250 * frmNoise(vec2(qx * 36.3, yConst + 12.57));
+  return v;
+}
+#endif
+
 // Roughness sparkle grain — also 1-D to avoid cross-bar roughness banding.
 float frmRoughnessGrain(vec2 barUV, float seed) {
   float yConst = frmHash(seed * 13.37) * 57.0;
@@ -88,21 +99,51 @@ float frmScratchLine(vec2 barUV, float density, float localSeed) {
 }
 
 float frmScratchLayer(vec2 barUV, float seed) {
+#if defined(FRAME_DETAIL_HIGH)
+  // v0.69 M-03: clustered scratch presence. A coarse per-zone hash
+  // (~every 1/3 of bar length) groups scratches into wear families
+  // instead of distributing them uniformly. Cluster gain peaks at
+  // 2.5× presence in ~40% of zones, never increases roughness impact
+  // (the roughness scratch cap in roughnessmap_fragment is unchanged).
+  float clusterHash = frmHash(floor(barUV.x * 3.0 + 1.0) * 17.0 + seed * 29.3);
+  float clusterGain = 1.0 + smoothstep(0.60, 0.75, clusterHash) * 1.5;
+  float a = frmScratchLine(barUV,  8.0, seed);
+  float b = frmScratchLine(barUV, 14.0, seed + 5.11);
+  float c = frmScratchLine(barUV, 22.0, seed + 11.37);
+  return clamp((a * 0.06 + b * 0.05 + c * 0.04) * clusterGain, 0.0, 0.16);
+#else
   float a = frmScratchLine(barUV,  8.0, seed);
   float b = frmScratchLine(barUV, 14.0, seed + 5.11);
   float c = frmScratchLine(barUV, 22.0, seed + 11.37);
   return clamp(a * 0.06 + b * 0.05 + c * 0.04, 0.0, 0.14);
+#endif
 }
 
 // Normal: purely 1-D perturbation along the bar.
-// yConst is seed-derived; Y gradient is zero by construction (no hy sample).
-// Scale 0.025 → max ≈ 7° tilt → subtle grain without step-ridge artefacts.
+// Y gradient is zero by construction (no hy sample).
+// Primary scale 0.025 → max ≈ 7° tilt.
+// On high/balanced presets a fine-detail layer is added; its contribution
+// is attenuated by fwidth(barUV.x) so it vanishes at mid distance,
+// removing any shimmer risk (M-05).
 vec3 frmBrushedNormal(vec2 barUV, float seed) {
   float yConst = frmHash(seed * 7.31) * 57.0;
   float eps = 0.010;
   float h0 = frmBrushedFbm(barUV.x,       yConst);
   float hx = frmBrushedFbm(barUV.x + eps, yConst);
   float gradX = (h0 - hx) / eps * 0.025;
+#if defined(FRAME_DETAIL_HIGH) || defined(FRAME_DETAIL_BALANCED)
+  float yConst2 = frmHash(seed * 3.17) * 57.0;
+  float h0f = frmBrushedFbm2(barUV.x,       yConst2);
+  float hxf = frmBrushedFbm2(barUV.x + eps, yConst2);
+  float fw = fwidth(barUV.x);
+  float fineAttn = 1.0 - smoothstep(0.004, 0.015, fw);
+  #if defined(FRAME_DETAIL_HIGH)
+    float fineAmp = 0.006;
+  #else
+    float fineAmp = 0.004;
+  #endif
+  gradX += (h0f - hxf) / eps * fineAmp * fineAttn;
+#endif
   return normalize(vec3(gradX, 0.0, 1.0));
 }
 `;
@@ -114,6 +155,160 @@ const FRAME_FRAG_NORMAL_REPLACE = /* glsl */ `
   vec3 proceduralN = frmBrushedNormal(vFrameUV, uFrameSeed);
   normal = normalize(tbn * proceduralN);
 }
+`;
+
+// v0.69 M-05: roughness grain attenuation. The two highest-frequency grain
+// octaves (57.0, 115.0) become aliased at mid distance; `fwidth` collapses
+// the modulation toward neutral (0.5) as pixel footprint grows.
+// Roughness scratch cap (+0.015) is unchanged across all presets so cluster
+// gain (M-03) only affects visual presence, not BRDF roughness.
+const FRAME_FRAG_ROUGHNESS_REPLACE_HIGH = /* glsl */ `
+  float fwR = fwidth(vFrameUV.x);
+  float grainAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
+  float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
+  // Fade grain modulation to neutral (0.5) at distance — eliminates
+  // high-frequency roughness aliasing without preset branching.
+  roughnessGrain = mix(0.5, roughnessGrain, grainAttn);
+  float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
+  float roughnessFactor = uBaseRoughness
+    + (roughnessGrain - 0.5) * 0.040
+    + roughnessScratch * 0.015;
+  roughnessFactor = clamp(roughnessFactor, 0.14, 0.72);
+`;
+
+const FRAME_FRAG_ROUGHNESS_REPLACE_BALANCED = /* glsl */ `
+  float fwR = fwidth(vFrameUV.x);
+  float grainAttn = 1.0 - smoothstep(0.003, 0.012, fwR);
+  float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
+  roughnessGrain = mix(0.5, roughnessGrain, grainAttn);
+  float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
+  float roughnessFactor = uBaseRoughness
+    + (roughnessGrain - 0.5) * 0.030
+    + roughnessScratch * 0.015;
+  roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);
+`;
+
+const FRAME_FRAG_ROUGHNESS_REPLACE_NONE = /* glsl */ `
+  float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
+  float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
+  float roughnessFactor = uBaseRoughness
+    + (roughnessGrain - 0.5) * 0.030
+    + roughnessScratch * 0.015;
+  roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);
+`;
+
+// v0.69 M-04: per-fragment anisotropy direction perturbation (high preset only).
+// Replaces `#include <lights_physical_fragment>` so we can compute the
+// brushed direction from `vFrameUV` directly. This sidesteps the r166
+// native `anisotropyMap` path entirely (which would sample from the
+// standard `uv` channel — not aligned with our `aFrameUV` attribute) and
+// avoids the need to author a DataTexture. The base direction matches the
+// scalar `anisotropyRotation = π/2` orientation (vec2(0, 1)); a gentle
+// sinusoidal perturbation along the bar simulates the natural mid-frequency
+// wander of brushed grain.
+const FRAME_FRAG_LIGHTS_PHYSICAL_REPLACE = /* glsl */ `
+PhysicalMaterial material;
+material.diffuseColor = diffuseColor.rgb * ( 1.0 - metalnessFactor );
+
+vec3 dxy = max( abs( dFdx( nonPerturbedNormal ) ), abs( dFdy( nonPerturbedNormal ) ) );
+float geometryRoughness = max( max( dxy.x, dxy.y ), dxy.z );
+
+material.roughness = max( roughnessFactor, 0.0525 );
+material.roughness += geometryRoughness;
+material.roughness = min( material.roughness, 1.0 );
+
+#ifdef IOR
+material.ior = ior;
+#ifdef USE_SPECULAR
+float specularIntensityFactor = specularIntensity;
+vec3 specularColorFactor = specularColor;
+#ifdef USE_SPECULAR_COLORMAP
+specularColorFactor *= texture2D( specularColorMap, vSpecularColorMapUv ).rgb;
+#endif
+#ifdef USE_SPECULAR_INTENSITYMAP
+specularIntensityFactor *= texture2D( specularIntensityMap, vSpecularIntensityMapUv ).a;
+#endif
+material.specularF90 = mix( specularIntensityFactor, 1.0, metalnessFactor );
+#else
+float specularIntensityFactor = 1.0;
+vec3 specularColorFactor = vec3( 1.0 );
+material.specularF90 = 1.0;
+#endif
+material.specularColor = mix( min( pow2( ( material.ior - 1.0 ) / ( material.ior + 1.0 ) ) * specularColorFactor, vec3( 1.0 ) ) * specularIntensityFactor, diffuseColor.rgb, metalnessFactor );
+#else
+material.specularColor = mix( vec3( 0.04 ), diffuseColor.rgb, metalnessFactor );
+material.specularF90 = 1.0;
+#endif
+
+#ifdef USE_CLEARCOAT
+material.clearcoat = clearcoat;
+material.clearcoatRoughness = clearcoatRoughness;
+material.clearcoatF0 = vec3( 0.04 );
+material.clearcoatF90 = 1.0;
+#ifdef USE_CLEARCOATMAP
+material.clearcoat *= texture2D( clearcoatMap, vClearcoatMapUv ).x;
+#endif
+#ifdef USE_CLEARCOAT_ROUGHNESSMAP
+material.clearcoatRoughness *= texture2D( clearcoatRoughnessMap, vClearcoatRoughnessMapUv ).y;
+#endif
+material.clearcoat = saturate( material.clearcoat );
+material.clearcoatRoughness = max( material.clearcoatRoughness, 0.0525 );
+material.clearcoatRoughness += geometryRoughness;
+material.clearcoatRoughness = min( material.clearcoatRoughness, 1.0 );
+#endif
+
+#ifdef USE_DISPERSION
+material.dispersion = dispersion;
+#endif
+
+#ifdef USE_IRIDESCENCE
+material.iridescence = iridescence;
+material.iridescenceIOR = iridescenceIOR;
+#ifdef USE_IRIDESCENCEMAP
+material.iridescence *= texture2D( iridescenceMap, vIridescenceMapUv ).r;
+#endif
+#ifdef USE_IRIDESCENCE_THICKNESSMAP
+material.iridescenceThickness = ( iridescenceThicknessMaximum - iridescenceThicknessMinimum ) * texture2D( iridescenceThicknessMap, vIridescenceThicknessMapUv ).g + iridescenceThicknessMinimum;
+#else
+material.iridescenceThickness = iridescenceThicknessMaximum;
+#endif
+#endif
+
+#ifdef USE_SHEEN
+material.sheenColor = sheenColor;
+#ifdef USE_SHEENCOLORMAP
+material.sheenColor *= texture2D( sheenColorMap, vSheenColorMapUv ).rgb;
+#endif
+material.sheenRoughness = clamp( sheenRoughness, 0.07, 1.0 );
+#ifdef USE_SHEEN_ROUGHNESSMAP
+material.sheenRoughness *= texture2D( sheenRoughnessMap, vSheenRoughnessMapUv ).a;
+#endif
+#endif
+
+#ifdef USE_ANISOTROPY
+{
+  // v0.69 M-04: per-fragment anisotropy direction perturbation.
+  // Base direction matches the scalar 'anisotropyRotation = π/2'
+  // (i.e. tangent-space vec2(0, 1)). A bar-aligned sinusoidal wander
+  // (±0.18 rad ≈ ±10°) provides the directional micro-variance that
+  // brushed-metal sheen exhibits in reality without breaking the
+  // 1-D cross-bar invariant (vFrameUV.y is *not* used here).
+  float angleBase = 1.5707963; // π/2
+  float anglePert = sin(vFrameUV.x * 3.7 + uFrameSeed * 6.2831853) * 0.18;
+  float ang = angleBase + anglePert;
+  vec2 anisotropyV = vec2(cos(ang), sin(ang)) * length(anisotropyVector);
+  material.anisotropy = length( anisotropyV );
+  if( material.anisotropy == 0.0 ) {
+    anisotropyV = vec2( 1.0, 0.0 );
+  } else {
+    anisotropyV /= material.anisotropy;
+    material.anisotropy = saturate( material.anisotropy );
+  }
+  material.alphaT = mix( pow2( material.roughness ), 1.0, pow2( material.anisotropy ) );
+  material.anisotropyT = tbn[ 0 ] * anisotropyV.x + tbn[ 1 ] * anisotropyV.y;
+  material.anisotropyB = tbn[ 1 ] * anisotropyV.x - tbn[ 0 ] * anisotropyV.y;
+}
+#endif
 `;
 
 export class CanvasMaterial {
@@ -237,43 +432,87 @@ export class CanvasMaterial {
         'void main() {\n  vFrameUV = aFrameUV;'
       );
 
-      // 3. Prepend helper GLSL functions
-      shader.fragmentShader = FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
+      // 3. M-06: preset detail level compile-flag.  Three distinct programs
+      // (one per `frameDetailLevel`) — per-artwork seed remains a uniform.
+      let detailDefine = '';
+      if (preset.frameDetailLevel === 'high') {
+        detailDefine = '#define FRAME_DETAIL_HIGH 1\n';
+      } else if (preset.frameDetailLevel === 'balanced') {
+        detailDefine = '#define FRAME_DETAIL_BALANCED 1\n';
+      }
 
-      // 4. Procedural normal (tbn = Three.js r166 local mat3; do NOT use vTBN)
+      // 4. Prepend helper GLSL functions
+      shader.fragmentShader = detailDefine + FRAME_FRAG_FUNCTIONS + '\n' + shader.fragmentShader;
+
+      // 5. Procedural normal (tbn = Three.js r166 local mat3; do NOT use vTBN)
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <normal_fragment_maps>',
         FRAME_FRAG_NORMAL_REPLACE
       );
 
-      // 5. Roughness variation: fine grain running along brush direction.
-      // frmRoughnessGrain has high X frequency / low Y frequency = sparkle, no lines.
-      // Scratches deepen roughness very slightly where they exist.
+      // 6. Roughness variation: per-preset block.  Scratches deepen roughness
+      // very slightly where they exist.  M-05 attenuates the high-frequency
+      // grain term as pixel footprint grows (high/balanced only).
+      let roughnessReplace: string;
+      if (preset.frameDetailLevel === 'high') {
+        roughnessReplace = FRAME_FRAG_ROUGHNESS_REPLACE_HIGH;
+      } else if (preset.frameDetailLevel === 'balanced') {
+        roughnessReplace = FRAME_FRAG_ROUGHNESS_REPLACE_BALANCED;
+      } else {
+        roughnessReplace = FRAME_FRAG_ROUGHNESS_REPLACE_NONE;
+      }
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <roughnessmap_fragment>',
-         `float roughnessGrain = frmRoughnessGrain(vFrameUV, uFrameSeed);
-          float roughnessScratch = frmScratchLayer(vFrameUV, uFrameSeed);
-          float roughnessFactor = uBaseRoughness
-            + (roughnessGrain - 0.5) * 0.030
-            + roughnessScratch * 0.015;
-          roughnessFactor = clamp(roughnessFactor, 0.15, 0.70);`
+        roughnessReplace
       );
 
+      // 7. M-04: per-fragment anisotropy direction perturbation (high only).
+      // Replaces the entire `lights_physical_fragment` include with a copy
+      // that computes anisotropyV procedurally from vFrameUV instead of
+      // sampling an anisotropyMap from the (mis-aligned) standard uv channel.
+      if (preset.frameDetailLevel === 'high') {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <lights_physical_fragment>',
+          FRAME_FRAG_LIGHTS_PHYSICAL_REPLACE
+        );
+      }
+
+      // 8. M-01: extended baseline log — explicit knob record for diff/audit.
+      const cacheKey = 'frame-v0.69-' + preset.frameDetailLevel;
+      const fineGrainAmplitude =
+        preset.frameDetailLevel === 'high'
+          ? 0.006
+          : preset.frameDetailLevel === 'balanced'
+            ? 0.004
+            : 0.0;
+      const roughnessGrainAmp = preset.frameDetailLevel === 'high' ? 0.040 : 0.030;
       console.debug('[CanvasMaterial] frame-shader-compiled', {
-        version: 'v0.54',
+        version: 'v0.69',
         preset: preset.id,
+        frameDetailLevel: preset.frameDetailLevel,
         seed,
         frameRoughness: preset.frameRoughness,
         frameAnisotropy: preset.frameAnisotropy,
         frameClearcoat: preset.frameClearcoat,
+        // Baseline knobs (M-01):
+        normalGradientScale: 0.025,
+        fineGrainAmplitude,
+        roughnessGrainAmp,
+        scratchRoughnessMax: 0.015,
+        clusterGainEnabled: preset.frameDetailLevel === 'high',
+        anisoPerFragmentEnabled: preset.frameDetailLevel === 'high',
         coordinateMode: 'vertex-attribute-barUV',
         normalApproach: 'pure-1D-along-only-yConst-per-seed',
         roughnessGrain: 'pure-1D-along-direction',
+        cacheKey,
       });
     };
-    // Unique cache key per artwork seed so Three.js compiles distinct programs.
-    // v0.54: seed only changes a uniform, not compiled code → single cache key.
-    material.customProgramCacheKey = () => 'frame-v0.54';
+    // Unique cache key per frame detail level so Three.js compiles distinct
+    // programs for the three GLSL variants.  Per-artwork seed only updates a
+    // uniform → no re-compile per artwork.  Battery (`none`) compiles GLSL
+    // functionally equivalent to the v0.54 path.
+    const cacheKey = 'frame-v0.69-' + preset.frameDetailLevel;
+    material.customProgramCacheKey = () => cacheKey;
 
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;

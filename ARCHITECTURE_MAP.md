@@ -1,6 +1,76 @@
 # FREYRAUM architecture map
-> v0.58 shipped: topbar UI uniformity with left/right group structure, SVG icon button, accessible tooltip.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.73 shipped architecture update: active runtime frame baseline is v0.69 and docs are merge-synced.
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 frame-status architecture note (**shipped**)
+
+1. **Active frame runtime on this branch is v0.69 baseline.** `customProgramCacheKey` uses `frame-v0.69-*`.
+2. **v0.70+ macro lane is historical in this branch state.** No active `FRAME_MACRO_SCRATCH` branch in the runtime shader path.
+3. **Anti-banding invariant remains core architecture.** Keep FBM/noise normal-driving terms free from `barUV.y` inputs.
+4. **Status docs now reflect active runtime.** Merge-readiness requires release notes and architecture notes to describe current behavior, not historical intermediate states.
+
+## v0.70 macro-scratch architecture note (**shipped**)
+
+1. **Two-lane model is now live.** `CanvasMaterial` combines existing micro lane with a dedicated macro lane (`FRAME_MACRO_SCRATCH` high/balanced).
+2. **Per-lane attenuation is now explicit.** Micro lane uses aggressive attenuation; macro lane uses slower attenuation and fades later.
+3. **v0.54 anti-banding invariant is still non-negotiable.** No `barUV.y` in FBM/noise terms that feed normal gradients.
+4. **Frame direction control remains on `vFrameUV`.** High preset keeps GLSL anisotropy-direction perturbation in `lights_physical_fragment` replacement.
+5. **Roughness-first macro policy is implemented.** Macro readability is primarily roughness-driven; normal macro perturbation is bounded.
+6. **Preset envelope is explicit.** High = full macro; balanced = reduced macro; battery = macro off.
+7. **Compile/cache contract updated.** Frame shader cache key version is now `frame-v0.70-*`.
+8. **Diagnostics contract updated.** Compile logs include macro lane mode and tuning ranges.
+
+## v0.69 frame-shader invariants (updated)
+
+1. **Cross-bar gradient must remain zero.** Both `frmBrushedFbm` (primary) and `frmBrushedFbm2` (M-02 fine) take only `alongX` plus a seed-derived `yConst*` scalar. `barUV.y` is never an input to any FBM call → `dFBM/dY = 0`. Violation: any future code that adds a `barUV.y`-dependent term inside the FBMs would reintroduce v0.53-style banding.
+2. **Per-artwork seed = uniform-only.** `customProgramCacheKey()` depends on `frameDetailLevel`, not seed. Adding seed to the key would explode the Three.js program cache to one entry per artwork.
+3. **Preset compile-flag source of truth.** `QualityPreset.frameDetailLevel` (`'high' | 'balanced' | 'none'`) is the only place the detail-level branching is encoded. `onBeforeCompile` prepends `#define FRAME_DETAIL_HIGH|BALANCED` accordingly and chooses the roughness/lights-physical replacements based on it. Shader code must not read `preset.id` directly.
+4. **`anisotropyMap` is intentionally not used for the frame.** Three.js r166 native `anisotropyMap` samples from the standard `uv` channel which does not align with `aFrameUV`. Per-fragment direction perturbation is done by replacing `#include <lights_physical_fragment>` (high preset only) and computing `anisotropyV` from `vFrameUV` directly. Future contributors who reach for `material.anisotropyMap = ...` for frame work should re-read this section.
+5. **Cache-key versioning is mandatory on GLSL changes.** Bump `'frame-v0.69-…'` → `'frame-v0.70-…'` (etc.) whenever any compile-time GLSL changes, or Three.js will serve stale compiled binaries to existing materials.
+
+## v0.68 frame-detail plan architecture note (**planning/docs-only**)
+
+The next frame-realism pass must keep the current ownership split:
+
+- `CanvasMaterial`: frame shading model + shader injection points + frame diagnostics.
+- `ArtworkMesh`: frame geometry/tangents and `aFrameUV` vertex attribute generation.
+- `quality.ts`: preset-level cost/fidelity policy (`frameRoughness`, `frameAnisotropy`, `frameClearcoat`, bevel policy). Add `frameDetailLevel: 'high' | 'balanced' | 'none'` to drive `onBeforeCompile` `#define` selection.
+
+Invariants for the implementation pass (historical snapshot; v0.69 supersedes anisotropy guidance):
+
+1. **Preserve the v0.54 anti-banding constraint.** No `barUV.y` input to any FBM or noise call — every new function must use a seed-derived `yConst` constant so `dFBM/dY = 0` exactly.
+2. **Treat close-up detail as bounded multi-scale additions.** M-02 fine grain amplitude `0.006` (≤ 1:4 ratio vs primary `0.025`); M-03 cluster gain capped at `0.16`; M-04 anisotropy direction perturbation ±8%.
+3. **`customProgramCacheKey` must be versioned when GLSL changes.** Change from `'frame-v0.54'` → `'frame-v0.69-' + preset.id`. Use `#define FRAME_DETAIL_HIGH` / `FRAME_DETAIL_BALANCED` guards in `onBeforeCompile` to keep program count to three (high, balanced, battery) rather than one per seed.
+4. **Superseded by v0.69 audit delta.** Frame anisotropy direction for this codebase should remain in the `vFrameUV` GLSL injection path, because standard `uv`-based `anisotropyMap` sampling does not align with `aFrameUV` on frame geometry.
+5. **`fwidth(barUV.x)` is the AA guard for all new high-frequency terms.** `smoothstep(0.004, 0.015, fwidth(barUV.x))` covers the close-zoom to mid-distance transition without conditional branching.
+6. **Battery preset conservative.** No `#define` fine-grain path; `'frame-v0.69-battery'` compiles GLSL identical to v0.54 behavior.
+7. **Diagnostics before/after.** Extend `[CanvasMaterial] frame-shader-compiled` with `normalGradientScale`, `fineGrainAmplitude`, `clusterGainEnabled`, `anisoMapEnabled`, `cacheKey` for regression-detectable baseline records.
+
+## v0.68 staged startup-readiness architecture note
+
+The startup readiness contract is owned by one config module (`src/config/startup.ts`) and applied through `GalleryManager.configureStartupReadiness(...)` before `init()`. Invariants:
+
+- **Single feature flag.** `startupReadinessMode` (`full` | `entry-balanced` | `entry-minimal`) is the only rollout switch; resolved from `?startup=` → `localStorage` → default. `full` is the exact legacy/strict baseline.
+- **Entry target set = warm-order prefix.** `getStartupEntryTargets(0)` returns `getBudgetedWarmOrder(0).slice(0, entryTargetCount)`, so it is always a prefix of `warmOrder`. The post-reveal `continueWarmQueue` therefore resumes at `warmCursor = entryTargets.length` and warms exactly the deferred remainder — do not break this prefix relationship.
+- **Determinism.** Deferred artworks go through the existing `critical-now` / `near-next` / `background` lane scheduler; never rely on opportunistic idle callbacks alone for completion.
+- **Warm budget is centralised.** All warm-budget constants live in `WARM_BUDGET` (`src/config/startup.ts`); behaviour and diagnostics must read from there so they cannot diverge.
+- **Diagnostics schema stability.** The `boot / performance-gate` record (`schemaVersion: 1`) is the phase-comparison contract; extend additively and bump `schemaVersion` on breaking changes.
+
+## v0.65 clean-chrome affordance architecture note
+
+v0.65 keeps v0.64 architecture boundaries (DOM ownership in `ChromeVisibilityManager`, styling in `src/styles/main.scss`) and applies a visual-polish layer only: stronger cue tokens, higher idle pulse floor, subtle glass material treatment for strips, and reinforced static markers.
+
+Invariants remain unchanged:
+
+- clean-mode cue visibility must remain predictable (`:root[data-chrome-mode='clean']` selectors).
+- settle selector must stay specificity-safe against clean-mode pulse rules.
+- reduced-motion and forced-colors branches must continue to override decorative motion/appearance safely.
+
+## v0.64 clean-chrome affordance architecture note
+
+Hidden chrome affordances are owned by `ChromeVisibilityManager.createPeekElements()` and styled exclusively in `src/styles/main.scss`. The v0.64 invariant is: **do not animate whole-element opacity down to a value that multiplies RGBA tokens below visible contrast**. If future work changes strip/chevron alpha, calculate effective alpha as `rgbaAlpha × elementOpacity`.
+
+The bottom timeline affordance must remain a `column-reverse` stack (`.timeline-peek` at the safe-area bottom, `.timeline-chevron` centered above it). The settle class lives on `#app`; selectors that override clean-mode pulse must include enough specificity, currently `:root[data-chrome-mode='clean'] #app.affordance-settling ...` for settle and clean-mode-qualified selectors inside `prefers-reduced-motion`.
 
 ## v0.58 UI architecture additions
 

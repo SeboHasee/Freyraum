@@ -1,6 +1,7 @@
 # FREYRAUM lessons learned
-> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.73 shipped: merge-readiness docs sync; active runtime frame baseline documented as v0.69.
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
 
 ## 2026-05-23 — v0.58 implementation lessons
 

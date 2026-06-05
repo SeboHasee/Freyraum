@@ -1,6 +1,6 @@
 # Architecture prompt
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-05-22 (v0.56-A shipped: UX/readability/accessibility pass A delivered; v0.56-B follow-ups tracked).
+> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
 
 ## v0.29 current context
 

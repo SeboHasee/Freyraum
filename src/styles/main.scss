@@ -103,6 +103,43 @@
   // Timeline height ≈ 149px at bottom: 28px → top edge ≈ 177px. Using 200px
   // gives comfortable clearance and keeps zoom controls above the timeline too.
   --chrome-bottom: max(200px, calc(180px + var(--safe-bottom)));
+
+  // ---------------------------------------------------------------------------
+  // v0.60 — Clean Chrome auto-hide tokens
+  // ---------------------------------------------------------------------------
+  // Timing — Apple HIG "appear fast, disappear slow": reveal is snappy
+  // (ease-out, shorter), hide is gentle (ease-in, longer).
+  --dur-chrome-reveal: 0.28s;
+  --dur-chrome-hide: 0.52s;
+  --dur-peek-pulse: 2.0s;   // v0.66: slightly faster pulse catches the eye quicker
+  --ease-chrome-reveal: cubic-bezier(0, 0, 0.2, 1);   // Material LinearOutSlowIn
+  --ease-chrome-hide: cubic-bezier(0.4, 0, 1, 1);     // Material FastOutLinearIn
+
+  // Geometry — small travel when hiding adds depth without jarring displacement.
+  --chrome-timeline-hide-offset: 14px;    // translateY(+) when hidden
+  --chrome-infopanel-hide-offset: -22px;  // translateX(-) when hidden
+  --chrome-nav-hide-offset: 10px;         // translateY(+) when nav hidden (v0.62)
+
+  // Visual — translucent peek strips at the screen edges.
+  // v0.64: the pulse animates whole-element opacity, so the RGBA alpha must be
+  // high enough that `alpha × opacity-floor` remains visible on real artwork.
+  // v0.66: strips widened for better first-glance discoverability.
+  --chrome-peek-bg: rgba(255, 255, 255, 0.58);
+  --chrome-peek-width-v: 10px;    // left-edge (info panel) strip thickness
+  --chrome-peek-height-h: 14px;   // bottom-edge (timeline) strip thickness
+  --chrome-peek-length-v: min(260px, 26vh);   // left strip length
+  --chrome-peek-length-h: min(520px, 52vw);   // bottom strip length
+
+  // Touch — hit area larger than the visual strip (WCAG 2.5.8 ≥24px; 44px std).
+  --chrome-peek-touch-target: 44px;
+
+  // v0.62 — Micro-affordance chevrons: subtle directional cues at peek zones.
+  // v0.64: raised because element opacity is animated; effective alpha now
+  // remains visible at the pulse trough instead of multiplying down to ~0.06.
+  // v0.66: larger chevrons for quicker recognition at a glance.
+  --chrome-affordance-color: rgba(255, 255, 255, 0.90);
+  --chrome-affordance-size: 22px;        // chevron bounding box
+  --chrome-affordance-weight: 3.5px;     // stroke width
 }
 
 html,
@@ -436,6 +473,31 @@ button {
     background: var(--glass-bg-strong);
     box-shadow: var(--shadow-soft), 0 0 0 3px rgba(255, 255, 255, 0.8);
   }
+}
+
+@keyframes nav-ring-pulse {
+  0% {
+    box-shadow: var(--shadow-medium), 0 0 0 0 rgba(255, 255, 255, 0.4);
+  }
+  60% {
+    box-shadow: var(--shadow-medium), 0 0 0 12px rgba(255, 255, 255, 0);
+  }
+  100% {
+    box-shadow: var(--shadow-medium), 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+:root[data-nav-hint='active'] .nav-btn::before {
+  animation: nav-ring-pulse 1.6s ease-out 3;
+}
+
+:root[data-nav-hint='active'] .nav-btn:last-child::before {
+  animation-delay: 0.4s;
+}
+
+:root[data-nav-hint='active'] .nav-btn:hover::before,
+:root[data-nav-hint='active'] .nav-btn:focus-visible::before {
+  animation: none;
 }
 
 // =============================================================================
@@ -1660,7 +1722,423 @@ button {
 }
 
 // =============================================================================
-// v0.11 — Device-capability mirror selectors
+// v0.60 — CLEAN CHROME AUTO-HIDE
+// =============================================================================
+// The timeline (bottom) and info panel (left) are hidden by default and reveal
+// on pointer proximity, keyboard focus, or touch tap. `ChromeVisibilityManager`
+// toggles the `.is-revealed` class and sets `data-chrome-mode` on <html>
+// (mirrored early by PreferencesStore so there is no flash of visible chrome on
+// load). Safe-area handling is already provided by the `--safe-*` tokens on the
+// base `.timeline` / `.info-panel` rules, so it is not repeated here.
+
+:root[data-chrome-mode='clean'] {
+  // ── Timeline (bottom edge) ──────────────────────────────────────────────
+  .timeline {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(var(--chrome-timeline-hide-offset));
+    transition:
+      opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
+      transform var(--dur-chrome-hide) var(--ease-chrome-hide);
+  }
+
+  .timeline.is-revealed {
+    opacity: 1;
+    pointer-events: auto;
+    // Keep the existing horizontal centering transform from the base rule.
+    transform: translateX(-50%) translateY(0);
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  // ── Info panel (left edge) ──────────────────────────────────────────────
+  .info-panel {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(var(--chrome-infopanel-hide-offset));
+    transition:
+      opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
+      transform var(--dur-chrome-hide) var(--ease-chrome-hide);
+  }
+
+  .info-panel.is-revealed {
+    opacity: 1;
+    transform: translateX(0);
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  // Compact (phone-portrait) info panel becomes scrollable when revealed.
+  .info-panel--compact.is-revealed {
+    pointer-events: auto;
+  }
+
+  // Preserve the navigation content-swap fade (`.is-transitioning`, added by
+  // InfoPanel.update) even while the panel is force-revealed. Without this
+  // higher-specificity rule the `.is-revealed` opacity:1 would defeat the fade.
+  .info-panel.is-revealed.is-transitioning {
+    opacity: 0;
+    transform: translateX(0) translateY(16px);
+  }
+
+  // ── Nav controls (bottom-center) — v0.62 auto-hide ──────────────────────
+  // Nav arrows hide in clean mode and reveal on bottom proximity, keyboard
+  // focus, ArrowLeft/ArrowRight, or when the onboarding hint fires.
+  .nav-controls {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(var(--chrome-nav-hide-offset));
+    transition:
+      opacity var(--dur-chrome-hide) var(--ease-chrome-hide),
+      transform var(--dur-chrome-hide) var(--ease-chrome-hide);
+  }
+
+  .nav-controls.is-revealed {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  // Focusable children: keep the browser's scroll-into-view clear of the fixed
+  // chrome so a Tab landing never lands behind a panel edge (WCAG 2.4.11).
+  .timeline a,
+  .timeline button {
+    scroll-margin-bottom: 80px;
+  }
+  .info-panel a,
+  .info-panel button {
+    scroll-margin-left: 320px;
+  }
+}
+
+// ── Peek hit areas (invisible; tappable only on coarse pointers) ───────────
+.timeline-peek-hit {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--chrome-peek-length-h);
+  height: var(--chrome-peek-touch-target);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  z-index: 101;
+  pointer-events: none;
+  contain: layout paint;
+
+  @media (pointer: coarse) {
+    pointer-events: auto;
+  }
+}
+
+.info-panel-peek-hit {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  width: var(--chrome-peek-touch-target);
+  height: var(--chrome-peek-length-v);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  z-index: 101;
+  pointer-events: none;
+  contain: layout paint;
+
+  @media (pointer: coarse) {
+    pointer-events: auto;
+  }
+}
+
+// ── Visual peek strips ─────────────────────────────────────────────────────
+.timeline-peek {
+  width: 100%;
+  height: var(--chrome-peek-height-h);
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.68), var(--chrome-peek-bg));
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  backdrop-filter: blur(10px) saturate(125%);
+  margin-bottom: var(--safe-bottom);
+  contain: layout paint;
+  will-change: opacity;
+  // v0.63 dual-contrast: thin dark hairline keeps the white strip perceptible on
+  // light/cream painting edges; a faint light hairline keeps it readable on
+  // mid-tone edges (layered-shadow technique, GPU-composited, no WebGL cost).
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.18),
+    0 -1px 0 rgba(255, 255, 255, 0.14),
+    0 0 12px rgba(181, 215, 255, 0.22);
+}
+
+.info-panel-peek {
+  width: var(--chrome-peek-width-v);
+  height: 100%;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.68), var(--chrome-peek-bg));
+  -webkit-backdrop-filter: blur(10px) saturate(125%);
+  backdrop-filter: blur(10px) saturate(125%);
+  margin-left: var(--safe-left);
+  contain: layout paint;
+  will-change: opacity;
+  // v0.63 dual-contrast: dark hairline on the outer (right) edge + faint light
+  // hairline on the inner (left) edge for visibility against any artwork.
+  box-shadow:
+    1px 0 0 rgba(0, 0, 0, 0.18),
+    -1px 0 0 rgba(255, 255, 255, 0.14),
+    0 0 12px rgba(181, 215, 255, 0.22);
+}
+
+@keyframes peek-pulse {
+  0%, 100% { opacity: 0.88; }   // v0.66: raised floor — strip is clearly visible at rest
+  50%      { opacity: 1; }      // full opacity at peak
+}
+
+// ── v0.63 Post-hint "settle" animation ─────────────────────────────────────
+// Replaces peek-pulse briefly after the onboarding hint finishes. Starts at an
+// elevated opacity (matching hint-active salience) and decays back to the
+// peek-pulse floor (0.82). The final frame matches peek-pulse's 0%/100% exactly
+// so the handoff back to peek-pulse is seamless (no frame jump).
+@keyframes peek-settle {
+  0%   { opacity: 1; }      // peak — draws the eye to the persistent cue
+  100% { opacity: 0.88; }   // matches peek-pulse 0%/100% — seamless handoff (v0.66)
+}
+
+// Peek strips only breathe in clean mode; hidden entirely when chrome is pinned.
+:root[data-chrome-mode='clean'] {
+  .timeline-peek,
+  .info-panel-peek {
+    animation: peek-pulse var(--dur-peek-pulse) ease-in-out infinite;
+  }
+}
+
+:root[data-chrome-mode='visible'] {
+  .timeline-peek-hit,
+  .info-panel-peek-hit {
+    display: none;
+  }
+}
+
+// ── v0.62 Micro-affordance chevrons ────────────────────────────────────────
+// Small directional cue elements appended inside the peek hit areas by
+// ChromeVisibilityManager. They breathe with the peek-pulse animation and
+// clearly indicate the direction in which the hidden panel will slide in.
+// All chevrons are aria-hidden so screen readers are not distracted.
+.timeline-chevron {
+  // Upward-pointing chevron (^) built from CSS borders so no icon font is
+  // needed and it scales cleanly with the token.
+  width: var(--chrome-affordance-size);
+  height: var(--chrome-affordance-size);
+  border-top: var(--chrome-affordance-weight) solid var(--chrome-affordance-color);
+  border-left: var(--chrome-affordance-weight) solid var(--chrome-affordance-color);
+  transform: rotate(45deg) translateY(2px);
+  border-radius: 1px;
+  flex-shrink: 0;
+  margin-bottom: 0;
+  // v0.63 dual-contrast: subtle dark halo keeps the white chevron visible on
+  // bright artwork edges. drop-shadow follows the border shape (not the box).
+  filter:
+    drop-shadow(0 1px 1px rgba(0, 0, 0, 0.50))
+    drop-shadow(0 -1px 0 rgba(255, 255, 255, 0.22))
+    drop-shadow(0 0 8px rgba(181, 215, 255, 0.28));
+}
+
+.info-panel-chevron {
+  // Rightward-pointing chevron (>) pointing toward the info panel slide-in.
+  width: var(--chrome-affordance-size);
+  height: var(--chrome-affordance-size);
+  border-top: var(--chrome-affordance-weight) solid var(--chrome-affordance-color);
+  border-right: var(--chrome-affordance-weight) solid var(--chrome-affordance-color);
+  transform: rotate(45deg) translateX(-2px);
+  border-radius: 1px;
+  flex-shrink: 0;
+  margin-left: 0;
+  // v0.63 dual-contrast: subtle dark halo for visibility on bright edges.
+  filter:
+    drop-shadow(1px 0 1px rgba(0, 0, 0, 0.50))
+    drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.22))
+    drop-shadow(0 0 8px rgba(181, 215, 255, 0.28));
+}
+
+// ── v0.63 Static micro-handle bars (decoupled secondary signifier) ──────────
+// A permanently-visible static cue that does NOT pulse, so at least one marker
+// is always perceptible even when peek-pulse is at its 0%/100% opacity trough.
+// Attached to the peek-hit container (not the rotated chevron, not the animated
+// strip) so it is fully decoupled from the breathing animation.
+.timeline-peek-hit::after,
+.info-panel-peek-hit::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.90);   // static — never multiplied by pulse opacity
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.timeline-peek-hit::after {
+  // Horizontal bar centered above the bottom strip.
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 18px);
+  transform: translateX(-50%);
+  width: 32px;
+  height: 3px;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.56),
+    0 -1px 0 rgba(255, 255, 255, 0.22),
+    0 0 8px rgba(181, 215, 255, 0.24);
+}
+
+.info-panel-peek-hit::after {
+  // Vertical bar centered beside the left strip.
+  top: 50%;
+  left: calc(var(--safe-left) + 18px);
+  transform: translateY(-50%);
+  width: 3px;
+  height: 32px;
+  box-shadow:
+    1px 0 1px rgba(0, 0, 0, 0.56),
+    -1px 0 0 rgba(255, 255, 255, 0.22),
+    0 0 8px rgba(181, 215, 255, 0.24);
+}
+
+// The static bars must not appear when chrome is pinned visible.
+:root[data-chrome-mode='visible'] {
+  .timeline-peek-hit::after,
+  .info-panel-peek-hit::after {
+    display: none;
+  }
+}
+
+// Chevrons breathe in sync with the peek strip pulse in clean mode.
+:root[data-chrome-mode='clean'] {
+  .timeline-chevron,
+  .info-panel-chevron {
+    animation: peek-pulse var(--dur-peek-pulse) ease-in-out infinite;
+  }
+}
+
+// Hidden when chrome is always visible (no need for affordance when visible).
+:root[data-chrome-mode='visible'] {
+  .timeline-chevron,
+  .info-panel-chevron {
+    display: none;
+  }
+}
+
+// ── v0.63 Post-hint "settle" phase ─────────────────────────────────────────
+// ChromeVisibilityManager toggles the `affordance-settling` class on appRoot
+// after the nav onboarding hint finishes. While active, peek strips and
+// chevrons run the one-shot `peek-settle` animation (0.55 → 0.15, forwards),
+// briefly elevating salience to direct the eye to the persistent idle cues,
+// then handing back to peek-pulse seamlessly. The static handle bars are not
+// animated; they stay at their resting opacity throughout.
+:root[data-chrome-mode='clean'] #app.affordance-settling {
+  .timeline-peek,
+  .info-panel-peek,
+  .timeline-chevron,
+  .info-panel-chevron {
+    animation: peek-settle 2s ease-out forwards;
+  }
+}
+
+// ── Touch (coarse pointer): keep the timeline discoverable ──────────────────
+// Touch users cannot hover, so the timeline stays at low opacity baseline and a
+// tap (handled in JS) brings it to full. The info panel stays fully hidden and
+// is revealed by tapping its left-edge peek strip.
+:root[data-hover='false'][data-chrome-mode='clean'] {
+  .timeline {
+    opacity: 0.32;
+    transform: translateX(-50%);
+    pointer-events: auto;
+  }
+
+  .timeline.is-revealed {
+    opacity: 1;
+    transition: opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal);
+  }
+
+  .info-panel {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
+// ── Reduced motion: instant transitions, no breathing animation ─────────────
+// WCAG 2.3.3 — the hide/reveal slide and peek pulse are non-essential.
+@media (prefers-reduced-motion: reduce) {
+  :root[data-chrome-mode='clean'] {
+    .timeline,
+    .info-panel,
+    .nav-controls {
+      transition-duration: 0.001ms;
+    }
+  }
+
+  :root[data-chrome-mode='clean'] .timeline-peek,
+  :root[data-chrome-mode='clean'] .info-panel-peek {
+    animation: none;
+    opacity: 1;  // v0.64: RGBA token controls transparency; do not multiply it down
+  }
+
+  // Chevrons remain static (no pulse) but stay visible at a comfortable opacity.
+  :root[data-chrome-mode='clean'] .timeline-chevron,
+  :root[data-chrome-mode='clean'] .info-panel-chevron {
+    animation: none;
+    opacity: 1;  // v0.64: keep static cue visible under reduced motion
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));  // v0.64: dual-contrast retained
+  }
+
+  // The static handle bars never animate, so they are already correct here; no
+  // settle is ever triggered under reduced motion (the hint is skipped).
+  .timeline-peek-hit::after,
+  .info-panel-peek-hit::after {
+    opacity: 1;
+  }
+
+  :root[data-nav-hint='active'] .nav-btn::before {
+    animation: none;
+  }
+}
+
+// ── Forced colors: make peek strips and chevrons visible in high-contrast mode
+@media (forced-colors: active) {
+  .timeline-peek,
+  .info-panel-peek {
+    background: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+    box-shadow: none;  // v0.63: dual-contrast shadow not needed with ButtonText fill
+  }
+
+  // Use ButtonText for chevron borders so they remain visible in all themes.
+  .timeline-chevron,
+  .info-panel-chevron {
+    border-color: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+    filter: none;  // v0.63: forced-colors renders its own contrast; drop-shadow removed
+  }
+
+  // v0.63: static handle bars rendered as ButtonText for high-contrast visibility.
+  .timeline-peek-hit::after,
+  .info-panel-peek-hit::after {
+    background: ButtonText;
+    opacity: 1;
+    forced-color-adjust: none;
+    box-shadow: none;
+  }
+
+  :root[data-nav-hint='active'] .nav-btn::before {
+    animation: none;
+  }
+}
 // =============================================================================
 // `applyDeviceCaps()` in `src/utils/device.ts` writes the following data
 // attributes onto <html>:
@@ -1752,6 +2230,22 @@ button {
     visibility: hidden;
     position: absolute;
     pointer-events: none;
+  }
+  // v0.60 — clean-chrome `.is-revealed` raises specificity and would otherwise
+  // re-enable pointer events on the hidden timeline; keep it fully inert here.
+  :root[data-chrome-mode='clean'] .timeline.is-revealed,
+  :root[data-hover='false'][data-chrome-mode='clean'] .timeline {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+  // v0.62 — short landscape: nav is the only navigation mechanism (timeline is
+  // hidden). Force nav visible regardless of clean-mode auto-hide so users can
+  // always navigate. WCAG SC 2.5.1 — keyboard/pointer equivalence preserved.
+  :root[data-chrome-mode='clean'] .nav-controls {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
   }
   .hint-text {
     display: none;
@@ -1930,6 +2424,18 @@ button {
     color: rgba(255 255 255 / 0.95);
   }
 
+  // v0.63 — discoverability note: tells keyboard/AT users that moving the mouse
+  // to a screen edge reveals the otherwise-hidden chrome (closes the gap for
+  // users who never see the visual peek affordances).
+  &__hint {
+    margin: 1rem 0 0;
+    padding-top: 0.85rem;
+    border-top: 1px solid rgba(255 255 255 / 0.12);
+    font-size: 0.78rem;
+    line-height: 1.4;
+    color: rgba(255 255 255 / 0.62);
+  }
+
   &__close {
     position: absolute;
     top: 0.75rem;
@@ -2003,14 +2509,77 @@ button {
 }
 
 // =============================================================================
-// v0.57 — High-contrast / forced-colors support (B-2)
+// v0.66 — Topbar chrome-toggle buttons (Info / Zeitleiste)
+// Pill-shaped icon+label buttons that offer a central, always-visible path to
+// reveal the hidden Info panel and Timeline, so users don't need to discover
+// the edge affordances first. Hidden when chrome is always-visible (the panels
+// are already pinned open in that mode).
 // =============================================================================
+.topbar__chrome-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-soft);
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  &:hover {
+    background: var(--glass-bg-strong);
+    border-color: var(--glass-border-strong);
+    box-shadow: var(--shadow-medium);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-soft), 0 0 0 3px var(--focus-ring);
+  }
+
+  // On compact phone layouts, show only the icon to save horizontal space.
+  @at-root :root[data-layout-tier='phone-small'] &,
+  :root[data-layout-tier='phone-portrait'] & {
+    padding: 0 10px;
+
+    .topbar__chrome-btn-label {
+      display: none;
+    }
+  }
+}
+
+// Chrome-toggle buttons are redundant when panels are pinned always-visible.
+:root[data-chrome-mode='visible'] .topbar__chrome-btn {
+  display: none;
+}
 
 @media (forced-colors: active) {
   // Restore button borders that our custom styles suppress
   .nav-btn,
   .zoom-btn,
   .topbar__help-btn,
+  .topbar__chrome-btn,
   .loading-start-btn,
   .prefs__toggle,
   .audio-btn {

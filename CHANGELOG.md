@@ -1,6 +1,498 @@
 # CHANGELOG
-> v0.59 shipped: hover-state float fix, keyboard-help contrast fix (WCAG 2.2 AA).
-> Last full markdown audit: 2026-05-23 (v0.59 shipped).
+> v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — Merge-readiness docs sync (2026-06-05, **shipped**)
+
+### Status
+
+**Shipped.** Documentation and release-status correction only. Runtime code unchanged from current branch baseline.
+
+### Summary
+
+- **Current runtime frame path clarified:** branch runs the v0.69 frame baseline (`customProgramCacheKey: frame-v0.69-*`) with no v0.70+ macro lane in `CanvasMaterial`.
+- **Release notes corrected for merge readiness:** top-level status docs now explicitly state that v0.70/v0.71/v0.72 frame work is historical and not active in current runtime.
+- **Cross-doc consistency restored:** `README.md`, `FINDINGS.md`, `plan.md`, `ARCHITECTURE_MAP.md`, and `docs/HANDOFF.md` now align on one status statement.
+- **Validation rerun:** `npm run lint` ✅, `npm run build` ✅.
+
+### Files
+
+- `CHANGELOG.md`
+- `README.md`
+- `FINDINGS.md`
+- `plan.md`
+- `ARCHITECTURE_MAP.md`
+- `docs/HANDOFF.md`
+
+## v0.72 — Natural-scratch frame model (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Runtime shader changes validated (lint ✅, build ✅).
+
+### Summary
+
+Addresses "flat and unnatural" frame appearance introduced in v0.71. The v0.71 shiny-scratch model (subtractive roughness) created mirror-like bright strips on a dull-ish base (roughness 0.40/0.48), which read as artificial rather than natural brushed aluminum.
+
+- **Scratch model reverted to additive:** Scratch marks now add a small amount of roughness (+0.025/+0.018 micro, +0.045/+0.032 macro) rather than subtracting it. Scratches disrupt the surface coating → slightly more matte, not shinier.
+- **Normal gradient scale:** `0.085` → `0.12` (41% stronger) — brushed texture is more visibly three-dimensional.
+- **Base roughness (quality.ts):** high `0.40` → `0.23`; balanced `0.48` → `0.31` — restores the satin-aluminum sheen that was lost in v0.71.
+- **Clearcoat (quality.ts):** high `0.12` → `0.28`; balanced `0.08` → `0.16` — a stronger gloss top layer adds visible specular depth and the layered look of anodized/lacquered aluminum.
+- **Roughness grain amplitude:** high `±0.07` → `±0.05`; balanced `±0.05` → `±0.035`; battery `±0.04` → `±0.03` — tighter variation keeps the satin base uniform.
+- **Anisotropy direction perturbation:** `±23°` → `±12.6°` — more consistent directional grain; less scattered shimmer.
+- **Cache key:** `frame-v0.71-*` → `frame-v0.72-*` to force shader recompile.
+
+### Files
+
+- `src/materials/CanvasMaterial.ts`
+- `src/config/quality.ts`
+- `CHANGELOG.md`
+
+## v0.71 — UE5-inspired metal detail visibility uplift (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Runtime shader changes implemented and validated (lint ✅, build ✅).
+
+### Summary
+
+All changes are in `CanvasMaterial.ts` and `quality.ts`. The core insight from Unreal Engine 5 brushed-metal materials is that **scratches expose raw shiny metal** (lower roughness) rather than making the surface rougher — this creates the dramatic specular-highlight "catch the light" effect at macro viewing distance.
+
+- **Normal gradient scale:** `0.025` → `0.085` (3.4×). Brushed grain ridges/fibers now produce a clearly visible normal tilt (max ~24° instead of ~7°).
+- **Fine grain amplitude** (high): `0.006` → `0.022`; (balanced): `0.004` → `0.016` — both ~3.7× stronger.
+- **Macro scratch normal amplitude** (high): `0.006` → `0.025`; (balanced): `0.003` → `0.014` — both ~4× stronger.
+- **Shiny-scratch roughness model (UE5):** Scratch contributions are now **subtracted** from base roughness instead of added. Scratches expose lower-roughness metal, creating bright specular highlights:
+  - High: micro `−0.065`, macro `−0.30`; roughness floor lowered to `0.06`.
+  - Balanced: micro `−0.044`, macro `−0.20`; floor `0.08`.
+  - Battery: `−0.035`; floor `0.10`.
+- **Roughness grain modulation** (high): `±0.02` → `±0.07`; (balanced): `±0.015` → `±0.05` — clearly visible surface micro-variation.
+- **Scratch presence/density:** micro threshold `1.8%` → `3.2%`; macro `4%` → `7%` — roughly 2× more scratch occurrences.
+- **Scratch line geometry:** micro width 2×, inten 2×; macro inten `0.055..0.155` (was `0.030..0.090`).
+- **Macro layer multipliers:** `(a*0.20 + b*0.16 + c*0.13)` → `(a*0.32 + b*0.26 + c*0.20)`, cap `0.35` (was `0.20`).
+- **Anisotropy direction perturbation** (high): `±10°` → `±23°` — wider directional fiber shimmer band for visible metallic grain sheen.
+- **Base roughness in quality config:** high `0.28` → `0.40`; balanced `0.38` → `0.48` — higher base roughness amplifies the contrast of shiny scratch highlights.
+- **Cache key:** `frame-v0.70-*` → `frame-v0.71-*` to force shader recompile.
+
+### Files
+
+- `src/materials/CanvasMaterial.ts`
+- `src/config/quality.ts`
+- `CHANGELOG.md`
+
+
+
+## v0.70 — Macro-visible micro-scratch uplift (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Runtime shader changes implemented and validated.
+
+### Summary
+
+- **S-01 macro lane added.** `CanvasMaterial` now includes a dedicated macro scratch lane (`frmScratchLayerMacro`) with lower densities (`2.0..7.0`), wider profile floor (`0.0016..0.0040`), and stronger per-line intensity.
+- **S-02 wear-zone masking added.** New `frmWearZoneMask(alongX, seed)` gates macro scratches through a low-frequency, smoothly interpolated zone hash so wear is clustered but non-blocky.
+- **S-03 roughness-vs-normal split.** Macro readability is roughness-led (`high` strongest, `balanced` reduced), while macro normal contribution stays bounded to avoid engraved-groove artifacts.
+- **S-04 split attenuation windows.** Micro lane keeps aggressive fade; macro lane uses a slower fade window (`1 - smoothstep(0.006, 0.024, fwidth(vFrameUV.x))`) to survive medium-close views without distance shimmer.
+- **S-05 anti-banding invariants preserved.** No `barUV.y` was introduced into FBM/noise paths that drive normal gradients.
+- **S-06 compile/cache updates.** Added `FRAME_MACRO_SCRATCH` compile flag for high/balanced presets and bumped cache key from `frame-v0.69-*` to `frame-v0.70-*`.
+- **S-07 diagnostics extended.** `[CanvasMaterial] frame-shader-compiled` now logs macro lane enabled/mode, density range, width range, attenuation window, and v0.70 cache key. Added explicit macro-state debug log for reduced/off modes.
+- **S-08 validation.** `npm run lint` ✅, `npm run build` ✅.
+
+### Files
+
+- `src/materials/CanvasMaterial.ts`
+- `src/config/quality.ts`
+- `plan.md`
+- `FINDINGS.md`
+- `ARCHITECTURE_MAP.md`
+- `CHANGELOG.md`
+- `README.md`
+- `docs/HANDOFF.md`
+
+## v0.69 — Metal frame close-up realism uplift (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implements the v0.68 frame-detail plan (M-01..M-08) with two audit deltas applied before code: anisotropy direction is computed in GLSL from `vFrameUV` (not via `material.anisotropyMap`) to sidestep the standard-`uv` channel mismatch with the frame's `aFrameUV` attribute, and battery `frameRoughness` documentation aligned to the runtime value (`0.60`).
+
+### Summary
+
+- **M-01 baseline diagnostic.** `[CanvasMaterial] frame-shader-compiled` now records `version: 'v0.69'`, `frameDetailLevel`, `normalGradientScale`, `fineGrainAmplitude`, `roughnessGrainAmp`, `scratchRoughnessMax`, `clusterGainEnabled`, `anisoPerFragmentEnabled`, and `cacheKey`.
+- **M-02 multi-scale grain.** New `frmBrushedFbm2` (4× base frequency, 1/4 amplitude, identical 1-D invariant) drives a fine-detail normal term on `high` (amp `0.006`) and `balanced` (amp `0.004`).
+- **M-03 clustered scratches (high only).** Coarse per-zone hash (`floor(barUV.x * 3.0 + 1.0)`) groups scratches into wear families with `2.5×` presence peak in ~40 % of zones; the `+0.015` scratch roughness cap is unchanged.
+- **M-04 per-fragment anisotropy direction (high only).** GLSL injection in `lights_physical_fragment` rotates the brushed direction by `±0.18 rad ≈ ±10°` along `vFrameUV.x` while preserving the cross-bar invariant.
+- **M-05 derivative-aware AA.** `fwidth(vFrameUV.x)` attenuates the fine-grain normal and the roughness-grain modulation toward neutral at mid distance, eliminating shimmer with no preset branching at the call site.
+- **M-06 preset compile-flag branching.** Added `QualityPreset.frameDetailLevel: 'high' | 'balanced' | 'none'`. `#define FRAME_DETAIL_HIGH|BALANCED` selects compiled detail level; `customProgramCacheKey` is now `'frame-v0.69-' + frameDetailLevel` (three programs total, not one per artwork seed).
+- **M-07 validation.** `npm run lint` ✅, `npm run build` ✅. Bundle: 731.54 → 739.45 kB (+1.1 %), gzip 192.07 → 194.22 kB (+1.1 %). Cross-bar `dFBM/dY = 0` invariant preserved.
+- **M-08 documentation.** This entry; `plan.md`, `FINDINGS.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md`, and `README.md` synced.
+
+### Files
+
+- `src/materials/CanvasMaterial.ts` — multi-scale FBM, cluster scratches, per-preset roughness blocks, per-fragment anisotropy injection, versioned cache key, extended baseline log.
+- `src/config/quality.ts` — new `frameDetailLevel` field; `high → 'high'`, `balanced → 'balanced'`, `battery → 'none'`.
+- `plan.md`, `CHANGELOG.md`, `FINDINGS.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md`, `README.md` — synced.
+
+## v0.68 — Metal frame close-up realism plan (2026-06-04, **superseded by v0.69**)
+
+### Status
+
+**Planning/docs only.** No runtime code changes shipped in this update.
+
+### Summary
+
+- Audited current frame shader/material path (`CanvasMaterial`, `ArtworkMesh`, quality presets) with focus on close-zoom realism limits. Key findings: purely 1-D FBM (v0.54 invariant correct), `customProgramCacheKey = 'frame-v0.54'`, no `anisotropyMap` set, roughness grain amplitude `±0.030`.
+- Performed online research for anisotropic brushed-metal best practices in realtime PBR. Key findings: Three.js r166 (installed) natively supports `material.anisotropyMap`; `fwidth(barUV.x)` is the correct derivative-aware AA guard for procedural normals; multi-scale FBM with 1:4 amplitude ratio is the standard close-up metal technique.
+- **Enhanced plan in `plan.md`** (v0.68 frame-detail section): added concrete GLSL code for M-02 fine-grain FBM (`frmBrushedFbm2`), M-03 clustered scratch layer, M-05 `fwidth` AA integration; added TypeScript API pattern for M-04 `anisotropyMap` `DataTexture` generation; added `customProgramCacheKey` versioning strategy (`'frame-v0.54'` → `'frame-v0.69-{preset}'`); added `#define FRAME_DETAIL_HIGH / BALANCED` compile-flag strategy for preset branching.
+- Documented findings and architecture/handoff implications across all markdown files.
+
+### Files (docs only)
+
+- `plan.md` — v0.68 frame-detail section enhanced with concrete GLSL + TypeScript coding guidance
+- `FINDINGS.md` — extended with code-verified findings and API research details
+- `ARCHITECTURE_MAP.md` — invariants updated with API specifics and cache-key strategy
+- `CHANGELOG.md`
+- `README.md`
+- `docs/HANDOFF.md`
+
+## v0.68 — Staged startup readiness (v0.67 performance plan, Phase 2) (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass). Executes the actionable runtime portions of the v0.67 performance plan (P-04, P-06, P-07). The offline KTX2/Basis tier pipeline (P-05) remains the next, offline-tooling phase — see `plan.md` (it requires offline asset re-encoding that cannot be executed/validated in a runtime-only sandbox).
+
+### Problem addressed
+
+After the v0.67 Phase 1 quality lock, the dominant remaining startup cost was strategy breadth, not adaptive quality: the entry CTA waited for a strict **full-gallery** contract — every artwork's PBR set preloaded, GPU-warmed, and final-path-warmed under the loading overlay. For large customer galleries this scales linearly and delays first interaction. Online research (web.dev INP, Three.js KTX2 guidance, NN/g progressive loading) is consistent: enable interaction as soon as the active + near view is ready, then stream the remainder while yielding per frame.
+
+### Changes — staged startup readiness (P-04, P-06, P-07)
+
+**`src/config/startup.ts` (new)**
+- Single source of truth for the startup readiness contract and warm-budget constants.
+- `StartupReadinessMode` = `full` (legacy strict) | `entry-balanced` (new default) | `entry-minimal`, resolved from a single feature flag: `?startup=` query param → `localStorage['freyraum:startup-readiness']` → default. Fail-safe (never throws).
+- `computeEntryTargetCount(...)` derives the pre-entry warm count from mode + device tier + critical radius + artwork count (replaces the `MAX_SAFE_INTEGER` cap). `WARM_BUDGET` centralises the per-frame warm-budget constants so behaviour and diagnostics cannot diverge.
+
+**`src/gallery/GalleryManager.ts`**
+- `configureStartupReadiness({ mode, entryTargetCount })` + `getStartupEntryTargets()` + `isStagedStartup`.
+- `init()` eagerly preloads PBR only for the entry target set in entry modes; every other artwork with a texture set is queued deterministically to the `near-next` lane (it streams in after entry, never blocking the CTA). `full` mode preloads the whole gallery exactly as before.
+- `getFullGalleryReadinessSummary()` is mode-aware: `preloadMode` is now `strict | staged | bounded-fallback`, and reports `deferredArtworkCount` (artworks intentionally deferred to background lanes — expected, not a contract failure).
+
+**`src/main.ts`**
+- Pre-entry GPU warm + final-path warm now cover only the entry target set (`fullWarmTargets = getStartupEntryTargets(0)`); in `full` mode this is the whole gallery (unchanged). The remaining artworks are warmed after entry by the existing budgeted `continueWarmQueue` (per-frame ms + batch guards), which previously ran as a no-op.
+- The unresolved-artwork gate treats deferred artworks as expected (`info`) in staged/bounded modes and a failure (`warn`) only in strict mode.
+- New stable-schema `boot / performance-gate` diagnostic (P-07): startup readiness mode, entry/deferred warm counts, no-auto-quality-writes assertion, startup ms to CTA, post-reveal frame budget, and readiness ledger snapshot — phase-comparable evidence for rollout decisions.
+
+### Acceptance criteria met
+
+1. User quality preset remains fully manual/authoritative (unchanged from Phase 1). ✅
+2. Entry readiness no longer requires full-gallery full-path warming (entry modes). ✅
+3. Remaining artworks complete deterministically after entry via background lanes with per-frame budget guards. ✅
+4. `full` mode preserves the legacy strict contract exactly as a one-flag rollback. ✅
+5. Phase-comparable quantitative diagnostics emitted for every startup (`performance-gate`). ✅
+
+### Deferred to the next (offline) phase
+
+- **P-05 — offline artwork tier pipeline (source → `thumb`/`mid`/`full` + KTX2/Basis with mipmaps).** Requires offline asset re-encoding (KTX2/Basis tooling) and a per-artwork tier manifest with fail-safe runtime fallback. Tracked in `plan.md`; not implementable/validatable in a runtime-only sandbox.
+
+
+## v0.67 — Performance stabilization + no automatic quality changes (2026-06-04, **Phase 1 shipped**)
+
+### Status
+
+**Phase 1 shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass). The large-artwork asset-pipeline / staged-loading work (P-04–P-06) and rollout validation (P-07) remain planning-only and are deferred to future phased PRs — see `plan.md`.
+
+### Problem addressed
+
+Performance settings were changing automatically at runtime (adaptive preset downgrades) and on first run (startup heuristic). The customer wants the selected quality to be authoritative, and performance work to focus on real rendering/asset optimizations rather than hidden preset changes.
+
+### Changes — quality lock (P-01, P-02, P-03)
+
+**`src/utils/AdaptiveQualityController.ts`**
+- Added a `locked` constructor flag (default `false`) and an `isLocked` getter.
+- In locked mode, `evaluate()` no longer mutates the preset or returns a downgrade. When sustained frame-budget pressure is detected it emits a throttled `quality / locked-pressure` warning (preset, rolling ms/fps, ema, severe-frame count) and returns `null`, keeping diagnostics visibility without changing quality.
+
+**`src/main.ts`**
+- Adaptive controller is now constructed locked via `AUTOMATIC_QUALITY_CHANGES_ENABLED = false`, so the render loop never calls `preferences.setQuality(...)` from performance events. Removed the `adaptiveQualityWriteInFlight` write-flag plumbing; every preference quality change is now treated as user-initiated (manual).
+- First-run startup heuristic is now diagnostics-only: it keeps the deterministic `DEFAULT_QUALITY_PRESET` and logs `quality / startup-suggestion-suppressed` with what the legacy heuristic would have suggested, instead of applying it. Stored user choices (`hasStoredQuality()`) are unaffected.
+
+### Acceptance criteria met (Phase 1)
+
+1. Runtime never changes the user quality preset automatically. ✅
+2. First-run startup does not silently switch preset. ✅
+3. Performance mitigation now prefers internal optimization over hidden preset downgrades; diagnostics surface pressure without changing quality. ✅ (asset-pipeline gains tracked under P-04–P-06)
+
+
+## v0.66 — Affordance discoverability (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass).
+
+### Problem addressed
+
+Edge affordances (peek strips + chevrons) are too subtle for first-time users who have no prior knowledge they exist. Research (NNGroup, Material Design, Apple HIG) consistently shows hidden-navigation UI needs either (a) larger, higher-contrast cues or (b) a clearly visible secondary entry point that doesn't rely on edge discovery.
+
+### Changes
+
+**CSS — bigger, more visible edge cues (`src/styles/main.scss`)**
+- `--chrome-peek-height-h` `7px → 14px` — bottom strip is now unmissable at a glance
+- `--chrome-peek-width-v` `7px → 10px` — left strip noticeably wider
+- `--chrome-peek-length-h` `min(360px, 36vw) → min(520px, 52vw)` — wider bottom strip
+- `--chrome-peek-length-v` `min(220px, 22vh) → min(260px, 26vh)` — taller left strip
+- `--chrome-affordance-size` `16px → 22px` — larger chevrons
+- `--chrome-affordance-weight` `2.8px → 3.5px` — thicker chevron strokes
+- `--chrome-affordance-color` `0.84 → 0.90` — brighter chevron fill
+- `--chrome-peek-bg` alpha `0.52 → 0.58`
+- `--dur-peek-pulse` `2.6s → 2.0s` — slightly quicker breathing catches the eye faster
+- `peek-pulse` floor `0.82 → 0.88` — strip is visibly present even at animation trough
+- `peek-settle` final frame aligned to `0.88` (seamless handoff)
+- Static handle bars grown from `20×2px → 32×3px` (both axes)
+
+**Topbar secondary entry points (`src/ui/Topbar.ts` + `src/main.ts`)**
+- Added `infoBtn` + `timelineBtn` pill-shaped glass buttons in the topbar right group
+- Each button shows a recognisable SVG icon + short text label ("Info" / "Zeitleiste")
+- On compact phone layouts the text label is hidden (icon-only to save space)
+- Buttons hidden in always-visible chrome mode (panels are already pinned open)
+- Buttons are aria-labelled and keyboard-focusable
+- Wired in `main.ts`: `topbar.onInfoClick → chromeVisibility.forceReveal('info-panel')` and `topbar.onTimelineClick → chromeVisibility.forceReveal('timeline')`
+
+**Forced-colors support**
+- `.topbar__chrome-btn` added to the `forced-colors: active` block alongside existing buttons
+
+### Files
+
+- `src/styles/main.scss` — token updates, `.topbar__chrome-btn` style
+- `src/ui/Topbar.ts` — `infoBtn`, `timelineBtn`, `onInfoClick`, `onTimelineClick`
+- `src/main.ts` — wires topbar buttons to `chromeVisibility.forceReveal`
+- `CHANGELOG.md` — this entry
+
+### Validation
+
+- `npm run lint` ✅, `npm run build` ✅
+
+
+
+## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime CSS and validated (`npm run lint` + `npm run build` pass).
+
+### Research-informed intent (Apple-style)
+
+- Keep content first, controls second: cues stay small and edge-bound.
+- Improve discoverability via clearer hierarchy, not noisy UI.
+- Use subtle material/light cues (frosted + soft glow) and gentle motion.
+- Respect reduced-motion and forced-colors paths already in place.
+
+### Changes
+
+- Raised affordance visibility tokens:
+  - `--chrome-peek-bg` `0.42 → 0.52`
+  - `--chrome-peek-width-v` / `--chrome-peek-height-h` `6px → 7px`
+  - `--chrome-affordance-color` `0.72 → 0.84`
+  - `--chrome-affordance-size` `14px → 16px`
+  - `--chrome-affordance-weight` `2.4px → 2.8px`
+- Increased idle pulse floor in `peek-pulse` (`0.74 → 0.82`) and aligned `peek-settle` final frame to `0.82`.
+- Added subtle glass treatment to peek strips (`linear-gradient` + `backdrop-filter: blur(10px) saturate(125%)`) for a more premium, Apple-like material feel.
+- Strengthened dual-contrast shadows and added soft cool glow accents on strips, chevrons, and static handles.
+- Increased static-handle geometry (`18×1.5 → 20×2` and `1.5×18 → 2×20`) for clearer non-animated signifiers.
+
+### Files
+
+- `src/styles/main.scss` — v0.65 affordance prominence/polish pass.
+- `README.md`, `CHANGELOG.md`, `FINDINGS.md`, `plan.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md` — v0.65 documentation sync.
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build` ✅.
+- After edits: `npm run lint`, `npm run build` ✅.
+
+## v0.64 — Visual affordance hardening (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass; browser DOM/style smoke confirms clean-mode affordances are mounted, visible, animated, and correctly laid out).
+
+### Root cause analysis
+
+The affordance elements were **not missing**: `ChromeVisibilityManager.createPeekElements()` created `.timeline-peek-hit`, `.info-panel-peek-hit`, `.timeline-peek`, `.info-panel-peek`, `.timeline-chevron`, and `.info-panel-chevron`. They were **active** in clean mode and intentionally hidden only in visible/pinned chrome mode. The failure was visual/CSS:
+
+1. The pulse animated whole-element `opacity` (`0.15 → 0.40`) while the backgrounds/borders were already low-alpha RGBA tokens (`0.22` strip, `0.42` chevron). At the trough the actual effective alpha was roughly `0.22 × 0.15 = 0.033` for strips and `0.42 × 0.15 = 0.063` for chevrons — effectively invisible.
+2. The bottom timeline hit area used default row flex. Because `.timeline-peek` was `width: 100%`, the chevron was pushed beside/squeezed by the strip instead of reading as a centered cue above the bottom edge.
+3. The post-hint settle selector `.affordance-settling .timeline-peek` and reduced-motion overrides had lower specificity than `:root[data-chrome-mode='clean'] .timeline-peek`, so the intended settle/reduced-motion states could be defeated by the clean-mode pulse rule.
+
+### Changes
+
+- Raised effective visual floors by increasing RGBA tokens and changing `peek-pulse` to `0.74 → 1` (small lift instead of fade-out).
+- Increased strip thickness/length and chevron size/stroke for retina-safe visibility.
+- Fixed bottom affordance layout with `column-reverse`, centered alignment, and a visible gap between chevron and strip.
+- Strengthened static handle bars and dual-contrast shadows so a non-animated marker survives every pulse frame and bright/cream artwork edges.
+- Changed settle selector to `:root[data-chrome-mode='clean'] #app.affordance-settling ...`, qualified reduced-motion animation overrides with clean-mode specificity, and aligned `peek-settle` with the new pulse floor (`1 → 0.74`).
+- Added `peek-affordances-created` diagnostics logging when the visual affordance DOM is mounted.
+
+### Files
+
+- `src/styles/main.scss` — v0.64 visibility token/floor/layout/specificity fixes.
+- `src/ui/ChromeVisibilityManager.ts` — diagnostics log for mounted visual affordances.
+- `README.md`, `CHANGELOG.md`, `FINDINGS.md`, `plan.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md` — documentation sync.
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build` ✅.
+- After code edits: `npm run lint`, `npm run build` ✅.
+- Browser smoke: clean-mode affordance DOM exists; bottom/left cues have `display:flex`, `animation: peek-pulse`, visible opacity floor, and corrected bottom layout.
+
+## v0.63 — Hidden affordance salience + transparency balance (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass).
+
+### Summary
+
+v0.63 makes the hidden-control affordances reliably discoverable on any artwork — including the bright/cream painting edges where the white-only cues previously vanished — while keeping the chrome footprint minimal so the painting stays the focal point.
+
+### Changes
+
+- **P-01 — Perceptibility floor raised.** `--chrome-peek-bg` 0.16 → 0.22, `--chrome-affordance-color` 0.30 → 0.42, `--chrome-affordance-size` 10 → 11px, `--chrome-affordance-weight` 1.5 → 1.8px. The `peek-pulse` keyframe floor 0.12 → 0.15 and peak 0.32 → 0.40 (NN/g ≥0.20 peripheral-detection threshold).
+- **P-02 — Decoupled static handle bars + dual-contrast.** New always-visible static micro-handle bars rendered as `::after` on the non-rotated, non-animated `.timeline-peek-hit` / `.info-panel-peek-hit` containers, so at least one marker is perceptible even at the animation trough. Peek strips gain a layered dual-contrast `box-shadow` (dark + light hairline) and chevrons gain a `drop-shadow` halo for visibility on both light and dark edges.
+- **P-03 — Post-hint "settle" phase.** After the nav onboarding hint completes, `ChromeVisibilityManager.triggerAffordanceSettle()` adds an `affordance-settling` class to the app root that swaps peek strips/chevrons onto a one-shot `peek-settle` animation (0.55 → 0.15, `forwards`), guiding the eye to the persistent cues, then handing back to `peek-pulse` seamlessly. Reduced-motion safe (no-op) and cleaned up on `dispose()`.
+- **P-04 — Contrast resilience.** Reduced-motion static floors raised (peek 0.18 → 0.22, chevrons 0.25 → 0.30) with `drop-shadow` retained; forced-colors block resets `box-shadow`/`filter` and renders the new static bars as `ButtonText`.
+- **E-1 (folded backlog #4) — Keyboard-help discoverability note.** Added a German note to the `Tastaturkürzel` dialog explaining that moving the mouse to a screen edge reveals the hidden chrome, closing the discoverability gap for keyboard/AT users.
+
+### Files
+
+- `src/styles/main.scss` — tokens, `peek-pulse`/`peek-settle` keyframes, static handle bars, dual-contrast shadows, settle class, reduced-motion + forced-colors hardening, keyboard-help hint style.
+- `src/ui/ChromeVisibilityManager.ts` — `settleTimer` field, `triggerAffordanceSettle()`, `onHintFinished` wiring, `dispose()` cleanup.
+- `src/ui/KeyboardHelp.ts` — discoverability hint paragraph.
+
+### Validation
+
+- `npm run lint` — pass (zero new warnings).
+- `npm run build` — pass (zero TypeScript errors).
+
+### As-built notes
+
+- Static bars were attached to the peek-hit containers (not the chevron `::after` as originally sketched) because the chevrons are rotated 45° and carry the pulse animation, which would have rotated and re-animated the "static" cue.
+- Dual-contrast uses a layered dark+light shadow per the 2026-06-04 research refresh (more robust on mid-tone edges than a single dark line).
+
+### Deferred beyond v0.64
+
+Session-aware adaptive cue intensity, artwork-edge luminance sampling, `@property` settle decay, touch-first wider reveal envelope, and diagnostics reveal-history export remain backlog after the v0.64 emergency visibility hardening. See `plan.md § v0.64` for the shipped fix and its v0.65 backlog.
+
+
+## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide behavior (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Implemented in runtime code and validated (`npm run lint` + `npm run build` pass).
+
+### Summary
+
+v0.62 completes the discoverability and progressive-disclosure follow-up. Nav arrows now participate in the same auto-hide lifecycle as the timeline and info panel, with a clean hint-then-hide onboarding flow. Micro-chevron affordances are added at both peek zones to give users an explicit directional cue that hidden UI surfaces exist and can be revealed.
+
+### Changes
+
+- **P-01 — Micro-affordance chevrons (CSS + DOM):**
+  - Added `--chrome-affordance-color`, `--chrome-affordance-size`, `--chrome-affordance-weight` tokens.
+  - `ChromeVisibilityManager.createPeekElements()` now appends `.timeline-chevron` (∧ upward) and `.info-panel-chevron` (› rightward) decorative elements inside each peek hit area.
+  - Chevrons breathe with the existing `peek-pulse` animation in clean mode; static opacity 0.25 under `prefers-reduced-motion`; `ButtonText` border color under `forced-colors`.
+  - Hidden in visible mode (no need for affordance when chrome is always shown).
+
+- **P-02 — Nav controls as third managed chrome surface:**
+  - `ChromeVisibilityManager`: added `'nav-controls'` to `PanelId`, `'hint' | 'keyboard'` to `RevealReason`, `NAV_TRIGGER_BAND_PX: 220` and `NAV_HIDE_DELAY_MS: 2000` to `CHROME_CONFIG`.
+  - New public method `registerNavControls(navEl, navControls)` registers nav as a third managed panel with bottom-proximity, keyboard-focus, ArrowLeft/ArrowRight reveal channels.
+  - `onPointerMove` extended to check nav zone with the extended bottom band.
+  - `onKeyDown` reveals nav on ArrowLeft/ArrowRight and schedules hide after `NAV_HIDE_DELAY_MS`.
+  - `onViewportLeave` now iterates `panels.keys()` (auto-includes nav).
+  - `updateZone` accepts optional `hideDelayMs` for per-panel hide timing.
+  - CSS: `[data-chrome-mode='clean'] .nav-controls { opacity: 0; pointer-events: none; transform: translateX(-50%) translateY(var(--chrome-nav-hide-offset)); }` and `.nav-controls.is-revealed { opacity: 1; ... }` with reveal/hide transitions.
+  - Short-height landscape override keeps nav fully visible (it is the only navigation surface in that context).
+
+- **P-03 — Nav hint lifecycle: hint → reveal → ring-pulse → re-hide:**
+  - `NavigationControls`: added `onHintStart()` + `onHintFinished()` callback registration, `hintAnimationTimer` (fires at 3 × 1.6 s + 300 ms buffer to auto-dismiss hint and trigger re-hide), `HINT_ANIM_DURATION_MS` constant, `setHiddenMode()` API.
+  - `dismissHint()` now clears `hintAnimationTimer` and immediately calls `onHintFinishedCallback`.
+  - `dispose()` cleans up `hintAnimationTimer`.
+  - Flow: nav starts hidden → 5 s idle → `onHintStart` fires (ChromeVis reveals nav) → ring-pulse animation × 3 → `onHintFinished` fires (ChromeVis schedules re-hide after 2 s) → nav returns to hidden idle.
+
+- **P-04 — Accessibility + resilience hardening:**
+  - `shouldHide()` guard is unchanged (checks `!pointerInZone && !pointerInPanel && !focusActive`); nav inherits this focus-containment protection.
+  - Keyboard reachability: nav reveals before/during keyboard focus (`focusin` → `reveal('nav-controls', 'focus')`).
+  - `aria-live` artwork announcement path from v0.61 unchanged.
+  - Reduced-motion: `.nav-controls` transition-duration collapsed to 0.001ms; chevrons static; nav-ring-pulse suppressed (already was).
+  - Forced-colors: peek strips and chevrons painted with `ButtonText`.
+
+- **P-05 — Diagnostics events:**
+  - `nav-hint-start`, `nav-hint-dismiss`, `nav-keyboard-reveal`, `nav-auto-hide` diagnostic events added via `this.diag.debug(...)` in `ChromeVisibilityManager`.
+  - All reveal/hide paths already emit `reveal`/`hide` debug events with `panelId` and `reason` payload.
+
+- **`src/main.ts`**: Added `chromeVisibility.registerNavControls(chromeRefs.navControls!, navControls)` immediately after `chromeVisibility.init()`.
+
+### Online research enhancements applied
+
+- **Hint-then-hide pattern validated** (NNGroup, Google Photos, Apple Photos): users in immersive gallery contexts prefer minimal chrome with discoverable triggers; one-shot animation + hide is the recommended onboarding pattern.
+- **Chevron affordances recommended** (NNGroup progressive disclosure): persistent directional cues outperform pulse-only strips for first-time discoverability of hidden panels.
+- **Micro-affordance opacity tuned** at 0.30 default with `peek-pulse` breathing — below the distraction threshold but above the "invisible" threshold for peripheral vision.
+
+### Validation
+
+- `npm run lint` — pass
+- `npm run build` — pass
+- Manual smoke matrix: mouse proximity, keyboard ArrowLeft/ArrowRight, Tab focus into nav, onboarding hint flow, always-show override, reduced-motion flag, short-height landscape.
+
+## v0.61 — Discoverability + navigation-arrow cue follow-up (2026-06-04, **shipped**)
+
+### Status
+
+Shipped in runtime code and validated.
+
+### Summary
+
+Implemented the full v0.61 follow-up after the v0.60 clean-chrome rollout:
+
+- **P-01 — Strengthen peek strips:** Increased strip thickness (`3px → 4px`) and pulse amplitude (`0.10/0.26 → 0.12/0.32`) for clearer discoverability.
+- **P-02 — Nav arrow idle-hint system:** Added one-shot `nav-ring-pulse` onboarding hint with 5s idle delay and persistent dismissal (`localStorage` key `freyraum-nav-hint-seen`), including dismissal on click, keyboard arrows, hover, or focus.
+- **P-03 — Remove forced info-panel reveal on navigation:** Removed `chromeVisibility.forceReveal('info-panel')` from `handleNavigate`, so descriptions stay hidden until explicit reveal intent.
+- **P-04 — Screen-reader artwork announcement:** Added a dedicated `#freyraum-artwork-status` `aria-live="polite"` announcer updated on every navigation with a double-rAF mutation pattern.
+
+### Documentation updates
+
+- `plan.md`: v0.61 status promoted to shipped with implementation closeout summary.
+- `FINDINGS.md`: v0.61 section promoted to shipped and extended with as-built verification notes.
+- `README.md`: top status banner updated to reflect v0.61 as current shipped state.
+
+### Validation
+
+- `npm run lint` — pass
+- `npm run build` — pass
+
+## v0.60 — Clean Chrome: Auto-Hide Timeline & Info Panel (2026-06-04, **shipped**)
+
+### Status
+
+**Shipped.** Design research verified against live sources; plan finalized after correcting code-snippet/API mismatches against the actual codebase; implemented, runtime-verified in a browser, and `npm run lint` + `npm run build` pass.
+
+### Summary
+
+v0.60 introduces progressive-disclosure chrome: the timeline (bottom strip) and the painting info panel (left side) are hidden by default, revealing smoothly when the user moves the pointer near the respective screen edge or gives them keyboard focus. A subtle peek strip at each edge signals discoverability. A new "Bedienleiste immer einblenden" preference toggle in the settings panel restores the previous always-visible behaviour for users who prefer it.
+
+### Changes
+
+- **New:** `src/ui/ChromeVisibilityManager.ts` — proximity detection, dwell timers (`HIDE_DELAY_MS` 2.5s), focus tracking, touch tap fallback with iOS back-swipe dead zone, viewport-leave handling, Escape dismiss, `aria-live` screen-reader region, decorative peek strips, `forceReveal()` on navigation, full `dispose()`.
+- **Extend:** `src/utils/preferences.ts` — add `alwaysShowChrome` preference (persisted); mirror `data-chrome-mode="clean|visible"` to `<html>` from `applyToDocument()` (set during construction, so there is no flash of visible chrome before JS init).
+- **Extend:** `src/styles/main.scss` — clean-chrome design tokens; `[data-chrome-mode='clean']` auto-hide rules for `.timeline` / `.info-panel` with asymmetric reveal/hide easing; `.is-revealed` overrides; `.timeline-peek` / `.info-panel-peek` strips + 44px touch hit areas; `peek-pulse` keyframe; `[data-hover='false']` coarse-pointer rules; reduced-motion, forced-colors, and short-height-landscape guards; navigation `.is-transitioning` fade-compat rule.
+- **Extend:** `src/ui/PreferencesPanel.ts` — add "Bedienleiste immer einblenden" toggle (after the contrast toggle), with in-place patch support.
+- **Minor extend:** `src/main.ts` — init `ChromeVisibilityManager` after chrome refs resolve; `forceReveal('info-panel')` on navigation; `dispose()` in cleanup.
+
+### Plan finalization corrections (verified against the real codebase)
+
+- `preferences.ts` uses the existing private `emit()` + module-level `diagnostics` (not the plan's `this.diag`/`this.persist()`/`this.notify()`); `data-chrome-mode` is mirrored in `applyToDocument()`.
+- `ScopedDiagnostics` methods take `(event, message, data?)` — three arguments; all manager log calls supply a message string.
+- `PreferencesPanel` is build-once + `patchPanel()`; the toggle was added to that pattern (the plan's `createRow()` helper does not exist).
+- `.sr-only` already exists; safe-area is already absorbed by the `--safe-*` tokens on the base `.timeline` / `.info-panel` rules, so the plan's duplicate `env()` block was intentionally omitted to avoid conflicts.
+- `app.html` already includes `viewport-fit=cover` (verify-only).
+
+---
 
 ## v0.59 — Hover-state float fix + keyboard-help contrast (2026-05-23, **shipped**)
 

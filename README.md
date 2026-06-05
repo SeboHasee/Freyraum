@@ -1,6 +1,100 @@
 # Freyraum
-> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-05-23 (v0.58 shipped).
+> v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — Merge-readiness status sync (2026-06-05, **shipped**)
+
+Current status: **shipped and validated (docs/status sync only)**.
+
+- Current runtime frame path on this branch is **v0.69 baseline** (`frame-v0.69-*` cache key; no v0.70+ macro scratch lane active).
+- v0.70/v0.71/v0.72 entries remain in changelog history but are **not** the active runtime state on this branch.
+- Top-level status docs were synchronized to remove merge-risking status drift.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+
+## v0.70 — Macro-visible micro-scratch uplift (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Added a dedicated macro scratch lane in `CanvasMaterial` (densities `2.0..7.0`, width floor `0.0016..0.0040`, stronger line intensity) while keeping the existing micro lane.
+- Added low-frequency wear-zone masking (`frmWearZoneMask`) so macro wear appears in natural clustered zones instead of uniformly everywhere.
+- Split lane attenuation windows: micro lane keeps aggressive fade; macro lane uses a slower fade window to stay readable at medium-close distance and still collapse safely at distance.
+- Shifted macro readability to roughness-first coupling with bounded normal influence to avoid carved-groove artifacts.
+- Added compile-time macro flag (`FRAME_MACRO_SCRATCH`) for high/balanced only, bumped shader cache key to `frame-v0.70-*`, and extended compile diagnostics with macro-specific fields.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- References: `plan.md § v0.70`, `FINDINGS.md § v0.70`, `CHANGELOG.md § v0.70`.
+
+## v0.68 — Metal frame close-up realism plan (2026-06-04, **planning/docs-only**)
+
+Current status: **planned, not yet shipped**.
+
+- Technical audit of frame shader path completed: `CanvasMaterial` uses 1-D procedural FBM (v0.54 anti-banding invariant), `customProgramCacheKey: 'frame-v0.54'`, no `anisotropyMap`.
+- Online research established the anisotropy/derivative constraints; v0.69 audit later clarified frame direction control should stay in `vFrameUV` GLSL (not `anisotropyMap`) for this geometry path.
+- Concrete implementation plan with GLSL-oriented guidance documented in `plan.md` (M-02 fine grain, M-03 clustered scratches, M-05 derivative-aware AA, M-06 preset compile flags; M-04 superseded by v0.69 GLSL-direction approach).
+- Runtime behavior unchanged; staged startup readiness from shipped v0.68 remains active.
+- References: `plan.md § v0.68 — Metal frame close-up realism uplift`, `FINDINGS.md § v0.68`.
+
+## v0.68 — Staged startup readiness (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- The entry CTA ("Galerie betreten") no longer waits for every artwork to be GPU-warmed; it waits for the active artwork + critical view (+ a bounded near-next subset). Remaining artworks stream in deterministically after entry.
+- One feature flag controls the behavior: `?startup=entry-balanced` (default), `entry-minimal`, or `full` (legacy strict, one-flag rollback). Also settable via `localStorage['freyraum:startup-readiness']`.
+- User-selected quality stays fully manual (unchanged from v0.67); a stable-schema `performance-gate` diagnostic records startup evidence each load.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- Next phase (offline): KTX2/Basis tier pipeline + per-artwork `thumb`/`mid`/`full` manifest (P-05).
+
+## v0.65 — Visual affordance prominence + polish (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Affordance strips/chevrons/handles are now slightly stronger and clearer while staying minimal.
+- Edge cues got subtle glass material polish (`linear-gradient` + `backdrop-filter`) for a more premium look.
+- Motion stays calm and guided: idle floor increased (`peek-pulse` floor `0.82`) with seamless settle handoff.
+- Reduced-motion and forced-colors support remain intact.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+
+## v0.64 — Visual affordance hardening (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Root cause fixed: v0.63 animated whole-element `opacity` while the strip/chevron colors were already translucent RGBA values, multiplying the effective alpha down to near-invisible levels at the pulse trough.
+- Bottom affordance layout fixed: the timeline cue now uses a column-reverse flex stack, so the chevron is centered above the bottom strip instead of being squeezed sideways by the `width: 100%` strip.
+- Post-hint settle and reduced-motion fixed: override selectors now beat the clean-mode pulse selector, so settle actually runs and reduced-motion actually stops the pulse.
+- Static handle bars and dual-contrast shadows were strengthened so a non-animated cue remains visible on both bright and dark artwork edges.
+- Diagnostics now log when visual peek affordances are mounted.
+- Validation: `npm run lint` ✅, `npm run build` ✅, browser DOM/style smoke ✅.
+
+## v0.63 — Hidden affordance salience + transparency balance (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Affordance perceptibility floor raised (peek strip, chevron color/size/stroke, and the `peek-pulse` keyframe) so hidden-control cues clear the peripheral-detection threshold without adding clutter.
+- New always-visible **static micro-handle bars** at both peek zones, decoupled from the breathing pulse, so at least one marker stays visible even at the animation trough.
+- **Dual-contrast** layered shadows on peek strips and chevrons make the white cues visible on bright/cream painting edges as well as dark ones.
+- **Post-hint "settle"** phase briefly elevates the idle affordances after the nav onboarding hint completes, guiding the eye to the persistent cues, then decays back smoothly. Reduced-motion safe.
+- Keyboard-help dialog now notes that moving the mouse to a screen edge reveals the hidden chrome (discoverability for keyboard/AT users).
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+
+## v0.62 — Hidden affordance signifiers + nav-arrow post-pulse hide (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Nav arrows now auto-hide in clean mode and participate in the same proximity/focus/keyboard reveal lifecycle as the timeline and info panel.
+- Micro-chevron affordances (∧ and ›) added at bottom and left-edge peek zones — persistent directional cues that survive reduced-motion and forced-colors modes.
+- Nav onboarding hint: hint-then-hide flow — arrows reveal for the 3-pulse ring animation, then return to hidden idle (or dismiss immediately on user interaction).
+- `ChromeVisibilityManager` extended to manage nav as a third panel: `registerNavControls()`, ArrowLeft/ArrowRight keyboard reveal channel, extended bottom proximity band.
+- Short-height landscape override keeps nav permanently visible (it is the only navigation mechanism in that context).
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+
+## v0.61 — Hidden-UI discoverability + nav-arrow idle hint (2026-06-04, **shipped**)
+
+Current status: **shipped and validated**.
+
+- Info panel no longer auto-reveals when the artwork changes; description stays hidden until explicit user intent.
+- A one-shot nav-arrow onboarding hint now pulses after idle delay and dismisses permanently after first nav discovery (`localStorage` persisted).
+- Screen-reader users now receive an explicit `aria-live` announcement for artwork changes, preserving accessibility after auto-reveal removal.
+- Peek-strip discoverability cues were strengthened (slightly thicker strips + stronger pulse).
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 
 ## v0.58 — Topbar UI Uniformity & Premium 2026 Polish (2026-05-23, **shipped**)
 
