@@ -1,6 +1,16 @@
 # FREYRAUM customer handoff guide
-> v0.70 shipped handoff update: macro-visible micro-scratch uplift implemented in runtime and validated.
-> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
+> v0.73 shipped handoff update: merge-readiness sync clarifies current active runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — handoff status: merge-readiness docs sync (2026-06-05, shipped)
+
+Customer-facing status: **shipped and validated (documentation/status sync)**.
+
+- Current active frame runtime on this branch is the v0.69 baseline (`frame-v0.69-*` cache key).
+- v0.70/v0.71/v0.72 entries remain historical release notes and are not the active runtime frame path in this branch state.
+- Top-level docs were synchronized to ensure handoff and changelog messaging now match runtime behavior.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
+- References: `../CHANGELOG.md § v0.73`, `../FINDINGS.md § v0.73`, `../plan.md § v0.73`.
 
 ## v0.70 — handoff status: macro-visible micro-scratch uplift (2026-06-04, shipped)
 

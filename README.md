@@ -1,6 +1,15 @@
 # Freyraum
-> v0.70 shipped: macro-visible micro-scratch uplift implemented in runtime shader code and synced across docs.
-> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
+> v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — Merge-readiness status sync (2026-06-05, **shipped**)
+
+Current status: **shipped and validated (docs/status sync only)**.
+
+- Current runtime frame path on this branch is **v0.69 baseline** (`frame-v0.69-*` cache key; no v0.70+ macro scratch lane active).
+- v0.70/v0.71/v0.72 entries remain in changelog history but are **not** the active runtime state on this branch.
+- Top-level status docs were synchronized to remove merge-risking status drift.
+- Validation: `npm run lint` ✅, `npm run build` ✅.
 
 ## v0.70 — Macro-visible micro-scratch uplift (2026-06-04, **shipped**)
 

@@ -1,6 +1,27 @@
 # FINDINGS
-> v0.70 implementation findings added: macro-visible micro-scratch uplift shipped in runtime shader code.
-> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
+> v0.73 findings added: merge-readiness docs sync clarifies current runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — Merge-readiness docs sync (shipped 2026-06-05) — findings
+
+### Code-verified findings
+
+1. **Current runtime baseline is v0.69 frame path.**
+   - `CanvasMaterial` cache key remains `frame-v0.69-*`.
+   - v0.70+ macro-lane symbols (`frmScratchLayerMacro`, `FRAME_MACRO_SCRATCH`) are not present in active shader code.
+2. **Top-level docs previously drifted from runtime.**
+   - Key status docs still declared v0.70/v0.72 as active, while runtime had already been reverted to v0.69 baseline.
+3. **Merge-risk status drift is now corrected.**
+   - Key status docs now state the same active runtime baseline and validation state.
+
+### Validation evidence
+
+- `npm run lint` ✅
+- `npm run build` ✅
+
+### Outcome
+
+Repository is now merge-ready from a release-status documentation perspective: active runtime state and release messaging are aligned.
 
 ## v0.70 — Macro-visible micro-scratch uplift (shipped 2026-06-04) — findings
 

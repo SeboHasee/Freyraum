@@ -1,6 +1,28 @@
 # CHANGELOG
-> v0.72 shipped: natural-scratch frame model, lower roughness, stronger clearcoat.
-> Last full markdown audit: 2026-06-04 (v0.72 shipped).
+> v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — Merge-readiness docs sync (2026-06-05, **shipped**)
+
+### Status
+
+**Shipped.** Documentation and release-status correction only. Runtime code unchanged from current branch baseline.
+
+### Summary
+
+- **Current runtime frame path clarified:** branch runs the v0.69 frame baseline (`customProgramCacheKey: frame-v0.69-*`) with no v0.70+ macro lane in `CanvasMaterial`.
+- **Release notes corrected for merge readiness:** top-level status docs now explicitly state that v0.70/v0.71/v0.72 frame work is historical and not active in current runtime.
+- **Cross-doc consistency restored:** `README.md`, `FINDINGS.md`, `plan.md`, `ARCHITECTURE_MAP.md`, and `docs/HANDOFF.md` now align on one status statement.
+- **Validation rerun:** `npm run lint` ✅, `npm run build` ✅.
+
+### Files
+
+- `CHANGELOG.md`
+- `README.md`
+- `FINDINGS.md`
+- `plan.md`
+- `ARCHITECTURE_MAP.md`
+- `docs/HANDOFF.md`
 
 ## v0.72 — Natural-scratch frame model (2026-06-04, **shipped**)
 

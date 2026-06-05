@@ -1,6 +1,13 @@
 # FREYRAUM architecture map
-> v0.70 shipped architecture update: macro-visible micro-scratch lane is implemented in runtime shader code.
-> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
+> v0.73 shipped architecture update: active runtime frame baseline is v0.69 and docs are merge-synced.
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 frame-status architecture note (**shipped**)
+
+1. **Active frame runtime on this branch is v0.69 baseline.** `customProgramCacheKey` uses `frame-v0.69-*`.
+2. **v0.70+ macro lane is historical in this branch state.** No active `FRAME_MACRO_SCRATCH` branch in the runtime shader path.
+3. **Anti-banding invariant remains core architecture.** Keep FBM/noise normal-driving terms free from `barUV.y` inputs.
+4. **Status docs now reflect active runtime.** Merge-readiness requires release notes and architecture notes to describe current behavior, not historical intermediate states.
 
 ## v0.70 macro-scratch architecture note (**shipped**)
 

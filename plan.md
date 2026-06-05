@@ -1,6 +1,26 @@
 # FREYRAUM Plan
-> v0.70 shipped: macro-visible scratch readability uplift implemented in runtime shader code (S-01..S-08 completed).
-> Last full markdown audit: 2026-06-04 (v0.70 shipped runtime + docs sync).
+> v0.73 shipped: merge-readiness docs sync completed; active runtime baseline is v0.69 frame path.
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+
+## v0.73 — Merge-readiness docs sync (**shipped 2026-06-05**)
+
+> **Outcome:** Repository status docs are aligned with the current runtime baseline (v0.69 frame path), eliminating release-state drift before merge.
+
+### Shipped slices
+
+1. **R-01 — Runtime baseline verification.** Confirmed `CanvasMaterial` cache key and frame shader path are currently `frame-v0.69-*` baseline.
+2. **R-02 — Changelog correction.** Added a dedicated v0.73 entry documenting that this pass is docs/status synchronization (not runtime shader changes).
+3. **R-03 — Top-level status sync.** Updated `README.md`, `FINDINGS.md`, `plan.md`, `ARCHITECTURE_MAP.md`, and `docs/HANDOFF.md` so active-state messaging is consistent.
+4. **R-04 — Validation rerun.** Re-executed lint/build checks after documentation updates.
+
+### Acceptance summary
+
+| Gate | Result |
+| --- | --- |
+| Runtime/doc status alignment | ✅ restored |
+| Changelog reflects current branch state | ✅ yes |
+| Lint | ✅ pass |
+| Build | ✅ pass |
 
 ## v0.70 — Macro-visible micro-scratch uplift (**shipped 2026-06-04**)
 
