@@ -37,14 +37,24 @@ const DIFF_DIR = resolve(ROOT, '.visual-regression/diff');
 const URL = process.env.FREYRAUM_URL ?? 'http://localhost:5173/app.html';
 const VIEWPORT = { width: 1280, height: 800 };
 
-// Phase 10.3 state matrix: lighting profile × artwork × zoom. The app exposes
-// lighting profile and starting artwork through its preference store / query
-// params; this matrix documents the required coverage. Extend `states` as the
-// app grows query-param hooks for deterministic state selection.
-const states = [
-  { name: 'default-entry', query: '' },
-  { name: 'debug-info', query: '?debug=info' },
-];
+const LIGHTING_PROFILES = ['gallery-soft', 'raking-inspection', 'museum-neutral', 'dramatic-demo'];
+const ARTWORK_STEPS = [0, 1, 2];
+const ZOOM_STATES = ['overview', 'reset', 'inspection'];
+
+// Phase 10.3 state matrix: lighting profile × artwork × zoom. State is driven
+// deterministically through the persisted preference store plus keyboard input
+// so the gate works against the current public runtime without test-only hooks.
+const states = LIGHTING_PROFILES.flatMap((lighting) =>
+  ARTWORK_STEPS.flatMap((artworkStep) =>
+    ZOOM_STATES.map((zoom) => ({
+      name: `${lighting}__artwork-${artworkStep}__${zoom}`,
+      query: '?startup=entry-minimal',
+      lighting,
+      artworkStep,
+      zoom,
+    }))
+  )
+);
 
 // Phase 10.3 / 14.3 thresholds.
 const PER_PIXEL_CHANNEL_THRESHOLD = 10 / 255; // a pixel "differs" beyond this
@@ -66,14 +76,49 @@ async function capture(targetDir) {
   const { chromium } = await loadPlaywright();
   mkdirSync(targetDir, { recursive: true });
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 1 });
   for (const state of states) {
+    const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 1 });
+    await page.addInitScript((lighting) => {
+      localStorage.setItem('freyraum-nav-hint-seen', '1');
+      localStorage.setItem(
+        'freyraum.preferences.v1',
+        JSON.stringify({
+          reducedMotion: true,
+          highContrast: false,
+          contrastMode: 'auto',
+          quality: 'high',
+          lighting,
+          audioMuted: false,
+          audioVolume: 0.15,
+          alwaysShowChrome: true,
+        })
+      );
+    }, state.lighting);
     await page.goto(`${URL}${state.query}`, { waitUntil: 'networkidle' });
-    // Allow the loading overlay + first production frames to settle.
-    await page.waitForTimeout(4000);
+    await page.waitForSelector('.loading-start-btn:not([disabled])', { timeout: 45_000 });
+    await page.click('.loading-start-btn');
+    await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 10_000 });
+    for (let i = 0; i < state.artworkStep; i += 1) {
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(350);
+    }
+    if (state.zoom === 'overview') {
+      for (let i = 0; i < 5; i += 1) await page.keyboard.press('-');
+    } else if (state.zoom === 'inspection') {
+      for (let i = 0; i < 7; i += 1) await page.keyboard.press('=');
+    }
+    await page.waitForTimeout(1600);
+    const invariant = await page.evaluate(() => window.__FREYRAUM_PERF_TOOLS__?.checkInvariants());
+    if (!invariant) {
+      throw new Error(`${state.name}: performance/invariant tooling was not installed`);
+    }
+    if (invariant.violations.length > 0) {
+      throw new Error(`${state.name}: invariant gate failed: ${invariant.violations.join('; ')}`);
+    }
     const file = resolve(targetDir, `${state.name}.png`);
     await page.screenshot({ path: file });
     console.log(`captured ${state.name} → ${file}`);
+    await page.close();
   }
   await browser.close();
 }

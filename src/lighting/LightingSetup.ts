@@ -60,6 +60,7 @@ export class LightingSetup {
     if (next.id === this.profile.id) return;
     this.profile = next;
     this.applyProfile(next);
+    this.lastUpdateTime = 0;
   }
 
   applyPreset(preset: QualityPreset): void {
@@ -83,8 +84,8 @@ export class LightingSetup {
     this.animate = animate;
   }
 
-  update(time: number): void {
-    if (!this.animate || !this.profile.animateAllowed) return;
+  update(time: number): boolean {
+    if (!this.animate || !this.profile.animateAllowed) return false;
     if (this.lastUpdateTime > 0) {
       this.animatedTime += Math.min(time - this.lastUpdateTime, MAX_LIGHTING_DT_MS);
     }
@@ -93,9 +94,10 @@ export class LightingSetup {
     // smaller in v0.03 because the new gallery-soft key sits closer to the
     // painting, so a 0.6 unit drift would be too perceptible.
     const primary = this.spots[0];
-    if (!primary) return;
+    if (!primary) return false;
     const baseX = this.profile.keys[0]?.position.x ?? -3;
     primary.position.x = baseX + Math.sin(this.animatedTime * 0.0002) * 0.25;
+    return true;
   }
 
   dispose(): void {

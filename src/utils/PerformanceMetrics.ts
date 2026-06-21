@@ -51,6 +51,32 @@ export interface PerfMetricsReport {
   heapDeltaMb: number | null;
 }
 
+export interface PerfThresholdResult {
+  checked: number;
+  violations: string[];
+}
+
+export const TIER1_PERF_THRESHOLDS = {
+  gcEventsPerMinute: 4,
+  gcPauseP99Ms: 1,
+} as const;
+
+export function evaluateTier1PerfThresholds(report: PerfMetricsReport): PerfThresholdResult {
+  const violations: string[] = [];
+  if (report.gcEventsPerMinute > TIER1_PERF_THRESHOLDS.gcEventsPerMinute) {
+    violations.push(
+      `GC events/min ${report.gcEventsPerMinute} exceeds ${TIER1_PERF_THRESHOLDS.gcEventsPerMinute}`
+    );
+  }
+  if (report.gcPauseP99Ms > TIER1_PERF_THRESHOLDS.gcPauseP99Ms) {
+    violations.push(`GC pause P99 ${report.gcPauseP99Ms}ms exceeds ${TIER1_PERF_THRESHOLDS.gcPauseP99Ms}ms`);
+  }
+  return {
+    checked: 2,
+    violations,
+  };
+}
+
 interface PerformanceMemoryLike {
   readonly usedJSHeapSize: number;
   readonly totalJSHeapSize: number;

@@ -8,7 +8,12 @@
  * passive and opt-in; installing them costs nothing until they are invoked.
  */
 
-import { PerformanceMetrics, type PerfMetricsReport } from './PerformanceMetrics';
+import {
+  PerformanceMetrics,
+  evaluateTier1PerfThresholds,
+  type PerfMetricsReport,
+  type PerfThresholdResult,
+} from './PerformanceMetrics';
 import { runInvariants, type InvariantContext, type InvariantResult } from './RuntimeInvariants';
 import { getDiagnostics } from './Diagnostics';
 
@@ -21,6 +26,8 @@ export interface PerformanceToolingApi {
   perfReport(): PerfMetricsReport;
   /** Type B — evaluate structural invariants for the current scene state. */
   checkInvariants(): InvariantResult;
+  /** Phase 14 — evaluate active Tier 1 thresholds against the latest Type C report. */
+  checkTier1Thresholds(report?: PerfMetricsReport): PerfThresholdResult;
 }
 
 declare global {
@@ -52,6 +59,15 @@ export function installPerformanceTooling(
         diagnostics.warn('perf-tools', 'invariant-violation', 'Structural invariant violation(s) detected', result);
       } else {
         diagnostics.info('perf-tools', 'invariant-ok', 'All structural invariants hold', result);
+      }
+      return result;
+    },
+    checkTier1Thresholds: (report) => {
+      const result = evaluateTier1PerfThresholds(report ?? perf.report());
+      if (result.violations.length > 0) {
+        diagnostics.warn('perf-tools', 'tier1-threshold-failed', 'Tier 1 performance threshold(s) failed', result);
+      } else {
+        diagnostics.info('perf-tools', 'tier1-threshold-ok', 'Tier 1 performance thresholds passed', result);
       }
       return result;
     },

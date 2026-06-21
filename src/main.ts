@@ -1404,6 +1404,7 @@ async function main(): Promise<void> {
     );
 
     frameBudget.markPresetChange();
+    galleryManager.markRenderDirty(6);
     if (manual) {
       adaptiveQuality.notifyManualPreset(quality);
     }
@@ -1452,6 +1453,7 @@ async function main(): Promise<void> {
     // Mark a cooldown so the immediate post-resume frame spike doesn't
     // cause an adaptive quality downgrade.
     frameBudget.markNavigation();
+    galleryManager.markRenderDirty(6);
     diagnostics.info('lifecycle', 'resume', `Runtime resumed (${reason})`, {
       reason,
       visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
@@ -1681,10 +1683,13 @@ async function main(): Promise<void> {
       });
       preferences.setQuality(downgrade);
     }
-    lightingSetup.update(now);
+    const lightingChanged = lightingSetup.update(now);
     // v0.15 — pass DOMHighResTimeStamp so GalleryManager.update() can
     // compute a frame-rate-independent dt for exponential smoothing.
-    galleryManager.update(now);
+    const galleryChanged = galleryManager.update(now);
+    if (!lightingChanged && !galleryChanged && !galleryManager.hasReadinessWork()) {
+      return;
+    }
 
     // v0.03: feed view-space key-light direction into PaintingMaterial so
     // the self-shadow march in tangent space can run. The camera's

@@ -50,6 +50,7 @@ export class ArtworkMesh {
   private _lastAspectSource: 'manifest' | 'texture' = 'texture';
   /** v0.08: the manifest dimensions used in the last updateAspect() call, if any. */
   private _lastManifestDimensions: { width: number; height: number } | null = null;
+  private readonly frameGeometryCache = new Map<string, THREE.BufferGeometry>();
 
   constructor(scene: THREE.Scene, preset: QualityPreset, artworkIndex = 0) {
     this.scene = scene;
@@ -59,7 +60,7 @@ export class ArtworkMesh {
     this.currentSegments = preset.artworkSegments;
     this.currentFrameBevelEnabled = preset.frameBevelEnabled;
 
-    const frameGeo = this.makeFrameGeometry(this.currentFrameBevelEnabled, this._artworkWidth, this._artworkHeight);
+    const frameGeo = this.getFrameGeometry(this.currentFrameBevelEnabled, this._artworkWidth, this._artworkHeight);
     this.frameMaterial = this.canvasMaterial.createFrameMaterial(
       preset,
       this.artworkSeed,
@@ -75,7 +76,7 @@ export class ArtworkMesh {
     this.group.add(this.artworkMesh);
 
     // P-06: log the initial frame seed for diagnostics.
-    diag.debug('artwork-frame-seed', 'Initial artwork frame seed', { artworkIndex, seed: this.artworkSeed });
+    diag.debugLazy('artwork-frame-seed', 'Initial artwork frame seed', () => ({ artworkIndex, seed: this.artworkSeed }));
 
     scene.add(this.group);
   }
@@ -153,13 +154,34 @@ export class ArtworkMesh {
     // and the vTBN varying, which the onBeforeCompile GLSL injection depends on.
     geometry.computeTangents();
 
-    diag.debug('frame-geometry-built', 'Frame geometry built', {
+    diag.debugLazy('frame-geometry-built', 'Frame geometry built', () => ({
       outerW, outerH, innerW, innerH,
       vertexCount: geometry.getAttribute('position').count,
       hasFrameUV: !!geometry.getAttribute('aFrameUV'),
       bevelEnabled,
-    });
+    }));
 
+    return geometry;
+  }
+
+  private getFrameGeometryCacheKey(bevelEnabled: boolean, artworkWidth: number, artworkHeight: number): string {
+    return `${bevelEnabled ? 'bevel' : 'flat'}|${artworkWidth.toFixed(4)}|${artworkHeight.toFixed(4)}`;
+  }
+
+  private getFrameGeometry(bevelEnabled: boolean, artworkWidth: number, artworkHeight: number): THREE.BufferGeometry {
+    const key = this.getFrameGeometryCacheKey(bevelEnabled, artworkWidth, artworkHeight);
+    const cached = this.frameGeometryCache.get(key);
+    if (cached) {
+      diag.debugLazy('frame-geometry-cache-hit', 'Reused cached frame geometry', () => ({
+        key,
+        bevelEnabled,
+        artworkWidth,
+        artworkHeight,
+      }));
+      return cached;
+    }
+    const geometry = this.makeFrameGeometry(bevelEnabled, artworkWidth, artworkHeight);
+    this.frameGeometryCache.set(key, geometry);
     return geometry;
   }
 
@@ -244,17 +266,18 @@ export class ArtworkMesh {
   }
 
   private replaceFrameGeometry(bevelEnabled: boolean): void {
-    const oldGeo = this.frameMesh.geometry;
-    this.frameMesh.geometry = this.makeFrameGeometry(bevelEnabled, this._artworkWidth, this._artworkHeight);
-    oldGeo.dispose();
-    diag.debug('frame-geometry-replaced', 'Frame geometry replaced', {
+    const nextGeo = this.getFrameGeometry(bevelEnabled, this._artworkWidth, this._artworkHeight);
+    if (this.frameMesh.geometry === nextGeo) return;
+    this.frameMesh.geometry = nextGeo;
+    diag.debugLazy('frame-geometry-replaced', 'Frame geometry replaced from cache', () => ({
       bevelEnabled,
       bevelThickness: bevelEnabled ? 0.012 : 0,
       bevelSize: bevelEnabled ? 0.012 : 0,
       bevelSegments: bevelEnabled ? 1 : 0,
       artworkWidth: this._artworkWidth,
       artworkHeight: this._artworkHeight,
-    });
+      cacheSize: this.frameGeometryCache.size,
+    }));
   }
 
   private applyFramePreset(preset: QualityPreset): void {
@@ -299,7 +322,7 @@ export class ArtworkMesh {
     this.artworkSeed = seed;
     this.canvasMaterial.refreshFrameUniforms(this.frameMaterial, seed);
     // P-06: log seed change for diagnostics.
-    diag.debug('artwork-frame-seed', 'Artwork frame seed changed', { artworkIndex, seed });
+    diag.debugLazy('artwork-frame-seed', 'Artwork frame seed changed', () => ({ artworkIndex, seed }));
   }
 
   /**
@@ -411,7 +434,10 @@ export class ArtworkMesh {
 
   dispose(): void {
     this.scene.remove(this.group);
-    this.frameMesh.geometry.dispose();
+    for (const geometry of this.frameGeometryCache.values()) {
+      geometry.dispose();
+    }
+    this.frameGeometryCache.clear();
     this.artworkMesh.geometry.dispose();
     this.frameMaterial.dispose();
     this.material.dispose();
