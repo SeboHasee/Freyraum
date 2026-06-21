@@ -11,6 +11,7 @@ export default defineConfig({
       name: 'FreyraumApp',
       formats: ['iife'],
       fileName: () => 'freyraum-gallery.js',
+      cssFileName: 'style',
     },
   },
 });

@@ -1,6 +1,32 @@
 # CHANGELOG
-> v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
-> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+> v0.74 shipped: Vite 7 tooling maintenance upgrade preserves preview/build output contracts.
+> Last full markdown audit: 2026-06-21 (v0.74 Vite migration sync).
+
+## v0.74 — Vite 7 tooling maintenance upgrade (2026-06-21, **shipped**)
+
+### Status
+
+**Shipped.** Tooling-only change. Gallery/runtime behavior unchanged by design; build pipeline validated after the Vite major bump.
+
+### Summary
+
+- **Vite major bump:** upgraded from the Vite 5 line to `vite@7.3.5`.
+- **Sass migration cleanup:** removed the obsolete `css.preprocessorOptions.scss.api` override from `vite.config.ts` because Vite 6/7 already use the modern Sass API.
+- **Customer preview contract preserved:** added `build.lib.cssFileName: 'style'` in `vite.local.config.ts` so `customer-preview/app.html` and `scripts/write-local-preview.mjs` continue to load `./style.css`.
+- **Baseline vs. upgraded output:** customer-preview/dist artifact sizes changed only by tens of bytes, with no file-name contract drift in the production-relevant outputs.
+- **Validation:** `npm run lint` ✅, `npm run build:typecheck` ✅, `npm run build` ✅, `npx vite build` ✅, `npm audit --audit-level=moderate` ✅.
+- **Residual tooling debt:** plain `npm audit` still reports one low-severity transitive `esbuild` dev-server advisory with no non-breaking fix applied by `npm audit fix`.
+
+### Files
+
+- `package.json`
+- `package-lock.json`
+- `vite.config.ts`
+- `vite.local.config.ts`
+- `plan.md`
+- `FINDINGS.md`
+- `docs/DEPENDENCY_MAINTENANCE_PLAN.md`
+- `CHANGELOG.md`
 
 ## v0.73 — Merge-readiness docs sync (2026-06-05, **shipped**)
 

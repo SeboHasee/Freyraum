@@ -11,11 +11,4 @@ export default defineConfig({
       input: 'app.html',
     },
   },
-  css: {
-    preprocessorOptions: {
-      scss: {
-        api: 'modern-compiler'
-      }
-    }
-  }
 });
