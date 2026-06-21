@@ -102,6 +102,20 @@ There is no exit for **"nothing has changed since the last frame"**. Even when a
 
 `adaptiveQuality.evaluate()` is already locked (correct no-op), but the actual render is not gated.
 
+#### 0.4 Architecture Decision Rule
+
+> **One primary architecture; one fallback; one emergency mode. Do not co-implement all three simultaneously.**
+
+Engineers reading the three approaches below should treat them as a **staged deployment sequence**, not a menu of equally valid options:
+
+| Role | Approach | When to use |
+|---|---|---|
+| **Primary** | Approach A — Dirty-flag + frame cooldown | Ship first; lowest coupling risk; keeps rAF alive (safe for smoothDamp convergence tracking) |
+| **Fallback** | Approach C — rAF throttle | One-day interim while Approach A is designed; remove once Approach A is stable |
+| **Emergency / future** | Approach B — `setAnimationLoop(null)` loop suspension | Only after Approach A is fully validated; introduces FrameBudgetMonitor coupling (see Phase 13) |
+
+Shipping Approach A and Approach B together creates a conflict: Approach A keeps rAF running for convergence tracking; Approach B stops it entirely. **Design one primary model per release.** The natural progression is C (quick win) → A (production) → optionally B (maximum power saving, Tier 3).
+
 #### 0.4 Implementation Approaches
 
 ---
@@ -417,6 +431,9 @@ Total: 3 × 60 = 180 scalar comparisons per frame, returning a new `FrameBudgetS
 
 *Mobile GPU note:* Mobile GPU shadow cost is not just extra passes — shadow maps incur **texture bandwidth saturation** on tile-based deferred rendering (TBDR) architectures (all iOS GPUs, many Android GPUs). The shadow map depth texture must be fully resolved to memory and re-fetched during the lighting pass, causing disproportionate bandwidth spikes even at low shadow map resolutions. A 1024×1024 shadow map on a tile-based GPU can cost 2–4× more than on an immediate-mode desktop GPU, not just 2× more render passes.
 
+**Additional TBDR nuance — smaller render targets and shadow resolution:**  
+Tile-based GPUs tile the screen into ~32×32 pixel bins and render each bin entirely in on-chip memory before flushing to DRAM. A key implication: *reducing the shadow map render target size has disproportionate benefit on TBDR compared to immediate-mode GPUs*. On a desktop GPU, halving shadow map resolution (1024→512) saves ~75% of fill rate cost. On a TBDR GPU, the same reduction additionally cuts the tile memory footprint required for the depth render, which can reduce the number of tile passes (or eliminate overflowing the tile buffer entirely) — yielding savings well beyond the naïve ×4 area ratio. Shadow resolution reduction (Approach B in OPT-5) is therefore a **higher-priority win on Apple Silicon and Android TBDR devices** than on desktop and should be validated and shipped early in Step 5 for mobile targets.
+
 *Frame stability:* Yes — shadow maps allocated at fixed resolution can cause memory pressure on low-VRAM devices.
 
 ---
@@ -600,6 +617,8 @@ All values are static-analysis estimates at 1920×1080, mid-range discrete GPU (
 | OutputPass (color space, 1 quad) | ~0.05–0.1 ms | Bandwidth |
 | **GPU steady-state total (desktop)** | **~2.5–8.0 ms/frame** | |
 | **GPU steady-state total (mobile TBDR)** | **~5.0–20 ms/frame** | Shadow bandwidth ×2–4 |
+
+> ⚠️ **These ranges depend heavily on shadow and bloom state.** The desktop range of 2.5–8 ms reflects the `high` preset with 2 shadow-casting lights and bloom enabled. On `battery` preset (no shadows, no bloom) the same device sees ~1.0–3.5 ms. Similarly, the mobile TBDR range of 5–20 ms is for the `high` preset with TBDR shadow bandwidth cost; with shadows disabled the mobile range drops to ~2–8 ms. Do not interpret either baseline as a fixed hardware floor — it is a preset-configuration floor.
 
 At 60 fps (16.7 ms budget): desktop is well within budget; mobile high preset can approach the limit.
 At 120 fps (8.3 ms budget): mobile high preset exceeds budget. Shadow maps are the primary constraint.
@@ -1670,4 +1689,194 @@ All GPU reductions (Step 5) should be gated behind quality preset flags so they 
 
 ---
 
-*Audit completed and enhanced 2026-06-21. Phase 0–11 represents a full engineering planning document. Scope: static analysis of src/ at v0.73 HEAD + reviewer feedback integration. No runtime profiling was performed — all estimates are derived from code structure analysis. Implement Phase 10 (Profiling Validation Plan) before starting any Tier 1+ code changes to establish measured baselines.*
+---
+
+### Phase 12: Performance Regression Risk Model
+
+> **Gating decisions in Phase 11 (rollout sequence) require a shared classification of what kind of regression each optimization can cause.** Without explicit risk types, reviewers and engineers will apply inconsistent hold/ship criteria to different optimizations.
+
+#### 12.1 Regression Type Definitions
+
+| Type | Name | Description | Detection method |
+|---|---|---|---|
+| **Type A** | Visual regression | A rendered pixel is perceptibly different from the baseline render | Screenshot comparison (pixelmatch/resemblejs); human sign-off |
+| **Type B** | Structural regression | Scene graph, geometry, or buffer state diverges from expected invariants after an optimization | Profiler geometry-inspector; scene object count; WebGL buffer state audit |
+| **Type C** | Behavioral regression | System logic (FrameBudgetMonitor, AdaptiveQualityController, idle state machine) operates on incorrect assumptions after an optimization | Unit tests on internal state machines; diagnostic overlay values checked at known scenarios |
+
+#### 12.2 Optimization → Regression Type Matrix
+
+| Optimization | Primary risk type | Secondary risk type | Notes |
+|---|---|---|---|
+| OPT-4 bloom disable | Type A | — | Bright specular pixels may become hard points rather than soft glows |
+| OPT-5 shadow reduction | Type A | — | Contact shadows along frame edge; floor plane softness |
+| OPT-6 side panels opaque | Type A | — | Hard edge where panel meets background at 0.95→1.0 opacity |
+| OPT-9 LOD vertex count | Type A | Type B | Geometry pop at LOD threshold; mesh swap must not corrupt UV layout |
+| OPT-2 aspect cache | Type B | — | Stale cached geometry used for wrong artwork if LRU eviction logic is wrong |
+| OPT-1 fovTan + metrics cache | Type B | — | Stale viewport metrics if cache invalidation frame-count is mismanaged |
+| OPT-3 FrameBudgetMonitor O(1) | Type C | — | Incremental accumulator drifts if oldest-slot removal has an off-by-one |
+| Phase 0 (Approach A) dirty-flag | Type C | — | Input events that forget `markDirty()` produce stale renders |
+| Phase 0 (Approach B) loop suspend | Type C | Type B | FrameBudgetMonitor rolling average stagnates during sleep; AdaptiveQualityController sees stale data |
+
+#### 12.3 Gating Criteria by Type
+
+**Type A — Visual regression gate (required before ship):**
+- Automated pixel comparison across all lighting profiles × 5+ artworks × full/overview zoom
+- Pass criterion: < 2% of pixels differ by > 10/255 (same as Phase 10.3)
+- Additional manual sign-off at close inspection zoom for shadow and bloom changes
+- **No Type A risk optimization ships without this gate, even if performance gains are significant**
+
+**Type B — Structural regression gate (required before ship):**
+- Verify scene object count and geometry vertex count are unchanged for same-aspect consecutive navigations (OPT-2)
+- Verify `getViewportMetrics()` returns a value consistent with visible DOM layout at each frame the cache is read (OPT-1 Approach B)
+- Verify LOD mesh has correct UVs and tangents after swap (OPT-9)
+- May be validated via unit tests or a short diagnostic mode script
+
+**Type C — Behavioral regression gate (required before ship):**
+- `FrameBudgetMonitor` O(1) path: construct a 60-frame test sequence; compare rolling average, EMA, above-budget count, and severe-frame count to the O(N) reference path. Must be numerically identical.
+- Dirty-flag system: write a unit test covering: (1) markDirty → consume returns true, (2) consecutive consume returns false after frames expire, (3) markDirty during active cooldown extends cooldown correctly, (4) all input event handlers and GalleryManager navigation methods call markDirty
+- Loop suspension (Approach B): verify FrameBudgetMonitor rolling average resets to a neutral value (budget baseline) on loop resume, not stale sleep-period values
+
+---
+
+### Phase 13: Cross-Optimization Dependency Map
+
+> Some optimizations interact — applying one changes the assumptions or visible output of another. This map documents the known interaction chains so engineers sequence them correctly and avoid cascading regressions.
+
+#### 13.1 Dependency Map
+
+```
+[OPT-5 shadow reduction]
+  → affects perceived contrast and local darkening at frame edges
+  → COUPLING: reduces the apparent dark area surrounding the artwork
+  → This makes high-frequency bloom (if re-enabled) more visually noticeable
+  → Rule: validate OPT-4 (bloom) and OPT-5 (shadow) TOGETHER in Step 5,
+    not independently. Shadow-off + bloom-off is a compound visual state;
+    shadow-off + bloom-on is a different visual state than shadow-on + bloom-on.
+
+[OPT-9 LOD vertex count]
+  → switches artworkMesh geometry from 65K to ~1.2K triangles at overview distance
+  → COUPLING: high-preset parallax (parallaxEnabled=true, parallaxSteps=10) runs
+    in the FRAGMENT shader, not the vertex shader; it is driven by UV coordinates
+    not vertex count. Reducing vertex count does NOT disable parallax fragment cost.
+  → Rule: OPT-9 Approach A (geometry swap) must be paired with OPT-9 Approach C
+    (uParallaxStrength fade to 0 at LOD distance) to capture both GPU savings.
+    Shipping Approach A alone without C delivers only vertex shader savings; the
+    dominant per-fragment parallax cost at overview distance is NOT eliminated.
+
+[Phase 0 idle render / Approach B loop suspension]
+  → stops setAnimationLoop; FrameBudgetMonitor.sample() is not called during sleep
+  → COUPLING: FrameBudgetMonitor.rolling, .ema, and .belowBudget values stagnate
+    at whatever was measured before sleep. AdaptiveQualityController (currently
+    locked) reads these values; while the lock is active this is a no-op, but if
+    the lock is ever lifted the controller will see artificially stable budget
+    numbers during wake-up (the first few active frames after wake will be
+    unexpectedly expensive due to shader/state warmup).
+  → Rule: if Approach B (loop suspension) is implemented, FrameBudgetMonitor must
+    receive a reset/cool-down call on loop-resume so its rolling average rebuilds
+    from current frames, not from pre-sleep values. Alternatively, gate
+    AdaptiveQualityController's decision logic on "frames since last wake > N".
+
+[Phase 0 dirty-flag / Approach A]
+  → skips postProcessing.render() on settled frames
+  → COUPLING: FrameBudgetMonitor.sample(now) is still called on every rAF tick
+    (the plan specifies this in §0.4 Approach A, "frameBudget.sample(now) to keep
+    timing stats accurate"). This is correct and intentional; the monitor measures
+    real wall-clock time not render time, so it should still run on skipped frames.
+  → Rule: do NOT move frameBudget.sample() inside the "shouldRender" guard when
+    implementing Approach A. The sample call must remain unconditional.
+
+[OPT-5 shadow resolution (1024→512)]
+  → reduces shadow map render target size by 4×
+  → COUPLING: Three.js PCFSoftShadowMap uses a 4-sample PCF kernel; at 512×512
+    the kernel footprint covers a larger world-space area than at 1024×1024, which
+    softens shadow edges more. This is usually perceptually BETTER for a gallery
+    lighting context (softer contact shadows) but must be validated per the Type A
+    gate. Do not assume the softening is invisible.
+  → Rule: include shadow softness comparison at close zoom in the OPT-5 visual
+    gate, specifically the frame edge shadow on high preset.
+
+[OPT-2 frame geometry aspect cache + OPT-9 LOD swap]
+  → both manipulate artworkMesh.geometry assignments
+  → COUPLING: if OPT-9 is implemented as Approach A (explicit hiRes/loRes geo swap),
+    and OPT-2 is implemented as LRU aspect cache, they both compete to assign
+    artworkMesh.geometry. The LOD swap is driven by camera distance; the aspect
+    cache swap is driven by navigation. Assigning geometry from both systems
+    simultaneously will cause thrashing or corruption.
+  → Rule: if both are shipped, the LOD system must wrap the aspect-cached geometry
+    (LOD selects between aspect-cached-hi and aspect-cached-lo), not the raw
+    PlaneGeometry. Design the combined architecture before implementing either.
+```
+
+#### 13.2 Safe Implementation Ordering Derived from Dependencies
+
+Based on the coupling map above, the following sequencing constraints apply:
+
+1. **OPT-4 and OPT-5 must be validated as a pair in Step 5** (not independently committed).
+2. **OPT-9 Approach A requires OPT-9 Approach C** to deliver meaningful GPU savings at overview; ship them together.
+3. **Phase 0 Approach B requires FrameBudgetMonitor reset on wake**; do not ship without it.
+4. **Phase 0 Approach A requires `frameBudget.sample()` to remain unconditional**; never move it inside the render guard.
+5. **OPT-2 and OPT-9** must be designed jointly if both are targeted; the geometry ownership model must resolve the conflict before code is written.
+
+---
+
+### Phase 14: Measurement Success Criteria per Tier
+
+> Optimization success is currently measured as "CPU/GPU metric must not increase" (Phase 10.2 pass criteria). This is insufficient for gating decisions — it defines the floor but not the target. Each tier needs an explicit success threshold to differentiate "good enough to ship" from "further work needed".
+
+#### 14.1 Tier 0 — Idle Render Elimination
+
+| Metric | Threshold to pass | Notes |
+|---|---|---|
+| FPS at static idle (> 3 s since last input) | ≤ 3 frames/second | Measured via diagnostics overlay in production build |
+| GPU active time at idle (Chrome GPU panel) | < 5% of 16.7 ms | Excludes OS compositor overhead |
+| FPS variance reduction (σ over 60-frame window) | ≥ 80% reduction vs baseline | σ at idle should approach 0 when render is suppressed |
+| Max frame time spike after first user input (wake) | < 50 ms | First active frame after idle sleep may be expensive |
+| FrameBudgetMonitor rolling average at idle | Must not drift to artificially low values | Stagnation is acceptable; artificial reduction is not |
+
+#### 14.2 Tier 1 — CPU Micro-Optimizations
+
+| Metric | Threshold to pass | Notes |
+|---|---|---|
+| `FrameBudgetMonitor.sample()` self-time (Chrome Perf) | < 0.01 ms/frame | Down from ~0.05–0.10 ms |
+| GC events (minor collections) per minute at steady state | ≤ 4/minute | Down from ~12–20/minute from `FrameBudgetSample` churn |
+| GC pause duration (P99) | < 1 ms | Down from ~0.5–2 ms |
+| `galleryManager.update()` total time (4× CPU throttle) | ≤ 1.5 ms/frame | `getViewportMetrics()` cascade eliminated |
+| CPU frame avg (4× CPU throttle, high preset, settled) | ≤ 2.5 ms/frame | Baseline ~1.2–4.5 ms |
+| Regressions | Zero | No new long tasks; no GC event increase |
+
+#### 14.3 Tier 2 — GPU Reductions
+
+| Metric | Threshold to pass | Notes |
+|---|---|---|
+| GPU frame avg (desktop, high preset, active zoom) | Reduction ≥ stated estimate | Bloom off: −0.3–1 ms; shadow 1-light: −25–50% base cost |
+| GPU frame avg (mobile TBDR, high preset) | Reduction ≥ 2× desktop percentage gain | TBDR bandwidth benefit is higher; measure separately |
+| Navigation frame max spike (CPU, P99) | ≤ 5 ms | Down from ~2–7 ms; frame geo cache must deliver this |
+| Visual comparison (all lighting profiles × artworks) | ≤ 2% pixels differ by > 10/255 | Type A gate; no exceptions |
+| Shadow softness delta (close zoom, frame edge) | Human sign-off required | Type A gate |
+
+#### 14.4 Tier 3 — Architectural Refinements
+
+| Metric | Threshold to pass | Notes |
+|---|---|---|
+| Vertex count at overview distance (LOD active) | ≤ 2,000 triangles | Down from 65K; verifiable via renderer.info |
+| Parallax texture reads at overview (Chrome GPU trace) | ≤ 2 reads/fragment | Approach C (uParallaxStrength=0) must be confirmed active |
+| Startup time on slow mobile (4G + mid-range device) | < 8 seconds to entry CTA | Procedural Worker only if this threshold is measured as exceeded |
+| LOD transition: no pop visible | Human sign-off at LOD switch camera Z | Type A gate for geometry swap |
+| LOD + aspect cache: no geometry assignment conflict | Zero TypeB regressions | Structural gate; verified via renderer.info.render.triangles stability |
+
+#### 14.5 FPS Variance as a First-Class Metric
+
+> FPS average is not sufficient to describe frame stability. A scene delivering 60 fps average with P99 spikes of 80 ms is worse for gallery UX than 55 fps with P99 < 22 ms.
+
+| Metric | Baseline (pre-optimization) | Target (post Tier 0+1) | Measurement |
+|---|---|---|---|
+| FPS variance σ at static idle | ~0 (render suppressed) or ~3 if unsuppressed | ~0 | Chrome rAF timestamps |
+| FPS variance σ during active zoom/pan | ~2–5 fps | ≤ 2 fps | Chrome Performance trace |
+| P99 frame time (all scenarios) | Currently unmeasured | < 25 ms (desktop), < 33 ms (mobile) | Phase 10.3 instrument |
+| Max GC pause in 60-second session | Currently unmeasured | < 2 ms (P99) | Chrome Memory timeline |
+
+These criteria replace the subjective "must not increase" pass condition with engineering-grade acceptance thresholds. Record all metrics in the Phase 10.2 measurement table before and after each Tier.
+
+---
+
+*Audit completed and enhanced 2026-06-21. Phases 12–14 added 2026-06-21 based on reviewer feedback: Phase 0 architecture decision rule, GPU-1/2.5 TBDR qualifier, regression risk model, cross-optimization coupling map, and measurement success criteria per tier. No runtime profiling was performed — all estimates are derived from code structure analysis. Implement Phase 10 (Profiling Validation Plan) before starting any Tier 1+ code changes to establish measured baselines.*
