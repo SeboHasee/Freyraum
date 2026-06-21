@@ -1,6 +1,6 @@
 # Lessons learned docs
-> v0.58 shipped: topbar UI uniformity, help button fix, badge layout, premium 2026 micro-interactions.
-> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+> v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
 
 ## v0.47 lesson index update
 
@@ -18,7 +18,7 @@ See `../../LESSONS_LEARNED.md § 2026-05-22 — v0.29 implementation lessons` fo
 
 ## v0.23 — Performance/Preloading Planning Audit
 
-This Markdown file was refreshed during the 2026-05-21 all-docs sync. The current runtime is still v0.22; the open performance work is documented in `plan.md § v0.23`, with source-referenced audit notes in `FINDINGS.md § v0.23`. Key boundary: v0.22 improves the first 15 artworks, but large-gallery GPU warming, synchronous procedural map generation, and best-effort idle prefetch remain planned N-series work.
+This section is retained as historical planning context from the 2026-05-21 all-docs sync (runtime v0.22 at that time). Current branch runtime baseline is documented in `README.md` and `CHANGELOG.md` (v0.73 sync; active frame baseline v0.69).
 
 ## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
 

@@ -4,6 +4,7 @@
 
 ## v0.58 documentation pass
 
+- 2026-06-21 (documentation): repository-wide markdown status sync completed. Stale v0.65/v0.22 status banners were normalized to v0.73 baseline messaging, and `docs/QUERY_PARAMETERS.md` was added as the canonical query/localStorage configuration reference with cross-links from `README.md` and `ARCHITECTURE_MAP.md`.
 - 2026-05-23 (runtime + documentation): Implemented topbar UI uniformity refactor (Option B + premium enhancements). Restructured `Topbar.ts` into left/right groups, restyled help button as 44px glass circle with SVG icon, added accessible tooltip, entrance animations, and `prefers-reduced-motion` support. All markdown files refreshed to v0.58 shipped status.
 
 ## v0.47 documentation pass

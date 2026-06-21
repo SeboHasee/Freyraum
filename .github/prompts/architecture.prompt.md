@@ -1,6 +1,6 @@
 # Architecture prompt
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-06-04 (v0.65 documentation sync; runtime now v0.65).
+> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
 
 ## v0.29 current context
 
@@ -10,7 +10,7 @@ Latest v0.29 status: metallic frame runtime implementation is shipped (M-01..M-0
 
 ## v0.23 — Performance/Preloading Planning Audit
 
-This Markdown file was refreshed during the 2026-05-21 all-docs sync. The current runtime is still v0.22; the open performance work is documented in `plan.md § v0.23`, with source-referenced audit notes in `FINDINGS.md § v0.23`. Key boundary: v0.22 improves the first 15 artworks, but large-gallery GPU warming, synchronous procedural map generation, and best-effort idle prefetch remain planned N-series work.
+This section is retained as historical planning context from the 2026-05-21 all-docs sync (runtime v0.22 at that time). Current branch runtime baseline is documented in `README.md` and `CHANGELOG.md` (v0.73 sync; active frame baseline v0.69).
 
 ## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
 

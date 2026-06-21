@@ -323,6 +323,7 @@ FREYRAUM is a Vite + strict TypeScript + three.js customer-preview application f
 - `FINDINGS.md`: technical findings, decisions, validation notes, regressions.
 - `CHANGELOG.md`: concise release/change history.
 - `DOCUMENTATION_RULES.md`: required documentation updates.
+- `docs/QUERY_PARAMETERS.md`: runtime query parameter and localStorage configuration reference.
 - `docs/HANDOFF.md`: customer/contributor handoff.
 - `.github/copilot-instructions.md` and `.github/prompts/`: AI workflow guidance.
 - `docs/architecture/README.md`: deeper architecture notes and subsystem documentation entry point.

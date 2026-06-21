@@ -899,4 +899,5 @@ This repository now follows a documentation-first rule for future development.
 - [`CHANGELOG.md`](./CHANGELOG.md) — shipped changes by version/date
 - [`FINDINGS.md`](./FINDINGS.md) — technical findings, caveats, and validation notes
 - [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md) — required documentation process for future work
+- [`docs/QUERY_PARAMETERS.md`](./docs/QUERY_PARAMETERS.md) — query-parameter and localStorage configuration reference
 - [`docs/HANDOFF.md`](./docs/HANDOFF.md) — customer handoff guide with architecture diagram, controls reference, accessibility modes, quality preset matrix, screenshot procedure, and reviewer checklist
