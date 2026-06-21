@@ -6,7 +6,9 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 
 - Runtime renderer: WebGL (WebGPU is opt-in probe mode only).
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
+- Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
 - Diagnostics API is available (see `docs/QUERY_PARAMETERS.md`).
+- Regression tooling is documented in `docs/REGRESSION_TOOLING.md`.
 - Customer updates are handled by `Update Gallery.command` (macOS) or `Update Gallery.bat` (Windows).
 
 Historical release details are maintained in [`CHANGELOG.md`](./CHANGELOG.md).
@@ -53,12 +55,14 @@ Do not duplicate config tables in other docs.
 | Contributor workflow & freshness rules | `CONTRIBUTING.md` |
 | Technical findings (active/reusable) | `FINDINGS.md` |
 | Active engineering work | `plan.md` |
+| Regression tooling | `docs/REGRESSION_TOOLING.md` |
 
 ## Documentation map
 
 - Overview: [`README.md`](./README.md)
 - History: [`CHANGELOG.md`](./CHANGELOG.md)
 - Configuration reference (authoritative): [`docs/QUERY_PARAMETERS.md`](./docs/QUERY_PARAMETERS.md)
+- Regression tooling: [`docs/REGRESSION_TOOLING.md`](./docs/REGRESSION_TOOLING.md)
 - Architecture: [`ARCHITECTURE_MAP.md`](./ARCHITECTURE_MAP.md)
 - Contributor workflow: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - Handoff/support: [`docs/HANDOFF.md`](./docs/HANDOFF.md)

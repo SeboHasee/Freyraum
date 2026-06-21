@@ -9,7 +9,7 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - Boot orchestration
   - Lifecycle handling
   - UI wiring
-  - Render-loop coordination
+  - Render-loop coordination and idle render suppression
 - `src/core/`
   - `RendererManager`, `SceneManager`, post-processing pipeline
 - `src/gallery/`
@@ -31,6 +31,17 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
 3. `RendererManager` prewarms renderer pipeline.
 4. UI entry flow continues after readiness gates are satisfied.
+
+## Render-loop behavior
+
+- rAF remains active so frame-budget sampling, readiness work, and animation
+  convergence keep progressing.
+- `FrameBudgetMonitor.sample()` runs before render gating.
+- `postProcessing.render()` is skipped when lighting is static, gallery motion is
+  settled, no readiness work is pending, and dirty-frame cooldowns are consumed.
+- Dirty-frame hints are emitted by navigation, zoom/pan/hover input, preference
+  changes, viewport changes, artwork/material readiness updates, and lifecycle
+  resume.
 
 For exact config keys and query behavior, use only `docs/QUERY_PARAMETERS.md`.
 

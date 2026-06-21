@@ -25,6 +25,50 @@ Long-form historical findings have been moved to:
 
 ---
 
+## Performance remediation findings — completion pass (2026-06-21)
+
+Source: implementation pass responding to the partial-correctness verdict for
+`plan.md § v0.74`.
+
+### Findings verified in code
+
+1. **OPT-1 required metric propagation, not only `fovTan` caching.**
+   `GalleryManager.update()` previously called `clampZoom()` and
+   `clampPanTargets()` without passing the already-known viewport metrics, which
+   re-entered `getViewportMetrics()`. The fixed path computes metrics/bounds
+   once for the frame and reuses them through zoom/pan clamping.
+
+2. **OPT-2 can safely ship as a frame-only geometry cache.** The cache added in
+   `ArtworkMesh` is scoped to `frameMesh.geometry` and keyed by frame dimensions
+   plus bevel state. It does not assign `artworkMesh.geometry`, so it does not
+   create the OPT-9 artwork LOD ownership conflict documented for a broader
+   aspect-cache design.
+
+3. **Debug diagnostics must be skipped before payload serialization.** Routing
+   direct `console.debug` calls through diagnostics was insufficient while
+   default-mode debug entries were still serialized/deduped/stored. Diagnostics
+   now drops debug events unless mode is `verbose` and supports lazy payload
+   factories for hot debug callsites.
+
+4. **Idle suppression can be introduced without stopping rAF.** The shipped
+   Phase 0 step keeps rAF and `FrameBudgetMonitor.sample()` active, then skips
+   the render/composer path when the scene is settled. This avoids the
+   `setAnimationLoop(null)` measurement-stagnation risk while reducing idle GPU
+   work.
+
+5. **Regression tooling is stronger when gates are composed.** The Type A
+   script now fails if Type B invariants fail for any visual state. This catches
+   structural regressions during screenshot capture instead of relying on a
+   separate console-only workflow.
+
+### Validation notes
+
+- Baseline before edits passed: `npm install`, `npm run lint`, `npm run build`,
+  `npm run test:frame-budget`, `npm run docs:check-config-authority`.
+- Runtime edit checkpoint passed: `npm run lint`, `npm run build:typecheck`.
+
+---
+
 ## Performance audit findings — reviewer feedback integration (2026-06-21)
 
 Source: external performance audit review of `plan.md § v0.74` at v0.73 HEAD.
@@ -154,5 +198,4 @@ running the repo toolchain on a fresh clone.
 - `npm run build:preview`
 - `npm run docs:check-config-authority`
 - `npm run test:frame-budget`
-
 

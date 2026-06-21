@@ -12,17 +12,19 @@ is accepted unless the measurement hook for its type exists and passes.
 | Type | Risk | Tool in this repo | How to run |
 |---|---|---|---|
 | **A — Visual** | A rendered pixel differs perceptibly from baseline | `scripts/visual-regression.mjs` (Playwright screenshot + pixelmatch) | `npm run validate:visual baseline` / `... compare` |
-| **B — Structural** | Scene graph / geometry / material / shadow state diverges | `src/utils/RuntimeInvariants.ts` via `window.__FREYRAUM_PERF_TOOLS__.checkInvariants()` | run in browser console |
+| **B — Structural** | Scene graph / geometry / material / shadow state diverges | `src/utils/RuntimeInvariants.ts` via `window.__FREYRAUM_PERF_TOOLS__.checkInvariants()`; also run by the Type A script before every screenshot | browser console / Type A gate |
 | **C — Behavioral / GC** | Internal state machine logic or allocation behavior changes | `src/utils/PerformanceMetrics.ts` via `window.__FREYRAUM_PERF_TOOLS__`; `scripts/test-frame-budget.mjs` | console session / `npm run test:frame-budget` |
 
 ## Type A — Pixel diff (Playwright / WebGL snapshot)
 
 `scripts/visual-regression.mjs` drives Chromium through Playwright, captures the
-Phase 10.3 state matrix (lighting profile × artwork × zoom), and compares
-against a stored baseline.
+Phase 10.3 state matrix (lighting profile × artwork step × zoom), checks Type B
+invariants for every state, and compares against a stored baseline.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.
+- **Matrix:** all lighting profiles × artwork steps 0/1/2 × overview/reset/
+  inspection zoom states.
 - **Workflow:** capture a baseline *before* the change, apply the optimization,
   then compare. Diffs are written to `.visual-regression/diff/` (git-ignored).
 - **Required for:** OPT-4 (bloom), OPT-5 (shadow), OPT-6 (panel opacity),
@@ -45,7 +47,8 @@ returns a non-throwing list of violations plus measured values:
 
 Run from the browser console after an optimization:
 `window.__FREYRAUM_PERF_TOOLS__.checkInvariants()`. Violations are also surfaced
-through the diagnostics pipeline.
+through the diagnostics pipeline. The Type A visual regression script calls this
+same gate before every screenshot and fails immediately on violations.
 
 ## Type C — GC / memory / frame-variance metrics
 
@@ -61,6 +64,10 @@ cost when idle) and reports the Phase 14 acceptance metrics:
 
 Run from the console: `__FREYRAUM_PERF_TOOLS__.startPerf()`, exercise the
 gallery, then `__FREYRAUM_PERF_TOOLS__.stopPerf()`.
+
+After a Type C session, run
+`__FREYRAUM_PERF_TOOLS__.checkTier1Thresholds(report)` (or omit `report` to use
+the current report). This actively checks the Tier 1 GC thresholds below.
 
 `scripts/test-frame-budget.mjs` is the automated Type C gate for the
 `FrameBudgetMonitor` O(1) refactor: it proves the optimized accumulator path is

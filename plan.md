@@ -26,6 +26,43 @@ Long-form historical planning has been moved to:
 
 ---
 
+## v0.74 — Performance remediation completion execution (2026-06-21)
+
+> **Phase: Shipped runtime/tooling remediation.** This addendum corrects the
+> partial execution verdict against the original v0.74 plan and records what was
+> completed in this pass.
+
+### Execution verdict update
+
+The reviewer-identified gaps are addressed as follows:
+
+| Item | Status | Execution record |
+|---|---|---|
+| Phase 0 / Tier 0 idle render | Shipped first step | rAF remains alive for sampling and convergence tracking, but `postProcessing.render()` is skipped once lighting, gallery animation, readiness work, and dirty-frame cooldowns are all settled. |
+| OPT-1 viewport metrics | Complete | `GalleryManager.update()` now computes metrics/bounds once per frame and passes them through target zoom/pan clamping. Cached `fovTan` remains in place. |
+| OPT-2 frame geometry cache | Shipped | Cache is scoped to `frameMesh.geometry` by aspect + bevel state. It does not write `artworkMesh.geometry`, so the previous OPT-2/OPT-9 conflict rationale does not apply to this implementation. |
+| OPT-3 rolling stats | Already complete | Existing O(1) `FrameBudgetMonitor` behavior retained and covered by `npm run test:frame-budget`. |
+| OPT-4/5/6 | Deferred | Still visual-risk changes; require Type A approval with the expanded matrix before shipping. |
+| OPT-7 vector reuse | Complete | `RendererManager` snapshot scratch remains; `GalleryManager.handlePanelClick()` now reuses a scratch `THREE.Vector2`. |
+| OPT-8 / T1-C diagnostics | Complete | Debug entries are not stored, serialized, deduped, or printed unless diagnostics mode is `verbose`; lazy payload factories avoid object construction on skipped debug paths. |
+| OPT-9 | Deferred | Still requires Type A plus artwork-geometry ownership design. |
+| OPT-10 | Deferred | Tier 3 startup work remains dependent on startup measurements. |
+
+### Tooling/gate upgrades
+
+- `scripts/visual-regression.mjs` now captures a deterministic lighting profile × artwork step × zoom matrix instead of only default/debug entry states.
+- The visual regression script runs Type B invariant checks before every screenshot and fails the run on violations.
+- `PerformanceMetrics` now exposes Tier 1 threshold evaluation for GC events/minute and GC pause P99 through `window.__FREYRAUM_PERF_TOOLS__.checkTier1Thresholds()`.
+- Type A remains an on-demand browser gate because it requires Playwright/browser dependencies, but its matrix and invariant enforcement are no longer only documented.
+
+### Remaining boundaries
+
+- Visual-risk GPU changes (bloom, shadow, panel transparency, LOD/parallax) remain intentionally unshipped until the expanded Type A matrix is baselined and compared in a browser.
+- GPU active time, true GC profiling, and parallax texture-read thresholds still require browser/GPU instrumentation beyond static CI.
+- Future OPT-9 LOD work must provide an active `maxArtworkTriangles` invariant threshold when the LOD path exists.
+
+---
+
 ## v0.74 — Performance Audit & Optimization Plan (2026-06-21)
 
 > **Phase: Planning only. No code changes.**
