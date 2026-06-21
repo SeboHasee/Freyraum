@@ -31,6 +31,7 @@ import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/Bac
 import { PreferencesStore } from './utils/preferences';
 import { isWebGLAvailable } from './utils/webgl';
 import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
+import { installPerformanceTooling } from './utils/performanceTooling';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
@@ -673,6 +674,17 @@ async function main(): Promise<void> {
   // Gallery objects
   const artworkMesh = new ArtworkMesh(sceneManager.scene, initialPreset);
   const sidePanels = new SidePanels(sceneManager.scene);
+
+  // v0.74 Phase 10 — install the Type B (structural invariants) and Type C
+  // (performance / GC / frame-variance) regression tooling on `window`. Passive
+  // and opt-in; see docs/REGRESSION_TOOLING.md. The context provider reads live
+  // scene handles each time the invariants are evaluated.
+  installPerformanceTooling(() => ({
+    scene: sceneManager.scene,
+    artworkMesh: artworkMesh.getArtworkMeshObject(),
+    lights: lightingSetup.getLights(),
+    expectedShadowCasterCount: lightingSetup.getExpectedShadowCasterCount(),
+  }));
 
   // v0.16 — cache DOM chrome refs once. Previously `measureArtworkViewport`
   // called `app.querySelector` three times per measurement; on mobile
@@ -1392,6 +1404,7 @@ async function main(): Promise<void> {
     );
 
     frameBudget.markPresetChange();
+    galleryManager.markRenderDirty(6);
     if (manual) {
       adaptiveQuality.notifyManualPreset(quality);
     }
@@ -1440,6 +1453,7 @@ async function main(): Promise<void> {
     // Mark a cooldown so the immediate post-resume frame spike doesn't
     // cause an adaptive quality downgrade.
     frameBudget.markNavigation();
+    galleryManager.markRenderDirty(6);
     diagnostics.info('lifecycle', 'resume', `Runtime resumed (${reason})`, {
       reason,
       visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
@@ -1669,10 +1683,13 @@ async function main(): Promise<void> {
       });
       preferences.setQuality(downgrade);
     }
-    lightingSetup.update(now);
+    const lightingChanged = lightingSetup.update(now);
     // v0.15 — pass DOMHighResTimeStamp so GalleryManager.update() can
     // compute a frame-rate-independent dt for exponential smoothing.
-    galleryManager.update(now);
+    const galleryChanged = galleryManager.update(now);
+    if (!lightingChanged && !galleryChanged && !galleryManager.hasReadinessWork()) {
+      return;
+    }
 
     // v0.03: feed view-space key-light direction into PaintingMaterial so
     // the self-shadow march in tangent space can run. The camera's

@@ -30,6 +30,9 @@ export class LightingSetup {
   private animate = true;
   private lastUpdateTime = 0;
   private animatedTime = 0;
+  // v0.74 Phase 12 (Type B) — track the shadow expectation so the structural
+  // invariant tooling can assert the live shadow-caster count matches intent.
+  private shadowsEnabled = false;
 
   constructor(scene: THREE.Scene, preset: QualityPreset, profileId: LightProfileId = DEFAULT_LIGHT_PROFILE) {
     this.scene = scene;
@@ -57,20 +60,32 @@ export class LightingSetup {
     if (next.id === this.profile.id) return;
     this.profile = next;
     this.applyProfile(next);
+    this.lastUpdateTime = 0;
   }
 
   applyPreset(preset: QualityPreset): void {
+    this.shadowsEnabled = preset.shadows;
     for (const spot of this.spots) {
       spot.castShadow = preset.shadows;
     }
+  }
+
+  /** v0.74 Type B tooling — live lights for structural invariant checks. */
+  getLights(): THREE.Light[] {
+    return [...this.spots, this.ambientLight];
+  }
+
+  /** v0.74 Type B tooling — expected shadow-caster count for the active preset. */
+  getExpectedShadowCasterCount(): number {
+    return this.shadowsEnabled ? this.spots.length : 0;
   }
 
   setAnimated(animate: boolean): void {
     this.animate = animate;
   }
 
-  update(time: number): void {
-    if (!this.animate || !this.profile.animateAllowed) return;
+  update(time: number): boolean {
+    if (!this.animate || !this.profile.animateAllowed) return false;
     if (this.lastUpdateTime > 0) {
       this.animatedTime += Math.min(time - this.lastUpdateTime, MAX_LIGHTING_DT_MS);
     }
@@ -79,9 +94,10 @@ export class LightingSetup {
     // smaller in v0.03 because the new gallery-soft key sits closer to the
     // painting, so a 0.6 unit drift would be too perceptible.
     const primary = this.spots[0];
-    if (!primary) return;
+    if (!primary) return false;
     const baseX = this.profile.keys[0]?.position.x ?? -3;
     primary.position.x = baseX + Math.sin(this.animatedTime * 0.0002) * 0.25;
+    return true;
   }
 
   dispose(): void {

@@ -1,5 +1,6 @@
 export type DiagnosticsMode = 'default' | 'info' | 'verbose';
 export type DiagnosticLevel = 'debug' | 'info' | 'warn' | 'error';
+export type DiagnosticData = unknown | (() => unknown);
 
 export interface DiagnosticEntry {
   id: number;
@@ -189,19 +190,19 @@ class Diagnostics {
     });
   }
 
-  debug(scope: string, event: string, message: string, data?: unknown): void {
+  debug(scope: string, event: string, message: string, data?: DiagnosticData): void {
     this.push('debug', scope, event, message, data);
   }
 
-  info(scope: string, event: string, message: string, data?: unknown): void {
+  info(scope: string, event: string, message: string, data?: DiagnosticData): void {
     this.push('info', scope, event, message, data);
   }
 
-  warn(scope: string, event: string, message: string, data?: unknown): void {
+  warn(scope: string, event: string, message: string, data?: DiagnosticData): void {
     this.push('warn', scope, event, message, data);
   }
 
-  error(scope: string, event: string, message: string, data?: unknown): void {
+  error(scope: string, event: string, message: string, data?: DiagnosticData): void {
     this.push('error', scope, event, message, data);
   }
 
@@ -285,15 +286,12 @@ class Diagnostics {
     };
   }
 
-  private push(level: DiagnosticLevel, scope: string, event: string, message: string, data?: unknown): void {
-    let safeData: unknown;
-    try {
-      safeData = data === undefined ? undefined : serializeValue(data);
-    } catch (err) {
-      safeData = {
-        serializationError: err instanceof Error ? err.message : String(err),
-      };
-    }
+  isLevelEnabled(level: DiagnosticLevel): boolean {
+    return level !== 'debug' || this.mode === 'verbose';
+  }
+
+  private push(level: DiagnosticLevel, scope: string, event: string, message: string, data?: DiagnosticData): void {
+    if (!this.isLevelEnabled(level)) return;
     const now = performance.now();
     const dedupeKey = `${level}|${scope}|${event}|${message}`;
     const dedupeHit = this.dedupe.get(dedupeKey);
@@ -304,6 +302,16 @@ class Diagnostics {
         dedupeHit.lastSeen = now;
         return;
       }
+    }
+
+    let safeData: unknown;
+    try {
+      const rawData = typeof data === 'function' ? (data as () => unknown)() : data;
+      safeData = rawData === undefined ? undefined : serializeValue(rawData);
+    } catch (err) {
+      safeData = {
+        serializationError: err instanceof Error ? err.message : String(err),
+      };
     }
 
     const entry: DiagnosticEntry = {
@@ -371,19 +379,27 @@ class ScopedDiagnostics {
     private readonly scope: string
   ) {}
 
-  debug(event: string, message: string, data?: unknown): void {
+  isDebugEnabled(): boolean {
+    return this.diagnostics.isLevelEnabled('debug');
+  }
+
+  debug(event: string, message: string, data?: DiagnosticData): void {
     this.diagnostics.debug(this.scope, event, message, data);
   }
 
-  info(event: string, message: string, data?: unknown): void {
+  debugLazy(event: string, message: string, data: () => unknown): void {
+    this.diagnostics.debug(this.scope, event, message, data);
+  }
+
+  info(event: string, message: string, data?: DiagnosticData): void {
     this.diagnostics.info(this.scope, event, message, data);
   }
 
-  warn(event: string, message: string, data?: unknown): void {
+  warn(event: string, message: string, data?: DiagnosticData): void {
     this.diagnostics.warn(this.scope, event, message, data);
   }
 
-  error(event: string, message: string, data?: unknown): void {
+  error(event: string, message: string, data?: DiagnosticData): void {
     this.diagnostics.error(this.scope, event, message, data);
   }
 }

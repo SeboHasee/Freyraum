@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
+import { createScopedDiagnostics } from '../utils/Diagnostics';
+
+const diagnostics = createScopedDiagnostics('canvas-material');
 
 type FrameShaderUniforms = {
   uFrameSeed: { value: number };
@@ -486,7 +489,7 @@ export class CanvasMaterial {
             ? 0.004
             : 0.0;
       const roughnessGrainAmp = preset.frameDetailLevel === 'high' ? 0.040 : 0.030;
-      console.debug('[CanvasMaterial] frame-shader-compiled', {
+      diagnostics.debugLazy('frame-shader-compiled', 'Frame shader compiled', () => ({
         version: 'v0.69',
         preset: preset.id,
         frameDetailLevel: preset.frameDetailLevel,
@@ -505,7 +508,7 @@ export class CanvasMaterial {
         normalApproach: 'pure-1D-along-only-yConst-per-seed',
         roughnessGrain: 'pure-1D-along-direction',
         cacheKey,
-      });
+      }));
     };
     // Unique cache key per frame detail level so Three.js compiles distinct
     // programs for the three GLSL variants.  Per-artwork seed only updates a
@@ -517,11 +520,11 @@ export class CanvasMaterial {
     // Store uniforms reference for refreshFrameUniforms (seed-only update on navigation).
     material.userData.frameUniforms = uniforms;
 
-    console.debug('[CanvasMaterial] frame-material-created', {
+    diagnostics.debugLazy('frame-material-created', 'Frame material created', () => ({
       preset: preset.id, seed,
       frameRoughness: preset.frameRoughness, frameAnisotropy: preset.frameAnisotropy,
       coordinateMode: 'vertex-attribute-barUV',
-    });
+    }));
 
     return material;
   }
@@ -536,17 +539,17 @@ export class CanvasMaterial {
     const u = material.userData.frameUniforms as FrameShaderUniforms | undefined;
     if (!u) return;
     u.uFrameSeed.value = seed * 0.00390625;
-    console.debug('[CanvasMaterial] frame-uniforms-refreshed', { seed });
+    diagnostics.debugLazy('frame-uniforms-refreshed', 'Frame seed uniform refreshed', () => ({ seed }));
   }
 
   refreshFramePresetUniforms(material: THREE.MeshPhysicalMaterial, preset: QualityPreset): void {
     const u = material.userData.frameUniforms as FrameShaderUniforms | undefined;
     if (!u) return;
     u.uBaseRoughness.value = preset.frameRoughness;
-    console.debug('[CanvasMaterial] frame-preset-uniforms-refreshed', {
+    diagnostics.debugLazy('frame-preset-uniforms-refreshed', 'Frame preset uniforms refreshed', () => ({
       preset: preset.id,
       frameRoughness: preset.frameRoughness,
-    });
+    }));
   }
 
   refreshFrameGeometryUniforms(
@@ -558,7 +561,7 @@ export class CanvasMaterial {
     // v0.53: No-op. Frame coordinates are now baked into the geometry attribute
     // (aFrameUV) and no longer depend on runtime uniforms. The geometry itself
     // is rebuilt when aspect changes, which regenerates the attribute.
-    console.debug('[CanvasMaterial] frame-geometry-uniforms-noop (v0.53 attribute-based)');
+    diagnostics.debug('frame-geometry-uniforms-noop', 'Frame geometry uniforms noop (v0.53 attribute-based)');
   }
 
   dispose(): void {

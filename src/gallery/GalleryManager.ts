@@ -251,6 +251,28 @@ interface NavigationProbe {
   };
 }
 
+interface AnimationSnapshot {
+  groupX: number;
+  groupY: number;
+  groupZ: number;
+  groupRotX: number;
+  groupRotY: number;
+  groupScaleX: number;
+  groupScaleY: number;
+  groupScaleZ: number;
+  zoom: number;
+  cameraX: number;
+  cameraY: number;
+  cameraZ: number;
+  panX: number;
+  panY: number;
+  targetX: number;
+  targetY: number;
+  targetZoom: number;
+  targetPanX: number;
+  targetPanY: number;
+}
+
 /**
  * v0.06: roles whose procedural texel grid is visible under raking light at
  * maximum zoom. When `inspectionMode` is true and the active preset declares
@@ -271,6 +293,14 @@ export class GalleryManager {
   private readonly textureManager: TextureManager;
   private readonly procedural: ProceduralTextureFactory;
   private readonly camera: THREE.PerspectiveCamera;
+  // v0.74 OPT-1/T1-A — cache `tan(fov/2)`. `camera.fov` is constant at runtime
+  // (never reassigned anywhere in src/; only `aspect` changes on resize), so
+  // this avoids recomputing the same `Math.tan(degToRad(...))` 2–3× per frame.
+  // The cache is keyed on the fov value, so a future fov change still recomputes
+  // correctly on the next read. Output is mathematically identical.
+  private _fovTanCache = NaN;
+  private _fovTanForFov = NaN;
+  private readonly panelClickMouse = new THREE.Vector2();
   private readonly viewportMetricsProvider: ViewportMetricsProvider | null;
   private readonly raycaster = new THREE.Raycaster();
   private reducedMotion = false;
@@ -326,6 +356,7 @@ export class GalleryManager {
   private pendingNavigationProbe: NavigationProbe | null = null;
   private readonly proceduralQueue = new Set<number>();
   private proceduralQueueRunning = false;
+  private renderDirtyFrames = 8;
 
   private targetX = 0;
   private targetY = 0;
@@ -397,6 +428,7 @@ export class GalleryManager {
       this.interactionFrameCount = 0;
       this.interactionFrameTotalMs = 0;
       this.interactionFrameDropped = 0;
+      this.markRenderDirty(4);
       this.diagnostics.debug('interaction-start', 'Pointer interaction window opened; non-critical prefetch paused');
     } else {
       const durationMs = this.now() - this.interactionActiveSince;
@@ -413,6 +445,7 @@ export class GalleryManager {
           : 0,
       });
       this.interactionActive = false;
+      this.markRenderDirty(2);
       this.interactionActiveSince = 0;
       this.interactionFrameCount = 0;
       this.interactionFrameTotalMs = 0;
@@ -434,6 +467,10 @@ export class GalleryManager {
     this.interactionFrameCount += 1;
     this.interactionFrameTotalMs += dtMs;
     if (dtMs > 33) this.interactionFrameDropped += 1;
+  }
+
+  markRenderDirty(frames = 4): void {
+    this.renderDirtyFrames = Math.max(this.renderDirtyFrames, Math.max(1, Math.round(frames)));
   }
 
   configureReadinessProfile(profile: ReadinessProfileConfig): void {
@@ -497,6 +534,7 @@ export class GalleryManager {
       specularStrength: preset.specularStrength,
       selfShadowBias: preset.selfShadowBias,
     });
+    this.markRenderDirty(4);
     // Rebuild the current artwork's map set so preset-specific roles
     // (detailNormal, height, roughness, specular, AO) are added/removed
     // immediately on quality changes.
@@ -514,6 +552,7 @@ export class GalleryManager {
   setInspectionMode(on: boolean): void {
     if (on === this.inspectionMode) return;
     this.inspectionMode = on;
+    this.markRenderDirty(4);
     this.diagnostics.info('inspection-mode', `Inspection mode ${on ? 'enabled' : 'disabled'}`);
     if (this.currentPreset) void this.showArtwork(this.currentIndex);
   }
@@ -603,14 +642,20 @@ export class GalleryManager {
   }
 
   addZoomDelta(delta: number): void {
-    this.targetZoom = this.clampZoom(this.targetZoom + delta);
-    this.clampPanTargets();
+    const metrics = this.getViewportMetrics();
+    const bounds = this.getZoomBounds(metrics);
+    this.targetZoom = this.clampZoom(this.targetZoom + delta, bounds);
+    this.clampPanTargets(metrics, bounds);
+    this.markRenderDirty(4);
   }
 
   setPanOffset(deltaX: number, deltaY: number): void {
-    const { x, y } = this.getPanLimits(this.targetZoom);
+    const metrics = this.getViewportMetrics();
+    const bounds = this.getZoomBounds(metrics);
+    const { x, y } = this.getPanLimits(this.targetZoom, metrics, bounds);
     this.targetPanX = clamp(this.targetPanX + deltaX, -x, x);
     this.targetPanY = clamp(this.targetPanY + deltaY, -y, y);
+    this.markRenderDirty(4);
   }
 
   canPan(): boolean {
@@ -621,7 +666,7 @@ export class GalleryManager {
   getHoverRotationScale(): { x: number; y: number } {
     const bounds = this.getZoomBounds();
     const zoomRange = Math.max(0.001, bounds.maxOverviewZoom - bounds.minInspectionZoom);
-    const zoomProgress = (this.clampZoom(this.targetZoom) - bounds.minInspectionZoom) / zoomRange;
+    const zoomProgress = (this.clampZoom(this.targetZoom, bounds) - bounds.minInspectionZoom) / zoomRange;
 
     return {
       x: 0.03 + zoomProgress * 0.13,
@@ -660,7 +705,7 @@ export class GalleryManager {
         };
       }
     }
-    this.diagnostics.debug('show-artwork', 'Preparing artwork render state', {
+    this.diagnostics.debugLazy('show-artwork', 'Preparing artwork render state', () => ({
       index,
       artworkId: artwork.id,
       token,
@@ -671,7 +716,7 @@ export class GalleryManager {
         : 'local-relative',
       dimensions: artwork.dimensions,
       surfaceProfile: artwork.surfaceProfile ?? 'matte-canvas',
-    });
+    }));
 
     // Side previews use albedo only, even when authored sets exist.
     // v0.09: side panels use webglImage too so they match the preloaded cache key.
@@ -701,11 +746,11 @@ export class GalleryManager {
 
     // Audited guard: discard stale loads.
     if (token !== this.artworkLoadToken) {
-      this.diagnostics.debug('stale-load', 'Discarded stale artwork load', {
+      this.diagnostics.debugLazy('stale-load', 'Discarded stale artwork load', () => ({
         artworkId: artwork.id,
         token,
         latestToken: this.artworkLoadToken,
-      });
+      }));
       return;
     }
 
@@ -733,6 +778,7 @@ export class GalleryManager {
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
     this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
     this.markReadiness(index, 'materialApplied', 'show-artwork');
+    this.markRenderDirty(8);
 
     // Log the full resolved texture map so support can see which roles are
     // authored vs procedurally generated vs absent at a glance.
@@ -742,12 +788,12 @@ export class GalleryManager {
       else if (resolved[role]) resolvedSummary[role] = 'procedural';
       else resolvedSummary[role] = 'absent';
     }
-    this.diagnostics.debug('show-artwork-maps', 'Resolved texture map for artwork', {
+    this.diagnostics.debugLazy('show-artwork-maps', 'Resolved texture map for artwork', () => ({
       artworkId: artwork.id,
       maps: resolvedSummary,
       shaderVariant: preset.shaderVariant,
       inspectionMode: this.inspectionMode,
-    });
+    }));
 
     // v0.09: check fallback using the same URL that was loaded (albedoUrl).
     const albedoIsFallback = this.textureManager.isFallback(albedoUrl, 'albedo');
@@ -763,7 +809,7 @@ export class GalleryManager {
     }
     const viewportMetrics = this.getViewportMetrics();
     const zoomBounds = this.getZoomBounds(viewportMetrics);
-    const panLimitsAtReset = this.getPanLimits(zoomBounds.resetFitZoom);
+    const panLimitsAtReset = this.getPanLimits(zoomBounds.resetFitZoom, viewportMetrics, zoomBounds);
     const isPortraitReset = this.isPortraitResetArtwork();
     this.diagnostics.info('show-artwork-complete', 'Artwork is ready', {
       artworkId: artwork.id,
@@ -810,10 +856,10 @@ export class GalleryManager {
       this.pendingResetAfterArtworkLoad = false;
       this.resetView();
     } else {
-      this.targetZoom = this.clampZoom(this.targetZoom);
-      this.zoom = this.clampZoom(this.zoom);
+      this.targetZoom = this.clampZoom(this.targetZoom, zoomBounds);
+      this.zoom = this.clampZoom(this.zoom, zoomBounds);
     }
-    this.clampPanTargets();
+    this.clampPanTargets(viewportMetrics, zoomBounds);
     this.prefetchAdjacentArtworks(index);
     this.queueProceduralWindow(index, this.readinessRadius, 'show-artwork-adjacent');
     this.logNavigationReadinessVerdict(index);
@@ -1072,7 +1118,8 @@ export class GalleryManager {
     if (timing.pbrMs !== undefined) entry.pbrMs = Math.round(timing.pbrMs * 10) / 10;
     if (timing.proceduralMs !== undefined) entry.proceduralMs = Math.round(timing.proceduralMs * 10) / 10;
     if (timing.lastWarmMs !== undefined) entry.lastWarmMs = Math.round(timing.lastWarmMs * 10) / 10;
-    this.diagnostics.debug('readiness', `Artwork readiness updated: ${stage}`, {
+    this.markRenderDirty(2);
+    this.diagnostics.debugLazy('readiness', `Artwork readiness updated: ${stage}`, () => ({
       index,
       artworkId: entry.artworkId,
       stage,
@@ -1090,7 +1137,7 @@ export class GalleryManager {
         proceduralMs: entry.proceduralMs,
         lastWarmMs: entry.lastWarmMs,
       },
-    });
+    }));
   }
 
   private now(): number {
@@ -1400,7 +1447,8 @@ export class GalleryManager {
     }
     this.zoom = clamp(this.zoom, bounds.minInspectionZoom, bounds.maxOverviewZoom);
     this.lastResetFitZoom = bounds.resetFitZoom;
-    this.clampPanTargets();
+    this.clampPanTargets(viewportMetrics, bounds);
+    this.markRenderDirty(4);
 
     this.diagnostics.info('viewport-refit', 'Artwork viewport metrics changed', {
       resetFitZoom: bounds.resetFitZoom,
@@ -1413,8 +1461,10 @@ export class GalleryManager {
   }
 
   setHoverTarget(x: number, y: number): void {
+    if (this.targetY === x && this.targetX === y) return;
     this.targetY = x;
     this.targetX = y;
+    this.markRenderDirty(2);
   }
 
   onNavigate(cb: NavigationCallback): void {
@@ -1436,7 +1486,7 @@ export class GalleryManager {
 
   handlePanelClick(event: MouseEvent, canvas: HTMLCanvasElement): void {
     const rect = canvas.getBoundingClientRect();
-    const mouse = new THREE.Vector2(
+    const mouse = this.panelClickMouse.set(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     );
@@ -1460,8 +1510,9 @@ export class GalleryManager {
    * lambda, dt)` which is the analytic solution to exponential decay, so
    * timing is consistent across 30 Hz, 60 Hz, 90 Hz, and 120 Hz displays.
    */
-  update(now: number): void {
+  update(now: number): boolean {
     const group = this.artworkMesh.group;
+    const before = this.readAnimationSnapshot();
 
     // Compute dt. Skip the very first tick (no previous timestamp) so we
     // do not feed an unbounded delta into smoothDamp. Clamp to
@@ -1475,10 +1526,12 @@ export class GalleryManager {
     // Target clamping runs every tick (including the first, when dt is 0)
     // so that any target written between frames — e.g. by zoom/pan input
     // handlers — is constrained even before the first smoothing step.
-    this.targetZoom = this.clampZoom(this.targetZoom);
-    this.clampPanTargets();
+    const metrics = this.getViewportMetrics();
+    const bounds = this.getZoomBounds(metrics);
+    this.targetZoom = this.clampZoom(this.targetZoom, bounds);
+    this.clampPanTargets(metrics, bounds);
 
-    if (dt <= 0) return;
+    if (dt <= 0) return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
 
     // Hover rotation — λ=12 → ~250 ms settle (immediate feel).
     group.rotation.x = smoothDamp(group.rotation.x, this.targetX, LAMBDA_HOVER_ROTATION, dt);
@@ -1509,6 +1562,7 @@ export class GalleryManager {
     this.panY = smoothDamp(this.panY, this.targetPanY, LAMBDA_CAMERA_PAN, dt);
     this.camera.position.x = smoothDamp(this.camera.position.x, this.panX, LAMBDA_CAMERA_PAN, dt);
     this.camera.position.y = smoothDamp(this.camera.position.y, this.panY, LAMBDA_CAMERA_PAN, dt);
+    return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
   }
 
   resetView(): void {
@@ -1519,26 +1573,84 @@ export class GalleryManager {
     this.lastResetFitZoom = bounds.resetFitZoom;
     this.targetX = 0;
     this.targetY = 0;
+    this.markRenderDirty(4);
   }
 
-  private clampZoom(value: number): number {
-    const bounds = this.getZoomBounds();
+  private consumeRenderDirty(): boolean {
+    if (this.renderDirtyFrames <= 0) return false;
+    this.renderDirtyFrames -= 1;
+    return true;
+  }
+
+  private readAnimationSnapshot(): AnimationSnapshot {
+    const group = this.artworkMesh.group;
+    return {
+      groupX: group.position.x,
+      groupY: group.position.y,
+      groupZ: group.position.z,
+      groupRotX: group.rotation.x,
+      groupRotY: group.rotation.y,
+      groupScaleX: group.scale.x,
+      groupScaleY: group.scale.y,
+      groupScaleZ: group.scale.z,
+      zoom: this.zoom,
+      cameraX: this.camera.position.x,
+      cameraY: this.camera.position.y,
+      cameraZ: this.camera.position.z,
+      panX: this.panX,
+      panY: this.panY,
+      targetX: this.targetX,
+      targetY: this.targetY,
+      targetZoom: this.targetZoom,
+      targetPanX: this.targetPanX,
+      targetPanY: this.targetPanY,
+    };
+  }
+
+  private animationSnapshotChanged(before: AnimationSnapshot): boolean {
+    const after = this.readAnimationSnapshot();
+    return Object.keys(before).some((key) => {
+      const k = key as keyof AnimationSnapshot;
+      return Math.abs(after[k] - before[k]) > 1e-5;
+    });
+  }
+
+  private clampZoom(value: number, bounds = this.getZoomBounds()): number {
     return clamp(value, bounds.minInspectionZoom, bounds.maxOverviewZoom);
   }
 
-  private clampPanTargets(): void {
-    const limits = this.getPanLimits(this.targetZoom);
+  private clampPanTargets(
+    metrics = this.getViewportMetrics(),
+    bounds = this.getZoomBounds(metrics)
+  ): void {
+    const limits = this.getPanLimits(this.targetZoom, metrics, bounds);
     this.targetPanX = clamp(this.targetPanX, -limits.x, limits.x);
     this.targetPanY = clamp(this.targetPanY, -limits.y, limits.y);
   }
 
-  private getPanLimits(zoom: number): { x: number; y: number } {
-    const metrics = this.getViewportMetrics();
-    const bounds = this.getZoomBounds(metrics);
+  /**
+   * v0.74 OPT-1/T1-A — memoized `tan(degToRad(fov/2))`. Recomputes only when
+   * the camera fov actually changes (it does not at runtime), so the common
+   * case is a single field read instead of a `Math.tan` + `degToRad` per call.
+   */
+  private getFovTan(): number {
+    const fov = this.camera.fov;
+    if (fov !== this._fovTanForFov) {
+      this._fovTanForFov = fov;
+      this._fovTanCache = Math.tan(THREE.MathUtils.degToRad(fov * 0.5));
+    }
+    return this._fovTanCache;
+  }
+
+  private getPanLimits(
+    zoom: number,
+    metrics = this.getViewportMetrics(),
+    bounds = this.getZoomBounds(metrics)
+  ): { x: number; y: number } {
     const boundedZoom = clamp(zoom, bounds.minInspectionZoom, bounds.maxOverviewZoom);
     const visibleHeight = 2 *
       boundedZoom *
-      Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) *
+      this.getFovTan() *
       metrics.usableFracY;
     const visibleWidth = visibleHeight * metrics.effectiveAspect;
 
@@ -1563,7 +1675,7 @@ export class GalleryManager {
   }
 
   private getInspectionMinZoom(metrics: ArtworkViewportMetrics): number {
-    const fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+    const fovTan = this.getFovTan();
     const requiredHeight = this.artworkMesh.artworkHeight * MIN_VISIBLE_ARTWORK_FRACTION;
     const requiredWidth = this.artworkMesh.artworkWidth * MIN_VISIBLE_ARTWORK_FRACTION;
     const heightDistance = requiredHeight / (2 * fovTan * metrics.usableFracY);
@@ -1575,7 +1687,7 @@ export class GalleryManager {
   private getResetFitZoom(metrics: ArtworkViewportMetrics): number {
     const frameWidth = this.artworkMesh.artworkWidth + 0.4;
     const frameHeight = this.artworkMesh.artworkHeight + 0.4;
-    const fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+    const fovTan = this.getFovTan();
     const heightDistance = (frameHeight * RESET_VIEW_FRAME_MARGIN) / (2 * fovTan * metrics.usableFracY);
     const widthDistance = (frameWidth * RESET_VIEW_FRAME_MARGIN) /
       (2 * fovTan * this.camera.aspect * metrics.usableFracX);

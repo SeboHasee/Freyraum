@@ -2,6 +2,39 @@
 > v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
 > Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
 
+## v0.74 — Performance remediation execution (2026-06-21, **shipped**)
+
+### Status
+
+**Shipped.** Completes the reviewer-identified v0.74 Tier 1 gaps and converts more of the regression tooling from passive helpers into runnable gates.
+
+### Summary
+
+- **OPT-1 completed:** `GalleryManager.update()` now measures viewport metrics once for the frame and passes the same metrics/bounds through zoom and pan clamping, avoiding repeated viewport recomputation in the hot path.
+- **OPT-2 shipped as standalone frame-geometry cache:** `ArtworkMesh` caches/reuses `frameMesh.geometry` by aspect + bevel state. This does not touch `artworkMesh.geometry`, so it does not conflict with future OPT-9 artwork LOD ownership.
+- **OPT-7 completed:** panel-click raycasting now reuses a `THREE.Vector2` scratch instead of allocating on every panel click.
+- **T1-C completed:** debug diagnostics are skipped entirely outside verbose mode, support lazy payload factories, and frame/material debug logs now route through diagnostics instead of direct `console.debug`.
+- **Phase 0 first step shipped:** the render loop now samples frame budget every rAF but skips `postProcessing.render()` when lighting, gallery animation, readiness work, and dirty-frame cooldowns are all settled.
+- **Regression gates improved:** Type A visual regression coverage now spans lighting profile × artwork step × zoom state and checks Type B invariants before every screenshot. Type C tooling exposes Tier 1 threshold checks for GC/min and GC pause P99.
+
+### Validation
+
+- Baseline before edits: `npm install`, `npm run lint`, `npm run build`, `npm run test:frame-budget`, `npm run docs:check-config-authority` ✅
+- After runtime edits: `npm run lint`, `npm run build:typecheck` ✅
+
+### Files
+
+- `src/gallery/GalleryManager.ts`
+- `src/gallery/ArtworkMesh.ts`
+- `src/lighting/LightingSetup.ts`
+- `src/main.ts`
+- `src/materials/CanvasMaterial.ts`
+- `src/utils/Diagnostics.ts`
+- `src/utils/PerformanceMetrics.ts`
+- `src/utils/performanceTooling.ts`
+- `scripts/visual-regression.mjs`
+- `plan.md`, `FINDINGS.md`, `docs/REGRESSION_TOOLING.md`, `README.md`, `ARCHITECTURE_MAP.md`, `docs/HANDOFF.md`
+
 ## v0.73 — Merge-readiness docs sync (2026-06-05, **shipped**)
 
 ### Status
