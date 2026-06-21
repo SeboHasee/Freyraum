@@ -1,331 +1,52 @@
-# FREYRAUM architecture map
-> v0.73 shipped architecture update: active runtime frame baseline is v0.69 and docs are merge-synced.
-> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+# FREYRAUM Architecture Map
 
-## v0.73 frame-status architecture note (**shipped**)
+This file documents the current architecture and ownership boundaries only.
+Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
 
-1. **Active frame runtime on this branch is v0.69 baseline.** `customProgramCacheKey` uses `frame-v0.69-*`.
-2. **v0.70+ macro lane is historical in this branch state.** No active `FRAME_MACRO_SCRATCH` branch in the runtime shader path.
-3. **Anti-banding invariant remains core architecture.** Keep FBM/noise normal-driving terms free from `barUV.y` inputs.
-4. **Status docs now reflect active runtime.** Merge-readiness requires release notes and architecture notes to describe current behavior, not historical intermediate states.
-
-## v0.70 macro-scratch architecture note (**shipped**)
-
-1. **Two-lane model is now live.** `CanvasMaterial` combines existing micro lane with a dedicated macro lane (`FRAME_MACRO_SCRATCH` high/balanced).
-2. **Per-lane attenuation is now explicit.** Micro lane uses aggressive attenuation; macro lane uses slower attenuation and fades later.
-3. **v0.54 anti-banding invariant is still non-negotiable.** No `barUV.y` in FBM/noise terms that feed normal gradients.
-4. **Frame direction control remains on `vFrameUV`.** High preset keeps GLSL anisotropy-direction perturbation in `lights_physical_fragment` replacement.
-5. **Roughness-first macro policy is implemented.** Macro readability is primarily roughness-driven; normal macro perturbation is bounded.
-6. **Preset envelope is explicit.** High = full macro; balanced = reduced macro; battery = macro off.
-7. **Compile/cache contract updated.** Frame shader cache key version is now `frame-v0.70-*`.
-8. **Diagnostics contract updated.** Compile logs include macro lane mode and tuning ranges.
-
-## v0.69 frame-shader invariants (updated)
-
-1. **Cross-bar gradient must remain zero.** Both `frmBrushedFbm` (primary) and `frmBrushedFbm2` (M-02 fine) take only `alongX` plus a seed-derived `yConst*` scalar. `barUV.y` is never an input to any FBM call → `dFBM/dY = 0`. Violation: any future code that adds a `barUV.y`-dependent term inside the FBMs would reintroduce v0.53-style banding.
-2. **Per-artwork seed = uniform-only.** `customProgramCacheKey()` depends on `frameDetailLevel`, not seed. Adding seed to the key would explode the Three.js program cache to one entry per artwork.
-3. **Preset compile-flag source of truth.** `QualityPreset.frameDetailLevel` (`'high' | 'balanced' | 'none'`) is the only place the detail-level branching is encoded. `onBeforeCompile` prepends `#define FRAME_DETAIL_HIGH|BALANCED` accordingly and chooses the roughness/lights-physical replacements based on it. Shader code must not read `preset.id` directly.
-4. **`anisotropyMap` is intentionally not used for the frame.** Three.js r166 native `anisotropyMap` samples from the standard `uv` channel which does not align with `aFrameUV`. Per-fragment direction perturbation is done by replacing `#include <lights_physical_fragment>` (high preset only) and computing `anisotropyV` from `vFrameUV` directly. Future contributors who reach for `material.anisotropyMap = ...` for frame work should re-read this section.
-5. **Cache-key versioning is mandatory on GLSL changes.** Bump `'frame-v0.69-…'` → `'frame-v0.70-…'` (etc.) whenever any compile-time GLSL changes, or Three.js will serve stale compiled binaries to existing materials.
-
-## v0.68 frame-detail plan architecture note (**planning/docs-only**)
-
-The next frame-realism pass must keep the current ownership split:
-
-- `CanvasMaterial`: frame shading model + shader injection points + frame diagnostics.
-- `ArtworkMesh`: frame geometry/tangents and `aFrameUV` vertex attribute generation.
-- `quality.ts`: preset-level cost/fidelity policy (`frameRoughness`, `frameAnisotropy`, `frameClearcoat`, bevel policy). Add `frameDetailLevel: 'high' | 'balanced' | 'none'` to drive `onBeforeCompile` `#define` selection.
-
-Invariants for the implementation pass (historical snapshot; v0.69 supersedes anisotropy guidance):
-
-1. **Preserve the v0.54 anti-banding constraint.** No `barUV.y` input to any FBM or noise call — every new function must use a seed-derived `yConst` constant so `dFBM/dY = 0` exactly.
-2. **Treat close-up detail as bounded multi-scale additions.** M-02 fine grain amplitude `0.006` (≤ 1:4 ratio vs primary `0.025`); M-03 cluster gain capped at `0.16`; M-04 anisotropy direction perturbation ±8%.
-3. **`customProgramCacheKey` must be versioned when GLSL changes.** Change from `'frame-v0.54'` → `'frame-v0.69-' + preset.id`. Use `#define FRAME_DETAIL_HIGH` / `FRAME_DETAIL_BALANCED` guards in `onBeforeCompile` to keep program count to three (high, balanced, battery) rather than one per seed.
-4. **Superseded by v0.69 audit delta.** Frame anisotropy direction for this codebase should remain in the `vFrameUV` GLSL injection path, because standard `uv`-based `anisotropyMap` sampling does not align with `aFrameUV` on frame geometry.
-5. **`fwidth(barUV.x)` is the AA guard for all new high-frequency terms.** `smoothstep(0.004, 0.015, fwidth(barUV.x))` covers the close-zoom to mid-distance transition without conditional branching.
-6. **Battery preset conservative.** No `#define` fine-grain path; `'frame-v0.69-battery'` compiles GLSL identical to v0.54 behavior.
-7. **Diagnostics before/after.** Extend `[CanvasMaterial] frame-shader-compiled` with `normalGradientScale`, `fineGrainAmplitude`, `clusterGainEnabled`, `anisoMapEnabled`, `cacheKey` for regression-detectable baseline records.
-
-## v0.68 staged startup-readiness architecture note
-
-The startup readiness contract is owned by one config module (`src/config/startup.ts`) and applied through `GalleryManager.configureStartupReadiness(...)` before `init()`. Invariants:
-
-- **Single feature flag.** `startupReadinessMode` (`full` | `entry-balanced` | `entry-minimal`) is the only rollout switch; resolved from `?startup=` → `localStorage` → default. `full` is the exact legacy/strict baseline.
-- **Entry target set = warm-order prefix.** `getStartupEntryTargets(0)` returns `getBudgetedWarmOrder(0).slice(0, entryTargetCount)`, so it is always a prefix of `warmOrder`. The post-reveal `continueWarmQueue` therefore resumes at `warmCursor = entryTargets.length` and warms exactly the deferred remainder — do not break this prefix relationship.
-- **Determinism.** Deferred artworks go through the existing `critical-now` / `near-next` / `background` lane scheduler; never rely on opportunistic idle callbacks alone for completion.
-- **Warm budget is centralised.** All warm-budget constants live in `WARM_BUDGET` (`src/config/startup.ts`); behaviour and diagnostics must read from there so they cannot diverge.
-- **Diagnostics schema stability.** The `boot / performance-gate` record (`schemaVersion: 1`) is the phase-comparison contract; extend additively and bump `schemaVersion` on breaking changes.
-
-## v0.65 clean-chrome affordance architecture note
-
-v0.65 keeps v0.64 architecture boundaries (DOM ownership in `ChromeVisibilityManager`, styling in `src/styles/main.scss`) and applies a visual-polish layer only: stronger cue tokens, higher idle pulse floor, subtle glass material treatment for strips, and reinforced static markers.
-
-Invariants remain unchanged:
-
-- clean-mode cue visibility must remain predictable (`:root[data-chrome-mode='clean']` selectors).
-- settle selector must stay specificity-safe against clean-mode pulse rules.
-- reduced-motion and forced-colors branches must continue to override decorative motion/appearance safely.
-
-## v0.64 clean-chrome affordance architecture note
-
-Hidden chrome affordances are owned by `ChromeVisibilityManager.createPeekElements()` and styled exclusively in `src/styles/main.scss`. The v0.64 invariant is: **do not animate whole-element opacity down to a value that multiplies RGBA tokens below visible contrast**. If future work changes strip/chevron alpha, calculate effective alpha as `rgbaAlpha × elementOpacity`.
-
-The bottom timeline affordance must remain a `column-reverse` stack (`.timeline-peek` at the safe-area bottom, `.timeline-chevron` centered above it). The settle class lives on `#app`; selectors that override clean-mode pulse must include enough specificity, currently `:root[data-chrome-mode='clean'] #app.affordance-settling ...` for settle and clean-mode-qualified selectors inside `prefers-reduced-motion`.
-
-## v0.58 UI architecture additions
-
-`src/ui/Topbar.ts` now uses a two-group layout: `.topbar__left` (brand + badge) and `.topbar__right` (help button + tooltip). Both groups receive `pointer-events: auto` while the parent `.topbar` remains passthrough (`pointer-events: none`) for 3D canvas interaction.
-
-The help button is now a standalone 44×44px glass button with inline SVG icon (no longer extends `.nav-btn`). An accessible tooltip (`role="tooltip"`, `aria-describedby`) is rendered as a sibling in `.topbar__right` and shown via CSS `:hover + .topbar__tooltip` / `:focus-visible + .topbar__tooltip`.
-
-Future utility buttons (settings, notifications) should be added to `.topbar__right` following the same pattern: 44px glass circle, inline SVG, adjacent tooltip.
-
-## v0.47 shipped frame-material architecture note
-
-Frame surfacing remains shader-owned in `CanvasMaterial`, now with a bar-aligned coordinate transform (`frmBarBrushCoords`) before FBM/scratch evaluation. Preset policy stays in `quality.ts`; geometry/tangent ownership remains in `ArtworkMesh`.
-
-## v0.45 planned frame-material architecture note
-
-The next frame-quality pass should treat procedural frame surfacing as a shader-owned subsystem inside `CanvasMaterial`: continuous frame-space coordinates, aperiodic multi-domain grain, derivative-aware scratch primitives, roughness modulation, and compile diagnostics. Preset policy remains in `quality.ts`; geometry/tangent ownership remains in `ArtworkMesh`.
-
-Important boundary: Three.js r166 creates a local `tbn` matrix in the fragment shader. Any future `onBeforeCompile` normal replacement must use `tbn`, not `vTBN`.
-
-## v0.40 planned frame-texture architecture note
-
-The next metal-quality pass should treat frame surfacing as a hybrid pipeline: authored premium texture-set input (optional) + procedural fallback + deterministic anti-repetition modulation. Keep ownership in `CanvasMaterial` for texture synthesis/material wiring, with preset policy in `quality.ts` and diagnostics emitted through existing diagnostics utilities.
-
-## v0.29 shipped boot/render architecture note
-
-The v0.29 preload fix treats startup readiness as a boot pipeline, not a set of isolated warm calls. Ownership remains split across `main.ts` orchestration, `GalleryManager` artwork/material readiness, `TextureManager` texture loading/upload support, `RendererManager` renderer/color setup, `PostProcessing` final pass readiness, and UI modules for DOM/control prebuild.
-
-Shipped architecture boundary: the loading overlay may enable entry only after the production render path has produced full-size presented frames and all paintings have been drawn through that path. `plan.md § v0.29` defines the Y-series slices.
-
-
-
-## v0.23 performance/preloading architecture note
-
-The current runtime has no dedicated preload coordinator. Responsibility is split across `GalleryManager.init()` (albedo and capped authored PBR preload), `GalleryManager.scheduleFullTextureSetPrefetch()` (idle PBR sweep), `GalleryManager.warmArtworkForGPU()` plus `main.ts` (hidden render upload), `ProceduralTextureFactory` (synchronous fallback map generation), and `RendererManager.prewarm()` (shader compile). The v0.23 plan introduces a future readiness/scheduler boundary so these steps can be measured and prioritized per artwork instead of being inferred from scattered logs.
-
-## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
-
-**Status: shipped.**
-
-### L-series: Full pre-load + press-to-start
-
-| Gap | Component | Status |
-|-----|-----------|--------|
-| L-01 | `GalleryManager.init()` preloads authored PBR texture sets under the overlay, capped by `PBR_PRELOAD_LIMIT = 15` | **Shipped** |
-| L-02 | GPU warm loop binds each cached artwork texture set and renders once before reveal, capped by `GPU_WARM_LIMIT = 15` | **Shipped** |
-| L-03 | Loading overlay waits for accessible "Galerie betreten" CTA instead of auto-revealing | **Shipped** |
-| L-04 | Idle sweep retained as a no-op/second-chance retry for failed or over-limit texture sets | **Shipped** |
-| L-05 | 500 ms minimum branded loading duration added with `Promise.all([init, delay])` | **Shipped** |
-
-### M-series: Deep code audit corrections
-
-| Gap | Component | Status |
-|-----|-----------|--------|
-| M-01 | `LoadingOverlayControls.reveal()` returns `Promise<void>` | **Shipped** |
-| M-02 | `reveal()` clears the hint timer before ready-state copy is shown | **Shipped** |
-| M-03 | Audio recovery listeners are registered before awaiting the start-button reveal | **Shipped** |
-| M-04 | `PBR_PRELOAD_LIMIT = 15` prevents large-gallery OOM during upfront PBR preload | **Shipped** |
-| M-05 | `warmArtworkForGPU(index): void` is synchronous and uses `TextureManager.getForRole()` | **Shipped** |
-| M-06 | Redundant single render removed for small galleries; retained only as large-gallery fallback | **Shipped** |
-| M-07 | Progress ranges remapped: warm 93–97%, shader prewarm 97–99%, ready 100% | **Shipped** |
-
-### Boot sequence architecture
-
-```
-galleryManager.init()          ←→  delay(500ms)
-  └─ albedo preload + PBR preload ≤ 15 artworks under LoadingManager
-  └─ showArtwork(0)
-  └─ scheduleFullTextureSetPrefetch() [retry / over-limit continuation]
-warmArtworkForGPU(0..N-1) + render × N [≤15 artworks]
-  └─ progress 93–97%
-renderer.prewarm() [awaited, 97–99%]
-setProgress(100) → reveal(): Promise<void>
-  └─ hint timer stopped
-  └─ startButton shown and focused
-user clicks "Galerie betreten"
-  └─ pointerdown captured by pre-registered audio recovery listener
-  └─ overlay fades out over 1.3 s
-  └─ gallery fully interactive
-```
-
-Implementation references: `src/gallery/GalleryManager.ts`, `src/gallery/TextureManager.ts`, `src/main.ts`, `src/styles/main.scss`, `plan.md § v0.22`, and `FINDINGS.md § v0.22`.
-
-## v0.21 — implementation shipped (2026-05-21)
-
-Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
-
-
-## v0.21 — Preloading, Interactive Loading Screen, Tab Smoothness + 16K High-Resolution Support + Global Pointer Tracking + Timeline Scalability (shipped, 2026-05-21)
-
-Current status: **shipped**. Boot-path and tab-lifecycle gaps identified by code audit and online research:
-
-### G-series: Preloading + Loading Screen
-
-| Gap | Component | Status |
-|-----|-----------|--------|
-| G-01 | `RendererManager.prewarm()` called post-overlay-hide as fire-and-forget `void` — not awaited before overlay hides | Shipped in v0.21 |
-| G-02 | Audio `preload='metadata'` instead of `'auto'` | Shipped in v0.21 |
-| G-03 | PBR maps lazy-loaded per artwork, no adjacent prefetch | Shipped in v0.21 |
-| G-04 | Loading screen is unbranded white spinner | Shipped in v0.21 |
-| G-05 | No `<link rel="preload">` for fonts in `<head>` | Shipped in v0.21 |
-| G-06 | Textures not GPU-uploaded before overlay hides | Shipped in v0.21 |
-| G-07 | No idle sweep of remaining artwork PBR sets | Shipped in v0.21 |
-
-### H-series: Tab Smoothness + 16K High-Resolution Support
-
-| Gap | Component | Status |
-|-----|-----------|--------|
-| H-01 | `LightingSetup.update()` uses absolute rAF timestamp → key-light jump on tab resume | Shipped in v0.21 |
-| H-02 | No user-visible indicator during WebGL context restoration | Shipped in v0.21 |
-| H-03 | `TextureManager.maxTextureSize` **not stored as field** (only logged); no oversized-texture diagnostic | Shipped in v0.21 |
-| H-04 | `PaintingMaterial` injected GLSL lacks `highp` precision guard for large UV tiling | Shipped in v0.21 |
-| H-05 | Importer warns ">4096px downscale" for all large images; 16K norm not reflected | Shipped in v0.21 |
-| H-06 | No NPOT dimension note in importer | Shipped in v0.21 |
-| H-07 | No LOD / tiled streaming for images exceeding device `maxTextureSize` | Open — future pass |
-
-### I-series: Global Pointer Tracking
-
-| Gap | Component | Status |
-|-----|-----------|--------|
-| I-01 | Hover rotation only updates when cursor is over the canvas — freezes over timeline / settings / nav overlays | Shipped in v0.21 |
-| I-02 | Touch Events fallback `mousemove` canvas-scoped only — same hover freeze in legacy browsers | Shipped in v0.21 |
-| I-03 | `setPointerCapture` failure unlogged; no global drag fallback if capture is stolen by an overlay | Shipped in v0.21 |
-| I-04 | Touch Events path: `touchmove` canvas-scoped; touch drag interrupted if finger exits to adjacent element | Shipped in v0.21 |
-
-### J-series: Timeline Scalability
-
-| Gap | Component | Status |
-|-----|-----------|--------|
-| J-01 | All thumbnails rendered as full DOM nodes at construction — no virtual windowing | Shipped in v0.21 |
-| J-02 | No scroll-arrow buttons for mouse-click navigation of the timeline strip | Shipped in v0.21 |
-| J-03 | No artwork counter ("3 / 20") in the timeline bar | Shipped in v0.21 |
-| J-04 | No CSS `mask-image` edge fade to indicate off-screen content | Shipped in v0.21 |
-| J-05 | Timeline thumbnail size hardcoded at 150×95px — not responsive | Shipped in v0.21 |
-| J-06 | No group/page navigation for 50+ artwork galleries | Open — future pass |
-
-### K-series: Code Audit Corrections (2026-05-21)
-
-| Gap | Component | Status |
-|-----|-----------|--------|
-| K-01 | `CanvasInteraction.dispose()` must remove global `window` listeners added by I-series patches | Shipped in v0.21 |
-| K-02 | `Timeline.dispose()` retains `this.thumbs` array — prevents GC of button element listeners | Shipped in v0.21 |
-| K-03 | `prefetchAdjacentArtworks()` method does not exist; G-03 patch must add it | Shipped in v0.21 |
-
-**Plan corrections:**
-- G-01 description updated: prewarm IS called but as fire-and-forget `void`, AFTER overlay hides
-- H-03 description updated: `maxTextureSize` is not stored as a field — only logged in `init()`
-
-Full plan: `plan.md § v0.21`. Research details: `FINDINGS.md § 2026-05-21`.
-
-
-
-## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
-
-Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
-
-## v0.20.3 planning boundary — audio UX technical hardening (2026-05-20)
-
-Implemented in v0.20.4. Previous planned status was:
-
-> Planned (not yet shipped): the next audio pass should preserve current module boundaries while adding:
-> - mapping helpers between displayed volume percent and effective gain,
-> - an in-place PreferencesPanel update strategy for continuous slider drag,
-> - fade-envelope transitions in `BackgroundAudioManager`,
-> - responsive placement policy for `.audio-controls` with documented overlap checks.
-
-All four items are now shipped. See `FINDINGS.md § 2026-05-20 (v0.20.4)`.
-
-## v0.20 — Audio CORS fix + main-page AudioControls (2026-05-20)
-
-**CORS fix:** `BackgroundAudioManager` no longer sets `crossOrigin = 'anonymous'`. This was blocking all audio on `file://` origins (Chromium null-origin CORS rejection). Canonical reference: `plan.md § v0.20`, `FINDINGS.md § 2026-05-20 (v0.20)`.
-
-**AudioControls:** `src/ui/AudioControls.ts` is the quick-control component instantiated by `main.ts`. The original bottom-left placement is now explicitly disputed by `v0.20.5`, so treat location and displayed-volume behavior as active follow-up areas rather than settled architecture.
-
-**Sidecar cache-bust:** `import-artworks.mjs` now stamps `?t=<timestamp>` on `customer-artworks.js` + `customer-audio.js` script src tags in `app.html` after every import, bypassing Chromium's file:// disk cache.
-
-## v0.20 — Audio workflow reliability shipped (2026-05-20)
-
-Architecture addition shipped: importer + runtime audio boundary for calm background music, with format compatibility and accessible mute/volume controls.
-
-Current runtime: **shipped**. Background audio now loads from importer payloads, integrates with preferences/lifecycle, and exposes mute/volume controls in the preferences panel and via the new main-page `AudioControls` widget (v0.20). Canonical reference: `plan.md § v0.19`.
-
-## v0.18 — Customer sidecar text shipped (2026-05-20)
-
-Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
-
-FREYRAUM is a Vite + strict TypeScript + three.js customer-preview application for an interactive digital museum installation.
-
-## Runtime entry
+## Runtime architecture
 
 - `src/main.ts`
-  - imports global SCSS
-  - validates injected artwork manifests
-  - creates renderer, scene, post-processing, lighting, gallery, controls, preferences, diagnostics, and adaptive quality
-  - owns the render loop, page lifecycle suspension, resize coordination, and UI wiring
+  - Boot orchestration
+  - Lifecycle handling
+  - UI wiring
+  - Render-loop coordination
+- `src/core/`
+  - `RendererManager`, `SceneManager`, post-processing pipeline
+- `src/gallery/`
+  - Gallery state, artwork switching, preload/warm orchestration, texture usage
+- `src/materials/`
+  - Painting and frame material behavior, procedural texture generation
+- `src/config/`
+  - Startup and quality/runtime config models
+- `src/ui/`, `src/timeline/`, `src/interaction/`
+  - UI controls, timeline, interaction handling
+- `src/utils/`
+  - Diagnostics, preferences, performance and utility primitives
+- `src/rendering/`
+  - Backend detection/probe boundary (WebGL production, optional WebGPU probe)
 
-## Core rendering
+## Startup sequence ownership
 
-- `src/core/RendererManager.ts`: WebGL renderer setup, quality preset application, pixel ratio, context-loss diagnostics, shader pre-warm, renderer snapshots, idempotent disposal.
-- `src/core/SceneManager.ts`: scene/camera setup and aspect updates.
-- `src/core/PostProcessing.ts`: post-processing chain (`RenderPass → UnrealBloomPass → ShaderPass(FXAA)`) with resize, preset toggle (`fxaaEnabled`), composer prewarm, and render ownership.
-- `src/rendering/RenderBackend.ts`: progressive rendering capability probes.
+1. `main.ts` resolves startup mode and initializes managers.
+2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
+3. `RendererManager` prewarms renderer pipeline.
+4. UI entry flow continues after readiness gates are satisfied.
 
-## Gallery domain
+For exact config keys and query behavior, use only `docs/QUERY_PARAMETERS.md`.
 
-- `src/gallery/GalleryManager.ts`: active artwork state, navigation, zoom/pan/reset math, art-safe viewport metrics, animation smoothing, diagnostics.
-- `src/gallery/ArtworkMesh.ts`: artwork mesh/frame construction.
-- `src/gallery/TextureManager.ts`: artwork texture loading, anisotropy, quality-sensitive texture behavior.
-- `src/gallery/SidePanels.ts`: side artwork presentation.
-- `src/config/artworks.ts`: built-in artwork data and metadata contract.
-- `src/config/quality.ts`: quality presets.
+## Architecture drift audit checklist
 
-## Materials and lighting
+When changing architecture-sensitive areas, verify all of the following:
 
-- `src/materials/PaintingMaterial.ts`: painting shader/material fidelity.
-- `src/materials/PaintingTextureSet.ts`: texture role typing and resolved texture sets.
-- `src/materials/ProceduralTextureFactory.ts`: procedural fallback maps.
-- `src/materials/CanvasMaterial.ts`: canvas/frame material helpers.
-- `src/lighting/LightingSetup.ts` and `src/lighting/LightProfile.ts`: lighting profiles and runtime light setup.
+1. Folder/module ownership still matches this map.
+2. Startup sequence docs still match initialization order in `main.ts` + `GalleryManager`.
+3. Rendering pipeline docs still match active runtime code paths.
+4. Any ownership change is reflected here in the same PR.
 
-## Interaction and UI
+## Related docs
 
-- `src/interaction/CanvasInteraction.ts`: pointer/touch/canvas interaction path. Replaces `MouseInteraction`, `TouchInteraction`, and `ZoomPan` (removed in v0.17).
-- `src/interaction/KeyboardNav.ts`: keyboard navigation.
-- `src/ui/`: topbar, info panel, preferences, fallback screen, fullscreen, hints, navigation, zoom controls.
-- `src/timeline/Timeline.ts`: timeline UI, selection, and scroll behavior.
-- `src/styles/main.scss`: global layout, glass chrome, responsive/safe-area styling, motion tokens, quality-aware CSS.
-
-## Utilities
-
-- `src/utils/Diagnostics.ts`: bounded diagnostics buffer, global report API, scoped logging.
-- `src/utils/FrameBudgetMonitor.ts` and `src/utils/AdaptiveQualityController.ts`: frame budget sampling and adaptive quality.
-- `src/utils/performance.ts`: startup quality and pixel ratio heuristics. `isMobileDevice()` was removed in v0.17; use `detectDeviceCapabilities()` from `device.ts`.
-- `src/utils/preferences.ts`: `freyraum.preferences.v1` localStorage schema and document-level data attributes.
-- `src/utils/device.ts`: device capability detection and DOM data attributes.
-- `src/utils/math.ts`, `texture.ts`, `webgl.ts`, `preferences.ts`: focused helpers.
-
-## Asset/customer workflow
-
-- `scripts/import-artworks.mjs`: imports customer artwork files and customer audio files, validates assets, generates artwork/audio preview payloads, and writes warning-first reports.
-- `scripts/run-import-artworks.cjs`: Node version guard and friendly compatibility report.
-- `scripts/write-local-preview.mjs`: writes the local customer preview HTML plus artwork/audio stubs.
-- `Update Gallery.bat` and `Update Gallery.command`: customer-facing launchers.
-- `customer-artworks/`: customer input and processed folders.
-- `customer-audio/`: customer audio input folders.
-- `customer-preview/`: generated preview bundle and assets.
-
-## Documentation system
-
-- `plan.md`: current and historical implementation plans.
-- `FINDINGS.md`: technical findings, decisions, validation notes, regressions.
-- `CHANGELOG.md`: concise release/change history.
-- `DOCUMENTATION_RULES.md`: required documentation updates.
-- `docs/QUERY_PARAMETERS.md`: runtime query parameter and localStorage configuration reference.
-- `docs/HANDOFF.md`: customer/contributor handoff.
-- `.github/copilot-instructions.md` and `.github/prompts/`: AI workflow guidance.
-- `docs/architecture/README.md`: deeper architecture notes and subsystem documentation entry point.
-- `docs/standards/CODING_GUIDELINES.md`: code, diagnostics, CSS, and dependency maintenance standards.
-- `docs/ai-feedback/AI_FEEDBACK_LOOP.md`: audit/review loop for future AI-assisted work.
+- Overview: `README.md`
+- History: `CHANGELOG.md`
+- Config reference: `docs/QUERY_PARAMETERS.md`
+- Contributor process: `CONTRIBUTING.md`
+- Archived context: `docs/archive/README.md`
