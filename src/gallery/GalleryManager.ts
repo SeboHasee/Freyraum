@@ -271,6 +271,13 @@ export class GalleryManager {
   private readonly textureManager: TextureManager;
   private readonly procedural: ProceduralTextureFactory;
   private readonly camera: THREE.PerspectiveCamera;
+  // v0.74 OPT-1/T1-A — cache `tan(fov/2)`. `camera.fov` is constant at runtime
+  // (never reassigned anywhere in src/; only `aspect` changes on resize), so
+  // this avoids recomputing the same `Math.tan(degToRad(...))` 2–3× per frame.
+  // The cache is keyed on the fov value, so a future fov change still recomputes
+  // correctly on the next read. Output is mathematically identical.
+  private _fovTanCache = NaN;
+  private _fovTanForFov = NaN;
   private readonly viewportMetricsProvider: ViewportMetricsProvider | null;
   private readonly raycaster = new THREE.Raycaster();
   private reducedMotion = false;
@@ -1532,13 +1539,27 @@ export class GalleryManager {
     this.targetPanY = clamp(this.targetPanY, -limits.y, limits.y);
   }
 
+  /**
+   * v0.74 OPT-1/T1-A — memoized `tan(degToRad(fov/2))`. Recomputes only when
+   * the camera fov actually changes (it does not at runtime), so the common
+   * case is a single field read instead of a `Math.tan` + `degToRad` per call.
+   */
+  private getFovTan(): number {
+    const fov = this.camera.fov;
+    if (fov !== this._fovTanForFov) {
+      this._fovTanForFov = fov;
+      this._fovTanCache = Math.tan(THREE.MathUtils.degToRad(fov * 0.5));
+    }
+    return this._fovTanCache;
+  }
+
   private getPanLimits(zoom: number): { x: number; y: number } {
     const metrics = this.getViewportMetrics();
     const bounds = this.getZoomBounds(metrics);
     const boundedZoom = clamp(zoom, bounds.minInspectionZoom, bounds.maxOverviewZoom);
     const visibleHeight = 2 *
       boundedZoom *
-      Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5)) *
+      this.getFovTan() *
       metrics.usableFracY;
     const visibleWidth = visibleHeight * metrics.effectiveAspect;
 
@@ -1563,7 +1584,7 @@ export class GalleryManager {
   }
 
   private getInspectionMinZoom(metrics: ArtworkViewportMetrics): number {
-    const fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+    const fovTan = this.getFovTan();
     const requiredHeight = this.artworkMesh.artworkHeight * MIN_VISIBLE_ARTWORK_FRACTION;
     const requiredWidth = this.artworkMesh.artworkWidth * MIN_VISIBLE_ARTWORK_FRACTION;
     const heightDistance = requiredHeight / (2 * fovTan * metrics.usableFracY);
@@ -1575,7 +1596,7 @@ export class GalleryManager {
   private getResetFitZoom(metrics: ArtworkViewportMetrics): number {
     const frameWidth = this.artworkMesh.artworkWidth + 0.4;
     const frameHeight = this.artworkMesh.artworkHeight + 0.4;
-    const fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+    const fovTan = this.getFovTan();
     const heightDistance = (frameHeight * RESET_VIEW_FRAME_MARGIN) / (2 * fovTan * metrics.usableFracY);
     const widthDistance = (frameWidth * RESET_VIEW_FRAME_MARGIN) /
       (2 * fovTan * this.camera.aspect * metrics.usableFracX);

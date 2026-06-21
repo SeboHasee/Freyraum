@@ -2,6 +2,14 @@ import * as THREE from 'three';
 import { PaintingMaterial } from '../materials/PaintingMaterial';
 import { CanvasMaterial } from '../materials/CanvasMaterial';
 import { fitWithinBox, getTextureSize } from '../utils/texture';
+import { createScopedDiagnostics } from '../utils/Diagnostics';
+
+// v0.74 T1-C — route per-navigation debug traces through the diagnostics
+// pipeline instead of calling `console.debug` directly. The diagnostics console
+// threshold suppresses these unless the session is in verbose mode, so they no
+// longer cost a console call (string + object build) on every artwork
+// navigation in the default/production path.
+const diag = createScopedDiagnostics('artwork');
 import type { QualityPreset } from '../config/quality';
 import type { ResolvedPaintingTextures } from '../materials/PaintingTextureSet';
 
@@ -67,7 +75,7 @@ export class ArtworkMesh {
     this.group.add(this.artworkMesh);
 
     // P-06: log the initial frame seed for diagnostics.
-    console.debug('[ArtworkMesh] artwork-frame-seed', { artworkIndex, seed: this.artworkSeed });
+    diag.debug('artwork-frame-seed', 'Initial artwork frame seed', { artworkIndex, seed: this.artworkSeed });
 
     scene.add(this.group);
   }
@@ -136,7 +144,7 @@ export class ArtworkMesh {
     // and the vTBN varying, which the onBeforeCompile GLSL injection depends on.
     geometry.computeTangents();
 
-    console.debug('[ArtworkMesh] frame-geometry-built', {
+    diag.debug('frame-geometry-built', 'Frame geometry built', {
       outerW, outerH, innerW, innerH,
       vertexCount: geometry.getAttribute('position').count,
       hasFrameUV: !!geometry.getAttribute('aFrameUV'),
@@ -230,7 +238,7 @@ export class ArtworkMesh {
     const oldGeo = this.frameMesh.geometry;
     this.frameMesh.geometry = this.makeFrameGeometry(bevelEnabled, this._artworkWidth, this._artworkHeight);
     oldGeo.dispose();
-    console.debug('[ArtworkMesh] frame-geometry-replaced', {
+    diag.debug('frame-geometry-replaced', 'Frame geometry replaced', {
       bevelEnabled,
       bevelThickness: bevelEnabled ? 0.012 : 0,
       bevelSize: bevelEnabled ? 0.012 : 0,
@@ -282,7 +290,7 @@ export class ArtworkMesh {
     this.artworkSeed = seed;
     this.canvasMaterial.refreshFrameUniforms(this.frameMaterial, seed);
     // P-06: log seed change for diagnostics.
-    console.debug('[ArtworkMesh] artwork-frame-seed', { artworkIndex, seed });
+    diag.debug('artwork-frame-seed', 'Artwork frame seed changed', { artworkIndex, seed });
   }
 
   /**

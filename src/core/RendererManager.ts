@@ -34,6 +34,10 @@ export class RendererManager {
   private renderPaused = false;
   private disposed = false;
   private contextChangeCallback: ((state: RendererContextState) => void) | null = null;
+  // v0.74 OPT-7/T1-D — reusable scratch vector for `renderer.getSize()` reads in
+  // `getRendererSnapshot()`. Avoids allocating a `THREE.Vector2` on every
+  // diagnostics snapshot (periodic in info/verbose modes).
+  private readonly _sizeScratch = new THREE.Vector2();
 
   constructor(container: HTMLElement, preset: QualityPreset) {
     this.preset = preset;
@@ -145,7 +149,7 @@ export class RendererManager {
    */
   getRendererSnapshot(): RendererSnapshot {
     const info = this.renderer.info;
-    const size = new THREE.Vector2();
+    const size = this._sizeScratch;
     this.renderer.getSize(size);
     return {
       drawCalls: info.render.calls,

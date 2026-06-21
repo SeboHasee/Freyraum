@@ -51,6 +51,39 @@ export class FrameBudgetMonitor {
   private rolling = 16.7;
   private lastNow = 0;
   private cooldownUntil = 0;
+  // v0.74 OPT-3/T1-B — incremental O(1) accumulators. These mirror the rolling
+  // window so `sample()` no longer rescans all `windowSize` slots three times
+  // per frame. `_sum`, `_aboveCount`, and `_severeCount` are kept in lock-step
+  // with the ring buffer: the slot being overwritten is subtracted before the
+  // new sample is added. The result is numerically identical to the previous
+  // O(N) linear-scan implementation (verified by scripts/test-frame-budget.mjs).
+  private _sum = 0;
+  private _aboveCount = 0;
+  private _severeCount = 0;
+  // v0.74 OPT-3/T1-B — reused output objects eliminate the per-call
+  // `FrameBudgetSample` allocation (≈60 objects/second at 60 fps). The returned
+  // reference is owned by the monitor and is overwritten on the next call;
+  // callers must read fields immediately and must not retain it across ticks.
+  // `sample()` and `readSnapshot()` use separate buffers so a dev-overlay read
+  // never aliases the hot render-loop sample.
+  private readonly _sampleOut: FrameBudgetSample = {
+    dtMs: 0,
+    emaMs: 16.7,
+    rollingMs: 16.7,
+    rollingFps: 0,
+    belowBudget: false,
+    severeFrameCount: 0,
+    inCooldown: false,
+  };
+  private readonly _readOut: FrameBudgetSample = {
+    dtMs: 0,
+    emaMs: 16.7,
+    rollingMs: 16.7,
+    rollingFps: 0,
+    belowBudget: false,
+    severeFrameCount: 0,
+    inCooldown: false,
+  };
   readonly budgetMs: number;
   readonly windowSize: number;
   readonly emaAlpha: number;
@@ -73,7 +106,7 @@ export class FrameBudgetMonitor {
   sample(now: number): FrameBudgetSample {
     if (this.lastNow === 0) {
       this.lastNow = now;
-      return this.snapshot(0, 0);
+      return this.writeSnapshot(this._sampleOut, 0, this._aboveCount, this._severeCount);
     }
     const dt = now - this.lastNow;
     this.lastNow = now;
@@ -82,17 +115,31 @@ export class FrameBudgetMonitor {
     // the rolling average.
     const clamped = Math.min(dt, 250);
 
+    // Remove the slot we are about to overwrite from the accumulators. Before
+    // the ring has wrapped once (`filled === false`) the target slot still
+    // holds the constructor pre-fill value and was never counted, so it must
+    // not be subtracted — matching the old code that summed only `usable`
+    // slots.
+    if (this.filled) {
+      const old = this.samples[this.writeIndex];
+      this._sum -= old;
+      if (old > this.budgetMs) this._aboveCount -= 1;
+      if (old >= this.severeFrameMs) this._severeCount -= 1;
+    }
+
     this.samples[this.writeIndex] = clamped;
+    this._sum += clamped;
+    if (clamped > this.budgetMs) this._aboveCount += 1;
+    if (clamped >= this.severeFrameMs) this._severeCount += 1;
+
     this.writeIndex = (this.writeIndex + 1) % this.windowSize;
     if (this.writeIndex === 0) this.filled = true;
 
     const usable = this.filled ? this.windowSize : this.writeIndex;
-    let sum = 0;
-    for (let i = 0; i < usable; i += 1) sum += this.samples[i];
-    this.rolling = sum / Math.max(1, usable);
+    this.rolling = this._sum / Math.max(1, usable);
     this.ema = this.ema + this.emaAlpha * (clamped - this.ema);
 
-    return this.snapshot(clamped, this.countAboveBudget(), this.countSevereFrames());
+    return this.writeSnapshot(this._sampleOut, clamped, this._aboveCount, this._severeCount);
   }
 
   /** Reset cooldown for an upcoming spike. */
@@ -106,53 +153,32 @@ export class FrameBudgetMonitor {
     this.markNavigation();
   }
 
-  private countAboveBudget(): number {
-    const usable = this.filled ? this.windowSize : this.writeIndex;
-    let count = 0;
-    for (let i = 0; i < usable; i += 1) {
-      if (this.samples[i] > this.budgetMs) count += 1;
-    }
-    return count;
-  }
-
-  private countSevereFrames(): number {
-    const usable = this.filled ? this.windowSize : this.writeIndex;
-    let count = 0;
-    for (let i = 0; i < usable; i += 1) {
-      if (this.samples[i] >= this.severeFrameMs) count += 1;
-    }
-    return count;
-  }
-
-  private snapshot(dtMs: number, aboveCount: number, severeFrameCount = 0): FrameBudgetSample {
+  /**
+   * Populate a reused {@link FrameBudgetSample} in place. The decision logic is
+   * identical to the original `snapshot()` — only the allocation is removed.
+   */
+  private writeSnapshot(
+    out: FrameBudgetSample,
+    dtMs: number,
+    aboveCount: number,
+    severeFrameCount: number
+  ): FrameBudgetSample {
     const now = typeof performance !== 'undefined' ? performance.now() : 0;
-    const inCooldown = now < this.cooldownUntil;
     const sustainedOverBudget = aboveCount > this.windowSize * 0.7;
     const repeatedSevereHitches = severeFrameCount >= this.severeFrameLimit;
-    return {
-      dtMs,
-      emaMs: this.ema,
-      rollingMs: this.rolling,
-      rollingFps: 1000 / Math.max(0.1, this.rolling),
-      // > 70 % of the rolling window over budget triggers the warning.
-      belowBudget: sustainedOverBudget || repeatedSevereHitches,
-      severeFrameCount,
-      inCooldown,
-    };
+    out.dtMs = dtMs;
+    out.emaMs = this.ema;
+    out.rollingMs = this.rolling;
+    out.rollingFps = 1000 / Math.max(0.1, this.rolling);
+    // > 70 % of the rolling window over budget triggers the warning.
+    out.belowBudget = sustainedOverBudget || repeatedSevereHitches;
+    out.severeFrameCount = severeFrameCount;
+    out.inCooldown = now < this.cooldownUntil;
+    return out;
   }
 
   /** Convenience for the dev overlay. */
   readSnapshot(): FrameBudgetSample {
-    const now = typeof performance !== 'undefined' ? performance.now() : 0;
-    const inCooldown = now < this.cooldownUntil;
-    return {
-      dtMs: 0,
-      emaMs: this.ema,
-      rollingMs: this.rolling,
-      rollingFps: 1000 / Math.max(0.1, this.rolling),
-      belowBudget: this.countAboveBudget() > this.windowSize * 0.7 || this.countSevereFrames() >= this.severeFrameLimit,
-      severeFrameCount: this.countSevereFrames(),
-      inCooldown,
-    };
+    return this.writeSnapshot(this._readOut, 0, this._aboveCount, this._severeCount);
   }
 }
