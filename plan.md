@@ -56,6 +56,208 @@ The FREYRAUM gallery runtime is a single-artwork WebGL viewer built on Three.js 
 
 ---
 
+### Phase 0: Architectural Root Cause — Always-On Render Loop (Tier 0)
+
+> **Elevated from Phase 9 footnote to Tier 0.** Static analysis and reviewer consensus confirm this is the single largest systemic inefficiency in the runtime — larger in total impact than all Tier 1–2 micro-optimizations combined.
+
+#### 0.1 The Core Inefficiency
+
+The render loop (`animate()` in `main.ts`) runs **unconditionally at display refresh rate** (60–120 Hz) regardless of scene state. During the primary use-case — a user passively viewing a static painting — every frame executes:
+
+- Full shadow map passes (2–3× base scene render cost)
+- Full bloom pipeline (10 FBO blits at near-zero contribution on high preset)
+- Full PBR fragment shading across the artwork plane (~76M texture reads/frame on high preset)
+- Full CPU update chain (`smoothDamp` × 10, viewport metrics cascade 2–4×, `FrameBudgetMonitor` scans)
+- Continuous GC pressure from `FrameBudgetSample` allocation (60 objects/second)
+
+None of this work produces any change to the rendered image when:
+- The camera is fully settled (no in-progress animation, no user input)
+- No lighting animation is running (`reducedMotion = true` or non-animated profile)
+- No texture load or quality preset change is pending
+
+**Output is identical to the previous frame, but the full GPU and CPU budget is consumed anyway.**
+
+#### 0.2 Why This Is Tier 0 (Not Tier 3)
+
+| Factor | Assessment |
+|---|---|
+| Impact magnitude | Eliminating idle rendering removes ~90–97% of all GPU + CPU work during static viewing |
+| Relative to Tier 1+2 combined | Single change outweighs all micro-optimizations for typical usage (static viewing dominant) |
+| Battery / thermal | GPU fan, device warmth, and battery drain are directly proportional to idle render rate |
+| Implementation risk | Moderate — Three.js and the browser RAF model support this cleanly |
+| Prerequisite for future work | Dirty-flag system enables animation budget accounting and power-profile reporting |
+
+The previous "Tier 3" classification reflected implementation effort, not impact. Approach A below is incremental and low-risk.
+
+#### 0.3 Root Cause: No Render Suppression When Settled
+
+`animate()` has two correct early exits:
+
+```typescript
+if (pageInactive) return;                        // ✓ tab-hidden
+if (rendererManager.isRenderPaused()) return;    // ✓ context-lost
+```
+
+There is no exit for **"nothing has changed since the last frame"**. Even when all `smoothDamp` targets equal their current values, all 10 calls execute, their results are written to camera/pan/tilt state, and `postProcessing.render()` follows unconditionally.
+
+`adaptiveQuality.evaluate()` is already locked (correct no-op), but the actual render is not gated.
+
+#### 0.4 Implementation Approaches
+
+---
+
+**Approach A — Dirty-Flag + Frame Cooldown (Recommended first step; lowest risk)**
+
+Introduce a minimal `_dirtyFrames` counter in `GalleryManager` (or a thin `AnimationStateTracker` class):
+
+```typescript
+// src/gallery/AnimationStateTracker.ts  (new file, ~40 lines)
+export class AnimationStateTracker {
+  private _remaining = 0;
+
+  /** Call from any state-change source (input, navigation, texture load, resize) */
+  markDirty(frames = 4): void {
+    this._remaining = Math.max(this._remaining, frames);
+  }
+
+  /** Call once per RAF tick; returns true if this frame should render */
+  consume(): boolean {
+    if (this._remaining > 0) { this._remaining--; return true; }
+    return false;
+  }
+
+  /** Force at least one more dirty frame regardless of current count */
+  nudge(): void { this._remaining = Math.max(this._remaining, 1); }
+}
+```
+
+In `main.ts animate()`:
+
+```typescript
+// After existing early-exit guards, before galleryManager.update():
+const shouldRender = animState.consume();
+if (!shouldRender) {
+  frameBudget.sample(now);  // keep timing stats accurate
+  return;
+}
+```
+
+**Where to call `markDirty()`:**
+
+| Source | Where to insert `markDirty()` | Frames hint |
+|---|---|---|
+| Pointer/touch/keyboard input | `pointerdown`, `pointermove`, `keydown` handlers | 4 |
+| Navigation (`navigateTo`, `goNext`, `goPrev`) | `GalleryManager` navigation methods | 8 |
+| Zoom/pan target change | Any setter that changes `targetZoom`, `targetPanX/Y` | 4 |
+| Texture load completion | `TextureManager` load callback | 2 |
+| Quality preset change | `applyPreset()` | 4 |
+| Window resize | Resize debounce handler | 4 |
+| Lighting animation | `LightingSetup.update()` on animated ticks | 2 |
+| Startup warm phase | Always-on until first interaction | ∞ |
+
+**Convergence detection for `smoothDamp`:**
+
+Add a shared helper to detect when a `smoothDamp` value has converged:
+
+```typescript
+function isSettled(
+  current: number, target: number, velocity: number,
+  posEps = 1e-4, velEps = 1e-4,
+): boolean {
+  return Math.abs(target - current) < posEps && Math.abs(velocity) < velEps;
+}
+```
+
+When *all* animated values in `GalleryManager` are settled and `_dirtyFrames === 0`, the render loop naturally sleeps.
+
+---
+
+**Approach B — `renderer.setAnimationLoop(null)` + Event-Driven Restart**
+
+Fully stop the RAF loop after an idle timeout; restart on next user input. This produces zero GPU work during sleep:
+
+```typescript
+// src/core/RenderLoopController.ts  (new file, ~60 lines)
+export class RenderLoopController {
+  private _active = true;
+  private _idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(
+    private readonly _renderer: THREE.WebGLRenderer,
+    private readonly _tick: XRFrameRequestCallback,
+  ) {}
+
+  wake(idleTimeoutMs = 2000): void {
+    if (!this._active) {
+      this._active = true;
+      this._renderer.setAnimationLoop(this._tick);
+    }
+    // Reset idle countdown
+    if (this._idleTimer) clearTimeout(this._idleTimer);
+    this._idleTimer = setTimeout(() => this._sleep(), idleTimeoutMs);
+  }
+
+  private _sleep(): void {
+    this._renderer.setAnimationLoop(null);
+    this._active = false;
+  }
+}
+```
+
+Attach `controller.wake()` to all input entry points: `pointermove`, `pointerdown`, `keydown`, `wheel`, timeline scroll, info panel open, audio playback resume.
+
+**Trade-offs vs Approach A:**
+- Approach B eliminates even the rAF overhead during sleep (stronger savings)
+- Approach B requires wrapping every input event source correctly (missing one = stale render after interaction)
+- Approach A is safer for first implementation — it still runs rAF but skips the GPU render
+- Recommended sequence: **ship Approach A first**, validate, then optionally escalate to B
+
+---
+
+**Approach C — rAF Throttle (Simplest, for quick-win interim)**
+
+```typescript
+const IDLE_FPS = 5;
+const IDLE_INTERVAL = 1000 / IDLE_FPS;
+let lastRenderTime = 0;
+let isRenderIdle = false;  // set by dirty-flag logic
+
+function animate(now: number) {
+  requestAnimationFrame(animate);
+  if (isRenderIdle && now - lastRenderTime < IDLE_INTERVAL) return;
+  lastRenderTime = now;
+  // ... full render path
+}
+```
+
+This reduces idle cost by ~92% (60 → 5 fps equivalent GPU work) without eliminating it. Suitable as a one-hour interim fix while Approach A is being implemented properly.
+
+#### 0.5 Interaction with Existing Features
+
+| Feature | Impact | Notes |
+|---|---|---|
+| WebGL context loss/restore | None | `isRenderPaused()` guard is orthogonal |
+| PageInactive guard | None | Tab-hidden path unchanged |
+| AdaptiveQualityController (locked) | None | Lock mode is already a no-op |
+| Background audio | None | Audio does not require visual rendering |
+| Loading overlay | Dirty-on during boot | `markDirty(∞)` or always-on flag until entry CTA clicked |
+| Quality preset pre-warming | Dirty-on during warm | Ensure warm frames are not suppressed |
+| GPU texture warming | Dirty-on during warm | Same as above |
+| Timeline scroll | `markDirty()` on scroll | Timeline DOM scroll is not the render loop |
+
+#### 0.6 Expected Savings Summary
+
+| Scenario | Current frames/s | After Approach A | GPU savings |
+|---|---|---|---|
+| Static idle viewing (dominant use case) | 60–120 | 0–3 (tail) | ~97% |
+| Active zoom/pan | 60–120 | 60–120 | 0% |
+| Navigation transition + settle | 60–120 for ~500 ms | 60–120 for ~500 ms + tail | ~0% active, ~95% settled |
+| Artwork fully loaded, zero input | 60–120 | 0–1 keepalive | ~98% |
+
+This single architectural change is the highest-leverage optimization available and should be the **first item designed** even if implemented incrementally via Approach C → A → B.
+
+---
+
 ### Phase 1: Full System Model
 
 #### 1.1 Rendering Pipeline
@@ -213,6 +415,8 @@ Total: 3 × 60 = 180 scalar comparisons per frame, returning a new `FrameBudgetS
 
 *Impact:* 2× shadow map passes ≈ doubles the base GPU render workload before post-processing. On mobile GPUs, this is one of the most expensive single optimizations available. Scales with light count and shadow map resolution.
 
+*Mobile GPU note:* Mobile GPU shadow cost is not just extra passes — shadow maps incur **texture bandwidth saturation** on tile-based deferred rendering (TBDR) architectures (all iOS GPUs, many Android GPUs). The shadow map depth texture must be fully resolved to memory and re-fetched during the lighting pass, causing disproportionate bandwidth spikes even at low shadow map resolutions. A 1024×1024 shadow map on a tile-based GPU can cost 2–4× more than on an immediate-mode desktop GPU, not just 2× more render passes.
+
 *Frame stability:* Yes — shadow maps allocated at fixed resolution can cause memory pressure on low-VRAM devices.
 
 ---
@@ -227,6 +431,8 @@ Total: 3 × 60 = 180 scalar comparisons per frame, returning a new `FrameBudgetS
 
 *Frame stability:* The 10 FBO blit operations add ~0.3–1 ms GPU time on mid-range hardware. This cost is incurred even if the scene has no bloom-eligible pixels.
 
+*Validation requirement (before disabling):* Because `THREE.NoToneMapping` is used and materials are not HDR, the assumption that "no scene pixel exceeds luminance 1.2" is almost certainly correct — but must be verified. Specular highlights on PBR artwork materials can produce luminance spikes depending on artwork texture content. **Required validation step:** measure peak scene luminance (histogram or max-pixel probe) across all artworks and all quality presets before committing to bloom disable. A single bright specular spike could produce a visible artifact if bloom was previously masking it. A one-frame luminance probe via `readRenderTargetPixels` into a small downsampled buffer (e.g., 64×64) is sufficient.
+
 ---
 
 **GPU-3 — Transparent side-panel alpha blending overhead (Medium)**
@@ -238,6 +444,8 @@ Total: 3 × 60 = 180 scalar comparisons per frame, returning a new `FrameBudgetS
 *Impact:* Minor per-frame blending cost for 2 plane meshes at fixed positions. The bigger issue is that transparent objects force Three.js to sort them by distance every frame (though with only 2 transparent objects the sort is trivial). Setting `opacity = 1.0` and `transparent = false` would allow depth write optimization and eliminate the alpha-blend stage.
 
 *Frame stability:* Low — but removing this is a free 1-draw-call optimization.
+
+*Validation requirement (before committing):* The visual difference between `opacity: 0.95` and `opacity: 1.0` is sub-perceptual on calibrated displays, but must be validated via **side-by-side render comparison at all exposure levels and all lighting profiles** (gallery-soft, raking, spotlight). If any profile produces a noticeable hard edge where the panel meets the background, consider keeping `opacity: 0.99` with `transparent: false` (Three.js transparently handles this — setting opacity < 1 forces transparent mode, so the exact threshold is `opacity === 1.0`). Alternative: add a soft gradient to the panel texture instead of relying on material opacity.
 
 ---
 
@@ -359,6 +567,76 @@ On the `high` preset the frame geometry with bevel is moderately complex. This e
 
 ---
 
+### Phase 2.5: Worst-Case Frame Budget Stack
+
+> Addresses the missing "frame budget aggregation" gap. Provides engineering-planning-grade estimates for CPU, GPU, and spike scenarios.
+
+All values are static-analysis estimates at 1920×1080, mid-range discrete GPU (GTX 1060-class) or M-series integrated GPU. Measure via Chrome DevTools Performance panel and WebGL Inspector for device-specific baselines before implementing Tier 2/Tier 3 items.
+
+#### CPU Frame Budget (Steady-State, High Preset, Settled State)
+
+| Task | Estimated Cost | Bottleneck |
+|---|---|---|
+| `frameBudget.sample()` — 3× O(60) linear scan | ~0.05–0.10 ms | Algorithmic |
+| `adaptiveQuality.evaluate()` (locked, no-op) | ~0.01 ms | Lock check |
+| `lightingSetup.update()` (animated profile) | ~0.01–0.02 ms | Sin + position write |
+| `galleryManager.update()` full path | ~0.3–1.5 ms | Viewport cascade 2–4× |
+| `camera.updateMatrixWorld()` (redundant) | ~0.01 ms | Matrix multiply |
+| Key-light direction transform | ~0.01 ms | `transformDirection` |
+| `material.setKeyLightDirView()` | ~0.01 ms | Uniform write |
+| JS/rAF overhead (closures, GC minor) | ~0.05–0.15 ms | V8 |
+| **CPU steady-state total (desktop)** | **~0.5–1.8 ms/frame** | |
+| **CPU steady-state total (mobile)** | **~1.2–4.5 ms/frame** | Layout reads scale up |
+
+#### GPU Frame Budget (Steady-State, High Preset)
+
+| Task | Estimated Cost | Bottleneck |
+|---|---|---|
+| Shadow map pass × 2 spotlights | ~0.5–2.0 ms | Full scene × 2 |
+| Main scene render — RenderPass | ~0.5–1.5 ms | Fragment dominated |
+| Painting shader (~23 tex reads/fragment) | ~1.0–3.0 ms | Texture bandwidth |
+| Frame shader (FBM + scratch, border pixels only) | ~0.1–0.3 ms | ALU |
+| Bloom pass UnrealBloom 10× FBO blits | ~0.3–1.0 ms | Bandwidth |
+| OutputPass (color space, 1 quad) | ~0.05–0.1 ms | Bandwidth |
+| **GPU steady-state total (desktop)** | **~2.5–8.0 ms/frame** | |
+| **GPU steady-state total (mobile TBDR)** | **~5.0–20 ms/frame** | Shadow bandwidth ×2–4 |
+
+At 60 fps (16.7 ms budget): desktop is well within budget; mobile high preset can approach the limit.
+At 120 fps (8.3 ms budget): mobile high preset exceeds budget. Shadow maps are the primary constraint.
+
+#### Navigation Spike Budget (Per Artwork Transition)
+
+| Event | Additional CPU | Additional GPU | Duration |
+|---|---|---|---|
+| `replaceFrameGeometry()` (aspect change) | +1–5 ms | — | 1 tick |
+| `assignFrameBarUVs()` | +0.3–1 ms | — | 1 tick |
+| `computeTangents()` | +0.2–0.5 ms | — | 1 tick |
+| GPU geometry buffer upload | — | +0.5–2 ms | 1 tick |
+| New artwork texture decode (JPEG) | +5–30 ms | — | Background (async) |
+| **Navigation spike total (worst case)** | **+2–7 ms** | **+0.5–2 ms** | **1–3 frames** |
+
+#### Startup Spike Budget
+
+| Phase | Estimated Duration | Device Factor |
+|---|---|---|
+| WebGL context creation + driver init | 50–200 ms | GPU driver |
+| Albedo preload × 15 artworks | 200–2000 ms | Network |
+| PBR texture set preload | 500–3000 ms | Network + decode |
+| Procedural texture generation × 15 artworks | 100–500 ms | CPU (main thread) |
+| Quality preset pre-warming × 3 cycles | 200–600 ms | Shader compilation |
+| GPU artwork warming × 15 | 50–300 ms | Render passes |
+| Chrome prewarm forced layout | 5–20 ms | DOM |
+| **Total startup (15 artworks, fast device)** | **~1.5–4 seconds** | |
+| **Total startup (15 artworks, slow mobile)** | **~4–12 seconds** | Risk of visible delay |
+
+#### Engineering Planning Summary
+
+Tier 0 (idle render elimination) alone recovers ~97% of steady-state GPU budget.
+After Tier 0, the most expensive remaining line item is shadow map passes (GPU-1) at ~0.5–2.0 ms/frame active, and the viewport measurement cascade (CPU-1) at ~0.3–1.5 ms/frame.
+Navigation spikes (+2–7 ms) are the next most user-visible issue after idle rendering is resolved.
+
+---
+
 ### Phase 3: Root Cause Summary Table
 
 | ID | Issue | File | Root Cause | Severity | Affects Frame Stability | Scales With |
@@ -393,15 +671,89 @@ On the `high` preset the frame geometry with bevel is moderately complex. This e
 
 **Target:** `CPU-1`, `CPU-2`
 
-**Approach:** Cache the result of `Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5))` as a class property updated only when FOV changes (never in this runtime). Cache `getZoomBounds()` results for the duration of one `update()` call — compute once, pass as a parameter to `clampZoom`, `clampPanTargets`, `getPanLimits`, and the smoothing block. Cache `getViewportMetrics()` result at the top of `update()` and pass it to all callers within the same tick.
+**Root problem:** `getViewportMetrics()` reads CSS custom properties and `getBoundingClientRect()` 2–4 times per frame (called from multiple helpers within the same `update()` tick). `Math.tan(degToRad(camera.fov * 0.5))` is recomputed 3× per frame despite being a constant.
 
-**Expected gain:**
-- CPU: eliminate 2–4 `getBoundingClientRect` + CSS property reads per frame (estimated −0.5–2 ms/frame on mobile)
+---
+
+**Approach A — FrameContext pattern (Recommended; cleanest architecture)**
+
+Compute all per-frame invariants once at the top of `update()` and pass them as a typed context object through the call chain:
+
+```typescript
+// src/gallery/types.ts  (add to existing or new file)
+interface FrameContext {
+  readonly fovTan: number;         // Math.tan(degToRad(fov * 0.5))
+  readonly viewportMetrics: ViewportMetrics;
+  readonly zoomBounds: ZoomBounds;
+  readonly timestamp: number;
+}
+
+// In GalleryManager.update(now: number):
+const ctx: FrameContext = {
+  fovTan: this._fovTan,            // cached class property (see Approach B)
+  viewportMetrics: this._viewportMetricsProvider(),   // called ONCE
+  zoomBounds: this._computeZoomBounds(viewportMetrics, fovTan),  // called ONCE
+  timestamp: now,
+};
+// Pass ctx to clampZoom(ctx), clampPanTargets(ctx), getPanLimits(ctx), etc.
+```
+
+This eliminates all re-entrancy by construction — each helper receives what it needs rather than computing it internally.
+
+---
+
+**Approach B — Class-level cache with invalidation (Easier to retrofit)**
+
+Cache `fovTan` as a class property updated on construction (FOV never changes at runtime):
+
+```typescript
+// In GalleryManager constructor:
+private readonly _fovTan = Math.tan(THREE.MathUtils.degToRad(this.camera.fov * 0.5));
+```
+
+Cache `viewportMetrics` at the top of `update()` using a local variable:
+
+```typescript
+update(now: number): void {
+  const metrics = this._viewportMetricsProvider();  // ONCE per tick
+  const bounds = this._getZoomBoundsWithMetrics(metrics);  // ONCE per tick
+  this._clampZoom(this.targetZoom, bounds);         // pass bounds
+  this._clampPanTargets(metrics, bounds);            // pass both
+  // ... rest of update
+}
+```
+
+This avoids touching the call signatures deeply — metrics and bounds are local variables passed explicitly only where needed.
+
+---
+
+**Approach C — Memoize-by-frame-count (Minimal change, no refactor)**
+
+Attach a `_lastMetricsFrame` counter and return the cached value if the frame count is unchanged:
+
+```typescript
+private _cachedMetrics: ViewportMetrics | null = null;
+private _cachedMetricsFrame = -1;
+
+private getViewportMetricsCached(frame: number): ViewportMetrics {
+  if (frame !== this._cachedMetricsFrame) {
+    this._cachedMetrics = this._viewportMetricsProvider();
+    this._cachedMetricsFrame = frame;
+  }
+  return this._cachedMetrics!;
+}
+```
+
+This requires threading a `frameNumber` counter (incrementing in `animate()`), but is otherwise a drop-in replacement with zero signature changes.
+
+**Expected gain (all approaches):**
+- CPU: eliminate 1–3 additional `getBoundingClientRect` + CSS property reads per frame
 - CPU: eliminate 2 redundant `Math.tan` calls per frame
+- Estimated: −0.5–2 ms/frame on mobile; −0.1–0.3 ms/frame on desktop
 
-**Risk:** Low — FOV is constant; viewport metrics need to be re-read at the start of each frame (once) to stay current. No visual change.
+**Risk:** Low. FOV is constant; viewport metrics need to be re-read at the start of each frame (once) to stay current. No visual change.
 
-**Requires architectural change:** No.
+**Validation:** None required — purely computational; output is mathematically identical.
 
 ---
 
@@ -411,15 +763,84 @@ On the `high` preset the frame geometry with bevel is moderately complex. This e
 
 **Target:** `GPU-4`
 
-**Approach:** In `ArtworkMesh.updateAspect()`, compare the incoming aspect ratio against the currently built geometry's aspect. If the delta is below a precision threshold (e.g., `< 0.001`), skip `replaceFrameGeometry()`. Additionally, maintain a small LRU cache (2–3 entries) of pre-built frame geometries keyed by rounded aspect ratio. When navigating between artworks with similar proportions (e.g., landscape formats), the cached geometry can be swapped in without CPU reconstruction or GPU re-upload.
+**Root problem:** `replaceFrameGeometry()` runs a full `ExtrudeGeometry` + UV + tangent pipeline (~1–5 ms CPU + GPU buffer upload) on every artwork navigation, even when the next artwork has an identical or nearly identical aspect ratio to the current one.
 
-**Expected gain:**
-- CPU: eliminate 1–5 ms geometry reconstruction spike per navigation for matching aspects
-- GPU: eliminate geometry buffer re-upload for common aspect groups
+---
 
-**Risk:** Low — geometric precision threshold is configurable; worst case is a cache miss falling back to the current behavior. No visual change.
+**Approach A — Equality skip guard (Quickest win)**
 
-**Requires architectural change:** No — local to `ArtworkMesh`.
+In `ArtworkMesh.updateAspect()`, compare the incoming aspect ratio against the last-built one before triggering a rebuild:
+
+```typescript
+private _lastBuiltAspect = -1;
+private readonly ASPECT_THRESHOLD = 0.002;  // ~0.2% difference
+
+updateAspect(aspect: number): void {
+  if (Math.abs(aspect - this._lastBuiltAspect) < this.ASPECT_THRESHOLD) {
+    // Aspect is the same; only update the artwork plane scale, not the frame geometry
+    this._artworkMesh.scale.set(aspect, 1, 1);
+    return;
+  }
+  this._lastBuiltAspect = aspect;
+  this.replaceFrameGeometry(aspect);
+}
+```
+
+Expected win: eliminates the rebuild for same-format artworks (common in a gallery of prints).
+
+---
+
+**Approach B — Small LRU aspect cache (Better coverage)**
+
+Maintain a cache of 3–5 pre-built frame geometries keyed by rounded aspect ratio:
+
+```typescript
+private readonly _geoCache = new Map<number, THREE.BufferGeometry>();
+private readonly GEO_CACHE_SIZE = 4;
+private readonly ASPECT_ROUND = 100;  // round to 2 decimal places (0.01 precision)
+
+private getOrBuildGeometry(aspect: number): THREE.BufferGeometry {
+  const key = Math.round(aspect * this.ASPECT_ROUND);
+  if (this._geoCache.has(key)) return this._geoCache.get(key)!;
+  
+  const geo = this._buildFrameGeometry(aspect);  // existing build logic
+  
+  // Evict oldest if at capacity
+  if (this._geoCache.size >= this.GEO_CACHE_SIZE) {
+    const oldestKey = this._geoCache.keys().next().value;
+    this._geoCache.get(oldestKey)!.dispose();  // free GPU buffer
+    this._geoCache.delete(oldestKey);
+  }
+  this._geoCache.set(key, geo);
+  return geo;
+}
+```
+
+Expected win: eliminates both CPU rebuild and GPU buffer re-upload for aspect ratios seen before. Handles portrait/landscape/square common groupings with 4 cache slots.
+
+**Disposal requirement:** On `ArtworkMesh.dispose()`, iterate `_geoCache` and call `.dispose()` on all cached geometries to prevent VRAM leak.
+
+---
+
+**Approach C — Pre-build all aspect geometries at startup**
+
+During the startup warm sequence (after `TextureManager` resolves all artwork manifests), pre-build and GPU-upload a frame geometry for each distinct aspect ratio in the artwork collection:
+
+```typescript
+// In main.ts startup sequence, after manifest load:
+const uniqueAspects = [...new Set(artworks.map(a => Math.round(a.aspect * 100) / 100))];
+for (const aspect of uniqueAspects) {
+  artworkMesh.preWarmAspect(aspect);  // builds and uploads geometry
+}
+```
+
+Expected win: zero rebuild cost at navigation time for all pre-warmed aspects. Best for collections with known artwork aspect ratios.
+
+**Trade-off:** Pre-warming N aspects adds N × (~1–5 ms CPU + ~0.5 ms GPU) to startup time. For a gallery of 15 artworks with 10 distinct aspects, this is ~15–75 ms — acceptable under the loading overlay.
+
+**Risk (all approaches):** Low — aspect equality threshold is configurable. Worst case: cache miss falls back to current behavior. No visual change.
+
+**Validation:** Confirm via profiler that navigation frames no longer show the `computeTangents` spike.
 
 ---
 
@@ -429,15 +850,53 @@ On the `high` preset the frame geometry with bevel is moderately complex. This e
 
 **Target:** `CPU-4`, `MEM-2`
 
-**Approach:** Maintain a running sum alongside the ring buffer so `rolling = (sum - oldest + newest) / windowSize` rather than iterating all samples. Similarly, maintain running counts for `aboveBudget` and `severeFrames`. Update them in O(1) when inserting a new sample (subtract the value being overwritten, add the new value). For `snapshot()`, return a pre-allocated, mutated result object stored on the class instance instead of allocating a new `FrameBudgetSample` each call — the caller reads a `readonly` snapshot before the next `sample()` call overwrites it.
+**Approach:** Maintain a running sum alongside the ring buffer so that `rolling average = (sum - oldest + newest) / windowSize` rather than iterating all samples. Similarly, maintain running counts for `aboveBudget` and `severeFrames`. Update them in O(1) when inserting a new sample:
+
+```typescript
+// Replace current linear-scan fields with accumulators:
+private _sum = 0;
+private _aboveCount = 0;
+private _severeCount = 0;
+private _head = 0;  // ring buffer write pointer
+
+sample(now: number): FrameBudgetSample {
+  const delta = now - this._lastTime;
+  this._lastTime = now;
+
+  // Remove oldest slot from accumulators
+  const oldest = this._buffer[this._head];
+  if (oldest !== undefined) {
+    this._sum -= oldest.delta;
+    if (oldest.delta > this._budget) this._aboveCount--;
+    if (oldest.delta > this._budget * 2) this._severeCount--;
+  }
+
+  // Add new sample
+  const entry = { delta, timestamp: now };
+  this._buffer[this._head] = entry;
+  this._head = (this._head + 1) % this._windowSize;
+  this._sum += delta;
+  if (delta > this._budget) this._aboveCount++;
+  if (delta > this._budget * 2) this._severeCount++;
+
+  // Return mutated snapshot (reuse pre-allocated object)
+  this._snapshot.avgDelta = this._sum / Math.min(this._count, this._windowSize);
+  this._snapshot.aboveBudgetCount = this._aboveCount;
+  this._snapshot.severeCount = this._severeCount;
+  return this._snapshot;
+}
+```
+
+For `snapshot()`, return a pre-allocated, mutated result object stored on the class instance (`this._snapshot: FrameBudgetSample`). The returned reference is stable; callers must not hold it across ticks. This matches the "single owner reads once" contract already in use in `main.ts`.
 
 **Expected gain:**
-- CPU: from O(180) to O(1) per frame (eliminate 180 comparisons/frame)
-- Memory: eliminate 60 heap allocations/second (60 fps × 1 object/frame)
+- CPU: from O(180) to O(1) per frame (eliminate 180 comparisons/frame → 0)
+- Memory: eliminate 60 heap allocations/second (60 fps × 1 `FrameBudgetSample` object/frame)
+- GC: eliminate minor GC hitches from object churn (~0.5–2 ms every 2–5 seconds)
 
-**Risk:** Low — pure refactor of internal bookkeeping. External interface unchanged.
+**Risk:** Low — pure refactor of internal bookkeeping. External interface (`sample()`, `getSnapshot()`, etc.) unchanged.
 
-**Requires architectural change:** No.
+**Validation:** No visual change. Verify output values are numerically equivalent via a unit test comparing old vs new path for the same input sequence.
 
 ---
 
@@ -447,17 +906,88 @@ On the `high` preset the frame geometry with bevel is moderately complex. This e
 
 **Target:** `GPU-2`
 
-**Approach:** On the high/balanced presets, `bloomStrength` is 0.04/0.03 with `bloomThreshold = 1.2`. Because the scene uses `THREE.NoToneMapping` and standard PBR materials, no surface in the scene will produce fragments with linear luminance > 1.2 under the current lighting setup (which is not HDR). The bloom pass therefore processes 10 framebuffers per frame for a result of effectively zero. Two complementary approaches:
+**Root problem:** `UnrealBloomPass` always processes 10 internal FBO ping-pong blits per frame even when `bloomStrength = 0.04` and `bloomThreshold = 1.2`. Because the scene uses `THREE.NoToneMapping` and no surface produces linear luminance > 1.2, the bloom output is effectively zero. The 10 blits are wasted bandwidth.
 
-1. Set `bloomPass.enabled = false` when `bloomStrength * max(1 - bloomThreshold, 0) < epsilon` (a threshold below which the output is visually indistinguishable from no bloom).
-2. Alternatively, reduce `bloomStrength` to 0 on balanced as well — the current 0.03 value is below perceptual threshold on a calibrated display.
+**⚠ Validation requirement (must precede implementation):**  
+The assumption "no scene pixel exceeds luminance 1.2" is almost certainly correct given `THREE.NoToneMapping` and non-HDR materials — but specular highlights in artwork PBR textures can produce bright spikes depending on artwork content. **Before disabling bloom:** probe peak scene luminance across all artworks and all presets. A practical measurement approach:
+
+```typescript
+// One-time diagnostic pass (run at startup, not per-frame):
+async function measurePeakLuminance(renderer, scene, camera): Promise<number> {
+  const rt = new THREE.WebGLRenderTarget(64, 64);  // small sample
+  renderer.setRenderTarget(rt);
+  renderer.render(scene, camera);
+  renderer.setRenderTarget(null);
+
+  const pixels = new Uint8Array(64 * 64 * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, 64, 64, pixels);
+  rt.dispose();
+
+  let maxLum = 0;
+  for (let i = 0; i < pixels.length; i += 4) {
+    // sRGB to linear approximation for quick check
+    const r = (pixels[i] / 255) ** 2.2;
+    const g = (pixels[i+1] / 255) ** 2.2;
+    const b = (pixels[i+2] / 255) ** 2.2;
+    maxLum = Math.max(maxLum, 0.2126 * r + 0.7152 * g + 0.0722 * b);
+  }
+  return maxLum;
+}
+```
+
+If all artworks return `maxLum < 0.8` (safely below the 1.2 threshold), bloom can be safely disabled. If any artwork returns `maxLum > 1.0`, investigate before disabling.
+
+---
+
+**Approach A — Static disable at preset level (Simplest)**
+
+Set `bloomStrength: 0` on `high` and `balanced` presets. Three.js `UnrealBloomPass` checks `this.strength` at the start of each render — but does **not** skip its FBO processing when strength is zero. The actual skip requires `bloomPass.enabled = false`:
+
+```typescript
+// In PostProcessing.ts applyPreset():
+if (preset.bloomStrength === 0) {
+  this._bloomPass.enabled = false;
+} else {
+  this._bloomPass.enabled = true;
+  this._bloomPass.strength = preset.bloomStrength;
+}
+```
+
+**Important:** `bloomPass.enabled = false` causes the `EffectComposer` to skip the pass entirely, including all 10 internal FBO reads/writes. Simply setting `strength = 0` does NOT achieve this.
+
+---
+
+**Approach B — Dynamic enable/disable based on measured scene luminance**
+
+Run the peak luminance probe above on first artwork load and re-evaluate after each artwork navigation. Cache the result per artwork:
+
+```typescript
+private _bloomEligibleByArtwork = new Map<string, boolean>();
+
+async checkBloomEligibility(artworkId: string): Promise<void> {
+  const peak = await measurePeakLuminance(this._renderer, this._scene, this._camera);
+  const eligible = peak > this._bloomThreshold * 0.8;  // 20% headroom
+  this._bloomEligibleByArtwork.set(artworkId, eligible);
+  this._bloomPass.enabled = eligible && this._preset.bloomEnabled;
+}
+```
+
+This adapts dynamically to artwork content and is the safest approach if peak luminance is uncertain.
+
+---
+
+**Approach C — Remove bloom pass from composer entirely on battery preset; keep as disabled-by-default on balanced/high**
+
+On `battery` preset: bloom is already strength 0. Ensure `enabled = false` is explicitly set.
+On `balanced` preset: default to `enabled = false`; provide a developer flag to re-enable for testing.
+On `high` preset: default to `enabled = false` pending luminance measurement; enable only if artwork content warrants it.
+
+This minimizes the default GPU cost while preserving the bloom infrastructure for future use.
 
 **Expected gain:**
-- GPU: eliminate 10 fullscreen quad renders per frame on high preset (~0.3–1 ms GPU/frame)
+- GPU: eliminate 10 fullscreen quad renders per frame on high/balanced preset (~0.3–1 ms GPU/frame)
 
-**Risk:** Low — if the bloom effect is genuinely below the perceptual threshold, disabling it produces no visual change. To verify, compare screenshots at `bloomStrength = 0.04` vs. `0.0` on a 4K display at maximum zoom.
-
-**Requires architectural change:** No.
+**Risk:** Low conditional on luminance validation. If bloom is removed while a rare artwork has specular spikes > 1.2, those spikes would become visible hard points rather than bloomed soft glows. Mitigated by Approach B.
 
 ---
 
@@ -467,18 +997,89 @@ On the `high` preset the frame geometry with bevel is moderately complex. This e
 
 **Target:** `GPU-1`
 
-**Approach:** The FREYRAUM scene renders a single artwork on a near-infinite gallery background. The artwork plane and frame are both flat or near-flat — they cannot receive meaningful self-shadowing from the other spotlight. Shadow maps in this context primarily affect soft floor/wall shadows that are not rendered (no floor geometry). Consider:
+**Root problem:** 2–3 shadow-casting spotlights produce 2–3 full depth-only render passes per frame before the main render. The scene geometry is near-flat (single artwork plane + frame ring); inter-object shadowing is imperceptible because no geometry casts meaningful shadows across other geometry at typical gallery distances.
 
-1. Reduce to one shadow-casting light (the primary key) on high preset only.
-2. On balanced, disable shadow maps entirely and rely on the existing ambient + indirect PBR path.
-3. Alternatively, reduce shadow map resolution from Three.js default (1024) to 512 for the lights that are shadow-casting — this halves the shadow map fill rate.
+**⚠ Validation requirement (visual-risk optimization):**  
+Shadow maps do contribute subtle contact shadows along frame edges and faint floor-plane softness at certain lighting profiles. **Required validation:** side-by-side render comparison at every lighting profile (gallery-soft, raking, spotlight, museum) across 5+ representative artworks at all zoom levels. Compare screenshots at:
+- `shadows: true` (current)
+- `shadows: false` (proposed balanced/battery)
+- `shadowCastingLights: 1` (proposed high preset, key light only)
+
+Do not commit shadow changes without explicit sign-off on these comparisons.
+
+**Mobile GPU bandwidth note:** On tile-based deferred rendering (TBDR) GPUs — all Apple Silicon, most Android (Adreno 6xx+, Mali-G series) — shadow map cost includes depth buffer resolution + reload to tile memory. This can produce 2–4× more cost than a comparable desktop GPU pass. Shadow maps are a disproportionate cost on the mobile GPU class most commonly used in gallery environments (iPad, MacBook Air M-series). Even a reduction from 2 lights to 1 shadow-casting light can save ~50% of shadow GPU budget on these devices.
+
+---
+
+**Approach A — Per-preset shadow light count via `shadowCastingLightCount` field (Recommended)**
+
+Replace the current binary `preset.shadows: boolean` with a count:
+
+```typescript
+// In QualityPreset interface:
+interface QualityPreset {
+  // ...existing fields...
+  shadowCastingLightCount: 0 | 1 | 2;  // replaces shadows: boolean
+}
+
+// Preset values:
+high:     shadowCastingLightCount: 1   // key light only (was: 2)
+balanced: shadowCastingLightCount: 0   // was: 2 (shadows: true)
+battery:  shadowCastingLightCount: 0   // already correct
+```
+
+In `LightingSetup.applyPreset()`:
+
+```typescript
+applyPreset(preset: QualityPreset): void {
+  const count = preset.shadowCastingLightCount;
+  this._spotlights.forEach((light, i) => {
+    light.castShadow = i < count;
+  });
+}
+```
+
+This granular control enables profile-specific tuning: inspection profile could use `shadowCastingLightCount: 1` for raking shadow detail while gallery-soft uses `0`.
+
+---
+
+**Approach B — Shadow map resolution reduction (Complementary, not alternative)**
+
+Reduce shadow map resolution from Three.js default (1024×1024) to 512×512 for all shadow-casting lights. This halves the shadow map fill rate and quarterns the bandwidth:
+
+```typescript
+// In LightingSetup setup():
+light.shadow.mapSize.set(512, 512);     // was: default 1024
+light.shadow.camera.near = 0.5;        // tighter frustum = better depth precision
+light.shadow.camera.far = 20;
+light.shadow.bias = -0.001;
+```
+
+512×512 is sufficient for the contact shadows visible at gallery distances — the artwork is not large enough for high-resolution shadow detail to matter.
+
+Expected GPU win: ~75% reduction in shadow texture bandwidth (4× smaller area) with minimal visual degradation.
+
+---
+
+**Approach C — PCF shadow soft-clamp + single key light on all presets**
+
+For the `high` preset, keep one shadow-casting spotlight at 512×512 with `THREE.PCFSoftShadowMap`. This produces a soft shadow halo around the frame bottom edge that is consistent with the museum lighting intention:
+
+```typescript
+// In RendererManager constructor or applyPreset():
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = preset.shadowCastingLightCount > 0;
+```
+
+`PCFSoftShadowMap` uses 4-tap filtering — slightly more expensive per texel, but at half resolution the net cost is lower than 2× PCF `BasicShadowMap` at full resolution.
 
 **Expected gain:**
-- GPU: 1 fewer render pass per light disabled. With 2 lights and shadows both disabled: 2 fewer full-scene render passes = 50–66% reduction in base scene render cost before post-processing.
+- GPU: Approach A (1 light): −50% shadow render passes on high
+- GPU: Approach A (0 lights) on balanced: −100% shadow passes = ~0.5–2 ms/frame freed
+- GPU: Approach B (512×512): −75% shadow bandwidth
+- Combined A+B: largest single GPU win available short of Tier 0
 
-**Risk:** Medium — disabling the second spotlight's shadow may change lighting feel. Shadow maps add soft contact shadows on the frame edges that may be subtly noticeable. Mitigate by toggling between shadow-on and shadow-off screenshots at the gallery-soft profile before committing.
-
-**Requires architectural change:** No — `preset.shadows` flag already gates this.
+**Risk:** Medium — shadow appearance change is the most perceptually noticeable visual change in this optimization set. Side-by-side validation is required before shipping.
 
 ---
 
@@ -488,15 +1089,25 @@ On the `high` preset the frame geometry with bevel is moderately complex. This e
 
 **Target:** `GPU-3`
 
-**Approach:** Change `SidePanels` materials to `transparent: false` (or `opacity: 1.0` — Three.js automatically sets `transparent: false` when opacity reaches 1.0). This moves the panels from the transparent render bucket (sorted by distance, alpha-blended) to the opaque bucket (depth-sorted, no blend cost). The visual difference at `opacity = 0.95 → 1.0` is imperceptible on printed fine-art images against a light gallery background.
+**Approach:** Change `SidePanels` materials to `transparent: false` (or `opacity: 1.0` — Three.js automatically sets `transparent: false` when opacity reaches 1.0). This moves the panels from the transparent render bucket (sorted by distance, alpha-blended) to the opaque bucket (depth-sorted, no blend cost).
+
+```typescript
+// In SidePanels.ts createMaterial():
+material.transparent = false;
+material.opacity = 1.0;
+// Note: Three.js requires needsUpdate = true on material after toggling transparent
+material.needsUpdate = true;
+```
+
+**Validation requirement (perceptual risk, not code risk):**  
+The visual difference at `opacity = 0.95 → 1.0` is below the perceptual threshold on calibrated displays — but this **must be validated via side-by-side render comparison at all lighting profiles and at all zoom levels** (especially close inspection mode where the panel texture fill is visible). If any profile shows a perceptible edge where the panel joins the background at the current 0.95 opacity, the fix is to add a soft gradient or vignette to the panel texture itself (image-based feathering rather than material opacity). Do not ship this change without the comparison.
 
 **Expected gain:**
-- GPU: eliminate alpha-blend for 2 meshes per frame; free up depth-write optimization for those fragments
+- GPU: eliminate alpha-blend for 2 panel meshes per frame
 - CPU: eliminate per-frame transparent-object sort for side panels
+- Code: simplifies render bucket; consistent with depth-write optimization
 
-**Risk:** Very low — 5% opacity reduction (0.95 → 1.0) is below perceptual threshold on fine-art display devices.
-
-**Requires architectural change:** No.
+**Risk:** Very low — 5% opacity shift is sub-perceptual, but requires sign-off.
 
 ---
 
@@ -542,15 +1153,86 @@ On the `high` preset the frame geometry with bevel is moderately complex. This e
 
 **Target:** `GPU-5`
 
-**Approach:** Maintain two `PlaneGeometry` instances: one at full `artworkSegments` (180 on high) for close inspection, and one at a reduced count (e.g., 24 segments) for overview distance. Switch between them based on camera Z distance crossing a threshold (e.g., camera.position.z > 10.0 → use low LOD; < 6.0 → use high LOD with hysteresis). The parallax and self-shadow effects are barely perceptible at Z > 10.0 (overview distance). This is conceptually similar to the existing `artworkSegments` system, extended to support runtime switching.
+**Root problem:** The artwork plane uses `artworkSegments: 180` (65K triangles) even at overview distance where vertex-level detail is sub-pixel. The high tessellation exists to support the parallax UV march and self-shadow march in the fragment shader — both of which are imperceptible at camera distances > 10 units.
+
+**⚠ Validation requirement:**  
+Must validate that: (1) parallax and self-shadow effects at overview zoom are already below perceptual threshold before enabling LOD, and (2) the geometry swap transition has no visible pop. Side-by-side screenshot comparison at the LOD threshold distance (proposed: Z ≈ 10) at maximum parallax strength.
+
+---
+
+**Approach A — Two-level explicit geometry swap with hysteresis (Recommended)**
+
+Maintain two `PlaneGeometry` instances in `ArtworkMesh`:
+
+```typescript
+private _hiResGeo: THREE.PlaneGeometry;   // artworkSegments = 180
+private _loResGeo: THREE.PlaneGeometry;   // artworkSegments = 24 (1.1K triangles)
+private _currentLOD: 'hi' | 'lo' = 'hi';
+
+private readonly LOD_SWITCH_HI = 6.0;   // switch to hi-res when Z < 6.0
+private readonly LOD_SWITCH_LO = 8.0;   // switch to lo-res when Z > 8.0
+
+updateLOD(cameraZ: number): void {
+  const targetLOD = cameraZ < this.LOD_SWITCH_HI ? 'hi' : 
+                    cameraZ > this.LOD_SWITCH_LO ? 'lo' : this._currentLOD;
+  if (targetLOD === this._currentLOD) return;
+  
+  this._currentLOD = targetLOD;
+  const geo = targetLOD === 'hi' ? this._hiResGeo : this._loResGeo;
+  this._artworkMesh.geometry = geo;
+  // Geometry swap is instantaneous — no upload, both are already on GPU
+}
+```
+
+The hysteresis band (6.0–8.0) prevents thrashing when the camera hovers near the threshold.
+
+---
+
+**Approach B — Three.js `THREE.LOD` node (Standard API)**
+
+Three.js provides a built-in `THREE.LOD` class:
+
+```typescript
+const lod = new THREE.LOD();
+lod.addLevel(artworkMeshHi, 0);    // hi-res: distance 0
+lod.addLevel(artworkMeshLo, 8.0);  // lo-res: distance 8.0
+
+// Three.js automatically switches LOD in renderer.render()
+// when renderer.info is accessed
+scene.add(lod);
+```
+
+This leverages Three.js's built-in distance computation but requires restructuring `ArtworkMesh` to use a `THREE.LOD` container. Slightly more overhead than Approach A (LOD tree traversal), but integrates cleanly with the scene graph.
+
+**Note:** `THREE.LOD.autoUpdate` must be `true` (default) for automatic LOD selection.
+
+---
+
+**Approach C — Conditional parallax/shadow shader disable at overview distance**
+
+Instead of switching geometry, disable the parallax and self-shadow marching loops in the fragment shader when the camera is far enough:
+
+```glsl
+// In artwork onBeforeCompile shader injection:
+uniform float uParallaxStrength;  // 0.0 at overview distance, 1.0 at close zoom
+
+// In parallax march loop:
+#if defined(USE_PARALLAX)
+  if (uParallaxStrength > 0.01) {
+    // ... parallax loop
+  }
+#endif
+```
+
+Drive `uParallaxStrength` from `main.ts` based on camera Z: lerp from 0→1 as Z goes from 8→4 units. This eliminates the ~16 dynamic texture samples at overview distance while keeping the same mesh tessellation.
+
+**Trade-off:** Fragment shader cost reduction without geometry swap stall; no pop artifact at all. But vertex count is unchanged (65K triangles still processed). Approach A + C combined achieves the most.
 
 **Expected gain:**
-- GPU: at overview distance, reduce vertex count from ~65K to ~1.2K triangles = ~50× reduction in vertex processing
-- The fragment shader cost dominates at close distances, so this primarily helps overview zoom
+- GPU: at overview distance (typical starting position), reduce vertex count from ~65K to ~1.2K triangles = ~98% reduction in vertex shader work
+- GPU: Approach C also eliminates ~16 dynamic texture reads/fragment at overview
 
-**Risk:** Medium — geometry swap causes a single-frame stall similar to the current preset-change path. Hysteresis band required to prevent thrashing. Visual change: none at overview distance (parallax/shadow are below perceptual threshold at z > 10).
-
-**Requires architectural change:** Minor — `ArtworkMesh` would maintain two geometry instances.
+**Risk:** Medium — geometry swap (Approach A) causes a single-frame stall on first switch. Hysteresis band required. No visible change at correct threshold distances.
 
 ---
 
@@ -691,6 +1373,15 @@ Within the render-eligible path, the loop runs all of: budget sampling, quality 
 
 ### Phase 8: Prioritized Optimization Roadmap
 
+#### Tier 0 — Architectural Priority (Highest Impact, Moderate Complexity)
+
+| # | Optimization | Target | Expected CPU Gain | Expected GPU Gain | Complexity | Risk |
+|---|---|---|---|---|---|---|
+| T0-A | Dirty-flag + frame cooldown idle render suppression (Approach A) | Phase 0 | ~97% reduction at idle | ~97% reduction at idle | Medium | Low-Medium |
+| T0-B | rAF throttle interim (Approach C, quick win) | Phase 0 | ~92% reduction at idle | ~92% reduction at idle | Very Low | Low |
+
+> T0-A should be designed first and implemented as a complete feature; T0-B can ship as a one-day interim while T0-A is being built.
+
 #### Tier 1 — Critical Impact, Low Risk
 
 | # | Optimization | Target | Expected CPU Gain | Expected GPU Gain | Memory Gain | Complexity | Risk |
@@ -775,4 +1466,208 @@ The FREYRAUM gallery runtime is well-architected for its use case: one artwork a
 
 ---
 
-*Audit completed 2026-06-21. Scope: static analysis of src/ at v0.73 HEAD. No runtime profiling was performed — all estimates are derived from code structure analysis. Actual measurements via Chrome DevTools Performance panel and WebGL Inspector are recommended before implementing Tier 2/Tier 3 items.*
+---
+
+### Phase 10: Profiling Validation Plan
+
+> **Run this baseline before implementing any Tier 1–3 optimization.** The data from Phase 10 turns planning estimates into confirmed measurements and prevents optimizing non-bottlenecks.
+
+#### 10.1 Baseline Measurements (Before Any Change)
+
+**Step 1 — Chrome DevTools Performance Trace (CPU baseline)**
+
+1. Open gallery in Chrome with **DevTools → Performance → CPU: 4× slowdown** (simulates mid-range mobile)
+2. Click record, interact with the gallery for 30 seconds: zoom in, navigate 5 artworks, zoom out, idle for 10 seconds
+3. Stop recording; export trace as `.json`
+4. Identify from the trace:
+   - Frames per second (top bar)
+   - Long tasks (> 50 ms marked in red)
+   - `animate()` self-time and total-time per frame
+   - `galleryManager.update()` contribution
+   - `FrameBudgetMonitor.sample()` contribution
+   - GC events (grey bars in the timeline)
+
+**Step 2 — WebGL Frame Time Breakdown (GPU baseline)**
+
+Use the **Spector.js** browser extension (spector.js.org) or Chrome DevTools **WebGL** inspector:
+
+1. Capture one frame at static idle state → record GPU time per draw call and post-process pass
+2. Capture one frame during active zoom → same
+3. Capture one navigation frame → identify geometry rebuild spike
+
+Record:
+- Shadow map pass time (×2 lights)
+- Main render pass time
+- Bloom pass time (×10 blits)
+- OutputPass time
+- Total frame GPU time
+
+**Step 3 — FPS + Frame Variance Measurement**
+
+```typescript
+// Add temporarily to diagnostics/debug mode only:
+const frameTimes: number[] = [];
+function animate(now: number) {
+  requestAnimationFrame(animate);
+  frameTimes.push(now);
+  if (frameTimes.length > 120) frameTimes.shift();
+  if (frameTimes.length >= 2) {
+    const deltas = frameTimes.slice(1).map((t, i) => t - frameTimes[i]);
+    const avg = deltas.reduce((a, b) => a + b) / deltas.length;
+    const max = Math.max(...deltas);
+    diagnostics.record('frameAvgMs', avg);
+    diagnostics.record('frameMaxMs', max);  // jank detection
+  }
+}
+```
+
+Target: `frameAvgMs < 16.7` (60 fps), `frameMaxMs < 33` (no frame > 30 ms).
+
+**Step 4 — Memory Snapshot (Heap Timeline)**
+
+1. Chrome DevTools → Memory → Heap snapshot at startup completion
+2. Chrome DevTools → Memory → Allocation timeline during 60 seconds of normal use
+3. Identify:
+   - Retained size of `TextureManager` cache
+   - `FrameBudgetSample` objects in heap (should appear as frequent small allocations)
+   - Any unexpected retained references
+
+#### 10.2 Per-Optimization Measurement Protocol
+
+For each Tier 1+ optimization, record:
+
+| Metric | Before | After | Delta | Pass/Fail |
+|---|---|---|---|---|
+| CPU frame time (avg, ms) | | | | |
+| CPU frame time (P99, ms) | | | | |
+| GPU frame time (avg, ms) | | | | |
+| Navigation spike (P99, ms) | | | | |
+| GC events per minute | | | | |
+| Peak JS heap (MB) | | | | |
+| FPS at 4× CPU throttle | | | | |
+
+**Pass criteria (suggested):**
+- CPU avg: must not increase
+- Navigation spike: must decrease (for navigation-related opts)
+- GPU avg: must decrease (for GPU-related opts)
+- No new long tasks (> 50 ms) introduced
+
+#### 10.3 Visual Validation Protocol (For Perceptual-Risk Optimizations)
+
+For OPT-4 (bloom), OPT-5 (shadows), OPT-6 (panels), OPT-9 (LOD):
+
+1. Take a reference screenshot at: all lighting profiles × all artwork formats × full zoom + overview zoom = ~30–50 combinations
+2. Apply the optimization
+3. Take the same set of screenshots
+4. Compare programmatically (`pixelmatch` or `resemblejs`) and visually
+5. Record maximum pixel difference and affected region
+6. **Pass criterion:** max pixel difference < 2% of pixels differ by > 10/255 on any comparison
+
+For shadow changes additionally:
+- Compare specifically the frame edge shadow softness at close zoom
+- Compare the floor/wall shadow fade (if present) at all profiles
+
+#### 10.4 Device Coverage for Performance Testing
+
+| Device Class | Representative Device | Why |
+|---|---|---|
+| Desktop high-end | Chrome on MacBook M3 Pro | Primary customer device |
+| Desktop mid-range | Chrome on Windows GTX 1060 | Baseline performance |
+| Mobile high-end | Safari iOS on iPhone 15 | TBDR GPU, common |
+| Mobile mid-range | Chrome on Android (Pixel 6a) | Adreno TBDR, shadow cost |
+| Tablet | Safari iOS on iPad Pro M2 | Gallery kiosk target |
+
+Shadow map and bloom savings will be disproportionately larger on mobile TBDR devices.
+
+---
+
+### Phase 11: Safe Rollout Sequence
+
+> Sequenced implementation order accounting for risk, dependencies, and measurement gates. Each step must pass the Phase 10 measurement protocol before the next step begins.
+
+#### Step 1 — CPU micro-optimizations (Zero visual risk, no measurement gate required)
+
+```
+T1-B: FrameBudgetMonitor incremental O(1) stats + snapshot object reuse
+T1-A: fovTan cached constant + viewport metrics memoized per frame (Approach B)
+T1-C: console.debug → diagnostics guard in ArtworkMesh.ts
+T1-D: Pre-allocate scratch Vector2 instances
+```
+
+**Verification:** Run Chrome Performance trace; confirm `FrameBudgetMonitor.sample()` self-time drops from ~0.05 ms to < 0.01 ms. Confirm no GC events from `FrameBudgetSample` in 60-second trace. No visual comparison needed.
+
+#### Step 2 — GC stabilization + object reuse
+
+```
+MEM-2: Pool or mutate FrameBudgetSample (part of T1-B above)
+MEM-3/4: Reuse scratch Vector2 instances (T1-D above)
+```
+
+**Verification:** Heap allocation timeline shows no `FrameBudgetSample` churn. Minor GC frequency reduced.
+
+#### Step 3 — Navigation spike reduction (CPU, low visual risk)
+
+```
+T2-A: Frame geometry aspect cache (Approach A equality skip first, then Approach B LRU)
+T2-D: Eliminate redundant camera.updateMatrixWorld() call
+```
+
+**Verification:** Navigation profiler trace shows no `computeTangents` spike on same-aspect transitions. No visual change. Chrome Performance → Main thread shows clean 16 ms frames after navigation.
+
+#### Step 4 — T0 idle render architecture (Highest impact, ship after Steps 1–3 are stable)
+
+```
+T0-B: rAF throttle (Approach C) as interim — ship first
+T0-A: AnimationStateTracker dirty-flag system — design and test in isolation
+     - Unit test: markDirty() → consume() → settle flow
+     - Integration test: zoom/pan/navigation all trigger markDirty correctly
+     - Regression: no input goes unrendered
+```
+
+**Verification:** Chrome Performance trace during 10-second idle after navigation shows near-zero main thread activity (no rAF callbacks executing render work). FPS counter shows 0–2 renders/second at idle. Device GPU temperature (measured via battery API) decreases within 30 seconds of idle.
+
+#### Step 5 — GPU reductions (Requires visual validation gate before shipping)
+
+```
+T2-B: Bloom disable (bloomPass.enabled = false on balanced/high)
+  → Prerequisites: peak luminance probe across all artworks (§OPT-4)
+  → Validation: screenshot comparison all presets all artworks ✓
+
+T2-C: Shadow map reduction
+  → Start with: shadow map resolution 1024 → 512 (lowest visual risk)
+  → Then: shadowCastingLightCount: 1 on high preset
+  → Then: shadowCastingLightCount: 0 on balanced preset
+  → Validation: shadow comparison all profiles all artworks ✓ with sign-off
+
+T1-E: Side panels transparent → opaque
+  → Validation: side-by-side at all profiles ✓
+```
+
+**Ship order within Step 5:** bloom first (least visual risk after luminance check), then panels, then shadows.
+
+#### Step 6 — Architectural refinements (Design first; implement after Step 4 is stable)
+
+```
+T3-D: Dirty-flag update throttle (skip smoothDamp when settled) — extends T0-A
+T3-A: Distance-based LOD for artwork plane (Approach A + C combined)
+  → Prerequisites: confirm parallax imperceptible at LOD switch distance
+  → Validation: no visible geometry pop at threshold distance
+T3-B: Procedural texture Web Worker (only if startup time measured as user-visible on slow mobile)
+```
+
+#### Rollout Risk Summary
+
+| Step | Visual Risk | CPU Risk | GPU Risk | Rollback Complexity |
+|---|---|---|---|---|
+| 1 (CPU micro) | None | None | None | Trivial |
+| 2 (GC) | None | None | None | Trivial |
+| 3 (navigation) | None | Low | None | Trivial |
+| 4 (idle render) | None | Medium | None | Low (remove flag) |
+| 5 (GPU reduce) | Medium | None | Medium | Low (toggle flag) |
+| 6 (architectural) | Low-Medium | Low | Medium | Medium |
+
+All GPU reductions (Step 5) should be gated behind quality preset flags so they can be independently toggled without a code deploy.
+
+---
+
+*Audit completed and enhanced 2026-06-21. Phase 0–11 represents a full engineering planning document. Scope: static analysis of src/ at v0.73 HEAD + reviewer feedback integration. No runtime profiling was performed — all estimates are derived from code structure analysis. Implement Phase 10 (Profiling Validation Plan) before starting any Tier 1+ code changes to establish measured baselines.*
