@@ -5,6 +5,10 @@ dist/
 *.log
 .DS_Store
 
+# v0.74 — Type A visual-regression harness output (scripts/visual-regression.mjs).
+# Baseline/current/diff screenshots are local measurement artifacts.
+.visual-regression/
+
 # v0.07: customer-managed artwork content. Originals and generated files
 # stay local on the customer machine; only the empty inbox/processed
 # folders are committed (via .gitkeep).

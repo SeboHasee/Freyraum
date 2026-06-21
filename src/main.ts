@@ -31,6 +31,7 @@ import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/Bac
 import { PreferencesStore } from './utils/preferences';
 import { isWebGLAvailable } from './utils/webgl';
 import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
+import { installPerformanceTooling } from './utils/performanceTooling';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
@@ -673,6 +674,17 @@ async function main(): Promise<void> {
   // Gallery objects
   const artworkMesh = new ArtworkMesh(sceneManager.scene, initialPreset);
   const sidePanels = new SidePanels(sceneManager.scene);
+
+  // v0.74 Phase 10 — install the Type B (structural invariants) and Type C
+  // (performance / GC / frame-variance) regression tooling on `window`. Passive
+  // and opt-in; see docs/REGRESSION_TOOLING.md. The context provider reads live
+  // scene handles each time the invariants are evaluated.
+  installPerformanceTooling(() => ({
+    scene: sceneManager.scene,
+    artworkMesh: artworkMesh.getArtworkMeshObject(),
+    lights: lightingSetup.getLights(),
+    expectedShadowCasterCount: lightingSetup.getExpectedShadowCasterCount(),
+  }));
 
   // v0.16 — cache DOM chrome refs once. Previously `measureArtworkViewport`
   // called `app.querySelector` three times per measurement; on mobile

@@ -30,6 +30,9 @@ export class LightingSetup {
   private animate = true;
   private lastUpdateTime = 0;
   private animatedTime = 0;
+  // v0.74 Phase 12 (Type B) — track the shadow expectation so the structural
+  // invariant tooling can assert the live shadow-caster count matches intent.
+  private shadowsEnabled = false;
 
   constructor(scene: THREE.Scene, preset: QualityPreset, profileId: LightProfileId = DEFAULT_LIGHT_PROFILE) {
     this.scene = scene;
@@ -60,9 +63,20 @@ export class LightingSetup {
   }
 
   applyPreset(preset: QualityPreset): void {
+    this.shadowsEnabled = preset.shadows;
     for (const spot of this.spots) {
       spot.castShadow = preset.shadows;
     }
+  }
+
+  /** v0.74 Type B tooling — live lights for structural invariant checks. */
+  getLights(): THREE.Light[] {
+    return [...this.spots, this.ambientLight];
+  }
+
+  /** v0.74 Type B tooling — expected shadow-caster count for the active preset. */
+  getExpectedShadowCasterCount(): number {
+    return this.shadowsEnabled ? this.spots.length : 0;
   }
 
   setAnimated(animate: boolean): void {

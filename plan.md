@@ -1879,4 +1879,57 @@ These criteria replace the subjective "must not increase" pass condition with en
 
 ---
 
+### Phase 15: Execution Record (2026-06-21)
+
+> Execution pass against this plan. Canonical guide: this file. Constraint: the
+> CI/sandbox has no interactive WebGL browser session, so Type A (visual) and
+> live GPU/GC measurement gates cannot be exercised here. Per the plan's own
+> safety rule, optimizations whose required gate cannot be run were **not
+> shipped** and are recorded as deferred/rejected below.
+
+#### Tooling alignment shipped (Phase 10 / Phase 12 hooks)
+
+This closes the previously-missing "regression model → tooling" mapping. See
+`docs/REGRESSION_TOOLING.md`.
+
+| Regression type | Tool shipped |
+|---|---|
+| Type A — pixel diff | `scripts/visual-regression.mjs` (Playwright + pixelmatch; Phase 10.3 < 2% / 10-of-255 threshold) |
+| Type B — invariants | `src/utils/RuntimeInvariants.ts` (geometry ownership, triangle ceiling, material binding, shadow-caster count, scene consistency) |
+| Type C — GC/behavior | `src/utils/PerformanceMetrics.ts` (frame σ, P99, FPS σ, GC/min, GC pause P99, long tasks, heap); `scripts/test-frame-budget.mjs` equivalence gate |
+
+Both runtime tools are exposed via `window.__FREYRAUM_PERF_TOOLS__` and are
+passive/opt-in (zero production cost until invoked).
+
+#### Optimizations shipped (zero visual risk; Phase 11 Step 1–2)
+
+| ID | Change | Validation run |
+|---|---|---|
+| OPT-3 / T1-B | `FrameBudgetMonitor` O(1) incremental accumulators + reused snapshot objects (removes 3× O(60) scans and ~60 allocs/s) | `npm run test:frame-budget` — numerically identical to O(N) reference across 435 frames |
+| OPT-1 / T1-A | Cached `tan(fov/2)` in `GalleryManager` (was recomputed 2–3×/frame) | typecheck/lint; output mathematically identical (FOV constant at runtime) |
+| T1-C | `ArtworkMesh` `console.debug` → diagnostics pipeline (suppressed unless verbose) | lint/typecheck |
+| OPT-7 / T1-D | Reused scratch `Vector2` in `RendererManager.getRendererSnapshot()` | lint/typecheck |
+
+Validation baseline + post-change: `npm run lint`, `npm run build:typecheck`,
+and `npm run build:preview` all pass.
+
+#### Deferred / Rejected during execution phase due to regression risk
+
+These require the Type A visual gate and/or live GPU/GC profiling, which cannot
+be performed in this non-interactive sandbox. They are **not** shipped; the
+tooling above is in place so they can be executed and gated in a follow-up with
+a real browser session.
+
+| ID | Reason |
+|---|---|
+| Phase 0 / T0-A,B,C (idle render suppression) | Behavioral (Type C) change requiring interactive input-coverage validation (every input path must `markDirty`); cannot verify no-stale-render in sandbox |
+| OPT-4 / T2-B (bloom disable) | Type A gate + peak-luminance probe required; no browser session |
+| OPT-5 / T2-C (shadow reduction) | Type A gate + per-profile shadow sign-off required |
+| OPT-6 / T1-E (side panels opaque) | Type A gate required (panel/background seam at opacity 0.95→1.0) |
+| OPT-2 / T2-A (frame geometry aspect cache) | Type B structural gate feasible, but navigation-spike benefit is unmeasurable without profiling; deferred to keep geometry ownership single-writer until OPT-9 design lands (Phase 13 §13.1) |
+| OPT-9 / T3-A (LOD) | Type A + Phase 13 coupling (must pair geometry swap with `uParallaxStrength=0`; must co-design with OPT-2 geometry ownership) |
+| T2-D (redundant `updateMatrixWorld`) | Deferred: requires confirming no consumer depends on the extra world-matrix refresh that frame; low benefit, not worth unguarded change |
+
+---
+
 *Audit completed and enhanced 2026-06-21. Phases 12–14 added 2026-06-21 based on reviewer feedback: Phase 0 architecture decision rule, GPU-1/2.5 TBDR qualifier, regression risk model, cross-optimization coupling map, and measurement success criteria per tier. No runtime profiling was performed — all estimates are derived from code structure analysis. Implement Phase 10 (Profiling Validation Plan) before starting any Tier 1+ code changes to establish measured baselines.*

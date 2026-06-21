@@ -81,6 +81,15 @@ export class ArtworkMesh {
   }
 
   /**
+   * v0.74 Type B tooling — exposes the live artwork plane mesh (read-only) so
+   * structural invariant checks can verify geometry ownership, triangle count,
+   * material binding, and transform finiteness. Callers must not mutate it.
+   */
+  getArtworkMeshObject(): THREE.Mesh {
+    return this.artworkMesh;
+  }
+
+  /**
    * Creates the artwork plane geometry. Also copies `uv` into `uv1` so the
    * optional AO map works in Three.js ≥ 0.152 (which reads aoMap from uv1).
    */

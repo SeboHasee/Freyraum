@@ -107,3 +107,52 @@ Fix: on loop resume, call `markNavigation()` (or a new `markLoopResume()`) to ac
 - TBDR tile memory analysis: Apple GPU A-series on-chip memory capacity; PowerVR architecture documentation; Arm Mali Bifrost developer guide (shadow depth buffer tile flush characteristics)
 
 
+---
+
+## Performance audit findings — execution pass (2026-06-21)
+
+Source: execution of `plan.md § v0.74` (Phase 15 Execution Record). Verified by
+running the repo toolchain on a fresh clone.
+
+### Verified results
+
+1. **Regression tooling gap closed.** The plan's regression model (Type A pixel
+   diff, Type B invariants, Type C GC/behavior) is now mapped to concrete tools
+   and documented in `docs/REGRESSION_TOOLING.md`:
+   - Type A: `scripts/visual-regression.mjs` (Playwright + pixelmatch, Phase
+     10.3 threshold of < 2% pixels differing by > 10/255).
+   - Type B: `src/utils/RuntimeInvariants.ts` (geometry ownership, triangle
+     ceiling, material binding, shadow-caster count, scene consistency).
+   - Type C: `src/utils/PerformanceMetrics.ts` (frame/FPS σ, P99, GC/min, GC
+     pause P99, long tasks, heap) + `scripts/test-frame-budget.mjs`.
+   Both runtime tools are exposed via `window.__FREYRAUM_PERF_TOOLS__`, passive
+   and opt-in.
+
+2. **`FrameBudgetMonitor` O(1) refactor is numerically identical.** The Type C
+   equivalence gate (`npm run test:frame-budget`) confirms the incremental
+   accumulator path matches the original O(N) linear-scan reference across a
+   435-frame sequence (including budget-exact, severe-hitch, wrap-around, and
+   >250 ms clamp edge cases) for all output fields. This satisfies the Phase
+   12.3 Type C gate for OPT-3.
+
+3. **Tier 1 zero-visual-risk optimizations shipped.** OPT-3/T1-B, OPT-1/T1-A
+   (cached `tan(fov/2)`; `camera.fov` is never reassigned anywhere in `src/`),
+   T1-C (debug routing), and OPT-7/T1-D (scratch `Vector2`). `npm run lint`,
+   `npm run build:typecheck`, and `npm run build:preview` all pass.
+
+4. **Visual-risk and idle-render optimizations were not shipped this pass.**
+   Phase 0 (idle render suppression) and OPT-4/5/6/9 require an interactive
+   browser session for their Type A / live-GPU / behavioral gates, which the CI
+   sandbox cannot provide. Per the plan's safety rule they are recorded as
+   deferred/rejected (Phase 15). The tooling above is the prerequisite that lets
+   a follow-up execute and gate them with a real browser.
+
+### Validation commands (all passing on this branch)
+
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build:preview`
+- `npm run docs:check-config-authority`
+- `npm run test:frame-budget`
+
+
