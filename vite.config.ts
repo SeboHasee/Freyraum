@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './',
+  base: '/Freyraum/',
   build: {
     outDir: 'dist',
     target: 'es2018',
