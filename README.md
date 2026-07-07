@@ -28,12 +28,16 @@ npm run dev
 1. Add images to `customer-artworks/inbox/`.
 2. (Optional) Add sidecar text cards (`.txt`) with the same basename.
 3. (Optional) Add audio files to `customer-audio/inbox/`.
-4. Run `Update Gallery.command` / `Update Gallery.bat`.
+4. Run `Update Gallery.command` / `Update Gallery.bat` (local preview).
 5. Open `customer-preview/app.html`.
+
+To publish to GitHub Pages: commit the inbox files and push to `main` — CI
+runs the import step automatically and deploys to https://sebohasee.github.io/Freyraum/.
 
 Details:
 - [`docs/CUSTOMER_PICTURE_GUIDE.md`](./docs/CUSTOMER_PICTURE_GUIDE.md)
 - [`docs/CUSTOMER_TEXT_GUIDE.md`](./docs/CUSTOMER_TEXT_GUIDE.md)
+- [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)
 
 ## Configuration and diagnostics
 
@@ -52,6 +56,7 @@ Do not duplicate config tables in other docs.
 | Query parameters & persisted config | `docs/QUERY_PARAMETERS.md` |
 | Architecture & ownership | `ARCHITECTURE_MAP.md` |
 | Customer workflow | `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/CUSTOMER_TEXT_GUIDE.md` |
+| GitHub Pages deployment | `docs/DEPLOYMENT.md` |
 | Contributor workflow & freshness rules | `CONTRIBUTING.md` |
 | Technical findings (active/reusable) | `FINDINGS.md` |
 | Active engineering work | `plan.md` |
@@ -65,6 +70,7 @@ Do not duplicate config tables in other docs.
 - Regression tooling: [`docs/REGRESSION_TOOLING.md`](./docs/REGRESSION_TOOLING.md)
 - Architecture: [`ARCHITECTURE_MAP.md`](./ARCHITECTURE_MAP.md)
 - Contributor workflow: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- Deployment / Pages: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)
 - Handoff/support: [`docs/HANDOFF.md`](./docs/HANDOFF.md)
 - Documentation policy: [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md)
 - Archive: [`docs/archive/README.md`](./docs/archive/README.md)

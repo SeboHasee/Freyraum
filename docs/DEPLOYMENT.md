@@ -1,0 +1,123 @@
+# FREYRAUM — GitHub Pages Deployment Guide
+
+This document describes the full operator flow for publishing the gallery to
+GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
+
+## One-time repository setup
+
+In the GitHub repository go to **Settings → Pages → Source** and choose
+**GitHub Actions**. No branch source is required; the workflow uploads and
+deploys the build artifact directly.
+
+---
+
+## Operator flow (end-to-end)
+
+### 1 — Place customer assets
+
+| Asset type | Folder |
+|---|---|
+| Artwork images (`.jpg`, `.png`, `.webp`, etc.) | `customer-artworks/inbox/` |
+| Artwork text sidecars (`.txt`, same basename as the image) | `customer-artworks/inbox/` |
+| Background audio (`.mp3`, `.ogg`, `.m4a`, `.wav`) | `customer-audio/inbox/` |
+
+Detailed format requirements are in
+[`docs/CUSTOMER_PICTURE_GUIDE.md`](./CUSTOMER_PICTURE_GUIDE.md) and
+[`docs/CUSTOMER_TEXT_GUIDE.md`](./CUSTOMER_TEXT_GUIDE.md).
+
+### 2 — Run the importer locally (optional but recommended)
+
+```bash
+npm install          # first time only
+npm run import:artworks
+```
+
+This does exactly what `Update Gallery.bat` / `Update Gallery.command` does,
+and additionally syncs the generated output to `public/` so a local
+`npm run build` or `npm run dev` includes your assets.
+
+Open `customer-preview/app.html` to verify the local preview looks correct
+before publishing.
+
+> **Note:** `Update Gallery.bat` / `Update Gallery.command` still works for the
+> local file-based preview. Use `npm run import:artworks` when you want to
+> validate the exact output that CI will build.
+
+### 3 — Commit the inbox files
+
+```bash
+git add customer-artworks/inbox/ customer-audio/inbox/
+git commit -m "chore: update customer artworks"
+git push origin main
+```
+
+Commit both the image/audio files **and** any `.txt` sidecar files.
+The generated files (`artworks.json`, `customer-artworks.js`, `public/images/`,
+etc.) are gitignored and rebuilt by CI every time.
+
+### 4 — Publishing happens automatically
+
+Pushing to `main` triggers the `Deploy to GitHub Pages` workflow
+(`.github/workflows/deploy-pages.yml`), which:
+
+1. Runs `npm run import:artworks` — identical to the local desktop step.
+2. Runs `npm run build` — Vite bundles the app with `base: '/Freyraum/'`.
+3. Validates that `dist/index.html` and the generated manifests exist.
+4. Deploys `dist/` to GitHub Pages.
+
+The live gallery is updated within ~2 minutes of a successful push.
+
+---
+
+## What CI validates before deploying
+
+| Check | Failure message |
+|---|---|
+| `customer-artworks/inbox` folder exists | `customer-artworks/inbox is missing` |
+| `customer-audio/inbox` folder exists | `customer-audio/inbox is missing` |
+| Importer generates `public/customer-artworks.js` | `public/customer-artworks.js was not generated` |
+| Importer generates `public/customer-audio.js` | `public/customer-audio.js was not generated` |
+| Build produces `dist/index.html` | `dist/index.html is missing` |
+
+---
+
+## Verification checklist (post-deploy)
+
+After the workflow completes:
+
+- [ ] Root URL loads: **https://sebohasee.github.io/Freyraum/**
+- [ ] At least one custom artwork image is visible in the gallery.
+- [ ] Artwork title/description text (from `.txt` sidecar) is shown.
+- [ ] Background audio plays (if audio files were committed).
+- [ ] Browser console shows no 404 errors for `customer-artworks.js` or images.
+
+---
+
+## File ownership summary
+
+| File / folder | Owned by | Committed? |
+|---|---|---|
+| `customer-artworks/inbox/*.jpg` etc. | Customer (operator) | ✅ Yes |
+| `customer-artworks/inbox/*.txt` | Customer (operator) | ✅ Yes |
+| `customer-audio/inbox/*.mp3` etc. | Customer (operator) | ✅ Yes |
+| `customer-artworks/artworks.json` | Importer (generated) | ❌ No |
+| `customer-preview/images/` | Importer (generated) | ❌ No |
+| `customer-preview/customer-artworks.js` | Importer (generated) | ❌ No |
+| `public/images/` | Sync script (generated) | ❌ No |
+| `public/customer-artworks.js` | Sync script (generated) | ❌ No |
+| `dist/` | Vite build (generated) | ❌ No |
+
+---
+
+## Root cause of pre-v0.75 missing assets
+
+Before v0.75 the deployment workflow skipped `npm run import:artworks`.
+Because `public/customer-artworks.js` was never generated, Vite had no
+customer data to bundle, and `window.__FREYRAUM_ARTWORKS` was never set in the
+deployed HTML — so the runtime fell back silently to the built-in placeholder
+artworks. In addition, `customer-artworks/inbox/*` was gitignored, so customer
+files could not be committed to the repository at all.
+
+Both gaps are fixed in v0.75: inbox files are no longer gitignored, the
+importer runs as a mandatory CI step, and `app.html` now loads the customer
+injection scripts before the main module.
