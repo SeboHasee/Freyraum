@@ -17,6 +17,20 @@ This guide documents the current customer workflow only.
    - Windows: `Update Gallery.bat`
 5. Open `customer-preview/app.html`.
 
+## Publish to GitHub Pages
+
+To make changes live at https://sebohasee.github.io/Freyraum/:
+
+1. Commit your inbox files and push to `main`:
+   ```
+   git add customer-artworks/inbox/ customer-audio/inbox/
+   git commit -m "chore: update artworks"
+   git push origin main
+   ```
+2. CI runs `npm run import:artworks` and deploys automatically.
+
+See [`docs/DEPLOYMENT.md`](./DEPLOYMENT.md) for the full operator flow.
+
 ## Supported image formats
 
 - JPG/JPEG

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --open app.html",
+    "import:artworks": "node scripts/import-artworks.mjs && node scripts/sync-customer-public.mjs",
     "build": "npm run build:typecheck && vite build && npm run build:preview && npm run build:preview-html",
     "preview": "vite preview --outDir customer-preview --open app.html",
     "lint": "eslint src --ext ts",
