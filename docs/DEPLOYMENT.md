@@ -77,7 +77,19 @@ The live gallery is updated within ~2 minutes of a successful push.
 | `customer-audio/inbox` folder exists | `customer-audio/inbox is missing` |
 | Importer generates `public/customer-artworks.js` | `public/customer-artworks.js was not generated` |
 | Importer generates `public/customer-audio.js` | `public/customer-audio.js was not generated` |
+| Inbox images produce manifest entries | `N image(s) found in inbox but manifest has 0 entries` |
+| All manifest images present in `dist/images/` | `images … absent from dist/images/` |
+| Audio sources linked → `dist/audio/` non-empty | `dist/audio/ is empty or missing` |
 | Build produces `dist/index.html` | `dist/index.html is missing` |
+
+Each successful workflow run also writes a **CI diagnostic summary** to the
+job summary page (visible on the Actions run page) with:
+
+- Number of inbox image files found
+- Number of artworks imported into the manifest
+- Number of inbox audio files found
+- Number of audio sources linked
+- Sample IDs of the first 5 imported artworks
 
 ---
 
