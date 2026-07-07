@@ -42,6 +42,11 @@ jobs:
             exit 1
           fi
 
+      - name: Prepare Pages artifact (app.html → index.html)
+        run: |
+          cp dist/app.html dist/index.html
+          cp dist/app.html dist/404.html
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
