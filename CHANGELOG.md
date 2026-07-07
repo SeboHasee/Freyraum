@@ -1,6 +1,61 @@
 # CHANGELOG
-> v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
-> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning).
+
+## v0.76 — High-resolution asset publishing plan + markdown audit (2026-07-07, **docs-only**)
+
+### Status
+
+**Planning/docs only.** No importer, runtime, or deployment behavior changed in
+this update.
+
+### Summary
+
+- Audited the current customer artwork pipeline and confirmed that the repository
+  still tracks source artwork files in `customer-artworks/inbox/`.
+- Documented the key GitHub constraints that make very large originals
+  unreliable in the current workflow: 25 MiB browser uploads, 100 MiB Git hard
+  block, 1 GB Pages site size, and no Git LFS support for Pages assets.
+- Recorded a new active plan in `plan.md` for a derivative-first publish model:
+  keep archival masters outside the Pages repo, commit only GitHub-safe publish
+  assets, and stop shipping full-size image bytes inside deployed JS manifests.
+- Refreshed the customer/operator markdown set so the current limitation and the
+  planned direction are visible from `README.md`,
+  `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/DEPLOYMENT.md`,
+  `docs/IMAGE_MAINTENANCE_GUIDE.md`, and `docs/HANDOFF.md`.
+- Corrected contributor/documentation validation docs so the verified regression
+  gate is `npm run test:frame-budget` rather than a non-existent generic
+  `npm run test`.
+- Refreshed the remaining non-archive markdown banners that still pointed at the
+  2026-06-05 audit so the active audit date is consistent across the operational
+  docs set.
+
+### Validation
+
+- `npm install` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run test:frame-budget` ✅
+
+### Files
+
+- `plan.md`
+- `FINDINGS.md`
+- `README.md`
+- `AI_RULES.md`
+- `CONTRIBUTING.md`
+- `DOCUMENTATION_RULES.md`
+- `LESSONS_LEARNED.md`
+- `docs/CUSTOMER_PICTURE_GUIDE.md`
+- `docs/DEPLOYMENT.md`
+- `docs/DEPENDENCY_MAINTENANCE_PLAN.md`
+- `docs/ai-feedback/AI_FEEDBACK_LOOP.md`
+- `docs/IMAGE_MAINTENANCE_GUIDE.md`
+- `docs/HANDOFF.md`
+- `docs/lessons-learned/README.md`
+- `docs/standards/CODING_GUIDELINES.md`
+- `CHANGELOG.md`
 
 ## v0.74 — Performance remediation execution (2026-06-21, **shipped**)
 

@@ -55,6 +55,13 @@ Commit both the image/audio files **and** any `.txt` sidecar files.
 The generated files (`artworks.json`, `customer-artworks.js`, `public/images/`,
 etc.) are gitignored and rebuilt by CI every time.
 
+> **Current high-resolution limitation:** this workflow still commits the source
+> artwork files themselves. GitHub browser uploads are limited to **25 MiB** per
+> file, regular Git blocks files above **100 MiB**, GitHub Pages sites may be no
+> larger than **1 GB**, and Git LFS cannot be used for Pages site assets. Until
+> the active plan in `plan.md` ships, keep archival masters outside this repo and
+> only commit GitHub-safe publish copies.
+
 ### 4 — Publishing happens automatically
 
 Pushing to `main` triggers the `Deploy to GitHub Pages` workflow
@@ -118,6 +125,11 @@ After the workflow completes:
 | `public/images/` | Sync script (generated) | ❌ No |
 | `public/customer-artworks.js` | Sync script (generated) | ❌ No |
 | `dist/` | Vite build (generated) | ❌ No |
+
+Because the committed customer sources currently live in `customer-artworks/inbox/`,
+this deployment model inherits GitHub’s file-size limits directly. The active
+high-resolution roadmap is documented in `plan.md` and summarised for operators
+in `docs/IMAGE_MAINTENANCE_GUIDE.md`.
 
 ---
 

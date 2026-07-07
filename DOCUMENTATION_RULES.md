@@ -43,7 +43,7 @@ npm run docs:check-config-authority
 npm run lint
 npm run build:typecheck
 npm run build
-npm run test --if-present
+npm run test:frame-budget
 ```
 
 For dependency updates also run:

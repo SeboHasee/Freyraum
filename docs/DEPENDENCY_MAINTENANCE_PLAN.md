@@ -17,7 +17,7 @@ Run after each upgrade batch:
 npm run lint
 npm run build:typecheck
 npm run build
-npm run test --if-present
+npm run test:frame-budget
 npm audit --audit-level=moderate
 ```
 

@@ -1,6 +1,5 @@
 # AI feedback loop
-> v0.73 shipped: merge-readiness sync documents current runtime frame baseline (v0.69).
-> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
 
 ## v0.29 feedback-loop note
 
