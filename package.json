@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --open app.html",
-    "build": "npm run build:typecheck && npm run build:preview && npm run build:preview-html",
+    "build": "npm run build:typecheck && vite build && npm run build:preview && npm run build:preview-html",
     "preview": "vite preview --outDir customer-preview --open app.html",
     "lint": "eslint src --ext ts",
     "format": "prettier --write src",
