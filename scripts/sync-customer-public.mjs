@@ -88,12 +88,10 @@ if (!artworksJs) {
 
 if (!audioJs) {
   // Write a stub so the build does not 404 when no audio has been imported.
-  import('node:fs').then(({ writeFileSync }) => {
-    writeFileSync(
-      join(PUBLIC, 'customer-audio.js'),
-      '// Stub: no audio imported.\nwindow.__FREYRAUM_AUDIO = { sources: [] };\n',
-    );
-  });
+  writeFileSync(
+    join(PUBLIC, 'customer-audio.js'),
+    '// Stub: no audio imported.\nwindow.__FREYRAUM_AUDIO = { sources: [] };\n',
+  );
 }
 
 // ── Sync image and audio asset folders ──────────────────────────────────────
@@ -103,7 +101,7 @@ const audioCopied  = syncDir(join(PREVIEW, 'audio'),  join(PUBLIC, 'audio'));
 
 process.stdout.write(
   `sync-customer-public: synced customer-artworks.js, customer-audio.js` +
-  (imagesCopied  != null ? `, ${imagesCopied} image(s)`  : '') +
-  (audioCopied   != null ? `, ${audioCopied} audio file(s)` : '') +
+  (imagesCopied  !== undefined ? `, ${imagesCopied} image(s)`  : '') +
+  (audioCopied   !== undefined ? `, ${audioCopied} audio file(s)` : '') +
   ' to public/\n',
 );
