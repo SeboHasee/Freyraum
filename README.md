@@ -7,6 +7,11 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Runtime renderer: WebGL (WebGPU is opt-in probe mode only).
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
+- Lighting uses one fixed dramatic warm/cool configuration; there is no lighting-mode setting.
+- Artworks render without metal frames or side-preview meshes.
+- The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.
+- Artwork `Surface` metadata is optional free text and never changes material or render settings.
+- CSS and WebGL use the same light-grey gallery background to avoid white reveal flashes.
 - Diagnostics API is available (see `docs/QUERY_PARAMETERS.md`).
 - Regression tooling is documented in `docs/REGRESSION_TOOLING.md`.
 - Customer updates are handled by `Update Gallery.command` (macOS) or `Update Gallery.bat` (Windows).

@@ -42,7 +42,7 @@ Notes:
 
 ### `freyraum.preferences.v1`
 
-Stored user preferences (`src/utils/preferences.ts`): quality, lighting, motion/contrast settings, audio volume, and chrome visibility mode.
+Stored user preferences (`src/utils/preferences.ts`): quality, motion/contrast settings, audio volume, and chrome visibility mode. Lighting is fixed internally to the dramatic configuration and is not user-configurable.
 
 Invariant: persisted writes force `audioMuted: false`, so each new session starts unmuted.
 

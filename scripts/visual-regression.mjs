@@ -37,23 +37,18 @@ const DIFF_DIR = resolve(ROOT, '.visual-regression/diff');
 const URL = process.env.FREYRAUM_URL ?? 'http://localhost:5173/app.html';
 const VIEWPORT = { width: 1280, height: 800 };
 
-const LIGHTING_PROFILES = ['gallery-soft', 'raking-inspection', 'museum-neutral', 'dramatic-demo'];
 const ARTWORK_STEPS = [0, 1, 2];
 const ZOOM_STATES = ['overview', 'reset', 'inspection'];
 
-// Phase 10.3 state matrix: lighting profile × artwork × zoom. State is driven
-// deterministically through the persisted preference store plus keyboard input
-// so the gate works against the current public runtime without test-only hooks.
-const states = LIGHTING_PROFILES.flatMap((lighting) =>
-  ARTWORK_STEPS.flatMap((artworkStep) =>
-    ZOOM_STATES.map((zoom) => ({
-      name: `${lighting}__artwork-${artworkStep}__${zoom}`,
-      query: '?startup=entry-minimal',
-      lighting,
-      artworkStep,
-      zoom,
-    }))
-  )
+// The fixed dramatic lighting configuration is exercised across artwork and
+// zoom states. Stored preferences no longer include a lighting field.
+const states = ARTWORK_STEPS.flatMap((artworkStep) =>
+  ZOOM_STATES.map((zoom) => ({
+    name: `dramatic__artwork-${artworkStep}__${zoom}`,
+    query: '?startup=entry-minimal',
+    artworkStep,
+    zoom,
+  }))
 );
 
 // Phase 10.3 / 14.3 thresholds.
@@ -78,7 +73,7 @@ async function capture(targetDir) {
   const browser = await chromium.launch();
   for (const state of states) {
     const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 1 });
-    await page.addInitScript((lighting) => {
+    await page.addInitScript(() => {
       localStorage.setItem('freyraum-nav-hint-seen', '1');
       localStorage.setItem(
         'freyraum.preferences.v1',
@@ -87,13 +82,12 @@ async function capture(targetDir) {
           highContrast: false,
           contrastMode: 'auto',
           quality: 'high',
-          lighting,
           audioMuted: false,
           audioVolume: 0.15,
           alwaysShowChrome: true,
         })
       );
-    }, state.lighting);
+    });
     await page.goto(`${URL}${state.query}`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.loading-start-btn:not([disabled])', { timeout: 45_000 });
     await page.click('.loading-start-btn');
