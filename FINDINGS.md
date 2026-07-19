@@ -1,5 +1,50 @@
 # FINDINGS
 
+## Active findings — high-resolution asset delivery audit (2026-07-07)
+
+1. **The current publish path is source-file-based, not derivative-based.**
+   The repository currently expects customer artwork source files to be committed
+   directly in `customer-artworks/inbox/`, and CI rebuilds the deployable assets
+   from those tracked originals.
+
+2. **The importer duplicates the heaviest asset bytes multiple times.**
+   `scripts/import-artworks.mjs` copies the source image into
+   `customer-preview/images/` and also embeds the exact original bytes into
+   `window.__FREYRAUM_ARTWORKS[*].webglImage` as a base64 data URL. A roughly
+   25 MiB JPEG therefore becomes both a shipped image file and an even larger JS
+   payload before the final Pages artifact is built.
+
+3. **GitHub’s official limits rule out “commit the masters” as a reliable long-term strategy.**
+   Official GitHub documentation states:
+   - browser uploads are capped at **25 MiB** per file,
+   - regular Git warns above **50 MiB** and blocks files above **100 MiB**,
+   - GitHub Pages sites may be no larger than **1 GB**,
+   - Git LFS **cannot be used with GitHub Pages sites**.
+
+4. **The reliable architecture is to separate archival masters from deployed derivatives.**
+   The Pages site should consume compact publish assets only, while oversized
+   originals stay local or in separate archive storage. The current exact-byte
+   `webglImage` strategy should become local-preview-only if retained at all.
+
+### Sources
+
+- Repository audit:
+  - `scripts/import-artworks.mjs`
+  - `scripts/sync-customer-public.mjs`
+  - `app.html`
+  - `.github/workflows/deploy-pages.yml`
+- Official GitHub docs:
+  - https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github
+  - https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-git-large-file-storage
+  - https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits
+
+## Decisions
+
+- Do **not** treat Git LFS as the solution for live Pages artwork delivery.
+- Plan toward a **tracked publish bundle + untracked/external masters** model.
+- Keep the deployed manifest compact; do not ship full-size image bytes inside
+  committed JavaScript.
+
 ## Active findings — documentation/tooling remediation (2026-06-21)
 
 1. The primary drift source is duplicated status/config/runtime text across operational docs.
@@ -10,7 +55,7 @@
    - `npm audit` reports vulnerabilities tied to transitive/tooling dependencies.
 4. Lack of contributor-facing freshness rules and CI checks allows drift to re-accumulate.
 
-## Decisions
+## Historical decisions — documentation/tooling remediation (2026-06-21)
 
 - Keep historical rationale in `docs/archive/` rather than relying on Git history.
 - Keep release history in `CHANGELOG.md`.
@@ -198,4 +243,3 @@ running the repo toolchain on a fresh clone.
 - `npm run build:preview`
 - `npm run docs:check-config-authority`
 - `npm run test:frame-budget`
-

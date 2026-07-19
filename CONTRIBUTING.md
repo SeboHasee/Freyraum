@@ -9,7 +9,7 @@ npm install
 npm run lint
 npm run build:typecheck
 npm run build
-npm run test --if-present
+npm run test:frame-budget
 ```
 
 For dependency changes also run:
@@ -56,6 +56,6 @@ After each dependency-upgrade batch, run and record:
 - `npm run lint`
 - `npm run build:typecheck`
 - `npm run build`
-- `npm run test --if-present`
+- `npm run test:frame-budget`
 
 If a risky major upgrade is deferred, log it in `docs/DEPENDENCY_MAINTENANCE_PLAN.md`.

@@ -20,7 +20,7 @@
  * No npm dependencies required. Node 18+.
  */
 
-import { existsSync, mkdirSync, copyFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, copyFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

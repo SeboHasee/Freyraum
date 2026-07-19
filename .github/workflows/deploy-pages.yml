@@ -57,6 +57,66 @@ jobs:
             exit 1
           fi
 
+      - name: Validate manifest content and generate CI diagnostic summary
+        run: |
+          # Count inbox image files (exclude hidden files and sidecar .txt/.md)
+          INBOX_IMAGES=$(find customer-artworks/inbox -maxdepth 1 -type f \
+            ! -name '.*' ! -name '*.txt' ! -name '*.md' ! -name '.gitkeep' \
+            2>/dev/null | wc -l | tr -d ' ')
+          INBOX_AUDIO=$(find customer-audio/inbox -maxdepth 1 -type f \
+            ! -name '.*' ! -name '.gitkeep' 2>/dev/null | wc -l | tr -d ' ')
+
+          # Count entries in the generated artworks JSON manifest
+          MANIFEST_COUNT=$(node -e "
+            const fs = require('fs');
+            try {
+              const data = JSON.parse(fs.readFileSync('customer-artworks/artworks.json','utf8'));
+              process.stdout.write(String(Array.isArray(data) ? data.length : 0));
+            } catch { process.stdout.write('0'); }
+          ")
+          SAMPLE_IDS=$(node -e "
+            const fs = require('fs');
+            try {
+              const data = JSON.parse(fs.readFileSync('customer-artworks/artworks.json','utf8'));
+              const ids = (Array.isArray(data) ? data : []).slice(0,5).map(a => a.id || '(no id)');
+              process.stdout.write(ids.join(', ') || '(none)');
+            } catch { process.stdout.write('(error reading manifest)'); }
+          ")
+          AUDIO_SOURCES=$(node -e "
+            const fs = require('fs');
+            try {
+              const js = fs.readFileSync('public/customer-audio.js','utf8');
+              const m = js.match(/\"sources\"\s*:\s*(\[[^\]]*\])/);
+              if (m) {
+                const sources = JSON.parse(m[1]);
+                process.stdout.write(String(sources.length));
+              } else { process.stdout.write('0'); }
+            } catch { process.stdout.write('0'); }
+          ")
+
+          echo "Inbox images: ${INBOX_IMAGES}, Manifest entries: ${MANIFEST_COUNT}"
+
+          # Hard validation: inbox images must produce manifest entries
+          if [ "${INBOX_IMAGES}" -gt 0 ] && [ "${MANIFEST_COUNT}" -eq 0 ]; then
+            echo "Error: ${INBOX_IMAGES} image(s) found in inbox but manifest has 0 entries. Import failed." >&2
+            exit 1
+          fi
+
+          # Export AUDIO_SOURCES so the post-build dist validation step can reuse it
+          echo "AUDIO_SOURCES=${AUDIO_SOURCES}" >> "$GITHUB_ENV"
+
+          # Write job summary (visible on the Actions run page)
+          echo "### Customer Asset Import Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Metric | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Inbox image files found | ${INBOX_IMAGES} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Artworks imported into manifest | ${MANIFEST_COUNT} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Inbox audio files found | ${INBOX_AUDIO} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Audio sources linked in manifest | ${AUDIO_SOURCES} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Sample imported IDs (first 5):** \`${SAMPLE_IDS}\`" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build
         run: npm run build
 
@@ -74,6 +134,45 @@ jobs:
           if [ ! -f dist/index.html ]; then
             echo "Error: dist/index.html is missing." >&2
             exit 1
+          fi
+
+      - name: Validate dist assets
+        run: |
+          # Verify that every image referenced in the manifest exists in dist/images/
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            let manifest;
+            try {
+              manifest = JSON.parse(fs.readFileSync('customer-artworks/artworks.json','utf8'));
+            } catch {
+              process.exit(0); // No manifest — nothing to validate
+            }
+            if (!Array.isArray(manifest) || manifest.length === 0) process.exit(0);
+            let missing = [];
+            for (const entry of manifest) {
+              if (!entry.image) continue;
+              // Strip cache-busting query strings (e.g. ?t=1234) before extracting the filename.
+              const filename = path.basename(entry.image.replace(/\?.*$/, ''));
+              const distPath = path.join('dist','images',filename);
+              if (!fs.existsSync(distPath)) missing.push(distPath);
+            }
+            if (missing.length > 0) {
+              process.stderr.write('Error: the following images are in the manifest but absent from dist/images/:\n');
+              missing.forEach(f => process.stderr.write('  ' + f + '\n'));
+              process.exit(1);
+            }
+            process.stdout.write('All ' + manifest.length + ' manifest image(s) present in dist/images/\n');
+          "
+          # Reuse the AUDIO_SOURCES count exported by the diagnostic step above.
+          # Verify dist/audio/ is non-empty when audio sources were linked.
+          if [ "${AUDIO_SOURCES}" -gt 0 ]; then
+            DIST_AUDIO=$(find dist/audio -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' ')
+            if [ "${DIST_AUDIO}" -eq 0 ]; then
+              echo "Error: ${AUDIO_SOURCES} audio source(s) linked in manifest but dist/audio/ is empty or missing." >&2
+              exit 1
+            fi
+            echo "${DIST_AUDIO} audio file(s) present in dist/audio/"
           fi
 
       - name: Upload Pages artifact

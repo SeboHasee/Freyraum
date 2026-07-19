@@ -10,6 +10,7 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Diagnostics API is available (see `docs/QUERY_PARAMETERS.md`).
 - Regression tooling is documented in `docs/REGRESSION_TOOLING.md`.
 - Customer updates are handled by `Update Gallery.command` (macOS) or `Update Gallery.bat` (Windows).
+- Current publishing still depends on GitHub-tracked customer artwork files; for oversized originals see `docs/IMAGE_MAINTENANCE_GUIDE.md` and `plan.md`.
 
 Historical release details are maintained in [`CHANGELOG.md`](./CHANGELOG.md).
 
@@ -37,6 +38,7 @@ runs the import step automatically and deploys to https://sebohasee.github.io/Fr
 Details:
 - [`docs/CUSTOMER_PICTURE_GUIDE.md`](./docs/CUSTOMER_PICTURE_GUIDE.md)
 - [`docs/CUSTOMER_TEXT_GUIDE.md`](./docs/CUSTOMER_TEXT_GUIDE.md)
+- [`docs/IMAGE_MAINTENANCE_GUIDE.md`](./docs/IMAGE_MAINTENANCE_GUIDE.md)
 - [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)
 
 ## Configuration and diagnostics
@@ -56,6 +58,7 @@ Do not duplicate config tables in other docs.
 | Query parameters & persisted config | `docs/QUERY_PARAMETERS.md` |
 | Architecture & ownership | `ARCHITECTURE_MAP.md` |
 | Customer workflow | `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/CUSTOMER_TEXT_GUIDE.md` |
+| Image maintenance & size constraints | `docs/IMAGE_MAINTENANCE_GUIDE.md` |
 | GitHub Pages deployment | `docs/DEPLOYMENT.md` |
 | Contributor workflow & freshness rules | `CONTRIBUTING.md` |
 | Technical findings (active/reusable) | `FINDINGS.md` |
@@ -71,6 +74,7 @@ Do not duplicate config tables in other docs.
 - Architecture: [`ARCHITECTURE_MAP.md`](./ARCHITECTURE_MAP.md)
 - Contributor workflow: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - Deployment / Pages: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)
+- Image maintenance / high-resolution constraints: [`docs/IMAGE_MAINTENANCE_GUIDE.md`](./docs/IMAGE_MAINTENANCE_GUIDE.md)
 - Handoff/support: [`docs/HANDOFF.md`](./docs/HANDOFF.md)
 - Documentation policy: [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md)
 - Archive: [`docs/archive/README.md`](./docs/archive/README.md)

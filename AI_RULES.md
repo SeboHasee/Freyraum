@@ -1,6 +1,5 @@
 # FREYRAUM AI rules
-> v0.73 shipped: merge-readiness docs sync; active runtime frame baseline documented as v0.69.
-> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
 
 ## v0.58 topbar/utility-button rule
 

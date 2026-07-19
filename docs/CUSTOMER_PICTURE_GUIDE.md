@@ -31,6 +31,20 @@ To make changes live at https://sebohasee.github.io/Freyraum/:
 
 See [`docs/DEPLOYMENT.md`](./DEPLOYMENT.md) for the full operator flow.
 
+## Current size limit for publishing
+
+The current publish workflow still commits the source artwork files to GitHub.
+That means GitHub’s platform limits apply directly:
+
+- browser uploads: **25 MiB** per file
+- regular Git warning: **50 MiB**
+- regular Git hard block: **100 MiB**
+- GitHub Pages site size: **1 GB**
+
+Until the high-resolution publish workflow from `plan.md` is implemented, keep a
+local archive of the original master files and put only GitHub-safe publish
+copies into `customer-artworks/inbox/`.
+
 ## Supported image formats
 
 - JPG/JPEG
@@ -60,5 +74,6 @@ See [`docs/DEPLOYMENT.md`](./DEPLOYMENT.md) for the full operator flow.
 ## Related docs
 
 - Text sidecars: `docs/CUSTOMER_TEXT_GUIDE.md`
+- Image size limits and operator guidance: `docs/IMAGE_MAINTENANCE_GUIDE.md`
 - Query/config reference: `docs/QUERY_PARAMETERS.md`
 - Historical release context: `CHANGELOG.md`
