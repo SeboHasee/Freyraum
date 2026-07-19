@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import type { Artwork } from '../config/artworks';
 import { ArtworkMesh } from './ArtworkMesh';
-import { SidePanels } from './SidePanels';
 import { TextureManager } from './TextureManager';
 import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory';
 import { clamp, smoothDamp } from '../utils/math';
@@ -289,7 +288,6 @@ export class GalleryManager {
   private readonly artworks: readonly Artwork[];
   private currentIndex = 0;
   private readonly artworkMesh: ArtworkMesh;
-  private readonly sidePanels: SidePanels;
   private readonly textureManager: TextureManager;
   private readonly procedural: ProceduralTextureFactory;
   private readonly camera: THREE.PerspectiveCamera;
@@ -300,9 +298,7 @@ export class GalleryManager {
   // correctly on the next read. Output is mathematically identical.
   private _fovTanCache = NaN;
   private _fovTanForFov = NaN;
-  private readonly panelClickMouse = new THREE.Vector2();
   private readonly viewportMetricsProvider: ViewportMetricsProvider | null;
-  private readonly raycaster = new THREE.Raycaster();
   private reducedMotion = false;
   /** Latest active quality preset. Maintained via `applyPreset`. */
   private currentPreset: QualityPreset | null = null;
@@ -378,7 +374,6 @@ export class GalleryManager {
   constructor(
     artworks: readonly Artwork[],
     artworkMesh: ArtworkMesh,
-    sidePanels: SidePanels,
     textureManager: TextureManager,
     camera: THREE.PerspectiveCamera,
     procedural?: ProceduralTextureFactory,
@@ -386,7 +381,6 @@ export class GalleryManager {
   ) {
     this.artworks = artworks;
     this.artworkMesh = artworkMesh;
-    this.sidePanels = sidePanels;
     this.textureManager = textureManager;
     this.camera = camera;
     this.procedural = procedural ?? new ProceduralTextureFactory();
@@ -715,16 +709,8 @@ export class GalleryManager {
         ? `data-uri:${albedoUrl.slice(5, albedoUrl.indexOf(';'))}`
         : 'local-relative',
       dimensions: artwork.dimensions,
-      surfaceProfile: artwork.surfaceProfile ?? 'matte-canvas',
+      surface: artwork.surface ?? null,
     }));
-
-    // Side previews use albedo only, even when authored sets exist.
-    // v0.09: side panels use webglImage too so they match the preloaded cache key.
-    const prevIndex = (index - 1 + this.artworks.length) % this.artworks.length;
-    const nextIndex = (index + 1) % this.artworks.length;
-    const prevTexture = this.textureManager.get(this.artworks[prevIndex].webglImage ?? this.artworks[prevIndex].image) ?? null;
-    const nextTexture = this.textureManager.get(this.artworks[nextIndex].webglImage ?? this.artworks[nextIndex].image) ?? null;
-    this.sidePanels.updateTextures(prevTexture, nextTexture);
 
     if (!albedo || !preset) {
       this.diagnostics.warn('show-artwork-missing-state', 'Cannot render artwork because preset or albedo texture is missing', {
@@ -774,9 +760,7 @@ export class GalleryManager {
 
     // P-02 v0.40: update frame surface seed so each artwork shows a distinct
     // deterministic texture phase, preventing phase alignment across the gallery.
-    this.artworkMesh.updateFrameSeed(index);
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
-    this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
     this.markReadiness(index, 'materialApplied', 'show-artwork');
     this.markRenderDirty(8);
 
@@ -1019,9 +1003,7 @@ export class GalleryManager {
       }
     }
 
-    this.artworkMesh.updateFrameSeed(index);
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
-    this.artworkMesh.material.applySurfaceProfile(artwork.surfaceProfile, preset);
     this.markReadiness(index, 'proceduralReady', reason);
     this.markReadiness(index, 'materialApplied', reason);
     this.diagnostics.debug('warm-gpu', 'Cached artwork textures bound for GPU warm render', {
@@ -1482,24 +1464,6 @@ export class GalleryManager {
   /** Read-only accessor for the procedural factory (used in dispose). */
   get proceduralFactory(): ProceduralTextureFactory {
     return this.procedural;
-  }
-
-  handlePanelClick(event: MouseEvent, canvas: HTMLCanvasElement): void {
-    const rect = canvas.getBoundingClientRect();
-    const mouse = this.panelClickMouse.set(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    );
-
-    this.raycaster.setFromCamera(mouse, this.camera);
-    const meshes = this.sidePanels.getMeshes();
-    const intersects = this.raycaster.intersectObjects(meshes);
-
-    if (intersects.length > 0) {
-      const side = intersects[0].object.userData['side'];
-      if (side === 'left') this.navigate(-1);
-      else if (side === 'right') this.navigate(1);
-    }
   }
 
   /**

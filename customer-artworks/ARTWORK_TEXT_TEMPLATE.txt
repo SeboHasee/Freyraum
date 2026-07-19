@@ -32,7 +32,7 @@ Year:
 Credit: 
 Alt: Describe the painting visually for screen readers
 Tags: 
-Surface: matte-canvas
+Surface: Oil on coarse canvas
 
 Description:
 Write your text on the lines below this one.
@@ -67,14 +67,9 @@ Tags:
   Example:  Tags: landscape, lake, warm, summer
 
 Surface:
-  Material look for the 3D painting effect.
-  Allowed values (copy exactly):
-    matte-canvas        — classic matte linen canvas (default)
-    satin-canvas        — slightly glossy canvas
-    varnished-oil       — varnished oil painting
-    paper               — smooth paper
-  Unknown values fall back to matte-canvas with a warning in the report.
-  Example:  Surface: varnished-oil
+  Optional free-text description shown with the artwork information.
+  This text does not change canvas, material, or render settings.
+  Example:  Surface: Oil on coarse canvas
 
 Medium:
   Free-text medium override. If omitted, the importer uses image dimensions.

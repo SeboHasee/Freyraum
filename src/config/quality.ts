@@ -118,30 +118,6 @@ export interface QualityPreset {
    */
   albedoFidelityFill: number;
 
-  // ── v0.29 frame PBR fields ────────────────────────────────────────────────
-  /** Frame surface roughness (0 mirror .. 1 fully diffuse). */
-  frameRoughness: number;
-  /** Frame anisotropy strength (0 disables directional brushed highlight). */
-  frameAnisotropy: number;
-  /** Frame clearcoat intensity. */
-  frameClearcoat: number;
-  /** Whether the frame should use beveled geometry. */
-  frameBevelEnabled: boolean;
-
-  // ── v0.69 frame close-up realism fields ───────────────────────────────────
-  /**
-   * v0.69 (M-06): authoritative preset-level switch for the procedural frame
-   * detail budget compiled into the brushed-metal fragment shader.
-   *  - `'high'`     → primary FBM + fine-grain FBM (M-02) + clustered scratches
-   *                  (M-03) + per-fragment anisotropy direction perturbation
-   *                  (M-04) + AA grain attenuation (M-05).
-   *  - `'balanced'` → primary FBM + fine-grain FBM (M-02) only.
-   *  - `'none'`     → pure v0.54 path (primary FBM only). Battery preset.
-   * The shader compiles a different program per `frameDetailLevel` value via
-   * `#define FRAME_DETAIL_*` and `customProgramCacheKey()`; per-artwork seed
-   * still updates a uniform only (no re-compile).
-   */
-  frameDetailLevel: 'high' | 'balanced' | 'none';
 }
 
 export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
@@ -192,11 +168,6 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     albedoFidelityFill: 0.0,
     // v0.53: high anisotropy (0.85) + semi-gloss roughness (0.28) for realistic
     // satin brushed-metal. Directional sheen is provided by anisotropy, not bumps.
-    frameRoughness: 0.28,
-    frameAnisotropy: 0.85,
-    frameClearcoat: 0.12,
-    frameBevelEnabled: true,
-    frameDetailLevel: 'high',
   },
   balanced: {
     id: 'balanced',
@@ -236,11 +207,6 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
     // v0.53: moderate anisotropy (0.60) + semi-gloss roughness (0.38).
-    frameRoughness: 0.38,
-    frameAnisotropy: 0.60,
-    frameClearcoat: 0.08,
-    frameBevelEnabled: true,
-    frameDetailLevel: 'balanced',
   },
   battery: {
     id: 'battery',
@@ -279,11 +245,6 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
     // v0.47: matte gallery-safe fallback for low-power hardware.
-    frameRoughness: 0.60,
-    frameAnisotropy: 0.0,
-    frameClearcoat: 0.0,
-    frameBevelEnabled: false,
-    frameDetailLevel: 'none',
   },
 };
 

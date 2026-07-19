@@ -4,14 +4,12 @@ import * as THREE from 'three';
 
 import { artworks as builtInArtworks, type Artwork } from './config/artworks';
 import { getQualityPreset, type QualityPresetId } from './config/quality';
-import { getLightProfile } from './lighting/LightProfile';
 import { RendererManager } from './core/RendererManager';
 import { SceneManager } from './core/SceneManager';
 import { PostProcessing } from './core/PostProcessing';
 import { LightingSetup } from './lighting/LightingSetup';
 import { TextureManager } from './gallery/TextureManager';
 import { ArtworkMesh } from './gallery/ArtworkMesh';
-import { SidePanels } from './gallery/SidePanels';
 import { GalleryManager, type ArtworkViewportMetrics, type FullGalleryReadinessResult } from './gallery/GalleryManager';
 import { Topbar } from './ui/Topbar';
 import { InfoPanel } from './ui/InfoPanel';
@@ -278,14 +276,7 @@ function sanitizeInjectedArtworks(
       alt: typeof a['alt'] === 'string' ? (a['alt'] as string) : title,
       credit: typeof a['credit'] === 'string' ? (a['credit'] as string) : '',
       tags,
-      surfaceProfile:
-        a['surfaceProfile'] === 'satin-canvas' ||
-        a['surfaceProfile'] === 'varnished-oil' ||
-        a['surfaceProfile'] === 'paper' ||
-        a['surfaceProfile'] === 'procedural-fallback' ||
-        a['surfaceProfile'] === 'matte-canvas'
-          ? (a['surfaceProfile'] as Artwork['surfaceProfile'])
-          : 'matte-canvas',
+      surface: typeof a['surface'] === 'string' ? (a['surface'] as string) : '',
     });
   }
   if (rejected > 0) {
@@ -579,7 +570,7 @@ async function main(): Promise<void> {
     hasWebglImage: !!a.webglImage,
     webglImageSource: a.webglImage ? 'embedded-data-url' : 'file-url',
     dimensions: a.dimensions,
-    surfaceProfile: a.surfaceProfile ?? 'matte-canvas',
+    surface: a.surface ?? null,
   }));
   diagnostics.info('boot', 'artworks-source', 'Artwork source resolved', {
     source: customerArtworks && customerArtworks.length > 0 ? 'customer' : 'built-in',
@@ -673,7 +664,6 @@ async function main(): Promise<void> {
 
   // Gallery objects
   const artworkMesh = new ArtworkMesh(sceneManager.scene, initialPreset);
-  const sidePanels = new SidePanels(sceneManager.scene);
 
   // v0.74 Phase 10 — install the Type B (structural invariants) and Type C
   // (performance / GC / frame-variance) regression tooling on `window`. Passive
@@ -751,7 +741,6 @@ async function main(): Promise<void> {
   const galleryManager = new GalleryManager(
     artworks,
     artworkMesh,
-    sidePanels,
     textureManager,
     sceneManager.camera,
     undefined,
@@ -842,7 +831,6 @@ async function main(): Promise<void> {
   // so the panels start hidden behind the loading overlay with no visible flash.
   // v0.61 removes forced info-panel reveal on artwork changes.
   const chromeVisibility = new ChromeVisibilityManager(
-    chromeRefs.timeline!,
     chromeRefs.infoPanel!,
     preferences,
     app
@@ -862,7 +850,7 @@ async function main(): Promise<void> {
   diagnostics.info('boot', 'gallery-ready', 'Gallery initialized', {
     artworkCount: artworks.length,
     quality: preferences.current.quality,
-    lighting: preferences.current.lighting,
+    lighting: 'dramatic',
   });
 
   // Interaction
@@ -1364,10 +1352,9 @@ async function main(): Promise<void> {
 
   // Apply current preferences to all subsystems.
   const applyPreferences = (manual: boolean): void => {
-    const { reducedMotion, quality, lighting, audioMuted, audioVolume } = preferences.current;
+    const { reducedMotion, quality, audioMuted, audioVolume } = preferences.current;
     galleryManager.setReducedMotion(reducedMotion);
     lightingSetup.setAnimated(!reducedMotion);
-    lightingSetup.setProfile(lighting);
     backgroundAudio.setVolume(audioVolume, 'preferences-apply');
     backgroundAudio.setMuted(audioMuted, 'preferences-apply');
     const audioState = backgroundAudio.getState();
@@ -1375,12 +1362,7 @@ async function main(): Promise<void> {
       void backgroundAudio.play('preferences-apply');
     }
 
-    // v0.05: self-shadow profile scale. Museum-style display profiles dim
-    // the self-shadow contribution to 50%; inspection (raking) profiles get
-    // the full effect, since revealing relief is the whole point.
-    const lightProfile = getLightProfile(lighting);
-    const shadowScale = lightProfile.displayIntent === 'inspection' ? 1.0 : 0.5;
-    artworkMesh.material.setShadowProfileScale(shadowScale);
+    artworkMesh.material.setShadowProfileScale(0.5);
 
     const preset = getQualityPreset(quality);
     rendererManager.applyPreset(preset);
@@ -1396,12 +1378,8 @@ async function main(): Promise<void> {
     // Gallery-style profiles get the standard tile size and the single-ray
     // shadow path — identical to v0.05 — so the museum-display experience
     // is unchanged.
-    const isInspection = lightProfile.displayIntent === 'inspection';
-    galleryManager.setInspectionMode(isInspection);
-    artworkMesh.material.setShadowFilterRadius(
-      isInspection ? preset.selfShadowFilterRadius : 0,
-      isInspection && preset.selfShadowFilterRadius > 0
-    );
+    galleryManager.setInspectionMode(false);
+    artworkMesh.material.setShadowFilterRadius(0, false);
 
     frameBudget.markPresetChange();
     galleryManager.markRenderDirty(6);
@@ -1412,7 +1390,7 @@ async function main(): Promise<void> {
       manual,
       reducedMotion,
       quality,
-      lighting,
+      lighting: 'dramatic',
       audioMuted,
       audioVolume,
       inspection: isInspection,
@@ -1809,7 +1787,6 @@ async function main(): Promise<void> {
     restoreStatus.remove();
     backgroundAudio.dispose();
     artworkMesh.dispose();
-    sidePanels.dispose();
     textureManager.dispose();
     galleryManager.proceduralFactory.disposeAll();
     lightingSetup.dispose();

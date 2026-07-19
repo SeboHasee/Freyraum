@@ -12,25 +12,6 @@
 
 import type { PaintingTextureSet } from '../materials/PaintingTextureSet';
 
-/**
- * v0.03 surface character for the painting pipeline. Drives default relief
- * and parallax depth choices when an artwork does not supply explicit
- * `surfacePhysics`. Optional; defaults to `'matte-canvas'` at runtime.
- */
-export type SurfaceProfile =
-  | 'matte-canvas'
-  | 'satin-canvas'
-  | 'varnished-oil'
-  | 'paper'
-  | 'procedural-fallback';
-
-export interface SurfacePhysics {
-  /** Multiplier on relief amplitude from all maps (normal/bump/height). 1.0 = default. */
-  reliefScale?: number;
-  /** Multiplier on parallax depth. 1.0 = default. */
-  parallaxDepthScale?: number;
-}
-
 export interface ArtworkDimensions {
   /** Pixel width of the rendered artwork asset. */
   width: number;
@@ -66,8 +47,8 @@ export interface Artwork {
    * procedural factory at runtime. Reserved for future scanned assets.
    */
   textureSet?: PaintingTextureSet;
-  /** v0.03: Surface character. Defaults to 'matte-canvas'. */
-  surfaceProfile?: SurfaceProfile;
+  /** Optional customer-facing surface description. Informational only. */
+  surface?: string;
   /**
    * v0.09: Origin-clean base64 data URL of the image for reliable WebGL
    * texture upload from file:// without CORS or taint issues.
@@ -78,8 +59,6 @@ export interface Artwork {
    * Format: `data:image/<subtype>;base64,<base64-bytes>`
    */
   webglImage?: string;
-  /** v0.03: Optional physical-scale modifiers for relief and parallax depth. */
-  surfacePhysics?: SurfacePhysics;
 }
 
 interface EmbeddedArtworkOptions {
@@ -168,7 +147,7 @@ export const artworks: readonly Artwork[] = [
     alt: 'Abstrakte Landschaft mit weichen Wolken über einem warm getönten Horizont.',
     credit: 'Freyraum Studio',
     tags: ['landscape', 'soft-light', 'warm'],
-    surfaceProfile: 'matte-canvas',
+    surface: 'Matte Leinwand',
   },
   {
     id: 'quiet-coastline',
@@ -191,7 +170,7 @@ export const artworks: readonly Artwork[] = [
     alt: 'Hochformatige minimalistische Küstenszene in gedämpften Grautönen.',
     credit: 'Freyraum Studio',
     tags: ['portrait', 'coast', 'minimal'],
-    surfaceProfile: 'matte-canvas',
+    surface: 'Matte Leinwand',
   },
   {
     id: 'tokyo-passage',
@@ -213,7 +192,7 @@ export const artworks: readonly Artwork[] = [
     alt: 'Quadratische urbane Szene mit dramatischem Streiflicht in kühlen Tönen.',
     credit: 'Freyraum Studio',
     tags: ['square', 'urban', 'cinematic'],
-    surfaceProfile: 'satin-canvas',
+    surface: 'Satinierte Leinwand',
   },
   {
     id: 'golden-desert',
@@ -236,6 +215,6 @@ export const artworks: readonly Artwork[] = [
     alt: 'Ultra-breite Wüstenkomposition in goldenen und sandfarbenen Tönen.',
     credit: 'Freyraum Studio',
     tags: ['ultrawide', 'desert', 'warm'],
-    surfaceProfile: 'matte-canvas',
+    surface: 'Matte Leinwand',
   },
 ];
