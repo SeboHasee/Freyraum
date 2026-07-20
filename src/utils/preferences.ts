@@ -1,7 +1,5 @@
 import type { QualityPresetId } from '../config/quality';
 import { DEFAULT_QUALITY_PRESET, QUALITY_PRESETS } from '../config/quality';
-import type { LightProfileId } from '../lighting/LightProfile';
-import { DEFAULT_LIGHT_PROFILE, LIGHT_PROFILES } from '../lighting/LightProfile';
 import { createScopedDiagnostics } from './Diagnostics';
 import { DEFAULT_AUDIO_GAIN, MAX_EFFECTIVE_AUDIO_GAIN } from '../audio/volumeMapping';
 
@@ -20,8 +18,6 @@ export interface Preferences {
   highContrast: boolean;
   contrastMode: ContrastMode;
   quality: QualityPresetId;
-  /** v0.03: artistic lighting profile (display vs. inspection). */
-  lighting: LightProfileId;
   /** v0.19: background audio mute state. */
   audioMuted: boolean;
   /** v0.19+: background audio effective gain (0..0.30). */
@@ -84,11 +80,6 @@ export class PreferencesStore {
         ? (stored.quality as QualityPresetId)
         : DEFAULT_QUALITY_PRESET;
 
-    const lighting: LightProfileId =
-      stored.lighting && stored.lighting in LIGHT_PROFILES
-        ? (stored.lighting as LightProfileId)
-        : DEFAULT_LIGHT_PROFILE;
-
     const contrastMode: ContrastMode = stored.contrastMode === 'high' ? 'high' : 'auto';
 
     let audioVolume =
@@ -115,7 +106,6 @@ export class PreferencesStore {
       highContrast: contrastMode === 'high' ? true : detectSystemHighContrast(),
       contrastMode,
       quality,
-      lighting,
       audioMuted: false, // always start unmuted regardless of stored state
       audioVolume,
       alwaysShowChrome: stored.alwaysShowChrome === true,
@@ -171,12 +161,6 @@ export class PreferencesStore {
   setQuality(id: QualityPresetId): void {
     if (!(id in QUALITY_PRESETS)) return;
     this.prefs.quality = id;
-    this.emit();
-  }
-
-  setLighting(id: LightProfileId): void {
-    if (!(id in LIGHT_PROFILES)) return;
-    this.prefs.lighting = id;
     this.emit();
   }
 
@@ -262,7 +246,6 @@ export class PreferencesStore {
     root.dataset['motion'] = this.prefs.reducedMotion ? 'reduced' : 'full';
     root.dataset['contrast'] = this.prefs.highContrast ? 'high' : 'auto';
     root.dataset['quality'] = this.prefs.quality;
-    root.dataset['lighting'] = this.prefs.lighting;
     // v0.60: mirror clean-chrome mode so SCSS auto-hide rules apply from the
     // very first paint (set during construction, before ChromeVisibilityManager
     // initialises) — prevents a flash of always-visible chrome on load.

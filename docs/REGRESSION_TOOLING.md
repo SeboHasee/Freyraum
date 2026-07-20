@@ -18,12 +18,12 @@ is accepted unless the measurement hook for its type exists and passes.
 ## Type A — Pixel diff (Playwright / WebGL snapshot)
 
 `scripts/visual-regression.mjs` drives Chromium through Playwright, captures the
-Phase 10.3 state matrix (lighting profile × artwork step × zoom), checks Type B
+Phase 10.3 state matrix (fixed dramatic lighting × artwork step × zoom), checks Type B
 invariants for every state, and compares against a stored baseline.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.
-- **Matrix:** all lighting profiles × artwork steps 0/1/2 × overview/reset/
+- **Matrix:** fixed dramatic lighting × artwork steps 0/1/2 × overview/reset/
   inspection zoom states.
 - **Workflow:** capture a baseline *before* the change, apply the optimization,
   then compare. Diffs are written to `.visual-regression/diff/` (git-ignored).

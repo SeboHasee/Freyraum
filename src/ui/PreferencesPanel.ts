@@ -1,7 +1,5 @@
 import type { QualityPresetId, QualityPreset } from '../config/quality';
 import { QUALITY_PRESETS } from '../config/quality';
-import type { LightProfileId, LightProfile } from '../lighting/LightProfile';
-import { LIGHT_PROFILES } from '../lighting/LightProfile';
 import type { PreferencesStore } from '../utils/preferences';
 import { gainToDisplayPercent, displayPercentToGain } from '../audio/volumeMapping';
 
@@ -93,7 +91,7 @@ export class PreferencesPanel {
   // ── Panel construction (called once) ────────────────────────────────────────
 
   private buildPanel(): void {
-    const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume, alwaysShowChrome } = this.prefs.current;
+    const { reducedMotion, contrastMode, quality, audioMuted, audioVolume, alwaysShowChrome } = this.prefs.current;
 
     const qualityOptions = (Object.values(QUALITY_PRESETS) as QualityPreset[])
       .map(
@@ -105,22 +103,6 @@ export class PreferencesPanel {
             <span class="prefs__radio-label">
               <span class="prefs__radio-title">${preset.label}</span>
               <span class="prefs__radio-desc">${preset.description}</span>
-            </span>
-          </label>
-        `
-      )
-      .join('');
-
-    const lightingOptions = (Object.values(LIGHT_PROFILES) as LightProfile[])
-      .map(
-        (profile) => `
-          <label class="prefs__radio">
-            <input type="radio" name="freyraum-lighting" value="${profile.id}" ${
-              lighting === profile.id ? 'checked' : ''
-            } />
-            <span class="prefs__radio-label">
-              <span class="prefs__radio-title">${profile.label}</span>
-              <span class="prefs__radio-desc">${profile.description}</span>
             </span>
           </label>
         `
@@ -156,10 +138,6 @@ export class PreferencesPanel {
           <span class="prefs__toggle-desc">Zeitleiste und Werkinformationen dauerhaft anzeigen.</span>
         </span>
       </label>
-      <fieldset class="prefs__group">
-        <legend class="prefs__legend">Beleuchtung</legend>
-        ${lightingOptions}
-      </fieldset>
       <h2 class="prefs__heading">Hintergrundmusik</h2>
       <label class="prefs__toggle">
         <input type="checkbox" id="freyraum-audio-muted" ${audioMuted ? 'checked' : ''} />
@@ -226,14 +204,6 @@ export class PreferencesPanel {
       });
     });
 
-    this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-lighting"]').forEach((input) => {
-      input.addEventListener('change', () => {
-        if (input.checked) {
-          this.prefs.setLighting(input.value as LightProfileId);
-        }
-      });
-    });
-
     this.audioMutedInput?.addEventListener('change', (e) => {
       this.prefs.setAudioMuted((e.target as HTMLInputElement).checked);
     });
@@ -282,7 +252,7 @@ export class PreferencesPanel {
   // ── In-place patch (called on every preference update) ───────────────────────
 
   private patchPanel(): void {
-    const { reducedMotion, contrastMode, quality, lighting, audioMuted, audioVolume, alwaysShowChrome } = this.prefs.current;
+    const { reducedMotion, contrastMode, quality, audioMuted, audioVolume, alwaysShowChrome } = this.prefs.current;
 
     if (this.motionInput) this.motionInput.checked = reducedMotion;
     if (this.contrastInput) this.contrastInput.checked = contrastMode === 'high';
@@ -313,10 +283,6 @@ export class PreferencesPanel {
       input.checked = input.value === quality;
     });
 
-    // Patch lighting radios.
-    this.panel.querySelectorAll<HTMLInputElement>('input[name="freyraum-lighting"]').forEach((input) => {
-      input.checked = input.value === lighting;
-    });
   }
 
   setAudioStatusMessage(message: string | null): void {

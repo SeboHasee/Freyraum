@@ -3,10 +3,10 @@ import type { PreferencesStore } from '../utils/preferences';
 import type { NavigationControls } from './NavigationControls';
 
 /**
- * v0.60 — Clean Chrome: auto-hide timeline and info panel.
+ * Clean Chrome: auto-hide the artwork information and navigation controls.
  *
- * Centralises all reveal/hide logic for the bottom timeline and the left
- * info panel so the artwork stays unobstructed by default. Panels reveal on
+ * The timeline remains fixed and visible. This manager centralises reveal/hide
+ * logic for the left info panel and navigation controls. Panels reveal on
  * pointer proximity to the relevant screen edge, on keyboard focus, or on an
  * explicit touch tap, and hide again after a dwell delay. The design satisfies
  * WCAG 2.2 SC 1.4.13 (Content on Hover or Focus): the hide timer never starts
@@ -21,14 +21,10 @@ import type { NavigationControls } from './NavigationControls';
 // ─── Configuration Constants ─────────────────────────────────────────────────
 // Exported so callers can inspect or override them at instantiation time.
 export const CHROME_CONFIG = {
-  /** px from the bottom edge of the viewport that triggers timeline reveal */
-  TIMELINE_TRIGGER_BAND_PX: 140,
-
   /** px from the left edge of the viewport that triggers info-panel reveal */
   INFO_PANEL_TRIGGER_BAND_PX: 120,
 
-  /** Extended bottom band (px) that also triggers nav-controls reveal.
-   *  Must be ≥ TIMELINE_TRIGGER_BAND_PX to encompass the nav buttons above the timeline. */
+  /** Bottom band (px) that triggers nav-controls reveal. */
   NAV_TRIGGER_BAND_PX: 220,
 
   /** ms after the pointer leaves ALL trigger zones before a panel hides */
@@ -52,7 +48,7 @@ export const CHROME_CONFIG = {
 } as const;
 
 // ─── Type Definitions ────────────────────────────────────────────────────────
-export type PanelId = 'timeline' | 'info-panel' | 'nav-controls';
+export type PanelId = 'info-panel' | 'nav-controls';
 export type RevealReason = 'proximity' | 'focus' | 'touch' | 'forced' | 'preference' | 'hint' | 'keyboard';
 export type ChromeMode = 'clean' | 'visible';
 
@@ -87,13 +83,11 @@ export class ChromeVisibilityManager {
   private readonly config: typeof CHROME_CONFIG;
   private readonly options: ChromeVisibilityManagerOptions;
 
-  private readonly timelineEl: HTMLElement;
   private readonly infoPanelEl: HTMLElement;
   private readonly prefs: PreferencesStore;
   private readonly appRoot: HTMLElement;
 
   // DOM elements created and owned by this manager.
-  private timelinePeekHit: HTMLElement | null = null;
   private infoPanelPeekHit: HTMLElement | null = null;
   private srStatusEl: HTMLElement | null = null;
 
@@ -114,13 +108,11 @@ export class ChromeVisibilityManager {
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
-    timelineEl: HTMLElement,
     infoPanelEl: HTMLElement,
     prefs: PreferencesStore,
     appRoot: HTMLElement,
     options: ChromeVisibilityManagerOptions = {}
   ) {
-    this.timelineEl = timelineEl;
     this.infoPanelEl = infoPanelEl;
     this.prefs = prefs;
     this.appRoot = appRoot;
@@ -139,7 +131,6 @@ export class ChromeVisibilityManager {
     if (this.initialised) return;
     this.initialised = true;
 
-    this.panels.set('timeline', this.createPanelState('timeline', this.timelineEl, 'Zeitleiste'));
     this.panels.set('info-panel', this.createPanelState('info-panel', this.infoPanelEl, 'Werkinformationen'));
 
     this.applyMode(this.currentMode());
@@ -189,10 +180,8 @@ export class ChromeVisibilityManager {
     }
     this.panels.clear();
 
-    this.timelinePeekHit?.remove();
     this.infoPanelPeekHit?.remove();
     this.srStatusEl?.remove();
-    this.timelinePeekHit = null;
     this.infoPanelPeekHit = null;
     this.srStatusEl = null;
 
@@ -415,7 +404,6 @@ export class ChromeVisibilityManager {
     const y = e.clientY;
     const h = window.innerHeight;
 
-    this.updateZone('timeline', y >= h - this.config.TIMELINE_TRIGGER_BAND_PX);
     this.updateZone('info-panel', x <= this.config.INFO_PANEL_TRIGGER_BAND_PX);
     // Nav controls share the bottom proximity zone with an extended band that
     // covers the button height above the timeline strip.
@@ -429,15 +417,6 @@ export class ChromeVisibilityManager {
     if (this.currentMode() === 'visible') return;
 
     const x = e.clientX;
-    const y = e.clientY;
-    const h = window.innerHeight;
-
-    // Bottom-edge tap → reveal timeline.
-    if (y >= h - this.config.TIMELINE_TRIGGER_BAND_PX) {
-      this.reveal('timeline', 'touch');
-      this.scheduleHide('timeline', this.config.TOUCH_REVEAL_DURATION_MS);
-    }
-
     // Left-edge tap (clear of the iOS back-swipe dead zone) → reveal info panel.
     if (x >= this.config.IOS_EDGE_DEAD_ZONE_PX && x <= this.config.INFO_PANEL_TOUCH_MAX_PX) {
       this.reveal('info-panel', 'touch');
@@ -539,22 +518,14 @@ export class ChromeVisibilityManager {
   private createPeekElements(): void {
     // The chevron elements are purely decorative affordances (aria-hidden) that
     // sit inside the peek hit areas to signal the direction of the hidden panel.
-    const timelineChevron = this.makeEl('div', 'timeline-chevron');
-    this.timelinePeekHit = this.makeEl('div', 'timeline-peek-hit', [
-      this.makeEl('div', 'timeline-peek'),
-      timelineChevron,
-    ]);
     const infoPanelChevron = this.makeEl('div', 'info-panel-chevron');
     this.infoPanelPeekHit = this.makeEl('div', 'info-panel-peek-hit', [
       this.makeEl('div', 'info-panel-peek'),
       infoPanelChevron,
     ]);
-    for (const el of [this.timelinePeekHit, this.infoPanelPeekHit]) {
-      el.setAttribute('aria-hidden', 'true');
-      this.appRoot.appendChild(el);
-    }
+    this.infoPanelPeekHit.setAttribute('aria-hidden', 'true');
+    this.appRoot.appendChild(this.infoPanelPeekHit);
     this.diag.debug('peek-affordances-created', 'Visual chrome affordances mounted', {
-      timeline: ['timeline-peek', 'timeline-chevron'],
       infoPanel: ['info-panel-peek', 'info-panel-chevron'],
     });
   }

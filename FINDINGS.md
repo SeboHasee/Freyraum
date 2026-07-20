@@ -1,5 +1,18 @@
 # FINDINGS
 
+## Runtime presentation decisions (2026-07-19)
+
+1. Lighting is a fixed runtime concern, not a preference. `LightingSetup` owns the
+   sole dramatic configuration and preference restore cannot override it.
+2. Artwork presentation has one mesh per painting. Metallic frame and side-preview
+   scene objects were fully removed, reducing scene graph, shader, and raycast work.
+3. Timeline visibility is invariant across responsive layouts. Clean-chrome state
+   applies only to artwork information and navigation controls.
+4. `Artwork.surface` is plain customer-facing metadata. It has no path into
+   `PaintingMaterial`; only authored maps and quality presets affect rendering.
+5. CSS and WebGL share `#eef1f3`, preventing a white transition between document,
+   canvas initialization, and reveal.
+
 ## Active findings — high-resolution asset delivery audit (2026-07-07)
 
 1. **The current publish path is source-file-based, not derivative-based.**

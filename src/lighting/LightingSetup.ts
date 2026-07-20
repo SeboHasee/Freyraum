@@ -1,11 +1,9 @@
 import * as THREE from 'three';
 import type { QualityPreset } from '../config/quality';
 import {
-  DEFAULT_LIGHT_PROFILE,
+  DRAMATIC_LIGHT_PROFILE,
   type LightProfile,
-  type LightProfileId,
   type KeyLight,
-  getLightProfile,
   kelvinToColor,
 } from './LightProfile';
 
@@ -34,9 +32,9 @@ export class LightingSetup {
   // invariant tooling can assert the live shadow-caster count matches intent.
   private shadowsEnabled = false;
 
-  constructor(scene: THREE.Scene, preset: QualityPreset, profileId: LightProfileId = DEFAULT_LIGHT_PROFILE) {
+  constructor(scene: THREE.Scene, preset: QualityPreset) {
     this.scene = scene;
-    this.profile = getLightProfile(profileId);
+    this.profile = DRAMATIC_LIGHT_PROFILE;
 
     this.ambientLight = new THREE.AmbientLight(0xffffff, this.profile.ambientIntensity);
     scene.add(this.ambientLight);
@@ -52,15 +50,6 @@ export class LightingSetup {
 
     this.applyProfile(this.profile);
     this.applyPreset(preset);
-  }
-
-  /** Switches to a different lighting profile. Reuses lights where possible. */
-  setProfile(id: LightProfileId): void {
-    const next = getLightProfile(id);
-    if (next.id === this.profile.id) return;
-    this.profile = next;
-    this.applyProfile(next);
-    this.lastUpdateTime = 0;
   }
 
   applyPreset(preset: QualityPreset): void {
@@ -85,7 +74,7 @@ export class LightingSetup {
   }
 
   update(time: number): boolean {
-    if (!this.animate || !this.profile.animateAllowed) return false;
+    if (!this.animate) return false;
     if (this.lastUpdateTime > 0) {
       this.animatedTime += Math.min(time - this.lastUpdateTime, MAX_LIGHTING_DT_MS);
     }
@@ -113,11 +102,6 @@ export class LightingSetup {
       this.accent.dispose();
       this.accent = null;
     }
-  }
-
-  /** Returns the active profile id (used by UI / debug overlay). */
-  get profileId(): LightProfileId {
-    return this.profile.id;
   }
 
   /**

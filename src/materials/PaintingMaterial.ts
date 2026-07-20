@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import type { QualityPreset, PaintingShaderVariant } from '../config/quality';
-import type { SurfaceProfile } from '../config/artworks';
 import type { ResolvedPaintingTextures } from './PaintingTextureSet';
 
 /**
@@ -15,7 +14,7 @@ import type { ResolvedPaintingTextures } from './PaintingTextureSet';
  * - `specularIntensityMap` → varnish pooling / specular highlights
  * - `bumpMap` / `bumpScale` → declares `dHdxy_fwd` / `perturbNormalArb` helpers
  * - `aoMap` / `aoMapIntensity` → ambient occlusion (uv1 attribute required)
- * - `clearcoatMap` / `clearcoat` → optional varnish layer, preset/profile gated
+ * - `clearcoatMap` / `clearcoat` → optional authored varnish layer, preset gated
  *
  * onBeforeCompile is used only for the things Three.js does NOT natively
  * support:
@@ -529,39 +528,6 @@ ${LIGHTS_END_TOKEN}
 
     if (definesChanged) {
       this.needsUpdate = true;
-    }
-  }
-
-  /**
-   * v0.04: applies per-artwork surface character to the clearcoat response.
-   * Authored varnish maps own per-pixel intensity; profiles then tune roughness.
-   */
-  applySurfaceProfile(profile: SurfaceProfile | undefined, preset: QualityPreset): void {
-    if (!preset.clearcoatEnabled) {
-      this.clearcoat = 0.0;
-      if (this.clearcoatMap) {
-        this.clearcoatMap = null;
-        this.needsUpdate = true;
-      }
-      return;
-    }
-
-    switch (profile) {
-      case 'varnished-oil':
-        if (!this.clearcoatMap) this.clearcoat = Math.min(preset.clearcoatStrength * 1.6, 0.2);
-        this.clearcoatRoughness = 0.22;
-        break;
-      case 'satin-canvas':
-        if (!this.clearcoatMap) this.clearcoat = preset.clearcoatStrength * 0.4;
-        this.clearcoatRoughness = 0.5;
-        break;
-      case 'matte-canvas':
-      case 'paper':
-      case 'procedural-fallback':
-      default:
-        if (!this.clearcoatMap) this.clearcoat = 0.0;
-        this.clearcoatRoughness = preset.clearcoatRoughnessValue;
-        break;
     }
   }
 

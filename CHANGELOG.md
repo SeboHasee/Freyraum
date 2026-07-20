@@ -1,6 +1,41 @@
 # CHANGELOG
 > Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning).
 
+## v0.77 — Fixed gallery presentation and metadata semantics (2026-07-19, **shipped**)
+
+### Summary
+
+- Removed lighting preset controls and persisted lighting preferences; startup and
+  runtime now always use the internal dramatic warm/cool configuration.
+- Removed metallic artwork frames, frame shaders/materials/geometry, frame quality
+  fields, diagnostics, and frame seed/cache paths.
+- Removed left/right WebGL preview artworks and their click raycasting while
+  preserving timeline, arrow, swipe, and keyboard navigation.
+- Kept the timeline visible in desktop and responsive layouts. Clean-chrome
+  auto-hide now applies only to artwork information and navigation controls.
+- Changed `Surface` to optional customer-facing free text. It is displayed with
+  artwork metadata and no longer changes clearcoat or any render setting.
+- Matched the WebGL clear color to the light-grey CSS background token.
+- Updated visual-regression state generation for the single lighting setup.
+
+### Migration
+
+- Existing generated manifests must be regenerated with `npm run import:artworks`
+  to replace `surfaceProfile` with optional `surface` text.
+- Stored `lighting` keys from earlier versions are ignored and disappear on the
+  next preference write.
+
+### Validation
+
+- Baseline: `npm install`, `npm run lint`, `npm run build`,
+  `npm run docs:check-config-authority`, `npm run test:frame-budget` ✅
+- Post-change: `npm install`, `npm run lint`, `npm run build`,
+  `npm run docs:check-config-authority`, `node -c scripts/import-artworks.mjs`,
+  and `npm run test:frame-budget` ✅
+- Known non-blocking baseline remains: npm reports 2 tooling vulnerabilities
+  (1 moderate, 1 high); Vite reports the existing large-chunk warning; Sass
+  reports its legacy JavaScript API deprecation.
+
 ## v0.76 — High-resolution asset publishing plan + markdown audit (2026-07-07, **docs-only**)
 
 ### Status

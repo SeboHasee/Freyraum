@@ -62,7 +62,6 @@ export class CanvasInteraction {
   private lastPinchDist = 0;
   /** Tracks whether the most recent gesture started as touch; used to
    *  suppress hover rotation immediately after a tap on touch laptops. */
-  private lastInputWasTouch = false;
 
   constructor(canvas: HTMLCanvasElement, galleryManager: GalleryManager) {
     this.canvas = canvas;
@@ -80,7 +79,6 @@ export class CanvasInteraction {
       this.canvas.addEventListener('pointerup', this.onPointerUp);
       this.canvas.addEventListener('pointercancel', this.onPointerCancel);
       this.canvas.addEventListener('lostpointercapture', this.onPointerCancel);
-      this.canvas.addEventListener('click', this.onClick);
       window.addEventListener('pointermove', this.onGlobalPointerMove, { passive: true });
       window.addEventListener('pointerup', this.onGlobalPointerUp, { passive: true });
       window.addEventListener('pointercancel', this.onGlobalPointerCancel, { passive: true });
@@ -96,7 +94,6 @@ export class CanvasInteraction {
       // that lacks Pointer Events.
       window.addEventListener('mousemove', this.onLegacyMouseMove, { passive: true });
       window.addEventListener('touchmove', this.onGlobalTouchMove, { passive: false });
-      this.canvas.addEventListener('click', this.onClick);
     }
 
     // Wheel zoom remains passive — no preventDefault needed; the canvas
@@ -115,8 +112,6 @@ export class CanvasInteraction {
   private onPointerDown = (e: PointerEvent): void => {
     // Mouse-only: reject non-primary buttons.
     if (e.pointerType === 'mouse' && e.button !== 0) return;
-
-    this.lastInputWasTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
 
     // Capture pointer so we keep receiving move/up even when the finger
     // leaves the canvas (e.g. user drags off-screen on a phone).
@@ -239,7 +234,6 @@ export class CanvasInteraction {
   // ---------------------------------------------------------------------------
 
   private onTouchStart = (e: TouchEvent): void => {
-    this.lastInputWasTouch = true;
     // Suppress synthetic mouse/click events that the browser would emit
     // after this touch sequence finishes (Bug 3).
     if (e.cancelable) e.preventDefault();
@@ -314,17 +308,6 @@ export class CanvasInteraction {
     this.galleryManager.addZoomDelta(e.deltaY * 0.0045);
   };
 
-  private onClick = (e: MouseEvent): void => {
-    // Suppress click activation during/just after a touch sequence so a
-    // tap-to-swipe gesture does not double-trigger panel-click logic.
-    if (this.lastInputWasTouch) {
-      this.lastInputWasTouch = false;
-      return;
-    }
-    if (this.state === 'panning') return;
-    this.galleryManager.handlePanelClick(e, this.canvas);
-  };
-
   private onLegacyMouseMove = (e: MouseEvent): void => {
     // Used only in the Touch Events fallback path on browsers without
     // Pointer Events. Updates hover rotation on fine-pointer desktops.
@@ -364,7 +347,6 @@ export class CanvasInteraction {
       this.canvas.removeEventListener('pointerup', this.onPointerUp);
       this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
       this.canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
-      this.canvas.removeEventListener('click', this.onClick);
       window.removeEventListener('pointermove', this.onGlobalPointerMove);
       window.removeEventListener('pointerup', this.onGlobalPointerUp);
       window.removeEventListener('pointercancel', this.onGlobalPointerCancel);
@@ -375,7 +357,6 @@ export class CanvasInteraction {
       this.canvas.removeEventListener('touchcancel', this.onTouchEnd);
       window.removeEventListener('mousemove', this.onLegacyMouseMove);
       window.removeEventListener('touchmove', this.onGlobalTouchMove);
-      this.canvas.removeEventListener('click', this.onClick);
     }
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.active.clear();

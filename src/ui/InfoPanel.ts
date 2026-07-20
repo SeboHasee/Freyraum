@@ -80,25 +80,9 @@ export class InfoPanel {
   private setContent(artwork: Artwork): void {
     this.eyebrow.textContent = `${artwork.subtitle} · ${artwork.year}`;
     this.title.textContent = artwork.title;
-    this.meta.textContent = `${artwork.medium} · ${this.surfaceLabel(artwork.surfaceProfile)}`;
+    this.meta.textContent = [artwork.medium, artwork.surface].filter(Boolean).join(' · ');
     this.description.textContent = artwork.description;
     this.credit.textContent = `© ${artwork.credit}`;
-  }
-
-  private surfaceLabel(profile: Artwork['surfaceProfile']): string {
-    switch (profile) {
-      case 'satin-canvas':
-        return 'Satinierte Leinwand';
-      case 'varnished-oil':
-        return 'Firnis / Öl';
-      case 'paper':
-        return 'Papier';
-      case 'procedural-fallback':
-        return 'Neutrale Studienoberfläche';
-      case 'matte-canvas':
-      default:
-        return 'Matte Leinwand';
-    }
   }
 
   dispose(): void {

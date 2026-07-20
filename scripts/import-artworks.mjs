@@ -27,7 +27,7 @@
  * The asset fields (`id`, `image`, `webglImage`, `dimensions`) remain
  * importer-owned. Sidecars only supply customer-facing metadata
  * (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`,
- * `tags`, `surfaceProfile`).
+ * `tags`, `surface`).
  *
  * No npm dependencies are required. Node 18+.
  */
@@ -83,16 +83,6 @@ const AUDIO_MIME_TYPES = {
 //     and the duplicate is reported as a warning.
 const SIDECAR_EXTENSIONS = ['.txt', '.md'];
 const PRIMARY_SIDECAR_EXT = '.txt';
-
-// Allowed surface profile values for sidecar `Surface:` lines. Mirrors the
-// `SurfaceProfile` type in `src/config/artworks.ts` minus the runtime-only
-// `procedural-fallback` value.
-const ALLOWED_SURFACE_PROFILES = new Set([
-  'matte-canvas',
-  'satin-canvas',
-  'varnished-oil',
-  'paper',
-]);
 
 // Sidecar field keys (lowercased) that map to artwork metadata fields.
 const SIDECAR_FIELD_KEYS = new Set([
@@ -377,17 +367,9 @@ function parseSidecar(filePath) {
     }
   }
 
-  // Validate Surface — must be one of the allowed profiles.
+  // Surface is optional free text; it never changes rendering behavior.
   if (Object.prototype.hasOwnProperty.call(fields, 'surface')) {
-    const surfaceText = fields.surface;
-    if (surfaceText === '') {
-      delete fields.surface;
-    } else if (!ALLOWED_SURFACE_PROFILES.has(surfaceText)) {
-      fieldWarnings.push(
-        `Surface "${surfaceText}" is not recognized — falling back to matte-canvas (allowed: ${[
-          ...ALLOWED_SURFACE_PROFILES,
-        ].join(', ')})`,
-      );
+    if (fields.surface === '') {
       delete fields.surface;
     }
   }
@@ -676,7 +658,7 @@ imageEntries.forEach((filename, i) => {
   const credit = (sidecarFields?.credit) || 'Customer';
   const alt = (sidecarFields?.alt) || title;
   const tags = Array.isArray(sidecarFields?.tags) ? sidecarFields.tags : [];
-  const surfaceProfile = (sidecarFields?.surface) || 'matte-canvas';
+  const surface = sidecarFields?.surface || '';
   const medium = (sidecarFields?.medium) || generateMedium(dims.width, dims.height);
 
   artworks.push({
@@ -692,7 +674,7 @@ imageEntries.forEach((filename, i) => {
     alt,
     credit,
     tags,
-    surfaceProfile,
+    ...(surface ? { surface } : {}),
   });
 
   imported.push(`${filename} (${dims.width} × ${dims.height})`);

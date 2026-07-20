@@ -1,5 +1,27 @@
 # FREYRAUM Plan
 
+## Completed — fixed presentation cleanup (2026-07-19)
+
+### Decisions
+
+- Keep one internal dramatic lighting configuration; remove selection and
+  persistence rather than retaining dormant profile branches.
+- Render only the painting plane. Frame geometry, materials, preset fields, and
+  diagnostics have no supported runtime path.
+- Keep the timeline fixed and interactive in all responsive layouts. Clean-chrome
+  manages the information panel and navigation controls only.
+- Treat `Artwork.surface` as optional display text. Authored texture maps and
+  quality presets remain the only inputs to painting material behavior.
+- Remove side-preview meshes and canvas click raycasting; retain primary
+  timeline, arrows, swipe, and keyboard navigation.
+- Use `#eef1f3` for both the CSS foreground background and WebGL clear color.
+
+### Validation boundary
+
+Required gates are lint, typecheck/build, importer syntax, config-authority check,
+and frame-budget equivalence. Regenerate customer manifests to migrate imported
+surface metadata.
+
 ## Active plan — high-resolution asset delivery beyond GitHub upload limits (2026-07-07)
 
 > **Phase: Planning/docs only.** No importer, runtime, or deployment behavior

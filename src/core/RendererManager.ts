@@ -55,7 +55,8 @@ export class RendererManager {
     // reduces contrast and shifts hues away from the source artwork.
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;
-    this.renderer.setClearColor(0xdfe5e9);
+    // Match the CSS --bg1 token so canvas creation/reveal cannot flash white.
+    this.renderer.setClearColor(0xeef1f3);
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 

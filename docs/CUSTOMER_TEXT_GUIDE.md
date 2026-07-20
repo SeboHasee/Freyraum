@@ -28,6 +28,13 @@ customer-artworks/inbox/
 - `.txt` is primary.
 - `.md` is accepted as secondary fallback.
 - Missing/invalid sidecars create warnings, not hard import failures.
+- `Surface` accepts any plain text, is shown with the artwork metadata, and does not alter canvas, material, or render settings.
+
+Example:
+
+```text
+Surface: Ölfarbe auf grober Leinwand
+```
 
 ## Common report sections
 

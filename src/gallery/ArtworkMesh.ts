@@ -1,20 +1,11 @@
 import * as THREE from 'three';
 import { PaintingMaterial } from '../materials/PaintingMaterial';
-import { CanvasMaterial } from '../materials/CanvasMaterial';
 import { fitWithinBox, getTextureSize } from '../utils/texture';
-import { createScopedDiagnostics } from '../utils/Diagnostics';
-
-// v0.74 T1-C — route per-navigation debug traces through the diagnostics
-// pipeline instead of calling `console.debug` directly. The diagnostics console
-// threshold suppresses these unless the session is in verbose mode, so they no
-// longer cost a console call (string + object build) on every artwork
-// navigation in the default/production path.
-const diag = createScopedDiagnostics('artwork');
 import type { QualityPreset } from '../config/quality';
 import type { ResolvedPaintingTextures } from '../materials/PaintingTextureSet';
 
 /**
- * The visible artwork mesh: a frame box behind a (possibly subdivided) plane.
+ * The visible artwork mesh: a possibly subdivided painting plane.
  *
  * v0.02: the inline `MeshPhysicalMaterial` is replaced by {@link PaintingMaterial}.
  * Aspect-ratio handling is unchanged — the base plane is 4×5.7 and the mesh is
@@ -28,21 +19,12 @@ import type { ResolvedPaintingTextures } from '../materials/PaintingTextureSet';
  */
 export class ArtworkMesh {
   readonly group: THREE.Group;
-  private readonly frameMesh: THREE.Mesh;
   private artworkMesh: THREE.Mesh;
   readonly material: PaintingMaterial;
-  private readonly frameMaterial: THREE.MeshPhysicalMaterial;
-  private readonly canvasMaterial: CanvasMaterial;
-  private readonly frameBorder = 0.2;
-  private readonly frameDepth = 0.28;
-  private readonly frameInnerClearance = 0.02;
-  private readonly artworkInset = 0.016;
   private _artworkAspect = 1;
   private _artworkWidth = 4;
   private _artworkHeight = 5.7;
   private currentSegments: number;
-  private currentFrameBevelEnabled: boolean;
-  private artworkSeed: number;
   private readonly scene: THREE.Scene;
   /** Density coefficient for detail-normal tiling (tiles per world unit). */
   private readonly detailTilesPerWorldUnit = 2.0;
@@ -50,33 +32,16 @@ export class ArtworkMesh {
   private _lastAspectSource: 'manifest' | 'texture' = 'texture';
   /** v0.08: the manifest dimensions used in the last updateAspect() call, if any. */
   private _lastManifestDimensions: { width: number; height: number } | null = null;
-  private readonly frameGeometryCache = new Map<string, THREE.BufferGeometry>();
 
-  constructor(scene: THREE.Scene, preset: QualityPreset, artworkIndex = 0) {
+  constructor(scene: THREE.Scene, preset: QualityPreset) {
     this.scene = scene;
-    this.canvasMaterial = new CanvasMaterial();
-    this.artworkSeed = artworkIndex % 256;
     this.group = new THREE.Group();
     this.currentSegments = preset.artworkSegments;
-    this.currentFrameBevelEnabled = preset.frameBevelEnabled;
-
-    const frameGeo = this.getFrameGeometry(this.currentFrameBevelEnabled, this._artworkWidth, this._artworkHeight);
-    this.frameMaterial = this.canvasMaterial.createFrameMaterial(
-      preset,
-      this.artworkSeed,
-      this.getFrameBounds(this._artworkWidth, this._artworkHeight)
-    );
-    this.frameMesh = new THREE.Mesh(frameGeo, this.frameMaterial);
-    this.group.add(this.frameMesh);
 
     const artGeo = this.makeArtworkGeometry(this.currentSegments);
     this.material = new PaintingMaterial(preset);
     this.artworkMesh = new THREE.Mesh(artGeo, this.material);
-    this.artworkMesh.position.z = -this.artworkInset;
     this.group.add(this.artworkMesh);
-
-    // P-06: log the initial frame seed for diagnostics.
-    diag.debugLazy('artwork-frame-seed', 'Initial artwork frame seed', () => ({ artworkIndex, seed: this.artworkSeed }));
 
     scene.add(this.group);
   }
@@ -107,198 +72,9 @@ export class ArtworkMesh {
     return geo;
   }
 
-  private makeFrameGeometry(bevelEnabled: boolean, artworkWidth: number, artworkHeight: number): THREE.BufferGeometry {
-    const outerW = artworkWidth + this.frameBorder * 2;
-    const outerH = artworkHeight + this.frameBorder * 2;
-    const innerW = artworkWidth + this.frameInnerClearance;
-    const innerH = artworkHeight + this.frameInnerClearance;
-
-    // v0.41 fix: always use a ring-shaped ExtrudeGeometry so the painting is
-    // visible through the frame's center opening. The previous battery path
-    // used BoxGeometry(outerW, outerH, …) — a solid rectangle that completely
-    // blocked the artwork plane behind it.
-    const shape = new THREE.Shape();
-    shape.moveTo(-outerW / 2, -outerH / 2);
-    shape.lineTo(outerW / 2, -outerH / 2);
-    shape.lineTo(outerW / 2, outerH / 2);
-    shape.lineTo(-outerW / 2, outerH / 2);
-    shape.closePath();
-
-    const hole = new THREE.Path();
-    hole.moveTo(-innerW / 2, -innerH / 2);
-    hole.lineTo(innerW / 2, -innerH / 2);
-    hole.lineTo(innerW / 2, innerH / 2);
-    hole.lineTo(-innerW / 2, innerH / 2);
-    hole.closePath();
-    shape.holes.push(hole);
-
-    const depth = this.frameDepth;
-    const geometry = new THREE.ExtrudeGeometry(shape, {
-      depth,
-      bevelEnabled,
-      ...(bevelEnabled
-        ? { bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1 }
-        : {}),
-    });
-    geometry.translate(0, 0, -depth);
-
-    // v0.51: Generate per-vertex frame bar UV attribute.
-    // Each vertex gets (along, across) where:
-    //   along  = position along the bar's length direction (world units)
-    //   across = 0 at inner edge, 1 at outer edge (normalized bar width)
-    // This replaces the broken distance-field frmBarBrushCoords() shader mapping
-    // that created concentric-square tunnel artifacts at corners.
-    this.assignFrameBarUVs(geometry, outerW, outerH, innerW, innerH);
-
-    // v0.44: tangents are required so Three.js emits the USE_TANGENT define
-    // and the vTBN varying, which the onBeforeCompile GLSL injection depends on.
-    geometry.computeTangents();
-
-    diag.debugLazy('frame-geometry-built', 'Frame geometry built', () => ({
-      outerW, outerH, innerW, innerH,
-      vertexCount: geometry.getAttribute('position').count,
-      hasFrameUV: !!geometry.getAttribute('aFrameUV'),
-      bevelEnabled,
-    }));
-
-    return geometry;
-  }
-
-  private getFrameGeometryCacheKey(bevelEnabled: boolean, artworkWidth: number, artworkHeight: number): string {
-    return `${bevelEnabled ? 'bevel' : 'flat'}|${artworkWidth.toFixed(4)}|${artworkHeight.toFixed(4)}`;
-  }
-
-  private getFrameGeometry(bevelEnabled: boolean, artworkWidth: number, artworkHeight: number): THREE.BufferGeometry {
-    const key = this.getFrameGeometryCacheKey(bevelEnabled, artworkWidth, artworkHeight);
-    const cached = this.frameGeometryCache.get(key);
-    if (cached) {
-      diag.debugLazy('frame-geometry-cache-hit', 'Reused cached frame geometry', () => ({
-        key,
-        bevelEnabled,
-        artworkWidth,
-        artworkHeight,
-      }));
-      return cached;
-    }
-    const geometry = this.makeFrameGeometry(bevelEnabled, artworkWidth, artworkHeight);
-    this.frameGeometryCache.set(key, geometry);
-    return geometry;
-  }
-
-  /**
-   * v0.51: Assigns per-vertex `aFrameUV` attribute to the frame geometry.
-   * For each vertex (x, y), determines which bar (top/bottom/left/right) it
-   * belongs to and computes linear (along, across) coordinates.
-   *
-   * At corners (where both dx > 0 and dy > 0), we pick the dominant bar based
-   * on which direction the vertex extends further past the inner edge. This
-   * produces a clean 45° miter transition instead of the concentric-square
-   * distance-field artifact.
-   */
-  private assignFrameBarUVs(
-    geometry: THREE.BufferGeometry,
-    outerW: number, outerH: number,
-    innerW: number, innerH: number
-  ): void {
-    const posAttr = geometry.getAttribute('position');
-    const count = posAttr.count;
-    const uvData = new Float32Array(count * 2);
-
-    const innerHalfW = innerW / 2;
-    const innerHalfH = innerH / 2;
-    const barWidthX = (outerW - innerW) / 2; // horizontal bar thickness
-    const barWidthY = (outerH - innerH) / 2; // vertical bar thickness
-
-    for (let i = 0; i < count; i++) {
-      const x = posAttr.getX(i);
-      const y = posAttr.getY(i);
-
-      const absX = Math.abs(x);
-      const absY = Math.abs(y);
-
-      // Distance past the inner edge in each direction
-      const dx = absX - innerHalfW; // > 0 means in left/right bar zone
-      const dy = absY - innerHalfH; // > 0 means in top/bottom bar zone
-
-      let along: number;
-      let across: number;
-
-      // Determine bar membership:
-      // - If only dy > 0: horizontal bar (top/bottom)
-      // - If only dx > 0: vertical bar (left/right)
-      // - If both > 0 (corner): pick bar with larger normalized penetration
-      // - If neither > 0: inside hole (shouldn't exist), default to horizontal
-
-      const dxNorm = dx / Math.max(barWidthX, 0.001);
-      const dyNorm = dy / Math.max(barWidthY, 0.001);
-
-      if (dyNorm > dxNorm) {
-        // Horizontal bar (top or bottom) — brush runs along X
-        along = x;
-        across = Math.max(0, Math.min(1, dy / Math.max(barWidthY, 0.001)));
-      } else {
-        // Vertical bar (left or right) — brush runs along Y
-        along = y;
-        across = Math.max(0, Math.min(1, dx / Math.max(barWidthX, 0.001)));
-      }
-
-      uvData[i * 2] = along;
-      uvData[i * 2 + 1] = across;
-    }
-
-    geometry.setAttribute(
-      'aFrameUV',
-      new THREE.BufferAttribute(uvData, 2)
-    );
-  }
-
-  private getFrameBounds(artworkWidth: number, artworkHeight: number): { outerHalf: THREE.Vector2; innerHalf: THREE.Vector2 } {
-    return {
-      outerHalf: new THREE.Vector2(
-        (artworkWidth + this.frameBorder * 2) / 2,
-        (artworkHeight + this.frameBorder * 2) / 2
-      ),
-      innerHalf: new THREE.Vector2(
-        (artworkWidth + this.frameInnerClearance) / 2,
-        (artworkHeight + this.frameInnerClearance) / 2
-      ),
-    };
-  }
-
-  private replaceFrameGeometry(bevelEnabled: boolean): void {
-    const nextGeo = this.getFrameGeometry(bevelEnabled, this._artworkWidth, this._artworkHeight);
-    if (this.frameMesh.geometry === nextGeo) return;
-    this.frameMesh.geometry = nextGeo;
-    diag.debugLazy('frame-geometry-replaced', 'Frame geometry replaced from cache', () => ({
-      bevelEnabled,
-      bevelThickness: bevelEnabled ? 0.012 : 0,
-      bevelSize: bevelEnabled ? 0.012 : 0,
-      bevelSegments: bevelEnabled ? 1 : 0,
-      artworkWidth: this._artworkWidth,
-      artworkHeight: this._artworkHeight,
-      cacheSize: this.frameGeometryCache.size,
-    }));
-  }
-
-  private applyFramePreset(preset: QualityPreset): void {
-    this.frameMaterial.roughness = preset.frameRoughness;
-    this.frameMaterial.clearcoat = preset.frameClearcoat;
-    this.frameMaterial.anisotropy = preset.frameAnisotropy;
-    this.canvasMaterial.refreshFramePresetUniforms(this.frameMaterial, preset);
-    this.frameMaterial.needsUpdate = true;
-  }
-
-  private ensureFrameGeometryForPreset(preset: QualityPreset): void {
-    if (preset.frameBevelEnabled === this.currentFrameBevelEnabled) return;
-    this.currentFrameBevelEnabled = preset.frameBevelEnabled;
-    this.replaceFrameGeometry(this.currentFrameBevelEnabled);
-  }
-
   applyPreset(preset: QualityPreset): void {
     // The material always reflects the latest preset, even when segments do not change.
     this.material.applyPreset(preset);
-    this.applyFramePreset(preset);
-    this.ensureFrameGeometryForPreset(preset);
 
     if (preset.artworkSegments === this.currentSegments) return;
     this.currentSegments = preset.artworkSegments;
@@ -308,21 +84,6 @@ export class ArtworkMesh {
     this.artworkMesh.geometry = newGeo;
     oldGeo.dispose();
     this.artworkMesh.scale.set(this._artworkWidth / 4.0, this._artworkHeight / 5.7, 1);
-  }
-
-  /**
-   * v0.44: Updates the frame material's uFrameSeed uniform for a new artwork
-   * index. Called by GalleryManager when navigating so each artwork's frame
-   * shows a distinct but deterministic grain phase. No texture disposal or
-   * regeneration — the GLSL reads the new uniform on the next frame.
-   */
-  updateFrameSeed(artworkIndex: number): void {
-    const seed = artworkIndex % 256;
-    if (seed === this.artworkSeed) return;
-    this.artworkSeed = seed;
-    this.canvasMaterial.refreshFrameUniforms(this.frameMaterial, seed);
-    // P-06: log seed change for diagnostics.
-    diag.debugLazy('artwork-frame-seed', 'Artwork frame seed changed', () => ({ artworkIndex, seed }));
   }
 
   /**
@@ -362,12 +123,6 @@ export class ArtworkMesh {
     this._artworkHeight = height;
 
     this.artworkMesh.scale.set(width / 4.0, height / 5.7, 1);
-
-    this.replaceFrameGeometry(this.currentFrameBevelEnabled);
-    this.canvasMaterial.refreshFrameGeometryUniforms(
-      this.frameMaterial,
-      this.getFrameBounds(width, height)
-    );
 
     // v0.08: expose aspect computation for diagnostics in GalleryManager.
     this._lastAspectSource = aspectSource;
@@ -434,13 +189,7 @@ export class ArtworkMesh {
 
   dispose(): void {
     this.scene.remove(this.group);
-    for (const geometry of this.frameGeometryCache.values()) {
-      geometry.dispose();
-    }
-    this.frameGeometryCache.clear();
     this.artworkMesh.geometry.dispose();
-    this.frameMaterial.dispose();
     this.material.dispose();
-    this.canvasMaterial.dispose();
   }
 }
