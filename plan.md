@@ -18,6 +18,9 @@
   press-to-start overlay releases focus.
 - The idle authored-texture sweep skips artworks without authored sets and
   advances before scheduling, preventing synchronous callback recursion.
+- Dialog and preferences Escape handlers consume the key before global
+  back-navigation, and the gallery canvas is an explicit programmatic focus
+  target after hub entry.
 - Hub backgrounds remain separate files. They must not be imported as Vite
   module assets because library mode inlines them into the local-preview
   JavaScript bundle.

@@ -25,6 +25,11 @@
 6. The idle texture-prefetch sweep must advance its cursor before invoking a
    callback-capable scheduler. Missing authored texture sets complete
    synchronously; advancing afterward caused unbounded recursion during startup.
+7. Visibility checks in a later bubbling listener cannot determine whether an
+   earlier listener already closed an overlay. Escape-owning components consume
+   the event, and global keyboard navigation ignores default-prevented events.
+8. A canvas requires an explicit `tabindex="-1"` to be a reliable
+   programmatic focus destination without joining sequential Tab navigation.
 
 ## Hub hotspot navigation decisions (2026-07-31)
 

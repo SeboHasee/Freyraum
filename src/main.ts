@@ -875,6 +875,7 @@ async function main(): Promise<void> {
 
   // Interaction
   const canvas = rendererManager.renderer.domElement;
+  canvas.tabIndex = -1;
   canvas.setAttribute('aria-label', 'Interaktive Galerie');
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-describedby', 'freyraum-canvas-help');

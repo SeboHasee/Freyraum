@@ -36,7 +36,7 @@ export class KeyboardNav {
   }
 
   private handleKeyDown = (e: KeyboardEvent): void => {
-    if (!this.enabled) return;
+    if (!this.enabled || e.defaultPrevented) return;
     // Ignore shortcuts when the user is editing form fields or focused on
     // an interactive timeline thumbnail (timeline manages its own arrows).
     if (isTypingTarget(e.target)) return;

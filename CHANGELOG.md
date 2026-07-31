@@ -18,6 +18,8 @@
   repeated fallback error loop.
 - Fixed the idle texture-prefetch sweep recursing synchronously on artworks
   without authored texture sets.
+- Prevented Escape from closing Help/Preferences and also returning to the hub.
+- Made the gallery canvas an explicit programmatic focus target after hub entry.
 
 ### Validation
 
@@ -30,6 +32,8 @@
 - `node --check scripts/sync-customer-public.mjs` ✅
 - Manual Pages-base loading, initial focus, both hotspot selections, back
   navigation, and missing-primary fallback ✅
+- Manual canvas focus, Help/Preferences Escape consumption, and unhandled
+  Escape back-navigation ✅
 - Hotspot calibration used the supplied reference; the local target image was
   not opened for visual inspection ✅
 

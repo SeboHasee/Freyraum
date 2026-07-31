@@ -16,7 +16,12 @@ export class KeyboardHelp {
   private opener: HTMLElement | null = null;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
-    if (e.key === 'Escape') this.close();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      this.close();
+      return;
+    }
     if (e.key === 'Tab') this.trapFocus(e);
   };
 
