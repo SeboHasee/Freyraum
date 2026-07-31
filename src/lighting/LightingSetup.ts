@@ -73,6 +73,14 @@ export class LightingSetup {
     this.animate = animate;
   }
 
+  setVisible(visible: boolean): void {
+    this.ambientLight.visible = visible;
+    this.spots.forEach((spot) => {
+      spot.visible = visible;
+    });
+    if (this.accent) this.accent.visible = visible;
+  }
+
   update(time: number): boolean {
     if (!this.animate) return false;
     if (this.lastUpdateTime > 0) {

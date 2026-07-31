@@ -32,6 +32,9 @@ import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
 import { installPerformanceTooling } from './utils/performanceTooling';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
+import { DestinationRegistry } from './navigation/DestinationRegistry';
+import { FadeTransition } from './navigation/FadeTransition';
+import { MainMuseumHub } from './hub/MainMuseumHub';
 import { getDiagnostics } from './utils/Diagnostics';
 import { detectDeviceCapabilities, applyDeviceCaps, type DeviceCapabilities } from './utils/device';
 import { suggestStartupQuality } from './utils/performance';
@@ -908,6 +911,46 @@ async function main(): Promise<void> {
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
   const keyboardHelp = new KeyboardHelp();
   const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
+  const destinations = new DestinationRegistry(new FadeTransition(app));
+  const museumHub = new MainMuseumHub(
+    sceneManager.scene,
+    sceneManager.camera,
+    canvas,
+    (destinationId) => destinations.navigate(destinationId)
+  );
+  const setGalleryActive = (active: boolean): void => {
+    artworkMesh.group.visible = active;
+    lightingSetup.setVisible(active);
+    canvasInteraction.setEnabled(active);
+    keyboardNav.setEnabled(active);
+    app.dataset['destination'] = active ? 'gallery' : 'hub';
+    canvas.setAttribute('aria-label', active ? 'Interaktive Galerie' : 'FREYRAUM Museumshalle');
+    canvas.setAttribute('role', active ? 'img' : 'button');
+    canvasA11yHelp.textContent = active
+      ? 'Interaktive 3D-Galerie. Navigation: Pfeiltasten links und rechts oder die Navigationsbuttons. Zoomen: Plus- und Minus-Buttons.'
+      : 'Interaktive 3D-Museumshalle. Das mittlere gerahmte Werk öffnet die Galerie. Mit Enter oder Leertaste aktivieren.';
+    if (active) {
+      canvas.removeAttribute('tabindex');
+    } else {
+      canvas.tabIndex = 0;
+    }
+  };
+  destinations.register({
+    id: 'gallery',
+    enter: () => setGalleryActive(true),
+    exit: () => setGalleryActive(false),
+    transition: { durationMs: 700 },
+  });
+  destinations.register({
+    id: 'hub',
+    enter: () => {
+      setGalleryActive(false);
+      museumHub.enter();
+    },
+    exit: () => museumHub.exit(),
+    update: () => museumHub.update(),
+    transition: { durationMs: 700 },
+  });
   topbar.onHelpClick = () => keyboardHelp.open(topbar.helpBtn);
   // The topbar info button is a secondary discovery path for the auto-hidden
   // information panel, so users are not dependent on edge affordances.
@@ -948,6 +991,7 @@ async function main(): Promise<void> {
   let interactionWindowTimer: ReturnType<typeof setTimeout> | undefined;
   const INTERACTION_WINDOW_COOLDOWN_MS = 200;
   const openInteractionWindow = (): void => {
+    if (destinations.getCurrentId() !== 'gallery') return;
     if (interactionWindowTimer !== undefined) {
       clearTimeout(interactionWindowTimer);
       interactionWindowTimer = undefined;
@@ -1627,6 +1671,10 @@ async function main(): Promise<void> {
   timeline.onPreview((index: number) => galleryManager.promotePrefetchWindow(index, 'timeline-preview'));
 
   // Animation loop
+  setGalleryActive(false);
+  await destinations.navigate('hub', { transition: false });
+  await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
+
   const animate = (now: number): void => {
     rafId = requestAnimationFrame(animate);
     // v0.11 — skip drawing while the WebGL context is lost on mobile.
@@ -1660,11 +1708,12 @@ async function main(): Promise<void> {
       });
       preferences.setQuality(downgrade);
     }
-    const lightingChanged = lightingSetup.update(now);
+    const destinationChanged = destinations.update(now);
+    const lightingChanged = destinations.getCurrentId() === 'gallery' && lightingSetup.update(now);
     // v0.15 — pass DOMHighResTimeStamp so GalleryManager.update() can
     // compute a frame-rate-independent dt for exponential smoothing.
     const galleryChanged = galleryManager.update(now);
-    if (!lightingChanged && !galleryChanged && !galleryManager.hasReadinessWork()) {
+    if (!destinationChanged && !lightingChanged && !galleryChanged && !galleryManager.hasReadinessWork()) {
       return;
     }
 
@@ -1783,6 +1832,8 @@ async function main(): Promise<void> {
     audioControls.dispose();
     hintText.dispose();
     timeline.dispose();
+    destinations.dispose();
+    museumHub.dispose();
     restoreStatus.remove();
     backgroundAudio.dispose();
     artworkMesh.dispose();

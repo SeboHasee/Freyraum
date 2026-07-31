@@ -205,6 +205,37 @@ canvas {
   transform: scale(1);
 }
 
+.destination-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0;
+  background: #17191a;
+  transition: opacity var(--destination-transition-ms, 650ms) var(--ease-gallery-in-out);
+
+  &.is-active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+#app[data-destination='hub'] {
+  .topbar,
+  .info-panel,
+  .nav-controls,
+  .zoom-controls,
+  .audio-controls,
+  .fullscreen-btn,
+  .prefs,
+  .timeline,
+  .hint-text,
+  .info-panel-peek-hit {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Universal focus ring
 // -----------------------------------------------------------------------------
