@@ -38,6 +38,19 @@ Notes:
 - WebGPU path is probe-only (`webgpu-experimental`) and falls back safely.
 - Resolution order: query param first; otherwise `localStorage['freyraum.backend'] === 'webgpu'`.
 
+### `?hubCalibrate=1`
+
+Hub hotspot calibration mode (`src/hub/MainMuseumHub.ts`).
+
+Notes:
+- Outlines every hub hotspot with a dashed border and slot label.
+- Drag a hotspot to move it; drag the corner handle to resize it.
+- On release, the updated config JSON appears in the on-screen copy panel and
+  is logged via diagnostics.
+- Paste the JSON into `customer-artworks/hub-hotspots.json` and re-run the
+  gallery update (`npm run import:artworks`) to apply it.
+- Hotspot navigation is disabled while calibrating.
+
 ## localStorage keys
 
 ### `freyraum.preferences.v1`

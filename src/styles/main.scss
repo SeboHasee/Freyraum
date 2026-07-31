@@ -21,6 +21,8 @@
   --bg2: #d8dee3;
   --bg3: #bcc5cc;
   --bg-deep: #b3bcc4;
+  // v0.79 — light-grey museum wall base for the hub (letterbox + image-error fill).
+  --museum-wall-light: #ecebe8;
 
   // Text
   --text: #12171b;
@@ -214,7 +216,8 @@ canvas {
   inset: 0;
   z-index: 80;
   overflow: hidden;
-  background:
+  background-color: var(--museum-wall-light);
+  background-image:
     radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.95), transparent 45%),
     linear-gradient(180deg, #dbe6ee 0%, #e8e5df 55%, #c8c9c7 100%);
   opacity: 1;
@@ -249,6 +252,10 @@ canvas {
 
 .museum-hub.has-image-error .museum-hub__image {
   opacity: 0;
+}
+
+.museum-hub.has-image-error .museum-hub__visual {
+  background: var(--museum-wall-light);
 }
 
 .museum-hub__shade {
@@ -356,6 +363,135 @@ canvas {
   cursor: wait;
 }
 
+// v0.79 — artwork hotspots inside the hub visual (normalized coordinates are
+// applied as inline percentages by MainMuseumHub; the visual box is a fixed
+// 16:9 content box so percentages map 1:1 to the image).
+.museum-hub__hotspot {
+  position: absolute;
+  z-index: 3;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 2px;
+  color: var(--text-inverse);
+  cursor: pointer;
+}
+
+.museum-hub__hotspot-frame {
+  position: absolute;
+  inset: -6px;
+  border: 2px solid transparent;
+  border-radius: 2px;
+  transition:
+    border-color var(--dur-control) var(--ease-out),
+    box-shadow var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__hotspot-label {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  width: max-content;
+  max-width: min(220px, 46vw);
+  transform: translateX(-50%) translateY(4px);
+  padding: 7px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-pill);
+  background: rgba(10, 14, 17, 0.78);
+  box-shadow: var(--shadow-medium);
+  font-size: clamp(0.68rem, 1vw, 0.82rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-control) var(--ease-out),
+    transform var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__hotspot:hover .museum-hub__hotspot-frame,
+.museum-hub__hotspot:focus-visible .museum-hub__hotspot-frame {
+  border-color: rgba(255, 255, 255, 0.92);
+  // Light-grey wall backdrop keeps the ring visible on dark image regions.
+  box-shadow: 0 0 0 4px rgba(15, 20, 24, 0.36), 0 0 0 6px var(--museum-wall-light);
+}
+
+.museum-hub__hotspot:hover .museum-hub__hotspot-label,
+.museum-hub__hotspot:focus-visible .museum-hub__hotspot-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.museum-hub__hotspot:focus-visible {
+  outline: none;
+}
+
+.museum-hub__hotspot:disabled {
+  cursor: wait;
+}
+
+// v0.79 — hotspot calibration mode (config query flag; see the canonical
+// configuration reference in docs). Non-interactive for navigation: drag to
+// move, drag the corner handle to resize, JSON refreshes in the copy panel.
+.museum-hub.is-calibrating .museum-hub__hotspot {
+  cursor: move;
+  touch-action: none;
+}
+
+.museum-hub.is-calibrating .museum-hub__hotspot-frame {
+  border: 2px dashed rgba(255, 90, 60, 0.95);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+}
+
+.museum-hub.is-calibrating .museum-hub__hotspot-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.museum-hub__hotspot-handle {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 3px;
+  background: rgba(255, 90, 60, 0.95);
+  cursor: nwse-resize;
+}
+
+.museum-hub__calibration {
+  position: absolute;
+  z-index: 4;
+  right: max(16px, calc(12px + var(--safe-right)));
+  bottom: max(16px, calc(12px + var(--safe-bottom)));
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(10, 14, 17, 0.86);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-medium);
+}
+
+.museum-hub__calibration-title {
+  margin-bottom: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.museum-hub__calibration-output {
+  width: 100%;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  color: inherit;
+  font-family: monospace;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
 #app:not([data-experience='gallery']) {
   .topbar,
   .info-panel,
@@ -390,7 +526,9 @@ canvas {
 @media (prefers-reduced-motion: reduce) {
   .museum-hub,
   .museum-hub__destination-frame,
-  .museum-hub__destination-label {
+  .museum-hub__destination-label,
+  .museum-hub__hotspot-frame,
+  .museum-hub__hotspot-label {
     transition: none;
   }
 }
@@ -398,7 +536,9 @@ canvas {
 :root[data-motion='reduced'] {
   .museum-hub,
   .museum-hub__destination-frame,
-  .museum-hub__destination-label {
+  .museum-hub__destination-label,
+  .museum-hub__hotspot-frame,
+  .museum-hub__hotspot-label {
     transition: none;
   }
 }

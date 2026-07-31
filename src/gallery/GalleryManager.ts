@@ -1457,6 +1457,35 @@ export class GalleryManager {
     return this.currentIndex;
   }
 
+  /**
+   * v0.79 — hub hotspot readiness gate. Resolves `'ready'` as soon as the
+   * artwork at `index` reaches an interactive surface (`materialApplied` and
+   * `shaderCompiled` in the existing readiness ledger), or `'timeout'` after
+   * `timeoutMs`. Never rejects and never blocks entry: the procedural
+   * fallback material guarantees a paintable surface on timeout.
+   */
+  whenArtworkInteractive(index: number, timeoutMs: number): Promise<'ready' | 'timeout'> {
+    const entry = this.readiness[index];
+    if (!entry) return Promise.resolve('timeout');
+    const isInteractive = (): boolean => entry.materialApplied && entry.shaderCompiled;
+    if (isInteractive()) return Promise.resolve('ready');
+    return new Promise((resolve) => {
+      const startedAt = this.now();
+      const poll = (): void => {
+        if (isInteractive()) {
+          resolve('ready');
+          return;
+        }
+        if (this.now() - startedAt >= timeoutMs) {
+          resolve('timeout');
+          return;
+        }
+        window.setTimeout(poll, 50);
+      };
+      window.setTimeout(poll, 50);
+    });
+  }
+
   get artworkAspect(): number {
     return this.artworkMesh.artworkAspect;
   }

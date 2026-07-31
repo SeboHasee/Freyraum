@@ -16,6 +16,12 @@ export class KeyboardNav {
   private fullscreenTarget: HTMLElement = document.documentElement;
   private enabled = true;
 
+  /**
+   * v0.79 — wired by main.ts to navigate back to the museum hub. Only invoked
+   * when no dialog/panel/fullscreen state consumes Escape first.
+   */
+  onEscape: (() => void) | undefined;
+
   constructor(
     galleryManager: GalleryManager,
     keyboardHelp?: { open(opener?: HTMLElement): void }
@@ -72,6 +78,12 @@ export class KeyboardNav {
       case '?':
         e.preventDefault();
         this.keyboardHelp?.open();
+        break;
+      case 'Escape':
+        // Fullscreen exit owns Escape natively; dialog/panel guards live in
+        // the main.ts callback so component internals stay encapsulated.
+        if (document.fullscreenElement) break;
+        this.onEscape?.();
         break;
     }
   };

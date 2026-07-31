@@ -26,6 +26,7 @@ import { KeyboardNav } from './interaction/KeyboardNav';
 import { KeyboardHelp } from './ui/KeyboardHelp';
 import { CanvasInteraction } from './interaction/CanvasInteraction';
 import { MainMuseumHub } from './hub/MainMuseumHub';
+import { resolveHubHotspots } from './config/hubHotspots';
 import { DestinationRouter } from './navigation/DestinationRouter';
 import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
 import { PreferencesStore } from './utils/preferences';
@@ -583,6 +584,21 @@ async function main(): Promise<void> {
     withoutWebglImage: artworkManifest.filter((a) => !a.hasWebglImage).length,
   });
 
+  // v0.79 — hub hotspot config: injected customer JSON → built-in default
+  // table → order-derived hotspots. Resolved once against the active
+  // artwork manifest; unresolved IDs use fallback_to_gallery_default.
+  const injectedHotspots = (window as unknown as { __FREYRAUM_HUB_HOTSPOTS?: unknown })
+    .__FREYRAUM_HUB_HOTSPOTS;
+  const hubHotspotResolution = resolveHubHotspots(artworks, injectedHotspots);
+  diagnostics.info('boot', 'hub-hotspots-resolved', 'Hub hotspot configuration resolved', {
+    source: hubHotspotResolution.source,
+    count: hubHotspotResolution.hotspots.length,
+    rejected: hubHotspotResolution.rejected,
+    unresolved: hubHotspotResolution.hotspots
+      .filter((h) => h.artworkIndex < 0)
+      .map((h) => ({ slot: h.slot, artworkId: h.artworkId })),
+  });
+
   const injectedAudio = (window as unknown as { __FREYRAUM_AUDIO?: unknown }).__FREYRAUM_AUDIO;
   const customerAudio = sanitizeInjectedAudio(injectedAudio, diagnostics);
   backgroundAudio.load(customerAudio);
@@ -816,7 +832,7 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
-  const museumHub = new MainMuseumHub(app);
+  const museumHub = new MainMuseumHub(app, hubHotspotResolution.hotspots);
   const unsubscribeAudioState = backgroundAudio.subscribe((state) => {
     preferencesPanel.setAudioStatusMessage(state.message);
   });
@@ -1689,6 +1705,55 @@ async function main(): Promise<void> {
   museumHub.onActivate(() => {
     void destinationRouter.navigate('gallery');
   });
+
+  // v0.79 — hub hotspot selection: valid mapping jumps the gallery to the
+  // target artwork behind a 1500 ms readiness gate; missing/invalid IDs use
+  // fallback_to_gallery_default (enter at the gallery's current index).
+  const HUB_HOTSPOT_READINESS_TIMEOUT_MS = 1500;
+  museumHub.onSelectArtwork((hotspot) => {
+    if (hotspot.artworkIndex < 0) {
+      diagnostics.warn('navigation', 'hub-hotspot-fallback', 'Hub hotspot artwork unresolved; falling back to gallery default', {
+        slot: hotspot.slot,
+        artworkId: hotspot.artworkId,
+        behavior: 'fallback_to_gallery_default',
+        galleryIndex: galleryManager.index,
+      });
+      void destinationRouter.navigate('gallery');
+      return;
+    }
+    diagnostics.info('navigation', 'hub-hotspot-select', 'Hub hotspot selected', {
+      slot: hotspot.slot,
+      artworkId: hotspot.artworkId,
+      artworkIndex: hotspot.artworkIndex,
+    });
+    galleryManager.goTo(hotspot.artworkIndex);
+    galleryManager.promotePrefetchWindow(hotspot.artworkIndex, 'hub-hotspot');
+    void galleryManager
+      .whenArtworkInteractive(hotspot.artworkIndex, HUB_HOTSPOT_READINESS_TIMEOUT_MS)
+      .then((verdict) => {
+        if (verdict === 'timeout') {
+          diagnostics.warn('navigation', 'hub-hotspot-readiness-timeout', 'Hub hotspot readiness gate timed out; entering with procedural surface', {
+            slot: hotspot.slot,
+            artworkId: hotspot.artworkId,
+            timeoutMs: HUB_HOTSPOT_READINESS_TIMEOUT_MS,
+          });
+        }
+        void destinationRouter.navigate('gallery');
+      });
+  });
+
+  // v0.79 — back navigation to the museum hub: Topbar "Museum" button and
+  // Escape (only when no dialog/panel consumes it and no fullscreen is
+  // active — KeyboardNav already skips Escape during fullscreen).
+  const navigateBackToHub = (): void => {
+    void destinationRouter.navigate('hub');
+  };
+  topbar.onBackClick = navigateBackToHub;
+  keyboardNav.onEscape = () => {
+    if (document.querySelector('.keyboard-help:not([hidden])')) return;
+    if (document.querySelector('.prefs__panel:not([hidden])')) return;
+    navigateBackToHub();
+  };
 
   // Animation loop
   const animate = (now: number): void => {

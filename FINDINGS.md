@@ -1,5 +1,27 @@
 # FINDINGS
 
+## Hub hotspot navigation decisions (2026-07-31)
+
+1. `.museum-hub__visual` is a fixed 16:9 content box with `object-fit: fill`,
+   so normalized hotspot coordinates map 1:1 to CSS percentages inside the
+   visual — no `object-fit: cover` inversion and no image-pixel reads are
+   needed. The existing `.museum-hub__destination` button already uses this
+   percentage-positioning pattern.
+2. Slot→artwork mapping resolves by artwork ID string (importer IDs are
+   `normalizeId(stem)` + `uniqueId`, e.g. `Akt 27.png` → `akt-27`), so
+   customer re-imports do not silently shift hotspot targets. `@order:<n>`
+   covers customers who prefer positional mapping.
+3. The readiness gate reuses the existing 6-stage ledger: `materialApplied &&
+   shaderCompiled` is the minimal interactive contract, and the 1500 ms
+   timeout is safe because the procedural fallback material always provides a
+   paintable surface (`GalleryManager.whenArtworkInteractive`).
+4. Injection reuses the Option-C pattern: hotspots are appended to
+   `customer-preview/customer-artworks.js` as `window.__FREYRAUM_HUB_HOTSPOTS`,
+   so no new script tag, sync entry, or cache-busting path is required.
+5. Escape-to-hub must be guarded in `main.ts` (open keyboard-help/preferences
+   panels, `document.fullscreenElement`) because existing Escape handlers do
+   not call `preventDefault`/`stopPropagation`.
+
 ## Main Museum Hub decisions (2026-07-31)
 
 1. The lowest-risk integration point is after existing gallery readiness and

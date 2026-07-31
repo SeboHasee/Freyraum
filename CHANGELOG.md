@@ -1,5 +1,36 @@
 # CHANGELOG
-> Latest markdown audit: 2026-07-31 (Main Museum Hub implementation).
+> Latest markdown audit: 2026-07-31 (Hub hotspot navigation).
+
+## v0.79 — Hub Hotspot Navigation (2026-07-31)
+
+### Summary
+
+- Added artwork hotspots to the Main Museum Hub: stable slots (`slot-1 … N`)
+  map to artwork IDs via one editable config model
+  (`src/config/hubHotspots.ts`), with a customer override in
+  `customer-artworks/hub-hotspots.json` injected as
+  `window.__FREYRAUM_HUB_HOTSPOTS` by the importer.
+- Hotspot coordinates are normalized `(cx, cy, w, h)` relative to the hub
+  image content box; defaults derive from wall-band/manifest-aspect formulas —
+  no image pixels are read.
+- Valid hotspot clicks jump the gallery to the target artwork behind a
+  1500 ms readiness gate (`materialApplied && shaderCompiled`), then enter;
+  timeout entry proceeds on the procedural surface. Missing/invalid IDs use
+  `fallback_to_gallery_default` (gallery opens at its current index).
+- Added back navigation to the hub: Topbar "Museum" button and guarded Escape.
+- Added the `--museum-wall-light: #ECEBE8` background token for the hub base
+  fill, image-error state, and hotspot focus-ring backdrop.
+- Added a non-dev hotspot calibration mode (config query flag; documented in
+  `docs/QUERY_PARAMETERS.md`) with drag/resize and a JSON copy panel.
+
+### Validation
+
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `node --check scripts/import-artworks.mjs` ✅
 
 ## v0.78 — Main Museum Hub (2026-07-31)
 

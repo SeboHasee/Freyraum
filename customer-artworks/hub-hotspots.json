@@ -1,0 +1,18 @@
+[
+  {
+    "slot": "slot-1",
+    "artworkId": "akt-27",
+    "cx": 0.28,
+    "cy": 0.46,
+    "w": 0.3,
+    "h": 0.28
+  },
+  {
+    "slot": "slot-2",
+    "artworkId": "fraktal",
+    "cx": 0.72,
+    "cy": 0.46,
+    "w": 0.3,
+    "h": 0.28
+  }
+]

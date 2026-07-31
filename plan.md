@@ -1,5 +1,40 @@
 # FREYRAUM Plan
 
+## Completed — Hub Hotspot Navigation (2026-07-31)
+
+### Decisions
+
+- Hub hotspots map stable ordinal slots (`slot-1 … slot-N`) to artwork IDs by
+  exact ID string (never by index), with `@order:<n>` as an opt-in positional
+  alias. One editable config model lives in `src/config/hubHotspots.ts`; the
+  customer override is `customer-artworks/hub-hotspots.json`, injected as
+  `window.__FREYRAUM_HUB_HOTSPOTS` by `scripts/import-artworks.mjs`.
+- Hotspot coordinates are normalized `(cx, cy, w, h)` in `[0, 1]` relative to
+  the hub image content box (`.museum-hub__visual` is a fixed 16:9 box with
+  `object-fit: fill`, so CSS percentages map 1:1 — no image pixels are read).
+  Defaults derive deterministically from the wall-band formula and manifest
+  aspect metadata; unmatched manifests fall back to order-derived hotspots.
+- Missing/invalid artwork IDs use `fallback_to_gallery_default`: the slot stays
+  visible and clicking it enters the gallery at its current index with a
+  `hub-hotspot-fallback` diagnostic. Nothing blocks or error-screens.
+- Valid selections jump the gallery via `goTo` + prefetch promotion behind a
+  readiness gate (`materialApplied && shaderCompiled`, 1500 ms timeout, then
+  entry proceeds on the procedural surface with a
+  `hub-hotspot-readiness-timeout` diagnostic).
+- Back navigation: Topbar "Museum" button and Escape (guarded against open
+  dialogs/panels and fullscreen) route through `destinationRouter.navigate('hub')`.
+- Background token `--museum-wall-light: #ECEBE8` is the hub base fill
+  (letterbox area, image-error state, hotspot focus-ring backdrop).
+- Non-dev calibration: a config query flag (see `docs/QUERY_PARAMETERS.md`)
+  enables drag-to-move / corner-resize with a live JSON copy panel that
+  round-trips into `customer-artworks/hub-hotspots.json`.
+
+### Validation boundary
+
+- Hotspot coordinates were derived from scene/layout data and manifest
+  metadata only; fine placement against the hub photograph is expected to go
+  through the calibration flow, not code changes.
+
 ## Completed — Main Museum Hub (2026-07-31)
 
 ### Decisions
