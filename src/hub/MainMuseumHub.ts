@@ -1,10 +1,14 @@
 import type { ResolvedHubHotspot } from '../config/hubHotspots';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 
-const HUB_IMAGE_URL =
-  'https://github.com/user-attachments/assets/c52252f4-64fc-4fa6-80da-8ae1a7031459';
-const HUB_IMAGE_FALLBACK_URL =
-  'https://github.com/user-attachments/assets/2f42c69d-b6b2-4c3c-9044-a3477900657c';
+const HUB_IMAGE_URL = new URL(
+  '../../customer-artworks/Backgrounds/museum-target.png',
+  import.meta.url
+).href;
+const HUB_IMAGE_FALLBACK_URL = new URL(
+  '../../customer-artworks/Backgrounds/museum-empty.png',
+  import.meta.url
+).href;
 const HUB_IMAGE_TIMEOUT_MS = 5000;
 
 const percent = (value: number): string => `${(value * 100).toFixed(3)}%`;
@@ -138,6 +142,7 @@ export class MainMuseumHub {
     this.entryButton.addEventListener('click', this.handleActivate);
 
     this.buildHotspots();
+    this.entryButton.hidden = this.hotspotButtons.length > 0;
     if (this.calibrating) this.buildCalibrationPanel(hub);
   }
 
@@ -159,7 +164,7 @@ export class MainMuseumHub {
     this.element.classList.remove('is-exiting');
     this.setButtonsDisabled(false);
     this.status.textContent = '';
-    requestAnimationFrame(() => this.entryButton.focus({ preventScroll: true }));
+    requestAnimationFrame(() => this.focusInitialTarget());
   }
 
   async exit(reducedMotion: boolean): Promise<void> {
@@ -179,12 +184,16 @@ export class MainMuseumHub {
     this.element.classList.remove('is-exiting');
     this.setButtonsDisabled(false);
     this.status.textContent = 'Die Ausstellung konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.';
-    this.entryButton.focus({ preventScroll: true });
+    this.focusInitialTarget();
   }
 
   private setButtonsDisabled(disabled: boolean): void {
     this.entryButton.disabled = disabled;
     for (const button of this.hotspotButtons) button.disabled = disabled;
+  }
+
+  private focusInitialTarget(): void {
+    (this.hotspotButtons[0] ?? this.entryButton).focus({ preventScroll: true });
   }
 
   private handleActivate = (): void => {

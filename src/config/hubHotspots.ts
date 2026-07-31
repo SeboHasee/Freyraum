@@ -66,15 +66,15 @@ const WALL_H = 0.28;
 const DERIVED_SLOT_CAP = 6;
 
 /**
- * First-pass hotspot table for the built-in artwork set. Coordinates were
- * derived deterministically from the wall-band formula and per-artwork aspect
- * metadata in `src/config/artworks.ts` — never from image pixels.
+ * Calibrated hotspot table for the built-in artwork set. Coordinates follow
+ * the supplied 16:9 museum visual; the local background file is not read by
+ * the calibration workflow.
  */
 export const HUB_HOTSPOT_DEFAULTS: readonly HubHotspot[] = [
-  { slot: 'slot-1', artworkId: 'electric-storm', cx: 0.17, cy: WALL_CY, w: 0.155, h: WALL_H },
-  { slot: 'slot-2', artworkId: 'quiet-coastline', cx: 0.39, cy: WALL_CY, w: 0.155, h: WALL_H },
-  { slot: 'slot-3', artworkId: 'tokyo-passage', cx: 0.61, cy: WALL_CY, w: 0.12, h: WALL_H },
-  { slot: 'slot-4', artworkId: 'golden-desert', cx: 0.83, cy: WALL_CY, w: 0.155, h: WALL_H },
+  { slot: 'slot-1', artworkId: 'electric-storm', cx: 0.185, cy: 0.514, w: 0.056, h: 0.207 },
+  { slot: 'slot-2', artworkId: 'quiet-coastline', cx: 0.381, cy: 0.514, w: 0.095, h: 0.158 },
+  { slot: 'slot-3', artworkId: 'tokyo-passage', cx: 0.625, cy: 0.515, w: 0.098, h: 0.16 },
+  { slot: 'slot-4', artworkId: 'golden-desert', cx: 0.819, cy: 0.515, w: 0.045, h: 0.173 },
 ];
 
 const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
