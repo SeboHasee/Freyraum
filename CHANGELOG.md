@@ -1,5 +1,74 @@
 # CHANGELOG
-> Latest markdown audit: 2026-07-31 (Hub visual reliability closure).
+> Latest markdown audit: 2026-07-31 (Manifest-driven museum hub composition).
+
+## v0.81 — Manifest-Driven Museum Hub Composition (2026-07-31)
+
+### Summary
+
+- Replaced the baked `museum-target.png` hub with a manifest-driven DOM
+  composition over `museum-empty.png`: every active artwork renders as a real
+  responsive image inside its own framed native button, so visual bounds and
+  hit bounds cannot drift. `museum-target.png` remains in the repository as a
+  calibration reference but is no longer shipped to `public/`/`dist/`.
+- Introduced the unified customer configuration
+  `customer-artworks/museum-hub.json` (version, background, visual tokens,
+  frame presets, fallbacks, slots) injected as `window.__FREYRAUM_MUSEUM_HUB`;
+  the legacy `hub-hotspots.json` array still works through automatic migration
+  with a deprecation warning.
+- New exact-ID resolver (`src/config/museumHub.ts`): explicit mappings win,
+  unmapped active artworks auto-place by aspect class then stable ID order,
+  overflow paginates into additional room pages (four slots per page, no
+  six-artwork cap). Invalid or duplicate mappings disable the slot — they can
+  never open another artwork. Missing image data shows a neutral placeholder
+  bound to the same exact target. Zero valid slots exposes one generic
+  gallery-entry action.
+- Frames use shared static CSS material presets (matte charcoal default, warm
+  oak and dark anodized aluminum optional): roughness/metalness metadata is
+  translated once into highlight/shadow strengths; perspective, bevel,
+  recessed aperture, and wall-specific static shadows add zero WebGL draw
+  calls and no continuous renders.
+- Gallery selection is ID-based with a selection generation token: duplicate
+  clicks and stale readiness completions cannot change the destination, and
+  the 1500 ms readiness fallback (`albedoLoaded && materialApplied &&
+  shaderCompiled` preferred) opens the exact requested work procedurally.
+- Hub preparation (background fetch + first-page artwork decode + slot layout)
+  completes under the loading overlay as the final weighted progress step;
+  later room pages decode during idle time and that work cancels when a
+  gallery transition begins.
+- Rolled out the museum-grey wall token `#E2E4E3` as authoritative
+  `--color-gallery-wall` (with `--color-museum-wall` defaulting to it and
+  customer-overridable): CSS surfaces, hub gradients (no near-white radial),
+  local preview shell, and the WebGL clear color all resolve from one token
+  before renderer construction.
+- Redesigned the back control: first position in the left topbar group with a
+  dedicated `topbar__back-btn` class and lifecycle, 48 px dark filled surface
+  with "Zurück zum Museum" (arrow + "Museum" on phones), dual-contrast 3 px
+  focus ring, busy/disabled state during transitions, and visibility in clean,
+  visible, and presentation chrome modes. The topbar now uses grid regions so
+  the control cannot collide with the right utility cluster.
+- Narrow-portrait viewports (aspect below 4:5) split each room page into
+  left/right wall focus pages with arrows, swipe, counter, and keyboard
+  navigation; off-wall frames leave the actionable set entirely. Returning to
+  the hub preserves its page and restores focus to the originating slot.
+- Calibration mode (`?hubCalibrate=1`) now manipulates the actual frame bounds
+  and exports the complete `museum-hub.json` schema.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `node --check scripts/import-artworks.mjs` / `node --check scripts/sync-customer-public.mjs` ✅
+- Browser matrix: hub composition renders both customer works over the empty
+  room; slot click, timeline state, info panel, and gallery `Artwork.id` agree
+  for both slots; back button and guarded Escape return with focus restored to
+  the originating slot; wall-focus pages ("Linke/Rechte Wand") navigate with
+  correct pager disabled states; phone tier shows the short "Museum" label ✅
+- Shipped hub-background transfer drops from ~16.2 MB (two PNGs) to ~10.7 MB
+  (empty room only); artwork images reuse browser-cached manifest URLs ✅
 
 ## v0.80 — Hub Visual Reliability Closure (2026-07-31)
 

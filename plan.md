@@ -1,5 +1,74 @@
 # FREYRAUM Plan
 
+## Completed — Manifest-Driven Museum Hub Composition (v0.81, 2026-07-31)
+
+### Decisions
+
+- The hub is a DOM composition: `museum-empty.png` is the only runtime room
+  image and every active `Artwork.id` receives exactly one selectable framed
+  slot unless explicitly disabled. The complete visible frame is one native
+  `<button>` (visual bounds = hit bounds). No second WebGL scene: frames use
+  shared static CSS material presets and perspective transforms, with
+  roughness/metalness translated once into highlight/shadow strengths so a
+  future WebGL upgrade stays possible.
+- One customer configuration: `customer-artworks/museum-hub.json`
+  (`window.__FREYRAUM_MUSEUM_HUB` via the existing generated customer script).
+  The v0.79/v0.80 `hub-hotspots.json` array is temporarily migrated with a
+  deprecation warning; `src/config/hubHotspots.ts` was replaced by
+  `src/config/museumHub.ts`.
+- Resolution contract: exact `Artwork.id` values are authoritative and produce
+  immutable slot→artwork / artwork→slot maps. Explicit mappings first,
+  deterministic aspect-aware placement second (portrait/landscape/
+  square/panoramic intended-use matching, then stable ID order), paginated
+  overflow last (`room-NN.*` page-qualified slot IDs, four per page, no cap).
+  Duplicate slot IDs / duplicate artwork mappings are rejected; invalid
+  explicit mappings disable that slot and never open another artwork; missing
+  image data shows a neutral placeholder retaining the exact valid target;
+  zero valid slots exposes one generic gallery-entry action.
+- Selection is ID-based with a generation/abort token owned by the hub
+  controller in `main.ts`: the target ID resolves again on activation, its
+  albedo/PBR work is promoted to the critical queue, readiness prefers
+  `albedoLoaded && materialApplied && shaderCompiled`, and the 1500 ms timeout
+  enters the same exact target with its procedural surface. Stale completions
+  are ignored; there is no fallback to the gallery's previous/current artwork.
+- The design coordinate space stays exact 1366:768 (`--hub-aspect` from config)
+  with `contain`-fit artwork inside apertures; centers align to the eye-level
+  band (`cy ≈ 0.515`); the customer profile maps `fraktal` to
+  `room-01.wall-left.outer` and `akt-27` to `room-01.wall-right.inner`, and the
+  built-in fallback maps all four defaults across the baseline inventory (the
+  fourth slot is a panoramic placement over the empty right wall).
+- `#E2E4E3` is the final wall color: `--color-gallery-wall` is authoritative,
+  `--color-museum-wall` defaults to it (validated customer override allowed via
+  `visualTokens`), hub edge gradients derive from the token, and the resolved
+  value is passed into `RendererManager` (no independent `0xeef1f3`). The
+  loading screen intentionally stays dark.
+- Back control: first in the left topbar grid region, dedicated
+  `topbar__back-btn` class/lifecycle (never shares chrome-btn hide rules),
+  48 px dark filled desktop surface / 44–48 px phone target with short
+  "Museum" label, dual-contrast 3 px focus ring, `aria-label="Zurück zum
+  Museum"`, busy/disabled state during navigation, visible in clean, visible,
+  and presentation modes. Return runs through one idempotent router action
+  shared with guarded Escape and restores focus to the source hub slot.
+- Loading: hub preparation starts at construction (parallel with gallery
+  startup); background + first-page decode complete under the overlay as the
+  final weighted progress step; later pages decode via idle callbacks that
+  cancel when a gallery transition begins; `museum-target.png` is excluded
+  from the public sync (reference asset only).
+- Narrow portrait (aspect < 4:5) splits room pages into wall-focus views
+  driven purely by CSS custom-property transforms on the one shared visual
+  box; off-wall frames leave the actionable set (`is-off-wall`). Resize only
+  recalculates the shared transform in a debounced animation frame.
+
+### Validation boundary
+
+- Automated: importer, doc-authority, lint, typecheck, build, frame-budget,
+  script syntax checks. Browser matrix: exact-ID routing for both customer
+  slots, back/Escape focus restoration, wall-focus paging, phone labels,
+  token reach (CSS custom property + body gradient + renderer parameter).
+- Future-only: responsive AVIF/WebP hub derivatives (current assets are the
+  committed PNG masters), automated projected-bound screenshot matrix, and a
+  WebGL frame-material upgrade path.
+
 ## Completed — Hub Visual Reliability Closure (2026-07-31)
 
 ### Decisions

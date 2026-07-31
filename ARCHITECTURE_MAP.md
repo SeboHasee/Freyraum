@@ -18,6 +18,15 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - Painting and frame material behavior, procedural texture generation
 - `src/config/`
   - Startup and quality/runtime config models
+  - `museumHub.ts`: unified museum-hub schema, sanitizer, legacy-hotspot
+    migration, exact-ID slot resolver (auto-placement + paginated overflow),
+    frame presets, and visual-token resolution
+- `src/hub/`
+  - `MainMuseumHub`: manifest-driven DOM composition over the empty room
+    photo — framed artwork buttons, room/wall paging, idle later-page decode,
+    and the frame calibration mode
+- `src/navigation/`
+  - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
   - UI controls, timeline, interaction handling
 - `src/utils/`
@@ -27,10 +36,14 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 
 ## Startup sequence ownership
 
-1. `main.ts` resolves startup mode and initializes managers.
+1. `main.ts` resolves startup mode, the museum-hub configuration
+   (`resolveMuseumHub`: injected → legacy-migrated → built-in), and the wall
+   visual tokens, then initializes managers with the resolved wall color.
 2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
 3. `RendererManager` prewarms renderer pipeline.
-4. UI entry flow continues after readiness gates are satisfied.
+4. `MainMuseumHub` prepares the hub (background + first-page artwork decode)
+   under the loading overlay via `DestinationRouter.startAt('hub')`.
+5. UI entry flow continues after readiness gates are satisfied.
 
 ## Render-loop behavior
 

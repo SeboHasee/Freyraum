@@ -1,5 +1,46 @@
 # FINDINGS
 
+## Manifest-driven hub composition findings (v0.81, 2026-07-31)
+
+1. Hotspots layered over a baked room photograph and DOM frames composing real
+   artwork images cannot coexist: the baked pixels always drift from the
+   manifest. Composition over `museum-empty.png` makes the manifest the single
+   source of truth, and making the whole visible frame one native `<button>`
+   removes the visual-bounds/hit-bounds drift class entirely.
+2. Injected non-empty configurations must merge with coverage invariants, not
+   replace defaults: unmapped active artworks are auto-placed (aspect class →
+   intended use, then stable ID order) and overflow paginates. The former
+   six-artwork derivation cap silently orphaned works; the resolver now scales
+   `ceil(N / 4)` pages with page-qualified `room-NN.*` slot IDs.
+3. Selection readiness must be target-specific and generation-guarded. The
+   previous timeout path opened the gallery's *current* index, which could show
+   the wrong artwork after rapid clicks; the exact-ID controller re-resolves
+   the target on activation, ignores stale completions, and the 1500 ms
+   fallback opens the same exact target with its procedural surface.
+4. `roughness`/`metalness` can stay canonical material metadata for DOM frames
+   when translated once into `--frame-highlight`/`--frame-shadow` strengths
+   (`frameMaterialStrengths`). Static wall-specific light direction
+   (`--frame-light-x`) fakes coherent room lighting without animation, extra
+   draw calls, or per-slot styles.
+5. A wall color used by both CSS and WebGL must resolve before renderer
+   construction: `resolveMuseumHub` produces validated visual tokens, main.ts
+   writes them to CSS custom properties, and `RendererManager` receives the
+   same string — hex drift like `#eef1f3` vs `#ecebe8` cannot recur. The
+   `#eef1f3` inside `artworks.ts` is artwork SVG content, not a wall surface,
+   and intentionally stays.
+6. Buttons re-enabled after a transition must recompute contextual disabled
+   state (pager arrows at range edges), not blanket-enable. Presentation-mode
+   opacity on a parent cannot be overridden by a child, so the always-visible
+   back control requires fading sibling groups (`topbar__brand-group`,
+   `topbar__right`) instead of the whole `.topbar`.
+7. In narrow wall-focus views, the scaled shared visual keeps edge slivers of
+   the other wall inside the viewport; those frames must leave the actionable
+   set (`is-off-wall`: `visibility: hidden` + `pointer-events: none`) or they
+   become misleading partial targets.
+8. `customer-preview/audio/` was generated importer output missing from
+   `.gitignore` (unlike `images/`); importer runs on clean machines would
+   otherwise commit customer audio artifacts.
+
 ## Hub visual reliability findings (2026-07-31)
 
 1. GitHub user-attachment URLs are not a reliable production asset contract.

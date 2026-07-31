@@ -40,16 +40,21 @@ Notes:
 
 ### `?hubCalibrate=1`
 
-Hub hotspot calibration mode (`src/hub/MainMuseumHub.ts`).
+Museum-hub frame calibration mode (`src/hub/MainMuseumHub.ts`).
 
 Notes:
-- Outlines every hub hotspot with a dashed border and slot label.
-- Drag a hotspot to move it; drag the corner handle to resize it.
-- On release, the updated config JSON appears in the on-screen copy panel and
-  is logged via diagnostics.
-- Paste the JSON into `customer-artworks/hub-hotspots.json` and re-run the
+- Outlines every framed artwork slot with a dashed border and slot label.
+- Drag a frame to move it; drag the corner handle to resize it. Calibration
+  manipulates the actual frame bounds, so what you see is what ships.
+- On release, the complete `museum-hub.json` schema (version, background,
+  visual tokens, frame presets, fallbacks, slots) appears in the on-screen
+  copy panel and is logged via diagnostics.
+- Paste the JSON into `customer-artworks/museum-hub.json` and re-run the
   gallery update (`npm run import:artworks`) to apply it.
-- Hotspot navigation is disabled while calibrating.
+- The legacy `customer-artworks/hub-hotspots.json` array is still migrated
+  automatically with a deprecation warning; new exports always use the
+  unified `museum-hub.json` format.
+- Slot/page navigation is disabled while calibrating.
 
 ## localStorage keys
 

@@ -47,8 +47,8 @@ Surface: Ölfarbe auf grober Leinwand
 ## Related docs
 
 - Picture workflow: `docs/CUSTOMER_PICTURE_GUIDE.md`
-- Hub hotspot mapping: `customer-artworks/hub-hotspots.json` (slots → artwork
-  IDs and normalized coordinates; see the canonical config reference for the
-  on-screen calibration workflow)
+- Museum hub mapping: `customer-artworks/museum-hub.json` (framed slots →
+  artwork IDs, normalized placement, visual tokens, frame presets; see the
+  canonical config reference for the on-screen calibration workflow)
 - Canonical config reference: `docs/QUERY_PARAMETERS.md`
 - Historical release context: `CHANGELOG.md`
