@@ -584,7 +584,7 @@ async function main(): Promise<void> {
     withoutWebglImage: artworkManifest.filter((a) => !a.hasWebglImage).length,
   });
 
-  // v0.80 — unified museum-hub configuration: injected customer
+  // v0.81 — unified museum-hub configuration: injected customer
   // `museum-hub.json` → migrated legacy hotspot array → built-in default.
   // Resolved once against the active artwork manifest with exact-ID maps,
   // full-manifest coverage, and paginated overflow (no slot cap).
@@ -605,7 +605,7 @@ async function main(): Promise<void> {
     warnings: museumHubResolution.warnings,
   });
 
-  // v0.80 — central visual-token resolver: one resolved wall color reaches
+  // v0.81 — central visual-token resolver: one resolved wall color reaches
   // CSS custom properties and the WebGL clear color before renderer
   // construction. Validated customer overrides come from museum-hub.json.
   const visualTokens = museumHubResolution.visualTokens;
@@ -1721,7 +1721,7 @@ async function main(): Promise<void> {
     void destinationRouter.navigate('gallery');
   });
 
-  // v0.80 — exact-ID selection controller. The slot's artwork ID is resolved
+  // v0.81 — exact-ID selection controller. The slot's artwork ID is resolved
   // again on activation against an immutable ID→index map; the readiness gate
   // prefers `albedoLoaded && materialApplied && shaderCompiled` and falls back
   // after the configured timeout to the same exact target with its procedural
@@ -1780,7 +1780,7 @@ async function main(): Promise<void> {
       });
   });
 
-  // v0.80 — back navigation to the museum hub: promoted Topbar control and
+  // v0.81 — back navigation to the museum hub: promoted Topbar control and
   // guarded Escape share one idempotent router action. The hub keeps its page
   // state and restores focus to the originating slot. During navigation the
   // control exposes a busy/disabled state to suppress duplicate activation.
@@ -1902,7 +1902,7 @@ async function main(): Promise<void> {
   });
 
   artworkMesh.group.visible = false;
-  // v0.80 — hub base fetch + first-page artwork decode + slot layout complete
+  // v0.81 — hub base fetch + first-page artwork decode + slot layout complete
   // under the overlay (the last weighted progress step), so the first hub
   // paint has zero image pop-in and zero layout shift after reveal.
   loadingOverlay.setStatus('Museum wird vorbereitet');

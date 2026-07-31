@@ -135,12 +135,19 @@ jobs:
             echo "Error: dist/index.html is missing." >&2
             exit 1
           fi
-          for background in museum-target.png museum-empty.png; do
+          # v0.81: museum-empty.png is the only shipped runtime room image;
+          # museum-target.png stays in the repo as a calibration reference and
+          # is intentionally excluded from public/ and dist/.
+          for background in museum-empty.png; do
             if [ ! -f "dist/backgrounds/${background}" ]; then
               echo "Error: dist/backgrounds/${background} is missing." >&2
               exit 1
             fi
           done
+          if [ -f dist/backgrounds/museum-target.png ]; then
+            echo "Error: dist/backgrounds/museum-target.png must not be shipped (reference asset only)." >&2
+            exit 1
+          fi
 
       - name: Validate dist assets
         run: |

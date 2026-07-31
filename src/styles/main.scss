@@ -17,7 +17,7 @@
 
 :root {
   // Surfaces
-  // v0.80 — authoritative museum-grey wall tokens (final pick #E2E4E3).
+  // v0.81 — authoritative museum-grey wall tokens (final pick #E2E4E3).
   // `--color-gallery-wall` is the active token for every gallery/hub wall
   // surface and the WebGL clear color (RendererManager receives the same
   // resolved value from main.ts). `--color-museum-wall` defaults to the same
@@ -786,7 +786,7 @@ button {
   right: 0;
   height: calc(72px + var(--safe-top));
   padding: var(--safe-top) calc(36px + var(--safe-right)) 0 calc(36px + var(--safe-left));
-  // v0.80 — grid regions (left navigation+brand | spacer | right utilities)
+  // v0.81 — grid regions (left navigation+brand | spacer | right utilities)
   // so the back action can never collide with Info/Help or the viewport edge.
   display: grid;
   grid-template-columns: minmax(0, auto) 1fr auto;
@@ -2268,7 +2268,7 @@ button {
 // =============================================================================
 // Presentation / fullscreen mode polish
 // =============================================================================
-// v0.80 — the back-to-museum action stays visible in presentation mode; only
+// v0.81 — the back-to-museum action stays visible in presentation mode; only
 // brand and utility clusters fade out (they reveal again on hover/focus).
 :root[data-presentation='on'] {
   .topbar__brand-group,
@@ -3004,7 +3004,7 @@ button {
   display: none;
 }
 
-// v0.80 — primary "Zurück zum Museum" action. Dedicated class and lifecycle:
+// v0.81 — primary "Zurück zum Museum" action. Dedicated class and lifecycle:
 // it never shares the chrome-btn hide rules, stays visible in clean-chrome,
 // visible-chrome, and presentation modes, and sits first in the left topbar
 // region so it cannot collide with the right utility cluster.

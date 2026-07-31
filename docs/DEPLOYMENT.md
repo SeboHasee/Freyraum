@@ -36,7 +36,8 @@ This does exactly what `Update Gallery.bat` / `Update Gallery.command` does,
 and additionally syncs the generated output to `public/` so a local
 `npm run build` or `npm run dev` includes your assets. The same sync copies the
 committed museum backgrounds from `customer-artworks/Backgrounds/` to
-`public/backgrounds/`.
+`public/backgrounds/` (`museum-target.png` is excluded — it is a calibration
+reference asset, not a shipped runtime background).
 
 Open `customer-preview/app.html` to verify the local preview looks correct
 before publishing.
@@ -91,7 +92,7 @@ The live gallery is updated within ~2 minutes of a successful push.
 | All manifest images present in `dist/images/` | `images … absent from dist/images/` |
 | Audio sources linked → `dist/audio/` non-empty | `dist/audio/ is empty or missing` |
 | Build produces `dist/index.html` | `dist/index.html is missing` |
-| Both hub backgrounds reach `dist/backgrounds/` | `dist/backgrounds/… is missing` |
+| Hub room background reaches `dist/backgrounds/` (and `museum-target.png` stays excluded) | `dist/backgrounds/… is missing` |
 
 Each successful workflow run also writes a **CI diagnostic summary** to the
 job summary page (visible on the Actions run page) with:

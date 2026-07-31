@@ -20,7 +20,7 @@ export class Topbar {
     const leftGroup = document.createElement('div');
     leftGroup.className = 'topbar__left';
 
-    // v0.80 — primary back-to-hub navigation. Dedicated class and lifecycle
+    // v0.81 — primary back-to-hub navigation. Dedicated class and lifecycle
     // (not a `topbar__chrome-btn`): it stays visible in clean-chrome,
     // visible-chrome, and presentation modes, and is first in the gallery
     // focus order after the canvas. DestinationRouter handles the transition.
@@ -76,7 +76,7 @@ export class Topbar {
   }
 
   /**
-   * v0.80 — busy/disabled state while a hub↔gallery transition runs, so
+   * v0.81 — busy/disabled state while a hub↔gallery transition runs, so
    * duplicate activations are suppressed and assistive tech sees the state.
    */
   setBackBusy(busy: boolean): void {

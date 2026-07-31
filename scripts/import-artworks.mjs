@@ -727,7 +727,7 @@ try {
 
 writeFileSync(MANIFEST_JSON, JSON.stringify(artworks, null, 2) + '\n', 'utf8');
 
-// v0.80 — unified customer museum-hub configuration. When
+// v0.81 — unified customer museum-hub configuration. When
 // `customer-artworks/museum-hub.json` exists and parses as an object, it is
 // injected alongside the artwork manifest as `window.__FREYRAUM_MUSEUM_HUB`.
 // The runtime sanitizes slots/tokens/presets and falls back to the built-in

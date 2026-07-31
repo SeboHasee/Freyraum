@@ -1462,7 +1462,7 @@ export class GalleryManager {
   }
 
   /**
-   * v0.80 — exact-target readiness gate for hub selection. Resolves `'ready'`
+   * v0.81 — exact-target readiness gate for hub selection. Resolves `'ready'`
    * as soon as the artwork at `index` reaches an interactive presented
    * surface (`albedoLoaded`, `materialApplied`, and `shaderCompiled` in the
    * existing readiness ledger), or `'timeout'` after `timeoutMs`. Never

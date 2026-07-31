@@ -55,7 +55,7 @@ export class RendererManager {
     // reduces contrast and shifts hues away from the source artwork.
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;
-    // v0.80 — clear color comes from the resolved wall token (default
+    // v0.81 — clear color comes from the resolved wall token (default
     // `#E2E4E3`) so CSS and WebGL share one authoritative value and canvas
     // creation/reveal cannot flash white.
     this.renderer.setClearColor(new THREE.Color(wallClearColor));
