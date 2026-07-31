@@ -1,14 +1,12 @@
 import type { ResolvedHubHotspot } from '../config/hubHotspots';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 
-const HUB_IMAGE_URL = new URL(
-  '../../customer-artworks/Backgrounds/museum-target.png',
-  import.meta.url
-).href;
-const HUB_IMAGE_FALLBACK_URL = new URL(
-  '../../customer-artworks/Backgrounds/museum-empty.png',
-  import.meta.url
-).href;
+const HUB_BACKGROUND_BASE_URL =
+  window.location.protocol === 'file:'
+    ? '../customer-artworks/Backgrounds/'
+    : `${import.meta.env.BASE_URL}backgrounds/`;
+const HUB_IMAGE_URL = `${HUB_BACKGROUND_BASE_URL}museum-target.png`;
+const HUB_IMAGE_FALLBACK_URL = `${HUB_BACKGROUND_BASE_URL}museum-empty.png`;
 const HUB_IMAGE_TIMEOUT_MS = 5000;
 
 const percent = (value: number): string => `${(value * 100).toFixed(3)}%`;
@@ -65,6 +63,7 @@ export class MainMuseumHub {
     image.draggable = false;
     this.imageReady = new Promise<void>((resolve) => {
       let settled = false;
+      let fallbackRequested = false;
       const finish = (): void => {
         if (settled) return;
         settled = true;
@@ -80,7 +79,8 @@ export class MainMuseumHub {
         finish();
       });
       image.addEventListener('error', () => {
-        if (image.src !== HUB_IMAGE_FALLBACK_URL) {
+        if (!fallbackRequested) {
+          fallbackRequested = true;
           image.src = HUB_IMAGE_FALLBACK_URL;
         } else {
           hub.classList.add('has-image-error');
@@ -192,7 +192,7 @@ export class MainMuseumHub {
     for (const button of this.hotspotButtons) button.disabled = disabled;
   }
 
-  private focusInitialTarget(): void {
+  focusInitialTarget(): void {
     (this.hotspotButtons[0] ?? this.entryButton).focus({ preventScroll: true });
   }
 

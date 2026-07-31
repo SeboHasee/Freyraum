@@ -135,6 +135,12 @@ jobs:
             echo "Error: dist/index.html is missing." >&2
             exit 1
           fi
+          for background in museum-target.png museum-empty.png; do
+            if [ ! -f "dist/backgrounds/${background}" ]; then
+              echo "Error: dist/backgrounds/${background} is missing." >&2
+              exit 1
+            fi
+          done
 
       - name: Validate dist assets
         run: |

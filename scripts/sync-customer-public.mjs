@@ -11,6 +11,7 @@
  *   customer-preview/customer-audio.js     → public/customer-audio.js
  *   customer-preview/images/               → public/images/  (entire folder)
  *   customer-preview/audio/                → public/audio/   (entire folder, if present)
+ *   customer-artworks/Backgrounds/          → public/backgrounds/ (entire folder)
  *
  * The `public/` versions are gitignored (CI regenerates them from the committed
  * inbox sources). Customer artwork source files live in:
@@ -94,14 +95,19 @@ if (!audioJs) {
   );
 }
 
-// ── Sync image and audio asset folders ──────────────────────────────────────
+// ── Sync image, audio, and hub-background asset folders ─────────────────────
 
 const imagesCopied = syncDir(join(PREVIEW, 'images'), join(PUBLIC, 'images'));
 const audioCopied  = syncDir(join(PREVIEW, 'audio'),  join(PUBLIC, 'audio'));
+const backgroundsCopied = syncDir(
+  join(ROOT, 'customer-artworks', 'Backgrounds'),
+  join(PUBLIC, 'backgrounds'),
+);
 
 process.stdout.write(
   `sync-customer-public: synced customer-artworks.js, customer-audio.js` +
   (imagesCopied  !== undefined ? `, ${imagesCopied} image(s)`  : '') +
   (audioCopied   !== undefined ? `, ${audioCopied} audio file(s)` : '') +
+  (backgroundsCopied !== undefined ? `, ${backgroundsCopied} hub background(s)` : '') +
   ' to public/\n',
 );

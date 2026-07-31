@@ -1,5 +1,31 @@
 # FINDINGS
 
+## Hub visual reliability findings (2026-07-31)
+
+1. GitHub user-attachment URLs are not a reliable production asset contract.
+   The committed museum backgrounds now flow through
+   `scripts/sync-customer-public.mjs` into `public/backgrounds/` and the Pages
+   artifact.
+2. Importing the 5.8 MB and 11.2 MB backgrounds with `new URL(...,
+   import.meta.url)` works for the Pages build but makes Vite library mode
+   inline both files, growing `customer-preview/freyraum-gallery.js` from about
+   0.7 MB to 23.3 MB. Runtime base paths plus copied static files avoid that
+   regression.
+3. Relative asset URLs must not be compared to `HTMLImageElement.src`, which
+   returns an absolute URL. Fallback selection uses explicit state so a failed
+   fallback cannot create an error/reassignment loop.
+4. The customer hotspot seed values were wall-band placeholders, not artwork
+   bounds. Calibration from the supplied 1366 × 768 reference places `fraktal`
+   at `(0.185, 0.514, 0.056, 0.207)` and `akt-27` at
+   `(0.625, 0.515, 0.098, 0.160)`. The local target image was not visually
+   inspected.
+5. A generic central destination must not overlap artwork-specific hotspots.
+   It remains only as the no-hotspot fallback; artwork hotspots own focus and
+   activation whenever they exist.
+6. The idle texture-prefetch sweep must advance its cursor before invoking a
+   callback-capable scheduler. Missing authored texture sets complete
+   synchronously; advancing afterward caused unbounded recursion during startup.
+
 ## Hub hotspot navigation decisions (2026-07-31)
 
 1. `.museum-hub__visual` is a fixed 16:9 content box with `object-fit: fill`,

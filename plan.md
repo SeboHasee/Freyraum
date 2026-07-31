@@ -1,5 +1,33 @@
 # FREYRAUM Plan
 
+## Completed — Hub Visual Reliability Closure (2026-07-31)
+
+### Decisions
+
+- The hub uses the committed `museum-target.png` and `museum-empty.png` assets,
+  not GitHub attachment URLs. `file://` preview resolves the committed source
+  folder directly; hosted builds receive `/backgrounds/` through the existing
+  customer-public sync step.
+- Customer hotspots were calibrated from the supplied 1366 × 768 reference
+  image without inspecting the local target image. `fraktal` maps to the
+  left-hand portrait and `akt-27` maps to the centre-right square.
+- Built-in hotspot defaults use the same four visible artwork bounds. Generic
+  wall-band derivation remains the fallback for other manifests.
+- When artwork hotspots exist, the legacy central entry target is hidden and
+  initial/error focus moves to the first artwork hotspot, including after the
+  press-to-start overlay releases focus.
+- The idle authored-texture sweep skips artworks without authored sets and
+  advances before scheduling, preventing synchronous callback recursion.
+- Hub backgrounds remain separate files. They must not be imported as Vite
+  module assets because library mode inlines them into the local-preview
+  JavaScript bundle.
+
+### Validation boundary
+
+- Validate importer/public sync, both Vite outputs, hosted and `file://` path
+  selection, exact hotspot placement, focus behavior, and missing-image
+  fallback without opening the prohibited local target image for inspection.
+
 ## Completed — Hub Hotspot Navigation (2026-07-31)
 
 ### Decisions

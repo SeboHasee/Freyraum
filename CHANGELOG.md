@@ -1,5 +1,37 @@
 # CHANGELOG
-> Latest markdown audit: 2026-07-31 (Hub hotspot navigation).
+> Latest markdown audit: 2026-07-31 (Hub visual reliability closure).
+
+## v0.80 — Hub Visual Reliability Closure (2026-07-31)
+
+### Summary
+
+- Replaced runtime GitHub attachment dependencies with the committed target and
+  empty museum backgrounds.
+- Added hub backgrounds to the customer-public sync and Pages artifact
+  validation while keeping them out of the JavaScript bundle.
+- Calibrated customer hotspots to the supplied 1366 × 768 visual: `fraktal`
+  targets the left portrait and `akt-27` targets the centre-right square.
+- Calibrated all four built-in hotspot defaults to the visible frames.
+- Hid the legacy central entry target whenever artwork hotspots exist and moved
+  initial/error focus to the first hotspot.
+- Made image fallback selection state-based so relative URLs cannot cause a
+  repeated fallback error loop.
+- Fixed the idle texture-prefetch sweep recursing synchronously on artworks
+  without authored texture sets.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `node --check scripts/sync-customer-public.mjs` ✅
+- Manual Pages-base loading, initial focus, both hotspot selections, back
+  navigation, and missing-primary fallback ✅
+- Hotspot calibration used the supplied reference; the local target image was
+  not opened for visual inspection ✅
 
 ## v0.79 — Hub Hotspot Navigation (2026-07-31)
 

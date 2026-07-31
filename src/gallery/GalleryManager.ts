@@ -1156,7 +1156,10 @@ export class GalleryManager {
     this.fullPrefetchScheduled = true;
     let index = 0;
     const runNext = (): void => {
-      while (index < this.artworks.length && this.prefetchedTextureSets.has(index)) {
+      while (
+        index < this.artworks.length &&
+        (!this.artworks[index]?.textureSet || this.prefetchedTextureSets.has(index))
+      ) {
         index += 1;
       }
       if (index >= this.artworks.length) {
@@ -1166,8 +1169,9 @@ export class GalleryManager {
         });
         return;
       }
-      this.scheduleTextureSetPrefetch(index, 'idle-sweep', 'background', runNext);
+      const scheduledIndex = index;
       index += 1;
+      this.scheduleTextureSetPrefetch(scheduledIndex, 'idle-sweep', 'background', runNext);
     };
     this.scheduleIdle(runNext, 500);
   }

@@ -1865,6 +1865,7 @@ async function main(): Promise<void> {
   await destinationRouter.startAt('hub');
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
+  museumHub.focusInitialTarget();
 
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {
