@@ -1,5 +1,8 @@
 const HUB_IMAGE_URL =
+  'https://github.com/user-attachments/assets/c52252f4-64fc-4fa6-80da-8ae1a7031459';
+const HUB_IMAGE_FALLBACK_URL =
   'https://github.com/user-attachments/assets/2f42c69d-b6b2-4c3c-9044-a3477900657c';
+const HUB_IMAGE_TIMEOUT_MS = 5000;
 
 export class MainMuseumHub {
   readonly element: HTMLElement;
@@ -20,15 +23,29 @@ export class MainMuseumHub {
     image.decoding = 'async';
     image.draggable = false;
     this.imageReady = new Promise<void>((resolve) => {
-      image.addEventListener('load', () => resolve(), { once: true });
-      image.addEventListener(
-        'error',
-        () => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        resolve();
+      };
+      const timeout = window.setTimeout(() => {
+        hub.classList.add('has-image-error');
+        finish();
+      }, HUB_IMAGE_TIMEOUT_MS);
+      image.addEventListener('load', () => {
+        hub.classList.remove('has-image-error');
+        finish();
+      });
+      image.addEventListener('error', () => {
+        if (image.src !== HUB_IMAGE_FALLBACK_URL) {
+          image.src = HUB_IMAGE_FALLBACK_URL;
+        } else {
           hub.classList.add('has-image-error');
-          resolve();
-        },
-        { once: true }
-      );
+          finish();
+        }
+      });
     });
     image.src = HUB_IMAGE_URL;
 
