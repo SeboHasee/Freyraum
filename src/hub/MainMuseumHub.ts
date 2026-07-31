@@ -313,8 +313,13 @@ export class MainMuseumHub {
     for (const view of this.slotViews) {
       view.button.disabled = disabled || !view.slot.selectable;
     }
-    this.pagerPrev.disabled = disabled;
-    this.pagerNext.disabled = disabled;
+    if (disabled) {
+      this.pagerPrev.disabled = true;
+      this.pagerNext.disabled = true;
+    } else {
+      this.pagerPrev.disabled = this.viewIndex === 0;
+      this.pagerNext.disabled = this.viewIndex === this.viewCount - 1;
+    }
   }
 
   private handleActivate = (): void => {
@@ -568,6 +573,12 @@ export class MainMuseumHub {
     } else {
       this.visual.style.setProperty('--hub-focus-scale', '1.9');
       this.visual.style.setProperty('--hub-focus-x', wallFocus === 'left' ? '24%' : '-24%');
+    }
+    // In wall-focus views the other wall's frames leave the actionable set so
+    // partially visible edge targets can never overlap or mislead.
+    for (const view of this.slotViews) {
+      const slotWall = view.slot.placement.cx < 0.5 ? 'left' : 'right';
+      view.button.classList.toggle('is-off-wall', wallFocus !== 'full' && slotWall !== wallFocus);
     }
 
     const showPager = this.viewCount > 1;

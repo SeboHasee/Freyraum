@@ -565,6 +565,13 @@ canvas {
   }
 }
 
+// Narrow wall-focus views: the non-focused wall's frames leave the
+// actionable/focusable set entirely (their edges may poke into the viewport).
+.museum-hub__frame.is-off-wall {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 // ── Pager (room pages + narrow wall-focus views) ────────────────────────────
 
 .museum-hub__pager {
