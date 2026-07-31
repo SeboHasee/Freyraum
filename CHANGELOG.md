@@ -16,6 +16,17 @@
 - Added reduced-motion handling, responsive hub framing, focus restoration, and
   hidden gallery chrome while the hub is active.
 
+### Validation
+
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- Manual loading → hub → gallery pointer/focus flow ✅
+- Visual comparison was not runnable because the repository does not install its
+  optional `pixelmatch`/`pngjs` comparison packages; no dependency was added.
+
 ## v0.77 — Fixed gallery presentation and metadata semantics (2026-07-19, **shipped**)
 
 ### Summary
