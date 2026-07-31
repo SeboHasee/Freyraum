@@ -11,7 +11,7 @@
  *   customer-preview/customer-audio.js     → public/customer-audio.js
  *   customer-preview/images/               → public/images/  (entire folder)
  *   customer-preview/audio/                → public/audio/   (entire folder, if present)
- *   customer-artworks/Backgrounds/          → public/backgrounds/ (entire folder)
+ *   customer-artworks/Backgrounds/          → public/backgrounds/ (museum-target.png excluded — reference asset only)
  *
  * The `public/` versions are gitignored (CI regenerates them from the committed
  * inbox sources). Customer artwork source files live in:
@@ -33,8 +33,9 @@ const PUBLIC = join(ROOT, 'public');
 /**
  * Copies all files (non-recursive) from srcDir to destDir.
  * Clears destDir first so stale files from a previous run are removed.
+ * An optional filter decides which source files are shipped.
  */
-function syncDir(srcDir, destDir) {
+function syncDir(srcDir, destDir, filter) {
   if (!existsSync(srcDir)) return;
 
   // Remove stale files from a previous run.
@@ -50,7 +51,7 @@ function syncDir(srcDir, destDir) {
 
   let copied = 0;
   for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
-    if (entry.isFile()) {
+    if (entry.isFile() && (!filter || filter(entry.name))) {
       copyFileSync(join(srcDir, entry.name), join(destDir, entry.name));
       copied++;
     }
@@ -99,9 +100,13 @@ if (!audioJs) {
 
 const imagesCopied = syncDir(join(PREVIEW, 'images'), join(PUBLIC, 'images'));
 const audioCopied  = syncDir(join(PREVIEW, 'audio'),  join(PUBLIC, 'audio'));
+// v0.80 — museum-target.png stays in the repo as a calibration/reference
+// asset only; the runtime hub composes artworks over museum-empty.png, so the
+// baked-target PNG (~5.5 MB) is no longer shipped to public/ or dist/.
 const backgroundsCopied = syncDir(
   join(ROOT, 'customer-artworks', 'Backgrounds'),
   join(PUBLIC, 'backgrounds'),
+  (name) => name !== 'museum-target.png',
 );
 
 process.stdout.write(

@@ -1262,7 +1262,7 @@ async function main(): Promise<void> {
     artworkCount,
   });
 
-  loadingOverlay.setProgress(100);
+  loadingOverlay.setProgress(99);
   // v0.24.3 R-04 / v0.27 W-05 / v0.68 P-04: Align status text with the actual
   // preload contract.
   // - strict (legacy full): all artworks fully prepared before entry.
@@ -1902,8 +1902,12 @@ async function main(): Promise<void> {
   });
 
   artworkMesh.group.visible = false;
+  // v0.80 — hub base fetch + first-page artwork decode + slot layout complete
+  // under the overlay (the last weighted progress step), so the first hub
+  // paint has zero image pop-in and zero layout shift after reveal.
   loadingOverlay.setStatus('Museum wird vorbereitet');
   await destinationRouter.startAt('hub');
+  loadingOverlay.setProgress(100);
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
   museumHub.focusInitialTarget();

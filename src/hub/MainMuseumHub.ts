@@ -91,6 +91,8 @@ export class MainMuseumHub {
   private narrowMode = false;
   private lastActivatedSlotId: string | null = null;
   private decodedPages = new Set<number>();
+  private idleDecodeHandle: number | null = null;
+  private idleDecodeNextPage = 1;
   private swipeStartX: number | null = null;
   private swipeStartY: number | null = null;
   private resizeRafId = 0;
@@ -238,6 +240,7 @@ export class MainMuseumHub {
     // overlay is dismissed; later pages decode lazily.
     this.imageReady = Promise.all([backgroundReady, this.decodePageImages(0)]).then(() => {
       this.applyView(true);
+      this.scheduleIdlePageDecode();
       this.diagnostics.info('composition-ready', 'Hub composition prepared', {
         pages: this.pageCount,
         selectableSlots: this.resolution.slotToArtwork.size,
@@ -265,12 +268,15 @@ export class MainMuseumHub {
     this.element.classList.remove('is-exiting');
     this.setButtonsDisabled(false);
     this.status.textContent = '';
+    this.scheduleIdlePageDecode();
     // Preserve page state and restore focus to the originating slot.
     requestAnimationFrame(() => this.focusInitialTarget());
   }
 
   async exit(reducedMotion: boolean): Promise<void> {
     if (this.disposed) return;
+    // A gallery transition begins: cancel low-priority hub work immediately.
+    this.cancelIdlePageDecode();
     this.setButtonsDisabled(true);
     this.status.textContent = 'Ausstellung wird geöffnet.';
     this.element.classList.add('is-exiting');
@@ -440,6 +446,40 @@ export class MainMuseumHub {
     button.style.width = percent(w);
     button.style.height = percent(h);
     button.style.setProperty('--frame-rotate-y', `${placement.rotateYDeg}deg`);
+  }
+
+  /**
+   * Decodes later room pages one at a time during browser idle periods so a
+   * page preview or overflow navigation shows no image pop-in. Cancelled when
+   * a gallery transition begins and rescheduled on hub re-entry.
+   */
+  private scheduleIdlePageDecode(): void {
+    if (this.disposed || this.idleDecodeHandle !== null) return;
+    while (this.idleDecodeNextPage < this.pageCount && this.decodedPages.has(this.idleDecodeNextPage)) {
+      this.idleDecodeNextPage += 1;
+    }
+    if (this.idleDecodeNextPage >= this.pageCount) return;
+    const requestIdle =
+      typeof window.requestIdleCallback === 'function'
+        ? (cb: () => void): number => window.requestIdleCallback(cb, { timeout: 4000 })
+        : (cb: () => void): number => window.setTimeout(cb, 600);
+    this.idleDecodeHandle = requestIdle(() => {
+      this.idleDecodeHandle = null;
+      if (this.disposed) return;
+      const page = this.idleDecodeNextPage;
+      this.idleDecodeNextPage += 1;
+      void this.decodePageImages(page).then(() => this.scheduleIdlePageDecode());
+    });
+  }
+
+  private cancelIdlePageDecode(): void {
+    if (this.idleDecodeHandle === null) return;
+    if (typeof window.cancelIdleCallback === 'function') {
+      window.cancelIdleCallback(this.idleDecodeHandle);
+    } else {
+      window.clearTimeout(this.idleDecodeHandle);
+    }
+    this.idleDecodeHandle = null;
   }
 
   /** Lazily decodes the artwork images of one room page. */
@@ -705,6 +745,7 @@ export class MainMuseumHub {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.cancelIdlePageDecode();
     if (this.resizeRafId !== 0) cancelAnimationFrame(this.resizeRafId);
     this.narrowQuery.removeEventListener('change', this.handleNarrowChange);
     window.removeEventListener('resize', this.handleResize);
