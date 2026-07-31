@@ -17,12 +17,17 @@
 
 :root {
   // Surfaces
-  --bg1: #eef1f3;
+  // v0.80 — authoritative museum-grey wall tokens (final pick #E2E4E3).
+  // `--color-gallery-wall` is the active token for every gallery/hub wall
+  // surface and the WebGL clear color (RendererManager receives the same
+  // resolved value from main.ts). `--color-museum-wall` defaults to the same
+  // value and may be overridden by a validated customer museum-hub.json.
+  --color-gallery-wall: #e2e4e3;
+  --color-museum-wall: var(--color-gallery-wall);
+  --bg1: var(--color-gallery-wall);
   --bg2: #d8dee3;
   --bg3: #bcc5cc;
   --bg-deep: #b3bcc4;
-  // v0.79 — light-grey museum wall base for the hub (letterbox + image-error fill).
-  --museum-wall-light: #ecebe8;
 
   // Text
   --text: #12171b;
@@ -208,18 +213,29 @@ canvas {
 }
 
 // =============================================================================
-// Main Museum Hub
+// Main Museum Hub (v0.80) — manifest-driven DOM composition
 // =============================================================================
+// The empty museum room (`museum-empty.png`) is the only runtime background;
+// each artwork is a real responsive <img> inside its own framed native
+// <button>, so visible frame bounds and hit bounds are the same element.
+// Frames share static CSS material presets (no per-slot styles) and the
+// composition adds zero WebGL draw calls or continuous renders.
 
 .museum-hub {
   position: fixed;
   inset: 0;
   z-index: 80;
   overflow: hidden;
-  background-color: var(--museum-wall-light);
+  background-color: var(--color-museum-wall);
+  // Edge gradients derive from the base wall token (no near-white radial).
   background-image:
-    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.95), transparent 45%),
-    linear-gradient(180deg, #dbe6ee 0%, #e8e5df 55%, #c8c9c7 100%);
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.28), transparent 52%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-museum-wall) 92%, #ffffff) 0%,
+      var(--color-museum-wall) 55%,
+      color-mix(in srgb, var(--color-museum-wall) 84%, #000000) 100%
+    );
   opacity: 1;
   transition: opacity 0.52s var(--ease-gallery-in-out);
 }
@@ -233,13 +249,22 @@ canvas {
   pointer-events: none;
 }
 
+// Exact design coordinate space (1366:768 by default, --hub-aspect from the
+// resolved config). The wall-focus transform for narrow portrait viewports
+// only moves/scales this one shared box, so background and overlays can
+// never drift apart.
 .museum-hub__visual {
+  --hub-aspect: 1.778646;
+  --hub-focus-scale: 1;
+  --hub-focus-x: 0%;
   position: absolute;
   top: 50%;
   left: 50%;
-  width: min(100vw, 177.734375vh);
-  height: min(100vh, 56.25vw);
-  transform: translate(-50%, -50%);
+  width: min(100vw, calc(100vh * var(--hub-aspect)));
+  height: min(100vh, calc(100vw / var(--hub-aspect)));
+  transform: translate(-50%, -50%) translateX(var(--hub-focus-x)) scale(var(--hub-focus-scale));
+  transform-origin: center;
+  transition: transform 0.45s var(--ease-gallery-out);
 }
 
 .museum-hub__image {
@@ -255,7 +280,7 @@ canvas {
 }
 
 .museum-hub.has-image-error .museum-hub__visual {
-  background: var(--museum-wall-light);
+  background: var(--color-museum-wall);
 }
 
 .museum-hub__shade {
@@ -298,6 +323,7 @@ canvas {
   line-height: 1.45;
 }
 
+// Generic gallery-entry action — only shown when zero valid slots exist.
 .museum-hub__destination {
   position: absolute;
   z-index: 3;
@@ -363,33 +389,130 @@ canvas {
   cursor: wait;
 }
 
-// v0.79 — artwork hotspots inside the hub visual (normalized coordinates are
-// applied as inline percentages by MainMuseumHub; the visual box is a fixed
-// 16:9 content box so percentages map 1:1 to the image).
-.museum-hub__hotspot {
+// ── Room pages ───────────────────────────────────────────────────────────────
+
+.museum-hub__rooms {
+  position: absolute;
+  inset: 0;
+}
+
+.museum-hub__room {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.museum-hub__room.is-active {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+// ── Framed artwork buttons ───────────────────────────────────────────────────
+// The whole visible frame is one native <button>. Perspective + static
+// wall-specific highlight/shadow directions come from shared custom
+// properties written once per slot (--frame-rotate-y, --frame-color,
+// --frame-highlight, --frame-shadow, --frame-light-x); the preset itself is
+// one shared class, not per-slot styles.
+
+.museum-hub__frame {
   position: absolute;
   z-index: 3;
-  min-width: 44px;
-  min-height: 44px;
-  border-radius: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--text-inverse);
   cursor: pointer;
+  perspective: 900px;
+  // Transparent hit slop keeps targets at least 44 CSS px without visual
+  // growth; collision safety comes from the calibrated slot bounds.
+  min-width: 24px;
+  min-height: 24px;
 }
 
-.museum-hub__hotspot-frame {
+.museum-hub__frame::before {
+  content: '';
   position: absolute;
-  inset: -6px;
-  border: 2px solid transparent;
-  border-radius: 2px;
-  transition:
-    border-color var(--dur-control) var(--ease-out),
-    box-shadow var(--dur-control) var(--ease-out);
+  inset: min(-10px, -22%);
+  // Invisible hit-slop layer that enlarges the pointer target.
 }
 
-.museum-hub__hotspot-label {
+.museum-hub__frame-shell {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform: rotateY(var(--frame-rotate-y, 0deg));
+  transform-style: preserve-3d;
+  background: var(--frame-color, #25282a);
+  // Matte painted wood look: bevel highlight/shadow strengths are derived
+  // once from roughness/metalness metadata (frameMaterialStrengths).
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  box-shadow:
+    // Projected side depth (5–10 px equivalent, direction follows the wall).
+    calc(var(--frame-light-x, 1) * -0.45em) 0.35em 0.9em rgba(10, 13, 15, calc(var(--frame-shadow, 0.5) * 0.75)),
+    // Contact shadow onto the wall.
+    0 10px 22px rgba(10, 13, 15, calc(var(--frame-shadow, 0.5) * 0.55)),
+    // Static wall-specific highlight edge.
+    inset calc(var(--frame-light-x, 1) * 2px) 2px 0 rgba(255, 255, 255, calc(var(--frame-highlight, 0.2) * 0.6)),
+    inset calc(var(--frame-light-x, 1) * -2px) -2px 0 rgba(0, 0, 0, 0.4);
+  transition:
+    box-shadow var(--dur-control) var(--ease-out),
+    transform var(--dur-control) var(--ease-out);
+}
+
+// Recessed aperture with inner contact shadow (20 mm implied depth).
+.museum-hub__frame-aperture {
+  position: absolute;
+  inset: 7%;
+  display: block;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-museum-wall) 88%, #000000);
+  box-shadow:
+    inset calc(var(--frame-light-x, 1) * 3px) 3px 7px rgba(0, 0, 0, 0.5),
+    inset 0 -1px 2px rgba(255, 255, 255, calc(var(--frame-highlight, 0.2) * 0.5));
+}
+
+.museum-hub__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+}
+
+// Neutral placeholder shown when image data is missing; the button keeps its
+// exact valid artwork target (placeholder-exact-target).
+.museum-hub__art-placeholder {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 6%;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(0, 0, 0, 0.12)),
+    color-mix(in srgb, var(--color-museum-wall) 72%, #000000);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: clamp(0.5rem, 0.9vw, 0.78rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.museum-hub__frame.has-missing-image .museum-hub__art {
+  visibility: hidden;
+}
+
+.museum-hub__frame.has-missing-image .museum-hub__art-placeholder {
+  display: flex;
+}
+
+.museum-hub__frame-label {
   position: absolute;
   top: calc(100% + 12px);
   left: 50%;
+  z-index: 4;
   width: max-content;
   max-width: min(220px, 46vw);
   transform: translateX(-50%) translateY(4px);
@@ -408,49 +531,122 @@ canvas {
     transform var(--dur-control) var(--ease-out);
 }
 
-.museum-hub__hotspot:hover .museum-hub__hotspot-frame,
-.museum-hub__hotspot:focus-visible .museum-hub__hotspot-frame {
-  border-color: rgba(255, 255, 255, 0.92);
-  // Light-grey wall backdrop keeps the ring visible on dark image regions.
-  box-shadow: 0 0 0 4px rgba(15, 20, 24, 0.36), 0 0 0 6px var(--museum-wall-light);
+.museum-hub__frame:hover .museum-hub__frame-shell,
+.museum-hub__frame:focus-visible .museum-hub__frame-shell {
+  box-shadow:
+    calc(var(--frame-light-x, 1) * -0.45em) 0.35em 1.1em rgba(10, 13, 15, calc(var(--frame-shadow, 0.5) * 0.9)),
+    0 14px 30px rgba(10, 13, 15, calc(var(--frame-shadow, 0.5) * 0.7)),
+    0 0 0 3px rgba(255, 255, 255, 0.9),
+    0 0 0 6px rgba(15, 20, 24, 0.45),
+    inset calc(var(--frame-light-x, 1) * 2px) 2px 0 rgba(255, 255, 255, calc(var(--frame-highlight, 0.2) * 0.75)),
+    inset calc(var(--frame-light-x, 1) * -2px) -2px 0 rgba(0, 0, 0, 0.4);
 }
 
-.museum-hub__hotspot:hover .museum-hub__hotspot-label,
-.museum-hub__hotspot:focus-visible .museum-hub__hotspot-label {
+.museum-hub__frame:hover .museum-hub__frame-label,
+.museum-hub__frame:focus-visible .museum-hub__frame-label {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 
-.museum-hub__hotspot:focus-visible {
+.museum-hub__frame:focus-visible {
   outline: none;
 }
 
-.museum-hub__hotspot:disabled {
+.museum-hub__frame:disabled {
   cursor: wait;
 }
 
-// v0.79 — hotspot calibration mode (config query flag; see the canonical
-// configuration reference in docs). Non-interactive for navigation: drag to
-// move, drag the corner handle to resize, JSON refreshes in the copy panel.
-.museum-hub.is-calibrating .museum-hub__hotspot {
+.museum-hub__frame.is-disabled-slot {
+  cursor: default;
+  opacity: 0.4;
+
+  .museum-hub__frame-label {
+    display: none;
+  }
+}
+
+// ── Pager (room pages + narrow wall-focus views) ────────────────────────────
+
+.museum-hub__pager {
+  position: absolute;
+  z-index: 5;
+  bottom: max(20px, calc(14px + var(--safe-bottom)));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(10, 14, 17, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: var(--shadow-medium);
+}
+
+.museum-hub__pager[hidden] {
+  display: none;
+}
+
+.museum-hub__pager-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--text-inverse);
+  cursor: pointer;
+  transition: background var(--dur-control) var(--ease-out);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 0 0 6px rgba(15, 20, 24, 0.6);
+  }
+}
+
+.museum-hub__pager-counter {
+  min-width: 8ch;
+  color: var(--text-inverse);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+// ── Calibration mode (?hubCalibrate=1) ──────────────────────────────────────
+// Calibration manipulates the actual frame bounds and exports the complete
+// museum-hub.json schema in the copy panel.
+
+.museum-hub.is-calibrating .museum-hub__frame {
   cursor: move;
   touch-action: none;
 }
 
-.museum-hub.is-calibrating .museum-hub__hotspot-frame {
-  border: 2px dashed rgba(255, 90, 60, 0.95);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+.museum-hub.is-calibrating .museum-hub__frame-shell {
+  outline: 2px dashed rgba(255, 90, 60, 0.95);
+  outline-offset: 2px;
 }
 
-.museum-hub.is-calibrating .museum-hub__hotspot-label {
+.museum-hub.is-calibrating .museum-hub__frame-label {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 
-.museum-hub__hotspot-handle {
+.museum-hub__frame-handle {
   position: absolute;
   right: -8px;
   bottom: -8px;
+  z-index: 5;
   width: 16px;
   height: 16px;
   border: 2px solid rgba(255, 255, 255, 0.9);
@@ -461,7 +657,7 @@ canvas {
 
 .museum-hub__calibration {
   position: absolute;
-  z-index: 4;
+  z-index: 6;
   right: max(16px, calc(12px + var(--safe-right)));
   bottom: max(16px, calc(12px + var(--safe-bottom)));
   width: min(420px, calc(100vw - 32px));
@@ -521,24 +717,33 @@ canvas {
     opacity: 1;
     transform: translateX(-50%);
   }
+
+  // Narrow-portrait wall-focus mode: labels stay visible because there is no
+  // hover affordance, and pager arrows/counter provide the wall navigation.
+  .museum-hub__frame-label {
+    opacity: 0.92;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .museum-hub,
+  .museum-hub__visual,
   .museum-hub__destination-frame,
   .museum-hub__destination-label,
-  .museum-hub__hotspot-frame,
-  .museum-hub__hotspot-label {
+  .museum-hub__frame-shell,
+  .museum-hub__frame-label {
     transition: none;
   }
 }
 
 :root[data-motion='reduced'] {
   .museum-hub,
+  .museum-hub__visual,
   .museum-hub__destination-frame,
   .museum-hub__destination-label,
-  .museum-hub__hotspot-frame,
-  .museum-hub__hotspot-label {
+  .museum-hub__frame-shell,
+  .museum-hub__frame-label {
     transition: none;
   }
 }
@@ -574,9 +779,12 @@ button {
   right: 0;
   height: calc(72px + var(--safe-top));
   padding: var(--safe-top) calc(36px + var(--safe-right)) 0 calc(36px + var(--safe-left));
-  display: flex;
+  // v0.80 — grid regions (left navigation+brand | spacer | right utilities)
+  // so the back action can never collide with Info/Help or the viewport edge.
+  display: grid;
+  grid-template-columns: minmax(0, auto) 1fr auto;
   align-items: center;
-  justify-content: space-between;
+  column-gap: 12px;
   z-index: 100;
   pointer-events: none;
   animation: topbar-enter var(--dur-slow, 0.5s) var(--ease-out) both;
@@ -593,16 +801,27 @@ button {
   }
 }
 
-// Left group: brand + badge — logically grouped, clickthrough restored
+// Left group: back action first, then brand + badge — clickthrough restored
 .topbar__left {
+  grid-column: 1;
   pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
+}
+
+.topbar__brand-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 // Right group: utility actions — clickthrough restored
 .topbar__right {
+  grid-column: 3;
   pointer-events: auto;
   display: flex;
   align-items: center;
@@ -2042,8 +2261,11 @@ button {
 // =============================================================================
 // Presentation / fullscreen mode polish
 // =============================================================================
+// v0.80 — the back-to-museum action stays visible in presentation mode; only
+// brand and utility clusters fade out (they reveal again on hover/focus).
 :root[data-presentation='on'] {
-  .topbar,
+  .topbar__brand-group,
+  .topbar__right,
   .hint-text {
     opacity: 0;
     pointer-events: none;
@@ -2052,9 +2274,11 @@ button {
 
   &:hover,
   &:focus-within {
-    .topbar,
+    .topbar__brand-group,
+    .topbar__right,
     .hint-text {
       opacity: 1;
+      pointer-events: auto;
     }
   }
 }
@@ -2773,12 +2997,95 @@ button {
   display: none;
 }
 
+// v0.80 — primary "Zurück zum Museum" action. Dedicated class and lifecycle:
+// it never shares the chrome-btn hide rules, stays visible in clean-chrome,
+// visible-chrome, and presentation modes, and sits first in the left topbar
+// region so it cannot collide with the right utility cluster.
+.topbar__back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: #12171b;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--text-inverse);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-medium);
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  &:hover:not(:disabled) {
+    background: #1d2731;
+    box-shadow: var(--shadow-strong);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  // Dual-contrast 3px focus ring: light inner ring + dark outer ring so it
+  // stays visible over both the dark button and light wall behind it.
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.95),
+      0 0 0 6px rgba(15, 20, 24, 0.85);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.7;
+  }
+}
+
+// Short label ("Museum") is phone-only; full label is default.
+.topbar__back-btn-label--short {
+  display: none;
+}
+
+:root[data-layout-tier='phone-small'] .topbar__back-btn,
+:root[data-layout-tier='phone-portrait'] .topbar__back-btn {
+  min-height: 44px;
+  padding: 0 14px;
+
+  .topbar__back-btn-label--full {
+    display: none;
+  }
+
+  .topbar__back-btn-label--short {
+    display: inline;
+  }
+}
+
+// Reduce the brand before hiding this essential action on very small phones.
+:root[data-layout-tier='phone-small'] .topbar__brand-group {
+  display: none;
+}
+
 @media (forced-colors: active) {
   // Restore button borders that our custom styles suppress
   .nav-btn,
   .zoom-btn,
   .topbar__help-btn,
   .topbar__chrome-btn,
+  .topbar__back-btn,
+  .museum-hub__frame,
+  .museum-hub__pager-arrow,
+  .museum-hub__destination,
   .loading-start-btn,
   .prefs__toggle,
   .audio-btn {

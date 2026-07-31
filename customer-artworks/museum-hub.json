@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "coverage": "all-active-artworks",
+  "background": {
+    "src": "Backgrounds/museum-empty.png",
+    "aspect": 1.778646
+  },
+  "visualTokens": {
+    "galleryWall": "#E2E4E3",
+    "museumWall": "#E2E4E3",
+    "defaultFramePreset": "matte-charcoal"
+  },
+  "framePresets": {
+    "matte-charcoal": {
+      "color": "#25282A",
+      "depthMm": 20,
+      "roughness": 0.78,
+      "metalness": 0.04
+    }
+  },
+  "fallbacks": {
+    "requireAllMapped": true,
+    "autoPlaceUnmapped": true,
+    "overflow": "paginate",
+    "invalidMapping": "disable-slot",
+    "missingImage": "placeholder-exact-target",
+    "selectionTimeoutMs": 1500,
+    "selectionTimeout": "open-exact-target-procedural"
+  },
+  "slots": [
+    {
+      "id": "room-01.wall-left.outer",
+      "enabled": true,
+      "selectable": true,
+      "artworkId": "fraktal",
+      "placement": {
+        "cx": 0.185,
+        "cy": 0.514,
+        "maxW": 0.056,
+        "maxH": 0.207,
+        "rotateYDeg": 18
+      }
+    },
+    {
+      "id": "room-01.wall-left.inner",
+      "enabled": true,
+      "selectable": true,
+      "placement": {
+        "cx": 0.381,
+        "cy": 0.514,
+        "maxW": 0.095,
+        "maxH": 0.158,
+        "rotateYDeg": 8
+      }
+    },
+    {
+      "id": "room-01.wall-right.inner",
+      "enabled": true,
+      "selectable": true,
+      "artworkId": "akt-27",
+      "placement": {
+        "cx": 0.625,
+        "cy": 0.515,
+        "maxW": 0.098,
+        "maxH": 0.16,
+        "rotateYDeg": -6
+      }
+    },
+    {
+      "id": "room-01.wall-right.outer",
+      "enabled": true,
+      "selectable": true,
+      "placement": {
+        "cx": 0.819,
+        "cy": 0.515,
+        "maxW": 0.105,
+        "maxH": 0.075,
+        "rotateYDeg": -18
+      }
+    }
+  ]
+}

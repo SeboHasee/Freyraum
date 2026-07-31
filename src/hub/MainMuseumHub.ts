@@ -1,13 +1,32 @@
-import type { ResolvedHubHotspot } from '../config/hubHotspots';
+/**
+ * Main Museum Hub (v0.80) — manifest-driven DOM composition.
+ *
+ * The hub renders the empty museum room (`museum-empty.png`) as the only
+ * runtime background and overlays each active artwork as an actual responsive
+ * DOM `<img>` inside its own framed native `<button>`. Visual bounds and hit
+ * bounds are the same element, so they cannot drift. No second WebGL scene is
+ * created: frames use shared static CSS material presets and perspective
+ * transforms, and the composition adds zero WebGL draw calls.
+ *
+ * Room pages hold up to four artworks; larger exhibitions paginate. Narrow
+ * portrait viewports (aspect below 4:5) split each room page into left-wall
+ * and right-wall focus views with arrows, swipe, counter, and keyboard
+ * navigation.
+ */
+
+import {
+  frameMaterialStrengths,
+  type MuseumHubResolution,
+  type ResolvedHubSlot,
+} from '../config/museumHub';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
-    ? '../customer-artworks/Backgrounds/'
-    : `${import.meta.env.BASE_URL}backgrounds/`;
-const HUB_IMAGE_URL = `${HUB_BACKGROUND_BASE_URL}museum-target.png`;
-const HUB_IMAGE_FALLBACK_URL = `${HUB_BACKGROUND_BASE_URL}museum-empty.png`;
+    ? '../customer-artworks/'
+    : `${import.meta.env.BASE_URL}`;
 const HUB_IMAGE_TIMEOUT_MS = 5000;
+const NARROW_PORTRAIT_QUERY = '(max-aspect-ratio: 4/5)';
 
 const percent = (value: number): string => `${(value * 100).toFixed(3)}%`;
 
@@ -19,8 +38,15 @@ const isCalibrationRequested = (): boolean => {
   }
 };
 
+/** Resolves the runtime URL for the configured hub background source. */
+function resolveBackgroundUrl(src: string): string {
+  if (window.location.protocol === 'file:') return `${HUB_BACKGROUND_BASE_URL}${src}`;
+  // Served builds copy `customer-artworks/Backgrounds/` to `backgrounds/`.
+  return `${HUB_BACKGROUND_BASE_URL}${src.replace(/^Backgrounds\//, 'backgrounds/')}`;
+}
+
 interface CalibrationDrag {
-  hotspot: ResolvedHubHotspot;
+  slot: ResolvedHubSlot;
   button: HTMLButtonElement;
   pointerId: number;
   mode: 'move' | 'resize';
@@ -32,38 +58,62 @@ interface CalibrationDrag {
   startH: number;
 }
 
+interface SlotView {
+  slot: ResolvedHubSlot;
+  button: HTMLButtonElement;
+  image: HTMLImageElement | null;
+}
+
 export class MainMuseumHub {
   readonly element: HTMLElement;
   private readonly diagnostics = createScopedDiagnostics('hub');
+  private readonly resolution: MuseumHubResolution;
   private readonly visual: HTMLElement;
+  private readonly roomLayers: HTMLElement[] = [];
+  private readonly slotViews: SlotView[] = [];
   private readonly entryButton: HTMLButtonElement;
   private readonly status: HTMLElement;
+  private readonly pager: HTMLElement;
+  private readonly pagerPrev: HTMLButtonElement;
+  private readonly pagerNext: HTMLButtonElement;
+  private readonly pagerCounter: HTMLElement;
+  private readonly narrowQuery: MediaQueryList;
   private readonly imageReady: Promise<void>;
-  private readonly hotspots: readonly ResolvedHubHotspot[];
-  private readonly hotspotButtons: HTMLButtonElement[] = [];
   private readonly calibrating: boolean;
   private calibrationOutput: HTMLTextAreaElement | null = null;
   private calibrationDrag: CalibrationDrag | null = null;
   private activateCallback: (() => void) | null = null;
-  private selectArtworkCallback: ((hotspot: ResolvedHubHotspot) => void) | null = null;
+  private selectSlotCallback: ((slot: ResolvedHubSlot) => void) | null = null;
   private disposed = false;
+  private pageCount = 1;
+  /** Current view index: room page, or wall-focus view when narrow. */
+  private viewIndex = 0;
+  private narrowMode = false;
+  private lastActivatedSlotId: string | null = null;
+  private decodedPages = new Set<number>();
+  private swipeStartX: number | null = null;
+  private swipeStartY: number | null = null;
+  private resizeRafId = 0;
 
-  constructor(app: HTMLElement, hotspots: readonly ResolvedHubHotspot[] = []) {
-    this.hotspots = hotspots;
+  constructor(app: HTMLElement, resolution: MuseumHubResolution) {
+    this.resolution = resolution;
     this.calibrating = isCalibrationRequested();
+    this.pageCount = Math.max(1, resolution.pages.length);
+
     const hub = document.createElement('section');
     hub.className = 'museum-hub';
     hub.setAttribute('aria-labelledby', 'museum-hub-title');
+    hub.style.setProperty('--hub-aspect', String(resolution.background.aspect));
     if (this.calibrating) hub.classList.add('is-calibrating');
 
+    // Room baseline: museum-empty.png is the only runtime room image.
     const image = document.createElement('img');
     image.className = 'museum-hub__image';
     image.alt = '';
     image.decoding = 'async';
     image.draggable = false;
-    this.imageReady = new Promise<void>((resolve) => {
+    const backgroundReady = new Promise<void>((resolve) => {
       let settled = false;
-      let fallbackRequested = false;
       const finish = (): void => {
         if (settled) return;
         settled = true;
@@ -79,19 +129,15 @@ export class MainMuseumHub {
         finish();
       });
       image.addEventListener('error', () => {
-        if (!fallbackRequested) {
-          fallbackRequested = true;
-          image.src = HUB_IMAGE_FALLBACK_URL;
-        } else {
-          hub.classList.add('has-image-error');
-          finish();
-        }
+        hub.classList.add('has-image-error');
+        finish();
       });
     });
-    image.src = HUB_IMAGE_URL;
+    image.src = resolveBackgroundUrl(resolution.background.src);
 
     const visual = document.createElement('div');
     visual.className = 'museum-hub__visual';
+    visual.appendChild(image);
 
     const shade = document.createElement('div');
     shade.className = 'museum-hub__shade';
@@ -111,6 +157,7 @@ export class MainMuseumHub {
     introduction.textContent = 'Wählen Sie ein Kunstwerk, um die Ausstellung zu betreten.';
     header.append(eyebrow, title, introduction);
 
+    // Generic gallery-entry action — only exposed when zero valid slots exist.
     const entryButton = document.createElement('button');
     entryButton.className = 'museum-hub__destination';
     entryButton.type = 'button';
@@ -131,29 +178,83 @@ export class MainMuseumHub {
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
 
-    visual.append(image, entryButton);
-    hub.append(visual, shade, header, description, status);
+    // Pager (arrows + counter) for multi-page exhibitions and wall-focus views.
+    const pager = document.createElement('nav');
+    pager.className = 'museum-hub__pager';
+    pager.setAttribute('aria-label', 'Museumsräume');
+    const pagerPrev = document.createElement('button');
+    pagerPrev.type = 'button';
+    pagerPrev.className = 'museum-hub__pager-arrow museum-hub__pager-arrow--prev';
+    pagerPrev.setAttribute('aria-label', 'Vorherige Wand');
+    pagerPrev.innerHTML =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>';
+    const pagerCounter = document.createElement('span');
+    pagerCounter.className = 'museum-hub__pager-counter';
+    pagerCounter.setAttribute('aria-live', 'polite');
+    const pagerNext = document.createElement('button');
+    pagerNext.type = 'button';
+    pagerNext.className = 'museum-hub__pager-arrow museum-hub__pager-arrow--next';
+    pagerNext.setAttribute('aria-label', 'Nächste Wand');
+    pagerNext.innerHTML =
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
+    pager.append(pagerPrev, pagerCounter, pagerNext);
+
+    visual.appendChild(entryButton);
+    hub.append(visual, shade, header, description, pager, status);
     app.appendChild(hub);
 
     this.element = hub;
     this.visual = visual;
     this.entryButton = entryButton;
     this.status = status;
+    this.pager = pager;
+    this.pagerPrev = pagerPrev;
+    this.pagerNext = pagerNext;
+    this.pagerCounter = pagerCounter;
     this.entryButton.addEventListener('click', this.handleActivate);
+    pagerPrev.addEventListener('click', () => this.stepView(-1));
+    pagerNext.addEventListener('click', () => this.stepView(1));
 
-    this.buildHotspots();
-    this.entryButton.hidden = this.hotspotButtons.length > 0;
+    this.buildSlots();
+    const hasSelectableSlots = this.resolution.slotToArtwork.size > 0;
+    this.entryButton.hidden = hasSelectableSlots;
+
+    // Narrow-portrait wall-focus mode. matchMedia drives mode switching;
+    // the actual geometry is pure CSS custom-property transforms, so a
+    // resize only recalculates the shared background/overlay transform.
+    this.narrowQuery = window.matchMedia(NARROW_PORTRAIT_QUERY);
+    this.narrowMode = this.narrowQuery.matches;
+    this.narrowQuery.addEventListener('change', this.handleNarrowChange);
+    window.addEventListener('resize', this.handleResize);
+
+    // Swipe + keyboard navigation between views.
+    hub.addEventListener('pointerdown', this.handleSwipeStart, { passive: true });
+    hub.addEventListener('pointerup', this.handleSwipeEnd, { passive: true });
+    hub.addEventListener('keydown', this.handleKeydown);
+
     if (this.calibrating) this.buildCalibrationPanel(hub);
+
+    // First-page artwork presentation must be complete before the loading
+    // overlay is dismissed; later pages decode lazily.
+    this.imageReady = Promise.all([backgroundReady, this.decodePageImages(0)]).then(() => {
+      this.applyView(true);
+      this.diagnostics.info('composition-ready', 'Hub composition prepared', {
+        pages: this.pageCount,
+        selectableSlots: this.resolution.slotToArtwork.size,
+        source: this.resolution.source,
+      });
+    });
   }
 
   onActivate(callback: () => void): void {
     this.activateCallback = callback;
   }
 
-  onSelectArtwork(callback: (hotspot: ResolvedHubHotspot) => void): void {
-    this.selectArtworkCallback = callback;
+  onSelectSlot(callback: (slot: ResolvedHubSlot) => void): void {
+    this.selectSlotCallback = callback;
   }
 
+  /** Critical hub preparation awaited under the loading overlay. */
   prepare(): Promise<void> {
     return this.imageReady;
   }
@@ -164,6 +265,7 @@ export class MainMuseumHub {
     this.element.classList.remove('is-exiting');
     this.setButtonsDisabled(false);
     this.status.textContent = '';
+    // Preserve page state and restore focus to the originating slot.
     requestAnimationFrame(() => this.focusInitialTarget());
   }
 
@@ -187,13 +289,26 @@ export class MainMuseumHub {
     this.focusInitialTarget();
   }
 
-  private setButtonsDisabled(disabled: boolean): void {
-    this.entryButton.disabled = disabled;
-    for (const button of this.hotspotButtons) button.disabled = disabled;
+  focusInitialTarget(): void {
+    const restored = this.lastActivatedSlotId
+      ? this.slotViews.find((view) => view.slot.id === this.lastActivatedSlotId && !view.button.disabled)
+      : undefined;
+    if (restored) {
+      this.goToPage(restored.slot.pageIndex, restored.slot);
+      restored.button.focus({ preventScroll: true });
+      return;
+    }
+    const firstSelectable = this.slotViews.find((view) => view.slot.selectable);
+    (firstSelectable?.button ?? this.entryButton).focus({ preventScroll: true });
   }
 
-  focusInitialTarget(): void {
-    (this.hotspotButtons[0] ?? this.entryButton).focus({ preventScroll: true });
+  private setButtonsDisabled(disabled: boolean): void {
+    this.entryButton.disabled = disabled;
+    for (const view of this.slotViews) {
+      view.button.disabled = disabled || !view.slot.selectable;
+    }
+    this.pagerPrev.disabled = disabled;
+    this.pagerNext.disabled = disabled;
   }
 
   private handleActivate = (): void => {
@@ -202,69 +317,293 @@ export class MainMuseumHub {
     this.activateCallback?.();
   };
 
-  // ── Hotspots ──────────────────────────────────────────────────────────────
+  // ── Composition ───────────────────────────────────────────────────────────
 
-  private buildHotspots(): void {
-    for (const hotspot of this.hotspots) {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'museum-hub__hotspot';
-      button.dataset['slot'] = hotspot.slot;
-      button.setAttribute('aria-label', `Kunstwerk „${hotspot.displayLabel}“ in der Ausstellung öffnen`);
-      this.applyHotspotGeometry(button, hotspot);
-      const frame = document.createElement('span');
-      frame.className = 'museum-hub__hotspot-frame';
-      frame.setAttribute('aria-hidden', 'true');
-      const label = document.createElement('span');
-      label.className = 'museum-hub__hotspot-label';
-      label.setAttribute('aria-hidden', 'true');
-      label.textContent = this.calibrating ? `${hotspot.slot} · ${hotspot.displayLabel}` : hotspot.displayLabel;
-      button.append(frame, label);
-      if (this.calibrating) {
-        const handle = document.createElement('span');
-        handle.className = 'museum-hub__hotspot-handle';
-        handle.setAttribute('aria-hidden', 'true');
-        button.appendChild(handle);
-        button.addEventListener('pointerdown', (event) => this.startCalibrationDrag(event, hotspot, button));
-      } else {
-        button.addEventListener('click', () => this.handleHotspotClick(hotspot));
+  private buildSlots(): void {
+    const rooms = document.createElement('div');
+    rooms.className = 'museum-hub__rooms';
+    for (const page of this.resolution.pages) {
+      const room = document.createElement('div');
+      room.className = 'museum-hub__room';
+      room.dataset['page'] = String(page.pageIndex);
+      for (const slot of page.slots) {
+        const view = this.buildSlotButton(slot);
+        room.appendChild(view.button);
+        this.slotViews.push(view);
       }
-      this.visual.appendChild(button);
-      this.hotspotButtons.push(button);
+      rooms.appendChild(room);
+      this.roomLayers.push(room);
     }
+    this.visual.appendChild(rooms);
   }
 
-  private applyHotspotGeometry(button: HTMLButtonElement, hotspot: ResolvedHubHotspot): void {
-    button.style.left = percent(hotspot.cx - hotspot.w / 2);
-    button.style.top = percent(hotspot.cy - hotspot.h / 2);
-    button.style.width = percent(hotspot.w);
-    button.style.height = percent(hotspot.h);
+  private buildSlotButton(slot: ResolvedHubSlot): SlotView {
+    const preset = this.resolution.framePresets[slot.framePreset]
+      ?? this.resolution.framePresets['matte-charcoal']!;
+    const strengths = frameMaterialStrengths(preset);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'museum-hub__frame';
+    button.dataset['slotId'] = slot.id;
+    if (slot.artworkId) button.dataset['artworkId'] = slot.artworkId;
+    this.applySlotGeometry(button, slot);
+    button.style.setProperty('--frame-color', preset.color);
+    button.style.setProperty('--frame-highlight', String(strengths.highlight));
+    button.style.setProperty('--frame-shadow', String(strengths.shadow));
+    // Wall-specific static light direction matches the room photograph.
+    button.style.setProperty('--frame-light-x', slot.placement.rotateYDeg >= 0 ? '1' : '-1');
+
+    const shell = document.createElement('span');
+    shell.className = 'museum-hub__frame-shell';
+    shell.setAttribute('aria-hidden', 'true');
+    const aperture = document.createElement('span');
+    aperture.className = 'museum-hub__frame-aperture';
+
+    let image: HTMLImageElement | null = null;
+    if (slot.selectable && slot.artworkId) {
+      button.setAttribute(
+        'aria-label',
+        `Kunstwerk „${slot.displayLabel}“ in der Ausstellung öffnen`
+      );
+      image = document.createElement('img');
+      image.className = 'museum-hub__art';
+      image.alt = '';
+      image.decoding = 'async';
+      image.draggable = false;
+      // Missing image data shows a neutral placeholder but retains the exact
+      // valid target ID (placeholder-exact-target).
+      image.addEventListener('error', () => {
+        button.classList.add('has-missing-image');
+        this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
+          slotId: slot.id,
+          artworkId: slot.artworkId,
+        });
+      });
+      aperture.appendChild(image);
+      const placeholder = document.createElement('span');
+      placeholder.className = 'museum-hub__art-placeholder';
+      placeholder.textContent = slot.displayLabel;
+      aperture.appendChild(placeholder);
+    } else {
+      button.disabled = true;
+      button.classList.add('is-disabled-slot');
+      button.setAttribute('aria-label', 'Nicht verfügbarer Ausstellungsplatz');
+      button.setAttribute('aria-disabled', 'true');
+    }
+
+    shell.appendChild(aperture);
+    button.appendChild(shell);
+
+    const label = document.createElement('span');
+    label.className = 'museum-hub__frame-label';
+    label.setAttribute('aria-hidden', 'true');
+    label.textContent = this.calibrating ? `${slot.id} · ${slot.displayLabel}` : slot.displayLabel;
+    button.appendChild(label);
+
+    if (this.calibrating) {
+      const handle = document.createElement('span');
+      handle.className = 'museum-hub__frame-handle';
+      handle.setAttribute('aria-hidden', 'true');
+      button.appendChild(handle);
+      button.disabled = false;
+      button.addEventListener('pointerdown', (event) => this.startCalibrationDrag(event, slot, button));
+    } else if (slot.selectable) {
+      button.addEventListener('click', () => this.handleSlotClick(slot));
+    }
+
+    return { slot, button, image };
   }
 
-  private handleHotspotClick(hotspot: ResolvedHubHotspot): void {
+  /**
+   * Positions the frame button from normalized placement. The button box is
+   * the maximum slot bounds; the artwork keeps its own aspect via a
+   * contain-fit inner box, so unusual ratios get a neutral inset mat rather
+   * than cropping.
+   */
+  private applySlotGeometry(button: HTMLButtonElement, slot: ResolvedHubSlot): void {
+    const { placement, artworkAspect } = slot;
+    // The visual box is `aspect` wide for every 1 unit of height, so a
+    // horizontal fraction represents `aspect` × the same vertical fraction.
+    const boxAspect = this.resolution.background.aspect;
+    let w = placement.maxW;
+    let h = placement.maxH;
+    if (slot.artworkId) {
+      const slotPixelAspect = (placement.maxW * boxAspect) / placement.maxH;
+      if (artworkAspect < slotPixelAspect) {
+        w = (placement.maxH * artworkAspect) / boxAspect;
+      } else {
+        h = (placement.maxW * boxAspect) / artworkAspect;
+      }
+    }
+    button.style.left = percent(placement.cx - w / 2);
+    button.style.top = percent(placement.cy - h / 2);
+    button.style.width = percent(w);
+    button.style.height = percent(h);
+    button.style.setProperty('--frame-rotate-y', `${placement.rotateYDeg}deg`);
+  }
+
+  /** Lazily decodes the artwork images of one room page. */
+  private decodePageImages(pageIndex: number): Promise<void> {
+    if (this.decodedPages.has(pageIndex)) return Promise.resolve();
+    this.decodedPages.add(pageIndex);
+    const waits: Promise<void>[] = [];
+    for (const view of this.slotViews) {
+      if (view.slot.pageIndex !== pageIndex || !view.image || !view.slot.artworkId) continue;
+      const artworkSrc = this.artworkImageSrc(view.slot);
+      if (!artworkSrc) {
+        view.button.classList.add('has-missing-image');
+        continue;
+      }
+      view.image.src = artworkSrc;
+      waits.push(
+        new Promise<void>((resolve) => {
+          const timeout = window.setTimeout(resolve, HUB_IMAGE_TIMEOUT_MS);
+          const done = (): void => {
+            window.clearTimeout(timeout);
+            resolve();
+          };
+          if (view.image!.complete && view.image!.naturalWidth > 0) {
+            done();
+            return;
+          }
+          view.image!.addEventListener('load', done, { once: true });
+          view.image!.addEventListener('error', done, { once: true });
+        })
+      );
+    }
+    return Promise.all(waits).then(() => undefined);
+  }
+
+  private artworkImageSrc(slot: ResolvedHubSlot): string | null {
+    const src = slot.artworkId ? this.resolution.artworkImageById.get(slot.artworkId) : undefined;
+    return src ?? null;
+  }
+
+  private handleSlotClick(slot: ResolvedHubSlot): void {
     if (this.entryButton.disabled) return;
     this.setButtonsDisabled(true);
+    this.lastActivatedSlotId = slot.id;
     this.status.textContent = 'Ausstellung wird geöffnet.';
-    this.selectArtworkCallback?.(hotspot);
+    this.selectSlotCallback?.(slot);
   }
 
+  // ── View navigation (room pages + narrow wall-focus views) ───────────────
+
+  private get viewCount(): number {
+    return this.narrowMode ? this.pageCount * 2 : this.pageCount;
+  }
+
+  private stepView(direction: -1 | 1): void {
+    const next = this.viewIndex + direction;
+    if (next < 0 || next >= this.viewCount) return;
+    this.viewIndex = next;
+    this.applyView();
+  }
+
+  private goToPage(pageIndex: number, slot?: ResolvedHubSlot): void {
+    if (this.narrowMode) {
+      const wall = slot && slot.placement.cx >= 0.5 ? 1 : 0;
+      this.viewIndex = pageIndex * 2 + wall;
+    } else {
+      this.viewIndex = pageIndex;
+    }
+    this.applyView();
+  }
+
+  private applyView(initial = false): void {
+    if (this.disposed) return;
+    this.viewIndex = Math.max(0, Math.min(this.viewCount - 1, this.viewIndex));
+    const pageIndex = this.narrowMode ? Math.floor(this.viewIndex / 2) : this.viewIndex;
+    const wallFocus = this.narrowMode ? (this.viewIndex % 2 === 0 ? 'left' : 'right') : 'full';
+
+    for (const room of this.roomLayers) {
+      const roomPage = Number.parseInt(room.dataset['page'] ?? '0', 10);
+      room.classList.toggle('is-active', roomPage === pageIndex);
+    }
+    // Wall-focus transform: pure CSS custom properties on the shared visual.
+    this.element.dataset['wallFocus'] = wallFocus;
+    if (wallFocus === 'full') {
+      this.visual.style.setProperty('--hub-focus-scale', '1');
+      this.visual.style.setProperty('--hub-focus-x', '0%');
+    } else {
+      this.visual.style.setProperty('--hub-focus-scale', '1.9');
+      this.visual.style.setProperty('--hub-focus-x', wallFocus === 'left' ? '24%' : '-24%');
+    }
+
+    const showPager = this.viewCount > 1;
+    this.pager.hidden = !showPager;
+    if (showPager) {
+      this.pagerPrev.disabled = this.viewIndex === 0;
+      this.pagerNext.disabled = this.viewIndex === this.viewCount - 1;
+      this.pagerCounter.textContent = this.narrowMode
+        ? `Raum ${pageIndex + 1}/${this.pageCount} · ${wallFocus === 'left' ? 'Linke' : 'Rechte'} Wand`
+        : `Raum ${pageIndex + 1} / ${this.pageCount}`;
+    }
+    if (!initial) void this.decodePageImages(pageIndex);
+  }
+
+  private handleNarrowChange = (): void => {
+    const wasNarrow = this.narrowMode;
+    this.narrowMode = this.narrowQuery.matches;
+    if (wasNarrow !== this.narrowMode) {
+      const pageIndex = wasNarrow ? Math.floor(this.viewIndex / 2) : this.viewIndex;
+      this.viewIndex = this.narrowMode ? pageIndex * 2 : pageIndex;
+      this.applyView();
+    }
+  };
+
+  /** Debounced-in-RAF recalculation of the shared view transform only. */
+  private handleResize = (): void => {
+    if (this.resizeRafId !== 0) return;
+    this.resizeRafId = requestAnimationFrame(() => {
+      this.resizeRafId = 0;
+      this.applyView();
+    });
+  };
+
+  private handleKeydown = (event: KeyboardEvent): void => {
+    if (this.calibrating) return;
+    if (event.key === 'ArrowLeft') {
+      this.stepView(-1);
+      event.preventDefault();
+    } else if (event.key === 'ArrowRight') {
+      this.stepView(1);
+      event.preventDefault();
+    }
+  };
+
+  private handleSwipeStart = (event: PointerEvent): void => {
+    if (this.calibrating) return;
+    this.swipeStartX = event.clientX;
+    this.swipeStartY = event.clientY;
+  };
+
+  private handleSwipeEnd = (event: PointerEvent): void => {
+    if (this.swipeStartX === null || this.swipeStartY === null) return;
+    const dx = event.clientX - this.swipeStartX;
+    const dy = event.clientY - this.swipeStartY;
+    this.swipeStartX = null;
+    this.swipeStartY = null;
+    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    this.stepView(dx < 0 ? 1 : -1);
+  };
+
   // ── Calibration mode (?hubCalibrate=1) ───────────────────────────────────
-  // Non-dev calibration flow: drag a hotspot to move it, drag the corner
-  // handle to resize. On release the JSON config block is refreshed in the
-  // on-screen copy panel and logged via diagnostics. Paste the JSON into
-  // `customer-artworks/hub-hotspots.json` and re-run the gallery update.
+  // Calibration manipulates the actual frame bounds (the same buttons users
+  // click) and exports the complete museum-hub.json schema. Paste the JSON
+  // into `customer-artworks/museum-hub.json` and re-run the gallery update.
 
   private buildCalibrationPanel(hub: HTMLElement): void {
     const panel = document.createElement('div');
     panel.className = 'museum-hub__calibration';
     const heading = document.createElement('p');
     heading.className = 'museum-hub__calibration-title';
-    heading.textContent = 'Hotspot-Kalibrierung — JSON in customer-artworks/hub-hotspots.json einfügen';
+    heading.textContent = 'Rahmen-Kalibrierung — JSON in customer-artworks/museum-hub.json einfügen';
     const output = document.createElement('textarea');
     output.className = 'museum-hub__calibration-output';
     output.readOnly = true;
-    output.rows = 8;
-    output.setAttribute('aria-label', 'Hotspot-Konfiguration als JSON');
+    output.rows = 12;
+    output.setAttribute('aria-label', 'Museum-Hub-Konfiguration als JSON');
     panel.append(heading, output);
     hub.appendChild(panel);
     this.calibrationOutput = output;
@@ -273,22 +612,22 @@ export class MainMuseumHub {
 
   private startCalibrationDrag(
     event: PointerEvent,
-    hotspot: ResolvedHubHotspot,
+    slot: ResolvedHubSlot,
     button: HTMLButtonElement
   ): void {
     event.preventDefault();
     const target = event.target as HTMLElement | null;
     this.calibrationDrag = {
-      hotspot,
+      slot,
       button,
       pointerId: event.pointerId,
-      mode: target?.classList.contains('museum-hub__hotspot-handle') ? 'resize' : 'move',
+      mode: target?.classList.contains('museum-hub__frame-handle') ? 'resize' : 'move',
       startX: event.clientX,
       startY: event.clientY,
-      startCx: hotspot.cx,
-      startCy: hotspot.cy,
-      startW: hotspot.w,
-      startH: hotspot.h,
+      startCx: slot.placement.cx,
+      startCy: slot.placement.cy,
+      startW: slot.placement.maxW,
+      startH: slot.placement.maxH,
     };
     button.setPointerCapture(event.pointerId);
     button.addEventListener('pointermove', this.handleCalibrationMove);
@@ -305,13 +644,13 @@ export class MainMuseumHub {
     const dy = (event.clientY - drag.startY) / rect.height;
     const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
     if (drag.mode === 'move') {
-      drag.hotspot.cx = clamp01(drag.startCx + dx);
-      drag.hotspot.cy = clamp01(drag.startCy + dy);
+      drag.slot.placement.cx = clamp01(drag.startCx + dx);
+      drag.slot.placement.cy = clamp01(drag.startCy + dy);
     } else {
-      drag.hotspot.w = clamp01(Math.max(0.02, drag.startW + dx * 2));
-      drag.hotspot.h = clamp01(Math.max(0.02, drag.startH + dy * 2));
+      drag.slot.placement.maxW = clamp01(Math.max(0.02, drag.startW + dx * 2));
+      drag.slot.placement.maxH = clamp01(Math.max(0.02, drag.startH + dy * 2));
     }
-    this.applyHotspotGeometry(drag.button, drag.hotspot);
+    this.applySlotGeometry(drag.button, drag.slot);
   };
 
   private handleCalibrationEnd = (event: PointerEvent): void => {
@@ -325,27 +664,58 @@ export class MainMuseumHub {
   };
 
   private updateCalibrationOutput(): void {
-    const config = this.hotspots.map(({ slot, artworkId, cx, cy, w, h, label }) => ({
-      slot,
-      artworkId,
-      cx: Math.round(cx * 1000) / 1000,
-      cy: Math.round(cy * 1000) / 1000,
-      w: Math.round(w * 1000) / 1000,
-      h: Math.round(h * 1000) / 1000,
-      ...(label ? { label } : {}),
-    }));
+    const round = (value: number): number => Math.round(value * 1000) / 1000;
+    const config = {
+      version: 1,
+      coverage: 'all-active-artworks',
+      background: {
+        src: this.resolution.background.src,
+        aspect: Math.round(this.resolution.background.aspect * 1e6) / 1e6,
+      },
+      visualTokens: this.resolution.visualTokens,
+      framePresets: this.resolution.framePresets,
+      fallbacks: {
+        requireAllMapped: true,
+        autoPlaceUnmapped: true,
+        overflow: 'paginate',
+        invalidMapping: 'disable-slot',
+        missingImage: 'placeholder-exact-target',
+        selectionTimeoutMs: this.resolution.selectionTimeoutMs,
+        selectionTimeout: 'open-exact-target-procedural',
+      },
+      slots: this.slotViews.map(({ slot }) => ({
+        id: slot.id,
+        enabled: slot.disabledReason !== 'explicitly-disabled',
+        selectable: slot.selectable,
+        ...(slot.artworkId ? { artworkId: slot.artworkId } : {}),
+        placement: {
+          cx: round(slot.placement.cx),
+          cy: round(slot.placement.cy),
+          maxW: round(slot.placement.maxW),
+          maxH: round(slot.placement.maxH),
+          rotateYDeg: round(slot.placement.rotateYDeg),
+        },
+      })),
+    };
     const json = JSON.stringify(config, null, 2);
     if (this.calibrationOutput) this.calibrationOutput.value = json;
-    this.diagnostics.info('hotspot-calibration', 'Hub hotspot calibration snapshot', { config });
+    this.diagnostics.info('frame-calibration', 'Museum hub calibration snapshot', { config });
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.resizeRafId !== 0) cancelAnimationFrame(this.resizeRafId);
+    this.narrowQuery.removeEventListener('change', this.handleNarrowChange);
+    window.removeEventListener('resize', this.handleResize);
+    this.element.removeEventListener('pointerdown', this.handleSwipeStart);
+    this.element.removeEventListener('pointerup', this.handleSwipeEnd);
+    this.element.removeEventListener('keydown', this.handleKeydown);
     this.entryButton.removeEventListener('click', this.handleActivate);
     this.activateCallback = null;
-    this.selectArtworkCallback = null;
-    this.hotspotButtons.length = 0;
+    this.selectSlotCallback = null;
+    this.slotViews.length = 0;
+    this.roomLayers.length = 0;
     this.element.remove();
   }
 }

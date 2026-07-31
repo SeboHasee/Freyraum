@@ -39,7 +39,7 @@ export class RendererManager {
   // diagnostics snapshot (periodic in info/verbose modes).
   private readonly _sizeScratch = new THREE.Vector2();
 
-  constructor(container: HTMLElement, preset: QualityPreset) {
+  constructor(container: HTMLElement, preset: QualityPreset, wallClearColor = '#e2e4e3') {
     this.preset = preset;
 
     this.renderer = new THREE.WebGLRenderer({
@@ -55,8 +55,10 @@ export class RendererManager {
     // reduces contrast and shifts hues away from the source artwork.
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;
-    // Match the CSS --bg1 token so canvas creation/reveal cannot flash white.
-    this.renderer.setClearColor(0xeef1f3);
+    // v0.80 — clear color comes from the resolved wall token (default
+    // `#E2E4E3`) so CSS and WebGL share one authoritative value and canvas
+    // creation/reveal cannot flash white.
+    this.renderer.setClearColor(new THREE.Color(wallClearColor));
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 

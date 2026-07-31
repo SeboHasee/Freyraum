@@ -26,7 +26,7 @@ import { KeyboardNav } from './interaction/KeyboardNav';
 import { KeyboardHelp } from './ui/KeyboardHelp';
 import { CanvasInteraction } from './interaction/CanvasInteraction';
 import { MainMuseumHub } from './hub/MainMuseumHub';
-import { resolveHubHotspots } from './config/hubHotspots';
+import { resolveMuseumHub } from './config/museumHub';
 import { DestinationRouter } from './navigation/DestinationRouter';
 import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
 import { PreferencesStore } from './utils/preferences';
@@ -584,20 +584,34 @@ async function main(): Promise<void> {
     withoutWebglImage: artworkManifest.filter((a) => !a.hasWebglImage).length,
   });
 
-  // v0.79 — hub hotspot config: injected customer JSON → built-in default
-  // table → order-derived hotspots. Resolved once against the active
-  // artwork manifest; unresolved IDs use fallback_to_gallery_default.
-  const injectedHotspots = (window as unknown as { __FREYRAUM_HUB_HOTSPOTS?: unknown })
+  // v0.80 — unified museum-hub configuration: injected customer
+  // `museum-hub.json` → migrated legacy hotspot array → built-in default.
+  // Resolved once against the active artwork manifest with exact-ID maps,
+  // full-manifest coverage, and paginated overflow (no slot cap).
+  const injectedMuseumHub = (window as unknown as { __FREYRAUM_MUSEUM_HUB?: unknown })
+    .__FREYRAUM_MUSEUM_HUB;
+  const injectedLegacyHotspots = (window as unknown as { __FREYRAUM_HUB_HOTSPOTS?: unknown })
     .__FREYRAUM_HUB_HOTSPOTS;
-  const hubHotspotResolution = resolveHubHotspots(artworks, injectedHotspots);
-  diagnostics.info('boot', 'hub-hotspots-resolved', 'Hub hotspot configuration resolved', {
-    source: hubHotspotResolution.source,
-    count: hubHotspotResolution.hotspots.length,
-    rejected: hubHotspotResolution.rejected,
-    unresolved: hubHotspotResolution.hotspots
-      .filter((h) => h.artworkIndex < 0)
-      .map((h) => ({ slot: h.slot, artworkId: h.artworkId })),
+  const museumHubResolution = resolveMuseumHub(artworks, injectedMuseumHub, injectedLegacyHotspots);
+  diagnostics.info('boot', 'museum-hub-resolved', 'Museum hub configuration resolved', {
+    source: museumHubResolution.source,
+    pages: museumHubResolution.pages.length,
+    selectableSlots: museumHubResolution.slotToArtwork.size,
+    unmappedArtworkCount: museumHubResolution.unmappedArtworkCount,
+    disabledSlots: museumHubResolution.pages
+      .flatMap((page) => page.slots)
+      .filter((slot) => !slot.selectable)
+      .map((slot) => ({ slotId: slot.id, reason: slot.disabledReason })),
+    warnings: museumHubResolution.warnings,
   });
+
+  // v0.80 — central visual-token resolver: one resolved wall color reaches
+  // CSS custom properties and the WebGL clear color before renderer
+  // construction. Validated customer overrides come from museum-hub.json.
+  const visualTokens = museumHubResolution.visualTokens;
+  document.documentElement.style.setProperty('--color-gallery-wall', visualTokens.galleryWall);
+  document.documentElement.style.setProperty('--color-museum-wall', visualTokens.museumWall);
+  diagnostics.info('boot', 'visual-tokens-resolved', 'Wall color tokens resolved', visualTokens);
 
   const injectedAudio = (window as unknown as { __FREYRAUM_AUDIO?: unknown }).__FREYRAUM_AUDIO;
   const customerAudio = sanitizeInjectedAudio(injectedAudio, diagnostics);
@@ -635,7 +649,7 @@ async function main(): Promise<void> {
 
   let rendererManager: RendererManager;
   try {
-    rendererManager = new RendererManager(app, initialPreset);
+    rendererManager = new RendererManager(app, initialPreset, visualTokens.galleryWall);
   } catch (err) {
     diagnostics.error('renderer', 'init-failed', 'RendererManager initialization failed', err);
     loadingOverlay.dispose();
@@ -832,7 +846,7 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
-  const museumHub = new MainMuseumHub(app, hubHotspotResolution.hotspots);
+  const museumHub = new MainMuseumHub(app, museumHubResolution);
   const unsubscribeAudioState = backgroundAudio.subscribe((state) => {
     preferencesPanel.setAudioStatusMessage(state.message);
   });
@@ -1707,47 +1721,73 @@ async function main(): Promise<void> {
     void destinationRouter.navigate('gallery');
   });
 
-  // v0.79 — hub hotspot selection: valid mapping jumps the gallery to the
-  // target artwork behind a 1500 ms readiness gate; missing/invalid IDs use
-  // fallback_to_gallery_default (enter at the gallery's current index).
-  const HUB_HOTSPOT_READINESS_TIMEOUT_MS = 1500;
-  museumHub.onSelectArtwork((hotspot) => {
-    if (hotspot.artworkIndex < 0) {
-      diagnostics.warn('navigation', 'hub-hotspot-fallback', 'Hub hotspot artwork unresolved; falling back to gallery default', {
-        slot: hotspot.slot,
-        artworkId: hotspot.artworkId,
-        behavior: 'fallback_to_gallery_default',
-        galleryIndex: galleryManager.index,
+  // v0.80 — exact-ID selection controller. The slot's artwork ID is resolved
+  // again on activation against an immutable ID→index map; the readiness gate
+  // prefers `albedoLoaded && materialApplied && shaderCompiled` and falls back
+  // after the configured timeout to the same exact target with its procedural
+  // surface. A selection generation token ignores stale completions, and there
+  // is no fallback to the gallery's previous/current artwork.
+  const artworkIndexById = new Map<string, number>();
+  artworks.forEach((artwork, index) => artworkIndexById.set(artwork.id, index));
+  let hubSelectionGeneration = 0;
+  museumHub.onSelectSlot((slot) => {
+    const generation = ++hubSelectionGeneration;
+    const targetArtworkId = slot.artworkId;
+    const targetIndex = targetArtworkId !== null ? artworkIndexById.get(targetArtworkId) : undefined;
+    if (targetArtworkId === null || targetIndex === undefined) {
+      // Disabled/invalid slots are non-interactive buttons, so this path only
+      // guards against inconsistent state. It never opens another artwork.
+      diagnostics.warn('navigation', 'hub-slot-invalid', 'Hub slot activation without a valid exact target; ignoring', {
+        slotId: slot.id,
+        artworkId: targetArtworkId,
       });
-      void destinationRouter.navigate('gallery');
+      museumHub.showError();
       return;
     }
-    diagnostics.info('navigation', 'hub-hotspot-select', 'Hub hotspot selected', {
-      slot: hotspot.slot,
-      artworkId: hotspot.artworkId,
-      artworkIndex: hotspot.artworkIndex,
+    diagnostics.info('navigation', 'hub-slot-select', 'Hub frame selected', {
+      slotId: slot.id,
+      artworkId: targetArtworkId,
+      artworkIndex: targetIndex,
+      generation,
     });
-    galleryManager.goTo(hotspot.artworkIndex);
-    galleryManager.promotePrefetchWindow(hotspot.artworkIndex, 'hub-hotspot');
+    // Commit the exact target and promote its albedo/PBR work to the
+    // critical queue before waiting on readiness.
+    galleryManager.goTo(targetIndex);
+    galleryManager.promotePrefetchWindow(targetIndex, 'hub-slot');
     void galleryManager
-      .whenArtworkInteractive(hotspot.artworkIndex, HUB_HOTSPOT_READINESS_TIMEOUT_MS)
+      .whenArtworkInteractive(targetIndex, museumHubResolution.selectionTimeoutMs)
       .then((verdict) => {
+        if (generation !== hubSelectionGeneration) {
+          diagnostics.info('navigation', 'hub-slot-stale-readiness', 'Ignoring stale hub readiness completion', {
+            slotId: slot.id,
+            artworkId: targetArtworkId,
+            generation,
+            currentGeneration: hubSelectionGeneration,
+          });
+          return;
+        }
         if (verdict === 'timeout') {
-          diagnostics.warn('navigation', 'hub-hotspot-readiness-timeout', 'Hub hotspot readiness gate timed out; entering with procedural surface', {
-            slot: hotspot.slot,
-            artworkId: hotspot.artworkId,
-            timeoutMs: HUB_HOTSPOT_READINESS_TIMEOUT_MS,
+          diagnostics.warn('navigation', 'hub-slot-readiness-timeout', 'Hub readiness gate timed out; entering exact target with procedural surface', {
+            slotId: slot.id,
+            artworkId: targetArtworkId,
+            timeoutMs: museumHubResolution.selectionTimeoutMs,
           });
         }
+        // Re-assert the committed target before entering: duplicate clicks
+        // and stale completions cannot change the destination.
+        if (galleryManager.index !== targetIndex) galleryManager.goTo(targetIndex);
         void destinationRouter.navigate('gallery');
       });
   });
 
-  // v0.79 — back navigation to the museum hub: Topbar "Museum" button and
-  // Escape (only when no dialog/panel consumes it and no fullscreen is
-  // active — KeyboardNav already skips Escape during fullscreen).
+  // v0.80 — back navigation to the museum hub: promoted Topbar control and
+  // guarded Escape share one idempotent router action. The hub keeps its page
+  // state and restores focus to the originating slot. During navigation the
+  // control exposes a busy/disabled state to suppress duplicate activation.
   const navigateBackToHub = (): void => {
-    void destinationRouter.navigate('hub');
+    hubSelectionGeneration += 1;
+    topbar.setBackBusy(true);
+    void destinationRouter.navigate('hub').finally(() => topbar.setBackBusy(false));
   };
   topbar.onBackClick = navigateBackToHub;
   keyboardNav.onEscape = () => {
