@@ -205,6 +205,204 @@ canvas {
   transform: scale(1);
 }
 
+// =============================================================================
+// Main Museum Hub
+// =============================================================================
+
+.museum-hub {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.95), transparent 45%),
+    linear-gradient(180deg, #dbe6ee 0%, #e8e5df 55%, #c8c9c7 100%);
+  opacity: 1;
+  transition: opacity 0.52s var(--ease-gallery-in-out);
+}
+
+.museum-hub[hidden] {
+  display: none;
+}
+
+.museum-hub.is-exiting {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.museum-hub__visual {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(100vw, 177.734375vh);
+  height: min(100vh, 56.25vw);
+  transform: translate(-50%, -50%);
+}
+
+.museum-hub__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: fill;
+  user-select: none;
+}
+
+.museum-hub.has-image-error .museum-hub__image {
+  opacity: 0;
+}
+
+.museum-hub__shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(4, 8, 11, 0.36) 0%, transparent 28%),
+    linear-gradient(0deg, rgba(4, 8, 11, 0.26) 0%, transparent 26%);
+}
+
+.museum-hub__header {
+  position: absolute;
+  z-index: 2;
+  top: max(26px, calc(18px + var(--safe-top)));
+  left: max(28px, calc(22px + var(--safe-left)));
+  color: var(--text-inverse);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.museum-hub__eyebrow {
+  margin-bottom: 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+}
+
+.museum-hub__title {
+  font-size: clamp(1.8rem, 4vw, 3.6rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.museum-hub__introduction {
+  max-width: 34rem;
+  margin-top: 12px;
+  font-size: clamp(0.82rem, 1.2vw, 1rem);
+  line-height: 1.45;
+}
+
+.museum-hub__destination {
+  position: absolute;
+  z-index: 3;
+  left: 57.25%;
+  top: 43.2%;
+  width: 10.25%;
+  height: 16.7%;
+  border-radius: 2px;
+  color: var(--text-inverse);
+  cursor: pointer;
+}
+
+.museum-hub__destination-frame {
+  position: absolute;
+  inset: -8px;
+  border: 2px solid rgba(255, 255, 255, 0.66);
+  box-shadow: 0 0 0 3px rgba(15, 20, 24, 0.2);
+  transition:
+    border-color var(--dur-control) var(--ease-out),
+    box-shadow var(--dur-control) var(--ease-out),
+    transform var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__destination-label {
+  position: absolute;
+  top: calc(100% + 18px);
+  left: 50%;
+  width: max-content;
+  max-width: min(240px, 52vw);
+  transform: translateX(-50%) translateY(4px);
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-pill);
+  background: rgba(10, 14, 17, 0.78);
+  box-shadow: var(--shadow-medium);
+  font-size: clamp(0.72rem, 1.1vw, 0.9rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.88;
+  transition:
+    opacity var(--dur-control) var(--ease-out),
+    transform var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__destination:hover .museum-hub__destination-frame,
+.museum-hub__destination:focus-visible .museum-hub__destination-frame {
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 5px rgba(15, 20, 24, 0.42), 0 0 32px rgba(255, 255, 255, 0.5);
+  transform: scale(1.035);
+}
+
+.museum-hub__destination:hover .museum-hub__destination-label,
+.museum-hub__destination:focus-visible .museum-hub__destination-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.museum-hub__destination:focus-visible {
+  outline: none;
+}
+
+.museum-hub__destination:disabled {
+  cursor: wait;
+}
+
+#app:not([data-experience='gallery']) {
+  .topbar,
+  .info-panel,
+  .nav-controls,
+  .zoom-controls,
+  .timeline,
+  .hint-text,
+  .info-panel-peek-hit,
+  .info-panel-peek,
+  .info-panel-chevron {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+
+@media (max-aspect-ratio: 4 / 5) {
+  .museum-hub__header {
+    right: max(24px, calc(18px + var(--safe-right)));
+    text-align: center;
+  }
+
+  .museum-hub__introduction {
+    margin-inline: auto;
+  }
+
+  .museum-hub__destination-label {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .museum-hub,
+  .museum-hub__destination-frame,
+  .museum-hub__destination-label {
+    transition: none;
+  }
+}
+
+:root[data-motion='reduced'] {
+  .museum-hub,
+  .museum-hub__destination-frame,
+  .museum-hub__destination-label {
+    transition: none;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Universal focus ring
 // -----------------------------------------------------------------------------

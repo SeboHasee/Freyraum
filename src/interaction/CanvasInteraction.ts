@@ -56,6 +56,7 @@ export class CanvasInteraction {
    *  the `beforeunload` cleanup), which previously could remove
    *  pointer-capture listeners twice and leak a no-op handler. */
   private disposed = false;
+  private enabled = true;
 
   private state: GestureState = 'idle';
   private readonly active = new Map<number, PointerSlot>();
@@ -110,6 +111,7 @@ export class CanvasInteraction {
   // ---------------------------------------------------------------------------
 
   private onPointerDown = (e: PointerEvent): void => {
+    if (!this.enabled) return;
     // Mouse-only: reject non-primary buttons.
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
@@ -153,6 +155,7 @@ export class CanvasInteraction {
   };
 
   private handlePointerMove(e: PointerEvent): void {
+    if (!this.enabled) return;
     const slot = this.active.get(e.pointerId);
 
     // Hover rotation (fine pointer only, no buttons held).
@@ -188,6 +191,7 @@ export class CanvasInteraction {
   }
 
   private onPointerUp = (e: PointerEvent): void => {
+    if (!this.enabled) return;
     const slot = this.active.get(e.pointerId);
     this.active.delete(e.pointerId);
     try {
@@ -217,6 +221,7 @@ export class CanvasInteraction {
   };
 
   private onPointerCancel = (e: PointerEvent): void => {
+    if (!this.enabled) return;
     this.active.delete(e.pointerId);
     if (this.active.size === 0) {
       this.state = 'idle';
@@ -234,6 +239,7 @@ export class CanvasInteraction {
   // ---------------------------------------------------------------------------
 
   private onTouchStart = (e: TouchEvent): void => {
+    if (!this.enabled) return;
     // Suppress synthetic mouse/click events that the browser would emit
     // after this touch sequence finishes (Bug 3).
     if (e.cancelable) e.preventDefault();
@@ -250,6 +256,7 @@ export class CanvasInteraction {
   };
 
   private onTouchMove = (e: TouchEvent): void => {
+    if (!this.enabled) return;
     if (e.touches.length >= 2) {
       // Own the pinch gesture (Bug 2). Browser must not run native zoom.
       if (e.cancelable) e.preventDefault();
@@ -284,6 +291,7 @@ export class CanvasInteraction {
   };
 
   private onTouchEnd = (e: TouchEvent): void => {
+    if (!this.enabled) return;
     if (this.state === 'swipe-candidate' && e.changedTouches.length > 0) {
       const slot = this.active.get(0);
       if (slot) this.resolveSwipe(slot, e.changedTouches[0].clientX, e.changedTouches[0].clientY);
@@ -305,10 +313,12 @@ export class CanvasInteraction {
   // ---------------------------------------------------------------------------
 
   private onWheel = (e: WheelEvent): void => {
+    if (!this.enabled) return;
     this.galleryManager.addZoomDelta(e.deltaY * 0.0045);
   };
 
   private onLegacyMouseMove = (e: MouseEvent): void => {
+    if (!this.enabled) return;
     // Used only in the Touch Events fallback path on browsers without
     // Pointer Events. Updates hover rotation on fine-pointer desktops.
     if (this.state !== 'idle') return;
@@ -334,6 +344,16 @@ export class CanvasInteraction {
       // on pointerup/touchend), not on initial pointer down.
       this.galleryManager.navigate(dx < 0 ? 1 : -1);
       this.diagnostics.debug('swipe', 'Swipe resolved', { direction: dx < 0 ? 'next' : 'prev' });
+    }
+  }
+
+  setEnabled(enabled: boolean): void {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    if (!enabled) {
+      this.active.clear();
+      this.state = 'idle';
+      this.galleryManager.setHoverTarget(0, 0);
     }
   }
 

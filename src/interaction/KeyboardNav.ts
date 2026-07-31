@@ -14,6 +14,7 @@ export class KeyboardNav {
   private readonly galleryManager: GalleryManager;
   private readonly keyboardHelp: { open(opener?: HTMLElement): void } | undefined;
   private fullscreenTarget: HTMLElement = document.documentElement;
+  private enabled = true;
 
   constructor(
     galleryManager: GalleryManager,
@@ -29,6 +30,7 @@ export class KeyboardNav {
   }
 
   private handleKeyDown = (e: KeyboardEvent): void => {
+    if (!this.enabled) return;
     // Ignore shortcuts when the user is editing form fields or focused on
     // an interactive timeline thumbnail (timeline manages its own arrows).
     if (isTypingTarget(e.target)) return;
@@ -73,6 +75,10 @@ export class KeyboardNav {
         break;
     }
   };
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+  }
 
   private toggleFullscreen(): void {
     if (!document.fullscreenEnabled) return;

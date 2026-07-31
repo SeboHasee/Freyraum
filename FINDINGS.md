@@ -1,5 +1,21 @@
 # FINDINGS
 
+## Main Museum Hub decisions (2026-07-31)
+
+1. The lowest-risk integration point is after existing gallery readiness and
+   before loading-overlay dismissal. Gallery preload, shader warmup, and the
+   production render loop remain unchanged.
+2. The hub is a static DOM presentation over the shared WebGL runtime. This uses
+   the supplied room composition exactly while avoiding a second scene, camera,
+   renderer, or continuous hub animation.
+3. `DestinationRouter` provides the scalable boundary: registered destinations
+   own prepare/enter/exit hooks, while the router owns synchronous transition
+   locking, stale-transition generation checks, state reporting, and recovery.
+4. Gallery pointer and keyboard controllers require explicit enable/disable
+   gates because both install listeners before the loading overlay is dismissed.
+5. Deferred gallery GPU warm renders temporarily expose the hidden artwork root
+   only for their offscreen render, preserving the existing readiness contract.
+
 ## Runtime presentation decisions (2026-07-19)
 
 1. Lighting is a fixed runtime concern, not a preference. `LightingSetup` owns the

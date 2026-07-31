@@ -25,6 +25,8 @@ import { Timeline } from './timeline/Timeline';
 import { KeyboardNav } from './interaction/KeyboardNav';
 import { KeyboardHelp } from './ui/KeyboardHelp';
 import { CanvasInteraction } from './interaction/CanvasInteraction';
+import { MainMuseumHub } from './hub/MainMuseumHub';
+import { DestinationRouter } from './navigation/DestinationRouter';
 import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
 import { PreferencesStore } from './utils/preferences';
 import { isWebGLAvailable } from './utils/webgl';
@@ -361,7 +363,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   overlay.className = 'loading-overlay';
   overlay.setAttribute('role', 'status');
   overlay.setAttribute('aria-live', 'polite');
-  overlay.setAttribute('aria-label', 'Galerie wird geladen');
+  overlay.setAttribute('aria-label', 'Museum wird geladen');
 
   // v0.28 X-04 — 12 particles, 3-6 s duration, 4-waypoint random wander.
   // Each particle gets three independent drift vectors (dx1/dy1 through dx3/dy3)
@@ -420,7 +422,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   wordmark.appendChild(wordmarkText);
   const subtitle = document.createElement('div');
   subtitle.className = 'loading-subtitle';
-  subtitle.textContent = 'Galerie wird geladen';
+  subtitle.textContent = 'Museum wird geladen';
   const track = document.createElement('div');
   track.className = 'loading-progress-track';
   const fill = document.createElement('div');
@@ -434,8 +436,8 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   hint.textContent = hints[0];
   const startButton = document.createElement('button');
   startButton.className = 'loading-start-btn';
-  startButton.textContent = 'Galerie betreten';
-  startButton.setAttribute('aria-label', 'Galerie betreten und Ausstellung beginnen');
+  startButton.textContent = 'Museum betreten';
+  startButton.setAttribute('aria-label', 'Museum betreten und Ausstellungen entdecken');
   startButton.disabled = true;
   card.append(wordmark, subtitle, track, pct, hint, startButton);
   overlay.appendChild(card);
@@ -471,9 +473,9 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
       startButton.addEventListener('click', () => {
         startButton.style.removeProperty('will-change');
       }, { once: true });
-      subtitle.textContent = 'Galerie bereit — zum Starten klicken';
+      subtitle.textContent = 'Museum bereit — zum Starten klicken';
       hint.textContent = 'Alle Inhalte sind vollständig vorbereitet.';
-      overlay.setAttribute('aria-label', 'Galerie bereit — zum Starten klicken');
+      overlay.setAttribute('aria-label', 'Museum bereit — zum Starten klicken');
       return new Promise<void>((resolve) => {
         let entered = false;
         const go = (): void => {
@@ -516,6 +518,7 @@ async function main(): Promise<void> {
     diagnostics.error('boot', 'missing-app-root', 'Missing #app root element');
     return;
   }
+  app.dataset['experience'] = 'loading';
 
   // Preferences must apply before WebGL bootstrapping so the fallback
   // screen and loading overlay both react to motion/contrast settings.
@@ -813,6 +816,7 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
+  const museumHub = new MainMuseumHub(app);
   const unsubscribeAudioState = backgroundAudio.subscribe((state) => {
     preferencesPanel.setAudioStatusMessage(state.message);
   });
@@ -908,6 +912,8 @@ async function main(): Promise<void> {
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
   const keyboardHelp = new KeyboardHelp();
   const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
+  canvasInteraction.setEnabled(false);
+  keyboardNav.setEnabled(false);
   topbar.onHelpClick = () => keyboardHelp.open(topbar.helpBtn);
   // The topbar info button is a secondary discovery path for the auto-hidden
   // information panel, so users are not dependent on edge affordances.
@@ -975,17 +981,23 @@ async function main(): Promise<void> {
   const warmArtwork = (index: number, reason: string): boolean => {
     const start = performance.now();
     if (!galleryManager.warmArtworkForGPU(index, reason)) return false;
+    const wasVisible = artworkMesh.group.visible;
+    artworkMesh.group.visible = true;
     const previousTarget = rendererManager.renderer.getRenderTarget();
     rendererManager.renderer.setRenderTarget(warmRenderTarget);
     rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
     rendererManager.renderer.setRenderTarget(previousTarget);
+    artworkMesh.group.visible = wasVisible;
     galleryManager.markGpuWarmed(index, performance.now() - start, reason);
     return true;
   };
   const warmArtworkFinalPath = (index: number, reason: string): boolean => {
     const start = performance.now();
     if (!galleryManager.warmArtworkForGPU(index, reason)) return false;
+    const wasVisible = artworkMesh.group.visible;
+    artworkMesh.group.visible = true;
     postProcessing.render();
+    artworkMesh.group.visible = wasVisible;
     galleryManager.markGpuWarmed(index, performance.now() - start, reason);
     diagnostics.debug('boot', 'artwork-final-path-warm', 'Artwork rendered through final post-processing path under loading overlay', {
       index,
@@ -1626,6 +1638,58 @@ async function main(): Promise<void> {
   timeline.onSelect((index: number) => galleryManager.goTo(index));
   timeline.onPreview((index: number) => galleryManager.promotePrefetchWindow(index, 'timeline-preview'));
 
+  const destinationRouter = new DestinationRouter({
+    onStateChange: (state) => {
+      app.dataset['experience'] = state === 'destination' ? 'gallery' : state;
+      diagnostics.info('navigation', 'experience-state', 'Experience state changed', { state });
+    },
+    onTransitionError: (destination, error) => {
+      museumHub.showError();
+      diagnostics.error(
+        'navigation',
+        'destination-transition-failed',
+        `Failed to enter destination "${destination.id}"`,
+        error
+      );
+    },
+  });
+  destinationRouter.register({
+    id: 'hub',
+    label: 'Main Museum Hub',
+    prepare: () => museumHub.prepare(),
+    enter: () => {
+      artworkMesh.group.visible = false;
+      canvasInteraction.setEnabled(false);
+      keyboardNav.setEnabled(false);
+      museumHub.enter();
+    },
+    exit: () => museumHub.exit(preferences.current.reducedMotion),
+  });
+  destinationRouter.register({
+    id: 'gallery',
+    label: 'Interaktive Galerie',
+    prepare: async () => {
+      artworkMesh.group.visible = true;
+      galleryManager.resetView();
+      await rafYield();
+    },
+    enter: () => {
+      canvasInteraction.setEnabled(true);
+      keyboardNav.setEnabled(true);
+      canvas.focus({ preventScroll: true });
+      diagnostics.info('navigation', 'gallery-entered', 'Existing interactive gallery entered from museum hub', {
+        artworkId: artworks[galleryManager.index]?.id,
+      });
+    },
+    exit: () => {
+      canvasInteraction.setEnabled(false);
+      keyboardNav.setEnabled(false);
+    },
+  });
+  museumHub.onActivate(() => {
+    void destinationRouter.navigate('gallery');
+  });
+
   // Animation loop
   const animate = (now: number): void => {
     rafId = requestAnimationFrame(animate);
@@ -1731,6 +1795,9 @@ async function main(): Promise<void> {
     deferredArtworkCount: fullReadinessSummary.deferredArtworkCount,
   });
 
+  artworkMesh.group.visible = false;
+  loadingOverlay.setStatus('Museum wird vorbereitet');
+  await destinationRouter.startAt('hub');
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
 
@@ -1766,6 +1833,7 @@ async function main(): Promise<void> {
     chromeObserver?.disconnect();
     clearTimeout(resizeDebounce);
     diagnostics.info('boot', 'shutdown', 'Disposing FREYRAUM runtime');
+    destinationRouter.dispose();
     preferences.dispose();
     canvasInteraction.dispose();
     chromeVisibility.dispose();

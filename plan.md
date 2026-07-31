@@ -1,5 +1,26 @@
 # FREYRAUM Plan
 
+## Completed — Main Museum Hub (2026-07-31)
+
+### Decisions
+
+- Startup is `loading → hub → gallery`; the existing gallery remains the only
+  initial registered destination.
+- The supplied museum-room image is a static hub backdrop. Its central artwork
+  is the accessible pointer/keyboard entry target for the existing gallery.
+- A small destination registry owns transition locking, prepare/enter/exit hooks,
+  state reporting, error recovery, and disposal. Future rooms register against
+  the same contract instead of adding navigation branches to `main.ts`.
+- Gallery assets retain the existing staged preload and GPU-warm contract.
+  Gallery canvas, keyboard, swipe, zoom, and pan input stay disabled in the hub.
+- The transition is a short fade only; reduced-motion mode switches immediately.
+  No free-roam, orbit, or cinematic camera system is introduced.
+
+### Validation boundary
+
+Required gates are config-authority, lint, typecheck/build, frame-budget
+equivalence, visual review, secret scanning, and parallel code/security review.
+
 ## Completed — fixed presentation cleanup (2026-07-19)
 
 ### Decisions

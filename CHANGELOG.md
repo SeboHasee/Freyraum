@@ -1,5 +1,20 @@
 # CHANGELOG
-> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning).
+> Latest markdown audit: 2026-07-31 (Main Museum Hub implementation).
+
+## v0.78 — Main Museum Hub (2026-07-31)
+
+### Summary
+
+- Changed startup to `Loading Screen → Main Museum Hub → Interactive Gallery`.
+- Added a static, responsive museum-room hub using the supplied visual and an
+  accessible central-artwork destination target.
+- Added a registration-based destination router with transition locking,
+  cancellation guards, lifecycle hooks, error recovery, and idempotent disposal.
+- Gated gallery pointer, touch, wheel, and keyboard input until gallery entry.
+- Preserved the existing gallery initialization, preload, GPU warmup, controls,
+  rendering, and artwork behavior after entry.
+- Added reduced-motion handling, responsive hub framing, focus restoration, and
+  hidden gallery chrome while the hub is active.
 
 ## v0.77 — Fixed gallery presentation and metadata semantics (2026-07-19, **shipped**)
 
