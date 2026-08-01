@@ -42,7 +42,7 @@
 - `npm run build` ✅
 - `npm run test:frame-budget` ✅
 - `npm run validate:museum-hub` ✅
-- `npm run validate:visual compare` ⚠️ *(requires an existing local baseline under `.visual-regression/baseline`)*.
+- `npm run validate:visual compare` ⚠️ *(requires Type A optional dependencies and an existing local baseline under `.visual-regression/baseline`)*.
 
 ## v0.82 — Wall-plane museum hub projection (2026-08-01)
 
