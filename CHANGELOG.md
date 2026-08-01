@@ -1,6 +1,49 @@
 # CHANGELOG
 > Latest markdown audit: 2026-08-01 (wall-plane museum hub projection).
 
+## v0.83 — Museum-hub plane topology + diagnostics hardening (2026-08-01)
+
+### Summary
+
+- Replaced the shipping two-wall hub topology with four calibrated physical
+  wall planes (`wall-left-outer`, `wall-left-inner`, `wall-right-inner`,
+  `wall-right-outer`) in both built-in defaults and
+  `customer-artworks/museum-hub.json`, while keeping canonical slot IDs stable.
+- Updated baseline slot placements and v1 migration wall targeting so legacy
+  placements map into the new multi-plane model instead of coarse left/right
+  buckets.
+- Fixed safe-zone validation coordinate-space drift: containment checks now use
+  stage-space projected artwork corners against stage-space wall safe polygons.
+- Added contain-style placement fitting/clamping in the resolver so oversized or
+  edge-straddling placements are nudged toward valid drawable regions.
+- Added read-only `?hubDebug=1` overlay diagnostics (wall/safe polygons,
+  projected slot quads/corners, local axes, per-slot homography snapshots)
+  without enabling calibration edits.
+- Expanded regression hardening:
+  - `scripts/test-museum-hub-geometry.mjs` now validates the shipping
+    `museum-hub.json` with stage-space containment, doorway exclusions, minimum
+    projected-size thresholds, corner tolerances, and homography roundtrip
+    bounds.
+  - `scripts/visual-regression.mjs` now covers wide desktop + narrow portrait
+    wall-focus states, very tall/square/very wide fixture sets, and optional
+    debug-overlay capture via `FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG=1`.
+  - Added `npm run validate:museum-hub` and wired it into
+    `.github/workflows/quality-and-doc-drift.yml`.
+- Added runtime wall-color consistency verification snapshots (tokens, CSS vars,
+  hub/fallback/transition surfaces, renderer clear color) and normalized the
+  local launcher shell’s stale background tone to the authoritative wall token.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run validate:visual compare` ⚠️ *(requires an existing local baseline under `.visual-regression/baseline`)*.
+
 ## v0.82 — Wall-plane museum hub projection (2026-08-01)
 
 ### Summary

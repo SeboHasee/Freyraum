@@ -8,7 +8,9 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Startup flows from the loading screen into a manifest-driven Main Museum Hub:
   the empty room photo (`museum-empty.png`) is the only runtime background and
   every active artwork renders as an unframed projectively mapped button on a
-  calibrated wall plane. Slots resolve by exact `Artwork.id` from
+  calibrated wall plane. The shipping hub now splits the room into multiple
+  physical wall planes (left outer/inner and right inner/outer) so doorway-side
+  and rear-wall artworks no longer share one homography. Slots resolve by exact `Artwork.id` from
   `customer-artworks/museum-hub.json`; wall quads, safe polygons, and wall-local
   mounted sizes live in the same v2 config and legacy `hub-hotspots.json` /
   v1 slot boxes migrate automatically for recalibration. Larger exhibitions
@@ -37,6 +39,7 @@ npm install
 npm run lint
 npm run build:typecheck
 npm run build
+npm run validate:museum-hub
 npm run dev
 ```
 

@@ -95,6 +95,46 @@ function parseCssNumeric(value: string): number {
   return fallback ? Number.parseFloat(fallback[0]) : 0;
 }
 
+function isHubDebugEnabled(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('hubDebug') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function normalizeCssColorToHex(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const color = new THREE.Color();
+  try {
+    color.setStyle(trimmed);
+    return `#${color.getHexString().toUpperCase()}`;
+  } catch {
+    return null;
+  }
+}
+
+function probeClassBackground(className: string): { backgroundColor: string; backgroundImage: string } | null {
+  if (!document.body) return null;
+  const probe = document.createElement('div');
+  probe.className = className;
+  probe.style.position = 'fixed';
+  probe.style.left = '-10000px';
+  probe.style.top = '-10000px';
+  probe.style.width = '4px';
+  probe.style.height = '4px';
+  document.body.appendChild(probe);
+  const style = getComputedStyle(probe);
+  const snapshot = {
+    backgroundColor: style.backgroundColor,
+    backgroundImage: style.backgroundImage,
+  };
+  probe.remove();
+  return snapshot;
+}
+
 interface WarmProfile {
   criticalRadius: number;
   preEntryWarmCount: number;
@@ -352,6 +392,67 @@ function sanitizeInjectedAudio(
   };
 }
 
+function verifyMuseumWallColorConsistency(
+  diagnostics: ReturnType<typeof getDiagnostics>,
+  tokens: { galleryWall: string; museumWall: string },
+  rendererManager: RendererManager,
+  museumHubElement: HTMLElement,
+  loadingOverlayElement: HTMLElement
+): void {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const resolvedGalleryVar = rootStyle.getPropertyValue('--color-gallery-wall').trim();
+  const resolvedMuseumVar = rootStyle.getPropertyValue('--color-museum-wall').trim();
+  const clearColor = rendererManager.renderer.getClearColor(new THREE.Color());
+  const clearHex = `#${clearColor.getHexString().toUpperCase()}`;
+  const hubStyle = getComputedStyle(museumHubElement);
+  const fallbackProbe = probeClassBackground('fallback-screen');
+  const bodyStyle = getComputedStyle(document.body);
+  const loadingStyle = getComputedStyle(loadingOverlayElement);
+
+  const expectedGalleryHex = normalizeCssColorToHex(tokens.galleryWall);
+  const expectedMuseumHex = normalizeCssColorToHex(tokens.museumWall);
+  const galleryVarHex = normalizeCssColorToHex(resolvedGalleryVar);
+  const museumVarHex = normalizeCssColorToHex(resolvedMuseumVar);
+  const hubBackgroundHex = normalizeCssColorToHex(hubStyle.backgroundColor);
+  const fallbackBackgroundHex = normalizeCssColorToHex(fallbackProbe?.backgroundColor ?? null);
+  const bodyBackgroundHex = normalizeCssColorToHex(bodyStyle.backgroundColor);
+
+  const mismatchSignals: string[] = [];
+  if (expectedGalleryHex && clearHex !== expectedGalleryHex) mismatchSignals.push(`renderer-clear(${clearHex}) != token.galleryWall(${expectedGalleryHex})`);
+  if (expectedGalleryHex && galleryVarHex && galleryVarHex !== expectedGalleryHex) mismatchSignals.push(`--color-gallery-wall(${galleryVarHex}) != token.galleryWall(${expectedGalleryHex})`);
+  if (expectedMuseumHex && museumVarHex && museumVarHex !== expectedMuseumHex) mismatchSignals.push(`--color-museum-wall(${museumVarHex}) != token.museumWall(${expectedMuseumHex})`);
+  if (expectedMuseumHex && hubBackgroundHex && hubBackgroundHex !== expectedMuseumHex) mismatchSignals.push(`hub-background(${hubBackgroundHex}) != token.museumWall(${expectedMuseumHex})`);
+  if (expectedGalleryHex && fallbackBackgroundHex && fallbackBackgroundHex !== expectedGalleryHex) mismatchSignals.push(`fallback-background(${fallbackBackgroundHex}) != token.galleryWall(${expectedGalleryHex})`);
+
+  const payload = {
+    tokens,
+    rootVariables: {
+      gallery: resolvedGalleryVar,
+      museum: resolvedMuseumVar,
+      galleryHex: galleryVarHex,
+      museumHex: museumVarHex,
+    },
+    rendererClearHex: clearHex,
+    surfaces: {
+      hubBackgroundColor: hubStyle.backgroundColor,
+      hubBackgroundImage: hubStyle.backgroundImage,
+      loadingOverlayBackgroundColor: loadingStyle.backgroundColor,
+      loadingOverlayBackgroundImage: loadingStyle.backgroundImage,
+      fallbackProbeBackgroundColor: fallbackProbe?.backgroundColor ?? null,
+      fallbackProbeBackgroundImage: fallbackProbe?.backgroundImage ?? null,
+      bodyBackgroundColor: bodyStyle.backgroundColor,
+      bodyBackgroundImage: bodyStyle.backgroundImage,
+      bodyBackgroundHex,
+    },
+    mismatchSignals,
+  };
+  if (mismatchSignals.length > 0) {
+    diagnostics.warn('boot', 'visual-token-consistency-mismatch', 'Museum wall/clear-color consistency mismatch detected', payload);
+  } else {
+    diagnostics.info('boot', 'visual-token-consistency', 'Museum wall/clear-color surfaces resolved consistently', payload);
+  }
+}
+
 function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   const hints = [
     'Kunstwerke werden vorbereitet …',
@@ -511,8 +612,12 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
 async function main(): Promise<void> {
   const bootStartedAt = performance.now();
   const diagnostics = getDiagnostics();
+  const hubDebugEnabled = isHubDebugEnabled();
   diagnostics.installGlobalHandlers();
   diagnostics.info('boot', 'startup', 'Starting FREYRAUM runtime');
+  if (hubDebugEnabled) {
+    diagnostics.info('boot', 'hub-debug-enabled', 'Museum hub debug overlay requested via ?hubDebug=1');
+  }
 
   const app = document.getElementById('app');
   if (!app) {
@@ -847,6 +952,13 @@ async function main(): Promise<void> {
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
   const museumHub = new MainMuseumHub(app, museumHubResolution);
+  verifyMuseumWallColorConsistency(
+    diagnostics,
+    visualTokens,
+    rendererManager,
+    museumHub.element,
+    loadingOverlay.overlay
+  );
   const unsubscribeAudioState = backgroundAudio.subscribe((state) => {
     preferencesPanel.setAudioStatusMessage(state.message);
   });

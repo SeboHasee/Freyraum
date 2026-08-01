@@ -112,9 +112,11 @@ export function pointInPolygon(target: Point2D, polygon: Polygon): boolean {
   for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
     const a = polygon[index]!;
     const b = polygon[previous]!;
+    const dy = b.y - a.y;
+    const safeDy = Math.abs(dy) <= EPSILON ? (dy < 0 ? -EPSILON : EPSILON) : dy;
     const intersects =
       a.y > target.y !== b.y > target.y &&
-      target.x < ((b.x - a.x) * (target.y - a.y)) / Math.max(EPSILON, b.y - a.y) + a.x;
+      target.x < ((b.x - a.x) * (target.y - a.y)) / safeDy + a.x;
     if (intersects) inside = !inside;
   }
   return inside;
@@ -270,8 +272,10 @@ export function projectSlotArtwork(
   artworkAspect: number,
   stage: StageReference
 ): ProjectedArtworkGeometry | null {
-  const mountedHeight = Math.max(EPSILON, slot.mountedHeight);
-  const mountedWidth = mountedHeight * Math.max(EPSILON, artworkAspect) / Math.max(EPSILON, wall.planeAspect);
+  const safeAspect = Math.max(EPSILON, artworkAspect);
+  const containHeightLimit = Math.max(EPSILON, Math.min(1, wall.planeAspect / safeAspect));
+  const mountedHeight = Math.max(EPSILON, Math.min(slot.mountedHeight, containHeightLimit));
+  const mountedWidth = mountedHeight * safeAspect / Math.max(EPSILON, wall.planeAspect);
   const halfWidth = mountedWidth / 2;
   const halfHeight = mountedHeight / 2;
   const localQuad: Quad = [

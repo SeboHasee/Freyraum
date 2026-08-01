@@ -16,10 +16,116 @@ const DIFF_DIR = resolve(ROOT, '.visual-regression/diff');
 
 const URL = process.env.FREYRAUM_URL ?? 'http://localhost:5173/app.html';
 const DESKTOP_VIEWPORT = { width: 1280, height: 800 };
+const WIDE_DESKTOP_VIEWPORT = { width: 1728, height: 960 };
+const NARROW_PORTRAIT_VIEWPORT = { width: 420, height: 980 };
 const PHONE_VIEWPORT = { width: 390, height: 844 };
+const INCLUDE_HUB_DEBUG_CAPTURE = process.env.FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG === '1';
+const SHIPPING_HUB_CONFIG = JSON.parse(
+  readFileSync(resolve(ROOT, 'customer-artworks/museum-hub.json'), 'utf8')
+);
+const FIXTURE_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#7089a3\"/><stop offset=\"1\" stop-color=\"#d8dddb\"/></linearGradient></defs><rect width=\"512\" height=\"512\" fill=\"url(#g)\"/><circle cx=\"256\" cy=\"256\" r=\"140\" fill=\"rgba(255,255,255,0.35)\"/></svg>'\n)}`;
 
 const ARTWORK_STEPS = [0, 1, 2];
 const ZOOM_STATES = ['overview', 'reset', 'inspection'];
+
+const HUB_ASPECT_FIXTURES = {
+  portrait: [
+    {
+      id: 'fixture-portrait',
+      title: 'Fixture Portrait',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 900, height: 2000 },
+    },
+    {
+      id: 'fixture-square',
+      title: 'Fixture Square',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 1400, height: 1400 },
+    },
+    {
+      id: 'fixture-landscape',
+      title: 'Fixture Landscape',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 1800, height: 1000 },
+    },
+    {
+      id: 'fixture-pano',
+      title: 'Fixture Pano',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 3200, height: 900 },
+    },
+  ],
+  square: [
+    {
+      id: 'fixture-square-a',
+      title: 'Fixture Square A',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 1200, height: 1200 },
+    },
+    {
+      id: 'fixture-square-b',
+      title: 'Fixture Square B',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 1400, height: 1400 },
+    },
+    {
+      id: 'fixture-square-c',
+      title: 'Fixture Square C',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 1600, height: 1600 },
+    },
+    {
+      id: 'fixture-square-d',
+      title: 'Fixture Square D',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 1800, height: 1800 },
+    },
+  ],
+  wide: [
+    {
+      id: 'fixture-wide-a',
+      title: 'Fixture Wide A',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 2400, height: 1000 },
+    },
+    {
+      id: 'fixture-wide-b',
+      title: 'Fixture Wide B',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 2800, height: 1000 },
+    },
+    {
+      id: 'fixture-wide-c',
+      title: 'Fixture Wide C',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 3200, height: 1000 },
+    },
+    {
+      id: 'fixture-wide-d',
+      title: 'Fixture Wide D',
+      image: FIXTURE_IMAGE,
+      dimensions: { width: 3600, height: 1000 },
+    },
+  ],
+};
+
+function hubFixture(artworks) {
+  return {
+    artworks,
+    museumHub: {
+      ...SHIPPING_HUB_CONFIG,
+      slots: SHIPPING_HUB_CONFIG.slots.map((slot) => ({
+        ...slot,
+        ...(slot.id === 'room-01.wall-left.outer'
+          ? { artworkId: artworks[0].id }
+          : slot.id === 'room-01.wall-right.inner'
+            ? { artworkId: artworks[1].id }
+            : {}),
+      })),
+    },
+  };
+}
 
 const states = [
   {
@@ -27,6 +133,13 @@ const states = [
     query: '?startup=entry-minimal',
     mode: 'hub',
     viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+  },
+  {
+    name: 'hub__desktop-wide__room-1',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: WIDE_DESKTOP_VIEWPORT,
     hubSteps: [],
   },
   {
@@ -43,6 +156,55 @@ const states = [
     viewport: PHONE_VIEWPORT,
     hubSteps: ['ArrowRight'],
   },
+  {
+    name: 'hub__portrait-narrow__left-wall',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: NARROW_PORTRAIT_VIEWPORT,
+    hubSteps: [],
+  },
+  {
+    name: 'hub__portrait-narrow__right-wall',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: NARROW_PORTRAIT_VIEWPORT,
+    hubSteps: ['ArrowRight'],
+  },
+  {
+    name: 'hub__fixture__very-tall',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+    fixture: hubFixture(HUB_ASPECT_FIXTURES.portrait),
+  },
+  {
+    name: 'hub__fixture__square',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+    fixture: hubFixture(HUB_ASPECT_FIXTURES.square),
+  },
+  {
+    name: 'hub__fixture__very-wide',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+    fixture: hubFixture(HUB_ASPECT_FIXTURES.wide),
+  },
+  ...(INCLUDE_HUB_DEBUG_CAPTURE
+    ? [
+        {
+          name: 'hub__desktop__debug-overlay',
+          query: '?startup=entry-minimal&hubDebug=1&debug=1',
+          mode: 'hub',
+          viewport: DESKTOP_VIEWPORT,
+          hubSteps: [],
+        },
+      ]
+    : []),
   ...ARTWORK_STEPS.flatMap((artworkStep) =>
     ZOOM_STATES.map((zoom) => ({
       name: `dramatic__artwork-${artworkStep}__${zoom}`,
@@ -76,7 +238,7 @@ async function capture(targetDir) {
   const browser = await chromium.launch();
   for (const state of states) {
     const page = await browser.newPage({ viewport: state.viewport, deviceScaleFactor: 1 });
-    await page.addInitScript(() => {
+    await page.addInitScript((fixture) => {
       localStorage.setItem('freyraum-nav-hint-seen', '1');
       localStorage.setItem(
         'freyraum.preferences.v1',
@@ -90,7 +252,12 @@ async function capture(targetDir) {
           alwaysShowChrome: true,
         })
       );
-    });
+      if (fixture) {
+        window.__FREYRAUM_ARTWORKS = fixture.artworks;
+        window.__FREYRAUM_MUSEUM_HUB = fixture.museumHub;
+        window.__FREYRAUM_HUB_HOTSPOTS = undefined;
+      }
+    }, state.fixture ?? null);
     await page.goto(`${URL}${state.query}`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.loading-start-btn:not([disabled])', { timeout: 45_000 });
     await page.click('.loading-start-btn');

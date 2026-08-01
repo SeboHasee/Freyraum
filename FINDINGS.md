@@ -1,5 +1,25 @@
 # FINDINGS
 
+## Museum-hub topology + containment findings (v0.83, 2026-08-01)
+
+1. A single homography is only reliable for one physical wall plane. If a
+   config wall quad spans folded room geometry (doorway-side + rear wall),
+   artwork perspective drift is unavoidable even when projection math is
+   correct.
+2. Safe-zone checks are only meaningful when both operands share one coordinate
+   space. Comparing wall-local artwork quads against stage-space safe polygons
+   silently invalidates containment checks.
+3. A robust hub geometry gate must validate the shipping
+   `customer-artworks/museum-hub.json`, not only synthetic migration/overlap
+   fixtures. Stage-space containment, doorway exclusions, size thresholds, and
+   numeric projection tolerances are all required to catch real regressions.
+4. Read-only runtime overlays (`?hubDebug=1`) are a safer day-to-day diagnosis
+   path than edit-capable calibration mode when the immediate goal is
+   observability, not authoring.
+5. Wall-color consistency issues are better caught with runtime token/CSS/WebGL
+   snapshots than broad restyling. Shell surfaces outside the runtime root can
+   still drift and should be normalized explicitly.
+
 ## Wall-plane museum hub projection findings (v0.82, 2026-08-01)
 
 1. A fixed photographed room can achieve believable side-wall perspective

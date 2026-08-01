@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { buildSync } from 'esbuild';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(here, '..');
+const SHIPPING_CONFIG_PATH = resolve(ROOT, 'customer-artworks/museum-hub.json');
 
 async function loadTsModule(relativePath) {
   const entry = resolve(ROOT, relativePath);
@@ -74,8 +76,8 @@ assert.equal(migrated.slotToArtwork.get('room-01.wall-left.outer'), 'portrait-wo
 assert.equal(migrated.slotToArtwork.get('room-01.wall-right.inner'), 'square-work');
 assert.ok(migrated.warnings.some((warning) => warning.includes('migrated provisionally')));
 
-const leftWall = migrated.wallById.get('wall-left');
-assert.ok(leftWall, 'expected built-in left wall to resolve');
+const leftWall = migrated.wallById.get('wall-left-outer');
+assert.ok(leftWall, 'expected built-in left outer wall to resolve');
 const leftSlot = migrated.pages.flatMap((page) => page.slots).find((slot) => slot.id === 'room-01.wall-left.outer');
 assert.ok(leftSlot, 'expected migrated slot to resolve');
 const projection = geometry.projectSlotArtwork(leftWall, leftSlot.placement, leftSlot.artworkAspect, migrated.stage);
@@ -90,20 +92,20 @@ const overlapConfig = {
   visualTokens: { galleryWall: '#D8DDDB', museumWall: '#D8DDDB' },
   walls: [
     {
-      id: 'wall-left',
+      id: 'wall-left-inner',
       group: 'left',
-      planeAspect: 1.55,
+      planeAspect: 1.06,
       quad: [
-        { x: 102, y: 176 },
-        { x: 662, y: 192 },
-        { x: 708, y: 598 },
-        { x: 40, y: 620 },
+        { x: 362, y: 234 },
+        { x: 688, y: 246 },
+        { x: 732, y: 610 },
+        { x: 332, y: 614 },
       ],
       safePolygon: [
-        { x: 120, y: 196 },
-        { x: 646, y: 210 },
-        { x: 688, y: 580 },
-        { x: 62, y: 600 },
+        { x: 376, y: 250 },
+        { x: 674, y: 260 },
+        { x: 712, y: 594 },
+        { x: 348, y: 598 },
       ],
     },
   ],
@@ -123,7 +125,7 @@ const overlapConfig = {
       selectable: true,
       artworkId: 'portrait-work',
       placement: {
-        wallId: 'wall-left',
+        wallId: 'wall-left-inner',
         center: { x: 0.35, y: 0.55 },
         mountedHeight: 0.34,
       },
@@ -134,7 +136,7 @@ const overlapConfig = {
       selectable: true,
       artworkId: 'wide-work',
       placement: {
-        wallId: 'wall-left',
+        wallId: 'wall-left-inner',
         center: { x: 0.39, y: 0.55 },
         mountedHeight: 0.34,
       },
@@ -145,4 +147,163 @@ const overlapConfig = {
 const overlapped = museumHub.resolveMuseumHub(artworks, overlapConfig, null);
 assert.ok(overlapped.warnings.some((warning) => warning.includes('overlaps')), 'expected overlap warning');
 
-console.log('PASS: museum-hub wall-plane geometry migration and overlap checks behave as expected.');
+function rectPolygon(minX, minY, maxX, maxY) {
+  return [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ];
+}
+
+const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
+assert.ok(Array.isArray(shippingConfig.walls), 'shipping museum-hub config must include walls');
+assert.ok(shippingConfig.walls.length > 2, 'shipping museum-hub config must encode more than two wall planes');
+
+const shippingArtworks = [
+  {
+    id: 'fraktal',
+    title: 'Fraktal',
+    image: 'fraktal.png',
+    dimensions: { width: 900, height: 1200 },
+  },
+  {
+    id: 'akt-27',
+    title: 'Akt 27',
+    image: 'akt-27.png',
+    dimensions: { width: 1200, height: 1200 },
+  },
+  {
+    id: 'shipping-landscape-fixture',
+    title: 'Landscape Fixture',
+    image: 'landscape.png',
+    dimensions: { width: 1800, height: 1100 },
+  },
+  {
+    id: 'shipping-panoramic-fixture',
+    title: 'Panoramic Fixture',
+    image: 'panoramic.png',
+    dimensions: { width: 2600, height: 1000 },
+  },
+];
+
+const shipping = museumHub.resolveMuseumHub(shippingArtworks, shippingConfig, null);
+const blockingWarningPatterns = [
+  /projected artwork bounds extend outside wall safePolygon/i,
+  /projected short edge .* below/i,
+  /overlaps slot/i,
+  /projected geometry is invalid/i,
+];
+for (const warning of shipping.warnings) {
+  assert.ok(
+    !blockingWarningPatterns.some((pattern) => pattern.test(warning)),
+    `shipping museum-hub geometry warning must hard-fail: ${warning}`
+  );
+}
+
+const expectedWallBySlotId = new Map([
+  ['room-01.wall-left.outer', 'wall-left-outer'],
+  ['room-01.wall-left.inner', 'wall-left-inner'],
+  ['room-01.wall-right.inner', 'wall-right-inner'],
+  ['room-01.wall-right.outer', 'wall-right-outer'],
+]);
+
+const resolvedSelectableSlots = shipping.pages
+  .flatMap((page) => page.slots)
+  .filter((slot) => slot.selectable && !!slot.artworkId);
+assert.deepEqual(
+  resolvedSelectableSlots.map((slot) => slot.id).sort(),
+  [...expectedWallBySlotId.keys()].sort(),
+  'shipping config must resolve all canonical wall slots'
+);
+
+const forbiddenDoorwayRegions = [
+  rectPolygon(0, 120, 86, 768),
+  rectPolygon(1280, 120, 1366, 768),
+];
+
+for (const slot of resolvedSelectableSlots) {
+  const expectedWallId = expectedWallBySlotId.get(slot.id);
+  assert.equal(slot.placement.wallId, expectedWallId, `${slot.id} must resolve to the expected wall plane`);
+  const wall = shipping.wallById.get(slot.placement.wallId);
+  assert.ok(wall, `wall ${slot.placement.wallId} must exist`);
+  const projected = geometry.projectSlotArtwork(wall, slot.placement, slot.artworkAspect, shipping.stage);
+  assert.ok(projected, `slot ${slot.id} must produce projected geometry`);
+  assert.ok(projected.shortEdge >= 84, `slot ${slot.id} short edge (${projected.shortEdge.toFixed(1)}px) must stay readable`);
+
+  for (const corner of projected.projectedQuad) {
+    assert.ok(
+      geometry.pointInPolygon(corner, wall.safePolygon),
+      `slot ${slot.id} corner (${corner.x.toFixed(1)}, ${corner.y.toFixed(1)}) must stay inside stage-space safePolygon`
+    );
+  }
+  for (const forbidden of forbiddenDoorwayRegions) {
+    assert.ok(
+      !geometry.polygonsIntersect(projected.projectedQuad, forbidden),
+      `slot ${slot.id} must not intersect doorway forbidden regions`
+    );
+  }
+}
+
+const expectedProjectedCorners = {
+  'room-01.wall-left.outer': [
+    { x: 171.57, y: 352.16 },
+    { x: 292.61, y: 365.06 },
+    { x: 279.48, y: 530.73 },
+    { x: 152.59, y: 526.97 },
+  ],
+  'room-01.wall-left.inner': [
+    { x: 472.68, y: 384.1 },
+    { x: 603.88, y: 386.54 },
+    { x: 609.62, y: 476.31 },
+    { x: 471.78, y: 475.32 },
+  ],
+  'room-01.wall-right.inner': [
+    { x: 793.17, y: 386.44 },
+    { x: 877.45, y: 384.88 },
+    { x: 877.81, y: 481.48 },
+    { x: 789.78, y: 482.02 },
+  ],
+  'room-01.wall-right.outer': [
+    { x: 1037.99, y: 397.5 },
+    { x: 1262.37, y: 376.41 },
+    { x: 1273.23, y: 468.99 },
+    { x: 1042.29, y: 481.47 },
+  ],
+};
+
+const cornerTolerancePx = 28;
+for (const slot of resolvedSelectableSlots) {
+  const wall = shipping.wallById.get(slot.placement.wallId);
+  assert.ok(wall, `wall ${slot.placement.wallId} must resolve for projection tolerance checks`);
+  const projected = geometry.projectSlotArtwork(wall, slot.placement, slot.artworkAspect, shipping.stage);
+  assert.ok(projected, `${slot.id} must project for tolerance checks`);
+  const expected = expectedProjectedCorners[slot.id];
+  assert.ok(expected, `expected projected-corner fixture is missing for ${slot.id}`);
+  projected.projectedQuad.forEach((corner, index) => {
+    const target = expected[index];
+    const distance = Math.hypot(corner.x - target.x, corner.y - target.y);
+    assert.ok(
+      distance <= cornerTolerancePx,
+      `${slot.id} corner ${index} drift ${distance.toFixed(2)}px exceeds ${cornerTolerancePx}px tolerance`
+    );
+  });
+}
+
+const homographyProbePoints = [
+  { x: 0.2, y: 0.2 },
+  { x: 0.5, y: 0.5 },
+  { x: 0.8, y: 0.7 },
+];
+for (const wall of shipping.walls) {
+  for (const probe of homographyProbePoints) {
+    const stagePoint = geometry.projectWallPoint(wall, probe);
+    assert.ok(stagePoint, `wall ${wall.id} must project probe point`);
+    const localPoint = geometry.invertWallPoint(wall, stagePoint);
+    assert.ok(localPoint, `wall ${wall.id} must invert projected probe point`);
+    const error = Math.hypot(localPoint.x - probe.x, localPoint.y - probe.y);
+    assert.ok(error <= 0.01, `wall ${wall.id} homography roundtrip error ${error.toFixed(5)} exceeds 0.01`);
+  }
+}
+
+console.log('PASS: museum-hub geometry migration, overlap checks, and shipping wall-plane constraints are valid.');

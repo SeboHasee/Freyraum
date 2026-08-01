@@ -1,5 +1,38 @@
 # FREYRAUM Plan
 
+## Completed — Museum-hub plane topology + diagnostics hardening (v0.83, 2026-08-01)
+
+### Decisions
+
+- The shipping hub geometry now models four physical wall planes
+  (`wall-left-outer`, `wall-left-inner`, `wall-right-inner`,
+  `wall-right-outer`) instead of two coarse left/right quads.
+- Canonical slot IDs remain stable, but baseline/default/customer slot
+  placements are remapped to the correct physical plane. v1 migration now
+  resolves legacy placements through this four-plane topology.
+- Safe-zone validation now compares projected stage-space artwork corners to
+  stage-space `safePolygon` coordinates (the previous local-vs-stage mismatch
+  is removed).
+- Resolver fitting now applies an explicit contain-style policy and clamps slot
+  placements toward valid drawable regions before emitting geometry warnings.
+- Added read-only `?hubDebug=1` overlay/diagnostics (wall quads, safe polygons,
+  projected quads, slot centers/corners, local axis guides, per-slot
+  homography/containment snapshots) without enabling calibration edits.
+- Added `npm run validate:museum-hub`, expanded visual-regression hub state
+  coverage (wide desktop, narrow portrait wall focus, extreme aspect fixtures),
+  optional debug-overlay capture, and CI execution of the geometry gate.
+- Local launcher shell now uses the authoritative gallery wall token baseline so
+  startup shell tone matches runtime wall surfaces.
+
+### Validation boundary
+
+- Required repository gates remain
+  `npm run docs:check-config-authority`, `npm run lint`,
+  `npm run build:typecheck`, `npm run build`, and `npm run test:frame-budget`.
+- Focused hub checks are now `npm run validate:museum-hub` and
+  `npm run validate:visual compare` (with optional
+  `FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG=1` diagnostic capture).
+
 ## Completed — Wall-plane museum hub projection (v0.82, 2026-08-01)
 
 ### Decisions

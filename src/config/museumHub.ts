@@ -160,81 +160,125 @@ interface BaselineSlotDef {
 
 const DEFAULT_WALLS: readonly HubWallConfig[] = [
   {
-    id: 'wall-left',
+    id: 'wall-left-outer',
     group: 'left',
-    planeAspect: 1.55,
+    planeAspect: 0.73,
     quad: [
-      point(102, 176),
-      point(662, 192),
-      point(708, 598),
-      point(40, 620),
+      point(94, 188),
+      point(372, 236),
+      point(348, 622),
+      point(36, 626),
     ],
-    safePolygon: shrinkPolygonTowardsCentroid(
-      [point(102, 176), point(662, 192), point(708, 598), point(40, 620)],
-      0.92
-    ),
-    shadowVector: point(-12, 16),
+    safePolygon: [
+      point(110, 206),
+      point(356, 248),
+      point(332, 606),
+      point(52, 610),
+    ],
+    shadowVector: point(-14, 18),
   },
   {
-    id: 'wall-right',
-    group: 'right',
-    planeAspect: 1.56,
+    id: 'wall-left-inner',
+    group: 'left',
+    planeAspect: 1.06,
     quad: [
-      point(706, 192),
-      point(1264, 176),
-      point(1324, 620),
-      point(660, 598),
+      point(362, 234),
+      point(688, 246),
+      point(732, 610),
+      point(332, 614),
     ],
-    safePolygon: shrinkPolygonTowardsCentroid(
-      [point(706, 192), point(1264, 176), point(1324, 620), point(660, 598)],
-      0.92
-    ),
-    shadowVector: point(12, 16),
+    safePolygon: [
+      point(376, 250),
+      point(674, 260),
+      point(712, 594),
+      point(348, 598),
+    ],
+    shadowVector: point(-8, 14),
+  },
+  {
+    id: 'wall-right-inner',
+    group: 'right',
+    planeAspect: 1.05,
+    quad: [
+      point(682, 246),
+      point(1006, 234),
+      point(1032, 614),
+      point(648, 610),
+    ],
+    safePolygon: [
+      point(698, 260),
+      point(990, 250),
+      point(1012, 598),
+      point(666, 594),
+    ],
+    shadowVector: point(8, 14),
+  },
+  {
+    id: 'wall-right-outer',
+    group: 'right',
+    planeAspect: 0.72,
+    quad: [
+      point(998, 236),
+      point(1274, 188),
+      point(1330, 626),
+      point(1014, 622),
+    ],
+    safePolygon: [
+      point(1014, 248),
+      point(1256, 206),
+      point(1310, 610),
+      point(1032, 606),
+    ],
+    shadowVector: point(14, 18),
   },
 ];
 
 const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
   {
     suffix: 'wall-left.outer',
-    wallId: 'wall-left',
+    wallId: 'wall-left-outer',
     intendedUse: 'portrait',
     placement: {
-      wallId: 'wall-left',
-      center: point(0.16, 0.56),
-      mountedHeight: 0.33,
+      wallId: 'wall-left-outer',
+      center: point(0.52, 0.58),
+      mountedHeight: 0.41,
     },
   },
   {
     suffix: 'wall-left.inner',
-    wallId: 'wall-left',
+    wallId: 'wall-left-inner',
     intendedUse: 'landscape',
     placement: {
-      wallId: 'wall-left',
-      center: point(0.61, 0.56),
-      mountedHeight: 0.25,
+      wallId: 'wall-left-inner',
+      center: point(0.52, 0.56),
+      mountedHeight: 0.24,
     },
   },
   {
     suffix: 'wall-right.inner',
-    wallId: 'wall-right',
+    wallId: 'wall-right-inner',
     intendedUse: 'square',
     placement: {
-      wallId: 'wall-right',
-      center: point(0.34, 0.56),
-      mountedHeight: 0.25,
+      wallId: 'wall-right-inner',
+      center: point(0.49, 0.56),
+      mountedHeight: 0.255,
     },
   },
   {
     suffix: 'wall-right.outer',
-    wallId: 'wall-right',
+    wallId: 'wall-right-outer',
     intendedUse: 'panoramic',
     placement: {
-      wallId: 'wall-right',
-      center: point(0.77, 0.56),
-      mountedHeight: 0.19,
+      wallId: 'wall-right-outer',
+      center: point(0.51, 0.56),
+      mountedHeight: 0.212,
     },
   },
 ];
+
+const BASELINE_WALL_BY_SUFFIX = new Map<string, string>(
+  BASELINE_SLOTS.map((entry) => [entry.suffix, entry.wallId])
+);
 
 const BUILT_IN_SLOT_MAPPINGS: Readonly<Record<string, string>> = {
   'room-01.wall-left.outer': 'quiet-coastline',
@@ -314,6 +358,106 @@ function artworkAspect(artwork: Artwork): number {
   return artwork.dimensions.height > 0
     ? artwork.dimensions.width / artwork.dimensions.height
     : 1;
+}
+
+function polygonCentroid(points: readonly Point2D[]): Point2D {
+  const total = points.reduce(
+    (accumulator, current) => point(accumulator.x + current.x, accumulator.y + current.y),
+    point(0, 0)
+  );
+  return point(total.x / Math.max(1, points.length), total.y / Math.max(1, points.length));
+}
+
+function clampSlotPlacementToDrawableRegion(
+  wall: ResolvedHubWall,
+  placement: HubSlotPlacement,
+  artworkAspectRatio: number,
+  stage: StageReference
+): { center: Point2D; mountedHeight: number; adjusted: boolean } {
+  const aspect = Math.max(0.25, artworkAspectRatio);
+  const wallAspect = Math.max(0.25, wall.planeAspect);
+  let center = point(clamp01(placement.center.x), clamp01(placement.center.y));
+  let mountedHeight = Math.max(0.04, Math.min(0.9, placement.mountedHeight));
+  let adjusted = center.x !== placement.center.x || center.y !== placement.center.y || mountedHeight !== placement.mountedHeight;
+
+  const containMaxHeight = Math.max(0.04, Math.min(0.9, wallAspect / aspect));
+  if (mountedHeight > containMaxHeight) {
+    mountedHeight = containMaxHeight;
+    adjusted = true;
+  }
+
+  const clampCenterWithinLocalUnit = (): void => {
+    const mountedWidth = (mountedHeight * aspect) / wallAspect;
+    const halfWidth = mountedWidth / 2;
+    const halfHeight = mountedHeight / 2;
+    const minX = Math.max(0, halfWidth);
+    const maxX = Math.min(1, 1 - halfWidth);
+    const minY = Math.max(0, halfHeight);
+    const maxY = Math.min(1, 1 - halfHeight);
+    const clampedX = Math.max(minX, Math.min(maxX, center.x));
+    const clampedY = Math.max(minY, Math.min(maxY, center.y));
+    if (clampedX !== center.x || clampedY !== center.y) adjusted = true;
+    center = point(clampedX, clampedY);
+  };
+  clampCenterWithinLocalUnit();
+
+  const projectCurrent = (): ReturnType<typeof projectSlotArtwork> =>
+    projectSlotArtwork(
+      wall,
+      {
+        wallId: placement.wallId,
+        center,
+        mountedHeight,
+      },
+      aspect,
+      stage
+    );
+  const containedCornerCount = (projected: ReturnType<typeof projectSlotArtwork> | null): number => {
+    if (!projected) return -1;
+    return projected.projectedQuad.reduce(
+      (count, vertex) => count + (pointInPolygon(vertex, wall.safePolygon) ? 1 : 0),
+      0
+    );
+  };
+
+  let bestScore = containedCornerCount(projectCurrent());
+  let bestCenter = center;
+  let bestHeight = mountedHeight;
+  if (bestScore === 4) {
+    return { center: bestCenter, mountedHeight: bestHeight, adjusted };
+  }
+
+  const safeLocalAnchor = (() => {
+    const local = invertWallPoint(wall, polygonCentroid(wall.safePolygon));
+    return local ? point(clamp01(local.x), clamp01(local.y)) : point(0.5, 0.5);
+  })();
+
+  for (let attempt = 0; attempt < 36; attempt += 1) {
+    center = point(
+      clamp01(center.x + (safeLocalAnchor.x - center.x) * 0.22),
+      clamp01(center.y + (safeLocalAnchor.y - center.y) * 0.22)
+    );
+    mountedHeight = Math.max(0.04, Math.min(containMaxHeight, mountedHeight * 0.985));
+    clampCenterWithinLocalUnit();
+    const projection = projectCurrent();
+    const score = containedCornerCount(projection);
+    if (score > bestScore) {
+      bestScore = score;
+      bestCenter = center;
+      bestHeight = mountedHeight;
+    }
+    if (bestScore === 4) break;
+  }
+
+  const changed =
+    Math.abs(bestCenter.x - placement.center.x) > 1e-6 ||
+    Math.abs(bestCenter.y - placement.center.y) > 1e-6 ||
+    Math.abs(bestHeight - placement.mountedHeight) > 1e-6;
+  return {
+    center: bestCenter,
+    mountedHeight: bestHeight,
+    adjusted: adjusted || changed,
+  };
 }
 
 function parsePoint(raw: unknown, clamp = false): Point2D | null {
@@ -434,7 +578,19 @@ function migrateV1Placement(
   walls: readonly HubWallConfig[],
   stage: StageReference
 ): HubSlotPlacement {
-  const preferredWallId = slotId.includes('wall-right') ? 'wall-right' : slotId.includes('wall-left') ? 'wall-left' : placement.cx >= 0.5 ? 'wall-right' : 'wall-left';
+  const suffix = slotId.replace(/^room-\d+\./, '');
+  const explicitWallId = BASELINE_WALL_BY_SUFFIX.get(suffix);
+  let preferredWallId = explicitWallId ?? '';
+  if (!preferredWallId) {
+    preferredWallId =
+      placement.cx < 0.25
+        ? 'wall-left-outer'
+        : placement.cx < 0.5
+          ? 'wall-left-inner'
+          : placement.cx < 0.75
+            ? 'wall-right-inner'
+            : 'wall-right-outer';
+  }
   const wall = walls.find((entry) => entry.id === preferredWallId) ?? walls[0]!;
   const projectionWall = toProjectionWall(wall);
   const centerStage = point(placement.cx * stage.width, placement.cy * stage.height);
@@ -923,6 +1079,17 @@ export function resolveMuseumHub(
     }
   }
 
+  for (const slot of resolved) {
+    if (!slot.selectable || !slot.artworkId) continue;
+    const wall = wallById.get(slot.placement.wallId);
+    if (!wall) continue;
+    const fitted = clampSlotPlacementToDrawableRegion(wall, slot.placement, slot.artworkAspect, stage);
+    if (!fitted.adjusted) continue;
+    slot.placement.center = fitted.center;
+    slot.placement.mountedHeight = fitted.mountedHeight;
+    warnings.push(`slot "${slot.id}": placement was clamped to the wall drawable region (contain policy).`);
+  }
+
   const projectedBySlot = new Map<string, ReturnType<typeof projectSlotArtwork>>();
   for (const slot of resolved) {
     if (!slot.selectable || !slot.artworkId) continue;
@@ -934,9 +1101,9 @@ export function resolveMuseumHub(
       warnings.push(`slot "${slot.id}": projected geometry is invalid.`);
       continue;
     }
-    const withinSafePolygon = projected.localQuad.every((vertex) => pointInPolygon(vertex, wall.safePolygon));
+    const withinSafePolygon = projected.projectedQuad.every((vertex) => pointInPolygon(vertex, wall.safePolygon));
     if (!withinSafePolygon) {
-      warnings.push(`slot "${slot.id}": artwork bounds extend outside wall safePolygon.`);
+      warnings.push(`slot "${slot.id}": projected artwork bounds extend outside wall safePolygon.`);
     }
     if (projected.shortEdge < 84) {
       warnings.push(`slot "${slot.id}": projected short edge ${projected.shortEdge.toFixed(1)}px is below the 84px desktop guidance.`);

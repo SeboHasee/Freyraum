@@ -18,15 +18,17 @@ is accepted unless the measurement hook for its type exists and passes.
 ## Type A — Pixel diff (Playwright / WebGL snapshot)
 
 `scripts/visual-regression.mjs` drives Chromium through Playwright, captures the
-Phase 10.3 state matrix plus museum-hub entry states (desktop full room and
-narrow-phone left/right wall focus), checks Type B invariants for every state,
-and compares against a stored baseline.
+Phase 10.3 state matrix plus expanded museum-hub states (desktop, wide desktop,
+narrow portrait wall-focus, and extreme-aspect fixture sets), checks Type B
+invariants for every state, and compares against a stored baseline.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.
-- **Matrix:** museum-hub desktop + narrow-phone wall-focus states, plus fixed
-  dramatic lighting × artwork steps 0/1/2 × overview/reset/inspection zoom
-  states.
+- **Matrix:** museum-hub desktop/wide/portrait wall-focus states, synthetic
+  tall/square/wide hub fixture sets, and fixed dramatic lighting × artwork
+  steps 0/1/2 × overview/reset/inspection zoom states.
+- Optional diagnostic capture: `FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG=1` adds a
+  `?hubDebug=1` overlay screenshot without making it part of the mandatory gate.
 - **Workflow:** capture a baseline *before* the change, apply the optimization,
   then compare. Diffs are written to `.visual-regression/diff/` (git-ignored).
 - **Required for:** OPT-4 (bloom), OPT-5 (shadow), OPT-6 (panel opacity),
@@ -78,8 +80,11 @@ sequence including edge cases.
 
 `scripts/test-museum-hub-geometry.mjs` is a focused hub geometry regression
 check: it loads the shipping TypeScript modules, verifies v1→v2 migration keeps
-exact artwork targets, asserts projected wall-plane geometry, and fails on
-overlap-warning regressions.
+exact artwork targets, validates the checked-in
+`customer-artworks/museum-hub.json` wall topology (>2 planes), asserts
+stage-space safe-polygon containment, doorway exclusion, minimum projected size,
+corner-tolerance fixtures, and homography roundtrip error bounds. Threshold
+breaches hard-fail the script (`npm run validate:museum-hub`) and CI.
 
 ## Acceptance thresholds (Phase 14)
 

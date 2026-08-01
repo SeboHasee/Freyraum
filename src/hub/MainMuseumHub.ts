@@ -15,6 +15,7 @@ import {
   sanitizeMuseumHubConfig,
 } from '../config/museumHub';
 import {
+  applyHomography,
   clonePoint,
   point,
   pointInPolygon,
@@ -37,6 +38,14 @@ const NARROW_PORTRAIT_QUERY = '(max-aspect-ratio: 4/5)';
 const isCalibrationRequested = (): boolean => {
   try {
     return new URLSearchParams(window.location.search).get('hubCalibrate') === '1';
+  } catch {
+    return false;
+  }
+};
+
+const isHubDebugRequested = (): boolean => {
+  try {
+    return new URLSearchParams(window.location.search).get('hubDebug') === '1';
   } catch {
     return false;
   }
@@ -86,6 +95,7 @@ export class MainMuseumHub {
   private readonly narrowQuery: MediaQueryList;
   private readonly imageReady: Promise<void>;
   private readonly calibrating: boolean;
+  private readonly debugGeometry: boolean;
   private readonly stageWidth: number;
   private readonly stageHeight: number;
   private readonly resizeObserver: ResizeObserver | null;
@@ -107,6 +117,8 @@ export class MainMuseumHub {
   private decodedPages = new Set<number>();
   private idleDecodeHandle: number | null = null;
   private idleDecodeNextPage = 1;
+  private projectedSlotGeometry = new Map<string, ProjectedArtworkGeometry>();
+  private debugProjectionSignatureBySlot = new Map<string, string>();
   private swipeStartX: number | null = null;
   private swipeStartY: number | null = null;
   private resizeRafId = 0;
@@ -114,6 +126,7 @@ export class MainMuseumHub {
   constructor(app: HTMLElement, resolution: MuseumHubResolution) {
     this.resolution = resolution;
     this.calibrating = isCalibrationRequested();
+    this.debugGeometry = isHubDebugRequested();
     this.pageCount = Math.max(1, resolution.pages.length);
     this.stageWidth = resolution.stage.width;
     this.stageHeight = resolution.stage.height;
@@ -127,6 +140,7 @@ export class MainMuseumHub {
     hub.style.setProperty('--hub-stage-height', `${this.stageHeight}px`);
     hub.style.setProperty('--hub-stage-scale', '1');
     if (this.calibrating) hub.classList.add('is-calibrating');
+    if (this.debugGeometry) hub.classList.add('is-debug-geometry');
 
     const visual = document.createElement('div');
     visual.className = 'museum-hub__visual';
@@ -257,9 +271,9 @@ export class MainMuseumHub {
     hub.addEventListener('pointerup', this.handleSwipeEnd, { passive: true });
     hub.addEventListener('keydown', this.handleKeydown);
 
-    if (this.calibrating) {
+    if (this.calibrating || this.debugGeometry) {
       this.buildCalibrationOverlay();
-      this.buildCalibrationPanel(hub);
+      if (this.calibrating) this.buildCalibrationPanel(hub);
       this.renderCalibrationOverlay();
     }
 
@@ -269,10 +283,12 @@ export class MainMuseumHub {
       this.applyAllSlotGeometry();
       this.scheduleIdlePageDecode();
       if (this.calibrating) this.updateCalibrationOutput(true);
+      if (this.debugGeometry) this.emitDebugGeometrySnapshot('composition-ready');
       this.diagnostics.info('composition-ready', 'Hub composition prepared', {
         pages: this.pageCount,
         selectableSlots: this.resolution.slotToArtwork.size,
         source: this.resolution.source,
+        debugGeometry: this.debugGeometry,
       });
     });
   }
@@ -410,7 +426,7 @@ export class MainMuseumHub {
     const label = document.createElement('span');
     label.className = 'museum-hub__artwork-label';
     label.setAttribute('aria-hidden', 'true');
-    label.textContent = this.calibrating ? `${slot.id} · ${slot.displayLabel}` : slot.displayLabel;
+    label.textContent = this.calibrating || this.debugGeometry ? `${slot.id} · ${slot.displayLabel}` : slot.displayLabel;
     button.appendChild(label);
 
     if (this.calibrating) {
@@ -435,13 +451,16 @@ export class MainMuseumHub {
     const wall = this.resolution.wallById.get(slot.placement.wallId);
     if (!wall) {
       button.classList.add('is-invalid-geometry');
+      this.projectedSlotGeometry.delete(slot.id);
       return;
     }
     const projection = projectSlotArtwork(wall, slot.placement, Math.max(0.25, slot.artworkAspect), this.resolution.stage);
     if (!projection) {
       button.classList.add('is-invalid-geometry');
+      this.projectedSlotGeometry.delete(slot.id);
       return;
     }
+    this.projectedSlotGeometry.set(slot.id, projection);
     button.classList.remove('is-invalid-geometry');
     button.style.left = '0px';
     button.style.top = '0px';
@@ -451,10 +470,65 @@ export class MainMuseumHub {
     const shadow = wall.shadowVector ?? point(wall.group === 'left' ? -10 : 10, 16);
     button.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
+    if (this.debugGeometry) this.logSlotProjection(slot, wall, projection);
   }
 
   private applyAllSlotGeometry(): void {
     for (const view of this.slotViews) this.applySlotGeometry(view.button, view.slot);
+    if (this.calibrating || this.debugGeometry) this.renderCalibrationOverlay();
+  }
+
+  private logSlotProjection(slot: ResolvedHubSlot, wall: ResolvedHubWall, projection: ProjectedArtworkGeometry): void {
+    const signature = projection.projectedQuad
+      .map((corner) => `${corner.x.toFixed(1)},${corner.y.toFixed(1)}`)
+      .join('|');
+    if (this.debugProjectionSignatureBySlot.get(slot.id) === signature) return;
+    this.debugProjectionSignatureBySlot.set(slot.id, signature);
+
+    const withinSafePolygon = projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon));
+    this.diagnostics.info('hub-debug-slot-projection', 'Projected slot geometry snapshot', {
+      slotId: slot.id,
+      wallId: wall.id,
+      localQuad: projection.localQuad,
+      projectedQuad: projection.projectedQuad,
+      homography: wall.homography,
+      inverseHomography: wall.inverseHomography,
+      withinSafePolygon,
+      shortEdgePx: Math.round(projection.shortEdge * 100) / 100,
+    });
+  }
+
+  private emitDebugGeometrySnapshot(reason: string): void {
+    if (!this.debugGeometry) return;
+    const slotDiagnostics = this.slotViews
+      .filter(({ slot }) => slot.selectable && !!slot.artworkId)
+      .map(({ slot }) => {
+        const wall = this.resolution.wallById.get(slot.placement.wallId);
+        const projection = this.projectedSlotGeometry.get(slot.id);
+        return {
+          slotId: slot.id,
+          wallId: slot.placement.wallId,
+          localQuad: projection?.localQuad ?? null,
+          projectedQuad: projection?.projectedQuad ?? null,
+          homography: wall?.homography ?? null,
+          inverseHomography: wall?.inverseHomography ?? null,
+          withinSafePolygon:
+            wall && projection
+              ? projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))
+              : false,
+        };
+      });
+    this.diagnostics.info('hub-debug-geometry', 'Hub debug geometry snapshot', {
+      reason,
+      stage: this.resolution.stage,
+      walls: this.resolution.walls.map((wall) => ({
+        id: wall.id,
+        group: wall.group,
+        quad: wall.quad,
+        safePolygon: wall.safePolygon,
+      })),
+      slots: slotDiagnostics,
+    });
   }
 
   private scheduleIdlePageDecode(): void {
@@ -604,7 +678,7 @@ export class MainMuseumHub {
       this.updateStageScale();
       this.applyView();
       this.applyAllSlotGeometry();
-      if (this.calibrating) this.renderCalibrationOverlay();
+      if (this.debugGeometry) this.emitDebugGeometrySnapshot('resize');
     });
   };
 
@@ -810,15 +884,17 @@ export class MainMuseumHub {
     this.calibrationSvg.replaceChildren();
     const activeWallId = this.activeCalibrationWallId;
     for (const wall of this.resolution.walls) {
-      const active = wall.id === activeWallId;
+      const active = this.calibrating ? wall.id === activeWallId : true;
       const wallPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       wallPolygon.setAttribute('points', this.pointsToSvg(wall.quad));
       wallPolygon.setAttribute('class', `museum-hub__calibration-wall${active ? ' is-active' : ''}`);
-      wallPolygon.addEventListener('pointerdown', () => {
-        this.activeCalibrationWallId = wall.id;
-        if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
-        this.renderCalibrationOverlay();
-      });
+      if (this.calibrating) {
+        wallPolygon.addEventListener('pointerdown', () => {
+          this.activeCalibrationWallId = wall.id;
+          if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
+          this.renderCalibrationOverlay();
+        });
+      }
       this.calibrationSvg.appendChild(wallPolygon);
 
       const safePolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -826,10 +902,12 @@ export class MainMuseumHub {
       safePolygon.setAttribute('class', `museum-hub__calibration-safe${active ? ' is-active' : ''}`);
       this.calibrationSvg.appendChild(safePolygon);
 
-      if (!active) continue;
+      if (this.debugGeometry) this.renderWallDebugAxes(wall);
+      if (!this.calibrating || !active) continue;
       wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle')));
       wall.safePolygon.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'safe', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--safe')));
     }
+    if (this.debugGeometry) this.renderProjectedSlotDebugOverlay();
   }
 
   private createCalibrationHandle(
@@ -846,6 +924,81 @@ export class MainMuseumHub {
     handle.setAttribute('r', '8');
     handle.addEventListener('pointerdown', (event) => this.startWallPointCalibrationDrag(event, wallId, target, index));
     return handle;
+  }
+
+  private renderWallDebugAxes(wall: ResolvedHubWall): void {
+    if (!this.calibrationSvg || !wall.homography) return;
+    const origin = applyHomography(wall.homography, 0.1, 0.1);
+    const axisX = applyHomography(wall.homography, 0.28, 0.1);
+    const axisY = applyHomography(wall.homography, 0.1, 0.28);
+    if (!origin || !axisX || !axisY) return;
+
+    this.appendSvgLine(origin, axisX, 'museum-hub__debug-axis museum-hub__debug-axis--x');
+    this.appendSvgLine(origin, axisY, 'museum-hub__debug-axis museum-hub__debug-axis--y');
+    this.appendSvgCircle(origin, 'museum-hub__debug-origin', 3.8);
+    this.appendSvgLabel(point(origin.x + 8, origin.y - 8), wall.id, 'museum-hub__debug-wall-label');
+  }
+
+  private renderProjectedSlotDebugOverlay(): void {
+    if (!this.calibrationSvg) return;
+    for (const { slot } of this.slotViews) {
+      if (!slot.selectable || !slot.artworkId) continue;
+      const wall = this.resolution.wallById.get(slot.placement.wallId);
+      const projection = this.projectedSlotGeometry.get(slot.id);
+      if (!wall || !projection || !wall.homography) continue;
+      const centerStage = applyHomography(wall.homography, slot.placement.center.x, slot.placement.center.y);
+      this.calibrationSvg.appendChild(this.createProjectedQuadElement(projection.projectedQuad));
+      if (centerStage) {
+        this.appendSvgCircle(centerStage, 'museum-hub__debug-slot-center', 3.2);
+      }
+      projection.projectedQuad.forEach((corner) => this.appendSvgCircle(corner, 'museum-hub__debug-slot-corner', 2.8));
+      const labelAnchor = projection.projectedQuad[0];
+      if (labelAnchor) {
+        this.appendSvgLabel(
+          point(labelAnchor.x + 8, labelAnchor.y - 8),
+          `${slot.id} · ${slot.placement.wallId}`,
+          'museum-hub__debug-slot-label'
+        );
+      }
+    }
+  }
+
+  private createProjectedQuadElement(points: readonly Point2D[]): SVGPolygonElement {
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', this.pointsToSvg(points));
+    polygon.setAttribute('class', 'museum-hub__debug-slot-quad');
+    return polygon;
+  }
+
+  private appendSvgLine(start: Point2D, end: Point2D, className: string): void {
+    if (!this.calibrationSvg) return;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('class', className);
+    line.setAttribute('x1', start.x.toFixed(2));
+    line.setAttribute('y1', start.y.toFixed(2));
+    line.setAttribute('x2', end.x.toFixed(2));
+    line.setAttribute('y2', end.y.toFixed(2));
+    this.calibrationSvg.appendChild(line);
+  }
+
+  private appendSvgCircle(position: Point2D, className: string, radius: number): void {
+    if (!this.calibrationSvg) return;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('class', className);
+    circle.setAttribute('cx', position.x.toFixed(2));
+    circle.setAttribute('cy', position.y.toFixed(2));
+    circle.setAttribute('r', radius.toFixed(1));
+    this.calibrationSvg.appendChild(circle);
+  }
+
+  private appendSvgLabel(position: Point2D, text: string, className: string): void {
+    if (!this.calibrationSvg) return;
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('class', className);
+    label.setAttribute('x', position.x.toFixed(2));
+    label.setAttribute('y', position.y.toFixed(2));
+    label.textContent = text;
+    this.calibrationSvg.appendChild(label);
   }
 
   private pointsToSvg(points: readonly Point2D[]): string {
@@ -895,7 +1048,7 @@ export class MainMuseumHub {
         warnings.push(`Slot ${slot.id}: projected geometry is invalid.`);
         continue;
       }
-      if (!projection.localQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
+      if (!projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
         warnings.push(`Slot ${slot.id}: artwork extends outside the wall safe zone.`);
       }
       if (projection.shortEdge < 84) {
@@ -1031,6 +1184,8 @@ export class MainMuseumHub {
     this.entryButton.removeEventListener('click', this.handleActivate);
     this.activateCallback = null;
     this.selectSlotCallback = null;
+    this.projectedSlotGeometry.clear();
+    this.debugProjectionSignatureBySlot.clear();
     this.slotViews.length = 0;
     this.roomLayers.length = 0;
     this.element.remove();

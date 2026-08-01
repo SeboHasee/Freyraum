@@ -59,6 +59,21 @@ Notes:
   format.
 - Slot/page navigation is disabled while calibrating.
 
+### `?hubDebug=1`
+
+Read-only museum-hub geometry diagnostics overlay (`src/hub/MainMuseumHub.ts`).
+
+Notes:
+- Keeps normal interaction/navigation enabled (unlike calibration mode).
+- Reuses the SVG overlay layer to show:
+  - wall quads
+  - wall safe polygons
+  - per-slot projected quads and corner markers
+  - wall-local axis guides
+- Emits per-slot diagnostics snapshots (wall id, local/projected quads,
+  homography, inverse homography, containment result) and a full hub geometry
+  snapshot once composition is ready.
+
 ## localStorage keys
 
 ### `freyraum.preferences.v1`

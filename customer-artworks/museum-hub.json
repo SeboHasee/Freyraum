@@ -15,40 +15,76 @@
   },
   "walls": [
     {
-      "id": "wall-left",
+      "id": "wall-left-outer",
       "group": "left",
-      "planeAspect": 1.55,
+      "planeAspect": 0.73,
       "quad": [
-        { "x": 102, "y": 176 },
-        { "x": 662, "y": 192 },
-        { "x": 708, "y": 598 },
-        { "x": 40, "y": 620 }
+        { "x": 94, "y": 188 },
+        { "x": 372, "y": 236 },
+        { "x": 348, "y": 622 },
+        { "x": 36, "y": 626 }
       ],
       "safePolygon": [
-        { "x": 122.8, "y": 194.92 },
-        { "x": 637.999, "y": 209.64 },
-        { "x": 680.319, "y": 583.16 },
-        { "x": 65.759, "y": 603.4 }
+        { "x": 110, "y": 206 },
+        { "x": 356, "y": 248 },
+        { "x": 332, "y": 606 },
+        { "x": 52, "y": 610 }
       ],
-      "shadowVector": { "x": -12, "y": 16 }
+      "shadowVector": { "x": -14, "y": 18 }
     },
     {
-      "id": "wall-right",
-      "group": "right",
-      "planeAspect": 1.56,
+      "id": "wall-left-inner",
+      "group": "left",
+      "planeAspect": 1.06,
       "quad": [
-        { "x": 706, "y": 192 },
-        { "x": 1264, "y": 176 },
-        { "x": 1324, "y": 620 },
-        { "x": 660, "y": 598 }
+        { "x": 362, "y": 234 },
+        { "x": 688, "y": 246 },
+        { "x": 732, "y": 610 },
+        { "x": 332, "y": 614 }
       ],
       "safePolygon": [
-        { "x": 726.8, "y": 209.64 },
-        { "x": 1239.96, "y": 194.92 },
-        { "x": 1295.16, "y": 603.4 },
-        { "x": 684.28, "y": 583.16 }
+        { "x": 376, "y": 250 },
+        { "x": 674, "y": 260 },
+        { "x": 712, "y": 594 },
+        { "x": 348, "y": 598 }
       ],
-      "shadowVector": { "x": 12, "y": 16 }
+      "shadowVector": { "x": -8, "y": 14 }
+    },
+    {
+      "id": "wall-right-inner",
+      "group": "right",
+      "planeAspect": 1.05,
+      "quad": [
+        { "x": 682, "y": 246 },
+        { "x": 1006, "y": 234 },
+        { "x": 1032, "y": 614 },
+        { "x": 648, "y": 610 }
+      ],
+      "safePolygon": [
+        { "x": 698, "y": 260 },
+        { "x": 990, "y": 250 },
+        { "x": 1012, "y": 598 },
+        { "x": 666, "y": 594 }
+      ],
+      "shadowVector": { "x": 8, "y": 14 }
+    },
+    {
+      "id": "wall-right-outer",
+      "group": "right",
+      "planeAspect": 0.72,
+      "quad": [
+        { "x": 998, "y": 236 },
+        { "x": 1274, "y": 188 },
+        { "x": 1330, "y": 626 },
+        { "x": 1014, "y": 622 }
+      ],
+      "safePolygon": [
+        { "x": 1014, "y": 248 },
+        { "x": 1256, "y": 206 },
+        { "x": 1310, "y": 610 },
+        { "x": 1032, "y": 606 }
+      ],
+      "shadowVector": { "x": 14, "y": 18 }
     }
   ],
   "fallbacks": {
@@ -67,9 +103,9 @@
       "selectable": true,
       "artworkId": "fraktal",
       "placement": {
-        "wallId": "wall-left",
-        "center": { "x": 0.16, "y": 0.56 },
-        "mountedHeight": 0.33
+        "wallId": "wall-left-outer",
+        "center": { "x": 0.52, "y": 0.58 },
+        "mountedHeight": 0.41
       }
     },
     {
@@ -77,9 +113,9 @@
       "enabled": true,
       "selectable": true,
       "placement": {
-        "wallId": "wall-left",
-        "center": { "x": 0.61, "y": 0.56 },
-        "mountedHeight": 0.25
+        "wallId": "wall-left-inner",
+        "center": { "x": 0.52, "y": 0.56 },
+        "mountedHeight": 0.24
       }
     },
     {
@@ -88,9 +124,9 @@
       "selectable": true,
       "artworkId": "akt-27",
       "placement": {
-        "wallId": "wall-right",
-        "center": { "x": 0.34, "y": 0.56 },
-        "mountedHeight": 0.25
+        "wallId": "wall-right-inner",
+        "center": { "x": 0.49, "y": 0.56 },
+        "mountedHeight": 0.255
       }
     },
     {
@@ -98,9 +134,9 @@
       "enabled": true,
       "selectable": true,
       "placement": {
-        "wallId": "wall-right",
-        "center": { "x": 0.77, "y": 0.56 },
-        "mountedHeight": 0.19
+        "wallId": "wall-right-outer",
+        "center": { "x": 0.51, "y": 0.56 },
+        "mountedHeight": 0.212
       }
     }
   ]

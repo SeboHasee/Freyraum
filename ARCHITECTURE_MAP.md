@@ -19,15 +19,17 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 - `src/config/`
   - Startup and quality/runtime config models
   - `museumHub.ts`: unified museum-hub schema, v1/legacy migration, calibrated
-    wall-plane contract (stage + wall quads + safe polygons + wall-local slot
-    placement), exact-ID slot resolver (auto-placement + paginated overflow),
-    and visual-token resolution
+    wall-plane contract (stage + multi-plane wall quads + stage-space safe
+    polygons + wall-local slot placement), exact-ID slot resolver
+    (auto-placement + paginated overflow), contain-style placement fitting, and
+    visual-token resolution
 - `src/hub/`
   - `projectiveGeometry.ts`: planar projection math, polygon checks, and CSS
     matrix generation for the hub
   - `MainMuseumHub`: manifest-driven DOM composition over the empty room photo
     — projectively mapped artwork buttons, room/wall paging, idle later-page
-    decode, and wall-plane calibration mode
+    decode, wall-plane calibration mode (`?hubCalibrate=1`), and read-only
+    geometry diagnostics overlay (`?hubDebug=1`)
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
