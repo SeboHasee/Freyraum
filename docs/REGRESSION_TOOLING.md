@@ -18,13 +18,15 @@ is accepted unless the measurement hook for its type exists and passes.
 ## Type A — Pixel diff (Playwright / WebGL snapshot)
 
 `scripts/visual-regression.mjs` drives Chromium through Playwright, captures the
-Phase 10.3 state matrix (fixed dramatic lighting × artwork step × zoom), checks Type B
-invariants for every state, and compares against a stored baseline.
+Phase 10.3 state matrix plus museum-hub entry states (desktop full room and
+narrow-phone left/right wall focus), checks Type B invariants for every state,
+and compares against a stored baseline.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.
-- **Matrix:** fixed dramatic lighting × artwork steps 0/1/2 × overview/reset/
-  inspection zoom states.
+- **Matrix:** museum-hub desktop + narrow-phone wall-focus states, plus fixed
+  dramatic lighting × artwork steps 0/1/2 × overview/reset/inspection zoom
+  states.
 - **Workflow:** capture a baseline *before* the change, apply the optimization,
   then compare. Diffs are written to `.visual-regression/diff/` (git-ignored).
 - **Required for:** OPT-4 (bloom), OPT-5 (shadow), OPT-6 (panel opacity),
@@ -73,6 +75,11 @@ the current report). This actively checks the Tier 1 GC thresholds below.
 `FrameBudgetMonitor` O(1) refactor: it proves the optimized accumulator path is
 numerically identical to the original O(N) reference across a 435-frame
 sequence including edge cases.
+
+`scripts/test-museum-hub-geometry.mjs` is a focused hub geometry regression
+check: it loads the shipping TypeScript modules, verifies v1→v2 migration keeps
+exact artwork targets, asserts projected wall-plane geometry, and fails on
+overlap-warning regressions.
 
 ## Acceptance thresholds (Phase 14)
 

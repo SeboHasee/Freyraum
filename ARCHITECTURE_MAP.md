@@ -18,13 +18,16 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - Painting and frame material behavior, procedural texture generation
 - `src/config/`
   - Startup and quality/runtime config models
-  - `museumHub.ts`: unified museum-hub schema, sanitizer, legacy-hotspot
-    migration, exact-ID slot resolver (auto-placement + paginated overflow),
-    frame presets, and visual-token resolution
+  - `museumHub.ts`: unified museum-hub schema, v1/legacy migration, calibrated
+    wall-plane contract (stage + wall quads + safe polygons + wall-local slot
+    placement), exact-ID slot resolver (auto-placement + paginated overflow),
+    and visual-token resolution
 - `src/hub/`
-  - `MainMuseumHub`: manifest-driven DOM composition over the empty room
-    photo — framed artwork buttons, room/wall paging, idle later-page decode,
-    and the frame calibration mode
+  - `projectiveGeometry.ts`: planar projection math, polygon checks, and CSS
+    matrix generation for the hub
+  - `MainMuseumHub`: manifest-driven DOM composition over the empty room photo
+    — projectively mapped artwork buttons, room/wall paging, idle later-page
+    decode, and wall-plane calibration mode
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`

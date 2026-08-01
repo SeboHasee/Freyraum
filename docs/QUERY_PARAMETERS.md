@@ -40,20 +40,23 @@ Notes:
 
 ### `?hubCalibrate=1`
 
-Museum-hub frame calibration mode (`src/hub/MainMuseumHub.ts`).
+Museum-hub wall-plane calibration mode (`src/hub/MainMuseumHub.ts`).
 
 Notes:
-- Outlines every framed artwork slot with a dashed border and slot label.
-- Drag a frame to move it; drag the corner handle to resize it. Calibration
-  manipulates the actual frame bounds, so what you see is what ships.
-- On release, the complete `museum-hub.json` schema (version, background,
-  visual tokens, frame presets, fallbacks, slots) appears in the on-screen
+- Exposes the projected artwork surfaces plus an SVG calibration overlay for
+  wall-corner points and safe-zone points.
+- Drag an artwork to move it on its wall plane; drag its corner handle to
+  change mounted height. Drag wall/safe handles to recalibrate the wall plane.
+- The panel includes an active-wall selector, live overlap/convexity/safe-zone/
+  minimum-size warnings, and a restore-last-valid action.
+- On release, the complete v2 `museum-hub.json` schema (version, stage,
+  background, visual tokens, walls, fallbacks, slots) appears in the on-screen
   copy panel and is logged via diagnostics.
 - Paste the JSON into `customer-artworks/museum-hub.json` and re-run the
   gallery update (`npm run import:artworks`) to apply it.
-- The legacy `customer-artworks/hub-hotspots.json` array is still migrated
-  automatically with a deprecation warning; new exports always use the
-  unified `museum-hub.json` format.
+- Legacy `customer-artworks/hub-hotspots.json` and v1 box placements still
+  migrate automatically with warnings; new exports always use the v2 wall-plane
+  format.
 - Slot/page navigation is disabled while calibrating.
 
 ## localStorage keys

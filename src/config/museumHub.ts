@@ -1,76 +1,83 @@
 /**
- * Museum hub configuration model (v0.80).
+ * Museum hub configuration model (v0.82).
  *
- * Replaces the narrow v0.79 hotspot array (`hub-hotspots.json`) with one
- * unified customer configuration: `customer-artworks/museum-hub.json`,
- * injected at runtime as `window.__FREYRAUM_MUSEUM_HUB` by
- * `scripts/import-artworks.mjs` (same Option-C injection pattern as
- * `__FREYRAUM_ARTWORKS`).
+ * Uses a versioned wall-plane contract stored in
+ * `customer-artworks/museum-hub.json` and injected at runtime as
+ * `window.__FREYRAUM_MUSEUM_HUB` by `scripts/import-artworks.mjs`.
  *
  * Model invariants:
- *  - Exact `Artwork.id` values are authoritative. There is no index-based
- *    (`@order:<n>`) canonical mapping anymore.
- *  - Every active manifest artwork receives exactly one selectable slot
- *    unless it is explicitly disabled — explicit mappings first,
- *    deterministic aspect-aware placement second, paginated overflow last.
- *  - Four artworks fit per museum room page; larger exhibitions paginate
- *    automatically (`ceil(N / 4)` pages, page-qualified slot IDs). There is
- *    no six-slot cap.
+ *  - Exact `Artwork.id` values are authoritative.
+ *  - Every active manifest artwork receives exactly one selectable slot unless
+ *    explicitly disabled.
+ *  - Four artworks fit per museum room page; larger exhibitions paginate.
  *  - Invalid explicit mappings disable that slot; they never resolve to a
  *    different artwork.
  *  - Duplicate slot IDs and duplicate artwork mappings are rejected.
- *
- * The legacy injected hotspot array (`window.__FREYRAUM_HUB_HOTSPOTS`) is
- * temporarily migrated into the new schema with a warning so existing
- * customer configurations keep working during the transition.
+ *  - Wall geometry is calibrated once per wall and every artwork on that wall
+ *    derives its projected quadrilateral from the same plane.
  */
 
 import type { Artwork } from './artworks';
+import {
+  clonePolygon,
+  clonePoint,
+  computeHomographyFromUnitSquare,
+  invertMatrix3x3,
+  invertWallPoint,
+  point,
+  pointInPolygon,
+  polygonIsClockwise,
+  polygonSignedArea,
+  polygonsIntersect,
+  projectSlotArtwork,
+  quadIsConvex,
+  quadIsDegenerate,
+  shrinkPolygonTowardsCentroid,
+  type Point2D,
+  type Polygon,
+  type Quad,
+  type StageReference,
+  type WallProjectionModel,
+} from '../hub/projectiveGeometry';
 
 // ── Schema types ─────────────────────────────────────────────────────────────
-
-export interface HubSlotPlacement {
-  /** Normalized center X in [0, 1] of the hub background content box. */
-  cx: number;
-  /** Normalized center Y in [0, 1]. */
-  cy: number;
-  /** Maximum normalized width in [0, 1]. */
-  maxW: number;
-  /** Maximum normalized height in [0, 1]. */
-  maxH: number;
-  /** Static perspective rotation applied to the frame (CSS rotateY). */
-  rotateYDeg: number;
-}
-
-export interface HubSlotConfig {
-  /** Stable slot identifier, e.g. `room-01.wall-left.outer`. */
-  id: string;
-  enabled: boolean;
-  selectable: boolean;
-  /** Exact `Artwork.id` mapping. Empty = auto-placed by the resolver. */
-  artworkId?: string;
-  placement: HubSlotPlacement;
-}
-
-export interface HubFramePreset {
-  color: string;
-  depthMm: number;
-  roughness: number;
-  metalness: number;
-}
 
 export interface HubVisualTokens {
   galleryWall: string;
   museumWall: string;
-  defaultFramePreset: string;
+}
+
+export interface HubWallConfig {
+  id: string;
+  group: 'left' | 'right';
+  planeAspect: number;
+  quad: Quad;
+  safePolygon?: Polygon;
+  shadowVector?: Point2D;
+}
+
+export interface HubSlotPlacement {
+  wallId: string;
+  center: Point2D;
+  mountedHeight: number;
+  provisional?: boolean;
+}
+
+export interface HubSlotConfig {
+  id: string;
+  enabled: boolean;
+  selectable: boolean;
+  artworkId?: string;
+  placement: HubSlotPlacement;
 }
 
 export interface MuseumHubConfig {
   version: number;
   coverage: 'all-active-artworks';
+  stage: StageReference;
   background: { src: string; aspect: number };
   visualTokens: HubVisualTokens;
-  framePresets: Record<string, HubFramePreset>;
+  walls: HubWallConfig[];
   fallbacks: {
     requireAllMapped: boolean;
     autoPlaceUnmapped: boolean;
@@ -86,32 +93,30 @@ export interface MuseumHubConfig {
 /** Aspect class used for deterministic auto-placement. */
 export type ArtworkAspectClass = 'portrait' | 'landscape' | 'square' | 'panoramic';
 
+export interface ResolvedHubWall extends WallProjectionModel {
+  group: 'left' | 'right';
+  safePolygon: Point2D[];
+  homography: ReturnType<typeof computeHomographyFromUnitSquare>;
+  inverseHomography: ReturnType<typeof invertMatrix3x3>;
+}
+
 export interface ResolvedHubSlot {
-  /** Page-qualified slot ID, e.g. `room-02.wall-left.outer`. */
   id: string;
-  /** Zero-based room page index. */
   pageIndex: number;
   placement: HubSlotPlacement;
-  /**
-   * Exact artwork ID this slot opens. `null` for disabled slots (invalid
-   * mapping or explicitly disabled) — a disabled slot never opens another
-   * artwork.
-   */
   artworkId: string | null;
-  /** Manifest index of `artworkId`, or -1 when the slot is disabled. */
   artworkIndex: number;
-  /** Display label for the slot (artwork title). */
   displayLabel: string;
-  /** Frame preset key resolved for this slot. */
-  framePreset: string;
-  /** Whether the slot is rendered as a selectable button. */
   selectable: boolean;
-  /** Why a slot is disabled (diagnostics; null when selectable). */
-  disabledReason: 'invalid-mapping' | 'duplicate-mapping' | 'explicitly-disabled' | null;
-  /** Where the mapping came from (diagnostics). */
+  disabledReason:
+    | 'invalid-mapping'
+    | 'duplicate-mapping'
+    | 'explicitly-disabled'
+    | 'missing-wall'
+    | null;
   mappingSource: 'explicit' | 'auto-placed';
-  /** Artwork aspect ratio (width / height) for contain-fit sizing. */
   artworkAspect: number;
+  wallGroup: 'left' | 'right';
 }
 
 export interface ResolvedHubPage {
@@ -119,95 +124,124 @@ export interface ResolvedHubPage {
   slots: readonly ResolvedHubSlot[];
 }
 
-export type MuseumHubSource = 'injected' | 'legacy-migrated' | 'built-in-default';
+export type MuseumHubSource = 'injected' | 'legacy-migrated' | 'built-in-default' | 'v1-migrated';
 
 export interface MuseumHubResolution {
   pages: readonly ResolvedHubPage[];
-  /** Immutable slot-ID → artwork-ID map (selectable slots only). */
   slotToArtwork: ReadonlyMap<string, string>;
-  /** Immutable artwork-ID → slot-ID map (selectable slots only). */
   artworkToSlot: ReadonlyMap<string, string>;
-  /** Artwork-ID → presentation image source (browser-cached URL/data URI). */
   artworkImageById: ReadonlyMap<string, string>;
   background: { src: string; aspect: number };
+  stage: StageReference;
   visualTokens: HubVisualTokens;
-  framePresets: Readonly<Record<string, HubFramePreset>>;
+  walls: readonly ResolvedHubWall[];
+  wallById: ReadonlyMap<string, ResolvedHubWall>;
   selectionTimeoutMs: number;
   source: MuseumHubSource;
   warnings: readonly string[];
-  /** Count of active artworks without a selectable slot (must be 0). */
   unmappedArtworkCount: number;
 }
 
 // ── Baseline inventory and defaults ──────────────────────────────────────────
 
 export const HUB_SLOTS_PER_PAGE = 4;
-
-/** Exact 1366:768 design coordinate space (do not round to 16:9). */
-export const HUB_BACKGROUND_ASPECT = 1366 / 768;
-
+export const HUB_STAGE: StageReference = { width: 1366, height: 768 };
+export const HUB_BACKGROUND_ASPECT = HUB_STAGE.width / HUB_STAGE.height;
 export const HUB_BACKGROUND_SRC = 'Backgrounds/museum-empty.png';
-
-/** Final grey-wall pick (see plan: candidate table, `#E2E4E3`). */
-export const DEFAULT_GALLERY_WALL = '#E2E4E3';
-
-export const DEFAULT_FRAME_PRESET_ID = 'matte-charcoal';
-
-/**
- * Shared static frame material presets. Roughness/metalness remain canonical
- * material metadata; they are translated once into CSS highlight/shadow
- * strengths by `frameMaterialStrengths` (no per-slot styles or WebGL scene).
- */
-export const HUB_FRAME_PRESETS: Readonly<Record<string, HubFramePreset>> = {
-  'matte-charcoal': { color: '#25282A', depthMm: 20, roughness: 0.78, metalness: 0.04 },
-  'warm-oak': { color: '#8A6A48', depthMm: 20, roughness: 0.82, metalness: 0 },
-  'dark-anodized-aluminum': { color: '#3A3E42', depthMm: 20, roughness: 0.42, metalness: 0.72 },
-};
+export const DEFAULT_GALLERY_WALL = '#D8DDDB';
+export const HUB_SELECTION_TIMEOUT_MS = 1500;
 
 interface BaselineSlotDef {
-  /** Wall-relative slot suffix (page prefix is added per room page). */
   suffix: string;
-  placement: HubSlotPlacement;
+  wallId: string;
   intendedUse: ArtworkAspectClass;
+  placement: HubSlotPlacement;
 }
 
-/**
- * Baseline slot inventory per room page. The first three anchors reuse the
- * repository hotspot calibration; the fourth is a practical panoramic
- * placement over the empty wall (the baked portrait frame is gone).
- */
-const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
+const DEFAULT_WALLS: readonly HubWallConfig[] = [
   {
-    suffix: 'wall-left.outer',
-    placement: { cx: 0.185, cy: 0.514, maxW: 0.056, maxH: 0.207, rotateYDeg: 18 },
-    intendedUse: 'portrait',
+    id: 'wall-left',
+    group: 'left',
+    planeAspect: 1.55,
+    quad: [
+      point(102, 176),
+      point(662, 192),
+      point(708, 598),
+      point(40, 620),
+    ],
+    safePolygon: shrinkPolygonTowardsCentroid(
+      [point(102, 176), point(662, 192), point(708, 598), point(40, 620)],
+      0.92
+    ),
+    shadowVector: point(-12, 16),
   },
   {
-    suffix: 'wall-left.inner',
-    placement: { cx: 0.381, cy: 0.514, maxW: 0.095, maxH: 0.158, rotateYDeg: 8 },
-    intendedUse: 'landscape',
-  },
-  {
-    suffix: 'wall-right.inner',
-    placement: { cx: 0.625, cy: 0.515, maxW: 0.098, maxH: 0.16, rotateYDeg: -6 },
-    intendedUse: 'square',
-  },
-  {
-    suffix: 'wall-right.outer',
-    placement: { cx: 0.819, cy: 0.515, maxW: 0.105, maxH: 0.075, rotateYDeg: -18 },
-    intendedUse: 'panoramic',
+    id: 'wall-right',
+    group: 'right',
+    planeAspect: 1.56,
+    quad: [
+      point(706, 192),
+      point(1264, 176),
+      point(1324, 620),
+      point(660, 598),
+    ],
+    safePolygon: shrinkPolygonTowardsCentroid(
+      [point(706, 192), point(1264, 176), point(1324, 620), point(660, 598)],
+      0.92
+    ),
+    shadowVector: point(12, 16),
   },
 ];
 
-/** Canonical explicit mappings for the built-in fallback artwork set. */
+const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
+  {
+    suffix: 'wall-left.outer',
+    wallId: 'wall-left',
+    intendedUse: 'portrait',
+    placement: {
+      wallId: 'wall-left',
+      center: point(0.16, 0.56),
+      mountedHeight: 0.33,
+    },
+  },
+  {
+    suffix: 'wall-left.inner',
+    wallId: 'wall-left',
+    intendedUse: 'landscape',
+    placement: {
+      wallId: 'wall-left',
+      center: point(0.61, 0.56),
+      mountedHeight: 0.25,
+    },
+  },
+  {
+    suffix: 'wall-right.inner',
+    wallId: 'wall-right',
+    intendedUse: 'square',
+    placement: {
+      wallId: 'wall-right',
+      center: point(0.34, 0.56),
+      mountedHeight: 0.25,
+    },
+  },
+  {
+    suffix: 'wall-right.outer',
+    wallId: 'wall-right',
+    intendedUse: 'panoramic',
+    placement: {
+      wallId: 'wall-right',
+      center: point(0.77, 0.56),
+      mountedHeight: 0.19,
+    },
+  },
+];
+
 const BUILT_IN_SLOT_MAPPINGS: Readonly<Record<string, string>> = {
   'room-01.wall-left.outer': 'quiet-coastline',
   'room-01.wall-left.inner': 'electric-storm',
   'room-01.wall-right.inner': 'tokyo-passage',
   'room-01.wall-right.outer': 'golden-desert',
 };
-
-export const HUB_SELECTION_TIMEOUT_MS = 1500;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -226,29 +260,40 @@ export function classifyArtworkAspect(aspect: number): ArtworkAspectClass {
   return 'panoramic';
 }
 
-/**
- * Translates canonical roughness/metalness metadata once into static CSS
- * highlight and shadow strengths. Keeps a future WebGL frame upgrade possible
- * without adding current draw calls or texture duplication.
- */
-export function frameMaterialStrengths(preset: HubFramePreset): {
-  highlight: number;
-  shadow: number;
-} {
-  const highlight = clamp01(0.16 + preset.metalness * 0.5 + (1 - preset.roughness) * 0.3);
-  const shadow = clamp01(0.3 + preset.roughness * 0.25);
-  return {
-    highlight: Math.round(highlight * 100) / 100,
-    shadow: Math.round(shadow * 100) / 100,
-  };
-}
-
 function defaultVisualTokens(): HubVisualTokens {
   return {
     galleryWall: DEFAULT_GALLERY_WALL,
     museumWall: DEFAULT_GALLERY_WALL,
-    defaultFramePreset: DEFAULT_FRAME_PRESET_ID,
   };
+}
+
+function normalizeStage(stage: StageReference): StageReference {
+  const width = Number.isFinite(stage.width) ? Math.max(640, Math.min(4096, stage.width)) : HUB_STAGE.width;
+  const height = Number.isFinite(stage.height) ? Math.max(360, Math.min(4096, stage.height)) : HUB_STAGE.height;
+  return { width, height };
+}
+
+function cloneQuad(quad: Quad): Quad {
+  return [clonePoint(quad[0]), clonePoint(quad[1]), clonePoint(quad[2]), clonePoint(quad[3])];
+}
+
+function toProjectionWall(wall: HubWallConfig): WallProjectionModel {
+  return {
+    id: wall.id,
+    planeAspect: wall.planeAspect,
+    quad: wall.quad,
+    safePolygon: wall.safePolygon ?? clonePolygon(shrinkPolygonTowardsCentroid(wall.quad, 0.92)),
+    shadowVector: wall.shadowVector,
+  };
+}
+
+function defaultWalls(): HubWallConfig[] {
+  return DEFAULT_WALLS.map((wall) => ({
+    ...wall,
+    quad: cloneQuad(wall.quad),
+    safePolygon: wall.safePolygon ? clonePolygon(wall.safePolygon) : undefined,
+    shadowVector: wall.shadowVector ? clonePoint(wall.shadowVector) : undefined,
+  }));
 }
 
 function baselinePageSlots(pageIndex: number): HubSlotConfig[] {
@@ -256,11 +301,157 @@ function baselinePageSlots(pageIndex: number): HubSlotConfig[] {
     id: `${roomPagePrefix(pageIndex)}.${def.suffix}`,
     enabled: true,
     selectable: true,
-    placement: { ...def.placement },
+    placement: {
+      wallId: def.wallId,
+      center: clonePoint(def.placement.center),
+      mountedHeight: def.placement.mountedHeight,
+      provisional: false,
+    },
   }));
 }
 
-// ── Sanitizing / migration ───────────────────────────────────────────────────
+function artworkAspect(artwork: Artwork): number {
+  return artwork.dimensions.height > 0
+    ? artwork.dimensions.width / artwork.dimensions.height
+    : 1;
+}
+
+function parsePoint(raw: unknown, clamp = false): Point2D | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const x = typeof candidate['x'] === 'number' && Number.isFinite(candidate['x']) ? (candidate['x'] as number) : NaN;
+  const y = typeof candidate['y'] === 'number' && Number.isFinite(candidate['y']) ? (candidate['y'] as number) : NaN;
+  if (Number.isNaN(x) || Number.isNaN(y)) return null;
+  return clamp ? point(clamp01(x), clamp01(y)) : point(x, y);
+}
+
+function parseQuad(raw: unknown): Quad | null {
+  if (!Array.isArray(raw) || raw.length !== 4) return null;
+  const points = raw.map((entry) => parsePoint(entry));
+  if (points.some((entry) => entry === null)) return null;
+  return [points[0]!, points[1]!, points[2]!, points[3]!];
+}
+
+function parsePolygon(raw: unknown): Point2D[] | null {
+  if (!Array.isArray(raw) || raw.length < 3) return null;
+  const points = raw.map((entry) => parsePoint(entry));
+  if (points.some((entry) => entry === null)) return null;
+  return points as Point2D[];
+}
+
+function parseShadowVector(raw: unknown): Point2D | undefined {
+  const parsed = parsePoint(raw);
+  return parsed ?? undefined;
+}
+
+function sanitizeStage(raw: unknown): StageReference {
+  if (!raw || typeof raw !== 'object') return { ...HUB_STAGE };
+  const candidate = raw as Record<string, unknown>;
+  return normalizeStage({
+    width: typeof candidate['width'] === 'number' ? (candidate['width'] as number) : HUB_STAGE.width,
+    height: typeof candidate['height'] === 'number' ? (candidate['height'] as number) : HUB_STAGE.height,
+  });
+}
+
+function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const id = typeof candidate['id'] === 'string' ? candidate['id'].trim() : '';
+  const group = candidate['group'] === 'right' ? 'right' : 'left';
+  const planeAspect =
+    typeof candidate['planeAspect'] === 'number' && Number.isFinite(candidate['planeAspect'])
+      ? Math.max(0.25, Math.min(8, candidate['planeAspect'] as number))
+      : NaN;
+  const quad = parseQuad(candidate['quad']);
+  if (!id || Number.isNaN(planeAspect) || !quad) {
+    warnings.push(`wall "${id || '?'}" ignored: requires id, planeAspect, and a four-corner quad.`);
+    return null;
+  }
+  if (quadIsDegenerate(quad) || !quadIsConvex(quad)) {
+    warnings.push(`wall "${id}" ignored: quad must be convex and non-degenerate.`);
+    return null;
+  }
+  const safePolygon = parsePolygon(candidate['safePolygon'])
+    ?? clonePolygon(shrinkPolygonTowardsCentroid(quad, 0.92));
+  if (!polygonIsClockwise(quad)) warnings.push(`wall "${id}": quad was normalized to clockwise winding.`);
+  if (Math.abs(polygonSignedArea(safePolygon)) <= 1e-6) {
+    warnings.push(`wall "${id}": safePolygon is degenerate; using a derived inset polygon.`);
+  }
+  return {
+    id,
+    group,
+    planeAspect,
+    quad,
+    safePolygon,
+    shadowVector: parseShadowVector(candidate['shadowVector']),
+  };
+}
+
+function sanitizeV2Placement(raw: unknown): HubSlotPlacement | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const wallId = typeof candidate['wallId'] === 'string' ? candidate['wallId'].trim() : '';
+  const center = parsePoint(candidate['center'], true);
+  const mountedHeight =
+    typeof candidate['mountedHeight'] === 'number' && Number.isFinite(candidate['mountedHeight'])
+      ? Math.max(0.04, Math.min(0.9, candidate['mountedHeight'] as number))
+      : NaN;
+  if (!wallId || !center || Number.isNaN(mountedHeight)) return null;
+  return {
+    wallId,
+    center,
+    mountedHeight,
+    provisional: candidate['provisional'] === true,
+  };
+}
+
+interface V1Placement {
+  cx: number;
+  cy: number;
+  maxW: number;
+  maxH: number;
+  rotateYDeg: number;
+}
+
+function sanitizeV1Placement(raw: unknown): V1Placement | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const cx = typeof candidate['cx'] === 'number' && Number.isFinite(candidate['cx']) ? clamp01(candidate['cx'] as number) : NaN;
+  const cy = typeof candidate['cy'] === 'number' && Number.isFinite(candidate['cy']) ? clamp01(candidate['cy'] as number) : NaN;
+  const maxW = typeof candidate['maxW'] === 'number' && Number.isFinite(candidate['maxW']) ? clamp01(candidate['maxW'] as number) : NaN;
+  const maxH = typeof candidate['maxH'] === 'number' && Number.isFinite(candidate['maxH']) ? clamp01(candidate['maxH'] as number) : NaN;
+  const rotateYDeg =
+    typeof candidate['rotateYDeg'] === 'number' && Number.isFinite(candidate['rotateYDeg'])
+      ? Math.max(-45, Math.min(45, candidate['rotateYDeg'] as number))
+      : 0;
+  if ([cx, cy, maxW, maxH].some(Number.isNaN) || maxW <= 0 || maxH <= 0) return null;
+  return { cx, cy, maxW, maxH, rotateYDeg };
+}
+
+function migrateV1Placement(
+  placement: V1Placement,
+  slotId: string,
+  walls: readonly HubWallConfig[],
+  stage: StageReference
+): HubSlotPlacement {
+  const preferredWallId = slotId.includes('wall-right') ? 'wall-right' : slotId.includes('wall-left') ? 'wall-left' : placement.cx >= 0.5 ? 'wall-right' : 'wall-left';
+  const wall = walls.find((entry) => entry.id === preferredWallId) ?? walls[0]!;
+  const projectionWall = toProjectionWall(wall);
+  const centerStage = point(placement.cx * stage.width, placement.cy * stage.height);
+  const localCenter = invertWallPoint(projectionWall, centerStage) ?? point(0.5, 0.5);
+  const topStage = point(centerStage.x, centerStage.y - (placement.maxH * stage.height) / 2);
+  const bottomStage = point(centerStage.x, centerStage.y + (placement.maxH * stage.height) / 2);
+  const topLocal = invertWallPoint(projectionWall, topStage);
+  const bottomLocal = invertWallPoint(projectionWall, bottomStage);
+  const localHeight =
+    topLocal && bottomLocal ? Math.abs(bottomLocal.y - topLocal.y) : Math.max(0.08, placement.maxH * 1.35);
+  return {
+    wallId: wall.id,
+    center: point(clamp01(localCenter.x), clamp01(localCenter.y)),
+    mountedHeight: Math.max(0.06, Math.min(0.9, localHeight)),
+    provisional: true,
+  };
+}
 
 interface SanitizedConfig {
   config: MuseumHubConfig | null;
@@ -268,33 +459,23 @@ interface SanitizedConfig {
   source: MuseumHubSource;
 }
 
-function sanitizePlacement(raw: unknown): HubSlotPlacement | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const p = raw as Record<string, unknown>;
-  const num = (key: string): number =>
-    typeof p[key] === 'number' && Number.isFinite(p[key]) ? (p[key] as number) : NaN;
-  const cx = num('cx');
-  const cy = num('cy');
-  const maxW = num('maxW');
-  const maxH = num('maxH');
-  const rotateYDeg = typeof p['rotateYDeg'] === 'number' && Number.isFinite(p['rotateYDeg'])
-    ? (p['rotateYDeg'] as number)
-    : 0;
-  if ([cx, cy, maxW, maxH].some(Number.isNaN) || maxW <= 0 || maxH <= 0) return null;
+function sanitizeFallbacks(raw: unknown): MuseumHubConfig['fallbacks'] {
+  const candidate = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const selectionTimeoutMs =
+    typeof candidate['selectionTimeoutMs'] === 'number' && Number.isFinite(candidate['selectionTimeoutMs'])
+      ? Math.max(250, Math.min(10000, candidate['selectionTimeoutMs'] as number))
+      : HUB_SELECTION_TIMEOUT_MS;
   return {
-    cx: clamp01(cx),
-    cy: clamp01(cy),
-    maxW: clamp01(maxW),
-    maxH: clamp01(maxH),
-    rotateYDeg: Math.max(-45, Math.min(45, rotateYDeg)),
+    requireAllMapped: candidate['requireAllMapped'] !== false,
+    autoPlaceUnmapped: candidate['autoPlaceUnmapped'] !== false,
+    overflow: 'paginate',
+    invalidMapping: 'disable-slot',
+    missingImage: 'placeholder-exact-target',
+    selectionTimeoutMs,
+    selectionTimeout: 'open-exact-target-procedural',
   };
 }
 
-/**
- * Validates an injected `window.__FREYRAUM_MUSEUM_HUB` object. Malformed
- * slots are dropped with warnings; duplicate slot IDs are rejected. Invalid
- * customer color overrides fall back to the defaults.
- */
 export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   const warnings: string[] = [];
   if (raw === undefined || raw === null) return { config: null, warnings, source: 'built-in-default' };
@@ -303,7 +484,6 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
     return { config: null, warnings, source: 'built-in-default' };
   }
   const cfg = raw as Record<string, unknown>;
-
   const tokens = defaultVisualTokens();
   const rawTokens =
     cfg['visualTokens'] && typeof cfg['visualTokens'] === 'object'
@@ -313,126 +493,122 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
     if (isHexColor(rawTokens['galleryWall'])) tokens.galleryWall = (rawTokens['galleryWall'] as string).trim();
     else warnings.push('visualTokens.galleryWall is not a valid #RRGGBB color; using default.');
   }
-  tokens.museumWall = tokens.galleryWall;
   if (rawTokens['museumWall'] !== undefined) {
     if (isHexColor(rawTokens['museumWall'])) tokens.museumWall = (rawTokens['museumWall'] as string).trim();
     else warnings.push('visualTokens.museumWall is not a valid #RRGGBB color; using galleryWall.');
+  } else {
+    tokens.museumWall = tokens.galleryWall;
   }
 
-  const framePresets: Record<string, HubFramePreset> = { ...HUB_FRAME_PRESETS };
-  const rawPresets =
-    cfg['framePresets'] && typeof cfg['framePresets'] === 'object'
-      ? (cfg['framePresets'] as Record<string, unknown>)
-      : {};
-  for (const [key, value] of Object.entries(rawPresets)) {
-    if (!value || typeof value !== 'object') {
-      warnings.push(`framePresets.${key} ignored: not an object.`);
-      continue;
-    }
-    const preset = value as Record<string, unknown>;
-    const color = isHexColor(preset['color']) ? (preset['color'] as string).trim() : null;
-    const roughness =
-      typeof preset['roughness'] === 'number' ? clamp01(preset['roughness'] as number) : NaN;
-    const metalness =
-      typeof preset['metalness'] === 'number' ? clamp01(preset['metalness'] as number) : NaN;
-    const depthMm =
-      typeof preset['depthMm'] === 'number' && Number.isFinite(preset['depthMm'])
-        ? Math.max(4, Math.min(60, preset['depthMm'] as number))
-        : 20;
-    if (!color || Number.isNaN(roughness) || Number.isNaN(metalness)) {
-      warnings.push(`framePresets.${key} ignored: requires color (#RRGGBB), roughness, metalness.`);
-      continue;
-    }
-    framePresets[key] = { color, depthMm, roughness, metalness };
-  }
-  if (typeof rawTokens['defaultFramePreset'] === 'string' && rawTokens['defaultFramePreset'].trim()) {
-    const requested = (rawTokens['defaultFramePreset'] as string).trim();
-    if (framePresets[requested]) tokens.defaultFramePreset = requested;
-    else warnings.push(`visualTokens.defaultFramePreset "${requested}" is unknown; using default.`);
-  }
-
+  const stage = sanitizeStage(cfg['stage']);
   let backgroundAspect = HUB_BACKGROUND_ASPECT;
   let backgroundSrc = HUB_BACKGROUND_SRC;
   if (cfg['background'] && typeof cfg['background'] === 'object') {
-    const bg = cfg['background'] as Record<string, unknown>;
-    if (typeof bg['aspect'] === 'number' && Number.isFinite(bg['aspect']) && bg['aspect'] > 0.5 && bg['aspect'] < 4) {
-      backgroundAspect = bg['aspect'];
+    const background = cfg['background'] as Record<string, unknown>;
+    if (
+      typeof background['aspect'] === 'number' &&
+      Number.isFinite(background['aspect']) &&
+      background['aspect'] > 0.5 &&
+      background['aspect'] < 4
+    ) {
+      backgroundAspect = background['aspect'];
     }
-    if (typeof bg['src'] === 'string' && bg['src'].trim()) backgroundSrc = (bg['src'] as string).trim();
+    if (typeof background['src'] === 'string' && background['src'].trim()) {
+      backgroundSrc = (background['src'] as string).trim();
+    }
   }
 
-  const rawFallbacks =
-    cfg['fallbacks'] && typeof cfg['fallbacks'] === 'object'
-      ? (cfg['fallbacks'] as Record<string, unknown>)
-      : {};
-  const selectionTimeoutMs =
-    typeof rawFallbacks['selectionTimeoutMs'] === 'number' &&
-    Number.isFinite(rawFallbacks['selectionTimeoutMs'])
-      ? Math.max(250, Math.min(10000, rawFallbacks['selectionTimeoutMs'] as number))
-      : HUB_SELECTION_TIMEOUT_MS;
+  const fallbacks = sanitizeFallbacks(cfg['fallbacks']);
+  const rawSlots = Array.isArray(cfg['slots']) ? (cfg['slots'] as unknown[]) : [];
+  if (rawSlots.length === 0) {
+    warnings.push('museum-hub config ignored: expected a non-empty slots array.');
+    return { config: null, warnings, source: 'built-in-default' };
+  }
 
-  const slots: HubSlotConfig[] = [];
+  const parsedWalls = Array.isArray(cfg['walls']) ? (cfg['walls'] as unknown[]) : [];
+  const walls = parsedWalls.map((entry) => sanitizeWallConfig(entry, warnings)).filter((entry): entry is HubWallConfig => entry !== null);
+  const effectiveWalls = walls.length > 0 ? walls : defaultWalls();
+  if (parsedWalls.length > 0 && walls.length === 0) {
+    warnings.push('museum-hub walls were invalid; using built-in calibrated wall planes.');
+  }
+
+  const version = typeof cfg['version'] === 'number' ? (cfg['version'] as number) : 1;
   const seenSlotIds = new Set<string>();
-  if (Array.isArray(cfg['slots'])) {
-    for (const candidate of cfg['slots'] as unknown[]) {
-      if (!candidate || typeof candidate !== 'object') {
-        warnings.push('slot ignored: not an object.');
-        continue;
-      }
-      const slot = candidate as Record<string, unknown>;
-      const id = typeof slot['id'] === 'string' ? slot['id'].trim() : '';
-      const placement = sanitizePlacement(slot['placement']);
-      if (!id || !placement) {
-        warnings.push(`slot "${id || '?'}" ignored: requires id and a valid placement.`);
-        continue;
-      }
-      if (seenSlotIds.has(id)) {
-        warnings.push(`slot "${id}" ignored: duplicate slot ID.`);
-        continue;
-      }
-      seenSlotIds.add(id);
-      const artworkId =
-        typeof slot['artworkId'] === 'string' && slot['artworkId'].trim()
-          ? (slot['artworkId'] as string).trim()
-          : undefined;
-      slots.push({
-        id,
-        enabled: slot['enabled'] !== false,
-        selectable: slot['selectable'] !== false,
-        ...(artworkId ? { artworkId } : {}),
-        placement,
-      });
+  const slots: HubSlotConfig[] = [];
+  let source: MuseumHubSource = 'injected';
+  for (const candidate of rawSlots) {
+    if (!candidate || typeof candidate !== 'object') {
+      warnings.push('slot ignored: not an object.');
+      continue;
     }
+    const slot = candidate as Record<string, unknown>;
+    const id = typeof slot['id'] === 'string' ? slot['id'].trim() : '';
+    if (!id) {
+      warnings.push('slot ignored: missing id.');
+      continue;
+    }
+    if (seenSlotIds.has(id)) {
+      warnings.push(`slot "${id}" ignored: duplicate slot ID.`);
+      continue;
+    }
+    seenSlotIds.add(id);
+    const artworkId =
+      typeof slot['artworkId'] === 'string' && slot['artworkId'].trim()
+        ? (slot['artworkId'] as string).trim()
+        : undefined;
+    const rawPlacement = slot['placement'];
+    const v2Placement = sanitizeV2Placement(rawPlacement);
+    let placement: HubSlotPlacement | null = null;
+    if (v2Placement) {
+      placement = v2Placement;
+    } else {
+      const v1Placement = sanitizeV1Placement(rawPlacement);
+      if (v1Placement) {
+        placement = migrateV1Placement(v1Placement, id, effectiveWalls, stage);
+        source = version >= 2 ? 'injected' : 'v1-migrated';
+      }
+    }
+    if (!placement) {
+      warnings.push(`slot "${id}" ignored: requires a valid v2 placement or migratable v1 placement.`);
+      continue;
+    }
+    slots.push({
+      id,
+      enabled: slot['enabled'] !== false,
+      selectable: slot['selectable'] !== false,
+      ...(artworkId ? { artworkId } : {}),
+      placement,
+    });
+  }
+
+  if (slots.length === 0) {
+    return { config: null, warnings, source: 'built-in-default' };
+  }
+  if (source === 'v1-migrated') {
+    warnings.push(
+      'Version-1 museum-hub slots were migrated to the wall-plane v2 model. Review calibration output and re-save customer-artworks/museum-hub.json.'
+    );
   }
 
   return {
     config: {
-      version: typeof cfg['version'] === 'number' ? (cfg['version'] as number) : 1,
+      version: 2,
       coverage: 'all-active-artworks',
+      stage,
       background: { src: backgroundSrc, aspect: backgroundAspect },
       visualTokens: tokens,
-      framePresets,
-      fallbacks: {
-        requireAllMapped: rawFallbacks['requireAllMapped'] !== false,
-        autoPlaceUnmapped: rawFallbacks['autoPlaceUnmapped'] !== false,
-        overflow: 'paginate',
-        invalidMapping: 'disable-slot',
-        missingImage: 'placeholder-exact-target',
-        selectionTimeoutMs,
-        selectionTimeout: 'open-exact-target-procedural',
-      },
+      walls: effectiveWalls,
+      fallbacks,
       slots,
     },
     warnings,
-    source: 'injected',
+    source,
   };
 }
 
 /**
- * Temporary migration for the legacy v0.79 hotspot array
- * (`window.__FREYRAUM_HUB_HOTSPOTS` / `hub-hotspots.json`). Each legacy
- * entry becomes an explicit slot mapping in the unified schema. Emits a
- * deprecation warning so customers move to `museum-hub.json`.
+ * Temporary migration for the legacy v0.79 hotspot array. Each legacy entry
+ * becomes an explicit v2 slot placement over the built-in wall planes.
  */
 export function migrateLegacyHotspots(raw: unknown): SanitizedConfig {
   const warnings: string[] = [];
@@ -442,10 +618,11 @@ export function migrateLegacyHotspots(raw: unknown): SanitizedConfig {
   warnings.push(
     'Legacy hub-hotspots.json configuration migrated automatically. Please move to customer-artworks/museum-hub.json.'
   );
+  const walls = defaultWalls();
   const slots: HubSlotConfig[] = [];
   const seenSlotIds = new Set<string>();
   const baseline = baselinePageSlots(0);
-  let baselineCursor = 0;
+  let legacyCursor = 0;
   for (const candidate of raw) {
     if (!candidate || typeof candidate !== 'object') {
       warnings.push('legacy hotspot ignored: not an object.');
@@ -461,50 +638,48 @@ export function migrateLegacyHotspots(raw: unknown): SanitizedConfig {
       warnings.push(`legacy hotspot "${artworkId || '?'}" could not be migrated.`);
       continue;
     }
-    // Snap onto the nearest free baseline anchor when close, otherwise keep
-    // the calibrated legacy geometry as an explicit custom slot.
     const nearest = baseline.find(
       (slot) =>
         !seenSlotIds.has(slot.id) &&
-        Math.abs(slot.placement.cx - cx) < 0.04 &&
-        Math.abs(slot.placement.cy - cy) < 0.06
+        Math.abs(slot.placement.center.x - cx) < 0.12 &&
+        Math.abs(slot.placement.center.y - cy) < 0.12
     );
-    const id = nearest ? nearest.id : `${roomPagePrefix(0)}.legacy-${(baselineCursor += 1)}`;
+    const id = nearest ? nearest.id : `${roomPagePrefix(0)}.legacy-${(legacyCursor += 1)}`;
     if (seenSlotIds.has(id)) continue;
     seenSlotIds.add(id);
-    const rotateYDeg = nearest ? nearest.placement.rotateYDeg : cx < 0.5 ? 12 : -12;
+    const placement = migrateV1Placement(
+      { cx, cy, maxW: w, maxH: h, rotateYDeg: cx < 0.5 ? 12 : -12 },
+      id,
+      walls,
+      HUB_STAGE
+    );
     slots.push({
       id,
       enabled: true,
       selectable: true,
       artworkId,
-      placement: { cx, cy, maxW: w, maxH: h, rotateYDeg },
+      placement,
     });
   }
   if (slots.length === 0) return { config: null, warnings, source: 'built-in-default' };
-  const sanitized = sanitizeMuseumHubConfig({ version: 1, slots });
   return {
-    config: sanitized.config,
-    warnings: [...warnings, ...sanitized.warnings],
+    config: {
+      version: 2,
+      coverage: 'all-active-artworks',
+      stage: { ...HUB_STAGE },
+      background: { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT },
+      visualTokens: defaultVisualTokens(),
+      walls,
+      fallbacks: sanitizeFallbacks(undefined),
+      slots,
+    },
+    warnings,
     source: 'legacy-migrated',
   };
 }
 
 // ── Resolver ─────────────────────────────────────────────────────────────────
 
-function artworkAspect(artwork: Artwork): number {
-  return artwork.dimensions.height > 0
-    ? artwork.dimensions.width / artwork.dimensions.height
-    : 1;
-}
-
-/**
- * Resolves the active museum-hub composition against the active artwork
- * manifest. Precedence: injected `museum-hub.json` → migrated legacy hotspot
- * array → built-in default config. The resolver guarantees full manifest
- * coverage: explicit valid IDs first, deterministic aspect-aware placement
- * second, paginated overflow last.
- */
 export function resolveMuseumHub(
   artworks: readonly Artwork[],
   injectedConfig: unknown,
@@ -518,47 +693,77 @@ export function resolveMuseumHub(
 
   const warnings = [...sanitized.warnings];
   let source: MuseumHubSource = sanitized.config ? sanitized.source : 'built-in-default';
-
-  let configSlots: HubSlotConfig[];
-  if (sanitized.config && sanitized.config.slots.length > 0) {
-    configSlots = sanitized.config.slots;
+  let config: MuseumHubConfig;
+  if (sanitized.config) {
+    config = sanitized.config;
   } else {
-    // Built-in default: baseline page-1 inventory with the canonical
-    // built-in mappings applied wherever those artworks exist.
-    configSlots = baselinePageSlots(0).map((slot) => {
-      const mappedId = BUILT_IN_SLOT_MAPPINGS[slot.id];
-      const exists = mappedId !== undefined && artworks.some((a) => a.id === mappedId);
-      return exists ? { ...slot, artworkId: mappedId } : slot;
-    });
-    if (!sanitized.config) source = 'built-in-default';
+    config = {
+      version: 2,
+      coverage: 'all-active-artworks',
+      stage: { ...HUB_STAGE },
+      background: { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT },
+      visualTokens: defaultVisualTokens(),
+      walls: defaultWalls(),
+      fallbacks: sanitizeFallbacks(undefined),
+      slots: baselinePageSlots(0).map((slot) => {
+        const mappedId = BUILT_IN_SLOT_MAPPINGS[slot.id];
+        const exists = mappedId !== undefined && artworks.some((artwork) => artwork.id === mappedId);
+        return exists ? { ...slot, artworkId: mappedId } : slot;
+      }),
+    };
+    source = 'built-in-default';
   }
 
-  const config = sanitized.config;
-  const tokens = config?.visualTokens ?? defaultVisualTokens();
-  const framePresets = config?.framePresets ?? { ...HUB_FRAME_PRESETS };
-  const background = config?.background ?? { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT };
-  const selectionTimeoutMs = config?.fallbacks.selectionTimeoutMs ?? HUB_SELECTION_TIMEOUT_MS;
-  const autoPlaceUnmapped = config?.fallbacks.autoPlaceUnmapped ?? true;
-  const defaultPreset = framePresets[tokens.defaultFramePreset]
-    ? tokens.defaultFramePreset
-    : DEFAULT_FRAME_PRESET_ID;
+  const stage = normalizeStage(config.stage);
+  const tokens = config.visualTokens;
+  const background = config.background;
+  const selectionTimeoutMs = config.fallbacks.selectionTimeoutMs;
+  const autoPlaceUnmapped = config.fallbacks.autoPlaceUnmapped;
+
+  const walls: ResolvedHubWall[] = [];
+  for (const wall of config.walls) {
+    const quad = cloneQuad(wall.quad);
+    const safePolygon = wall.safePolygon ? clonePolygon(wall.safePolygon) : clonePolygon(shrinkPolygonTowardsCentroid(quad, 0.92));
+    const homography = computeHomographyFromUnitSquare(quad);
+    const inverseHomography = homography ? invertMatrix3x3(homography) : null;
+    if (!homography || !inverseHomography) {
+      warnings.push(`wall "${wall.id}" could not build a homography and will be ignored.`);
+      continue;
+    }
+    walls.push({
+      id: wall.id,
+      group: wall.group,
+      planeAspect: wall.planeAspect,
+      quad,
+      safePolygon,
+      shadowVector: wall.shadowVector ? clonePoint(wall.shadowVector) : undefined,
+      homography,
+      inverseHomography,
+    });
+  }
+  const wallById = new Map(walls.map((wall) => [wall.id, wall]));
 
   const artworkIndexById = new Map<string, number>();
   artworks.forEach((artwork, index) => artworkIndexById.set(artwork.id, index));
 
-  // Phase 1 — explicit mappings from config slots (exact IDs win; duplicates
-  // and invalid IDs disable the slot instead of resolving elsewhere).
   const mappedArtworkIds = new Set<string>();
   const resolved: ResolvedHubSlot[] = [];
   const freeSlots: ResolvedHubSlot[] = [];
 
-  for (const slot of configSlots) {
+  for (const slot of config.slots) {
     const pageIndex = Math.max(0, parsePageIndex(slot.id));
+    const wall = wallById.get(slot.placement.wallId);
+    const wallGroup = wall?.group ?? (slot.placement.wallId.includes('right') ? 'right' : 'left');
     const base: Omit<ResolvedHubSlot, 'artworkId' | 'artworkIndex' | 'displayLabel' | 'selectable' | 'disabledReason' | 'mappingSource' | 'artworkAspect'> = {
       id: slot.id,
       pageIndex,
-      placement: slot.placement,
-      framePreset: defaultPreset,
+      placement: {
+        wallId: slot.placement.wallId,
+        center: clonePoint(slot.placement.center),
+        mountedHeight: slot.placement.mountedHeight,
+        provisional: slot.placement.provisional === true,
+      },
+      wallGroup,
     };
     if (!slot.enabled) {
       resolved.push({
@@ -568,6 +773,20 @@ export function resolveMuseumHub(
         displayLabel: '',
         selectable: false,
         disabledReason: 'explicitly-disabled',
+        mappingSource: 'explicit',
+        artworkAspect: 1,
+      });
+      continue;
+    }
+    if (!wall) {
+      warnings.push(`slot "${slot.id}" references unknown wall "${slot.placement.wallId}"; slot disabled.`);
+      resolved.push({
+        ...base,
+        artworkId: null,
+        artworkIndex: -1,
+        displayLabel: '',
+        selectable: false,
+        disabledReason: 'missing-wall',
         mappingSource: 'explicit',
         artworkAspect: 1,
       });
@@ -617,7 +836,6 @@ export function resolveMuseumHub(
       });
       continue;
     }
-    // Unmapped enabled slot: available for deterministic auto-placement.
     freeSlots.push({
       ...base,
       artworkId: null,
@@ -630,14 +848,9 @@ export function resolveMuseumHub(
     });
   }
 
-  // Phase 2 — deterministic aspect-aware placement of unmapped active
-  // artworks: aspect-class match into free page-1 slots first, then stable
-  // manifest order into remaining free slots.
-  const unmapped = autoPlaceUnmapped
-    ? artworks.filter((artwork) => !mappedArtworkIds.has(artwork.id))
-    : [];
+  const unmapped = autoPlaceUnmapped ? artworks.filter((artwork) => !mappedArtworkIds.has(artwork.id)) : [];
   const intendedUseBySuffix = new Map<string, ArtworkAspectClass>(
-    BASELINE_SLOTS.map((def) => [def.suffix, def.intendedUse])
+    BASELINE_SLOTS.map((entry) => [entry.suffix, entry.intendedUse])
   );
   const slotIntendedUse = (slot: ResolvedHubSlot): ArtworkAspectClass | undefined => {
     const suffix = slot.id.replace(/^room-\d+\./, '');
@@ -669,11 +882,8 @@ export function resolveMuseumHub(
   }
   for (const slot of freeSlots) {
     if (slot.artworkId) resolved.push(slot);
-    // Free slots that stayed empty are simply not rendered.
   }
 
-  // Phase 3 — paginated overflow: any artwork still unmapped receives a slot
-  // on an additional room page with page-qualified slot IDs. No cap.
   let overflow = artworks.filter((artwork) => !mappedArtworkIds.has(artwork.id));
   if (autoPlaceUnmapped && overflow.length > 0) {
     let pageIndex = resolved.reduce((max, slot) => Math.max(max, slot.pageIndex), 0) + 1;
@@ -681,8 +891,12 @@ export function resolveMuseumHub(
       const pageSlots = baselinePageSlots(pageIndex).map<ResolvedHubSlot>((slot) => ({
         id: slot.id,
         pageIndex,
-        placement: slot.placement,
-        framePreset: defaultPreset,
+        placement: {
+          wallId: slot.placement.wallId,
+          center: clonePoint(slot.placement.center),
+          mountedHeight: slot.placement.mountedHeight,
+          provisional: false,
+        },
         artworkId: null,
         artworkIndex: -1,
         displayLabel: '',
@@ -690,6 +904,7 @@ export function resolveMuseumHub(
         disabledReason: null,
         mappingSource: 'auto-placed',
         artworkAspect: 1,
+        wallGroup: slot.placement.wallId.includes('right') ? 'right' : 'left',
       }));
       const batch = overflow.slice(0, HUB_SLOTS_PER_PAGE);
       const consumed = new Set<string>();
@@ -708,7 +923,29 @@ export function resolveMuseumHub(
     }
   }
 
-  // Assemble pages, immutable maps, and coverage accounting.
+  const projectedBySlot = new Map<string, ReturnType<typeof projectSlotArtwork>>();
+  for (const slot of resolved) {
+    if (!slot.selectable || !slot.artworkId) continue;
+    const wall = wallById.get(slot.placement.wallId);
+    if (!wall) continue;
+    const projected = projectSlotArtwork(wall, slot.placement, slot.artworkAspect, stage);
+    projectedBySlot.set(slot.id, projected);
+    if (!projected) {
+      warnings.push(`slot "${slot.id}": projected geometry is invalid.`);
+      continue;
+    }
+    const withinSafePolygon = projected.localQuad.every((vertex) => pointInPolygon(vertex, wall.safePolygon));
+    if (!withinSafePolygon) {
+      warnings.push(`slot "${slot.id}": artwork bounds extend outside wall safePolygon.`);
+    }
+    if (projected.shortEdge < 84) {
+      warnings.push(`slot "${slot.id}": projected short edge ${projected.shortEdge.toFixed(1)}px is below the 84px desktop guidance.`);
+    }
+    if (slot.placement.provisional) {
+      warnings.push(`slot "${slot.id}": placement was migrated provisionally and should be recalibrated.`);
+    }
+  }
+
   const pageMap = new Map<number, ResolvedHubSlot[]>();
   for (const slot of resolved) {
     const list = pageMap.get(slot.pageIndex) ?? [];
@@ -719,6 +956,23 @@ export function resolveMuseumHub(
     .sort((a, b) => a[0] - b[0])
     .map(([pageIndex, slots]) => ({ pageIndex, slots }));
 
+  for (const page of pages) {
+    const projectedSlots = page.slots.filter((slot) => slot.selectable && slot.artworkId);
+    for (let index = 0; index < projectedSlots.length; index += 1) {
+      const current = projectedSlots[index]!;
+      const currentProjection = projectedBySlot.get(current.id);
+      if (!currentProjection) continue;
+      for (let nextIndex = index + 1; nextIndex < projectedSlots.length; nextIndex += 1) {
+        const next = projectedSlots[nextIndex]!;
+        const nextProjection = projectedBySlot.get(next.id);
+        if (!nextProjection) continue;
+        if (polygonsIntersect(currentProjection.projectedQuad, nextProjection.projectedQuad)) {
+          warnings.push(`page ${page.pageIndex + 1}: slot "${current.id}" overlaps slot "${next.id}".`);
+        }
+      }
+    }
+  }
+
   const slotToArtwork = new Map<string, string>();
   const artworkToSlot = new Map<string, string>();
   for (const slot of resolved) {
@@ -727,7 +981,7 @@ export function resolveMuseumHub(
       artworkToSlot.set(slot.artworkId, slot.id);
     }
   }
-  const unmappedArtworkCount = artworks.filter((a) => !artworkToSlot.has(a.id)).length;
+  const unmappedArtworkCount = artworks.filter((artwork) => !artworkToSlot.has(artwork.id)).length;
   if (unmappedArtworkCount > 0 && autoPlaceUnmapped) {
     warnings.push(`${unmappedArtworkCount} active artwork(s) without a selectable slot.`);
   }
@@ -740,8 +994,10 @@ export function resolveMuseumHub(
     artworkToSlot,
     artworkImageById,
     background,
+    stage,
     visualTokens: tokens,
-    framePresets,
+    walls,
+    wallById,
     selectionTimeoutMs,
     source,
     warnings,

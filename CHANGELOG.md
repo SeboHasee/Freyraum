@@ -1,5 +1,42 @@
 # CHANGELOG
-> Latest markdown audit: 2026-07-31 (Manifest-driven museum hub composition).
+> Latest markdown audit: 2026-08-01 (wall-plane museum hub projection).
+
+## v0.82 — Wall-plane museum hub projection (2026-08-01)
+
+### Summary
+
+- Replaced the museum hub’s per-slot framed box model with a versioned v2
+  wall-plane contract: `museum-hub.json` now stores a fixed stage size,
+  calibrated wall quads, safe polygons, wall-local mounted sizes, and exact
+  artwork mappings. Legacy `hub-hotspots.json` and v1 box placements migrate
+  automatically with provisional recalibration warnings.
+- Rebuilt `MainMuseumHub` as a DOM projective renderer: each artwork remains a
+  native button but is mapped through a calibrated planar projection, so all
+  artworks on a wall share one consistent vanishing geometry instead of
+  independent `perspective: 900px` / `rotateY()` transforms.
+- Removed visible frames, mats, bevels, and decorative rims from hub artworks.
+  Normal runtime states now show raw artwork-to-edge presentation, subtle
+  contact shadows, focus-only affordances, and neutral unframed placeholders.
+- Upgraded `?hubCalibrate=1` to author wall corners, safe-zone points, and
+  wall-local artwork placement/size, with live warnings and restore-last-valid
+  recovery.
+- Changed the authoritative gallery/hub/WebGL wall token from `#E2E4E3` to
+  `#D8DDDB` across config defaults, checked-in customer config, CSS, and
+  `RendererManager`.
+- Extended regression tooling with museum-hub screenshot states in
+  `scripts/visual-regression.mjs` and added
+  `scripts/test-museum-hub-geometry.mjs` for geometry/migration assertions.
+
+### Validation
+
+- `npm install` ✅
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `node scripts/test-museum-hub-geometry.mjs` ✅
 
 ## v0.81 — Manifest-Driven Museum Hub Composition (2026-07-31)
 

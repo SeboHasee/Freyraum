@@ -17,12 +17,12 @@
 
 :root {
   // Surfaces
-  // v0.81 — authoritative museum-grey wall tokens (final pick #E2E4E3).
+  // v0.82 — authoritative museum-grey wall tokens (final pick #D8DDDB).
   // `--color-gallery-wall` is the active token for every gallery/hub wall
   // surface and the WebGL clear color (RendererManager receives the same
   // resolved value from main.ts). `--color-museum-wall` defaults to the same
   // value and may be overridden by a validated customer museum-hub.json.
-  --color-gallery-wall: #e2e4e3;
+  --color-gallery-wall: #d8dddb;
   --color-museum-wall: var(--color-gallery-wall);
   --bg1: var(--color-gallery-wall);
   --bg2: #d8dee3;
@@ -267,6 +267,17 @@ canvas {
   transition: transform 0.45s var(--ease-gallery-out);
 }
 
+.museum-hub__stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--hub-stage-width, 1366px);
+  height: var(--hub-stage-height, 768px);
+  overflow: hidden;
+  transform-origin: top left;
+  transform: scale(var(--hub-stage-scale, 1));
+}
+
 .museum-hub__image {
   width: 100%;
   height: 100%;
@@ -279,7 +290,7 @@ canvas {
   opacity: 0;
 }
 
-.museum-hub.has-image-error .museum-hub__visual {
+.museum-hub.has-image-error .museum-hub__stage {
   background: var(--color-museum-wall);
 }
 
@@ -408,14 +419,9 @@ canvas {
   pointer-events: auto;
 }
 
-// ── Framed artwork buttons ───────────────────────────────────────────────────
-// The whole visible frame is one native <button>. Perspective + static
-// wall-specific highlight/shadow directions come from shared custom
-// properties written once per slot (--frame-rotate-y, --frame-color,
-// --frame-highlight, --frame-shadow, --frame-light-x); the preset itself is
-// one shared class, not per-slot styles.
+// ── Projected artwork buttons ────────────────────────────────────────────────
 
-.museum-hub__frame {
+.museum-hub__artwork {
   position: absolute;
   z-index: 3;
   padding: 0;
@@ -423,53 +429,19 @@ canvas {
   background: none;
   color: var(--text-inverse);
   cursor: pointer;
-  perspective: 900px;
-  // Transparent hit slop keeps targets at least 44 CSS px without visual
-  // growth; collision safety comes from the calibrated slot bounds.
-  min-width: 24px;
-  min-height: 24px;
+  transform-origin: 0 0;
+  transform-style: flat;
+  filter: drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 18px rgba(10, 13, 15, 0.24));
+  transition: filter var(--dur-control) var(--ease-out);
 }
 
-.museum-hub__frame::before {
+.museum-hub__artwork::before {
   content: '';
   position: absolute;
-  inset: min(-10px, -22%);
-  // Invisible hit-slop layer that enlarges the pointer target.
-}
-
-.museum-hub__frame-shell {
-  position: absolute;
-  inset: 0;
-  display: block;
-  transform: rotateY(var(--frame-rotate-y, 0deg));
-  transform-style: preserve-3d;
-  background: var(--frame-color, #25282a);
-  // Matte painted wood look: bevel highlight/shadow strengths are derived
-  // once from roughness/metalness metadata (frameMaterialStrengths).
-  border: 1px solid rgba(0, 0, 0, 0.55);
-  box-shadow:
-    // Projected side depth (5–10 px equivalent, direction follows the wall).
-    calc(var(--frame-light-x, 1) * -0.45em) 0.35em 0.9em rgba(10, 13, 15, calc(var(--frame-shadow, 0.5) * 0.75)),
-    // Contact shadow onto the wall.
-    0 10px 22px rgba(10, 13, 15, calc(var(--frame-shadow, 0.5) * 0.55)),
-    // Static wall-specific highlight edge.
-    inset calc(var(--frame-light-x, 1) * 2px) 2px 0 rgba(255, 255, 255, calc(var(--frame-highlight, 0.2) * 0.6)),
-    inset calc(var(--frame-light-x, 1) * -2px) -2px 0 rgba(0, 0, 0, 0.4);
-  transition:
-    box-shadow var(--dur-control) var(--ease-out),
-    transform var(--dur-control) var(--ease-out);
-}
-
-// Recessed aperture with inner contact shadow (20 mm implied depth).
-.museum-hub__frame-aperture {
-  position: absolute;
-  inset: 7%;
-  display: block;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--color-museum-wall) 88%, #000000);
-  box-shadow:
-    inset calc(var(--frame-light-x, 1) * 3px) 3px 7px rgba(0, 0, 0, 0.5),
-    inset 0 -1px 2px rgba(255, 255, 255, calc(var(--frame-highlight, 0.2) * 0.5));
+  inset: -8px;
+  border: 3px solid transparent;
+  opacity: 0;
+  transition: opacity var(--dur-control) var(--ease-out);
 }
 
 .museum-hub__art {
@@ -477,12 +449,13 @@ canvas {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: fill;
   user-select: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(12, 18, 22, 0.14),
+    inset 0 -1px 1px rgba(10, 12, 14, 0.2);
 }
 
-// Neutral placeholder shown when image data is missing; the button keeps its
-// exact valid artwork target (placeholder-exact-target).
 .museum-hub__art-placeholder {
   position: absolute;
   inset: 0;
@@ -500,15 +473,15 @@ canvas {
   text-align: center;
 }
 
-.museum-hub__frame.has-missing-image .museum-hub__art {
+.museum-hub__artwork.has-missing-image .museum-hub__art {
   visibility: hidden;
 }
 
-.museum-hub__frame.has-missing-image .museum-hub__art-placeholder {
+.museum-hub__artwork.has-missing-image .museum-hub__art-placeholder {
   display: flex;
 }
 
-.museum-hub__frame-label {
+.museum-hub__artwork-label {
   position: absolute;
   top: calc(100% + 12px);
   left: 50%;
@@ -531,43 +504,37 @@ canvas {
     transform var(--dur-control) var(--ease-out);
 }
 
-.museum-hub__frame:hover .museum-hub__frame-shell,
-.museum-hub__frame:focus-visible .museum-hub__frame-shell {
-  box-shadow:
-    calc(var(--frame-light-x, 1) * -0.45em) 0.35em 1.1em rgba(10, 13, 15, calc(var(--frame-shadow, 0.5) * 0.9)),
-    0 14px 30px rgba(10, 13, 15, calc(var(--frame-shadow, 0.5) * 0.7)),
-    0 0 0 3px rgba(255, 255, 255, 0.9),
-    0 0 0 6px rgba(15, 20, 24, 0.45),
-    inset calc(var(--frame-light-x, 1) * 2px) 2px 0 rgba(255, 255, 255, calc(var(--frame-highlight, 0.2) * 0.75)),
-    inset calc(var(--frame-light-x, 1) * -2px) -2px 0 rgba(0, 0, 0, 0.4);
+.museum-hub__artwork:focus-visible::before {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 5px rgba(15, 20, 24, 0.42);
 }
 
-.museum-hub__frame:hover .museum-hub__frame-label,
-.museum-hub__frame:focus-visible .museum-hub__frame-label {
+.museum-hub__artwork:focus-visible .museum-hub__artwork-label {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 
-.museum-hub__frame:focus-visible {
+.museum-hub__artwork:focus-visible {
   outline: none;
 }
 
-.museum-hub__frame:disabled {
+.museum-hub__artwork:disabled {
   cursor: wait;
 }
 
-.museum-hub__frame.is-disabled-slot {
+.museum-hub__artwork.is-disabled-slot,
+.museum-hub__artwork.is-invalid-geometry {
   cursor: default;
   opacity: 0.4;
-
-  .museum-hub__frame-label {
-    display: none;
-  }
 }
 
-// Narrow wall-focus views: the non-focused wall's frames leave the
-// actionable/focusable set entirely (their edges may poke into the viewport).
-.museum-hub__frame.is-off-wall {
+.museum-hub__artwork.is-disabled-slot .museum-hub__artwork-label,
+.museum-hub__artwork.is-invalid-geometry .museum-hub__artwork-label {
+  display: none;
+}
+
+.museum-hub__artwork.is-off-wall {
   visibility: hidden;
   pointer-events: none;
 }
@@ -631,25 +598,66 @@ canvas {
 }
 
 // ── Calibration mode (?hubCalibrate=1) ──────────────────────────────────────
-// Calibration manipulates the actual frame bounds and exports the complete
-// museum-hub.json schema in the copy panel.
 
-.museum-hub.is-calibrating .museum-hub__frame {
+.museum-hub__calibration-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: visible;
+}
+
+.museum-hub__calibration-wall {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(255, 164, 120, 0.86);
+  stroke-width: 2.5;
+}
+
+.museum-hub__calibration-safe {
+  fill: rgba(100, 191, 255, 0.08);
+  stroke: rgba(100, 191, 255, 0.78);
+  stroke-width: 2;
+  stroke-dasharray: 10 6;
+}
+
+.museum-hub__calibration-wall.is-active,
+.museum-hub__calibration-safe.is-active {
+  opacity: 1;
+}
+
+.museum-hub__calibration-wall:not(.is-active),
+.museum-hub__calibration-safe:not(.is-active) {
+  opacity: 0.45;
+}
+
+.museum-hub__calibration-handle {
+  fill: rgba(255, 90, 60, 0.95);
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 2;
+  cursor: move;
+}
+
+.museum-hub__calibration-handle--safe {
+  fill: rgba(100, 191, 255, 0.95);
+}
+
+.museum-hub.is-calibrating .museum-hub__artwork {
   cursor: move;
   touch-action: none;
 }
 
-.museum-hub.is-calibrating .museum-hub__frame-shell {
-  outline: 2px dashed rgba(255, 90, 60, 0.95);
-  outline-offset: 2px;
+.museum-hub.is-calibrating .museum-hub__artwork::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px dashed rgba(255, 90, 60, 0.92);
 }
 
-.museum-hub.is-calibrating .museum-hub__frame-label {
+.museum-hub.is-calibrating .museum-hub__artwork-label {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 
-.museum-hub__frame-handle {
+.museum-hub__artwork-handle {
   position: absolute;
   right: -8px;
   bottom: -8px;
@@ -680,6 +688,42 @@ canvas {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.museum-hub__calibration-controls {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.museum-hub__calibration-label {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.museum-hub__calibration-select,
+.museum-hub__calibration-restore {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.34);
+  color: inherit;
+}
+
+.museum-hub__calibration-restore:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.museum-hub__calibration-warnings {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 0.72rem;
+  line-height: 1.45;
 }
 
 .museum-hub__calibration-output {
@@ -727,7 +771,7 @@ canvas {
 
   // Narrow-portrait wall-focus mode: labels stay visible because there is no
   // hover affordance, and pager arrows/counter provide the wall navigation.
-  .museum-hub__frame-label {
+  .museum-hub__artwork-label {
     opacity: 0.92;
     transform: translateX(-50%) translateY(0);
   }
@@ -738,8 +782,8 @@ canvas {
   .museum-hub__visual,
   .museum-hub__destination-frame,
   .museum-hub__destination-label,
-  .museum-hub__frame-shell,
-  .museum-hub__frame-label {
+  .museum-hub__artwork,
+  .museum-hub__artwork-label {
     transition: none;
   }
 }
@@ -749,8 +793,8 @@ canvas {
   .museum-hub__visual,
   .museum-hub__destination-frame,
   .museum-hub__destination-label,
-  .museum-hub__frame-shell,
-  .museum-hub__frame-label {
+  .museum-hub__artwork,
+  .museum-hub__artwork-label {
     transition: none;
   }
 }
@@ -3090,7 +3134,7 @@ button {
   .topbar__help-btn,
   .topbar__chrome-btn,
   .topbar__back-btn,
-  .museum-hub__frame,
+  .museum-hub__artwork,
   .museum-hub__pager-arrow,
   .museum-hub__destination,
   .loading-start-btn,

@@ -1,28 +1,8 @@
 /**
  * v0.74 Phase 10.3 / Phase 12 — Type A (visual) regression harness.
  *
- * Captures and compares rendered screenshots of the FREYRAUM gallery to gate
- * perceptual-risk optimizations (OPT-4 bloom, OPT-5 shadow, OPT-6 panel
- * opacity, OPT-9 LOD). This is the "pixel diff → Playwright" tooling mapping the
- * regression model requires (`plan.md § Phase 10.3`, `§ Phase 12.3 Type A`).
- *
- * Pass criterion (Phase 10.3 / 14.3): on every comparison, fewer than 2% of
- * pixels may differ by more than 10/255.
- *
- * Usage:
- *   1. Build a preview server (e.g. `npm run dev` or a static server of the
- *      built `customer-preview/`) and pass its URL via FREYRAUM_URL.
- *   2. Capture a baseline BEFORE the optimization:
- *        node scripts/visual-regression.mjs baseline
- *   3. Apply the optimization, then compare:
- *        node scripts/visual-regression.mjs compare
- *
- * Dependencies are loaded lazily so the rest of the toolchain never has to
- * install a browser engine. When Playwright (and pixelmatch + pngjs for the
- * compare step) are absent the script prints the exact install command and
- * exits non-zero rather than failing opaquely.
- *
- *   npm i -D playwright pixelmatch pngjs && npx playwright install chromium
+ * Captures and compares rendered screenshots of the FREYRAUM gallery and main
+ * museum hub to gate perceptual-risk changes.
  */
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -35,25 +15,48 @@ const CURRENT_DIR = resolve(ROOT, '.visual-regression/current');
 const DIFF_DIR = resolve(ROOT, '.visual-regression/diff');
 
 const URL = process.env.FREYRAUM_URL ?? 'http://localhost:5173/app.html';
-const VIEWPORT = { width: 1280, height: 800 };
+const DESKTOP_VIEWPORT = { width: 1280, height: 800 };
+const PHONE_VIEWPORT = { width: 390, height: 844 };
 
 const ARTWORK_STEPS = [0, 1, 2];
 const ZOOM_STATES = ['overview', 'reset', 'inspection'];
 
-// The fixed dramatic lighting configuration is exercised across artwork and
-// zoom states. Stored preferences no longer include a lighting field.
-const states = ARTWORK_STEPS.flatMap((artworkStep) =>
-  ZOOM_STATES.map((zoom) => ({
-    name: `dramatic__artwork-${artworkStep}__${zoom}`,
+const states = [
+  {
+    name: 'hub__desktop__room-1',
     query: '?startup=entry-minimal',
-    artworkStep,
-    zoom,
-  }))
-);
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+  },
+  {
+    name: 'hub__phone__left-wall',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: PHONE_VIEWPORT,
+    hubSteps: [],
+  },
+  {
+    name: 'hub__phone__right-wall',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: PHONE_VIEWPORT,
+    hubSteps: ['ArrowRight'],
+  },
+  ...ARTWORK_STEPS.flatMap((artworkStep) =>
+    ZOOM_STATES.map((zoom) => ({
+      name: `dramatic__artwork-${artworkStep}__${zoom}`,
+      query: '?startup=entry-minimal',
+      mode: 'gallery',
+      viewport: DESKTOP_VIEWPORT,
+      artworkStep,
+      zoom,
+    }))
+  ),
+];
 
-// Phase 10.3 / 14.3 thresholds.
-const PER_PIXEL_CHANNEL_THRESHOLD = 10 / 255; // a pixel "differs" beyond this
-const MAX_DIFF_FRACTION = 0.02; // < 2% of pixels may differ
+const PER_PIXEL_CHANNEL_THRESHOLD = 10 / 255;
+const MAX_DIFF_FRACTION = 0.02;
 
 async function loadPlaywright() {
   try {
@@ -72,7 +75,7 @@ async function capture(targetDir) {
   mkdirSync(targetDir, { recursive: true });
   const browser = await chromium.launch();
   for (const state of states) {
-    const page = await browser.newPage({ viewport: VIEWPORT, deviceScaleFactor: 1 });
+    const page = await browser.newPage({ viewport: state.viewport, deviceScaleFactor: 1 });
     await page.addInitScript(() => {
       localStorage.setItem('freyraum-nav-hint-seen', '1');
       localStorage.setItem(
@@ -92,16 +95,28 @@ async function capture(targetDir) {
     await page.waitForSelector('.loading-start-btn:not([disabled])', { timeout: 45_000 });
     await page.click('.loading-start-btn');
     await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 10_000 });
-    for (let i = 0; i < state.artworkStep; i += 1) {
-      await page.keyboard.press('ArrowRight');
-      await page.waitForTimeout(350);
+
+    if (state.mode === 'hub') {
+      await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
+      for (const step of state.hubSteps) {
+        await page.keyboard.press(step);
+        await page.waitForTimeout(350);
+      }
+      await page.waitForTimeout(600);
+    } else {
+      await page.waitForSelector("#app[data-experience='gallery']", { timeout: 10_000 });
+      for (let index = 0; index < state.artworkStep; index += 1) {
+        await page.keyboard.press('ArrowRight');
+        await page.waitForTimeout(350);
+      }
+      if (state.zoom === 'overview') {
+        for (let index = 0; index < 5; index += 1) await page.keyboard.press('-');
+      } else if (state.zoom === 'inspection') {
+        for (let index = 0; index < 7; index += 1) await page.keyboard.press('=');
+      }
+      await page.waitForTimeout(1600);
     }
-    if (state.zoom === 'overview') {
-      for (let i = 0; i < 5; i += 1) await page.keyboard.press('-');
-    } else if (state.zoom === 'inspection') {
-      for (let i = 0; i < 7; i += 1) await page.keyboard.press('=');
-    }
-    await page.waitForTimeout(1600);
+
     const invariant = await page.evaluate(() => window.__FREYRAUM_PERF_TOOLS__?.checkInvariants());
     if (!invariant) {
       throw new Error(`${state.name}: performance/invariant tooling was not installed`);

@@ -1,5 +1,24 @@
 # FINDINGS
 
+## Wall-plane museum hub projection findings (v0.82, 2026-08-01)
+
+1. A fixed photographed room can achieve believable side-wall perspective
+   without a second 3D scene when every artwork is projected from one
+   calibrated wall plane and the stage itself remains fixed.
+2. The crucial abstraction is wall-local authoring, not per-slot screen boxes:
+   store one wall quad + safe polygon, then derive each artwork quad from its
+   wall-local center, mounted height, and native aspect ratio.
+3. v1 slot boxes can migrate safely when the runtime preserves slot IDs and
+   artwork IDs, converts screen-space centers back into wall-local coordinates,
+   and marks the result provisional for recalibration rather than silently
+   reinterpreting the customer layout as final.
+4. A calibration mode becomes materially safer once the runtime can validate
+   convex wall quads, safe-zone containment, overlap, and projected short-edge
+   thresholds before accepting an exported config as the last known good state.
+5. Hub visual regression should cover both desktop full-room and narrow-phone
+   wall-focus states; otherwise perspective regressions on side walls and mobile
+   focus transforms can slip through unchanged gallery baselines.
+
 ## Manifest-driven hub composition findings (v0.81, 2026-07-31)
 
 1. Hotspots layered over a baked room photograph and DOM frames composing real

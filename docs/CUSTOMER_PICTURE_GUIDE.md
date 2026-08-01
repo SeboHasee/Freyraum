@@ -59,11 +59,24 @@ copies into `customer-artworks/inbox/`.
 - Imports and validates customer artworks.
 - Copies usable assets into `customer-preview/images/`.
 - Imports optional audio into `customer-preview/audio/`.
+- Injects the current museum-hub wall-plane config (`customer-artworks/museum-hub.json`)
+  into the preview build.
 - Updates:
   - `customer-artworks/artworks.json`
   - `customer-preview/customer-artworks.js`
   - `customer-preview/customer-audio.js`
   - `customer-artworks/last-import-report.txt`
+
+## Museum hub placement
+
+- The current `customer-artworks/museum-hub.json` format is **version 2**:
+  fixed stage size, calibrated wall quads, safe polygons, and wall-local slot
+  positions/mounted sizes live in the same file.
+- Use the documented museum-hub calibration mode from `docs/QUERY_PARAMETERS.md`
+  to adjust wall corners, safe zones, and artwork size/placement visually, then
+  copy the exported JSON back into `customer-artworks/museum-hub.json`.
+- Older hotspot arrays and v1 slot boxes still load, but they are migrated
+  provisionally and should be re-saved from the v2 calibration flow.
 
 ## Troubleshooting
 

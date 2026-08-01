@@ -1,5 +1,37 @@
 # FREYRAUM Plan
 
+## Completed — Wall-plane museum hub projection (v0.82, 2026-08-01)
+
+### Decisions
+
+- The museum hub now uses a versioned v2 wall-plane contract in
+  `customer-artworks/museum-hub.json`: fixed stage size, calibrated wall quads,
+  safe polygons, wall-local mounted sizes, and exact `Artwork.id` slot mapping.
+- Slot geometry is derived from wall-local placement through shared planar
+  projection, not per-slot `rotateY()` or contain-fit frame boxes. Native
+  artwork aspect is preserved on the wall plane and every artwork on the same
+  wall shares one projection model.
+- Museum hub artworks are unframed in normal runtime states. Frame shells,
+  aperture mats, bevels, and decorative rims were removed; only subtle contact
+  shadowing plus focus-only affordances remain.
+- `?hubCalibrate=1` now edits wall corners, safe-zone points, and slot
+  placement/size directly against the projected stage, exports full v2 JSON,
+  surfaces overlap/convexity/safe-zone/size warnings, and can restore the last
+  valid configuration snapshot.
+- `#D8DDDB` is the authoritative wall token across CSS fallback surfaces,
+  customer config, hub composition, and the WebGL clear color.
+- Regression coverage now includes hub screenshots in `scripts/visual-regression.mjs`
+  plus a dedicated geometry script (`scripts/test-museum-hub-geometry.mjs`) for
+  migration, projection, and overlap assertions.
+
+### Validation boundary
+
+- Required repository gates remain `npm run docs:check-config-authority`,
+  `npm run lint`, `npm run build:typecheck`, `npm run build`, and
+  `npm run test:frame-budget`.
+- Focused hub checks additionally include `node scripts/test-museum-hub-geometry.mjs`,
+  browser calibration review, and hub visual-regression baseline/compare runs.
+
 ## Completed — Manifest-Driven Museum Hub Composition (v0.81, 2026-07-31)
 
 ### Decisions
