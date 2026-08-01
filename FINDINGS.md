@@ -1,5 +1,26 @@
 # FINDINGS
 
+## Authoritative 3D museum-hub room findings (v0.86, 2026-08-01)
+
+1. Once a hub scene has real wall-local transforms, the DOM should stop drawing
+   the artworks. Keeping DOM buttons only as projected interaction masks avoids
+   duplicate perspective systems and makes the camera chain the single source of
+   truth.
+2. Doorway safety is more robust when fallback stays in authored wall space:
+   clamp/solve locally first, then fall through to the next valid wall bucket
+   only after same-wall candidates fail. This preserves deterministic behavior
+   and keeps warnings explainable.
+3. A lightweight room model does not need full gallery complexity. Four wall
+   meshes plus floor/ceiling geometry are enough to produce believable
+   perspective, preserve wall ownership, and keep the hub runtime cheap.
+4. Grey-surface regressions hide in fatal-startup paths more often than steady
+   state. Re-applying the resolved token to `documentElement`, `body`, `#app`,
+   and the fallback screen before rendering closes the last white flash path.
+5. Visual hub regressions are easier to catch when the screenshot harness checks
+   the architectural contract too: presence of the dedicated hub canvas, lack of
+   per-slot transform projection, and projected clip paths together prove the 3D
+   scene bridge is still active.
+
 ## Museum-hub realism / selection / wall-token hardening findings (v0.85, 2026-08-01)
 
 1. The photographed room should keep one explicit stage-space reference per wall

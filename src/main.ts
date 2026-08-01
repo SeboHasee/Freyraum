@@ -408,6 +408,13 @@ function applyResolvedWallSurfaceColor(
   return { galleryWall, museumWall };
 }
 
+function resolveRuntimeFallbackSurfaceColor(): string {
+  const rootGalleryWall = normalizeCssColorToHex(
+    getComputedStyle(document.documentElement).getPropertyValue('--color-gallery-wall')
+  );
+  return rootGalleryWall ?? '#D8DDDB';
+}
+
 function verifyMuseumWallColorConsistency(
   diagnostics: ReturnType<typeof getDiagnostics>,
   reason: string,
@@ -2163,6 +2170,10 @@ main().catch((err) => {
   getDiagnostics().error('boot', 'startup-failed', 'Fatal startup failure', err);
   const app = document.getElementById('app');
   if (app) {
-    showFallbackScreen(app, err instanceof Error ? err.message : 'Unbekannter Fehler beim Initialisieren.');
+    const resolvedGalleryWall = resolveRuntimeFallbackSurfaceColor();
+    document.documentElement.style.backgroundColor = resolvedGalleryWall;
+    document.body.style.backgroundColor = resolvedGalleryWall;
+    app.style.backgroundColor = resolvedGalleryWall;
+    showFallbackScreen(app, err instanceof Error ? err.message : 'Unbekannter Fehler beim Initialisieren.', resolvedGalleryWall);
   }
 });

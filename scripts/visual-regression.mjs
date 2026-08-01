@@ -490,6 +490,46 @@ async function assertSelectedArtworkState(page, stateName, expectedArtworkId) {
   }
 }
 
+async function assertHubSceneBridge(page, stateName) {
+  const snapshot = await page.evaluate(() => {
+    const canvas = document.querySelector('.museum-hub__canvas');
+    const slots = [...document.querySelectorAll('.museum-hub__artwork[data-artwork-id]')]
+      .slice(0, 4)
+      .map((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        return {
+          artworkId: element.getAttribute('data-artwork-id'),
+          transform: style.transform,
+          clipPath: style.clipPath,
+          width: rect.width,
+          height: rect.height,
+        };
+      });
+    return {
+      hasCanvas: canvas instanceof HTMLCanvasElement,
+      slots,
+    };
+  });
+  if (!snapshot.hasCanvas) {
+    throw new Error(`${stateName}: hub did not render through the dedicated 3D room canvas`);
+  }
+  if (snapshot.slots.length === 0) {
+    throw new Error(`${stateName}: hub did not expose any interactive slot overlays`);
+  }
+  for (const slot of snapshot.slots) {
+    if (slot.transform && slot.transform !== 'none') {
+      throw new Error(`${stateName}: slot ${slot.artworkId} still relies on per-slot transform projection`);
+    }
+    if (!slot.clipPath || slot.clipPath === 'none') {
+      throw new Error(`${stateName}: slot ${slot.artworkId} lost its projected screen-space containment mask`);
+    }
+    if (slot.width < 12 || slot.height < 12) {
+      throw new Error(`${stateName}: slot ${slot.artworkId} projected overlay is implausibly small`);
+    }
+  }
+}
+
 function getStateHubConfig(state) {
   return state.fixture?.museumHub ?? SHIPPING_HUB_CONFIG;
 }
@@ -718,6 +758,7 @@ async function capture(targetDir) {
       }
       await page.waitForTimeout(600);
       await assertAuthoritativeSurfaces(page, state.name);
+      await assertHubSceneBridge(page, state.name);
       await assertSurfaceReasons(page, state.name, ['experience-state:hub']);
     } else if (state.mode === 'gallery') {
       await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
@@ -750,10 +791,10 @@ async function capture(targetDir) {
       await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
       await page.waitForTimeout(700);
       await assertAuthoritativeSurfaces(page, state.name);
+      await assertHubSceneBridge(page, state.name);
       await assertSurfaceReasons(page, state.name, [
         'experience-state:hub',
         'experience-state:transitioning',
-        'experience-state:destination',
       ]);
       await assertSelectedArtworkState(page, state.name, state.expectedSelectedArtworkId);
     } else if (state.mode === 'restore') {

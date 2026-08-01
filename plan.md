@@ -1,5 +1,36 @@
 # FREYRAUM Plan
 
+## Implemented — Authoritative 3D museum-hub room pipeline (v0.86, 2026-08-01)
+
+- The hub now owns a dedicated 3D room scene with wall meshes, floor/ceiling
+  surfaces, and wall-mounted artwork planes rendered through one camera instead
+  of projecting artwork images with per-slot DOM transforms.
+- The shipping `museum-hub.json` contract is now v4: camera far/lens-shift,
+  room envelope, global hanging rules, wall transforms/drawable regions/
+  exclusion polygons, and normalized slot UV/scale/z-offset metadata are all
+  persisted in the authored config.
+- Slot resolution now enforces doorway exclusion and drawable-region
+  containment before projection, then deterministically falls back to the next
+  valid wall bucket when a wall becomes unusable.
+- The DOM layer remains only for interaction, focus, and accessibility: slot
+  buttons derive their clip path + bounds from projected quads while the 3D
+  scene owns visible artwork perspective.
+- `?hubDebug=1` now exposes projected anchors/world quads alongside the existing
+  wall/safe-zone/doorway diagnostics, and the fatal fallback screen path now
+  inherits the authoritative grey token before it renders.
+- Regression coverage now hard-fails on the v4 room contract, fallback wall
+  buckets, perspective foreshortening, neutral-grey fallback, and the presence
+  of the dedicated `.museum-hub__canvas` scene bridge.
+
+### Validation boundary
+
+- Required repository gates remain
+  `npm run import:artworks`, `npm run docs:check-config-authority`,
+  `npm run lint`, `npm run build:typecheck`, `npm run build`,
+  `npm run test:frame-budget`, `npm run validate:museum-hub`, and filtered
+  `scripts/visual-regression.mjs baseline|capture|compare` runs against a local
+  HTTP server serving `customer-preview/`.
+
 ## Implemented — Museum-hub realism, selection, and wall-token hardening (v0.85, 2026-08-01)
 
 - The hub now treats configured stage quads/safe polygons as photographed

@@ -1,6 +1,48 @@
 # CHANGELOG
 > Latest markdown audit: 2026-08-01 (wall-plane museum hub projection).
 
+## v0.86 — Authoritative 3D museum-hub room pipeline (2026-08-01)
+
+### Summary
+
+- Replaced the hub’s projected DOM artwork rendering with a dedicated 3D room
+  scene (`HubRoomRenderer`) that mounts artwork planes onto actual wall-local
+  world transforms and renders them through one authoritative camera.
+- Kept the existing DOM interaction layer, but changed it into a pure
+  screen-space bridge: buttons now use projected bounds + clip paths instead of
+  per-slot CSS `matrix3d(...)` transforms.
+- Expanded the v4 `museum-hub.json` contract with room envelope, hanging rules,
+  wall transforms/drawable regions/exclusion polygons, camera far/lens-shift,
+  and normalized slot UV / scale / z-offset metadata.
+- Hardened slot resolution so doorway/containment failures first seek the
+  nearest valid pose on the same wall and then deterministically fall back to
+  the next valid wall bucket before suppressing the slot.
+- Preserved selection persistence by stable artwork ID, kept round-trip hub
+  return feedback, and extended `?hubDebug=1` diagnostics with projected anchors
+  plus world-space quads.
+- Closed the remaining fatal-startup white-surface path by forcing the fallback
+  screen to inherit the authoritative gallery-wall grey before rendering.
+- Upgraded regression tooling:
+  - `scripts/test-museum-hub-geometry.mjs` now validates the v4 room schema,
+    world-space quad export, fallback wall buckets, perspective foreshortening,
+    and the grey fallback path.
+  - `scripts/visual-regression.mjs` now asserts that the hub renders through the
+    dedicated `.museum-hub__canvas` scene bridge and that interactive overlays
+    no longer rely on per-slot transform projection.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `FREYRAUM_URL=http://127.0.0.1:4173/app.html FREYRAUM_VISUAL_STATE_FILTER='hub__desktop__room-1,hub__desktop-wide__room-1,hub__phone__left-wall,hub__phone__right-wall,hub__fixture__doorway-left-edge,hub__fixture__doorway-right-edge,hub__desktop__missing-background-fallback,hub__desktop__missing-background-neutral,hub__desktop__selected-return-topbar' node scripts/visual-regression.mjs baseline` ✅
+- `FREYRAUM_URL=http://127.0.0.1:4173/app.html FREYRAUM_VISUAL_STATE_FILTER='hub__desktop__room-1,hub__desktop-wide__room-1,hub__phone__left-wall,hub__phone__right-wall,hub__fixture__doorway-left-edge,hub__fixture__doorway-right-edge,hub__desktop__missing-background-fallback,hub__desktop__missing-background-neutral,hub__desktop__selected-return-topbar' node scripts/visual-regression.mjs capture` ✅
+- `FREYRAUM_URL=http://127.0.0.1:4173/app.html FREYRAUM_VISUAL_STATE_FILTER='hub__desktop__room-1,hub__desktop-wide__room-1,hub__phone__left-wall,hub__phone__right-wall,hub__fixture__doorway-left-edge,hub__fixture__doorway-right-edge,hub__desktop__missing-background-fallback,hub__desktop__missing-background-neutral,hub__desktop__selected-return-topbar' node scripts/visual-regression.mjs compare` ✅
+
 ## v0.85 — Museum-hub realism, selection, and wall-token hardening (2026-08-01)
 
 ### Summary

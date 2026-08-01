@@ -93,14 +93,17 @@ sequence including edge cases.
 
 `scripts/test-museum-hub-geometry.mjs` is a focused hub geometry regression
 check: it loads the shipping TypeScript modules, verifies v1/v2 migration keeps
-exact artwork targets, validates the checked-in v3 camera/room-plane contract,
-reconciles wall-local planes against the photographed reference quads, and
-asserts deterministic doorway-edge placement, invalid-slot suppression,
-projected containment, hanging-band containment, realism residuals, vanishing
-direction trends, selected-state runtime hooks, grey-token reach, and the
-bounded missing-background fallback. Threshold breaches hard-fail
+exact artwork targets, validates the checked-in v4 camera/room/wall/slot
+contract, reconciles wall-local planes against the photographed reference
+quads, and asserts deterministic doorway-edge placement, fallback wall buckets,
+projected containment, hanging-band containment, perspective foreshortening,
+world-space quad export, selected-state runtime hooks, grey-token reach, and
+the bounded missing-background fallback. Threshold breaches hard-fail
 `npm run validate:museum-hub` and CI. `npm run validate:museum-hub:visual`
-runs the optional Type A screenshot comparison with an existing local baseline.
+runs the optional Type A screenshot comparison with an existing local baseline,
+and the harness additionally checks that the hub still renders through the
+dedicated `.museum-hub__canvas` scene bridge rather than per-slot DOM
+projection transforms.
 
 ## Acceptance thresholds (Phase 14)
 
