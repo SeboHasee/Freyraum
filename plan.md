@@ -1,5 +1,15 @@
 # FREYRAUM Plan
 
+## Implemented — Calibrated 3D museum room reconstruction (v0.84, 2026-08-01)
+
+- Replaced the hub's runtime placement path with one camera-calibrated
+  wall-local → world → camera → NDC → stage projection chain.
+- Shipping config now carries v3 room planes, local doorway voids, hanging
+  bands, metric-like anchors, and a bounded room-background fallback.
+- Debug rendering and deterministic regression checks cover validity flags,
+  horizon/vanishing guides, grey-token reach, and the missing-asset path.
+- Remaining validation evidence is recorded in `CHANGELOG.md`.
+
 ## Completed — Museum-hub plane topology + diagnostics hardening (v0.83, 2026-08-01)
 
 ### Decisions

@@ -79,12 +79,13 @@ numerically identical to the original O(N) reference across a 435-frame
 sequence including edge cases.
 
 `scripts/test-museum-hub-geometry.mjs` is a focused hub geometry regression
-check: it loads the shipping TypeScript modules, verifies v1→v2 migration keeps
-exact artwork targets, validates the checked-in
-`customer-artworks/museum-hub.json` wall topology (>2 planes), asserts
-stage-space safe-polygon containment, doorway exclusion, minimum projected size,
-corner-tolerance fixtures, and homography roundtrip error bounds. Threshold
-breaches hard-fail the script (`npm run validate:museum-hub`) and CI.
+check: it loads the shipping TypeScript modules, verifies v1/v2 migration keeps
+exact artwork targets, validates the checked-in v3 camera/room-plane contract,
+and asserts projected containment, doorway exclusion, hanging-band containment,
+orientation and vanishing-direction trends, grey-token reach, and the bounded
+missing-background fallback. Threshold breaches hard-fail
+`npm run validate:museum-hub` and CI. `npm run validate:museum-hub:visual`
+runs the optional Type A screenshot comparison with an existing local baseline.
 
 ## Acceptance thresholds (Phase 14)
 

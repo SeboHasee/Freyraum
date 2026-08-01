@@ -15,6 +15,7 @@
     "build:preview-html": "node scripts/write-local-preview.mjs",
     "test:frame-budget": "node scripts/test-frame-budget.mjs",
     "validate:museum-hub": "node scripts/test-museum-hub-geometry.mjs",
+    "validate:museum-hub:visual": "node scripts/visual-regression.mjs compare",
     "validate:visual": "node scripts/visual-regression.mjs",
     "docs:check-config-authority": "node scripts/check-config-doc-authority.mjs"
   },

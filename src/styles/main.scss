@@ -155,7 +155,7 @@ body {
   height: 100%;        // legacy fallback
   height: 100dvh;      // dynamic viewport height — collapses with browser chrome
   overflow: hidden;
-  background: radial-gradient(ellipse at center, var(--bg1) 0%, var(--bg3) 100%);
+  background: var(--color-gallery-wall);
   font-family: var(--font);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -166,6 +166,7 @@ body {
   width: 100%;
   height: 100%;
   position: relative;
+  background: var(--color-gallery-wall);
 }
 
 .sr-only {
@@ -227,15 +228,7 @@ canvas {
   z-index: 80;
   overflow: hidden;
   background-color: var(--color-museum-wall);
-  // Edge gradients derive from the base wall token (no near-white radial).
-  background-image:
-    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.28), transparent 52%),
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--color-museum-wall) 92%, #ffffff) 0%,
-      var(--color-museum-wall) 55%,
-      color-mix(in srgb, var(--color-museum-wall) 84%, #000000) 100%
-    );
+  background-image: none;
   opacity: 1;
   transition: opacity 0.52s var(--ease-gallery-in-out);
 }
@@ -690,6 +683,27 @@ canvas {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.01em;
+}
+
+.museum-hub__debug-horizon {
+  stroke: rgba(255, 204, 92, 0.96);
+  stroke-width: 1.5;
+  stroke-dasharray: 7 5;
+}
+
+.museum-hub__debug-vanishing {
+  stroke: rgba(192, 132, 252, 0.88);
+  stroke-width: 1.15;
+  stroke-dasharray: 4 4;
+}
+
+.museum-hub__debug-camera-label {
+  fill: rgba(255, 230, 160, 0.98);
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 0.55;
+  paint-order: stroke;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .museum-hub.is-calibrating .museum-hub__artwork {
@@ -2219,7 +2233,7 @@ button {
   display: grid;
   place-items: center;
   padding: 32px;
-  background: radial-gradient(ellipse at top, var(--bg1) 0%, var(--bg3) 100%);
+  background: var(--color-gallery-wall);
   z-index: 300;
 }
 

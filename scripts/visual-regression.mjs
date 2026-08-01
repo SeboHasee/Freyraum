@@ -128,6 +128,21 @@ function hubFixture(artworks) {
   };
 }
 
+function missingBackgroundFixture() {
+  return {
+    artworks: HUB_ASPECT_FIXTURES.square,
+    museumHub: {
+      ...SHIPPING_HUB_CONFIG,
+      background: { ...SHIPPING_HUB_CONFIG.background, src: 'Backgrounds/missing-room.png' },
+      backgroundFallback: { src: 'Backgrounds/museum-empty.png' },
+      slots: SHIPPING_HUB_CONFIG.slots.map((slot, index) => ({
+        ...slot,
+        ...(index < HUB_ASPECT_FIXTURES.square.length ? { artworkId: HUB_ASPECT_FIXTURES.square[index].id } : {}),
+      })),
+    },
+  };
+}
+
 const states = [
   {
     name: 'hub__desktop__room-1',
@@ -170,6 +185,15 @@ const states = [
     mode: 'hub',
     viewport: NARROW_PORTRAIT_VIEWPORT,
     hubSteps: ['ArrowRight'],
+  },
+  {
+    name: 'hub__desktop__missing-background-fallback',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+    fixture: missingBackgroundFixture(),
+    expectBackgroundFallback: true,
   },
   {
     name: 'hub__fixture__very-tall',
@@ -266,6 +290,12 @@ async function capture(targetDir) {
 
     if (state.mode === 'hub') {
       await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
+      if (state.expectBackgroundFallback) {
+        await page.waitForFunction(
+          () => document.querySelector('.museum-hub__image')?.getAttribute('src')?.includes('museum-empty.png'),
+          { timeout: 10_000 }
+        );
+      }
       for (const step of state.hubSteps) {
         await page.keyboard.press(step);
         await page.waitForTimeout(350);
@@ -283,6 +313,14 @@ async function capture(targetDir) {
         for (let index = 0; index < 7; index += 1) await page.keyboard.press('=');
       }
       await page.waitForTimeout(1600);
+      const artworkSurface = await page.evaluate(() => {
+        const body = getComputedStyle(document.body).backgroundColor;
+        const app = getComputedStyle(document.getElementById('app')).backgroundColor;
+        return { body, app };
+      });
+      if (artworkSurface.body !== 'rgb(216, 221, 219)' || artworkSurface.app !== 'rgb(216, 221, 219)') {
+        throw new Error(`${state.name}: artwork-view background leaked from the authoritative museum-grey token`);
+      }
     }
 
     const invariant = await page.evaluate(() => window.__FREYRAUM_PERF_TOOLS__?.checkInvariants());

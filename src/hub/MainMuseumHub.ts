@@ -20,6 +20,7 @@ import {
   point,
   pointInPolygon,
   polygonsIntersect,
+  projectWorldPoint,
   projectSlotArtwork,
   quadIsConvex,
   quadIsDegenerate,
@@ -27,6 +28,7 @@ import {
   type Point2D,
 } from './projectiveGeometry';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import { getBackgroundFallbackCandidate } from './backgroundFallback';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -152,28 +154,63 @@ export class MainMuseumHub {
     image.alt = '';
     image.decoding = 'async';
     image.draggable = false;
+    const primaryBackgroundUrl = resolveBackgroundUrl(resolution.background.src);
+    const fallbackBackgroundUrl = resolveBackgroundUrl(resolution.backgroundFallback.src);
     const backgroundReady = new Promise<void>((resolve) => {
       let settled = false;
+      let fallbackAttempted = false;
+      let timeout = 0;
       const finish = (): void => {
         if (settled) return;
         settled = true;
         window.clearTimeout(timeout);
         resolve();
       };
-      const timeout = window.setTimeout(() => {
-        hub.classList.add('has-image-error');
-        finish();
-      }, HUB_IMAGE_TIMEOUT_MS);
+      const armTimeout = (): void => {
+        window.clearTimeout(timeout);
+        timeout = window.setTimeout(() => {
+          if (tryFallback('timeout')) return;
+          hub.classList.add('has-image-error');
+          this.diagnostics.warn('background-fallback-failed', 'Hub background timed out; continuing with neutral museum-grey surface', {
+            primaryPath: resolution.background.src,
+            fallbackPath: resolution.backgroundFallback.src,
+          });
+          finish();
+        }, HUB_IMAGE_TIMEOUT_MS);
+      };
+      const tryFallback = (reason: '404' | 'timeout'): boolean => {
+        const candidate = getBackgroundFallbackCandidate(
+          primaryBackgroundUrl,
+          fallbackBackgroundUrl,
+          fallbackAttempted
+        );
+        if (!candidate) return false;
+        fallbackAttempted = true;
+        this.diagnostics.warn('background-missing', 'Hub background failed; retrying configured fallback without interrupting interaction', {
+          path: resolution.background.src,
+          reason,
+          fallbackPath: resolution.backgroundFallback.src,
+        });
+        image.src = candidate;
+        armTimeout();
+        return true;
+      };
       image.addEventListener('load', () => {
         hub.classList.remove('has-image-error');
         finish();
       });
       image.addEventListener('error', () => {
+        if (tryFallback('404')) return;
         hub.classList.add('has-image-error');
+        this.diagnostics.warn('background-fallback-failed', 'Hub background and fallback image failed; continuing with neutral museum-grey surface', {
+          primaryPath: resolution.background.src,
+          fallbackPath: resolution.backgroundFallback.src,
+        });
         finish();
       });
+      armTimeout();
     });
-    image.src = resolveBackgroundUrl(resolution.background.src);
+    image.src = primaryBackgroundUrl;
     stage.appendChild(image);
 
     const shade = document.createElement('div');
@@ -495,6 +532,7 @@ export class MainMuseumHub {
       inverseHomography: wall.inverseHomography,
       withinSafePolygon,
       shortEdgePx: Math.round(projection.shortEdge * 100) / 100,
+      validity: projection.validity ?? null,
     });
   }
 
@@ -516,6 +554,7 @@ export class MainMuseumHub {
             wall && projection
               ? projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))
               : false,
+          validity: projection?.validity ?? null,
         };
       });
     this.diagnostics.info('hub-debug-geometry', 'Hub debug geometry snapshot', {
@@ -849,8 +888,17 @@ export class MainMuseumHub {
       if (!local) return;
       if (drag.mode === 'move') {
         drag.slot.placement.center = point(this.clampLocalX(local.x), this.clampLocalY(local.y));
+        if (wall.room) {
+          drag.slot.placement.anchor = point(
+            drag.slot.placement.center.x * wall.room.width,
+            (1 - drag.slot.placement.center.y) * wall.room.height
+          );
+        }
       } else {
-        drag.slot.placement.mountedHeight = Math.max(0.04, Math.min(0.9, Math.abs(local.y - drag.slot.placement.center.y) * 2));
+        const localHeight = Math.abs(local.y - drag.slot.placement.center.y) * 2;
+        drag.slot.placement.mountedHeight = wall.room
+          ? Math.max(0.12, Math.min(wall.room.height, localHeight * wall.room.height))
+          : Math.max(0.04, Math.min(0.9, localHeight));
       }
       this.applySlotGeometry(drag.button, drag.slot);
     } else {
@@ -907,7 +955,10 @@ export class MainMuseumHub {
       wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle')));
       wall.safePolygon.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'safe', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--safe')));
     }
-    if (this.debugGeometry) this.renderProjectedSlotDebugOverlay();
+    if (this.debugGeometry) {
+      this.renderCameraDebugGuides();
+      this.renderProjectedSlotDebugOverlay();
+    }
   }
 
   private createCalibrationHandle(
@@ -951,15 +1002,49 @@ export class MainMuseumHub {
       if (centerStage) {
         this.appendSvgCircle(centerStage, 'museum-hub__debug-slot-center', 3.2);
       }
+
       projection.projectedQuad.forEach((corner) => this.appendSvgCircle(corner, 'museum-hub__debug-slot-corner', 2.8));
       const labelAnchor = projection.projectedQuad[0];
       if (labelAnchor) {
         this.appendSvgLabel(
           point(labelAnchor.x + 8, labelAnchor.y - 8),
-          `${slot.id} · ${slot.placement.wallId}`,
+          `${slot.id} · ${slot.placement.wallId} · ${
+            projection.validity?.contained && projection.validity.doorwayClear && projection.validity.inHangingBand
+              ? 'valid'
+              : 'invalid'
+          }`,
           'museum-hub__debug-slot-label'
         );
       }
+    }
+  }
+
+  private renderCameraDebugGuides(): void {
+    const camera = this.resolution.camera;
+    const horizon = projectWorldPoint(
+      camera,
+      { x: camera.target.x, y: camera.target.y, z: camera.target.z - 24 },
+      this.resolution.stage
+    );
+    if (horizon) {
+      this.appendSvgLine(
+        point(0, horizon.y),
+        point(this.stageWidth, horizon.y),
+        'museum-hub__debug-horizon'
+      );
+      this.appendSvgLabel(point(12, Math.max(18, horizon.y - 8)), 'camera horizon', 'museum-hub__debug-camera-label');
+    }
+    for (const wall of this.resolution.walls) {
+      if (!wall.room) continue;
+      const local = point(wall.room.width / 2, wall.room.height / 2);
+      const worldAt = (x: number) => ({
+        x: wall.room!.origin.x + wall.room!.axisU.x * x + wall.room!.axisV.x * local.y,
+        y: wall.room!.origin.y + wall.room!.axisU.y * x + wall.room!.axisV.y * local.y,
+        z: wall.room!.origin.z + wall.room!.axisU.z * x + wall.room!.axisV.z * local.y,
+      });
+      const origin = projectWorldPoint(camera, worldAt(local.x), this.resolution.stage);
+      const vanishing = projectWorldPoint(camera, worldAt(local.x + 40), this.resolution.stage);
+      if (origin && vanishing) this.appendSvgLine(origin, vanishing, 'museum-hub__debug-vanishing');
     }
   }
 
@@ -1074,11 +1159,13 @@ export class MainMuseumHub {
 
   private buildCurrentCalibrationConfig(): unknown {
     return {
-      version: 2,
+      version: 3,
       coverage: 'all-active-artworks',
       stage: this.resolution.stage,
       background: this.resolution.background,
+      backgroundFallback: this.resolution.backgroundFallback,
       visualTokens: this.resolution.visualTokens,
+      camera: this.resolution.camera,
       walls: this.resolution.walls.map((wall) => ({
         id: wall.id,
         group: wall.group,
@@ -1086,6 +1173,7 @@ export class MainMuseumHub {
         quad: wall.quad.map((corner) => this.roundPoint(corner)),
         safePolygon: wall.safePolygon.map((corner) => this.roundPoint(corner)),
         ...(wall.shadowVector ? { shadowVector: this.roundPoint(wall.shadowVector) } : {}),
+        ...(wall.room ? { room: wall.room } : {}),
       })),
       fallbacks: {
         requireAllMapped: true,
@@ -1104,6 +1192,7 @@ export class MainMuseumHub {
         placement: {
           wallId: slot.placement.wallId,
           center: this.roundPoint(slot.placement.center),
+          ...(slot.placement.anchor ? { anchor: this.roundPoint(slot.placement.anchor) } : {}),
           mountedHeight: this.round(slot.placement.mountedHeight),
           ...(slot.placement.provisional ? { provisional: true } : {}),
         },
@@ -1148,12 +1237,25 @@ export class MainMuseumHub {
       currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
       currentWall.planeAspect = wall.planeAspect;
       if (wall.shadowVector) currentWall.shadowVector = clonePoint(wall.shadowVector);
+      if (wall.room) {
+        currentWall.room = {
+          origin: { ...wall.room.origin },
+          axisU: { ...wall.room.axisU },
+          axisV: { ...wall.room.axisV },
+          width: wall.room.width,
+          height: wall.room.height,
+          safePolygon: wall.room.safePolygon.map(clonePoint),
+          doorwayExclusions: wall.room.doorwayExclusions.map((polygon) => polygon.map(clonePoint)),
+          hangingBand: { ...wall.room.hangingBand },
+        };
+      }
     }
     for (const slot of config.slots) {
       const currentSlot = this.slotViews.find((view) => view.slot.id === slot.id)?.slot;
       if (!currentSlot) continue;
       currentSlot.placement.wallId = slot.placement.wallId;
       currentSlot.placement.center = clonePoint(slot.placement.center);
+      currentSlot.placement.anchor = slot.placement.anchor ? clonePoint(slot.placement.anchor) : undefined;
       currentSlot.placement.mountedHeight = slot.placement.mountedHeight;
       currentSlot.placement.provisional = slot.placement.provisional === true;
     }

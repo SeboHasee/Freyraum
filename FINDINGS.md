@@ -1,5 +1,17 @@
 # FINDINGS
 
+## Calibrated 3D hub reconstruction findings (v0.84, 2026-08-01)
+
+1. Stage-space quads are useful calibration references, but cannot be the
+   authoritative placement model: camera and wall-local geometry must own every
+   artwork projection to preserve shared perspective.
+2. Doorway and hanging-band constraints are safest before projection, where
+   metric-like wall-local dimensions make containment/intersection deterministic.
+3. A failed room image requires one distinct fallback attempt followed by a
+   neutral token surface; retrying the same URL risks an unbounded error loop.
+4. Gallery, hub, boot shell, fallback, and WebGL must resolve the same grey
+   token before renderer construction to avoid a white transition surface.
+
 ## Museum-hub topology + containment findings (v0.83, 2026-08-01)
 
 1. A single homography is only reliable for one physical wall plane. If a

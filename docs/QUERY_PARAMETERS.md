@@ -49,13 +49,14 @@ Notes:
   change mounted height. Drag wall/safe handles to recalibrate the wall plane.
 - The panel includes an active-wall selector, live overlap/convexity/safe-zone/
   minimum-size warnings, and a restore-last-valid action.
-- On release, the complete v2 `museum-hub.json` schema (version, stage,
-  background, visual tokens, walls, fallbacks, slots) appears in the on-screen
+- On release, the complete v3 `museum-hub.json` schema (single calibrated
+  camera, metric-like wall planes, doorway exclusions, hanging bands, slot
+  anchors, fallback background, visual tokens, and slots) appears in the on-screen
   copy panel and is logged via diagnostics.
 - Paste the JSON into `customer-artworks/museum-hub.json` and re-run the
   gallery update (`npm run import:artworks`) to apply it.
-- Legacy `customer-artworks/hub-hotspots.json` and v1 box placements still
-  migrate automatically with warnings; new exports always use the v2 wall-plane
+- Legacy `customer-artworks/hub-hotspots.json` and v1/v2 box placements still
+  migrate automatically with warnings; new exports always use the v3 calibrated-room
   format.
 - Slot/page navigation is disabled while calibrating.
 
@@ -70,8 +71,10 @@ Notes:
   - wall safe polygons
   - per-slot projected quads and corner markers
   - wall-local axis guides
+  - camera horizon and wall-family vanishing-direction guides
+  - containment, doorway, hanging-band, and orientation validity flags
 - Emits per-slot diagnostics snapshots (wall id, local/projected quads,
-  homography, inverse homography, containment result) and a full hub geometry
+  calibrated camera chain, and validity result) and a full hub geometry
   snapshot once composition is ready.
 
 ## localStorage keys

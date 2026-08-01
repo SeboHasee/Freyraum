@@ -1,6 +1,26 @@
 # CHANGELOG
 > Latest markdown audit: 2026-08-01 (wall-plane museum hub projection).
 
+## v0.84 — Calibrated 3D museum room reconstruction (2026-08-01)
+
+### Summary
+
+- Replaced hub placement with a v3 calibrated camera/room-plane pipeline:
+  wall-local metric anchors project through world, camera, NDC, and stage
+  pixels before the terminal DOM transform is generated.
+- Added local safe polygons, doorway exclusions, hanging bands, and placement
+  validity checks. Invalid doorway/hanging placements are solved before render.
+- Added a single 404-safe background fallback attempt and neutral museum-grey
+  continuation if both primary and fallback assets fail.
+- Enforced the shared `#D8DDDB` background token across boot shell, gallery,
+  hub, fallback, and WebGL clear color.
+- Extended `?hubDebug=1`, deterministic hub checks, visual-regression states,
+  and CI coverage for the calibrated room contract.
+
+### Validation
+
+- Pending final repository validation for this release.
+
 ## v0.83 — Museum-hub plane topology + diagnostics hardening (2026-08-01)
 
 ### Summary
