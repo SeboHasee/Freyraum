@@ -128,6 +128,56 @@ function hubFixture(artworks) {
   };
 }
 
+function fullMappedHubFixture(artworks) {
+  const slotIds = SHIPPING_HUB_CONFIG.slots.map((slot) => slot.id);
+  return {
+    artworks,
+    museumHub: {
+      ...SHIPPING_HUB_CONFIG,
+      slots: SHIPPING_HUB_CONFIG.slots.map((slot, index) => ({
+        ...slot,
+        ...(artworks[index] ? { artworkId: artworks[index].id } : {}),
+      })),
+      fallbacks: {
+        ...SHIPPING_HUB_CONFIG.fallbacks,
+        requireAllMapped: true,
+      },
+    },
+  };
+}
+
+function doorwayEdgeFixture(side) {
+  const artworks = HUB_ASPECT_FIXTURES.square;
+  const fixture = fullMappedHubFixture(artworks);
+  fixture.museumHub = {
+    ...fixture.museumHub,
+    slots: fixture.museumHub.slots.map((slot) => {
+      if (side === 'left' && slot.id === 'room-01.wall-left.outer') {
+        return {
+          ...slot,
+          placement: {
+            ...slot.placement,
+            anchor: { x: 0.06, y: 0.52 },
+            mountedHeight: 1.38,
+          },
+        };
+      }
+      if (side === 'right' && slot.id === 'room-01.wall-right.outer') {
+        return {
+          ...slot,
+          placement: {
+            ...slot.placement,
+            anchor: { x: 2.72, y: 0.54 },
+            mountedHeight: 1.08,
+          },
+        };
+      }
+      return slot;
+    }),
+  };
+  return fixture;
+}
+
 function missingBackgroundFixture() {
   return {
     artworks: HUB_ASPECT_FIXTURES.square,
@@ -225,6 +275,22 @@ const states = [
     hubSteps: [],
     fixture: hubFixture(HUB_ASPECT_FIXTURES.wide),
   },
+  {
+    name: 'hub__fixture__doorway-left-edge',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+    fixture: doorwayEdgeFixture('left'),
+  },
+  {
+    name: 'hub__fixture__doorway-right-edge',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+    fixture: doorwayEdgeFixture('right'),
+  },
   ...(INCLUDE_HUB_DEBUG_CAPTURE
     ? [
         {
@@ -236,6 +302,36 @@ const states = [
         },
       ]
     : []),
+  {
+    name: 'hub__desktop__selected-return-topbar',
+    query: '?startup=entry-minimal',
+    mode: 'roundtrip',
+    viewport: DESKTOP_VIEWPORT,
+    fixture: fullMappedHubFixture(HUB_ASPECT_FIXTURES.square),
+    activateArtworkId: 'fixture-square-b',
+    galleryNavigationSteps: ['ArrowRight'],
+    returnMethod: 'topbar',
+    expectedSelectedArtworkId: 'fixture-square-c',
+  },
+  {
+    name: 'hub__desktop__selected-return-escape',
+    query: '?startup=entry-minimal',
+    mode: 'roundtrip',
+    viewport: DESKTOP_VIEWPORT,
+    fixture: fullMappedHubFixture(HUB_ASPECT_FIXTURES.square),
+    activateArtworkId: 'fixture-square-b',
+    galleryNavigationSteps: ['ArrowRight'],
+    returnMethod: 'escape',
+    expectedSelectedArtworkId: 'fixture-square-c',
+  },
+  {
+    name: 'gallery__desktop__context-restore',
+    query: '?startup=entry-minimal',
+    mode: 'restore',
+    viewport: DESKTOP_VIEWPORT,
+    fixture: fullMappedHubFixture(HUB_ASPECT_FIXTURES.square),
+    activateArtworkId: 'fixture-square-a',
+  },
   ...ARTWORK_STEPS.flatMap((artworkStep) =>
     ZOOM_STATES.map((zoom) => ({
       name: `dramatic__artwork-${artworkStep}__${zoom}`,
@@ -260,6 +356,92 @@ async function loadPlaywright() {
         '  npm i -D playwright pixelmatch pngjs && npx playwright install chromium'
     );
     process.exit(2);
+  }
+}
+
+async function assertAuthoritativeSurfaces(page, stateName) {
+  const surfaces = await page.evaluate(() => {
+    const root = getComputedStyle(document.documentElement);
+    const body = getComputedStyle(document.body);
+    const app = getComputedStyle(document.getElementById('app'));
+    const hub = document.querySelector('.museum-hub');
+    const hubStyle = hub ? getComputedStyle(hub) : null;
+    return {
+      galleryVar: root.getPropertyValue('--color-gallery-wall').trim(),
+      museumVar: root.getPropertyValue('--color-museum-wall').trim(),
+      body: body.backgroundColor,
+      app: app.backgroundColor,
+      hub: hubStyle?.backgroundColor ?? null,
+    };
+  });
+  const expected = 'rgb(216, 221, 219)';
+  if (
+    surfaces.galleryVar.toLowerCase() !== '#d8dddb' ||
+    surfaces.museumVar.toLowerCase() !== '#d8dddb' ||
+    surfaces.body !== expected ||
+    surfaces.app !== expected
+  ) {
+    throw new Error(`${stateName}: authoritative museum-grey token did not reach root/body/app surfaces`);
+  }
+}
+
+async function enterGalleryFromHub(page, artworkId) {
+  if (artworkId) {
+    await page.click(`.museum-hub__artwork[data-artwork-id="${artworkId}"]`);
+  } else if (await page.locator('.museum-hub__artwork[data-artwork-id]').count()) {
+    await page.locator('.museum-hub__artwork[data-artwork-id]').first().click();
+  } else {
+    await page.click('.museum-hub__destination');
+  }
+  await page.waitForSelector("#app[data-experience='gallery']", { timeout: 10_000 });
+  await page.waitForTimeout(700);
+}
+
+async function assertSurfaceReasons(page, stateName, expectedReasons) {
+  const seenReasons = await page.evaluate(() =>
+    (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+      .filter((entry) => entry.scope === 'surface' && entry.event === 'wall-surface-snapshot')
+      .map((entry) => entry.data?.reason)
+      .filter(Boolean)
+  );
+  for (const reason of expectedReasons) {
+    if (!seenReasons.includes(reason)) {
+      throw new Error(`${stateName}: missing wall-surface snapshot for ${reason}`);
+    }
+  }
+}
+
+async function assertSelectedArtworkState(page, stateName, expectedArtworkId) {
+  const snapshot = await page.evaluate((artworkId) => {
+    const selected = [...document.querySelectorAll('.museum-hub__artwork.is-selected')]
+      .map((el) => el.getAttribute('data-artwork-id'))
+      .filter(Boolean);
+    const current = [...document.querySelectorAll('.museum-hub__artwork[aria-current="true"]')]
+      .map((el) => el.getAttribute('data-artwork-id'))
+      .filter(Boolean);
+    const activeElement = document.activeElement;
+    return {
+      selected,
+      current,
+      activeArtworkId:
+        activeElement instanceof HTMLElement ? activeElement.getAttribute('data-artwork-id') : null,
+      lifecycleReasons: (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+        .filter((entry) => entry.scope === 'hub' && entry.event === 'hub-selection-lifecycle')
+        .map((entry) => entry.data?.reason)
+        .filter(Boolean),
+    };
+  }, expectedArtworkId);
+  if (snapshot.selected.length !== 1 || snapshot.selected[0] !== expectedArtworkId) {
+    throw new Error(`${stateName}: persistent hub selection did not resolve to ${expectedArtworkId}`);
+  }
+  if (snapshot.current.length !== 1 || snapshot.current[0] !== expectedArtworkId) {
+    throw new Error(`${stateName}: aria-current selection did not resolve to ${expectedArtworkId}`);
+  }
+  if (snapshot.activeArtworkId !== expectedArtworkId) {
+    throw new Error(`${stateName}: focus was not restored to the selected artwork ${expectedArtworkId}`);
+  }
+  if (!snapshot.lifecycleReasons.includes('gallery-navigate') || !snapshot.lifecycleReasons.includes('router-enter-hub')) {
+    throw new Error(`${stateName}: hub selection lifecycle diagnostics did not record gallery sync and hub restore`);
   }
 }
 
@@ -324,8 +506,11 @@ async function capture(targetDir) {
         await page.waitForTimeout(350);
       }
       await page.waitForTimeout(600);
-    } else {
-      await page.waitForSelector("#app[data-experience='gallery']", { timeout: 10_000 });
+      await assertAuthoritativeSurfaces(page, state.name);
+      await assertSurfaceReasons(page, state.name, ['experience-state:hub']);
+    } else if (state.mode === 'gallery') {
+      await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
+      await enterGalleryFromHub(page, state.activateArtworkId);
       for (let index = 0; index < state.artworkStep; index += 1) {
         await page.keyboard.press('ArrowRight');
         await page.waitForTimeout(350);
@@ -336,14 +521,55 @@ async function capture(targetDir) {
         for (let index = 0; index < 7; index += 1) await page.keyboard.press('=');
       }
       await page.waitForTimeout(1600);
-      const artworkSurface = await page.evaluate(() => {
-        const body = getComputedStyle(document.body).backgroundColor;
-        const app = getComputedStyle(document.getElementById('app')).backgroundColor;
-        return { body, app };
-      });
-      if (artworkSurface.body !== 'rgb(216, 221, 219)' || artworkSurface.app !== 'rgb(216, 221, 219)') {
-        throw new Error(`${state.name}: artwork-view background leaked from the authoritative museum-grey token`);
+      await assertAuthoritativeSurfaces(page, state.name);
+      await assertSurfaceReasons(page, state.name, ['experience-state:transitioning', 'experience-state:destination']);
+    } else if (state.mode === 'roundtrip') {
+      await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
+      await enterGalleryFromHub(page, state.activateArtworkId);
+      for (const step of state.galleryNavigationSteps ?? []) {
+        await page.keyboard.press(step);
+        await page.waitForTimeout(400);
       }
+      await assertAuthoritativeSurfaces(page, state.name);
+      if (state.returnMethod === 'topbar') {
+        await page.click('.topbar__back-btn');
+      } else {
+        await page.keyboard.press('Escape');
+      }
+      await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
+      await page.waitForTimeout(700);
+      await assertAuthoritativeSurfaces(page, state.name);
+      await assertSurfaceReasons(page, state.name, [
+        'experience-state:hub',
+        'experience-state:transitioning',
+        'experience-state:destination',
+      ]);
+      await assertSelectedArtworkState(page, state.name, state.expectedSelectedArtworkId);
+    } else if (state.mode === 'restore') {
+      await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
+      await enterGalleryFromHub(page, state.activateArtworkId);
+      const restoreTriggered = await page.evaluate(() => {
+        const canvas = document.querySelector('canvas');
+        const gl = canvas?.getContext('webgl2') ?? canvas?.getContext('webgl');
+        const extension = gl?.getExtension('WEBGL_lose_context');
+        if (!extension) return false;
+        extension.loseContext();
+        setTimeout(() => extension.restoreContext(), 120);
+        return true;
+      });
+      if (!restoreTriggered) {
+        throw new Error(`${state.name}: WEBGL_lose_context extension unavailable`);
+      }
+      await page.waitForFunction(
+        () =>
+          (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? []).some(
+            (entry) => entry.scope === 'surface' && entry.data?.reason === 'renderer-context-restored'
+          ),
+        { timeout: 10_000 }
+      );
+      await page.waitForTimeout(800);
+      await assertAuthoritativeSurfaces(page, state.name);
+      await assertSurfaceReasons(page, state.name, ['renderer-context-lost', 'renderer-context-restored']);
     }
 
     const invariant = await page.evaluate(() => window.__FREYRAUM_PERF_TOOLS__?.checkInvariants());

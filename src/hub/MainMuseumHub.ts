@@ -9,6 +9,7 @@
  */
 
 import {
+  HUB_MIN_PROJECTED_SHORT_EDGE_PX,
   type MuseumHubResolution,
   type ResolvedHubSlot,
   type ResolvedHubWall,
@@ -20,6 +21,7 @@ import {
   point,
   pointInPolygon,
   polygonsIntersect,
+  projectRoomDoorwayPolygons,
   projectWorldPoint,
   projectSlotArtwork,
   quadIsConvex,
@@ -116,6 +118,8 @@ export class MainMuseumHub {
   private viewIndex = 0;
   private narrowMode = false;
   private lastActivatedSlotId: string | null = null;
+  private selectedArtworkId: string | null = null;
+  private lastSelectionSignature: string | null = null;
   private decodedPages = new Set<number>();
   private idleDecodeHandle: number | null = null;
   private idleDecodeNextPage = 1;
@@ -298,6 +302,7 @@ export class MainMuseumHub {
       this.applyView(true);
       this.updateStageScale();
       this.applyAllSlotGeometry();
+      this.applySelectionState('composition-ready');
       this.scheduleIdlePageDecode();
       if (this.calibrating) this.updateCalibrationOutput(true);
       if (this.debugGeometry) this.emitDebugGeometrySnapshot('composition-ready');
@@ -318,6 +323,24 @@ export class MainMuseumHub {
     this.selectSlotCallback = callback;
   }
 
+  setSelectedArtworkId(
+    artworkId: string | null,
+    options: { alignPage?: boolean; restoreFocus?: boolean; source?: string } = {}
+  ): void {
+    const nextArtworkId =
+      artworkId && this.resolution.artworkToSlot.has(artworkId) ? artworkId : null;
+    this.selectedArtworkId = nextArtworkId;
+    const selectedView = nextArtworkId
+      ? this.slotViews.find((view) => view.slot.artworkId === nextArtworkId && !view.button.disabled)
+      : undefined;
+    if (selectedView && options.alignPage !== false) {
+      this.goToPage(selectedView.slot.pageIndex, selectedView.slot);
+    }
+    this.applySelectionState(options.source ?? 'external-selection-sync', {
+      restoreFocus: options.restoreFocus === true,
+    });
+  }
+
   prepare(): Promise<void> {
     return this.imageReady;
   }
@@ -329,6 +352,7 @@ export class MainMuseumHub {
     this.setButtonsDisabled(false);
     this.status.textContent = '';
     this.scheduleIdlePageDecode();
+    this.applySelectionState('enter');
     requestAnimationFrame(() => this.focusInitialTarget());
   }
 
@@ -354,16 +378,68 @@ export class MainMuseumHub {
   }
 
   focusInitialTarget(): void {
+    const selected = this.selectedArtworkId
+      ? this.slotViews.find((view) => view.slot.artworkId === this.selectedArtworkId && !view.button.disabled)
+      : undefined;
+    if (selected) {
+      this.goToPage(selected.slot.pageIndex, selected.slot);
+      selected.button.focus({ preventScroll: true });
+      this.logSelectionLifecycle('focus-selected-target');
+      return;
+    }
     const restored = this.lastActivatedSlotId
       ? this.slotViews.find((view) => view.slot.id === this.lastActivatedSlotId && !view.button.disabled)
       : undefined;
     if (restored) {
       this.goToPage(restored.slot.pageIndex, restored.slot);
       restored.button.focus({ preventScroll: true });
+      this.logSelectionLifecycle('focus-restored-slot');
       return;
     }
     const firstSelectable = this.slotViews.find((view) => view.slot.selectable);
     (firstSelectable?.button ?? this.entryButton).focus({ preventScroll: true });
+    this.logSelectionLifecycle('focus-first-target');
+  }
+
+  private applySelectionState(
+    reason: string,
+    options: { restoreFocus?: boolean } = {}
+  ): void {
+    let selectedView: SlotView | undefined;
+    for (const view of this.slotViews) {
+      const selected = !!this.selectedArtworkId && view.slot.artworkId === this.selectedArtworkId;
+      view.button.classList.toggle('is-selected', selected);
+      if (selected) {
+        view.button.setAttribute('aria-current', 'true');
+        selectedView = view;
+      } else {
+        view.button.removeAttribute('aria-current');
+      }
+    }
+    const signature = `${reason}:${this.selectedArtworkId ?? 'none'}:${selectedView?.slot.id ?? 'none'}:${this.viewIndex}`;
+    if (this.lastSelectionSignature !== signature) {
+      this.lastSelectionSignature = signature;
+      this.logSelectionLifecycle(reason);
+    }
+    if (options.restoreFocus && selectedView) {
+      selectedView.button.focus({ preventScroll: true });
+    }
+  }
+
+  private logSelectionLifecycle(reason: string): void {
+    const selectedView = this.selectedArtworkId
+      ? this.slotViews.find((view) => view.slot.artworkId === this.selectedArtworkId)
+      : undefined;
+    this.diagnostics.info('hub-selection-lifecycle', 'Hub selection lifecycle updated', {
+      reason,
+      selectedArtworkId: this.selectedArtworkId,
+      selectedSlotId: selectedView?.slot.id ?? null,
+      selectedPageIndex: selectedView?.slot.pageIndex ?? null,
+      currentViewIndex: this.viewIndex,
+      currentWallFocus: this.element.dataset['wallFocus'] ?? 'full',
+      lastActivatedSlotId: this.lastActivatedSlotId,
+      renderedSlots: this.slotViews.length,
+    });
   }
 
   private setButtonsDisabled(disabled: boolean): void {
@@ -396,6 +472,7 @@ export class MainMuseumHub {
       room.className = 'museum-hub__room';
       room.dataset['page'] = String(page.pageIndex);
       for (const slot of page.slots) {
+        if (!this.calibrating && !this.debugGeometry && (!slot.selectable || !slot.artworkId)) continue;
         const view = this.buildSlotButton(slot);
         room.appendChild(view.button);
         this.slotViews.push(view);
@@ -469,12 +546,22 @@ export class MainMuseumHub {
     if (!wall) {
       button.classList.add('is-invalid-geometry');
       this.projectedSlotGeometry.delete(slot.id);
+      this.diagnostics.warn('hub-slot-missing-wall', 'Hub slot geometry skipped because the wall is missing', {
+        slotId: slot.id,
+        wallId: slot.placement.wallId,
+      });
       return;
     }
     const projection = projectSlotArtwork(wall, slot.placement, Math.max(0.25, slot.artworkAspect), this.resolution.stage);
     if (!projection) {
       button.classList.add('is-invalid-geometry');
       this.projectedSlotGeometry.delete(slot.id);
+      this.diagnostics.warn('hub-slot-projection-invalid', 'Hub slot projection is invalid and will not render interactively', {
+        slotId: slot.id,
+        artworkId: slot.artworkId,
+        wallId: wall.id,
+        projectionRealism: wall.projectionRealism,
+      });
       return;
     }
     this.projectedSlotGeometry.set(slot.id, projection);
@@ -492,6 +579,7 @@ export class MainMuseumHub {
 
   private applyAllSlotGeometry(): void {
     for (const view of this.slotViews) this.applySlotGeometry(view.button, view.slot);
+    this.applySelectionState('geometry-refresh');
     if (this.calibrating || this.debugGeometry) this.renderCalibrationOverlay();
   }
 
@@ -506,13 +594,17 @@ export class MainMuseumHub {
     this.diagnostics.info('hub-debug-slot-projection', 'Projected slot geometry snapshot', {
       slotId: slot.id,
       wallId: wall.id,
+      selectedArtworkId: this.selectedArtworkId,
+      localAnchor: slot.placement.anchor ?? null,
       localQuad: projection.localQuad,
       projectedQuad: projection.projectedQuad,
       homography: wall.homography,
       inverseHomography: wall.inverseHomography,
       withinSafePolygon,
       shortEdgePx: Math.round(projection.shortEdge * 100) / 100,
+      placement: projection.placement,
       validity: projection.validity ?? null,
+      realism: projection.realism ?? wall.projectionRealism ?? null,
     });
   }
 
@@ -540,11 +632,29 @@ export class MainMuseumHub {
     this.diagnostics.info('hub-debug-geometry', 'Hub debug geometry snapshot', {
       reason,
       stage: this.resolution.stage,
+      visualTokens: this.resolution.visualTokens,
+      backgroundState: {
+        imageError: this.element.classList.contains('has-image-error'),
+      },
+      selection: {
+        selectedArtworkId: this.selectedArtworkId,
+        lastActivatedSlotId: this.lastActivatedSlotId,
+      },
       walls: this.resolution.walls.map((wall) => ({
         id: wall.id,
         group: wall.group,
         quad: wall.quad,
         safePolygon: wall.safePolygon,
+        referenceQuad: wall.referenceQuad,
+        referenceSafePolygon: wall.referenceSafePolygon,
+        projectedQuad: wall.projectedQuad,
+        projectedSafePolygon: wall.projectedSafePolygon,
+        projectedDoorways:
+          wall.room && wall.camera
+            ? projectRoomDoorwayPolygons(wall.room, wall.camera, this.resolution.stage)
+            : [],
+        projectionRealism: wall.projectionRealism,
+        expectedConvergence: wall.expectedConvergence,
       })),
       slots: slotDiagnostics,
     });
@@ -619,6 +729,7 @@ export class MainMuseumHub {
     if (this.entryButton.disabled) return;
     this.setButtonsDisabled(true);
     this.lastActivatedSlotId = slot.id;
+    this.setSelectedArtworkId(slot.artworkId, { alignPage: false, source: 'slot-click' });
     this.status.textContent = 'Ausstellung wird geöffnet.';
     this.selectSlotCallback?.(slot);
   }
@@ -677,6 +788,7 @@ export class MainMuseumHub {
         ? `Raum ${pageIndex + 1}/${this.pageCount} · ${wallFocus === 'left' ? 'Linke' : 'Rechte'} Wand`
         : `Raum ${pageIndex + 1} / ${this.pageCount}`;
     }
+    this.applySelectionState(initial ? 'initial-view' : 'view-change');
     if (!initial) void this.decodePageImages(pageIndex);
   }
 
@@ -930,7 +1042,10 @@ export class MainMuseumHub {
       safePolygon.setAttribute('class', `museum-hub__calibration-safe${active ? ' is-active' : ''}`);
       this.calibrationSvg.appendChild(safePolygon);
 
-      if (this.debugGeometry) this.renderWallDebugAxes(wall);
+      if (this.debugGeometry) {
+        this.renderProjectedDoorwayDebugOverlay(wall);
+        this.renderWallDebugAxes(wall);
+      }
       if (!this.calibrating || !active) continue;
       wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle')));
       wall.safePolygon.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'safe', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--safe')));
@@ -967,7 +1082,21 @@ export class MainMuseumHub {
     this.appendSvgLine(origin, axisX, 'museum-hub__debug-axis museum-hub__debug-axis--x');
     this.appendSvgLine(origin, axisY, 'museum-hub__debug-axis museum-hub__debug-axis--y');
     this.appendSvgCircle(origin, 'museum-hub__debug-origin', 3.8);
-    this.appendSvgLabel(point(origin.x + 8, origin.y - 8), wall.id, 'museum-hub__debug-wall-label');
+    const realism = wall.projectionRealism;
+    const wallLabel = realism
+      ? `${wall.id} · ref ${realism.referenceResidualMaxPx.toFixed(1)}px · ${realism.projectedConvergence}`
+      : wall.id;
+    this.appendSvgLabel(point(origin.x + 8, origin.y - 8), wallLabel, 'museum-hub__debug-wall-label');
+  }
+
+  private renderProjectedDoorwayDebugOverlay(wall: ResolvedHubWall): void {
+    if (!this.calibrationSvg || !wall.room || !wall.camera) return;
+    for (const doorway of projectRoomDoorwayPolygons(wall.room, wall.camera, this.resolution.stage)) {
+      const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      polygon.setAttribute('points', this.pointsToSvg(doorway));
+      polygon.setAttribute('class', 'museum-hub__debug-doorway');
+      this.calibrationSvg.appendChild(polygon);
+    }
   }
 
   private renderProjectedSlotDebugOverlay(): void {
@@ -986,9 +1115,15 @@ export class MainMuseumHub {
       projection.projectedQuad.forEach((corner) => this.appendSvgCircle(corner, 'museum-hub__debug-slot-corner', 2.8));
       const labelAnchor = projection.projectedQuad[0];
       if (labelAnchor) {
+        const localAnchor = slot.placement.anchor
+          ? `L ${slot.placement.anchor.x.toFixed(2)},${slot.placement.anchor.y.toFixed(2)}`
+          : `L ${slot.placement.center.x.toFixed(2)},${slot.placement.center.y.toFixed(2)}`;
+        const stageAnchor = centerStage
+          ? `S ${centerStage.x.toFixed(0)},${centerStage.y.toFixed(0)}`
+          : 'S –';
         this.appendSvgLabel(
           point(labelAnchor.x + 8, labelAnchor.y - 8),
-          `${slot.id} · ${slot.placement.wallId} · ${
+          `${slot.id} · ${slot.placement.wallId} · ${localAnchor} · ${stageAnchor} · ${
             projection.validity?.contained && projection.validity.doorwayClear && projection.validity.inHangingBand
               ? 'valid'
               : 'invalid'
@@ -1116,8 +1251,10 @@ export class MainMuseumHub {
       if (!projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
         warnings.push(`Slot ${slot.id}: artwork extends outside the wall safe zone.`);
       }
-      if (projection.shortEdge < 84) {
-        warnings.push(`Slot ${slot.id}: projected short edge ${projection.shortEdge.toFixed(1)}px is below 84px.`);
+      if (projection.shortEdge < HUB_MIN_PROJECTED_SHORT_EDGE_PX) {
+        warnings.push(
+          `Slot ${slot.id}: projected short edge ${projection.shortEdge.toFixed(1)}px is below ${HUB_MIN_PROJECTED_SHORT_EDGE_PX}px.`
+        );
       }
       const pageList = visibleByPage.get(slot.pageIndex) ?? [];
       pageList.push({ slot, quad: projection });

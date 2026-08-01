@@ -1,6 +1,32 @@
 # CHANGELOG
 > Latest markdown audit: 2026-08-01 (wall-plane museum hub projection).
 
+## v0.85 — Museum-hub realism, selection, and wall-token hardening (2026-08-01)
+
+### Summary
+
+- Reconciled v3 room-local wall planes against the configured photographed
+  reference quads at resolve time, keeping room-local anchors authoritative
+  while restoring realistic side-wall projection, residual metrics, and
+  per-wall convergence checks.
+- Replaced the hub’s doorway-avoidance heuristic with a deterministic local
+  placement solver that records adjustment/rejection reasons and suppresses
+  invalid slots instead of rendering floating invalid buttons.
+- Added artwork-ID-based hub selection persistence, synchronized from gallery
+  navigation and restored on hub re-entry with persistent `.is-selected` /
+  `aria-current` feedback plus focus restoration to the current artwork slot.
+- Centralized wall-surface color application across CSS variables, document/app
+  shell, fallback, renderer clear color, transition diagnostics, and WebGL
+  context restoration.
+- Expanded geometry/visual regression tooling with doorway-edge fixtures,
+  wall-realism assertions, invalid-slot suppression checks, round-trip
+  selection states, transition surface snapshots, and context-restore token
+  verification.
+
+### Validation
+
+- Pending final repository validation for this release.
+
 ## v0.84 — Calibrated 3D museum room reconstruction (2026-08-01)
 
 ### Summary

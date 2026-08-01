@@ -20,16 +20,18 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - Startup and quality/runtime config models
   - `museumHub.ts`: unified museum-hub schema, v1/legacy migration, calibrated
     wall-plane contract (stage + multi-plane wall quads + stage-space safe
-    polygons + wall-local slot placement), exact-ID slot resolver
-    (auto-placement + paginated overflow), contain-style placement fitting, and
-    visual-token resolution
+    polygons + wall-local slot placement), reference-quad room reconciliation,
+    wall-realism gating, exact-ID slot resolver (auto-placement + paginated
+    overflow), deterministic local placement fitting, and visual-token
+    resolution
 - `src/hub/`
-  - `projectiveGeometry.ts`: planar projection math, polygon checks, and CSS
-    matrix generation for the hub
+  - `projectiveGeometry.ts`: camera/room projection math, room-plane/reference
+    reconciliation, doorway-safe deterministic placement solving, polygon
+    checks, and CSS matrix generation for the hub
   - `MainMuseumHub`: manifest-driven DOM composition over the empty room photo
     — projectively mapped artwork buttons, room/wall paging, idle later-page
-    decode, wall-plane calibration mode, and read-only geometry diagnostics
-    overlay
+    decode, wall-plane calibration mode, persistent artwork-ID selection state,
+    and read-only geometry diagnostics overlay
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
@@ -42,8 +44,9 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 ## Startup sequence ownership
 
 1. `main.ts` resolves startup mode, the museum-hub configuration
-   (`resolveMuseumHub`: injected → legacy-migrated → built-in), and the wall
-   visual tokens, then initializes managers with the resolved wall color.
+   (`resolveMuseumHub`: injected → legacy-migrated → built-in), applies the
+   resolved wall-surface color path (CSS vars + shell + renderer clear color),
+   and initializes managers with that authoritative value.
 2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
 3. `RendererManager` prewarms renderer pipeline.
 4. `MainMuseumHub` prepares the hub (background + first-page artwork decode)

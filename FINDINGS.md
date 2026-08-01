@@ -1,5 +1,29 @@
 # FINDINGS
 
+## Museum-hub realism / selection / wall-token hardening findings (v0.85, 2026-08-01)
+
+1. The photographed room should keep one explicit stage-space reference per wall
+   even when slot rendering stays camera-driven. Reconciling room-local wall
+   dimensions/axes to those reference quads lets the camera chain preserve
+   believable perspective without forcing hand-edited slot anchors to be
+   rewritten one by one.
+2. Doorway avoidance is only stable when every candidate is solved and scored in
+   room-local space before projection. Using stage-space or mixed-space fallback
+   checks makes doorway-edge results nondeterministic and obscures why a slot
+   moved or disappeared.
+3. Persistent hub feedback must belong to the current artwork ID, not the last
+   focused slot. Gallery navigation can change the selected work after hub entry,
+   so hub return/focus restoration has to re-derive page and slot identity from
+   immutable artwork/slot maps.
+4. Grey-token drift is easiest to catch at lifecycle boundaries rather than only
+   at startup. Structured boot/transition/context-restore/fallback surface
+   snapshots reveal when CSS variables, document shell, and renderer clear color
+   diverge even if the initial boot state looked correct.
+5. Visual regression around the hub needs full round trips, not static room
+   screenshots alone: doorway-edge fixtures, return-to-hub selected-state checks,
+   and context-restore token assertions catch failures that containment-only and
+   first-paint-only tests miss.
+
 ## Calibrated 3D hub reconstruction findings (v0.84, 2026-08-01)
 
 1. Stage-space quads are useful calibration references, but cannot be the

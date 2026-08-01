@@ -51,8 +51,10 @@ Notes:
   minimum-size warnings, and a restore-last-valid action.
 - On release, the complete v3 `museum-hub.json` schema (single calibrated
   camera, metric-like wall planes, doorway exclusions, hanging bands, slot
-  anchors, fallback background, visual tokens, and slots) appears in the on-screen
-  copy panel and is logged via diagnostics.
+  anchors, fallback background, visual tokens, and slots) appears in the
+  on-screen copy panel and is logged via diagnostics. Exported room planes are
+  the runtime-reconciled wall-local values that match the configured reference
+  quads used by the photographed room.
 - Paste the JSON into `customer-artworks/museum-hub.json` and re-run the
   gallery update (`npm run import:artworks`) to apply it.
 - Legacy `customer-artworks/hub-hotspots.json` and v1/v2 box placements still
@@ -69,13 +71,18 @@ Notes:
 - Reuses the SVG overlay layer to show:
   - wall quads
   - wall safe polygons
+  - projected doorway-void polygons
   - per-slot projected quads and corner markers
-  - wall-local axis guides
+  - wall-local axis guides plus local/stage anchor labels
   - camera horizon and wall-family vanishing-direction guides
   - containment, doorway, hanging-band, and orientation validity flags
+  - per-wall reference residual / convergence summaries
 - Emits per-slot diagnostics snapshots (wall id, local/projected quads,
-  calibrated camera chain, and validity result) and a full hub geometry
-  snapshot once composition is ready.
+  calibrated camera chain, selected artwork state, and validity result) and a
+  full hub geometry snapshot once composition is ready.
+- Runtime navigation also logs selection lifecycle and wall-surface snapshots, so
+  `?hubDebug=1` sessions can correlate geometry, current artwork ownership, and
+  transition background state.
 
 ## localStorage keys
 

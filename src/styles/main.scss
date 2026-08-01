@@ -284,7 +284,8 @@ canvas {
 }
 
 .museum-hub.has-image-error .museum-hub__stage {
-  background: var(--color-museum-wall);
+  background-color: var(--color-museum-wall);
+  background-image: none;
 }
 
 .museum-hub__shade {
@@ -497,13 +498,27 @@ canvas {
     transform var(--dur-control) var(--ease-out);
 }
 
-.museum-hub__artwork:focus-visible::before {
+.museum-hub__artwork:hover::before,
+.museum-hub__artwork:focus-visible::before,
+.museum-hub__artwork.is-selected::before,
+.museum-hub__artwork[aria-current='true']::before {
   opacity: 1;
   border-color: rgba(255, 255, 255, 0.95);
   box-shadow: 0 0 0 5px rgba(15, 20, 24, 0.42);
 }
 
-.museum-hub__artwork:focus-visible .museum-hub__artwork-label {
+.museum-hub__artwork.is-selected::before,
+.museum-hub__artwork[aria-current='true']::before {
+  border-color: rgba(255, 231, 164, 0.98);
+  box-shadow:
+    0 0 0 5px rgba(15, 20, 24, 0.48),
+    0 0 28px rgba(255, 231, 164, 0.34);
+}
+
+.museum-hub__artwork:hover .museum-hub__artwork-label,
+.museum-hub__artwork:focus-visible .museum-hub__artwork-label,
+.museum-hub__artwork.is-selected .museum-hub__artwork-label,
+.museum-hub__artwork[aria-current='true'] .museum-hub__artwork-label {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
@@ -672,6 +687,13 @@ canvas {
   fill: rgba(255, 255, 255, 0.98);
   stroke: rgba(12, 16, 19, 0.95);
   stroke-width: 1.1;
+}
+
+.museum-hub__debug-doorway {
+  fill: rgba(255, 92, 92, 0.18);
+  stroke: rgba(255, 92, 92, 0.92);
+  stroke-width: 1.4;
+  stroke-dasharray: 6 4;
 }
 
 .museum-hub__debug-wall-label,

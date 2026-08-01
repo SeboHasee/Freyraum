@@ -1,5 +1,38 @@
 # FREYRAUM Plan
 
+## Implemented — Museum-hub realism, selection, and wall-token hardening (v0.85, 2026-08-01)
+
+- The hub now treats configured stage quads/safe polygons as photographed
+  reference surfaces while reconciling stored room-local wall planes to those
+  references at resolve time. Slot anchors, hanging bands, doorway exclusions,
+  and mounted heights are scaled with the calibrated room model before any slot
+  projection runs.
+- `solveRoomArtworkPlacement()` is now a deterministic room-local solver: it
+  scores stable safe-region and doorway-clear candidates, shrinks only when
+  necessary, and records an explicit adjustment/rejection outcome. Slots whose
+  calibrated projection still fails are suppressed from the runtime DOM instead
+  of rendering as floating invalid buttons.
+- Hub selection is artwork-ID based instead of focus-only. Gallery navigation
+  continuously synchronizes the current artwork back into the hub, reselects the
+  matching slot/page on return, restores focus to that selected slot, and keeps
+  hover/focus/selected affordances visually aligned.
+- One wall-surface application path now owns CSS variables, document/app shell
+  backgrounds, renderer clear color, fallback background override, transition
+  diagnostics, and WebGL context-restore reapplication. Transition boundaries
+  emit structured wall-surface snapshots for regression tooling.
+- Regression coverage now includes doorway-edge placement fixtures,
+  wall-realism/residual gates, invalid-slot suppression checks, persistent
+  selection round trips, transition-surface diagnostics, and WebGL restore
+  token verification.
+
+### Validation boundary
+
+- Required repository gates remain
+  `npm run import:artworks`, `npm run docs:check-config-authority`,
+  `npm run lint`, `npm run build:typecheck`, `npm run build`,
+  `npm run test:frame-budget`, `npm run validate:museum-hub`, and
+  `npm run validate:museum-hub:visual`.
+
 ## Implemented — Calibrated 3D museum room reconstruction (v0.84, 2026-08-01)
 
 - Replaced the hub's runtime placement path with one camera-calibrated

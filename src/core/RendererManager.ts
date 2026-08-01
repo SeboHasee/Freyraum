@@ -31,6 +31,7 @@ export type RendererContextState = 'lost' | 'restored';
 export class RendererManager {
   readonly renderer: THREE.WebGLRenderer;
   private preset: QualityPreset;
+  private wallClearColor: string;
   private renderPaused = false;
   private disposed = false;
   private contextChangeCallback: ((state: RendererContextState) => void) | null = null;
@@ -41,6 +42,7 @@ export class RendererManager {
 
   constructor(container: HTMLElement, preset: QualityPreset, wallClearColor = '#d8dddb') {
     this.preset = preset;
+    this.wallClearColor = wallClearColor;
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -58,7 +60,7 @@ export class RendererManager {
     // v0.81 — clear color comes from the resolved wall token (default
     // `#D8DDDB`) so CSS and WebGL share one authoritative value and canvas
     // creation/reveal cannot flash white.
-    this.renderer.setClearColor(new THREE.Color(wallClearColor));
+    this.renderer.setClearColor(new THREE.Color(this.wallClearColor));
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -86,6 +88,11 @@ export class RendererManager {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.shadowMap.enabled = preset.shadows;
     this.applyQualityDataAttribute(preset.id);
+  }
+
+  setWallClearColor(wallClearColor: string): void {
+    this.wallClearColor = wallClearColor;
+    this.renderer.setClearColor(new THREE.Color(this.wallClearColor));
   }
 
   /**
@@ -197,6 +204,7 @@ export class RendererManager {
     // for the framebuffer to be allocated at the right size.
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(getOptimalPixelRatio(this.preset.pixelRatioCap));
+    this.renderer.setClearColor(new THREE.Color(this.wallClearColor));
     this.contextChangeCallback?.('restored');
     diagnostics.info('context-restored', 'WebGL context restored', {});
   };

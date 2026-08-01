@@ -19,8 +19,9 @@ is accepted unless the measurement hook for its type exists and passes.
 
 `scripts/visual-regression.mjs` drives Chromium through Playwright, captures the
 Phase 10.3 state matrix plus expanded museum-hub states (desktop, wide desktop,
-narrow portrait wall-focus, and extreme-aspect fixture sets), checks Type B
-invariants for every state, and compares against a stored baseline.
+narrow portrait wall-focus, doorway-edge fixtures, extreme-aspect fixture sets,
+hub→gallery→hub selection round trips, and WebGL context-restore token checks),
+checks Type B invariants for every state, and compares against a stored baseline.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.
@@ -29,6 +30,9 @@ invariants for every state, and compares against a stored baseline.
   steps 0/1/2 × overview/reset/inspection zoom states.
 - Optional diagnostic capture: `FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG=1` adds a
   `?hubDebug=1` overlay screenshot without making it part of the mandatory gate.
+- Round-trip states also assert hub selected-state persistence (`.is-selected` +
+  `aria-current`) and transition-surface diagnostics before the screenshot is
+  accepted.
 - **Workflow:** capture a baseline *before* the change, apply the optimization,
   then compare. Diffs are written to `.visual-regression/diff/` (git-ignored).
 - **Required for:** OPT-4 (bloom), OPT-5 (shadow), OPT-6 (panel opacity),
@@ -81,9 +85,11 @@ sequence including edge cases.
 `scripts/test-museum-hub-geometry.mjs` is a focused hub geometry regression
 check: it loads the shipping TypeScript modules, verifies v1/v2 migration keeps
 exact artwork targets, validates the checked-in v3 camera/room-plane contract,
-and asserts projected containment, doorway exclusion, hanging-band containment,
-orientation and vanishing-direction trends, grey-token reach, and the bounded
-missing-background fallback. Threshold breaches hard-fail
+reconciles wall-local planes against the photographed reference quads, and
+asserts deterministic doorway-edge placement, invalid-slot suppression,
+projected containment, hanging-band containment, realism residuals, vanishing
+direction trends, selected-state runtime hooks, grey-token reach, and the
+bounded missing-background fallback. Threshold breaches hard-fail
 `npm run validate:museum-hub` and CI. `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline.
 

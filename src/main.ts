@@ -392,39 +392,61 @@ function sanitizeInjectedAudio(
   };
 }
 
+function applyResolvedWallSurfaceColor(
+  app: HTMLElement,
+  tokens: { galleryWall: string; museumWall: string },
+  rendererManager?: RendererManager
+): { galleryWall: string; museumWall: string } {
+  const galleryWall = normalizeCssColorToHex(tokens.galleryWall) ?? tokens.galleryWall.trim();
+  const museumWall = normalizeCssColorToHex(tokens.museumWall) ?? galleryWall;
+  document.documentElement.style.setProperty('--color-gallery-wall', galleryWall);
+  document.documentElement.style.setProperty('--color-museum-wall', museumWall);
+  document.documentElement.style.backgroundColor = galleryWall;
+  document.body.style.backgroundColor = galleryWall;
+  app.style.backgroundColor = galleryWall;
+  rendererManager?.setWallClearColor(galleryWall);
+  return { galleryWall, museumWall };
+}
+
 function verifyMuseumWallColorConsistency(
   diagnostics: ReturnType<typeof getDiagnostics>,
+  reason: string,
   tokens: { galleryWall: string; museumWall: string },
-  rendererManager: RendererManager,
-  museumHubElement: HTMLElement,
-  loadingOverlayElement: HTMLElement
+  rendererManager: RendererManager | null,
+  museumHubElement: HTMLElement | null,
+  loadingOverlayElement: HTMLElement | null,
+  appElement: HTMLElement
 ): void {
   const rootStyle = getComputedStyle(document.documentElement);
   const resolvedGalleryVar = rootStyle.getPropertyValue('--color-gallery-wall').trim();
   const resolvedMuseumVar = rootStyle.getPropertyValue('--color-museum-wall').trim();
-  const clearColor = rendererManager.renderer.getClearColor(new THREE.Color());
-  const clearHex = `#${clearColor.getHexString().toUpperCase()}`;
-  const hubStyle = getComputedStyle(museumHubElement);
+  const clearColor = rendererManager?.renderer.getClearColor(new THREE.Color()) ?? null;
+  const clearHex = clearColor ? `#${clearColor.getHexString().toUpperCase()}` : null;
+  const hubStyle = museumHubElement ? getComputedStyle(museumHubElement) : null;
   const fallbackProbe = probeClassBackground('fallback-screen');
   const bodyStyle = getComputedStyle(document.body);
-  const loadingStyle = getComputedStyle(loadingOverlayElement);
+  const appStyle = getComputedStyle(appElement);
+  const loadingStyle = loadingOverlayElement ? getComputedStyle(loadingOverlayElement) : null;
 
   const expectedGalleryHex = normalizeCssColorToHex(tokens.galleryWall);
   const expectedMuseumHex = normalizeCssColorToHex(tokens.museumWall);
   const galleryVarHex = normalizeCssColorToHex(resolvedGalleryVar);
   const museumVarHex = normalizeCssColorToHex(resolvedMuseumVar);
-  const hubBackgroundHex = normalizeCssColorToHex(hubStyle.backgroundColor);
+  const hubBackgroundHex = normalizeCssColorToHex(hubStyle?.backgroundColor ?? null);
   const fallbackBackgroundHex = normalizeCssColorToHex(fallbackProbe?.backgroundColor ?? null);
   const bodyBackgroundHex = normalizeCssColorToHex(bodyStyle.backgroundColor);
+  const appBackgroundHex = normalizeCssColorToHex(appStyle.backgroundColor);
 
   const mismatchSignals: string[] = [];
-  if (expectedGalleryHex && clearHex !== expectedGalleryHex) mismatchSignals.push(`renderer-clear(${clearHex}) != token.galleryWall(${expectedGalleryHex})`);
+  if (expectedGalleryHex && clearHex && clearHex !== expectedGalleryHex) mismatchSignals.push(`renderer-clear(${clearHex}) != token.galleryWall(${expectedGalleryHex})`);
   if (expectedGalleryHex && galleryVarHex && galleryVarHex !== expectedGalleryHex) mismatchSignals.push(`--color-gallery-wall(${galleryVarHex}) != token.galleryWall(${expectedGalleryHex})`);
   if (expectedMuseumHex && museumVarHex && museumVarHex !== expectedMuseumHex) mismatchSignals.push(`--color-museum-wall(${museumVarHex}) != token.museumWall(${expectedMuseumHex})`);
   if (expectedMuseumHex && hubBackgroundHex && hubBackgroundHex !== expectedMuseumHex) mismatchSignals.push(`hub-background(${hubBackgroundHex}) != token.museumWall(${expectedMuseumHex})`);
   if (expectedGalleryHex && fallbackBackgroundHex && fallbackBackgroundHex !== expectedGalleryHex) mismatchSignals.push(`fallback-background(${fallbackBackgroundHex}) != token.galleryWall(${expectedGalleryHex})`);
+  if (expectedGalleryHex && appBackgroundHex && appBackgroundHex !== expectedGalleryHex) mismatchSignals.push(`app-background(${appBackgroundHex}) != token.galleryWall(${expectedGalleryHex})`);
 
   const payload = {
+    reason,
     tokens,
     rootVariables: {
       gallery: resolvedGalleryVar,
@@ -434,22 +456,25 @@ function verifyMuseumWallColorConsistency(
     },
     rendererClearHex: clearHex,
     surfaces: {
-      hubBackgroundColor: hubStyle.backgroundColor,
-      hubBackgroundImage: hubStyle.backgroundImage,
-      loadingOverlayBackgroundColor: loadingStyle.backgroundColor,
-      loadingOverlayBackgroundImage: loadingStyle.backgroundImage,
+      hubBackgroundColor: hubStyle?.backgroundColor ?? null,
+      hubBackgroundImage: hubStyle?.backgroundImage ?? null,
+      loadingOverlayBackgroundColor: loadingStyle?.backgroundColor ?? null,
+      loadingOverlayBackgroundImage: loadingStyle?.backgroundImage ?? null,
       fallbackProbeBackgroundColor: fallbackProbe?.backgroundColor ?? null,
       fallbackProbeBackgroundImage: fallbackProbe?.backgroundImage ?? null,
       bodyBackgroundColor: bodyStyle.backgroundColor,
       bodyBackgroundImage: bodyStyle.backgroundImage,
       bodyBackgroundHex,
+      appBackgroundColor: appStyle.backgroundColor,
+      appBackgroundImage: appStyle.backgroundImage,
+      appBackgroundHex,
     },
     mismatchSignals,
   };
   if (mismatchSignals.length > 0) {
-    diagnostics.warn('boot', 'visual-token-consistency-mismatch', 'Museum wall/clear-color consistency mismatch detected', payload);
+    diagnostics.warn('surface', 'wall-surface-snapshot-mismatch', 'Museum wall/clear-color consistency mismatch detected', payload);
   } else {
-    diagnostics.info('boot', 'visual-token-consistency', 'Museum wall/clear-color surfaces resolved consistently', payload);
+    diagnostics.info('surface', 'wall-surface-snapshot', 'Museum wall/clear-color surfaces resolved consistently', payload);
   }
 }
 
@@ -714,9 +739,8 @@ async function main(): Promise<void> {
   // CSS custom properties and the WebGL clear color before renderer
   // construction. Validated customer overrides come from museum-hub.json.
   const visualTokens = museumHubResolution.visualTokens;
-  document.documentElement.style.setProperty('--color-gallery-wall', visualTokens.galleryWall);
-  document.documentElement.style.setProperty('--color-museum-wall', visualTokens.museumWall);
-  diagnostics.info('boot', 'visual-tokens-resolved', 'Wall color tokens resolved', visualTokens);
+  const resolvedWallTokens = applyResolvedWallSurfaceColor(app, visualTokens);
+  diagnostics.info('boot', 'visual-tokens-resolved', 'Wall color tokens resolved', resolvedWallTokens);
 
   const injectedAudio = (window as unknown as { __FREYRAUM_AUDIO?: unknown }).__FREYRAUM_AUDIO;
   const customerAudio = sanitizeInjectedAudio(injectedAudio, diagnostics);
@@ -724,7 +748,7 @@ async function main(): Promise<void> {
 
   if (!isWebGLAvailable()) {
     diagnostics.error('boot', 'webgl-unavailable', 'WebGL is not available in the current browser');
-    showFallbackScreen(app, 'WebGL ist im aktuellen Browser nicht verfügbar.');
+    showFallbackScreen(app, 'WebGL ist im aktuellen Browser nicht verfügbar.', resolvedWallTokens.galleryWall);
     return;
   }
 
@@ -754,15 +778,21 @@ async function main(): Promise<void> {
 
   let rendererManager: RendererManager;
   try {
-    rendererManager = new RendererManager(app, initialPreset, visualTokens.galleryWall);
+    rendererManager = new RendererManager(app, initialPreset, resolvedWallTokens.galleryWall);
   } catch (err) {
     diagnostics.error('renderer', 'init-failed', 'RendererManager initialization failed', err);
     loadingOverlay.dispose();
     loadingOverlay.overlay.remove();
-    showFallbackScreen(app, err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.');
+    showFallbackScreen(
+      app,
+      err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.',
+      resolvedWallTokens.galleryWall
+    );
     return;
   }
+  applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
   rendererManager.renderer.domElement.classList.add('gallery-canvas', 'gallery-canvas--loading');
+  let museumHub: MainMuseumHub | null = null;
   const restoreStatus = document.createElement('div');
   restoreStatus.className = 'webgl-restore-status';
   restoreStatus.setAttribute('role', 'status');
@@ -775,10 +805,29 @@ async function main(): Promise<void> {
       clearTimeout(restoreStatusTimer);
       restoreStatus.classList.add('is-visible');
       diagnostics.warn('renderer', 'context-restore-visible', 'Showing WebGL restore status');
+      verifyMuseumWallColorConsistency(
+        diagnostics,
+        'renderer-context-lost',
+        resolvedWallTokens,
+        rendererManager,
+        museumHub?.element ?? null,
+        loadingOverlay.overlay,
+        app
+      );
       return;
     }
+    applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
     restoreStatus.textContent = 'Grafik wiederhergestellt';
     diagnostics.info('renderer', 'context-restore-hidden', 'WebGL restore status will hide');
+    verifyMuseumWallColorConsistency(
+      diagnostics,
+      'renderer-context-restored',
+      resolvedWallTokens,
+      rendererManager,
+      museumHub?.element ?? null,
+      loadingOverlay.overlay,
+      app
+    );
     restoreStatusTimer = setTimeout(() => {
       restoreStatus.classList.remove('is-visible');
       restoreStatus.textContent = 'Grafik wird wiederhergestellt …';
@@ -951,13 +1000,19 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
-  const museumHub = new MainMuseumHub(app, museumHubResolution);
+  museumHub = new MainMuseumHub(app, museumHubResolution);
+  museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
+    alignPage: false,
+    source: 'boot-gallery-selection',
+  });
   verifyMuseumWallColorConsistency(
     diagnostics,
-    visualTokens,
+    'post-hub-composition-create',
+    resolvedWallTokens,
     rendererManager,
     museumHub.element,
-    loadingOverlay.overlay
+    loadingOverlay.overlay,
+    app
   );
   const unsubscribeAudioState = backgroundAudio.subscribe((state) => {
     preferencesPanel.setAudioStatusMessage(state.message);
@@ -1765,6 +1820,10 @@ async function main(): Promise<void> {
     infoPanel.update(artworks[index], true);
     timeline.setActive(index);
     announceArtworkChange(artworks[index]?.title ?? '');
+    museumHub?.setSelectedArtworkId(artworks[index]?.id ?? null, {
+      alignPage: false,
+      source: 'gallery-navigate',
+    });
     diagnostics.info('gallery', 'navigate', 'Artwork changed', {
       index,
       artworkId: artworks[index]?.id,
@@ -1784,6 +1843,16 @@ async function main(): Promise<void> {
   const destinationRouter = new DestinationRouter({
     onStateChange: (state) => {
       app.dataset['experience'] = state === 'destination' ? 'gallery' : state;
+      applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
+      verifyMuseumWallColorConsistency(
+        diagnostics,
+        `experience-state:${state}`,
+        resolvedWallTokens,
+        rendererManager,
+        museumHub?.element ?? null,
+        loadingOverlay.overlay.isConnected ? loadingOverlay.overlay : null,
+        app
+      );
       diagnostics.info('navigation', 'experience-state', 'Experience state changed', { state });
     },
     onTransitionError: (destination, error) => {
@@ -1804,6 +1873,10 @@ async function main(): Promise<void> {
       artworkMesh.group.visible = false;
       canvasInteraction.setEnabled(false);
       keyboardNav.setEnabled(false);
+      museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
+        alignPage: true,
+        source: 'router-enter-hub',
+      });
       museumHub.enter();
     },
     exit: () => museumHub.exit(preferences.current.reducedMotion),

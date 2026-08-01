@@ -21,7 +21,10 @@ import type { Artwork } from './artworks';
 import {
   clonePolygon,
   clonePoint,
+  calibrateRoomWallToReferenceQuad,
+  classifyProjectionConvergence,
   computeHomographyFromUnitSquare,
+  evaluateWallProjectionRealism,
   invertMatrix3x3,
   invertWallPoint,
   point,
@@ -42,9 +45,11 @@ import {
   type Point2D,
   type Point3D,
   type Polygon,
+  type ProjectionConvergence,
   type Quad,
   type RoomWallModel,
   type StageReference,
+  type WallProjectionRealism,
   type WallProjectionModel,
 } from '../hub/projectiveGeometry';
 import { isReferenceOnlyHubAssetPath } from '../hub/backgroundFallback';
@@ -114,6 +119,13 @@ export interface ResolvedHubWall extends WallProjectionModel {
   inverseHomography: ReturnType<typeof invertMatrix3x3>;
   room?: RoomWallModel;
   camera?: CameraCalibration;
+  referenceQuad: Quad;
+  referenceSafePolygon: Point2D[];
+  projectedQuad: Quad | null;
+  projectedSafePolygon: Point2D[] | null;
+  localCalibrationScale: { x: number; y: number };
+  projectionRealism?: WallProjectionRealism;
+  expectedConvergence: ProjectionConvergence;
 }
 
 export interface ResolvedHubSlot {
@@ -129,6 +141,9 @@ export interface ResolvedHubSlot {
     | 'duplicate-mapping'
     | 'explicitly-disabled'
     | 'missing-wall'
+    | 'invalid-placement'
+    | 'invalid-projection'
+    | 'projection-realism'
     | null;
   mappingSource: 'explicit' | 'auto-placed';
   artworkAspect: number;
@@ -168,6 +183,7 @@ export const HUB_BACKGROUND_ASPECT = HUB_STAGE.width / HUB_STAGE.height;
 export const HUB_BACKGROUND_SRC = 'Backgrounds/museum-empty.png';
 export const DEFAULT_GALLERY_WALL = '#D8DDDB';
 export const HUB_SELECTION_TIMEOUT_MS = 1500;
+export const HUB_MIN_PROJECTED_SHORT_EDGE_PX = 72;
 export const HUB_CAMERA: CameraCalibration = {
   position: point3(0, 1.8, 7.5),
   target: point3(0, 1.8, 0),
@@ -374,6 +390,10 @@ function defaultVisualTokens(): HubVisualTokens {
     galleryWall: DEFAULT_GALLERY_WALL,
     museumWall: DEFAULT_GALLERY_WALL,
   };
+}
+
+function expectedWallConvergence(referenceQuad: Quad): ProjectionConvergence {
+  return classifyProjectionConvergence(referenceQuad, 0.01);
 }
 
 function normalizeStage(stage: StageReference): StageReference {
@@ -647,7 +667,7 @@ function parseRoomWall(raw: unknown): RoomWallModel | null {
   const axisULength = Math.hypot(axisU.x, axisU.y, axisU.z);
   const axisVLength = Math.hypot(axisV.x, axisV.y, axisV.z);
   const axisDot = axisU.x * axisV.x + axisU.y * axisV.y + axisU.z * axisV.z;
-  if (axisULength < 0.99 || axisULength > 1.01 || axisVLength < 0.99 || axisVLength > 1.01 || Math.abs(axisDot) > 0.02) {
+  if (axisULength < 0.92 || axisULength > 1.08 || axisVLength < 0.92 || axisVLength > 1.08 || Math.abs(axisDot) > 0.08) {
     return null;
   }
   const safePolygon = parsePolygon(candidate['safePolygon']);
@@ -1139,13 +1159,53 @@ export function resolveMuseumHub(
 
   const walls: ResolvedHubWall[] = [];
   for (const wall of config.walls) {
-    const room = wall.room ? cloneRoomWall(wall.room) : undefined;
-    const calibratedQuad = room ? projectRoomWallQuad(room, camera, stage) : null;
-    const calibratedSafePolygon = room ? projectRoomPolygon(room, camera, room.safePolygon, stage) : null;
-    const quad = calibratedQuad ?? cloneQuad(wall.quad);
-    const safePolygon =
-      calibratedSafePolygon ??
-      (wall.safePolygon ? clonePolygon(wall.safePolygon) : clonePolygon(shrinkPolygonTowardsCentroid(quad, 0.92)));
+    const referenceQuad = cloneQuad(wall.quad);
+    const referenceSafePolygon =
+      wall.safePolygon ? clonePolygon(wall.safePolygon) : clonePolygon(shrinkPolygonTowardsCentroid(referenceQuad, 0.92));
+    let room = wall.room ? cloneRoomWall(wall.room) : undefined;
+    let projectedQuad: Quad | null = null;
+    let projectedSafePolygon: Point2D[] | null = null;
+    let localCalibrationScale = { x: 1, y: 1 };
+    let projectionRealism: WallProjectionRealism | undefined;
+    const expectedConvergence = expectedWallConvergence(referenceQuad);
+    if (room) {
+      const calibrated = calibrateRoomWallToReferenceQuad(
+        room,
+        referenceQuad,
+        referenceSafePolygon,
+        camera,
+        stage,
+        expectedConvergence
+      );
+      if (calibrated) {
+        room = calibrated.room;
+        projectedQuad = calibrated.projectedQuad;
+        projectedSafePolygon = calibrated.projectedSafePolygon;
+        localCalibrationScale = { x: calibrated.scaleX, y: calibrated.scaleY };
+        projectionRealism = calibrated.realism;
+      } else {
+        warnings.push(`wall "${wall.id}": room plane could not be reconciled to the reference quad; using the stored room transform.`);
+        projectedQuad = projectRoomWallQuad(room, camera, stage);
+        projectedSafePolygon = projectRoomPolygon(room, camera, room.safePolygon, stage);
+        if (projectedQuad) {
+          projectionRealism = evaluateWallProjectionRealism(
+            room,
+            projectedQuad,
+            referenceQuad,
+            projectedSafePolygon,
+            referenceSafePolygon,
+            expectedConvergence
+          );
+        }
+      }
+      if (projectionRealism && !projectionRealism.passes) {
+        warnings.push(
+          `wall "${wall.id}": projection realism failed (max residual ${projectionRealism.referenceResidualMaxPx.toFixed(1)}px, axis dot ${projectionRealism.axisDot.toFixed(3)}, convergence ${projectionRealism.projectedConvergence}).`
+        );
+      }
+    }
+    const quad = referenceQuad;
+    const safePolygon = referenceSafePolygon;
     const homography = computeHomographyFromUnitSquare(quad);
     const inverseHomography = homography ? invertMatrix3x3(homography) : null;
     if (!homography || !inverseHomography) {
@@ -1161,6 +1221,13 @@ export function resolveMuseumHub(
       shadowVector: wall.shadowVector ? clonePoint(wall.shadowVector) : undefined,
       room,
       camera: room ? camera : undefined,
+      referenceQuad,
+      referenceSafePolygon,
+      projectedQuad,
+      projectedSafePolygon,
+      localCalibrationScale,
+      projectionRealism,
+      expectedConvergence,
       homography,
       inverseHomography,
     });
@@ -1178,8 +1245,14 @@ export function resolveMuseumHub(
     const pageIndex = Math.max(0, parsePageIndex(slot.id));
     const wall = wallById.get(slot.placement.wallId);
     const wallGroup = wall?.group ?? (slot.placement.wallId.includes('right') ? 'right' : 'left');
+    const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
+    if (wall?.room && !slot.placement.anchor) {
+      warnings.push(`slot "${slot.id}": room-local anchor missing; deriving it from the normalized center for calibrated placement.`);
+    }
     const migratedAnchor =
-      slot.placement.anchor ??
+      (slot.placement.anchor
+        ? point(slot.placement.anchor.x * localScale.x, slot.placement.anchor.y * localScale.y)
+        : undefined) ??
       (wall?.room
         ? point(slot.placement.center.x * wall.room.width, (1 - slot.placement.center.y) * wall.room.height)
         : undefined);
@@ -1189,7 +1262,7 @@ export function resolveMuseumHub(
       placement: {
         wallId: slot.placement.wallId,
         center: clonePoint(slot.placement.center),
-        mountedHeight: slot.placement.mountedHeight,
+        mountedHeight: wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight,
         anchor: migratedAnchor ? clonePoint(migratedAnchor) : undefined,
         provisional: slot.placement.provisional === true,
       },
@@ -1318,25 +1391,34 @@ export function resolveMuseumHub(
   if (autoPlaceUnmapped && overflow.length > 0) {
     let pageIndex = resolved.reduce((max, slot) => Math.max(max, slot.pageIndex), 0) + 1;
     while (overflow.length > 0) {
-      const pageSlots = baselinePageSlots(pageIndex).map<ResolvedHubSlot>((slot) => ({
-        id: slot.id,
-        pageIndex,
-        placement: {
-          wallId: slot.placement.wallId,
-          center: clonePoint(slot.placement.center),
-          mountedHeight: slot.placement.mountedHeight,
-          anchor: slot.placement.anchor ? clonePoint(slot.placement.anchor) : undefined,
-          provisional: false,
-        },
-        artworkId: null,
-        artworkIndex: -1,
-        displayLabel: '',
-        selectable: true,
-        disabledReason: null,
-        mappingSource: 'auto-placed',
-        artworkAspect: 1,
-        wallGroup: slot.placement.wallId.includes('right') ? 'right' : 'left',
-      }));
+      const pageSlots = baselinePageSlots(pageIndex).map<ResolvedHubSlot>((slot) => {
+        const wall = wallById.get(slot.placement.wallId);
+        const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
+        return {
+          id: slot.id,
+          pageIndex,
+          placement: {
+            wallId: slot.placement.wallId,
+            center: clonePoint(slot.placement.center),
+            mountedHeight: wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight,
+            anchor:
+              wall?.room && slot.placement.anchor
+                ? point(slot.placement.anchor.x * localScale.x, slot.placement.anchor.y * localScale.y)
+                : slot.placement.anchor
+                  ? clonePoint(slot.placement.anchor)
+                  : undefined,
+            provisional: false,
+          },
+          artworkId: null,
+          artworkIndex: -1,
+          displayLabel: '',
+          selectable: true,
+          disabledReason: null,
+          mappingSource: 'auto-placed',
+          artworkAspect: 1,
+          wallGroup: slot.placement.wallId.includes('right') ? 'right' : 'left',
+        };
+      });
       const batch = overflow.slice(0, HUB_SLOTS_PER_PAGE);
       const consumed = new Set<string>();
       for (const artwork of batch) {
@@ -1363,7 +1445,9 @@ export function resolveMuseumHub(
     slot.placement.center = fitted.center;
     if (fitted.anchor) slot.placement.anchor = fitted.anchor;
     slot.placement.mountedHeight = fitted.mountedHeight;
-    warnings.push(`slot "${slot.id}": placement was clamped to the wall drawable region (contain policy).`);
+    if (slot.placement.provisional) {
+      warnings.push(`slot "${slot.id}": provisional placement was clamped to the wall drawable region.`);
+    }
   }
 
   const projectedBySlot = new Map<string, ReturnType<typeof projectSlotArtwork>>();
@@ -1371,18 +1455,32 @@ export function resolveMuseumHub(
     if (!slot.selectable || !slot.artworkId) continue;
     const wall = wallById.get(slot.placement.wallId);
     if (!wall) continue;
+    if (wall.projectionRealism && !wall.projectionRealism.passes) {
+      slot.selectable = false;
+      slot.disabledReason = 'projection-realism';
+      warnings.push(`slot "${slot.id}": wall projection realism rejected runtime composition.`);
+      continue;
+    }
     const projected = projectSlotArtwork(wall, slot.placement, slot.artworkAspect, stage);
     projectedBySlot.set(slot.id, projected);
     if (!projected) {
-      warnings.push(`slot "${slot.id}": projected geometry is invalid.`);
+      slot.selectable = false;
+      slot.disabledReason = 'invalid-projection';
+      warnings.push(`slot "${slot.id}": projected geometry is invalid and the slot was suppressed.`);
       continue;
     }
     const withinSafePolygon = projected.projectedQuad.every((vertex) => pointInPolygon(vertex, wall.safePolygon));
     if (!withinSafePolygon) {
-      warnings.push(`slot "${slot.id}": projected artwork bounds extend outside wall safePolygon.`);
+      slot.selectable = false;
+      slot.disabledReason = 'invalid-placement';
+      warnings.push(`slot "${slot.id}": projected artwork bounds extend outside wall safePolygon and the slot was suppressed.`);
+      projectedBySlot.delete(slot.id);
+      continue;
     }
-    if (projected.shortEdge < 84) {
-      warnings.push(`slot "${slot.id}": projected short edge ${projected.shortEdge.toFixed(1)}px is below the 84px desktop guidance.`);
+    if (projected.shortEdge < HUB_MIN_PROJECTED_SHORT_EDGE_PX) {
+      warnings.push(
+        `slot "${slot.id}": projected short edge ${projected.shortEdge.toFixed(1)}px is below the ${HUB_MIN_PROJECTED_SHORT_EDGE_PX}px desktop guidance.`
+      );
     }
     if (slot.placement.provisional) {
       warnings.push(`slot "${slot.id}": placement was migrated provisionally and should be recalibrated.`);
