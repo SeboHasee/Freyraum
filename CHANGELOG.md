@@ -22,6 +22,10 @@
   wall-realism assertions, invalid-slot suppression checks, round-trip
   selection states, transition surface snapshots, and context-restore token
   verification.
+- Added a pre-screenshot Playwright hub/background fail-safe: 404 room-image
+  URLs are logged with structured URL/status data, downgraded to
+  `backgrounds/museum-empty.png` or the neutral museum-grey token, and still
+  captured into a per-run `capture-report.json`.
 
 ### Validation
 

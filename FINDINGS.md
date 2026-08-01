@@ -23,6 +23,11 @@
    screenshots alone: doorway-edge fixtures, return-to-hub selected-state checks,
    and context-restore token assertions catch failures that containment-only and
    first-paint-only tests miss.
+6. Playwright capture should treat hub background 404s as reportable screenshot
+   state, not a terminal failure. Reading the runtime’s structured hub-asset
+   diagnostics before each screenshot lets the harness preserve attempted URLs,
+   failed URLs, fallback choice (`museum-empty.png` vs neutral grey), and the
+   screenshot artifact in one deterministic report.
 
 ## Calibrated 3D hub reconstruction findings (v0.84, 2026-08-01)
 

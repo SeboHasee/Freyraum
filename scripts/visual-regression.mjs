@@ -15,6 +15,14 @@ const CURRENT_DIR = resolve(ROOT, '.visual-regression/current');
 const DIFF_DIR = resolve(ROOT, '.visual-regression/diff');
 
 const URL = process.env.FREYRAUM_URL ?? 'http://localhost:5173/app.html';
+const CAPTURE_REPORT_FILENAME = 'capture-report.json';
+const HUB_BACKGROUND_FALLBACK_SRC = 'Backgrounds/museum-empty.png';
+const HUB_BACKGROUND_FALLBACK_DEPLOYED_PATH = 'backgrounds/museum-empty.png';
+const MUSEUM_GREY_RGB = 'rgb(216, 221, 219)';
+const STATE_FILTERS = (process.env.FREYRAUM_VISUAL_STATE_FILTER ?? '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean);
 const DESKTOP_VIEWPORT = { width: 1280, height: 800 };
 const WIDE_DESKTOP_VIEWPORT = { width: 1728, height: 960 };
 const NARROW_PORTRAIT_VIEWPORT = { width: 420, height: 980 };
@@ -193,6 +201,21 @@ function missingBackgroundFixture() {
   };
 }
 
+function missingFallbackBackgroundFixture() {
+  return {
+    artworks: HUB_ASPECT_FIXTURES.square,
+    museumHub: {
+      ...SHIPPING_HUB_CONFIG,
+      background: { ...SHIPPING_HUB_CONFIG.background, src: 'Backgrounds/missing-room.png' },
+      backgroundFallback: { src: 'Backgrounds/missing-fallback-room.png' },
+      slots: SHIPPING_HUB_CONFIG.slots.map((slot, index) => ({
+        ...slot,
+        ...(index < HUB_ASPECT_FIXTURES.square.length ? { artworkId: HUB_ASPECT_FIXTURES.square[index].id } : {}),
+      })),
+    },
+  };
+}
+
 const states = [
   {
     name: 'hub__desktop__room-1',
@@ -250,6 +273,21 @@ const states = [
       path: 'Backgrounds/missing-room.png',
       httpStatus: 404,
     },
+  },
+  {
+    name: 'hub__desktop__missing-background-neutral',
+    query: '?startup=entry-minimal',
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+    fixture: missingFallbackBackgroundFixture(),
+    expectHubWarning: {
+      scope: 'hub',
+      event: 'hub-asset-fallback-failed',
+      path: 'Backgrounds/missing-fallback-room.png',
+      httpStatus: 404,
+    },
+    expectNeutralBackgroundFallback: true,
   },
   {
     name: 'hub__fixture__very-tall',
@@ -344,6 +382,14 @@ const states = [
   ),
 ];
 
+const activeStates = states.filter(
+  (state) => STATE_FILTERS.length === 0 || STATE_FILTERS.some((filter) => state.name.includes(filter))
+);
+if (STATE_FILTERS.length > 0 && activeStates.length === 0) {
+  console.error(`No visual-regression states matched FREYRAUM_VISUAL_STATE_FILTER="${STATE_FILTERS.join(',')}".`);
+  process.exit(2);
+}
+
 const PER_PIXEL_CHANNEL_THRESHOLD = 10 / 255;
 const MAX_DIFF_FRACTION = 0.02;
 
@@ -374,12 +420,11 @@ async function assertAuthoritativeSurfaces(page, stateName) {
       hub: hubStyle?.backgroundColor ?? null,
     };
   });
-  const expected = 'rgb(216, 221, 219)';
   if (
     surfaces.galleryVar.toLowerCase() !== '#d8dddb' ||
     surfaces.museumVar.toLowerCase() !== '#d8dddb' ||
-    surfaces.body !== expected ||
-    surfaces.app !== expected
+    surfaces.body !== MUSEUM_GREY_RGB ||
+    surfaces.app !== MUSEUM_GREY_RGB
   ) {
     throw new Error(`${stateName}: authoritative museum-grey token did not reach root/body/app surfaces`);
   }
@@ -445,11 +490,187 @@ async function assertSelectedArtworkState(page, stateName, expectedArtworkId) {
   }
 }
 
+function getStateHubConfig(state) {
+  return state.fixture?.museumHub ?? SHIPPING_HUB_CONFIG;
+}
+
+function getStateHubBackgroundConfig(state) {
+  const museumHub = getStateHubConfig(state);
+  return {
+    primarySrc: museumHub.background?.src ?? SHIPPING_HUB_CONFIG.background.src,
+    fallbackSrc: museumHub.backgroundFallback?.src ?? HUB_BACKGROUND_FALLBACK_SRC,
+  };
+}
+
+function resolveHubBackgroundUrl(pageUrl, src) {
+  if (!src) return null;
+  if (/^https?:\/\//i.test(src)) return src;
+  const normalized = src.replace(/^Backgrounds\//, 'backgrounds/');
+  return new URL(normalized, pageUrl).href;
+}
+
+function dedupeStrings(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function dedupeFailures(failures) {
+  const seen = new Set();
+  return failures.filter((failure) => {
+    const key = `${failure.url ?? ''}::${failure.status ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function readHubBackgroundSnapshot(page) {
+  return await page.evaluate(() => {
+    const hub = document.querySelector('.museum-hub');
+    const image = document.querySelector('.museum-hub__image');
+    const stage = document.querySelector('.museum-hub__stage');
+    const stageStyle = stage ? getComputedStyle(stage) : null;
+    const entries = window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [];
+    return {
+      hasHub: hub instanceof HTMLElement,
+      imageError: hub instanceof HTMLElement ? hub.classList.contains('has-image-error') : false,
+      currentImageSrc:
+        image instanceof HTMLImageElement ? image.currentSrc || image.getAttribute('src') || image.src || null : null,
+      stageBackgroundColor: stageStyle?.backgroundColor ?? null,
+      warnings: entries
+        .filter(
+          (entry) =>
+            entry.scope === 'hub' &&
+            (entry.event === 'hub-asset-missing' || entry.event === 'hub-asset-fallback-failed')
+        )
+        .map((entry) => ({
+          event: entry.event,
+          path: typeof entry.data?.path === 'string' ? entry.data.path : null,
+          url: typeof entry.data?.url === 'string' ? entry.data.url : null,
+          fallbackPath: typeof entry.data?.fallbackPath === 'string' ? entry.data.fallbackPath : null,
+          fallbackUrl: typeof entry.data?.fallbackUrl === 'string' ? entry.data.fallbackUrl : null,
+          httpStatus: typeof entry.data?.httpStatus === 'number' ? entry.data.httpStatus : null,
+          attempt: typeof entry.data?.attempt === 'string' ? entry.data.attempt : null,
+        })),
+    };
+  });
+}
+
+async function forceNeutralHubBackground(page) {
+  await page.evaluate(() => {
+    const hub = document.querySelector('.museum-hub');
+    if (hub instanceof HTMLElement) hub.classList.add('has-image-error');
+  });
+}
+
+async function ensureHubBackgroundFailSafe(page, state) {
+  const { primarySrc, fallbackSrc } = getStateHubBackgroundConfig(state);
+  const primaryUrl = resolveHubBackgroundUrl(page.url(), primarySrc);
+  const fallbackUrl = resolveHubBackgroundUrl(page.url(), fallbackSrc);
+  let snapshot = await readHubBackgroundSnapshot(page);
+  if (!snapshot.hasHub) {
+    return {
+      attemptedUrls: dedupeStrings([primaryUrl]),
+      failed: [],
+      fallbackUsed: null,
+    };
+  }
+
+  const failed404s = dedupeFailures(
+    snapshot.warnings
+      .filter((warning) => warning.httpStatus === 404)
+      .map((warning) => ({
+        url: warning.url,
+        path: warning.path,
+        status: warning.httpStatus,
+        event: warning.event,
+        attempt: warning.attempt,
+      }))
+  );
+  const primaryFailed = failed404s.some((failure) => failure.url === primaryUrl || failure.attempt === 'primary');
+  const fallbackFailed = failed404s.some((failure) => failure.url === fallbackUrl || failure.attempt === 'fallback');
+  const shouldUseNeutral = primaryFailed && (!fallbackUrl || fallbackUrl === primaryUrl || fallbackFailed);
+
+  if (failed404s.length > 0) {
+    for (const failure of failed404s) {
+      console.warn(`${state.name}: hub/background asset ${failure.url} returned ${failure.status}`);
+    }
+    if (shouldUseNeutral) {
+      await forceNeutralHubBackground(page);
+    } else if (primaryFailed && fallbackUrl) {
+      await page.evaluate((expectedFallbackUrl) => {
+        const image = document.querySelector('.museum-hub__image');
+        if (
+          image instanceof HTMLImageElement &&
+          image.currentSrc !== expectedFallbackUrl &&
+          image.src !== expectedFallbackUrl
+        ) {
+          image.src = expectedFallbackUrl;
+        }
+      }, fallbackUrl);
+    }
+    await page.waitForFunction(
+      ({ expectedFallbackUrl, neutral }) => {
+        const hub = document.querySelector('.museum-hub');
+        const image = document.querySelector('.museum-hub__image');
+        const stage = document.querySelector('.museum-hub__stage');
+        const stageStyle = stage ? getComputedStyle(stage) : null;
+        if (!(hub instanceof HTMLElement)) return false;
+        if (neutral) {
+          return hub.classList.contains('has-image-error') && stageStyle?.backgroundColor === 'rgb(216, 221, 219)';
+        }
+        return (
+          image instanceof HTMLImageElement &&
+          Boolean(expectedFallbackUrl) &&
+          (image.currentSrc === expectedFallbackUrl || image.src === expectedFallbackUrl)
+        );
+      },
+      { timeout: 10_000 },
+      { expectedFallbackUrl: shouldUseNeutral ? null : fallbackUrl, neutral: shouldUseNeutral }
+    );
+    snapshot = await readHubBackgroundSnapshot(page);
+  }
+
+  if (state.expectHubWarning) {
+    const warning = snapshot.warnings.find(
+      (entry) =>
+        entry.event === state.expectHubWarning.event &&
+        entry.path === state.expectHubWarning.path &&
+        entry.httpStatus === state.expectHubWarning.httpStatus
+    );
+    if (!warning) {
+      throw new Error(`${state.name}: missing background fail-safe warning was not recorded with structured 404 context`);
+    }
+  }
+
+  if (state.expectNeutralBackgroundFallback) {
+    if (!snapshot.imageError || snapshot.stageBackgroundColor !== MUSEUM_GREY_RGB) {
+      throw new Error(`${state.name}: fallback-neutral hub state did not degrade to museum-grey`);
+    }
+  }
+
+  const attemptedUrls = dedupeStrings([
+    primaryUrl,
+    ...snapshot.warnings.map((warning) => warning.url),
+    primaryFailed ? fallbackUrl : null,
+    snapshot.currentImageSrc,
+  ]);
+  return {
+    attemptedUrls,
+    failed: failed404s,
+    fallbackUsed: snapshot.imageError
+      ? 'neutral-grey'
+      : snapshot.currentImageSrc?.includes(HUB_BACKGROUND_FALLBACK_DEPLOYED_PATH)
+        ? HUB_BACKGROUND_FALLBACK_DEPLOYED_PATH
+        : null,
+  };
+}
+
 async function capture(targetDir) {
   const { chromium } = await loadPlaywright();
   mkdirSync(targetDir, { recursive: true });
   const browser = await chromium.launch();
-  for (const state of states) {
+  const captureReport = [];
+  for (const state of activeStates) {
     const page = await browser.newPage({ viewport: state.viewport, deviceScaleFactor: 1 });
     await page.addInitScript((fixture) => {
       localStorage.setItem('freyraum-nav-hint-seen', '1');
@@ -478,29 +699,6 @@ async function capture(targetDir) {
 
     if (state.mode === 'hub') {
       await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
-      if (state.expectBackgroundFallback) {
-        await page.waitForFunction(
-          () => document.querySelector('.museum-hub__image')?.getAttribute('src')?.includes('museum-empty.png'),
-          { timeout: 10_000 }
-        );
-      }
-      if (state.expectHubWarning) {
-        const warning = await page.evaluate((expected) => {
-          const entries = window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [];
-          return entries.find(
-            (entry) =>
-              entry.scope === expected.scope &&
-              entry.event === expected.event &&
-              entry.data &&
-              typeof entry.data === 'object' &&
-              entry.data.path === expected.path &&
-              entry.data.httpStatus === expected.httpStatus
-          ) ?? null;
-        }, state.expectHubWarning);
-        if (!warning) {
-          throw new Error(`${state.name}: missing background fallback warning was not recorded with structured 404 context`);
-        }
-      }
       for (const step of state.hubSteps) {
         await page.keyboard.press(step);
         await page.waitForTimeout(350);
@@ -572,6 +770,7 @@ async function capture(targetDir) {
       await assertSurfaceReasons(page, state.name, ['renderer-context-lost', 'renderer-context-restored']);
     }
 
+    const assetCheck = await ensureHubBackgroundFailSafe(page, state);
     const invariant = await page.evaluate(() => window.__FREYRAUM_PERF_TOOLS__?.checkInvariants());
     if (!invariant) {
       throw new Error(`${state.name}: performance/invariant tooling was not installed`);
@@ -581,10 +780,24 @@ async function capture(targetDir) {
     }
     const file = resolve(targetDir, `${state.name}.png`);
     await page.screenshot({ path: file });
+    captureReport.push({
+      state: state.name,
+      attemptedUrls: assetCheck.attemptedUrls,
+      failed: assetCheck.failed,
+      fallbackUsed: assetCheck.fallbackUsed,
+      screenshotPath: file,
+    });
+    console.log(
+      `asset-check ${state.name}: attempted=${assetCheck.attemptedUrls.length} failed=${assetCheck.failed.length} fallback=${assetCheck.fallbackUsed ?? 'none'}`
+    );
     console.log(`captured ${state.name} → ${file}`);
     await page.close();
   }
   await browser.close();
+  const reportPath = resolve(targetDir, CAPTURE_REPORT_FILENAME);
+  writeFileSync(reportPath, JSON.stringify(captureReport, null, 2));
+  console.log(`capture report → ${reportPath}`);
+  return captureReport;
 }
 
 async function compare() {
@@ -608,7 +821,7 @@ async function compare() {
   mkdirSync(DIFF_DIR, { recursive: true });
 
   let failed = 0;
-  for (const state of states) {
+  for (const state of activeStates) {
     const basePath = resolve(BASELINE_DIR, `${state.name}.png`);
     const curPath = resolve(CURRENT_DIR, `${state.name}.png`);
     if (!existsSync(basePath)) {
@@ -647,9 +860,12 @@ const mode = process.argv[2];
 if (mode === 'baseline') {
   await capture(BASELINE_DIR);
   console.log(`\nBaseline written to ${BASELINE_DIR}.`);
+} else if (mode === 'capture') {
+  await capture(CURRENT_DIR);
+  console.log(`\nCapture written to ${CURRENT_DIR}.`);
 } else if (mode === 'compare') {
   await compare();
 } else {
-  console.error('Usage: node scripts/visual-regression.mjs <baseline|compare>');
+  console.error('Usage: node scripts/visual-regression.mjs <baseline|capture|compare>');
   process.exit(2);
 }

@@ -22,6 +22,12 @@ Phase 10.3 state matrix plus expanded museum-hub states (desktop, wide desktop,
 narrow portrait wall-focus, doorway-edge fixtures, extreme-aspect fixture sets,
 hub→gallery→hub selection round trips, and WebGL context-restore token checks),
 checks Type B invariants for every state, and compares against a stored baseline.
+Before each screenshot, the harness now runs a hub-background fail-safe pass:
+required `/backgrounds/...` URLs that returned 404 are logged with URL + status,
+downgraded to the shipped `backgrounds/museum-empty.png` fallback when
+available, otherwise forced to the neutral museum-grey token, and still
+captured. Each run writes a per-state JSON summary to
+`.visual-regression/*/capture-report.json`.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.
@@ -35,6 +41,9 @@ checks Type B invariants for every state, and compares against a stored baseline
   accepted.
 - **Workflow:** capture a baseline *before* the change, apply the optimization,
   then compare. Diffs are written to `.visual-regression/diff/` (git-ignored).
+- `node scripts/visual-regression.mjs capture` writes screenshots without
+  requiring an existing baseline. `FREYRAUM_VISUAL_STATE_FILTER=foo,bar`
+  restricts baseline/capture/compare runs to matching state-name substrings.
 - **Required for:** OPT-4 (bloom), OPT-5 (shadow), OPT-6 (panel opacity),
   OPT-9 (LOD). These must additionally pass manual sign-off at close inspection
   zoom for shadow/bloom changes.

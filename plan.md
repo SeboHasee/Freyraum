@@ -24,6 +24,10 @@
   wall-realism/residual gates, invalid-slot suppression checks, persistent
   selection round trips, transition-surface diagnostics, and WebGL restore
   token verification.
+- The Playwright screenshot harness now performs a pre-screenshot hub/background
+  fail-safe audit, records attempted/failed asset URLs plus fallback outcome in
+  `capture-report.json`, downgrades 404 room images to `museum-empty.png` or
+  the neutral wall token, and keeps screenshot capture running.
 
 ### Validation boundary
 
@@ -32,6 +36,9 @@
   `npm run lint`, `npm run build:typecheck`, `npm run build`,
   `npm run test:frame-budget`, `npm run validate:museum-hub`, and
   `npm run validate:museum-hub:visual`.
+- `node scripts/visual-regression.mjs capture` is now the no-baseline capture
+  path; `FREYRAUM_VISUAL_STATE_FILTER` can scope it to targeted screenshot
+  states such as missing-background fail-safe checks.
 
 ## Implemented — Calibrated 3D museum room reconstruction (v0.84, 2026-08-01)
 
