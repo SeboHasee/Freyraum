@@ -179,8 +179,17 @@ export class MainMuseumHub {
         return;
       }
       hub.classList.remove('has-image-error');
-    }).catch(() => {
+    }).catch((error: unknown) => {
       hub.classList.add('has-image-error');
+      this.diagnostics.warn(
+        'hub-asset-loader-unexpected',
+        'Hub background loader threw unexpectedly; continuing with neutral museum-grey surface',
+        {
+          primaryPath: resolution.background.src,
+          fallbackPath: resolution.backgroundFallback.src,
+          error,
+        }
+      );
     });
     stage.appendChild(image);
 
