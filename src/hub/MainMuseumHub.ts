@@ -31,6 +31,7 @@ import {
 } from './projectiveGeometry';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import { loadHubImageAsset } from './hubAssetLoader';
+import { HubRoomRenderer } from './HubRoomRenderer';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -88,6 +89,7 @@ export class MainMuseumHub {
   private readonly resolution: MuseumHubResolution;
   private readonly visual: HTMLElement;
   private readonly stage: HTMLElement;
+  private readonly hubRoomRenderer: HubRoomRenderer;
   private readonly roomLayers: HTMLElement[] = [];
   private readonly slotViews: SlotView[] = [];
   private readonly entryButton: HTMLButtonElement;
@@ -196,6 +198,7 @@ export class MainMuseumHub {
       );
     });
     stage.appendChild(image);
+    this.hubRoomRenderer = new HubRoomRenderer(stage, resolution);
 
     const shade = document.createElement('div');
     shade.className = 'museum-hub__shade';
@@ -498,8 +501,13 @@ export class MainMuseumHub {
       image.alt = '';
       image.decoding = 'async';
       image.draggable = false;
+      image.addEventListener('load', () => {
+        button.classList.remove('has-missing-image');
+        this.syncSlotRenderer({ slot, button, image });
+      });
       image.addEventListener('error', () => {
         button.classList.add('has-missing-image');
+        this.syncSlotRenderer({ slot, button, image });
         this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
           slotId: slot.id,
           artworkId: slot.artworkId,
@@ -538,7 +546,9 @@ export class MainMuseumHub {
     }
 
     this.applySlotGeometry(button, slot);
-    return { slot, button, image };
+    const view = { slot, button, image };
+    this.syncSlotRenderer(view);
+    return view;
   }
 
   private applySlotGeometry(button: HTMLButtonElement, slot: ResolvedHubSlot): void {
@@ -546,6 +556,11 @@ export class MainMuseumHub {
     if (!wall) {
       button.classList.add('is-invalid-geometry');
       this.projectedSlotGeometry.delete(slot.id);
+      this.hubRoomRenderer.setSlotHidden(slot.id);
+      button.style.width = '0px';
+      button.style.height = '0px';
+      button.style.clipPath = 'none';
+      button.style.removeProperty('--hub-clip-path');
       this.diagnostics.warn('hub-slot-missing-wall', 'Hub slot geometry skipped because the wall is missing', {
         slotId: slot.id,
         wallId: slot.placement.wallId,
@@ -556,6 +571,11 @@ export class MainMuseumHub {
     if (!projection) {
       button.classList.add('is-invalid-geometry');
       this.projectedSlotGeometry.delete(slot.id);
+      this.hubRoomRenderer.setSlotHidden(slot.id);
+      button.style.width = '0px';
+      button.style.height = '0px';
+      button.style.clipPath = 'none';
+      button.style.removeProperty('--hub-clip-path');
       this.diagnostics.warn('hub-slot-projection-invalid', 'Hub slot projection is invalid and will not render interactively', {
         slotId: slot.id,
         artworkId: slot.artworkId,
@@ -566,15 +586,43 @@ export class MainMuseumHub {
     }
     this.projectedSlotGeometry.set(slot.id, projection);
     button.classList.remove('is-invalid-geometry');
-    button.style.left = '0px';
-    button.style.top = '0px';
-    button.style.width = `${projection.sourceWidth}px`;
-    button.style.height = `${projection.sourceHeight}px`;
-    button.style.transform = projection.cssMatrix3d;
+    const bounds = projection.projectedQuad.reduce(
+      (accumulator, corner) => ({
+        minX: Math.min(accumulator.minX, corner.x),
+        maxX: Math.max(accumulator.maxX, corner.x),
+        minY: Math.min(accumulator.minY, corner.y),
+        maxY: Math.max(accumulator.maxY, corner.y),
+      }),
+      { minX: Number.POSITIVE_INFINITY, maxX: Number.NEGATIVE_INFINITY, minY: Number.POSITIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY }
+    );
+    const width = Math.max(1, bounds.maxX - bounds.minX);
+    const height = Math.max(1, bounds.maxY - bounds.minY);
+    const clipPath = `polygon(${projection.projectedQuad
+      .map((corner) => `${(((corner.x - bounds.minX) / width) * 100).toFixed(3)}% ${(((corner.y - bounds.minY) / height) * 100).toFixed(3)}%`)
+      .join(', ')})`;
+    button.style.left = `${bounds.minX}px`;
+    button.style.top = `${bounds.minY}px`;
+    button.style.width = `${width}px`;
+    button.style.height = `${height}px`;
+    button.style.transform = 'none';
+    button.style.clipPath = clipPath;
+    button.style.setProperty('--hub-clip-path', clipPath);
     const shadow = wall.shadowVector ?? point(wall.group === 'left' ? -10 : 10, 16);
     button.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
+    this.syncSlotRenderer({ slot, button, image: this.slotViews.find((view) => view.slot.id === slot.id)?.image ?? null });
     if (this.debugGeometry) this.logSlotProjection(slot, wall, projection);
+  }
+
+  private syncSlotRenderer(view: SlotView): void {
+    const wall = this.resolution.wallById.get(view.slot.placement.wallId);
+    if (!wall) return;
+    const missingImage =
+      view.button.classList.contains('has-missing-image')
+      || !view.image
+      || !view.image.complete
+      || view.image.naturalWidth <= 0;
+    this.hubRoomRenderer.upsertSlot(view.slot, wall, view.image, missingImage);
   }
 
   private applyAllSlotGeometry(): void {
@@ -597,6 +645,8 @@ export class MainMuseumHub {
       selectedArtworkId: this.selectedArtworkId,
       localAnchor: slot.placement.anchor ?? null,
       localQuad: projection.localQuad,
+      worldQuad: projection.worldQuad ?? null,
+      projectedAnchor: projection.projectedAnchor ?? null,
       projectedQuad: projection.projectedQuad,
       homography: wall.homography,
       inverseHomography: wall.inverseHomography,
@@ -619,6 +669,8 @@ export class MainMuseumHub {
           slotId: slot.id,
           wallId: slot.placement.wallId,
           localQuad: projection?.localQuad ?? null,
+          worldQuad: projection?.worldQuad ?? null,
+          projectedAnchor: projection?.projectedAnchor ?? null,
           projectedQuad: projection?.projectedQuad ?? null,
           homography: wall?.homography ?? null,
           inverseHomography: wall?.inverseHomography ?? null,
@@ -698,6 +750,7 @@ export class MainMuseumHub {
       const artworkSrc = this.artworkImageSrc(view.slot);
       if (!artworkSrc) {
         view.button.classList.add('has-missing-image');
+        this.syncSlotRenderer(view);
         continue;
       }
       view.image.src = artworkSrc;
@@ -709,6 +762,8 @@ export class MainMuseumHub {
             resolve();
           };
           if (view.image!.complete && view.image!.naturalWidth > 0) {
+            view.button.classList.remove('has-missing-image');
+            this.syncSlotRenderer(view);
             done();
             return;
           }
@@ -762,6 +817,7 @@ export class MainMuseumHub {
     this.viewIndex = Math.max(0, Math.min(this.viewCount - 1, this.viewIndex));
     const pageIndex = this.narrowMode ? Math.floor(this.viewIndex / 2) : this.viewIndex;
     const wallFocus = this.narrowMode ? (this.viewIndex % 2 === 0 ? 'left' : 'right') : 'full';
+    this.hubRoomRenderer.setActivePage(pageIndex);
 
     for (const room of this.roomLayers) {
       const roomPage = Number.parseInt(room.dataset['page'] ?? '0', 10);
@@ -981,6 +1037,10 @@ export class MainMuseumHub {
       if (drag.mode === 'move') {
         drag.slot.placement.center = point(this.clampLocalX(local.x), this.clampLocalY(local.y));
         if (wall.room) {
+          drag.slot.placement.uv = point(
+            drag.slot.placement.center.x,
+            1 - drag.slot.placement.center.y
+          );
           drag.slot.placement.anchor = point(
             drag.slot.placement.center.x * wall.room.width,
             (1 - drag.slot.placement.center.y) * wall.room.height
@@ -1121,9 +1181,13 @@ export class MainMuseumHub {
         const stageAnchor = centerStage
           ? `S ${centerStage.x.toFixed(0)},${centerStage.y.toFixed(0)}`
           : 'S –';
+        const projectedAnchor = projection.projectedAnchor
+          ? `P ${projection.projectedAnchor.x.toFixed(0)},${projection.projectedAnchor.y.toFixed(0)}`
+          : 'P –';
+        const selectionState = slot.artworkId && slot.artworkId === this.selectedArtworkId ? 'selected' : 'idle';
         this.appendSvgLabel(
           point(labelAnchor.x + 8, labelAnchor.y - 8),
-          `${slot.id} · ${slot.placement.wallId} · ${localAnchor} · ${stageAnchor} · ${
+          `${slot.id} · ${slot.placement.wallId} · ${selectionState} · ${localAnchor} · ${stageAnchor} · ${projectedAnchor} · ${
             projection.validity?.contained && projection.validity.doorwayClear && projection.validity.inHangingBand
               ? 'valid'
               : 'invalid'
@@ -1276,13 +1340,23 @@ export class MainMuseumHub {
 
   private buildCurrentCalibrationConfig(): unknown {
     return {
-      version: 3,
+      version: 4,
       coverage: 'all-active-artworks',
       stage: this.resolution.stage,
       background: this.resolution.background,
       backgroundFallback: this.resolution.backgroundFallback,
       visualTokens: this.resolution.visualTokens,
       camera: this.resolution.camera,
+      room: {
+        dimensions: this.resolution.room.dimensions,
+        floorY: this.resolution.room.floorY,
+        ceilingY: this.resolution.room.ceilingY,
+        floorOutline: this.resolution.room.floorOutline.map((corner) => ({
+          x: this.round(corner.x),
+          z: this.round(corner.z),
+        })),
+      },
+      hangingRules: this.resolution.hangingRules,
       walls: this.resolution.walls.map((wall) => ({
         id: wall.id,
         group: wall.group,
@@ -1290,7 +1364,24 @@ export class MainMuseumHub {
         quad: wall.quad.map((corner) => this.roundPoint(corner)),
         safePolygon: wall.safePolygon.map((corner) => this.roundPoint(corner)),
         ...(wall.shadowVector ? { shadowVector: this.roundPoint(wall.shadowVector) } : {}),
-        ...(wall.room ? { room: wall.room } : {}),
+        ...(wall.room
+          ? {
+              room: {
+                origin: wall.room.origin,
+                axisU: wall.room.axisU,
+                axisV: wall.room.axisV,
+                width: wall.room.width,
+                height: wall.room.height,
+                safePolygon: wall.room.safePolygon.map((corner) => this.roundPoint(corner)),
+                doorwayExclusions: wall.room.doorwayExclusions.map((polygon) => polygon.map((corner) => this.roundPoint(corner))),
+                hangingBand: wall.room.hangingBand,
+              },
+            }
+          : {}),
+        ...(wall.transform ? { transform: wall.transform } : {}),
+        ...(wall.drawableRegion ? { drawableRegion: wall.drawableRegion } : {}),
+        ...(wall.exclusionPolygons ? { exclusionPolygons: wall.exclusionPolygons } : {}),
+        ...(wall.hangingBand ? { hangingBand: wall.hangingBand } : {}),
       })),
       fallbacks: {
         requireAllMapped: true,
@@ -1310,7 +1401,14 @@ export class MainMuseumHub {
           wallId: slot.placement.wallId,
           center: this.roundPoint(slot.placement.center),
           ...(slot.placement.anchor ? { anchor: this.roundPoint(slot.placement.anchor) } : {}),
+          ...(slot.placement.uv ? { uv: this.roundPoint(slot.placement.uv) } : {}),
           mountedHeight: this.round(slot.placement.mountedHeight),
+          ...(typeof slot.placement.targetSizePolicy === 'string'
+            ? { targetSizePolicy: slot.placement.targetSizePolicy }
+            : {}),
+          ...(typeof slot.placement.minScale === 'number' ? { minScale: this.round(slot.placement.minScale) } : {}),
+          ...(typeof slot.placement.maxScale === 'number' ? { maxScale: this.round(slot.placement.maxScale) } : {}),
+          ...(typeof slot.placement.zOffset === 'number' ? { zOffset: this.round(slot.placement.zOffset) } : {}),
           ...(slot.placement.provisional ? { provisional: true } : {}),
         },
       })),
@@ -1354,6 +1452,10 @@ export class MainMuseumHub {
       currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
       currentWall.planeAspect = wall.planeAspect;
       if (wall.shadowVector) currentWall.shadowVector = clonePoint(wall.shadowVector);
+      if (wall.transform) currentWall.transform = wall.transform;
+      currentWall.drawableRegion = wall.drawableRegion;
+      currentWall.exclusionPolygons = wall.exclusionPolygons;
+      currentWall.hangingBand = wall.hangingBand;
       if (wall.room) {
         currentWall.room = {
           origin: { ...wall.room.origin },
@@ -1373,7 +1475,12 @@ export class MainMuseumHub {
       currentSlot.placement.wallId = slot.placement.wallId;
       currentSlot.placement.center = clonePoint(slot.placement.center);
       currentSlot.placement.anchor = slot.placement.anchor ? clonePoint(slot.placement.anchor) : undefined;
+      currentSlot.placement.uv = slot.placement.uv ? clonePoint(slot.placement.uv) : undefined;
       currentSlot.placement.mountedHeight = slot.placement.mountedHeight;
+      currentSlot.placement.targetSizePolicy = slot.placement.targetSizePolicy;
+      currentSlot.placement.minScale = slot.placement.minScale;
+      currentSlot.placement.maxScale = slot.placement.maxScale;
+      currentSlot.placement.zOffset = slot.placement.zOffset;
       currentSlot.placement.provisional = slot.placement.provisional === true;
     }
     this.applyAllSlotGeometry();
@@ -1403,6 +1510,7 @@ export class MainMuseumHub {
     this.entryButton.removeEventListener('click', this.handleActivate);
     this.activateCallback = null;
     this.selectSlotCallback = null;
+    this.hubRoomRenderer.dispose();
     this.projectedSlotGeometry.clear();
     this.debugProjectionSignatureBySlot.clear();
     this.slotViews.length = 0;

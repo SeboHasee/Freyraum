@@ -46,6 +46,8 @@ export interface CameraCalibration {
   target: Point3D;
   verticalFovDeg: number;
   near: number;
+  far?: number;
+  lensShift?: Point2D;
 }
 
 export interface HangingBand {
@@ -138,6 +140,7 @@ export interface CalibratedRoomWallResult {
 
 export interface ProjectedArtworkGeometry {
   localQuad: Quad;
+  worldQuad?: readonly [Point3D, Point3D, Point3D, Point3D];
   projectedQuad: Quad;
   bounds: {
     minX: number;
@@ -152,6 +155,7 @@ export interface ProjectedArtworkGeometry {
   cssMatrix3d: string;
   shortEdge: number;
   placement: ArtworkPlacementResult | null;
+  projectedAnchor?: Point2D | null;
   validity?: ArtworkPlacementValidity;
   realism?: WallProjectionRealism;
 }
@@ -486,6 +490,22 @@ export function roomWallPoint(wall: RoomWallModel, local: Point2D): Point3D {
   );
 }
 
+export function roomWallNormal(wall: RoomWallModel): Point3D | null {
+  return normalize3(cross3(wall.axisU, wall.axisV));
+}
+
+export function roomWallWorldQuad(
+  wall: RoomWallModel,
+  localQuad: Quad
+): readonly [Point3D, Point3D, Point3D, Point3D] {
+  return [
+    roomWallPoint(wall, localQuad[0]),
+    roomWallPoint(wall, localQuad[1]),
+    roomWallPoint(wall, localQuad[2]),
+    roomWallPoint(wall, localQuad[3]),
+  ];
+}
+
 export function roomWallQuad(wall: RoomWallModel): Quad {
   return [
     point(0, wall.height),
@@ -510,6 +530,7 @@ export function projectWorldPoint(
     !isFinitePoint3D(worldPoint) ||
     !Number.isFinite(camera.verticalFovDeg) ||
     !Number.isFinite(camera.near) ||
+    (camera.far !== undefined && (!Number.isFinite(camera.far) || camera.far <= camera.near)) ||
     camera.verticalFovDeg <= 1 ||
     camera.verticalFovDeg >= 179 ||
     camera.near <= 0 ||
@@ -525,7 +546,13 @@ export function projectWorldPoint(
   const cameraX = dot3(relative, basis.right);
   const cameraY = dot3(relative, basis.up);
   const cameraZ = dot3(relative, basis.forward);
-  if (!Number.isFinite(cameraX) || !Number.isFinite(cameraY) || !Number.isFinite(cameraZ) || cameraZ <= camera.near) {
+  if (
+    !Number.isFinite(cameraX) ||
+    !Number.isFinite(cameraY) ||
+    !Number.isFinite(cameraZ) ||
+    cameraZ <= camera.near ||
+    (camera.far !== undefined && cameraZ >= camera.far)
+  ) {
     return null;
   }
   const tanHalfFov = Math.tan((camera.verticalFovDeg * Math.PI) / 360);
@@ -536,7 +563,12 @@ export function projectWorldPoint(
   const ndcX = cameraX / (cameraZ * tanHalfFov * aspect);
   const ndcY = cameraY / (cameraZ * tanHalfFov);
   if (!Number.isFinite(ndcX) || !Number.isFinite(ndcY)) return null;
-  return point(((ndcX + 1) * stage.width) / 2, ((1 - ndcY) * stage.height) / 2);
+  const shiftX = camera.lensShift?.x ?? 0;
+  const shiftY = camera.lensShift?.y ?? 0;
+  return point(
+    ((ndcX + 1) * stage.width) / 2 + shiftX * stage.width,
+    ((1 - ndcY) * stage.height) / 2 + shiftY * stage.height
+  );
 }
 
 export function projectRoomWallPoint(
@@ -984,6 +1016,7 @@ export function projectSlotArtwork(
       projectRoomWallPoint(wall.room!, wall.camera!, corner, stage)
     );
     if (projected.some((corner) => corner === null)) return null;
+    const worldQuad = roomWallWorldQuad(wall.room, placement.localQuad);
     const projectedQuad = normalizeQuadClockwise([
       projected[0]!,
       projected[1]!,
@@ -1001,6 +1034,7 @@ export function projectSlotArtwork(
     const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
     return {
       localQuad: placement.localQuad,
+      worldQuad,
       projectedQuad,
       bounds: getQuadBounds(projectedQuad),
       sourceWidth,
@@ -1008,6 +1042,7 @@ export function projectSlotArtwork(
       cssMatrix3d: homographyToCssMatrix3d(sourceHomography),
       shortEdge: shortestEdge(projectedQuad),
       placement,
+      projectedAnchor: projectRoomWallPoint(wall.room, wall.camera, placement.anchor, stage),
       validity: placement.validity,
       realism: wall.projectionRealism,
     };

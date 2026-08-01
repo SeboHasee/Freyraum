@@ -267,16 +267,28 @@ canvas {
   width: var(--hub-stage-width, 1366px);
   height: var(--hub-stage-height, 768px);
   overflow: hidden;
+   background: var(--color-museum-wall);
   transform-origin: top left;
   transform: scale(var(--hub-stage-scale, 1));
 }
 
 .museum-hub__image {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   display: block;
   object-fit: fill;
   user-select: none;
+  opacity: 0.16;
+}
+
+.museum-hub__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .museum-hub.has-image-error .museum-hub__image {
@@ -423,8 +435,7 @@ canvas {
   background: none;
   color: var(--text-inverse);
   cursor: pointer;
-  transform-origin: 0 0;
-  transform-style: flat;
+  clip-path: var(--hub-clip-path, none);
   filter: drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 18px rgba(10, 13, 15, 0.24));
   transition: filter var(--dur-control) var(--ease-out);
 }
@@ -432,8 +443,9 @@ canvas {
 .museum-hub__artwork::before {
   content: '';
   position: absolute;
-  inset: -8px;
+  inset: 0;
   border: 3px solid transparent;
+  clip-path: var(--hub-clip-path, none);
   opacity: 0;
   transition: opacity var(--dur-control) var(--ease-out);
 }
@@ -443,11 +455,12 @@ canvas {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: cover;
   user-select: none;
+  opacity: 0;
   box-shadow:
-    inset 0 0 0 1px rgba(12, 18, 22, 0.14),
-    inset 0 -1px 1px rgba(10, 12, 14, 0.2);
+   inset 0 0 0 1px rgba(12, 18, 22, 0.14),
+   inset 0 -1px 1px rgba(10, 12, 14, 0.2);
 }
 
 .museum-hub__art-placeholder {
@@ -472,7 +485,7 @@ canvas {
 }
 
 .museum-hub__artwork.has-missing-image .museum-hub__art-placeholder {
-  display: flex;
+  display: none;
 }
 
 .museum-hub__artwork-label {

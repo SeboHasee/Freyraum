@@ -61,12 +61,44 @@ export interface HubVisualTokens {
   museumWall: string;
 }
 
+export interface HubWallTransform {
+  origin: Point3D;
+  axisU: Point3D;
+  axisV: Point3D;
+  width: number;
+  height: number;
+}
+
+export interface HubRoomConfig {
+  floorOutline?: readonly Point3D[];
+  bounds?: {
+    min: Point3D;
+    max: Point3D;
+  };
+  floorY?: number;
+  ceilingY?: number;
+  wallThickness?: number;
+}
+
+export interface HubHangingRules {
+  verticalBand?: {
+    minY: number;
+    maxY: number;
+  };
+  sideMargin?: number;
+  doorwayClearance?: number;
+}
+
 export interface HubWallConfig {
   id: string;
   group: 'left' | 'right';
   planeAspect: number;
   quad: Quad;
   safePolygon?: Polygon;
+  drawableRegion?: Polygon;
+  exclusionPolygons?: readonly Polygon[];
+  transform?: HubWallTransform;
+  hangingBand?: HangingBand;
   shadowVector?: Point2D;
   room?: RoomWallModel;
 }
@@ -77,6 +109,12 @@ export interface HubSlotPlacement {
   mountedHeight: number;
   /** v3 wall-local anchor in metric-like units; `center` remains migration-only. */
   anchor?: Point2D;
+  /** v4 normalized wall-local anchor (0..1, y grows upward). */
+  uv?: Point2D;
+  targetSizePolicy?: 'contain' | 'fixed-height';
+  minScale?: number;
+  maxScale?: number;
+  zOffset?: number;
   provisional?: boolean;
 }
 
@@ -96,6 +134,8 @@ export interface MuseumHubConfig {
   backgroundFallback: { src: string };
   visualTokens: HubVisualTokens;
   camera?: CameraCalibration;
+  room?: HubRoomConfig;
+  hangingRules?: HubHangingRules;
   walls: HubWallConfig[];
   fallbacks: {
     requireAllMapped: boolean;
@@ -114,7 +154,11 @@ export type ArtworkAspectClass = 'portrait' | 'landscape' | 'square' | 'panorami
 
 export interface ResolvedHubWall extends WallProjectionModel {
   group: 'left' | 'right';
+  transform: HubWallTransform;
   safePolygon: Point2D[];
+  drawableRegion?: Polygon;
+  exclusionPolygons?: readonly Polygon[];
+  hangingBand?: HangingBand;
   homography: ReturnType<typeof computeHomographyFromUnitSquare>;
   inverseHomography: ReturnType<typeof invertMatrix3x3>;
   room?: RoomWallModel;
@@ -157,6 +201,23 @@ export interface ResolvedHubPage {
 
 export type MuseumHubSource = 'injected' | 'legacy-migrated' | 'built-in-default' | 'v1-migrated';
 
+export interface ResolvedHubRoom {
+  floorOutline: readonly Point3D[];
+  bounds: {
+    min: Point3D;
+    max: Point3D;
+  };
+  dimensions: {
+    width: number;
+    height: number;
+    depth: number;
+  };
+  floorY: number;
+  ceilingY: number;
+  wallThickness: number;
+  wallIds: readonly string[];
+}
+
 export interface MuseumHubResolution {
   pages: readonly ResolvedHubPage[];
   slotToArtwork: ReadonlyMap<string, string>;
@@ -167,6 +228,8 @@ export interface MuseumHubResolution {
   stage: StageReference;
   visualTokens: HubVisualTokens;
   camera: CameraCalibration;
+  room: ResolvedHubRoom;
+  hangingRules: HubHangingRules;
   walls: readonly ResolvedHubWall[];
   wallById: ReadonlyMap<string, ResolvedHubWall>;
   selectionTimeoutMs: number;
@@ -189,6 +252,8 @@ export const HUB_CAMERA: CameraCalibration = {
   target: point3(0, 1.8, 0),
   verticalFovDeg: 42,
   near: 0.1,
+  far: 40,
+  lensShift: point(0, 0),
 };
 
 function roomWall(
@@ -216,6 +281,21 @@ function roomWall(
   };
 }
 
+function wallTransform(
+  origin: Point3D,
+  axisU: Point3D,
+  width: number,
+  height: number
+): HubWallTransform {
+  return {
+    origin,
+    axisU,
+    axisV: point3(0, 1, 0),
+    width,
+    height,
+  };
+}
+
 interface BaselineSlotDef {
   suffix: string;
   wallId: string;
@@ -240,6 +320,12 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
       point(332, 606),
       point(52, 610),
     ],
+    drawableRegion: [point(0.14, 0.14), point(2.633, 0.14), point(2.633, 3.26), point(0.14, 3.26)],
+    exclusionPolygons: [
+      [point(0, 0), point(0.3, 0), point(0.3, 1.35), point(0, 1.35)],
+    ],
+    transform: wallTransform(point3(-3.9, 0, 2), point3(0.433, 0, -0.902), 2.773, 3.4),
+    hangingBand: { minY: 0.42, maxY: 3.12, margin: 0.08 },
     shadowVector: point(-14, 18),
     room: roomWall(point3(-3.9, 0, 2), point3(0.433, 0, -0.902), 2.773, 3.4, [
       [point(0, 0), point(0.3, 0), point(0.3, 1.35), point(0, 1.35)],
@@ -261,6 +347,12 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
       point(712, 594),
       point(348, 598),
     ],
+    drawableRegion: [point(0.14, 0.14), point(2.56, 0.14), point(2.56, 2.86), point(0.14, 2.86)],
+    exclusionPolygons: [
+      [point(2.34, 0), point(2.7, 0), point(2.7, 1.7), point(2.34, 1.7)],
+    ],
+    transform: wallTransform(point3(-2.7, 0, -0.5), point3(1, 0, 0), 2.7, 3),
+    hangingBand: { minY: 0.42, maxY: 2.72, margin: 0.08 },
     shadowVector: point(-8, 14),
     room: roomWall(point3(-2.7, 0, -0.5), point3(1, 0, 0), 2.7, 3, [
       [point(2.34, 0), point(2.7, 0), point(2.7, 1.7), point(2.34, 1.7)],
@@ -282,6 +374,12 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
       point(1012, 598),
       point(666, 594),
     ],
+    drawableRegion: [point(0.14, 0.14), point(2.56, 0.14), point(2.56, 2.86), point(0.14, 2.86)],
+    exclusionPolygons: [
+      [point(0, 0), point(0.36, 0), point(0.36, 1.7), point(0, 1.7)],
+    ],
+    transform: wallTransform(point3(0, 0, -0.5), point3(1, 0, 0), 2.7, 3),
+    hangingBand: { minY: 0.42, maxY: 2.72, margin: 0.08 },
     shadowVector: point(8, 14),
     room: roomWall(point3(0, 0, -0.5), point3(1, 0, 0), 2.7, 3, [
       [point(0, 0), point(0.36, 0), point(0.36, 1.7), point(0, 1.7)],
@@ -303,6 +401,12 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
       point(1310, 610),
       point(1032, 606),
     ],
+    drawableRegion: [point(0.14, 0.14), point(2.633, 0.14), point(2.633, 3.26), point(0.14, 3.26)],
+    exclusionPolygons: [
+      [point(2.47, 0), point(2.773, 0), point(2.773, 1.35), point(2.47, 1.35)],
+    ],
+    transform: wallTransform(point3(2.7, 0, -0.5), point3(0.433, 0, 0.902), 2.773, 3.4),
+    hangingBand: { minY: 0.42, maxY: 3.12, margin: 0.08 },
     shadowVector: point(14, 18),
     room: roomWall(point3(2.7, 0, -0.5), point3(0.433, 0, 0.902), 2.773, 3.4, [
       [point(2.47, 0), point(2.773, 0), point(2.773, 1.35), point(2.47, 1.35)],
@@ -319,7 +423,12 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
       wallId: 'wall-left-outer',
       center: point(0.52, 0.58),
       anchor: point(1.4, 1.78),
+      uv: point(0.5, 0.52),
       mountedHeight: 1.24,
+      targetSizePolicy: 'contain',
+      minScale: 0.7,
+      maxScale: 1,
+      zOffset: 0.02,
     },
   },
   {
@@ -330,7 +439,12 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
       wallId: 'wall-left-inner',
       center: point(0.52, 0.56),
       anchor: point(1.35, 1.68),
+      uv: point(0.5, 0.56),
       mountedHeight: 0.84,
+      targetSizePolicy: 'contain',
+      minScale: 0.7,
+      maxScale: 1,
+      zOffset: 0.02,
     },
   },
   {
@@ -341,7 +455,12 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
       wallId: 'wall-right-inner',
       center: point(0.49, 0.56),
       anchor: point(1.35, 1.68),
+      uv: point(0.5, 0.56),
       mountedHeight: 0.9,
+      targetSizePolicy: 'contain',
+      minScale: 0.7,
+      maxScale: 1,
+      zOffset: 0.02,
     },
   },
   {
@@ -352,7 +471,12 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
       wallId: 'wall-right-outer',
       center: point(0.51, 0.56),
       anchor: point(1.38, 1.7),
+      uv: point(0.5, 0.5),
       mountedHeight: 0.7,
+      targetSizePolicy: 'contain',
+      minScale: 0.7,
+      maxScale: 1,
+      zOffset: 0.02,
     },
   },
 ];
@@ -392,6 +516,17 @@ function defaultVisualTokens(): HubVisualTokens {
   };
 }
 
+function defaultHangingRules(): HubHangingRules {
+  return {
+    verticalBand: {
+      minY: 0.42,
+      maxY: 3.12,
+    },
+    sideMargin: 0.14,
+    doorwayClearance: 0.08,
+  };
+}
+
 function expectedWallConvergence(referenceQuad: Quad): ProjectionConvergence {
   return classifyProjectionConvergence(referenceQuad, 0.01);
 }
@@ -408,6 +543,16 @@ function cloneQuad(quad: Quad): Quad {
 
 function clonePoint3(value: Point3D): Point3D {
   return point3(value.x, value.y, value.z);
+}
+
+function cloneWallTransform(transform: HubWallTransform): HubWallTransform {
+  return {
+    origin: clonePoint3(transform.origin),
+    axisU: clonePoint3(transform.axisU),
+    axisV: clonePoint3(transform.axisV),
+    width: transform.width,
+    height: transform.height,
+  };
 }
 
 function cloneRoomWall(room: RoomWallModel): RoomWallModel {
@@ -429,6 +574,8 @@ function cloneCamera(camera: CameraCalibration): CameraCalibration {
     target: clonePoint3(camera.target),
     verticalFovDeg: camera.verticalFovDeg,
     near: camera.near,
+    far: camera.far,
+    lensShift: camera.lensShift ? clonePoint(camera.lensShift) : undefined,
   };
 }
 
@@ -437,7 +584,10 @@ function toProjectionWall(wall: HubWallConfig): WallProjectionModel {
     id: wall.id,
     planeAspect: wall.planeAspect,
     quad: wall.quad,
-    safePolygon: wall.safePolygon ?? clonePolygon(shrinkPolygonTowardsCentroid(wall.quad, 0.92)),
+    safePolygon:
+      wall.drawableRegion
+      ?? wall.safePolygon
+      ?? clonePolygon(shrinkPolygonTowardsCentroid(wall.quad, 0.92)),
     shadowVector: wall.shadowVector,
     room: wall.room,
   };
@@ -448,9 +598,76 @@ function defaultWalls(): HubWallConfig[] {
     ...wall,
     quad: cloneQuad(wall.quad),
     safePolygon: wall.safePolygon ? clonePolygon(wall.safePolygon) : undefined,
+    drawableRegion: wall.drawableRegion ? clonePolygon(wall.drawableRegion) : undefined,
+    exclusionPolygons: wall.exclusionPolygons?.map((polygon) => clonePolygon(polygon)),
+    transform: wall.transform ? cloneWallTransform(wall.transform) : undefined,
+    hangingBand: wall.hangingBand ? { ...wall.hangingBand } : undefined,
     shadowVector: wall.shadowVector ? clonePoint(wall.shadowVector) : undefined,
     room: wall.room ? cloneRoomWall(wall.room) : undefined,
   }));
+}
+
+function deriveFloorOutlineFromWalls(walls: readonly HubWallConfig[]): Point3D[] {
+  const outline: Point3D[] = [];
+  for (const wall of walls) {
+    const transform = wall.transform;
+    if (!transform) continue;
+    outline.push(clonePoint3(transform.origin));
+  }
+  const lastWall = [...walls].reverse().find((wall) => wall.transform);
+  if (lastWall?.transform) {
+    outline.push(
+      point3(
+        lastWall.transform.origin.x + lastWall.transform.axisU.x * lastWall.transform.width,
+        lastWall.transform.origin.y + lastWall.transform.axisU.y * lastWall.transform.width,
+        lastWall.transform.origin.z + lastWall.transform.axisU.z * lastWall.transform.width
+      )
+    );
+  }
+  return outline.length >= 3 ? outline : [
+    point3(-3.9, 0, 2),
+    point3(-2.7, 0, -0.5),
+    point3(2.7, 0, -0.5),
+    point3(3.9, 0, 2),
+  ];
+}
+
+function deriveRoomBounds(
+  walls: readonly HubWallConfig[],
+  floorOutline: readonly Point3D[]
+): { min: Point3D; max: Point3D } {
+  const wallPoints = walls.flatMap((wall) => {
+    const transform = wall.transform;
+    if (!transform) return [];
+    return [
+      transform.origin,
+      point3(
+        transform.origin.x + transform.axisU.x * transform.width,
+        transform.origin.y + transform.axisU.y * transform.width + transform.axisV.y * transform.height,
+        transform.origin.z + transform.axisU.z * transform.width + transform.axisV.z * transform.height
+      ),
+    ];
+  });
+  const points = [...floorOutline, ...wallPoints];
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const zs = points.map((point) => point.z);
+  return {
+    min: point3(Math.min(...xs), Math.min(...ys), Math.min(...zs)),
+    max: point3(Math.max(...xs), Math.max(...ys), Math.max(...zs)),
+  };
+}
+
+function defaultRoomConfig(walls: readonly HubWallConfig[]): HubRoomConfig {
+  const floorOutline = deriveFloorOutlineFromWalls(walls);
+  const bounds = deriveRoomBounds(walls, floorOutline);
+  return {
+    floorOutline,
+    bounds,
+    floorY: bounds.min.y,
+    ceilingY: bounds.max.y,
+    wallThickness: 0.08,
+  };
 }
 
 function baselinePageSlots(pageIndex: number): HubSlotConfig[] {
@@ -474,12 +691,54 @@ function artworkAspect(artwork: Artwork): number {
     : 1;
 }
 
+function derivePlacementUv(
+  placement: HubSlotPlacement,
+  wall?: Pick<ResolvedHubWall, 'room'>
+): Point2D | undefined {
+  if (placement.uv) return clonePoint(placement.uv);
+  if (placement.anchor && wall?.room) {
+    return point(
+      clamp01(placement.anchor.x / Math.max(0.001, wall.room.width)),
+      clamp01(placement.anchor.y / Math.max(0.001, wall.room.height))
+    );
+  }
+  return point(clamp01(placement.center.x), clamp01(1 - placement.center.y));
+}
+
+function derivePlacementAnchor(
+  placement: HubSlotPlacement,
+  wall?: Pick<ResolvedHubWall, 'room'>
+): Point2D | undefined {
+  if (placement.anchor) return clonePoint(placement.anchor);
+  const uv = derivePlacementUv(placement, wall);
+  if (!uv || !wall?.room) return undefined;
+  return point(uv.x * wall.room.width, uv.y * wall.room.height);
+}
+
 function polygonCentroid(points: readonly Point2D[]): Point2D {
   const total = points.reduce(
     (accumulator, current) => point(accumulator.x + current.x, accumulator.y + current.y),
     point(0, 0)
   );
   return point(total.x / Math.max(1, points.length), total.y / Math.max(1, points.length));
+}
+
+function candidateFallbackWalls(
+  currentWallId: string,
+  walls: readonly ResolvedHubWall[],
+  preferredGroup: 'left' | 'right'
+): ResolvedHubWall[] {
+  const currentIndex = Math.max(0, walls.findIndex((wall) => wall.id === currentWallId));
+  return [...walls].sort((a, b) => {
+    const aSameWall = a.id === currentWallId ? -1 : 0;
+    const bSameWall = b.id === currentWallId ? -1 : 0;
+    if (aSameWall !== bSameWall) return aSameWall - bSameWall;
+    const aGroup = a.group === preferredGroup ? 0 : 1;
+    const bGroup = b.group === preferredGroup ? 0 : 1;
+    if (aGroup !== bGroup) return aGroup - bGroup;
+    return Math.abs(currentIndex - walls.findIndex((wall) => wall.id === a.id))
+      - Math.abs(currentIndex - walls.findIndex((wall) => wall.id === b.id));
+  });
 }
 
 function clampSlotPlacementToDrawableRegion(
@@ -643,12 +902,12 @@ function parseHangingBand(raw: unknown, height: number): HangingBand | null {
   return { minY, maxY, margin };
 }
 
-function parseRoomWall(raw: unknown): RoomWallModel | null {
+function parseWallTransform(raw: unknown): HubWallTransform | null {
   if (!raw || typeof raw !== 'object') return null;
   const candidate = raw as Record<string, unknown>;
   const origin = parsePoint3(candidate['origin']);
   const axisU = parsePoint3(candidate['axisU']);
-  const axisV = parsePoint3(candidate['axisV']);
+  const axisV = parsePoint3(candidate['axisV']) ?? point3(0, 1, 0);
   const width = candidate['width'];
   const height = candidate['height'];
   if (
@@ -667,18 +926,112 @@ function parseRoomWall(raw: unknown): RoomWallModel | null {
   const axisULength = Math.hypot(axisU.x, axisU.y, axisU.z);
   const axisVLength = Math.hypot(axisV.x, axisV.y, axisV.z);
   const axisDot = axisU.x * axisV.x + axisU.y * axisV.y + axisU.z * axisV.z;
-  if (axisULength < 0.92 || axisULength > 1.08 || axisVLength < 0.92 || axisVLength > 1.08 || Math.abs(axisDot) > 0.08) {
+  if (
+    axisULength < 0.92 ||
+    axisULength > 1.08 ||
+    axisVLength < 0.92 ||
+    axisVLength > 1.08 ||
+    Math.abs(axisDot) > 0.08
+  ) {
     return null;
   }
+  return { origin, axisU, axisV, width, height };
+}
+
+function parseHangingRules(raw: unknown): HubHangingRules | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const verticalBandRaw =
+    candidate['verticalBand'] && typeof candidate['verticalBand'] === 'object'
+      ? (candidate['verticalBand'] as Record<string, unknown>)
+      : null;
+  const verticalBand =
+    verticalBandRaw &&
+    typeof verticalBandRaw['minY'] === 'number' &&
+    Number.isFinite(verticalBandRaw['minY']) &&
+    typeof verticalBandRaw['maxY'] === 'number' &&
+    Number.isFinite(verticalBandRaw['maxY']) &&
+    verticalBandRaw['maxY'] > verticalBandRaw['minY']
+      ? {
+          minY: verticalBandRaw['minY'] as number,
+          maxY: verticalBandRaw['maxY'] as number,
+        }
+      : undefined;
+  const sideMargin =
+    typeof candidate['sideMargin'] === 'number' && Number.isFinite(candidate['sideMargin'])
+      ? Math.max(0, candidate['sideMargin'] as number)
+      : undefined;
+  const doorwayClearance =
+    typeof candidate['doorwayClearance'] === 'number' && Number.isFinite(candidate['doorwayClearance'])
+      ? Math.max(0, candidate['doorwayClearance'] as number)
+      : undefined;
+  if (!verticalBand && sideMargin === undefined && doorwayClearance === undefined) return null;
+  return {
+    verticalBand,
+    sideMargin,
+    doorwayClearance,
+  };
+}
+
+function parseRoomConfig(raw: unknown): HubRoomConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const floorOutline = Array.isArray(candidate['floorOutline'])
+    ? candidate['floorOutline'].map((entry) => parsePoint3(entry)).filter((entry): entry is Point3D => entry !== null)
+    : [];
+  const boundsRaw =
+    candidate['bounds'] && typeof candidate['bounds'] === 'object'
+      ? (candidate['bounds'] as Record<string, unknown>)
+      : null;
+  const min = boundsRaw ? parsePoint3(boundsRaw['min']) : null;
+  const max = boundsRaw ? parsePoint3(boundsRaw['max']) : null;
+  const floorY =
+    typeof candidate['floorY'] === 'number' && Number.isFinite(candidate['floorY'])
+      ? (candidate['floorY'] as number)
+      : undefined;
+  const ceilingY =
+    typeof candidate['ceilingY'] === 'number' && Number.isFinite(candidate['ceilingY'])
+      ? (candidate['ceilingY'] as number)
+      : undefined;
+  const wallThickness =
+    typeof candidate['wallThickness'] === 'number' && Number.isFinite(candidate['wallThickness'])
+      ? Math.max(0.01, candidate['wallThickness'] as number)
+      : undefined;
+  if (floorOutline.length === 0 && (!min || !max) && floorY === undefined && ceilingY === undefined && wallThickness === undefined) {
+    return null;
+  }
+  return {
+    floorOutline: floorOutline.length >= 3 ? floorOutline : undefined,
+    bounds: min && max ? { min, max } : undefined,
+    floorY,
+    ceilingY,
+    wallThickness,
+  };
+}
+
+function parseRoomWall(raw: unknown): RoomWallModel | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const candidate = raw as Record<string, unknown>;
+  const transform = parseWallTransform(raw);
+  if (!transform) return null;
   const safePolygon = parsePolygon(candidate['safePolygon']);
   const rawDoorways = Array.isArray(candidate['doorwayExclusions']) ? candidate['doorwayExclusions'] : [];
   const doorwayExclusions = rawDoorways.map((doorway) => parsePolygon(doorway)).filter((doorway): doorway is Point2D[] => doorway !== null);
-  const hangingBand = parseHangingBand(candidate['hangingBand'], height);
+  const hangingBand = parseHangingBand(candidate['hangingBand'], transform.height);
   if (!safePolygon || !hangingBand) return null;
   const inBounds = (corner: Point2D): boolean =>
-    corner.x >= 0 && corner.x <= width && corner.y >= 0 && corner.y <= height;
+    corner.x >= 0 && corner.x <= transform.width && corner.y >= 0 && corner.y <= transform.height;
   if (!safePolygon.every(inBounds) || doorwayExclusions.some((doorway) => !doorway.every(inBounds))) return null;
-  return { origin, axisU, axisV, width, height, safePolygon, doorwayExclusions, hangingBand };
+  return {
+    origin: transform.origin,
+    axisU: transform.axisU,
+    axisV: transform.axisV,
+    width: transform.width,
+    height: transform.height,
+    safePolygon,
+    doorwayExclusions,
+    hangingBand,
+  };
 }
 
 function parseCamera(raw: unknown): CameraCalibration | null {
@@ -688,6 +1041,11 @@ function parseCamera(raw: unknown): CameraCalibration | null {
   const target = parsePoint3(candidate['target']);
   const verticalFovDeg = candidate['verticalFovDeg'];
   const near = candidate['near'];
+  const far =
+    typeof candidate['far'] === 'number' && Number.isFinite(candidate['far'])
+      ? (candidate['far'] as number)
+      : 40;
+  const lensShift = parsePoint(candidate['lensShift']);
   if (
     !position ||
     !target ||
@@ -695,14 +1053,16 @@ function parseCamera(raw: unknown): CameraCalibration | null {
     typeof near !== 'number' ||
     !Number.isFinite(verticalFovDeg) ||
     !Number.isFinite(near) ||
+    !Number.isFinite(far) ||
     verticalFovDeg < 15 ||
     verticalFovDeg > 100 ||
     near <= 0 ||
+    far <= near ||
     Math.hypot(position.x - target.x, position.y - target.y, position.z - target.z) < 0.1
   ) {
     return null;
   }
-  return { position, target, verticalFovDeg, near };
+  return { position, target, verticalFovDeg, near, far, lensShift: lensShift ?? undefined };
 }
 
 function parseQuad(raw: unknown): Quad | null {
@@ -751,11 +1111,51 @@ function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | n
     warnings.push(`wall "${id}" ignored: quad must be convex and non-degenerate.`);
     return null;
   }
-  const safePolygon = parsePolygon(candidate['safePolygon'])
+  const safePolygon =
+    parsePolygon(candidate['safePolygon'])
     ?? clonePolygon(shrinkPolygonTowardsCentroid(quad, 0.92));
-  const room = parseRoomWall(candidate['room']);
-  if (candidate['room'] !== undefined && !room) {
+  const drawableRegion =
+    parsePolygon(candidate['drawableRegion'])
+    ?? parsePolygon(candidate['safePolygon'])
+    ?? undefined;
+  const exclusionPolygons = Array.isArray(candidate['exclusionPolygons'])
+    ? candidate['exclusionPolygons']
+        .map((entry) => parsePolygon(entry))
+        .filter((entry): entry is Point2D[] => entry !== null)
+    : undefined;
+  const transform = parseWallTransform(candidate['transform']);
+  const hangingBandFromTransform =
+    transform ? parseHangingBand(candidate['hangingBand'], transform.height) : null;
+  const legacyRoom = parseRoomWall(candidate['room']);
+  let room = legacyRoom ?? undefined;
+  if (candidate['room'] !== undefined && !legacyRoom && candidate['transform'] === undefined) {
     warnings.push(`wall "${id}": v3 room plane is invalid; using the calibrated default plane when available.`);
+  }
+  if (candidate['transform'] !== undefined && !transform) {
+    warnings.push(`wall "${id}": transform is invalid; falling back to the legacy room plane when available.`);
+  }
+  if (transform) {
+    room = {
+      origin: clonePoint3(transform.origin),
+      axisU: clonePoint3(transform.axisU),
+      axisV: clonePoint3(transform.axisV),
+      width: transform.width,
+      height: transform.height,
+      safePolygon:
+        drawableRegion
+        ?? legacyRoom?.safePolygon
+        ?? [
+          point(0.14, 0.14),
+          point(transform.width - 0.14, 0.14),
+          point(transform.width - 0.14, transform.height - 0.14),
+          point(0.14, transform.height - 0.14),
+        ],
+      doorwayExclusions: exclusionPolygons ?? legacyRoom?.doorwayExclusions ?? [],
+      hangingBand:
+        hangingBandFromTransform
+        ?? legacyRoom?.hangingBand
+        ?? { minY: 0.42, maxY: transform.height - 0.28, margin: 0.08 },
+    };
   }
   if (!polygonIsClockwise(quad)) warnings.push(`wall "${id}": quad was normalized to clockwise winding.`);
   if (Math.abs(polygonSignedArea(safePolygon)) <= 1e-6) {
@@ -767,6 +1167,16 @@ function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | n
     planeAspect,
     quad,
     safePolygon,
+    drawableRegion: drawableRegion ? clonePolygon(drawableRegion) : undefined,
+    exclusionPolygons: exclusionPolygons?.map((polygon) => clonePolygon(polygon)),
+    transform: transform ? cloneWallTransform(transform) : room ? {
+      origin: clonePoint3(room.origin),
+      axisU: clonePoint3(room.axisU),
+      axisV: clonePoint3(room.axisV),
+      width: room.width,
+      height: room.height,
+    } : undefined,
+    hangingBand: hangingBandFromTransform ?? room?.hangingBand,
     shadowVector: parseShadowVector(candidate['shadowVector']),
     room: room ?? undefined,
   };
@@ -776,19 +1186,39 @@ function sanitizeV2Placement(raw: unknown): HubSlotPlacement | null {
   if (!raw || typeof raw !== 'object') return null;
   const candidate = raw as Record<string, unknown>;
   const wallId = typeof candidate['wallId'] === 'string' ? candidate['wallId'].trim() : '';
-  const center = parsePoint(candidate['center'], true);
+  const uv = parsePoint(candidate['uv'], true);
+  const center = parsePoint(candidate['center'], true) ?? (uv ? point(clamp01(uv.x), clamp01(1 - uv.y)) : null);
   const anchor = parsePoint(candidate['anchor']);
-  const maxMountedHeight = anchor ? 8 : 0.9;
+  const maxMountedHeight = anchor || uv ? 8 : 0.9;
   const mountedHeight =
     typeof candidate['mountedHeight'] === 'number' && Number.isFinite(candidate['mountedHeight'])
       ? Math.max(0.04, Math.min(maxMountedHeight, candidate['mountedHeight'] as number))
       : NaN;
+  const targetSizePolicy =
+    candidate['targetSizePolicy'] === 'fixed-height' ? 'fixed-height' : 'contain';
+  const minScale =
+    typeof candidate['minScale'] === 'number' && Number.isFinite(candidate['minScale'])
+      ? Math.max(0.4, Math.min(1, candidate['minScale'] as number))
+      : 0.7;
+  const maxScale =
+    typeof candidate['maxScale'] === 'number' && Number.isFinite(candidate['maxScale'])
+      ? Math.max(1, Math.min(2.5, candidate['maxScale'] as number))
+      : 1;
+  const zOffset =
+    typeof candidate['zOffset'] === 'number' && Number.isFinite(candidate['zOffset'])
+      ? Math.max(0.001, Math.min(0.12, candidate['zOffset'] as number))
+      : 0.02;
   if (!wallId || !center || Number.isNaN(mountedHeight)) return null;
   return {
     wallId,
     center,
     mountedHeight,
     anchor: anchor ?? undefined,
+    uv: uv ?? undefined,
+    targetSizePolicy,
+    minScale,
+    maxScale,
+    zOffset,
     provisional: candidate['provisional'] === true,
   };
 }
@@ -939,6 +1369,10 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   if (cfg['camera'] !== undefined && !parseCamera(cfg['camera'])) {
     warnings.push('museum-hub camera is invalid; using built-in calibrated camera.');
   }
+  const hangingRules = parseHangingRules(cfg['hangingRules']) ?? defaultHangingRules();
+  if (cfg['hangingRules'] !== undefined && !parseHangingRules(cfg['hangingRules'])) {
+    warnings.push('museum-hub hangingRules are invalid; using built-in doorway/band defaults.');
+  }
 
   const fallbacks = sanitizeFallbacks(cfg['fallbacks']);
   const rawSlots = Array.isArray(cfg['slots']) ? (cfg['slots'] as unknown[]) : [];
@@ -959,6 +1393,10 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   });
   if (parsedWalls.length > 0 && walls.length === 0) {
     warnings.push('museum-hub walls were invalid; using built-in calibrated wall planes.');
+  }
+  const room = parseRoomConfig(cfg['room']) ?? defaultRoomConfig(effectiveWalls);
+  if (cfg['room'] !== undefined && !parseRoomConfig(cfg['room'])) {
+    warnings.push('museum-hub room is invalid; deriving floor/ceiling layout from wall transforms.');
   }
 
   const version = typeof cfg['version'] === 'number' ? (cfg['version'] as number) : 1;
@@ -1021,13 +1459,15 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
 
   return {
     config: {
-      version: 3,
+      version: Math.max(4, version),
       coverage: 'all-active-artworks',
       stage,
       background: { src: backgroundSrc, aspect: backgroundAspect },
       backgroundFallback: { src: backgroundFallbackSrc },
       visualTokens: tokens,
       camera,
+      room,
+      hangingRules,
       walls: effectiveWalls,
       fallbacks,
       slots,
@@ -1095,13 +1535,15 @@ export function migrateLegacyHotspots(raw: unknown): SanitizedConfig {
   if (slots.length === 0) return { config: null, warnings, source: 'built-in-default' };
   return {
     config: {
-      version: 3,
+      version: 4,
       coverage: 'all-active-artworks',
       stage: { ...HUB_STAGE },
       background: { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT },
       backgroundFallback: { src: HUB_BACKGROUND_SRC },
       visualTokens: defaultVisualTokens(),
       camera: cloneCamera(HUB_CAMERA),
+      room: defaultRoomConfig(walls),
+      hangingRules: defaultHangingRules(),
       walls,
       fallbacks: sanitizeFallbacks(undefined),
       slots,
@@ -1131,13 +1573,15 @@ export function resolveMuseumHub(
     config = sanitized.config;
   } else {
     config = {
-      version: 3,
+      version: 4,
       coverage: 'all-active-artworks',
       stage: { ...HUB_STAGE },
       background: { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT },
       backgroundFallback: { src: HUB_BACKGROUND_SRC },
       visualTokens: defaultVisualTokens(),
       camera: cloneCamera(HUB_CAMERA),
+      room: defaultRoomConfig(defaultWalls()),
+      hangingRules: defaultHangingRules(),
       walls: defaultWalls(),
       fallbacks: sanitizeFallbacks(undefined),
       slots: baselinePageSlots(0).map((slot) => {
@@ -1154,6 +1598,8 @@ export function resolveMuseumHub(
   const background = config.background;
   const backgroundFallback = config.backgroundFallback;
   const camera = config.camera ? cloneCamera(config.camera) : cloneCamera(HUB_CAMERA);
+  const roomConfig = config.room ?? defaultRoomConfig(config.walls);
+  const hangingRules = config.hangingRules ?? defaultHangingRules();
   const selectionTimeoutMs = config.fallbacks.selectionTimeoutMs;
   const autoPlaceUnmapped = config.fallbacks.autoPlaceUnmapped;
 
@@ -1212,9 +1658,25 @@ export function resolveMuseumHub(
       warnings.push(`wall "${wall.id}" could not build a homography and will be ignored.`);
       continue;
     }
+    const transform = wall.transform
+      ? cloneWallTransform(wall.transform)
+      : room
+        ? {
+            origin: clonePoint3(room.origin),
+            axisU: clonePoint3(room.axisU),
+            axisV: clonePoint3(room.axisV),
+            width: room.width,
+            height: room.height,
+          }
+        : null;
+    if (!transform) {
+      warnings.push(`wall "${wall.id}" is missing a room transform and will be ignored.`);
+      continue;
+    }
     walls.push({
       id: wall.id,
       group: wall.group,
+      transform,
       planeAspect: wall.planeAspect,
       quad,
       safePolygon,
@@ -1233,6 +1695,27 @@ export function resolveMuseumHub(
     });
   }
   const wallById = new Map(walls.map((wall) => [wall.id, wall]));
+  const roomFloorOutline = roomConfig.floorOutline?.map((point) => clonePoint3(point))
+    ?? deriveFloorOutlineFromWalls(config.walls);
+  const roomBounds = roomConfig.bounds
+    ? {
+        min: clonePoint3(roomConfig.bounds.min),
+        max: clonePoint3(roomConfig.bounds.max),
+      }
+    : deriveRoomBounds(config.walls, roomFloorOutline);
+  const room: ResolvedHubRoom = {
+    floorOutline: roomFloorOutline,
+    bounds: roomBounds,
+    dimensions: {
+      width: Math.max(0.01, roomBounds.max.x - roomBounds.min.x),
+      height: Math.max(0.01, (roomConfig.ceilingY ?? roomBounds.max.y) - (roomConfig.floorY ?? roomBounds.min.y)),
+      depth: Math.max(0.01, roomBounds.max.z - roomBounds.min.z),
+    },
+    floorY: roomConfig.floorY ?? roomBounds.min.y,
+    ceilingY: roomConfig.ceilingY ?? roomBounds.max.y,
+    wallThickness: roomConfig.wallThickness ?? 0.08,
+    wallIds: walls.map((wall) => wall.id),
+  };
 
   const artworkIndexById = new Map<string, number>();
   artworks.forEach((artwork, index) => artworkIndexById.set(artwork.id, index));
@@ -1246,24 +1729,36 @@ export function resolveMuseumHub(
     const wall = wallById.get(slot.placement.wallId);
     const wallGroup = wall?.group ?? (slot.placement.wallId.includes('right') ? 'right' : 'left');
     const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
+    const placementUv = derivePlacementUv(slot.placement, wall);
     if (wall?.room && !slot.placement.anchor) {
       warnings.push(`slot "${slot.id}": room-local anchor missing; deriving it from the normalized center for calibrated placement.`);
     }
     const migratedAnchor =
-      (slot.placement.anchor
-        ? point(slot.placement.anchor.x * localScale.x, slot.placement.anchor.y * localScale.y)
-        : undefined) ??
-      (wall?.room
-        ? point(slot.placement.center.x * wall.room.width, (1 - slot.placement.center.y) * wall.room.height)
-        : undefined);
+      (() => {
+        const explicitAnchor = derivePlacementAnchor(slot.placement, wall);
+        if (explicitAnchor) {
+          return point(explicitAnchor.x * localScale.x, explicitAnchor.y * localScale.y);
+        }
+        if (placementUv && wall?.room) {
+          return point(placementUv.x * wall.room.width, placementUv.y * wall.room.height);
+        }
+        return wall?.room
+          ? point(slot.placement.center.x * wall.room.width, (1 - slot.placement.center.y) * wall.room.height)
+          : undefined;
+      })();
     const base: Omit<ResolvedHubSlot, 'artworkId' | 'artworkIndex' | 'displayLabel' | 'selectable' | 'disabledReason' | 'mappingSource' | 'artworkAspect'> = {
       id: slot.id,
       pageIndex,
       placement: {
         wallId: slot.placement.wallId,
-        center: clonePoint(slot.placement.center),
+        center: placementUv ? point(placementUv.x, 1 - placementUv.y) : clonePoint(slot.placement.center),
         mountedHeight: wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight,
         anchor: migratedAnchor ? clonePoint(migratedAnchor) : undefined,
+        uv: placementUv ? clonePoint(placementUv) : undefined,
+        targetSizePolicy: slot.placement.targetSizePolicy ?? 'contain',
+        minScale: slot.placement.minScale ?? 0.7,
+        maxScale: slot.placement.maxScale ?? 1,
+        zOffset: slot.placement.zOffset ?? 0.02,
         provisional: slot.placement.provisional === true,
       },
       wallGroup,
@@ -1407,6 +1902,11 @@ export function resolveMuseumHub(
                 : slot.placement.anchor
                   ? clonePoint(slot.placement.anchor)
                   : undefined,
+            uv: slot.placement.uv ? clonePoint(slot.placement.uv) : undefined,
+            targetSizePolicy: slot.placement.targetSizePolicy ?? 'contain',
+            minScale: slot.placement.minScale ?? 0.7,
+            maxScale: slot.placement.maxScale ?? 1,
+            zOffset: slot.placement.zOffset ?? 0.02,
             provisional: false,
           },
           artworkId: null,
@@ -1444,38 +1944,96 @@ export function resolveMuseumHub(
     if (!fitted.adjusted) continue;
     slot.placement.center = fitted.center;
     if (fitted.anchor) slot.placement.anchor = fitted.anchor;
+    if (fitted.anchor && wall?.room) {
+      slot.placement.uv = point(
+        clamp01(fitted.anchor.x / Math.max(0.001, wall.room.width)),
+        clamp01(fitted.anchor.y / Math.max(0.001, wall.room.height))
+      );
+      slot.placement.center = point(slot.placement.uv.x, 1 - slot.placement.uv.y);
+    }
     slot.placement.mountedHeight = fitted.mountedHeight;
     if (slot.placement.provisional) {
       warnings.push(`slot "${slot.id}": provisional placement was clamped to the wall drawable region.`);
     }
   }
 
+  const tryProjectResolvedSlot = (
+    slot: ResolvedHubSlot,
+    targetWall: ResolvedHubWall
+  ): { projection: ReturnType<typeof projectSlotArtwork>; placement: HubSlotPlacement } => {
+    const uv = slot.placement.uv
+      ?? derivePlacementUv(slot.placement, targetWall)
+      ?? point(slot.placement.center.x, 1 - slot.placement.center.y);
+    const sourceWall = wallById.get(slot.placement.wallId);
+    const sourceHeight = sourceWall?.room?.height ?? targetWall.room?.height ?? 1;
+    const targetHeight = targetWall.room?.height ?? sourceHeight;
+    const normalizedHeight = slot.placement.mountedHeight / Math.max(0.001, sourceHeight);
+    const placement: HubSlotPlacement = {
+      wallId: targetWall.id,
+      center: point(uv.x, 1 - uv.y),
+      anchor: targetWall.room ? point(uv.x * targetWall.room.width, uv.y * targetWall.room.height) : undefined,
+      uv: clonePoint(uv),
+      mountedHeight: targetWall.room
+        ? Math.max(0.04, normalizedHeight * targetHeight)
+        : slot.placement.mountedHeight,
+      targetSizePolicy: slot.placement.targetSizePolicy,
+      minScale: slot.placement.minScale,
+      maxScale: slot.placement.maxScale,
+      zOffset: slot.placement.zOffset,
+      provisional: slot.placement.provisional,
+    };
+    return {
+      projection: projectSlotArtwork(targetWall, placement, slot.artworkAspect, stage),
+      placement,
+    };
+  };
+
   const projectedBySlot = new Map<string, ReturnType<typeof projectSlotArtwork>>();
   for (const slot of resolved) {
     if (!slot.selectable || !slot.artworkId) continue;
-    const wall = wallById.get(slot.placement.wallId);
-    if (!wall) continue;
-    if (wall.projectionRealism && !wall.projectionRealism.passes) {
-      slot.selectable = false;
-      slot.disabledReason = 'projection-realism';
-      warnings.push(`slot "${slot.id}": wall projection realism rejected runtime composition.`);
-      continue;
+    const currentWall = wallById.get(slot.placement.wallId);
+    if (!currentWall) continue;
+    let resolvedWall: ResolvedHubWall | null = null;
+    let resolvedPlacement: HubSlotPlacement | null = null;
+    let projected: ReturnType<typeof projectSlotArtwork> = null;
+    const fallbackWalls = candidateFallbackWalls(currentWall.id, walls, currentWall.group);
+    for (const candidateWall of fallbackWalls) {
+      if (candidateWall.projectionRealism && !candidateWall.projectionRealism.passes) continue;
+      const attempt = tryProjectResolvedSlot(slot, candidateWall);
+      if (!attempt.projection) continue;
+      const withinSafePolygon = attempt.projection.projectedQuad.every((vertex) => pointInPolygon(vertex, candidateWall.safePolygon));
+      if (!withinSafePolygon) continue;
+      resolvedWall = candidateWall;
+      resolvedPlacement = attempt.placement;
+      projected = attempt.projection;
+      break;
     }
-    const projected = projectSlotArtwork(wall, slot.placement, slot.artworkAspect, stage);
     projectedBySlot.set(slot.id, projected);
-    if (!projected) {
+    if (!resolvedWall || !resolvedPlacement || !projected) {
       slot.selectable = false;
-      slot.disabledReason = 'invalid-projection';
+      slot.disabledReason = currentWall.projectionRealism && !currentWall.projectionRealism.passes
+        ? 'projection-realism'
+        : 'invalid-projection';
       warnings.push(`slot "${slot.id}": projected geometry is invalid and the slot was suppressed.`);
       continue;
     }
-    const withinSafePolygon = projected.projectedQuad.every((vertex) => pointInPolygon(vertex, wall.safePolygon));
-    if (!withinSafePolygon) {
-      slot.selectable = false;
-      slot.disabledReason = 'invalid-placement';
-      warnings.push(`slot "${slot.id}": projected artwork bounds extend outside wall safePolygon and the slot was suppressed.`);
-      projectedBySlot.delete(slot.id);
-      continue;
+    if (resolvedWall.id !== currentWall.id) {
+      slot.placement = {
+        ...resolvedPlacement,
+        center: clonePoint(resolvedPlacement.center),
+        anchor: resolvedPlacement.anchor ? clonePoint(resolvedPlacement.anchor) : undefined,
+        uv: resolvedPlacement.uv ? clonePoint(resolvedPlacement.uv) : undefined,
+      };
+      slot.wallGroup = resolvedWall.group;
+      warnings.push(`slot "${slot.id}": moved from "${currentWall.id}" to fallback wall "${resolvedWall.id}" after doorway/containment validation.`);
+    } else {
+      slot.placement = {
+        ...slot.placement,
+        center: clonePoint(resolvedPlacement.center),
+        anchor: resolvedPlacement.anchor ? clonePoint(resolvedPlacement.anchor) : undefined,
+        uv: resolvedPlacement.uv ? clonePoint(resolvedPlacement.uv) : undefined,
+        mountedHeight: resolvedPlacement.mountedHeight,
+      };
     }
     if (projected.shortEdge < HUB_MIN_PROJECTED_SHORT_EDGE_PX) {
       warnings.push(
@@ -1539,6 +2097,8 @@ export function resolveMuseumHub(
     stage,
     visualTokens: tokens,
     camera,
+    room,
+    hangingRules,
     walls,
     wallById,
     selectionTimeoutMs,
