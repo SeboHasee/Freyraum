@@ -28,8 +28,8 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     matrix generation for the hub
   - `MainMuseumHub`: manifest-driven DOM composition over the empty room photo
     — projectively mapped artwork buttons, room/wall paging, idle later-page
-    decode, wall-plane calibration mode (`?hubCalibrate=1`), and read-only
-    geometry diagnostics overlay (`?hubDebug=1`)
+    decode, wall-plane calibration mode, and read-only geometry diagnostics
+    overlay
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
