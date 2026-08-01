@@ -29,7 +29,13 @@
 
 ### Validation
 
-- Pending final repository validation for this release.
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `FREYRAUM_URL=http://127.0.0.1:4173/Freyraum/app.html FREYRAUM_VISUAL_STATE_FILTER=missing-background node scripts/visual-regression.mjs capture` ✅ *(after `npm install --no-save playwright` + `npx playwright install chromium`, served via `vite preview`)*.
 
 ## v0.84 — Calibrated 3D museum room reconstruction (2026-08-01)
 

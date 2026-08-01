@@ -14,7 +14,7 @@ const BASELINE_DIR = resolve(ROOT, '.visual-regression/baseline');
 const CURRENT_DIR = resolve(ROOT, '.visual-regression/current');
 const DIFF_DIR = resolve(ROOT, '.visual-regression/diff');
 
-const URL = process.env.FREYRAUM_URL ?? 'http://localhost:5173/app.html';
+const APP_URL = process.env.FREYRAUM_URL ?? 'http://localhost:5173/app.html';
 const CAPTURE_REPORT_FILENAME = 'capture-report.json';
 const HUB_BACKGROUND_FALLBACK_SRC = 'Backgrounds/museum-empty.png';
 const HUB_BACKGROUND_FALLBACK_DEPLOYED_PATH = 'backgrounds/museum-empty.png';
@@ -523,6 +523,15 @@ function dedupeFailures(failures) {
   });
 }
 
+function buildFixtureScript(fixture) {
+  return `(() => {
+    const fixture = ${JSON.stringify(fixture)};
+    window.__FREYRAUM_ARTWORKS = fixture.artworks;
+    window.__FREYRAUM_MUSEUM_HUB = fixture.museumHub;
+    window.__FREYRAUM_HUB_HOTSPOTS = undefined;
+  })();`;
+}
+
 async function readHubBackgroundSnapshot(page) {
   return await page.evaluate(() => {
     const hub = document.querySelector('.museum-hub');
@@ -624,8 +633,8 @@ async function ensureHubBackgroundFailSafe(page, state) {
           (image.currentSrc === expectedFallbackUrl || image.src === expectedFallbackUrl)
         );
       },
-      { timeout: 10_000 },
-      { expectedFallbackUrl: shouldUseNeutral ? null : fallbackUrl, neutral: shouldUseNeutral }
+      { expectedFallbackUrl: shouldUseNeutral ? null : fallbackUrl, neutral: shouldUseNeutral },
+      { timeout: 10_000 }
     );
     snapshot = await readHubBackgroundSnapshot(page);
   }
@@ -672,7 +681,16 @@ async function capture(targetDir) {
   const captureReport = [];
   for (const state of activeStates) {
     const page = await browser.newPage({ viewport: state.viewport, deviceScaleFactor: 1 });
-    await page.addInitScript((fixture) => {
+    if (state.fixture) {
+      await page.route('**/customer-artworks.js', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/javascript',
+          body: buildFixtureScript(state.fixture),
+        });
+      });
+    }
+    await page.addInitScript(() => {
       localStorage.setItem('freyraum-nav-hint-seen', '1');
       localStorage.setItem(
         'freyraum.preferences.v1',
@@ -686,13 +704,8 @@ async function capture(targetDir) {
           alwaysShowChrome: true,
         })
       );
-      if (fixture) {
-        window.__FREYRAUM_ARTWORKS = fixture.artworks;
-        window.__FREYRAUM_MUSEUM_HUB = fixture.museumHub;
-        window.__FREYRAUM_HUB_HOTSPOTS = undefined;
-      }
-    }, state.fixture ?? null);
-    await page.goto(`${URL}${state.query}`, { waitUntil: 'networkidle' });
+    });
+    await page.goto(`${APP_URL}${state.query}`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.loading-start-btn:not([disabled])', { timeout: 45_000 });
     await page.click('.loading-start-btn');
     await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 10_000 });
