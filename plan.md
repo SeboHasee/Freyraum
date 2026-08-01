@@ -6,6 +6,9 @@
   wall-local → world → camera → NDC → stage projection chain.
 - Shipping config now carries v3 room planes, local doorway voids, hanging
   bands, metric-like anchors, and a bounded room-background fallback.
+- Hub asset loads now flow through one safe wrapper that records structured 404
+  diagnostics, downgrades missing shipped/reference assets to `museum-empty.png`
+  or the neutral wall token, and keeps validation running.
 - Debug rendering and deterministic regression checks cover validity flags,
   horizon/vanishing guides, grey-token reach, and the missing-asset path.
 - Remaining validation evidence is recorded in `CHANGELOG.md`.

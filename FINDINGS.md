@@ -11,6 +11,10 @@
    neutral token surface; retrying the same URL risks an unbounded error loop.
 4. Gallery, hub, boot shell, fallback, and WebGL must resolve the same grey
    token before renderer construction to avoid a white transition surface.
+5. `Backgrounds/...` resolves to deployed `/backgrounds/...`, but
+   `museum-target.png` is intentionally reference-only and excluded from
+   `public/backgrounds/`; missing or unshipped hub asset paths therefore need a
+   structured non-fatal 404 downgrade, not a hard failure.
 
 ## Museum-hub topology + containment findings (v0.83, 2026-08-01)
 

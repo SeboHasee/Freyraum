@@ -153,6 +153,10 @@ assert.equal(
   backgroundFallback.getBackgroundFallbackCandidate('/backgrounds/missing.png', '/backgrounds/museum-empty.png', false),
   '/backgrounds/museum-empty.png'
 );
+assert.equal(backgroundFallback.isHubAssetNotFoundStatus(404), true);
+assert.equal(backgroundFallback.isHubAssetNotFoundStatus(500), false);
+assert.equal(backgroundFallback.isReferenceOnlyHubAssetPath('Backgrounds/museum-target.png'), true);
+assert.equal(backgroundFallback.isReferenceOnlyHubAssetPath('/backgrounds/museum-target.png'), true);
 assert.equal(
   backgroundFallback.getBackgroundFallbackCandidate('/backgrounds/missing.png', '/backgrounds/museum-empty.png', true),
   null
@@ -160,6 +164,20 @@ assert.equal(
 assert.equal(
   backgroundFallback.getBackgroundFallbackCandidate('/backgrounds/museum-empty.png', '/backgrounds/museum-empty.png', false),
   null
+);
+const referenceOnly = museumHub.resolveMuseumHub(
+  artworks,
+  {
+    version: 3,
+    background: { src: 'Backgrounds/museum-target.png', aspect: shippingConfig.background.aspect },
+    backgroundFallback: { src: 'Backgrounds/museum-target.png' },
+    slots: shippingConfig.slots,
+  },
+  null
+);
+assert.ok(
+  referenceOnly.warnings.some((warning) => /reference-only asset/i.test(warning)),
+  'reference-only hub asset paths must warn instead of silently failing hosted downloads'
 );
 
 // Token sources for artwork, boot, fallback, and renderer must never use a

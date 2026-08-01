@@ -10,8 +10,9 @@
   pixels before the terminal DOM transform is generated.
 - Added local safe polygons, doorway exclusions, hanging bands, and placement
   validity checks. Invalid doorway/hanging placements are solved before render.
-- Added a single 404-safe background fallback attempt and neutral museum-grey
-  continuation if both primary and fallback assets fail.
+- Added a safe hub asset loader wrapper: missing/unshipped background or
+  reference paths log structured 404 diagnostics, retry `museum-empty.png`
+  once, and degrade to the neutral museum-grey token without aborting.
 - Enforced the shared `#D8DDDB` background token across boot shell, gallery,
   hub, fallback, and WebGL clear color.
 - Extended `?hubDebug=1`, deterministic hub checks, visual-regression states,

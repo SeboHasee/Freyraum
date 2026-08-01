@@ -47,6 +47,7 @@ import {
   type StageReference,
   type WallProjectionModel,
 } from '../hub/projectiveGeometry';
+import { isReferenceOnlyHubAssetPath } from '../hub/backgroundFallback';
 
 // ── Schema types ─────────────────────────────────────────────────────────────
 
@@ -903,6 +904,16 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
     if (typeof fallback['src'] === 'string' && fallback['src'].trim()) {
       backgroundFallbackSrc = fallback['src'].trim();
     }
+  }
+  if (isReferenceOnlyHubAssetPath(backgroundSrc)) {
+    warnings.push(
+      `museum-hub background "${backgroundSrc}" is a reference-only asset and is not shipped to public/backgrounds; hosted builds will fall back at runtime.`
+    );
+  }
+  if (isReferenceOnlyHubAssetPath(backgroundFallbackSrc)) {
+    warnings.push(
+      `museum-hub background fallback "${backgroundFallbackSrc}" is a reference-only asset and is not shipped to public/backgrounds; hosted builds may continue on the neutral wall token.`
+    );
   }
   const camera = parseCamera(cfg['camera']) ?? cloneCamera(HUB_CAMERA);
   if (cfg['camera'] !== undefined && !parseCamera(cfg['camera'])) {

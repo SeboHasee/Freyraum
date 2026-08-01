@@ -28,7 +28,7 @@ import {
   type Point2D,
 } from './projectiveGeometry';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
-import { getBackgroundFallbackCandidate } from './backgroundFallback';
+import { loadHubImageAsset } from './hubAssetLoader';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -156,61 +156,32 @@ export class MainMuseumHub {
     image.draggable = false;
     const primaryBackgroundUrl = resolveBackgroundUrl(resolution.background.src);
     const fallbackBackgroundUrl = resolveBackgroundUrl(resolution.backgroundFallback.src);
-    const backgroundReady = new Promise<void>((resolve) => {
-      let settled = false;
-      let fallbackAttempted = false;
-      let timeout = 0;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeout);
-        resolve();
-      };
-      const armTimeout = (): void => {
-        window.clearTimeout(timeout);
-        timeout = window.setTimeout(() => {
-          if (tryFallback('timeout')) return;
-          hub.classList.add('has-image-error');
-          this.diagnostics.warn('background-fallback-failed', 'Hub background timed out; continuing with neutral museum-grey surface', {
-            primaryPath: resolution.background.src,
-            fallbackPath: resolution.backgroundFallback.src,
-          });
-          finish();
-        }, HUB_IMAGE_TIMEOUT_MS);
-      };
-      const tryFallback = (reason: '404' | 'timeout'): boolean => {
-        const candidate = getBackgroundFallbackCandidate(
-          primaryBackgroundUrl,
-          fallbackBackgroundUrl,
-          fallbackAttempted
-        );
-        if (!candidate) return false;
-        fallbackAttempted = true;
-        this.diagnostics.warn('background-missing', 'Hub background failed; retrying configured fallback without interrupting interaction', {
-          path: resolution.background.src,
-          reason,
-          fallbackPath: resolution.backgroundFallback.src,
-        });
-        image.src = candidate;
-        armTimeout();
-        return true;
-      };
-      image.addEventListener('load', () => {
-        hub.classList.remove('has-image-error');
-        finish();
-      });
-      image.addEventListener('error', () => {
-        if (tryFallback('404')) return;
+    const backgroundReady = loadHubImageAsset({
+      image,
+      role: 'background',
+      primaryPath: resolution.background.src,
+      primaryUrl: primaryBackgroundUrl,
+      fallbackPath: resolution.backgroundFallback.src,
+      fallbackUrl: fallbackBackgroundUrl,
+      timeoutMs: HUB_IMAGE_TIMEOUT_MS,
+      diagnostics: this.diagnostics,
+      context: {
+        hubSource: resolution.source,
+        stage: `${resolution.stage.width}x${resolution.stage.height}`,
+        selectableSlots: resolution.slotToArtwork.size,
+      },
+      onNeutralFallback: () => {
         hub.classList.add('has-image-error');
-        this.diagnostics.warn('background-fallback-failed', 'Hub background and fallback image failed; continuing with neutral museum-grey surface', {
-          primaryPath: resolution.background.src,
-          fallbackPath: resolution.backgroundFallback.src,
-        });
-        finish();
-      });
-      armTimeout();
+      },
+    }).then((outcome) => {
+      if (outcome.status === 'neutral-fallback') {
+        hub.classList.add('has-image-error');
+        return;
+      }
+      hub.classList.remove('has-image-error');
+    }).catch(() => {
+      hub.classList.add('has-image-error');
     });
-    image.src = primaryBackgroundUrl;
     stage.appendChild(image);
 
     const shade = document.createElement('div');

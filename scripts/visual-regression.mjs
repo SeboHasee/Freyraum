@@ -194,6 +194,12 @@ const states = [
     hubSteps: [],
     fixture: missingBackgroundFixture(),
     expectBackgroundFallback: true,
+    expectHubWarning: {
+      scope: 'hub',
+      event: 'hub-asset-missing',
+      path: 'Backgrounds/missing-room.png',
+      httpStatus: 404,
+    },
   },
   {
     name: 'hub__fixture__very-tall',
@@ -295,6 +301,23 @@ async function capture(targetDir) {
           () => document.querySelector('.museum-hub__image')?.getAttribute('src')?.includes('museum-empty.png'),
           { timeout: 10_000 }
         );
+      }
+      if (state.expectHubWarning) {
+        const warning = await page.evaluate((expected) => {
+          const entries = window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [];
+          return entries.find(
+            (entry) =>
+              entry.scope === expected.scope &&
+              entry.event === expected.event &&
+              entry.data &&
+              typeof entry.data === 'object' &&
+              entry.data.path === expected.path &&
+              entry.data.httpStatus === expected.httpStatus
+          ) ?? null;
+        }, state.expectHubWarning);
+        if (!warning) {
+          throw new Error(`${state.name}: missing background fallback warning was not recorded with structured 404 context`);
+        }
       }
       for (const step of state.hubSteps) {
         await page.keyboard.press(step);
