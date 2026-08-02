@@ -1,5 +1,37 @@
 # CHANGELOG
-> Latest markdown audit: 2026-08-01 (wall-plane museum hub projection).
+> Latest markdown audit: 2026-08-02 (square-room hub architectural quality tiers).
+
+## v0.87 — Square-room hub architectural quality tiers (2026-08-02)
+
+### Summary
+
+- Rebuilt `HubRoomRenderer` around a complete square-room shell: calibrated
+  front/left/right walls, an entry-side enclosure behind the camera, doorway
+  passage pockets, dark skirting shadow gaps, recessed ceiling light coves,
+  shallow artwork side depth, and soft contact shadows.
+- Added `ArchitecturalSurfaceFactory`, a shared procedural material set for
+  wall, floor, ceiling, trim, doorway pocket, light-strip, and artwork-edge
+  surfaces. Tileable normal/roughness maps are regenerated in place when the
+  active quality preset changes.
+- Quality presets now control the hub room too: pixel-ratio cap,
+  architectural-surface tile size, skylight shadow budget, and floor
+  reflection mode (`planar`, `ibl`, `off`). `MainMuseumHub` forwards preset
+  changes to the room renderer at runtime.
+- High and balanced presets now render an on-demand downscaled planar floor
+  reflection with Fresnel/roughness weighting; battery disables hub
+  reflections/environment/shadows and falls back to a diffuse mineral floor.
+- Rebuilt `customer-preview/freyraum-gallery.js` so the committed local preview
+  matches the runtime source.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
 
 ## v0.86 — Authoritative 3D museum-hub room pipeline (2026-08-01)
 

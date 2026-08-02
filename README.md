@@ -6,17 +6,21 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 
 - Runtime renderer: WebGL (WebGPU is opt-in probe mode only).
 - Startup flows from the loading screen into a manifest-driven Main Museum Hub:
-  the empty room photo (`museum-empty.png`) is the only runtime background and
-  every active artwork renders as an unframed projectively mapped button on a
-  calibrated wall plane. The shipping hub now splits the room into multiple
-  physical wall planes (left outer/inner and right inner/outer) so doorway-side
-  and rear-wall artworks no longer share one homography. Slots resolve by exact `Artwork.id` from
-  `customer-artworks/museum-hub.json`; one calibrated camera projects metric-like
-  wall planes, safe zones, doorway exclusions, hanging bands, and slot anchors
-  through a v3 room model. Legacy `hub-hotspots.json` / v1-v2 slot boxes migrate
-  automatically for recalibration. Larger exhibitions
-  paginate into additional room pages, and narrow-portrait viewports split each
-  room into left/right wall focus pages.
+  the customer room backdrop remains the environmental plate, while a dedicated
+  on-demand WebGL room scene renders calibrated front/left/right walls inside a
+  7 × 7 × 3.4 m square shell plus an entry enclosure behind the camera,
+  doorway passage pockets, skirting shadow gaps, recessed ceiling coves,
+  mounted artwork depth, and soft contact shadows.
+- Hub interaction DOM is now only the screen-space accessibility bridge. Slots
+  resolve by exact `Artwork.id` from `customer-artworks/museum-hub.json`; the
+  shipping v4 hub contract persists camera far/lens-shift, room envelope,
+  hanging rules, wall transforms/drawable regions/exclusion polygons, and
+  normalized slot UV / scale / z-offset metadata. Larger exhibitions paginate
+  into additional room pages, and narrow-portrait viewports split each room
+  into left/right wall focus pages.
+- Quality presets now also drive the hub room pixel ratio, architectural
+  surface tile size, skylight shadowing, and floor reflection strategy
+  (`planar`, `ibl`, `off`).
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
 - Lighting uses one fixed dramatic warm/cool configuration; there is no lighting-mode setting.

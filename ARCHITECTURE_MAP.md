@@ -15,7 +15,8 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 - `src/gallery/`
   - Gallery state, artwork switching, preload/warm orchestration, texture usage
 - `src/materials/`
-  - Painting and frame material behavior, procedural texture generation
+  - Painting and frame material behavior, procedural texture generation, and
+    shared architectural hub-shell materials/detail maps
 - `src/config/`
   - Startup and quality/runtime config models
   - `museumHub.ts`: unified museum-hub schema, v1/legacy migration, calibrated
@@ -27,11 +28,14 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 - `src/hub/`
   - `projectiveGeometry.ts`: camera/room projection math, room-plane/reference
     reconciliation, doorway-safe deterministic placement solving, polygon
-    checks, and CSS matrix generation for the hub
-  - `MainMuseumHub`: manifest-driven DOM composition over the empty room photo
-    — projectively mapped artwork buttons, room/wall paging, idle later-page
-    decode, wall-plane calibration mode, persistent artwork-ID selection state,
-    and read-only geometry diagnostics overlay
+    checks, and projected hub interaction geometry
+  - `HubRoomRenderer`: on-demand WebGL hub room shell, page groups, floor
+    reflection, shadow/environment setup, and quality-preset-driven hub surface
+    fidelity
+  - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
+    room/wall paging, idle later-page decode, background fallback/calibration
+    flow, persistent artwork-ID selection state, and read-only geometry
+    diagnostics overlay
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
@@ -49,8 +53,9 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
    and initializes managers with that authoritative value.
 2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
 3. `RendererManager` prewarms renderer pipeline.
-4. `MainMuseumHub` prepares the hub (background + first-page artwork decode)
-   under the loading overlay via `DestinationRouter.startAt('hub')`.
+4. `MainMuseumHub` prepares the hub (background fallback + room scene +
+   first-page artwork decode) under the loading overlay via
+   `DestinationRouter.startAt('hub')`.
 5. UI entry flow continues after readiness gates are satisfied.
 
 ## Render-loop behavior

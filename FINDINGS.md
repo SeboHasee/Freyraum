@@ -1,5 +1,27 @@
 # FINDINGS
 
+## Square-room hub architectural quality findings (v0.87, 2026-08-02)
+
+1. A square hub scene needs an entry-side enclosure behind the calibrated
+   camera; otherwise wide desktop and portrait wall-focus views can expose the
+   open back of the shell.
+2. Architectural hub surfaces should share one small material set with
+   tileable procedural maps regenerated in place when quality changes.
+   Rebinding maps on the same material instances preserves shader/program reuse
+   while still scaling texture cost by preset.
+3. An on-demand planar floor reflection is affordable in the static hub
+   because the scene only rerenders on mutation. Hiding reflection-sampling
+   floor meshes during the mirrored pass prevents feedback, while Fresnel plus
+   roughness weighting keeps the effect as satin sheen instead of mirror
+   glass.
+4. Mounted artwork depth should come from a shadow-casting edge shell plus a
+   separate soft contact shadow, not from the transparent image plane itself;
+   this keeps artwork imagery color-accurate while still letting the room
+   lighting explain the object in space.
+5. Runtime quality switches must update the hub renderer as well as
+   gallery/post-processing/lighting managers, or users can move between
+   destinations with mismatched performance and visual contracts.
+
 ## Authoritative 3D museum-hub room findings (v0.86, 2026-08-01)
 
 1. Once a hub scene has real wall-local transforms, the DOM should stop drawing
