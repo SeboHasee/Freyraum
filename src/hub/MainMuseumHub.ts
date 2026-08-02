@@ -32,6 +32,7 @@ import {
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import { loadHubImageAsset } from './hubAssetLoader';
 import { HubRoomRenderer } from './HubRoomRenderer';
+import type { QualityPreset } from '../config/quality';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -131,7 +132,7 @@ export class MainMuseumHub {
   private swipeStartY: number | null = null;
   private resizeRafId = 0;
 
-  constructor(app: HTMLElement, resolution: MuseumHubResolution) {
+  constructor(app: HTMLElement, resolution: MuseumHubResolution, preset: QualityPreset) {
     this.resolution = resolution;
     this.calibrating = isCalibrationRequested();
     this.debugGeometry = isHubDebugRequested();
@@ -198,7 +199,7 @@ export class MainMuseumHub {
       );
     });
     stage.appendChild(image);
-    this.hubRoomRenderer = new HubRoomRenderer(stage, resolution);
+    this.hubRoomRenderer = new HubRoomRenderer(stage, resolution, preset);
 
     const shade = document.createElement('div');
     shade.className = 'museum-hub__shade';
@@ -320,6 +321,12 @@ export class MainMuseumHub {
 
   onActivate(callback: () => void): void {
     this.activateCallback = callback;
+  }
+
+  /** Forwards quality-preset changes to the hub room renderer (v0.87). */
+  applyPreset(preset: QualityPreset): void {
+    if (this.disposed) return;
+    this.hubRoomRenderer.applyPreset(preset);
   }
 
   onSelectSlot(callback: (slot: ResolvedHubSlot) => void): void {

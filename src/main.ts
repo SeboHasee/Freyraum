@@ -1007,7 +1007,7 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
-  museumHub = new MainMuseumHub(app, museumHubResolution);
+  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset);
   museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
     alignPage: false,
     source: 'boot-gallery-selection',
@@ -1586,6 +1586,9 @@ async function main(): Promise<void> {
     lightingSetup.applyPreset(preset);
     artworkMesh.applyPreset(preset);
     galleryManager.applyPreset(preset);
+    // v0.87 — hub room renderer follows the same quality preset (pixel-ratio
+    // cap, surface tile size, skylight shadows, floor-reflection strategy).
+    museumHub?.applyPreset(preset);
 
     // v0.06: inspection-mode wiring. Drives two cost-gated features that
     // should only run under raking-light inspection profiles:
