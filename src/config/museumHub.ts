@@ -89,11 +89,23 @@ export interface HubHangingRules {
   doorwayClearance?: number;
 }
 
+/** Spatial group of a wall inside the square hub room. */
+export type HubWallGroup = 'front' | 'left' | 'right' | 'rear';
+
+/**
+ * `rendered` walls project into the stage and can carry artwork slots.
+ * `bounds-only` walls define the architectural envelope (e.g. the entrance
+ * wall behind the camera) but are never rendered nor calibrated.
+ */
+export type HubWallRole = 'rendered' | 'bounds-only';
+
 export interface HubWallConfig {
   id: string;
-  group: 'left' | 'right';
+  group: HubWallGroup;
+  role?: HubWallRole;
   planeAspect: number;
-  quad: Quad;
+  /** Stage-space reference quad; required for rendered walls. */
+  quad?: Quad;
   safePolygon?: Polygon;
   drawableRegion?: Polygon;
   exclusionPolygons?: readonly Polygon[];
@@ -146,6 +158,8 @@ export interface MuseumHubConfig {
     selectionTimeoutMs: number;
     selectionTimeout: 'open-exact-target-procedural';
   };
+  /** Hero-room capacity per overflow page (sanitized 1–8, default 6). */
+  slotsPerPage?: number;
   slots: HubSlotConfig[];
 }
 
@@ -153,7 +167,7 @@ export interface MuseumHubConfig {
 export type ArtworkAspectClass = 'portrait' | 'landscape' | 'square' | 'panoramic';
 
 export interface ResolvedHubWall extends WallProjectionModel {
-  group: 'left' | 'right';
+  group: HubWallGroup;
   transform: HubWallTransform;
   safePolygon: Point2D[];
   drawableRegion?: Polygon;
@@ -191,7 +205,7 @@ export interface ResolvedHubSlot {
     | null;
   mappingSource: 'explicit' | 'auto-placed';
   artworkAspect: number;
-  wallGroup: 'left' | 'right';
+  wallGroup: HubWallGroup;
 }
 
 export interface ResolvedHubPage {
@@ -232,6 +246,7 @@ export interface MuseumHubResolution {
   hangingRules: HubHangingRules;
   walls: readonly ResolvedHubWall[];
   wallById: ReadonlyMap<string, ResolvedHubWall>;
+  slotsPerPage: number;
   selectionTimeoutMs: number;
   source: MuseumHubSource;
   warnings: readonly string[];
@@ -240,7 +255,7 @@ export interface MuseumHubResolution {
 
 // ── Baseline inventory and defaults ──────────────────────────────────────────
 
-export const HUB_SLOTS_PER_PAGE = 4;
+export const HUB_SLOTS_PER_PAGE = 6;
 export const HUB_STAGE: StageReference = { width: 1366, height: 768 };
 export const HUB_BACKGROUND_ASPECT = HUB_STAGE.width / HUB_STAGE.height;
 export const HUB_BACKGROUND_SRC = 'Backgrounds/museum-empty.png';
@@ -249,12 +264,22 @@ export const HUB_SELECTION_TIMEOUT_MS = 1500;
 export const HUB_MIN_PROJECTED_SHORT_EDGE_PX = 72;
 export const HUB_CAMERA: CameraCalibration = {
   position: point3(0, 1.8, 7.5),
-  target: point3(0, 1.8, 0),
+  target: point3(0, 1.55, 0),
   verticalFovDeg: 42,
   near: 0.1,
   far: 40,
   lensShift: point(0, 0),
 };
+
+// ── Square hero-room envelope (v0.87) ────────────────────────────────────────
+// True 7 × 7 m square gallery: x ∈ [−3.5, +3.5], z ∈ [−2.5, +4.5], height 3.4 m.
+// Three rendered walls (front/left/right) plus a bounds-only entrance wall at
+// z = +4.5 that sits between the room and the camera and is never rendered.
+export const HUB_ROOM_SIZE = 7;
+export const HUB_ROOM_HEIGHT = 3.4;
+/** Mirrored side-wall doorways: z ∈ [+1.5, +2.55], 1.05 × 2.30 m, floor-based. */
+export const HUB_DOORWAY_WIDTH = 1.05;
+export const HUB_DOORWAY_HEIGHT = 2.3;
 
 function roomWall(
   origin: Point3D,
@@ -305,126 +330,105 @@ interface BaselineSlotDef {
 
 const DEFAULT_WALLS: readonly HubWallConfig[] = [
   {
-    id: 'wall-left-outer',
-    group: 'left',
-    planeAspect: 0.73,
+    id: 'wall-front',
+    group: 'front',
+    planeAspect: 2.06,
     quad: [
-      point(94, 188),
-      point(372, 236),
-      point(348, 622),
-      point(36, 626),
+      point(330.8, 189.56),
+      point(1035.2, 189.56),
+      point(1031.23, 529.84),
+      point(334.77, 529.84),
     ],
     safePolygon: [
-      point(110, 206),
-      point(356, 248),
-      point(332, 606),
-      point(52, 610),
+      point(348.54, 515.98),
+      point(1017.46, 515.98),
+      point(1020.95, 203.73),
+      point(345.05, 203.73),
     ],
-    drawableRegion: [point(0.14, 0.14), point(2.633, 0.14), point(2.633, 3.26), point(0.14, 3.26)],
-    exclusionPolygons: [
-      [point(0, 0), point(0.3, 0), point(0.3, 1.35), point(0, 1.35)],
-    ],
-    transform: wallTransform(point3(-3.9, 0, 2), point3(0.433, 0, -0.902), 2.773, 3.4),
+    drawableRegion: [point(0.14, 0.14), point(6.86, 0.14), point(6.86, 3.26), point(0.14, 3.26)],
+    transform: wallTransform(point3(-3.5, 0, -2.5), point3(1, 0, 0), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
     hangingBand: { minY: 0.42, maxY: 3.12, margin: 0.08 },
-    shadowVector: point(-14, 18),
-    room: roomWall(point3(-3.9, 0, 2), point3(0.433, 0, -0.902), 2.773, 3.4, [
-      [point(0, 0), point(0.3, 0), point(0.3, 1.35), point(0, 1.35)],
-    ]),
+    shadowVector: point(0, 14),
+    room: roomWall(point3(-3.5, 0, -2.5), point3(1, 0, 0), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
   },
   {
-    id: 'wall-left-inner',
-    group: 'left',
-    planeAspect: 1.06,
-    quad: [
-      point(362, 234),
-      point(688, 246),
-      point(732, 610),
-      point(332, 614),
-    ],
-    safePolygon: [
-      point(376, 250),
-      point(674, 260),
-      point(712, 594),
-      point(348, 598),
-    ],
-    drawableRegion: [point(0.14, 0.14), point(2.56, 0.14), point(2.56, 2.86), point(0.14, 2.86)],
-    exclusionPolygons: [
-      [point(2.34, 0), point(2.7, 0), point(2.7, 1.7), point(2.34, 1.7)],
-    ],
-    transform: wallTransform(point3(-2.7, 0, -0.5), point3(1, 0, 0), 2.7, 3),
-    hangingBand: { minY: 0.42, maxY: 2.72, margin: 0.08 },
-    shadowVector: point(-8, 14),
-    room: roomWall(point3(-2.7, 0, -0.5), point3(1, 0, 0), 2.7, 3, [
-      [point(2.34, 0), point(2.7, 0), point(2.7, 1.7), point(2.34, 1.7)],
-    ]),
-  },
-  {
-    id: 'wall-right-inner',
+    id: 'wall-right',
     group: 'right',
-    planeAspect: 1.05,
+    planeAspect: 2.06,
     quad: [
-      point(682, 246),
-      point(1006, 234),
-      point(1032, 614),
-      point(648, 610),
+      point(1035.2, 189.56),
+      point(1871.86, -193.13),
+      point(1827.83, 939.75),
+      point(1031.23, 529.84),
     ],
     safePolygon: [
-      point(698, 260),
-      point(990, 250),
-      point(1012, 598),
-      point(666, 594),
+      point(1036.31, 518.32),
+      point(1779.34, 870.92),
+      point(1816.23, -122.33),
+      point(1040.05, 201.63),
     ],
-    drawableRegion: [point(0.14, 0.14), point(2.56, 0.14), point(2.56, 2.86), point(0.14, 2.86)],
+    drawableRegion: [point(0.14, 0.14), point(6.86, 0.14), point(6.86, 3.26), point(0.14, 3.26)],
+    // u = z + 2.5 → doorway z ∈ [1.5, 2.55] maps to u ∈ [4.0, 5.05].
     exclusionPolygons: [
-      [point(0, 0), point(0.36, 0), point(0.36, 1.7), point(0, 1.7)],
+      [point(4, 0), point(5.05, 0), point(5.05, HUB_DOORWAY_HEIGHT), point(4, HUB_DOORWAY_HEIGHT)],
     ],
-    transform: wallTransform(point3(0, 0, -0.5), point3(1, 0, 0), 2.7, 3),
-    hangingBand: { minY: 0.42, maxY: 2.72, margin: 0.08 },
+    transform: wallTransform(point3(3.5, 0, -2.5), point3(0, 0, 1), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
+    hangingBand: { minY: 0.42, maxY: 3.12, margin: 0.08 },
     shadowVector: point(8, 14),
-    room: roomWall(point3(0, 0, -0.5), point3(1, 0, 0), 2.7, 3, [
-      [point(0, 0), point(0.36, 0), point(0.36, 1.7), point(0, 1.7)],
+    room: roomWall(point3(3.5, 0, -2.5), point3(0, 0, 1), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT, [
+      [point(4, 0), point(5.05, 0), point(5.05, HUB_DOORWAY_HEIGHT), point(4, HUB_DOORWAY_HEIGHT)],
     ]),
   },
   {
-    id: 'wall-right-outer',
-    group: 'right',
-    planeAspect: 0.72,
+    id: 'wall-rear',
+    group: 'rear',
+    role: 'bounds-only',
+    planeAspect: 2.06,
+    transform: wallTransform(point3(3.5, 0, 4.5), point3(-1, 0, 0), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
+  },
+  {
+    id: 'wall-left',
+    group: 'left',
+    planeAspect: 2.06,
     quad: [
-      point(998, 236),
-      point(1274, 188),
-      point(1330, 626),
-      point(1014, 622),
+      point(-505.86, -193.13),
+      point(330.8, 189.56),
+      point(334.77, 529.84),
+      point(-461.83, 939.75),
     ],
     safePolygon: [
-      point(1014, 248),
-      point(1256, 206),
-      point(1310, 610),
-      point(1032, 606),
+      point(-413.34, 870.92),
+      point(329.69, 518.32),
+      point(325.95, 201.63),
+      point(-450.23, -122.33),
     ],
-    drawableRegion: [point(0.14, 0.14), point(2.633, 0.14), point(2.633, 3.26), point(0.14, 3.26)],
+    drawableRegion: [point(0.14, 0.14), point(6.86, 0.14), point(6.86, 3.26), point(0.14, 3.26)],
+    // u = 4.5 − z → doorway z ∈ [1.5, 2.55] maps to u ∈ [1.95, 3.0].
     exclusionPolygons: [
-      [point(2.47, 0), point(2.773, 0), point(2.773, 1.35), point(2.47, 1.35)],
+      [point(1.95, 0), point(3, 0), point(3, HUB_DOORWAY_HEIGHT), point(1.95, HUB_DOORWAY_HEIGHT)],
     ],
-    transform: wallTransform(point3(2.7, 0, -0.5), point3(0.433, 0, 0.902), 2.773, 3.4),
+    transform: wallTransform(point3(-3.5, 0, 4.5), point3(0, 0, -1), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
     hangingBand: { minY: 0.42, maxY: 3.12, margin: 0.08 },
-    shadowVector: point(14, 18),
-    room: roomWall(point3(2.7, 0, -0.5), point3(0.433, 0, 0.902), 2.773, 3.4, [
-      [point(2.47, 0), point(2.773, 0), point(2.773, 1.35), point(2.47, 1.35)],
+    shadowVector: point(-8, 14),
+    room: roomWall(point3(-3.5, 0, 4.5), point3(0, 0, -1), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT, [
+      [point(1.95, 0), point(3, 0), point(3, HUB_DOORWAY_HEIGHT), point(1.95, HUB_DOORWAY_HEIGHT)],
     ]),
   },
 ];
 
+// 2 + 2 + 2 hero composition on a shared 1.55 m centerline. Side-wall pairs
+// are exact mirrors (u_left + u_right = 7): validated by resolveMuseumHub.
 const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
   {
-    suffix: 'wall-left.outer',
-    wallId: 'wall-left-outer',
+    suffix: 'wall-front.a',
+    wallId: 'wall-front',
     intendedUse: 'portrait',
     placement: {
-      wallId: 'wall-left-outer',
-      center: point(0.52, 0.58),
-      anchor: point(1.4, 1.78),
-      uv: point(0.5, 0.52),
-      mountedHeight: 1.24,
+      wallId: 'wall-front',
+      center: point(0.2857, 0.5441),
+      anchor: point(2, 1.55),
+      uv: point(0.2857, 0.4559),
+      mountedHeight: 1.4,
       targetSizePolicy: 'contain',
       minScale: 0.7,
       maxScale: 1,
@@ -432,47 +436,79 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     },
   },
   {
-    suffix: 'wall-left.inner',
-    wallId: 'wall-left-inner',
-    intendedUse: 'landscape',
-    placement: {
-      wallId: 'wall-left-inner',
-      center: point(0.52, 0.56),
-      anchor: point(1.35, 1.68),
-      uv: point(0.5, 0.56),
-      mountedHeight: 0.84,
-      targetSizePolicy: 'contain',
-      minScale: 0.7,
-      maxScale: 1,
-      zOffset: 0.02,
-    },
-  },
-  {
-    suffix: 'wall-right.inner',
-    wallId: 'wall-right-inner',
-    intendedUse: 'square',
-    placement: {
-      wallId: 'wall-right-inner',
-      center: point(0.49, 0.56),
-      anchor: point(1.35, 1.68),
-      uv: point(0.5, 0.56),
-      mountedHeight: 0.9,
-      targetSizePolicy: 'contain',
-      minScale: 0.7,
-      maxScale: 1,
-      zOffset: 0.02,
-    },
-  },
-  {
-    suffix: 'wall-right.outer',
-    wallId: 'wall-right-outer',
+    suffix: 'wall-front.b',
+    wallId: 'wall-front',
     intendedUse: 'panoramic',
     placement: {
-      wallId: 'wall-right-outer',
-      center: point(0.51, 0.56),
-      anchor: point(1.38, 1.7),
-      uv: point(0.5, 0.5),
-      mountedHeight: 0.7,
+      wallId: 'wall-front',
+      center: point(0.7143, 0.5441),
+      anchor: point(5, 1.55),
+      uv: point(0.7143, 0.4559),
+      mountedHeight: 1.4,
+      targetSizePolicy: 'contain',
+      minScale: 0.7,
+      maxScale: 1,
+      zOffset: 0.02,
+    },
+  },
+  {
+    suffix: 'wall-left.a',
+    wallId: 'wall-left',
+    intendedUse: 'landscape',
+    placement: {
+      wallId: 'wall-left',
+      center: point(0.8, 0.5441),
+      anchor: point(5.6, 1.55),
+      uv: point(0.8, 0.4559),
+      mountedHeight: 0.95,
+      targetSizePolicy: 'contain',
+      minScale: 0.7,
+      maxScale: 1,
+      zOffset: 0.02,
+    },
+  },
+  {
+    suffix: 'wall-left.b',
+    wallId: 'wall-left',
+    intendedUse: 'square',
+    placement: {
+      wallId: 'wall-left',
+      center: point(0.5679, 0.5441),
+      anchor: point(3.975, 1.55),
+      uv: point(0.5679, 0.4559),
+      mountedHeight: 1.2,
+      targetSizePolicy: 'contain',
+      minScale: 0.7,
+      maxScale: 1,
+      zOffset: 0.02,
+    },
+  },
+  {
+    suffix: 'wall-right.a',
+    wallId: 'wall-right',
+    intendedUse: 'landscape',
+    placement: {
+      wallId: 'wall-right',
+      center: point(0.2, 0.5441),
+      anchor: point(1.4, 1.55),
+      uv: point(0.2, 0.4559),
+      mountedHeight: 0.95,
+      targetSizePolicy: 'contain',
+      minScale: 0.7,
+      maxScale: 1,
+      zOffset: 0.02,
+    },
+  },
+  {
+    suffix: 'wall-right.b',
+    wallId: 'wall-right',
+    intendedUse: 'square',
+    placement: {
+      wallId: 'wall-right',
+      center: point(0.4321, 0.5441),
+      anchor: point(3.025, 1.55),
+      uv: point(0.4321, 0.4559),
+      mountedHeight: 1.2,
       targetSizePolicy: 'contain',
       minScale: 0.7,
       maxScale: 1,
@@ -486,10 +522,10 @@ const BASELINE_WALL_BY_SUFFIX = new Map<string, string>(
 );
 
 const BUILT_IN_SLOT_MAPPINGS: Readonly<Record<string, string>> = {
-  'room-01.wall-left.outer': 'quiet-coastline',
-  'room-01.wall-left.inner': 'electric-storm',
-  'room-01.wall-right.inner': 'tokyo-passage',
-  'room-01.wall-right.outer': 'golden-desert',
+  'room-01.wall-front.a': 'quiet-coastline',
+  'room-01.wall-front.b': 'golden-desert',
+  'room-01.wall-left.a': 'electric-storm',
+  'room-01.wall-left.b': 'tokyo-passage',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -523,7 +559,7 @@ function defaultHangingRules(): HubHangingRules {
       maxY: 3.12,
     },
     sideMargin: 0.14,
-    doorwayClearance: 0.08,
+    doorwayClearance: 0.35,
   };
 }
 
@@ -580,14 +616,17 @@ function cloneCamera(camera: CameraCalibration): CameraCalibration {
 }
 
 function toProjectionWall(wall: HubWallConfig): WallProjectionModel {
+  const quad: Quad = wall.quad
+    ? cloneQuad(wall.quad)
+    : [point(0, 0), point(1, 0), point(1, 1), point(0, 1)];
   return {
     id: wall.id,
     planeAspect: wall.planeAspect,
-    quad: wall.quad,
+    quad,
     safePolygon:
       wall.drawableRegion
       ?? wall.safePolygon
-      ?? clonePolygon(shrinkPolygonTowardsCentroid(wall.quad, 0.92)),
+      ?? clonePolygon(shrinkPolygonTowardsCentroid(quad, 0.92)),
     shadowVector: wall.shadowVector,
     room: wall.room,
   };
@@ -596,7 +635,7 @@ function toProjectionWall(wall: HubWallConfig): WallProjectionModel {
 function defaultWalls(): HubWallConfig[] {
   return DEFAULT_WALLS.map((wall) => ({
     ...wall,
-    quad: cloneQuad(wall.quad),
+    quad: wall.quad ? cloneQuad(wall.quad) : undefined,
     safePolygon: wall.safePolygon ? clonePolygon(wall.safePolygon) : undefined,
     drawableRegion: wall.drawableRegion ? clonePolygon(wall.drawableRegion) : undefined,
     exclusionPolygons: wall.exclusionPolygons?.map((polygon) => clonePolygon(polygon)),
@@ -625,10 +664,10 @@ function deriveFloorOutlineFromWalls(walls: readonly HubWallConfig[]): Point3D[]
     );
   }
   return outline.length >= 3 ? outline : [
-    point3(-3.9, 0, 2),
-    point3(-2.7, 0, -0.5),
-    point3(2.7, 0, -0.5),
-    point3(3.9, 0, 2),
+    point3(-3.5, 0, -2.5),
+    point3(3.5, 0, -2.5),
+    point3(3.5, 0, 4.5),
+    point3(-3.5, 0, 4.5),
   ];
 }
 
@@ -726,7 +765,7 @@ function polygonCentroid(points: readonly Point2D[]): Point2D {
 function candidateFallbackWalls(
   currentWallId: string,
   walls: readonly ResolvedHubWall[],
-  preferredGroup: 'left' | 'right'
+  preferredGroup: HubWallGroup
 ): ResolvedHubWall[] {
   const currentIndex = Math.max(0, walls.findIndex((wall) => wall.id === currentWallId));
   return [...walls].sort((a, b) => {
@@ -1093,15 +1132,36 @@ function sanitizeStage(raw: unknown): StageReference {
   });
 }
 
+function parseWallGroup(raw: unknown): HubWallGroup {
+  return raw === 'right' || raw === 'front' || raw === 'rear' ? raw : 'left';
+}
+
 function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | null {
   if (!raw || typeof raw !== 'object') return null;
   const candidate = raw as Record<string, unknown>;
   const id = typeof candidate['id'] === 'string' ? candidate['id'].trim() : '';
-  const group = candidate['group'] === 'right' ? 'right' : 'left';
+  const group = parseWallGroup(candidate['group']);
+  const role: HubWallRole = candidate['role'] === 'bounds-only' ? 'bounds-only' : 'rendered';
   const planeAspect =
     typeof candidate['planeAspect'] === 'number' && Number.isFinite(candidate['planeAspect'])
       ? Math.max(0.25, Math.min(8, candidate['planeAspect'] as number))
       : NaN;
+  if (role === 'bounds-only') {
+    const boundsTransform = parseWallTransform(candidate['transform']);
+    if (!id || !boundsTransform) {
+      warnings.push(`wall "${id || '?'}" ignored: bounds-only walls require an id and a valid transform.`);
+      return null;
+    }
+    return {
+      id,
+      group,
+      role,
+      planeAspect: Number.isNaN(planeAspect)
+        ? Math.max(0.25, Math.min(8, boundsTransform.width / Math.max(0.001, boundsTransform.height)))
+        : planeAspect,
+      transform: cloneWallTransform(boundsTransform),
+    };
+  }
   const quad = parseQuad(candidate['quad']);
   if (!id || Number.isNaN(planeAspect) || !quad) {
     warnings.push(`wall "${id || '?'}" ignored: requires id, planeAspect, and a four-corner quad.`);
@@ -1164,6 +1224,7 @@ function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | n
   return {
     id,
     group,
+    role: 'rendered',
     planeAspect,
     quad,
     safePolygon,
@@ -1257,15 +1318,17 @@ function migrateV1Placement(
   let preferredWallId = explicitWallId ?? '';
   if (!preferredWallId) {
     preferredWallId =
-      placement.cx < 0.25
-        ? 'wall-left-outer'
-        : placement.cx < 0.5
-          ? 'wall-left-inner'
-          : placement.cx < 0.75
-            ? 'wall-right-inner'
-            : 'wall-right-outer';
+      placement.cx < 0.33
+        ? 'wall-left'
+        : placement.cx < 0.67
+          ? 'wall-front'
+          : 'wall-right';
   }
-  const wall = walls.find((entry) => entry.id === preferredWallId) ?? walls[0]!;
+  const renderedWalls = walls.filter((entry) => entry.role !== 'bounds-only');
+  const wall =
+    renderedWalls.find((entry) => entry.id === preferredWallId)
+    ?? renderedWalls[0]
+    ?? walls[0]!;
   const projectionWall = toProjectionWall(wall);
   const centerStage = point(placement.cx * stage.width, placement.cy * stage.height);
   const localCenter = invertWallPoint(projectionWall, centerStage) ?? point(0.5, 0.5);
@@ -1375,6 +1438,13 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   }
 
   const fallbacks = sanitizeFallbacks(cfg['fallbacks']);
+  const slotsPerPage =
+    typeof cfg['slotsPerPage'] === 'number' && Number.isFinite(cfg['slotsPerPage'])
+      ? Math.max(1, Math.min(8, Math.round(cfg['slotsPerPage'] as number)))
+      : HUB_SLOTS_PER_PAGE;
+  if (cfg['slotsPerPage'] !== undefined && slotsPerPage !== cfg['slotsPerPage']) {
+    warnings.push(`museum-hub slotsPerPage was clamped to ${slotsPerPage} (allowed range 1–8).`);
+  }
   const rawSlots = Array.isArray(cfg['slots']) ? (cfg['slots'] as unknown[]) : [];
   if (rawSlots.length === 0) {
     warnings.push('museum-hub config ignored: expected a non-empty slots array.');
@@ -1385,7 +1455,7 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   const walls = parsedWalls.map((entry) => sanitizeWallConfig(entry, warnings)).filter((entry): entry is HubWallConfig => entry !== null);
   const defaultWallsById = new Map(defaultWalls().map((wall) => [wall.id, wall]));
   const effectiveWalls = (walls.length > 0 ? walls : defaultWalls()).map((wall) => {
-    if (wall.room) return wall;
+    if (wall.room || wall.role === 'bounds-only') return wall;
     const fallbackRoom = defaultWallsById.get(wall.id)?.room;
     if (!fallbackRoom) return wall;
     warnings.push(`wall "${wall.id}": missing v3 room plane; using built-in calibrated room plane.`);
@@ -1470,6 +1540,7 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
       hangingRules,
       walls: effectiveWalls,
       fallbacks,
+      slotsPerPage,
       slots,
     },
     warnings,
@@ -1546,6 +1617,7 @@ export function migrateLegacyHotspots(raw: unknown): SanitizedConfig {
       hangingRules: defaultHangingRules(),
       walls,
       fallbacks: sanitizeFallbacks(undefined),
+      slotsPerPage: HUB_SLOTS_PER_PAGE,
       slots,
     },
     warnings,
@@ -1584,6 +1656,7 @@ export function resolveMuseumHub(
       hangingRules: defaultHangingRules(),
       walls: defaultWalls(),
       fallbacks: sanitizeFallbacks(undefined),
+      slotsPerPage: HUB_SLOTS_PER_PAGE,
       slots: baselinePageSlots(0).map((slot) => {
         const mappedId = BUILT_IN_SLOT_MAPPINGS[slot.id];
         const exists = mappedId !== undefined && artworks.some((artwork) => artwork.id === mappedId);
@@ -1602,9 +1675,15 @@ export function resolveMuseumHub(
   const hangingRules = config.hangingRules ?? defaultHangingRules();
   const selectionTimeoutMs = config.fallbacks.selectionTimeoutMs;
   const autoPlaceUnmapped = config.fallbacks.autoPlaceUnmapped;
+  const slotsPerPage = config.slotsPerPage ?? HUB_SLOTS_PER_PAGE;
 
   const walls: ResolvedHubWall[] = [];
   for (const wall of config.walls) {
+    if (wall.role === 'bounds-only') continue;
+    if (!wall.quad) {
+      warnings.push(`wall "${wall.id}" is missing a reference quad and will be ignored.`);
+      continue;
+    }
     const referenceQuad = cloneQuad(wall.quad);
     const referenceSafePolygon =
       wall.safePolygon ? clonePolygon(wall.safePolygon) : clonePolygon(shrinkPolygonTowardsCentroid(referenceQuad, 0.92));
@@ -1629,6 +1708,21 @@ export function resolveMuseumHub(
         projectedSafePolygon = calibrated.projectedSafePolygon;
         localCalibrationScale = { x: calibrated.scaleX, y: calibrated.scaleY };
         projectionRealism = calibrated.realism;
+        // Homography decomposition recovers the wall plane only up to scale
+        // about the camera center. Rescale to the authored metric transform so
+        // the rendered 3D room (walls, floor, doorway pockets, reflections)
+        // shares one coherent world space. Rescaling about the camera keeps
+        // the stage projection bit-identical.
+        if (wall.transform && room.width > 0.000001) {
+          const metricScale = wall.transform.width / room.width;
+          if (Number.isFinite(metricScale) && metricScale > 0) {
+            room = rescaleRoomWallAboutCamera(room, camera.position, metricScale);
+            localCalibrationScale = {
+              x: calibrated.scaleX * metricScale,
+              y: calibrated.scaleY * metricScale,
+            };
+          }
+        }
       } else {
         warnings.push(`wall "${wall.id}": room plane could not be reconciled to the reference quad; using the stored room transform.`);
         projectedQuad = projectRoomWallQuad(room, camera, stage);
@@ -1695,6 +1789,7 @@ export function resolveMuseumHub(
     });
   }
   const wallById = new Map(walls.map((wall) => [wall.id, wall]));
+  validateMirrorSymmetry(config, warnings);
   const roomFloorOutline = roomConfig.floorOutline?.map((point) => clonePoint3(point))
     ?? deriveFloorOutlineFromWalls(config.walls);
   const roomBounds = roomConfig.bounds
@@ -1727,7 +1822,7 @@ export function resolveMuseumHub(
   for (const slot of config.slots) {
     const pageIndex = Math.max(0, parsePageIndex(slot.id));
     const wall = wallById.get(slot.placement.wallId);
-    const wallGroup = wall?.group ?? (slot.placement.wallId.includes('right') ? 'right' : 'left');
+    const wallGroup = wall?.group ?? heuristicWallGroup(slot.placement.wallId);
     const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
     const placementUv = derivePlacementUv(slot.placement, wall);
     if (wall?.room && !slot.placement.anchor) {
@@ -1916,10 +2011,10 @@ export function resolveMuseumHub(
           disabledReason: null,
           mappingSource: 'auto-placed',
           artworkAspect: 1,
-          wallGroup: slot.placement.wallId.includes('right') ? 'right' : 'left',
+          wallGroup: heuristicWallGroup(slot.placement.wallId),
         };
       });
-      const batch = overflow.slice(0, HUB_SLOTS_PER_PAGE);
+      const batch = overflow.slice(0, slotsPerPage);
       const consumed = new Set<string>();
       for (const artwork of batch) {
         const aspectClass = classifyArtworkAspect(artworkAspect(artwork));
@@ -2101,11 +2196,127 @@ export function resolveMuseumHub(
     hangingRules,
     walls,
     wallById,
+    slotsPerPage,
     selectionTimeoutMs,
     source,
     warnings,
     unmappedArtworkCount,
   };
+}
+
+function heuristicWallGroup(wallId: string): HubWallGroup {
+  if (wallId.includes('front')) return 'front';
+  if (wallId.includes('rear')) return 'rear';
+  return wallId.includes('right') ? 'right' : 'left';
+}
+
+/** Data-derived mirror tolerance for the square hero room (1 cm). */
+const MIRROR_TOLERANCE_M = 0.01;
+
+/**
+ * Uniformly rescales a calibrated wall plane about the camera position. The
+ * stage-space projection of a plane is invariant under this scaling, so it can
+ * reconcile the scale-ambiguous homography decomposition with the authored
+ * metric wall transform.
+ */
+function rescaleRoomWallAboutCamera(
+  room: RoomWallModel,
+  cameraPosition: Point3D,
+  scale: number
+): RoomWallModel {
+  const scaled = (value: Point2D): Point2D => point(value.x * scale, value.y * scale);
+  return {
+    origin: point3(
+      cameraPosition.x + (room.origin.x - cameraPosition.x) * scale,
+      cameraPosition.y + (room.origin.y - cameraPosition.y) * scale,
+      cameraPosition.z + (room.origin.z - cameraPosition.z) * scale
+    ),
+    axisU: clonePoint3(room.axisU),
+    axisV: clonePoint3(room.axisV),
+    width: room.width * scale,
+    height: room.height * scale,
+    safePolygon: room.safePolygon.map(scaled),
+    doorwayExclusions: room.doorwayExclusions.map((polygon) => polygon.map(scaled)),
+    hangingBand: {
+      minY: room.hangingBand.minY * scale,
+      maxY: room.hangingBand.maxY * scale,
+      margin: room.hangingBand.margin * scale,
+    },
+  };
+}
+
+function polygonSpanU(polygon: Polygon): { min: number; max: number } {
+  const xs = polygon.map((corner) => corner.x);
+  return { min: Math.min(...xs), max: Math.max(...xs) };
+}
+
+function polygonSpanV(polygon: Polygon): { min: number; max: number } {
+  const ys = polygon.map((corner) => corner.y);
+  return { min: Math.min(...ys), max: Math.max(...ys) };
+}
+
+/**
+ * The hero room mandates exact left/right mirror symmetry: doorway openings
+ * and slot placements on the right wall must mirror the left wall within 1 cm.
+ * Violations are surfaced as resolver warnings so the geometry gate fails.
+ */
+function validateMirrorSymmetry(config: MuseumHubConfig, warnings: string[]): void {
+  const leftWall = config.walls.find((wall) => wall.role !== 'bounds-only' && wall.group === 'left');
+  const rightWall = config.walls.find((wall) => wall.role !== 'bounds-only' && wall.group === 'right');
+  if (!leftWall?.room || !rightWall?.room) return;
+  if (
+    Math.abs(leftWall.room.width - rightWall.room.width) > MIRROR_TOLERANCE_M ||
+    Math.abs(leftWall.room.height - rightWall.room.height) > MIRROR_TOLERANCE_M
+  ) {
+    warnings.push('museum-hub mirror symmetry: left/right wall dimensions differ beyond the 1 cm tolerance.');
+    return;
+  }
+  const width = leftWall.room.width;
+  const leftDoors = leftWall.room.doorwayExclusions;
+  const rightDoors = rightWall.room.doorwayExclusions;
+  if (leftDoors.length !== rightDoors.length) {
+    warnings.push(
+      `museum-hub mirror symmetry: left wall has ${leftDoors.length} doorway(s) but right wall has ${rightDoors.length}.`
+    );
+  } else {
+    for (const leftDoor of leftDoors) {
+      const leftU = polygonSpanU(leftDoor);
+      const leftV = polygonSpanV(leftDoor);
+      const mirrored = rightDoors.some((rightDoor) => {
+        const rightU = polygonSpanU(rightDoor);
+        const rightV = polygonSpanV(rightDoor);
+        return (
+          Math.abs(rightU.min - (width - leftU.max)) <= MIRROR_TOLERANCE_M &&
+          Math.abs(rightU.max - (width - leftU.min)) <= MIRROR_TOLERANCE_M &&
+          Math.abs(rightV.min - leftV.min) <= MIRROR_TOLERANCE_M &&
+          Math.abs(rightV.max - leftV.max) <= MIRROR_TOLERANCE_M
+        );
+      });
+      if (!mirrored) {
+        warnings.push('museum-hub mirror symmetry: side-wall doorways are not mirrored within the 1 cm tolerance.');
+        break;
+      }
+    }
+  }
+  for (const slot of config.slots) {
+    if (slot.placement.wallId !== leftWall.id || !slot.placement.anchor) continue;
+    const counterpartId = slot.id.replace('wall-left', 'wall-right');
+    if (counterpartId === slot.id) continue;
+    const counterpart = config.slots.find((entry) => entry.id === counterpartId);
+    if (!counterpart || counterpart.placement.wallId !== rightWall.id || !counterpart.placement.anchor) {
+      warnings.push(`museum-hub mirror symmetry: slot "${slot.id}" has no mirrored counterpart "${counterpartId}".`);
+      continue;
+    }
+    if (
+      Math.abs(counterpart.placement.anchor.x - (width - slot.placement.anchor.x)) > MIRROR_TOLERANCE_M ||
+      Math.abs(counterpart.placement.anchor.y - slot.placement.anchor.y) > MIRROR_TOLERANCE_M ||
+      Math.abs(counterpart.placement.mountedHeight - slot.placement.mountedHeight) > MIRROR_TOLERANCE_M
+    ) {
+      warnings.push(
+        `museum-hub mirror symmetry: slot "${counterpartId}" does not mirror "${slot.id}" within the 1 cm tolerance.`
+      );
+    }
+  }
 }
 
 function parsePageIndex(slotId: string): number {

@@ -790,9 +790,14 @@ export class MainMuseumHub {
   }
 
   // ── View navigation ───────────────────────────────────────────────────────
+  // Narrow portrait mode splits every page into three wall-focus views:
+  // front (0) → left (1) → right (2).
+
+  private static readonly NARROW_VIEWS_PER_PAGE = 3;
+  private static readonly NARROW_WALL_ORDER: readonly ('front' | 'left' | 'right')[] = ['front', 'left', 'right'];
 
   private get viewCount(): number {
-    return this.narrowMode ? this.pageCount * 2 : this.pageCount;
+    return this.narrowMode ? this.pageCount * MainMuseumHub.NARROW_VIEWS_PER_PAGE : this.pageCount;
   }
 
   private stepView(direction: -1 | 1): void {
@@ -804,8 +809,10 @@ export class MainMuseumHub {
 
   private goToPage(pageIndex: number, slot?: ResolvedHubSlot): void {
     if (this.narrowMode) {
-      const wall = slot?.wallGroup === 'right' ? 1 : 0;
-      this.viewIndex = pageIndex * 2 + wall;
+      const wall = Math.max(0, MainMuseumHub.NARROW_WALL_ORDER.indexOf(
+        (slot?.wallGroup ?? 'front') as 'front' | 'left' | 'right'
+      ));
+      this.viewIndex = pageIndex * MainMuseumHub.NARROW_VIEWS_PER_PAGE + wall;
     } else {
       this.viewIndex = pageIndex;
     }
@@ -815,8 +822,12 @@ export class MainMuseumHub {
   private applyView(initial = false): void {
     if (this.disposed) return;
     this.viewIndex = Math.max(0, Math.min(this.viewCount - 1, this.viewIndex));
-    const pageIndex = this.narrowMode ? Math.floor(this.viewIndex / 2) : this.viewIndex;
-    const wallFocus = this.narrowMode ? (this.viewIndex % 2 === 0 ? 'left' : 'right') : 'full';
+    const pageIndex = this.narrowMode
+      ? Math.floor(this.viewIndex / MainMuseumHub.NARROW_VIEWS_PER_PAGE)
+      : this.viewIndex;
+    const wallFocus = this.narrowMode
+      ? MainMuseumHub.NARROW_WALL_ORDER[this.viewIndex % MainMuseumHub.NARROW_VIEWS_PER_PAGE]!
+      : 'full';
     this.hubRoomRenderer.setActivePage(pageIndex);
 
     for (const room of this.roomLayers) {
@@ -826,6 +837,9 @@ export class MainMuseumHub {
     this.element.dataset['wallFocus'] = wallFocus;
     if (wallFocus === 'full') {
       this.visual.style.setProperty('--hub-focus-scale', '1');
+      this.visual.style.setProperty('--hub-focus-x', '0%');
+    } else if (wallFocus === 'front') {
+      this.visual.style.setProperty('--hub-focus-scale', '1.45');
       this.visual.style.setProperty('--hub-focus-x', '0%');
     } else {
       this.visual.style.setProperty('--hub-focus-scale', '1.9');
@@ -840,8 +854,9 @@ export class MainMuseumHub {
     if (showPager) {
       this.pagerPrev.disabled = this.viewIndex === 0;
       this.pagerNext.disabled = this.viewIndex === this.viewCount - 1;
+      const wallLabel = wallFocus === 'front' ? 'Frontwand' : wallFocus === 'left' ? 'Linke Wand' : 'Rechte Wand';
       this.pagerCounter.textContent = this.narrowMode
-        ? `Raum ${pageIndex + 1}/${this.pageCount} · ${wallFocus === 'left' ? 'Linke' : 'Rechte'} Wand`
+        ? `Raum ${pageIndex + 1}/${this.pageCount} · ${wallLabel}`
         : `Raum ${pageIndex + 1} / ${this.pageCount}`;
     }
     this.applySelectionState(initial ? 'initial-view' : 'view-change');
@@ -852,8 +867,10 @@ export class MainMuseumHub {
     const wasNarrow = this.narrowMode;
     this.narrowMode = this.narrowQuery.matches;
     if (wasNarrow !== this.narrowMode) {
-      const pageIndex = wasNarrow ? Math.floor(this.viewIndex / 2) : this.viewIndex;
-      this.viewIndex = this.narrowMode ? pageIndex * 2 : pageIndex;
+      const pageIndex = wasNarrow
+        ? Math.floor(this.viewIndex / MainMuseumHub.NARROW_VIEWS_PER_PAGE)
+        : this.viewIndex;
+      this.viewIndex = this.narrowMode ? pageIndex * MainMuseumHub.NARROW_VIEWS_PER_PAGE : pageIndex;
       this.applyView();
     }
   };
@@ -1443,10 +1460,11 @@ export class MainMuseumHub {
     if (!config) return;
     for (const wall of config.walls) {
       const currentWall = this.resolution.wallById.get(wall.id);
-      if (!currentWall) continue;
+      if (!currentWall || !wall.quad) continue;
+      const nextQuad = wall.quad;
       currentWall.quad.forEach((corner, index) => {
-        corner.x = wall.quad[index]!.x;
-        corner.y = wall.quad[index]!.y;
+        corner.x = nextQuad[index]!.x;
+        corner.y = nextQuad[index]!.y;
       });
       const nextSafe = wall.safePolygon ?? [];
       currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
