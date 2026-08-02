@@ -118,6 +118,25 @@ export interface QualityPreset {
    */
   albedoFidelityFill: number;
 
+  // ── v0.87 square museum hub fields ────────────────────────────────────────
+  /**
+   * Floor gloss strategy for the square hub room. `planar` renders an
+   * on-demand mirrored reflection pass into a downscaled render target,
+   * `ibl` falls back to environment-map gloss only, `off` keeps the marble
+   * fully diffuse.
+   */
+  hubReflection: 'planar' | 'ibl' | 'off';
+  /**
+   * Downscale divisor for the hub planar-reflection render target relative to
+   * the hub canvas (2 → half resolution). Ignored unless `hubReflection`
+   * is `planar`.
+   */
+  hubReflectionDivisor: number;
+  /** Pixel size of the procedurally generated hub surface textures. */
+  hubSurfaceTileSize: number;
+  /** Whether the hub skylight directional casts shadows. */
+  hubShadows: boolean;
+
 }
 
 export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
@@ -166,6 +185,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on high to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
+    hubReflection: 'planar',
+    hubReflectionDivisor: 2,
+    hubSurfaceTileSize: 1024,
+    hubShadows: true,
     // v0.53: high anisotropy (0.85) + semi-gloss roughness (0.28) for realistic
     // satin brushed-metal. Directional sheen is provided by anisotropy, not bumps.
   },
@@ -206,6 +229,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
+    hubReflection: 'planar',
+    hubReflectionDivisor: 3,
+    hubSurfaceTileSize: 512,
+    hubShadows: true,
     // v0.53: moderate anisotropy (0.60) + semi-gloss roughness (0.38).
   },
   battery: {
@@ -244,6 +271,10 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     clearcoatRoughnessValue: 0.0,
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
+    hubReflection: 'off',
+    hubReflectionDivisor: 4,
+    hubSurfaceTileSize: 256,
+    hubShadows: false,
     // v0.47: matte gallery-safe fallback for low-power hardware.
   },
 };
