@@ -1,5 +1,58 @@
 # FINDINGS
 
+## Interactive-gallery architectural presentation findings (v0.88 plan, 2026-08-07)
+
+1. The v0.87 hub’s room-edge fix is already complete and scoped to its dedicated
+   `HubRoomRenderer`: entry-side wall extension plus rear closure prevent the
+   calibrated hub camera from exposing an open shell. The interactive gallery
+   uses a different `SceneManager` scene containing a PMREM environment and
+   one painting plane, not a room. A gallery-stage addition is therefore the
+   correct bounded response; changing hub geometry, camera clipping, or global
+   culling would not solve the active-gallery presentation gap.
+2. The current gallery colour path is a suitable fidelity baseline:
+   `RendererManager` outputs sRGB with `NoToneMapping`, `TextureManager`
+   marks albedo as sRGB and data maps as non-colour, and normal gallery
+   material application has zero emissive intensity. Future physical cues must
+   be validated against the existing albedo-only debug mode rather than
+   compensating for lighting by self-lighting the customer image.
+3. `Artwork.surface` is descriptive imported text, not a rendering contract.
+   A future media choice must use a separately named optional, validated
+   presentation field with a clean `matte-print` default. Inferring a canvas
+   effect from arbitrary `surface`, title, tags, or image aspect would apply a
+   distracting pattern to photographs and prints.
+4. A small number of shared profile detail textures and finite material
+   variants is more appropriate than per-artwork shader/map generation. The
+   existing loader, readiness ledger, warm-up, prefetch cancellation, and
+   texture disposal already provide the correct resource boundary for
+   profile-aware fallbacks.
+5. The existing quality architecture already protects DPR, shadows, map size,
+   anisotropy, shader complexity, post-processing, and hub material quality.
+   Gallery-stage shadow/glass/detail decisions should become fields in the
+   same explicit high/balanced/battery policy; automatic quality remains
+   diagnostic-only because users retain their selected preset.
+
+### Primary-source research recorded for this plan
+
+- Three.js colour-management guidance:
+  <https://threejs.org/docs/index.html?q=color#manual/en/introduction/Color-management>
+  supports the sRGB-colour versus linear/non-colour texture assignment above.
+- Three.js renderer tone-mapping guidance:
+  <https://threejs.org/docs/index.html?q=ren#api/en/renderers/WebGLRenderer.toneMapping>
+  supports treating tone-map changes as colour-fidelity changes, not a generic
+  realism upgrade.
+- Three.js physical-material documentation:
+  <https://threejs.org/docs/index.html?q=meshphys#api/en/materials/MeshPhysicalMaterial>
+  supports using standard roughness, normal, and quality-gated clearcoat before
+  extending shaders for a presentation profile.
+- Three.js capability documentation:
+  <https://threejs.org/docs/index.html?q=capab#api/en/renderers/WebGLCapabilities.maxTextureSize>
+  supports retaining the renderer-specific texture-size guard on mobile and
+  desktop.
+- MDN idle-callback guidance:
+  <https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback>
+  supports the existing feature-detected, timeout-bounded idle-prefetch
+  scheduling with a timer fallback.
+
 ## Square-room hub architectural quality findings (v0.87, 2026-08-02)
 
 1. A square hub scene needs an entry-side enclosure behind the calibrated

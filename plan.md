@@ -1,5 +1,556 @@
 # FREYRAUM Plan
 
+## Active plan — Premium interactive-gallery architectural presentation (v0.88, 2026-08-07)
+
+> **Phase: planning/docs only.** This entry describes a future implementation.
+> It does not change the runtime, imported customer artwork, generated preview,
+> or current v0.87 hub baseline.
+
+### Mission and scoped outcome
+
+Make the **interactive gallery destination** read as a restrained, physically
+believable museum presentation while keeping supplied artwork colour faithful,
+navigation smooth, and the high/balanced/battery quality contract intentional.
+The result must add an architectural context, material separation, mounted
+artwork depth, and controlled lighting without introducing a free-roam game,
+asset-heavy room, expensive screen-space effects, or a second artwork pipeline.
+
+This plan deliberately distinguishes the two current destinations:
+
+| Destination | Current state | v0.88 responsibility |
+|---|---|---|
+| Museum hub | v0.87 already renders a complete 7 × 7 × 3.4 m room shell, entry enclosure, doorway pockets, skirting, coves, mounted edges, contact shadows, shared architectural materials, and tiered reflections. | Preserve it. Do not duplicate or replace its shell; retain its current on-demand rendering and v0.87 visual-regression coverage. |
+| Interactive gallery | `SceneManager` provides a clear-colour/PMREM presentation space and `ArtworkMesh` renders one physical-material plane. It has no wall, floor, ceiling, returns, or mounted-object body. | Add a small gallery presentation stage and profile-aware artwork construction within the existing main-gallery renderer. |
+
+The reported “cut-off room” appearance is therefore not a v0.87 hub topology
+defect. In the active gallery path it is principally a missing-architecture
+problem: the camera can reveal clear colour/IBL space around a single painting
+plane because there is no shell to light, shade, or terminate the view. Camera
+near/far values (`0.1`/`100`) and ordinary frustum culling are not currently
+the cause. The implementation must prove this assessment with before/after
+captures before changing projection or disabling culling.
+
+The requested v0.29 headings are not present in the current `plan.md` or
+`FINDINGS.md`; the auditable current baseline is v0.87 and is the controlling
+architecture for this plan.
+
+### Audit record
+
+| Area | Current implementation | Consequence for the future change |
+|---|---|---|
+| Renderer | `RendererManager` uses native antialiasing, sRGB output, `NoToneMapping`, exposure `1`, PCF-soft shadows, capped DPR, shader prewarming, diagnostics, and WebGL context loss/restoration. | Retain one gallery renderer and its recovery path. Validate a neutral colour-management decision before retuning lights; do not introduce a second renderer or a global tone-map switch casually. |
+| Main scene | `SceneManager` has a 40° camera at z=7, near/far `0.1`/`100`, plus a PMREM `RoomEnvironment` at intensity `0.55`; it has no visible architectural geometry. | Add stage geometry to this scene through a core-owned component. Keep the PMREM as low-cost indirect/reflection support, not as a substitute for real walls. |
+| Gallery lighting/post | `LightingSetup` supplies one animated warm spotlight, ambient fill, and optional cool point accent. `PostProcessing` has the existing low-strength bloom/FXAA pipeline. | Rebalance the existing limited light rig around real receiving surfaces. Do not add per-artwork spotlights, SSR, SSAO, real-time GI, or a default multi-pass effect. |
+| Hub room | `HubRoomRenderer.buildEntryShell()` extends walls past the calibrated camera and closes the rear; its visible shell has correctly oriented faces rather than a `DoubleSide` workaround. | Reuse its architectural lessons and surface language, but keep hub and gallery renderer lifetimes/resource ownership independent. |
+| Architecture materials | `ArchitecturalSurfaceFactory` already creates shared plaster, microcement, ceiling, trim, pocket, strip, and canvas-edge materials plus tileable procedural normal/roughness maps. | Generalise recipes or factory inputs only as needed so a gallery-stage material set is internally shared and disposable; do not share live Three.js resource ownership across renderer contexts. |
+| Artwork mesh | `ArtworkMesh` is a segmented plane with aspect-aware scale and tangents. It has no backing, spacer, mount, frame, glazing, or receiving wall. | Evolve its one group into an optional physical mounted-work assembly while retaining its public texture/aspect contract and one active main artwork. |
+| Painting surface | `PaintingMaterial` is a `MeshPhysicalMaterial` with authored maps, procedural fallbacks, preset defines, optional clearcoat/parallax/self-shadow, and an albedo-only debug mode. `emissiveMap` is bound but its normal effective intensity is `0`. | Make surface selection explicit and media-appropriate. Preserve the zero-emissive display path and albedo-only comparison; never use emissive fill to hide incorrect lighting. |
+| Texture flow | `TextureManager` assigns sRGB to albedo and linear/no-colour treatment to data maps, warns above `MAX_TEXTURE_SIZE`, applies preset anisotropy, uploads/warm-ups resources, and owns disposal. `GalleryManager` has staged loading, readiness, adjacent/idle prefetch, cancellation, and context-restore work. | Keep this contract. Surface improvements must use shared small detail maps and must neither make customer imagery self-lit nor regress target-specific readiness. |
+| Quality | `high`, `balanced`, and `battery` already control DPR, shadows, procedural-map size, shader paths, post-processing, hub surface quality/reflection, and coarse-pointer DPR. Automatic downgrades intentionally only diagnose pressure; they do not override a visitor’s selected preset. | Add only explicit gallery-stage/profile gates to this one policy. Preserve manual quality selection and lower-tier intentional fallbacks. |
+| Customer flow | Sidecars supply free-text `surface`; importer-owned fields remain `id`, image data, `webglImage`, and dimensions. `surface` is display metadata and currently has no render effect. Generated preview files are ignored except the committed bundle when source runtime changes require regeneration. | Add a separately named, validated presentation contract. Do not infer render behaviour from arbitrary legacy `surface` prose or regenerate generated output for documentation-only work. |
+| UX and lifecycle | German UI text, focus restoration, keyboard/touch navigation, reduced-motion handling, preload overlay, audio, responsive chrome, timeline virtualization, and suspend/resume logic are established. | Keep interactions and semantics unchanged. Route gallery-stage visibility and cleanup through existing lifecycle points; visual material work must not add reflection flicker, animated noise, or inaccessible controls. |
+
+### Research basis and implementation decisions
+
+The future implementation should use the following primary-source guidance,
+recorded with the specific repository decision it supports:
+
+| Primary source | Repository decision |
+|---|---|
+| [Three.js colour management](https://threejs.org/docs/index.html?q=color#manual/en/introduction/Color-management) | Continue to mark customer albedo/base-colour textures as `SRGBColorSpace` and keep normal, roughness, AO, height, and other data maps uncoloured/linear. Never decide a map’s colour space from its filename. |
+| [Three.js WebGLRenderer](https://threejs.org/docs/index.html?q=ren#api/en/renderers/WebGLRenderer.toneMapping) | Validate output colour space and tone mapping as one controlled change. The current no-tone-map baseline is defensible for source-art fidelity; adopt a curve only if side-by-side albedo checks demonstrate that it preserves the supplied image better than neutral lighting calibration. |
+| [Three.js MeshPhysicalMaterial](https://threejs.org/docs/index.html?q=meshphys#api/en/materials/MeshPhysicalMaterial) | Use standard physical-material roughness, normal, specular, and clearcoat controls before adding custom shader code. Reserve clearcoat/glazing for explicitly selected media profiles and gate it by quality. |
+| [Three.js WebGLCapabilities](https://threejs.org/docs/index.html?q=capab#api/en/renderers/WebGLCapabilities.maxTextureSize) | Continue capability-aware source/map selection and reject or warn about texture dimensions beyond the renderer’s supported maximum rather than assuming desktop-size limits on mobile. |
+| [Three.js `compileAsync`](https://threejs.org/docs/#api/en/renderers/WebGLRenderer.compileAsync) | Extend the existing prewarm sequence to the finite gallery-stage/profile variants so a newly selected work does not hitch while its material compiles. |
+| [MDN `requestIdleCallback`](https://developer.mozilla.org/en-US/docs/Web/API/Window/requestIdleCallback) | Continue feature-detected, timeout-bounded idle work with a timer fallback; use it only for cancellable non-critical profile/map preparation, never for the selected artwork’s readiness path. |
+
+No additional runtime dependency is justified. Three.js, browser canvas/image
+decoding, the existing procedural-map factory, and the existing diagnostics are
+sufficient for the scoped work.
+
+### Non-negotiable design rules
+
+1. **Artwork wins over effect.** Albedo stays the supplied source image; all
+   physical cues come from restrained lighting, normal/roughness response,
+   actual edge depth, and optional profile metadata. A visible weave, strong
+   Fresnel overlay, broad dark self-shadow, or colour shift is a defect.
+2. **One architectural language.** The interactive stage should visually relate
+   to the v0.87 hub: warm/off-white mineral plaster, a restrained microcement
+   or stone-like floor, ceiling separation, muted dark reveals, and controlled
+   reflectivity. It must not impersonate a different room or use pure-black
+   voids.
+3. **Geometry earns its cost.** Add geometry only where it establishes a
+   silhouette, light break, contact shadow, or visible architectural boundary.
+   Use correct front-facing inward normals and normal bounding volumes; do not
+   set `DoubleSide`, disable culling globally, or build unseen exterior walls to
+   conceal an orientation error.
+4. **One resource owner per renderer.** The hub and gallery use distinct
+   renderers. Each scene may obtain the same material recipe, but each factory
+   instance owns and disposes its own Three.js textures/materials.
+5. **Finite, shared variants.** At most the documented presentation profiles
+   and quality variants may compile. There must be no unique custom shader
+   program, unique high-resolution PBR map bundle, or per-frame allocation for
+   every artwork.
+6. **Quality degrades gracefully.** A lower tier removes nonessential surface
+   cues, shadows, and glazing before it compromises an image’s aspect, loading
+   correctness, focusability, navigation, or clear error state.
+
+### Delivery sequence
+
+#### Phase 0 — Establish visual, colour, and performance baselines
+
+1. Capture the current interactive-gallery and hub states before modifying
+   geometry: wide desktop, standard desktop, narrow portrait, phone landscape,
+   high-DPR desktop/phone, first entry, next/previous navigation, closest
+   supported inspection zoom, return to hub, each quality preset, and simulated
+   context restore.
+2. Record, in diagnostics mode, gallery renderer snapshots for each state:
+   drawing-buffer dimensions/pixel ratio, draw calls, triangles, geometries,
+   textures, programs, and the selected preset. Treat these as comparison
+   evidence, not universal hard-coded budgets.
+3. Use the existing albedo-only debug mode to capture at least one supplied
+   customer work and one fallback work. Record the output as the colour-fidelity
+   control for light/tone-map decisions.
+4. Inspect the active gallery camera frustum and all proposed stage bounds at
+   extreme aspect ratios before implementation. Confirm that the current
+   `0.1`/`100` near/far range contains the compact stage and that no existing
+   object is erroneously culled. Change projection or a mesh bounding volume
+   only when the evidence identifies it as the actual cause.
+5. Establish the presentation-stage specification in one typed, named
+   configuration rather than scattering dimensions and offsets through
+   `main.ts`, scene construction, and shaders. Name physical intents
+   (wall offset, return depth, ceiling height, reveal depth, artwork wall gap,
+   maximum visible span) and calculate dependent bounds from them.
+6. Confirm with a visual-design checkpoint that the scoped stage is sufficient.
+   If it cannot make normal gallery views read as a coherent room without
+   expanding into a free-roam environment, stop and revise the scope rather
+   than quietly adding a large architectural subsystem.
+
+#### Phase 1 — Add a compact, complete gallery presentation stage
+
+**Likely files:** new `src/core/GalleryPresentationStage.ts`; targeted updates
+to `src/core/SceneManager.ts`, `src/lighting/LightingSetup.ts`,
+`src/main.ts`, `src/config/quality.ts`, and
+`src/materials/ArchitecturalSurfaceFactory.ts`.
+
+1. Create a core-owned stage component attached to the existing
+   `SceneManager.scene`. It owns stage groups, architecture materials,
+   quality application, visibility, resize-independent camera bounds,
+   destruction, and no DOM/UI events.
+2. Construct an intentionally small interior around the fixed inspection
+   camera:
+   - a continuous front display wall behind the mounted work;
+   - a floor and ceiling meeting that wall with no clear-colour seam;
+   - shallow left/right returns extending far enough beyond the camera
+     position to cover wide desktop and portrait view cones;
+   - an entry-side/rear closure only where it can appear through the
+     supported inspection camera/view cone;
+   - a slim base shadow gap and one recessed ceiling/cove reveal where their
+     silhouette and grazing light explain depth.
+3. Build all visible interior faces with outward geometry orientation chosen so
+   their front faces point into the room. Use single-sided walls/floor/ceiling
+   and correctly oriented `ShapeGeometry`/plane bases; use narrow box or
+   simple extruded pieces only for visible returns, cove lips, skirting, and
+   artwork bodies. Retain back-face culling and normal frustum culling.
+4. Keep the room deliberately architectural rather than theatrical:
+   - no doorway, pillar, or recess unless it is visible in the fixed gallery
+     composition and clarifies scale;
+   - no large invisible exterior shell;
+   - no dense wall/floor tessellation;
+   - no camera motion, orbit controls, or navigation-model change.
+5. Mark stage surfaces as shadow receivers and limit shadow casters to the
+   mounted-work body and documented small architectural elements. Ensure the
+   artwork texture plane itself does not create a translucent or detached
+   shadow artefact.
+6. On gallery/hub route transitions, show the stage only for the gallery
+   destination. It must not consume visible draw work underneath the hub.
+   Route its preset rebind, dirty render request, and disposal through the
+   existing `main.ts` orchestration without moving lifecycle ownership into the
+   stage.
+7. During resize, retain the existing single resize coordinator. Do not add
+   competing window listeners; stage geometry remains metric and only the
+   existing camera aspect/projection updates.
+8. Dispose all stage geometries, materials, maps, and optional render targets
+   idempotently on application cleanup. Rebuild/rebind only the resources
+   required after a renderer context restoration, then prewarm before an
+   interactive frame.
+
+**Phase acceptance:** Every supported gallery aspect shows intentional floor,
+wall, ceiling, and edge terminations. No edge exposes clear colour, a
+back-facing plane, a missing ceiling, or a cardboard-box exterior. The hub
+keeps its independently calibrated v0.87 shell unchanged.
+
+#### Phase 2 — Reuse a restrained architectural surface system
+
+1. Evolve `ArchitecturalSurfaceFactory` from hub-specific material ownership
+   into a recipe-driven factory that can make a small stage-local set:
+   `plasterWall`, `ceilingPlaster`, `microcementFloor`, `shadowReveal`,
+   `trim`, and `artworkEdge`. Retain the hub’s current material names/outputs
+   through a compatible adapter or explicitly migrate all hub callers in one
+   reviewable change.
+2. Create one tileable, low-frequency/micro-detail normal-and-roughness source
+   per applicable surface role and quality size. Reuse it across surfaces with
+   metric UV mapping; do not create a large image texture per wall or use
+   procedural noise in every fragment.
+3. Tune material roles by physical response, not arbitrary dark colour:
+   - **plaster:** warm neutral base, high roughness, very small normal strength,
+     barely perceptible broad tonal/roughness variation;
+   - **floor:** restrained microcement/stone response with a moderate-to-high
+     roughness floor and low normal amplitude; no wet, mirror-like, or
+     alias-prone reflection;
+   - **ceiling:** a slightly distinct rough plaster that catches cove light
+     without reading as a dark lid;
+   - **reveals/trim:** very dark charcoal/brown-grey painted material with
+     visible roughness and edge response, never unlit pure black;
+   - **artwork edge/backer:** muted canvas/board or optional frame material
+     that receives light and casts the mounting shadow.
+4. Use texture map colour-space rules consistently: only artistic/base-colour
+   maps are sRGB; normal, roughness, AO, height, and procedural detail maps
+   are non-colour data. Configure repeat wrapping, mipmaps, minification
+   filtering, and anisotropy once at factory creation.
+5. Keep map scales in scene/world units so a wall return, floor, and portrait
+   work do not reveal stretched or visibly repeating detail. Verify at phone
+   DPR and camera motion that detail neither shimmers nor forms a procedural
+   grid.
+6. Keep planar floor reflection confined to the static hub. The gallery stage
+   should initially use the existing PMREM/roughness response only; add no
+   gallery reflection render pass unless a later measured visual need justifies
+   its own budget and lifecycle.
+
+**Phase acceptance:** Architectural planes separate under light through
+roughness, normal response, reveals, and restrained value contrast. Detail is
+not recognisable as a repeated texture at normal viewing distance.
+
+#### Phase 3 — Add explicit, backwards-compatible artwork presentation profiles
+
+**Likely files:** `src/config/artworks.ts`, a new typed presentation-profile
+module under `src/materials/` or `src/config/`, `src/gallery/ArtworkMesh.ts`,
+`src/materials/PaintingMaterial.ts`, `src/materials/ProceduralTextureFactory.ts`,
+`src/gallery/GalleryManager.ts`, `scripts/import-artworks.mjs`, and the
+customer text guide/template.
+
+1. Introduce an optional typed `presentation` field separate from the existing
+   descriptive `Artwork.surface` string. `surface` remains display metadata and
+   is never silently reinterpreted as rendering input.
+2. Validate a small closed vocabulary in sidecars/import output. The default
+   for absent or invalid data is `matte-print`: it preserves legacy artwork
+   appearance and uses no synthetic canvas weave, no clearcoat, no frame, and
+   no glass. Warn in the import report when a supplied presentation value is
+   invalid, but do not fail otherwise valid artwork imports.
+3. Support only these initial visual profiles:
+
+| Profile | Surface response | Default physical construction | Lower-tier fallback |
+|---|---|---|---|
+| `canvas` | Subtle shared weave/detail normal plus low-frequency roughness variation; high roughness and restrained specular. | Stretched canvas edge/backer, tiny wall gap, physical cast/contact cue. | Keep the matte body; reduce/disable weave normal before altering albedo. |
+| `fine-art-paper` | High roughness, faint non-directional paper grain, no varnish. | Thin paper/board backing and wall gap. | Flat matte normal/roughness response. |
+| `matte-print` | Near-flat high-roughness print response with no invented media pattern. | Thin mount/backer and wall gap. | Identical visual intent with simplified geometry/maps. |
+| `satin-print` | Moderately lower roughness with controlled, broad specular response. | Thin mount/backer and wall gap. | Matte-leaning roughness; no extra shader path. |
+| `glazed-print` | Protected image with very restrained angle-dependent highlight. | Optional glazing only when explicitly selected; no default frame. | Reuse satin/clearcoat response, then matte response on battery. |
+
+4. Make any frame an explicit presentation option, defaulting to `none` to
+   preserve the current unframed interactive-gallery language. If selected,
+   offer only a small shared-material vocabulary (for example slim
+   powder-coated metal or restrained stained wood), built from four reusable
+   rails with shallow bevel/highlight geometry. Do not restore side-preview
+   meshes or make a frame mandatory.
+5. Change `ArtworkMesh` from a texture plane alone to a group with stable
+   subparts: image surface, shallow opaque backing/edge body, wall spacer, an
+   optional shared-material frame, and an optional glazing layer. Reuse unit
+   geometries and scale them per artwork aspect; update them atomically with
+   the existing aspect calculation and retain one active work in the main
+   gallery.
+6. Let actual stage-wall shadowing provide the primary mounting cue. Use one
+   subtle, shared contact-shadow card only if shadow quality is off or cannot
+   provide a stable near-wall cue; it must sit behind the body, fade at its
+   edges, and never darken the customer image.
+7. Apply glass conservatively:
+   - high may use a separate, thin shared-material glazing mesh only for
+     explicitly glazed work, with depth ordering and opacity/roughness tuned
+     against an albedo-only comparison;
+   - balanced should prefer the material’s low-strength clearcoat response
+     over an extra transparent draw;
+   - battery uses no separate glass and no reflective overlay.
+   Reject a treatment if it creates a grey veil, hides image detail, flickers,
+   or produces a strong artificial Fresnel band.
+8. Bind a profile through a finite material parameter set. Authored maps remain
+   authoritative; profile defaults fill only missing roles. Avoid profile
+   inference from title, medium, tags, image aspect, or arbitrary customer
+   prose.
+9. Refactor generic procedural fallback maps into shared profile-safe detail
+   resources. Canvas-only directional weave must never bind to photographs,
+   digital art, paper, or generic matte prints. Detail tiling stays
+   aspect-aware in world units so it is neither stretched nor unstable while
+   zooming.
+10. Keep custom shader work minimal. Use `MeshPhysicalMaterial` map/roughness/
+    normal/clearcoat support first. Restrict the existing custom detail-normal
+    path to a fixed profile/quality matrix. Do not enable generic parallax or
+    height-march self-shadow as a default canvas effect; retain such relief
+    only if a measured, profile-specific high-tier experiment passes close
+    inspection and mobile fallback review. The initial production default is
+    normal/roughness detail without true displacement.
+11. Preserve the `a` albedo-only debug comparison. The normal gallery path must
+    leave `emissiveIntensity` at zero and must not use the albedo as a
+    self-lighting workaround. Any changed material must be checked against
+    albedo-only output for source hue, luminance, crop, and aspect fidelity.
+
+**Phase acceptance:** A canvas, paper print, matte print, satin print, and
+glazed print can each look like a mounted object under the same gallery light
+without imposing canvas artefacts or reflections on the others. Existing
+artwork imports continue to display as clean, unframed matte works.
+
+#### Phase 4 — Preserve and strengthen texture/loading discipline
+
+1. Keep `TextureManager` as the only owner of customer texture loading,
+   colour-space assignment, filtering, anisotropy, capability diagnostics,
+   fallback textures, upload, and disposal. Do not have profile components
+   independently load or dispose customer albedo/PBR maps.
+2. Select the existing `webglImage`/image source according to the current
+   fallback contract, verify decoded dimensions against
+   `renderer.capabilities.maxTextureSize`, and continue reporting oversize
+   sources with artwork ID, decoded dimensions, selected source, preset, and
+   limit. Never assume a desktop 16K limit on a phone.
+3. Keep authored normal/roughness/specular/AO/height maps opt-in and correctly
+   classified as non-colour data. Apply a profile’s shared fallback only for a
+   missing role; do not overwrite a supplied authored map.
+4. Reuse one small procedural texture bundle per
+   `profile × quality-map-size` rather than generating a unique set for each
+   artwork ID. Maintain a bounded cache and dispose superseded bundles when
+   changing quality or shutting down.
+5. Preserve current staged albedo-first loading, critical queue promotion,
+   readiness ledger, GPU warm render, shader prewarm, adjacent prefetch,
+   interaction deferral, stale-generation cancellation, and exact-ID hub
+   selection behaviour. The selected work must remain renderable with the
+   default profile while optional authored/profile resources are still pending.
+6. Prewarm only the stage plus finite profile variants that can actually be
+   shown for the active preset. Schedule speculative profile/map generation in
+   the existing cancellable idle lane with its timeout/fallback, never ahead of
+   visible navigation or initial entry.
+7. Do not introduce an image-resizing or derivative-generation system in this
+   work. The active high-resolution asset-delivery plan owns publish derivatives
+   and source-size policy. This work may document expected texture targets and
+   diagnostics, but must not duplicate source artwork bytes, mutate supplied
+   imagery, or add a new image-processing dependency.
+
+**Phase acceptance:** No selected artwork flashes untextured, changes colour
+space, uses a wrong target after rapid hub selection, or produces an avoidable
+navigation hitch because a profile resource compiled or decoded synchronously.
+
+#### Phase 5 — Calibrate controlled gallery lighting and image quality
+
+1. Before changing intensities, compare the current sRGB/no-tone-map renderer
+   output with the albedo-only references from Phase 0. Keep
+   `NoToneMapping` as the initial target because the project has LDR customer
+   art and current documentation records colour-shift risk. Only adopt an
+   alternate tone map after documented visual evidence shows better source
+   fidelity across artwork and architecture; never choose it merely because it
+   sounds more cinematic.
+2. Replace the current flat appearance through a bounded light hierarchy:
+   - one carefully aimed warm key/track spotlight for the displayed work and
+     wall plane;
+   - one low-intensity broad ceiling/cove fill that separates ceiling, wall,
+     and floor without creating a hotspot;
+   - the existing PMREM plus restrained ambient/environment contribution for
+     stable dark-frame/reveal readability;
+   - at most one non-shadowing cool/neutral accent where it visibly explains
+     a return or prevents recesses from crushing.
+3. Retain a single shadow-casting key light in the interactive gallery. Tune
+   its target, cone, decay/distance, normal bias, and map resolution against
+   the actual mounted body/wall instead of adding a shadow-casting light for
+   each work. The light should create a soft near-wall cue, not a detached
+   rectangle or harsh floor shadow.
+4. Explicitly gate shadow maps through quality settings: high uses one
+   documented 1024-pixel map; balanced uses one documented 512-pixel map;
+   battery disables gallery shadows. Confirm the actual values after device
+   testing and put them in the single `QualityPreset` policy, not local light
+   constants.
+5. Keep bloom at the established extremely low/disabled settings and verify
+   that white plaster does not bloom, clip, or make UI contrast unreliable.
+   Do not add SSR, SSAO, real-time GI, volumetrics, dynamic probe updates, or
+   a high-cost post-processing pass as a default path.
+6. Ensure reduced motion stops only animated presentation behaviour. It must
+   not reduce image resolution, turn realistic materials into placeholders, or
+   introduce pulsing light/noise. Stage lighting should normally settle into a
+   stable still image.
+
+**Phase acceptance:** White walls retain separation without blown highlights,
+reveals/frames retain form without crushed black, floor response is controlled,
+and source artwork remains legible and attractive rather than self-lit.
+
+#### Phase 6 — Extend one capability-aware quality policy
+
+Add documented gallery-stage fields to `QualityPreset` rather than creating
+ad-hoc device checks. The exact field names can follow repository conventions,
+but their behaviour must be equivalent to this matrix:
+
+| Control | High | Balanced | Battery |
+|---|---|---|---|
+| Effective DPR cap | Existing `1.6`, including existing coarse-pointer cap | Existing `1.25` | Existing `1.0` |
+| Gallery key shadow | Enabled, one 1024 map | Enabled, one 512 map | Disabled |
+| Architecture/detail-map tier | Shared full detail at a documented bounded tile size | Smaller shared detail map | Minimal/shared map or flat high-roughness material |
+| Texture anisotropy | `min(device maximum, 4)` | `min(device maximum, 2)` | `1` |
+| Artwork micro-detail | Profile-safe normal/roughness only; no default relief march | Reduced normal/roughness detail | No procedural microdetail |
+| Clearcoat/glazing | Explicit profile only; controlled clearcoat or thin glazing | Clearcoat-style response only where it is visually necessary | Disabled |
+| Gallery floor reflection | PMREM/roughness only | PMREM/roughness only | Diffuse/no reflection |
+| Extra post-processing | Existing conservative policy only | Existing conservative policy only | Existing disabled/minimal policy |
+
+1. Preserve the current `MAX_TEXTURE_SIZE` check, device max-anisotropy
+   protection, coarse-pointer DPR cap, and manual quality lock. Do not introduce
+   user-agent sniffing or silently lower a visitor’s selected preset.
+2. When a preset changes, apply it atomically to renderer, post-processing,
+   lights, `ArtworkMesh`/material, `GalleryManager`, gallery stage, and hub.
+   Request the existing dirty frames and prewarm only necessary programs.
+3. Add diagnostics for active profile, stage/material detail tier, selected
+   shadow strategy/map size, anisotropy cap, glazing state, effective DPR, and
+   profile fallback reason. Extend the renderer snapshot only with inexpensive
+   static fields.
+4. Establish comparison budgets from Phase 0. Review draw calls, triangles,
+   texture count/memory implications, program count, and interaction frame
+   timing at every tier. If the compact stage or selected profile exceeds its
+   agreed measured budget, simplify geometry/material variants before lowering
+   artwork resolution.
+5. Retain no per-frame geometry rebuild, texture allocation, shader-define
+   mutation, random noise update, or dynamic reflection target. Quality changes
+   may rebind/recreate bounded static resources outside a frame-critical
+   interaction path.
+
+#### Phase 7 — Integrate safely with existing orchestration and recovery
+
+1. Keep `main.ts` as the sole owner of boot sequencing, preferences,
+   diagnostics, resize coordination, render-loop routing, lifecycle suspension,
+   hub/gallery destination registration, and disposal. New stage/profile
+   classes expose narrow methods such as apply preset, apply presentation, mark
+   visible, restore resources, and dispose; they do not install global
+   listeners.
+2. Preserve the existing destination behaviour: entering gallery shows the
+   current exact target, resets only the existing inspection view as today,
+   enables current input, and focuses the canvas; returning to hub hides the
+   artwork/stage, restores hub selection/focus, and changes no German copy.
+3. Update context-loss/restoration coordination so stage materials and selected
+   profile resources are re-applied before the first restored render. Retain
+   clear-colour token reconciliation, loading/error notices, current artwork
+   target, quality choice, and diagnostic events.
+4. Keep page visibility/freeze suspension and the existing dirty-render policy.
+   No background idle task may mutate or render stage resources while a gallery
+   transition, pointer interaction, hidden page, context loss, or disposal is
+   active.
+5. Maintain keyboard, touch, pinch/pan, timeline, topbar back action,
+   preferences, fullscreen, audio, reduced motion, high contrast, clean chrome,
+   focus outlines, and loading overlay semantics unchanged unless a narrow
+   integration test proves an adjustment is necessary.
+
+### File-impact map for the implementation PR
+
+| File or area | Intended responsibility |
+|---|---|
+| `src/core/GalleryPresentationStage.ts` (new) | Gallery-only shell group, stage-local architecture resources, preset/visibility/cleanup API. |
+| `src/core/SceneManager.ts` | Own scene/camera attachment and disposal ordering only; retain camera/PMREM authority. |
+| `src/materials/ArchitecturalSurfaceFactory.ts` | Shared surface recipes/maps with renderer-local ownership; preserve hub outputs. |
+| `src/lighting/LightingSetup.ts` | Bounded key/fill/accent calibration and one-shadow-map policy. |
+| `src/config/quality.ts` | Single explicit stage/profile quality matrix. |
+| `src/config/artworks.ts` and a typed profile module | Optional validated presentation metadata without redefining descriptive `surface`. |
+| `src/gallery/ArtworkMesh.ts` | Aspect-synchronised mounted-work group, backer/spacer/optional frame/glaze geometry, and cleanup. |
+| `src/materials/PaintingMaterial.ts` | Finite profile parameters and conservative physical-map binding; retain albedo-only debug and zero-emissive default. |
+| `src/materials/ProceduralTextureFactory.ts` | Shared profile-safe fallback detail bundles, bounded caching, no universal canvas treatment. |
+| `src/gallery/TextureManager.ts`, `src/gallery/GalleryManager.ts` | Existing loading/resource ownership plus profile-aware fallback, warm-up, diagnostics, and cancellation. |
+| `src/main.ts` | Wiring only: route visibility, current-profile application, preset fan-out, context restore, and disposal. |
+| `scripts/import-artworks.mjs` | Validate/pass optional presentation metadata while retaining nonfatal sidecars and importer-owned asset fields. |
+| `docs/CUSTOMER_TEXT_GUIDE.md`, `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt` | Explain the optional presentation field, valid values, defaults, and examples only if the importer contract ships. |
+| `README.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `CHANGELOG.md` | Update current behaviour/ownership, durable decisions, implementation status, and release history when runtime work ships. |
+| `customer-preview/` | Regenerate only if importer/runtime/preview source changes make the generated local-preview output stale; never regenerate for this planning entry alone. |
+
+### Validation plan for the implementation PR
+
+1. Start from a clean checkout with `npm install`. Do not claim a fresh install
+   if package installation cannot complete; record the exact failure.
+2. Run the existing required gates:
+   - `npm run import:artworks` when importer/manifest behaviour changes;
+   - `npm run docs:check-config-authority`;
+   - `npm run lint`;
+   - `npm run build:typecheck`;
+   - `npm run build`;
+   - `npm run test:frame-budget`;
+   - `npm run validate:museum-hub`;
+   - `npm run validate:museum-hub:visual` and the applicable filtered
+     `scripts/visual-regression.mjs` baseline/capture/compare workflow when
+     browser tooling and baselines are available;
+   - `node -c scripts/import-artworks.mjs` if the importer changes.
+3. Extend visual regression intentionally rather than relying on one screenshot:
+   - gallery desktop, wide desktop, narrow portrait, phone portrait/landscape,
+     and one high-DPR capture;
+   - initial loading/press-to-start, first gallery entry, rapid next/previous
+     navigation, timeline selection, close inspection zoom/pan, and return to
+     hub;
+   - each quality tier, one explicit canvas/paper/matte/satin/glazed fixture,
+     and a legacy artwork without presentation metadata;
+   - context loss/restoration with the selected profile/stage visible;
+   - existing hub room, doorway-edge, wall-focus, and selection-return states
+     unchanged.
+4. Check manual accessibility/UX at each applicable visual state: German text
+   unchanged, focus ring visible over wall/floor, keyboard navigation and
+   Escape/back focus restoration intact, controls readable above the stage,
+   touch targets unobstructed, high contrast viable, reduced motion static, and
+   loading/error states still explicit.
+5. Compare renderer diagnostics to the Phase 0 baseline for high, balanced,
+   and battery: effective pixel ratio/resolution, calls, triangles, geometry,
+   texture/program counts, and interaction frame-time pressure. Describe
+   texture-memory and shader-read trade-offs qualitatively; do not invent
+   hardware-wide millisecond or memory claims.
+6. Verify colour/material behaviour manually with albedo-only debug: source
+   crop/aspect/hue/luminance remain credible, normal/roughness cues do not
+   alter pixels, glass does not veil art, and no generic weave appears on
+   non-canvas media.
+7. Scan every changed/created file for secrets before commit. Review disposal,
+   context restoration, stale async work, map colour-space assignment, shader
+   compile variants, and user-provided metadata validation before requesting
+   review.
+
+### Explicit deferrals and rejection criteria
+
+- Do not add HDRI downloads, a new asset pipeline, texture compression
+  dependency, automatic artwork resizing, external 3D assets, free roaming,
+  orbit controls, real-time global illumination, SSR, SSAO, volumetrics,
+  default depth-of-field, or heavy bloom.
+- Do not use true high-density displacement or universal parallax; profile
+  detail must remain normal/roughness-led unless a later high-tier experiment
+  proves a close-up benefit without mobile instability.
+- Do not add a default decorative frame, glazing, canvas weave, or speculative
+  material profile. Existing customer imports must remain intentionally clean.
+- Do not change customer originals, base64/image delivery policy, or GitHub
+  Pages size strategy in this work; coordinate with the active high-resolution
+  asset-delivery plan instead.
+- Reject any implementation that fixes an apparent opening by globally enabling
+  `DoubleSide`, disabling frustum culling, adding invisible giant geometry, or
+  hiding it with an opaque post-process/background gradient.
+
+### Pull-request evidence and definition of done
+
+The implementation PR must state:
+
+1. the gallery-versus-hub root cause of the former unfinished-edge appearance;
+2. the architectural material and mounted-artwork profile decisions;
+3. exact lighting/shadow/tone-map decision and colour-fidelity evidence;
+4. quality-tier safeguards, rendering/texture implications, and mobile
+   fallbacks;
+5. changed files and their ownership boundaries;
+6. every validation command/result plus unavailable checks and exact reasons;
+7. intentionally deferred work from the list above.
+
+Visual acceptance checklist:
+
+- [ ] The interactive gallery reads as a complete, intentionally bounded
+  architectural presentation at desktop, tablet, and phone aspect ratios.
+- [ ] Floor, walls, ceiling, returns, and reveals have subtle believable
+  separation without texture repetition, missing faces, or clear-colour gaps.
+- [ ] Artworks read as mounted physical works, not flat self-lit images.
+- [ ] Canvas, paper, matte, satin, and optional glazing remain restrained and
+  never obscure, recolour, or pattern the supplied art.
+- [ ] All colour/data maps use correct colour-space treatment and albedo-only
+  comparison confirms image fidelity.
+- [ ] High-quality material/shadow/glass cues reduce deliberately through
+  balanced and battery presets without breaking loading or navigation.
+- [ ] Hub geometry, customer import compatibility, timeline/input/accessibility,
+  loading states, lifecycle handling, and context recovery show no regression.
+
 ## Implemented — Square-room hub architectural quality tiers (v0.87, 2026-08-02)
 
 - The hub room now renders as a complete 7 × 7 × 3.4 m square shell:
