@@ -1,5 +1,727 @@
 # FREYRAUM Plan
 
+## Planned — Evidence-based recovery plan for grey museum-hub artworks before realism (2026-08-07)
+
+> **Planning/docs only.** No runtime code, importer code, generated assets, or
+> implementation PR were created in this planning pass.
+>
+> **Verified branch snapshot:** `copilot/planning-change-startup-flow` at
+> `061da51ad4a6348be2e86fa8e440760326ae5615`; `git status --branch --porcelain=v1`
+> was clean during the audit.
+
+### 1. Executive diagnosis
+
+| Rank | Candidate cause | Confidence | Evidence | How to prove/disprove |
+|---|---|---:|---|---|
+| 1 | The failing runtime is using a generated customer manifest / image bundle that does not match the actual shipped preview or Pages assets, so hub `image` URLs fail and slots enter the explicit missing-image state. | High | The screenshot titles (`Gartenszene`, `Zdigital…`) do not exist anywhere in the checked-in inbox, built-in artwork list, or checked-in `museum-hub.json`. The clean clone currently has no `customer-preview/customer-artworks.js`, no `public/customer-artworks.js`, no generated `images/`, and no `dist/` output. Both runtime entries depend on those generated files for customer art. | Capture the exact failing `customer-artworks.js` (preview or deployed), the generated `images/` folder, and the resolved browser requests in the failing environment; compare filenames, IDs, and timestamps against the active branch’s importer output. |
+| 2 | The hub is reaching the explicit **primary failed + fallback missing/failed** path, not a generic “material looks flat” state. | High | `MainMuseumHub.setSlotImageState(..., 'missing', ...)` is the only path that adds `.has-missing-image`; `HubRoomRenderer.upsertSlot(..., missingImage)` then binds `placeholderTexture(label)` instead of the artwork texture. The latest commit (`061da51`) also made the DOM missing-image placeholder visibly render. | In a failing session, inspect each slot’s `artworkSourceState`, `artworkSourceMode`, `artworkFallbackReason`, diagnostics entries, and final `HubRoomRenderer` texture key before changing materials or lighting. |
+| 3 | The generated artifact that produced the screenshot is stale, external, or otherwise not the same runtime/data state as the clean current branch. | High | The current checked-in inbox contains only `Fraktal.png` and `Akt 27.png`; the checked-in `customer-artworks/museum-hub.json` explicitly maps only `fraktal` and `akt-27` onto the front wall pair. The screenshot shows more artworks, including side-wall titles that are not present in the branch. | Record the exact environment: Vite dev, built `dist/`, `customer-preview/app.html`, or deployed Pages. Save the generated customer manifest used by that environment and compare it to the branch inputs. |
+| 4 | Relative-path / base-path / casing / encoding differences between Vite dev, GitHub Pages, and `file://` preview are breaking the declared customer `image` URLs. | Medium | The importer writes relative `./images/<id>.<ext>` paths; the dev entry loads `/customer-artworks.js`; the Pages build uses base `/Freyraum/`; the preview entry loads `./customer-artworks.js`. The screenshot data set is external to the clone, so environment-specific path resolution is still open. | For each traced artwork, log: requested URL, final URL, protocol, HTTP/file status, content type, decoded dimensions, and whether the request came from dev, Pages, or `file://`. |
+| 5 | The embedded `webglImage` fallback is absent, sanitized away, stale, or also failing in the screenshot environment. | Medium | Current hub code retries `webglImage` before declaring `missing`, and current importer writes `webglImage` from the copied preview image bytes. A visible missing-image state therefore means the embedded fallback either was not present in the active generated artifact or did not survive load/decode. | Inspect the active `window.__FREYRAUM_ARTWORKS` entries in the failing runtime and compare them to the importer contract. Confirm whether `sanitizeInjectedArtworks()` preserved each `webglImage`. |
+| 6 | Material/shader assignment or color-management is the primary blocker for the screenshot. | Low | The screenshot route is the museum hub, whose visible artwork plane is a simple `MeshBasicMaterial` fed from `HubRoomRenderer.imageTexture()` or `placeholderTexture()`, not the interactive gallery’s `PaintingMaterial` shader path. The visible result is placeholder-grey, not “wrong but still image-bearing”. | Only investigate this after a real image is proven to arrive on the hub artwork plane. Use raw albedo vs final-shaded debug comparisons on both hub and gallery paths. |
+
+#### Proven facts
+
+- The screenshot route is the **museum hub / selection room**, not the
+  interactive gallery:
+  `src/hub/MainMuseumHub.ts` builds the “Museum” header and DOM shell, while
+  `src/hub/HubRoomRenderer.ts` builds the square room, wall-mounted artwork
+  planes, and hub-specific WebGL canvas.
+- The current clone has **no generated customer-artwork injection state**:
+  `customer-preview/customer-artworks.js` is absent, `public/customer-artworks.js`
+  is absent, generated preview `images/` are absent, and `dist/` is absent.
+- The current checked-in customer inputs do **not** match the screenshot:
+  `customer-artworks/inbox/Fraktal.png`,
+  `customer-artworks/inbox/Akt 27.png`, and
+  `customer-artworks/museum-hub.json` only prove a two-artwork front-wall setup.
+- The latest commit did **not** restore artwork images. It made the
+  missing-image placeholder more visible:
+  `.museum-hub__artwork.has-missing-image .museum-hub__art-placeholder` changed
+  from `display: none` to `display: flex` in `src/styles/main.scss`.
+- The normal hover/selection label (`.museum-hub__artwork-label`) is hidden by
+  default and only appears on hover, focus, or selected state. Multiple visible
+  titles in the screenshot are therefore more consistent with the **missing-image
+  placeholder path** than with the normal label path.
+- The current tracked inbox images are not oversized enough to prove a GPU limit
+  failure by themselves: `Akt 27.png` is 3150 × 3150 and `Fraktal.png` is
+  3780 × 5046. `maxTextureSize` pressure remains a future-proofing concern, not a
+  proven cause for the checked-in assets.
+
+#### Likely explanations
+
+- The screenshot environment is loading a generated customer manifest whose
+  declared image URLs do not resolve to real shipped files in that environment.
+- The same generated artifact either lacks valid `webglImage` fallbacks or uses a
+  stale pre-v0.90-style bundle that never reaches the fallback recovery path.
+
+#### Unverified hypotheses
+
+- A GitHub Pages base-path or pathname-casing mismatch.
+- A stale `file://` preview loading an old `customer-artworks.js`.
+- A decode failure specific to the embedded fallback payload.
+- A DOM/canvas layering problem after the hub slot already reached `ready`.
+- A hub-to-gallery divergence where one route uses newer generated data than the
+  other.
+
+#### Prior-session claims that do not match the active branch
+
+- The custom instructions mention `plan.md § v0.29` and `FINDINGS.md § v0.29`,
+  but no such current sections exist in the active branch. Treat those mentions as
+  historical context, not as authoritative architecture.
+- Changelog/plan statements about “preview rebuilt” describe a prior generated
+  state, but the clean checked-out branch does not currently contain the generated
+  customer JS or generated preview images. Those claims remain historical until the
+  importer is run again in the current environment.
+
+### 2. Current rendering and asset architecture map
+
+#### Current-state truth table
+
+| Area | Current implementation | Source file(s) | Proven? | Notes |
+|---|---|---|---|---|
+| Screenshot runtime | Museum hub / selection room (`MainMuseumHub` + `HubRoomRenderer`) | `src/hub/MainMuseumHub.ts`, `src/hub/HubRoomRenderer.ts`, `src/styles/main.scss` | Partially | The route is proven. The exact environment (Vite dev / Pages / preview / other) is not, because the screenshot titles do not match the checked-in branch state. |
+| Visible title source | `ResolvedHubSlot.displayLabel` is written into three places: hidden hover label, DOM missing-image placeholder, and WebGL placeholder texture | `src/hub/MainMuseumHub.ts`, `src/hub/HubRoomRenderer.ts`, `src/styles/main.scss` | Yes | The screenshot most strongly matches the missing-image placeholder path, not the hover label path. |
+| Visible artwork image source | Hub WebGL plane texture on `HubRoomRenderer.artworkMesh.material.map` | `src/hub/HubRoomRenderer.ts` | Yes | The DOM `<img class="museum-hub__art">` is not the primary visible art surface. |
+| Artwork manifest source | `window.__FREYRAUM_ARTWORKS` when generated customer data exists; otherwise built-in `src/config/artworks.ts` | `app.html`, `customer-preview/app.html`, `src/main.ts`, `src/config/artworks.ts`, `scripts/import-artworks.mjs` | Yes | The clean clone currently falls back to built-ins because generated customer JS is absent. |
+| Texture loader | Hub: DOM `HTMLImageElement` load/decode → `THREE.Texture(image)`; gallery: `TextureManager` + `TextureLoader` + generated fallback texture | `src/hub/MainMuseumHub.ts`, `src/hub/HubRoomRenderer.ts`, `src/gallery/TextureManager.ts` | Yes | The screenshot route is on the simpler hub path. |
+| Active material/shader | Hub: `MeshBasicMaterial`; gallery: `PaintingMaterial` (`MeshPhysicalMaterial` subclass + `onBeforeCompile`) | `src/hub/HubRoomRenderer.ts`, `src/gallery/ArtworkMesh.ts`, `src/materials/PaintingMaterial.ts` | Yes | This makes a hub-specific material/shader bug less likely than an asset/source failure. |
+| Fallback material/texture | Hub: `placeholderTexture(label)` plus optional DOM missing-image placeholder; gallery: generated gradient fallback | `src/hub/HubRoomRenderer.ts`, `src/hub/MainMuseumHub.ts`, `src/styles/main.scss`, `src/gallery/TextureManager.ts` | Yes | The screenshot is consistent with hub fallback/placeholder behavior. |
+| Generated preview path | Importer writes preview JS/images/audio, then sync copies those to `public/` for Vite/Pages | `scripts/import-artworks.mjs`, `scripts/sync-customer-public.mjs`, `scripts/write-local-preview.mjs`, `app.html`, `customer-preview/app.html` | Yes | In the active clean clone, those generated customer-artwork files are missing; the current preview/public state is therefore incomplete. |
+
+#### Current branch runtime inventory
+
+- **Active branch:** `copilot/planning-change-startup-flow`
+- **HEAD:** `061da51ad4a6348be2e86fa8e440760326ae5615`
+- **Uncommitted changes during audit:** none
+- **Recent relevant commits:**
+  - `061da51` — “Fix hub placeholder visibility and warm lookup”
+  - `81a8704` — “Regenerate preview bundle for artwork fallback fix”
+- **Checked-in generated customer preview state:** only the runtime bundle shell is
+  tracked (`customer-preview/app.html`, `customer-preview/freyraum-gallery.js`,
+  `customer-preview/style.css`, `customer-preview/webgpu-probe.js`). The generated
+  customer artwork JS and image assets are absent from the clone.
+
+#### Actual file/function flow
+
+##### A. Customer-imported artwork flow (preview / dev / Pages)
+
+1. **Source artwork file**
+   - `customer-artworks/inbox/<filename>`
+2. **Importer discovery**
+   - `scripts/import-artworks.mjs`
+   - reads dimensions, copies the source to `customer-preview/images/<id>.<ext>`,
+     derives `id`, `title`, and metadata, and embeds `webglImage` from the copied
+     bytes when possible
+3. **Generated manifest record**
+   - writes `customer-artworks/artworks.json`
+   - writes `customer-preview/customer-artworks.js` as
+     `window.__FREYRAUM_ARTWORKS = [...]`
+   - optional `window.__FREYRAUM_MUSEUM_HUB = {...}` injection from
+     `customer-artworks/museum-hub.json`
+4. **Runtime artwork object**
+   - `src/main.ts` → `sanitizeInjectedArtworks()` → `artworks`
+5. **Resolved browser URL / embedded payload**
+   - `src/utils/artworkImageSources.ts` → `resolveArtworkImageSources()`
+   - primary = `image`
+   - fallback = `webglImage` when present and distinct
+6. **Hub path**
+   - `src/config/museumHub.ts` → `resolveMuseumHub()` → `artworkSourceById`
+   - `src/hub/MainMuseumHub.ts` → `resolveSlotImage()` →
+     `loadSlotImageCandidate()` → `decodeSlotImage()` →
+     `setSlotImageState()` → `syncSlotRenderer()`
+   - `src/hub/HubRoomRenderer.ts` → `upsertSlot()` →
+     `imageTexture()` or `placeholderTexture(label)` →
+     `renderer.initTexture()` → visible pixels on `.museum-hub__canvas`
+7. **Interactive gallery path**
+   - `src/gallery/GalleryManager.ts` → `init()` →
+     `TextureManager.preloadArtworkAlbedos()` →
+     `showArtwork()` → `ArtworkMesh.setPaintingTextures()` →
+     `PaintingMaterial.applyTextures()` → main gallery canvas
+
+##### B. Clean-clone observed branch flow (current audit)
+
+1. `app.html` expects `/customer-artworks.js` and `/customer-audio.js`.
+2. The clean clone currently has neither generated file under `public/`.
+3. `src/main.ts` therefore falls back to `src/config/artworks.ts`.
+4. `customer-preview/app.html` expects `./customer-artworks.js` and
+   `./customer-audio.js`, but those generated files are also absent in the clean
+   clone until `scripts/write-local-preview.mjs` or the importer is run.
+5. The screenshot titles cannot therefore come from the clean-clone runtime state.
+
+##### C. Screenshot-specific trace blockers that must be resolved first
+
+- The screenshot titles are not present in:
+  - `src/config/artworks.ts`
+  - `customer-artworks/inbox/`
+  - `customer-artworks/museum-hub.json`
+- The screenshot shows side-wall titled placeholders, but the checked-in
+  `customer-artworks/museum-hub.json` only explicitly maps two front-wall artworks.
+- Conclusion: the later implementation agent must first capture the **actual
+  failing generated customer manifest + image bundle** from the runtime that
+  produced the screenshot before claiming any root cause inside the current
+  checked-in source tree.
+
+### 3. Recommended implementation strategy
+
+> **Strict first implementation PR scope:** stop after **A + B + the minimum
+> visibility-proof pieces of C**. Do not mix geometry/material realism into the
+> first repair PR.
+
+#### A — Restore artwork image rendering
+
+- **Goals**
+  - Reproduce the exact failing customer-artwork runtime.
+  - Trace one real artwork per front/left/right wall from source file to final hub
+    pixels.
+  - Fix only the first proven failure in that chain.
+- **Exact files likely to change**
+  - `src/hub/MainMuseumHub.ts`
+  - `src/hub/HubRoomRenderer.ts`
+  - `src/main.ts`
+  - `src/utils/artworkImageSources.ts`
+  - `scripts/import-artworks.mjs`
+  - `scripts/sync-customer-public.mjs`
+  - `app.html`
+  - `customer-preview/app.html`
+- **Implementation steps**
+  1. Capture the exact failing generated artifact:
+     `customer-preview/customer-artworks.js` or `public/customer-artworks.js`,
+     plus the matching `images/` folder and the runtime entry path that used it.
+  2. For at least one front-wall, one left-wall, one right-wall, and one
+     long-title artwork, record: source filename, generated manifest entry,
+     primary image URL, fallback presence, actual requested URL, request status,
+     decoded dimensions, resolved hub slot ID, and final hub texture key.
+  3. Compare the same artwork across:
+     - Vite dev (`app.html`)
+     - built production output (`dist/app.html`)
+     - `customer-preview/app.html`
+     - `file://` preview when applicable
+  4. Fix the first proven defect only:
+     - missing/stale generated file
+     - wrong base/relative path
+     - casing / encoding mismatch
+     - sanitized-away fallback
+     - state/retry bug between load, decode, and slot sync
+  5. Keep the hub renderer on its current simple `MeshBasicMaterial` path until
+     the asset pipeline is proven correct.
+- **Interfaces / data-model changes**
+  - Prefer dev-only diagnostic state first.
+  - Do not change the customer-facing artwork schema unless the failing artifact
+    proves that an importer-owned field is missing or ambiguous.
+- **Importer / generated-preview implications**
+  - Treat `image`, `webglImage`, and `dimensions` as importer-owned.
+  - If the fix touches generated asset layout, update both preview generation and
+    `public/` sync together.
+- **Risk**
+  - Fixing one environment path can regress another (`file://` vs Pages).
+- **Rollback plan**
+  - Isolate path-resolution and fallback changes behind narrow helpers so the old
+    source-selection behavior can be restored quickly if another environment breaks.
+- **Test / validation plan**
+  - `npm run import:artworks`
+  - `npm run validate:museum-hub`
+  - `npm run validate:visual`
+  - manual cross-environment request/decode verification
+- **Acceptance criteria**
+  - Every visible hub artwork that has a valid manifest image shows the real image.
+  - No slot with a valid recoverable source reaches `.has-missing-image`.
+  - The failing screenshot can be re-created pre-fix and shown resolved post-fix.
+- **Desktop/mobile impact**
+  - Must stay neutral or positive; no new passes or heavy materials in this phase.
+- **Prerequisite phase(s)**
+  - None.
+
+#### B — Add diagnostics and automated regression gates
+
+- **Goals**
+  - Make every future grey-artwork regression explainable in one inspection pass.
+  - Prevent “title visible, artwork missing” regressions from landing silently.
+- **Exact files likely to change**
+  - `src/hub/MainMuseumHub.ts`
+  - `src/hub/HubRoomRenderer.ts`
+  - `src/gallery/TextureManager.ts`
+  - `src/utils/Diagnostics.ts`
+  - `scripts/test-museum-hub-geometry.mjs`
+  - `scripts/visual-regression.mjs`
+  - `docs/QUERY_PARAMETERS.md`
+  - `docs/REGRESSION_TOOLING.md`
+- **Implementation steps**
+  1. Add one developer-only per-artwork diagnostic record with, at minimum:
+     artwork ID, title, source mode, manifest image, resolved image URL, request
+     outcome/status, decode outcome, decoded size, `maxTextureSize`,
+     downscaled-flag, cache key, texture color space, texture-uploaded flag,
+     active mesh/material identifiers, map-assigned flag, shader/material variant,
+     and fallback reason.
+  2. Expose a developer-only debug view or keyboard/query toggle that can show:
+     unlit source albedo, final shaded artwork, UV visualization, detail/normal
+     response, fallback state, and missing-image state.
+  3. Add automated checks that fail when:
+     - a manifest image is missing from preview/public/dist bundles
+     - a selected artwork reaches visible state without a valid color texture
+     - fallback renders when a valid image was expected
+     - customer preview and production diverge in artwork image behavior
+  4. Add a guard that explicitly flags visible missing-image placeholders when the
+     corresponding slot is supposed to have a recoverable source.
+- **Interfaces / data-model changes**
+  - New dev-only diagnostics API surface is expected.
+- **Importer / generated-preview implications**
+  - May add importer report fields or manifest consistency checks, but should not
+    change customer-editable metadata fields.
+- **Risk**
+  - Diagnostics can become noisy unless they are structured and per-slot.
+- **Rollback plan**
+  - Keep diagnostics opt-in and non-blocking in normal runtime mode.
+- **Test / validation plan**
+  - `npm run validate:museum-hub`
+  - `npm run validate:visual`
+  - developer debug-mode manual checks
+- **Acceptance criteria**
+  - A grey artwork can be explained from one diagnostic snapshot without guessing.
+  - CI/local regression tooling fails before a silent placeholder regression ships.
+- **Desktop/mobile impact**
+  - Dev-only; zero visible impact when disabled.
+- **Prerequisite phase(s)**
+  - A.
+
+#### C — Verify color management and texture lifecycle
+
+- **Goals**
+  - Prove that the correct image is also treated as the correct kind of data.
+  - Align hub/gallery texture lifecycle, GPU upload, restore, and color-space rules.
+- **Exact files likely to change**
+  - `src/gallery/TextureManager.ts`
+  - `src/hub/HubRoomRenderer.ts`
+  - `src/materials/PaintingMaterial.ts`
+  - `src/materials/ArchitecturalSurfaceFactory.ts`
+  - `src/core/RendererManager.ts`
+  - `src/main.ts`
+- **Implementation steps**
+  1. Verify renderer output settings on both hub and gallery paths:
+     `outputColorSpace`, `toneMapping`, and exposure.
+  2. Confirm that customer artwork albedo stays sRGB and that non-color data maps
+     use the correct Three.js non-color treatment for the pinned Three.js version.
+     The current code uses `LinearSRGBColorSpace` for non-albedo maps; this must
+     be checked against current official guidance before material work.
+  3. Verify that any `PaintingMaterial` shader customization still preserves
+     Three.js decode/output handling once real images are visible.
+  4. Add explicit logs for texture upload, active color space, and context-restore
+     rebind on both hub and gallery paths.
+  5. Add a capability-aware plan for image downscaling before GPU upload when
+     `renderer.capabilities.maxTextureSize` is smaller than the source image.
+- **Interfaces / data-model changes**
+  - No customer schema change expected.
+  - Diagnostic records should gain explicit color-space and upload fields.
+- **Importer / generated-preview implications**
+  - None unless importer-side downscale variants are later proven necessary.
+- **Risk**
+  - Incorrect color-space changes can “fix” grey placeholders while introducing
+    color shifts elsewhere.
+- **Rollback plan**
+  - Treat color-space changes as isolated, reversible commits with before/after
+    albedo screenshots.
+- **Test / validation plan**
+  - manual albedo-vs-final comparisons
+  - `npm run build`
+  - `npm run validate:visual`
+- **Acceptance criteria**
+  - Raw source colors remain faithful after shading.
+  - Context restore rebinds the active texture correctly.
+  - Downscale logic only activates when device capabilities require it.
+- **Desktop/mobile impact**
+  - High value on constrained devices; no unnecessary overhead on desktop.
+- **Prerequisite phase(s)**
+  - A, B.
+
+#### D — Refine room geometry and composition
+
+- **Goals**
+  - Move the interactive gallery from “compact stage” toward a complete premium
+    interior without rewriting the hub shell or adding high-poly architecture.
+- **Exact files likely to change**
+  - `src/core/GalleryPresentationStage.ts`
+  - `src/config/galleryPresentation.ts`
+  - `src/hub/HubRoomRenderer.ts`
+  - `src/config/museumHub.ts`
+  - `src/lighting/LightingSetup.ts`
+- **Implementation steps**
+  1. Separate geometry work into:
+     - correctness fixes (normals, culling, z-fighting, camera bounds)
+     - realism improvements (returns, reveals, depth transitions, composition)
+     - intentional deferrals (furniture, free-roam, decorative assets)
+  2. Keep the v0.87 hub shell as the authoritative museum-room route unless a
+     correctness defect is proven there.
+  3. Focus most geometry refinement on the interactive gallery stage:
+     side returns, wall/ceiling/floor transitions, selective bevel cues, and
+     camera composition.
+  4. Do not use `DoubleSide` as a realism shortcut; fix normals and orientation.
+- **Interfaces / data-model changes**
+  - Only add new stage constants when a geometry change needs one stable name.
+- **Importer / generated-preview implications**
+  - Generated preview bundle must be regenerated after runtime geometry changes.
+- **Risk**
+  - Geometry scope can sprawl into an expensive room rebuild.
+- **Rollback plan**
+  - Keep hub and gallery geometry changes in separate commits/phases.
+- **Test / validation plan**
+  - `npm run validate:visual`
+  - manual wide desktop / portrait / phone checks
+- **Acceptance criteria**
+  - The room reads as intentional architecture, not a blockout or open shell.
+- **Desktop/mobile impact**
+  - Geometry additions must be silhouette-driven and low-poly.
+- **Prerequisite phase(s)**
+  - A, B, C.
+
+#### E — Build realistic architectural materials
+
+- **Goals**
+  - Give walls, floor, ceiling, trim, recesses, and dark details restrained,
+    physically plausible differentiation that does not compete with the art.
+- **Exact files likely to change**
+  - `src/materials/ArchitecturalSurfaceFactory.ts`
+  - `src/config/quality.ts`
+  - `src/core/GalleryPresentationStage.ts`
+  - `src/hub/HubRoomRenderer.ts`
+- **Implementation steps**
+  1. Keep **MeshStandardMaterial / MeshPhysicalMaterial first**.
+  2. Walls: use warm neutral plaster with shared subtle normal/roughness detail.
+  3. Floor: prefer one restrained premium surface with controlled reflection,
+     anti-shimmer filtering, and reuse across tiers.
+  4. Ceiling/reveals/trim: use rougher plaster and muted dark painted detail,
+     not pure black or noisy procedural patterns.
+  5. Only move to `onBeforeCompile` or a custom material if the standard PBR path
+     proves insufficient after side-by-side comparisons.
+- **Interfaces / data-model changes**
+  - None required for the first architectural material pass.
+- **Importer / generated-preview implications**
+  - Preview bundle regeneration only.
+- **Risk**
+  - Over-detail can flatten the room or distract from the artwork.
+- **Rollback plan**
+  - Keep surface-role recipe changes isolated per material role.
+- **Test / validation plan**
+  - `npm run validate:visual`
+  - manual grazing-light review on desktop and phone
+- **Acceptance criteria**
+  - Surfaces feel materially distinct while remaining visually quiet.
+- **Desktop/mobile impact**
+  - Reuse small shared maps; avoid unique heavy textures.
+- **Prerequisite phase(s)**
+  - D.
+
+#### F — Build physical artwork surface profiles
+
+- **Goals**
+  - Use the existing validated `presentation` contract as the backbone for
+    believable canvas, paper, matte-print, satin-print, and glazed-print behavior.
+- **Exact files likely to change**
+  - `src/config/presentation.ts`
+  - `src/gallery/ArtworkMesh.ts`
+  - `src/materials/PaintingMaterial.ts`
+  - `scripts/import-artworks.mjs`
+  - customer-facing picture/text docs if metadata guidance changes
+- **Implementation steps**
+  1. Keep the existing profile list:
+     `canvas`, `fine-art-paper`, `matte-print`, `satin-print`, `glazed-print`.
+  2. Define per-profile roughness/specular/clearcoat/detail expectations.
+  3. Keep source image color untouched; physicality must come from roughness,
+     normal, clearcoat, body depth, wall gap, and optional frame/backing detail.
+  4. Prefer shared reusable detail resources or bounded procedural equivalents,
+     not per-artwork unique PBR bundles.
+  5. If frames remain, use simple shared geometry and restrained materials.
+- **Interfaces / data-model changes**
+  - The current `presentation` field is already the correct compatibility layer.
+  - Legacy records should continue to default to `matte-print`.
+- **Importer / generated-preview implications**
+  - Only documentation/import validation changes if new presentation rules are
+    added; avoid changing sidecar field names.
+- **Risk**
+  - Over-strong canvas/glaze cues can alter the identity of the supplied artwork.
+- **Rollback plan**
+  - Keep profile tuning data-driven in `src/config/presentation.ts`.
+- **Test / validation plan**
+  - manual close-view and normal-view checks
+  - `npm run validate:visual`
+- **Acceptance criteria**
+  - Physical response is believable and subtle at normal distance and stable at
+    close inspection.
+- **Desktop/mobile impact**
+  - Profile detail scales down by preset without breaking presentation semantics.
+- **Prerequisite phase(s)**
+  - C, E.
+
+#### G — Tune lighting and image quality
+
+- **Goals**
+  - Reveal room geometry and surface response while preserving artwork fidelity.
+- **Exact files likely to change**
+  - `src/lighting/LightingSetup.ts`
+  - `src/hub/HubRoomRenderer.ts`
+  - `src/core/PostProcessing.ts`
+  - `src/core/RendererManager.ts`
+- **Implementation steps**
+  1. Tune the existing restrained warm/cool rigs before adding new lights.
+  2. Keep white walls and artwork highlights below blowout.
+  3. Re-evaluate bloom only after raw albedo comparisons prove it does not wash
+     out the artwork.
+  4. Keep tone mapping unchanged unless side-by-side image checks prove a better
+     fidelity result than the current `NoToneMapping` baseline.
+- **Interfaces / data-model changes**
+  - None expected.
+- **Importer / generated-preview implications**
+  - Preview bundle regeneration only.
+- **Risk**
+  - Lighting changes can hide asset bugs or alter artwork brightness.
+- **Rollback plan**
+  - Capture albedo/final before/after screenshots for each lighting change.
+- **Test / validation plan**
+  - `npm run validate:visual`
+  - manual source-image fidelity review
+- **Acceptance criteria**
+  - Room lighting improves realism without becoming a color-management regression.
+- **Desktop/mobile impact**
+  - Prefer static or on-demand lighting changes; no heavy dynamic effects.
+- **Prerequisite phase(s)**
+  - C, D, E, F.
+
+#### H — Performance hardening, tier fallbacks, and disposal
+
+- **Goals**
+  - Keep the refined result smooth and memory-safe across desktop, tablet, and mobile.
+- **Exact files likely to change**
+  - `src/config/quality.ts`
+  - `src/gallery/TextureManager.ts`
+  - `src/gallery/GalleryManager.ts`
+  - `src/hub/HubRoomRenderer.ts`
+  - `src/materials/ArchitecturalSurfaceFactory.ts`
+  - `src/utils/PerformanceMetrics.ts`
+- **Implementation steps**
+  1. Add capability-aware upload caps based on `renderer.capabilities.maxTextureSize`.
+  2. Bound anisotropy, procedural-map sizes, clearcoat/glaze features, and shadow
+     budgets by preset.
+  3. Keep preload windows bounded and explicit.
+  4. Avoid per-frame allocations and per-artwork unique shader programs.
+  5. Verify disposal and context-restore behavior for active, adjacent, and
+     preloaded textures.
+- **Interfaces / data-model changes**
+  - Quality preset fields may need explicit artwork-resolution caps and
+    per-surface detail toggles.
+- **Importer / generated-preview implications**
+  - None unless importer-side variant generation is later proven necessary.
+- **Risk**
+  - Aggressive downscaling or low-tier pruning can silently change the art.
+- **Rollback plan**
+  - Preserve the current quality architecture and add new limits incrementally.
+- **Test / validation plan**
+  - `npm run test:frame-budget`
+  - `npm run validate:visual`
+  - manual mobile/high-DPR checks
+- **Acceptance criteria**
+  - High-quality features degrade gracefully instead of failing abruptly on mobile.
+- **Desktop/mobile impact**
+  - This phase owns the final desktop/mobile differentiation.
+- **Prerequisite phase(s)**
+  - A through G.
+
+##### Recommended quality-tier behavior
+
+| Feature | High | Balanced | Battery/Low |
+|---|---|---|---|
+| Artwork image resolution cap | `min(source, maxTextureSize, 8192)` | `min(source, maxTextureSize, 4096)` | `min(source, maxTextureSize, 2048)` |
+| DPR / render-resolution cap | keep current `pixelRatioCap: 1.6` | keep current `pixelRatioCap: 1.25` | keep current `pixelRatioCap: 1.0` |
+| Artwork canvas/paper microdetail | full eligible profile detail | reduced profile detail | off except essential base roughness |
+| Clearcoat / glaze | enabled only for eligible glazed/satin profiles | off by default | off |
+| Floor / wall normal detail | full shared maps (`hubSurfaceTileSize: 1024`) | reduced shared maps (`512`) | coarse shared maps (`256`) |
+| Anisotropy cap | `maxAnisotropy / 1` | `maxAnisotropy / 2` | `maxAnisotropy / 4` |
+| Dynamic shadows | enabled | enabled | disabled |
+| Shadow map size / update policy | 2048, on-demand updates only | 1024, on-demand updates only | off |
+| Post-processing | only restrained, fidelity-validated effects | minimal or off | off |
+| Texture preload window | active + near critical window + background sweep | active + one-step adjacent window + near-next queue | active first, one-at-a-time idle adjacent prefetch |
+
+#### I — Documentation and customer-preview synchronization
+
+- **Goals**
+  - Keep architecture, diagnostics, deployment, and preview behavior documented in
+    lock-step with the implementation.
+- **Exact files likely to change**
+  - `plan.md`
+  - `FINDINGS.md`
+  - `CHANGELOG.md`
+  - `README.md`
+  - `docs/DEPLOYMENT.md`
+  - `docs/REGRESSION_TOOLING.md`
+  - customer-facing picture/text docs if importer behavior changes
+- **Implementation steps**
+  1. Update plan/findings/changelog immediately when the first image-visibility PR
+     lands.
+  2. Document the exact developer diagnostics and the customer-preview /
+     production parity checks.
+  3. Regenerate the tracked preview bundle (`customer-preview/freyraum-gallery.js`,
+     `customer-preview/style.css`, and `customer-preview/app.html`) only when
+     source runtime files actually change.
+  4. Do **not** commit generated `customer-preview/customer-artworks.js`,
+     `public/customer-artworks.js`, or generated `images/` output.
+- **Interfaces / data-model changes**
+  - Documentation only.
+- **Importer / generated-preview implications**
+  - Preview bundle regeneration must stay tied to source runtime changes, not to
+    customer data changes alone.
+- **Risk**
+  - Documentation drift can mislead later debugging.
+- **Rollback plan**
+  - Keep docs aligned with the same implementation PRs that change behavior.
+- **Test / validation plan**
+  - `npm run docs:check-config-authority`
+- **Acceptance criteria**
+  - Later contributors can reproduce the fixed pipeline and the preview/deploy
+    workflow from docs alone.
+- **Desktop/mobile impact**
+  - None.
+- **Prerequisite phase(s)**
+  - A through H.
+
+### 4. Brainstorming decision matrix
+
+| Topic | Option A | Option B | Option C | Recommended option | Why |
+|---|---|---|---|---|---|
+| Artwork visibility diagnosis | Instrument the hub image/fallback pipeline first | Start with gallery shader/material changes | Judge only from screenshots | A | The screenshot route is the hub, and its placeholder path is explicit and measurable. |
+| Artwork rendering material | Keep hub on `MeshBasicMaterial` until assets are proven | Move hub to `PaintingMaterial` immediately | Custom hub shader | A | Removes shader complexity from the first repair. |
+| Canvas detail | Shared reusable detail resource or bounded procedural equivalent | Per-artwork unique weave textures | Displacement/tessellation | A | Matches current architecture and mobile constraints. |
+| Wall material detail | `MeshStandardMaterial` with shared subtle normal/roughness maps | `onBeforeCompile` enhancement | Fully custom wall shader | A | Lowest risk, highest reuse, enough for restrained realism. |
+| Floor material detail | Restrained microcement / stone with bounded reflection tiers | Highly glossy polished stone | SSR-driven floor | A | Premium look without unstable reflection cost. |
+| Frames | Simple shared geometry if frames remain | Frameless-only forever | Unique textured frames per artwork | A | Shared geometry is believable and cheap; unique texture sets are not. |
+| Lighting | Tune the existing restrained rigs | Add many per-artwork spotlights | Heavy bloom/SSR/SSAO-driven mood lighting | A | Keeps the art primary and preserves performance. |
+| Mobile quality fallback | Explicit preset-gated feature reduction | Hidden automatic downgrades | Same desktop path everywhere | A | The repository already uses explicit quality presets and should keep them authoritative. |
+
+### 5. File-by-file change map
+
+| File | Responsibility | Why it changes | Type | Regenerate generated output? |
+|---|---|---|---|---|
+| `src/hub/MainMuseumHub.ts` | Hub slot source resolution, load/decode state, diagnostics bridge | First repair target for request/decode/fallback proof and slot-level diagnostics | Runtime | Yes, preview bundle if source changes |
+| `src/hub/HubRoomRenderer.ts` | Visible hub artwork plane, placeholder texture, hub WebGL canvas | Needed for map-assignment diagnostics, placeholder-state proof, and any hub-only image-surface fixes | Runtime | Yes, preview bundle if source changes |
+| `src/utils/artworkImageSources.ts` | Shared declared-image / embedded-fallback source planning | Needed if source selection or logging metadata must become more explicit | Runtime | Yes, preview bundle if source changes |
+| `src/main.ts` | Boot-time artwork-source resolution and diagnostics | Needed if environment/source capture must be surfaced at startup | Runtime | Yes, preview bundle if source changes |
+| `scripts/import-artworks.mjs` | Customer source discovery, manifest generation, preview asset generation | Needed only if the failing artifact proves a generation mismatch, stale field, or missing fallback payload | Importer | No committed generated customer-artwork output; regenerate locally |
+| `scripts/sync-customer-public.mjs` | Copy preview-generated customer assets to `public/` for Vite/Pages | Needed if production asset copying is the proven failure | Importer/build | No committed generated customer-artwork output; regenerate locally |
+| `app.html` | Dev / production entry ordering for generated customer JS | Change only if base/path ordering is the proven bug | Runtime entry | Rebuild `dist/` |
+| `customer-preview/app.html` | File-based preview entry | Change only if preview-specific path/cache behavior is proven wrong | Preview entry | Re-run preview HTML generation |
+| `src/gallery/TextureManager.ts` | Gallery albedo/data-map load, color space, fallback textures, size warnings | Needed for cross-route color/lifecycle parity and future downscale work | Runtime | Yes, preview bundle if source changes |
+| `src/gallery/GalleryManager.ts` | Gallery readiness, preload, and active artwork application | Needed for gallery-side diagnostics and parity once the hub is fixed | Runtime | Yes, preview bundle if source changes |
+| `src/gallery/ArtworkMesh.ts` | Interactive artwork assembly/body depth | Needed in later physicality phases | Runtime | Yes, preview bundle if source changes |
+| `src/materials/PaintingMaterial.ts` | Interactive artwork shading and debug modes | Needed after visibility is proven for albedo/final/UV/profile checks | Runtime | Yes, preview bundle if source changes |
+| `src/materials/ArchitecturalSurfaceFactory.ts` | Shared room/stage material recipes | Needed for restrained realism phases | Runtime | Yes, preview bundle if source changes |
+| `src/core/GalleryPresentationStage.ts` | Interactive-gallery architectural shell | Needed for later geometry realism work | Runtime | Yes, preview bundle if source changes |
+| `src/lighting/LightingSetup.ts` | Interactive-gallery light rig | Needed for later lighting tuning | Runtime | Yes, preview bundle if source changes |
+| `src/config/quality.ts` | Explicit quality-tier feature policy | Needed for final tier caps and fallbacks | Runtime config | Yes, preview bundle if source changes |
+| `src/config/presentation.ts` | Validated artwork surface profile contract | Existing compatibility point for later artwork-surface tuning | Runtime config | Yes, preview bundle if source changes |
+| `scripts/test-museum-hub-geometry.mjs` | Structural hub regression gate | Needed to fail slot/source regressions deterministically | Test | No |
+| `scripts/visual-regression.mjs` | Pixel/regression harness for hub/gallery/preview parity | Needed for screenshot-based proof and divergence detection | Test | No |
+| `docs/QUERY_PARAMETERS.md` | Authoritative diagnostics/query reference | Update if new debug toggles or APIs are added | Documentation | No |
+| `docs/REGRESSION_TOOLING.md` | Regression gate documentation | Update when new artwork-source diagnostics/tests land | Documentation | No |
+| `docs/DEPLOYMENT.md` | Customer asset generation and Pages deployment flow | Update if the proven fix changes how generated assets are validated or synced | Documentation | No |
+| `README.md`, `CHANGELOG.md`, `plan.md`, `FINDINGS.md` | Current state, release history, active plan, reusable findings | Update when the implementation lands | Documentation | No |
+| `customer-preview/freyraum-gallery.js`, `customer-preview/style.css` | Tracked generated preview runtime bundle | Should only change after runtime source changes, never as manual edits | Generated output | Yes, when runtime source changes |
+
+### 6. Validation matrix
+
+#### Existing script validation
+
+| Command | Why it matters for this roadmap | When to run |
+|---|---|---|
+| `npm install` | Ensures the same dependency graph as CI before reproduction and validation | Before any implementation validation |
+| `npm run import:artworks` | Regenerates the customer manifest, preview JS, preview images, and `public/` sync state | Before reproducing customer-artwork failures or validating Pages/dev/preview parity |
+| `npm run lint` | Protects TypeScript/ESLint runtime changes | For implementation PRs that touch runtime/importer/tests |
+| `npm run build:typecheck` | Verifies strict TypeScript across hub/gallery/importer-adjacent code | For implementation PRs |
+| `npm run build` | Produces both tracked preview bundle and Vite production build | For any runtime/importer change |
+| `npm run validate:museum-hub` | Structural gate for wall geometry, slot placement, fallback contracts, and wall token reach | For any hub/image-pipeline change |
+| `npm run test:frame-budget` | Guards existing performance-tooling behavior and is part of the repository baseline | For implementation PRs |
+| `npm run validate:visual` | Pixel/regression gate for hub/gallery output | For image-pipeline, geometry, lighting, and material changes |
+| `npm run docs:check-config-authority` | Keeps docs aligned if diagnostics/query docs change | For any plan/docs or debug-surface update |
+
+#### Required manual validation
+
+- **Development runtime**
+  - `app.html` under Vite dev
+  - verify `/customer-artworks.js` and `/customer-audio.js` injection behavior
+- **Built production output**
+  - `dist/app.html` / Pages-equivalent path
+  - verify `/Freyraum/` base-path asset resolution
+- **Customer preview**
+  - `customer-preview/app.html`
+  - verify generated JS, generated images, and timestamped file-path updates after import
+- **Supported `file://` mode**
+  - only for the customer-preview path
+  - confirm browser can decode and display the customer artwork image without network assumptions
+- **Viewport/device coverage**
+  - desktop
+  - wide desktop
+  - tablet
+  - phone portrait
+  - phone landscape
+  - simulated high-DPR
+- **Interaction/state coverage**
+  - first load
+  - active artwork navigation
+  - image cache/prefetch behavior
+  - missing-image behavior
+  - oversized-image behavior
+  - quality-preset changes
+  - WebGL context restore
+  - developer albedo / UV / fallback debug modes
+
+#### Manual acceptance checks per environment
+
+1. The hub and gallery both load the same intended artwork IDs.
+2. Every visible artwork surface shows the actual customer image, not a placeholder.
+3. No URL resolves to HTML, 404, or the wrong asset type.
+4. Customer preview and production show the same image/fallback behavior.
+5. Context restore rebinds the active artwork texture.
+6. Lower quality tiers reduce cost, not correctness.
+
+### 7. Definition of done
+
+The later implementation is **not complete** unless all of the following are true:
+
+- Every intended artwork visibly displays the correct supplied image.
+- No artwork title overlay substitutes for an image.
+- The active artwork always has a verifiable successful request/decode path and an
+  assigned color texture on the visible render surface.
+- Missing assets have an explicit, developer-readable diagnostic reason.
+- Artwork source colors remain faithful after shading.
+- The museum hub and the interactive gallery no longer diverge silently in source
+  resolution or fallback behavior.
+- Room geometry reads as a complete premium interior rather than a blockout.
+- Walls, floor, ceiling, frames/backers, and artwork surfaces have intentionally
+  differentiated, physically plausible response.
+- Material detail supports the art and never obscures it.
+- High-quality features degrade gracefully on mobile and constrained GPUs.
+- Existing navigation, loading, accessibility, importer, and customer-preview
+  workflows do not regress.
+- All relevant validation gates pass.
+- Documentation and generated preview bundle output are synchronized only when
+  source runtime changes require regeneration.
+
+#### Strict non-goals for the first repair PR
+
+- no renderer/framework migration
+- no new dependency without proof that existing Three.js/WebGL cannot do the job
+- no default GI / SSR / heavy SSAO path
+- no high-poly room rebuild
+- no per-artwork unique heavy PBR bundles
+- no persistent visible title text over artwork as a fallback UX
+- no “grey placeholder but no diagnostics” behavior
+
+#### Immediate recommendation for the next implementation agent
+
+1. Reproduce the failing screenshot with the **actual generated customer manifest**
+   that produced it.
+2. Prove one full hub source-to-pixel trace on the failing environment.
+3. Ship one small PR containing:
+   - the proven hub image-pipeline fix
+   - the minimal diagnostics needed to explain failures
+   - regression gates that fail before grey placeholders silently return
+4. Defer room/material realism to later measured phases.
+
 ## Implemented — Shared artwork-source fallback contract for hub + gallery (v0.90, 2026-08-07)
 
 This slice closes the verified hub placeholder failure without changing the

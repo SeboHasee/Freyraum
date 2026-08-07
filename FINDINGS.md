@@ -1,5 +1,40 @@
 # FINDINGS
 
+## Grey-artwork planning audit (current-branch evidence only, 2026-08-07)
+
+1. The audited branch state was `copilot/planning-change-startup-flow` at
+   `061da51ad4a6348be2e86fa8e440760326ae5615` with a clean working tree. The
+   screenshot route is the **museum hub** (`src/hub/MainMuseumHub.ts` plus
+   `src/hub/HubRoomRenderer.ts`), not the interactive gallery.
+2. The visible titles in the screenshot are most likely **missing-image
+   placeholders**, not successful artwork labels. In the current branch, the
+   normal hub label pill stays hidden until hover/focus/selected, while the
+   `.museum-hub__art-placeholder` becomes visible only when
+   `.museum-hub__artwork.has-missing-image` is present. Commit `061da51` made
+   that placeholder visibly render.
+3. The screenshot data set does **not** match the checked-in customer inputs.
+   Current tracked inbox art is only `Fraktal.png` and `Akt 27.png`, and the
+   checked-in `customer-artworks/museum-hub.json` explicitly maps only those two
+   artworks to the front wall. Screenshot titles such as `Gartenszene` and
+   `Zdigital…` do not exist anywhere in the active branch.
+4. The clean clone does **not** contain the generated customer-artwork runtime
+   files needed to reproduce the screenshot state:
+   `customer-preview/customer-artworks.js`, `public/customer-artworks.js`,
+   generated preview/public `images/`, and `dist/` are all absent until the
+   importer/build steps run locally.
+5. The hub’s visible artwork surface is much simpler than the gallery shader
+   path. The hub resolves a DOM image or fallback payload, then binds it to a
+   `THREE.Texture(image)` on a `MeshBasicMaterial`. That makes the first
+   debugging target the generated source/URL/fallback state, not a broad
+   material rewrite.
+6. Color management still needs verification after visibility is restored, but
+   it is not the strongest current-branch explanation for the screenshot. The
+   hub and gallery both use `renderer.outputColorSpace = THREE.SRGBColorSpace`
+   with `NoToneMapping`; the gallery marks albedo textures as sRGB. The current
+   non-albedo path uses `LinearSRGBColorSpace`, which should be checked against
+   current official Three.js non-color guidance during the later color-pipeline
+   phase.
+
 ## Shared artwork-source fallback findings (v0.90, 2026-08-07)
 
 1. The grey museum-hub artwork symptom was caused by a real runtime split:
