@@ -29,11 +29,14 @@ customer-artworks/inbox/
 - `.md` is accepted as secondary fallback.
 - Missing/invalid sidecars create warnings, not hard import failures.
 - `Surface` accepts any plain text, is shown with the artwork metadata, and does not alter canvas, material, or render settings.
+- `Presentation` is optional and affects only the interactive-gallery mounting profile. Valid values are `canvas`, `fine-art-paper`, `matte-print`, `satin-print`, and `glazed-print`.
+- If `Presentation` is omitted or invalid, the interactive gallery falls back to `matte-print`.
 
 Example:
 
 ```text
 Surface: Ölfarbe auf grober Leinwand
+Presentation: canvas
 ```
 
 ## Common report sections

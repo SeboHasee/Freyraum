@@ -27,7 +27,7 @@
  * The asset fields (`id`, `image`, `webglImage`, `dimensions`) remain
  * importer-owned. Sidecars only supply customer-facing metadata
  * (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`,
- * `tags`, `surface`).
+ * `tags`, `surface`, `presentation`).
  *
  * No npm dependencies are required. Node 18+.
  */
@@ -95,8 +95,17 @@ const SIDECAR_FIELD_KEYS = new Set([
   'alt',
   'tags',
   'surface',
+  'presentation',
   'medium',
   'description',
+]);
+
+const VALID_PRESENTATIONS = new Set([
+  'canvas',
+  'fine-art-paper',
+  'matte-print',
+  'satin-print',
+  'glazed-print',
 ]);
 
 /** MIME types for data URL encoding. */
@@ -290,7 +299,7 @@ function uniqueId(base, taken) {
  *     blank lines trimmed)
  *
  * Returns `{ fields, fieldWarnings }`. Field-level mistakes (invalid year,
- * unknown surface, unknown keys, blank required values) collect warnings
+ * invalid presentation, unknown keys, blank required values) collect warnings
  * but never throw — the import still succeeds. I/O errors throw so the
  * caller can decide how to surface them.
  */
@@ -373,6 +382,22 @@ function parseSidecar(filePath) {
   if (Object.prototype.hasOwnProperty.call(fields, 'surface')) {
     if (fields.surface === '') {
       delete fields.surface;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(fields, 'presentation')) {
+    if (fields.presentation === '') {
+      delete fields.presentation;
+    } else {
+      const normalized = String(fields.presentation).trim().toLowerCase();
+      if (!VALID_PRESENTATIONS.has(normalized)) {
+        fieldWarnings.push(
+          `Presentation "${fields.presentation}" is invalid — use ${Array.from(VALID_PRESENTATIONS).join(', ')}`
+        );
+        delete fields.presentation;
+      } else {
+        fields.presentation = normalized;
+      }
     }
   }
 
@@ -661,6 +686,7 @@ imageEntries.forEach((filename, i) => {
   const alt = (sidecarFields?.alt) || title;
   const tags = Array.isArray(sidecarFields?.tags) ? sidecarFields.tags : [];
   const surface = sidecarFields?.surface || '';
+  const presentation = sidecarFields?.presentation || '';
   const medium = (sidecarFields?.medium) || generateMedium(dims.width, dims.height);
 
   artworks.push({
@@ -677,6 +703,7 @@ imageEntries.forEach((filename, i) => {
     credit,
     tags,
     ...(surface ? { surface } : {}),
+    ...(presentation ? { presentation } : {}),
   });
 
   imported.push(`${filename} (${dims.width} × ${dims.height})`);

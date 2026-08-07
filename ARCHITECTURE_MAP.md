@@ -11,14 +11,18 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - UI wiring
   - Render-loop coordination and idle render suppression
 - `src/core/`
-  - `RendererManager`, `SceneManager`, post-processing pipeline
+  - `RendererManager`, `SceneManager`, `GalleryPresentationStage`, post-processing pipeline
 - `src/gallery/`
-  - Gallery state, artwork switching, preload/warm orchestration, texture usage
+  - Gallery state, artwork switching, preload/warm orchestration, texture usage,
+    and mounted-work composition
 - `src/materials/`
   - Painting and frame material behavior, procedural texture generation, and
     shared architectural hub-shell materials/detail maps
 - `src/config/`
   - Startup and quality/runtime config models
+  - `galleryPresentation.ts`: compact interactive-gallery stage envelope and
+    mounted-work spacing constants
+  - `presentation.ts`: validated interactive-gallery presentation profiles
   - `museumHub.ts`: unified museum-hub schema, v1/legacy migration, calibrated
     wall-plane contract (stage + multi-plane wall quads + stage-space safe
     polygons + wall-local slot placement), reference-quad room reconciliation,

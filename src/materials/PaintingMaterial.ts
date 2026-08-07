@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import {
+  ARTWORK_PRESENTATION_PROFILES,
+  DEFAULT_ARTWORK_PRESENTATION,
+  type ArtworkPresentationId,
+} from '../config/presentation';
 import type { QualityPreset, PaintingShaderVariant } from '../config/quality';
 import type { ResolvedPaintingTextures } from './PaintingTextureSet';
 
@@ -87,6 +92,7 @@ export interface PaintingUniforms {
 export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
   readonly paintingUniforms: PaintingUniforms;
   private currentVariant: PaintingShaderVariant;
+  private activePresentation: ArtworkPresentationId = DEFAULT_ARTWORK_PRESENTATION;
   private hasDetailNormal = false;
   private hasBump = false;
   private hasAO = false;
@@ -105,8 +111,9 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
   private reducedMotion = false;
 
   constructor(preset: QualityPreset) {
+    const initialPresentation = ARTWORK_PRESENTATION_PROFILES[DEFAULT_ARTWORK_PRESENTATION];
     super({
-      roughness: 0.88,
+      roughness: initialPresentation.baseRoughness,
       metalness: 0,
       emissive: 0xffffff,
       emissiveIntensity: preset.albedoFidelityFill,
@@ -115,7 +122,7 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
       clearcoat: 0.0,
       // v0.03 matte-first retune: was 1.0. Specular intensity map (when
       // present) controls the dynamic range, but the base term is muted.
-      specularIntensity: 0.3,
+      specularIntensity: 0.08,
     });
 
     this.paintingUniforms = {
@@ -148,6 +155,7 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
     this.grazingEnabled = preset.grazingBoostEnabled;
     this.parallaxEnabledFlag = preset.parallaxEnabled;
     this.selfShadowEnabledFlag = preset.selfShadowEnabled;
+    this.applyPresentation(DEFAULT_ARTWORK_PRESENTATION, preset);
 
     this.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, this.paintingUniforms);
@@ -454,10 +462,10 @@ ${LIGHTS_END_TOKEN}
 
   applyPreset(preset: QualityPreset): void {
     this.normalScale.set(preset.normalStrength, preset.normalStrength);
-    this.clearcoatRoughness = preset.clearcoatRoughnessValue;
     this.emissiveIntensity = preset.albedoFidelityFill;
+    this.applyPresentationSettings(preset);
 
-    if (!preset.clearcoatEnabled) {
+    if (!preset.clearcoatEnabled || ARTWORK_PRESENTATION_PROFILES[this.activePresentation].clearcoatStrength <= 0) {
       this.clearcoat = 0.0;
       if (this.clearcoatMap) {
         this.clearcoatMap = null;
@@ -543,10 +551,11 @@ ${LIGHTS_END_TOKEN}
     this.normalMap = textures.normal ?? null;
 
     this.roughnessMap = preset.shaderVariant === 'painting-battery' ? null : (textures.roughness ?? null);
-    if (this.roughnessMap) this.roughness = 1.0;
+    this.roughness = ARTWORK_PRESENTATION_PROFILES[this.activePresentation].baseRoughness;
 
-    this.specularIntensityMap = preset.specularStrength > 0 ? (textures.specular ?? null) : null;
-    this.specularIntensity = preset.specularStrength > 0 ? preset.specularStrength : 0.3;
+    const specularStrength = preset.specularStrength * ARTWORK_PRESENTATION_PROFILES[this.activePresentation].specularScale;
+    this.specularIntensityMap = specularStrength > 0 ? (textures.specular ?? null) : null;
+    this.specularIntensity = specularStrength > 0 ? specularStrength : 0.08;
 
     this.paintingUniforms.tDetailNormal.value =
       preset.detailNormalEnabled && preset.detailNormalStrength > 0 ? (textures.detailNormal ?? null) : null;
@@ -565,11 +574,14 @@ ${LIGHTS_END_TOKEN}
     this.aoMap = textures.ao ?? null;
     this.aoMapIntensity = 1.0;
 
-    const nextClearcoatMap = preset.clearcoatEnabled ? (textures.varnish ?? null) : null;
+    const presentation = ARTWORK_PRESENTATION_PROFILES[this.activePresentation];
+    const nextClearcoatMap =
+      preset.clearcoatEnabled && presentation.clearcoatStrength > 0 ? (textures.varnish ?? null) : null;
     const clearcoatMapChanged = nextClearcoatMap !== this.clearcoatMap;
     this.clearcoatMap = nextClearcoatMap;
-    this.clearcoat = preset.clearcoatEnabled && textures.varnish ? preset.clearcoatStrength : 0.0;
-    this.clearcoatRoughness = preset.clearcoatRoughnessValue;
+    this.clearcoat = preset.clearcoatEnabled ? presentation.clearcoatStrength : 0.0;
+    this.clearcoatRoughness =
+      presentation.clearcoatStrength > 0 ? presentation.clearcoatRoughness : preset.clearcoatRoughnessValue;
     if (clearcoatMapChanged) {
       this.needsUpdate = true;
     }
@@ -585,6 +597,11 @@ ${LIGHTS_END_TOKEN}
     // (detail-normal and grazing/specular response) remain quality-preset
     // controlled only.
     this.paintingUniforms.uReducedMotionScalar.value = 1.0;
+  }
+
+  applyPresentation(presentation: ArtworkPresentationId, preset: QualityPreset): void {
+    this.activePresentation = presentation;
+    this.applyPresentationSettings(preset);
   }
 
   /**
@@ -668,5 +685,21 @@ ${LIGHTS_END_TOKEN}
     if (this.clearcoatMap || this.clearcoat > 0) active.push('varnish');
     if (this.emissiveMap && this.emissiveIntensity > 0) active.push('albedoFill');
     return active;
+  }
+
+  private applyPresentationSettings(preset: QualityPreset): void {
+    const presentation = ARTWORK_PRESENTATION_PROFILES[this.activePresentation];
+    this.roughness = presentation.baseRoughness;
+    this.clearcoatRoughness =
+      presentation.clearcoatStrength > 0 ? presentation.clearcoatRoughness : preset.clearcoatRoughnessValue;
+    const specularStrength = preset.specularStrength * presentation.specularScale;
+    this.specularIntensity = specularStrength > 0 ? specularStrength : 0.08;
+    if (presentation.clearcoatStrength <= 0) {
+      this.clearcoat = 0;
+    } else if (preset.clearcoatEnabled) {
+      this.clearcoat = presentation.clearcoatStrength;
+    } else {
+      this.clearcoat = 0;
+    }
   }
 }

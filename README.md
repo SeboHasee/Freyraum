@@ -23,10 +23,19 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   (`planar`, `ibl`, `off`).
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
-- Lighting uses one fixed dramatic warm/cool configuration; there is no lighting-mode setting.
-- Artworks render without metal frames or side-preview meshes.
+- The interactive gallery now mounts artworks inside a compact architectural stage
+  (front display wall, floor, ceiling, side returns, shadow gap, and ceiling
+  reveal) while keeping the hub on its independent v0.87 room renderer.
+- Lighting still uses one fixed dramatic warm/cool configuration; there is no
+  lighting-mode setting.
+- Interactive-gallery artworks render as shallow mounted objects with no default
+  decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.
-- Artwork `Surface` metadata is optional free text and never changes material or render settings.
+- Artwork `Surface` metadata is optional free text and never changes material or
+  render settings.
+- Artwork `Presentation` metadata is optional, validated, and affects only the
+  interactive-gallery mounting profile (`canvas`, `fine-art-paper`,
+  `matte-print`, `satin-print`, `glazed-print`; default `matte-print`).
 - CSS and WebGL share one authoritative museum-grey wall token (`#D8DDDB`,
   `--color-gallery-wall`) resolved before renderer construction, so gallery,
   hub, fallback surfaces, and the WebGL clear color can never drift apart.

@@ -1,5 +1,11 @@
 import * as THREE from 'three';
 import type { Artwork } from '../config/artworks';
+import {
+  ARTWORK_PRESENTATION_PROFILES,
+  resolveArtworkPresentation,
+  type ArtworkPresentationId,
+  type ArtworkPresentationProfile,
+} from '../config/presentation';
 import { ArtworkMesh } from './ArtworkMesh';
 import { TextureManager } from './TextureManager';
 import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory';
@@ -680,6 +686,8 @@ export class GalleryManager {
    */
   private async showArtwork(index: number): Promise<void> {
     const artwork = this.artworks[index];
+    const presentation = this.resolvePresentation(index);
+    const presentationProfile = ARTWORK_PRESENTATION_PROFILES[presentation];
     // v0.09: prefer the embedded data URL for WebGL upload reliability.
     const albedoUrl = artwork.webglImage ?? artwork.image;
     const webglImageSource: 'embedded-data-url' | 'file-url' =
@@ -710,6 +718,7 @@ export class GalleryManager {
         : 'local-relative',
       dimensions: artwork.dimensions,
       surface: artwork.surface ?? null,
+      presentation,
     }));
 
     if (!albedo || !preset) {
@@ -749,7 +758,7 @@ export class GalleryManager {
     for (const role of PROCEDURAL_ROLES) {
       if (authored[role]) {
         resolved[role] = authored[role];
-      } else if (this.shouldFillRole(role, preset)) {
+      } else if (this.shouldFillRole(role, preset, presentationProfile)) {
         resolved[role] = this.generateProceduralMap(artwork.id, role, preset);
         proceduralGenerated = true;
       }
@@ -760,7 +769,7 @@ export class GalleryManager {
 
     // P-02 v0.40: update frame surface seed so each artwork shows a distinct
     // deterministic texture phase, preventing phase alignment across the gallery.
-    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
+    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions, presentation);
     this.markReadiness(index, 'materialApplied', 'show-artwork');
     this.markRenderDirty(8);
 
@@ -777,6 +786,7 @@ export class GalleryManager {
       maps: resolvedSummary,
       shaderVariant: preset.shaderVariant,
       inspectionMode: this.inspectionMode,
+      presentation,
     }));
 
     // v0.09: check fallback using the same URL that was loaded (albedoUrl).
@@ -831,6 +841,7 @@ export class GalleryManager {
       },
       parallaxEnabled: preset.parallaxEnabled,
       parallaxScale: preset.parallaxScale,
+      presentation,
       specularStrength: preset.specularStrength,
       selfShadowBias: preset.selfShadowBias,
       readiness: this.readiness[index],
@@ -965,6 +976,8 @@ export class GalleryManager {
   warmArtworkForGPU(index: number, reason = 'gpu-warm'): boolean {
     const start = this.now();
     const artwork = this.artworks[index];
+    const presentation = this.resolvePresentation(index);
+    const presentationProfile = ARTWORK_PRESENTATION_PROFILES[presentation];
     const preset = this.currentPreset;
     if (!artwork || !preset) return false;
 
@@ -998,12 +1011,12 @@ export class GalleryManager {
     for (const role of PROCEDURAL_ROLES) {
       if (authored[role]) {
         resolved[role] = authored[role];
-      } else if (this.shouldFillRole(role, preset)) {
+      } else if (this.shouldFillRole(role, preset, presentationProfile)) {
         resolved[role] = this.generateProceduralMap(artwork.id, role, preset);
       }
     }
 
-    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
+    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions, presentation);
     this.markReadiness(index, 'proceduralReady', reason);
     this.markReadiness(index, 'materialApplied', reason);
     this.diagnostics.debug('warm-gpu', 'Cached artwork textures bound for GPU warm render', {
@@ -1050,10 +1063,11 @@ export class GalleryManager {
     if (!preset) return;
     for (const index of this.getCriticalWindowIndices(center, radius)) {
       const artwork = this.artworks[index];
+      const presentationProfile = ARTWORK_PRESENTATION_PROFILES[this.resolvePresentation(index)];
       const start = this.now();
       let generated = 0;
       for (const role of PROCEDURAL_ROLES) {
-        if (artwork.textureSet?.[role] || !this.shouldFillRole(role, preset)) continue;
+        if (artwork.textureSet?.[role] || !this.shouldFillRole(role, preset, presentationProfile)) continue;
         this.generateProceduralMap(artwork.id, role, preset);
         generated += 1;
       }
@@ -1308,7 +1322,12 @@ export class GalleryManager {
   }
 
   /** Selects which procedural fallback roles to generate for the active preset. */
-  private shouldFillRole(role: PaintingMapRole, preset: QualityPreset): boolean {
+  private shouldFillRole(
+    role: PaintingMapRole,
+    preset: QualityPreset,
+    presentation: ArtworkPresentationProfile
+  ): boolean {
+    if (!presentation.proceduralRoles.includes(role)) return false;
     switch (role) {
       case 'normal':
         return true;
@@ -1320,11 +1339,17 @@ export class GalleryManager {
         return preset.shaderVariant !== 'painting-battery';
       case 'specular':
         return preset.specularStrength > 0;
+      case 'varnish':
+        return preset.clearcoatEnabled && presentation.clearcoatStrength > 0;
       case 'ao':
         return preset.aoEnabled;
       default:
         return false;
     }
+  }
+
+  private resolvePresentation(index: number): ArtworkPresentationId {
+    return resolveArtworkPresentation(this.artworks[index]?.presentation);
   }
 
   navigate(direction: 1 | -1): void {

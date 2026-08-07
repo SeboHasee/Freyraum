@@ -1,6 +1,38 @@
 # FREYRAUM Plan
 
-## Active plan — Premium interactive-gallery architectural presentation (v0.88, 2026-08-07)
+## Implemented — Interactive-gallery architectural stage + mounted presentation baseline (v0.89, 2026-08-07)
+
+This shipping slice narrows the broader v0.88 gallery audit to one safe,
+reviewable implementation that materially fixes the interactive gallery without
+disturbing the hub:
+
+- added `GalleryPresentationStage` to the existing main gallery renderer so the
+  interactive path now has a real front wall, floor, ceiling, side returns,
+  skirting shadow gap, and ceiling reveal;
+- kept hub and gallery architectural resources independent by giving the gallery
+  stage its own `ArchitecturalSurfaceFactory` instance while reusing the same
+  material language;
+- upgraded `ArtworkMesh` from a plane-only presentation to a shallow mounted
+  work assembly whose opaque body casts the near-wall shadow cue while the
+  customer image itself stays shadow-free;
+- introduced an optional validated `presentation` metadata field
+  (`canvas`, `fine-art-paper`, `matte-print`, `satin-print`, `glazed-print`)
+  that affects only the interactive-gallery mounting/material defaults; legacy
+  free-text `surface` remains descriptive metadata only;
+- kept the existing PMREM/no-tone-map colour path, hub renderer, navigation
+  model, and conservative post-processing contract unchanged.
+
+Explicitly deferred from the broader v0.88 master plan:
+
+- default decorative frames;
+- separate transparent glazing meshes;
+- a full profile-specific procedural-texture cache redesign;
+- a larger lighting/tone-mapping overhaul beyond the existing single-rig
+  shadow-budget tuning.
+
+Validation is recorded in `CHANGELOG.md`.
+
+## Superseded planning baseline — Premium interactive-gallery architectural presentation (v0.88, 2026-08-07)
 
 > **Phase: planning/docs only.** This entry describes a future implementation.
 > It does not change the runtime, imported customer artwork, generated preview,

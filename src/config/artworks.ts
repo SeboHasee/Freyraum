@@ -10,6 +10,7 @@
  * factory provides fallbacks whenever a slot in the texture set is missing.
  */
 
+import type { ArtworkPresentationId } from './presentation';
 import type { PaintingTextureSet } from '../materials/PaintingTextureSet';
 
 export interface ArtworkDimensions {
@@ -49,6 +50,8 @@ export interface Artwork {
   textureSet?: PaintingTextureSet;
   /** Optional customer-facing surface description. Informational only. */
   surface?: string;
+  /** Optional validated presentation profile for the interactive gallery. */
+  presentation?: ArtworkPresentationId;
   /**
    * v0.09: Origin-clean base64 data URL of the image for reliable WebGL
    * texture upload from file:// without CORS or taint issues.
@@ -148,6 +151,7 @@ export const artworks: readonly Artwork[] = [
     credit: 'Freyraum Studio',
     tags: ['landscape', 'soft-light', 'warm'],
     surface: 'Matte Leinwand',
+    presentation: 'canvas',
   },
   {
     id: 'quiet-coastline',
@@ -171,6 +175,7 @@ export const artworks: readonly Artwork[] = [
     credit: 'Freyraum Studio',
     tags: ['portrait', 'coast', 'minimal'],
     surface: 'Matte Leinwand',
+    presentation: 'canvas',
   },
   {
     id: 'tokyo-passage',
@@ -193,6 +198,7 @@ export const artworks: readonly Artwork[] = [
     credit: 'Freyraum Studio',
     tags: ['square', 'urban', 'cinematic'],
     surface: 'Satinierte Leinwand',
+    presentation: 'canvas',
   },
   {
     id: 'golden-desert',
@@ -216,5 +222,6 @@ export const artworks: readonly Artwork[] = [
     credit: 'Freyraum Studio',
     tags: ['ultrawide', 'desert', 'warm'],
     surface: 'Matte Leinwand',
+    presentation: 'canvas',
   },
 ];

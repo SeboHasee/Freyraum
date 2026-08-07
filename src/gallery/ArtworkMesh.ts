@@ -1,11 +1,18 @@
 import * as THREE from 'three';
+import { GALLERY_PRESENTATION_CONFIG } from '../config/galleryPresentation';
+import {
+  ARTWORK_PRESENTATION_PROFILES,
+  DEFAULT_ARTWORK_PRESENTATION,
+  type ArtworkPresentationId,
+} from '../config/presentation';
 import { PaintingMaterial } from '../materials/PaintingMaterial';
 import { fitWithinBox, getTextureSize } from '../utils/texture';
 import type { QualityPreset } from '../config/quality';
 import type { ResolvedPaintingTextures } from '../materials/PaintingTextureSet';
 
 /**
- * The visible artwork mesh: a possibly subdivided painting plane.
+ * The visible mounted artwork assembly: a possibly subdivided painting plane
+ * plus a shallow opaque body that casts the near-wall cue for the gallery stage.
  *
  * v0.02: the inline `MeshPhysicalMaterial` is replaced by {@link PaintingMaterial}.
  * Aspect-ratio handling is unchanged — the base plane is 4×5.7 and the mesh is
@@ -13,13 +20,20 @@ import type { ResolvedPaintingTextures } from '../materials/PaintingTextureSet';
  * to the material in tiles-per-world-unit so canvas threads stay square in any
  * orientation.
  *
- * Audited: ArtworkMesh.dispose() disposes geometry and the material only.
+ * v0.89: the public aspect + texture contract stays stable while the group now
+ * includes a mounted-work body. The image plane itself never receives or casts
+ * real shadows; only the opaque body casts the wall shadow so customer pixels
+ * are not darkened by the lighting rig.
+ *
+ * Audited: ArtworkMesh.dispose() disposes only its own geometries/materials.
  * It must NOT dispose painting textures — those are owned by TextureManager or
  * ProceduralTextureFactory.
  */
 export class ArtworkMesh {
   readonly group: THREE.Group;
   private artworkMesh: THREE.Mesh;
+  private readonly artworkBodyMesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
+  private readonly artworkBodyMaterial: THREE.MeshStandardMaterial;
   readonly material: PaintingMaterial;
   private _artworkAspect = 1;
   private _artworkWidth = 4;
@@ -32,6 +46,8 @@ export class ArtworkMesh {
   private _lastAspectSource: 'manifest' | 'texture' = 'texture';
   /** v0.08: the manifest dimensions used in the last updateAspect() call, if any. */
   private _lastManifestDimensions: { width: number; height: number } | null = null;
+  private activePresentation: ArtworkPresentationId = DEFAULT_ARTWORK_PRESENTATION;
+  private activeBodyDepth = GALLERY_PRESENTATION_CONFIG.artworkBodyDepth;
 
   constructor(scene: THREE.Scene, preset: QualityPreset) {
     this.scene = scene;
@@ -41,7 +57,21 @@ export class ArtworkMesh {
     const artGeo = this.makeArtworkGeometry(this.currentSegments);
     this.material = new PaintingMaterial(preset);
     this.artworkMesh = new THREE.Mesh(artGeo, this.material);
-    this.group.add(this.artworkMesh);
+    this.artworkMesh.castShadow = false;
+    this.artworkMesh.receiveShadow = false;
+    this.artworkMesh.renderOrder = 3;
+
+    this.artworkBodyMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(ARTWORK_PRESENTATION_PROFILES[this.activePresentation].backerColor),
+      roughness: 0.9,
+      metalness: 0,
+    });
+    this.artworkBodyMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.artworkBodyMaterial);
+    this.artworkBodyMesh.castShadow = true;
+    this.artworkBodyMesh.receiveShadow = false;
+    this.artworkBodyMesh.renderOrder = 2;
+    this.group.add(this.artworkBodyMesh, this.artworkMesh);
+    this.updateMountedBody();
 
     scene.add(this.group);
   }
@@ -84,6 +114,16 @@ export class ArtworkMesh {
     this.artworkMesh.geometry = newGeo;
     oldGeo.dispose();
     this.artworkMesh.scale.set(this._artworkWidth / 4.0, this._artworkHeight / 5.7, 1);
+    this.updateMountedBody();
+  }
+
+  applyPresentation(presentation: ArtworkPresentationId, preset: QualityPreset): void {
+    const resolved = ARTWORK_PRESENTATION_PROFILES[presentation];
+    this.activePresentation = presentation;
+    this.activeBodyDepth = resolved.bodyDepth;
+    this.artworkBodyMaterial.color.set(resolved.backerColor);
+    this.material.applyPresentation(presentation, preset);
+    this.updateMountedBody();
   }
 
   /**
@@ -145,8 +185,10 @@ export class ArtworkMesh {
   setPaintingTextures(
     textures: ResolvedPaintingTextures,
     preset: QualityPreset,
-    manifestDimensions?: { width: number; height: number }
+    manifestDimensions?: { width: number; height: number },
+    presentation: ArtworkPresentationId = DEFAULT_ARTWORK_PRESENTATION
   ): void {
+    this.applyPresentation(presentation, preset);
     this.updateAspect(textures.albedo, manifestDimensions);
 
     // Aspect-aware detail-normal tiling. We keep tiles square in world space:
@@ -158,6 +200,7 @@ export class ArtworkMesh {
     );
 
     this.material.applyTextures(textures, tiling, preset);
+    this.updateMountedBody();
   }
 
   /** Backwards-compatible single-texture setter (albedo only). */
@@ -191,5 +234,18 @@ export class ArtworkMesh {
     this.scene.remove(this.group);
     this.artworkMesh.geometry.dispose();
     this.material.dispose();
+    this.artworkBodyMesh.geometry.dispose();
+    this.artworkBodyMaterial.dispose();
+  }
+
+  private updateMountedBody(): void {
+    const bodyWidth = this._artworkWidth;
+    const bodyHeight = this._artworkHeight;
+    this.artworkBodyMesh.scale.set(bodyWidth, bodyHeight, this.activeBodyDepth);
+    this.artworkBodyMesh.position.set(
+      0,
+      0,
+      -(this.activeBodyDepth * 0.5 + GALLERY_PRESENTATION_CONFIG.artworkBodyFrontClearance)
+    );
   }
 }

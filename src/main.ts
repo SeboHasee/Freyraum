@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { artworks as builtInArtworks, type Artwork } from './config/artworks';
 import { getQualityPreset, type QualityPresetId } from './config/quality';
 import { RendererManager } from './core/RendererManager';
+import { GalleryPresentationStage } from './core/GalleryPresentationStage';
 import { SceneManager } from './core/SceneManager';
 import { PostProcessing } from './core/PostProcessing';
 import { LightingSetup } from './lighting/LightingSetup';
@@ -27,6 +28,7 @@ import { KeyboardHelp } from './ui/KeyboardHelp';
 import { CanvasInteraction } from './interaction/CanvasInteraction';
 import { MainMuseumHub } from './hub/MainMuseumHub';
 import { resolveMuseumHub } from './config/museumHub';
+import { normalizeArtworkPresentation } from './config/presentation';
 import { DestinationRouter } from './navigation/DestinationRouter';
 import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
 import { PreferencesStore } from './utils/preferences';
@@ -303,6 +305,15 @@ function sanitizeInjectedArtworks(
       /^data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/]/.test(webglImageRaw)
         ? webglImageRaw
         : undefined;
+    const rawPresentation =
+      typeof a['presentation'] === 'string' ? (a['presentation'] as string) : undefined;
+    const presentation = normalizeArtworkPresentation(rawPresentation);
+    if (rawPresentation && !presentation) {
+      diagnostics.warn('boot', 'artwork-presentation-invalid', 'Ignoring invalid injected artwork presentation', {
+        artworkId: id,
+        presentation: rawPresentation,
+      });
+    }
     out.push({
       id,
       title,
@@ -320,6 +331,7 @@ function sanitizeInjectedArtworks(
       credit: typeof a['credit'] === 'string' ? (a['credit'] as string) : '',
       tags,
       surface: typeof a['surface'] === 'string' ? (a['surface'] as string) : '',
+      ...(presentation ? { presentation } : {}),
     });
   }
   if (rejected > 0) {
@@ -712,6 +724,7 @@ async function main(): Promise<void> {
     webglImageSource: a.webglImage ? 'embedded-data-url' : 'file-url',
     dimensions: a.dimensions,
     surface: a.surface ?? null,
+    presentation: a.presentation ?? null,
   }));
   diagnostics.info('boot', 'artworks-source', 'Artwork source resolved', {
     source: customerArtworks && customerArtworks.length > 0 ? 'customer' : 'built-in',
@@ -807,6 +820,10 @@ async function main(): Promise<void> {
   restoreStatus.textContent = 'Grafik wird wiederhergestellt …';
   app.appendChild(restoreStatus);
   let restoreStatusTimer: ReturnType<typeof setTimeout> | undefined;
+  let restoreSceneManager: SceneManager | null = null;
+  let restoreTextureManager: TextureManager | null = null;
+  let restoreGalleryManager: GalleryManager | null = null;
+  let galleryStage: GalleryPresentationStage | null = null;
   rendererManager.onContextChange((state) => {
     if (state === 'lost') {
       clearTimeout(restoreStatusTimer);
@@ -824,8 +841,18 @@ async function main(): Promise<void> {
       return;
     }
     applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
+    if (galleryStage && restoreTextureManager) {
+      galleryStage.applyPreset(
+        getQualityPreset(preferences.current.quality),
+        restoreTextureManager.getEffectiveAnisotropy()
+      );
+    }
     restoreStatus.textContent = 'Grafik wiederhergestellt';
     diagnostics.info('renderer', 'context-restore-hidden', 'WebGL restore status will hide');
+    restoreGalleryManager?.markRenderDirty(8);
+    if (restoreSceneManager) {
+      void rendererManager.prewarm(restoreSceneManager.scene, restoreSceneManager.camera);
+    }
     verifyMuseumWallColorConsistency(
       diagnostics,
       'renderer-context-restored',
@@ -842,6 +869,7 @@ async function main(): Promise<void> {
   });
 
   const sceneManager = new SceneManager(rendererManager.renderer);
+  restoreSceneManager = sceneManager;
   const postProcessing = new PostProcessing(
     rendererManager.renderer,
     sceneManager.scene,
@@ -851,9 +879,16 @@ async function main(): Promise<void> {
 
   // Texture & lighting
   const textureManager = new TextureManager(loadingManager);
+  restoreTextureManager = textureManager;
   textureManager.init(rendererManager.renderer);
   textureManager.setAnisotropyDivisor(initialPreset.anisotropyDivisor);
 
+  galleryStage = new GalleryPresentationStage(
+    sceneManager.scene,
+    { wall: resolvedWallTokens.galleryWall },
+    initialPreset,
+    textureManager.getEffectiveAnisotropy()
+  );
   const lightingSetup = new LightingSetup(sceneManager.scene, initialPreset);
 
   // Gallery objects
@@ -940,6 +975,7 @@ async function main(): Promise<void> {
     undefined,
     measureArtworkViewport
   );
+  restoreGalleryManager = galleryManager;
   galleryManager.applyPreset(initialPreset);
   const warmProfile = deriveWarmProfile(initialCaps, artworks.length);
   galleryManager.configureReadinessProfile({ criticalRadius: warmProfile.criticalRadius });
@@ -1371,6 +1407,7 @@ async function main(): Promise<void> {
       lightingSetup.applyPreset(variantPreset);
       artworkMesh.applyPreset(variantPreset);
       galleryManager.applyPreset(variantPreset);
+      galleryStage?.applyPreset(variantPreset, textureManager.getEffectiveAnisotropy());
       galleryManager.warmArtworkForGPU(variantWarmIndex, `overlay-quality-variant-${qualityId}`);
       await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
       diagnostics.debug('boot', 'quality-variant-prewarmed', 'Quality shader variant prewarmed', {
@@ -1388,6 +1425,7 @@ async function main(): Promise<void> {
     lightingSetup.applyPreset(activePreset);
     artworkMesh.applyPreset(activePreset);
     galleryManager.applyPreset(activePreset);
+    galleryStage?.applyPreset(activePreset, textureManager.getEffectiveAnisotropy());
     galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-quality-variant-prewarm');
     await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
     diagnostics.info('boot', 'quality-variant-prewarm-complete', 'All non-active quality shader variants prewarmed under loading overlay', {
@@ -1586,6 +1624,7 @@ async function main(): Promise<void> {
     lightingSetup.applyPreset(preset);
     artworkMesh.applyPreset(preset);
     galleryManager.applyPreset(preset);
+    galleryStage?.applyPreset(preset, textureManager.getEffectiveAnisotropy());
     // v0.87 — hub room renderer follows the same quality preset (pixel-ratio
     // cap, surface tile size, skylight shadows, floor-reflection strategy).
     museumHub?.applyPreset(preset);
@@ -1881,6 +1920,7 @@ async function main(): Promise<void> {
     prepare: () => museumHub.prepare(),
     enter: () => {
       artworkMesh.group.visible = false;
+      galleryStage?.setVisible(false);
       canvasInteraction.setEnabled(false);
       keyboardNav.setEnabled(false);
       museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
@@ -1896,6 +1936,7 @@ async function main(): Promise<void> {
     label: 'Interaktive Galerie',
     prepare: async () => {
       artworkMesh.group.visible = true;
+      galleryStage?.setVisible(true);
       galleryManager.resetView();
       await rafYield();
     },
@@ -2097,6 +2138,7 @@ async function main(): Promise<void> {
   });
 
   artworkMesh.group.visible = false;
+  galleryStage?.setVisible(false);
   // v0.81 — hub base fetch + first-page artwork decode + slot layout complete
   // under the overlay (the last weighted progress step), so the first hub
   // paint has zero image pop-in and zero layout shift after reveal.
@@ -2160,6 +2202,7 @@ async function main(): Promise<void> {
     restoreStatus.remove();
     backgroundAudio.dispose();
     artworkMesh.dispose();
+    galleryStage?.dispose();
     textureManager.dispose();
     galleryManager.proceduralFactory.disposeAll();
     lightingSetup.dispose();

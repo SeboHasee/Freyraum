@@ -33,6 +33,7 @@ Credit:
 Alt: Describe the painting visually for screen readers
 Tags: 
 Surface: Oil on coarse canvas
+Presentation: matte-print
 
 Description:
 Write your text on the lines below this one.
@@ -70,6 +71,17 @@ Surface:
   Optional free-text description shown with the artwork information.
   This text does not change canvas, material, or render settings.
   Example:  Surface: Oil on coarse canvas
+
+Presentation:
+  Optional validated mounting profile for the interactive 3D gallery.
+  Valid values:
+    canvas
+    fine-art-paper
+    matte-print
+    satin-print
+    glazed-print
+  Default: matte-print
+  Example:  Presentation: canvas
 
 Medium:
   Free-text medium override. If omitted, the importer uses image dimensions.

@@ -1,5 +1,25 @@
 # FINDINGS
 
+## Interactive-gallery stage + mounted presentation findings (v0.89, 2026-08-07)
+
+1. The interactive gallery needed its own compact architectural shell inside the
+   existing `SceneManager` scene; the v0.87 hub room was already correct and
+   should remain a separate renderer path.
+2. Gallery and hub can share one architectural material language without sharing
+   live Three.js ownership. Separate `ArchitecturalSurfaceFactory` instances are
+   the safe boundary on quality changes, disposal, and context restoration.
+3. The mounted-object cue is more reliable when the customer image plane stays
+   shadow-free and a separate opaque artwork body casts the wall shadow. This
+   preserves colour fidelity while still giving the gallery stage a believable
+   near-wall contact cue.
+4. `Artwork.surface` remains descriptive prose. A new optional validated
+   `presentation` field is the correct place for interactive-gallery defaults,
+   and `matte-print` is the safe fallback for legacy imports.
+5. A conservative first presentation pass can materially improve the gallery by
+   changing which procedural roles are allowed per profile (`canvas` keeps the
+   existing relief path; print/paper profiles stay flatter) without adding new
+   dependencies, a second artwork pipeline, or speculative frame/glass systems.
+
 ## Interactive-gallery architectural presentation findings (v0.88 plan, 2026-08-07)
 
 1. The v0.87 hub’s room-edge fix is already complete and scoped to its dedicated

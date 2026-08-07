@@ -1,5 +1,38 @@
 # CHANGELOG
-> Latest markdown audit: 2026-08-02 (square-room hub architectural quality tiers).
+> Latest markdown audit: 2026-08-07 (interactive-gallery stage + mounted presentation baseline).
+
+## v0.89 — Interactive-gallery architectural stage + mounted presentation baseline (2026-08-07)
+
+### Summary
+
+- Added `GalleryPresentationStage` to the main gallery renderer so the
+  interactive destination now renders against a compact front wall, floor,
+  ceiling, side returns, skirting shadow gap, and ceiling reveal instead of the
+  clear-colour/PMREM void.
+- Kept the hub untouched on its dedicated v0.87 renderer path while giving the
+  gallery stage its own `ArchitecturalSurfaceFactory` instance so hub/gallery
+  resource ownership stays independent on preset changes and cleanup.
+- Upgraded `ArtworkMesh` from a plane-only presentation to a shallow mounted
+  work assembly whose opaque body casts the wall shadow cue while the customer
+  image stays shadow-free.
+- Introduced optional validated artwork `presentation` metadata for the
+  interactive gallery (`canvas`, `fine-art-paper`, `matte-print`,
+  `satin-print`, `glazed-print`); legacy `surface` text remains descriptive
+  metadata only.
+- Rebuilt `customer-preview/freyraum-gallery.js` and reran the importer so the
+  committed local preview matches the new runtime/import contract.
+
+### Validation
+
+- `npm install` ✅ *(existing advisories remain in the dependency tree; no new dependencies were added)*
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `node -c scripts/import-artworks.mjs` ✅
 
 ## v0.87 — Square-room hub architectural quality tiers (2026-08-02)
 
