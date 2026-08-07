@@ -605,8 +605,21 @@ function dedupeFailures(failures) {
 
 function buildFixtureScript(fixture) {
   return `(() => {
+    const script = document.currentScript instanceof HTMLScriptElement ? document.currentScript : null;
+    const fallbackHref = typeof window !== 'undefined' && window.location ? window.location.href : '';
+    let assetBaseUrl = fallbackHref;
+    try {
+      assetBaseUrl = new URL('./', (script && script.src) || fallbackHref).href;
+    } catch {}
     const fixture = ${JSON.stringify(fixture)};
-    window.__FREYRAUM_ARTWORKS = fixture.artworks;
+    window.__FREYRAUM_ARTWORK_BUNDLE__ = {
+      schemaVersion: 1,
+      bundleId: 'visual-regression-fixture',
+      generatedAt: null,
+      assetBaseUrl,
+      artworks: fixture.artworks,
+    };
+    window.__FREYRAUM_ARTWORKS = window.__FREYRAUM_ARTWORK_BUNDLE__.artworks;
     window.__FREYRAUM_MUSEUM_HUB = fixture.museumHub;
     window.__FREYRAUM_HUB_HOTSPOTS = undefined;
   })();`;

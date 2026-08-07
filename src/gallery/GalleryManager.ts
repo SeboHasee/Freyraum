@@ -564,9 +564,11 @@ export class GalleryManager {
       const sourcePlan = resolveArtworkImageSources(a);
       return {
         id: a.id,
-        declaredImageUrlType: sourcePlan.primary?.urlType ?? null,
+        bundleId: sourcePlan.primary?.bundleId ?? null,
+        declaredImageUrlType: sourcePlan.primary?.declaredUrlType ?? null,
+        resolvedImageUrlType: sourcePlan.primary?.resolvedUrlType ?? null,
         hasEmbeddedFallback: !!sourcePlan.fallback,
-        embeddedFallbackUrlType: sourcePlan.fallback?.urlType ?? null,
+        embeddedFallbackUrlType: sourcePlan.fallback?.resolvedUrlType ?? null,
         dimensions: a.dimensions,
       };
     });
@@ -690,7 +692,7 @@ export class GalleryManager {
     const presentation = this.resolvePresentation(index);
     const presentationProfile = ARTWORK_PRESENTATION_PROFILES[presentation];
     const sourcePlan = resolveArtworkImageSources(artwork);
-    const albedoUrl = artwork.image;
+    const albedoUrl = sourcePlan.primary?.resolvedUrl ?? artwork.image;
     const albedoSelection = this.textureManager.getArtworkAlbedoSelection(artwork);
     const albedo = this.textureManager.get(albedoUrl);
 
@@ -711,9 +713,10 @@ export class GalleryManager {
       index,
       artworkId: artwork.id,
       token,
+      bundleId: albedoSelection?.bundleId ?? sourcePlan.primary?.bundleId ?? null,
       hasEmbeddedFallback: !!artwork.webglImage,
       albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
-      albedoDeclaredUrlType: sourcePlan.primary?.urlType ?? 'local-relative',
+      albedoDeclaredUrlType: sourcePlan.primary?.declaredUrlType ?? 'local-relative',
       albedoResolvedUrlType: albedoSelection?.selectedUrlType ?? 'local-relative',
       usedEmbeddedFallback: albedoSelection?.usedEmbeddedFallback ?? false,
       generatedFallback: albedoSelection?.generatedFallback ?? false,
@@ -727,8 +730,9 @@ export class GalleryManager {
         artworkId: artwork.id,
         hasAlbedo: !!albedo,
         hasPreset: !!preset,
+        bundleId: albedoSelection?.bundleId ?? sourcePlan.primary?.bundleId ?? null,
         albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
-        albedoDeclaredUrlType: sourcePlan.primary?.urlType ?? 'local-relative',
+        albedoDeclaredUrlType: sourcePlan.primary?.declaredUrlType ?? 'local-relative',
         albedoResolvedUrlType: albedoSelection?.selectedUrlType ?? 'local-relative',
       });
       // Albedo preload should have populated the cache; if not, give up.
@@ -794,7 +798,9 @@ export class GalleryManager {
     if (albedoIsFallback) {
       this.diagnostics.warn('show-artwork-fallback', 'Central 3D painting is using a GENERATED FALLBACK texture — the customer image could not be loaded as a WebGL texture', {
         artworkId: artwork.id,
-        imageUrl: artwork.image,
+        bundleId: albedoSelection?.bundleId ?? sourcePlan.primary?.bundleId ?? null,
+        imageUrl: sourcePlan.primary?.declaredUrl ?? artwork.image,
+        resolvedImageUrl: albedoSelection?.selectedUrl ?? albedoUrl,
         albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
         usedEmbeddedFallback: albedoSelection?.usedEmbeddedFallback ?? false,
         manifestWidth: artwork.dimensions?.width,
@@ -808,6 +814,7 @@ export class GalleryManager {
     const isPortraitReset = this.isPortraitResetArtwork();
     this.diagnostics.info('show-artwork-complete', 'Artwork is ready', {
       artworkId: artwork.id,
+      bundleId: albedoSelection?.bundleId ?? sourcePlan.primary?.bundleId ?? null,
       activeMaps: this.artworkMesh.material.activeMaps(),
       inspectionMode: this.inspectionMode,
       fallbackUsed: albedoIsFallback,
@@ -984,7 +991,10 @@ export class GalleryManager {
     const preset = this.currentPreset;
     if (!artwork || !preset) return false;
 
-    const albedoUrl = this.textureManager.getArtworkAlbedoSelection(artwork)?.selectedUrl ?? artwork.image;
+    const albedoUrl =
+      this.textureManager.getArtworkAlbedoSelection(artwork)?.selectedUrl
+      ?? resolveArtworkImageSources(artwork).primary?.resolvedUrl
+      ?? artwork.image;
     const fallbackAlbedo = this.textureManager.get(albedoUrl);
     if (!fallbackAlbedo) {
       this.diagnostics.warn('warm-gpu', 'Cannot warm artwork because albedo is not cached', {

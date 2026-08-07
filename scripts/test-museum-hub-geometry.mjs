@@ -203,9 +203,28 @@ const artworks = [
 ];
 const sourcePlan = artworkImageSources.resolveArtworkImageSources(artworks[0]);
 assert.equal(sourcePlan.primary?.mode, 'declared-image', 'artwork source resolution must keep the declared image as primary');
-assert.equal(sourcePlan.primary?.url, 'fraktal.png');
+assert.equal(sourcePlan.primary?.declaredUrl, 'fraktal.png');
+assert.equal(sourcePlan.primary?.resolvedUrl, 'fraktal.png');
 assert.equal(sourcePlan.fallback?.mode, 'embedded-webgl-fallback', 'artwork source resolution must expose the embedded fallback separately');
-assert.equal(sourcePlan.fallback?.url, 'data:image/png;base64,AAAA');
+assert.equal(sourcePlan.fallback?.declaredUrl, 'data:image/png;base64,AAAA');
+assert.equal(sourcePlan.fallback?.resolvedUrl, 'data:image/png;base64,AAAA');
+assert.equal(sourcePlan.primary?.declaredUrlType, 'local-relative');
+assert.equal(sourcePlan.primary?.resolvedUrlType, 'local-relative');
+const bundleScopedSourcePlan = artworkImageSources.resolveArtworkImageSources({
+  image: './images/fraktal.png',
+  webglImage: 'data:image/png;base64,AAAA',
+  imageSourceContext: {
+    bundleId: 'bundle-test',
+    assetBaseUrl: 'file:///tmp/freyraum/customer-preview/',
+  },
+});
+assert.equal(
+  bundleScopedSourcePlan.primary?.resolvedUrl,
+  'file:///tmp/freyraum/customer-preview/images/fraktal.png',
+  'bundle-scoped source resolution must resolve relative artwork paths against the generated script base'
+);
+assert.equal(bundleScopedSourcePlan.primary?.resolvedUrlType, 'file-url');
+assert.equal(bundleScopedSourcePlan.primary?.bundleId, 'bundle-test');
 const shipping = museumHub.resolveMuseumHub(artworks, shippingConfig, null);
 assert.deepEqual(shipping.warnings, [], `shipping calibration warnings: ${shipping.warnings.join('; ')}`);
 assert.equal(shipping.camera.verticalFovDeg, shippingConfig.camera.verticalFovDeg);

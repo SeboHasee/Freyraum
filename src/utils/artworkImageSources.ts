@@ -1,12 +1,15 @@
-import type { Artwork } from '../config/artworks';
+import type { Artwork, ArtworkImageSourceContext } from '../config/artworks';
 
-export type ArtworkImageUrlType = 'data-uri' | 'external-http' | 'local-relative';
+export type ArtworkImageUrlType = 'data-uri' | 'external-http' | 'file-url' | 'local-relative';
 export type ArtworkImageSourceMode = 'declared-image' | 'embedded-webgl-fallback';
 
 export interface ArtworkImageSourceCandidate {
-  url: string;
+  declaredUrl: string;
+  resolvedUrl: string;
   mode: ArtworkImageSourceMode;
-  urlType: ArtworkImageUrlType;
+  declaredUrlType: ArtworkImageUrlType;
+  resolvedUrlType: ArtworkImageUrlType;
+  bundleId: string | null;
 }
 
 export interface ArtworkImageSourcePlan {
@@ -14,35 +17,65 @@ export interface ArtworkImageSourcePlan {
   fallback: ArtworkImageSourceCandidate | null;
 }
 
-type ArtworkImageSourceRecord = Pick<Artwork, 'image'> & {
+export type ArtworkImageSourceRecord = Pick<Artwork, 'image' | 'imageSourceContext'> & {
   webglImage?: string | null;
 };
 
 export function classifyArtworkImageUrl(url: string): ArtworkImageUrlType {
   if (url.startsWith('data:')) return 'data-uri';
   if (/^https?:\/\//i.test(url)) return 'external-http';
+  if (/^file:\/\//i.test(url)) return 'file-url';
   return 'local-relative';
+}
+
+function resolveRelativeArtworkImageUrl(
+  url: string,
+  context: ArtworkImageSourceContext | null | undefined
+): string {
+  if (classifyArtworkImageUrl(url) !== 'local-relative') return url;
+  const baseUrl = context?.assetBaseUrl?.trim() ?? '';
+  if (baseUrl) {
+    try {
+      return new URL(url, baseUrl).href;
+    } catch {
+      return url;
+    }
+  }
+  if (typeof window === 'undefined') return url;
+  try {
+    return new URL(url, window.location.href).href;
+  } catch {
+    return url;
+  }
+}
+
+export function resolveArtworkImageSourceUrl(
+  url: string,
+  mode: ArtworkImageSourceMode,
+  context: ArtworkImageSourceContext | null | undefined
+): ArtworkImageSourceCandidate {
+  const declaredUrl = url.trim();
+  const resolvedUrl = resolveRelativeArtworkImageUrl(declaredUrl, context);
+  return {
+    declaredUrl,
+    resolvedUrl,
+    mode,
+    declaredUrlType: classifyArtworkImageUrl(declaredUrl),
+    resolvedUrlType: classifyArtworkImageUrl(resolvedUrl),
+    bundleId: context?.bundleId?.trim() || null,
+  };
 }
 
 export function resolveArtworkImageSources(
   artwork: ArtworkImageSourceRecord | null | undefined
 ): ArtworkImageSourcePlan {
+  const context = artwork?.imageSourceContext;
   const primaryUrl = artwork?.image?.trim() ?? '';
   const fallbackUrl = artwork?.webglImage?.trim() ?? '';
-  const primary = primaryUrl
-    ? {
-        url: primaryUrl,
-        mode: 'declared-image' as const,
-        urlType: classifyArtworkImageUrl(primaryUrl),
-      }
-    : null;
+  const primary = primaryUrl ? resolveArtworkImageSourceUrl(primaryUrl, 'declared-image', context) : null;
   const fallback =
     fallbackUrl && fallbackUrl !== primaryUrl
-      ? {
-          url: fallbackUrl,
-          mode: 'embedded-webgl-fallback' as const,
-          urlType: classifyArtworkImageUrl(fallbackUrl),
-        }
+      ? resolveArtworkImageSourceUrl(fallbackUrl, 'embedded-webgl-fallback', context)
       : null;
   return { primary, fallback };
 }

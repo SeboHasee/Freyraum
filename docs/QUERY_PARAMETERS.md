@@ -79,8 +79,8 @@ Notes:
   - per-wall reference residual / convergence summaries
 - Emits per-slot diagnostics snapshots (wall id, local/projected quads,
   calibrated camera chain, selected artwork state, validity result, source
-  mode, URL type, image state, and fallback reason) and a full hub geometry
-  snapshot once composition is ready.
+  mode, bundle ID, declared/resolved URL type, image state, and fallback
+  reason) and a full hub geometry snapshot once composition is ready.
 - Runtime navigation also logs selection lifecycle and wall-surface snapshots, so
   `?hubDebug=1` sessions can correlate geometry, current artwork ownership, and
   transition background state.
@@ -94,6 +94,7 @@ data below. Relevant current records are:
 - `hub:artwork-source-resolved`
 - `hub:artwork-image-retry`
 - `hub:artwork-image-missing`
+- `boot:artworks-source`
 - `texture:load-fallback`
 - `gallery:show-artwork-fallback`
 

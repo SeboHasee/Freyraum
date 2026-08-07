@@ -12,7 +12,10 @@ import {
 export interface ArtworkAlbedoSelection {
   selectedUrl: string;
   selectedUrlType: ArtworkImageUrlType;
+  declaredUrl: string;
+  declaredUrlType: ArtworkImageUrlType;
   sourceMode: ArtworkImageSourceMode;
+  bundleId: string | null;
   usedEmbeddedFallback: boolean;
   attemptedEmbeddedFallback: boolean;
   generatedFallback: boolean;
@@ -140,9 +143,11 @@ export class TextureManager {
         const sourcePlan = resolveArtworkImageSources(artwork);
         return {
           artworkId: artwork.id,
-          declaredImageUrlType: sourcePlan.primary?.urlType ?? null,
+          bundleId: sourcePlan.primary?.bundleId ?? null,
+          declaredImageUrlType: sourcePlan.primary?.declaredUrlType ?? null,
+          resolvedImageUrlType: sourcePlan.primary?.resolvedUrlType ?? null,
           hasEmbeddedFallback: !!sourcePlan.fallback,
-          embeddedFallbackUrlType: sourcePlan.fallback?.urlType ?? null,
+          embeddedFallbackUrlType: sourcePlan.fallback?.resolvedUrlType ?? null,
         };
       }),
     });
@@ -154,16 +159,19 @@ export class TextureManager {
     const primary = sourcePlan.primary;
     const existingSelection = this.artworkAlbedoSelections.get(artwork.id);
     if (primary) {
-      const existingTexture = this.cache.get(`albedo::${primary.url}`);
+      const existingTexture = this.cache.get(`albedo::${primary.resolvedUrl}`);
       if (existingSelection && existingTexture) return existingTexture;
     }
     if (!primary) {
       const fallback = this.createFallbackTexture(artwork.id);
       this.renderer?.initTexture(fallback);
       this.artworkAlbedoSelections.set(artwork.id, {
-        selectedUrl: artwork.id,
+        selectedUrl: artwork.image,
         selectedUrlType: 'local-relative',
+        declaredUrl: artwork.image,
+        declaredUrlType: 'local-relative',
         sourceMode: 'declared-image',
+        bundleId: null,
         usedEmbeddedFallback: false,
         attemptedEmbeddedFallback: false,
         generatedFallback: true,
@@ -171,12 +179,15 @@ export class TextureManager {
       return fallback;
     }
 
-    const primaryTexture = await this.loadForRole(primary.url, 'albedo');
-    if (!this.isFallback(primary.url, 'albedo')) {
+    const primaryTexture = await this.loadForRole(primary.resolvedUrl, 'albedo');
+    if (!this.isFallback(primary.resolvedUrl, 'albedo')) {
       this.artworkAlbedoSelections.set(artwork.id, {
-        selectedUrl: primary.url,
-        selectedUrlType: primary.urlType,
+        selectedUrl: primary.resolvedUrl,
+        selectedUrlType: primary.resolvedUrlType,
+        declaredUrl: primary.declaredUrl,
+        declaredUrlType: primary.declaredUrlType,
         sourceMode: primary.mode,
+        bundleId: primary.bundleId,
         usedEmbeddedFallback: false,
         attemptedEmbeddedFallback: false,
         generatedFallback: false,
@@ -188,37 +199,45 @@ export class TextureManager {
     if (fallback) {
       this.diagnostics.warn('artwork-albedo-retry', 'Declared artwork image failed; retrying embedded fallback', {
         artworkId: artwork.id,
-        declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
-        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.url),
-        declaredImageUrlType: primary.urlType,
-        fallbackImageUrlType: fallback.urlType,
+        bundleId: primary.bundleId,
+        declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+        declaredImageUrlType: primary.declaredUrlType,
+        fallbackImageUrlType: fallback.resolvedUrlType,
       });
-      const fallbackTexture = await this.loadForRole(fallback.url, 'albedo');
-      if (!this.isFallback(fallback.url, 'albedo')) {
-        this.promoteArtworkAlbedo(primary.url, fallbackTexture);
+      const fallbackTexture = await this.loadForRole(fallback.resolvedUrl, 'albedo');
+      if (!this.isFallback(fallback.resolvedUrl, 'albedo')) {
+        this.promoteArtworkAlbedo(primary.resolvedUrl, fallbackTexture);
         this.artworkAlbedoSelections.set(artwork.id, {
-          selectedUrl: fallback.url,
-          selectedUrlType: fallback.urlType,
+          selectedUrl: fallback.resolvedUrl,
+          selectedUrlType: fallback.resolvedUrlType,
+          declaredUrl: primary.declaredUrl,
+          declaredUrlType: primary.declaredUrlType,
           sourceMode: fallback.mode,
+          bundleId: fallback.bundleId,
           usedEmbeddedFallback: true,
           attemptedEmbeddedFallback: true,
           generatedFallback: false,
         });
         this.diagnostics.info('artwork-albedo-fallback', 'Artwork albedo resolved through embedded fallback', {
           artworkId: artwork.id,
-          declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
-          resolvedImageUrl: redactArtworkImageUrlForLog(fallback.url),
-          declaredImageUrlType: primary.urlType,
-          resolvedImageUrlType: fallback.urlType,
+          bundleId: fallback.bundleId,
+          declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+          resolvedImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+          declaredImageUrlType: primary.declaredUrlType,
+          resolvedImageUrlType: fallback.resolvedUrlType,
         });
         return fallbackTexture;
       }
     }
 
     this.artworkAlbedoSelections.set(artwork.id, {
-      selectedUrl: primary.url,
-      selectedUrlType: primary.urlType,
+      selectedUrl: primary.resolvedUrl,
+      selectedUrlType: primary.resolvedUrlType,
+      declaredUrl: primary.declaredUrl,
+      declaredUrlType: primary.declaredUrlType,
       sourceMode: primary.mode,
+      bundleId: primary.bundleId,
       usedEmbeddedFallback: false,
       attemptedEmbeddedFallback: !!fallback,
       generatedFallback: true,
@@ -471,9 +490,10 @@ export class TextureManager {
    * We intentionally distinguish data URIs because they must never be printed
    * in full (can be many MB of base64 payload).
    */
-  private classifyUrlType(url: string): 'data-uri' | 'external-http' | 'local-relative' {
+  private classifyUrlType(url: string): 'data-uri' | 'external-http' | 'file-url' | 'local-relative' {
     if (url.startsWith('data:')) return 'data-uri';
     if (/^https?:\/\//i.test(url)) return 'external-http';
+    if (/^file:\/\//i.test(url)) return 'file-url';
     return 'local-relative';
   }
 
@@ -481,6 +501,7 @@ export class TextureManager {
   private compactUrlType(url: string): string {
     const type = this.classifyUrlType(url);
     if (type === 'external-http') return 'http';
+    if (type === 'file-url') return 'file';
     if (type === 'local-relative') return 'local';
     return `data-uri:${this.dataUriMime(url)}`;
   }

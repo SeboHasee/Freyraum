@@ -2,7 +2,7 @@ import './styles/main.scss';
 
 import * as THREE from 'three';
 
-import { artworks as builtInArtworks, type Artwork } from './config/artworks';
+import { artworks as builtInArtworks, type Artwork, type ArtworkImageSourceContext } from './config/artworks';
 import { getQualityPreset, type QualityPresetId } from './config/quality';
 import { RendererManager } from './core/RendererManager';
 import { GalleryPresentationStage } from './core/GalleryPresentationStage';
@@ -258,15 +258,48 @@ function deriveWarmProfile(caps: DeviceCapabilities, artworkCount: number): Warm
 }
 
 /**
- * v0.07: validates `window.__FREYRAUM_ARTWORKS` and returns a clean
- * `Artwork[]` or `null`. Each entry is validated for the minimal field set
- * required by the gallery; anything malformed is dropped with a diagnostic
- * note rather than crashing the runtime. This keeps the customer preview
- * resilient even if the import script writes a partially valid manifest.
+ * v0.07/v0.91: validates injected customer artwork payloads and returns a
+ * clean `Artwork[]` or `null`. The runtime accepts either the legacy
+ * `window.__FREYRAUM_ARTWORKS` array or the
+ * `window.__FREYRAUM_ARTWORK_BUNDLE__` envelope, drops malformed entries with a
+ * diagnostic note, and preserves a bundle-scoped asset base for relative image
+ * resolution.
  */
+interface SanitizedInjectedArtworkPayload {
+  artworks: readonly Artwork[];
+  source: 'customer-bundle' | 'customer-legacy-array';
+  bundleId: string | null;
+  assetBaseUrl: string | null;
+}
+
+function normalizeInjectedArtworkBundleId(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 96) : null;
+}
+
+function normalizeInjectedArtworkAssetBaseUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const fallbackBase = typeof window !== 'undefined' ? window.location.href : 'http://localhost/';
+  try {
+    const resolved = new URL(raw.trim(), fallbackBase);
+    if (!['http:', 'https:', 'file:'].includes(resolved.protocol)) return null;
+    return new URL('./', resolved.href).href;
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedInjectedArtworkPrimaryUrl(url: string): boolean {
+  if (!url) return false;
+  if (/^data:image\//i.test(url)) return true;
+  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(url)?.[1]?.toLowerCase() ?? null;
+  if (!scheme) return true;
+  return scheme === 'http' || scheme === 'https' || scheme === 'file';
+}
+
 function sanitizeInjectedArtworks(
   raw: unknown,
-  diagnostics: ReturnType<typeof getDiagnostics>
+  diagnostics: ReturnType<typeof getDiagnostics>,
+  imageSourceContext?: ArtworkImageSourceContext | null
 ): readonly Artwork[] | null {
   if (raw === undefined || raw === null) return null;
   if (!Array.isArray(raw)) {
@@ -289,7 +322,7 @@ function sanitizeInjectedArtworks(
     const dims = a['dimensions'] as { width?: unknown; height?: unknown } | undefined;
     const width = typeof dims?.width === 'number' && Number.isFinite(dims.width) ? dims.width : 0;
     const height = typeof dims?.height === 'number' && Number.isFinite(dims.height) ? dims.height : 0;
-    if (!id || !image || width <= 0 || height <= 0 || seenIds.has(id)) {
+    if (!id || !image || width <= 0 || height <= 0 || seenIds.has(id) || !isAllowedInjectedArtworkPrimaryUrl(image)) {
       rejected++;
       continue;
     }
@@ -333,6 +366,7 @@ function sanitizeInjectedArtworks(
       tags,
       surface: typeof a['surface'] === 'string' ? (a['surface'] as string) : '',
       ...(presentation ? { presentation } : {}),
+      ...(imageSourceContext ? { imageSourceContext } : {}),
     });
   }
   if (rejected > 0) {
@@ -342,6 +376,53 @@ function sanitizeInjectedArtworks(
     });
   }
   return out;
+}
+
+function sanitizeInjectedArtworkPayload(
+  rawBundle: unknown,
+  rawLegacyArtworks: unknown,
+  diagnostics: ReturnType<typeof getDiagnostics>
+): SanitizedInjectedArtworkPayload | null {
+  if (rawBundle !== undefined && rawBundle !== null) {
+    if (!rawBundle || typeof rawBundle !== 'object' || Array.isArray(rawBundle)) {
+      diagnostics.warn('boot', 'artworks-bundle-invalid', 'Ignoring injected artwork bundle: expected an object envelope', {
+        typeOf: typeof rawBundle,
+      });
+    } else {
+      const bundle = rawBundle as Record<string, unknown>;
+      const bundleId = normalizeInjectedArtworkBundleId(bundle['bundleId']);
+      const assetBaseUrl = normalizeInjectedArtworkAssetBaseUrl(bundle['assetBaseUrl']);
+      if (bundle['assetBaseUrl'] !== undefined && bundle['assetBaseUrl'] !== null && !assetBaseUrl) {
+        diagnostics.warn('boot', 'artworks-bundle-base-invalid', 'Ignoring invalid injected artwork asset base URL', {
+          assetBaseUrlType: typeof bundle['assetBaseUrl'],
+        });
+      }
+      const imageSourceContext =
+        bundleId || assetBaseUrl
+          ? {
+              ...(bundleId ? { bundleId } : {}),
+              ...(assetBaseUrl ? { assetBaseUrl } : {}),
+            }
+          : undefined;
+      const artworks = sanitizeInjectedArtworks(bundle['artworks'], diagnostics, imageSourceContext);
+      if (artworks) {
+        return {
+          artworks,
+          source: 'customer-bundle',
+          bundleId,
+          assetBaseUrl,
+        };
+      }
+    }
+  }
+  const legacyArtworks = sanitizeInjectedArtworks(rawLegacyArtworks, diagnostics);
+  if (!legacyArtworks) return null;
+  return {
+    artworks: legacyArtworks,
+    source: 'customer-legacy-array',
+    bundleId: null,
+    assetBaseUrl: null,
+  };
 }
 
 function sanitizeInjectedAudio(
@@ -712,27 +793,43 @@ async function main(): Promise<void> {
     }
   }
 
-  // v0.07: customer-managed artworks injected at runtime by
-  // `scripts/import-artworks.mjs` via `customer-preview/customer-artworks.js`
-  // (Option C: global window injection, see plan.md v0.07).
-  const injected = (window as unknown as { __FREYRAUM_ARTWORKS?: unknown }).__FREYRAUM_ARTWORKS;
-  const customerArtworks = sanitizeInjectedArtworks(injected, diagnostics);
+  // v0.07/v0.91: customer-managed artworks are injected at runtime by
+  // `scripts/import-artworks.mjs` via `customer-artworks.js`. The generated
+  // script now publishes both the legacy artwork array and a bundle envelope
+  // with a script-derived asset base so runtime source resolution is stable
+  // across file:// preview, Vite dev, and Pages builds.
+  const injectedBundle = (window as unknown as { __FREYRAUM_ARTWORK_BUNDLE__?: unknown })
+    .__FREYRAUM_ARTWORK_BUNDLE__;
+  const injectedLegacyArtworks = (window as unknown as { __FREYRAUM_ARTWORKS?: unknown }).__FREYRAUM_ARTWORKS;
+  const injectedArtworkPayload = sanitizeInjectedArtworkPayload(
+    injectedBundle,
+    injectedLegacyArtworks,
+    diagnostics
+  );
+  const customerArtworks = injectedArtworkPayload?.artworks ?? null;
   const artworks: readonly Artwork[] =
     customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
   const artworkManifest = artworks.map((a) => {
     const sourcePlan = resolveArtworkImageSources(a);
     return {
       id: a.id,
-      declaredImageUrlType: sourcePlan.primary?.urlType ?? null,
+      bundleId: sourcePlan.primary?.bundleId ?? null,
+      declaredImageUrlType: sourcePlan.primary?.declaredUrlType ?? null,
+      resolvedImageUrlType: sourcePlan.primary?.resolvedUrlType ?? null,
       hasEmbeddedFallback: !!sourcePlan.fallback,
-      embeddedFallbackUrlType: sourcePlan.fallback?.urlType ?? null,
+      embeddedFallbackUrlType: sourcePlan.fallback?.resolvedUrlType ?? null,
       dimensions: a.dimensions,
       surface: a.surface ?? null,
       presentation: a.presentation ?? null,
     };
   });
   diagnostics.info('boot', 'artworks-source', 'Artwork source resolved', {
-    source: customerArtworks && customerArtworks.length > 0 ? 'customer' : 'built-in',
+    source:
+      customerArtworks && customerArtworks.length > 0
+        ? injectedArtworkPayload?.source ?? 'customer-legacy-array'
+        : 'built-in',
+    bundleId: injectedArtworkPayload?.bundleId ?? null,
+    assetBaseUrl: injectedArtworkPayload?.assetBaseUrl ?? null,
     count: artworks.length,
     artworks: artworkManifest,
     withEmbeddedFallback: artworkManifest.filter((a) => a.hasEmbeddedFallback).length,

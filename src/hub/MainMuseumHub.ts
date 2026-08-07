@@ -701,7 +701,8 @@ export class MainMuseumHub {
           wallId: slot.placement.wallId,
           imageState,
           sourceMode: resolvedSource?.mode ?? null,
-          sourceUrlType: resolvedSource?.urlType ?? null,
+          sourceUrlType: resolvedSource?.resolvedUrlType ?? null,
+          bundleId: resolvedSource?.bundleId ?? null,
           fallbackReason,
           localQuad: projection?.localQuad ?? null,
           worldQuad: projection?.worldQuad ?? null,
@@ -799,6 +800,7 @@ export class MainMuseumHub {
       this.diagnostics.warn('artwork-image-missing', 'Hub artwork image is unavailable; neutral placeholder retains exact target', {
         slotId: view.slot.id,
         artworkId: view.slot.artworkId,
+        bundleId: sourcePlan.fallback?.bundleId ?? null,
         fallbackReason: 'no-source',
       });
       return;
@@ -812,11 +814,12 @@ export class MainMuseumHub {
       this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
         slotId: view.slot.id,
         artworkId: view.slot.artworkId,
+        bundleId: primary.bundleId,
         sourceMode: primary.mode,
-        declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
-        resolvedImageUrl: redactArtworkImageUrlForLog(primary.url),
-        declaredImageUrlType: primary.urlType,
-        resolvedImageUrlType: primary.urlType,
+        declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+        resolvedImageUrl: redactArtworkImageUrlForLog(primary.resolvedUrl),
+        declaredImageUrlType: primary.declaredUrlType,
+        resolvedImageUrlType: primary.resolvedUrlType,
         requestStatus: 'loaded',
         decodeStatus: 'decoded',
         textureWidth: primaryResult.width,
@@ -831,10 +834,11 @@ export class MainMuseumHub {
       this.diagnostics.warn('artwork-image-retry', 'Hub artwork source failed; retrying embedded fallback', {
         slotId: view.slot.id,
         artworkId: view.slot.artworkId,
-        declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
-        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.url),
-        declaredImageUrlType: primary.urlType,
-        fallbackImageUrlType: fallback.urlType,
+        bundleId: fallback.bundleId,
+        declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+        declaredImageUrlType: primary.declaredUrlType,
+        fallbackImageUrlType: fallback.resolvedUrlType,
         fallbackReason: primaryFailure,
       });
       const fallbackResult = await this.loadSlotImageCandidate(view, fallback);
@@ -843,11 +847,12 @@ export class MainMuseumHub {
         this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
           slotId: view.slot.id,
           artworkId: view.slot.artworkId,
+          bundleId: fallback.bundleId,
           sourceMode: fallback.mode,
-          declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
-          resolvedImageUrl: redactArtworkImageUrlForLog(fallback.url),
-          declaredImageUrlType: primary.urlType,
-          resolvedImageUrlType: fallback.urlType,
+          declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+          resolvedImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+          declaredImageUrlType: primary.declaredUrlType,
+          resolvedImageUrlType: fallback.resolvedUrlType,
           requestStatus: 'fallback-loaded',
           decodeStatus: 'decoded',
           textureWidth: fallbackResult.width,
@@ -861,21 +866,22 @@ export class MainMuseumHub {
       this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
         slotId: view.slot.id,
         artworkId: view.slot.artworkId,
-        declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
-        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.url),
-        declaredImageUrlType: primary.urlType,
-        fallbackImageUrlType: fallback.urlType,
+        bundleId: fallback.bundleId,
+        declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+        declaredImageUrlType: primary.declaredUrlType,
+        fallbackImageUrlType: fallback.resolvedUrlType,
         fallbackReason: fallbackFailure,
         attemptedSources: [
           {
             sourceMode: primary.mode,
-            url: redactArtworkImageUrlForLog(primary.url),
-            urlType: primary.urlType,
+            url: redactArtworkImageUrlForLog(primary.resolvedUrl),
+            urlType: primary.resolvedUrlType,
           },
           {
             sourceMode: fallback.mode,
-            url: redactArtworkImageUrlForLog(fallback.url),
-            urlType: fallback.urlType,
+            url: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+            urlType: fallback.resolvedUrlType,
           },
         ],
       });
@@ -886,16 +892,17 @@ export class MainMuseumHub {
     this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
       slotId: view.slot.id,
       artworkId: view.slot.artworkId,
-      declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
+      bundleId: primary.bundleId,
+      declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
       fallbackImageUrl: null,
-      declaredImageUrlType: primary.urlType,
+      declaredImageUrlType: primary.declaredUrlType,
       fallbackImageUrlType: null,
       fallbackReason: primaryFailure,
       attemptedSources: [
         {
           sourceMode: primary.mode,
-          url: redactArtworkImageUrlForLog(primary.url),
-          urlType: primary.urlType,
+          url: redactArtworkImageUrlForLog(primary.resolvedUrl),
+          urlType: primary.resolvedUrlType,
         },
       ],
     });
@@ -914,7 +921,7 @@ export class MainMuseumHub {
     view.button.dataset['artworkSourceState'] = imageState;
     if (resolvedSource) {
       view.button.dataset['artworkSourceMode'] = resolvedSource.mode;
-      view.button.dataset['artworkUrlType'] = resolvedSource.urlType;
+      view.button.dataset['artworkUrlType'] = resolvedSource.resolvedUrlType;
     } else {
       delete view.button.dataset['artworkSourceMode'];
       delete view.button.dataset['artworkUrlType'];
@@ -949,7 +956,7 @@ export class MainMuseumHub {
       const timeout = window.setTimeout(() => complete('timeout'), HUB_IMAGE_TIMEOUT_MS);
       image.addEventListener('load', handleLoad);
       image.addEventListener('error', handleError);
-      image.src = source.url;
+      image.src = source.resolvedUrl;
       if (image.complete && image.naturalWidth > 0) complete('loaded');
     });
     if (token !== view.imageLoadToken) return { status: 'failed', reason: 'load-timeout' };

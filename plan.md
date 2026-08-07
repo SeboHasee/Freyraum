@@ -2,10 +2,13 @@
 
 ## Active — Route-aware recovery plan for persistent grey artwork planes (v0.91, 2026-08-07)
 
-> **Planning and documentation only.** This entry records the current source
-> audit and a future implementation sequence; it does not claim that the
-> persistent customer-visible symptom is fixed. No runtime, importer, generated
-> preview, or customer asset was changed in this pass.
+> **Status update:** The root source-addressing repair from this plan is now
+> implemented. Generated customer bundles publish a script-derived
+> `assetBaseUrl` through `window.__FREYRAUM_ARTWORK_BUNDLE__`, runtime startup
+> sanitizes bundle envelopes as well as the legacy artwork array, and both hub
+> and gallery now consume shared declared-versus-resolved artwork source
+> candidates. The remaining future work below is limited to deeper failure
+> typing, CORS/upload proofing, and oversized-image downscale hardening.
 
 ### Incident assessment
 
@@ -84,7 +87,7 @@ PBR realism, or tone mapping should be rewritten.
 **Exit criterion:** the team can point to a single first failed stage for at
 least one grey artwork. A screenshot alone does not satisfy this phase.
 
-#### Phase 1 — Make generated customer image addressing script-relative
+#### Phase 1 — Make generated customer image addressing script-relative ✅ shipped
 
 **Scope:** `scripts/import-artworks.mjs`, `src/main.ts`,
 `src/utils/artworkImageSources.ts`, `src/gallery/TextureManager.ts`,

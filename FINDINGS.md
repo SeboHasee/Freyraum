@@ -42,6 +42,11 @@
    compatibility decision. The current manager logs an oversized decoded source
    only after it has loaded; it does not yet guarantee a bounded downscaled
    upload on mobile.
+9. The first production hardening slice is now shipped: generated customer
+   bundles publish a script-derived `assetBaseUrl` through
+   `window.__FREYRAUM_ARTWORK_BUNDLE__`, runtime startup accepts that envelope
+   as well as the legacy array, and both hub/gallery resolve relative customer
+   image paths through the same declared-versus-resolved source candidate.
 
 ### Primary-source research for the v0.91 plan
 

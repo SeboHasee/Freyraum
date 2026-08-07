@@ -1,6 +1,41 @@
 # CHANGELOG
 > Latest markdown audit: 2026-08-07 (interactive-gallery stage + mounted presentation baseline).
 
+## v0.91 — Script-relative customer artwork bundle recovery (2026-08-07)
+
+### Summary
+
+- The customer importer now publishes a backward-compatible
+  `window.__FREYRAUM_ARTWORK_BUNDLE__` envelope with bundle ID, generated
+  timestamp, artwork records, and a script-derived `assetBaseUrl`, while still
+  exposing `window.__FREYRAUM_ARTWORKS` for legacy readers.
+- Runtime startup now sanitizes bundle envelopes as well as legacy injected
+  arrays, rejects unsafe primary URL schemes, and carries bundle metadata into
+  the active artwork manifest.
+- Shared artwork-source resolution now distinguishes declared versus resolved
+  URLs/types, resolves relative customer image paths against the generated
+  bundle base, and applies the same result in both the interactive gallery and
+  museum hub.
+- Gallery and hub diagnostics now include bundle-aware declared/resolved source
+  metadata, and the museum-hub regression fixture covers script-relative bundle
+  resolution explicitly.
+- Rebuilt `customer-preview/freyraum-gallery.js` so the tracked local preview
+  matches the updated runtime/importer contract.
+
+### Validation
+
+- `npm install` ✅ *(existing advisories remain in the dependency tree; no new dependencies were added)*
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+- `node --check scripts/import-artworks.mjs` / `node --check scripts/write-local-preview.mjs` / `node --check scripts/visual-regression.mjs` / `node --check scripts/test-museum-hub-geometry.mjs` ✅
+- `npm run validate:visual` ⚠️ *(script requires an explicit mode argument in this repository)*
+- `npm run validate:museum-hub:visual` ⚠️ *(compare tooling dependencies `pixelmatch`/`pngjs` are not installed in this repository snapshot)*
+
 ## v0.90 — Shared artwork-source fallback contract for hub + gallery (2026-08-07)
 
 ### Summary

@@ -124,7 +124,9 @@ After the workflow completes:
 1. Record whether the symptom is in the interactive gallery (generated
    FREYRAUM-style fallback) or the museum hub (title-bearing placeholder).
 2. Download or preserve the exact deployed `customer-artworks.js` and matching
-   `images/` directory before rerunning the importer.
+   `images/` directory before rerunning the importer. The generated script now
+   carries `window.__FREYRAUM_ARTWORK_BUNDLE__.assetBaseUrl`; keep that value in
+   the evidence because it determines how relative artwork paths resolve.
 3. Open the same deployed URL with `?debug=verbose&hubDebug=1`, export
    diagnostics, and save Network/console evidence for the failed artwork.
 4. Confirm the published image request resolves under `/Freyraum/images/` and

@@ -20,6 +20,13 @@ export interface ArtworkDimensions {
   height: number;
 }
 
+export interface ArtworkImageSourceContext {
+  /** Runtime-only metadata for resolving generated customer bundles. */
+  bundleId?: string;
+  /** Runtime-only base URL used to resolve relative customer image paths. */
+  assetBaseUrl?: string;
+}
+
 export interface Artwork {
   /** Stable, URL-safe identifier. Required for CMS interop. */
   id: string;
@@ -61,6 +68,8 @@ export interface Artwork {
    * Format: `data:image/<subtype>;base64,<base64-bytes>`
    */
   webglImage?: string;
+  /** Runtime-only bundle context for resolving relative customer image paths. */
+  imageSourceContext?: ArtworkImageSourceContext;
 }
 
 interface EmbeddedArtworkOptions {

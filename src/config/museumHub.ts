@@ -243,6 +243,7 @@ export interface MuseumHubResolution {
       image: string;
       webglImage: string | null;
       dimensions: Artwork['dimensions'];
+      imageSourceContext?: Artwork['imageSourceContext'];
     }
   >;
   background: { src: string; aspect: number };
@@ -2202,6 +2203,7 @@ export function resolveMuseumHub(
       image: artwork.image,
       webglImage: artwork.webglImage ?? null,
       dimensions: artwork.dimensions,
+      ...(artwork.imageSourceContext ? { imageSourceContext: artwork.imageSourceContext } : {}),
     });
   }
 
