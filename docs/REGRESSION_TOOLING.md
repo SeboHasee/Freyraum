@@ -1,4 +1,4 @@
-# Regression Validation Tooling (v0.91)
+# Regression Validation Tooling (v0.92)
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel

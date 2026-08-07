@@ -118,8 +118,9 @@ The active implementation sequence and acceptance gates are canonical in
 - Vite static assets:
   <https://vite.dev/guide/assets.html>
 
-The implementation decision, exact code-level phases, alternatives, and
-acceptance gates are canonical in `plan.md § v0.91`.
+The v0.91 source-addressing decision is retained in `plan.md § v0.91` as the
+historical implemented slice. The active implementation sequence and acceptance
+gates are canonical in `plan.md § v0.92`.
 
 ## Grey-artwork planning audit (current-branch evidence only, 2026-08-07)
 
