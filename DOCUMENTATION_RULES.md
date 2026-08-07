@@ -22,6 +22,8 @@ Keep documentation authoritative, minimal, and resistant to drift.
 2. Do not duplicate release history outside `CHANGELOG.md`.
 3. Do not embed long historical status sections in operational docs.
 4. Prefer links to canonical documents over copied content.
+5. When customer feedback reopens a documented visual incident, downgrade the
+   prior fixed claim and link the current evidence and active recovery plan.
 
 ## Documentation freshness policy
 

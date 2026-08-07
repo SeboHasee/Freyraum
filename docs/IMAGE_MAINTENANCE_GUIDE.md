@@ -49,7 +49,8 @@ Until the planned high-resolution workflow ships:
 If a valid source instead appears as a grey artwork surface, preserve the
 generated customer bundle and collect runtime diagnostics before replacing the
 image. The active plan distinguishes a missing/decode/CORS source failure from
-a device texture-size limit: `plan.md § v0.91`.
+a device texture-size limit and requires a source-to-pixel result:
+`plan.md § v0.92`.
 
 ## Reliable target architecture (planned)
 

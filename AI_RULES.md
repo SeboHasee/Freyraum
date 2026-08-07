@@ -23,6 +23,15 @@ When documenting metal/material upgrades, explicitly distinguish shipped runtime
 
 When addressing loading-screen smoothness or painting fidelity, do not rely on “loaded” or “compiled” as sufficient proof. Require diagnostics for full-size presented frames, final-path artwork warm coverage, post-processing readiness, UI/control prebuild, and source-vs-render color checks before describing the site as smooth or original-looking.
 
+## v0.92 artwork-recovery rule
+
+For a grey customer artwork, first identify the visible route signature and
+prove the same source through request, decode, compatibility, GPU binding, and
+visible pixels. Do not claim a script-relative URL, importer report, or
+`LoadingManager` completion resolves the incident by itself. Keep hub
+`MeshBasicMaterial` recovery separate from gallery PBR/lighting fidelity, and
+preserve the existing PNG importer plus its bounded embedded fallback.
+
 
 
 ## v0.23 performance documentation rule

@@ -1,6 +1,18 @@
 # FREYRAUM lessons learned
 > Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
 
+## 2026-08-07 — Grey-artwork recovery lesson
+
+### Lesson 89 — Packaged is not visible
+
+An importer report, generated asset directory, and successful build establish
+that an artwork was packaged; they do not prove that the browser decoded,
+uploaded, and drew customer pixels. Future recovery work must record the first
+failed source-to-pixel stage for the actual generated bundle before changing
+lighting or material settings. A hub title placeholder is a source failure
+signature because hub artwork planes are unlit; it cannot be repaired by
+interactive-gallery PBR tuning.
+
 
 ## 2026-05-23 — v0.58 implementation lessons
 

@@ -32,10 +32,10 @@ hub/gallery artwork-source regressions fail even when the final pixels still
 match the baseline.
 
 For the persistent-grey-artwork recovery, retain that existing primary-failure /
-embedded-fallback fixture and add the v0.91 gates before declaring a repair
-complete: script-relative customer-bundle URL resolution in `file://`, Vite,
-and Pages-base environments; an expected generated-image existence check in
-preview/public/dist; final-placeholder diagnostics; delayed decode; and
+embedded-fallback fixture and add the v0.92 gates before declaring a repair
+complete: the real current PNG bundle in `file://`, Vite, and Pages-base
+delivery; preview/public/dist asset-contract checks; typed final-placeholder and
+delayed-decode diagnostics; source-to-pixel binding proof; and
 capability-limited image handling. These are planned gates, not claims about
 the current implementation.
 

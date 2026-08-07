@@ -64,6 +64,14 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
    `DestinationRouter.startAt('hub')`.
 5. UI entry flow continues after readiness gates are satisfied.
 
+## Active artwork-recovery boundary
+
+The v0.91 source-addressing layer is current runtime behavior. The active v0.92
+plan extends it with a shared source-to-pixel outcome and capability-aware
+derived texture path; it is not implemented yet. Keep hub `MeshBasicMaterial`
+image recovery separate from interactive-gallery PBR fidelity work. See
+`plan.md § v0.92` for the staged implementation and `FINDINGS.md` for evidence.
+
 ## Render-loop behavior
 
 - rAF remains active so frame-budget sampling, readiness work, and animation

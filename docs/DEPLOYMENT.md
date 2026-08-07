@@ -132,9 +132,9 @@ After the workflow completes:
 4. Confirm the published image request resolves under `/Freyraum/images/` and
    returns an image with a non-zero decoded size. Do not try to compensate by
    changing lighting, material, or customer metadata.
-5. Follow the route-aware recovery process in `plan.md § v0.91`; it covers
+5. Follow the source-to-pixel recovery process in `plan.md § v0.92`; it covers
    missing/stale bundles, relative-path resolution, fallback payloads, CORS,
-   decode deadlines, and texture-size limits.
+   decode deadlines, GPU binding proof, and texture-size limits.
 
 ---
 

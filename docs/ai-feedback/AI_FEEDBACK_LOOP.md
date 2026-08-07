@@ -5,6 +5,13 @@
 
 When user feedback says a shipped preload/fidelity fix still fails, immediately downgrade the claim to follow-up in docs, audit the current source against the claim, add diagnostics-driven acceptance checks, then flip docs back to shipped only after implementation and validation. v0.29 is the shipped example for painting darkness, loading-screen ownership, entry glitching, and first-use lag.
 
+## v0.92 feedback-loop note
+
+A user report that grey artworks persist reopens the incident even when an
+earlier source-addressing change shipped. The next plan must use the exact
+generated current artwork bundle and distinguish packaged assets from decoded,
+GPU-bound, visible pixels before proposing material or lighting changes.
+
 
 
 ## v0.23 — Performance/Preloading Planning Audit

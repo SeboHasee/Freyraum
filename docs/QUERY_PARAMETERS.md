@@ -100,7 +100,8 @@ data below. Relevant current records are:
 
 Capture the browser Network log and console errors with the export. Do not
 include raw `data:image/...` payloads in issue reports; runtime diagnostics
-redact them. The route-aware recovery procedure is in `plan.md § v0.91`.
+redact them. The route-aware source-to-pixel recovery procedure is in
+`plan.md § v0.92`.
 
 ## localStorage keys
 

@@ -22,7 +22,8 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 6. For a grey artwork, classify the route signature, preserve the exact generated
    customer bundle, and enable the documented verbose hub diagnostics before
    collecting Network/console evidence or regenerating files. The decision tree
-   is canonical in `plan.md § v0.91`.
+   is canonical in `plan.md § v0.92`. Do not treat an importer report or a
+   published asset file as proof that a browser uploaded visible artwork pixels.
 7. If behavior differs from docs, treat as drift and update canonical docs in the same fix PR.
 
 ## Handoff checklist

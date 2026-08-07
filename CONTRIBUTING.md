@@ -31,6 +31,11 @@ Update docs in the same PR when your change affects:
 
 If docs are not updated, the PR is incomplete.
 
+When a user reports that a documented or shipped visual recovery still fails,
+reopen the incident in `plan.md` and `FINDINGS.md`. Do not keep an unverified
+"fixed" claim: reproduce with the current customer bundle and document the
+first failed source-to-pixel stage before choosing a rendering change.
+
 ## Source-of-truth rules
 
 - Configuration tables/keys belong only in `docs/QUERY_PARAMETERS.md`.

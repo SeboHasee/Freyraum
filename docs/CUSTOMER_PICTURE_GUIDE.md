@@ -88,7 +88,9 @@ copies into `customer-artworks/inbox/`.
   placeholder, keep the generated `customer-artworks.js` and `images/` output,
   then capture the diagnostics described in `docs/QUERY_PARAMETERS.md`. Do not
   replace the original image or change room lighting until the failed source
-  stage is identified; see `plan.md § v0.91`.
+  stage is identified; see `plan.md § v0.92`. A successful update report only
+  proves that files were generated, so reproduce the same output in the local
+  preview and deployed build before importing again.
 
 ## Related docs
 
