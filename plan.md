@@ -1,6 +1,161 @@
 # FREYRAUM Plan
 
-## Active — Route-aware recovery plan for persistent grey artwork planes (v0.91, 2026-08-07)
+## Active — Verified pixel-recovery plan for persistent grey artworks (v0.92, 2026-08-07)
+
+> **Incident status:** The v0.91 script-relative source-addressing repair is
+> present in the current branch, but the new customer report means it is not
+> sufficient evidence that the currently configured artworks are visible. Treat
+> the incident as unresolved until the current `Fraktal.png` and `Akt 27.png`
+> render as source-backed pixels in both the hub and interactive gallery.
+
+### What is known, and what is not
+
+1. The checked-in current setup has two PNG inputs in
+   `customer-artworks/inbox/`: `Fraktal.png` and `Akt 27.png`. Their normalized
+   IDs (`fraktal`, `akt-27`) are the two active front-wall mappings in
+   `customer-artworks/museum-hub.json`.
+2. A hub title-bearing grey plane is not a lighting symptom. It is the explicit
+   final state from `MainMuseumHub` after primary and embedded source candidates
+   fail to load or decode, and `HubRoomRenderer.placeholderTexture()` is bound.
+   A proportional FREYRAUM gradient in the gallery is similarly a deliberate
+   `TextureManager` fallback.
+3. The current branch resolves generated `./images/...` paths against the
+   generated bundle script, retains an optional embedded `webglImage` retry, and
+   validates that manifest image files reach `dist/images/`. Those checks prove
+   packaging intent, not that the deployed browser decoded, uploaded, and drew
+   the actual customer pixels.
+4. The hub displays a source image through an unlit `MeshBasicMaterial`; changing
+   gallery lighting, bloom, or `PaintingMaterial` cannot restore a hub
+   placeholder. The interactive gallery has a separate material/colour pipeline
+   that must be assessed only after its albedo source is proven present.
+
+### Decision
+
+Implement one shared **source-to-pixel outcome** for both routes. It must record
+the selected candidate, request/decode dimensions and duration, compatibility
+decision, GPU binding proof, and terminal result without exposing source bytes.
+The selected candidate must be downscaled only when it exceeds the active
+renderer/quality texture limit, then retried once through the existing embedded
+fallback before a truthful placeholder is shown. This works with the existing
+PNG importer setup; it does not require a new artwork format, manual manifest
+editing, a dependency, or a lighting workaround.
+
+### Implementation phases
+
+#### Phase 0 — Reproduce with the current artwork bundle
+
+1. Run the normal importer and retain the generated
+   `customer-preview/customer-artworks.js`, `images/`, and
+   `customer-artworks/last-import-report.txt` before changing any sources.
+2. Exercise that same generated bundle in local `file://` preview, Vite
+   development, and the Pages-base build. For each of `fraktal` and `akt-27`,
+   capture the resolved primary URL, fallback availability, request result,
+   decode result, natural dimensions, `MAX_TEXTURE_SIZE`, quality preset,
+   browser/device, diagnostics export, Network evidence, and console errors.
+3. Classify the visible state before choosing a repair: hub title placeholder,
+   gallery generated gradient, source pixels that are merely too dark, or a
+   decoded source that becomes grey only after WebGL binding.
+
+**Exit criterion:** one first failing stage is recorded for a real current
+artwork in the original failing environment. A screenshot, importer success, or
+LoadingManager completion alone is not evidence.
+
+#### Phase 1 — Make the current importer output a verifiable asset contract
+
+1. Preserve the v0.91 script-relative bundle envelope and legacy array fallback,
+   but add a focused generated-bundle validator that checks every normalized
+   artwork ID, declared source, fallback policy, and image file across preview,
+   public, and built output.
+2. Make importer/public-sync/build failures identify the artwork ID and expected
+   file rather than allowing a runtime grey placeholder to be the first signal.
+3. Add coverage for the actual two-artwork layout as well as synthetic
+   primary-failure/fallback cases; do not rely only on data-URI fixtures.
+
+**Acceptance criterion:** the generated current bundle maps `fraktal` and
+`akt-27` to existing, decodable PNG files in all three supported delivery modes.
+
+#### Phase 2 — Replace ambiguous success with shared source-to-pixel outcomes
+
+1. Introduce a shared, redacted outcome contract for declared source, embedded
+   fallback, compatibility downscale, final placeholder, and upload-suspect
+   states. Include candidate type, resolved URL type, bundle ID, stage, elapsed
+   time, source/upload dimensions, and renderer capability.
+2. Change gallery texture loading so a generated texture cannot erase the
+   original albedo failure before the explicit outcome is recorded.
+3. Change hub candidate loading so request and decode timing belong to one
+   candidate token; delayed events from an abandoned primary cannot settle the
+   fallback attempt.
+4. After texture initialization, add a bounded developer/CI source-to-pixel
+   probe for the visible map binding. The probe must report only pass/fail and
+   compact colour/size metadata, never customer image bytes or data URIs.
+
+**Acceptance criterion:** each grey surface has one diagnostic record naming the
+first failed stage, while a real current artwork has a recorded successful
+source-to-pixel result in both routes.
+
+#### Phase 3 — Make decoded images compatible with the active device
+
+1. Use the live renderer capability and an explicit quality-tier cap before
+   committing an oversized source to GPU memory. Preserve the original texture
+   when it fits.
+2. For an oversize source, create one bounded derived raster with browser
+   image-resize APIs and a feature-detected canvas fallback. Release temporary
+   decode resources promptly and never upscale.
+3. Apply the same compatibility policy to the hub and gallery, including the
+   embedded fallback. A retry with identical over-limit bytes is not a recovery.
+
+**Acceptance criterion:** an over-limit PNG produces either visible downscaled
+customer pixels or a specific unsupported diagnostic, never an unexplained grey
+plane.
+
+#### Phase 4 — Audit fidelity only after pixels are proven
+
+1. Keep `SRGBColorSpace` for albedo and renderer output. Correct non-colour PBR
+   data maps to the installed Three.js `NoColorSpace` contract, with a
+   side-by-side visual baseline.
+2. Use the existing raw-albedo debug path to compare source, unshaded albedo,
+   and final gallery material output. Evaluate the currently disabled
+   `albedoFidelityFill` only against that evidence; do not assign a brightness
+   value or retune lights to hide an absent source.
+3. Keep the hub artwork material unlit unless the new probe proves a bound
+   source is not visible. Any hub room-light adjustment is a separate scene
+   presentation decision, not an image-recovery fix.
+
+**Acceptance criterion:** source pixels, raw albedo, and final output retain
+recognizable colour and detail for the current PNGs; material work never turns a
+missing image into a false success.
+
+### Verification and documentation gates
+
+- `npm run import:artworks`, `npm run lint`, `npm run build:typecheck`,
+  `npm run build`, `npm run validate:museum-hub`,
+  `npm run test:frame-budget`, and `npm run docs:check-config-authority`.
+- Focused importer and bundle checks for the current two PNGs, broken primary
+  with working fallback, missing fallback, delayed decode, and oversized source.
+- Visual capture across `file://`, Vite, Pages-base, desktop, and a constrained
+  device/quality profile. A valid artwork may not show a hub placeholder or
+  gallery generated fallback.
+- Update `FINDINGS.md`, `README.md`, `CHANGELOG.md`, customer/deployment/handoff
+  guidance, architecture, regression tooling, and engineering rules together.
+
+### Primary research
+
+- Three.js colour management:
+  <https://threejs.org/manual/en/color-management.html>
+- Three.js texture colour-space constants:
+  <https://threejs.org/docs/#api/en/constants/Textures>
+- Three.js `TextureLoader`:
+  <https://threejs.org/docs/#api/en/loaders/TextureLoader>
+- Three.js `MeshPhysicalMaterial` emissive map/intensity:
+  <https://threejs.org/docs/#api/en/materials/MeshPhysicalMaterial>
+- Three.js texture-size capability:
+  <https://threejs.org/docs/#api/en/renderers/WebGLCapabilities.maxTextureSize>
+- MDN image decode:
+  <https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode>
+- MDN CORS-enabled images:
+  <https://developer.mozilla.org/en-US/docs/Web/HTML/How_to/CORS_enabled_image>
+
+## Implemented but insufficient — Route-aware source-addressing recovery (v0.91, 2026-08-07)
 
 > **Status update:** The root source-addressing repair from this plan is now
 > implemented. Generated customer bundles publish a script-derived

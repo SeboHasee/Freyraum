@@ -1,6 +1,19 @@
 # CHANGELOG
 > Latest markdown audit: 2026-08-07 (interactive-gallery stage + mounted presentation baseline).
 
+## v0.92 — Persistent grey-artwork recovery plan (2026-08-07)
+
+### Documentation status
+
+- Reopened the artwork-visibility incident after a customer report that grey
+  museum artworks persist despite the v0.91 URL repair.
+- Recorded the current two-PNG setup, route-specific fallback signatures, and
+  the gap between generated-asset existence and source-to-pixel proof.
+- Added a staged implementation plan for asset-contract validation, typed
+  source/decode/upload outcomes, capability-aware downscaling, and a
+  post-visibility gallery fidelity audit.
+- No runtime behavior changed in this documentation-only planning update.
+
 ## v0.91 — Script-relative customer artwork bundle recovery (2026-08-07)
 
 ### Summary

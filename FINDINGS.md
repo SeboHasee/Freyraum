@@ -1,5 +1,58 @@
 # FINDINGS
 
+## Persistent grey-artwork investigation (v0.92, 2026-08-07)
+
+1. The current tracked customer setup is two PNG artworks, `Fraktal.png` and
+   `Akt 27.png`, normalized as `fraktal` and `akt-27`; the shipping v4 hub
+   configuration maps those exact IDs to its front-wall slots. The generated
+   bundle/images are deliberately ignored and must be produced before a real
+   runtime reproduction.
+2. The v0.91 script-relative URL repair is implemented, but the renewed customer
+   report invalidates any claim that URL resolution alone fixed this incident.
+   Bundle existence and CI asset copying prove delivery intent, not browser
+   decode, GPU upload, or a rendered customer pixel.
+3. Hub and gallery fallbacks are diagnostic signatures, not generic grey styling.
+   A title-bearing hub plane means `MainMuseumHub` exhausted its source
+   candidates; a proportional FREYRAUM gallery gradient means `TextureManager`
+   constructed a fallback. Neither is fixed by room lights, bloom, or PBR
+   tuning.
+4. The hub image plane uses `MeshBasicMaterial`; it is independent of lighting
+   and the interactive `PaintingMaterial`. If a decoded hub image still renders
+   grey, the next boundary to prove is WebGL map binding/upload, not gallery
+   brightness.
+5. The current fallback payload contains the same original image bytes as the
+   primary PNG. It helps path/CORS failures but cannot recover a texture-size or
+   decode-resource failure. A shared, bounded capability downscale is therefore
+   required before retrying identical bytes.
+6. Three.js guidance keeps albedo in `SRGBColorSpace` and puts non-colour
+   normal/roughness/height/AO-style data in `NoColorSpace`. The repository’s
+   existing non-colour `LinearSRGBColorSpace` usage is a separate gallery
+   fidelity correction, not an explanation for a hub placeholder.
+7. `PaintingMaterial` has a wired but currently zero `albedoFidelityFill`.
+   Assess a conservative source-fidelity floor only after raw albedo and final
+   material captures prove that a loaded gallery image is merely too dark. It
+   must never be used to hide source failure.
+
+### Primary sources for v0.92
+
+- Three.js colour management:
+  <https://threejs.org/manual/en/color-management.html>
+- Three.js texture constants:
+  <https://threejs.org/docs/#api/en/constants/Textures>
+- Three.js texture-size capability:
+  <https://threejs.org/docs/#api/en/renderers/WebGLCapabilities.maxTextureSize>
+- Three.js texture loading:
+  <https://threejs.org/docs/#api/en/loaders/TextureLoader>
+- Three.js physical material:
+  <https://threejs.org/docs/#api/en/materials/MeshPhysicalMaterial>
+- MDN `HTMLImageElement.decode()`:
+  <https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode>
+- MDN CORS-enabled images:
+  <https://developer.mozilla.org/en-US/docs/Web/HTML/How_to/CORS_enabled_image>
+
+The active implementation sequence and acceptance gates are canonical in
+`plan.md § v0.92`.
+
 ## Persistent grey-artwork recovery findings (v0.91, 2026-08-07)
 
 1. “Grey plane” identifies a symptom, not one renderer bug. The interactive
