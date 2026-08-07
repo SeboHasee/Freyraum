@@ -359,6 +359,7 @@ export class GalleryManager {
   private readonly proceduralQueue = new Set<number>();
   private proceduralQueueRunning = false;
   private renderDirtyFrames = 8;
+  private disposed = false;
 
   private targetX = 0;
   private targetY = 0;
@@ -1311,14 +1312,18 @@ export class GalleryManager {
   }
 
   private scheduleIdle(callback: () => void, timeout: number): void {
+    const invoke = (): void => {
+      if (this.disposed) return;
+      callback();
+    };
     const idle = (window as unknown as {
       requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
     }).requestIdleCallback;
     if (typeof idle === 'function') {
-      idle(callback, { timeout });
+      idle(invoke, { timeout });
       return;
     }
-    window.setTimeout(callback, 1);
+    window.setTimeout(invoke, 1);
   }
 
   /** Selects which procedural fallback roles to generate for the active preset. */
@@ -1497,13 +1502,17 @@ export class GalleryManager {
    */
   whenArtworkInteractive(index: number, timeoutMs: number): Promise<'ready' | 'timeout'> {
     const entry = this.readiness[index];
-    if (!entry) return Promise.resolve('timeout');
+    if (!entry || this.disposed) return Promise.resolve('timeout');
     const isInteractive = (): boolean =>
       entry.albedoLoaded && entry.materialApplied && entry.shaderCompiled;
     if (isInteractive()) return Promise.resolve('ready');
     return new Promise((resolve) => {
       const startedAt = this.now();
       const poll = (): void => {
+        if (this.disposed || !this.readiness[index]) {
+          resolve('timeout');
+          return;
+        }
         if (isInteractive()) {
           resolve('ready');
           return;
@@ -1818,5 +1827,14 @@ export class GalleryManager {
         readiness: entry,
       }
     );
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.prefetchQueue.length = 0;
+    this.proceduralQueue.clear();
+    this.activePrefetches.clear();
+    this.onNavigateCallback = null;
+    this.pendingNavigationProbe = null;
   }
 }

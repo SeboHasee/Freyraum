@@ -1905,7 +1905,7 @@ async function main(): Promise<void> {
       diagnostics.info('navigation', 'experience-state', 'Experience state changed', { state });
     },
     onTransitionError: (destination, error) => {
-      museumHub.showError();
+      museumHub?.showError();
       diagnostics.error(
         'navigation',
         'destination-transition-failed',
@@ -2201,6 +2201,7 @@ async function main(): Promise<void> {
     timeline.dispose();
     restoreStatus.remove();
     backgroundAudio.dispose();
+    galleryManager.dispose();
     artworkMesh.dispose();
     galleryStage?.dispose();
     textureManager.dispose();
