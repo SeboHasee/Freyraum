@@ -95,7 +95,7 @@ build path.
    bundle envelope, for example `window.__FREYRAUM_ARTWORK_BUNDLE__`, containing
    a schema version, bundle identifier, generated timestamp, script-derived
    `assetBaseUrl`, and the existing artwork records. Keep
-   `window.__FREYRAUM_ARTWORKS__`/the existing array contract readable during the
+   `window.__FREYRAUM_ARTWORKS`/the existing array contract readable during the
    migration so old previews do not hard-fail.
 2. In the generated classic script, compute `assetBaseUrl` from
    `document.currentScript.src` while that script is executing, with

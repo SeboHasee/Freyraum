@@ -1,5 +1,68 @@
 # FINDINGS
 
+## Persistent grey-artwork recovery findings (v0.91, 2026-08-07)
+
+1. “Grey plane” identifies a symptom, not one renderer bug. The interactive
+   gallery displays `TextureManager.createFallbackTexture()` when an albedo
+   source fails; the museum hub displays `HubRoomRenderer.placeholderTexture()`
+   after `MainMuseumHub` exhausts its primary and embedded fallback candidates.
+   The two signatures must be identified before changing code.
+2. The current v0.90 source-fallback contract is correctly bounded: the declared
+   `image` is primary and `webglImage` is tried only after primary failure. It
+   does not prove the generated artifact, image bytes, browser decode, CORS
+   response, or GPU upload is valid; a final grey fallback remains expected when
+   both candidates cannot render.
+3. Current gallery evidence points first to asset loading, not material/lighting:
+   `TextureManager.loadForRole()` creates a deliberate generated fallback after
+   a load error, and `GalleryManager` records `show-artwork-fallback`. The
+   gallery preserves manifest dimensions for mounted-work aspect, so a correctly
+   proportioned grey plane is compatible with a failed image source.
+4. Current hub evidence points first to source/decode state, not the painting
+   shader: it uses an sRGB `THREE.Texture(image)` on `MeshBasicMaterial`, then
+   explicitly maps final failures to a title-bearing placeholder. It also has
+   independent five-second load/decode deadlines that need duration evidence on
+   constrained devices.
+5. The importer emits document-relative `./images/<id>.<ext>` paths into a
+   generated classic script. That happens to work only while the document base
+   agrees with the script location; it is a plausible cross-environment risk for
+   `file://`, Vite development, and Pages under `/Freyraum/`. The preferred
+   future repair is script-relative generated asset addressing plus a
+   backward-compatible bundle envelope, not making base64 data primary.
+6. Three.js research confirms that loader/manager completion is not per-image
+   success: `TextureLoader` returns before the image is ready and
+   `LoadingManager` completes after failures as well as successes. Future
+   diagnostics/tests must record the per-artwork request, decode, map-bind, and
+   upload outcome rather than infer success from startup completion.
+7. The renderer and albedo settings are a low-probability root cause for missing
+   pixels: both renderers output sRGB with `NoToneMapping`, and albedo maps are
+   sRGB. Official Three.js guidance instead identifies a later, separate audit:
+   non-colour normal/roughness/AO-style maps should use `NoColorSpace`, not be
+   used to explain a source image that is absent.
+8. `renderer.capabilities.maxTextureSize` must become an active pre-upload
+   compatibility decision. The current manager logs an oversized decoded source
+   only after it has loaded; it does not yet guarantee a bounded downscaled
+   upload on mobile.
+
+### Primary-source research for the v0.91 plan
+
+- Three.js `TextureLoader`:
+  <https://threejs.org/docs/#api/en/loaders/TextureLoader>
+- Three.js `LoadingManager`:
+  <https://threejs.org/docs/#api/en/loaders/managers/LoadingManager>
+- Three.js colour management:
+  <https://threejs.org/manual/en/color-management.html>
+- Three.js texture-size capability:
+  <https://threejs.org/docs/#api/en/renderers/WebGLCapabilities.maxTextureSize>
+- MDN `HTMLImageElement.decode()`:
+  <https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode>
+- MDN CORS-enabled images:
+  <https://developer.mozilla.org/en-US/docs/Web/HTML/How_to/CORS_enabled_image>
+- Vite static assets:
+  <https://vite.dev/guide/assets.html>
+
+The implementation decision, exact code-level phases, alternatives, and
+acceptance gates are canonical in `plan.md § v0.91`.
+
 ## Grey-artwork planning audit (current-branch evidence only, 2026-08-07)
 
 1. The audited branch state was `copilot/planning-change-startup-flow` at

@@ -69,20 +69,26 @@ copies into `customer-artworks/inbox/`.
 
 ## Museum hub placement
 
-- The current `customer-artworks/museum-hub.json` format is **version 2**:
-  fixed stage size, calibrated wall quads, safe polygons, and wall-local slot
-  positions/mounted sizes live in the same file.
+- The current `customer-artworks/museum-hub.json` format is **version 4**:
+  camera, room envelope, calibrated front/left/right wall transforms, drawable
+  regions, doorway exclusions, visual tokens, exact artwork IDs, normalized
+  wall-local slot placement, and mounted sizes live in the same file.
 - Use the documented museum-hub calibration mode from `docs/QUERY_PARAMETERS.md`
   to adjust wall corners, safe zones, and artwork size/placement visually, then
   copy the exported JSON back into `customer-artworks/museum-hub.json`.
-- Older hotspot arrays and v1 slot boxes still load, but they are migrated
-  provisionally and should be re-saved from the v2 calibration flow.
+- Older hotspot arrays and v1/v2 slot boxes still load through migration, but
+  they should be re-saved from the current calibration flow.
 
 ## Troubleshooting
 
 - If Node.js is missing, install Node.js LTS and run again.
 - If the report contains warnings, fix the listed files and run update again.
 - If preview content looks stale, rerun update and refresh the page.
+- If a painting appears as a grey FREYRAUM-style fallback or a hub title
+  placeholder, keep the generated `customer-artworks.js` and `images/` output,
+  then capture the diagnostics described in `docs/QUERY_PARAMETERS.md`. Do not
+  replace the original image or change room lighting until the failed source
+  stage is identified; see `plan.md § v0.91`.
 
 ## Related docs
 

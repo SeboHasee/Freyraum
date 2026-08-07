@@ -46,6 +46,11 @@ Until the planned high-resolution workflow ships:
    - above **8192 px** → high-memory / desktop-oriented territory
    - above **16384 px** → not reliable for WebGL at all
 
+If a valid source instead appears as a grey artwork surface, preserve the
+generated customer bundle and collect runtime diagnostics before replacing the
+image. The active plan distinguishes a missing/decode/CORS source failure from
+a device texture-size limit: `plan.md § v0.91`.
+
 ## Reliable target architecture (planned)
 
 The active plan in `plan.md` moves FREYRAUM to a safer two-tier model:

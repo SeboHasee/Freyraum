@@ -39,6 +39,11 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Hub and gallery now share one artwork-source contract: the declared
   `image` asset stays primary, while optional embedded `webglImage` data is
   used only as an explicit fallback when the primary source fails.
+- A grey artwork is a diagnosable source-rendering incident, not an automatic
+  material/lighting defect: the gallery's generated fallback and the hub's
+  title-bearing placeholder are distinct states. Capture diagnostics plus the
+  exact generated customer bundle before changing rendering; the active
+  recovery plan is `plan.md § v0.91`.
 - CSS and WebGL share one authoritative museum-grey wall token (`#D8DDDB`,
   `--color-gallery-wall`) resolved before renderer construction, so gallery,
   hub, fallback surfaces, and the WebGL clear color can never drift apart.

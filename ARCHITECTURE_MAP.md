@@ -38,13 +38,15 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     fidelity
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
-    flow, persistent artwork-ID selection state, and read-only geometry
-    diagnostics overlay
+    flow, persistent artwork-ID selection state, declared-image/embedded-fallback
+    slot state, and read-only geometry/source diagnostics overlay
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
   - UI controls, timeline, interaction handling
 - `src/utils/`
+  - `artworkImageSources.ts`: shared declared-image/embedded-fallback source
+    plan used by both gallery and hub
   - Diagnostics, preferences, performance and utility primitives
 - `src/rendering/`
   - Backend detection/probe boundary (WebGL production, optional WebGPU probe)
@@ -58,7 +60,7 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
 3. `RendererManager` prewarms renderer pipeline.
 4. `MainMuseumHub` prepares the hub (background fallback + room scene +
-   first-page artwork decode) under the loading overlay via
+   first-page artwork primary/fallback decode) under the loading overlay via
    `DestinationRouter.startAt('hub')`.
 5. UI entry flow continues after readiness gates are satisfied.
 

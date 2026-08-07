@@ -1,10 +1,8 @@
-# Regression Validation Tooling (v0.74)
+# Regression Validation Tooling (v0.91)
 
-This document is the explicit **regression model → tooling** mapping required by
-`plan.md § v0.74` (Phase 10 Profiling Validation, Phase 12 Regression Risk
-Model, Phase 14 Success Criteria). It closes the gap where the regression model
-defined *pixel diff*, *invariants*, and *GC metrics* conceptually but did not
-map them to concrete tools.
+This document is the explicit **regression model → tooling** mapping for the
+current rendering baseline and active recovery work in `plan.md`. It maps pixel
+diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
@@ -32,6 +30,14 @@ Fixture hub states also break one declared image path on purpose and assert that
 the embedded fallback recovers it without exposing placeholder mode, so
 hub/gallery artwork-source regressions fail even when the final pixels still
 match the baseline.
+
+For the persistent-grey-artwork recovery, retain that existing primary-failure /
+embedded-fallback fixture and add the v0.91 gates before declaring a repair
+complete: script-relative customer-bundle URL resolution in `file://`, Vite,
+and Pages-base environments; an expected generated-image existence check in
+preview/public/dist; final-placeholder diagnostics; delayed decode; and
+capability-limited image handling. These are planned gates, not claims about
+the current implementation.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.

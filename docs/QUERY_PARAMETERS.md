@@ -3,7 +3,7 @@
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
 
-Verified against runtime code on 2026-06-21.
+Verified against runtime code on 2026-08-07.
 
 ## Query parameters
 
@@ -78,11 +78,28 @@ Notes:
   - containment, doorway, hanging-band, and orientation validity flags
   - per-wall reference residual / convergence summaries
 - Emits per-slot diagnostics snapshots (wall id, local/projected quads,
-  calibrated camera chain, selected artwork state, and validity result) and a
-  full hub geometry snapshot once composition is ready.
+  calibrated camera chain, selected artwork state, validity result, source
+  mode, URL type, image state, and fallback reason) and a full hub geometry
+  snapshot once composition is ready.
 - Runtime navigation also logs selection lifecycle and wall-surface snapshots, so
   `?hubDebug=1` sessions can correlate geometry, current artwork ownership, and
   transition background state.
+
+### Grey-artwork incident capture
+
+There is no separate query parameter. Use `?debug=verbose&hubDebug=1` when the
+museum hub shows a title-bearing placeholder, then export the diagnostics API
+data below. Relevant current records are:
+
+- `hub:artwork-source-resolved`
+- `hub:artwork-image-retry`
+- `hub:artwork-image-missing`
+- `texture:load-fallback`
+- `gallery:show-artwork-fallback`
+
+Capture the browser Network log and console errors with the export. Do not
+include raw `data:image/...` payloads in issue reports; runtime diagnostics
+redact them. The route-aware recovery procedure is in `plan.md § v0.91`.
 
 ## localStorage keys
 

@@ -111,11 +111,28 @@ After the workflow completes:
 
 - [ ] Root URL loads: **https://sebohasee.github.io/Freyraum/**
 - [ ] At least one custom artwork image is visible in the gallery.
+- [ ] At least one intended customer painting—not a grey generated fallback—is
+      visible in both the interactive gallery and museum hub.
 - [ ] Artwork title/description text (from `.txt` sidecar) is shown.
 - [ ] Background audio plays (if audio files were committed).
 - [ ] Museum hub loads and its artwork hotspots align with the visible works.
 - [ ] Browser console shows no 404 errors for `customer-artworks.js`, artwork
       images, or museum backgrounds.
+
+### If an artwork is grey after deployment
+
+1. Record whether the symptom is in the interactive gallery (generated
+   FREYRAUM-style fallback) or the museum hub (title-bearing placeholder).
+2. Download or preserve the exact deployed `customer-artworks.js` and matching
+   `images/` directory before rerunning the importer.
+3. Open the same deployed URL with `?debug=verbose&hubDebug=1`, export
+   diagnostics, and save Network/console evidence for the failed artwork.
+4. Confirm the published image request resolves under `/Freyraum/images/` and
+   returns an image with a non-zero decoded size. Do not try to compensate by
+   changing lighting, material, or customer metadata.
+5. Follow the route-aware recovery process in `plan.md § v0.91`; it covers
+   missing/stale bundles, relative-path resolution, fallback payloads, CORS,
+   decode deadlines, and texture-size limits.
 
 ---
 
