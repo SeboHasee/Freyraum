@@ -11,6 +11,7 @@ import { TextureManager } from './TextureManager';
 import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory';
 import { clamp, smoothDamp } from '../utils/math';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import type { QualityPreset } from '../config/quality';
 import type { StartupReadinessMode } from '../config/startup';
 import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/PaintingTextureSet';
@@ -539,7 +540,7 @@ export class GalleryManager {
     // Rebuild the current artwork's map set so preset-specific roles
     // (detailNormal, height, roughness, specular, AO) are added/removed
     // immediately on quality changes.
-    if (hadPreset && this.textureManager.get(this.artworks[this.currentIndex].webglImage ?? this.artworks[this.currentIndex].image)) {
+    if (hadPreset && this.textureManager.get(this.artworks[this.currentIndex].image)) {
       void this.showArtwork(this.currentIndex);
     }
   }
@@ -559,21 +560,21 @@ export class GalleryManager {
   }
 
   async init(): Promise<void> {
-    const artworkSources = this.artworks.map((a) => ({
-      id: a.id,
-      source: a.webglImage ? 'embedded-data-url' : 'file-url',
-      urlType: a.webglImage
-        ? `data-uri:${a.webglImage.slice(5, a.webglImage.indexOf(';'))}`
-        : 'local-relative',
-      hasWebglImage: !!a.webglImage,
-      dimensions: a.dimensions,
-    }));
+    const artworkSources = this.artworks.map((a) => {
+      const sourcePlan = resolveArtworkImageSources(a);
+      return {
+        id: a.id,
+        declaredImageUrlType: sourcePlan.primary?.urlType ?? null,
+        hasEmbeddedFallback: !!sourcePlan.fallback,
+        embeddedFallbackUrlType: sourcePlan.fallback?.urlType ?? null,
+        dimensions: a.dimensions,
+      };
+    });
     this.diagnostics.info('init', 'Starting gallery init — preloading albedo textures', {
       artworkCount: artworkSources.length,
       artworks: artworkSources,
     });
-    const urls = this.artworks.map((a) => a.webglImage ?? a.image);
-    await this.textureManager.preload(urls);
+    await this.textureManager.preloadArtworkAlbedos(this.artworks);
     this.readiness.forEach((entry) => this.markReadiness(entry.index, 'albedoLoaded', 'init-preload'));
 
     const textureSetCount = this.artworks.filter((a) => !!a.textureSet).length;
@@ -633,7 +634,7 @@ export class GalleryManager {
     this.preGenerateProceduralWindow(0, this.readinessRadius, 'init-critical-window');
     this.logGalleryScaleValidation();
     this.diagnostics.info('init', 'Preload complete — showing first artwork', {
-      artworkCount: urls.length,
+      artworkCount: this.artworks.length,
       pbrPreloaded: pbrArtworks.length,
       criticalProceduralReady: this.getCriticalWindowIndices(0, this.readinessRadius).length,
     });
@@ -680,19 +681,17 @@ export class GalleryManager {
    * the artwork mesh. Async + race-protected: rapid navigation cannot apply
    * a stale map set (see audited Lifecycle Guardrails in plan.md).
    *
-   * v0.09: Uses `artwork.webglImage ?? artwork.image` as the albedo source for
-   * the central 3D painting. The `webglImage` field is an origin-clean base64
-   * data URL written by the importer so WebGL texture upload does not depend on
-   * `file://` image fetch behavior, which varies by browser.
+   * v0.90: Uses the shared artwork-source contract — declared image first,
+   * optional embedded `webglImage` only as an explicit fallback if the image
+   * asset fails to load as a WebGL albedo.
    */
   private async showArtwork(index: number): Promise<void> {
     const artwork = this.artworks[index];
     const presentation = this.resolvePresentation(index);
     const presentationProfile = ARTWORK_PRESENTATION_PROFILES[presentation];
-    // v0.09: prefer the embedded data URL for WebGL upload reliability.
-    const albedoUrl = artwork.webglImage ?? artwork.image;
-    const webglImageSource: 'embedded-data-url' | 'file-url' =
-      artwork.webglImage ? 'embedded-data-url' : 'file-url';
+    const sourcePlan = resolveArtworkImageSources(artwork);
+    const albedoUrl = artwork.image;
+    const albedoSelection = this.textureManager.getArtworkAlbedoSelection(artwork);
     const albedo = this.textureManager.get(albedoUrl);
 
     const token = ++this.artworkLoadToken;
@@ -712,11 +711,12 @@ export class GalleryManager {
       index,
       artworkId: artwork.id,
       token,
-      hasWebglImage: !!artwork.webglImage,
-      webglImageSource,
-      albedoUrlType: albedoUrl.startsWith('data:')
-        ? `data-uri:${albedoUrl.slice(5, albedoUrl.indexOf(';'))}`
-        : 'local-relative',
+      hasEmbeddedFallback: !!artwork.webglImage,
+      albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
+      albedoDeclaredUrlType: sourcePlan.primary?.urlType ?? 'local-relative',
+      albedoResolvedUrlType: albedoSelection?.selectedUrlType ?? 'local-relative',
+      usedEmbeddedFallback: albedoSelection?.usedEmbeddedFallback ?? false,
+      generatedFallback: albedoSelection?.generatedFallback ?? false,
       dimensions: artwork.dimensions,
       surface: artwork.surface ?? null,
       presentation,
@@ -727,10 +727,9 @@ export class GalleryManager {
         artworkId: artwork.id,
         hasAlbedo: !!albedo,
         hasPreset: !!preset,
-        webglImageSource,
-        albedoUrlType: albedoUrl.startsWith('data:')
-          ? `data-uri:${albedoUrl.slice(5, albedoUrl.indexOf(';'))}`
-          : 'local-relative',
+        albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
+        albedoDeclaredUrlType: sourcePlan.primary?.urlType ?? 'local-relative',
+        albedoResolvedUrlType: albedoSelection?.selectedUrlType ?? 'local-relative',
       });
       // Albedo preload should have populated the cache; if not, give up.
       return;
@@ -796,7 +795,8 @@ export class GalleryManager {
       this.diagnostics.warn('show-artwork-fallback', 'Central 3D painting is using a GENERATED FALLBACK texture — the customer image could not be loaded as a WebGL texture', {
         artworkId: artwork.id,
         imageUrl: artwork.image,
-        webglImageSource,
+        albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
+        usedEmbeddedFallback: albedoSelection?.usedEmbeddedFallback ?? false,
         manifestWidth: artwork.dimensions?.width,
         manifestHeight: artwork.dimensions?.height,
         fallbackUsed: true,
@@ -811,7 +811,9 @@ export class GalleryManager {
       activeMaps: this.artworkMesh.material.activeMaps(),
       inspectionMode: this.inspectionMode,
       fallbackUsed: albedoIsFallback,
-      webglImageSource,
+      albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
+      usedEmbeddedFallback: albedoSelection?.usedEmbeddedFallback ?? false,
+      generatedFallback: albedoSelection?.generatedFallback ?? albedoIsFallback,
       aspectSource: this.artworkMesh.lastAspectSource,
       manifestDimensions: this.artworkMesh.lastManifestDimensions,
       paintingWidth: this.artworkMesh.artworkWidth,
@@ -982,7 +984,7 @@ export class GalleryManager {
     const preset = this.currentPreset;
     if (!artwork || !preset) return false;
 
-    const albedoUrl = artwork.webglImage ?? artwork.image;
+    const albedoUrl = artwork.image;
     const fallbackAlbedo = this.textureManager.get(albedoUrl);
     if (!fallbackAlbedo) {
       this.diagnostics.warn('warm-gpu', 'Cannot warm artwork because albedo is not cached', {

@@ -237,6 +237,14 @@ export interface MuseumHubResolution {
   slotToArtwork: ReadonlyMap<string, string>;
   artworkToSlot: ReadonlyMap<string, string>;
   artworkImageById: ReadonlyMap<string, string>;
+  artworkSourceById: ReadonlyMap<
+    string,
+    {
+      image: string;
+      webglImage: string | null;
+      dimensions: Artwork['dimensions'];
+    }
+  >;
   background: { src: string; aspect: number };
   backgroundFallback: { src: string };
   stage: StageReference;
@@ -2180,13 +2188,29 @@ export function resolveMuseumHub(
     warnings.push(`${unmappedArtworkCount} active artwork(s) without a selectable slot.`);
   }
   const artworkImageById = new Map<string, string>();
-  for (const artwork of artworks) artworkImageById.set(artwork.id, artwork.image);
+  const artworkSourceById = new Map<
+    string,
+    {
+      image: string;
+      webglImage: string | null;
+      dimensions: Artwork['dimensions'];
+    }
+  >();
+  for (const artwork of artworks) {
+    artworkImageById.set(artwork.id, artwork.image);
+    artworkSourceById.set(artwork.id, {
+      image: artwork.image,
+      webglImage: artwork.webglImage ?? null,
+      dimensions: artwork.dimensions,
+    });
+  }
 
   return {
     pages,
     slotToArtwork,
     artworkToSlot,
     artworkImageById,
+    artworkSourceById,
     background,
     backgroundFallback,
     stage,

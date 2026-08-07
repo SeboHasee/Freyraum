@@ -1,6 +1,38 @@
 # CHANGELOG
 > Latest markdown audit: 2026-08-07 (interactive-gallery stage + mounted presentation baseline).
 
+## v0.90 — Shared artwork-source fallback contract for hub + gallery (2026-08-07)
+
+### Summary
+
+- Added a shared artwork-source resolver so both runtime routes treat the
+  manifest `image` path as primary and optional embedded `webglImage` data as
+  an explicit fallback.
+- Reworked `MainMuseumHub` slot loading so first-page readiness now waits for an
+  explicit decoded result: primary success, embedded fallback success, or a
+  declared placeholder failure. Timeouts no longer count as implicit success.
+- Added per-slot hub diagnostics/data attributes for resolved source mode,
+  readiness state, and fallback reason, and warmed the resolved hub texture with
+  `renderer.initTexture(...)` before reveal.
+- Changed gallery albedo preload/use to retry the embedded fallback only after a
+  declared-image failure, while preserving the generated fallback warning path
+  for true final failures.
+- Extended museum-hub regression coverage so fixture states now prove that a
+  broken declared image can still render through the embedded fallback without
+  showing the neutral placeholder.
+
+### Validation
+
+- `npm install` ✅ *(existing advisories remain in the dependency tree; no new dependencies were added)*
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `node -c scripts/import-artworks.mjs` ✅
+
 ## v0.89 — Interactive-gallery architectural stage + mounted presentation baseline (2026-08-07)
 
 ### Summary

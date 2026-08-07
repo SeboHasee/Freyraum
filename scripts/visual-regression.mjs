@@ -34,6 +34,7 @@ const SHIPPING_HUB_CONFIG = JSON.parse(
 const FIXTURE_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#7089a3\"/><stop offset=\"1\" stop-color=\"#d8dddb\"/></linearGradient></defs><rect width=\"512\" height=\"512\" fill=\"url(#g)\"/><circle cx=\"256\" cy=\"256\" r=\"140\" fill=\"rgba(255,255,255,0.35)\"/></svg>'
 )}`;
+const MISSING_FIXTURE_IMAGE = './images/missing-fixture.png';
 
 const ARTWORK_STEPS = [0, 1, 2];
 const ZOOM_STATES = ['overview', 'reset', 'inspection'];
@@ -43,7 +44,8 @@ const HUB_ASPECT_FIXTURES = {
     {
       id: 'fixture-portrait',
       title: 'Fixture Portrait',
-      image: FIXTURE_IMAGE,
+      image: MISSING_FIXTURE_IMAGE,
+      webglImage: FIXTURE_IMAGE,
       dimensions: { width: 900, height: 2000 },
     },
     {
@@ -69,7 +71,8 @@ const HUB_ASPECT_FIXTURES = {
     {
       id: 'fixture-square-a',
       title: 'Fixture Square A',
-      image: FIXTURE_IMAGE,
+      image: MISSING_FIXTURE_IMAGE,
+      webglImage: FIXTURE_IMAGE,
       dimensions: { width: 1200, height: 1200 },
     },
     {
@@ -95,7 +98,8 @@ const HUB_ASPECT_FIXTURES = {
     {
       id: 'fixture-wide-a',
       title: 'Fixture Wide A',
-      image: FIXTURE_IMAGE,
+      image: MISSING_FIXTURE_IMAGE,
+      webglImage: FIXTURE_IMAGE,
       dimensions: { width: 2400, height: 1000 },
     },
     {
@@ -296,6 +300,7 @@ const states = [
     viewport: DESKTOP_VIEWPORT,
     hubSteps: [],
     fixture: hubFixture(HUB_ASPECT_FIXTURES.portrait),
+    expectHubArtworkFallback: 'fixture-portrait',
   },
   {
     name: 'hub__fixture__square',
@@ -304,6 +309,7 @@ const states = [
     viewport: DESKTOP_VIEWPORT,
     hubSteps: [],
     fixture: hubFixture(HUB_ASPECT_FIXTURES.square),
+    expectHubArtworkFallback: 'fixture-square-a',
   },
   {
     name: 'hub__fixture__very-wide',
@@ -312,6 +318,7 @@ const states = [
     viewport: DESKTOP_VIEWPORT,
     hubSteps: [],
     fixture: hubFixture(HUB_ASPECT_FIXTURES.wide),
+    expectHubArtworkFallback: 'fixture-wide-a',
   },
   {
     name: 'hub__fixture__doorway-left-edge',
@@ -320,6 +327,7 @@ const states = [
     viewport: DESKTOP_VIEWPORT,
     hubSteps: [],
     fixture: doorwayEdgeFixture('left'),
+    expectHubArtworkFallback: 'fixture-square-a',
   },
   {
     name: 'hub__fixture__doorway-right-edge',
@@ -328,6 +336,7 @@ const states = [
     viewport: DESKTOP_VIEWPORT,
     hubSteps: [],
     fixture: doorwayEdgeFixture('right'),
+    expectHubArtworkFallback: 'fixture-square-a',
   },
   ...(INCLUDE_HUB_DEBUG_CAPTURE
     ? [
@@ -350,6 +359,7 @@ const states = [
     galleryNavigationSteps: ['ArrowRight'],
     returnMethod: 'topbar',
     expectedSelectedArtworkId: 'fixture-square-c',
+    expectHubArtworkFallback: 'fixture-square-a',
   },
   {
     name: 'hub__desktop__selected-return-escape',
@@ -361,6 +371,7 @@ const states = [
     galleryNavigationSteps: ['ArrowRight'],
     returnMethod: 'escape',
     expectedSelectedArtworkId: 'fixture-square-c',
+    expectHubArtworkFallback: 'fixture-square-a',
   },
   {
     name: 'gallery__desktop__context-restore',
@@ -527,6 +538,35 @@ async function assertHubSceneBridge(page, stateName) {
     if (slot.width < 12 || slot.height < 12) {
       throw new Error(`${stateName}: slot ${slot.artworkId} projected overlay is implausibly small`);
     }
+  }
+}
+
+async function assertHubArtworkFallback(page, stateName, expectedArtworkId) {
+  const snapshot = await page.evaluate((artworkId) => {
+    const element = document.querySelector(`.museum-hub__artwork[data-artwork-id="${artworkId}"]`);
+    if (!(element instanceof HTMLElement)) return null;
+    return {
+      artworkId: element.getAttribute('data-artwork-id'),
+      sourceState: element.dataset['artworkSourceState'] ?? null,
+      sourceMode: element.dataset['artworkSourceMode'] ?? null,
+      fallbackReason: element.dataset['artworkFallbackReason'] ?? null,
+      hasMissingImageClass: element.classList.contains('has-missing-image'),
+    };
+  }, expectedArtworkId);
+  if (!snapshot) {
+    throw new Error(`${stateName}: fallback artwork slot ${expectedArtworkId} was not rendered`);
+  }
+  if (snapshot.sourceState !== 'ready') {
+    throw new Error(`${stateName}: fallback artwork slot ${expectedArtworkId} did not reach the ready state`);
+  }
+  if (snapshot.sourceMode !== 'embedded-webgl-fallback') {
+    throw new Error(`${stateName}: fallback artwork slot ${expectedArtworkId} did not resolve through the embedded fallback`);
+  }
+  if (!snapshot.fallbackReason?.startsWith('declared-image:')) {
+    throw new Error(`${stateName}: fallback artwork slot ${expectedArtworkId} did not record the declared-image failure reason`);
+  }
+  if (snapshot.hasMissingImageClass) {
+    throw new Error(`${stateName}: fallback artwork slot ${expectedArtworkId} still exposes the missing-image placeholder state`);
   }
 }
 
@@ -759,6 +799,9 @@ async function capture(targetDir) {
       await page.waitForTimeout(600);
       await assertAuthoritativeSurfaces(page, state.name);
       await assertHubSceneBridge(page, state.name);
+      if (state.expectHubArtworkFallback) {
+        await assertHubArtworkFallback(page, state.name, state.expectHubArtworkFallback);
+      }
       await assertSurfaceReasons(page, state.name, ['experience-state:hub']);
     } else if (state.mode === 'gallery') {
       await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
@@ -792,6 +835,9 @@ async function capture(targetDir) {
       await page.waitForTimeout(700);
       await assertAuthoritativeSurfaces(page, state.name);
       await assertHubSceneBridge(page, state.name);
+      if (state.expectHubArtworkFallback) {
+        await assertHubArtworkFallback(page, state.name, state.expectHubArtworkFallback);
+      }
       await assertSurfaceReasons(page, state.name, [
         'experience-state:hub',
         'experience-state:transitioning',

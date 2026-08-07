@@ -28,6 +28,10 @@ downgraded to the shipped `backgrounds/museum-empty.png` fallback when
 available, otherwise forced to the neutral museum-grey token, and still
 captured. Each run writes a per-state JSON summary to
 `.visual-regression/*/capture-report.json`.
+Fixture hub states also break one declared image path on purpose and assert that
+the embedded fallback recovers it without exposing placeholder mode, so
+hub/gallery artwork-source regressions fail even when the final pixels still
+match the baseline.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.

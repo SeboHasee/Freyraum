@@ -36,6 +36,9 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Artwork `Presentation` metadata is optional, validated, and affects only the
   interactive-gallery mounting profile (`canvas`, `fine-art-paper`,
   `matte-print`, `satin-print`, `glazed-print`; default `matte-print`).
+- Hub and gallery now share one artwork-source contract: the declared
+  `image` asset stays primary, while optional embedded `webglImage` data is
+  used only as an explicit fallback when the primary source fails.
 - CSS and WebGL share one authoritative museum-grey wall token (`#D8DDDB`,
   `--color-gallery-wall`) resolved before renderer construction, so gallery,
   hub, fallback surfaces, and the WebGL clear color can never drift apart.

@@ -38,6 +38,7 @@ import { installPerformanceTooling } from './utils/performanceTooling';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
+import { resolveArtworkImageSources } from './utils/artworkImageSources';
 import { detectDeviceCapabilities, applyDeviceCaps, type DeviceCapabilities } from './utils/device';
 import { suggestStartupQuality } from './utils/performance';
 import {
@@ -718,20 +719,24 @@ async function main(): Promise<void> {
   const customerArtworks = sanitizeInjectedArtworks(injected, diagnostics);
   const artworks: readonly Artwork[] =
     customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
-  const artworkManifest = artworks.map((a) => ({
-    id: a.id,
-    hasWebglImage: !!a.webglImage,
-    webglImageSource: a.webglImage ? 'embedded-data-url' : 'file-url',
-    dimensions: a.dimensions,
-    surface: a.surface ?? null,
-    presentation: a.presentation ?? null,
-  }));
+  const artworkManifest = artworks.map((a) => {
+    const sourcePlan = resolveArtworkImageSources(a);
+    return {
+      id: a.id,
+      declaredImageUrlType: sourcePlan.primary?.urlType ?? null,
+      hasEmbeddedFallback: !!sourcePlan.fallback,
+      embeddedFallbackUrlType: sourcePlan.fallback?.urlType ?? null,
+      dimensions: a.dimensions,
+      surface: a.surface ?? null,
+      presentation: a.presentation ?? null,
+    };
+  });
   diagnostics.info('boot', 'artworks-source', 'Artwork source resolved', {
     source: customerArtworks && customerArtworks.length > 0 ? 'customer' : 'built-in',
     count: artworks.length,
     artworks: artworkManifest,
-    withWebglImage: artworkManifest.filter((a) => a.hasWebglImage).length,
-    withoutWebglImage: artworkManifest.filter((a) => !a.hasWebglImage).length,
+    withEmbeddedFallback: artworkManifest.filter((a) => a.hasEmbeddedFallback).length,
+    withoutEmbeddedFallback: artworkManifest.filter((a) => !a.hasEmbeddedFallback).length,
   });
 
   // v0.81 — unified museum-hub configuration: injected customer

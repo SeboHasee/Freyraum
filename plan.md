@@ -1,5 +1,27 @@
 # FREYRAUM Plan
 
+## Implemented — Shared artwork-source fallback contract for hub + gallery (v0.90, 2026-08-07)
+
+This slice closes the verified hub placeholder failure without changing the
+architectural room work:
+
+- added one shared artwork-source resolver so both hub and gallery treat the
+  manifest `image` as the primary source and optional `webglImage` data as an
+  explicit fallback;
+- changed the hub image gate from timeout-as-success to explicit states
+  (`ready`, `missing`, fallback retry) and recorded the resolved source mode on
+  each projected slot;
+- kept the neutral placeholder path only for declared unavailable/final-failure
+  states, while warming the resolved hub texture on upload;
+- aligned gallery albedo preload/use with the same contract by retrying the
+  embedded fallback only after a declared-image failure instead of silently
+  preferring it up front;
+- extended regression coverage so museum-hub fixture states now prove that a
+  missing declared image can still render through the embedded fallback without
+  dropping into placeholder mode.
+
+Validation is recorded in `CHANGELOG.md`.
+
 ## Implemented — Interactive-gallery architectural stage + mounted presentation baseline (v0.89, 2026-08-07)
 
 This shipping slice narrows the broader v0.88 gallery audit to one safe,

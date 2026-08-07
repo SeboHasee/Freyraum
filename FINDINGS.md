@@ -1,5 +1,24 @@
 # FINDINGS
 
+## Shared artwork-source fallback findings (v0.90, 2026-08-07)
+
+1. The grey museum-hub artwork symptom was caused by a real runtime split:
+   `MainMuseumHub` used only the declared `image` path, while the interactive
+   gallery could still succeed through `webglImage`.
+2. The correct bounded fix is not to make `webglImage` primary everywhere.
+   The deployable `image` path should stay authoritative, and the embedded data
+   URL should be used only as an explicit fallback when the primary source
+   fails.
+3. Hub readiness must not treat a timeout as success. Every slot needs one of
+   three explicit outcomes before reveal: decoded primary image, decoded
+   embedded fallback, or declared unavailable placeholder.
+4. The hub renderer can stay visually faithful with its existing unlit artwork
+   plane so long as the resolved image source is warmed on upload and the slot
+   records which source path actually won.
+5. Regression coverage is strongest when fixture screenshots keep the same
+   visible pixels but intentionally break the declared image path and require the
+   embedded fallback to recover the artwork.
+
 ## Interactive-gallery stage + mounted presentation findings (v0.89, 2026-08-07)
 
 1. The interactive gallery needed its own compact architectural shell inside the

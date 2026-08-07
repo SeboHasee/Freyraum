@@ -210,6 +210,7 @@ export class HubRoomRenderer {
       }
       state.artworkMesh.material.map = targetTexture;
       state.artworkMesh.material.needsUpdate = true;
+      this.renderer.initTexture(targetTexture);
       state.textureKey = textureKey;
       state.textureKind = missingImage ? 'placeholder' : 'image';
     }

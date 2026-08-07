@@ -585,8 +585,9 @@ imageEntries.forEach((filename, i) => {
     return;
   }
 
-  // v0.09: embed exact image bytes as a base64 data URL so the 3D painting
-  // can load the texture reliably from file:// without CORS / taint issues.
+  // v0.09/v0.90: embed exact image bytes as a base64 data URL so the gallery
+  // can fall back to a reliable WebGL albedo source on file:// or whenever the
+  // declared image asset is unavailable.
   // No crop, no scale, no recompression — the exact original bytes are encoded.
   let webglImage = '';
   try {

@@ -48,10 +48,11 @@ const ROOM_HEIGHT = 3.4;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
+  loadTsModule('src/utils/artworkImageSources.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
@@ -187,13 +188,24 @@ for (const leftSlot of slotsByWall['wall-left']) {
 }
 
 const artworks = [
-  { id: 'fraktal', title: 'Fraktal', image: 'fraktal.png', dimensions: { width: 900, height: 1200 } },
+  {
+    id: 'fraktal',
+    title: 'Fraktal',
+    image: 'fraktal.png',
+    webglImage: 'data:image/png;base64,AAAA',
+    dimensions: { width: 900, height: 1200 },
+  },
   { id: 'akt-27', title: 'Akt 27', image: 'akt-27.png', dimensions: { width: 1200, height: 1200 } },
   { id: 'landscape-fixture', title: 'Landscape', image: 'landscape.png', dimensions: { width: 1800, height: 1100 } },
   { id: 'landscape-fixture-2', title: 'Landscape II', image: 'landscape-2.png', dimensions: { width: 1800, height: 1100 } },
   { id: 'square-fixture', title: 'Square', image: 'square.png', dimensions: { width: 1000, height: 1000 } },
   { id: 'square-fixture-2', title: 'Square II', image: 'square-2.png', dimensions: { width: 1100, height: 1100 } },
 ];
+const sourcePlan = artworkImageSources.resolveArtworkImageSources(artworks[0]);
+assert.equal(sourcePlan.primary?.mode, 'declared-image', 'artwork source resolution must keep the declared image as primary');
+assert.equal(sourcePlan.primary?.url, 'fraktal.png');
+assert.equal(sourcePlan.fallback?.mode, 'embedded-webgl-fallback', 'artwork source resolution must expose the embedded fallback separately');
+assert.equal(sourcePlan.fallback?.url, 'data:image/png;base64,AAAA');
 const shipping = museumHub.resolveMuseumHub(artworks, shippingConfig, null);
 assert.deepEqual(shipping.warnings, [], `shipping calibration warnings: ${shipping.warnings.join('; ')}`);
 assert.equal(shipping.camera.verticalFovDeg, shippingConfig.camera.verticalFovDeg);
@@ -201,6 +213,11 @@ assert.equal(shipping.slotsPerPage, 6, 'resolved hub must page six hero slots');
 assert.equal(shipping.walls.length, 3, 'resolver must render exactly three walls (bounds-only rear wall skipped)');
 assert.equal(shipping.room.wallIds.length, 3, 'resolved room must track the rendered wall ids');
 assert.deepEqual(shipping.hangingRules, shippingConfig.hangingRules, 'resolved room must retain hanging rules');
+assert.deepEqual(shipping.artworkSourceById.get('fraktal'), {
+  image: 'fraktal.png',
+  webglImage: 'data:image/png;base64,AAAA',
+  dimensions: { width: 900, height: 1200 },
+}, 'resolved hub must retain both declared artwork image and embedded fallback sources');
 for (const wall of shipping.walls) {
   assert.ok(wall.projectionRealism?.passes, `${wall.id} must pass the wall projection realism gate`);
   assert.ok(wall.projectedQuad, `${wall.id} must retain a projected wall quad for debug/reality checks`);

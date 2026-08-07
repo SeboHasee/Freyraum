@@ -30,6 +30,11 @@ import {
   type Point2D,
 } from './projectiveGeometry';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import {
+  redactArtworkImageUrlForLog,
+  resolveArtworkImageSources,
+  type ArtworkImageSourceCandidate,
+} from '../utils/artworkImageSources';
 import { loadHubImageAsset } from './hubAssetLoader';
 import { HubRoomRenderer } from './HubRoomRenderer';
 import type { QualityPreset } from '../config/quality';
@@ -40,6 +45,24 @@ const HUB_BACKGROUND_BASE_URL =
     : `${import.meta.env.BASE_URL}`;
 const HUB_IMAGE_TIMEOUT_MS = 5000;
 const NARROW_PORTRAIT_QUERY = '(max-aspect-ratio: 4/5)';
+
+type SlotImageAttemptFailureReason =
+  | 'no-source'
+  | 'load-error'
+  | 'load-timeout'
+  | 'decode-error'
+  | 'decode-timeout';
+
+type SlotImageAttemptResult =
+  | {
+      status: 'ready';
+      width: number;
+      height: number;
+    }
+  | {
+      status: 'failed';
+      reason: SlotImageAttemptFailureReason;
+    };
 
 const isCalibrationRequested = (): boolean => {
   try {
@@ -82,6 +105,10 @@ interface SlotView {
   slot: ResolvedHubSlot;
   button: HTMLButtonElement;
   image: HTMLImageElement | null;
+  imageLoadToken: number;
+  imageState: 'idle' | 'loading' | 'ready' | 'missing';
+  resolvedSource: ArtworkImageSourceCandidate | null;
+  fallbackReason: string | null;
 }
 
 export class MainMuseumHub {
@@ -508,18 +535,6 @@ export class MainMuseumHub {
       image.alt = '';
       image.decoding = 'async';
       image.draggable = false;
-      image.addEventListener('load', () => {
-        button.classList.remove('has-missing-image');
-        this.syncSlotRenderer({ slot, button, image });
-      });
-      image.addEventListener('error', () => {
-        button.classList.add('has-missing-image');
-        this.syncSlotRenderer({ slot, button, image });
-        this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
-          slotId: slot.id,
-          artworkId: slot.artworkId,
-        });
-      });
       button.appendChild(image);
       const placeholder = document.createElement('span');
       placeholder.className = 'museum-hub__art-placeholder';
@@ -553,7 +568,15 @@ export class MainMuseumHub {
     }
 
     this.applySlotGeometry(button, slot);
-    const view = { slot, button, image };
+    const view: SlotView = {
+      slot,
+      button,
+      image,
+      imageLoadToken: 0,
+      imageState: 'idle',
+      resolvedSource: null,
+      fallbackReason: null,
+    };
     this.syncSlotRenderer(view);
     return view;
   }
@@ -617,7 +640,8 @@ export class MainMuseumHub {
     const shadow = wall.shadowVector ?? point(wall.group === 'left' ? -10 : 10, 16);
     button.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
-    this.syncSlotRenderer({ slot, button, image: this.slotViews.find((view) => view.slot.id === slot.id)?.image ?? null });
+    const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
+    if (view) this.syncSlotRenderer(view);
     if (this.debugGeometry) this.logSlotProjection(slot, wall, projection);
   }
 
@@ -625,7 +649,7 @@ export class MainMuseumHub {
     const wall = this.resolution.wallById.get(view.slot.placement.wallId);
     if (!wall) return;
     const missingImage =
-      view.button.classList.contains('has-missing-image')
+      view.imageState !== 'ready'
       || !view.image
       || !view.image.complete
       || view.image.naturalWidth <= 0;
@@ -669,12 +693,16 @@ export class MainMuseumHub {
     if (!this.debugGeometry) return;
     const slotDiagnostics = this.slotViews
       .filter(({ slot }) => slot.selectable && !!slot.artworkId)
-      .map(({ slot }) => {
+      .map(({ slot, imageState, resolvedSource, fallbackReason }) => {
         const wall = this.resolution.wallById.get(slot.placement.wallId);
         const projection = this.projectedSlotGeometry.get(slot.id);
         return {
           slotId: slot.id,
           wallId: slot.placement.wallId,
+          imageState,
+          sourceMode: resolvedSource?.mode ?? null,
+          sourceUrlType: resolvedSource?.urlType ?? null,
+          fallbackReason,
           localQuad: projection?.localQuad ?? null,
           worldQuad: projection?.worldQuad ?? null,
           projectedAnchor: projection?.projectedAnchor ?? null,
@@ -754,37 +782,212 @@ export class MainMuseumHub {
     const waits: Promise<void>[] = [];
     for (const view of this.slotViews) {
       if (view.slot.pageIndex !== pageIndex || !view.image || !view.slot.artworkId) continue;
-      const artworkSrc = this.artworkImageSrc(view.slot);
-      if (!artworkSrc) {
-        view.button.classList.add('has-missing-image');
-        this.syncSlotRenderer(view);
-        continue;
-      }
-      view.image.src = artworkSrc;
-      waits.push(
-        new Promise<void>((resolve) => {
-          const timeout = window.setTimeout(resolve, HUB_IMAGE_TIMEOUT_MS);
-          const done = (): void => {
-            window.clearTimeout(timeout);
-            resolve();
-          };
-          if (view.image!.complete && view.image!.naturalWidth > 0) {
-            view.button.classList.remove('has-missing-image');
-            this.syncSlotRenderer(view);
-            done();
-            return;
-          }
-          view.image!.addEventListener('load', done, { once: true });
-          view.image!.addEventListener('error', done, { once: true });
-        })
-      );
+      waits.push(this.resolveSlotImage(view));
     }
     return Promise.all(waits).then(() => undefined);
   }
 
-  private artworkImageSrc(slot: ResolvedHubSlot): string | null {
-    const src = slot.artworkId ? this.resolution.artworkImageById.get(slot.artworkId) : undefined;
-    return src ?? null;
+  private async resolveSlotImage(view: SlotView): Promise<void> {
+    const sourceRecord = view.slot.artworkId
+      ? this.resolution.artworkSourceById.get(view.slot.artworkId) ?? null
+      : null;
+    const sourcePlan = resolveArtworkImageSources(sourceRecord);
+    const primary = sourcePlan.primary;
+    const fallback = sourcePlan.fallback;
+    if (!primary || !view.image || !view.slot.artworkId) {
+      this.setSlotImageState(view, 'missing', null, 'no-source');
+      this.diagnostics.warn('artwork-image-missing', 'Hub artwork image is unavailable; neutral placeholder retains exact target', {
+        slotId: view.slot.id,
+        artworkId: view.slot.artworkId,
+        fallbackReason: 'no-source',
+      });
+      return;
+    }
+
+    this.setSlotImageState(view, 'loading', null, null);
+
+    const primaryResult = await this.loadSlotImageCandidate(view, primary);
+    if (primaryResult.status === 'ready') {
+      this.setSlotImageState(view, 'ready', primary, null);
+      this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
+        slotId: view.slot.id,
+        artworkId: view.slot.artworkId,
+        sourceMode: primary.mode,
+        declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
+        resolvedImageUrl: redactArtworkImageUrlForLog(primary.url),
+        declaredImageUrlType: primary.urlType,
+        resolvedImageUrlType: primary.urlType,
+        requestStatus: 'loaded',
+        decodeStatus: 'decoded',
+        textureWidth: primaryResult.width,
+        textureHeight: primaryResult.height,
+        fallbackReason: null,
+      });
+      return;
+    }
+
+    const primaryFailure = `${primary.mode}:${primaryResult.reason}`;
+    if (fallback) {
+      this.diagnostics.warn('artwork-image-retry', 'Hub artwork source failed; retrying embedded fallback', {
+        slotId: view.slot.id,
+        artworkId: view.slot.artworkId,
+        declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
+        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.url),
+        declaredImageUrlType: primary.urlType,
+        fallbackImageUrlType: fallback.urlType,
+        fallbackReason: primaryFailure,
+      });
+      const fallbackResult = await this.loadSlotImageCandidate(view, fallback);
+      if (fallbackResult.status === 'ready') {
+        this.setSlotImageState(view, 'ready', fallback, primaryFailure);
+        this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
+          slotId: view.slot.id,
+          artworkId: view.slot.artworkId,
+          sourceMode: fallback.mode,
+          declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
+          resolvedImageUrl: redactArtworkImageUrlForLog(fallback.url),
+          declaredImageUrlType: primary.urlType,
+          resolvedImageUrlType: fallback.urlType,
+          requestStatus: 'fallback-loaded',
+          decodeStatus: 'decoded',
+          textureWidth: fallbackResult.width,
+          textureHeight: fallbackResult.height,
+          fallbackReason: primaryFailure,
+        });
+        return;
+      }
+      const fallbackFailure = `${fallback.mode}:${fallbackResult.reason}`;
+      this.setSlotImageState(view, 'missing', null, fallbackFailure);
+      this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
+        slotId: view.slot.id,
+        artworkId: view.slot.artworkId,
+        declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
+        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.url),
+        declaredImageUrlType: primary.urlType,
+        fallbackImageUrlType: fallback.urlType,
+        fallbackReason: fallbackFailure,
+        attemptedSources: [
+          {
+            sourceMode: primary.mode,
+            url: redactArtworkImageUrlForLog(primary.url),
+            urlType: primary.urlType,
+          },
+          {
+            sourceMode: fallback.mode,
+            url: redactArtworkImageUrlForLog(fallback.url),
+            urlType: fallback.urlType,
+          },
+        ],
+      });
+      return;
+    }
+
+    this.setSlotImageState(view, 'missing', null, primaryFailure);
+    this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
+      slotId: view.slot.id,
+      artworkId: view.slot.artworkId,
+      declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
+      fallbackImageUrl: null,
+      declaredImageUrlType: primary.urlType,
+      fallbackImageUrlType: null,
+      fallbackReason: primaryFailure,
+      attemptedSources: [
+        {
+          sourceMode: primary.mode,
+          url: redactArtworkImageUrlForLog(primary.url),
+          urlType: primary.urlType,
+        },
+      ],
+    });
+  }
+
+  private setSlotImageState(
+    view: SlotView,
+    imageState: SlotView['imageState'],
+    resolvedSource: ArtworkImageSourceCandidate | null,
+    fallbackReason: string | null
+  ): void {
+    view.imageState = imageState;
+    view.resolvedSource = resolvedSource;
+    view.fallbackReason = fallbackReason;
+    view.button.classList.toggle('has-missing-image', imageState === 'missing');
+    view.button.dataset['artworkSourceState'] = imageState;
+    if (resolvedSource) {
+      view.button.dataset['artworkSourceMode'] = resolvedSource.mode;
+      view.button.dataset['artworkUrlType'] = resolvedSource.urlType;
+    } else {
+      delete view.button.dataset['artworkSourceMode'];
+      delete view.button.dataset['artworkUrlType'];
+    }
+    if (fallbackReason) {
+      view.button.dataset['artworkFallbackReason'] = fallbackReason;
+    } else {
+      delete view.button.dataset['artworkFallbackReason'];
+    }
+    this.syncSlotRenderer(view);
+  }
+
+  private async loadSlotImageCandidate(
+    view: SlotView,
+    source: ArtworkImageSourceCandidate
+  ): Promise<SlotImageAttemptResult> {
+    if (!view.image) return { status: 'failed', reason: 'no-source' };
+    const token = ++view.imageLoadToken;
+    const image = view.image;
+    const loadStatus = await new Promise<'loaded' | 'error' | 'timeout'>((resolve) => {
+      let settled = false;
+      const complete = (status: 'loaded' | 'error' | 'timeout'): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        image.removeEventListener('load', handleLoad);
+        image.removeEventListener('error', handleError);
+        resolve(status);
+      };
+      const handleLoad = (): void => complete('loaded');
+      const handleError = (): void => complete('error');
+      const timeout = window.setTimeout(() => complete('timeout'), HUB_IMAGE_TIMEOUT_MS);
+      image.addEventListener('load', handleLoad);
+      image.addEventListener('error', handleError);
+      image.src = source.url;
+      if (image.complete && image.naturalWidth > 0) complete('loaded');
+    });
+    if (token !== view.imageLoadToken) return { status: 'failed', reason: 'load-timeout' };
+    if (loadStatus === 'error') return { status: 'failed', reason: 'load-error' };
+    if (loadStatus === 'timeout') return { status: 'failed', reason: 'load-timeout' };
+    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      return { status: 'failed', reason: 'load-error' };
+    }
+    const decodeStatus = await this.decodeSlotImage(image);
+    if (decodeStatus !== 'decoded') {
+      return {
+        status: 'failed',
+        reason: decodeStatus === 'timeout' ? 'decode-timeout' : 'decode-error',
+      };
+    }
+    return {
+      status: 'ready',
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+    };
+  }
+
+  private async decodeSlotImage(image: HTMLImageElement): Promise<'decoded' | 'error' | 'timeout'> {
+    if (typeof image.decode !== 'function') return 'decoded';
+    return new Promise((resolve) => {
+      let settled = false;
+      const complete = (status: 'decoded' | 'error' | 'timeout'): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        resolve(status);
+      };
+      const timeout = window.setTimeout(() => complete('timeout'), HUB_IMAGE_TIMEOUT_MS);
+      image.decode().then(
+        () => complete('decoded'),
+        () => complete('error')
+      );
+    });
   }
 
   private handleSlotClick(slot: ResolvedHubSlot): void {

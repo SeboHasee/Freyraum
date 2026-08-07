@@ -1,6 +1,22 @@
 import * as THREE from 'three';
+import type { Artwork } from '../config/artworks';
 import type { PaintingMapRole, PaintingTextureSet, ResolvedPaintingTextures } from '../materials/PaintingTextureSet';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import {
+  redactArtworkImageUrlForLog,
+  resolveArtworkImageSources,
+  type ArtworkImageSourceMode,
+  type ArtworkImageUrlType,
+} from '../utils/artworkImageSources';
+
+export interface ArtworkAlbedoSelection {
+  selectedUrl: string;
+  selectedUrlType: ArtworkImageUrlType;
+  sourceMode: ArtworkImageSourceMode;
+  usedEmbeddedFallback: boolean;
+  attemptedEmbeddedFallback: boolean;
+  generatedFallback: boolean;
+}
 
 /**
  * Texture manager owns network-loaded textures and is solely responsible for
@@ -43,6 +59,7 @@ export class TextureManager {
    * diagnostic warning when the central 3D painting falls back.
    */
   private readonly fallbackKeys = new Set<string>();
+  private readonly artworkAlbedoSelections = new Map<string, ArtworkAlbedoSelection>();
 
   constructor(loadingManager: THREE.LoadingManager = THREE.DefaultLoadingManager) {
     this.externalLoader = new THREE.TextureLoader(loadingManager);
@@ -114,6 +131,103 @@ export class TextureManager {
       urlTypes: urls.map((u) => this.compactUrlType(u)),
     });
     await Promise.all(urls.map((url) => this.load(url)));
+  }
+
+  async preloadArtworkAlbedos(artworks: readonly Pick<Artwork, 'id' | 'image' | 'webglImage'>[]): Promise<void> {
+    this.diagnostics.info('preload', `Preloading ${artworks.length} artwork albedo texture(s)`, {
+      count: artworks.length,
+      artworks: artworks.map((artwork) => {
+        const sourcePlan = resolveArtworkImageSources(artwork);
+        return {
+          artworkId: artwork.id,
+          declaredImageUrlType: sourcePlan.primary?.urlType ?? null,
+          hasEmbeddedFallback: !!sourcePlan.fallback,
+          embeddedFallbackUrlType: sourcePlan.fallback?.urlType ?? null,
+        };
+      }),
+    });
+    await Promise.all(artworks.map((artwork) => this.loadArtworkAlbedo(artwork)));
+  }
+
+  async loadArtworkAlbedo(artwork: Pick<Artwork, 'id' | 'image' | 'webglImage'>): Promise<THREE.Texture> {
+    const sourcePlan = resolveArtworkImageSources(artwork);
+    const primary = sourcePlan.primary;
+    const existingSelection = this.artworkAlbedoSelections.get(artwork.id);
+    if (primary) {
+      const existingTexture = this.cache.get(`albedo::${primary.url}`);
+      if (existingSelection && existingTexture) return existingTexture;
+    }
+    if (!primary) {
+      const fallback = this.createFallbackTexture(artwork.id);
+      this.renderer?.initTexture(fallback);
+      this.artworkAlbedoSelections.set(artwork.id, {
+        selectedUrl: artwork.id,
+        selectedUrlType: 'local-relative',
+        sourceMode: 'declared-image',
+        usedEmbeddedFallback: false,
+        attemptedEmbeddedFallback: false,
+        generatedFallback: true,
+      });
+      return fallback;
+    }
+
+    const primaryTexture = await this.loadForRole(primary.url, 'albedo');
+    if (!this.isFallback(primary.url, 'albedo')) {
+      this.artworkAlbedoSelections.set(artwork.id, {
+        selectedUrl: primary.url,
+        selectedUrlType: primary.urlType,
+        sourceMode: primary.mode,
+        usedEmbeddedFallback: false,
+        attemptedEmbeddedFallback: false,
+        generatedFallback: false,
+      });
+      return primaryTexture;
+    }
+
+    const fallback = sourcePlan.fallback;
+    if (fallback) {
+      this.diagnostics.warn('artwork-albedo-retry', 'Declared artwork image failed; retrying embedded fallback', {
+        artworkId: artwork.id,
+        declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
+        fallbackImageUrl: redactArtworkImageUrlForLog(fallback.url),
+        declaredImageUrlType: primary.urlType,
+        fallbackImageUrlType: fallback.urlType,
+      });
+      const fallbackTexture = await this.loadForRole(fallback.url, 'albedo');
+      if (!this.isFallback(fallback.url, 'albedo')) {
+        this.promoteArtworkAlbedo(primary.url, fallbackTexture);
+        this.artworkAlbedoSelections.set(artwork.id, {
+          selectedUrl: fallback.url,
+          selectedUrlType: fallback.urlType,
+          sourceMode: fallback.mode,
+          usedEmbeddedFallback: true,
+          attemptedEmbeddedFallback: true,
+          generatedFallback: false,
+        });
+        this.diagnostics.info('artwork-albedo-fallback', 'Artwork albedo resolved through embedded fallback', {
+          artworkId: artwork.id,
+          declaredImageUrl: redactArtworkImageUrlForLog(primary.url),
+          resolvedImageUrl: redactArtworkImageUrlForLog(fallback.url),
+          declaredImageUrlType: primary.urlType,
+          resolvedImageUrlType: fallback.urlType,
+        });
+        return fallbackTexture;
+      }
+    }
+
+    this.artworkAlbedoSelections.set(artwork.id, {
+      selectedUrl: primary.url,
+      selectedUrlType: primary.urlType,
+      sourceMode: primary.mode,
+      usedEmbeddedFallback: false,
+      attemptedEmbeddedFallback: !!fallback,
+      generatedFallback: true,
+    });
+    return primaryTexture;
+  }
+
+  getArtworkAlbedoSelection(artwork: Pick<Artwork, 'id'>): ArtworkAlbedoSelection | undefined {
+    return this.artworkAlbedoSelections.get(artwork.id);
   }
 
   /** Default loader: treats the texture as an sRGB albedo / preview image. */
@@ -254,6 +368,18 @@ export class TextureManager {
   dispose(): void {
     this.cache.forEach((tex) => tex.dispose());
     this.cache.clear();
+    this.fallbackKeys.clear();
+    this.artworkAlbedoSelections.clear();
+  }
+
+  private promoteArtworkAlbedo(primaryUrl: string, texture: THREE.Texture): void {
+    const cacheKey = `albedo::${primaryUrl}`;
+    const existing = this.cache.get(cacheKey);
+    if (existing && existing !== texture && this.fallbackKeys.has(cacheKey)) {
+      existing.dispose();
+    }
+    this.cache.set(cacheKey, texture);
+    this.fallbackKeys.delete(cacheKey);
   }
 
   private prepareTexture(texture: THREE.Texture, role: PaintingMapRole): void {
