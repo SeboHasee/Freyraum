@@ -1,5 +1,234 @@
 # FREYRAUM Plan
 
+## Active — Route-aware recovery plan for persistent grey artwork planes (v0.91, 2026-08-07)
+
+> **Planning and documentation only.** This entry records the current source
+> audit and a future implementation sequence; it does not claim that the
+> persistent customer-visible symptom is fixed. No runtime, importer, generated
+> preview, or customer asset was changed in this pass.
+
+### Incident assessment
+
+The phrase “grey plane” is not a sufficient root cause in this application.
+There are two independently rendered destinations with two intentional
+fallbacks:
+
+| Visible signature | Route and current code path | What it proves |
+|---|---|---|
+| A neutral grey/tan gradient, often with a faint `FREYRAUM` mark, while the mounted work keeps the correct aspect ratio | Interactive gallery: `TextureManager.createFallbackTexture()` → `GalleryManager` → `ArtworkMesh` / `PaintingMaterial` | An albedo source did not produce a usable texture. The geometry can still be correct because `Artwork.dimensions` sets its aspect ratio before the texture succeeds. |
+| A grey wall-coloured plane that shows the artwork title as a placeholder | Museum hub: `MainMuseumHub.setSlotImageState(..., 'missing')` → `HubRoomRenderer.placeholderTexture()` | Both declared source resolution and the embedded fallback have failed, timed out, or were unavailable for that slot. |
+| A flat but image-free material without either deliberate fallback signature | Either destination after a nominal load | This is a second class of failure: material-map binding, GPU upload, CORS/tainted texture upload, context restoration, or scene composition. It must not be treated as a URL 404 without proof. |
+
+The active branch already contains the v0.90 declared-image → `webglImage`
+fallback contract. That reduces the impact of a bad primary URL, but it cannot
+repair a generated bundle that is missing/corrupt, an unsupported image, a
+failed embedded payload, an external origin that denies CORS, a decode timeout,
+or a device that cannot upload the source dimensions. A recurring grey state
+after v0.90 is therefore an **incident to trace**, not evidence that lighting,
+PBR realism, or tone mapping should be rewritten.
+
+#### Source-backed hypotheses, ranked
+
+| Rank | Hypothesis | Current evidence | Required proof before implementing the corresponding repair |
+|---|---|---|---|
+| 1 | The failing environment has a stale, incomplete, or mismatched generated customer bundle. | The importer produces `customer-preview/customer-artworks.js` and `images/`; the sync script copies them to `public/`; the clean clone does not retain those generated artifacts. Previous screenshot titles did not match the checked-in inbox. | Preserve the exact `customer-artworks.js`, its paired image directory, entry URL, build commit, and browser Network log from the failing environment. |
+| 2 | A document-relative `./images/<id>.<ext>` URL resolves differently in `file://`, Vite development, or Pages under `/Freyraum/`. | The importer writes document-relative URLs; the same generated manifest is consumed from three distinct script locations. | Record both the manifest URL and the browser-resolved request URL for one failed primary source in each environment. |
+| 3 | The primary asset fails and its `webglImage` fallback is absent, sanitized out, corrupt, too large, or unsupported. | `sanitizeInjectedArtworks()` only retains a valid base64 image data URI; both routes intentionally end at a placeholder after final fallback failure. | Export the injected record and verify that its primary URL and fallback payload independently decode in the failing browser. |
+| 4 | An external artwork URL is loaded without a valid CORS response, so decoding appears successful but WebGL upload is rejected. | `TextureManager` correctly selects `crossOrigin='anonymous'` for HTTP(S) and a no-CORS loader for local/data URLs, but browser upload failures can surface only in DevTools. | Correlate the Network response headers with console `texImage2D`/security errors and an attempted texture upload. |
+| 5 | The fixed five-second hub load/decode deadline or an oversized image causes a false final failure on a constrained device. | `MainMuseumHub` times both load and `HTMLImageElement.decode()`; `TextureManager` observes `maxTextureSize` but currently only warns after loading. | Capture elapsed load/decode times, decoded dimensions, `maxTextureSize`, device memory class, and final slot state. |
+| 6 | Colour management or shader binding is the primary failure. | The gallery renderer and hub renderer use `SRGBColorSpace` output and `NoToneMapping`; albedo maps are assigned sRGB. The hub uses a simple `MeshBasicMaterial`. | First prove a real source reaches the material map but does not produce source pixels. Only then compare raw albedo, final material, and a shader/map-binding inspection. |
+
+### Research conclusions and repository decisions
+
+| Authoritative source | Finding | Decision for FREYRAUM |
+|---|---|---|
+| [Three.js `TextureLoader`](https://threejs.org/docs/#api/en/loaders/TextureLoader) and [source](https://github.com/mrdoob/three.js/blob/r166/src/loaders/TextureLoader.js) | `TextureLoader.load()` returns a `Texture` before its image is available; individual `onError` handling is necessary to distinguish a loaded texture from a request that merely settled. | Keep explicit per-artwork success/failure outcomes. Do not use loading-overlay completion as proof that customer pixels were uploaded. |
+| [Three.js `LoadingManager`](https://threejs.org/docs/#api/en/loaders/managers/LoadingManager) and [source](https://github.com/mrdoob/three.js/blob/r166/src/loaders/LoadingManager.js) | Manager completion includes items that errored; `onError` identifies a failed URL. | Log and test source success per artwork rather than treating manager completion as readiness. |
+| [Three.js colour-management manual](https://threejs.org/manual/en/color-management.html) | Colour/albedo maps use `SRGBColorSpace`; normal, roughness, AO, and other non-colour maps use `NoColorSpace`. A colour-space defect changes an image's appearance; it does not normally remove its pixels. | Retain the current albedo sRGB contract. Audit non-colour role assignment separately after image visibility is restored; do not use colour changes to mask source failure. |
+| [Three.js `WebGLCapabilities.maxTextureSize`](https://threejs.org/docs/#api/en/renderers/WebGLCapabilities.maxTextureSize) | The usable maximum is queried from the current renderer/device, not inferred from source dimensions or desktop hardware. | Promote the existing observation into a pre-upload, quality-tier-aware compatibility guard with an explicit resize/fallback outcome. |
+| [MDN: `HTMLImageElement.decode()`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode) | Decode is asynchronous and may reject; it must be tied to the same image/source attempt that initiated it. | Preserve explicit decode states, measure duration, and avoid declaring a final placeholder without recording which candidate and stage timed out. |
+| [MDN: CORS-enabled images](https://developer.mozilla.org/en-US/docs/Web/HTML/How_to/CORS_enabled_image) | Cross-origin images require both a suitable server response and `crossOrigin` before requesting the image for canvas/WebGL use. | Keep separate local and external loaders. Add a precise external-origin/CORS diagnostic rather than applying `crossOrigin` to `file://` or data URLs. |
+| [Vite static-asset guide](https://vite.dev/guide/assets.html) | Public assets are copied verbatim, and base-path-safe references must account for a subpath deployment. | Make generated customer image resolution relative to the generated manifest script, not implicitly to whichever document happens to load it. |
+
+### Options considered
+
+| Option | Benefits | Risks / rejected scope | Decision |
+|---|---|---|---|
+| Retune room lights, PBR material, bloom, or tone mapping | May improve an image that is already visible. | Cannot make an absent image appear; hides the real failure; regresses colour fidelity. | Reject for the recovery PR. |
+| Make `webglImage` the primary source everywhere | Bypasses one path-resolution class. | Duplicates large bytes in JS, weakens deployable-asset verification, and can still fail/overload memory. | Reject. Keep it as bounded fallback. |
+| Replace the hub material with `PaintingMaterial` or a custom shader | Unifies visual treatment. | Adds shader complexity to the route whose visible plane already uses an unlit texture map. | Reject until a real hub source is demonstrably bound but invisible. |
+| Add a CSS/DOM `<img>` over every plane | Could mask a WebGL issue. | Creates two competing render/perspective systems and does not fix the gallery route. | Reject. |
+| Make manifest URLs absolute from the generated script location; retain a visible source/fallback state machine | Works for file preview, Vite dev, and Pages without guessing the document base; makes artifacts auditable. | Requires a backward-compatible injected-manifest upgrade and focused fixture coverage. | **Recommended.** |
+| Add a per-artwork, capability-aware decode/downscale path | Prevents dimensions beyond `MAX_TEXTURE_SIZE` from becoming blank on constrained GPUs. | Must preserve original pixels on capable devices and bound CPU/heap cost. | **Recommended, but only after artifact/path repair is proven or as an independently tested hardening slice.** |
+
+### Recommended implementation sequence
+
+#### Phase 0 — Capture a reproducible failing artifact before code changes
+
+1. Identify the affected destination from the visible signature table and record:
+   browser/version, OS/device, protocol (`file:`, Vite dev, built Pages),
+   viewport/DPR, quality preset, and exact URL.
+2. Save the generated `customer-artworks.js`, matching `images/` directory, and
+   the customer inbox input that generated them. Do not debug from a manifest
+   regenerated after the failure.
+3. Export `window.__FREYRAUM_DIAGNOSTICS__.exportJson()` with
+   `?debug=verbose&hubDebug=1`, the DevTools Network HAR, and console errors.
+4. For one failing artwork, create a source-to-pixel record: artwork ID, manifest
+   `image`, fallback presence, script URL, document URL, resolved primary/fallback
+   URL, request status/content type, decode result/duration/dimensions,
+   `maxTextureSize`, selected material map, and final placeholder reason.
+5. Re-run the same captured artifact in `customer-preview/app.html`, Vite dev,
+   and a built Pages-base preview. This separates an artifact error from a
+   environment-resolution error before a fix is chosen.
+
+**Exit criterion:** the team can point to a single first failed stage for at
+least one grey artwork. A screenshot alone does not satisfy this phase.
+
+#### Phase 1 — Make generated customer image addressing script-relative
+
+**Scope:** `scripts/import-artworks.mjs`, `src/main.ts`,
+`src/utils/artworkImageSources.ts`, `src/gallery/TextureManager.ts`,
+`src/hub/MainMuseumHub.ts`, importer/hub fixtures, and the generated-preview
+build path.
+
+1. Evolve the generated injection from a bare array to a backward-compatible
+   bundle envelope, for example `window.__FREYRAUM_ARTWORK_BUNDLE__`, containing
+   a schema version, bundle identifier, generated timestamp, script-derived
+   `assetBaseUrl`, and the existing artwork records. Keep
+   `window.__FREYRAUM_ARTWORKS__`/the existing array contract readable during the
+   migration so old previews do not hard-fail.
+2. In the generated classic script, compute `assetBaseUrl` from
+   `document.currentScript.src` while that script is executing, with
+   `location.href` only as a documented fallback. Generate each image URL from
+   `new URL('images/<encoded-filename>', assetBaseUrl).href`; do not derive it
+   later from the document URL.
+3. Add a shared `resolveArtworkImageSourceUrl()` boundary that returns a
+   structured candidate with `declaredUrl`, `resolvedUrl`, `mode`, `urlType`, and
+   bundle ID. Both `TextureManager` and `MainMuseumHub` must consume this one
+   resolved candidate type; neither may independently reinterpret `./images`.
+4. Preserve filename case and URL-encode each path component at importer time.
+   Validate that generated image filenames are unique after normalization, and
+   surface a specific import error rather than allowing a later 404.
+5. Extend `sanitizeInjectedArtworks()` to validate the envelope/base URL without
+   accepting arbitrary non-image schemes. Retain only `https:`, `http:`,
+   `file:`, `data:image/`, and same-origin relative sources permitted by the
+   existing customer workflow.
+6. Update the public sync/build verifier to compare manifest records with
+   `customer-preview/images/`, `public/images/`, and `dist/images/`; fail with
+   artwork ID plus expected filename if any declared source is absent.
+
+**Why this is the preferred fix:** it removes reliance on the document's base
+path while retaining a small, statically served asset bundle. It correctly
+resolves from `file:///.../customer-preview/customer-artworks.js`,
+`http://localhost/.../customer-artworks.js`, and
+`https://host/Freyraum/customer-artworks.js` without adding a dependency or
+making base64 payloads primary.
+
+**Acceptance criteria:** for one fixture each in front/left/right hub walls and
+the gallery, the logged resolved primary URL is inside the exact generated
+bundle and returns an image with non-zero dimensions in all three environments.
+
+#### Phase 2 — Replace ambiguous texture fallback state with typed outcomes
+
+**Scope:** `src/gallery/TextureManager.ts`, `src/gallery/GalleryManager.ts`,
+`src/hub/MainMuseumHub.ts`, `src/hub/HubRoomRenderer.ts`, and
+`src/utils/Diagnostics.ts`.
+
+1. Refactor gallery albedo loading around a discriminated
+   `ArtworkTextureLoadOutcome`: `loaded`, `primary-failed-fallback-loaded`, or
+   `final-fallback`. Include artwork ID, bundle ID, declared/resolved URL,
+   source mode, request/decode/upload stage, dimensions, elapsed milliseconds,
+   `maxTextureSize`, colour space, and a redacted error.
+2. Do not make `TextureManager.loadForRole()` silently erase an albedo failure
+   before `loadArtworkAlbedo()` can describe it. Keep generated textures for
+   optional PBR roles, but give the customer-visible albedo path its explicit
+   outcome and one bounded embedded-fallback retry.
+3. Change `MainMuseumHub.loadSlotImageCandidate()` to return the same essential
+   request/decode timing metadata. Keep the five-second deadline only as a
+   recorded candidate failure; when a source is still pending, prevent a stale
+   event from resolving a later fallback attempt by using a new image element or
+   an abortable source token per candidate.
+4. Make `HubRoomRenderer.upsertSlot()` report a `HubTextureBindingOutcome` after
+   map assignment and `renderer.initTexture()`. This bridges the current gap
+   between DOM image decode and visible WebGL plane binding.
+5. Add one developer-only source-state overlay/table (or enrich the existing
+   `?hubDebug=1` output) that explicitly labels `primary`, `embedded fallback`,
+   `final placeholder`, `CORS/upload suspect`, and `oversize guarded`. Never
+   show a long customer-facing URL or data URI.
+
+**Acceptance criteria:** a grey artwork has one exported diagnostic record that
+names the exact first failed stage. A successful LoadingManager completion is
+never accepted as evidence that an artwork texture is visible.
+
+#### Phase 3 — Handle external CORS, decoding, and texture-size limits safely
+
+**Scope:** `src/gallery/TextureManager.ts`, `src/hub/MainMuseumHub.ts`,
+`src/config/quality.ts`, and the diagnostics/fixture harness.
+
+1. For HTTP(S) candidates, log the loader's `crossOrigin` policy and classify
+   failures as request/decode versus post-load upload suspect. Require customer
+   external hosts to return an appropriate `Access-Control-Allow-Origin`; do not
+   weaken local/data/file handling by globally forcing anonymous CORS.
+2. Add a small, opt-in developer proof that renders a successfully bound source
+   to a controlled target and detects a map-binding/upload failure before it is
+   mistaken for a missing asset. Keep this diagnostic out of normal rendering.
+3. Before uploading an image whose dimensions exceed the active
+   `renderer.capabilities.maxTextureSize` or the quality-tier cap, create one
+   bounded derived image using `createImageBitmap` resize options where available,
+   with an `OffscreenCanvas`/canvas fallback. Record source and uploaded
+   dimensions, do not upscale, and release temporary bitmaps/canvases promptly.
+4. Define caps in `src/config/quality.ts` rather than implicit device checks:
+   high `min(maxTextureSize, 8192)`, balanced `min(maxTextureSize, 4096)`, and
+   battery `min(maxTextureSize, 2048)` are starting values subject to device
+   validation. Preserve the original on devices that fit the cap.
+5. Keep the embedded `webglImage` fallback bounded to one attempt. If it is too
+   large to decode/upload, return a truthful final placeholder diagnostic instead
+   of retrying indefinitely or consuming unbounded memory.
+
+**Acceptance criteria:** a 4096+ fixture on a constrained simulated capability
+has either a verified downscaled image or a diagnosable explicit unsupported
+state—never an unexplained grey plane.
+
+#### Phase 4 — Audit colour/material only after source pixels are proven
+
+1. Add a developer-only raw-albedo mode that bypasses gallery physical response,
+   plus final-material and UV/map-bound snapshots. Use it to distinguish a
+   colour/material issue from source absence.
+2. Retain `SRGBColorSpace` for albedo and renderer output. Audit
+   `PaintingTextureSet` non-colour roles against the pinned Three.js version and
+   move normal/roughness/AO/height-style data to `NoColorSpace` only with
+   side-by-side visual regression evidence.
+3. Do not modify hub `MeshBasicMaterial`, lighting, bloom, tone mapping, or room
+   geometry in this incident PR unless Phase 2 proves a map reaches that material
+   and remains invisible.
+
+### Required verification and release gates
+
+| Layer | Required proof |
+|---|---|
+| Importer | `npm run import:artworks` generates a bundle report with stable IDs, encoded filenames, source dimensions, and primary/fallback availability. |
+| Static bundle | A focused artifact validator proves every manifest source exists in preview, `public`, and `dist`, with the same relative/script-derived resolution. |
+| Hub | `npm run validate:museum-hub` includes primary-success, primary-failure/fallback-success, final-placeholder, delayed-decode, and oversize cases. |
+| Gallery | Fixtures assert that `GalleryManager` reports a non-generated albedo outcome for valid artwork and an explicit final fallback for invalid artwork. |
+| Visual | `npm run validate:visual` compares hub and gallery fixtures across desktop and phone sizes; a valid fixture may not display a placeholder, title-only plane, or generated fallback. |
+| Manual environments | Verify `customer-preview/app.html` over `file://`, Vite dev, and built Pages-base output with the exact captured customer bundle. |
+| Baseline quality | `npm run lint`, `npm run build:typecheck`, `npm run build`, `npm run test:frame-budget`, and `npm run docs:check-config-authority` pass. |
+
+### Definition of done
+
+- The original captured incident reproduces before the repair and displays the
+  supplied paintings after it in its original environment.
+- Every visible intended artwork has a recorded source outcome and a real albedo
+  texture on its visible mesh; a fallback is never mistaken for success.
+- The hub and gallery share source URL semantics and fallback reporting.
+- `file://`, Vite development, and Pages-base builds resolve the same generated
+  customer images without manual URL edits.
+- External CORS, decode timeout, missing-file, and oversized-image failures are
+  explicit and bounded.
+- Colour/material work is only accepted after raw source pixels are visible.
+- Customer, deployment, diagnostics, architecture, findings, plan, and
+  regression documentation remain synchronized with the implementation.
+
 ## Planned — Evidence-based recovery plan for grey museum-hub artworks before realism (2026-08-07)
 
 > **Planning/docs only.** No runtime code, importer code, generated assets, or
