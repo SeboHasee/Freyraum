@@ -91,11 +91,19 @@ There is no separate query parameter. Use `?debug=verbose&hubDebug=1` when the
 museum hub shows a title-bearing placeholder, then export the diagnostics API
 data below. Relevant current records are:
 
+- `hub:source-to-pixel-outcome` / `texture:source-to-pixel-outcome` — one
+  terminal record per artwork per route naming the resolved candidate,
+  first failed stage (if any), source/upload dimensions, and — in verbose mode
+  — a bounded GPU visible-pixel probe result. This is the primary record to
+  check first; see `plan.md § v0.92`.
 - `hub:artwork-source-resolved`
 - `hub:artwork-image-retry`
 - `hub:artwork-image-missing`
+- `hub-room:hub-slot-texture-downscaled` / `hub-room:hub-slot-texture-oversized`
+- `hub-room:hub-slot-visible-probe-failed`
 - `boot:artworks-source`
 - `texture:load-fallback`
+- `texture:texture-downscaled` / `texture:texture-oversized`
 - `gallery:show-artwork-fallback`
 
 Capture the browser Network log and console errors with the export. Do not

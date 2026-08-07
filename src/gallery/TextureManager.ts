@@ -8,6 +8,9 @@ import {
   type ArtworkImageSourceMode,
   type ArtworkImageUrlType,
 } from '../utils/artworkImageSources';
+import { createCompatibleTextureImage, type TextureUploadFit } from '../utils/textureUploadCompatibility';
+import { probeTextureVisiblePixels } from '../utils/sourceToPixelProbe';
+import { recordSourceToPixelOutcome } from '../utils/sourceToPixelOutcome';
 
 export interface ArtworkAlbedoSelection {
   selectedUrl: string;
@@ -63,6 +66,13 @@ export class TextureManager {
    */
   private readonly fallbackKeys = new Set<string>();
   private readonly artworkAlbedoSelections = new Map<string, ArtworkAlbedoSelection>();
+  /**
+   * v0.92: capability-aware upload-fit recorded for every successfully
+   * loaded (non-fallback) texture, keyed the same way as `cache`. Used to
+   * prove the request→decode→GPU pipeline and to report whether a
+   * downscale was required/applied before upload.
+   */
+  private readonly uploadFits = new Map<string, TextureUploadFit>();
 
   constructor(loadingManager: THREE.LoadingManager = THREE.DefaultLoadingManager) {
     this.externalLoader = new THREE.TextureLoader(loadingManager);
@@ -162,6 +172,7 @@ export class TextureManager {
       const existingTexture = this.cache.get(`albedo::${primary.resolvedUrl}`);
       if (existingSelection && existingTexture) return existingTexture;
     }
+    const startedAt = this.now();
     if (!primary) {
       const fallback = this.createFallbackTexture(artwork.id);
       this.renderer?.initTexture(fallback);
@@ -175,6 +186,26 @@ export class TextureManager {
         usedEmbeddedFallback: false,
         attemptedEmbeddedFallback: false,
         generatedFallback: true,
+      });
+      recordSourceToPixelOutcome(this.diagnostics, {
+        route: 'gallery',
+        artworkId: artwork.id,
+        bundleId: null,
+        candidateMode: null,
+        resolvedUrlType: null,
+        usedEmbeddedFallback: false,
+        attemptedEmbeddedFallback: false,
+        result: 'failed',
+        firstFailedStage: 'candidate-selected',
+        failureReason: 'no-declared-source',
+        elapsedMs: Math.round(this.now() - startedAt),
+        sourceWidth: null,
+        sourceHeight: null,
+        uploadWidth: null,
+        uploadHeight: null,
+        downscaleApplied: false,
+        rendererMaxTextureSize: this.maxTextureSize || null,
+        visibleProbe: null,
       });
       return fallback;
     }
@@ -191,6 +222,12 @@ export class TextureManager {
         usedEmbeddedFallback: false,
         attemptedEmbeddedFallback: false,
         generatedFallback: false,
+      });
+      this.recordAlbedoOutcome(artwork.id, primary.resolvedUrl, primary.bundleId, primary.mode, primary.resolvedUrlType, {
+        usedEmbeddedFallback: false,
+        attemptedEmbeddedFallback: false,
+        startedAt,
+        texture: primaryTexture,
       });
       return primaryTexture;
     }
@@ -227,6 +264,14 @@ export class TextureManager {
           declaredImageUrlType: primary.declaredUrlType,
           resolvedImageUrlType: fallback.resolvedUrlType,
         });
+        this.recordAlbedoOutcome(
+          artwork.id,
+          fallback.resolvedUrl,
+          fallback.bundleId,
+          fallback.mode,
+          fallback.resolvedUrlType,
+          { usedEmbeddedFallback: true, attemptedEmbeddedFallback: true, startedAt, texture: fallbackTexture }
+        );
         return fallbackTexture;
       }
     }
@@ -242,7 +287,72 @@ export class TextureManager {
       attemptedEmbeddedFallback: !!fallback,
       generatedFallback: true,
     });
+    recordSourceToPixelOutcome(this.diagnostics, {
+      route: 'gallery',
+      artworkId: artwork.id,
+      bundleId: primary.bundleId,
+      candidateMode: null,
+      resolvedUrlType: null,
+      usedEmbeddedFallback: false,
+      attemptedEmbeddedFallback: !!fallback,
+      result: 'failed',
+      firstFailedStage: 'request',
+      failureReason: fallback ? 'primary-and-fallback-load-failed' : 'primary-load-failed-no-fallback',
+      elapsedMs: Math.round(this.now() - startedAt),
+      sourceWidth: null,
+      sourceHeight: null,
+      uploadWidth: null,
+      uploadHeight: null,
+      downscaleApplied: false,
+      rendererMaxTextureSize: this.maxTextureSize || null,
+      visibleProbe: null,
+    });
     return primaryTexture;
+  }
+
+  /**
+   * v0.92: builds and records the shared source-to-pixel outcome for a
+   * successfully resolved (non-fallback) albedo texture, including a bounded
+   * GPU visible-pixel probe when verbose diagnostics are enabled.
+   */
+  private recordAlbedoOutcome(
+    artworkId: string,
+    resolvedUrl: string,
+    bundleId: string | null,
+    candidateMode: ArtworkImageSourceMode,
+    resolvedUrlType: ArtworkImageUrlType,
+    options: {
+      usedEmbeddedFallback: boolean;
+      attemptedEmbeddedFallback: boolean;
+      startedAt: number;
+      texture: THREE.Texture;
+    }
+  ): void {
+    const fit = this.uploadFits.get(`albedo::${resolvedUrl}`) ?? null;
+    const visibleProbe =
+      this.renderer && this.diagnostics.isDebugEnabled()
+        ? probeTextureVisiblePixels(this.renderer, options.texture)
+        : null;
+    recordSourceToPixelOutcome(this.diagnostics, {
+      route: 'gallery',
+      artworkId,
+      bundleId,
+      candidateMode,
+      resolvedUrlType,
+      usedEmbeddedFallback: options.usedEmbeddedFallback,
+      attemptedEmbeddedFallback: options.attemptedEmbeddedFallback,
+      result: 'success',
+      firstFailedStage: null,
+      failureReason: null,
+      elapsedMs: Math.round(this.now() - options.startedAt),
+      sourceWidth: fit?.sourceWidth ?? null,
+      sourceHeight: fit?.sourceHeight ?? null,
+      uploadWidth: fit?.targetWidth ?? null,
+      uploadHeight: fit?.targetHeight ?? null,
+      downscaleApplied: fit?.needsDownscale ?? false,
+      rendererMaxTextureSize: this.maxTextureSize || null,
+      visibleProbe,
+    });
   }
 
   getArtworkAlbedoSelection(artwork: Pick<Artwork, 'id'>): ArtworkAlbedoSelection | undefined {
@@ -285,19 +395,49 @@ export class TextureManager {
         url,
         (texture) => {
           this.prepareTexture(texture, role);
+          const img = texture.image as HTMLImageElement | ImageBitmap | { width?: number; height?: number };
+          const sourceWidth = 'naturalWidth' in img ? (img.naturalWidth || img.width || 0) : (img.width || 0);
+          const sourceHeight = 'naturalHeight' in img ? (img.naturalHeight || img.height || 0) : (img.height || 0);
+
+          // v0.92: apply a shared capability-aware downscale BEFORE the
+          // texture is cached/uploaded, instead of only warning after an
+          // oversized upload already happened.
+          const compatible = createCompatibleTextureImage(
+            img as CanvasImageSource,
+            sourceWidth,
+            sourceHeight,
+            this.maxTextureSize
+          );
+          if (compatible.downscaleApplied) {
+            texture.image = compatible.image;
+            texture.needsUpdate = true;
+            this.diagnostics.warn('texture-downscaled', `Downscaled oversized ${role} texture to fit device capability`, {
+              role,
+              url: urlForLog,
+              urlType,
+              sourceWidth,
+              sourceHeight,
+              uploadWidth: compatible.fit.targetWidth,
+              uploadHeight: compatible.fit.targetHeight,
+              maxTextureSize: this.maxTextureSize,
+            });
+          } else if (compatible.fit.needsDownscale) {
+            this.warnIfOversized(role, urlForLog, urlType, sourceWidth, sourceHeight);
+          }
+          this.uploadFits.set(cacheKey, compatible.fit);
+
           this.cache.set(cacheKey, texture);
           // v0.25 T-03: proactively push the decoded texture to the GPU so the
           // compositor can drain the upload queue before the warm render loop.
           this.renderer?.initTexture(texture);
-          const img = texture.image as HTMLImageElement | ImageBitmap | { width?: number; height?: number };
-          const w = 'naturalWidth' in img ? (img.naturalWidth || img.width || 0) : (img.width || 0);
-          const h = 'naturalHeight' in img ? (img.naturalHeight || img.height || 0) : (img.height || 0);
-          this.warnIfOversized(role, urlForLog, urlType, w, h);
           this.diagnostics.info('load-success', `Loaded ${role} texture`, {
             url: urlForLog,
             urlType,
-            width: w,
-            height: h,
+            width: compatible.fit.targetWidth,
+            height: compatible.fit.targetHeight,
+            sourceWidth,
+            sourceHeight,
+            downscaleApplied: compatible.downscaleApplied,
             fallbackUsed: false,
           });
           resolve(texture);
@@ -312,6 +452,7 @@ export class TextureManager {
           });
           const fallback = this.createFallbackTexture(url);
           this.cache.set(cacheKey, fallback);
+          this.uploadFits.delete(cacheKey);
           // v0.25 T-03: upload fallback texture to GPU immediately.
           this.renderer?.initTexture(fallback);
           this.fallbackKeys.add(cacheKey);
@@ -389,6 +530,7 @@ export class TextureManager {
     this.cache.clear();
     this.fallbackKeys.clear();
     this.artworkAlbedoSelections.clear();
+    this.uploadFits.clear();
   }
 
   private promoteArtworkAlbedo(primaryUrl: string, texture: THREE.Texture): void {
@@ -399,6 +541,10 @@ export class TextureManager {
     }
     this.cache.set(cacheKey, texture);
     this.fallbackKeys.delete(cacheKey);
+  }
+
+  private now(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
   }
 
   private prepareTexture(texture: THREE.Texture, role: PaintingMapRole): void {

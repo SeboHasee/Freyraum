@@ -8,6 +8,9 @@ import {
   type ArchitecturalMaterials,
 } from '../materials/ArchitecturalSurfaceFactory';
 import { getOptimalPixelRatio } from '../utils/performance';
+import { createScopedDiagnostics } from '../utils/Diagnostics';
+import { createCompatibleTextureImage, type TextureUploadFit } from '../utils/textureUploadCompatibility';
+import { probeTextureVisiblePixels, type VisiblePixelProbeResult } from '../utils/sourceToPixelProbe';
 
 interface SlotMeshState {
   pageIndex: number;
@@ -17,6 +20,21 @@ interface SlotMeshState {
   shadowMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   textureKind: 'image' | 'placeholder' | null;
   textureKey: string | null;
+}
+
+/**
+ * v0.92: result of {@link HubRoomRenderer.upsertSlot}, letting
+ * `MainMuseumHub` fold the GPU-upload/visible-pixel proof into its
+ * shared source-to-pixel outcome record for the hub route.
+ */
+export interface SlotUpsertResult {
+  /** False only when the slot geometry/room was invalid and nothing was drawn. */
+  applied: boolean;
+  /** True when a real (non-placeholder) image texture is bound. */
+  usedImage: boolean;
+  /** Populated only when a new image texture was created during this call. */
+  fit?: TextureUploadFit;
+  visibleProbe?: VisiblePixelProbeResult;
 }
 
 const PLACEHOLDER_SIZE = 512;
@@ -54,6 +72,7 @@ const COVE_STRIP_LIFT = 0.006;
 export class HubRoomRenderer {
   readonly canvas: HTMLCanvasElement;
 
+  private readonly diagnostics = createScopedDiagnostics('hub-room');
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
@@ -177,40 +196,64 @@ export class HubRoomRenderer {
     this.render();
   }
 
+  /** v0.92: live renderer GPU capability used by the shared source-to-pixel outcome contract. */
+  getMaxTextureSize(): number {
+    return this.renderer.capabilities.maxTextureSize;
+  }
+
   upsertSlot(
     slot: ResolvedHubSlot,
     wall: ResolvedHubWall,
     image: HTMLImageElement | null,
     missingImage: boolean
-  ): void {
+  ): SlotUpsertResult {
     const state = this.ensureSlotState(slot);
     if (!state || !wall.room || !slot.selectable || !slot.artworkId) {
       if (state) state.group.visible = false;
       this.render();
-      return;
+      return { applied: false, usedImage: false };
     }
     const slotAnchor = slot.placement.anchor;
     const normal = roomWallNormal(wall.room);
     if (!slotAnchor || !normal) {
       state.group.visible = false;
       this.render();
-      return;
+      return { applied: false, usedImage: false };
     }
 
     const textureKey = !missingImage && image && image.complete && image.naturalWidth > 0
       ? image.currentSrc || image.src || `${slot.id}:image`
       : `${slot.id}:placeholder:${slot.displayLabel}`;
+    let fit: TextureUploadFit | undefined;
+    let visibleProbe: VisiblePixelProbeResult | undefined;
     if (state.textureKey !== textureKey) {
-      const targetTexture =
-        !missingImage && image && image.complete && image.naturalWidth > 0
-          ? this.imageTexture(image)
-          : this.placeholderTexture(slot.displayLabel);
+      let targetTexture: THREE.Texture;
+      if (!missingImage && image && image.complete && image.naturalWidth > 0) {
+        const built = this.imageTexture(image);
+        targetTexture = built.texture;
+        fit = built.fit;
+      } else {
+        targetTexture = this.placeholderTexture(slot.displayLabel);
+      }
       if (state.textureKind === 'image') {
         state.artworkMesh.material.map?.dispose();
       }
       state.artworkMesh.material.map = targetTexture;
       state.artworkMesh.material.needsUpdate = true;
       this.renderer.initTexture(targetTexture);
+      // v0.92: bounded developer/CI proof that the bound texture actually
+      // produced non-empty GPU output. Only runs in verbose diagnostics mode
+      // to avoid a GPU-stalling readback on every visitor's page load.
+      if (fit && this.diagnostics.isDebugEnabled()) {
+        visibleProbe = probeTextureVisiblePixels(this.renderer, targetTexture);
+        if (!visibleProbe.pass) {
+          this.diagnostics.warn('hub-slot-visible-probe-failed', 'Hub artwork texture bound but produced no visible pixels', {
+            slotId: slot.id,
+            artworkId: slot.artworkId,
+            probe: visibleProbe,
+          });
+        }
+      }
       state.textureKey = textureKey;
       state.textureKind = missingImage ? 'placeholder' : 'image';
     }
@@ -240,6 +283,7 @@ export class HubRoomRenderer {
     state.shadowMesh.scale.set(width * 1.22, height * 1.22, 1);
     state.shadowMesh.position.set(0, -0.015, -zOffset + 0.004);
     this.render();
+    return { applied: true, usedImage: !missingImage, fit, visibleProbe };
   }
 
   dispose(): void {
@@ -854,12 +898,36 @@ export class HubRoomRenderer {
     }
   }
 
-  private imageTexture(image: HTMLImageElement): THREE.Texture {
-    const texture = new THREE.Texture(image);
+  /**
+   * v0.92: builds the hub artwork albedo texture, applying the same shared
+   * capability-aware downscale used by the interactive gallery before the
+   * source is bound as a GPU texture. Never upscales.
+   */
+  private imageTexture(image: HTMLImageElement): { texture: THREE.Texture; fit: TextureUploadFit } {
+    const maxTextureSize = this.renderer.capabilities.maxTextureSize;
+    const sourceWidth = image.naturalWidth || image.width;
+    const sourceHeight = image.naturalHeight || image.height;
+    const compatible = createCompatibleTextureImage(image, sourceWidth, sourceHeight, maxTextureSize);
+    if (compatible.downscaleApplied) {
+      this.diagnostics.warn('hub-slot-texture-downscaled', 'Downscaled oversized hub artwork texture to fit device capability', {
+        sourceWidth,
+        sourceHeight,
+        uploadWidth: compatible.fit.targetWidth,
+        uploadHeight: compatible.fit.targetHeight,
+        maxTextureSize,
+      });
+    } else if (compatible.fit.needsDownscale) {
+      this.diagnostics.warn('hub-slot-texture-oversized', 'Hub artwork texture exceeds device MAX_TEXTURE_SIZE and could not be downscaled', {
+        sourceWidth,
+        sourceHeight,
+        maxTextureSize,
+      });
+    }
+    const texture = new THREE.Texture(compatible.image as TexImageSource);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.needsUpdate = true;
     texture.anisotropy = this.effectiveAnisotropy();
-    return texture;
+    return { texture, fit: compatible.fit };
   }
 
   /** Shared soft radial-gradient texture for artwork contact shadows. */

@@ -36,8 +36,9 @@ import {
   type ArtworkImageSourceCandidate,
 } from '../utils/artworkImageSources';
 import { loadHubImageAsset } from './hubAssetLoader';
-import { HubRoomRenderer } from './HubRoomRenderer';
+import { HubRoomRenderer, type SlotUpsertResult } from './HubRoomRenderer';
 import type { QualityPreset } from '../config/quality';
+import { recordSourceToPixelOutcome } from '../utils/sourceToPixelOutcome';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -109,6 +110,8 @@ interface SlotView {
   imageState: 'idle' | 'loading' | 'ready' | 'missing';
   resolvedSource: ArtworkImageSourceCandidate | null;
   fallbackReason: string | null;
+  /** v0.92: GPU-upload/visible-pixel proof from the most recent renderer sync. */
+  lastUpsertResult: SlotUpsertResult | null;
 }
 
 export class MainMuseumHub {
@@ -576,6 +579,7 @@ export class MainMuseumHub {
       imageState: 'idle',
       resolvedSource: null,
       fallbackReason: null,
+      lastUpsertResult: null,
     };
     this.syncSlotRenderer(view);
     return view;
@@ -653,7 +657,7 @@ export class MainMuseumHub {
       || !view.image
       || !view.image.complete
       || view.image.naturalWidth <= 0;
-    this.hubRoomRenderer.upsertSlot(view.slot, wall, view.image, missingImage);
+    view.lastUpsertResult = this.hubRoomRenderer.upsertSlot(view.slot, wall, view.image, missingImage);
   }
 
   private applyAllSlotGeometry(): void {
@@ -795,6 +799,7 @@ export class MainMuseumHub {
     const sourcePlan = resolveArtworkImageSources(sourceRecord);
     const primary = sourcePlan.primary;
     const fallback = sourcePlan.fallback;
+    const startedAt = this.now();
     if (!primary || !view.image || !view.slot.artworkId) {
       this.setSlotImageState(view, 'missing', null, 'no-source');
       this.diagnostics.warn('artwork-image-missing', 'Hub artwork image is unavailable; neutral placeholder retains exact target', {
@@ -803,6 +808,28 @@ export class MainMuseumHub {
         bundleId: sourcePlan.fallback?.bundleId ?? null,
         fallbackReason: 'no-source',
       });
+      if (view.slot.artworkId) {
+        recordSourceToPixelOutcome(this.diagnostics, {
+          route: 'hub',
+          artworkId: view.slot.artworkId,
+          bundleId: sourcePlan.fallback?.bundleId ?? null,
+          candidateMode: null,
+          resolvedUrlType: null,
+          usedEmbeddedFallback: false,
+          attemptedEmbeddedFallback: false,
+          result: 'failed',
+          firstFailedStage: 'candidate-selected',
+          failureReason: 'no-source',
+          elapsedMs: Math.round(this.now() - startedAt),
+          sourceWidth: null,
+          sourceHeight: null,
+          uploadWidth: null,
+          uploadHeight: null,
+          downscaleApplied: false,
+          rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
+          visibleProbe: null,
+        });
+      }
       return;
     }
 
@@ -825,6 +852,14 @@ export class MainMuseumHub {
         textureWidth: primaryResult.width,
         textureHeight: primaryResult.height,
         fallbackReason: null,
+      });
+      this.recordHubSourceToPixelOutcome(view, {
+        bundleId: primary.bundleId,
+        candidateMode: primary.mode,
+        resolvedUrlType: primary.resolvedUrlType,
+        usedEmbeddedFallback: false,
+        attemptedEmbeddedFallback: false,
+        startedAt,
       });
       return;
     }
@@ -859,6 +894,14 @@ export class MainMuseumHub {
           textureHeight: fallbackResult.height,
           fallbackReason: primaryFailure,
         });
+        this.recordHubSourceToPixelOutcome(view, {
+          bundleId: fallback.bundleId,
+          candidateMode: fallback.mode,
+          resolvedUrlType: fallback.resolvedUrlType,
+          usedEmbeddedFallback: true,
+          attemptedEmbeddedFallback: true,
+          startedAt,
+        });
         return;
       }
       const fallbackFailure = `${fallback.mode}:${fallbackResult.reason}`;
@@ -885,6 +928,26 @@ export class MainMuseumHub {
           },
         ],
       });
+      recordSourceToPixelOutcome(this.diagnostics, {
+        route: 'hub',
+        artworkId: view.slot.artworkId,
+        bundleId: fallback.bundleId,
+        candidateMode: null,
+        resolvedUrlType: null,
+        usedEmbeddedFallback: false,
+        attemptedEmbeddedFallback: true,
+        result: 'failed',
+        firstFailedStage: 'request',
+        failureReason: fallbackFailure,
+        elapsedMs: Math.round(this.now() - startedAt),
+        sourceWidth: null,
+        sourceHeight: null,
+        uploadWidth: null,
+        uploadHeight: null,
+        downscaleApplied: false,
+        rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
+        visibleProbe: null,
+      });
       return;
     }
 
@@ -906,6 +969,70 @@ export class MainMuseumHub {
         },
       ],
     });
+    recordSourceToPixelOutcome(this.diagnostics, {
+      route: 'hub',
+      artworkId: view.slot.artworkId,
+      bundleId: primary.bundleId,
+      candidateMode: null,
+      resolvedUrlType: null,
+      usedEmbeddedFallback: false,
+      attemptedEmbeddedFallback: false,
+      result: 'failed',
+      firstFailedStage: 'request',
+      failureReason: primaryFailure,
+      elapsedMs: Math.round(this.now() - startedAt),
+      sourceWidth: null,
+      sourceHeight: null,
+      uploadWidth: null,
+      uploadHeight: null,
+      downscaleApplied: false,
+      rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
+      visibleProbe: null,
+    });
+  }
+
+  /**
+   * v0.92: folds the most recent GPU-upload/visible-pixel proof recorded by
+   * `HubRoomRenderer.upsertSlot` (via `syncSlotRenderer`) into the shared
+   * source-to-pixel outcome for a successfully resolved hub artwork.
+   */
+  private recordHubSourceToPixelOutcome(
+    view: SlotView,
+    options: {
+      bundleId: string | null;
+      candidateMode: ArtworkImageSourceCandidate['mode'];
+      resolvedUrlType: ArtworkImageSourceCandidate['resolvedUrlType'];
+      usedEmbeddedFallback: boolean;
+      attemptedEmbeddedFallback: boolean;
+      startedAt: number;
+    }
+  ): void {
+    if (!view.slot.artworkId) return;
+    const upsert = view.lastUpsertResult;
+    recordSourceToPixelOutcome(this.diagnostics, {
+      route: 'hub',
+      artworkId: view.slot.artworkId,
+      bundleId: options.bundleId,
+      candidateMode: options.candidateMode,
+      resolvedUrlType: options.resolvedUrlType,
+      usedEmbeddedFallback: options.usedEmbeddedFallback,
+      attemptedEmbeddedFallback: options.attemptedEmbeddedFallback,
+      result: 'success',
+      firstFailedStage: null,
+      failureReason: null,
+      elapsedMs: Math.round(this.now() - options.startedAt),
+      sourceWidth: upsert?.fit?.sourceWidth ?? null,
+      sourceHeight: upsert?.fit?.sourceHeight ?? null,
+      uploadWidth: upsert?.fit?.targetWidth ?? null,
+      uploadHeight: upsert?.fit?.targetHeight ?? null,
+      downscaleApplied: upsert?.fit?.needsDownscale ?? false,
+      rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
+      visibleProbe: upsert?.visibleProbe ?? null,
+    });
+  }
+
+  private now(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
   }
 
   private setSlotImageState(

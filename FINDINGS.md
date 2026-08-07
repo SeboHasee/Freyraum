@@ -2,6 +2,10 @@
 
 ## Persistent grey-artwork investigation (v0.92, 2026-08-07)
 
+> **As-built update:** The investigation below drove an implemented fix. See
+> "As-built implementation notes" after the numbered findings for what shipped,
+> what validated, and the one unrelated issue an automated review surfaced.
+
 1. The current tracked customer setup is two PNG artworks, `Fraktal.png` and
    `Akt 27.png`, normalized as `fraktal` and `akt-27`; the shipping v4 hub
    configuration maps those exact IDs to its front-wall slots. The generated
@@ -33,7 +37,41 @@
    material captures prove that a loaded gallery image is merely too dark. It
    must never be used to hide source failure.
 
-### Primary sources for v0.92
+### As-built implementation notes (v0.92)
+
+- Added `src/utils/sourceToPixelOutcome.ts` (shared redacted outcome contract),
+  `src/utils/textureUploadCompatibility.ts` (capability-aware downscale, keyed
+  off live `renderer.capabilities.maxTextureSize`), and
+  `src/utils/sourceToPixelProbe.ts` (bounded 4×4 GPU visible-pixel readback,
+  cached per renderer, verbose-diagnostics-only).
+- `TextureManager` (gallery route) records one `source-to-pixel-outcome`
+  diagnostic per artwork in `loadArtworkAlbedo`, applies the shared downscale in
+  `loadForRole` before any `THREE.Texture` reaches the GPU, and stores the
+  computed fit per cache entry for reuse.
+- `HubRoomRenderer.upsertSlot`/`imageTexture` (hub route) apply the same shared
+  downscale before texture creation and return proof data (`SlotUpsertResult`);
+  `MainMuseumHub.resolveSlotImage` folds that proof into the same shared
+  outcome contract via `recordHubSourceToPixelOutcome`, on both the primary and
+  embedded-fallback success paths, and on every terminal failure branch.
+- The visible-pixel probe is gated behind `diagnostics.isDebugEnabled()`
+  (verbose mode) in both routes: `readRenderTargetPixels` is a synchronous
+  GPU-stalling call, so it must not run on default visitor traffic, only for a
+  developer/CI proof session.
+- The current `Fraktal.png`/`Akt 27.png` importer, manifest, and
+  `scripts/import-artworks.mjs` were not touched; `git diff` against the
+  importer/customer-artworks paths is empty. No lighting, `PaintingMaterial`,
+  or fidelity change was made (Phase 4 stays future work).
+- Validation: `npm run lint`, `npm run build:typecheck`, `npm run build`,
+  `npm run validate:museum-hub`, `npm run test:frame-budget`, and
+  `npm run docs:check-config-authority` all passed against the implemented
+  change.
+- An automated code review pass over this change surfaced one unrelated,
+  pre-existing issue: `DestinationRouter.runTransition`'s rollback branch calls
+  `previous.enter()` without first calling `previous.prepare()`, unlike the
+  forward-transition path. This is outside the source-to-pixel scope of v0.92
+  and was intentionally left unmodified; no runtime change was made for it.
+
+
 
 - Three.js colour management:
   <https://threejs.org/manual/en/color-management.html>

@@ -1,5 +1,49 @@
 # CHANGELOG
-> Latest markdown audit: 2026-08-07 (interactive-gallery stage + mounted presentation baseline).
+> Latest markdown audit: 2026-08-07 (v0.92.1 persistent grey-artwork recovery implementation).
+
+## v0.92.1 — Persistent grey-artwork recovery implementation (2026-08-07)
+
+### Changed
+
+- Added a shared, redacted source→decode→GPU→visible-pixels outcome contract
+  (`src/utils/sourceToPixelOutcome.ts`) recorded once per artwork per route,
+  naming the resolved candidate, embedded-fallback usage, first failed stage,
+  elapsed time, source/upload dimensions, and renderer capability, without
+  ever logging raw URLs, data URIs, or image bytes.
+- Added a shared capability-aware PNG downscale
+  (`src/utils/textureUploadCompatibility.ts`) applied before any decoded image
+  reaches the GPU in either route, sized against the live
+  `renderer.capabilities.maxTextureSize`. A source that already fits is passed
+  through unchanged; an oversize source is drawn once into a single bounded
+  canvas, preserving aspect ratio and never upscaling.
+- Added a bounded GPU visible-pixel probe (`src/utils/sourceToPixelProbe.ts`)
+  that renders a bound texture to a cached 4×4 render target and reports only
+  pass/fail plus average colour, gated to verbose diagnostics mode so the
+  GPU-stalling readback never runs on default visitor traffic.
+- Wired both into the interactive gallery (`TextureManager.loadForRole`,
+  `loadArtworkAlbedo`) and the museum hub (`HubRoomRenderer.upsertSlot`,
+  `imageTexture`, `MainMuseumHub.resolveSlotImage`), so a real
+  `Fraktal.png`/`Akt 27.png` load now produces one explicit success record per
+  route, and a failure names its first failed stage instead of only showing a
+  placeholder.
+- Left the current PNG importer, `customer-artworks/museum-hub.json`, and
+  `scripts/import-artworks.mjs` untouched, and made no lighting, material, or
+  `PaintingMaterial` change (Phase 4 of the v0.92 plan remains future work).
+
+### Validation and residual risk
+
+- `npm run lint`, `npm run build:typecheck`, `npm run build`,
+  `npm run validate:museum-hub`, `npm run test:frame-budget`, and
+  `npm run docs:check-config-authority` all passed.
+- Phase 0 (manual multi-environment reproduction capture) and the Phase 1
+  generated-bundle validator were not additionally implemented; the new
+  outcome diagnostics make that reproduction available on demand instead.
+  `npm audit --audit-level=moderate` still reports the pre-existing
+  Vite/esbuild development-server advisory, unrelated to this change.
+- An automated code review of this change surfaced one unrelated, pre-existing
+  issue: `DestinationRouter.runTransition`'s rollback branch re-enters the
+  previous destination without re-running `prepare()`. This is out of scope
+  for the pixel-recovery fix and was intentionally left unmodified.
 
 ## v0.92 — Persistent grey-artwork recovery plan (2026-08-07)
 

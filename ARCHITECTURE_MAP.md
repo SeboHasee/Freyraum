@@ -47,6 +47,12 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 - `src/utils/`
   - `artworkImageSources.ts`: shared declared-image/embedded-fallback source
     plan used by both gallery and hub
+  - `sourceToPixelOutcome.ts`: shared, redacted source→decode→GPU→visible-pixels
+    outcome contract recorded once per artwork per route (gallery and hub)
+  - `textureUploadCompatibility.ts`: shared capability-aware downscale applied
+    before any decoded image reaches the GPU in either route
+  - `sourceToPixelProbe.ts`: bounded, verbose-mode-only GPU visible-pixel
+    readback probe
   - Diagnostics, preferences, performance and utility primitives
 - `src/rendering/`
   - Backend detection/probe boundary (WebGL production, optional WebGPU probe)

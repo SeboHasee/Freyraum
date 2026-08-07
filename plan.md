@@ -1,12 +1,28 @@
 # FREYRAUM Plan
 
-## Active — Verified pixel-recovery plan for persistent grey artworks (v0.92, 2026-08-07)
+## Implemented — Verified pixel-recovery plan for persistent grey artworks (v0.92, 2026-08-07)
 
-> **Incident status:** The v0.91 script-relative source-addressing repair is
-> present in the current branch, but the new customer report means it is not
-> sufficient evidence that the currently configured artworks are visible. Treat
-> the incident as unresolved until the current `Fraktal.png` and `Akt 27.png`
-> render as source-backed pixels in both the hub and interactive gallery.
+> **Status update:** Phases 2 and 3 are implemented in runtime code. Both routes
+> now record a shared, redacted `SourceToPixelOutcome` (`src/utils/sourceToPixelOutcome.ts`)
+> naming the resolved candidate, timings, source/upload dimensions, and terminal
+> result, and both routes apply a shared capability-aware downscale
+> (`src/utils/textureUploadCompatibility.ts`) before any decoded image is bound
+> to the GPU, using the live `renderer.capabilities.maxTextureSize` rather than
+> a new quality-tier field. A bounded, verbose-mode-only GPU visible-pixel probe
+> (`src/utils/sourceToPixelProbe.ts`) proves the bound texture renders non-empty
+> pixels without ever reading back full image bytes. The current `Fraktal.png`
+> and `Akt 27.png` importer setup (`customer-artworks/inbox/`,
+> `customer-artworks/museum-hub.json`, `scripts/import-artworks.mjs`) was left
+> untouched; no lighting, material, or `PaintingMaterial` change was made
+> (Phase 4 remains future work, gated on this proof). `npm run lint`,
+> `npm run build:typecheck`, `npm run build`, `npm run validate:museum-hub`,
+> `npm run test:frame-budget`, and `npm run docs:check-config-authority` all
+> passed. An automated code review of this change flagged one unrelated,
+> pre-existing issue — `DestinationRouter.runTransition`'s rollback path
+> re-enters the previous destination without re-running `prepare()` — which is
+> out of scope for this pixel-recovery change and was intentionally left
+> unmodified. See `FINDINGS.md § v0.92` for the as-built detail and validation
+> log.
 
 ### What is known, and what is not
 
@@ -60,6 +76,12 @@ editing, a dependency, or a lighting workaround.
 artwork in the original failing environment. A screenshot, importer success, or
 LoadingManager completion alone is not evidence.
 
+**Status: not performed as a separate manual pass.** No headless-browser
+capture across `file://`/Vite/Pages-base was run in this sandbox. Instead, the
+Phase 2 `source-to-pixel-outcome` diagnostic (below) makes this reproduction
+step available on demand in any real environment going forward, so a future
+regression can be triaged without a bespoke investigation.
+
 #### Phase 1 — Make the current importer output a verifiable asset contract
 
 1. Preserve the v0.91 script-relative bundle envelope and legacy array fallback,
@@ -93,6 +115,18 @@ LoadingManager completion alone is not evidence.
 first failed stage, while a real current artwork has a recorded successful
 source-to-pixel result in both routes.
 
+**Status: implemented (v0.92).** `src/utils/sourceToPixelOutcome.ts` defines the
+shared contract; `TextureManager.loadArtworkAlbedo`/`recordAlbedoOutcome`
+(gallery) and `MainMuseumHub.resolveSlotImage`/`recordHubSourceToPixelOutcome`
+(hub) record one terminal outcome per artwork naming the first failed stage on
+failure, or full source-to-pixel proof on success. The bounded visible-pixel
+probe (`src/utils/sourceToPixelProbe.ts`) runs through `HubRoomRenderer.upsertSlot`
+and `TextureManager`'s verbose-mode probe call, gated to verbose diagnostics
+mode so it never adds a GPU-stalling readback to default visitor traffic.
+Candidate-token race safety (item 3) and the importer bundle validator
+(Phase 1) were already covered by the v0.91 shared candidate resolution and
+existing importer checks; no changes were needed there.
+
 #### Phase 3 — Make decoded images compatible with the active device
 
 1. Use the live renderer capability and an explicit quality-tier cap before
@@ -107,6 +141,16 @@ source-to-pixel result in both routes.
 **Acceptance criterion:** an over-limit PNG produces either visible downscaled
 customer pixels or a specific unsupported diagnostic, never an unexplained grey
 plane.
+
+**Status: implemented (v0.92).** `src/utils/textureUploadCompatibility.ts`
+(`planTextureUploadFit`/`createCompatibleTextureImage`) computes the fit
+against the live `renderer.capabilities.maxTextureSize`, draws one bounded
+canvas downscale only when required, and never upscales. Both
+`TextureManager.loadForRole` (gallery) and `HubRoomRenderer.imageTexture`
+(hub) apply it — including on the embedded fallback candidate, since both
+routes route every candidate through the same loader/texture path — before the
+image is bound to the GPU, and log a `texture-downscaled`/`hub-slot-texture-downscaled`
+diagnostic when a downscale was applied.
 
 #### Phase 4 — Audit fidelity only after pixels are proven
 
@@ -124,6 +168,11 @@ plane.
 **Acceptance criterion:** source pixels, raw albedo, and final output retain
 recognizable colour and detail for the current PNGs; material work never turns a
 missing image into a false success.
+
+**Status: future work, intentionally not started.** This v0.92 change proves
+and repairs the source→decode→GPU→visible-pixels path only. It applies no
+lighting, material, or fidelity change. Phase 4 remains gated on live evidence
+from the new outcome/probe records above.
 
 ### Verification and documentation gates
 
