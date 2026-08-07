@@ -984,7 +984,7 @@ export class GalleryManager {
     const preset = this.currentPreset;
     if (!artwork || !preset) return false;
 
-    const albedoUrl = artwork.image;
+    const albedoUrl = this.textureManager.getArtworkAlbedoSelection(artwork)?.selectedUrl ?? artwork.image;
     const fallbackAlbedo = this.textureManager.get(albedoUrl);
     if (!fallbackAlbedo) {
       this.diagnostics.warn('warm-gpu', 'Cannot warm artwork because albedo is not cached', {
