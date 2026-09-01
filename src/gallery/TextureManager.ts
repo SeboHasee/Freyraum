@@ -9,8 +9,13 @@ import {
   type ArtworkImageUrlType,
 } from '../utils/artworkImageSources';
 import { createCompatibleTextureImage, type TextureUploadFit } from '../utils/textureUploadCompatibility';
-import { probeTextureVisiblePixels } from '../utils/sourceToPixelProbe';
-import { recordSourceToPixelOutcome } from '../utils/sourceToPixelOutcome';
+import { probeTextureVisiblePixels, type VisiblePixelProbeResult } from '../utils/sourceToPixelProbe';
+import {
+  getRuntimeProtocol,
+  recordSourceToPixelOutcome,
+  shouldRetryEmbeddedFallbackAfterPostUploadFailure,
+  shouldRunVisiblePixelProbe,
+} from '../utils/sourceToPixelOutcome';
 
 export interface ArtworkAlbedoSelection {
   selectedUrl: string;
@@ -168,9 +173,11 @@ export class TextureManager {
     const sourcePlan = resolveArtworkImageSources(artwork);
     const primary = sourcePlan.primary;
     const existingSelection = this.artworkAlbedoSelections.get(artwork.id);
-    if (primary) {
-      const existingTexture = this.cache.get(`albedo::${primary.resolvedUrl}`);
-      if (existingSelection && existingTexture) return existingTexture;
+    if (existingSelection) {
+      const existingTexture =
+        this.cache.get(`albedo::${existingSelection.selectedUrl}`)
+        ?? (primary ? this.cache.get(`albedo::${primary.resolvedUrl}`) : undefined);
+      if (existingTexture) return existingTexture;
     }
     const startedAt = this.now();
     if (!primary) {
@@ -191,6 +198,7 @@ export class TextureManager {
         route: 'gallery',
         artworkId: artwork.id,
         bundleId: null,
+        runtimeProtocol: getRuntimeProtocol(),
         candidateMode: null,
         resolvedUrlType: null,
         usedEmbeddedFallback: false,
@@ -212,6 +220,151 @@ export class TextureManager {
 
     const primaryTexture = await this.loadForRole(primary.resolvedUrl, 'albedo');
     if (!this.isFallback(primary.resolvedUrl, 'albedo')) {
+      const primaryProbe = this.probeArtworkTexture(primaryTexture, primary.resolvedUrlType);
+      const shouldRetryAfterPrimaryPostUploadFailure = shouldRetryEmbeddedFallbackAfterPostUploadFailure(
+        {
+          runtimeProtocol: getRuntimeProtocol(),
+          resolvedUrlType: primary.resolvedUrlType,
+          debugEnabled: this.diagnostics.isDebugEnabled(),
+        },
+        !!sourcePlan.fallback
+      );
+      if (primaryProbe.failureReason && shouldRetryAfterPrimaryPostUploadFailure && sourcePlan.fallback) {
+        const fallback = sourcePlan.fallback;
+        const primaryFailure = `${primary.mode}:visible-pixel-probe:${primaryProbe.failureReason}`;
+        this.diagnostics.warn('artwork-albedo-retry', 'Declared artwork image failed after GPU upload; retrying embedded fallback', {
+          artworkId: artwork.id,
+          bundleId: primary.bundleId,
+          declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+          fallbackImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+          declaredImageUrlType: primary.declaredUrlType,
+          fallbackImageUrlType: fallback.resolvedUrlType,
+          fallbackReason: primaryFailure,
+          visibleProbe: primaryProbe.visibleProbe,
+        });
+        const fallbackTexture = await this.loadForRole(fallback.resolvedUrl, 'albedo');
+        if (!this.isFallback(fallback.resolvedUrl, 'albedo')) {
+          const fallbackProbe = this.probeArtworkTexture(fallbackTexture, fallback.resolvedUrlType);
+          if (!fallbackProbe.failureReason) {
+            this.promoteArtworkAlbedo(
+              primary.resolvedUrl,
+              fallbackTexture,
+              this.uploadFits.get(`albedo::${fallback.resolvedUrl}`) ?? null
+            );
+            this.artworkAlbedoSelections.set(artwork.id, {
+              selectedUrl: fallback.resolvedUrl,
+              selectedUrlType: fallback.resolvedUrlType,
+              declaredUrl: primary.declaredUrl,
+              declaredUrlType: primary.declaredUrlType,
+              sourceMode: fallback.mode,
+              bundleId: fallback.bundleId,
+              usedEmbeddedFallback: true,
+              attemptedEmbeddedFallback: true,
+              generatedFallback: false,
+            });
+            this.diagnostics.info('artwork-albedo-fallback', 'Artwork albedo resolved through embedded fallback', {
+              artworkId: artwork.id,
+              bundleId: fallback.bundleId,
+              declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+              resolvedImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+              declaredImageUrlType: primary.declaredUrlType,
+              resolvedImageUrlType: fallback.resolvedUrlType,
+            });
+            this.recordAlbedoOutcome(
+              artwork.id,
+              fallback.resolvedUrl,
+              fallback.bundleId,
+              fallback.mode,
+              fallback.resolvedUrlType,
+              {
+                usedEmbeddedFallback: true,
+                attemptedEmbeddedFallback: true,
+                startedAt,
+                texture: fallbackTexture,
+                visibleProbe: fallbackProbe.visibleProbe,
+              }
+            );
+            return fallbackTexture;
+          }
+          this.installGeneratedFallbackTexture(primary.resolvedUrl, artwork.id);
+          this.artworkAlbedoSelections.set(artwork.id, {
+            selectedUrl: primary.resolvedUrl,
+            selectedUrlType: primary.resolvedUrlType,
+            declaredUrl: primary.declaredUrl,
+            declaredUrlType: primary.declaredUrlType,
+            sourceMode: primary.mode,
+            bundleId: primary.bundleId,
+            usedEmbeddedFallback: false,
+            attemptedEmbeddedFallback: true,
+            generatedFallback: true,
+          });
+          this.recordFailedAlbedoOutcome(artwork.id, {
+            bundleId: fallback.bundleId,
+            candidateMode: fallback.mode,
+            resolvedUrlType: fallback.resolvedUrlType,
+            usedEmbeddedFallback: true,
+            attemptedEmbeddedFallback: true,
+            startedAt,
+            stage: 'visible-pixel-probe',
+            failureReason: `${fallback.mode}:visible-pixel-probe:${fallbackProbe.failureReason}`,
+            fit: this.uploadFits.get(`albedo::${fallback.resolvedUrl}`) ?? null,
+            visibleProbe: fallbackProbe.visibleProbe,
+          });
+          return this.cache.get(`albedo::${primary.resolvedUrl}`)!;
+        }
+        this.installGeneratedFallbackTexture(primary.resolvedUrl, artwork.id);
+        this.artworkAlbedoSelections.set(artwork.id, {
+          selectedUrl: primary.resolvedUrl,
+          selectedUrlType: primary.resolvedUrlType,
+          declaredUrl: primary.declaredUrl,
+          declaredUrlType: primary.declaredUrlType,
+          sourceMode: primary.mode,
+          bundleId: primary.bundleId,
+          usedEmbeddedFallback: false,
+          attemptedEmbeddedFallback: true,
+          generatedFallback: true,
+        });
+        this.recordFailedAlbedoOutcome(artwork.id, {
+          bundleId: primary.bundleId,
+          candidateMode: primary.mode,
+          resolvedUrlType: primary.resolvedUrlType,
+          usedEmbeddedFallback: false,
+          attemptedEmbeddedFallback: true,
+          startedAt,
+          stage: 'visible-pixel-probe',
+          failureReason: primaryFailure,
+          fit: this.uploadFits.get(`albedo::${primary.resolvedUrl}`) ?? null,
+          visibleProbe: primaryProbe.visibleProbe,
+        });
+        return this.cache.get(`albedo::${primary.resolvedUrl}`)!;
+      }
+      if (primaryProbe.failureReason) {
+        this.installGeneratedFallbackTexture(primary.resolvedUrl, artwork.id);
+        this.artworkAlbedoSelections.set(artwork.id, {
+          selectedUrl: primary.resolvedUrl,
+          selectedUrlType: primary.resolvedUrlType,
+          declaredUrl: primary.declaredUrl,
+          declaredUrlType: primary.declaredUrlType,
+          sourceMode: primary.mode,
+          bundleId: primary.bundleId,
+          usedEmbeddedFallback: false,
+          attemptedEmbeddedFallback: false,
+          generatedFallback: true,
+        });
+        this.recordFailedAlbedoOutcome(artwork.id, {
+          bundleId: primary.bundleId,
+          candidateMode: primary.mode,
+          resolvedUrlType: primary.resolvedUrlType,
+          usedEmbeddedFallback: false,
+          attemptedEmbeddedFallback: false,
+          startedAt,
+          stage: 'visible-pixel-probe',
+          failureReason: `${primary.mode}:visible-pixel-probe:${primaryProbe.failureReason}`,
+          fit: this.uploadFits.get(`albedo::${primary.resolvedUrl}`) ?? null,
+          visibleProbe: primaryProbe.visibleProbe,
+        });
+        return this.cache.get(`albedo::${primary.resolvedUrl}`)!;
+      }
       this.artworkAlbedoSelections.set(artwork.id, {
         selectedUrl: primary.resolvedUrl,
         selectedUrlType: primary.resolvedUrlType,
@@ -228,6 +381,7 @@ export class TextureManager {
         attemptedEmbeddedFallback: false,
         startedAt,
         texture: primaryTexture,
+        visibleProbe: primaryProbe.visibleProbe,
       });
       return primaryTexture;
     }
@@ -244,38 +398,77 @@ export class TextureManager {
       });
       const fallbackTexture = await this.loadForRole(fallback.resolvedUrl, 'albedo');
       if (!this.isFallback(fallback.resolvedUrl, 'albedo')) {
-        this.promoteArtworkAlbedo(primary.resolvedUrl, fallbackTexture);
+        const fallbackProbe = this.probeArtworkTexture(fallbackTexture, fallback.resolvedUrlType);
+        if (!fallbackProbe.failureReason) {
+          this.promoteArtworkAlbedo(
+            primary.resolvedUrl,
+            fallbackTexture,
+            this.uploadFits.get(`albedo::${fallback.resolvedUrl}`) ?? null
+          );
+          this.artworkAlbedoSelections.set(artwork.id, {
+            selectedUrl: fallback.resolvedUrl,
+            selectedUrlType: fallback.resolvedUrlType,
+            declaredUrl: primary.declaredUrl,
+            declaredUrlType: primary.declaredUrlType,
+            sourceMode: fallback.mode,
+            bundleId: fallback.bundleId,
+            usedEmbeddedFallback: true,
+            attemptedEmbeddedFallback: true,
+            generatedFallback: false,
+          });
+          this.diagnostics.info('artwork-albedo-fallback', 'Artwork albedo resolved through embedded fallback', {
+            artworkId: artwork.id,
+            bundleId: fallback.bundleId,
+            declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+            resolvedImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+            declaredImageUrlType: primary.declaredUrlType,
+            resolvedImageUrlType: fallback.resolvedUrlType,
+          });
+          this.recordAlbedoOutcome(
+            artwork.id,
+            fallback.resolvedUrl,
+            fallback.bundleId,
+            fallback.mode,
+            fallback.resolvedUrlType,
+            {
+              usedEmbeddedFallback: true,
+              attemptedEmbeddedFallback: true,
+              startedAt,
+              texture: fallbackTexture,
+              visibleProbe: fallbackProbe.visibleProbe,
+            }
+          );
+          return fallbackTexture;
+        }
+        this.installGeneratedFallbackTexture(primary.resolvedUrl, artwork.id);
         this.artworkAlbedoSelections.set(artwork.id, {
-          selectedUrl: fallback.resolvedUrl,
-          selectedUrlType: fallback.resolvedUrlType,
+          selectedUrl: primary.resolvedUrl,
+          selectedUrlType: primary.resolvedUrlType,
           declaredUrl: primary.declaredUrl,
           declaredUrlType: primary.declaredUrlType,
-          sourceMode: fallback.mode,
+          sourceMode: primary.mode,
+          bundleId: primary.bundleId,
+          usedEmbeddedFallback: false,
+          attemptedEmbeddedFallback: true,
+          generatedFallback: true,
+        });
+        this.recordFailedAlbedoOutcome(artwork.id, {
           bundleId: fallback.bundleId,
+          candidateMode: fallback.mode,
+          resolvedUrlType: fallback.resolvedUrlType,
           usedEmbeddedFallback: true,
           attemptedEmbeddedFallback: true,
-          generatedFallback: false,
+          startedAt,
+          stage: 'visible-pixel-probe',
+          failureReason: `${fallback.mode}:visible-pixel-probe:${fallbackProbe.failureReason}`,
+          fit: this.uploadFits.get(`albedo::${fallback.resolvedUrl}`) ?? null,
+          visibleProbe: fallbackProbe.visibleProbe,
         });
-        this.diagnostics.info('artwork-albedo-fallback', 'Artwork albedo resolved through embedded fallback', {
-          artworkId: artwork.id,
-          bundleId: fallback.bundleId,
-          declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
-          resolvedImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
-          declaredImageUrlType: primary.declaredUrlType,
-          resolvedImageUrlType: fallback.resolvedUrlType,
-        });
-        this.recordAlbedoOutcome(
-          artwork.id,
-          fallback.resolvedUrl,
-          fallback.bundleId,
-          fallback.mode,
-          fallback.resolvedUrlType,
-          { usedEmbeddedFallback: true, attemptedEmbeddedFallback: true, startedAt, texture: fallbackTexture }
-        );
-        return fallbackTexture;
+        return this.cache.get(`albedo::${primary.resolvedUrl}`)!;
       }
     }
 
+    this.installGeneratedFallbackTexture(primary.resolvedUrl, artwork.id);
     this.artworkAlbedoSelections.set(artwork.id, {
       selectedUrl: primary.resolvedUrl,
       selectedUrlType: primary.resolvedUrlType,
@@ -287,27 +480,19 @@ export class TextureManager {
       attemptedEmbeddedFallback: !!fallback,
       generatedFallback: true,
     });
-    recordSourceToPixelOutcome(this.diagnostics, {
-      route: 'gallery',
-      artworkId: artwork.id,
+    this.recordFailedAlbedoOutcome(artwork.id, {
       bundleId: primary.bundleId,
-      candidateMode: null,
-      resolvedUrlType: null,
+      candidateMode: fallback?.mode ?? primary.mode,
+      resolvedUrlType: fallback?.resolvedUrlType ?? primary.resolvedUrlType,
       usedEmbeddedFallback: false,
       attemptedEmbeddedFallback: !!fallback,
-      result: 'failed',
-      firstFailedStage: 'request',
+      startedAt,
+      stage: 'request',
       failureReason: fallback ? 'primary-and-fallback-load-failed' : 'primary-load-failed-no-fallback',
-      elapsedMs: Math.round(this.now() - startedAt),
-      sourceWidth: null,
-      sourceHeight: null,
-      uploadWidth: null,
-      uploadHeight: null,
-      downscaleApplied: false,
-      rendererMaxTextureSize: this.maxTextureSize || null,
+      fit: null,
       visibleProbe: null,
     });
-    return primaryTexture;
+    return this.cache.get(`albedo::${primary.resolvedUrl}`) ?? primaryTexture;
   }
 
   /**
@@ -326,17 +511,15 @@ export class TextureManager {
       attemptedEmbeddedFallback: boolean;
       startedAt: number;
       texture: THREE.Texture;
+      visibleProbe?: VisiblePixelProbeResult | null;
     }
   ): void {
     const fit = this.uploadFits.get(`albedo::${resolvedUrl}`) ?? null;
-    const visibleProbe =
-      this.renderer && this.diagnostics.isDebugEnabled()
-        ? probeTextureVisiblePixels(this.renderer, options.texture)
-        : null;
     recordSourceToPixelOutcome(this.diagnostics, {
       route: 'gallery',
       artworkId,
       bundleId,
+      runtimeProtocol: getRuntimeProtocol(),
       candidateMode,
       resolvedUrlType,
       usedEmbeddedFallback: options.usedEmbeddedFallback,
@@ -351,7 +534,7 @@ export class TextureManager {
       uploadHeight: fit?.targetHeight ?? null,
       downscaleApplied: fit?.needsDownscale ?? false,
       rendererMaxTextureSize: this.maxTextureSize || null,
-      visibleProbe,
+      visibleProbe: options.visibleProbe ?? null,
     });
   }
 
@@ -394,53 +577,72 @@ export class TextureManager {
       loader.load(
         url,
         (texture) => {
-          this.prepareTexture(texture, role);
-          const img = texture.image as HTMLImageElement | ImageBitmap | { width?: number; height?: number };
-          const sourceWidth = 'naturalWidth' in img ? (img.naturalWidth || img.width || 0) : (img.width || 0);
-          const sourceHeight = 'naturalHeight' in img ? (img.naturalHeight || img.height || 0) : (img.height || 0);
+          try {
+            this.prepareTexture(texture, role);
+            const img = texture.image as HTMLImageElement | ImageBitmap | { width?: number; height?: number };
+            const sourceWidth = 'naturalWidth' in img ? (img.naturalWidth || img.width || 0) : (img.width || 0);
+            const sourceHeight = 'naturalHeight' in img ? (img.naturalHeight || img.height || 0) : (img.height || 0);
 
-          // v0.92: apply a shared capability-aware downscale BEFORE the
-          // texture is cached/uploaded, instead of only warning after an
-          // oversized upload already happened.
-          const compatible = createCompatibleTextureImage(
-            img as CanvasImageSource,
-            sourceWidth,
-            sourceHeight,
-            this.maxTextureSize
-          );
-          if (compatible.downscaleApplied) {
-            texture.image = compatible.image;
-            texture.needsUpdate = true;
-            this.diagnostics.warn('texture-downscaled', `Downscaled oversized ${role} texture to fit device capability`, {
-              role,
-              url: urlForLog,
-              urlType,
+            // v0.92: apply a shared capability-aware downscale BEFORE the
+            // texture is cached/uploaded, instead of only warning after an
+            // oversized upload already happened.
+            const compatible = createCompatibleTextureImage(
+              img as CanvasImageSource,
               sourceWidth,
               sourceHeight,
-              uploadWidth: compatible.fit.targetWidth,
-              uploadHeight: compatible.fit.targetHeight,
-              maxTextureSize: this.maxTextureSize,
-            });
-          } else if (compatible.fit.needsDownscale) {
-            this.warnIfOversized(role, urlForLog, urlType, sourceWidth, sourceHeight);
-          }
-          this.uploadFits.set(cacheKey, compatible.fit);
+              this.maxTextureSize
+            );
+            if (compatible.downscaleApplied) {
+              texture.image = compatible.image;
+              texture.needsUpdate = true;
+              this.diagnostics.warn('texture-downscaled', `Downscaled oversized ${role} texture to fit device capability`, {
+                role,
+                url: urlForLog,
+                urlType,
+                sourceWidth,
+                sourceHeight,
+                uploadWidth: compatible.fit.targetWidth,
+                uploadHeight: compatible.fit.targetHeight,
+                maxTextureSize: this.maxTextureSize,
+              });
+            } else if (compatible.fit.needsDownscale) {
+              this.warnIfOversized(role, urlForLog, urlType, sourceWidth, sourceHeight);
+            }
+            this.uploadFits.set(cacheKey, compatible.fit);
 
-          this.cache.set(cacheKey, texture);
-          // v0.25 T-03: proactively push the decoded texture to the GPU so the
-          // compositor can drain the upload queue before the warm render loop.
-          this.renderer?.initTexture(texture);
-          this.diagnostics.info('load-success', `Loaded ${role} texture`, {
-            url: urlForLog,
-            urlType,
-            width: compatible.fit.targetWidth,
-            height: compatible.fit.targetHeight,
-            sourceWidth,
-            sourceHeight,
-            downscaleApplied: compatible.downscaleApplied,
-            fallbackUsed: false,
-          });
-          resolve(texture);
+            // v0.25 T-03: proactively push the decoded texture to the GPU so the
+            // compositor can drain the upload queue before the warm render loop.
+            this.renderer?.initTexture(texture);
+            this.cache.set(cacheKey, texture);
+            this.fallbackKeys.delete(cacheKey);
+            this.diagnostics.info('load-success', `Loaded ${role} texture`, {
+              url: urlForLog,
+              urlType,
+              width: compatible.fit.targetWidth,
+              height: compatible.fit.targetHeight,
+              sourceWidth,
+              sourceHeight,
+              downscaleApplied: compatible.downscaleApplied,
+              fallbackUsed: false,
+            });
+            resolve(texture);
+          } catch (error) {
+            texture.dispose();
+            this.uploadFits.delete(cacheKey);
+            this.diagnostics.warn('load-fallback', `Failed to prepare ${role} texture for upload — creating generated fallback`, {
+              url: urlForLog,
+              urlType,
+              role,
+              failureStage: 'gpu-upload',
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+            const fallback = this.createFallbackTexture(url);
+            this.cache.set(cacheKey, fallback);
+            this.uploadFits.delete(cacheKey);
+            this.renderer?.initTexture(fallback);
+            this.fallbackKeys.add(cacheKey);
+            resolve(fallback);
+          }
         },
         undefined,
         (error) => {
@@ -533,14 +735,88 @@ export class TextureManager {
     this.uploadFits.clear();
   }
 
-  private promoteArtworkAlbedo(primaryUrl: string, texture: THREE.Texture): void {
+  private promoteArtworkAlbedo(primaryUrl: string, texture: THREE.Texture, fit: TextureUploadFit | null): void {
     const cacheKey = `albedo::${primaryUrl}`;
     const existing = this.cache.get(cacheKey);
-    if (existing && existing !== texture && this.fallbackKeys.has(cacheKey)) {
+    if (existing && existing !== texture) {
       existing.dispose();
     }
     this.cache.set(cacheKey, texture);
     this.fallbackKeys.delete(cacheKey);
+    if (fit) {
+      this.uploadFits.set(cacheKey, fit);
+    } else {
+      this.uploadFits.delete(cacheKey);
+    }
+  }
+
+  private installGeneratedFallbackTexture(primaryUrl: string, seed: string): THREE.Texture {
+    const cacheKey = `albedo::${primaryUrl}`;
+    const existing = this.cache.get(cacheKey);
+    if (existing) existing.dispose();
+    const fallback = this.createFallbackTexture(seed);
+    this.cache.set(cacheKey, fallback);
+    this.uploadFits.delete(cacheKey);
+    this.fallbackKeys.add(cacheKey);
+    this.renderer?.initTexture(fallback);
+    return fallback;
+  }
+
+  private recordFailedAlbedoOutcome(
+    artworkId: string,
+    options: {
+      bundleId: string | null;
+      candidateMode: ArtworkImageSourceMode | null;
+      resolvedUrlType: ArtworkImageUrlType | null;
+      usedEmbeddedFallback: boolean;
+      attemptedEmbeddedFallback: boolean;
+      startedAt: number;
+      stage: 'candidate-selected' | 'request' | 'decode' | 'gpu-upload' | 'visible-pixel-probe';
+      failureReason: string;
+      fit: TextureUploadFit | null;
+      visibleProbe: VisiblePixelProbeResult | null;
+    }
+  ): void {
+    recordSourceToPixelOutcome(this.diagnostics, {
+      route: 'gallery',
+      artworkId,
+      bundleId: options.bundleId,
+      runtimeProtocol: getRuntimeProtocol(),
+      candidateMode: options.candidateMode,
+      resolvedUrlType: options.resolvedUrlType,
+      usedEmbeddedFallback: options.usedEmbeddedFallback,
+      attemptedEmbeddedFallback: options.attemptedEmbeddedFallback,
+      result: 'failed',
+      firstFailedStage: options.stage,
+      failureReason: options.failureReason,
+      elapsedMs: Math.round(this.now() - options.startedAt),
+      sourceWidth: options.fit?.sourceWidth ?? null,
+      sourceHeight: options.fit?.sourceHeight ?? null,
+      uploadWidth: options.fit?.targetWidth ?? null,
+      uploadHeight: options.fit?.targetHeight ?? null,
+      downscaleApplied: options.fit?.needsDownscale ?? false,
+      rendererMaxTextureSize: this.maxTextureSize || null,
+      visibleProbe: options.visibleProbe,
+    });
+  }
+
+  private probeArtworkTexture(
+    texture: THREE.Texture,
+    resolvedUrlType: ArtworkImageUrlType
+  ): { visibleProbe: VisiblePixelProbeResult | null; failureReason: string | null } {
+    const shouldProbe = shouldRunVisiblePixelProbe({
+      runtimeProtocol: getRuntimeProtocol(),
+      resolvedUrlType,
+      debugEnabled: this.diagnostics.isDebugEnabled(),
+    });
+    if (!shouldProbe || !this.renderer) {
+      return { visibleProbe: null, failureReason: null };
+    }
+    const visibleProbe = probeTextureVisiblePixels(this.renderer, texture);
+    return {
+      visibleProbe,
+      failureReason: visibleProbe.pass ? null : visibleProbe.reason ?? 'probe-failed',
+    };
   }
 
   private now(): number {

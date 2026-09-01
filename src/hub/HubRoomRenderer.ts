@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { MuseumHubResolution, ResolvedHubSlot, ResolvedHubWall } from '../config/museumHub';
 import type { QualityPreset } from '../config/quality';
+import type { ArtworkImageUrlType } from '../utils/artworkImageSources';
 import { roomWallNormal, roomWallPoint } from './projectiveGeometry';
 import {
   ArchitecturalSurfaceFactory,
@@ -11,6 +12,7 @@ import { getOptimalPixelRatio } from '../utils/performance';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import { createCompatibleTextureImage, type TextureUploadFit } from '../utils/textureUploadCompatibility';
 import { probeTextureVisiblePixels, type VisiblePixelProbeResult } from '../utils/sourceToPixelProbe';
+import { getRuntimeProtocol, shouldRunVisiblePixelProbe } from '../utils/sourceToPixelOutcome';
 
 interface SlotMeshState {
   pageIndex: number;
@@ -35,6 +37,8 @@ export interface SlotUpsertResult {
   /** Populated only when a new image texture was created during this call. */
   fit?: TextureUploadFit;
   visibleProbe?: VisiblePixelProbeResult;
+  failureStage?: 'gpu-upload' | 'visible-pixel-probe';
+  failureReason?: string;
 }
 
 const PLACEHOLDER_SIZE = 512;
@@ -205,7 +209,8 @@ export class HubRoomRenderer {
     slot: ResolvedHubSlot,
     wall: ResolvedHubWall,
     image: HTMLImageElement | null,
-    missingImage: boolean
+    missingImage: boolean,
+    sourceUrlType: ArtworkImageUrlType | null
   ): SlotUpsertResult {
     const state = this.ensureSlotState(slot);
     if (!state || !wall.room || !slot.selectable || !slot.artworkId) {
@@ -232,28 +237,60 @@ export class HubRoomRenderer {
         const built = this.imageTexture(image);
         targetTexture = built.texture;
         fit = built.fit;
+        try {
+          this.renderer.initTexture(targetTexture);
+        } catch (error) {
+          if (targetTexture !== state.artworkMesh.material.map) targetTexture.dispose();
+          const failureReason = error instanceof Error ? error.message : String(error);
+          this.diagnostics.warn('hub-slot-texture-upload-failed', 'Hub artwork texture failed during GPU upload', {
+            slotId: slot.id,
+            artworkId: slot.artworkId,
+            sourceUrlType,
+            fit,
+            failureReason,
+          });
+          return {
+            applied: true,
+            usedImage: false,
+            fit,
+            failureStage: 'gpu-upload',
+            failureReason,
+          };
+        }
+        const shouldProbe = shouldRunVisiblePixelProbe({
+          runtimeProtocol: getRuntimeProtocol(),
+          resolvedUrlType: sourceUrlType,
+          debugEnabled: this.diagnostics.isDebugEnabled(),
+        });
+        if (shouldProbe) {
+          visibleProbe = probeTextureVisiblePixels(this.renderer, targetTexture);
+          if (!visibleProbe.pass) {
+            if (targetTexture !== state.artworkMesh.material.map) targetTexture.dispose();
+            this.diagnostics.warn('hub-slot-visible-probe-failed', 'Hub artwork texture bound but produced no visible pixels', {
+              slotId: slot.id,
+              artworkId: slot.artworkId,
+              sourceUrlType,
+              probe: visibleProbe,
+            });
+            return {
+              applied: true,
+              usedImage: false,
+              fit,
+              visibleProbe,
+              failureStage: 'visible-pixel-probe',
+              failureReason: visibleProbe.reason ?? 'probe-failed',
+            };
+          }
+        }
       } else {
         targetTexture = this.placeholderTexture(slot.displayLabel);
+        this.renderer.initTexture(targetTexture);
       }
       if (state.textureKind === 'image') {
         state.artworkMesh.material.map?.dispose();
       }
       state.artworkMesh.material.map = targetTexture;
       state.artworkMesh.material.needsUpdate = true;
-      this.renderer.initTexture(targetTexture);
-      // v0.92: bounded developer/CI proof that the bound texture actually
-      // produced non-empty GPU output. Only runs in verbose diagnostics mode
-      // to avoid a GPU-stalling readback on every visitor's page load.
-      if (fit && this.diagnostics.isDebugEnabled()) {
-        visibleProbe = probeTextureVisiblePixels(this.renderer, targetTexture);
-        if (!visibleProbe.pass) {
-          this.diagnostics.warn('hub-slot-visible-probe-failed', 'Hub artwork texture bound but produced no visible pixels', {
-            slotId: slot.id,
-            artworkId: slot.artworkId,
-            probe: visibleProbe,
-          });
-        }
-      }
       state.textureKey = textureKey;
       state.textureKind = missingImage ? 'placeholder' : 'image';
     }

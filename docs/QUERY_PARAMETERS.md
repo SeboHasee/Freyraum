@@ -88,14 +88,17 @@ Notes:
 ### Grey-artwork incident capture
 
 There is no separate query parameter. Use `?debug=verbose&hubDebug=1` when the
-museum hub shows a title-bearing placeholder, then export the diagnostics API
-data below. Relevant current records are:
+museum hub shows missing, blank, or fallback artwork surfaces. Opening the root
+`/home/runner/work/Freyraum/Freyraum/index.html` now preserves that query/hash
+when it forwards into `customer-preview/app.html`. Relevant current records are:
 
 - `hub:source-to-pixel-outcome` / `texture:source-to-pixel-outcome` — one
   terminal record per artwork per route naming the resolved candidate,
-  first failed stage (if any), source/upload dimensions, and — in verbose mode
-  — a bounded GPU visible-pixel probe result. This is the primary record to
-  check first; see `plan.md § v0.92`.
+  first failed stage (if any), runtime protocol, source/upload dimensions, and
+  the bounded GPU visible-pixel proof result when that proof is required. This
+  is the primary record to check first; local `file://` sessions now treat a
+  blank post-upload probe as a real failure and may retry `webglImage`; see
+  `plan.md § v0.93`.
 - `hub:artwork-source-resolved`
 - `hub:artwork-image-retry`
 - `hub:artwork-image-missing`
@@ -109,7 +112,7 @@ data below. Relevant current records are:
 Capture the browser Network log and console errors with the export. Do not
 include raw `data:image/...` payloads in issue reports; runtime diagnostics
 redact them. The route-aware source-to-pixel recovery procedure is in
-`plan.md § v0.92`.
+`plan.md § v0.93`.
 
 ## localStorage keys
 

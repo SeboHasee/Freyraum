@@ -692,8 +692,8 @@ export class GalleryManager {
     const presentation = this.resolvePresentation(index);
     const presentationProfile = ARTWORK_PRESENTATION_PROFILES[presentation];
     const sourcePlan = resolveArtworkImageSources(artwork);
-    const albedoUrl = sourcePlan.primary?.resolvedUrl ?? artwork.image;
     const albedoSelection = this.textureManager.getArtworkAlbedoSelection(artwork);
+    const albedoUrl = albedoSelection?.selectedUrl ?? sourcePlan.primary?.resolvedUrl ?? artwork.image;
     const albedo = this.textureManager.get(albedoUrl);
 
     const token = ++this.artworkLoadToken;

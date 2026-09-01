@@ -15,7 +15,8 @@ This guide documents the current customer workflow only.
 4. Run:
    - macOS: `Update Gallery.command`
    - Windows: `Update Gallery.bat`
-5. Open `customer-preview/app.html`.
+5. Open `index.html` for the one-click launcher, or open
+   `customer-preview/app.html` directly.
 
 ## Publish to GitHub Pages
 
@@ -86,11 +87,12 @@ copies into `customer-artworks/inbox/`.
 - If preview content looks stale, rerun update and refresh the page.
 - If a painting appears as a grey FREYRAUM-style fallback or a hub title
   placeholder, keep the generated `customer-artworks.js` and `images/` output,
-  then capture the diagnostics described in `docs/QUERY_PARAMETERS.md`. Do not
-  replace the original image or change room lighting until the failed source
-  stage is identified; see `plan.md § v0.92`. A successful update report only
-  proves that files were generated, so reproduce the same output in the local
-  preview and deployed build before importing again.
+  then capture the diagnostics described in `docs/QUERY_PARAMETERS.md`. Local
+  `file://` preview now treats a blank post-upload artwork surface as a real
+  failure and retries the embedded `webglImage`, so a persistent blank plane
+  means both the primary source and its recovery path need inspection. Open the
+  preview with the debug query documented in `docs/QUERY_PARAMETERS.md`, then
+  export the route diagnostics before importing again; see `plan.md § v0.93`.
 
 ## Related docs
 

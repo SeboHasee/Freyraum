@@ -109,15 +109,21 @@
       Hinweis: Diese Datei öffnet <code>customer-preview/app.html</code>, eine statisch gebaute Version,
       die ohne lokalen Entwicklungsserver per Doppelklick funktioniert.
     </p>
-    <a href="./customer-preview/app.html">FREYRAUM Vorschau öffnen →</a>
+    <a href="./customer-preview/app.html" id="preview-link">FREYRAUM Vorschau öffnen →</a>
     <p id="redirect-status" aria-live="polite">Automatische Weiterleitung in Kürze …</p>
     <button type="button" id="cancel-redirect">Automatische Weiterleitung stoppen</button>
   </main>
   <script>
     const statusEl = document.getElementById('redirect-status');
     const cancelBtn = document.getElementById('cancel-redirect');
+    const previewLink = document.getElementById('preview-link');
+    const previewUrl = new URL('./customer-preview/app.html', window.location.href);
+    previewUrl.search = window.location.search;
+    previewUrl.hash = window.location.hash;
+    const previewHref = previewUrl.toString();
+    if (previewLink) previewLink.href = previewHref;
     let redirectTimer = window.setTimeout(() => {
-      window.location.href = './customer-preview/app.html';
+      window.location.href = previewHref;
     }, 1500);
     cancelBtn?.addEventListener('click', () => {
       window.clearTimeout(redirectTimer);

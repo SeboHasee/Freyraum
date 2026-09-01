@@ -31,13 +31,18 @@ the embedded fallback recovers it without exposing placeholder mode, so
 hub/gallery artwork-source regressions fail even when the final pixels still
 match the baseline.
 
-For the persistent-grey-artwork recovery, retain that existing primary-failure /
-embedded-fallback fixture and add the v0.92 gates before declaring a repair
-complete: the real current PNG bundle in `file://`, Vite, and Pages-base
-delivery; preview/public/dist asset-contract checks; typed final-placeholder and
-delayed-decode diagnostics; source-to-pixel binding proof; and
-capability-limited image handling. These are planned gates, not claims about
-the current implementation.
+For the persistent-grey-artwork recovery, retain the existing primary-failure /
+embedded-fallback fixture **and** the new v0.93 post-upload blank fixture. The
+visual harness now needs to prove both:
+
+- request/decode failure still recovers through `webglImage`;
+- a decoded `file://` primary that reaches upload but produces blank pixels also
+  recovers through `webglImage` before the runtime accepts success.
+
+Keep the broader gates as well: the real current PNG bundle in `file://`, Vite,
+and Pages-base delivery; preview/public/dist asset-contract checks; typed final
+placeholder and delayed-decode diagnostics; source-to-pixel binding proof; and
+capability-limited image handling.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.

@@ -1,10 +1,20 @@
 # FREYRAUM Plan
 
-## Planned — file:// local-preview blank-artwork recovery (v0.93, 2026-09-01)
+## Implemented — file:// local-preview blank-artwork recovery (v0.93, 2026-09-01)
 
-> **Planning/docs only.** This section analyzes the user-provided local screenshot
-> against the current source tree. No runtime, importer, or generated-asset
-> change was made in this planning pass.
+> **Status update:** Root `/home/runner/work/Freyraum/Freyraum/index.html` now
+> forwards `location.search` and `location.hash` into
+> `customer-preview/app.html`, so local debug/support runs keep
+> `?debug=verbose&hubDebug=1`. Shared visible-pixel proof is now authoritative
+> whenever verbose diagnostics request it and whenever a local `file://`
+> artwork candidate resolves to a `file-url`; if that post-upload proof fails,
+> both runtime routes retry the embedded `webglImage` before falling through to
+> the truthful placeholder/fallback state. The gallery now also resolves the
+> active albedo from the selected winning source URL instead of assuming the
+> declared primary URL. Regression coverage was extended in
+> `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`
+> and `/home/runner/work/Freyraum/Freyraum/scripts/visual-regression.mjs`.
+> Validation is recorded in `CHANGELOG.md`.
 
 ### 1. Screenshot-backed diagnosis
 

@@ -35,6 +35,9 @@ const FIXTURE_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#7089a3\"/><stop offset=\"1\" stop-color=\"#d8dddb\"/></linearGradient></defs><rect width=\"512\" height=\"512\" fill=\"url(#g)\"/><circle cx=\"256\" cy=\"256\" r=\"140\" fill=\"rgba(255,255,255,0.35)\"/></svg>'
 )}`;
 const MISSING_FIXTURE_IMAGE = './images/missing-fixture.png';
+const BLANK_FIXTURE_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><rect width=\"512\" height=\"512\" fill=\"rgba(255,255,255,0)\"/></svg>'
+)}`;
 
 const ARTWORK_STEPS = [0, 1, 2];
 const ZOOM_STATES = ['overview', 'reset', 'inspection'];
@@ -122,6 +125,34 @@ const HUB_ASPECT_FIXTURES = {
     },
   ],
 };
+
+const POST_UPLOAD_BLANK_FIXTURES = [
+  {
+    id: 'fixture-blank-primary',
+    title: 'Fixture Blank Primary',
+    image: BLANK_FIXTURE_IMAGE,
+    webglImage: FIXTURE_IMAGE,
+    dimensions: { width: 1200, height: 1600 },
+  },
+  {
+    id: 'fixture-visible-companion',
+    title: 'Fixture Visible Companion',
+    image: FIXTURE_IMAGE,
+    dimensions: { width: 1400, height: 1400 },
+  },
+  {
+    id: 'fixture-visible-landscape',
+    title: 'Fixture Visible Landscape',
+    image: FIXTURE_IMAGE,
+    dimensions: { width: 1800, height: 1000 },
+  },
+  {
+    id: 'fixture-visible-wide',
+    title: 'Fixture Visible Wide',
+    image: FIXTURE_IMAGE,
+    dimensions: { width: 2400, height: 1000 },
+  },
+];
 
 function hubFixture(artworks) {
   return {
@@ -338,6 +369,24 @@ const states = [
     fixture: doorwayEdgeFixture('right'),
     expectHubArtworkFallback: 'fixture-square-a',
   },
+  {
+    name: 'hub__fixture__blank-primary-post-upload-fallback',
+    query: '?startup=entry-minimal&debug=verbose',
+    mode: 'hub',
+    viewport: DESKTOP_VIEWPORT,
+    hubSteps: [],
+    fixture: hubFixture(POST_UPLOAD_BLANK_FIXTURES),
+    expectHubArtworkFallback: 'fixture-blank-primary',
+    expectHubArtworkFallbackReasonIncludes: 'visible-pixel-probe',
+    expectSourceToPixelOutcome: {
+      scope: 'hub',
+      artworkId: 'fixture-blank-primary',
+      result: 'success',
+      candidateMode: 'embedded-webgl-fallback',
+      attemptedEmbeddedFallback: true,
+      resolvedUrlType: 'data-uri',
+    },
+  },
   ...(INCLUDE_HUB_DEBUG_CAPTURE
     ? [
         {
@@ -380,6 +429,24 @@ const states = [
     viewport: DESKTOP_VIEWPORT,
     fixture: fullMappedHubFixture(HUB_ASPECT_FIXTURES.square),
     activateArtworkId: 'fixture-square-a',
+  },
+  {
+    name: 'gallery__fixture__blank-primary-post-upload-fallback',
+    query: '?startup=entry-minimal&debug=verbose',
+    mode: 'gallery',
+    viewport: DESKTOP_VIEWPORT,
+    fixture: hubFixture(POST_UPLOAD_BLANK_FIXTURES),
+    activateArtworkId: 'fixture-blank-primary',
+    artworkStep: 0,
+    zoom: 'reset',
+    expectSourceToPixelOutcome: {
+      scope: 'texture',
+      artworkId: 'fixture-blank-primary',
+      result: 'success',
+      candidateMode: 'embedded-webgl-fallback',
+      attemptedEmbeddedFallback: true,
+      resolvedUrlType: 'data-uri',
+    },
   },
   ...ARTWORK_STEPS.flatMap((artworkStep) =>
     ZOOM_STATES.map((zoom) => ({
@@ -541,7 +608,7 @@ async function assertHubSceneBridge(page, stateName) {
   }
 }
 
-async function assertHubArtworkFallback(page, stateName, expectedArtworkId) {
+async function assertHubArtworkFallback(page, stateName, expectedArtworkId, expectedReasonIncludes) {
   const snapshot = await page.evaluate((artworkId) => {
     const element = document.querySelector(`.museum-hub__artwork[data-artwork-id="${artworkId}"]`);
     if (!(element instanceof HTMLElement)) return null;
@@ -565,8 +632,35 @@ async function assertHubArtworkFallback(page, stateName, expectedArtworkId) {
   if (!snapshot.fallbackReason?.startsWith('declared-image:')) {
     throw new Error(`${stateName}: fallback artwork slot ${expectedArtworkId} did not record the declared-image failure reason`);
   }
+  if (expectedReasonIncludes && !snapshot.fallbackReason?.includes(expectedReasonIncludes)) {
+    throw new Error(
+      `${stateName}: fallback artwork slot ${expectedArtworkId} did not record the expected "${expectedReasonIncludes}" failure detail`
+    );
+  }
   if (snapshot.hasMissingImageClass) {
     throw new Error(`${stateName}: fallback artwork slot ${expectedArtworkId} still exposes the missing-image placeholder state`);
+  }
+}
+
+async function assertSourceToPixelOutcome(page, stateName, expectation) {
+  const entries = await page.evaluate((artworkId) => {
+    return (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+      .filter((entry) => entry.event === 'source-to-pixel-outcome' && entry.data?.artworkId === artworkId)
+      .map((entry) => ({ scope: entry.scope, data: entry.data }));
+  }, expectation.artworkId);
+  const match = entries.find((entry) =>
+    entry.scope === expectation.scope
+    && (!('result' in expectation) || entry.data?.result === expectation.result)
+    && (!('candidateMode' in expectation) || entry.data?.candidateMode === expectation.candidateMode)
+    && (!('attemptedEmbeddedFallback' in expectation)
+      || entry.data?.attemptedEmbeddedFallback === expectation.attemptedEmbeddedFallback)
+    && (!('resolvedUrlType' in expectation) || entry.data?.resolvedUrlType === expectation.resolvedUrlType)
+    && (!expectation.failureReasonIncludes || String(entry.data?.failureReason ?? '').includes(expectation.failureReasonIncludes))
+  );
+  if (!match) {
+    throw new Error(
+      `${stateName}: source-to-pixel outcome for ${expectation.artworkId} did not match ${JSON.stringify(expectation)}`
+    );
   }
 }
 
@@ -813,7 +907,15 @@ async function capture(targetDir) {
       await assertAuthoritativeSurfaces(page, state.name);
       await assertHubSceneBridge(page, state.name);
       if (state.expectHubArtworkFallback) {
-        await assertHubArtworkFallback(page, state.name, state.expectHubArtworkFallback);
+        await assertHubArtworkFallback(
+          page,
+          state.name,
+          state.expectHubArtworkFallback,
+          state.expectHubArtworkFallbackReasonIncludes
+        );
+      }
+      if (state.expectSourceToPixelOutcome) {
+        await assertSourceToPixelOutcome(page, state.name, state.expectSourceToPixelOutcome);
       }
       await assertSurfaceReasons(page, state.name, ['experience-state:hub']);
     } else if (state.mode === 'gallery') {
@@ -830,6 +932,9 @@ async function capture(targetDir) {
       }
       await page.waitForTimeout(1600);
       await assertAuthoritativeSurfaces(page, state.name);
+      if (state.expectSourceToPixelOutcome) {
+        await assertSourceToPixelOutcome(page, state.name, state.expectSourceToPixelOutcome);
+      }
       await assertSurfaceReasons(page, state.name, ['experience-state:transitioning', 'experience-state:destination']);
     } else if (state.mode === 'roundtrip') {
       await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 10_000 });
@@ -849,7 +954,15 @@ async function capture(targetDir) {
       await assertAuthoritativeSurfaces(page, state.name);
       await assertHubSceneBridge(page, state.name);
       if (state.expectHubArtworkFallback) {
-        await assertHubArtworkFallback(page, state.name, state.expectHubArtworkFallback);
+        await assertHubArtworkFallback(
+          page,
+          state.name,
+          state.expectHubArtworkFallback,
+          state.expectHubArtworkFallbackReasonIncludes
+        );
+      }
+      if (state.expectSourceToPixelOutcome) {
+        await assertSourceToPixelOutcome(page, state.name, state.expectSourceToPixelOutcome);
       }
       await assertSurfaceReasons(page, state.name, [
         'experience-state:hub',

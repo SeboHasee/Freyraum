@@ -35,6 +35,7 @@ export interface SourceToPixelOutcome {
   route: SourceToPixelRoute;
   artworkId: string;
   bundleId: string | null;
+  runtimeProtocol: string | null;
   /** Source mode that ultimately produced the visible texture, or null if none did. */
   candidateMode: ArtworkImageSourceMode | null;
   resolvedUrlType: ArtworkImageUrlType | null;
@@ -52,6 +53,35 @@ export interface SourceToPixelOutcome {
   downscaleApplied: boolean;
   rendererMaxTextureSize: number | null;
   visibleProbe: VisiblePixelProbeResult | null;
+}
+
+export interface VisiblePixelProbePolicy {
+  runtimeProtocol: string | null;
+  resolvedUrlType: ArtworkImageUrlType | null;
+  debugEnabled: boolean;
+}
+
+export function getRuntimeProtocol(): string | null {
+  if (typeof window === 'undefined' || !window.location) return null;
+  return window.location.protocol || null;
+}
+
+/**
+ * Always allow developer-requested proof in verbose diagnostics, and require
+ * proof automatically for file-preview `file://` artwork candidates because
+ * that is the environment where a decoded image can still collapse into a
+ * blank plane after upload.
+ */
+export function shouldRunVisiblePixelProbe(policy: VisiblePixelProbePolicy): boolean {
+  if (policy.debugEnabled) return true;
+  return policy.runtimeProtocol === 'file:' && policy.resolvedUrlType === 'file-url';
+}
+
+export function shouldRetryEmbeddedFallbackAfterPostUploadFailure(
+  policy: VisiblePixelProbePolicy,
+  hasEmbeddedFallback: boolean
+): boolean {
+  return hasEmbeddedFallback && shouldRunVisiblePixelProbe(policy);
 }
 
 /**

@@ -38,7 +38,11 @@ import {
 import { loadHubImageAsset } from './hubAssetLoader';
 import { HubRoomRenderer, type SlotUpsertResult } from './HubRoomRenderer';
 import type { QualityPreset } from '../config/quality';
-import { recordSourceToPixelOutcome } from '../utils/sourceToPixelOutcome';
+import {
+  getRuntimeProtocol,
+  recordSourceToPixelOutcome,
+  shouldRetryEmbeddedFallbackAfterPostUploadFailure,
+} from '../utils/sourceToPixelOutcome';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -657,7 +661,13 @@ export class MainMuseumHub {
       || !view.image
       || !view.image.complete
       || view.image.naturalWidth <= 0;
-    view.lastUpsertResult = this.hubRoomRenderer.upsertSlot(view.slot, wall, view.image, missingImage);
+    view.lastUpsertResult = this.hubRoomRenderer.upsertSlot(
+      view.slot,
+      wall,
+      view.image,
+      missingImage,
+      view.resolvedSource?.resolvedUrlType ?? null
+    );
   }
 
   private applyAllSlotGeometry(): void {
@@ -813,6 +823,7 @@ export class MainMuseumHub {
           route: 'hub',
           artworkId: view.slot.artworkId,
           bundleId: sourcePlan.fallback?.bundleId ?? null,
+          runtimeProtocol: getRuntimeProtocol(),
           candidateMode: null,
           resolvedUrlType: null,
           usedEmbeddedFallback: false,
@@ -837,29 +848,174 @@ export class MainMuseumHub {
 
     const primaryResult = await this.loadSlotImageCandidate(view, primary);
     if (primaryResult.status === 'ready') {
-      this.setSlotImageState(view, 'ready', primary, null);
-      this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
+      const primaryResolution = this.applyResolvedSlotSource(view, primary, null, 'loaded', primaryResult);
+      if (primaryResolution.status === 'ready') {
+        this.recordHubSourceToPixelOutcome(view, {
+          bundleId: primary.bundleId,
+          candidateMode: primary.mode,
+          resolvedUrlType: primary.resolvedUrlType,
+          usedEmbeddedFallback: false,
+          attemptedEmbeddedFallback: false,
+          startedAt,
+        });
+        return;
+      }
+      const primaryFailure = `${primary.mode}:${primaryResolution.stage}:${primaryResolution.reason}`;
+      const primaryUpsertFailure = view.lastUpsertResult;
+      const shouldRetryAfterPrimaryPostUploadFailure = shouldRetryEmbeddedFallbackAfterPostUploadFailure(
+        {
+          runtimeProtocol: getRuntimeProtocol(),
+          resolvedUrlType: primary.resolvedUrlType,
+          debugEnabled: this.diagnostics.isDebugEnabled(),
+        },
+        !!fallback
+      );
+      if (fallback && shouldRetryAfterPrimaryPostUploadFailure) {
+        this.diagnostics.warn('artwork-image-retry', 'Hub artwork source failed after GPU upload; retrying embedded fallback', {
+          slotId: view.slot.id,
+          artworkId: view.slot.artworkId,
+          bundleId: fallback.bundleId,
+          declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+          fallbackImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+          declaredImageUrlType: primary.declaredUrlType,
+          fallbackImageUrlType: fallback.resolvedUrlType,
+          fallbackReason: primaryFailure,
+          visibleProbe: primaryUpsertFailure?.visibleProbe ?? null,
+        });
+        const fallbackResult = await this.loadSlotImageCandidate(view, fallback);
+        if (fallbackResult.status === 'ready') {
+          const fallbackResolution = this.applyResolvedSlotSource(
+            view,
+            fallback,
+            primaryFailure,
+            'fallback-loaded',
+            fallbackResult
+          );
+          if (fallbackResolution.status === 'ready') {
+            this.recordHubSourceToPixelOutcome(view, {
+              bundleId: fallback.bundleId,
+              candidateMode: fallback.mode,
+              resolvedUrlType: fallback.resolvedUrlType,
+              usedEmbeddedFallback: true,
+              attemptedEmbeddedFallback: true,
+              startedAt,
+            });
+            return;
+          }
+          const fallbackFailure = `${fallback.mode}:${fallbackResolution.stage}:${fallbackResolution.reason}`;
+          const fallbackUpsertFailure = view.lastUpsertResult;
+          this.setSlotImageState(view, 'missing', null, fallbackFailure);
+          this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
+            slotId: view.slot.id,
+            artworkId: view.slot.artworkId,
+            bundleId: fallback.bundleId,
+            declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+            fallbackImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+            declaredImageUrlType: primary.declaredUrlType,
+            fallbackImageUrlType: fallback.resolvedUrlType,
+            fallbackReason: fallbackFailure,
+            attemptedSources: [
+              {
+                sourceMode: primary.mode,
+                url: redactArtworkImageUrlForLog(primary.resolvedUrl),
+                urlType: primary.resolvedUrlType,
+              },
+              {
+                sourceMode: fallback.mode,
+                url: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+                urlType: fallback.resolvedUrlType,
+              },
+            ],
+            visibleProbe: fallbackUpsertFailure?.visibleProbe ?? null,
+          });
+          this.recordHubFailedSourceToPixelOutcome(view, {
+            bundleId: fallback.bundleId,
+            candidateMode: fallback.mode,
+            resolvedUrlType: fallback.resolvedUrlType,
+            usedEmbeddedFallback: true,
+            attemptedEmbeddedFallback: true,
+            startedAt,
+            stage: fallbackResolution.stage,
+            failureReason: fallbackFailure,
+            upsert: fallbackUpsertFailure,
+          });
+          return;
+        }
+        const fallbackFailure = `${fallback.mode}:${fallbackResult.reason}`;
+        this.setSlotImageState(view, 'missing', null, fallbackFailure);
+        this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
+          slotId: view.slot.id,
+          artworkId: view.slot.artworkId,
+          bundleId: fallback.bundleId,
+          declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
+          fallbackImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+          declaredImageUrlType: primary.declaredUrlType,
+          fallbackImageUrlType: fallback.resolvedUrlType,
+          fallbackReason: fallbackFailure,
+          attemptedSources: [
+            {
+              sourceMode: primary.mode,
+              url: redactArtworkImageUrlForLog(primary.resolvedUrl),
+              urlType: primary.resolvedUrlType,
+            },
+            {
+              sourceMode: fallback.mode,
+              url: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+              urlType: fallback.resolvedUrlType,
+            },
+          ],
+        });
+        this.recordHubFailedSourceToPixelOutcome(view, {
+          bundleId: fallback.bundleId,
+          candidateMode: fallback.mode,
+          resolvedUrlType: fallback.resolvedUrlType,
+          usedEmbeddedFallback: false,
+          attemptedEmbeddedFallback: true,
+          startedAt,
+          stage: this.slotAttemptFailureStage(fallbackResult.reason),
+          failureReason: fallbackFailure,
+          upsert: null,
+        });
+        return;
+      }
+      this.setSlotImageState(view, 'missing', null, primaryFailure);
+      this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
         slotId: view.slot.id,
         artworkId: view.slot.artworkId,
         bundleId: primary.bundleId,
-        sourceMode: primary.mode,
         declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
-        resolvedImageUrl: redactArtworkImageUrlForLog(primary.resolvedUrl),
+        fallbackImageUrl: fallback ? redactArtworkImageUrlForLog(fallback.resolvedUrl) : null,
         declaredImageUrlType: primary.declaredUrlType,
-        resolvedImageUrlType: primary.resolvedUrlType,
-        requestStatus: 'loaded',
-        decodeStatus: 'decoded',
-        textureWidth: primaryResult.width,
-        textureHeight: primaryResult.height,
-        fallbackReason: null,
+        fallbackImageUrlType: fallback?.resolvedUrlType ?? null,
+        fallbackReason: primaryFailure,
+        attemptedSources: [
+          {
+            sourceMode: primary.mode,
+            url: redactArtworkImageUrlForLog(primary.resolvedUrl),
+            urlType: primary.resolvedUrlType,
+          },
+          ...(shouldRetryAfterPrimaryPostUploadFailure && fallback
+            ? [
+                {
+                  sourceMode: fallback.mode,
+                  url: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+                  urlType: fallback.resolvedUrlType,
+                },
+              ]
+            : []),
+        ],
+        visibleProbe: primaryUpsertFailure?.visibleProbe ?? null,
       });
-      this.recordHubSourceToPixelOutcome(view, {
+      this.recordHubFailedSourceToPixelOutcome(view, {
         bundleId: primary.bundleId,
         candidateMode: primary.mode,
         resolvedUrlType: primary.resolvedUrlType,
         usedEmbeddedFallback: false,
         attemptedEmbeddedFallback: false,
         startedAt,
+        stage: primaryResolution.stage,
+        failureReason: primaryFailure,
+        upsert: primaryUpsertFailure,
       });
       return;
     }
@@ -878,29 +1034,60 @@ export class MainMuseumHub {
       });
       const fallbackResult = await this.loadSlotImageCandidate(view, fallback);
       if (fallbackResult.status === 'ready') {
-        this.setSlotImageState(view, 'ready', fallback, primaryFailure);
-        this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
+        const fallbackResolution = this.applyResolvedSlotSource(
+          view,
+          fallback,
+          primaryFailure,
+          'fallback-loaded',
+          fallbackResult
+        );
+        if (fallbackResolution.status === 'ready') {
+          this.recordHubSourceToPixelOutcome(view, {
+            bundleId: fallback.bundleId,
+            candidateMode: fallback.mode,
+            resolvedUrlType: fallback.resolvedUrlType,
+            usedEmbeddedFallback: true,
+            attemptedEmbeddedFallback: true,
+            startedAt,
+          });
+          return;
+        }
+        const fallbackFailure = `${fallback.mode}:${fallbackResolution.stage}:${fallbackResolution.reason}`;
+        const fallbackUpsertFailure = view.lastUpsertResult;
+        this.setSlotImageState(view, 'missing', null, fallbackFailure);
+        this.diagnostics.warn('artwork-image-missing', 'Hub artwork image failed; neutral placeholder retains exact target', {
           slotId: view.slot.id,
           artworkId: view.slot.artworkId,
           bundleId: fallback.bundleId,
-          sourceMode: fallback.mode,
           declaredImageUrl: redactArtworkImageUrlForLog(primary.declaredUrl),
-          resolvedImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+          fallbackImageUrl: redactArtworkImageUrlForLog(fallback.resolvedUrl),
           declaredImageUrlType: primary.declaredUrlType,
-          resolvedImageUrlType: fallback.resolvedUrlType,
-          requestStatus: 'fallback-loaded',
-          decodeStatus: 'decoded',
-          textureWidth: fallbackResult.width,
-          textureHeight: fallbackResult.height,
-          fallbackReason: primaryFailure,
+          fallbackImageUrlType: fallback.resolvedUrlType,
+          fallbackReason: fallbackFailure,
+          attemptedSources: [
+            {
+              sourceMode: primary.mode,
+              url: redactArtworkImageUrlForLog(primary.resolvedUrl),
+              urlType: primary.resolvedUrlType,
+            },
+            {
+              sourceMode: fallback.mode,
+              url: redactArtworkImageUrlForLog(fallback.resolvedUrl),
+              urlType: fallback.resolvedUrlType,
+            },
+          ],
+          visibleProbe: fallbackUpsertFailure?.visibleProbe ?? null,
         });
-        this.recordHubSourceToPixelOutcome(view, {
+        this.recordHubFailedSourceToPixelOutcome(view, {
           bundleId: fallback.bundleId,
           candidateMode: fallback.mode,
           resolvedUrlType: fallback.resolvedUrlType,
           usedEmbeddedFallback: true,
           attemptedEmbeddedFallback: true,
           startedAt,
+          stage: fallbackResolution.stage,
+          failureReason: fallbackFailure,
+          upsert: fallbackUpsertFailure,
         });
         return;
       }
@@ -928,25 +1115,16 @@ export class MainMuseumHub {
           },
         ],
       });
-      recordSourceToPixelOutcome(this.diagnostics, {
-        route: 'hub',
-        artworkId: view.slot.artworkId,
+      this.recordHubFailedSourceToPixelOutcome(view, {
         bundleId: fallback.bundleId,
-        candidateMode: null,
-        resolvedUrlType: null,
+        candidateMode: fallback.mode,
+        resolvedUrlType: fallback.resolvedUrlType,
         usedEmbeddedFallback: false,
         attemptedEmbeddedFallback: true,
-        result: 'failed',
-        firstFailedStage: 'request',
+        startedAt,
+        stage: this.slotAttemptFailureStage(fallbackResult.reason),
         failureReason: fallbackFailure,
-        elapsedMs: Math.round(this.now() - startedAt),
-        sourceWidth: null,
-        sourceHeight: null,
-        uploadWidth: null,
-        uploadHeight: null,
-        downscaleApplied: false,
-        rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
-        visibleProbe: null,
+        upsert: null,
       });
       return;
     }
@@ -969,25 +1147,16 @@ export class MainMuseumHub {
         },
       ],
     });
-    recordSourceToPixelOutcome(this.diagnostics, {
-      route: 'hub',
-      artworkId: view.slot.artworkId,
+    this.recordHubFailedSourceToPixelOutcome(view, {
       bundleId: primary.bundleId,
-      candidateMode: null,
-      resolvedUrlType: null,
+      candidateMode: primary.mode,
+      resolvedUrlType: primary.resolvedUrlType,
       usedEmbeddedFallback: false,
       attemptedEmbeddedFallback: false,
-      result: 'failed',
-      firstFailedStage: 'request',
+      startedAt,
+      stage: this.slotAttemptFailureStage(primaryResult.reason),
       failureReason: primaryFailure,
-      elapsedMs: Math.round(this.now() - startedAt),
-      sourceWidth: null,
-      sourceHeight: null,
-      uploadWidth: null,
-      uploadHeight: null,
-      downscaleApplied: false,
-      rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
-      visibleProbe: null,
+      upsert: null,
     });
   }
 
@@ -1013,6 +1182,7 @@ export class MainMuseumHub {
       route: 'hub',
       artworkId: view.slot.artworkId,
       bundleId: options.bundleId,
+      runtimeProtocol: getRuntimeProtocol(),
       candidateMode: options.candidateMode,
       resolvedUrlType: options.resolvedUrlType,
       usedEmbeddedFallback: options.usedEmbeddedFallback,
@@ -1029,6 +1199,91 @@ export class MainMuseumHub {
       rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
       visibleProbe: upsert?.visibleProbe ?? null,
     });
+  }
+
+  private recordHubFailedSourceToPixelOutcome(
+    view: SlotView,
+    options: {
+      bundleId: string | null;
+      candidateMode: ArtworkImageSourceCandidate['mode'] | null;
+      resolvedUrlType: ArtworkImageSourceCandidate['resolvedUrlType'] | null;
+      usedEmbeddedFallback: boolean;
+      attemptedEmbeddedFallback: boolean;
+      startedAt: number;
+      stage: 'candidate-selected' | 'request' | 'decode' | 'gpu-upload' | 'visible-pixel-probe';
+      failureReason: string;
+      upsert: SlotUpsertResult | null;
+    }
+  ): void {
+    if (!view.slot.artworkId) return;
+    recordSourceToPixelOutcome(this.diagnostics, {
+      route: 'hub',
+      artworkId: view.slot.artworkId,
+      bundleId: options.bundleId,
+      runtimeProtocol: getRuntimeProtocol(),
+      candidateMode: options.candidateMode,
+      resolvedUrlType: options.resolvedUrlType,
+      usedEmbeddedFallback: options.usedEmbeddedFallback,
+      attemptedEmbeddedFallback: options.attemptedEmbeddedFallback,
+      result: 'failed',
+      firstFailedStage: options.stage,
+      failureReason: options.failureReason,
+      elapsedMs: Math.round(this.now() - options.startedAt),
+      sourceWidth: options.upsert?.fit?.sourceWidth ?? null,
+      sourceHeight: options.upsert?.fit?.sourceHeight ?? null,
+      uploadWidth: options.upsert?.fit?.targetWidth ?? null,
+      uploadHeight: options.upsert?.fit?.targetHeight ?? null,
+      downscaleApplied: options.upsert?.fit?.needsDownscale ?? false,
+      rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
+      visibleProbe: options.upsert?.visibleProbe ?? null,
+    });
+  }
+
+  private applyResolvedSlotSource(
+    view: SlotView,
+    source: ArtworkImageSourceCandidate,
+    fallbackReason: string | null,
+    requestStatus: 'loaded' | 'fallback-loaded',
+    dimensions: { width: number; height: number }
+  ): { status: 'ready' } | { status: 'failed'; stage: 'gpu-upload' | 'visible-pixel-probe'; reason: string } {
+    this.setSlotImageState(view, 'ready', source, fallbackReason);
+    const renderFailure = this.getSlotRenderFailure(view);
+    if (renderFailure) return { status: 'failed', ...renderFailure };
+    this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
+      slotId: view.slot.id,
+      artworkId: view.slot.artworkId,
+      bundleId: source.bundleId,
+      sourceMode: source.mode,
+      declaredImageUrl: redactArtworkImageUrlForLog(source.declaredUrl),
+      resolvedImageUrl: redactArtworkImageUrlForLog(source.resolvedUrl),
+      declaredImageUrlType: source.declaredUrlType,
+      resolvedImageUrlType: source.resolvedUrlType,
+      requestStatus,
+      decodeStatus: 'decoded',
+      textureWidth: dimensions.width,
+      textureHeight: dimensions.height,
+      fallbackReason,
+    });
+    return { status: 'ready' };
+  }
+
+  private getSlotRenderFailure(
+    view: SlotView
+  ): { stage: 'gpu-upload' | 'visible-pixel-probe'; reason: string } | null {
+    const failureStage = view.lastUpsertResult?.failureStage;
+    if (!failureStage) return null;
+    return {
+      stage: failureStage,
+      reason: view.lastUpsertResult?.failureReason ?? 'unknown-failure',
+    };
+  }
+
+  private slotAttemptFailureStage(
+    reason: SlotImageAttemptFailureReason
+  ): 'candidate-selected' | 'request' | 'decode' {
+    if (reason === 'decode-error' || reason === 'decode-timeout') return 'decode';
+    if (reason === 'no-source') return 'candidate-selected';
+    return 'request';
   }
 
   private now(): number {

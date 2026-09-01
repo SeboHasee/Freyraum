@@ -1,5 +1,41 @@
 # FINDINGS
 
+## Local file-preview blank-artwork recovery findings (v0.93, 2026-09-01)
+
+1. The customer screenshot shows the museum-hub room rendering correctly while
+   every mounted artwork surface stays blank. That is a different failure class
+   from the existing title-bearing hub placeholder and from the gallery’s
+   branded generated fallback.
+2. In the current architecture, that screenshot means the failure happens
+   **after** slot mapping and **after** hub geometry: the visible break is at
+   the final source→upload→visible-pixels boundary, not at wall selection,
+   lighting, or `museum-hub.json`.
+3. The local preview already carried the right recovery asset (`webglImage`),
+   but the hub/gallery only retried it after request/decode failure. A decoded
+   `file://` source that became blank after GPU upload could still be logged as
+   success and leave the user looking at empty mounted panels.
+4. The bounded visible-pixel probe therefore has to become authoritative in two
+   cases only:
+   - when verbose diagnostics explicitly ask for proof;
+   - when the runtime is the local `file://` preview and the selected candidate
+     is a `file-url`.
+5. The correct bounded fix is:
+   - keep declared `image` primary for dev/server/Pages;
+   - preserve query/hash through the root launcher into
+     `customer-preview/app.html`;
+   - retry embedded `webglImage` only after a post-upload blank result or an
+     earlier failure;
+   - fall through to the truthful placeholder/fallback if both candidates fail.
+6. The gallery had one extra cache/state pitfall: `showArtwork()` still looked up
+   albedo by the declared primary URL even after `TextureManager` had selected a
+   different winning source. The local-preview repair needed that lookup to
+   respect the selected source URL as well.
+7. Regression coverage is strongest as a pair:
+   - pure shared probe-policy assertions in
+     `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`;
+   - a visual-regression fixture whose primary source decodes but produces a
+     blank texture, requiring the embedded fallback to recover the artwork.
+
 ## Persistent grey-artwork investigation (v0.92, 2026-08-07)
 
 > **As-built update:** The investigation below drove an implemented fix. See

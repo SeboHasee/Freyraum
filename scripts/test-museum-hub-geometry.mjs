@@ -48,11 +48,12 @@ const ROOM_HEIGHT = 3.4;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
   loadTsModule('src/utils/artworkImageSources.ts'),
+  loadTsModule('src/utils/sourceToPixelOutcome.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
@@ -225,6 +226,57 @@ assert.equal(
 );
 assert.equal(bundleScopedSourcePlan.primary?.resolvedUrlType, 'file-url');
 assert.equal(bundleScopedSourcePlan.primary?.bundleId, 'bundle-test');
+assert.equal(
+  sourceToPixelOutcome.shouldRunVisiblePixelProbe({
+    runtimeProtocol: 'file:',
+    resolvedUrlType: 'file-url',
+    debugEnabled: false,
+  }),
+  true,
+  'file:// preview must require authoritative visible-pixel proof for file-url artwork sources'
+);
+assert.equal(
+  sourceToPixelOutcome.shouldRunVisiblePixelProbe({
+    runtimeProtocol: 'https:',
+    resolvedUrlType: 'external-http',
+    debugEnabled: false,
+  }),
+  false,
+  'server-backed artwork sources must not pay the visible-pixel probe cost by default'
+);
+assert.equal(
+  sourceToPixelOutcome.shouldRunVisiblePixelProbe({
+    runtimeProtocol: 'https:',
+    resolvedUrlType: 'data-uri',
+    debugEnabled: true,
+  }),
+  true,
+  'verbose diagnostics must be able to force visible-pixel proof in any environment'
+);
+assert.equal(
+  sourceToPixelOutcome.shouldRetryEmbeddedFallbackAfterPostUploadFailure(
+    {
+      runtimeProtocol: 'file:',
+      resolvedUrlType: 'file-url',
+      debugEnabled: false,
+    },
+    true
+  ),
+  true,
+  'file:// preview must retry the embedded fallback after a post-upload failure when one exists'
+);
+assert.equal(
+  sourceToPixelOutcome.shouldRetryEmbeddedFallbackAfterPostUploadFailure(
+    {
+      runtimeProtocol: 'https:',
+      resolvedUrlType: 'external-http',
+      debugEnabled: false,
+    },
+    true
+  ),
+  false,
+  'server-backed artwork sources must keep the declared image primary outside explicit debug proof'
+);
 const shipping = museumHub.resolveMuseumHub(artworks, shippingConfig, null);
 assert.deepEqual(shipping.warnings, [], `shipping calibration warnings: ${shipping.warnings.join('; ')}`);
 assert.equal(shipping.camera.verticalFovDeg, shippingConfig.camera.verticalFovDeg);
