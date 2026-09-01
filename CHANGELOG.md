@@ -1,5 +1,36 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-01 (v0.95 single-artwork inspection retune).
+> Latest markdown audit: 2026-09-01 (v0.96 concrete-grey wall retune).
+
+## v0.96 — Concrete-grey wall retune (2026-09-01)
+
+### Changed
+
+- Changed the authoritative gallery/hub wall token from `#D8DDDB` to the cooler
+  concrete-grey `#C7CED4` across checked-in customer config, CSS/HTML shell
+  defaults, runtime fallback paths, renderer defaults, and regression
+  assertions.
+- Retuned the gallery architectural surface palette in
+  `src/materials/ArchitecturalSurfaceFactory.ts` so the coupled floor, cove
+  light, and artwork-edge tones no longer pull the scene back toward beige.
+- Tempered the fixed gallery light profile in `src/lighting/LightProfile.ts`
+  from the previous 3000/2700/8000 K mix to a less amber 3600/3400/7200 K
+  mix, keeping the single-profile look while making the wall read as modern
+  grey instead of cream/orange in the inspection view.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`,
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/style.css`, and
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/app.html` match the
+  shipped runtime behavior.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
 
 ## v0.95 — Single-artwork inspection retune (2026-09-01)
 

@@ -18,7 +18,7 @@ const APP_URL = process.env.FREYRAUM_URL ?? 'http://localhost:5173/app.html';
 const CAPTURE_REPORT_FILENAME = 'capture-report.json';
 const HUB_BACKGROUND_FALLBACK_SRC = 'Backgrounds/museum-empty.png';
 const HUB_BACKGROUND_FALLBACK_DEPLOYED_PATH = 'backgrounds/museum-empty.png';
-const MUSEUM_GREY_RGB = 'rgb(216, 221, 219)';
+const MUSEUM_GREY_RGB = 'rgb(199, 206, 212)';
 const STATE_FILTERS = (process.env.FREYRAUM_VISUAL_STATE_FILTER ?? '')
   .split(',')
   .map((value) => value.trim())
@@ -499,8 +499,8 @@ async function assertAuthoritativeSurfaces(page, stateName) {
     };
   });
   if (
-    surfaces.galleryVar.toLowerCase() !== '#d8dddb' ||
-    surfaces.museumVar.toLowerCase() !== '#d8dddb' ||
+    surfaces.galleryVar.toLowerCase() !== '#c7ced4' ||
+    surfaces.museumVar.toLowerCase() !== '#c7ced4' ||
     surfaces.body !== MUSEUM_GREY_RGB ||
     surfaces.app !== MUSEUM_GREY_RGB
   ) {

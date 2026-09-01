@@ -60,8 +60,8 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
 assert.equal(shippingConfig.version, 4, 'shipping config must use the calibrated v4 room model');
-assert.equal(shippingConfig.visualTokens.galleryWall, '#D8DDDB');
-assert.equal(shippingConfig.visualTokens.museumWall, '#D8DDDB');
+assert.equal(shippingConfig.visualTokens.galleryWall, '#C7CED4');
+assert.equal(shippingConfig.visualTokens.museumWall, '#C7CED4');
 assert.equal(shippingConfig.backgroundFallback.src, 'Backgrounds/museum-empty.png');
 assert.ok(shippingConfig.camera, 'shipping config must define one camera calibration');
 assert.equal(shippingConfig.camera.far, 40, 'shipping config must define a finite camera far plane');
@@ -648,7 +648,7 @@ const shell = readFileSync(resolve(ROOT, 'app.html'), 'utf8');
 assert.match(scss, /#app\s*\{[\s\S]*?background:\s*var\(--color-gallery-wall\)/);
 assert.match(scss, /\.fallback-screen\s*\{[\s\S]*?background:\s*var\(--color-gallery-wall\)/);
 assert.match(scss, /\.museum-hub\s*\{[\s\S]*?background-color:\s*var\(--color-museum-wall\)/);
-assert.match(renderer, /wallClearColor\s*=\s*['"]#d8dddb['"]/i);
+assert.match(renderer, /wallClearColor\s*=\s*['"]#c7ced4['"]/i);
 assert.match(renderer, /setWallClearColor\(/);
 assert.match(main, /applyResolvedWallSurfaceColor\(/);
 assert.match(main, /wall-surface-snapshot/);
@@ -658,7 +658,7 @@ assert.match(hub, /is-selected/);
 assert.match(hub, /hub-selection-lifecycle/);
 assert.match(hub, /worldQuad/);
 assert.match(hub, /projectedAnchor/);
-assert.match(shell, /#d8dddb/i);
+assert.match(shell, /#c7ced4/i);
 assert.ok(!/background:\s*#fff(?:fff)?\b/i.test(scss.slice(scss.indexOf('.museum-hub {'), scss.indexOf('.museum-hub[hidden]'))));
 
 console.log('PASS: 7×7 square room invariants, mirrored doorways, 2+2+2 hero composition, calibrated projection, fallback wall buckets, selection persistence hooks, token consistency, and 404 fallback are valid.');

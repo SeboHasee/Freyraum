@@ -13,8 +13,8 @@
     "src": "Backgrounds/museum-empty.png"
   },
   "visualTokens": {
-    "galleryWall": "#D8DDDB",
-    "museumWall": "#D8DDDB"
+    "galleryWall": "#C7CED4",
+    "museumWall": "#C7CED4"
   },
   "camera": {
     "position": {

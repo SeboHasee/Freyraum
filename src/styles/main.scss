@@ -17,17 +17,17 @@
 
 :root {
   // Surfaces
-  // v0.82 — authoritative museum-grey wall tokens (final pick #D8DDDB).
+  // v0.96 — authoritative concrete-grey wall tokens (final pick #C7CED4).
   // `--color-gallery-wall` is the active token for every gallery/hub wall
   // surface and the WebGL clear color (RendererManager receives the same
   // resolved value from main.ts). `--color-museum-wall` defaults to the same
   // value and may be overridden by a validated customer museum-hub.json.
-  --color-gallery-wall: #d8dddb;
+  --color-gallery-wall: #c7ced4;
   --color-museum-wall: var(--color-gallery-wall);
   --bg1: var(--color-gallery-wall);
-  --bg2: #d8dee3;
-  --bg3: #bcc5cc;
-  --bg-deep: #b3bcc4;
+  --bg2: #d0d7dc;
+  --bg3: #b6c0c9;
+  --bg-deep: #adb8c1;
 
   // Text
   --text: #12171b;

@@ -1,5 +1,16 @@
 # FREYRAUM Plan
 
+## Implemented — concrete-grey wall retune (v0.96, 2026-09-01)
+
+> **Status update:** The app no longer ships the warmer off-white wall baseline
+> that made the inspection background read beige/orange. The authoritative
+> gallery/hub wall token is now the cooler concrete-grey `#C7CED4`, and the
+> coupled architectural palette plus the fixed gallery light profile were
+> tempered so the single-artwork view reads as modern grey without splitting the
+> wall-color pipeline. Token reach and preview parity remain guarded by
+> `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`
+> and `/home/runner/work/Freyraum/Freyraum/scripts/visual-regression.mjs`.
+
 ## Implemented — single-artwork inspection retune (v0.95, 2026-09-01)
 
 > **Status update:** The interactive gallery keeps the v0.94 wall-clearance

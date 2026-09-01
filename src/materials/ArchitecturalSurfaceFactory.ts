@@ -26,7 +26,7 @@ const FLOOR_TILE_PERIOD_M = 1.9;
 
 /** Surface palette derived from the authoritative gallery-wall token. */
 export interface ArchitecturalPalette {
-  /** Authoritative wall token (e.g. `#D8DDDB`). */
+  /** Authoritative wall token (e.g. `#C7CED4`). */
   wall: string;
 }
 
@@ -38,7 +38,7 @@ export interface ArchitecturalMaterials {
   trim: THREE.MeshStandardMaterial;
   /** Dim plaster used inside doorway pockets so openings read as passages. */
   pocket: THREE.MeshStandardMaterial;
-  /** Warm-white emissive strip inside the ceiling light coves. */
+  /** Neutral-white emissive strip inside the ceiling light coves. */
   lightStrip: THREE.MeshBasicMaterial;
   /** Neutral gesso-like side faces for artwork canvas edges. */
   artworkEdge: THREE.MeshStandardMaterial;
@@ -65,7 +65,7 @@ export class ArchitecturalSurfaceFactory {
 
     const wallColor = new THREE.Color(palette.wall);
     const ceilingColor = wallColor.clone().multiplyScalar(1.04);
-    const floorColor = wallColor.clone().multiplyScalar(0.82).lerp(new THREE.Color('#b9b4a8'), 0.18);
+    const floorColor = wallColor.clone().multiplyScalar(0.82).lerp(new THREE.Color('#adb5bb'), 0.18);
 
     const plasterNormal = this.detailTexture('plasterNormal');
     const plasterRoughness = this.detailTexture('plasterRoughness');
@@ -114,12 +114,12 @@ export class ArchitecturalSurfaceFactory {
     });
 
     const lightStrip = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#f5f0e3'),
+      color: new THREE.Color('#f2f4f6'),
       toneMapped: false,
     });
 
     const artworkEdge = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#e7e4dc'),
+      color: new THREE.Color('#e0e4e7'),
       roughness: 0.9,
       metalness: 0.0,
     });

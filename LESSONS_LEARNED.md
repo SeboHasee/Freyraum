@@ -1,5 +1,16 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-01 (v0.95 single-artwork inspection retune).
+> Latest markdown audit: 2026-09-01 (v0.96 concrete-grey wall retune).
+
+## 2026-09-01 — Concrete-grey wall retune lesson
+
+### Lesson 93 — Wall colour is a shared pipeline, not a single material tweak
+
+If the gallery wall reads beige/orange instead of neutral concrete grey, check
+the whole wall-colour pipeline: authoritative token, CSS shell, WebGL clear
+color, checked-in hub config, architectural palette, and the fixed light
+profile. Future rule: retune the shared token first, then adjust any directly
+coupled palette or color-temperature defaults rather than inventing a
+gallery-only wall override.
 
 ## 2026-09-01 — Inspection wall-clip fix lesson
 

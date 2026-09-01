@@ -35,13 +35,13 @@ export interface LightProfile {
   accent?: KeyLight;
 }
 
-/** The gallery's single, fixed warm/cool dramatic lighting configuration. */
+/** The gallery's single, fixed tempered warm/cool lighting configuration. */
 export const DRAMATIC_LIGHT_PROFILE: LightProfile = {
   ambientIntensity: 0.8,
-  ambientKelvin: 3000,
+  ambientKelvin: 3600,
   keys: [
     {
-      kelvin: 2700,
+      kelvin: 3400,
       intensity: 200,
       position: { x: -9, y: 6, z: 6 },
       angle: 0.4,
@@ -50,7 +50,7 @@ export const DRAMATIC_LIGHT_PROFILE: LightProfile = {
     },
   ],
   accent: {
-    kelvin: 8000,
+    kelvin: 7200,
     intensity: 16,
     position: { x: 7, y: -3, z: 5 },
     decay: 2.0,

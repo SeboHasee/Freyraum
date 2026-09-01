@@ -506,7 +506,7 @@ function resolveRuntimeFallbackSurfaceColor(): string {
   const rootGalleryWall = normalizeCssColorToHex(
     getComputedStyle(document.documentElement).getPropertyValue('--color-gallery-wall')
   );
-  return rootGalleryWall ?? '#D8DDDB';
+  return rootGalleryWall ?? '#C7CED4';
 }
 
 function verifyMuseumWallColorConsistency(

@@ -59,7 +59,7 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   (`src/utils/textureUploadCompatibility.ts`) before any decoded image reaches
   the GPU. Do not compensate missing artwork pixels with room lighting or
   metadata; the implemented local-preview recovery is `plan.md § v0.93`.
-- CSS and WebGL share one authoritative museum-grey wall token (`#D8DDDB`,
+- CSS and WebGL share one authoritative concrete-grey wall token (`#C7CED4`,
   `--color-gallery-wall`) resolved before renderer construction, so gallery,
   hub, fallback surfaces, and the WebGL clear color can never drift apart.
 - Diagnostics API is available (see `docs/QUERY_PARAMETERS.md`).

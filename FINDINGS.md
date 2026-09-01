@@ -1,5 +1,29 @@
 # FINDINGS
 
+## Concrete-grey wall retune findings (v0.96, 2026-09-01)
+
+1. The screenshot is not a missing-texture problem. The beige/orange look comes
+   from the combination of a very light wall token (`#D8DDDB`), a warm-cast
+   architectural palette, and the fixed 3000/2700 K gallery lighting mix in the
+   interactive inspection route.
+2. The visible wall tone is shared across CSS shell backgrounds, WebGL clear
+   color, gallery stage materials, and the checked-in customer hub config. A
+   convincing concrete-grey fix therefore has to move the authoritative token
+   itself instead of changing only one render path.
+3. The shipped fix uses the cooler concrete-grey token `#C7CED4` across the
+   shared wall-color pipeline (`customer-artworks/museum-hub.json`,
+   `src/config/museumHub.ts`, `src/styles/main.scss`, `app.html`,
+   `index.html`, `src/main.ts`, `src/core/RendererManager.ts`) so all fallback
+   and rendered surfaces stay in sync.
+4. The wall still read too warm under the previous coupled palette and 2700 K
+   spotlight, so the fix also cools the floor/cove/edge palette in
+   `src/materials/ArchitecturalSurfaceFactory.ts` and tempers the fixed gallery
+   light profile in `src/lighting/LightProfile.ts` to 3600/3400/7200 K.
+5. Regression protection remains lightweight: the existing token-consistency
+   checks in `scripts/test-museum-hub-geometry.mjs` and
+   `scripts/visual-regression.mjs` now assert the new authoritative token and
+   CSS RGB values.
+
 ## Single-artwork inspection wall-clearance retune findings (v0.95, 2026-09-01)
 
 1. The bug is in the interactive single-artwork gallery route, not the museum
