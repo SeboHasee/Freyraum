@@ -1,5 +1,17 @@
 # FREYRAUM Plan
 
+## Implemented — neutral gallery wall-lighting rebalance (v0.97, 2026-09-01)
+
+> **Status update:** The remaining amber wall cast after the concrete-grey token
+> retune is now removed at the lighting/material level. The fixed gallery light
+> profile in `src/lighting/LightProfile.ts` is now a balanced neutral two-key
+> setup instead of a single warm dramatic spot, `src/materials/ArchitecturalSurfaceFactory.ts`
+> flattens the wall's plaster response, and `src/hub/HubRoomRenderer.ts` uses a
+> matching neutral room-light mix. Focused guardrails live in
+> `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`,
+> and the tracked preview bundle has been rebuilt to keep local customer preview
+> output in sync.
+
 ## Implemented — concrete-grey wall retune (v0.96, 2026-09-01)
 
 > **Status update:** The app no longer ships the warmer off-white wall baseline

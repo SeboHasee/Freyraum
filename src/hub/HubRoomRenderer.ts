@@ -372,15 +372,16 @@ export class HubRoomRenderer {
   // ── Lighting ───────────────────────────────────────────────────────────────
 
   private buildLights(): void {
-    // Soft skydome base: slightly warm from above, floor-toned from below.
-    const hemisphere = new THREE.HemisphereLight(0xfffdf7, 0xb9b7ad, 0.62);
-    // Warm key "skylight" from high behind the viewer; the only shadow caster.
-    const key = new THREE.DirectionalLight(0xfff6e8, 1.05);
+    // Neutral skydome base so the authored wall token reads as concrete-grey
+    // instead of cream across both hub and gallery routes.
+    const hemisphere = new THREE.HemisphereLight(0xf3f5f6, 0xaab1b8, 0.56);
+    // Neutral key from high behind the viewer; the only shadow caster.
+    const key = new THREE.DirectionalLight(0xf4f6f7, 0.96);
     key.position.set(-2.4, 6.4, 6.2);
     key.target.position.set(0.4, 0.6, -0.4);
-    // Cool low fill from the opposite side keeps dark trim and the right
-    // wall readable without flattening the key modelling.
-    const fill = new THREE.DirectionalLight(0xe8eef6, 0.32);
+    // Cooler low fill from the opposite side keeps dark trim and the right
+    // wall readable without pushing the room back toward amber.
+    const fill = new THREE.DirectionalLight(0xe2e9ef, 0.38);
     fill.position.set(3.4, 2.6, 5.4);
     fill.target.position.set(-0.8, 1.4, 0);
     this.keyLight = key;

@@ -1,5 +1,39 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-01 (v0.96 concrete-grey wall retune).
+> Latest markdown audit: 2026-09-01 (v0.97 neutral gallery wall-lighting rebalance).
+
+## v0.97 — Neutral gallery wall-lighting rebalance (2026-09-01)
+
+### Changed
+
+- Rebalanced the fixed interactive-gallery lighting in
+  `src/lighting/LightProfile.ts` from a single warm dramatic spot into a
+  balanced neutral two-key setup, keeping the wall readable as concrete grey
+  instead of amber in the single-artwork view.
+- Reduced the gallery wall/ceiling surface response in
+  `src/materials/ArchitecturalSurfaceFactory.ts` by raising wall roughness and
+  lowering plaster normal intensity, so the background reads flatter and less
+  cream-tinted under close inspection.
+- Neutralized the museum-hub room lights in `src/hub/HubRoomRenderer.ts` so hub
+  walls and gallery walls stay aligned on the same cooler concrete-grey look.
+- Extended `scripts/test-museum-hub-geometry.mjs` with a lightweight fixed
+  gallery-lighting contract: neutral ambient Kelvin, balanced two-key setup,
+  and no regression to the old far-left warm spotlight placement.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`,
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/style.css`, and
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/app.html` match the
+  shipped runtime behavior.
+
+### Validation
+
+- `npm install` ✅
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
 
 ## v0.96 — Concrete-grey wall retune (2026-09-01)
 

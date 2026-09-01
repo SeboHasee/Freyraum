@@ -1,5 +1,14 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-01 (v0.96 concrete-grey wall retune).
+> Latest markdown audit: 2026-09-01 (v0.97 neutral gallery wall-lighting rebalance).
+
+## 2026-09-01 — Neutral gallery wall-lighting rebalance lesson
+
+### Lesson 94 — A correct wall token can still look wrong under theatrical lighting
+
+If the wall token is already shared correctly but the presented wall still
+looks beige or amber, inspect the lighting geometry and color temperature next.
+Future rule: neutral gallery walls need both the correct shared token and a
+balanced, non-theatrical light composition with restrained plaster response.
 
 ## 2026-09-01 — Concrete-grey wall retune lesson
 

@@ -48,7 +48,7 @@ const ROOM_HEIGHT = 3.4;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
@@ -56,6 +56,7 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/utils/sourceToPixelOutcome.ts'),
   loadTsModule('src/gallery/inspectionSafety.ts'),
   loadTsModule('src/config/galleryPresentation.ts'),
+  loadTsModule('src/lighting/LightProfile.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
@@ -306,6 +307,23 @@ assert.equal(
 assert.ok(
   Math.abs(galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallGap - 0.14) < 1e-9,
   'interactive-gallery inspection wall must stay set back enough to preserve close-view tilt freedom'
+);
+assert.ok(
+  lightProfile.DRAMATIC_LIGHT_PROFILE.ambientKelvin >= 4800,
+  'fixed gallery lighting must keep a neutral enough ambient color temperature for concrete-grey walls'
+);
+assert.equal(
+  lightProfile.DRAMATIC_LIGHT_PROFILE.keys.length,
+  2,
+  'fixed gallery lighting must keep the balanced two-key setup that flattens the wall cast'
+);
+assert.ok(
+  lightProfile.DRAMATIC_LIGHT_PROFILE.keys[0].position.x > -4.5,
+  'fixed gallery lighting primary key must not return to the overly dramatic far-left position'
+);
+assert.ok(
+  lightProfile.DRAMATIC_LIGHT_PROFILE.keys[0].kelvin >= 4300,
+  'fixed gallery lighting primary key must stay neutral enough to avoid amber wall casts'
 );
 assert.ok(
   Math.abs(galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ + 0.182) < 1e-9,

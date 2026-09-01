@@ -1,5 +1,28 @@
 # FINDINGS
 
+## Neutral gallery wall-lighting rebalance findings (v0.97, 2026-09-01)
+
+1. The remaining beige/amber wall cast after v0.96 was no longer a token-sync
+   issue. The shared wall token already resolved correctly, but the interactive
+   gallery still lit that wall with one strong warm spotlight from a dramatic
+   far-left position, and the wall plaster normal response exaggerated the cast.
+2. The correct next fix is therefore not another token-only change. The
+   interactive gallery must rebalance its fixed light composition
+   (`src/lighting/LightProfile.ts`) and slightly flatten the wall material
+   response (`src/materials/ArchitecturalSurfaceFactory.ts`) so the same token
+   can read as concrete grey in the presented wall.
+3. The shipped gallery-lighting rebalance uses a neutral 5000 K ambient fill,
+   a closer 4600 K primary key around the documented ~45° gallery angle, and a
+   softer 5200 K counter-fill instead of the previous theatrical single-key
+   warm spotlight plus cool accent point light.
+4. The hub has its own room-lighting path in `src/hub/HubRoomRenderer.ts`, so
+   that lighting also had to be neutralized to keep hub and gallery walls on
+   the same visual family.
+5. Regression protection can stay deterministic without screenshot baselines:
+   `scripts/test-museum-hub-geometry.mjs` now asserts a neutral enough ambient
+   Kelvin, the balanced two-key setup, and the absence of the old far-left
+   spotlight geometry.
+
 ## Concrete-grey wall retune findings (v0.96, 2026-09-01)
 
 1. The screenshot is not a missing-texture problem. The beige/orange look comes

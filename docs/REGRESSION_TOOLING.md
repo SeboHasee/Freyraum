@@ -129,7 +129,9 @@ projection transforms. It also carries the lightweight shared regression
 assertions for inspection safety in the interactive gallery: close-inspection
 pan may use only the bounded reveal margin, close hover tilt must retain its
 full requested range after the wall setback, and larger hover motion must still
-stay within the available front-wall clearance.
+stay within the available front-wall clearance. The same script now also checks
+the fixed gallery wall-lighting contract stays neutral enough (ambient Kelvin,
+balanced two-key setup, no return to the old dramatic far-left spotlight).
 
 ## Acceptance thresholds (Phase 14)
 

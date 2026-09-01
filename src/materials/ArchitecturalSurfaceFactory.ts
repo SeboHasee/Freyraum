@@ -65,7 +65,7 @@ export class ArchitecturalSurfaceFactory {
 
     const wallColor = new THREE.Color(palette.wall);
     const ceilingColor = wallColor.clone().multiplyScalar(1.04);
-    const floorColor = wallColor.clone().multiplyScalar(0.82).lerp(new THREE.Color('#adb5bb'), 0.18);
+    const floorColor = wallColor.clone().multiplyScalar(0.82).lerp(new THREE.Color('#aab2ba'), 0.18);
 
     const plasterNormal = this.detailTexture('plasterNormal');
     const plasterRoughness = this.detailTexture('plasterRoughness');
@@ -74,10 +74,10 @@ export class ArchitecturalSurfaceFactory {
 
     const wall = new THREE.MeshStandardMaterial({
       color: wallColor,
-      roughness: 0.94,
+      roughness: 0.97,
       metalness: 0.0,
       normalMap: plasterNormal,
-      normalScale: new THREE.Vector2(0.16, 0.16),
+      normalScale: new THREE.Vector2(0.08, 0.08),
       roughnessMap: plasterRoughness,
     });
 
@@ -86,7 +86,7 @@ export class ArchitecturalSurfaceFactory {
       roughness: 0.97,
       metalness: 0.0,
       normalMap: plasterNormal,
-      normalScale: new THREE.Vector2(0.1, 0.1),
+      normalScale: new THREE.Vector2(0.05, 0.05),
     });
 
     const floor = new THREE.MeshStandardMaterial({
@@ -114,12 +114,12 @@ export class ArchitecturalSurfaceFactory {
     });
 
     const lightStrip = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#f2f4f6'),
+      color: new THREE.Color('#edf1f4'),
       toneMapped: false,
     });
 
     const artworkEdge = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#e0e4e7'),
+      color: new THREE.Color('#d8dde1'),
       roughness: 0.9,
       metalness: 0.0,
     });
