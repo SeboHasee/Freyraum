@@ -77,6 +77,19 @@ export function shouldRunVisiblePixelProbe(policy: VisiblePixelProbePolicy): boo
   return policy.runtimeProtocol === 'file:' && policy.resolvedUrlType === 'file-url';
 }
 
+/**
+ * In the offline `file://` preview, browser-visible `<img>` success for a
+ * local file path is not sufficient proof that the same source will survive
+ * WebGL upload as artwork pixels. When the importer already embedded an
+ * origin-clean `webglImage`, prefer that source up front for the WebGL routes.
+ */
+export function shouldPreferEmbeddedWebglFallback(
+  policy: VisiblePixelProbePolicy,
+  hasEmbeddedFallback: boolean
+): boolean {
+  return hasEmbeddedFallback && policy.runtimeProtocol === 'file:' && policy.resolvedUrlType === 'file-url';
+}
+
 export function shouldRetryEmbeddedFallbackAfterPostUploadFailure(
   policy: VisiblePixelProbePolicy,
   hasEmbeddedFallback: boolean

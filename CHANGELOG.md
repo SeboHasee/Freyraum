@@ -1,5 +1,40 @@
 # CHANGELOG
-> Latest markdown audit: 2026-08-07 (v0.92.1 persistent grey-artwork recovery implementation).
+> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+
+## v0.93 — Local file-preview artwork recovery (2026-09-01)
+
+### Changed
+
+- The museum hub now treats offline `file://` customer image files as a special
+  WebGL reliability case: when a slot's declared `image` resolves to a local
+  `file-url` and the importer already embedded `webglImage`, the hub now uses
+  the embedded artwork bytes up front instead of waiting for a blank post-upload
+  plane before recovering.
+- Extended hub image load/decode deadlines for inline `data:` artwork sources so
+  the local preview can still render real paintings when the tracked preview
+  falls back to built-in embedded artworks or when the embedded WebGL recovery
+  path is selected.
+- Added regression coverage in `scripts/test-museum-hub-geometry.mjs` for the
+  new shared file-preview source-selection policy.
+- Rebuilt the tracked `customer-preview/freyraum-gallery.js` and
+  `customer-preview/app.html` so opening `index.html` locally uses the shipped
+  recovery logic immediately.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+- Explicit `file:///home/runner/work/Freyraum/Freyraum/customer-preview/app.html?debug=verbose&hubDebug=1` reproduction ✅
+  - with generated customer scripts, hub slots now settle on
+    `data-artwork-source-mode="embedded-webgl-fallback"` and show real artwork
+    pixels instead of blank grey planes;
+  - without generated customer scripts, the built-in embedded artworks still
+    reach `ready` in local preview instead of timing out.
 
 ## v0.92.1 — Persistent grey-artwork recovery implementation (2026-08-07)
 

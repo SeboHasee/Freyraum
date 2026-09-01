@@ -2,6 +2,20 @@
 
 ## Local file-preview blank-artwork recovery findings (v0.93, 2026-09-01)
 
+> **As-built update:** The shipped local-preview repair is narrower than the
+> original retry-after-blank plan. In the museum hub, offline `file://` runs now
+> prefer the importer-provided embedded `webglImage` immediately when the
+> declared source resolves to a local `file-url`, because that path already
+> proved origin-clean and upload-stable in the same environment where the direct
+> file image could decode yet still collapse to a blank wall plane. Inline/data
+> artwork sources in the hub also get a longer load/decode window so the local
+> preview still renders real artwork when it falls back to built-in embedded
+> assets or when the embedded recovery path is selected first. Validation:
+> `npm run import:artworks`, `npm run lint`, `npm run build:typecheck`,
+> `npm run build`, `npm run validate:museum-hub`, `npm run test:frame-budget`,
+> `npm run docs:check-config-authority`, plus explicit `file://` reproduction
+> with and without generated customer scripts.
+
 1. The customer screenshot shows the museum-hub room rendering correctly while
    every mounted artwork surface stays blank. That is a different failure class
    from the existing title-bearing hub placeholder and from the gallery’s
@@ -19,13 +33,15 @@
    - when verbose diagnostics explicitly ask for proof;
    - when the runtime is the local `file://` preview and the selected candidate
      is a `file-url`.
-5. The correct bounded fix is:
-   - keep declared `image` primary for dev/server/Pages;
-   - preserve query/hash through the root launcher into
-     `customer-preview/app.html`;
-   - retry embedded `webglImage` only after a post-upload blank result or an
-     earlier failure;
-   - fall through to the truthful placeholder/fallback if both candidates fail.
+5. The shipped bounded fix is:
+   - keep declared `image` primary for dev/server/Pages and other served
+     environments;
+   - in the hub's offline `file://` preview only, prefer embedded
+     `webglImage` immediately when the primary candidate is a local `file-url`;
+   - keep the truthful placeholder/fallback contract unchanged if the embedded
+     source also fails;
+   - give inline/data hub sources a longer load/decode budget so they are not
+     falsely classified as failures in local preview.
 6. The gallery had one extra cache/state pitfall: `showArtwork()` still looked up
    albedo by the declared primary URL even after `TextureManager` had selected a
    different winning source. The local-preview repair needed that lookup to

@@ -266,6 +266,30 @@ assert.equal(
   'file:// preview must retry the embedded fallback after a post-upload failure when one exists'
 );
 assert.equal(
+  sourceToPixelOutcome.shouldPreferEmbeddedWebglFallback(
+    {
+      runtimeProtocol: 'file:',
+      resolvedUrlType: 'file-url',
+      debugEnabled: false,
+    },
+    true
+  ),
+  true,
+  'file:// preview must prefer the embedded WebGL artwork source when one exists'
+);
+assert.equal(
+  sourceToPixelOutcome.shouldPreferEmbeddedWebglFallback(
+    {
+      runtimeProtocol: 'https:',
+      resolvedUrlType: 'external-http',
+      debugEnabled: false,
+    },
+    true
+  ),
+  false,
+  'server-backed environments must keep the declared image as the primary artwork source'
+);
+assert.equal(
   sourceToPixelOutcome.shouldRetryEmbeddedFallbackAfterPostUploadFailure(
     {
       runtimeProtocol: 'https:',

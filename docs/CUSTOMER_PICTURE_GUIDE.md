@@ -88,11 +88,12 @@ copies into `customer-artworks/inbox/`.
 - If a painting appears as a grey FREYRAUM-style fallback or a hub title
   placeholder, keep the generated `customer-artworks.js` and `images/` output,
   then capture the diagnostics described in `docs/QUERY_PARAMETERS.md`. Local
-  `file://` preview now treats a blank post-upload artwork surface as a real
-  failure and retries the embedded `webglImage`, so a persistent blank plane
-  means both the primary source and its recovery path need inspection. Open the
-  preview with the debug query documented in `docs/QUERY_PARAMETERS.md`, then
-  export the route diagnostics before importing again; see `plan.md § v0.93`.
+  `file://` preview now prefers the importer-provided embedded `webglImage`
+  whenever a hub wall would otherwise rely on a local file URL, so a persistent
+  blank plane means both the primary source and the embedded recovery payload
+  need inspection. Open the preview with the debug query documented in
+  `docs/QUERY_PARAMETERS.md`, then export the route diagnostics before
+  importing again; see `plan.md § v0.93`.
 
 ## Related docs
 

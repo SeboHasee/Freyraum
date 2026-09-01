@@ -41,6 +41,7 @@ import type { QualityPreset } from '../config/quality';
 import {
   getRuntimeProtocol,
   recordSourceToPixelOutcome,
+  shouldPreferEmbeddedWebglFallback,
   shouldRetryEmbeddedFallbackAfterPostUploadFailure,
 } from '../utils/sourceToPixelOutcome';
 
@@ -49,6 +50,7 @@ const HUB_BACKGROUND_BASE_URL =
     ? '../customer-artworks/'
     : `${import.meta.env.BASE_URL}`;
 const HUB_IMAGE_TIMEOUT_MS = 5000;
+const HUB_INLINE_IMAGE_TIMEOUT_MS = 20000;
 const NARROW_PORTRAIT_QUERY = '(max-aspect-ratio: 4/5)';
 
 type SlotImageAttemptFailureReason =
@@ -807,8 +809,18 @@ export class MainMuseumHub {
       ? this.resolution.artworkSourceById.get(view.slot.artworkId) ?? null
       : null;
     const sourcePlan = resolveArtworkImageSources(sourceRecord);
-    const primary = sourcePlan.primary;
-    const fallback = sourcePlan.fallback;
+    const runtimeProtocol = getRuntimeProtocol();
+    const preferEmbeddedWebgl = shouldPreferEmbeddedWebglFallback(
+      {
+        runtimeProtocol,
+        resolvedUrlType: sourcePlan.primary?.resolvedUrlType ?? null,
+        debugEnabled: this.diagnostics.isDebugEnabled(),
+      },
+      !!sourcePlan.fallback
+    );
+    const primary = preferEmbeddedWebgl && sourcePlan.fallback ? sourcePlan.fallback : sourcePlan.primary;
+    const fallback = preferEmbeddedWebgl ? null : sourcePlan.fallback;
+    const primaryUsesEmbeddedFallback = primary?.mode === 'embedded-webgl-fallback';
     const startedAt = this.now();
     if (!primary || !view.image || !view.slot.artworkId) {
       this.setSlotImageState(view, 'missing', null, 'no-source');
@@ -823,7 +835,7 @@ export class MainMuseumHub {
           route: 'hub',
           artworkId: view.slot.artworkId,
           bundleId: sourcePlan.fallback?.bundleId ?? null,
-          runtimeProtocol: getRuntimeProtocol(),
+          runtimeProtocol,
           candidateMode: null,
           resolvedUrlType: null,
           usedEmbeddedFallback: false,
@@ -854,8 +866,8 @@ export class MainMuseumHub {
           bundleId: primary.bundleId,
           candidateMode: primary.mode,
           resolvedUrlType: primary.resolvedUrlType,
-          usedEmbeddedFallback: false,
-          attemptedEmbeddedFallback: false,
+          usedEmbeddedFallback: primaryUsesEmbeddedFallback,
+          attemptedEmbeddedFallback: primaryUsesEmbeddedFallback,
           startedAt,
         });
         return;
@@ -864,7 +876,7 @@ export class MainMuseumHub {
       const primaryUpsertFailure = view.lastUpsertResult;
       const shouldRetryAfterPrimaryPostUploadFailure = shouldRetryEmbeddedFallbackAfterPostUploadFailure(
         {
-          runtimeProtocol: getRuntimeProtocol(),
+          runtimeProtocol,
           resolvedUrlType: primary.resolvedUrlType,
           debugEnabled: this.diagnostics.isDebugEnabled(),
         },
@@ -1010,8 +1022,8 @@ export class MainMuseumHub {
         bundleId: primary.bundleId,
         candidateMode: primary.mode,
         resolvedUrlType: primary.resolvedUrlType,
-        usedEmbeddedFallback: false,
-        attemptedEmbeddedFallback: false,
+        usedEmbeddedFallback: primaryUsesEmbeddedFallback,
+        attemptedEmbeddedFallback: primaryUsesEmbeddedFallback,
         startedAt,
         stage: primaryResolution.stage,
         failureReason: primaryFailure,
@@ -1151,8 +1163,8 @@ export class MainMuseumHub {
       bundleId: primary.bundleId,
       candidateMode: primary.mode,
       resolvedUrlType: primary.resolvedUrlType,
-      usedEmbeddedFallback: false,
-      attemptedEmbeddedFallback: false,
+      usedEmbeddedFallback: primaryUsesEmbeddedFallback,
+      attemptedEmbeddedFallback: primaryUsesEmbeddedFallback,
       startedAt,
       stage: this.slotAttemptFailureStage(primaryResult.reason),
       failureReason: primaryFailure,
@@ -1323,6 +1335,7 @@ export class MainMuseumHub {
     if (!view.image) return { status: 'failed', reason: 'no-source' };
     const token = ++view.imageLoadToken;
     const image = view.image;
+    const timeoutMs = source.resolvedUrlType === 'data-uri' ? HUB_INLINE_IMAGE_TIMEOUT_MS : HUB_IMAGE_TIMEOUT_MS;
     const loadStatus = await new Promise<'loaded' | 'error' | 'timeout'>((resolve) => {
       let settled = false;
       const complete = (status: 'loaded' | 'error' | 'timeout'): void => {
@@ -1335,7 +1348,7 @@ export class MainMuseumHub {
       };
       const handleLoad = (): void => complete('loaded');
       const handleError = (): void => complete('error');
-      const timeout = window.setTimeout(() => complete('timeout'), HUB_IMAGE_TIMEOUT_MS);
+      const timeout = window.setTimeout(() => complete('timeout'), timeoutMs);
       image.addEventListener('load', handleLoad);
       image.addEventListener('error', handleError);
       image.src = source.resolvedUrl;
@@ -1347,7 +1360,7 @@ export class MainMuseumHub {
     if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
       return { status: 'failed', reason: 'load-error' };
     }
-    const decodeStatus = await this.decodeSlotImage(image);
+    const decodeStatus = await this.decodeSlotImage(image, timeoutMs);
     if (decodeStatus !== 'decoded') {
       return {
         status: 'failed',
@@ -1361,7 +1374,10 @@ export class MainMuseumHub {
     };
   }
 
-  private async decodeSlotImage(image: HTMLImageElement): Promise<'decoded' | 'error' | 'timeout'> {
+  private async decodeSlotImage(
+    image: HTMLImageElement,
+    timeoutMs = HUB_IMAGE_TIMEOUT_MS
+  ): Promise<'decoded' | 'error' | 'timeout'> {
     if (typeof image.decode !== 'function') return 'decoded';
     return new Promise((resolve) => {
       let settled = false;
@@ -1371,7 +1387,7 @@ export class MainMuseumHub {
         window.clearTimeout(timeout);
         resolve(status);
       };
-      const timeout = window.setTimeout(() => complete('timeout'), HUB_IMAGE_TIMEOUT_MS);
+      const timeout = window.setTimeout(() => complete('timeout'), timeoutMs);
       image.decode().then(
         () => complete('decoded'),
         () => complete('error')

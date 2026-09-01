@@ -37,22 +37,24 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   interactive-gallery mounting profile (`canvas`, `fine-art-paper`,
   `matte-print`, `satin-print`, `glazed-print`; default `matte-print`).
 - Hub and gallery now share one artwork-source contract: the declared
-  `image` asset stays primary, while optional embedded `webglImage` data is
-  used only as an explicit fallback when the primary source fails.
+  `image` asset stays primary for served environments, while the offline
+  `file://` museum-hub preview may prefer embedded `webglImage` data when the
+  declared customer image resolves to a local file URL that is less reliable
+  for WebGL upload.
 - Generated `customer-artworks.js` now also publishes
   `window.__FREYRAUM_ARTWORK_BUNDLE__` with a script-derived `assetBaseUrl`,
   so the same imported customer image bundle resolves consistently in the local
   file preview, Vite dev, and GitHub Pages builds.
-- A grey artwork is a source-to-pixel incident, not a lighting issue. The
-  gallery's generated fallback and the hub's title-bearing placeholder are
-  distinct states from a real decoded image; both routes now record one
-  shared, redacted `source-to-pixel-outcome` diagnostic per artwork (see
-  `src/utils/sourceToPixelOutcome.ts`) naming the first failed stage or
-  confirming full source→decode→GPU→pixels proof, and both apply a shared
-  capability-aware downscale (`src/utils/textureUploadCompatibility.ts`)
-  before any decoded image reaches the GPU. Do not compensate a grey artwork
-  with room lighting or metadata; the implemented recovery is
-  `plan.md § v0.92`.
+- A grey or blank artwork is a source-to-pixel incident, not a lighting issue.
+  The gallery's generated fallback, the hub's title-bearing placeholder, and a
+  blank local `file://` wall plane are distinct states from a real decoded
+  image; both routes record one shared, redacted `source-to-pixel-outcome`
+  diagnostic per artwork (see `src/utils/sourceToPixelOutcome.ts`) naming the
+  first failed stage or confirming full source→decode→GPU→pixels proof, and
+  both apply a shared capability-aware downscale
+  (`src/utils/textureUploadCompatibility.ts`) before any decoded image reaches
+  the GPU. Do not compensate missing artwork pixels with room lighting or
+  metadata; the implemented local-preview recovery is `plan.md § v0.93`.
 - CSS and WebGL share one authoritative museum-grey wall token (`#D8DDDB`,
   `--color-gallery-wall`) resolved before renderer construction, so gallery,
   hub, fallback surfaces, and the WebGL clear color can never drift apart.
