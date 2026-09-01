@@ -1,5 +1,18 @@
 # FREYRAUM Plan
 
+## Implemented — single-artwork inspection retune (v0.95, 2026-09-01)
+
+> **Status update:** The interactive gallery keeps the v0.94 wall-clearance
+> safety rules, but no longer feels locked to the artwork edge. The front wall
+> now sits farther back via `src/config/galleryPresentation.ts`, and
+> `src/gallery/GalleryManager.ts` again allows a small bounded reveal margin
+> using shared defaults from `src/gallery/inspectionSafety.ts`. The revealed
+> wall remains the authoritative museum-grey token (`#D8DDDB`), and the focused
+> regression coverage in
+> `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`
+> now proves both the restored close-inspection freedom and the retained
+> wall-clearance clamp.
+
 ## Implemented — single-artwork inspection wall-clip fix (v0.94, 2026-09-01)
 
 > **Status update:** The interactive gallery no longer lets close inspection

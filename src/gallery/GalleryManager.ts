@@ -16,7 +16,12 @@ import type { QualityPreset } from '../config/quality';
 import type { StartupReadinessMode } from '../config/startup';
 import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/PaintingTextureSet';
 import { GALLERY_PRESENTATION_CONFIG } from '../config/galleryPresentation';
-import { clampHoverRotationToWallClearance, getInspectionPanLimits } from './inspectionSafety';
+import {
+  clampHoverRotationToWallClearance,
+  DEFAULT_INSPECTION_OVERSCROLL_X,
+  DEFAULT_INSPECTION_OVERSCROLL_Y,
+  getInspectionPanLimits,
+} from './inspectionSafety';
 
 export type NavigationCallback = (index: number) => void;
 export type FrameBudgetMarker = () => void;
@@ -75,9 +80,10 @@ const RESET_REFIT_EPSILON = 0.25;
  * approved horizontal edge reach.
  * v0.94: inspection panning no longer overscrolls past the artwork edge,
  * because doing so exposed the gallery wall/plane through the single-work view.
+ * v0.95: restores a smaller bounded reveal margin now that the stage wall sits
+ * farther back, so close inspection regains some edge travel without reopening
+ * the original clipping issue.
  */
-const INSPECTION_OVERSCROLL_X = 0;
-const INSPECTION_OVERSCROLL_Y = 0;
 const INSPECTION_WALL_CLEARANCE_MARGIN = 0.004;
 
 /**
@@ -839,8 +845,8 @@ export class GalleryManager {
       closeZoomMinVisibleFraction: MIN_VISIBLE_ARTWORK_FRACTION,
       maxZoom: zoomBounds.maxOverviewZoom,
       overviewHeadroom: zoomBounds.maxOverviewZoom - zoomBounds.resetFitZoom,
-      panOverscrollX: INSPECTION_OVERSCROLL_X,
-      panOverscrollY: INSPECTION_OVERSCROLL_Y,
+      panOverscrollX: DEFAULT_INSPECTION_OVERSCROLL_X,
+      panOverscrollY: DEFAULT_INSPECTION_OVERSCROLL_Y,
       panLimitAtReset: {
         x: panLimitsAtReset.x,
         y: panLimitsAtReset.y,
@@ -1712,16 +1718,16 @@ export class GalleryManager {
       metrics.usableFracY;
     const visibleWidth = visibleHeight * metrics.effectiveAspect;
 
-    // v0.94: inspection panning stops at the artwork edge so the gallery wall
-    // never peeks through the single-work view while the current detail region
-    // still remains fully reachable.
+    // v0.95: inspection panning keeps a modest, deliberate wall reveal margin
+    // now that the front wall sits deeper behind the work. Users regain some
+    // edge travel without letting the mounted body clip back through the wall.
     return getInspectionPanLimits({
       artworkWidth: this.artworkMesh.artworkWidth,
       artworkHeight: this.artworkMesh.artworkHeight,
       visibleWidth,
       visibleHeight,
-      overscrollX: INSPECTION_OVERSCROLL_X,
-      overscrollY: INSPECTION_OVERSCROLL_Y,
+      overscrollX: DEFAULT_INSPECTION_OVERSCROLL_X,
+      overscrollY: DEFAULT_INSPECTION_OVERSCROLL_Y,
     });
   }
 

@@ -1,5 +1,37 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-01 (v0.94 single-artwork inspection wall-clip fix).
+> Latest markdown audit: 2026-09-01 (v0.95 single-artwork inspection retune).
+
+## v0.95 — Single-artwork inspection retune (2026-09-01)
+
+### Changed
+
+- Moved the interactive-gallery front wall farther back in
+  `src/config/galleryPresentation.ts` so close inspection regains its intended
+  hover-tilt freedom without letting the mounted artwork reach the wall plane.
+- Replaced the v0.94 zero-overscroll inspection pan with a smaller bounded
+  reveal margin in `src/gallery/GalleryManager.ts`, using shared exported
+  defaults from `src/gallery/inspectionSafety.ts` so users can pan a little past
+  the artwork edge again while the stage still stays visually controlled.
+- Kept the revealed wall on the existing authoritative museum-grey token path
+  (`#D8DDDB`) rather than introducing a gallery-only wall color override.
+- Extended `scripts/test-museum-hub-geometry.mjs` so regressions now assert the
+  deeper front-wall setback, the restored bounded pan margin, full close-hover
+  tilt at inspection scale, and continued clearance clamping for larger hover
+  rotations.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`
+  matches the shipped runtime behavior.
+
+### Validation
+
+- `npm install` ✅ *(required in this fresh environment before lint/build)*
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
 
 ## v0.94 — Single-artwork inspection wall-clip fix (2026-09-01)
 

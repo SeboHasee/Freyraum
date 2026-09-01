@@ -127,8 +127,9 @@ and the harness additionally checks that the hub still renders through the
 dedicated `.museum-hub__canvas` scene bridge rather than per-slot DOM
 projection transforms. It also carries the lightweight shared regression
 assertions for inspection safety in the interactive gallery: close-inspection
-pan may not overscroll into the stage wall, and hover tilt must stay within the
-available front-wall clearance.
+pan may use only the bounded reveal margin, close hover tilt must retain its
+full requested range after the wall setback, and larger hover motion must still
+stay within the available front-wall clearance.
 
 ## Acceptance thresholds (Phase 14)
 

@@ -28,6 +28,8 @@ export interface HoverRotationClearanceResult {
 }
 
 const CORNER_SIGNS = [-1, 1] as const;
+export const DEFAULT_INSPECTION_OVERSCROLL_X = 0.45;
+export const DEFAULT_INSPECTION_OVERSCROLL_Y = 0.24;
 
 export function getInspectionPanLimits(input: InspectionPanLimitInput): { x: number; y: number } {
   return {

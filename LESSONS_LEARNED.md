@@ -1,15 +1,16 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-01 (v0.94 single-artwork inspection wall-clip fix).
+> Latest markdown audit: 2026-09-01 (v0.95 single-artwork inspection retune).
 
 ## 2026-09-01 — Inspection wall-clip fix lesson
 
-### Lesson 92 — Inspection framing must respect the actual stage clearance
+### Lesson 92 — Inspection framing must balance reveal margin against stage clearance
 
 Single-artwork zoom/pan math cannot be derived from artwork dimensions alone
-when the artwork lives inside a real architectural stage. Future rule: any
-inspection overscroll or hover tilt must be bounded against the front-wall
-clearance, or close inspection can expose the wall plane or rotate the mounted
-artwork back through it.
+when the artwork lives inside a real architectural stage. Future rule: retune
+inspection pan reveal and front-wall setback together, then keep hover tilt
+bounded against the real front-wall clearance. Zero overscroll is safe but can
+feel too restrictive; loose overscroll without wall-clearance math exposes the
+wall plane or rotates the mounted artwork back through it.
 
 ## 2026-09-01 — Local file-preview artwork recovery lessons
 

@@ -48,13 +48,14 @@ const ROOM_HEIGHT = 3.4;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
   loadTsModule('src/utils/artworkImageSources.ts'),
   loadTsModule('src/utils/sourceToPixelOutcome.ts'),
   loadTsModule('src/gallery/inspectionSafety.ts'),
+  loadTsModule('src/config/galleryPresentation.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
@@ -302,38 +303,63 @@ assert.equal(
   false,
   'server-backed artwork sources must keep the declared image primary outside explicit debug proof'
 );
+assert.ok(
+  Math.abs(galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallGap - 0.14) < 1e-9,
+  'interactive-gallery inspection wall must stay set back enough to preserve close-view tilt freedom'
+);
+assert.ok(
+  Math.abs(galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ + 0.182) < 1e-9,
+  'interactive-gallery front wall position must reflect the deeper inspection setback'
+);
 const inspectionPan = inspectionSafety.getInspectionPanLimits({
   artworkWidth: 4.2,
   artworkHeight: 5.8,
   visibleWidth: 0.6,
   visibleHeight: 0.8,
-  overscrollX: 0,
-  overscrollY: 0,
+  overscrollX: inspectionSafety.DEFAULT_INSPECTION_OVERSCROLL_X,
+  overscrollY: inspectionSafety.DEFAULT_INSPECTION_OVERSCROLL_Y,
 });
 assert.ok(
-  Math.abs(inspectionPan.x + 0.3 - 2.1) < 1e-9,
-  'single-artwork inspection pan must stop at the artwork edge instead of overscrolling into the gallery wall'
+  Math.abs(inspectionPan.x - 2.25) < 1e-9,
+  'single-artwork inspection pan must restore a bounded horizontal reveal margin for close edge exploration'
 );
 assert.ok(
-  Math.abs(inspectionPan.y + 0.4 - 2.9) < 1e-9,
-  'vertical inspection pan must also stop at the artwork edge'
+  Math.abs(inspectionPan.y - 2.74) < 1e-9,
+  'single-artwork inspection pan must restore a bounded vertical reveal margin without returning to the old loose overscroll'
 );
-const constrainedHover = inspectionSafety.clampHoverRotationToWallClearance({
+const closeHover = inspectionSafety.clampHoverRotationToWallClearance({
   targetRotX: 0.03,
   targetRotY: 0.018,
   artworkWidth: 4.2,
   artworkHeight: 5.8,
   bodyBackDepth: 0.032,
-  wallZ: -0.07,
+  wallZ: galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+  clearanceMargin: 0.004,
+});
+assert.ok(
+  closeHover.appliedScale === 1,
+  'close-inspection hover tilt must retain its full requested range after the front wall setback'
+);
+assert.ok(
+  closeHover.maxBackShift <= closeHover.availableClearance + 1e-6,
+  'close-inspection hover tilt must still keep the mounted artwork in front of the gallery wall'
+);
+const constrainedHover = inspectionSafety.clampHoverRotationToWallClearance({
+  targetRotX: 0.16,
+  targetRotY: 0.08,
+  artworkWidth: 4.2,
+  artworkHeight: 5.8,
+  bodyBackDepth: 0.032,
+  wallZ: galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
   clearanceMargin: 0.004,
 });
 assert.ok(
   constrainedHover.appliedScale > 0 && constrainedHover.appliedScale < 1,
-  'inspection hover tilt must be reduced when the requested angle would push the artwork through the wall plane'
+  'larger overview hover tilt must still be reduced before the mounted artwork can reach the wall plane'
 );
 assert.ok(
   constrainedHover.maxBackShift <= constrainedHover.availableClearance + 1e-6,
-  'constrained hover tilt must keep the mounted artwork in front of the gallery wall'
+  'wall-clearance clamping must remain authoritative even after the inspection setback retune'
 );
 const shipping = museumHub.resolveMuseumHub(artworks, shippingConfig, null);
 assert.deepEqual(shipping.warnings, [], `shipping calibration warnings: ${shipping.warnings.join('; ')}`);

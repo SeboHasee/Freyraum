@@ -1,6 +1,6 @@
 # FINDINGS
 
-## Single-artwork inspection wall-clip findings (v0.94, 2026-09-01)
+## Single-artwork inspection wall-clearance retune findings (v0.95, 2026-09-01)
 
 1. The bug is in the interactive single-artwork gallery route, not the museum
    hub. The relevant path is `src/gallery/GalleryManager.ts` plus
@@ -13,19 +13,29 @@
 3. Hover tilt was a second contributing factor: even at inspection-scale
    rotation values, the mounted artwork could rotate backward farther than the
    current wall clearance and visually intersect the wall plane.
-4. The bounded fix is therefore two-part:
-   - stop inspection pan exactly at the artwork edge instead of overscrolling
-     into the wall;
-   - clamp hover rotation to the actual stage clearance so the mounted artwork
-     remains in front of the wall even when the pointer target or zoom level
-     changes.
-5. This is a geometry/framing incident, not a texture/material/lighting issue.
-   Changing `PaintingMaterial`, lighting, or source-image logic would not solve
-   the underlying wall exposure.
-6. Regression coverage can stay lightweight and deterministic as pure geometry
+4. The first safe fix (v0.94) proved that zero overscroll plus wall-clearance
+   clamping removed the clipping, but it also made inspection feel too tight at
+   the artwork edge.
+5. The shipped retune is therefore three-part:
+   - move the gallery front wall farther back by increasing
+     `ARTWORK_WALL_GAP` in `src/config/galleryPresentation.ts`;
+   - restore only a smaller bounded inspection reveal margin
+     (`DEFAULT_INSPECTION_OVERSCROLL_X = 0.45`,
+     `DEFAULT_INSPECTION_OVERSCROLL_Y = 0.24`) through the shared
+     `src/gallery/inspectionSafety.ts` helper;
+   - keep hover rotation clamped to the actual stage clearance so the mounted
+     artwork still remains in front of the wall even when the pointer target or
+     zoom level changes.
+6. The visible wall color stays on the existing authoritative museum-grey token
+   path (`#D8DDDB`). This was a geometry/framing incident, not a
+   texture/material/lighting issue, so the correct fix is to reveal the same
+   wall more safely rather than inventing a separate inspection-only wall tint.
+7. Regression coverage can stay lightweight and deterministic as pure geometry
    assertions. The inspection safety rules are now verified in
    `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`
-   alongside the existing shared rendering-contract checks.
+   alongside the existing shared rendering-contract checks, including the deeper
+   wall setback, bounded pan margin, full close-hover tilt, and continued clamp
+   at larger hover rotations.
 
 ## Local file-preview blank-artwork recovery findings (v0.93, 2026-09-01)
 
