@@ -1,5 +1,146 @@
 # FREYRAUM Plan
 
+## Planned — file:// local-preview blank-artwork recovery (v0.93, 2026-09-01)
+
+> **Planning/docs only.** This section analyzes the user-provided local screenshot
+> against the current source tree. No runtime, importer, or generated-asset
+> change was made in this planning pass.
+
+### 1. Screenshot-backed diagnosis
+
+1. The screenshot is the **museum hub** route
+   (`src/hub/MainMuseumHub.ts` + `src/hub/HubRoomRenderer.ts`), not the
+   interactive gallery.
+2. Room shell, camera, wall ownership, mounted depth, contact shadows, and slot
+   selection are all working. The yellow focus outline and six mounted planes
+   prove that the hub geometry path is alive; the failure is not a missing room,
+   broken camera, or missing slot mapping.
+3. The planes in the screenshot are **flat blank panels**, not the current
+   explicit placeholder signatures:
+   - not `HubRoomRenderer.placeholderTexture(label)`, which would show the
+     artwork title and border;
+   - not the gallery’s branded FREYRAUM gradient fallback.
+4. The checked-in repository currently tracks a two-artwork example
+   (`Fraktal.png` / `Akt 27.png` on the front wall), but the screenshot shows a
+   larger locally generated bundle with left/front/right-wall mappings. That
+   local data difference matters, but the uniform “all planes blank” symptom
+   still points to a **route-level visibility failure**, not one isolated bad
+   artwork file.
+5. Most likely failing boundary: **source selection succeeded far enough to
+   mount a real artwork plane, but visible customer pixels did not survive the
+   final compatibility/downscale → GPU upload → rendered-output path in the
+   local `file://` preview.**
+
+### 2. Current-source evidence behind that diagnosis
+
+1. `/home/runner/work/Freyraum/Freyraum/index.html` is only a launcher. It
+   redirects to `./customer-preview/app.html`, so the screenshot reflects the
+   static local preview runtime, not the launcher page itself.
+2. `/home/runner/work/Freyraum/Freyraum/scripts/import-artworks.mjs` still emits
+   embedded `webglImage` data specifically to keep the offline/local WebGL path
+   recoverable, and it stamps `customer-preview/app.html` script URLs with
+   `?t=...` to avoid stale `file://` cache reads.
+3. `MainMuseumHub.resolveSlotImage()` only retries the embedded `webglImage`
+   candidate when the primary source fails during **request/decode**. A source
+   that loads/decodes but still becomes blank after texture binding stays on the
+   nominal “ready” path.
+4. `HubRoomRenderer.upsertSlot()` binds the image texture once a decoded image
+   exists. Its bounded visible-pixel probe is currently advisory-only: it can
+   warn in verbose diagnostics, but it does not demote the slot to failure or
+   trigger a fallback retry.
+5. `MainMuseumHub.recordHubSourceToPixelOutcome()` and
+   `TextureManager.recordAlbedoOutcome()` currently still record terminal
+   `result: 'success'` on the happy path even when a verbose visible-pixel probe
+   could prove that the bound texture did not produce the real artwork pixels.
+6. The launcher currently drops `location.search` / `location.hash` when it
+   redirects into `customer-preview/app.html`, which makes local support capture
+   harder because `?debug=verbose&hubDebug=1` does not survive a root
+   `index.html` launch.
+
+### 3. Decision and first implementation-PR scope
+
+- Fix the **local file-preview artwork visibility** problem first: the user must
+  see the actual artwork texture on the wall instead of a blank grey plane.
+- Keep importer-owned `image`, `webglImage`, `dimensions`, and
+  `customer-artworks/museum-hub.json` semantics intact unless the failing path
+  proves one of them is insufficient.
+- Do **not** mask the issue with lighting, bloom, tone mapping, material, or
+  geometry changes. The screenshot already shows that the room presentation is
+  present; the missing piece is the artwork texture visibility.
+- Keep the declared `image` asset authoritative for dev/server/Pages. Any
+  offline-specific recovery must stay narrowly scoped to the proven local
+  `file://` failure mode.
+
+### 4. Planned implementation slices
+
+1. **Make the local failure reproducible from the supported launcher path**
+   - Forward `location.search` and `location.hash` from root `index.html` into
+     `customer-preview/app.html` so local support/debug runs keep
+     `?debug=verbose&hubDebug=1`.
+   - Record explicit preview context in diagnostics: protocol, bundle id,
+     winning candidate mode, and whether the bound source was a `file-url` or an
+     embedded data fallback.
+2. **Promote visible-pixel proof from advisory to authoritative**
+   - If the bounded probe runs and fails, do not log terminal success for that
+     candidate.
+   - Classify the first failed stage as `gpu-upload` or
+     `visible-pixel-probe`, not `success`.
+   - Keep the expensive readback off normal served traffic unless it is required
+     to recover the local preview path.
+3. **Add one bounded post-upload recovery step before blank planes are shown**
+   - When a decoded primary `file-url` candidate reaches a blank/no-visible-pixel
+     outcome in the hub or gallery, retry the embedded `webglImage` candidate
+     through the same compatibility/downscale path.
+   - If that retry succeeds, record the file-based candidate as failed at the
+     GPU-visible stage and the embedded candidate as the actual winner.
+   - If both candidates fail, fall through to the existing truthful
+     placeholder/fallback path.
+4. **Keep file:// recovery shared and explicit**
+   - Isolate the local-preview decision in shared helpers instead of drifting the
+     hub and gallery into separate one-off fixes.
+   - Do not make embedded data the primary source everywhere; keep the current
+     declared-image contract for server-backed environments.
+5. **Add regression coverage for the exact screenshot class**
+   - Add a local-preview/file-URL validation path that opens
+     `/home/runner/work/Freyraum/Freyraum/index.html` or
+     `/home/runner/work/Freyraum/Freyraum/customer-preview/app.html`.
+   - Assert that mapped hub artworks show visible customer pixels and never
+     settle on blank untextured planes.
+   - Include a fixture where the declared file-based source is present but the
+     embedded fallback must rescue WebGL visibility.
+
+### 5. Files likely to change in the implementation PR
+
+- `/home/runner/work/Freyraum/Freyraum/index.html`
+- `/home/runner/work/Freyraum/Freyraum/src/utils/sourceToPixelOutcome.ts`
+- `/home/runner/work/Freyraum/Freyraum/src/utils/sourceToPixelProbe.ts`
+- `/home/runner/work/Freyraum/Freyraum/src/utils/artworkImageSources.ts`
+- `/home/runner/work/Freyraum/Freyraum/src/gallery/TextureManager.ts`
+- `/home/runner/work/Freyraum/Freyraum/src/hub/MainMuseumHub.ts`
+- `/home/runner/work/Freyraum/Freyraum/src/hub/HubRoomRenderer.ts`
+- `/home/runner/work/Freyraum/Freyraum/scripts/visual-regression.mjs` and/or a
+  focused local-preview validator
+- `/home/runner/work/Freyraum/Freyraum/docs/QUERY_PARAMETERS.md`,
+  `/home/runner/work/Freyraum/Freyraum/docs/CUSTOMER_PICTURE_GUIDE.md`,
+  `/home/runner/work/Freyraum/Freyraum/FINDINGS.md`, and
+  `/home/runner/work/Freyraum/Freyraum/CHANGELOG.md`
+
+### 6. Acceptance criteria for the fix
+
+- Opening `/home/runner/work/Freyraum/Freyraum/index.html` locally on a customer
+  machine still launches the committed preview, but the wall artworks show the
+  **real pictures** instead of blank grey planes.
+- A route may not record terminal `source-to-pixel-outcome.result = 'success'`
+  when the visible result is a blank plane.
+- The fallback from file-based source to embedded `webglImage` is exercised only
+  when the file-based candidate fails at the GPU-visible boundary or earlier.
+- Dev/server/Pages rendering continues to prefer the declared `image` source.
+- Implementation validation uses the repository’s existing command set:
+  `npm run import:artworks`, `npm run lint`, `npm run build:typecheck`,
+  `npm run build`, `npm run validate:museum-hub`,
+  `npm run test:frame-budget`, and `npm run docs:check-config-authority`,
+  plus an explicit local `file://` preview check.
+
 ## Implemented — Verified pixel-recovery plan for persistent grey artworks (v0.92, 2026-08-07)
 
 > **Status update:** Phases 2 and 3 are implemented in runtime code. Both routes
