@@ -1,18 +1,21 @@
 # FREYRAUM coding guidelines
-> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
+> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
 
 ## v0.29 rendering/preload coding guideline
 
 For any future startup smoothness fix, separate and log: fetch/decode, CPU cache, procedural generation, material binding, shader compile, GPU upload draw, final composer render, browser presentation, and UI/control prebuild. Do not enable user entry until the final render path has presented full-size frames behind the opaque loader.
 
-## v0.92 artwork visibility guideline
+## v0.93 artwork visibility guideline
 
 Keep customer image recovery as an explicit, bounded source-to-pixel state
 machine: candidate request, decode, compatibility decision, texture upload/map
 binding, and final visible result. Redact URLs and never log image bytes. Retry
 the embedded source only once; when both candidates exceed a device texture
 limit, derive one bounded raster instead of retrying the same bytes or silently
-displaying a grey fallback.
+displaying a grey fallback. For local-preview regressions, validate the actual
+`file://` launcher or `customer-preview/app.html` bundle, not only Vite dev or
+Pages output; the shipped hub exception that prefers embedded `webglImage` is
+bounded to that offline case.
 
 
 

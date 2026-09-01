@@ -39,7 +39,9 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback
-    slot state, and read-only geometry/source diagnostics overlay
+    slot state, offline `file://` hub source preference/decode deadlines for
+    local customer preview reliability, and read-only geometry/source
+    diagnostics overlay
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
@@ -72,11 +74,17 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 
 ## Active artwork-recovery boundary
 
-The v0.91 source-addressing layer is current runtime behavior. The active v0.92
-plan extends it with a shared source-to-pixel outcome and capability-aware
-derived texture path; it is not implemented yet. Keep hub `MeshBasicMaterial`
-image recovery separate from interactive-gallery PBR fidelity work. See
-`plan.md § v0.92` for the staged implementation and `FINDINGS.md` for evidence.
+The v0.93 artwork-recovery contract is current runtime behavior. Gallery and
+hub share the same declared-image versus embedded-fallback source plan, shared
+source-to-pixel diagnostics, visible-pixel proof, and capability-aware texture
+upload path. Served environments keep the declared `image` source primary. The
+bounded local-preview exception lives in `MainMuseumHub`: when the runtime is
+the offline `file://` preview and the declared hub artwork resolves to a local
+`file-url`, the hub may prefer the importer-provided embedded `webglImage`
+immediately because that is the WebGL-stable path proven by the v0.93 fix. Keep
+this recovery separate from interactive-gallery PBR/lighting fidelity work. See
+`plan.md § v0.93` and `FINDINGS.md` for the incident evidence and support
+workflow.
 
 ## Render-loop behavior
 

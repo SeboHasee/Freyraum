@@ -12,6 +12,14 @@ npm run build
 npm run test:frame-budget
 ```
 
+For artwork/importer/museum-hub/runtime-doc changes also run:
+
+```bash
+npm run import:artworks
+npm run validate:museum-hub
+npm run docs:check-config-authority
+```
+
 For dependency changes also run:
 
 ```bash
@@ -34,7 +42,11 @@ If docs are not updated, the PR is incomplete.
 When a user reports that a documented or shipped visual recovery still fails,
 reopen the incident in `plan.md` and `FINDINGS.md`. Do not keep an unverified
 "fixed" claim: reproduce with the current customer bundle and document the
-first failed source-to-pixel stage before choosing a rendering change.
+first failed source-to-pixel stage before choosing a rendering change. For a
+local blank-artwork report, reproduce the exact `customer-preview/app.html`
+`file://` preview with the documented diagnostics query from
+`docs/QUERY_PARAMETERS.md`, preserve the generated `customer-artworks.js` plus
+matching `images/` evidence, and only then choose a runtime fix.
 
 ## Source-of-truth rules
 

@@ -42,6 +42,11 @@ reference asset, not a shipped runtime background).
 Open `customer-preview/app.html` to verify the local preview looks correct
 before publishing.
 
+> **Evidence note:** a fresh clone does not contain the generated
+> `customer-preview/customer-artworks.js` / `customer-preview/customer-audio.js`
+> bundle until you run the importer once. Do not treat a pre-import preview as
+> evidence for or against the current customer artwork state.
+
 > **Note:** `Update Gallery.bat` / `Update Gallery.command` still works for the
 > local file-based preview. Use `npm run import:artworks` when you want to
 > validate the exact output that CI will build.
@@ -122,7 +127,8 @@ After the workflow completes:
 ### If an artwork is grey after deployment
 
 1. Record whether the symptom is in the interactive gallery (generated
-   FREYRAUM-style fallback) or the museum hub (title-bearing placeholder).
+   FREYRAUM-style fallback), the museum hub (title-bearing placeholder), or a
+   blank local `file://` hub wall plane.
 2. Download or preserve the exact deployed `customer-artworks.js` and matching
    `images/` directory before rerunning the importer. The generated script now
    carries `window.__FREYRAUM_ARTWORK_BUNDLE__.assetBaseUrl`; keep that value in
@@ -132,9 +138,10 @@ After the workflow completes:
 4. Confirm the published image request resolves under `/Freyraum/images/` and
    returns an image with a non-zero decoded size. Do not try to compensate by
    changing lighting, material, or customer metadata.
-5. Follow the source-to-pixel recovery process in `plan.md § v0.92`; it covers
-   missing/stale bundles, relative-path resolution, fallback payloads, CORS,
-   decode deadlines, GPU binding proof, and texture-size limits.
+5. Follow the source-to-pixel recovery process in `plan.md § v0.93`; it covers
+   missing/stale bundles, relative-path resolution, fallback payloads, local
+   `file://` hub recovery, decode deadlines, GPU binding proof, and
+   texture-size limits.
 
 ---
 

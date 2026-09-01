@@ -1,5 +1,27 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
+> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+
+## 2026-09-01 — Local file-preview artwork recovery lessons
+
+### Lesson 90 — `file://` decode success is not proof of visible WebGL artwork
+
+A customer image can load and decode from a local file URL yet still collapse
+into a blank museum-hub plane after the texture path reaches WebGL. Future
+rule: when a customer reports blank hub artworks, reproduce the exact
+`file://` preview with the generated bundle, inspect the
+`source-to-pixel-outcome` record, and keep the embedded `webglImage` recovery
+bounded to the offline hub case instead of changing lighting or material
+behavior first.
+
+### Lesson 91 — Fresh-clone preview evidence requires generated customer scripts
+
+`customer-preview/customer-artworks.js` and `customer-preview/customer-audio.js`
+are generated files, not committed source. A fresh clone can therefore miss the
+current customer preview bundle until `npm run import:artworks` or
+`Update Gallery.command` / `Update Gallery.bat` is run. Future rule: before
+diagnosing a local preview report, first confirm the generated preview scripts
+and matching `images/` output exist and preserve them as evidence before
+re-importing.
 
 ## 2026-08-07 — Grey-artwork recovery lesson
 

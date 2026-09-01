@@ -1,4 +1,4 @@
-# Regression Validation Tooling (v0.92)
+# Regression Validation Tooling (v0.93)
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -31,9 +31,9 @@ the embedded fallback recovers it without exposing placeholder mode, so
 hub/gallery artwork-source regressions fail even when the final pixels still
 match the baseline.
 
-For the persistent-grey-artwork recovery, retain the existing primary-failure /
-embedded-fallback fixture **and** the new v0.93 post-upload blank fixture. The
-visual harness now needs to prove both:
+For the shipped v0.93 artwork-recovery path, retain the existing
+primary-failure / embedded-fallback fixture **and** the post-upload blank
+fixture. The visual harness now needs to prove both:
 
 - request/decode failure still recovers through `webglImage`;
 - a decoded `file://` primary that reaches upload but produces blank pixels also
@@ -43,6 +43,13 @@ Keep the broader gates as well: the real current PNG bundle in `file://`, Vite,
 and Pages-base delivery; preview/public/dist asset-contract checks; typed final
 placeholder and delayed-decode diagnostics; source-to-pixel binding proof; and
 capability-limited image handling.
+
+Because the user-visible blank-plane bug was environment-specific, every future
+artwork-visibility investigation must also replay the local
+`file://` preview (`customer-preview/app.html?debug=verbose&hubDebug=1`) with
+the generated `customer-artworks.js` and matching `images/` bundle preserved as
+evidence. The scripted gates are necessary but not sufficient for this class of
+incident.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.

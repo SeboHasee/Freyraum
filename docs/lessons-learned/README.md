@@ -1,5 +1,12 @@
 # Lessons learned docs
-> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
+> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+
+## v0.93 lesson index update
+
+See `../../LESSONS_LEARNED.md § 2026-09-01 — Local file-preview artwork
+recovery lessons` for the key rules: local `file://` image decode does not
+guarantee visible WebGL artwork, and fresh-clone preview investigations must
+first confirm the generated customer preview bundle exists.
 
 ## v0.47 lesson index update
 

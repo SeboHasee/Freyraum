@@ -3,7 +3,7 @@
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
 
-Verified against runtime code on 2026-08-07.
+Verified against runtime code on 2026-09-01.
 
 ## Query parameters
 
@@ -49,7 +49,7 @@ Notes:
   change mounted height. Drag wall/safe handles to recalibrate the wall plane.
 - The panel includes an active-wall selector, live overlap/convexity/safe-zone/
   minimum-size warnings, and a restore-last-valid action.
-- On release, the complete v3 `museum-hub.json` schema (single calibrated
+- On release, the complete v4 `museum-hub.json` schema (single calibrated
   camera, metric-like wall planes, doorway exclusions, hanging bands, slot
   anchors, fallback background, visual tokens, and slots) appears in the
   on-screen copy panel and is logged via diagnostics. Exported room planes are
@@ -58,8 +58,8 @@ Notes:
 - Paste the JSON into `customer-artworks/museum-hub.json` and re-run the
   gallery update (`npm run import:artworks`) to apply it.
 - Legacy `customer-artworks/hub-hotspots.json` and v1/v2 box placements still
-  migrate automatically with warnings; new exports always use the v3 calibrated-room
-  format.
+  migrate automatically with warnings; new exports always use the v4
+  calibrated-room format.
 - Slot/page navigation is disabled while calibrating.
 
 ### `?hubDebug=1`
@@ -96,9 +96,12 @@ when it forwards into `customer-preview/app.html`. Relevant current records are:
   terminal record per artwork per route naming the resolved candidate,
   first failed stage (if any), runtime protocol, source/upload dimensions, and
   the bounded GPU visible-pixel proof result when that proof is required. This
-  is the primary record to check first; local `file://` sessions now treat a
-  blank post-upload probe as a real failure and may retry `webglImage`; see
-  `plan.md § v0.93`.
+  is the primary record to check first. A healthy local `file://` museum-hub
+  recovery can now legitimately end with
+  `candidateMode: "embedded-webgl-fallback"` and
+  `resolvedUrlType: "data-uri"` even when the declared image file exists,
+  because the shipped v0.93 fix prefers the embedded `webglImage` when a local
+  `file-url` is not WebGL-stable; see `plan.md § v0.93`.
 - `hub:artwork-source-resolved`
 - `hub:artwork-image-retry`
 - `hub:artwork-image-missing`

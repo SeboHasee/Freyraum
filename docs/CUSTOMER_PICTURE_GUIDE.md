@@ -85,6 +85,10 @@ copies into `customer-artworks/inbox/`.
 - If Node.js is missing, install Node.js LTS and run again.
 - If the report contains warnings, fix the listed files and run update again.
 - If preview content looks stale, rerun update and refresh the page.
+- If you open the preview in a fresh clone or freshly unzipped folder before
+  running update, `customer-preview/customer-artworks.js` and
+  `customer-preview/customer-audio.js` may not exist yet. Run
+  `Update Gallery.command` / `Update Gallery.bat` once, then reopen the preview.
 - If a painting appears as a grey FREYRAUM-style fallback or a hub title
   placeholder, keep the generated `customer-artworks.js` and `images/` output,
   then capture the diagnostics described in `docs/QUERY_PARAMETERS.md`. Local
