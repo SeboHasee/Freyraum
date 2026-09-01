@@ -48,12 +48,13 @@ const ROOM_HEIGHT = 3.4;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
   loadTsModule('src/utils/artworkImageSources.ts'),
   loadTsModule('src/utils/sourceToPixelOutcome.ts'),
+  loadTsModule('src/gallery/inspectionSafety.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
@@ -300,6 +301,39 @@ assert.equal(
   ),
   false,
   'server-backed artwork sources must keep the declared image primary outside explicit debug proof'
+);
+const inspectionPan = inspectionSafety.getInspectionPanLimits({
+  artworkWidth: 4.2,
+  artworkHeight: 5.8,
+  visibleWidth: 0.6,
+  visibleHeight: 0.8,
+  overscrollX: 0,
+  overscrollY: 0,
+});
+assert.ok(
+  Math.abs(inspectionPan.x + 0.3 - 2.1) < 1e-9,
+  'single-artwork inspection pan must stop at the artwork edge instead of overscrolling into the gallery wall'
+);
+assert.ok(
+  Math.abs(inspectionPan.y + 0.4 - 2.9) < 1e-9,
+  'vertical inspection pan must also stop at the artwork edge'
+);
+const constrainedHover = inspectionSafety.clampHoverRotationToWallClearance({
+  targetRotX: 0.03,
+  targetRotY: 0.018,
+  artworkWidth: 4.2,
+  artworkHeight: 5.8,
+  bodyBackDepth: 0.032,
+  wallZ: -0.07,
+  clearanceMargin: 0.004,
+});
+assert.ok(
+  constrainedHover.appliedScale > 0 && constrainedHover.appliedScale < 1,
+  'inspection hover tilt must be reduced when the requested angle would push the artwork through the wall plane'
+);
+assert.ok(
+  constrainedHover.maxBackShift <= constrainedHover.availableClearance + 1e-6,
+  'constrained hover tilt must keep the mounted artwork in front of the gallery wall'
 );
 const shipping = museumHub.resolveMuseumHub(artworks, shippingConfig, null);
 assert.deepEqual(shipping.warnings, [], `shipping calibration warnings: ${shipping.warnings.join('; ')}`);

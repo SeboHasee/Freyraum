@@ -1,5 +1,32 @@
 # FINDINGS
 
+## Single-artwork inspection wall-clip findings (v0.94, 2026-09-01)
+
+1. The bug is in the interactive single-artwork gallery route, not the museum
+   hub. The relevant path is `src/gallery/GalleryManager.ts` plus
+   `src/gallery/ArtworkMesh.ts` and the front-wall geometry in
+   `src/core/GalleryPresentationStage.ts`.
+2. The issue appears only during close inspection because the previous pan math
+   intentionally allowed additive overscroll past the artwork edge. That exposed
+   the front stage wall behind the artwork whenever the user dragged the view to
+   an extreme.
+3. Hover tilt was a second contributing factor: even at inspection-scale
+   rotation values, the mounted artwork could rotate backward farther than the
+   current wall clearance and visually intersect the wall plane.
+4. The bounded fix is therefore two-part:
+   - stop inspection pan exactly at the artwork edge instead of overscrolling
+     into the wall;
+   - clamp hover rotation to the actual stage clearance so the mounted artwork
+     remains in front of the wall even when the pointer target or zoom level
+     changes.
+5. This is a geometry/framing incident, not a texture/material/lighting issue.
+   Changing `PaintingMaterial`, lighting, or source-image logic would not solve
+   the underlying wall exposure.
+6. Regression coverage can stay lightweight and deterministic as pure geometry
+   assertions. The inspection safety rules are now verified in
+   `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`
+   alongside the existing shared rendering-contract checks.
+
 ## Local file-preview blank-artwork recovery findings (v0.93, 2026-09-01)
 
 > **As-built update:** The shipped local-preview repair is narrower than the

@@ -125,7 +125,10 @@ the bounded missing-background fallback. Threshold breaches hard-fail
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the
 dedicated `.museum-hub__canvas` scene bridge rather than per-slot DOM
-projection transforms.
+projection transforms. It also carries the lightweight shared regression
+assertions for inspection safety in the interactive gallery: close-inspection
+pan may not overscroll into the stage wall, and hover tilt must stay within the
+available front-wall clearance.
 
 ## Acceptance thresholds (Phase 14)
 

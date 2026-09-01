@@ -15,6 +15,8 @@ import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import type { QualityPreset } from '../config/quality';
 import type { StartupReadinessMode } from '../config/startup';
 import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/PaintingTextureSet';
+import { GALLERY_PRESENTATION_CONFIG } from '../config/galleryPresentation';
+import { clampHoverRotationToWallClearance, getInspectionPanLimits } from './inspectionSafety';
 
 export type NavigationCallback = (index: number) => void;
 export type FrameBudgetMarker = () => void;
@@ -71,9 +73,12 @@ const RESET_REFIT_EPSILON = 0.25;
  * reset-fit where a flat additive overscroll can feel too loose.
  * v0.14.2: split by axis so vertical pan can be tighter without reducing the
  * approved horizontal edge reach.
+ * v0.94: inspection panning no longer overscrolls past the artwork edge,
+ * because doing so exposed the gallery wall/plane through the single-work view.
  */
-const INSPECTION_OVERSCROLL_X = 1.2;
-const INSPECTION_OVERSCROLL_Y = 0.6;
+const INSPECTION_OVERSCROLL_X = 0;
+const INSPECTION_OVERSCROLL_Y = 0;
+const INSPECTION_WALL_CLEARANCE_MARGIN = 0.004;
 
 /**
  * v0.15 — Frame-rate-independent smoothing factors (per second).
@@ -774,6 +779,9 @@ export class GalleryManager {
     // P-02 v0.40: update frame surface seed so each artwork shows a distinct
     // deterministic texture phase, preventing phase alignment across the gallery.
     this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions, presentation);
+    const constrainedHover = this.clampHoverTargetToStageClearance(this.targetX, this.targetY);
+    this.targetX = constrainedHover.targetRotX;
+    this.targetY = constrainedHover.targetRotY;
     this.markReadiness(index, 'materialApplied', 'show-artwork');
     this.markRenderDirty(8);
 
@@ -1489,9 +1497,10 @@ export class GalleryManager {
   }
 
   setHoverTarget(x: number, y: number): void {
-    if (this.targetY === x && this.targetX === y) return;
-    this.targetY = x;
-    this.targetX = y;
+    const constrained = this.clampHoverTargetToStageClearance(y, x);
+    if (this.targetY === constrained.targetRotY && this.targetX === constrained.targetRotX) return;
+    this.targetY = constrained.targetRotY;
+    this.targetX = constrained.targetRotX;
     this.markRenderDirty(2);
   }
 
@@ -1576,6 +1585,9 @@ export class GalleryManager {
     const bounds = this.getZoomBounds(metrics);
     this.targetZoom = this.clampZoom(this.targetZoom, bounds);
     this.clampPanTargets(metrics, bounds);
+    const constrainedHover = this.clampHoverTargetToStageClearance(this.targetX, this.targetY);
+    this.targetX = constrainedHover.targetRotX;
+    this.targetY = constrainedHover.targetRotY;
 
     if (dt <= 0) return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
 
@@ -1700,12 +1712,32 @@ export class GalleryManager {
       metrics.usableFracY;
     const visibleWidth = visibleHeight * metrics.effectiveAspect;
 
-    // v0.03: allow viewport centre to reach the artwork edge plus an explicit
-    // overscroll margin so every corner is reachable during close inspection.
-    return {
-      x: Math.max(0, (this.artworkMesh.artworkWidth - visibleWidth) * 0.5 + INSPECTION_OVERSCROLL_X),
-      y: Math.max(0, (this.artworkMesh.artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL_Y),
-    };
+    // v0.94: inspection panning stops at the artwork edge so the gallery wall
+    // never peeks through the single-work view while the current detail region
+    // still remains fully reachable.
+    return getInspectionPanLimits({
+      artworkWidth: this.artworkMesh.artworkWidth,
+      artworkHeight: this.artworkMesh.artworkHeight,
+      visibleWidth,
+      visibleHeight,
+      overscrollX: INSPECTION_OVERSCROLL_X,
+      overscrollY: INSPECTION_OVERSCROLL_Y,
+    });
+  }
+
+  private clampHoverTargetToStageClearance(
+    targetRotX: number,
+    targetRotY: number
+  ): ReturnType<typeof clampHoverRotationToWallClearance> {
+    return clampHoverRotationToWallClearance({
+      targetRotX,
+      targetRotY,
+      artworkWidth: this.artworkMesh.artworkWidth,
+      artworkHeight: this.artworkMesh.artworkHeight,
+      bodyBackDepth: this.artworkMesh.bodyBackExtent,
+      wallZ: GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+      clearanceMargin: INSPECTION_WALL_CLEARANCE_MARGIN,
+    });
   }
 
   private getZoomBounds(metrics = this.getViewportMetrics()): ZoomBounds {

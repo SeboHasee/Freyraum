@@ -220,6 +220,11 @@ export class ArtworkMesh {
     return this._artworkHeight;
   }
 
+  /** Maximum mounted-body depth behind the painted plane, including front clearance. */
+  get bodyBackExtent(): number {
+    return this.activeBodyDepth + GALLERY_PRESENTATION_CONFIG.artworkBodyFrontClearance;
+  }
+
   /** v0.08: 'manifest' when aspect came from the declared artwork dimensions, 'texture' when derived from the loaded image. */
   get lastAspectSource(): 'manifest' | 'texture' {
     return this._lastAspectSource;

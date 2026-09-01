@@ -1,5 +1,35 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-01 (v0.94 single-artwork inspection wall-clip fix).
+
+## v0.94 — Single-artwork inspection wall-clip fix (2026-09-01)
+
+### Changed
+
+- Tightened single-artwork inspection pan bounds in
+  `src/gallery/GalleryManager.ts` so close inspection no longer overscrolls past
+  the artwork edge into the gallery wall/plane.
+- Added shared gallery inspection-safety math in
+  `src/gallery/inspectionSafety.ts` and used it to clamp hover tilt against the
+  actual front-wall clearance, preventing the mounted artwork from rotating back
+  through the stage wall during inspection.
+- Exposed the mounted-body back extent from `src/gallery/ArtworkMesh.ts` so the
+  clearance guard can account for both the painted plane and its shallow support
+  body.
+- Extended `scripts/test-museum-hub-geometry.mjs` with focused assertions for
+  single-artwork inspection pan bounds and hover-tilt wall clearance.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`
+  matches the shipped runtime behavior.
+
+### Validation
+
+- `npm install` ✅ *(required in this fresh environment before lint/build)*
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
 
 ## v0.93 — Local file-preview artwork recovery (2026-09-01)
 

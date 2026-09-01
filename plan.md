@@ -1,5 +1,18 @@
 # FREYRAUM Plan
 
+## Implemented — single-artwork inspection wall-clip fix (v0.94, 2026-09-01)
+
+> **Status update:** The interactive gallery no longer lets close inspection
+> drift or tilt into the front wall. `src/gallery/GalleryManager.ts` now stops
+> inspection pan at the artwork edge, and the new
+> `src/gallery/inspectionSafety.ts` clamps hover tilt against the real stage
+> clearance using the active artwork size plus mounted-body depth from
+> `src/gallery/ArtworkMesh.ts`. This keeps detailed inspection fully usable
+> without revealing or intersecting the background wall plane. Focused
+> regression coverage lives in
+> `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`,
+> and validation is recorded in `CHANGELOG.md`.
+
 ## Implemented — file:// local-preview blank-artwork recovery (v0.93, 2026-09-01)
 
 > **Status update:** Root `/home/runner/work/Freyraum/Freyraum/index.html` keeps

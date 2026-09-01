@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-01 (v0.94 single-artwork inspection wall-clip fix).
+
+## 2026-09-01 — Inspection wall-clip fix lesson
+
+### Lesson 92 — Inspection framing must respect the actual stage clearance
+
+Single-artwork zoom/pan math cannot be derived from artwork dimensions alone
+when the artwork lives inside a real architectural stage. Future rule: any
+inspection overscroll or hover tilt must be bounded against the front-wall
+clearance, or close inspection can expose the wall plane or rotate the mounted
+artwork back through it.
 
 ## 2026-09-01 — Local file-preview artwork recovery lessons
 
