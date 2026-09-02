@@ -396,8 +396,13 @@ assert.ok(
 );
 assert.equal(
   hubSurfaces.wall.userData.architecturalSurfaceProfile,
-  'hub-world-space',
+  'hub-world-space-wall',
   'hub wall must identify its non-repeating world-space response'
+);
+assert.equal(
+  hubSurfaces.floor.userData.architecturalSurfaceProfile,
+  'hub-world-space-floor',
+  'hub floor must identify its non-repeating mineral response'
 );
 assert.ok(
   architecture.HUB_WALL_SURFACE_PROFILE.minimumPatternPeriodM > Math.max(ROOM_WIDTH, ROOM_DEPTH),
@@ -405,8 +410,17 @@ assert.ok(
 );
 assert.ok(
   architecture.HUB_WALL_SURFACE_PROFILE.colorVariation === 0
-    && architecture.HUB_WALL_SURFACE_PROFILE.roughnessVariation <= 0.005,
-  'hub wall must avoid procedural color clouding and keep roughness variation imperceptible'
+    && architecture.HUB_WALL_SURFACE_PROFILE.roughnessVariation <= 0.015,
+  'hub wall must avoid procedural color clouding and keep roughness variation restrained'
+);
+assert.ok(
+  architecture.HUB_WALL_SURFACE_PROFILE.wallNormalStrength > 0
+    && architecture.HUB_WALL_SURFACE_PROFILE.wallNormalStrength <= 0.02,
+  'hub plaster must retain a subtle PBR micro-normal response'
+);
+assert.ok(
+  architecture.HUB_WALL_SURFACE_PROFILE.floorColorVariation <= 0.015,
+  'hub floor mineral variation must remain below visible grunge strength'
 );
 assert.ok(
   hubSurfaces.wall.color.r > 0.84
@@ -414,11 +428,17 @@ assert.ok(
     && hubSurfaces.wall.color.b > 0.8,
   'hub wall finish must remain a bright warm off-white'
 );
+assert.ok(
+  hubSurfaces.lightStrip.isMeshStandardMaterial
+    && hubSurfaces.lightStrip.emissiveIntensity > 0
+    && hubSurfaces.lightStrip.emissiveIntensity < 1,
+  'hub luminaires must use restrained emissive PBR material instead of flat unlit rectangles'
+);
 hubSurfaceFactory.dispose();
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.hemisphere.intensity
-    > hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity * 0.85,
-  'hub ambient wash must remain broad enough to avoid directional wall hotspots'
+    < hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity,
+  'hub daylight key must exceed the ambient wash so architecture retains directional gradients'
 );
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity
@@ -442,6 +462,27 @@ assert.ok(
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.key.position[1] >= 7,
   'hub key must remain high enough to read as ceiling-led architectural light'
+);
+assert.ok(
+  hubRoomRenderer.HUB_SKYLIGHT_PROFILE.roofRise >= 0.6
+    && hubRoomRenderer.HUB_SKYLIGHT_PROFILE.ribCount <= 12,
+  'hub skylight must keep a clearly pitched, economical instanced roof structure'
+);
+assert.ok(
+  hubRoomRenderer.HUB_SKYLIGHT_PROFILE.glassTransmission >= 0.6
+    && hubRoomRenderer.HUB_SKYLIGHT_PROFILE.glassRoughness >= 0.12,
+  'hub skylight glazing must transmit daylight without reading as perfect mirror glass'
+);
+assert.ok(
+  hubRoomRenderer.HUB_RENDER_PROFILE.toneMappingExposure >= 0.8
+    && hubRoomRenderer.HUB_RENDER_PROFILE.toneMappingExposure <= 1,
+  'hub architecture exposure must retain a restrained photographic highlight shoulder'
+);
+assert.ok(
+  hubRoomRenderer.HUB_RENDER_PROFILE.planarReflectionHigh <= 0.22
+    && hubRoomRenderer.HUB_RENDER_PROFILE.planarReflectionBalanced
+      < hubRoomRenderer.HUB_RENDER_PROFILE.planarReflectionHigh,
+  'hub planar reflection must remain subtle and quality-tiered after tone mapping'
 );
 const balancedPreset = quality.getQualityPreset('balanced');
 const matteMaterial = new paintingMaterial.PaintingMaterial(balancedPreset);

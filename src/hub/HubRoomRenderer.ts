@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import type { MuseumHubResolution, ResolvedHubSlot, ResolvedHubWall } from '../config/museumHub';
 import type { QualityPreset } from '../config/quality';
 import type { ArtworkImageUrlType } from '../utils/artworkImageSources';
@@ -59,6 +59,7 @@ const COVE_RECESS_DEPTH = 0.06;
 const CLERESTORY_WIDTH = 2.7;
 const CLERESTORY_END_INSET = 1.55;
 const CLERESTORY_RISE = 0.82;
+const SKYLIGHT_ROOF_RISE = 0.72;
 /** Height of the diffuser strip above the ceiling plane (metres). Nearly
  *  flush so the glowing strip fills the opening even at grazing angles. */
 const COVE_STRIP_LIFT = 0.006;
@@ -66,14 +67,14 @@ const COVE_STRIP_LIFT = 0.006;
 /** Static daylight rig: broad cool-neutral wash, perimeter panels, one shadow key. */
 export const HUB_LIGHTING_PROFILE = Object.freeze({
   hemisphere: Object.freeze({
-    sky: 0xf8fbff,
-    ground: 0xbfc1bd,
-    intensity: 0.56,
+    sky: 0xeaf2f6,
+    ground: 0xc7c3b9,
+    intensity: 0.38,
   }),
   key: Object.freeze({
-    color: 0xf6f8f7,
-    intensity: 0.34,
-    position: Object.freeze([-1.8, 8.5, 5.6] as const),
+    color: 0xf4f7f6,
+    intensity: 0.42,
+    position: Object.freeze([-3.4, 9.8, 5.9] as const),
     target: Object.freeze([0.2, 1.1, -1.8] as const),
   }),
   fill: Object.freeze({
@@ -84,10 +85,29 @@ export const HUB_LIGHTING_PROFILE = Object.freeze({
   }),
   ceilingPanel: Object.freeze({
     color: 0xf4f8fa,
-    intensity: 2.8,
+    intensity: 1.65,
     edgeInset: 0.05,
     ceilingOffset: 0.025,
   }),
+});
+
+export const HUB_SKYLIGHT_PROFILE = Object.freeze({
+  turbidity: 5.6,
+  rayleigh: 1.25,
+  mieCoefficient: 0.004,
+  mieDirectionalG: 0.78,
+  sunDirection: Object.freeze([-0.3, 0.87, 0.39] as const),
+  roofRise: SKYLIGHT_ROOF_RISE,
+  ribCount: 9,
+  glassRoughness: 0.19,
+  glassTransmission: 0.72,
+});
+
+export const HUB_RENDER_PROFILE = Object.freeze({
+  toneMappingExposure: 0.92,
+  environmentIntensity: 0.42,
+  planarReflectionHigh: 0.21,
+  planarReflectionBalanced: 0.17,
 });
 
 /**
@@ -126,6 +146,11 @@ export class HubRoomRenderer {
   private keyLight: THREE.DirectionalLight | null = null;
   private fillLight: THREE.DirectionalLight | null = null;
   private readonly ceilingPanelLights: THREE.RectAreaLight[] = [];
+  private sky: Sky | null = null;
+  private batterySky: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> | null = null;
+  private skylightGlassMaterial: THREE.MeshPhysicalMaterial | null = null;
+  private skylightGlassFallback: THREE.MeshBasicMaterial | null = null;
+  private readonly skylightGlassMeshes: THREE.Mesh[] = [];
   private environmentTarget: THREE.WebGLRenderTarget | null = null;
   private reflectionTarget: THREE.WebGLRenderTarget | null = null;
   private readonly reflectionCamera = new THREE.PerspectiveCamera();
@@ -150,8 +175,10 @@ export class HubRoomRenderer {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.setSize(resolution.stage.width, resolution.stage.height, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // No tone mapping: artwork planes must reproduce customer imagery exactly.
-    this.renderer.toneMapping = THREE.NoToneMapping;
+    // Architectural highlights use a restrained photographic shoulder. Artwork
+    // planes explicitly opt out so customer imagery remains source-faithful.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = HUB_RENDER_PROFILE.toneMappingExposure;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setClearColor(new THREE.Color(resolution.visualTokens.museumWall), 1);
@@ -180,6 +207,7 @@ export class HubRoomRenderer {
 
     this.surfaceFactory = new ArchitecturalSurfaceFactory(preset.hubSurfaceTileSize, 'hub');
     this.surfaceFactory.setAnisotropy(this.effectiveAnisotropy());
+    this.surfaceFactory.setHubSurfaceDetailEnabled(preset.id !== 'battery');
     this.materials = this.surfaceFactory.getMaterials({
       wall: resolution.visualTokens.museumWall,
     });
@@ -212,7 +240,9 @@ export class HubRoomRenderer {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.setSize(this.resolution.stage.width, this.resolution.stage.height, false);
     this.surfaceFactory.setTileSize(preset.hubSurfaceTileSize);
+    this.surfaceFactory.setHubSurfaceDetailEnabled(preset.id !== 'battery');
     this.applyLightingPreset();
+    this.applySkyPreset();
     this.applyShadowPreset();
     this.applyEnvironment();
     this.applyReflectionMode();
@@ -380,6 +410,10 @@ export class HubRoomRenderer {
     this.keyLight?.shadow.map?.dispose();
     this.reflectionTarget?.dispose();
     this.environmentTarget?.dispose();
+    this.sky?.material.dispose();
+    this.batterySky?.material.dispose();
+    this.skylightGlassMaterial?.dispose();
+    this.skylightGlassFallback?.dispose();
     this.surfaceFactory.dispose();
     this.renderer.dispose();
     this.slotMeshes.clear();
@@ -453,6 +487,16 @@ export class HubRoomRenderer {
     if (this.fillLight) this.fillLight.visible = !areaLightingEnabled;
   }
 
+  private applySkyPreset(): void {
+    const battery = this.preset.id === 'battery';
+    if (this.sky) this.sky.visible = !battery;
+    if (this.batterySky) this.batterySky.visible = battery;
+    const material = battery ? this.skylightGlassFallback : this.skylightGlassMaterial;
+    if (material) {
+      for (const glass of this.skylightGlassMeshes) glass.material = material;
+    }
+  }
+
   private applyShadowPreset(): void {
     const key = this.keyLight;
     if (!key) return;
@@ -480,18 +524,26 @@ export class HubRoomRenderer {
     key.shadow.camera.updateProjectionMatrix();
   }
 
-  /** PMREM room environment for subtle material response; skipped on battery. */
+  /** Cached PMREM generated from the same procedural sky visible through the roof. */
   private applyEnvironment(): void {
     const wantsEnvironment = this.preset.hubReflection !== 'off';
     if (wantsEnvironment && !this.environmentTarget) {
       const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-      pmremGenerator.compileEquirectangularShader();
-      const roomEnv = new RoomEnvironment(this.renderer);
-      this.environmentTarget = pmremGenerator.fromScene(roomEnv);
+      pmremGenerator.compileCubemapShader();
+      const environmentScene = new THREE.Scene();
+      environmentScene.add(this.createAtmosphericSky());
+      this.environmentTarget = pmremGenerator.fromScene(environmentScene, 0.08);
       pmremGenerator.dispose();
-      roomEnv.dispose();
+      environmentScene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.geometry.dispose();
+          const material = mesh.material as THREE.Material;
+          material.dispose();
+        }
+      });
       this.scene.environment = this.environmentTarget.texture;
-      this.scene.environmentIntensity = 0.32;
+      this.scene.environmentIntensity = HUB_RENDER_PROFILE.environmentIntensity;
     } else if (!wantsEnvironment && this.environmentTarget) {
       this.scene.environment = null;
       this.environmentTarget.dispose();
@@ -510,7 +562,9 @@ export class HubRoomRenderer {
    */
   private attachFloorReflectionShader(material: THREE.MeshStandardMaterial): void {
     const uniforms = this.reflectionUniforms;
+    const applySurfaceResponse = material.onBeforeCompile;
     material.onBeforeCompile = (shader) => {
+      applySurfaceResponse(shader, this.renderer);
       shader.uniforms.uReflectionMap = uniforms.uReflectionMap;
       shader.uniforms.uReflectionMatrix = uniforms.uReflectionMatrix;
       shader.uniforms.uReflectionStrength = uniforms.uReflectionStrength;
@@ -544,7 +598,8 @@ export class HubRoomRenderer {
             '#include <opaque_fragment>'
         );
     };
-    material.customProgramCacheKey = () => 'hub-floor-reflection';
+    const surfaceCacheKey = material.customProgramCacheKey;
+    material.customProgramCacheKey = () => `hub-floor-reflection-${surfaceCacheKey()}`;
   }
 
   private applyReflectionMode(): void {
@@ -559,11 +614,13 @@ export class HubRoomRenderer {
           minFilter: THREE.LinearFilter,
           magFilter: THREE.LinearFilter,
         });
-        this.reflectionTarget.texture.colorSpace = this.renderer.outputColorSpace;
+        this.reflectionTarget.texture.colorSpace = THREE.LinearSRGBColorSpace;
       }
       this.reflectionUniforms.uReflectionMap.value = this.reflectionTarget.texture;
-      this.reflectionUniforms.uReflectionStrength.value = this.preset.id === 'high' ? 0.28 : 0.24;
-      this.materials.floor.roughness = 0.64;
+      this.reflectionUniforms.uReflectionStrength.value = this.preset.id === 'high'
+        ? HUB_RENDER_PROFILE.planarReflectionHigh
+        : HUB_RENDER_PROFILE.planarReflectionBalanced;
+      this.materials.floor.roughness = 0.61;
     } else {
       this.reflectionUniforms.uReflectionMap.value = null;
       this.reflectionUniforms.uReflectionStrength.value = 0;
@@ -599,9 +656,12 @@ export class HubRoomRenderer {
     this.reflectionUniforms.uReflectionMatrix.value.copy(this.reflectionMatrix);
 
     for (const floor of this.floorMeshes) floor.visible = false;
+    const toneMapping = this.renderer.toneMapping;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.setRenderTarget(target);
     this.renderer.render(this.scene, cam);
     this.renderer.setRenderTarget(null);
+    this.renderer.toneMapping = toneMapping;
     for (const floor of this.floorMeshes) floor.visible = true;
   }
 
@@ -848,25 +908,137 @@ export class HubRoomRenderer {
       width,
       CLERESTORY_RISE
     );
-    this.addQuad(
-      this.materials.lightStrip,
-      new THREE.Vector3(opening.minX, topY, opening.minZ),
-      new THREE.Vector3(1, 0, 0),
-      new THREE.Vector3(0, 0, 1),
-      width,
-      depth
-    );
-    const ribGeometry = new THREE.BoxGeometry(width + 0.06, 0.035, 0.035);
-    const ribCount = 9;
-    const ribs = new THREE.InstancedMesh(ribGeometry, this.materials.trim, ribCount);
-    const transform = new THREE.Matrix4();
-    for (let index = 0; index < ribCount; index += 1) {
-      const z = opening.minZ + (depth * index) / (ribCount - 1);
-      transform.makeTranslation(0, topY - 0.018, z);
-      ribs.setMatrixAt(index, transform);
+    this.buildSkylightRoof(opening, topY);
+    if (!this.sky) {
+      this.sky = this.createAtmosphericSky();
+      this.batterySky = this.createBatterySky();
+      this.scene.add(this.sky, this.batterySky);
     }
-    ribs.instanceMatrix.needsUpdate = true;
-    this.scene.add(ribs);
+    this.applySkyPreset();
+  }
+
+  private buildSkylightRoof(
+    opening: { minX: number; maxX: number; minZ: number; maxZ: number },
+    eaveY: number
+  ): void {
+    const halfWidth = (opening.maxX - opening.minX) / 2;
+    const depth = opening.maxZ - opening.minZ;
+    const slopeLength = Math.hypot(halfWidth, SKYLIGHT_ROOF_RISE);
+    const roofAngle = Math.atan2(SKYLIGHT_ROOF_RISE, halfWidth);
+    this.skylightGlassMaterial = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#dbe8e9'),
+      roughness: HUB_SKYLIGHT_PROFILE.glassRoughness,
+      metalness: 0,
+      transmission: HUB_SKYLIGHT_PROFILE.glassTransmission,
+      thickness: 0.018,
+      ior: 1.48,
+      transparent: true,
+      opacity: 0.62,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      envMapIntensity: 0.72,
+    });
+    this.skylightGlassFallback = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#d8e5e7'),
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: true,
+    });
+    const leftGlass = this.addQuad(
+      this.skylightGlassMaterial,
+      new THREE.Vector3(opening.minX, eaveY, opening.minZ),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(halfWidth / slopeLength, SKYLIGHT_ROOF_RISE / slopeLength, 0),
+      depth,
+      slopeLength
+    );
+    const rightGlass = this.addQuad(
+      this.skylightGlassMaterial,
+      new THREE.Vector3(opening.maxX, eaveY, opening.maxZ),
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(-halfWidth / slopeLength, SKYLIGHT_ROOF_RISE / slopeLength, 0),
+      depth,
+      slopeLength
+    );
+    leftGlass.renderOrder = -1;
+    rightGlass.renderOrder = -1;
+    this.skylightGlassMeshes.push(leftGlass, rightGlass);
+
+    const frameThickness = 0.045;
+    const ridge = new THREE.Mesh(
+      new THREE.BoxGeometry(frameThickness, frameThickness, depth + 0.08),
+      this.materials.trim
+    );
+    ridge.position.set(0, eaveY + SKYLIGHT_ROOF_RISE, (opening.minZ + opening.maxZ) / 2);
+    this.scene.add(ridge);
+
+    const rafterGeometry = new THREE.BoxGeometry(slopeLength + 0.06, frameThickness, frameThickness);
+    const rafters = new THREE.InstancedMesh(
+      rafterGeometry,
+      this.materials.trim,
+      HUB_SKYLIGHT_PROFILE.ribCount * 2
+    );
+    const transform = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3(1, 1, 1);
+    for (let index = 0; index < HUB_SKYLIGHT_PROFILE.ribCount; index += 1) {
+      const z = opening.minZ + (depth * index) / (HUB_SKYLIGHT_PROFILE.ribCount - 1);
+      position.set(-halfWidth / 2, eaveY + SKYLIGHT_ROOF_RISE / 2, z);
+      quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), roofAngle);
+      transform.compose(position, quaternion, scale);
+      rafters.setMatrixAt(index * 2, transform);
+      position.set(halfWidth / 2, eaveY + SKYLIGHT_ROOF_RISE / 2, z);
+      quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -roofAngle);
+      transform.compose(position, quaternion, scale);
+      rafters.setMatrixAt(index * 2 + 1, transform);
+    }
+    rafters.instanceMatrix.needsUpdate = true;
+    this.scene.add(rafters);
+  }
+
+  private createAtmosphericSky(): Sky {
+    const sky = new Sky();
+    sky.scale.setScalar(80);
+    const uniforms = sky.material.uniforms;
+    uniforms.turbidity!.value = HUB_SKYLIGHT_PROFILE.turbidity;
+    uniforms.rayleigh!.value = HUB_SKYLIGHT_PROFILE.rayleigh;
+    uniforms.mieCoefficient!.value = HUB_SKYLIGHT_PROFILE.mieCoefficient;
+    uniforms.mieDirectionalG!.value = HUB_SKYLIGHT_PROFILE.mieDirectionalG;
+    uniforms.sunPosition!.value.set(...HUB_SKYLIGHT_PROFILE.sunDirection);
+    sky.material.depthWrite = false;
+    sky.renderOrder = -10;
+    return sky;
+  }
+
+  private createBatterySky(): THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> {
+    const material = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      toneMapped: true,
+      vertexShader: [
+        'varying vec3 vWorldDirection;',
+        'void main() {',
+        '  vec4 worldPosition = modelMatrix * vec4(position, 1.0);',
+        '  vWorldDirection = normalize(worldPosition.xyz - cameraPosition);',
+        '  gl_Position = projectionMatrix * viewMatrix * worldPosition;',
+        '}',
+      ].join('\n'),
+      fragmentShader: [
+        'varying vec3 vWorldDirection;',
+        'void main() {',
+        '  float horizon = smoothstep(-0.12, 0.72, vWorldDirection.y);',
+        '  vec3 low = vec3(0.78, 0.82, 0.82);',
+        '  vec3 high = vec3(0.60, 0.72, 0.80);',
+        '  gl_FragColor = vec4(mix(low, high, horizon), 1.0);',
+        '}',
+      ].join('\n'),
+    });
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(60, 16, 8), material);
+    mesh.renderOrder = -10;
+    return mesh;
   }
 
   /**

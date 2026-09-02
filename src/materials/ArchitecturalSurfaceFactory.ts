@@ -11,7 +11,7 @@ import * as THREE from 'three';
  *  - One material instance per surface role; every mesh with the same role
  *    shares the instance so the hub keeps a handful of shader programs.
  *  - The close gallery keeps tileable tactile detail, while the hub uses
- *    smooth, warm architectural finishes without repeating detail maps.
+ *    subtle world-space PBR response without repeating detail maps.
  *  - Geometry UVs are authored in metres (see `HubRoomRenderer`); the factory
  *    applies real-world tile periods through `texture.repeat` for gallery
  *    plaster and floor grain.
@@ -37,8 +37,8 @@ export interface ArchitecturalMaterials {
   trim: THREE.MeshStandardMaterial;
   /** Dim plaster used inside doorway pockets so openings read as passages. */
   pocket: THREE.MeshStandardMaterial;
-  /** Neutral-white emissive strip inside the ceiling light coves. */
-  lightStrip: THREE.MeshBasicMaterial;
+  /** Neutral-white emissive PBR strip inside the ceiling light coves. */
+  lightStrip: THREE.MeshStandardMaterial;
   /** Neutral gesso-like side faces for artwork canvas edges. */
   artworkEdge: THREE.MeshStandardMaterial;
 }
@@ -50,9 +50,12 @@ export const HUB_WALL_SURFACE_PROFILE = Object.freeze({
   wallColor: '#f3f3ef',
   wallRoughness: 0.88,
   ceilingRoughness: 0.92,
-  floorRoughness: 0.64,
+  floorRoughness: 0.61,
   colorVariation: 0,
-  roughnessVariation: 0.004,
+  roughnessVariation: 0.012,
+  wallNormalStrength: 0.018,
+  floorNormalStrength: 0.026,
+  floorColorVariation: 0.012,
   minimumPatternPeriodM: 14.2,
 });
 
@@ -64,6 +67,7 @@ export class ArchitecturalSurfaceFactory {
   private tileSize: number;
   private anisotropy = 1;
   private readonly surfaceProfile: ArchitecturalSurfaceProfile;
+  private hubSurfaceDetailEnabled = true;
 
   constructor(tileSize: number, surfaceProfile: ArchitecturalSurfaceProfile = 'gallery') {
     this.tileSize = Math.max(64, tileSize | 0);
@@ -111,7 +115,7 @@ export class ArchitecturalSurfaceFactory {
       ),
       roughnessMap: plasterRoughness,
     });
-    if (this.surfaceProfile === 'hub') this.applyHubWallResponse(wall);
+    if (this.surfaceProfile === 'hub') this.applyHubSurfaceResponse(wall, 'wall');
 
     const ceiling = new THREE.MeshStandardMaterial({
       color: ceilingColor,
@@ -125,6 +129,7 @@ export class ArchitecturalSurfaceFactory {
         this.surfaceProfile === 'gallery' ? 0.06 : 0
       ),
     });
+    if (this.surfaceProfile === 'hub') this.applyHubSurfaceResponse(ceiling, 'ceiling');
 
     const floor = new THREE.MeshStandardMaterial({
       color: floorColor,
@@ -140,6 +145,7 @@ export class ArchitecturalSurfaceFactory {
       roughnessMap: floorRoughness,
       envMapIntensity: 0.5,
     });
+    if (this.surfaceProfile === 'hub') this.applyHubSurfaceResponse(floor, 'floor');
 
     // Dark powder-coated metal, intentionally not pure black so edges keep
     // form under grazing light.
@@ -155,9 +161,13 @@ export class ArchitecturalSurfaceFactory {
       metalness: 0.0,
     });
 
-    const lightStrip = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#f4f7f6' : '#edf1f4'),
-      toneMapped: false,
+    const lightStripColor = new THREE.Color(this.surfaceProfile === 'hub' ? '#eef3f1' : '#e8edef');
+    const lightStrip = new THREE.MeshStandardMaterial({
+      color: lightStripColor,
+      emissive: lightStripColor,
+      emissiveIntensity: this.surfaceProfile === 'hub' ? 0.72 : 0.56,
+      roughness: 0.48,
+      metalness: 0,
     });
 
     const artworkEdge = new THREE.MeshStandardMaterial({
@@ -186,6 +196,7 @@ export class ArchitecturalSurfaceFactory {
       this.materials.wall.normalMap = this.detailTexture('plasterNormal');
       this.materials.wall.roughnessMap = this.detailTexture('plasterRoughness');
     }
+
     if (this.surfaceProfile === 'gallery') {
       this.materials.ceiling.normalMap = this.detailTexture('plasterNormal');
       this.materials.floor.normalMap = this.detailTexture('floorNormal');
@@ -195,6 +206,16 @@ export class ArchitecturalSurfaceFactory {
     this.materials.ceiling.needsUpdate = true;
     this.materials.floor.needsUpdate = true;
     for (const texture of previous) texture.dispose();
+  }
+
+  /** Disables the hub's derivative-based micro response on the battery preset. */
+  setHubSurfaceDetailEnabled(enabled: boolean): void {
+    if (this.surfaceProfile !== 'hub' || this.hubSurfaceDetailEnabled === enabled) return;
+    this.hubSurfaceDetailEnabled = enabled;
+    if (!this.materials) return;
+    this.materials.wall.needsUpdate = true;
+    this.materials.ceiling.needsUpdate = true;
+    this.materials.floor.needsUpdate = true;
   }
 
   /** Caps sampler anisotropy on every generated map (guarded by caller). */
@@ -219,14 +240,13 @@ export class ArchitecturalSurfaceFactory {
 
   // ── Detail-map generation ──────────────────────────────────────────────────
 
-  /**
-   * Adds an imperceptible broad roughness response to the hub wall. Its periods
-   * are larger than the room, so the finish has no UV seams or repeated tiles.
-   * Color remains uniform to avoid visible procedural clouding.
-   */
-  private applyHubWallResponse(material: THREE.MeshStandardMaterial): void {
-    const { roughnessVariation } = HUB_WALL_SURFACE_PROFILE;
-    material.userData.architecturalSurfaceProfile = 'hub-world-space';
+  /** Adds restrained, non-repeating world-space PBR response to hub surfaces. */
+  private applyHubSurfaceResponse(
+    material: THREE.MeshStandardMaterial,
+    role: 'wall' | 'ceiling' | 'floor'
+  ): void {
+    const profile = HUB_WALL_SURFACE_PROFILE;
+    material.userData.architecturalSurfaceProfile = `hub-world-space-${role}`;
     material.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader
         .replace(
@@ -246,10 +266,11 @@ export class ArchitecturalSurfaceFactory {
           [
             '#include <common>',
             'varying vec3 vArchitecturalWorldPosition;',
-            'float architecturalWallVariation(vec3 p) {',
+            'float architecturalSurfaceField(vec3 p) {',
             '  float broad = sin(dot(p, vec3(0.31, 0.17, 0.23)) + 0.7);',
             '  float cross = sin(dot(p, vec3(-0.19, 0.29, 0.13)) + 2.1);',
-            '  return broad * 0.64 + cross * 0.36;',
+            '  float micro = sin(dot(p, vec3(5.3, -3.7, 4.1)) + broad * 0.8);',
+            '  return broad * 0.55 + cross * 0.30 + micro * 0.15;',
             '}',
           ].join('\n')
         )
@@ -257,11 +278,41 @@ export class ArchitecturalSurfaceFactory {
           '#include <roughnessmap_fragment>',
           [
             '#include <roughnessmap_fragment>',
-            `roughnessFactor = clamp(roughnessFactor + architecturalWallVariation(vArchitecturalWorldPosition) * ${roughnessVariation.toFixed(4)}, 0.0, 1.0);`,
+            this.hubSurfaceDetailEnabled
+              ? `roughnessFactor = clamp(roughnessFactor + architecturalSurfaceField(vArchitecturalWorldPosition) * ${profile.roughnessVariation.toFixed(4)}, 0.0, 1.0);`
+              : '',
+          ].join('\n')
+        )
+        .replace(
+          '#include <normal_fragment_maps>',
+          [
+            '#include <normal_fragment_maps>',
+            this.hubSurfaceDetailEnabled
+              ? `float architecturalHeight = architecturalSurfaceField(vArchitecturalWorldPosition) * ${
+                  role === 'floor'
+                    ? profile.floorNormalStrength.toFixed(4)
+                    : role === 'wall'
+                      ? profile.wallNormalStrength.toFixed(4)
+                      : (profile.wallNormalStrength * 0.45).toFixed(4)
+                };`
+              : '',
+            this.hubSurfaceDetailEnabled
+              ? 'normal = perturbNormalArb(-vViewPosition, normal, vec2(dFdx(architecturalHeight), dFdy(architecturalHeight)), faceDirection);'
+              : '',
           ].join('\n')
         );
+      if (role === 'floor' && this.hubSurfaceDetailEnabled) {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <color_fragment>',
+          [
+            '#include <color_fragment>',
+            `diffuseColor.rgb *= 1.0 + architecturalSurfaceField(vArchitecturalWorldPosition * vec3(0.42, 1.0, 0.42)) * ${profile.floorColorVariation.toFixed(4)};`,
+          ].join('\n')
+        );
+      }
     };
-    material.customProgramCacheKey = () => 'freyraum-hub-wall-world-space-v2';
+    material.customProgramCacheKey = () =>
+      `freyraum-hub-${role}-world-space-v3-${this.hubSurfaceDetailEnabled ? 'detail' : 'plain'}`;
   }
 
   private detailTexture(role: DetailRole): THREE.DataTexture {
