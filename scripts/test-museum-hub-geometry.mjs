@@ -365,6 +365,29 @@ assert.equal(
   null,
   'hub wall must not expose a repeating roughness tile'
 );
+assert.ok(
+  hubSurfaces.wall.roughness >= 0.86 && hubSurfaces.wall.roughness <= 0.9,
+  'hub wall roughness must preserve a soft plaster highlight without looking polished'
+);
+assert.equal(
+  hubSurfaces.ceiling.normalMap,
+  null,
+  'hub ceiling must not expose repeating plaster detail'
+);
+assert.equal(
+  hubSurfaces.floor.normalMap,
+  null,
+  'hub floor must not expose repeating normal detail'
+);
+assert.equal(
+  hubSurfaces.floor.roughnessMap,
+  null,
+  'hub floor must not expose repeating roughness detail'
+);
+assert.ok(
+  hubSurfaces.floor.roughness >= 0.6 && hubSurfaces.floor.roughness <= 0.7,
+  'hub floor must retain restrained satin response'
+);
 assert.equal(
   hubSurfaces.wall.userData.architecturalSurfaceProfile,
   'hub-world-space',
@@ -375,9 +398,15 @@ assert.ok(
   'hub wall variation periods must exceed the room envelope'
 );
 assert.ok(
-  architecture.HUB_WALL_SURFACE_PROFILE.colorVariation <= 0.01
-    && architecture.HUB_WALL_SURFACE_PROFILE.roughnessVariation <= 0.015,
-  'hub wall variation must stay below visible-noise thresholds'
+  architecture.HUB_WALL_SURFACE_PROFILE.colorVariation === 0
+    && architecture.HUB_WALL_SURFACE_PROFILE.roughnessVariation <= 0.005,
+  'hub wall must avoid procedural color clouding and keep roughness variation imperceptible'
+);
+assert.ok(
+  hubSurfaces.wall.color.r > 0.84
+    && hubSurfaces.wall.color.g > 0.84
+    && hubSurfaces.wall.color.b > 0.8,
+  'hub wall finish must remain a bright warm off-white'
 );
 hubSurfaceFactory.dispose();
 assert.ok(

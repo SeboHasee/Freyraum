@@ -59,22 +59,22 @@ const COVE_RECESS_DEPTH = 0.06;
  *  flush so the glowing strip fills the opening even at grazing angles. */
 const COVE_STRIP_LIFT = 0.006;
 
-/** Static, low-energy hub rig: broad ambient wash plus two neutral directions. */
+/** Static, low-energy hub rig: broad warm-neutral wash plus two directions. */
 export const HUB_LIGHTING_PROFILE = Object.freeze({
   hemisphere: Object.freeze({
-    sky: 0xf5f6f6,
-    ground: 0xaeb4b9,
-    intensity: 0.66,
+    sky: 0xfffaf1,
+    ground: 0xbab4aa,
+    intensity: 0.64,
   }),
   key: Object.freeze({
-    color: 0xf5f6f5,
-    intensity: 0.72,
+    color: 0xfff4e2,
+    intensity: 0.7,
     position: Object.freeze([-1.4, 7.2, 4.8] as const),
     target: Object.freeze([0.25, 0.8, -0.6] as const),
   }),
   fill: Object.freeze({
-    color: 0xe7ecef,
-    intensity: 0.24,
+    color: 0xf0f3f1,
+    intensity: 0.22,
     position: Object.freeze([3.0, 4.8, 3.8] as const),
     target: Object.freeze([-0.6, 1.5, -0.4] as const),
   }),
@@ -522,8 +522,8 @@ export class HubRoomRenderer {
         this.reflectionTarget.texture.colorSpace = this.renderer.outputColorSpace;
       }
       this.reflectionUniforms.uReflectionMap.value = this.reflectionTarget.texture;
-      this.reflectionUniforms.uReflectionStrength.value = this.preset.id === 'high' ? 0.34 : 0.3;
-      this.materials.floor.roughness = 0.62;
+      this.reflectionUniforms.uReflectionStrength.value = this.preset.id === 'high' ? 0.28 : 0.24;
+      this.materials.floor.roughness = 0.64;
     } else {
       this.reflectionUniforms.uReflectionMap.value = null;
       this.reflectionUniforms.uReflectionStrength.value = 0;
