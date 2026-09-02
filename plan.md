@@ -1,5 +1,47 @@
 # FREYRAUM Plan
 
+## Implemented — Main Museum Hub architectural redesign (v1.02, 2026-09-02)
+
+> **Status update:** The hub is now a tall, elongated daylit hall rather than a
+> compact square room. Long perimeter luminaires, a raised central clerestory,
+> neutral near-white walls, and stronger perspective establish the architectural
+> character before surface micro-detail.
+
+### 1. As-built scope
+
+1. The authoritative room is `9 × 12 × 5.2 m`; its camera is positioned at
+   `(0, 1.72, 9)`, targets the raised architecture, and uses a 48° vertical FOV.
+2. All calibrated wall quads, safe regions, metric transforms, doorway
+   exclusions, hanging bands, slot anchors, and normalized UVs are synchronized.
+3. Two longitudinal perimeter channels replace the cross-room panels.
+4. A raised 0.82 m central clerestory uses simple shared-material planes and one
+   nine-instance rib mesh.
+5. The hub palette is neutral daylight: clean near-white plaster, a pale grey
+   mineral floor, cool-white luminaires, and subdued doorway recesses.
+6. Artwork imagery remains unlit. Mounted heights increase only as needed to
+   remain legible in the expanded room, while physical depth and exact IDs stay
+   unchanged.
+7. Camera navigation, route behavior, gallery rendering, artwork assets,
+   reflection tiers, and on-demand rendering remain unchanged.
+
+### 2. Performance boundaries
+
+- No new dependencies, textures, shadow maps, fullscreen passes, bloom, SSAO,
+  SSR, or animation loops.
+- Clerestory ribs use one instanced draw call.
+- Existing non-shadowing area lights remain high/balanced-only.
+- Battery retains the directional fallback and disables hub reflections/shadows.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
 ## Implemented — Main Museum Hub architectural lighting polish (v1.01, 2026-09-02)
 
 > **Status update:** High and balanced hub quality now connect the room's soft

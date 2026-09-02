@@ -1,5 +1,37 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-02 (v1.01 Main Museum Hub architectural lighting polish).
+> Latest markdown audit: 2026-09-02 (v1.02 Main Museum Hub architectural redesign).
+
+## v1.02 — Main Museum Hub architectural redesign (2026-09-02)
+
+### Changed
+
+- Recalibrated the authoritative hub from a compact `7 × 7 × 3.4 m` room to a
+  tall `9 × 12 × 5.2 m` hall with a wider 48° architectural camera composition.
+- Replaced the two cross-room ceiling panels with longitudinal perimeter light
+  channels and a raised central clerestory/light well with instanced dark ribs.
+- Updated wall reference quads, safe polygons, room transforms, doorway
+  positions, hanging bands, and artwork anchors as one coherent metric model.
+- Increased mounted artwork sizes to preserve legibility and curated presence
+  in the larger hall while retaining the six-slot composition and exact IDs.
+- Shifted the hub toward neutral daylight, cleaner near-white plaster, and a
+  pale grey mineral floor. Existing map-free surfaces and restrained reflection
+  architecture remain intact.
+- Added narrow ceiling contact reveals and further tightened the shared mounting
+  shadow so it reads directionally rather than as a halo.
+- Updated deterministic geometry validation from square-room assumptions to the
+  elongated hall, including wall widths, closure, mirrored doorways, calibration,
+  artwork centerline, and luminaire constraints.
+
+### Validation
+
+- `npm install` ✅ (seven existing audit findings remain: one moderate, six high)
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
 
 ## v1.01 — Main Museum Hub architectural lighting polish (2026-09-02)
 

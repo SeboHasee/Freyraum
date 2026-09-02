@@ -8,9 +8,10 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Startup flows from the loading screen into a manifest-driven Main Museum Hub:
   the customer room backdrop remains the environmental plate, while a dedicated
   on-demand WebGL room scene renders calibrated front/left/right walls inside a
-  7 × 7 × 3.4 m square shell plus an entry enclosure behind the camera,
-  doorway passage pockets, skirting shadow gaps, recessed ceiling coves,
-  mounted artwork depth, and soft contact shadows.
+  tall 9 × 12 × 5.2 m architectural hall plus an entry enclosure behind the
+  camera, doorway passage pockets, floor/ceiling shadow gaps, longitudinal
+  perimeter luminaires, a raised central clerestory, mounted artwork depth, and
+  soft directional contact shadows.
 - Hub interaction DOM is now only the screen-space accessibility bridge. Slots
   resolve by exact `Artwork.id` from `customer-artworks/museum-hub.json`; the
   shipping v4 hub contract persists camera far/lens-shift, room envelope,
@@ -38,10 +39,10 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Lighting still uses one fixed balanced neutral-gallery configuration, but the
   single-artwork view now runs at a softer ambient/direct energy balance and a
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
-- The hub keeps a separate low-energy architectural rig: two broad,
-  ceiling-aligned area fixtures on high/balanced quality, a warm-neutral
-  hemisphere wash, and one restrained shadow key. Battery quality omits the
-  area fixtures and uses the inexpensive directional fill fallback.
+- The hub keeps a separate daylight architectural rig: two longitudinal
+  ceiling-aligned area fixtures on high/balanced quality, a cool-neutral
+  clerestory wash, and one restrained shadow key. Battery quality omits the area
+  fixtures and uses the inexpensive directional fill fallback.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.

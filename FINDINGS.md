@@ -1,5 +1,27 @@
 # FINDINGS
 
+## Main Museum Hub architectural redesign findings (v1.02, 2026-09-02)
+
+1. The remaining prototype appearance was architectural rather than textural.
+   A compact low room could not reproduce the strong perspective, daylight, and
+   vertical breathing room of the supplied contemporary-museum reference.
+2. The wall-plane calibration contract supports a larger hall when camera,
+   reference quads, safe polygons, metric transforms, doorway exclusions, and
+   artwork anchors are revised together. Changing renderer geometry alone would
+   have caused DOM/WebGL interaction drift.
+3. A `9 × 12 × 5.2 m` envelope and 48° camera create longer floor/wall lines
+   while keeping the existing three selectable wall groups and route behavior.
+4. Long perimeter light channels plus one raised clerestory provide stronger
+   architectural identity than adding more surface detail or post-processing.
+5. The clerestory uses only simple planes and one instanced rib mesh. It adds no
+   texture, shadow map, fullscreen pass, or animation.
+6. Larger architecture requires larger mounted works to retain the existing
+   minimum projected-edge guidance. The accepted heights keep every hero slot
+   above the 72 px desktop threshold.
+7. Neutral daylight and pale grey flooring are closer to the supplied reference
+   than the prior cream-weighted palette while preserving exact unlit artwork
+   color and the map-free wall finish.
+
 ## Main Museum Hub architectural lighting findings (v1.01, 2026-09-02)
 
 1. After the v1.00 material pass, the highest-impact remaining mismatch was
