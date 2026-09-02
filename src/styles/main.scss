@@ -304,9 +304,12 @@ canvas {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(4, 8, 11, 0.36) 0%, transparent 28%),
-    linear-gradient(0deg, rgba(4, 8, 11, 0.26) 0%, transparent 26%);
+  background: radial-gradient(
+    ellipse 52% 38% at 0% 0%,
+    rgba(4, 8, 11, 0.4) 0%,
+    rgba(4, 8, 11, 0.18) 42%,
+    transparent 76%
+  );
 }
 
 .museum-hub__header {

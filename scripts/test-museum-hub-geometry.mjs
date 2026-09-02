@@ -396,31 +396,25 @@ assert.ok(
 );
 assert.equal(
   hubSurfaces.wall.userData.architecturalSurfaceProfile,
-  'hub-world-space-wall',
-  'hub wall must identify its non-repeating world-space response'
+  'hub-smooth-plaster',
+  'hub wall must identify its smooth light-driven plaster response'
 );
 assert.equal(
   hubSurfaces.floor.userData.architecturalSurfaceProfile,
-  'hub-world-space-floor',
-  'hub floor must identify its non-repeating mineral response'
-);
-assert.ok(
-  architecture.HUB_WALL_SURFACE_PROFILE.minimumPatternPeriodM > Math.max(ROOM_WIDTH, ROOM_DEPTH),
-  'hub wall variation periods must exceed the room envelope'
+  'hub-satin-mineral',
+  'hub floor must identify its distinct satin mineral response'
 );
 assert.ok(
   architecture.HUB_WALL_SURFACE_PROFILE.colorVariation === 0
-    && architecture.HUB_WALL_SURFACE_PROFILE.roughnessVariation <= 0.015,
-  'hub wall must avoid procedural color clouding and keep roughness variation restrained'
+    && architecture.HUB_WALL_SURFACE_PROFILE.roughnessVariation === 0,
+  'hub wall must avoid fake procedural color and roughness gradients'
 );
-assert.ok(
-  architecture.HUB_WALL_SURFACE_PROFILE.wallNormalStrength > 0
-    && architecture.HUB_WALL_SURFACE_PROFILE.wallNormalStrength <= 0.02,
-  'hub plaster must retain a subtle PBR micro-normal response'
-);
-assert.ok(
-  architecture.HUB_WALL_SURFACE_PROFILE.floorColorVariation <= 0.015,
-  'hub floor mineral variation must remain below visible grunge strength'
+assert.equal(
+  architecture.HUB_WALL_SURFACE_PROFILE.wallNormalStrength
+    + architecture.HUB_WALL_SURFACE_PROFILE.floorNormalStrength
+    + architecture.HUB_WALL_SURFACE_PROFILE.floorColorVariation,
+  0,
+  'hub surface form must come from geometry and lighting rather than procedural modulation'
 );
 assert.ok(
   hubSurfaces.wall.color.r > 0.84
@@ -437,8 +431,8 @@ assert.ok(
 hubSurfaceFactory.dispose();
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.hemisphere.intensity
-    < hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity,
-  'hub daylight key must exceed the ambient wash so architecture retains directional gradients'
+    <= hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity * 0.3,
+  'hub ambient wash must stay secondary to directional and local illumination'
 );
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity
@@ -452,16 +446,28 @@ assert.equal(
 );
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.ceilingPanel.intensity > 0
-    && hubRoomRenderer.HUB_LIGHTING_PROFILE.ceilingPanel.intensity <= 4,
-  'hub area-panel energy must remain soft and controlled'
+    && hubRoomRenderer.HUB_LIGHTING_PROFILE.ceilingPanel.intensity <= 6,
+  'hub area-panel energy must remain locally dominant but controlled'
 );
 assert.ok(
-  hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity < 0.5,
-  'hub directional key must remain secondary to the ceiling-aligned area fixtures'
+  hubRoomRenderer.HUB_LIGHTING_PROFILE.ceilingPanel.intensity
+    > hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity * 5,
+  'hub ceiling area fixtures must dominate the non-occluded ambient fill'
 );
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.key.position[1] >= 7,
   'hub key must remain high enough to read as ceiling-led architectural light'
+);
+assert.deepEqual(
+  hubRoomRenderer.HUB_AREA_LIGHT_DIRECTION,
+  [0, -1, 0],
+  'hub area fixtures must explicitly face down into the room'
+);
+assert.ok(
+  hubRoomRenderer.HUB_LIGHTING_PROFILE.skylightPanel.intensity > 0
+    && hubRoomRenderer.HUB_LIGHTING_PROFILE.skylightPanel.intensity
+      < hubRoomRenderer.HUB_LIGHTING_PROFILE.ceilingPanel.intensity,
+  'hub skylight must provide restrained local daylight beneath the clerestory'
 );
 assert.ok(
   hubRoomRenderer.HUB_SKYLIGHT_PROFILE.roofRise >= 0.6
@@ -479,10 +485,16 @@ assert.ok(
   'hub architecture exposure must retain a restrained photographic highlight shoulder'
 );
 assert.ok(
-  hubRoomRenderer.HUB_RENDER_PROFILE.planarReflectionHigh <= 0.22
-    && hubRoomRenderer.HUB_RENDER_PROFILE.planarReflectionBalanced
-      < hubRoomRenderer.HUB_RENDER_PROFILE.planarReflectionHigh,
+  hubRoomRenderer.HUB_RENDER_PROFILE.environmentIntensity <= 0.2
+    && hubRoomRenderer.HUB_RENDER_PROFILE.planarReflectionHigh <= 0.18
+    && hubRoomRenderer.HUB_RENDER_PROFILE.planarReflectionBalanced === 0,
   'hub planar reflection must remain subtle and quality-tiered after tone mapping'
+);
+assert.equal(quality.getQualityPreset('high').hubReflection, 'planar');
+assert.equal(
+  quality.getQualityPreset('balanced').hubReflection,
+  'ibl',
+  'balanced quality must avoid the extra planar reflection render'
 );
 const balancedPreset = quality.getQualityPreset('balanced');
 const matteMaterial = new paintingMaterial.PaintingMaterial(balancedPreset);

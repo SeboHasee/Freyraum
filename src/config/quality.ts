@@ -229,7 +229,7 @@ export const QUALITY_PRESETS: Record<QualityPresetId, QualityPreset> = {
     // v0.38: disable FXAA on balanced to restore v0.25 contrast/color fidelity.
     fxaaEnabled: false,
     albedoFidelityFill: 0.0,
-    hubReflection: 'planar',
+    hubReflection: 'ibl',
     hubReflectionDivisor: 3,
     hubSurfaceTileSize: 512,
     hubShadows: true,

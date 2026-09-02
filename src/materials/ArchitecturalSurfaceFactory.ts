@@ -11,7 +11,7 @@ import * as THREE from 'three';
  *  - One material instance per surface role; every mesh with the same role
  *    shares the instance so the hub keeps a handful of shader programs.
  *  - The close gallery keeps tileable tactile detail, while the hub uses
- *    subtle world-space PBR response without repeating detail maps.
+ *    calm, map-free PBR finishes whose form comes from architectural light.
  *  - Geometry UVs are authored in metres (see `HubRoomRenderer`); the factory
  *    applies real-world tile periods through `texture.repeat` for gallery
  *    plaster and floor grain.
@@ -48,15 +48,14 @@ export type ArchitecturalSurfaceProfile = 'gallery' | 'hub';
 /** Public contract for the hub's deliberately calm, non-repeating wall response. */
 export const HUB_WALL_SURFACE_PROFILE = Object.freeze({
   wallColor: '#f3f3ef',
-  wallRoughness: 0.88,
-  ceilingRoughness: 0.92,
-  floorRoughness: 0.61,
+  wallRoughness: 0.86,
+  ceilingRoughness: 0.93,
+  floorRoughness: 0.6,
   colorVariation: 0,
-  roughnessVariation: 0.012,
-  wallNormalStrength: 0.018,
-  floorNormalStrength: 0.026,
-  floorColorVariation: 0.012,
-  minimumPatternPeriodM: 14.2,
+  roughnessVariation: 0,
+  wallNormalStrength: 0,
+  floorNormalStrength: 0,
+  floorColorVariation: 0,
 });
 
 type DetailRole = 'plasterNormal' | 'plasterRoughness' | 'floorNormal' | 'floorRoughness';
@@ -67,7 +66,6 @@ export class ArchitecturalSurfaceFactory {
   private tileSize: number;
   private anisotropy = 1;
   private readonly surfaceProfile: ArchitecturalSurfaceProfile;
-  private hubSurfaceDetailEnabled = true;
 
   constructor(tileSize: number, surfaceProfile: ArchitecturalSurfaceProfile = 'gallery') {
     this.tileSize = Math.max(64, tileSize | 0);
@@ -115,7 +113,7 @@ export class ArchitecturalSurfaceFactory {
       ),
       roughnessMap: plasterRoughness,
     });
-    if (this.surfaceProfile === 'hub') this.applyHubSurfaceResponse(wall, 'wall');
+    if (this.surfaceProfile === 'hub') wall.userData.architecturalSurfaceProfile = 'hub-smooth-plaster';
 
     const ceiling = new THREE.MeshStandardMaterial({
       color: ceilingColor,
@@ -129,7 +127,7 @@ export class ArchitecturalSurfaceFactory {
         this.surfaceProfile === 'gallery' ? 0.06 : 0
       ),
     });
-    if (this.surfaceProfile === 'hub') this.applyHubSurfaceResponse(ceiling, 'ceiling');
+    if (this.surfaceProfile === 'hub') ceiling.userData.architecturalSurfaceProfile = 'hub-matte-ceiling';
 
     const floor = new THREE.MeshStandardMaterial({
       color: floorColor,
@@ -145,7 +143,7 @@ export class ArchitecturalSurfaceFactory {
       roughnessMap: floorRoughness,
       envMapIntensity: 0.5,
     });
-    if (this.surfaceProfile === 'hub') this.applyHubSurfaceResponse(floor, 'floor');
+    if (this.surfaceProfile === 'hub') floor.userData.architecturalSurfaceProfile = 'hub-satin-mineral';
 
     // Dark powder-coated metal, intentionally not pure black so edges keep
     // form under grazing light.
@@ -156,7 +154,7 @@ export class ArchitecturalSurfaceFactory {
     });
 
     const pocket = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#70736f' : '#565b5e'),
+      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#8c8f8b' : '#565b5e'),
       roughness: this.surfaceProfile === 'hub' ? 0.94 : 0.96,
       metalness: 0.0,
     });
@@ -208,16 +206,6 @@ export class ArchitecturalSurfaceFactory {
     for (const texture of previous) texture.dispose();
   }
 
-  /** Disables the hub's derivative-based micro response on the battery preset. */
-  setHubSurfaceDetailEnabled(enabled: boolean): void {
-    if (this.surfaceProfile !== 'hub' || this.hubSurfaceDetailEnabled === enabled) return;
-    this.hubSurfaceDetailEnabled = enabled;
-    if (!this.materials) return;
-    this.materials.wall.needsUpdate = true;
-    this.materials.ceiling.needsUpdate = true;
-    this.materials.floor.needsUpdate = true;
-  }
-
   /** Caps sampler anisotropy on every generated map (guarded by caller). */
   setAnisotropy(value: number): void {
     const a = Math.max(1, value | 0);
@@ -239,81 +227,6 @@ export class ArchitecturalSurfaceFactory {
   }
 
   // ── Detail-map generation ──────────────────────────────────────────────────
-
-  /** Adds restrained, non-repeating world-space PBR response to hub surfaces. */
-  private applyHubSurfaceResponse(
-    material: THREE.MeshStandardMaterial,
-    role: 'wall' | 'ceiling' | 'floor'
-  ): void {
-    const profile = HUB_WALL_SURFACE_PROFILE;
-    material.userData.architecturalSurfaceProfile = `hub-world-space-${role}`;
-    material.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader
-        .replace(
-          '#include <common>',
-          '#include <common>\nvarying vec3 vArchitecturalWorldPosition;'
-        )
-        .replace(
-          '#include <begin_vertex>',
-          [
-            '#include <begin_vertex>',
-            'vArchitecturalWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;',
-          ].join('\n')
-        );
-      shader.fragmentShader = shader.fragmentShader
-        .replace(
-          '#include <common>',
-          [
-            '#include <common>',
-            'varying vec3 vArchitecturalWorldPosition;',
-            'float architecturalSurfaceField(vec3 p) {',
-            '  float broad = sin(dot(p, vec3(0.31, 0.17, 0.23)) + 0.7);',
-            '  float cross = sin(dot(p, vec3(-0.19, 0.29, 0.13)) + 2.1);',
-            '  float micro = sin(dot(p, vec3(5.3, -3.7, 4.1)) + broad * 0.8);',
-            '  return broad * 0.55 + cross * 0.30 + micro * 0.15;',
-            '}',
-          ].join('\n')
-        )
-        .replace(
-          '#include <roughnessmap_fragment>',
-          [
-            '#include <roughnessmap_fragment>',
-            this.hubSurfaceDetailEnabled
-              ? `roughnessFactor = clamp(roughnessFactor + architecturalSurfaceField(vArchitecturalWorldPosition) * ${profile.roughnessVariation.toFixed(4)}, 0.0, 1.0);`
-              : '',
-          ].join('\n')
-        )
-        .replace(
-          '#include <normal_fragment_maps>',
-          [
-            '#include <normal_fragment_maps>',
-            this.hubSurfaceDetailEnabled
-              ? `float architecturalHeight = architecturalSurfaceField(vArchitecturalWorldPosition) * ${
-                  role === 'floor'
-                    ? profile.floorNormalStrength.toFixed(4)
-                    : role === 'wall'
-                      ? profile.wallNormalStrength.toFixed(4)
-                      : (profile.wallNormalStrength * 0.45).toFixed(4)
-                };`
-              : '',
-            this.hubSurfaceDetailEnabled
-              ? 'normal = perturbNormalArb(-vViewPosition, normal, vec2(dFdx(architecturalHeight), dFdy(architecturalHeight)), faceDirection);'
-              : '',
-          ].join('\n')
-        );
-      if (role === 'floor' && this.hubSurfaceDetailEnabled) {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <color_fragment>',
-          [
-            '#include <color_fragment>',
-            `diffuseColor.rgb *= 1.0 + architecturalSurfaceField(vArchitecturalWorldPosition * vec3(0.42, 1.0, 0.42)) * ${profile.floorColorVariation.toFixed(4)};`,
-          ].join('\n')
-        );
-      }
-    };
-    material.customProgramCacheKey = () =>
-      `freyraum-hub-${role}-world-space-v3-${this.hubSurfaceDetailEnabled ? 'detail' : 'plain'}`;
-  }
 
   private detailTexture(role: DetailRole): THREE.DataTexture {
     const key = `${role}::${this.tileSize}`;
