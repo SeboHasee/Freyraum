@@ -1,5 +1,36 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-02 (v0.98 wall surface realism + softer artwork-view lighting).
+> Latest markdown audit: 2026-09-02 (v0.99 Main Museum Hub plaster + lighting refinement).
+
+## v0.99 — Main Museum Hub plaster + lighting refinement (2026-09-02)
+
+### Changed
+
+- Added an explicit hub surface profile to
+  `src/materials/ArchitecturalSurfaceFactory.ts`. Hub walls no longer bind the
+  repeating gallery plaster normal/roughness maps; they use a very low-contrast
+  world-space color/roughness response whose pattern periods exceed the room.
+- Preserved the existing mapped plaster profile for the closer interactive
+  gallery, keeping the two routes resource-independent and avoiding a regression
+  to the tactile single-artwork wall shipped in v0.98.
+- Rebalanced `src/hub/HubRoomRenderer.ts` toward a broad neutral architectural
+  wash with weaker directional modeling. The high key remains the only shadow
+  caster and the existing on-demand render/reflection quality gates are
+  unchanged.
+- Extended `scripts/test-museum-hub-geometry.mjs` with deterministic contracts
+  for non-repeating hub walls, restrained variation, low directional-light
+  energy, and ceiling-led key placement.
+- Rebuilt the tracked local preview output to match the shipped runtime.
+
+### Validation
+
+- `npm install` ✅
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
 
 ## v0.98 — Wall surface realism + softer artwork-view lighting (2026-09-02)
 

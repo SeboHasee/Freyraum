@@ -1,5 +1,28 @@
 # FINDINGS
 
+## Main Museum Hub plaster + lighting findings (v0.99, 2026-09-02)
+
+1. The hub and interactive gallery already own independent
+   `ArchitecturalSurfaceFactory` instances, so the wall treatment can diverge
+   without splitting renderer ownership or changing the shared wall-color token.
+2. Reusing the close-gallery plaster maps in the seven-metre hub room made their
+   2.6 m repeat period perceptible. Raising texture resolution would sharpen the
+   same repetition rather than remove it.
+3. The hub now opts into a world-space wall profile with two broad,
+   incommensurate scalar waves. Their periods exceed the room envelope and their
+   color/roughness amplitudes remain below one and 1.5 percent respectively, so
+   the finish breaks perfect CG uniformity without reading as procedural noise.
+4. The interactive gallery remains on the mapped plaster profile introduced in
+   v0.98. This preserves close-view tactile response while keeping the calmer hub
+   wall appropriate to a spacious premium room.
+5. The hub light rig did not need more lights or a new post-processing pass.
+   Raising the broad hemisphere contribution and lowering/repositioning the two
+   directions produces softer architectural modeling while retaining one
+   preset-gated shadow caster.
+6. Existing performance boundaries remain intact: the hub still renders only on
+   mutation, shares one wall material, uses no animated shader state, and keeps
+   the existing reflection and shadow quality gates.
+
 ## Wall surface realism + softer artwork-view lighting findings (v0.98, 2026-09-02)
 
 1. After v0.97 the shared wall token and overall colour temperature were

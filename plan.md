@@ -1,5 +1,49 @@
 # FREYRAUM Plan
 
+## Implemented — Main Museum Hub plaster + lighting refinement (v0.99, 2026-09-02)
+
+> **Status update:** The Main Museum Hub keeps its calibrated room, camera,
+> artwork-slot, on-demand rendering, floor-reflection, and quality-preset
+> architecture. Its walls now opt into a calm non-repeating world-space plaster
+> response, while the close interactive gallery retains its mapped tactile
+> plaster. The hub light rig is rebalanced toward a broad neutral wash with
+> restrained directional modeling and one shadow caster.
+
+### 1. As-built scope
+
+1. `src/materials/ArchitecturalSurfaceFactory.ts` now accepts an explicit
+   `gallery` or `hub` profile.
+2. The gallery profile remains the default and preserves the v0.98 plaster
+   normal/roughness maps.
+3. The hub profile removes repeating wall maps and adds a shared, static
+   world-space color/roughness response with periods larger than the room and
+   deliberately sub-perceptual amplitudes.
+4. `src/hub/HubRoomRenderer.ts` opts into the hub profile and exposes one
+   deterministic low-energy lighting contract used by the room.
+5. Room geometry, camera calibration, slots, artwork loading, contact shadows,
+   environment map, floor reflection, and route transitions are unchanged.
+
+### 2. Performance and acceptance guardrails
+
+- No additional draw calls, textures, lights, render passes, or animation loop.
+- One shared hub wall shader program and one preset-gated shadow caster.
+- No repeating wall normal/roughness maps in the hub.
+- Hub variation remains below visible-noise thresholds and spans beyond the
+  seven-metre room envelope.
+- Gallery wall texture remains visible but restrained.
+- `scripts/test-museum-hub-geometry.mjs` guards the material split and hub light
+  energy/placement.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
 ## Implemented — Wall surface realism + softer artwork-view lighting (v0.98, 2026-09-02)
 
 > **Status update:** The interactive single-artwork route now keeps the neutral

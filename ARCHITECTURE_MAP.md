@@ -17,7 +17,9 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     and mounted-work composition
 - `src/materials/`
   - Painting and frame material behavior, procedural texture generation, and
-    shared architectural hub-shell materials/detail maps
+    shared architectural materials. `ArchitecturalSurfaceFactory` selects a
+    non-repeating world-space wall response for the hub and mapped tactile
+    plaster for the closer interactive gallery.
 - `src/config/`
   - Startup and quality/runtime config models
   - `galleryPresentation.ts`: compact interactive-gallery stage envelope and
@@ -34,8 +36,8 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     reconciliation, doorway-safe deterministic placement solving, polygon
     checks, and projected hub interaction geometry
   - `HubRoomRenderer`: on-demand WebGL hub room shell, page groups, floor
-    reflection, shadow/environment setup, and quality-preset-driven hub surface
-    fidelity
+    reflection, a broad neutral low-energy light rig with one shadow caster,
+    environment setup, and quality-preset-driven hub surface fidelity
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback
