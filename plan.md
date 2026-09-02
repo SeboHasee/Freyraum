@@ -1,5 +1,46 @@
 # FREYRAUM Plan
 
+## Implemented — Procedural skylight and PBR hub surfaces (v1.03, 2026-09-02)
+
+> **Status update:** The raised hub clerestory now opens to a static atmospheric
+> sky through pitched glazing and instanced steel rafters. Its visible daylight,
+> cached environment response, architectural tone mapping, and subtle PBR
+> surfaces form one coherent render path.
+
+### 1. As-built scope
+
+1. A local procedural atmosphere replaces the flat clerestory cap; battery uses
+   a reduced gradient sphere and no environment generation.
+2. Two pitched physical-glass planes, a ridge, and eighteen instanced rafter
+   segments form the skylight without downloaded assets.
+3. The hub PMREM is generated from the same sky model used in the visible scene.
+4. ACES tone mapping is limited to architectural materials; artwork and contact
+   shadows remain explicitly untone-mapped.
+5. Hub wall, ceiling, and floor materials use shared, non-repeating world-space
+   micro-normal and roughness response. Pale floor variation remains restrained.
+6. Perimeter diffusers are emissive PBR surfaces, area lights remain secondary,
+   and the sole directional key retains quality-gated shadows.
+7. The reflection target renders in linear space without tone mapping and blends
+   at reduced high/balanced strengths.
+
+### 2. Performance boundaries
+
+- Static mutation-driven rendering remains unchanged.
+- No downloaded textures, new dependencies, extra shadow maps, fullscreen
+  passes, SSAO, SSR, bloom, or animation were added.
+- Battery omits area lights, PMREM, surface-detail shader work, shadows, and
+  planar reflection.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
 ## Implemented — Main Museum Hub architectural redesign (v1.02, 2026-09-02)
 
 > **Status update:** The hub is now a tall, elongated daylit hall rather than a

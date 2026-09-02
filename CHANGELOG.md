@@ -1,5 +1,32 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-02 (v1.02 Main Museum Hub architectural redesign).
+> Latest markdown audit: 2026-09-02 (v1.03 procedural skylight and PBR surfaces).
+
+## v1.03 — Procedural skylight and PBR hub surfaces (2026-09-02)
+
+### Changed
+
+- Replaced the clerestory's flat luminous cap with a pitched, glazed roof, dark
+  ridge, and eighteen instanced rafter segments.
+- Added a static procedural atmospheric sky and generated the hub's cached PMREM
+  from the same daylight model, with a simpler gradient sky on battery quality.
+- Enabled restrained ACES tone mapping for hub architecture while preserving
+  explicit untone-mapped artwork and linear reflection-target rendering.
+- Added shared non-repeating world-space PBR micro-normal and roughness response
+  to hub plaster and pale mineral flooring; battery keeps the plain fallback.
+- Replaced flat unlit cove diffusers with restrained emissive PBR materials.
+- Rebalanced ambient, directional, and area-light energy and reduced the
+  quality-tiered floor reflection after tone mapping.
+- Extended deterministic contracts for skylight geometry, glazing, architectural
+  exposure, material response, emissive fixtures, and reflection limits.
+
+### Performance
+
+- The hub remains mutation-driven with no continuous animation.
+- One cached PMREM is generated only when environment reflections are enabled.
+- Repeated skylight rafters remain instanced; no external textures, extra shadow
+  maps, SSAO, SSR, bloom, or fullscreen passes were added.
+- Battery disables surface micro response, area lights, shadows, environment
+  generation, and planar reflections.
 
 ## v1.02 — Main Museum Hub architectural redesign (2026-09-02)
 

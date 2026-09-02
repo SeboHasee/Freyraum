@@ -1,5 +1,24 @@
 # FINDINGS
 
+## Procedural skylight and PBR hub findings (v1.03, 2026-09-02)
+
+1. A luminous cap cannot communicate exterior depth. A static atmospheric sky
+   behind two pitched glass planes gives the clerestory a legible outside world
+   without an HDRI, downloaded asset, or animation loop.
+2. Generating the cached PMREM from the visible sky keeps glazing, mineral-floor
+   sheen, and daylight direction coherent. Battery can omit the PMREM because it
+   already disables environment and planar reflection.
+3. Restrained architectural tone mapping improves highlight roll-off, while
+   `toneMapped: false` on artwork planes preserves customer image output.
+4. Hub plaster and mineral flooring benefit from derivative-based world-space
+   micro-normal response. It avoids repeat seams and texture memory, and the
+   battery preset can compile the plain variant.
+5. Floor color and roughness variation must remain below visible grunge strength;
+   realism comes from grazing response and broad daylight gradients rather than
+   obvious procedural patterning.
+6. Cove diffusers read more physically when emissive PBR material participates
+   in environmental shading instead of bypassing it with an unlit material.
+
 ## Main Museum Hub architectural redesign findings (v1.02, 2026-09-02)
 
 1. The remaining prototype appearance was architectural rather than textural.

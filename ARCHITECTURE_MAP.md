@@ -18,9 +18,8 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 - `src/materials/`
   - Painting and frame material behavior, procedural texture generation, and
     shared architectural materials. `ArchitecturalSurfaceFactory` selects
-    warm, map-free hub walls/ceiling/floor with an imperceptible world-space
-    wall-roughness response, and mapped tactile plaster for the closer
-    interactive gallery.
+    non-repeating world-space PBR micro response for hub plaster and mineral
+    flooring, and mapped tactile plaster for the closer interactive gallery.
 - `src/config/`
   - Startup and quality/runtime config models
   - `galleryPresentation.ts`: compact interactive-gallery stage envelope and
@@ -36,10 +35,11 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - `projectiveGeometry.ts`: camera/room projection math, room-plane/reference
     reconciliation, doorway-safe deterministic placement solving, polygon
     checks, and projected hub interaction geometry
-  - `HubRoomRenderer`: on-demand 9 × 12 × 5.2 m WebGL hall, raised central
-    clerestory, longitudinal perimeter channels, page groups, restrained floor
-    reflection, quality-gated ceiling area fixtures, a neutral daylight wash
-    and one shadow caster, environment setup, and preset-driven surface fidelity
+  - `HubRoomRenderer`: on-demand 9 × 12 × 5.2 m WebGL hall, pitched glazed
+    skylight over a raised clerestory, procedural atmospheric sky and matching
+    cached PMREM, longitudinal perimeter channels, page groups, restrained floor
+    reflection, quality-gated ceiling area fixtures, one shadow caster, and
+    preset-driven surface fidelity
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback

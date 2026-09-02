@@ -10,8 +10,8 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   on-demand WebGL room scene renders calibrated front/left/right walls inside a
   tall 9 × 12 × 5.2 m architectural hall plus an entry enclosure behind the
   camera, doorway passage pockets, floor/ceiling shadow gaps, longitudinal
-  perimeter luminaires, a raised central clerestory, mounted artwork depth, and
-  soft directional contact shadows.
+  perimeter luminaires, a pitched glazed skylight with procedural atmospheric
+  sky, mounted artwork depth, and soft directional contact shadows.
 - Hub interaction DOM is now only the screen-space accessibility bridge. Slots
   resolve by exact `Artwork.id` from `customer-artworks/museum-hub.json`; the
   shipping v4 hub contract persists camera far/lens-shift, room envelope,
@@ -21,9 +21,9 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   into left/right wall focus pages.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy
-  (`planar`, `ibl`, `off`). The hub uses warm off-white, mostly smooth wall
-  and ceiling finishes without repeating detail maps, plus a restrained satin
-  floor; the closer gallery retains its tactile mapped plaster profile.
+  (`planar`, `ibl`, `off`). The hub uses near-white PBR plaster and pale mineral
+  flooring with subtle non-repeating world-space micro response; the closer
+  gallery retains its tactile mapped plaster profile.
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
 - The interactive gallery now mounts artworks inside a compact architectural stage
@@ -39,10 +39,10 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Lighting still uses one fixed balanced neutral-gallery configuration, but the
   single-artwork view now runs at a softer ambient/direct energy balance and a
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
-- The hub keeps a separate daylight architectural rig: two longitudinal
-  ceiling-aligned area fixtures on high/balanced quality, a cool-neutral
-  clerestory wash, and one restrained shadow key. Battery quality omits the area
-  fixtures and uses the inexpensive directional fill fallback.
+- The hub keeps a separate daylight architectural rig: the visible procedural
+  sky also supplies its cached reflection environment, one restrained key casts
+  shadows, and two longitudinal area fixtures provide secondary high/balanced
+  fill. Battery uses a simple gradient sky and inexpensive directional fallback.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.
