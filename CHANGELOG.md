@@ -1,5 +1,37 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-02 (v1.00 Main Museum Hub environment polish).
+> Latest markdown audit: 2026-09-02 (v1.01 Main Museum Hub architectural lighting polish).
+
+## v1.01 — Main Museum Hub architectural lighting polish (2026-09-02)
+
+### Changed
+
+- Added two non-shadowing `RectAreaLight` fixtures aligned with the recessed
+  ceiling panels on high and balanced quality, creating localized architectural
+  gradients without per-artwork lights or another render pass.
+- Reduced the broad hemisphere and directional-key energy. The existing key
+  remains the sole shadow caster; battery quality omits area fixtures and uses
+  the inexpensive directional fill fallback.
+- Broadened ceiling coves from narrow strips to integrated 0.48 m luminaires and
+  reduced diffuser brightness.
+- Tightened and softened the shared artwork mounting-shadow approximation while
+  retaining the existing 4 cm shadow-casting artwork body.
+- Lifted doorway-pocket plaster from near-charcoal to a subdued warm grey so
+  recess geometry remains visible without looking artificially bright.
+- Added regression guards for panel size and energy, secondary key intensity,
+  doorway visibility, and existing surface constraints.
+
+### Validation
+
+- `npm install` ✅ (seven existing audit findings remain: one moderate, six high)
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+- Automated browser inspection unavailable because the Playwright transport
+  closed before navigation; it was not retried.
 
 ## v1.00 — Main Museum Hub environment polish (2026-09-02)
 

@@ -37,8 +37,9 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     reconciliation, doorway-safe deterministic placement solving, polygon
     checks, and projected hub interaction geometry
   - `HubRoomRenderer`: on-demand WebGL hub room shell, page groups, restrained
-    floor reflection, a broad warm-neutral low-energy light rig with one shadow
-    caster, environment setup, and quality-preset-driven hub surface fidelity
+    floor reflection, quality-gated ceiling-aligned area fixtures, a
+    warm-neutral wash and one shadow caster, environment setup, and
+    quality-preset-driven hub surface fidelity
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback

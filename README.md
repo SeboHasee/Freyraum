@@ -38,9 +38,10 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Lighting still uses one fixed balanced neutral-gallery configuration, but the
   single-artwork view now runs at a softer ambient/direct energy balance and a
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
-- The hub keeps a separate low-energy architectural rig: a broad warm-neutral
-  hemisphere wash plus two restrained directions aligned with the ceiling
-  coves, with only the high key casting shadows.
+- The hub keeps a separate low-energy architectural rig: two broad,
+  ceiling-aligned area fixtures on high/balanced quality, a warm-neutral
+  hemisphere wash, and one restrained shadow key. Battery quality omits the
+  area fixtures and uses the inexpensive directional fill fallback.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.

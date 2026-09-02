@@ -1,5 +1,45 @@
 # FREYRAUM Plan
 
+## Implemented — Main Museum Hub architectural lighting polish (v1.01, 2026-09-02)
+
+> **Status update:** High and balanced hub quality now connect the room's soft
+> gradients to two broad recessed ceiling fixtures. Artwork mounting shadows
+> are tighter, doorway recesses retain visible depth, and battery quality keeps
+> the prior inexpensive light path.
+
+### 1. As-built scope
+
+1. Two non-shadowing rectangular area lights match the room's cove positions
+   and dimensions on high/balanced quality.
+2. The warm hemisphere wash and directional shadow key remain at reduced energy.
+   Battery hides the area lights and enables one restrained directional fill.
+3. Ceiling openings are broadened to 0.48 m while retaining their recessed
+   returns and low-key diffuser surfaces.
+4. Artwork image planes remain unlit and color-faithful. Existing mounted bodies
+   retain 4 cm depth; their shared approximate contact shadow is reduced from
+   `0.34` to `0.22` opacity and from `1.22×` to `1.10×` extent.
+5. Doorway pockets retain their 1.15 m geometry with lighter warm-grey plaster.
+6. Camera, navigation, artwork assets, gallery renderer, tone mapping, floor
+   reflection hierarchy, and on-demand rendering are unchanged.
+
+### 2. Performance boundaries
+
+- No additional shadow maps, texture maps, fullscreen effects, render passes,
+  per-artwork lights, or animation loops.
+- Area lights are non-shadowing and omitted from the battery-quality light set.
+- The hub still renders only after state mutations.
+- One existing directional shadow caster remains quality-gated.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
 ## Implemented — Main Museum Hub environment polish (v1.00, 2026-09-02)
 
 > **Status update:** The hub-only architectural profile now presents smooth

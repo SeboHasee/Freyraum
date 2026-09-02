@@ -1,5 +1,27 @@
 # FINDINGS
 
+## Main Museum Hub architectural lighting findings (v1.01, 2026-09-02)
+
+1. After the v1.00 material pass, the highest-impact remaining mismatch was
+   spatial: broad directional lighting was not visibly connected to the recessed
+   ceiling luminaires.
+2. Two room-scale `RectAreaLight` fixtures provide localized wall and floor
+   gradients without shadow maps, textures, fullscreen passes, or per-artwork
+   lights. They are excluded from battery-quality light collection.
+3. The directional key remains useful at lower intensity because artwork bodies
+   and architectural geometry still need one coherent soft shadow direction.
+4. A directional fill is cheaper than area-light evaluation on integrated GPUs,
+   so it remains only as the battery fallback.
+5. The existing shared artwork shadow plane is sufficient when its extent and
+   opacity are reduced. A dedicated shadow map or light per artwork would cost
+   more and risk uneven curation.
+6. Doorway depth was already geometric. Raising the pocket material from
+   near-charcoal to warm mid-grey reveals that depth more naturally than adding
+   ambient occlusion.
+7. The named visual references were not present in the repository, so this pass
+   was evaluated against repository invariants and the supplied written art
+   direction only; no external retrieval was attempted.
+
 ## Main Museum Hub environment polish findings (v1.00, 2026-09-02)
 
 1. The hub's already-separated architectural profile is sufficient for premium
