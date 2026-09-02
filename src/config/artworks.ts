@@ -10,6 +10,7 @@
  * factory provides fallbacks whenever a slot in the texture set is missing.
  */
 
+import type { ArtworkPresentationId } from './presentation';
 import type { PaintingTextureSet } from '../materials/PaintingTextureSet';
 
 export interface ArtworkDimensions {
@@ -17,6 +18,13 @@ export interface ArtworkDimensions {
   width: number;
   /** Pixel height of the rendered artwork asset. */
   height: number;
+}
+
+export interface ArtworkImageSourceContext {
+  /** Runtime-only metadata for resolving generated customer bundles. */
+  bundleId?: string;
+  /** Runtime-only base URL used to resolve relative customer image paths. */
+  assetBaseUrl?: string;
 }
 
 export interface Artwork {
@@ -49,16 +57,19 @@ export interface Artwork {
   textureSet?: PaintingTextureSet;
   /** Optional customer-facing surface description. Informational only. */
   surface?: string;
+  /** Optional validated presentation profile for the interactive gallery. */
+  presentation?: ArtworkPresentationId;
   /**
-   * v0.09: Origin-clean base64 data URL of the image for reliable WebGL
+   * v0.09/v0.90: Origin-clean base64 data URL of the image for reliable WebGL
    * texture upload from file:// without CORS or taint issues.
    * Written by `scripts/import-artworks.mjs` as the exact original file bytes.
-   * When present, the central 3D painting albedo uses this source instead of
-   * `image`, which may be a relative path that can fail WebGL upload in some
-   * browsers when opened via file:// protocol.
+   * When present, the gallery may use this as an explicit fallback if the
+   * declared `image` asset fails to load as the albedo source.
    * Format: `data:image/<subtype>;base64,<base64-bytes>`
    */
   webglImage?: string;
+  /** Runtime-only bundle context for resolving relative customer image paths. */
+  imageSourceContext?: ArtworkImageSourceContext;
 }
 
 interface EmbeddedArtworkOptions {
@@ -148,6 +159,7 @@ export const artworks: readonly Artwork[] = [
     credit: 'Freyraum Studio',
     tags: ['landscape', 'soft-light', 'warm'],
     surface: 'Matte Leinwand',
+    presentation: 'canvas',
   },
   {
     id: 'quiet-coastline',
@@ -171,6 +183,7 @@ export const artworks: readonly Artwork[] = [
     credit: 'Freyraum Studio',
     tags: ['portrait', 'coast', 'minimal'],
     surface: 'Matte Leinwand',
+    presentation: 'canvas',
   },
   {
     id: 'tokyo-passage',
@@ -193,6 +206,7 @@ export const artworks: readonly Artwork[] = [
     credit: 'Freyraum Studio',
     tags: ['square', 'urban', 'cinematic'],
     surface: 'Satinierte Leinwand',
+    presentation: 'canvas',
   },
   {
     id: 'golden-desert',
@@ -216,5 +230,6 @@ export const artworks: readonly Artwork[] = [
     credit: 'Freyraum Studio',
     tags: ['ultrawide', 'desert', 'warm'],
     surface: 'Matte Leinwand',
+    presentation: 'canvas',
   },
 ];

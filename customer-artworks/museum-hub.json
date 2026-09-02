@@ -1,0 +1,556 @@
+{
+  "version": 4,
+  "coverage": "all-active-artworks",
+  "stage": {
+    "width": 1366,
+    "height": 768
+  },
+  "background": {
+    "src": "Backgrounds/museum-empty.png",
+    "aspect": 1.778646
+  },
+  "backgroundFallback": {
+    "src": "Backgrounds/museum-empty.png"
+  },
+  "visualTokens": {
+    "galleryWall": "#C7CED4",
+    "museumWall": "#C7CED4"
+  },
+  "camera": {
+    "position": {
+      "x": 0,
+      "y": 1.8,
+      "z": 7.5
+    },
+    "target": {
+      "x": 0,
+      "y": 1.55,
+      "z": 0
+    },
+    "verticalFovDeg": 42,
+    "near": 0.1,
+    "far": 40,
+    "lensShift": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  "slotsPerPage": 6,
+  "walls": [
+    {
+      "id": "wall-front",
+      "group": "front",
+      "planeAspect": 2.06,
+      "quad": [
+        {
+          "x": 330.8,
+          "y": 189.56
+        },
+        {
+          "x": 1035.2,
+          "y": 189.56
+        },
+        {
+          "x": 1031.23,
+          "y": 529.84
+        },
+        {
+          "x": 334.77,
+          "y": 529.84
+        }
+      ],
+      "safePolygon": [
+        {
+          "x": 348.54,
+          "y": 515.98
+        },
+        {
+          "x": 1017.46,
+          "y": 515.98
+        },
+        {
+          "x": 1020.95,
+          "y": 203.73
+        },
+        {
+          "x": 345.05,
+          "y": 203.73
+        }
+      ],
+      "drawableRegion": [
+        {
+          "x": 0.14,
+          "y": 0.14
+        },
+        {
+          "x": 6.86,
+          "y": 0.14
+        },
+        {
+          "x": 6.86,
+          "y": 3.26
+        },
+        {
+          "x": 0.14,
+          "y": 3.26
+        }
+      ],
+      "exclusionPolygons": [],
+      "transform": {
+        "origin": {
+          "x": -3.5,
+          "y": 0,
+          "z": -2.5
+        },
+        "axisU": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "axisV": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "width": 7,
+        "height": 3.4
+      },
+      "hangingBand": {
+        "minY": 0.42,
+        "maxY": 3.12,
+        "margin": 0.08
+      },
+      "shadowVector": {
+        "x": 0,
+        "y": 14
+      }
+    },
+    {
+      "id": "wall-right",
+      "group": "right",
+      "planeAspect": 2.06,
+      "quad": [
+        {
+          "x": 1035.2,
+          "y": 189.56
+        },
+        {
+          "x": 1871.86,
+          "y": -193.13
+        },
+        {
+          "x": 1827.83,
+          "y": 939.75
+        },
+        {
+          "x": 1031.23,
+          "y": 529.84
+        }
+      ],
+      "safePolygon": [
+        {
+          "x": 1036.31,
+          "y": 518.32
+        },
+        {
+          "x": 1779.34,
+          "y": 870.92
+        },
+        {
+          "x": 1816.23,
+          "y": -122.33
+        },
+        {
+          "x": 1040.05,
+          "y": 201.63
+        }
+      ],
+      "drawableRegion": [
+        {
+          "x": 0.14,
+          "y": 0.14
+        },
+        {
+          "x": 6.86,
+          "y": 0.14
+        },
+        {
+          "x": 6.86,
+          "y": 3.26
+        },
+        {
+          "x": 0.14,
+          "y": 3.26
+        }
+      ],
+      "exclusionPolygons": [
+        [
+          {
+            "x": 4,
+            "y": 0
+          },
+          {
+            "x": 5.05,
+            "y": 0
+          },
+          {
+            "x": 5.05,
+            "y": 2.3
+          },
+          {
+            "x": 4,
+            "y": 2.3
+          }
+        ]
+      ],
+      "transform": {
+        "origin": {
+          "x": 3.5,
+          "y": 0,
+          "z": -2.5
+        },
+        "axisU": {
+          "x": 0,
+          "y": 0,
+          "z": 1
+        },
+        "axisV": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "width": 7,
+        "height": 3.4
+      },
+      "hangingBand": {
+        "minY": 0.42,
+        "maxY": 3.12,
+        "margin": 0.08
+      },
+      "shadowVector": {
+        "x": 8,
+        "y": 14
+      }
+    },
+    {
+      "id": "wall-rear",
+      "group": "rear",
+      "role": "bounds-only",
+      "transform": {
+        "origin": {
+          "x": 3.5,
+          "y": 0,
+          "z": 4.5
+        },
+        "axisU": {
+          "x": -1,
+          "y": 0,
+          "z": 0
+        },
+        "axisV": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "width": 7,
+        "height": 3.4
+      }
+    },
+    {
+      "id": "wall-left",
+      "group": "left",
+      "planeAspect": 2.06,
+      "quad": [
+        {
+          "x": -505.86,
+          "y": -193.13
+        },
+        {
+          "x": 330.8,
+          "y": 189.56
+        },
+        {
+          "x": 334.77,
+          "y": 529.84
+        },
+        {
+          "x": -461.83,
+          "y": 939.75
+        }
+      ],
+      "safePolygon": [
+        {
+          "x": -413.34,
+          "y": 870.92
+        },
+        {
+          "x": 329.69,
+          "y": 518.32
+        },
+        {
+          "x": 325.95,
+          "y": 201.63
+        },
+        {
+          "x": -450.23,
+          "y": -122.33
+        }
+      ],
+      "drawableRegion": [
+        {
+          "x": 0.14,
+          "y": 0.14
+        },
+        {
+          "x": 6.86,
+          "y": 0.14
+        },
+        {
+          "x": 6.86,
+          "y": 3.26
+        },
+        {
+          "x": 0.14,
+          "y": 3.26
+        }
+      ],
+      "exclusionPolygons": [
+        [
+          {
+            "x": 1.95,
+            "y": 0
+          },
+          {
+            "x": 3,
+            "y": 0
+          },
+          {
+            "x": 3,
+            "y": 2.3
+          },
+          {
+            "x": 1.95,
+            "y": 2.3
+          }
+        ]
+      ],
+      "transform": {
+        "origin": {
+          "x": -3.5,
+          "y": 0,
+          "z": 4.5
+        },
+        "axisU": {
+          "x": 0,
+          "y": 0,
+          "z": -1
+        },
+        "axisV": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        },
+        "width": 7,
+        "height": 3.4
+      },
+      "hangingBand": {
+        "minY": 0.42,
+        "maxY": 3.12,
+        "margin": 0.08
+      },
+      "shadowVector": {
+        "x": -8,
+        "y": 14
+      }
+    }
+  ],
+  "slots": [
+    {
+      "id": "room-01.wall-front.a",
+      "enabled": true,
+      "selectable": true,
+      "artworkId": "fraktal",
+      "placement": {
+        "wallId": "wall-front",
+        "center": {
+          "x": 0.2857,
+          "y": 0.5441
+        },
+        "anchor": {
+          "x": 2,
+          "y": 1.55
+        },
+        "uv": {
+          "x": 0.2857,
+          "y": 0.4559
+        },
+        "mountedHeight": 1.4,
+        "targetSizePolicy": "contain",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02
+      }
+    },
+    {
+      "id": "room-01.wall-front.b",
+      "enabled": true,
+      "selectable": true,
+      "artworkId": "akt-27",
+      "placement": {
+        "wallId": "wall-front",
+        "center": {
+          "x": 0.7143,
+          "y": 0.5441
+        },
+        "anchor": {
+          "x": 5,
+          "y": 1.55
+        },
+        "uv": {
+          "x": 0.7143,
+          "y": 0.4559
+        },
+        "mountedHeight": 1.4,
+        "targetSizePolicy": "contain",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02
+      }
+    },
+    {
+      "id": "room-01.wall-left.a",
+      "enabled": true,
+      "selectable": true,
+      "placement": {
+        "wallId": "wall-left",
+        "center": {
+          "x": 0.8,
+          "y": 0.5441
+        },
+        "anchor": {
+          "x": 5.6,
+          "y": 1.55
+        },
+        "uv": {
+          "x": 0.8,
+          "y": 0.4559
+        },
+        "mountedHeight": 0.95,
+        "targetSizePolicy": "contain",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02
+      }
+    },
+    {
+      "id": "room-01.wall-left.b",
+      "enabled": true,
+      "selectable": true,
+      "placement": {
+        "wallId": "wall-left",
+        "center": {
+          "x": 0.5679,
+          "y": 0.5441
+        },
+        "anchor": {
+          "x": 3.975,
+          "y": 1.55
+        },
+        "uv": {
+          "x": 0.5679,
+          "y": 0.4559
+        },
+        "mountedHeight": 1.2,
+        "targetSizePolicy": "contain",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02
+      }
+    },
+    {
+      "id": "room-01.wall-right.a",
+      "enabled": true,
+      "selectable": true,
+      "placement": {
+        "wallId": "wall-right",
+        "center": {
+          "x": 0.2,
+          "y": 0.5441
+        },
+        "anchor": {
+          "x": 1.4,
+          "y": 1.55
+        },
+        "uv": {
+          "x": 0.2,
+          "y": 0.4559
+        },
+        "mountedHeight": 0.95,
+        "targetSizePolicy": "contain",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02
+      }
+    },
+    {
+      "id": "room-01.wall-right.b",
+      "enabled": true,
+      "selectable": true,
+      "placement": {
+        "wallId": "wall-right",
+        "center": {
+          "x": 0.4321,
+          "y": 0.5441
+        },
+        "anchor": {
+          "x": 3.025,
+          "y": 1.55
+        },
+        "uv": {
+          "x": 0.4321,
+          "y": 0.4559
+        },
+        "mountedHeight": 1.2,
+        "targetSizePolicy": "contain",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02
+      }
+    }
+  ],
+  "room": {
+    "floorOutline": [
+      {
+        "x": -3.5,
+        "y": 0,
+        "z": -2.5
+      },
+      {
+        "x": 3.5,
+        "y": 0,
+        "z": -2.5
+      },
+      {
+        "x": 3.5,
+        "y": 0,
+        "z": 4.5
+      },
+      {
+        "x": -3.5,
+        "y": 0,
+        "z": 4.5
+      }
+    ],
+    "floorY": 0,
+    "ceilingY": 3.4,
+    "wallThickness": 0.08
+  },
+  "hangingRules": {
+    "verticalBand": {
+      "minY": 0.42,
+      "maxY": 3.12
+    },
+    "sideMargin": 0.14,
+    "doorwayClearance": 0.35
+  }
+}

@@ -2,9 +2,10 @@ import './styles/main.scss';
 
 import * as THREE from 'three';
 
-import { artworks as builtInArtworks, type Artwork } from './config/artworks';
+import { artworks as builtInArtworks, type Artwork, type ArtworkImageSourceContext } from './config/artworks';
 import { getQualityPreset, type QualityPresetId } from './config/quality';
 import { RendererManager } from './core/RendererManager';
+import { GalleryPresentationStage } from './core/GalleryPresentationStage';
 import { SceneManager } from './core/SceneManager';
 import { PostProcessing } from './core/PostProcessing';
 import { LightingSetup } from './lighting/LightingSetup';
@@ -25,6 +26,10 @@ import { Timeline } from './timeline/Timeline';
 import { KeyboardNav } from './interaction/KeyboardNav';
 import { KeyboardHelp } from './ui/KeyboardHelp';
 import { CanvasInteraction } from './interaction/CanvasInteraction';
+import { MainMuseumHub } from './hub/MainMuseumHub';
+import { resolveMuseumHub } from './config/museumHub';
+import { normalizeArtworkPresentation } from './config/presentation';
+import { DestinationRouter } from './navigation/DestinationRouter';
 import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
 import { PreferencesStore } from './utils/preferences';
 import { isWebGLAvailable } from './utils/webgl';
@@ -33,6 +38,7 @@ import { installPerformanceTooling } from './utils/performanceTooling';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
+import { resolveArtworkImageSources } from './utils/artworkImageSources';
 import { detectDeviceCapabilities, applyDeviceCaps, type DeviceCapabilities } from './utils/device';
 import { suggestStartupQuality } from './utils/performance';
 import {
@@ -90,6 +96,46 @@ function parseCssNumeric(value: string): number {
   if (Number.isFinite(parsed)) return parsed;
   const fallback = value.match(/-?\d+(?:\.\d+)?/);
   return fallback ? Number.parseFloat(fallback[0]) : 0;
+}
+
+function isHubDebugEnabled(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('hubDebug') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function normalizeCssColorToHex(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const color = new THREE.Color();
+  try {
+    color.setStyle(trimmed);
+    return `#${color.getHexString().toUpperCase()}`;
+  } catch {
+    return null;
+  }
+}
+
+function probeClassBackground(className: string): { backgroundColor: string; backgroundImage: string } | null {
+  if (!document.body) return null;
+  const probe = document.createElement('div');
+  probe.className = className;
+  probe.style.position = 'fixed';
+  probe.style.left = '-10000px';
+  probe.style.top = '-10000px';
+  probe.style.width = '4px';
+  probe.style.height = '4px';
+  document.body.appendChild(probe);
+  const style = getComputedStyle(probe);
+  const snapshot = {
+    backgroundColor: style.backgroundColor,
+    backgroundImage: style.backgroundImage,
+  };
+  probe.remove();
+  return snapshot;
 }
 
 interface WarmProfile {
@@ -212,15 +258,48 @@ function deriveWarmProfile(caps: DeviceCapabilities, artworkCount: number): Warm
 }
 
 /**
- * v0.07: validates `window.__FREYRAUM_ARTWORKS` and returns a clean
- * `Artwork[]` or `null`. Each entry is validated for the minimal field set
- * required by the gallery; anything malformed is dropped with a diagnostic
- * note rather than crashing the runtime. This keeps the customer preview
- * resilient even if the import script writes a partially valid manifest.
+ * v0.07/v0.91: validates injected customer artwork payloads and returns a
+ * clean `Artwork[]` or `null`. The runtime accepts either the legacy
+ * `window.__FREYRAUM_ARTWORKS` array or the
+ * `window.__FREYRAUM_ARTWORK_BUNDLE__` envelope, drops malformed entries with a
+ * diagnostic note, and preserves a bundle-scoped asset base for relative image
+ * resolution.
  */
+interface SanitizedInjectedArtworkPayload {
+  artworks: readonly Artwork[];
+  source: 'customer-bundle' | 'customer-legacy-array';
+  bundleId: string | null;
+  assetBaseUrl: string | null;
+}
+
+function normalizeInjectedArtworkBundleId(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 96) : null;
+}
+
+function normalizeInjectedArtworkAssetBaseUrl(raw: unknown): string | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const fallbackBase = typeof window !== 'undefined' ? window.location.href : 'http://localhost/';
+  try {
+    const resolved = new URL(raw.trim(), fallbackBase);
+    if (!['http:', 'https:', 'file:'].includes(resolved.protocol)) return null;
+    return new URL('./', resolved.href).href;
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedInjectedArtworkPrimaryUrl(url: string): boolean {
+  if (!url) return false;
+  if (/^data:image\//i.test(url)) return true;
+  const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(url)?.[1]?.toLowerCase() ?? null;
+  if (!scheme) return true;
+  return scheme === 'http' || scheme === 'https' || scheme === 'file';
+}
+
 function sanitizeInjectedArtworks(
   raw: unknown,
-  diagnostics: ReturnType<typeof getDiagnostics>
+  diagnostics: ReturnType<typeof getDiagnostics>,
+  imageSourceContext?: ArtworkImageSourceContext | null
 ): readonly Artwork[] | null {
   if (raw === undefined || raw === null) return null;
   if (!Array.isArray(raw)) {
@@ -243,7 +322,7 @@ function sanitizeInjectedArtworks(
     const dims = a['dimensions'] as { width?: unknown; height?: unknown } | undefined;
     const width = typeof dims?.width === 'number' && Number.isFinite(dims.width) ? dims.width : 0;
     const height = typeof dims?.height === 'number' && Number.isFinite(dims.height) ? dims.height : 0;
-    if (!id || !image || width <= 0 || height <= 0 || seenIds.has(id)) {
+    if (!id || !image || width <= 0 || height <= 0 || seenIds.has(id) || !isAllowedInjectedArtworkPrimaryUrl(image)) {
       rejected++;
       continue;
     }
@@ -260,6 +339,15 @@ function sanitizeInjectedArtworks(
       /^data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/]/.test(webglImageRaw)
         ? webglImageRaw
         : undefined;
+    const rawPresentation =
+      typeof a['presentation'] === 'string' ? (a['presentation'] as string) : undefined;
+    const presentation = normalizeArtworkPresentation(rawPresentation);
+    if (rawPresentation && !presentation) {
+      diagnostics.warn('boot', 'artwork-presentation-invalid', 'Ignoring invalid injected artwork presentation', {
+        artworkId: id,
+        presentation: rawPresentation,
+      });
+    }
     out.push({
       id,
       title,
@@ -277,6 +365,8 @@ function sanitizeInjectedArtworks(
       credit: typeof a['credit'] === 'string' ? (a['credit'] as string) : '',
       tags,
       surface: typeof a['surface'] === 'string' ? (a['surface'] as string) : '',
+      ...(presentation ? { presentation } : {}),
+      ...(imageSourceContext ? { imageSourceContext } : {}),
     });
   }
   if (rejected > 0) {
@@ -286,6 +376,53 @@ function sanitizeInjectedArtworks(
     });
   }
   return out;
+}
+
+function sanitizeInjectedArtworkPayload(
+  rawBundle: unknown,
+  rawLegacyArtworks: unknown,
+  diagnostics: ReturnType<typeof getDiagnostics>
+): SanitizedInjectedArtworkPayload | null {
+  if (rawBundle !== undefined && rawBundle !== null) {
+    if (!rawBundle || typeof rawBundle !== 'object' || Array.isArray(rawBundle)) {
+      diagnostics.warn('boot', 'artworks-bundle-invalid', 'Ignoring injected artwork bundle: expected an object envelope', {
+        typeOf: typeof rawBundle,
+      });
+    } else {
+      const bundle = rawBundle as Record<string, unknown>;
+      const bundleId = normalizeInjectedArtworkBundleId(bundle['bundleId']);
+      const assetBaseUrl = normalizeInjectedArtworkAssetBaseUrl(bundle['assetBaseUrl']);
+      if (bundle['assetBaseUrl'] !== undefined && bundle['assetBaseUrl'] !== null && !assetBaseUrl) {
+        diagnostics.warn('boot', 'artworks-bundle-base-invalid', 'Ignoring invalid injected artwork asset base URL', {
+          assetBaseUrlType: typeof bundle['assetBaseUrl'],
+        });
+      }
+      const imageSourceContext =
+        bundleId || assetBaseUrl
+          ? {
+              ...(bundleId ? { bundleId } : {}),
+              ...(assetBaseUrl ? { assetBaseUrl } : {}),
+            }
+          : undefined;
+      const artworks = sanitizeInjectedArtworks(bundle['artworks'], diagnostics, imageSourceContext);
+      if (artworks) {
+        return {
+          artworks,
+          source: 'customer-bundle',
+          bundleId,
+          assetBaseUrl,
+        };
+      }
+    }
+  }
+  const legacyArtworks = sanitizeInjectedArtworks(rawLegacyArtworks, diagnostics);
+  if (!legacyArtworks) return null;
+  return {
+    artworks: legacyArtworks,
+    source: 'customer-legacy-array',
+    bundleId: null,
+    assetBaseUrl: null,
+  };
 }
 
 function sanitizeInjectedAudio(
@@ -349,6 +486,99 @@ function sanitizeInjectedAudio(
   };
 }
 
+function applyResolvedWallSurfaceColor(
+  app: HTMLElement,
+  tokens: { galleryWall: string; museumWall: string },
+  rendererManager?: RendererManager
+): { galleryWall: string; museumWall: string } {
+  const galleryWall = normalizeCssColorToHex(tokens.galleryWall) ?? tokens.galleryWall.trim();
+  const museumWall = normalizeCssColorToHex(tokens.museumWall) ?? galleryWall;
+  document.documentElement.style.setProperty('--color-gallery-wall', galleryWall);
+  document.documentElement.style.setProperty('--color-museum-wall', museumWall);
+  document.documentElement.style.backgroundColor = galleryWall;
+  document.body.style.backgroundColor = galleryWall;
+  app.style.backgroundColor = galleryWall;
+  rendererManager?.setWallClearColor(galleryWall);
+  return { galleryWall, museumWall };
+}
+
+function resolveRuntimeFallbackSurfaceColor(): string {
+  const rootGalleryWall = normalizeCssColorToHex(
+    getComputedStyle(document.documentElement).getPropertyValue('--color-gallery-wall')
+  );
+  return rootGalleryWall ?? '#C7CED4';
+}
+
+function verifyMuseumWallColorConsistency(
+  diagnostics: ReturnType<typeof getDiagnostics>,
+  reason: string,
+  tokens: { galleryWall: string; museumWall: string },
+  rendererManager: RendererManager | null,
+  museumHubElement: HTMLElement | null,
+  loadingOverlayElement: HTMLElement | null,
+  appElement: HTMLElement
+): void {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const resolvedGalleryVar = rootStyle.getPropertyValue('--color-gallery-wall').trim();
+  const resolvedMuseumVar = rootStyle.getPropertyValue('--color-museum-wall').trim();
+  const clearColor = rendererManager?.renderer.getClearColor(new THREE.Color()) ?? null;
+  const clearHex = clearColor ? `#${clearColor.getHexString().toUpperCase()}` : null;
+  const hubStyle = museumHubElement ? getComputedStyle(museumHubElement) : null;
+  const fallbackProbe = probeClassBackground('fallback-screen');
+  const bodyStyle = getComputedStyle(document.body);
+  const appStyle = getComputedStyle(appElement);
+  const loadingStyle = loadingOverlayElement ? getComputedStyle(loadingOverlayElement) : null;
+
+  const expectedGalleryHex = normalizeCssColorToHex(tokens.galleryWall);
+  const expectedMuseumHex = normalizeCssColorToHex(tokens.museumWall);
+  const galleryVarHex = normalizeCssColorToHex(resolvedGalleryVar);
+  const museumVarHex = normalizeCssColorToHex(resolvedMuseumVar);
+  const hubBackgroundHex = normalizeCssColorToHex(hubStyle?.backgroundColor ?? null);
+  const fallbackBackgroundHex = normalizeCssColorToHex(fallbackProbe?.backgroundColor ?? null);
+  const bodyBackgroundHex = normalizeCssColorToHex(bodyStyle.backgroundColor);
+  const appBackgroundHex = normalizeCssColorToHex(appStyle.backgroundColor);
+
+  const mismatchSignals: string[] = [];
+  if (expectedGalleryHex && clearHex && clearHex !== expectedGalleryHex) mismatchSignals.push(`renderer-clear(${clearHex}) != token.galleryWall(${expectedGalleryHex})`);
+  if (expectedGalleryHex && galleryVarHex && galleryVarHex !== expectedGalleryHex) mismatchSignals.push(`--color-gallery-wall(${galleryVarHex}) != token.galleryWall(${expectedGalleryHex})`);
+  if (expectedMuseumHex && museumVarHex && museumVarHex !== expectedMuseumHex) mismatchSignals.push(`--color-museum-wall(${museumVarHex}) != token.museumWall(${expectedMuseumHex})`);
+  if (expectedMuseumHex && hubBackgroundHex && hubBackgroundHex !== expectedMuseumHex) mismatchSignals.push(`hub-background(${hubBackgroundHex}) != token.museumWall(${expectedMuseumHex})`);
+  if (expectedGalleryHex && fallbackBackgroundHex && fallbackBackgroundHex !== expectedGalleryHex) mismatchSignals.push(`fallback-background(${fallbackBackgroundHex}) != token.galleryWall(${expectedGalleryHex})`);
+  if (expectedGalleryHex && appBackgroundHex && appBackgroundHex !== expectedGalleryHex) mismatchSignals.push(`app-background(${appBackgroundHex}) != token.galleryWall(${expectedGalleryHex})`);
+
+  const payload = {
+    reason,
+    tokens,
+    rootVariables: {
+      gallery: resolvedGalleryVar,
+      museum: resolvedMuseumVar,
+      galleryHex: galleryVarHex,
+      museumHex: museumVarHex,
+    },
+    rendererClearHex: clearHex,
+    surfaces: {
+      hubBackgroundColor: hubStyle?.backgroundColor ?? null,
+      hubBackgroundImage: hubStyle?.backgroundImage ?? null,
+      loadingOverlayBackgroundColor: loadingStyle?.backgroundColor ?? null,
+      loadingOverlayBackgroundImage: loadingStyle?.backgroundImage ?? null,
+      fallbackProbeBackgroundColor: fallbackProbe?.backgroundColor ?? null,
+      fallbackProbeBackgroundImage: fallbackProbe?.backgroundImage ?? null,
+      bodyBackgroundColor: bodyStyle.backgroundColor,
+      bodyBackgroundImage: bodyStyle.backgroundImage,
+      bodyBackgroundHex,
+      appBackgroundColor: appStyle.backgroundColor,
+      appBackgroundImage: appStyle.backgroundImage,
+      appBackgroundHex,
+    },
+    mismatchSignals,
+  };
+  if (mismatchSignals.length > 0) {
+    diagnostics.warn('surface', 'wall-surface-snapshot-mismatch', 'Museum wall/clear-color consistency mismatch detected', payload);
+  } else {
+    diagnostics.info('surface', 'wall-surface-snapshot', 'Museum wall/clear-color surfaces resolved consistently', payload);
+  }
+}
+
 function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   const hints = [
     'Kunstwerke werden vorbereitet …',
@@ -361,7 +591,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   overlay.className = 'loading-overlay';
   overlay.setAttribute('role', 'status');
   overlay.setAttribute('aria-live', 'polite');
-  overlay.setAttribute('aria-label', 'Galerie wird geladen');
+  overlay.setAttribute('aria-label', 'Museum wird geladen');
 
   // v0.28 X-04 — 12 particles, 3-6 s duration, 4-waypoint random wander.
   // Each particle gets three independent drift vectors (dx1/dy1 through dx3/dy3)
@@ -420,7 +650,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   wordmark.appendChild(wordmarkText);
   const subtitle = document.createElement('div');
   subtitle.className = 'loading-subtitle';
-  subtitle.textContent = 'Galerie wird geladen';
+  subtitle.textContent = 'Museum wird geladen';
   const track = document.createElement('div');
   track.className = 'loading-progress-track';
   const fill = document.createElement('div');
@@ -434,8 +664,8 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   hint.textContent = hints[0];
   const startButton = document.createElement('button');
   startButton.className = 'loading-start-btn';
-  startButton.textContent = 'Galerie betreten';
-  startButton.setAttribute('aria-label', 'Galerie betreten und Ausstellung beginnen');
+  startButton.textContent = 'Museum betreten';
+  startButton.setAttribute('aria-label', 'Museum betreten und Ausstellungen entdecken');
   startButton.disabled = true;
   card.append(wordmark, subtitle, track, pct, hint, startButton);
   overlay.appendChild(card);
@@ -471,9 +701,9 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
       startButton.addEventListener('click', () => {
         startButton.style.removeProperty('will-change');
       }, { once: true });
-      subtitle.textContent = 'Galerie bereit — zum Starten klicken';
+      subtitle.textContent = 'Museum bereit — zum Starten klicken';
       hint.textContent = 'Alle Inhalte sind vollständig vorbereitet.';
-      overlay.setAttribute('aria-label', 'Galerie bereit — zum Starten klicken');
+      overlay.setAttribute('aria-label', 'Museum bereit — zum Starten klicken');
       return new Promise<void>((resolve) => {
         let entered = false;
         const go = (): void => {
@@ -508,14 +738,19 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
 async function main(): Promise<void> {
   const bootStartedAt = performance.now();
   const diagnostics = getDiagnostics();
+  const hubDebugEnabled = isHubDebugEnabled();
   diagnostics.installGlobalHandlers();
   diagnostics.info('boot', 'startup', 'Starting FREYRAUM runtime');
+  if (hubDebugEnabled) {
+    diagnostics.info('boot', 'hub-debug-enabled', 'Museum hub debug overlay requested via ?hubDebug=1');
+  }
 
   const app = document.getElementById('app');
   if (!app) {
     diagnostics.error('boot', 'missing-app-root', 'Missing #app root element');
     return;
   }
+  app.dataset['experience'] = 'loading';
 
   // Preferences must apply before WebGL bootstrapping so the fallback
   // screen and loading overlay both react to motion/contrast settings.
@@ -558,27 +793,76 @@ async function main(): Promise<void> {
     }
   }
 
-  // v0.07: customer-managed artworks injected at runtime by
-  // `scripts/import-artworks.mjs` via `customer-preview/customer-artworks.js`
-  // (Option C: global window injection, see plan.md v0.07).
-  const injected = (window as unknown as { __FREYRAUM_ARTWORKS?: unknown }).__FREYRAUM_ARTWORKS;
-  const customerArtworks = sanitizeInjectedArtworks(injected, diagnostics);
+  // v0.07/v0.91: customer-managed artworks are injected at runtime by
+  // `scripts/import-artworks.mjs` via `customer-artworks.js`. The generated
+  // script now publishes both the legacy artwork array and a bundle envelope
+  // with a script-derived asset base so runtime source resolution is stable
+  // across file:// preview, Vite dev, and Pages builds.
+  const injectedBundle = (window as unknown as { __FREYRAUM_ARTWORK_BUNDLE__?: unknown })
+    .__FREYRAUM_ARTWORK_BUNDLE__;
+  const injectedLegacyArtworks = (window as unknown as { __FREYRAUM_ARTWORKS?: unknown }).__FREYRAUM_ARTWORKS;
+  const injectedArtworkPayload = sanitizeInjectedArtworkPayload(
+    injectedBundle,
+    injectedLegacyArtworks,
+    diagnostics
+  );
+  const customerArtworks = injectedArtworkPayload?.artworks ?? null;
   const artworks: readonly Artwork[] =
     customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
-  const artworkManifest = artworks.map((a) => ({
-    id: a.id,
-    hasWebglImage: !!a.webglImage,
-    webglImageSource: a.webglImage ? 'embedded-data-url' : 'file-url',
-    dimensions: a.dimensions,
-    surface: a.surface ?? null,
-  }));
+  const artworkManifest = artworks.map((a) => {
+    const sourcePlan = resolveArtworkImageSources(a);
+    return {
+      id: a.id,
+      bundleId: sourcePlan.primary?.bundleId ?? null,
+      declaredImageUrlType: sourcePlan.primary?.declaredUrlType ?? null,
+      resolvedImageUrlType: sourcePlan.primary?.resolvedUrlType ?? null,
+      hasEmbeddedFallback: !!sourcePlan.fallback,
+      embeddedFallbackUrlType: sourcePlan.fallback?.resolvedUrlType ?? null,
+      dimensions: a.dimensions,
+      surface: a.surface ?? null,
+      presentation: a.presentation ?? null,
+    };
+  });
   diagnostics.info('boot', 'artworks-source', 'Artwork source resolved', {
-    source: customerArtworks && customerArtworks.length > 0 ? 'customer' : 'built-in',
+    source:
+      customerArtworks && customerArtworks.length > 0
+        ? injectedArtworkPayload?.source ?? 'customer-legacy-array'
+        : 'built-in',
+    bundleId: injectedArtworkPayload?.bundleId ?? null,
+    assetBaseUrl: injectedArtworkPayload?.assetBaseUrl ?? null,
     count: artworks.length,
     artworks: artworkManifest,
-    withWebglImage: artworkManifest.filter((a) => a.hasWebglImage).length,
-    withoutWebglImage: artworkManifest.filter((a) => !a.hasWebglImage).length,
+    withEmbeddedFallback: artworkManifest.filter((a) => a.hasEmbeddedFallback).length,
+    withoutEmbeddedFallback: artworkManifest.filter((a) => !a.hasEmbeddedFallback).length,
   });
+
+  // v0.81 — unified museum-hub configuration: injected customer
+  // `museum-hub.json` → migrated legacy hotspot array → built-in default.
+  // Resolved once against the active artwork manifest with exact-ID maps,
+  // full-manifest coverage, and paginated overflow (no slot cap).
+  const injectedMuseumHub = (window as unknown as { __FREYRAUM_MUSEUM_HUB?: unknown })
+    .__FREYRAUM_MUSEUM_HUB;
+  const injectedLegacyHotspots = (window as unknown as { __FREYRAUM_HUB_HOTSPOTS?: unknown })
+    .__FREYRAUM_HUB_HOTSPOTS;
+  const museumHubResolution = resolveMuseumHub(artworks, injectedMuseumHub, injectedLegacyHotspots);
+  diagnostics.info('boot', 'museum-hub-resolved', 'Museum hub configuration resolved', {
+    source: museumHubResolution.source,
+    pages: museumHubResolution.pages.length,
+    selectableSlots: museumHubResolution.slotToArtwork.size,
+    unmappedArtworkCount: museumHubResolution.unmappedArtworkCount,
+    disabledSlots: museumHubResolution.pages
+      .flatMap((page) => page.slots)
+      .filter((slot) => !slot.selectable)
+      .map((slot) => ({ slotId: slot.id, reason: slot.disabledReason })),
+    warnings: museumHubResolution.warnings,
+  });
+
+  // v0.81 — central visual-token resolver: one resolved wall color reaches
+  // CSS custom properties and the WebGL clear color before renderer
+  // construction. Validated customer overrides come from museum-hub.json.
+  const visualTokens = museumHubResolution.visualTokens;
+  const resolvedWallTokens = applyResolvedWallSurfaceColor(app, visualTokens);
+  diagnostics.info('boot', 'visual-tokens-resolved', 'Wall color tokens resolved', resolvedWallTokens);
 
   const injectedAudio = (window as unknown as { __FREYRAUM_AUDIO?: unknown }).__FREYRAUM_AUDIO;
   const customerAudio = sanitizeInjectedAudio(injectedAudio, diagnostics);
@@ -586,7 +870,7 @@ async function main(): Promise<void> {
 
   if (!isWebGLAvailable()) {
     diagnostics.error('boot', 'webgl-unavailable', 'WebGL is not available in the current browser');
-    showFallbackScreen(app, 'WebGL ist im aktuellen Browser nicht verfügbar.');
+    showFallbackScreen(app, 'WebGL ist im aktuellen Browser nicht verfügbar.', resolvedWallTokens.galleryWall);
     return;
   }
 
@@ -616,15 +900,21 @@ async function main(): Promise<void> {
 
   let rendererManager: RendererManager;
   try {
-    rendererManager = new RendererManager(app, initialPreset);
+    rendererManager = new RendererManager(app, initialPreset, resolvedWallTokens.galleryWall);
   } catch (err) {
     diagnostics.error('renderer', 'init-failed', 'RendererManager initialization failed', err);
     loadingOverlay.dispose();
     loadingOverlay.overlay.remove();
-    showFallbackScreen(app, err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.');
+    showFallbackScreen(
+      app,
+      err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.',
+      resolvedWallTokens.galleryWall
+    );
     return;
   }
+  applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
   rendererManager.renderer.domElement.classList.add('gallery-canvas', 'gallery-canvas--loading');
+  let museumHub: MainMuseumHub | null = null;
   const restoreStatus = document.createElement('div');
   restoreStatus.className = 'webgl-restore-status';
   restoreStatus.setAttribute('role', 'status');
@@ -632,15 +922,48 @@ async function main(): Promise<void> {
   restoreStatus.textContent = 'Grafik wird wiederhergestellt …';
   app.appendChild(restoreStatus);
   let restoreStatusTimer: ReturnType<typeof setTimeout> | undefined;
+  let restoreSceneManager: SceneManager | null = null;
+  let restoreTextureManager: TextureManager | null = null;
+  let restoreGalleryManager: GalleryManager | null = null;
+  let galleryStage: GalleryPresentationStage | null = null;
   rendererManager.onContextChange((state) => {
     if (state === 'lost') {
       clearTimeout(restoreStatusTimer);
       restoreStatus.classList.add('is-visible');
       diagnostics.warn('renderer', 'context-restore-visible', 'Showing WebGL restore status');
+      verifyMuseumWallColorConsistency(
+        diagnostics,
+        'renderer-context-lost',
+        resolvedWallTokens,
+        rendererManager,
+        museumHub?.element ?? null,
+        loadingOverlay.overlay,
+        app
+      );
       return;
+    }
+    applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
+    if (galleryStage && restoreTextureManager) {
+      galleryStage.applyPreset(
+        getQualityPreset(preferences.current.quality),
+        restoreTextureManager.getEffectiveAnisotropy()
+      );
     }
     restoreStatus.textContent = 'Grafik wiederhergestellt';
     diagnostics.info('renderer', 'context-restore-hidden', 'WebGL restore status will hide');
+    restoreGalleryManager?.markRenderDirty(8);
+    if (restoreSceneManager) {
+      void rendererManager.prewarm(restoreSceneManager.scene, restoreSceneManager.camera);
+    }
+    verifyMuseumWallColorConsistency(
+      diagnostics,
+      'renderer-context-restored',
+      resolvedWallTokens,
+      rendererManager,
+      museumHub?.element ?? null,
+      loadingOverlay.overlay,
+      app
+    );
     restoreStatusTimer = setTimeout(() => {
       restoreStatus.classList.remove('is-visible');
       restoreStatus.textContent = 'Grafik wird wiederhergestellt …';
@@ -648,6 +971,7 @@ async function main(): Promise<void> {
   });
 
   const sceneManager = new SceneManager(rendererManager.renderer);
+  restoreSceneManager = sceneManager;
   const postProcessing = new PostProcessing(
     rendererManager.renderer,
     sceneManager.scene,
@@ -657,9 +981,16 @@ async function main(): Promise<void> {
 
   // Texture & lighting
   const textureManager = new TextureManager(loadingManager);
+  restoreTextureManager = textureManager;
   textureManager.init(rendererManager.renderer);
   textureManager.setAnisotropyDivisor(initialPreset.anisotropyDivisor);
 
+  galleryStage = new GalleryPresentationStage(
+    sceneManager.scene,
+    { wall: resolvedWallTokens.galleryWall },
+    initialPreset,
+    textureManager.getEffectiveAnisotropy()
+  );
   const lightingSetup = new LightingSetup(sceneManager.scene, initialPreset);
 
   // Gallery objects
@@ -746,6 +1077,7 @@ async function main(): Promise<void> {
     undefined,
     measureArtworkViewport
   );
+  restoreGalleryManager = galleryManager;
   galleryManager.applyPreset(initialPreset);
   const warmProfile = deriveWarmProfile(initialCaps, artworks.length);
   galleryManager.configureReadinessProfile({ criticalRadius: warmProfile.criticalRadius });
@@ -813,6 +1145,20 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
+  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset);
+  museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
+    alignPage: false,
+    source: 'boot-gallery-selection',
+  });
+  verifyMuseumWallColorConsistency(
+    diagnostics,
+    'post-hub-composition-create',
+    resolvedWallTokens,
+    rendererManager,
+    museumHub.element,
+    loadingOverlay.overlay,
+    app
+  );
   const unsubscribeAudioState = backgroundAudio.subscribe((state) => {
     preferencesPanel.setAudioStatusMessage(state.message);
   });
@@ -855,6 +1201,7 @@ async function main(): Promise<void> {
 
   // Interaction
   const canvas = rendererManager.renderer.domElement;
+  canvas.tabIndex = -1;
   canvas.setAttribute('aria-label', 'Interaktive Galerie');
   canvas.setAttribute('role', 'img');
   canvas.setAttribute('aria-describedby', 'freyraum-canvas-help');
@@ -908,6 +1255,8 @@ async function main(): Promise<void> {
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
   const keyboardHelp = new KeyboardHelp();
   const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
+  canvasInteraction.setEnabled(false);
+  keyboardNav.setEnabled(false);
   topbar.onHelpClick = () => keyboardHelp.open(topbar.helpBtn);
   // The topbar info button is a secondary discovery path for the auto-hidden
   // information panel, so users are not dependent on edge affordances.
@@ -975,17 +1324,23 @@ async function main(): Promise<void> {
   const warmArtwork = (index: number, reason: string): boolean => {
     const start = performance.now();
     if (!galleryManager.warmArtworkForGPU(index, reason)) return false;
+    const wasVisible = artworkMesh.group.visible;
+    artworkMesh.group.visible = true;
     const previousTarget = rendererManager.renderer.getRenderTarget();
     rendererManager.renderer.setRenderTarget(warmRenderTarget);
     rendererManager.renderer.render(sceneManager.scene, sceneManager.camera);
     rendererManager.renderer.setRenderTarget(previousTarget);
+    artworkMesh.group.visible = wasVisible;
     galleryManager.markGpuWarmed(index, performance.now() - start, reason);
     return true;
   };
   const warmArtworkFinalPath = (index: number, reason: string): boolean => {
     const start = performance.now();
     if (!galleryManager.warmArtworkForGPU(index, reason)) return false;
+    const wasVisible = artworkMesh.group.visible;
+    artworkMesh.group.visible = true;
     postProcessing.render();
+    artworkMesh.group.visible = wasVisible;
     galleryManager.markGpuWarmed(index, performance.now() - start, reason);
     diagnostics.debug('boot', 'artwork-final-path-warm', 'Artwork rendered through final post-processing path under loading overlay', {
       index,
@@ -1154,6 +1509,7 @@ async function main(): Promise<void> {
       lightingSetup.applyPreset(variantPreset);
       artworkMesh.applyPreset(variantPreset);
       galleryManager.applyPreset(variantPreset);
+      galleryStage?.applyPreset(variantPreset, textureManager.getEffectiveAnisotropy());
       galleryManager.warmArtworkForGPU(variantWarmIndex, `overlay-quality-variant-${qualityId}`);
       await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
       diagnostics.debug('boot', 'quality-variant-prewarmed', 'Quality shader variant prewarmed', {
@@ -1171,6 +1527,7 @@ async function main(): Promise<void> {
     lightingSetup.applyPreset(activePreset);
     artworkMesh.applyPreset(activePreset);
     galleryManager.applyPreset(activePreset);
+    galleryStage?.applyPreset(activePreset, textureManager.getEffectiveAnisotropy());
     galleryManager.warmArtworkForGPU(galleryManager.index, 'restore-active-after-quality-variant-prewarm');
     await rendererManager.prewarm(sceneManager.scene, sceneManager.camera);
     diagnostics.info('boot', 'quality-variant-prewarm-complete', 'All non-active quality shader variants prewarmed under loading overlay', {
@@ -1219,7 +1576,7 @@ async function main(): Promise<void> {
     artworkCount,
   });
 
-  loadingOverlay.setProgress(100);
+  loadingOverlay.setProgress(99);
   // v0.24.3 R-04 / v0.27 W-05 / v0.68 P-04: Align status text with the actual
   // preload contract.
   // - strict (legacy full): all artworks fully prepared before entry.
@@ -1369,6 +1726,10 @@ async function main(): Promise<void> {
     lightingSetup.applyPreset(preset);
     artworkMesh.applyPreset(preset);
     galleryManager.applyPreset(preset);
+    galleryStage?.applyPreset(preset, textureManager.getEffectiveAnisotropy());
+    // v0.87 — hub room renderer follows the same quality preset (pixel-ratio
+    // cap, surface tile size, skylight shadows, floor-reflection strategy).
+    museumHub?.applyPreset(preset);
 
     // v0.06: inspection-mode wiring. Drives two cost-gated features that
     // should only run under raking-light inspection profiles:
@@ -1610,6 +1971,10 @@ async function main(): Promise<void> {
     infoPanel.update(artworks[index], true);
     timeline.setActive(index);
     announceArtworkChange(artworks[index]?.title ?? '');
+    museumHub?.setSelectedArtworkId(artworks[index]?.id ?? null, {
+      alignPage: false,
+      source: 'gallery-navigate',
+    });
     diagnostics.info('gallery', 'navigate', 'Artwork changed', {
       index,
       artworkId: artworks[index]?.id,
@@ -1625,6 +1990,149 @@ async function main(): Promise<void> {
 
   timeline.onSelect((index: number) => galleryManager.goTo(index));
   timeline.onPreview((index: number) => galleryManager.promotePrefetchWindow(index, 'timeline-preview'));
+
+  const destinationRouter = new DestinationRouter({
+    onStateChange: (state) => {
+      app.dataset['experience'] = state === 'destination' ? 'gallery' : state;
+      applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
+      verifyMuseumWallColorConsistency(
+        diagnostics,
+        `experience-state:${state}`,
+        resolvedWallTokens,
+        rendererManager,
+        museumHub?.element ?? null,
+        loadingOverlay.overlay.isConnected ? loadingOverlay.overlay : null,
+        app
+      );
+      diagnostics.info('navigation', 'experience-state', 'Experience state changed', { state });
+    },
+    onTransitionError: (destination, error) => {
+      museumHub?.showError();
+      diagnostics.error(
+        'navigation',
+        'destination-transition-failed',
+        `Failed to enter destination "${destination.id}"`,
+        error
+      );
+    },
+  });
+  destinationRouter.register({
+    id: 'hub',
+    label: 'Main Museum Hub',
+    prepare: () => museumHub.prepare(),
+    enter: () => {
+      artworkMesh.group.visible = false;
+      galleryStage?.setVisible(false);
+      canvasInteraction.setEnabled(false);
+      keyboardNav.setEnabled(false);
+      museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
+        alignPage: true,
+        source: 'router-enter-hub',
+      });
+      museumHub.enter();
+    },
+    exit: () => museumHub.exit(preferences.current.reducedMotion),
+  });
+  destinationRouter.register({
+    id: 'gallery',
+    label: 'Interaktive Galerie',
+    prepare: async () => {
+      artworkMesh.group.visible = true;
+      galleryStage?.setVisible(true);
+      galleryManager.resetView();
+      await rafYield();
+    },
+    enter: () => {
+      canvasInteraction.setEnabled(true);
+      keyboardNav.setEnabled(true);
+      canvas.focus({ preventScroll: true });
+      diagnostics.info('navigation', 'gallery-entered', 'Existing interactive gallery entered from museum hub', {
+        artworkId: artworks[galleryManager.index]?.id,
+      });
+    },
+    exit: () => {
+      canvasInteraction.setEnabled(false);
+      keyboardNav.setEnabled(false);
+    },
+  });
+  museumHub.onActivate(() => {
+    void destinationRouter.navigate('gallery');
+  });
+
+  // v0.81 — exact-ID selection controller. The slot's artwork ID is resolved
+  // again on activation against an immutable ID→index map; the readiness gate
+  // prefers `albedoLoaded && materialApplied && shaderCompiled` and falls back
+  // after the configured timeout to the same exact target with its procedural
+  // surface. A selection generation token ignores stale completions, and there
+  // is no fallback to the gallery's previous/current artwork.
+  const artworkIndexById = new Map<string, number>();
+  artworks.forEach((artwork, index) => artworkIndexById.set(artwork.id, index));
+  let hubSelectionGeneration = 0;
+  museumHub.onSelectSlot((slot) => {
+    const generation = ++hubSelectionGeneration;
+    const targetArtworkId = slot.artworkId;
+    const targetIndex = targetArtworkId !== null ? artworkIndexById.get(targetArtworkId) : undefined;
+    if (targetArtworkId === null || targetIndex === undefined) {
+      // Disabled/invalid slots are non-interactive buttons, so this path only
+      // guards against inconsistent state. It never opens another artwork.
+      diagnostics.warn('navigation', 'hub-slot-invalid', 'Hub slot activation without a valid exact target; ignoring', {
+        slotId: slot.id,
+        artworkId: targetArtworkId,
+      });
+      museumHub.showError();
+      return;
+    }
+    diagnostics.info('navigation', 'hub-slot-select', 'Hub frame selected', {
+      slotId: slot.id,
+      artworkId: targetArtworkId,
+      artworkIndex: targetIndex,
+      generation,
+    });
+    // Commit the exact target and promote its albedo/PBR work to the
+    // critical queue before waiting on readiness.
+    galleryManager.goTo(targetIndex);
+    galleryManager.promotePrefetchWindow(targetIndex, 'hub-slot');
+    void galleryManager
+      .whenArtworkInteractive(targetIndex, museumHubResolution.selectionTimeoutMs)
+      .then((verdict) => {
+        if (generation !== hubSelectionGeneration) {
+          diagnostics.info('navigation', 'hub-slot-stale-readiness', 'Ignoring stale hub readiness completion', {
+            slotId: slot.id,
+            artworkId: targetArtworkId,
+            generation,
+            currentGeneration: hubSelectionGeneration,
+          });
+          return;
+        }
+        if (verdict === 'timeout') {
+          diagnostics.warn('navigation', 'hub-slot-readiness-timeout', 'Hub readiness gate timed out; entering exact target with procedural surface', {
+            slotId: slot.id,
+            artworkId: targetArtworkId,
+            timeoutMs: museumHubResolution.selectionTimeoutMs,
+          });
+        }
+        // Re-assert the committed target before entering: duplicate clicks
+        // and stale completions cannot change the destination.
+        if (galleryManager.index !== targetIndex) galleryManager.goTo(targetIndex);
+        void destinationRouter.navigate('gallery');
+      });
+  });
+
+  // v0.81 — back navigation to the museum hub: promoted Topbar control and
+  // guarded Escape share one idempotent router action. The hub keeps its page
+  // state and restores focus to the originating slot. During navigation the
+  // control exposes a busy/disabled state to suppress duplicate activation.
+  const navigateBackToHub = (): void => {
+    hubSelectionGeneration += 1;
+    topbar.setBackBusy(true);
+    void destinationRouter.navigate('hub').finally(() => topbar.setBackBusy(false));
+  };
+  topbar.onBackClick = navigateBackToHub;
+  keyboardNav.onEscape = () => {
+    if (document.querySelector('.keyboard-help:not([hidden])')) return;
+    if (document.querySelector('.prefs__panel:not([hidden])')) return;
+    navigateBackToHub();
+  };
 
   // Animation loop
   const animate = (now: number): void => {
@@ -1731,8 +2239,17 @@ async function main(): Promise<void> {
     deferredArtworkCount: fullReadinessSummary.deferredArtworkCount,
   });
 
+  artworkMesh.group.visible = false;
+  galleryStage?.setVisible(false);
+  // v0.81 — hub base fetch + first-page artwork decode + slot layout complete
+  // under the overlay (the last weighted progress step), so the first hub
+  // paint has zero image pop-in and zero layout shift after reveal.
+  loadingOverlay.setStatus('Museum wird vorbereitet');
+  await destinationRouter.startAt('hub');
+  loadingOverlay.setProgress(100);
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
+  museumHub.focusInitialTarget();
 
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {
@@ -1766,6 +2283,7 @@ async function main(): Promise<void> {
     chromeObserver?.disconnect();
     clearTimeout(resizeDebounce);
     diagnostics.info('boot', 'shutdown', 'Disposing FREYRAUM runtime');
+    destinationRouter.dispose();
     preferences.dispose();
     canvasInteraction.dispose();
     chromeVisibility.dispose();
@@ -1785,7 +2303,9 @@ async function main(): Promise<void> {
     timeline.dispose();
     restoreStatus.remove();
     backgroundAudio.dispose();
+    galleryManager.dispose();
     artworkMesh.dispose();
+    galleryStage?.dispose();
     textureManager.dispose();
     galleryManager.proceduralFactory.disposeAll();
     lightingSetup.dispose();
@@ -1799,6 +2319,10 @@ main().catch((err) => {
   getDiagnostics().error('boot', 'startup-failed', 'Fatal startup failure', err);
   const app = document.getElementById('app');
   if (app) {
-    showFallbackScreen(app, err instanceof Error ? err.message : 'Unbekannter Fehler beim Initialisieren.');
+    const resolvedGalleryWall = resolveRuntimeFallbackSurfaceColor();
+    document.documentElement.style.backgroundColor = resolvedGalleryWall;
+    document.body.style.backgroundColor = resolvedGalleryWall;
+    app.style.backgroundColor = resolvedGalleryWall;
+    showFallbackScreen(app, err instanceof Error ? err.message : 'Unbekannter Fehler beim Initialisieren.', resolvedGalleryWall);
   }
 });

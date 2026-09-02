@@ -19,6 +19,9 @@ jobs:
       - run: npm run lint
       - run: npm run build:typecheck
       - run: npm run build
+      - name: Validate calibrated museum hub geometry, doorway exclusion, grey token, and fallback contract
+        run: npm run validate:museum-hub
+      - run: npm run test:frame-budget
       - run: npm run test --if-present
       - name: npm audit (moderate)
         run: npm audit --audit-level=moderate

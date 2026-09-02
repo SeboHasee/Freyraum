@@ -1,5 +1,80 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
+> Latest markdown audit: 2026-09-02 (v0.98 wall surface realism + softer artwork-view lighting).
+
+## 2026-09-02 — Wall texture and artwork-view lighting lesson
+
+### Lesson 95 — Wall realism and artwork washout need different controls
+
+If a close artwork view feels flat and washed out, do not solve both symptoms
+with only wall-colour changes. Future rule: increase wall realism through the
+architectural roughness/normal response, but reduce artwork washout through
+lower light energy and a lower matte-specular floor so the wall gains texture
+without the picture becoming glossy or overexposed.
+
+## 2026-09-01 — Neutral gallery wall-lighting rebalance lesson
+
+### Lesson 94 — A correct wall token can still look wrong under theatrical lighting
+
+If the wall token is already shared correctly but the presented wall still
+looks beige or amber, inspect the lighting geometry and color temperature next.
+Future rule: neutral gallery walls need both the correct shared token and a
+balanced, non-theatrical light composition with restrained plaster response.
+
+## 2026-09-01 — Concrete-grey wall retune lesson
+
+### Lesson 93 — Wall colour is a shared pipeline, not a single material tweak
+
+If the gallery wall reads beige/orange instead of neutral concrete grey, check
+the whole wall-colour pipeline: authoritative token, CSS shell, WebGL clear
+color, checked-in hub config, architectural palette, and the fixed light
+profile. Future rule: retune the shared token first, then adjust any directly
+coupled palette or color-temperature defaults rather than inventing a
+gallery-only wall override.
+
+## 2026-09-01 — Inspection wall-clip fix lesson
+
+### Lesson 92 — Inspection framing must balance reveal margin against stage clearance
+
+Single-artwork zoom/pan math cannot be derived from artwork dimensions alone
+when the artwork lives inside a real architectural stage. Future rule: retune
+inspection pan reveal and front-wall setback together, then keep hover tilt
+bounded against the real front-wall clearance. Zero overscroll is safe but can
+feel too restrictive; loose overscroll without wall-clearance math exposes the
+wall plane or rotates the mounted artwork back through it.
+
+## 2026-09-01 — Local file-preview artwork recovery lessons
+
+### Lesson 90 — `file://` decode success is not proof of visible WebGL artwork
+
+A customer image can load and decode from a local file URL yet still collapse
+into a blank museum-hub plane after the texture path reaches WebGL. Future
+rule: when a customer reports blank hub artworks, reproduce the exact
+`file://` preview with the generated bundle, inspect the
+`source-to-pixel-outcome` record, and keep the embedded `webglImage` recovery
+bounded to the offline hub case instead of changing lighting or material
+behavior first.
+
+### Lesson 91 — Fresh-clone preview evidence requires generated customer scripts
+
+`customer-preview/customer-artworks.js` and `customer-preview/customer-audio.js`
+are generated files, not committed source. A fresh clone can therefore miss the
+current customer preview bundle until `npm run import:artworks` or
+`Update Gallery.command` / `Update Gallery.bat` is run. Future rule: before
+diagnosing a local preview report, first confirm the generated preview scripts
+and matching `images/` output exist and preserve them as evidence before
+re-importing.
+
+## 2026-08-07 — Grey-artwork recovery lesson
+
+### Lesson 89 — Packaged is not visible
+
+An importer report, generated asset directory, and successful build establish
+that an artwork was packaged; they do not prove that the browser decoded,
+uploaded, and drew customer pixels. Future recovery work must record the first
+failed source-to-pixel stage for the actual generated bundle before changing
+lighting or material settings. A hub title placeholder is a source failure
+signature because hub artwork planes are unlit; it cannot be repaired by
+interactive-gallery PBR tuning.
 
 
 ## 2026-05-23 — v0.58 implementation lessons

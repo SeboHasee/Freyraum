@@ -17,10 +17,17 @@
 
 :root {
   // Surfaces
-  --bg1: #eef1f3;
-  --bg2: #d8dee3;
-  --bg3: #bcc5cc;
-  --bg-deep: #b3bcc4;
+  // v0.96 — authoritative concrete-grey wall tokens (final pick #C7CED4).
+  // `--color-gallery-wall` is the active token for every gallery/hub wall
+  // surface and the WebGL clear color (RendererManager receives the same
+  // resolved value from main.ts). `--color-museum-wall` defaults to the same
+  // value and may be overridden by a validated customer museum-hub.json.
+  --color-gallery-wall: #c7ced4;
+  --color-museum-wall: var(--color-gallery-wall);
+  --bg1: var(--color-gallery-wall);
+  --bg2: #d0d7dc;
+  --bg3: #b6c0c9;
+  --bg-deep: #adb8c1;
 
   // Text
   --text: #12171b;
@@ -148,7 +155,7 @@ body {
   height: 100%;        // legacy fallback
   height: 100dvh;      // dynamic viewport height — collapses with browser chrome
   overflow: hidden;
-  background: radial-gradient(ellipse at center, var(--bg1) 0%, var(--bg3) 100%);
+  background: var(--color-gallery-wall);
   font-family: var(--font);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -159,6 +166,7 @@ body {
   width: 100%;
   height: 100%;
   position: relative;
+  background: var(--color-gallery-wall);
 }
 
 .sr-only {
@@ -205,6 +213,693 @@ canvas {
   transform: scale(1);
 }
 
+// =============================================================================
+// Main Museum Hub (v0.80) — manifest-driven DOM composition
+// =============================================================================
+// The empty museum room (`museum-empty.png`) is the only runtime background;
+// each artwork is a real responsive <img> inside its own framed native
+// <button>, so visible frame bounds and hit bounds are the same element.
+// Frames share static CSS material presets (no per-slot styles) and the
+// composition adds zero WebGL draw calls or continuous renders.
+
+.museum-hub {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  overflow: hidden;
+  background-color: var(--color-museum-wall);
+  background-image: none;
+  opacity: 1;
+  transition: opacity 0.52s var(--ease-gallery-in-out);
+}
+
+.museum-hub[hidden] {
+  display: none;
+}
+
+.museum-hub.is-exiting {
+  opacity: 0;
+  pointer-events: none;
+}
+
+// Exact design coordinate space (1366:768 by default, --hub-aspect from the
+// resolved config). The wall-focus transform for narrow portrait viewports
+// only moves/scales this one shared box, so background and overlays can
+// never drift apart.
+.museum-hub__visual {
+  --hub-aspect: 1.778646;
+  --hub-focus-scale: 1;
+  --hub-focus-x: 0%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(100vw, calc(100vh * var(--hub-aspect)));
+  height: min(100vh, calc(100vw / var(--hub-aspect)));
+  transform: translate(-50%, -50%) translateX(var(--hub-focus-x)) scale(var(--hub-focus-scale));
+  transform-origin: center;
+  transition: transform 0.45s var(--ease-gallery-out);
+}
+
+.museum-hub__stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--hub-stage-width, 1366px);
+  height: var(--hub-stage-height, 768px);
+  overflow: hidden;
+   background: var(--color-museum-wall);
+  transform-origin: top left;
+  transform: scale(var(--hub-stage-scale, 1));
+}
+
+.museum-hub__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: fill;
+  user-select: none;
+  opacity: 0.16;
+}
+
+.museum-hub__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.museum-hub.has-image-error .museum-hub__image {
+  opacity: 0;
+}
+
+.museum-hub.has-image-error .museum-hub__stage {
+  background-color: var(--color-museum-wall);
+  background-image: none;
+}
+
+.museum-hub__shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(4, 8, 11, 0.36) 0%, transparent 28%),
+    linear-gradient(0deg, rgba(4, 8, 11, 0.26) 0%, transparent 26%);
+}
+
+.museum-hub__header {
+  position: absolute;
+  z-index: 2;
+  top: max(26px, calc(18px + var(--safe-top)));
+  left: max(28px, calc(22px + var(--safe-left)));
+  color: var(--text-inverse);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.museum-hub__eyebrow {
+  margin-bottom: 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+}
+
+.museum-hub__title {
+  font-size: clamp(1.8rem, 4vw, 3.6rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.museum-hub__introduction {
+  max-width: 34rem;
+  margin-top: 12px;
+  font-size: clamp(0.82rem, 1.2vw, 1rem);
+  line-height: 1.45;
+}
+
+// Generic gallery-entry action — only shown when zero valid slots exist.
+.museum-hub__destination {
+  position: absolute;
+  z-index: 3;
+  left: 57.25%;
+  top: 43.2%;
+  width: 10.25%;
+  height: 16.7%;
+  border-radius: 2px;
+  color: var(--text-inverse);
+  cursor: pointer;
+}
+
+.museum-hub__destination-frame {
+  position: absolute;
+  inset: -8px;
+  border: 2px solid rgba(255, 255, 255, 0.66);
+  box-shadow: 0 0 0 3px rgba(15, 20, 24, 0.2);
+  transition:
+    border-color var(--dur-control) var(--ease-out),
+    box-shadow var(--dur-control) var(--ease-out),
+    transform var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__destination-label {
+  position: absolute;
+  top: calc(100% + 18px);
+  left: 50%;
+  width: max-content;
+  max-width: min(240px, 52vw);
+  transform: translateX(-50%) translateY(4px);
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-pill);
+  background: rgba(10, 14, 17, 0.78);
+  box-shadow: var(--shadow-medium);
+  font-size: clamp(0.72rem, 1.1vw, 0.9rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0.88;
+  transition:
+    opacity var(--dur-control) var(--ease-out),
+    transform var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__destination:hover .museum-hub__destination-frame,
+.museum-hub__destination:focus-visible .museum-hub__destination-frame {
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 5px rgba(15, 20, 24, 0.42), 0 0 32px rgba(255, 255, 255, 0.5);
+  transform: scale(1.035);
+}
+
+.museum-hub__destination:hover .museum-hub__destination-label,
+.museum-hub__destination:focus-visible .museum-hub__destination-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.museum-hub__destination:focus-visible {
+  outline: none;
+}
+
+.museum-hub__destination:disabled {
+  cursor: wait;
+}
+
+// ── Room pages ───────────────────────────────────────────────────────────────
+
+.museum-hub__rooms {
+  position: absolute;
+  inset: 0;
+}
+
+.museum-hub__room {
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.museum-hub__room.is-active {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+// ── Projected artwork buttons ────────────────────────────────────────────────
+
+.museum-hub__artwork {
+  position: absolute;
+  z-index: 3;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-inverse);
+  cursor: pointer;
+  clip-path: var(--hub-clip-path, none);
+  filter: drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 18px rgba(10, 13, 15, 0.24));
+  transition: filter var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__artwork::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid transparent;
+  clip-path: var(--hub-clip-path, none);
+  opacity: 0;
+  transition: opacity var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  opacity: 0;
+  box-shadow:
+   inset 0 0 0 1px rgba(12, 18, 22, 0.14),
+   inset 0 -1px 1px rgba(10, 12, 14, 0.2);
+}
+
+.museum-hub__art-placeholder {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 6%;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(0, 0, 0, 0.12)),
+    color-mix(in srgb, var(--color-museum-wall) 72%, #000000);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: clamp(0.5rem, 0.9vw, 0.78rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.museum-hub__artwork.has-missing-image .museum-hub__art {
+  visibility: hidden;
+}
+
+.museum-hub__artwork.has-missing-image .museum-hub__art-placeholder {
+  display: flex;
+}
+
+.museum-hub__artwork-label {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  z-index: 4;
+  width: max-content;
+  max-width: min(220px, 46vw);
+  transform: translateX(-50%) translateY(4px);
+  padding: 7px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-pill);
+  background: rgba(10, 14, 17, 0.78);
+  box-shadow: var(--shadow-medium);
+  font-size: clamp(0.68rem, 1vw, 0.82rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--dur-control) var(--ease-out),
+    transform var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__artwork:hover::before,
+.museum-hub__artwork:focus-visible::before,
+.museum-hub__artwork.is-selected::before,
+.museum-hub__artwork[aria-current='true']::before {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 5px rgba(15, 20, 24, 0.42);
+}
+
+.museum-hub__artwork.is-selected::before,
+.museum-hub__artwork[aria-current='true']::before {
+  border-color: rgba(255, 231, 164, 0.98);
+  box-shadow:
+    0 0 0 5px rgba(15, 20, 24, 0.48),
+    0 0 28px rgba(255, 231, 164, 0.34);
+}
+
+.museum-hub__artwork:hover .museum-hub__artwork-label,
+.museum-hub__artwork:focus-visible .museum-hub__artwork-label,
+.museum-hub__artwork.is-selected .museum-hub__artwork-label,
+.museum-hub__artwork[aria-current='true'] .museum-hub__artwork-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.museum-hub__artwork:focus-visible {
+  outline: none;
+}
+
+.museum-hub__artwork:disabled {
+  cursor: wait;
+}
+
+.museum-hub__artwork.is-disabled-slot,
+.museum-hub__artwork.is-invalid-geometry {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.museum-hub__artwork.is-disabled-slot .museum-hub__artwork-label,
+.museum-hub__artwork.is-invalid-geometry .museum-hub__artwork-label {
+  display: none;
+}
+
+.museum-hub__artwork.is-off-wall {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+// ── Pager (room pages + narrow wall-focus views) ────────────────────────────
+
+.museum-hub__pager {
+  position: absolute;
+  z-index: 5;
+  bottom: max(20px, calc(14px + var(--safe-bottom)));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(10, 14, 17, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: var(--shadow-medium);
+}
+
+.museum-hub__pager[hidden] {
+  display: none;
+}
+
+.museum-hub__pager-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--text-inverse);
+  cursor: pointer;
+  transition: background var(--dur-control) var(--ease-out);
+
+  &:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9), 0 0 0 6px rgba(15, 20, 24, 0.6);
+  }
+}
+
+.museum-hub__pager-counter {
+  min-width: 8ch;
+  color: var(--text-inverse);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+// ── Calibration mode (?hubCalibrate=1) ──────────────────────────────────────
+
+.museum-hub__calibration-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: visible;
+}
+
+.museum-hub.is-debug-geometry:not(.is-calibrating) .museum-hub__calibration-svg {
+  pointer-events: none;
+}
+
+.museum-hub__calibration-wall {
+  fill: rgba(255, 255, 255, 0.04);
+  stroke: rgba(255, 164, 120, 0.86);
+  stroke-width: 2.5;
+}
+
+.museum-hub__calibration-safe {
+  fill: rgba(100, 191, 255, 0.08);
+  stroke: rgba(100, 191, 255, 0.78);
+  stroke-width: 2;
+  stroke-dasharray: 10 6;
+}
+
+.museum-hub__calibration-wall.is-active,
+.museum-hub__calibration-safe.is-active {
+  opacity: 1;
+}
+
+.museum-hub__calibration-wall:not(.is-active),
+.museum-hub__calibration-safe:not(.is-active) {
+  opacity: 0.45;
+}
+
+.museum-hub__calibration-handle {
+  fill: rgba(255, 90, 60, 0.95);
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 2;
+  cursor: move;
+}
+
+.museum-hub__calibration-handle--safe {
+  fill: rgba(100, 191, 255, 0.95);
+}
+
+.museum-hub__debug-axis {
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.museum-hub__debug-axis--x {
+  stroke: rgba(255, 122, 88, 0.96);
+}
+
+.museum-hub__debug-axis--y {
+  stroke: rgba(112, 198, 255, 0.96);
+}
+
+.museum-hub__debug-origin {
+  fill: rgba(255, 255, 255, 0.95);
+  stroke: rgba(12, 16, 19, 0.88);
+  stroke-width: 1.2;
+}
+
+.museum-hub__debug-slot-quad {
+  fill: rgba(112, 198, 255, 0.12);
+  stroke: rgba(112, 198, 255, 0.94);
+  stroke-width: 1.8;
+}
+
+.museum-hub__debug-slot-center {
+  fill: rgba(255, 122, 88, 0.98);
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 1.2;
+}
+
+.museum-hub__debug-slot-corner {
+  fill: rgba(255, 255, 255, 0.98);
+  stroke: rgba(12, 16, 19, 0.95);
+  stroke-width: 1.1;
+}
+
+.museum-hub__debug-doorway {
+  fill: rgba(255, 92, 92, 0.18);
+  stroke: rgba(255, 92, 92, 0.92);
+  stroke-width: 1.4;
+  stroke-dasharray: 6 4;
+}
+
+.museum-hub__debug-wall-label,
+.museum-hub__debug-slot-label {
+  fill: rgba(255, 255, 255, 0.96);
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 0.55;
+  paint-order: stroke;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.museum-hub__debug-horizon {
+  stroke: rgba(255, 204, 92, 0.96);
+  stroke-width: 1.5;
+  stroke-dasharray: 7 5;
+}
+
+.museum-hub__debug-vanishing {
+  stroke: rgba(192, 132, 252, 0.88);
+  stroke-width: 1.15;
+  stroke-dasharray: 4 4;
+}
+
+.museum-hub__debug-camera-label {
+  fill: rgba(255, 230, 160, 0.98);
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 0.55;
+  paint-order: stroke;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.museum-hub.is-calibrating .museum-hub__artwork {
+  cursor: move;
+  touch-action: none;
+}
+
+.museum-hub.is-calibrating .museum-hub__artwork::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px dashed rgba(255, 90, 60, 0.92);
+}
+
+.museum-hub.is-calibrating .museum-hub__artwork-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.museum-hub__artwork-handle {
+  position: absolute;
+  right: -8px;
+  bottom: -8px;
+  z-index: 5;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 3px;
+  background: rgba(255, 90, 60, 0.95);
+  cursor: nwse-resize;
+}
+
+.museum-hub__calibration {
+  position: absolute;
+  z-index: 6;
+  right: max(16px, calc(12px + var(--safe-right)));
+  bottom: max(16px, calc(12px + var(--safe-bottom)));
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(10, 14, 17, 0.86);
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-medium);
+}
+
+.museum-hub__calibration-title {
+  margin-bottom: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.museum-hub__calibration-controls {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.museum-hub__calibration-label {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.museum-hub__calibration-select,
+.museum-hub__calibration-restore {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.34);
+  color: inherit;
+}
+
+.museum-hub__calibration-restore:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.museum-hub__calibration-warnings {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.museum-hub__calibration-output {
+  width: 100%;
+  resize: vertical;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+  color: inherit;
+  font-family: monospace;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+#app:not([data-experience='gallery']) {
+  .topbar,
+  .info-panel,
+  .nav-controls,
+  .zoom-controls,
+  .timeline,
+  .hint-text,
+  .info-panel-peek-hit,
+  .info-panel-peek,
+  .info-panel-chevron {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+
+@media (max-aspect-ratio: 4 / 5) {
+  .museum-hub__header {
+    right: max(24px, calc(18px + var(--safe-right)));
+    text-align: center;
+  }
+
+  .museum-hub__introduction {
+    margin-inline: auto;
+  }
+
+  .museum-hub__destination-label {
+    opacity: 1;
+    transform: translateX(-50%);
+  }
+
+  // Narrow-portrait wall-focus mode: labels stay visible because there is no
+  // hover affordance, and pager arrows/counter provide the wall navigation.
+  .museum-hub__artwork-label {
+    opacity: 0.92;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .museum-hub,
+  .museum-hub__visual,
+  .museum-hub__destination-frame,
+  .museum-hub__destination-label,
+  .museum-hub__artwork,
+  .museum-hub__artwork-label {
+    transition: none;
+  }
+}
+
+:root[data-motion='reduced'] {
+  .museum-hub,
+  .museum-hub__visual,
+  .museum-hub__destination-frame,
+  .museum-hub__destination-label,
+  .museum-hub__artwork,
+  .museum-hub__artwork-label {
+    transition: none;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Universal focus ring
 // -----------------------------------------------------------------------------
@@ -236,9 +931,12 @@ button {
   right: 0;
   height: calc(72px + var(--safe-top));
   padding: var(--safe-top) calc(36px + var(--safe-right)) 0 calc(36px + var(--safe-left));
-  display: flex;
+  // v0.81 — grid regions (left navigation+brand | spacer | right utilities)
+  // so the back action can never collide with Info/Help or the viewport edge.
+  display: grid;
+  grid-template-columns: minmax(0, auto) 1fr auto;
   align-items: center;
-  justify-content: space-between;
+  column-gap: 12px;
   z-index: 100;
   pointer-events: none;
   animation: topbar-enter var(--dur-slow, 0.5s) var(--ease-out) both;
@@ -255,16 +953,27 @@ button {
   }
 }
 
-// Left group: brand + badge — logically grouped, clickthrough restored
+// Left group: back action first, then brand + badge — clickthrough restored
 .topbar__left {
+  grid-column: 1;
   pointer-events: auto;
   display: flex;
   align-items: center;
   gap: 14px;
+  min-width: 0;
+}
+
+.topbar__brand-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 // Right group: utility actions — clickthrough restored
 .topbar__right {
+  grid-column: 3;
   pointer-events: auto;
   display: flex;
   align-items: center;
@@ -1559,7 +2268,7 @@ button {
   display: grid;
   place-items: center;
   padding: 32px;
-  background: radial-gradient(ellipse at top, var(--bg1) 0%, var(--bg3) 100%);
+  background: var(--color-gallery-wall);
   z-index: 300;
 }
 
@@ -1704,8 +2413,11 @@ button {
 // =============================================================================
 // Presentation / fullscreen mode polish
 // =============================================================================
+// v0.81 — the back-to-museum action stays visible in presentation mode; only
+// brand and utility clusters fade out (they reveal again on hover/focus).
 :root[data-presentation='on'] {
-  .topbar,
+  .topbar__brand-group,
+  .topbar__right,
   .hint-text {
     opacity: 0;
     pointer-events: none;
@@ -1714,9 +2426,11 @@ button {
 
   &:hover,
   &:focus-within {
-    .topbar,
+    .topbar__brand-group,
+    .topbar__right,
     .hint-text {
       opacity: 1;
+      pointer-events: auto;
     }
   }
 }
@@ -2435,12 +3149,95 @@ button {
   display: none;
 }
 
+// v0.81 — primary "Zurück zum Museum" action. Dedicated class and lifecycle:
+// it never shares the chrome-btn hide rules, stays visible in clean-chrome,
+// visible-chrome, and presentation modes, and sits first in the left topbar
+// region so it cannot collide with the right utility cluster.
+.topbar__back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  background: #12171b;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--text-inverse);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-medium);
+
+  svg {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  &:hover:not(:disabled) {
+    background: #1d2731;
+    box-shadow: var(--shadow-strong);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  // Dual-contrast 3px focus ring: light inner ring + dark outer ring so it
+  // stays visible over both the dark button and light wall behind it.
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.95),
+      0 0 0 6px rgba(15, 20, 24, 0.85);
+  }
+
+  &:disabled {
+    cursor: progress;
+    opacity: 0.7;
+  }
+}
+
+// Short label ("Museum") is phone-only; full label is default.
+.topbar__back-btn-label--short {
+  display: none;
+}
+
+:root[data-layout-tier='phone-small'] .topbar__back-btn,
+:root[data-layout-tier='phone-portrait'] .topbar__back-btn {
+  min-height: 44px;
+  padding: 0 14px;
+
+  .topbar__back-btn-label--full {
+    display: none;
+  }
+
+  .topbar__back-btn-label--short {
+    display: inline;
+  }
+}
+
+// Reduce the brand before hiding this essential action on very small phones.
+:root[data-layout-tier='phone-small'] .topbar__brand-group {
+  display: none;
+}
+
 @media (forced-colors: active) {
   // Restore button borders that our custom styles suppress
   .nav-btn,
   .zoom-btn,
   .topbar__help-btn,
   .topbar__chrome-btn,
+  .topbar__back-btn,
+  .museum-hub__artwork,
+  .museum-hub__pager-arrow,
+  .museum-hub__destination,
   .loading-start-btn,
   .prefs__toggle,
   .audio-btn {

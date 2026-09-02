@@ -20,6 +20,8 @@ customer-artworks/artworks.json
 customer-artworks/artworks.json.bak
 customer-artworks/last-import-report.txt
 customer-preview/images/
+customer-preview/audio/
+customer-preview/backgrounds/
 customer-preview/customer-artworks.js
 customer-preview/customer-audio.js
 
@@ -27,5 +29,6 @@ customer-preview/customer-audio.js
 # These are rebuilt by CI from the committed inbox sources; do not commit them.
 public/images/
 public/audio/
+public/backgrounds/
 public/customer-artworks.js
 public/customer-audio.js

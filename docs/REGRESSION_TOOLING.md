@@ -1,10 +1,8 @@
-# Regression Validation Tooling (v0.74)
+# Regression Validation Tooling (v0.93)
 
-This document is the explicit **regression model → tooling** mapping required by
-`plan.md § v0.74` (Phase 10 Profiling Validation, Phase 12 Regression Risk
-Model, Phase 14 Success Criteria). It closes the gap where the regression model
-defined *pixel diff*, *invariants*, and *GC metrics* conceptually but did not
-map them to concrete tools.
+This document is the explicit **regression model → tooling** mapping for the
+current rendering baseline and active recovery work in `plan.md`. It maps pixel
+diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
@@ -18,15 +16,56 @@ is accepted unless the measurement hook for its type exists and passes.
 ## Type A — Pixel diff (Playwright / WebGL snapshot)
 
 `scripts/visual-regression.mjs` drives Chromium through Playwright, captures the
-Phase 10.3 state matrix (fixed dramatic lighting × artwork step × zoom), checks Type B
-invariants for every state, and compares against a stored baseline.
+Phase 10.3 state matrix plus expanded museum-hub states (desktop, wide desktop,
+narrow portrait wall-focus, doorway-edge fixtures, extreme-aspect fixture sets,
+hub→gallery→hub selection round trips, and WebGL context-restore token checks),
+checks Type B invariants for every state, and compares against a stored baseline.
+Before each screenshot, the harness now runs a hub-background fail-safe pass:
+required `/backgrounds/...` URLs that returned 404 are logged with URL + status,
+downgraded to the shipped `backgrounds/museum-empty.png` fallback when
+available, otherwise forced to the neutral museum-grey token, and still
+captured. Each run writes a per-state JSON summary to
+`.visual-regression/*/capture-report.json`.
+Fixture hub states also break one declared image path on purpose and assert that
+the embedded fallback recovers it without exposing placeholder mode, so
+hub/gallery artwork-source regressions fail even when the final pixels still
+match the baseline.
+
+For the shipped v0.93 artwork-recovery path, retain the existing
+primary-failure / embedded-fallback fixture **and** the post-upload blank
+fixture. The visual harness now needs to prove both:
+
+- request/decode failure still recovers through `webglImage`;
+- a decoded `file://` primary that reaches upload but produces blank pixels also
+  recovers through `webglImage` before the runtime accepts success.
+
+Keep the broader gates as well: the real current PNG bundle in `file://`, Vite,
+and Pages-base delivery; preview/public/dist asset-contract checks; typed final
+placeholder and delayed-decode diagnostics; source-to-pixel binding proof; and
+capability-limited image handling.
+
+Because the user-visible blank-plane bug was environment-specific, every future
+artwork-visibility investigation must also replay the local
+`file://` preview (`customer-preview/app.html?debug=verbose&hubDebug=1`) with
+the generated `customer-artworks.js` and matching `images/` bundle preserved as
+evidence. The scripted gates are necessary but not sufficient for this class of
+incident.
 
 - **Pass criterion (Phase 10.3 / 14.3):** fewer than **2%** of pixels differ by
   more than **10/255** on any comparison.
-- **Matrix:** fixed dramatic lighting × artwork steps 0/1/2 × overview/reset/
-  inspection zoom states.
+- **Matrix:** museum-hub desktop/wide/portrait wall-focus states, synthetic
+  tall/square/wide hub fixture sets, and fixed dramatic lighting × artwork
+  steps 0/1/2 × overview/reset/inspection zoom states.
+- Optional diagnostic capture: `FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG=1` adds a
+  `?hubDebug=1` overlay screenshot without making it part of the mandatory gate.
+- Round-trip states also assert hub selected-state persistence (`.is-selected` +
+  `aria-current`) and transition-surface diagnostics before the screenshot is
+  accepted.
 - **Workflow:** capture a baseline *before* the change, apply the optimization,
   then compare. Diffs are written to `.visual-regression/diff/` (git-ignored).
+- `node scripts/visual-regression.mjs capture` writes screenshots without
+  requiring an existing baseline. `FREYRAUM_VISUAL_STATE_FILTER=foo,bar`
+  restricts baseline/capture/compare runs to matching state-name substrings.
 - **Required for:** OPT-4 (bloom), OPT-5 (shadow), OPT-6 (panel opacity),
   OPT-9 (LOD). These must additionally pass manual sign-off at close inspection
   zoom for shadow/bloom changes.
@@ -73,6 +112,29 @@ the current report). This actively checks the Tier 1 GC thresholds below.
 `FrameBudgetMonitor` O(1) refactor: it proves the optimized accumulator path is
 numerically identical to the original O(N) reference across a 435-frame
 sequence including edge cases.
+
+`scripts/test-museum-hub-geometry.mjs` is a focused hub geometry regression
+check: it loads the shipping TypeScript modules, verifies v1/v2 migration keeps
+exact artwork targets, validates the checked-in v4 camera/room/wall/slot
+contract, reconciles wall-local planes against the photographed reference
+quads, and asserts deterministic doorway-edge placement, fallback wall buckets,
+projected containment, hanging-band containment, perspective foreshortening,
+world-space quad export, selected-state runtime hooks, grey-token reach, and
+the bounded missing-background fallback. Threshold breaches hard-fail
+`npm run validate:museum-hub` and CI. `npm run validate:museum-hub:visual`
+runs the optional Type A screenshot comparison with an existing local baseline,
+and the harness additionally checks that the hub still renders through the
+dedicated `.museum-hub__canvas` scene bridge rather than per-slot DOM
+projection transforms. It also carries the lightweight shared regression
+assertions for inspection safety in the interactive gallery: close-inspection
+pan may use only the bounded reveal margin, close hover tilt must retain its
+full requested range after the wall setback, and larger hover motion must still
+stay within the available front-wall clearance. The same script now also checks
+the fixed gallery wall-lighting contract stays neutral enough (ambient Kelvin,
+balanced two-key setup, no return to the old dramatic far-left spotlight), and
+it now additionally guards the visible wall-material contract (matte wall,
+restrained wall normal scale, calmer ceiling) plus the low-sheen matte artwork
+response that prevents close-view washout.
 
 ## Acceptance thresholds (Phase 14)
 

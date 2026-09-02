@@ -1,5 +1,729 @@
 # CHANGELOG
-> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning).
+> Latest markdown audit: 2026-09-02 (v0.98 wall surface realism + softer artwork-view lighting).
+
+## v0.98 — Wall surface realism + softer artwork-view lighting (2026-09-02)
+
+### Changed
+
+- Retuned `src/materials/ArchitecturalSurfaceFactory.ts` so the neutral-grey
+  gallery wall regains visible matte plaster texture: stronger wall normal
+  response, stronger plaster roughness breakup, and a calmer ceiling response.
+- Softened the fixed close-view lighting in `src/lighting/LightProfile.ts` by
+  lowering ambient/direct energy and keeping the two-key setup on softer
+  near-gallery angles, reducing the large bright hotspot that was washing out
+  the artwork view.
+- Lowered the matte artwork sheen floor in `src/materials/PaintingMaterial.ts`
+  so matte presentations no longer keep the old `0.08` base specular response;
+  satin and glazed presentations still preserve higher sheen than matte works.
+- Extended `scripts/test-museum-hub-geometry.mjs` with focused guards for the
+  softer lighting-energy contract, visible-but-restrained wall texture, calmer
+  ceiling response, and matte-vs-satin specular separation.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`
+  matches the shipped runtime behavior.
+
+### Validation
+
+- `npm install` ✅
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+
+## v0.97 — Neutral gallery wall-lighting rebalance (2026-09-01)
+
+### Changed
+
+- Rebalanced the fixed interactive-gallery lighting in
+  `src/lighting/LightProfile.ts` from a single warm dramatic spot into a
+  balanced neutral two-key setup, keeping the wall readable as concrete grey
+  instead of amber in the single-artwork view.
+- Reduced the gallery wall/ceiling surface response in
+  `src/materials/ArchitecturalSurfaceFactory.ts` by raising wall roughness and
+  lowering plaster normal intensity, so the background reads flatter and less
+  cream-tinted under close inspection.
+- Neutralized the museum-hub room lights in `src/hub/HubRoomRenderer.ts` so hub
+  walls and gallery walls stay aligned on the same cooler concrete-grey look.
+- Extended `scripts/test-museum-hub-geometry.mjs` with a lightweight fixed
+  gallery-lighting contract: neutral ambient Kelvin, balanced two-key setup,
+  and no regression to the old far-left warm spotlight placement.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`,
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/style.css`, and
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/app.html` match the
+  shipped runtime behavior.
+
+### Validation
+
+- `npm install` ✅
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+
+## v0.96 — Concrete-grey wall retune (2026-09-01)
+
+### Changed
+
+- Changed the authoritative gallery/hub wall token from `#D8DDDB` to the cooler
+  concrete-grey `#C7CED4` across checked-in customer config, CSS/HTML shell
+  defaults, runtime fallback paths, renderer defaults, and regression
+  assertions.
+- Retuned the gallery architectural surface palette in
+  `src/materials/ArchitecturalSurfaceFactory.ts` so the coupled floor, cove
+  light, and artwork-edge tones no longer pull the scene back toward beige.
+- Tempered the fixed gallery light profile in `src/lighting/LightProfile.ts`
+  from the previous 3000/2700/8000 K mix to a less amber 3600/3400/7200 K
+  mix, keeping the single-profile look while making the wall read as modern
+  grey instead of cream/orange in the inspection view.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`,
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/style.css`, and
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/app.html` match the
+  shipped runtime behavior.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+
+## v0.95 — Single-artwork inspection retune (2026-09-01)
+
+### Changed
+
+- Moved the interactive-gallery front wall farther back in
+  `src/config/galleryPresentation.ts` so close inspection regains its intended
+  hover-tilt freedom without letting the mounted artwork reach the wall plane.
+- Replaced the v0.94 zero-overscroll inspection pan with a smaller bounded
+  reveal margin in `src/gallery/GalleryManager.ts`, using shared exported
+  defaults from `src/gallery/inspectionSafety.ts` so users can pan a little past
+  the artwork edge again while the stage still stays visually controlled.
+- Kept the revealed wall on the existing authoritative museum-grey token path
+  (`#D8DDDB`) rather than introducing a gallery-only wall color override.
+- Extended `scripts/test-museum-hub-geometry.mjs` so regressions now assert the
+  deeper front-wall setback, the restored bounded pan margin, full close-hover
+  tilt at inspection scale, and continued clearance clamping for larger hover
+  rotations.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`
+  matches the shipped runtime behavior.
+
+### Validation
+
+- `npm install` ✅ *(required in this fresh environment before lint/build)*
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+
+## v0.94 — Single-artwork inspection wall-clip fix (2026-09-01)
+
+### Changed
+
+- Tightened single-artwork inspection pan bounds in
+  `src/gallery/GalleryManager.ts` so close inspection no longer overscrolls past
+  the artwork edge into the gallery wall/plane.
+- Added shared gallery inspection-safety math in
+  `src/gallery/inspectionSafety.ts` and used it to clamp hover tilt against the
+  actual front-wall clearance, preventing the mounted artwork from rotating back
+  through the stage wall during inspection.
+- Exposed the mounted-body back extent from `src/gallery/ArtworkMesh.ts` so the
+  clearance guard can account for both the painted plane and its shallow support
+  body.
+- Extended `scripts/test-museum-hub-geometry.mjs` with focused assertions for
+  single-artwork inspection pan bounds and hover-tilt wall clearance.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`
+  matches the shipped runtime behavior.
+
+### Validation
+
+- `npm install` ✅ *(required in this fresh environment before lint/build)*
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+
+## v0.93 — Local file-preview artwork recovery (2026-09-01)
+
+### Changed
+
+- The museum hub now treats offline `file://` customer image files as a special
+  WebGL reliability case: when a slot's declared `image` resolves to a local
+  `file-url` and the importer already embedded `webglImage`, the hub now uses
+  the embedded artwork bytes up front instead of waiting for a blank post-upload
+  plane before recovering.
+- Extended hub image load/decode deadlines for inline `data:` artwork sources so
+  the local preview can still render real paintings when the tracked preview
+  falls back to built-in embedded artworks or when the embedded WebGL recovery
+  path is selected.
+- Added regression coverage in `scripts/test-museum-hub-geometry.mjs` for the
+  new shared file-preview source-selection policy.
+- Rebuilt the tracked `customer-preview/freyraum-gallery.js` and
+  `customer-preview/app.html` so opening `index.html` locally uses the shipped
+  recovery logic immediately.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+- Explicit `file:///home/runner/work/Freyraum/Freyraum/customer-preview/app.html?debug=verbose&hubDebug=1` reproduction ✅
+  - with generated customer scripts, hub slots now settle on
+    `data-artwork-source-mode="embedded-webgl-fallback"` and show real artwork
+    pixels instead of blank grey planes;
+  - without generated customer scripts, the built-in embedded artworks still
+    reach `ready` in local preview instead of timing out.
+
+## v0.92.1 — Persistent grey-artwork recovery implementation (2026-08-07)
+
+### Changed
+
+- Added a shared, redacted source→decode→GPU→visible-pixels outcome contract
+  (`src/utils/sourceToPixelOutcome.ts`) recorded once per artwork per route,
+  naming the resolved candidate, embedded-fallback usage, first failed stage,
+  elapsed time, source/upload dimensions, and renderer capability, without
+  ever logging raw URLs, data URIs, or image bytes.
+- Added a shared capability-aware PNG downscale
+  (`src/utils/textureUploadCompatibility.ts`) applied before any decoded image
+  reaches the GPU in either route, sized against the live
+  `renderer.capabilities.maxTextureSize`. A source that already fits is passed
+  through unchanged; an oversize source is drawn once into a single bounded
+  canvas, preserving aspect ratio and never upscaling.
+- Added a bounded GPU visible-pixel probe (`src/utils/sourceToPixelProbe.ts`)
+  that renders a bound texture to a cached 4×4 render target and reports only
+  pass/fail plus average colour, gated to verbose diagnostics mode so the
+  GPU-stalling readback never runs on default visitor traffic.
+- Wired both into the interactive gallery (`TextureManager.loadForRole`,
+  `loadArtworkAlbedo`) and the museum hub (`HubRoomRenderer.upsertSlot`,
+  `imageTexture`, `MainMuseumHub.resolveSlotImage`), so a real
+  `Fraktal.png`/`Akt 27.png` load now produces one explicit success record per
+  route, and a failure names its first failed stage instead of only showing a
+  placeholder.
+- Left the current PNG importer, `customer-artworks/museum-hub.json`, and
+  `scripts/import-artworks.mjs` untouched, and made no lighting, material, or
+  `PaintingMaterial` change (Phase 4 of the v0.92 plan remains future work).
+
+### Validation and residual risk
+
+- `npm run lint`, `npm run build:typecheck`, `npm run build`,
+  `npm run validate:museum-hub`, `npm run test:frame-budget`, and
+  `npm run docs:check-config-authority` all passed.
+- Phase 0 (manual multi-environment reproduction capture) and the Phase 1
+  generated-bundle validator were not additionally implemented; the new
+  outcome diagnostics make that reproduction available on demand instead.
+  `npm audit --audit-level=moderate` still reports the pre-existing
+  Vite/esbuild development-server advisory, unrelated to this change.
+- An automated code review of this change surfaced one unrelated, pre-existing
+  issue: `DestinationRouter.runTransition`'s rollback branch re-enters the
+  previous destination without re-running `prepare()`. This is out of scope
+  for the pixel-recovery fix and was intentionally left unmodified.
+
+## v0.92 — Persistent grey-artwork recovery plan (2026-08-07)
+
+### Documentation status
+
+- Reopened the artwork-visibility incident after a customer report that grey
+  museum artworks persist despite the v0.91 URL repair.
+- Recorded the current two-PNG setup, route-specific fallback signatures, and
+  the gap between generated-asset existence and source-to-pixel proof.
+- Added a staged implementation plan for asset-contract validation, typed
+  source/decode/upload outcomes, capability-aware downscaling, and a
+  post-visibility gallery fidelity audit.
+- No runtime behavior changed in this documentation-only planning update.
+
+## v0.91 — Script-relative customer artwork bundle recovery (2026-08-07)
+
+### Summary
+
+- The customer importer now publishes a backward-compatible
+  `window.__FREYRAUM_ARTWORK_BUNDLE__` envelope with bundle ID, generated
+  timestamp, artwork records, and a script-derived `assetBaseUrl`, while still
+  exposing `window.__FREYRAUM_ARTWORKS` for legacy readers.
+- Runtime startup now sanitizes bundle envelopes as well as legacy injected
+  arrays, rejects unsafe primary URL schemes, and carries bundle metadata into
+  the active artwork manifest.
+- Shared artwork-source resolution now distinguishes declared versus resolved
+  URLs/types, resolves relative customer image paths against the generated
+  bundle base, and applies the same result in both the interactive gallery and
+  museum hub.
+- Gallery and hub diagnostics now include bundle-aware declared/resolved source
+  metadata, and the museum-hub regression fixture covers script-relative bundle
+  resolution explicitly.
+- Rebuilt `customer-preview/freyraum-gallery.js` so the tracked local preview
+  matches the updated runtime/importer contract.
+
+### Validation
+
+- `npm install` ✅ *(existing advisories remain in the dependency tree; no new dependencies were added)*
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+- `node --check scripts/import-artworks.mjs` / `node --check scripts/write-local-preview.mjs` / `node --check scripts/visual-regression.mjs` / `node --check scripts/test-museum-hub-geometry.mjs` ✅
+- `npm run validate:visual` ⚠️ *(script requires an explicit mode argument in this repository)*
+- `npm run validate:museum-hub:visual` ⚠️ *(compare tooling dependencies `pixelmatch`/`pngjs` are not installed in this repository snapshot)*
+
+## v0.90 — Shared artwork-source fallback contract for hub + gallery (2026-08-07)
+
+### Summary
+
+- Added a shared artwork-source resolver so both runtime routes treat the
+  manifest `image` path as primary and optional embedded `webglImage` data as
+  an explicit fallback.
+- Reworked `MainMuseumHub` slot loading so first-page readiness now waits for an
+  explicit decoded result: primary success, embedded fallback success, or a
+  declared placeholder failure. Timeouts no longer count as implicit success.
+- Added per-slot hub diagnostics/data attributes for resolved source mode,
+  readiness state, and fallback reason, and warmed the resolved hub texture with
+  `renderer.initTexture(...)` before reveal.
+- Changed gallery albedo preload/use to retry the embedded fallback only after a
+  declared-image failure, while preserving the generated fallback warning path
+  for true final failures.
+- Extended museum-hub regression coverage so fixture states now prove that a
+  broken declared image can still render through the embedded fallback without
+  showing the neutral placeholder.
+
+### Validation
+
+- `npm install` ✅ *(existing advisories remain in the dependency tree; no new dependencies were added)*
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `node -c scripts/import-artworks.mjs` ✅
+
+## v0.89 — Interactive-gallery architectural stage + mounted presentation baseline (2026-08-07)
+
+### Summary
+
+- Added `GalleryPresentationStage` to the main gallery renderer so the
+  interactive destination now renders against a compact front wall, floor,
+  ceiling, side returns, skirting shadow gap, and ceiling reveal instead of the
+  clear-colour/PMREM void.
+- Kept the hub untouched on its dedicated v0.87 renderer path while giving the
+  gallery stage its own `ArchitecturalSurfaceFactory` instance so hub/gallery
+  resource ownership stays independent on preset changes and cleanup.
+- Upgraded `ArtworkMesh` from a plane-only presentation to a shallow mounted
+  work assembly whose opaque body casts the wall shadow cue while the customer
+  image stays shadow-free.
+- Introduced optional validated artwork `presentation` metadata for the
+  interactive gallery (`canvas`, `fine-art-paper`, `matte-print`,
+  `satin-print`, `glazed-print`); legacy `surface` text remains descriptive
+  metadata only.
+- Rebuilt `customer-preview/freyraum-gallery.js` and reran the importer so the
+  committed local preview matches the new runtime/import contract.
+
+### Validation
+
+- `npm install` ✅ *(existing advisories remain in the dependency tree; no new dependencies were added)*
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `node -c scripts/import-artworks.mjs` ✅
+
+## v0.87 — Square-room hub architectural quality tiers (2026-08-02)
+
+### Summary
+
+- Rebuilt `HubRoomRenderer` around a complete square-room shell: calibrated
+  front/left/right walls, an entry-side enclosure behind the camera, doorway
+  passage pockets, dark skirting shadow gaps, recessed ceiling light coves,
+  shallow artwork side depth, and soft contact shadows.
+- Added `ArchitecturalSurfaceFactory`, a shared procedural material set for
+  wall, floor, ceiling, trim, doorway pocket, light-strip, and artwork-edge
+  surfaces. Tileable normal/roughness maps are regenerated in place when the
+  active quality preset changes.
+- Quality presets now control the hub room too: pixel-ratio cap,
+  architectural-surface tile size, skylight shadow budget, and floor
+  reflection mode (`planar`, `ibl`, `off`). `MainMuseumHub` forwards preset
+  changes to the room renderer at runtime.
+- High and balanced presets now render an on-demand downscaled planar floor
+  reflection with Fresnel/roughness weighting; battery disables hub
+  reflections/environment/shadows and falls back to a diffuse mineral floor.
+- Rebuilt `customer-preview/freyraum-gallery.js` so the committed local preview
+  matches the runtime source.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+
+## v0.86 — Authoritative 3D museum-hub room pipeline (2026-08-01)
+
+### Summary
+
+- Replaced the hub’s projected DOM artwork rendering with a dedicated 3D room
+  scene (`HubRoomRenderer`) that mounts artwork planes onto actual wall-local
+  world transforms and renders them through one authoritative camera.
+- Kept the existing DOM interaction layer, but changed it into a pure
+  screen-space bridge: buttons now use projected bounds + clip paths instead of
+  per-slot CSS `matrix3d(...)` transforms.
+- Expanded the v4 `museum-hub.json` contract with room envelope, hanging rules,
+  wall transforms/drawable regions/exclusion polygons, camera far/lens-shift,
+  and normalized slot UV / scale / z-offset metadata.
+- Hardened slot resolution so doorway/containment failures first seek the
+  nearest valid pose on the same wall and then deterministically fall back to
+  the next valid wall bucket before suppressing the slot.
+- Preserved selection persistence by stable artwork ID, kept round-trip hub
+  return feedback, and extended `?hubDebug=1` diagnostics with projected anchors
+  plus world-space quads.
+- Closed the remaining fatal-startup white-surface path by forcing the fallback
+  screen to inherit the authoritative gallery-wall grey before rendering.
+- Upgraded regression tooling:
+  - `scripts/test-museum-hub-geometry.mjs` now validates the v4 room schema,
+    world-space quad export, fallback wall buckets, perspective foreshortening,
+    and the grey fallback path.
+  - `scripts/visual-regression.mjs` now asserts that the hub renders through the
+    dedicated `.museum-hub__canvas` scene bridge and that interactive overlays
+    no longer rely on per-slot transform projection.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `FREYRAUM_URL=http://127.0.0.1:4173/app.html FREYRAUM_VISUAL_STATE_FILTER='hub__desktop__room-1,hub__desktop-wide__room-1,hub__phone__left-wall,hub__phone__right-wall,hub__fixture__doorway-left-edge,hub__fixture__doorway-right-edge,hub__desktop__missing-background-fallback,hub__desktop__missing-background-neutral,hub__desktop__selected-return-topbar' node scripts/visual-regression.mjs baseline` ✅
+- `FREYRAUM_URL=http://127.0.0.1:4173/app.html FREYRAUM_VISUAL_STATE_FILTER='hub__desktop__room-1,hub__desktop-wide__room-1,hub__phone__left-wall,hub__phone__right-wall,hub__fixture__doorway-left-edge,hub__fixture__doorway-right-edge,hub__desktop__missing-background-fallback,hub__desktop__missing-background-neutral,hub__desktop__selected-return-topbar' node scripts/visual-regression.mjs capture` ✅
+- `FREYRAUM_URL=http://127.0.0.1:4173/app.html FREYRAUM_VISUAL_STATE_FILTER='hub__desktop__room-1,hub__desktop-wide__room-1,hub__phone__left-wall,hub__phone__right-wall,hub__fixture__doorway-left-edge,hub__fixture__doorway-right-edge,hub__desktop__missing-background-fallback,hub__desktop__missing-background-neutral,hub__desktop__selected-return-topbar' node scripts/visual-regression.mjs compare` ✅
+
+## v0.85 — Museum-hub realism, selection, and wall-token hardening (2026-08-01)
+
+### Summary
+
+- Reconciled v3 room-local wall planes against the configured photographed
+  reference quads at resolve time, keeping room-local anchors authoritative
+  while restoring realistic side-wall projection, residual metrics, and
+  per-wall convergence checks.
+- Replaced the hub’s doorway-avoidance heuristic with a deterministic local
+  placement solver that records adjustment/rejection reasons and suppresses
+  invalid slots instead of rendering floating invalid buttons.
+- Added artwork-ID-based hub selection persistence, synchronized from gallery
+  navigation and restored on hub re-entry with persistent `.is-selected` /
+  `aria-current` feedback plus focus restoration to the current artwork slot.
+- Centralized wall-surface color application across CSS variables, document/app
+  shell, fallback, renderer clear color, transition diagnostics, and WebGL
+  context restoration.
+- Expanded geometry/visual regression tooling with doorway-edge fixtures,
+  wall-realism assertions, invalid-slot suppression checks, round-trip
+  selection states, transition surface snapshots, and context-restore token
+  verification.
+- Added a pre-screenshot Playwright hub/background fail-safe: 404 room-image
+  URLs are logged with structured URL/status data, downgraded to
+  `backgrounds/museum-empty.png` or the neutral museum-grey token, and still
+  captured into a per-run `capture-report.json`.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `FREYRAUM_URL=http://127.0.0.1:4173/Freyraum/app.html FREYRAUM_VISUAL_STATE_FILTER=missing-background node scripts/visual-regression.mjs capture` ✅ *(after `npm install --no-save playwright` + `npx playwright install chromium`, served via `vite preview`)*.
+
+## v0.84 — Calibrated 3D museum room reconstruction (2026-08-01)
+
+### Summary
+
+- Replaced hub placement with a v3 calibrated camera/room-plane pipeline:
+  wall-local metric anchors project through world, camera, NDC, and stage
+  pixels before the terminal DOM transform is generated.
+- Added local safe polygons, doorway exclusions, hanging bands, and placement
+  validity checks. Invalid doorway/hanging placements are solved before render.
+- Added a safe hub asset loader wrapper: missing/unshipped background or
+  reference paths log structured 404 diagnostics, retry `museum-empty.png`
+  once, and degrade to the neutral museum-grey token without aborting.
+- Enforced the shared `#D8DDDB` background token across boot shell, gallery,
+  hub, fallback, and WebGL clear color.
+- Extended `?hubDebug=1`, deterministic hub checks, visual-regression states,
+  and CI coverage for the calibrated room contract.
+
+### Validation
+
+- Pending final repository validation for this release.
+
+## v0.83 — Museum-hub plane topology + diagnostics hardening (2026-08-01)
+
+### Summary
+
+- Replaced the shipping two-wall hub topology with four calibrated physical
+  wall planes (`wall-left-outer`, `wall-left-inner`, `wall-right-inner`,
+  `wall-right-outer`) in both built-in defaults and
+  `customer-artworks/museum-hub.json`, while keeping canonical slot IDs stable.
+- Updated baseline slot placements and v1 migration wall targeting so legacy
+  placements map into the new multi-plane model instead of coarse left/right
+  buckets.
+- Fixed safe-zone validation coordinate-space drift: containment checks now use
+  stage-space projected artwork corners against stage-space wall safe polygons.
+- Added contain-style placement fitting/clamping in the resolver so oversized or
+  edge-straddling placements are nudged toward valid drawable regions.
+- Added read-only `?hubDebug=1` overlay diagnostics (wall/safe polygons,
+  projected slot quads/corners, local axes, per-slot homography snapshots)
+  without enabling calibration edits.
+- Expanded regression hardening:
+  - `scripts/test-museum-hub-geometry.mjs` now validates the shipping
+    `museum-hub.json` with stage-space containment, doorway exclusions, minimum
+    projected-size thresholds, corner tolerances, and homography roundtrip
+    bounds.
+  - `scripts/visual-regression.mjs` now covers wide desktop + narrow portrait
+    wall-focus states, very tall/square/very wide fixture sets, and optional
+    debug-overlay capture via `FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG=1`.
+  - Added `npm run validate:museum-hub` and wired it into
+    `.github/workflows/quality-and-doc-drift.yml`.
+- Added runtime wall-color consistency verification snapshots (tokens, CSS vars,
+  hub/fallback/transition surfaces, renderer clear color) and normalized the
+  local launcher shell’s stale background tone to the authoritative wall token.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run validate:visual compare` ⚠️ *(requires Type A optional dependencies and an existing local baseline under `.visual-regression/baseline`)*.
+
+## v0.82 — Wall-plane museum hub projection (2026-08-01)
+
+### Summary
+
+- Replaced the museum hub’s per-slot framed box model with a versioned v2
+  wall-plane contract: `museum-hub.json` now stores a fixed stage size,
+  calibrated wall quads, safe polygons, wall-local mounted sizes, and exact
+  artwork mappings. Legacy `hub-hotspots.json` and v1 box placements migrate
+  automatically with provisional recalibration warnings.
+- Rebuilt `MainMuseumHub` as a DOM projective renderer: each artwork remains a
+  native button but is mapped through a calibrated planar projection, so all
+  artworks on a wall share one consistent vanishing geometry instead of
+  independent `perspective: 900px` / `rotateY()` transforms.
+- Removed visible frames, mats, bevels, and decorative rims from hub artworks.
+  Normal runtime states now show raw artwork-to-edge presentation, subtle
+  contact shadows, focus-only affordances, and neutral unframed placeholders.
+- Upgraded `?hubCalibrate=1` to author wall corners, safe-zone points, and
+  wall-local artwork placement/size, with live warnings and restore-last-valid
+  recovery.
+- Changed the authoritative gallery/hub/WebGL wall token from `#E2E4E3` to
+  `#D8DDDB` across config defaults, checked-in customer config, CSS, and
+  `RendererManager`.
+- Extended regression tooling with museum-hub screenshot states in
+  `scripts/visual-regression.mjs` and added
+  `scripts/test-museum-hub-geometry.mjs` for geometry/migration assertions.
+
+### Validation
+
+- `npm install` ✅
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `node scripts/test-museum-hub-geometry.mjs` ✅
+
+## v0.81 — Manifest-Driven Museum Hub Composition (2026-07-31)
+
+### Summary
+
+- Replaced the baked `museum-target.png` hub with a manifest-driven DOM
+  composition over `museum-empty.png`: every active artwork renders as a real
+  responsive image inside its own framed native button, so visual bounds and
+  hit bounds cannot drift. `museum-target.png` remains in the repository as a
+  calibration reference but is no longer shipped to `public/`/`dist/`.
+- Introduced the unified customer configuration
+  `customer-artworks/museum-hub.json` (version, background, visual tokens,
+  frame presets, fallbacks, slots) injected as `window.__FREYRAUM_MUSEUM_HUB`;
+  the legacy `hub-hotspots.json` array still works through automatic migration
+  with a deprecation warning.
+- New exact-ID resolver (`src/config/museumHub.ts`): explicit mappings win,
+  unmapped active artworks auto-place by aspect class then stable ID order,
+  overflow paginates into additional room pages (four slots per page, no
+  six-artwork cap). Invalid or duplicate mappings disable the slot — they can
+  never open another artwork. Missing image data shows a neutral placeholder
+  bound to the same exact target. Zero valid slots exposes one generic
+  gallery-entry action.
+- Frames use shared static CSS material presets (matte charcoal default, warm
+  oak and dark anodized aluminum optional): roughness/metalness metadata is
+  translated once into highlight/shadow strengths; perspective, bevel,
+  recessed aperture, and wall-specific static shadows add zero WebGL draw
+  calls and no continuous renders.
+- Gallery selection is ID-based with a selection generation token: duplicate
+  clicks and stale readiness completions cannot change the destination, and
+  the 1500 ms readiness fallback (`albedoLoaded && materialApplied &&
+  shaderCompiled` preferred) opens the exact requested work procedurally.
+- Hub preparation (background fetch + first-page artwork decode + slot layout)
+  completes under the loading overlay as the final weighted progress step;
+  later room pages decode during idle time and that work cancels when a
+  gallery transition begins.
+- Rolled out the museum-grey wall token `#E2E4E3` as authoritative
+  `--color-gallery-wall` (with `--color-museum-wall` defaulting to it and
+  customer-overridable): CSS surfaces, hub gradients (no near-white radial),
+  local preview shell, and the WebGL clear color all resolve from one token
+  before renderer construction.
+- Redesigned the back control: first position in the left topbar group with a
+  dedicated `topbar__back-btn` class and lifecycle, 48 px dark filled surface
+  with "Zurück zum Museum" (arrow + "Museum" on phones), dual-contrast 3 px
+  focus ring, busy/disabled state during transitions, and visibility in clean,
+  visible, and presentation chrome modes. The topbar now uses grid regions so
+  the control cannot collide with the right utility cluster.
+- Narrow-portrait viewports (aspect below 4:5) split each room page into
+  left/right wall focus pages with arrows, swipe, counter, and keyboard
+  navigation; off-wall frames leave the actionable set entirely. Returning to
+  the hub preserves its page and restores focus to the originating slot.
+- Calibration mode (`?hubCalibrate=1`) now manipulates the actual frame bounds
+  and exports the complete `museum-hub.json` schema.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `node --check scripts/import-artworks.mjs` / `node --check scripts/sync-customer-public.mjs` ✅
+- Browser matrix: hub composition renders both customer works over the empty
+  room; slot click, timeline state, info panel, and gallery `Artwork.id` agree
+  for both slots; back button and guarded Escape return with focus restored to
+  the originating slot; wall-focus pages ("Linke/Rechte Wand") navigate with
+  correct pager disabled states; phone tier shows the short "Museum" label ✅
+- Shipped hub-background transfer drops from ~16.2 MB (two PNGs) to ~10.7 MB
+  (empty room only); artwork images reuse browser-cached manifest URLs ✅
+
+## v0.80 — Hub Visual Reliability Closure (2026-07-31)
+
+### Summary
+
+- Replaced runtime GitHub attachment dependencies with the committed target and
+  empty museum backgrounds.
+- Added hub backgrounds to the customer-public sync and Pages artifact
+  validation while keeping them out of the JavaScript bundle.
+- Calibrated customer hotspots to the supplied 1366 × 768 visual: `fraktal`
+  targets the left portrait and `akt-27` targets the centre-right square.
+- Calibrated all four built-in hotspot defaults to the visible frames.
+- Hid the legacy central entry target whenever artwork hotspots exist and moved
+  initial/error focus to the first hotspot.
+- Made image fallback selection state-based so relative URLs cannot cause a
+  repeated fallback error loop.
+- Fixed the idle texture-prefetch sweep recursing synchronously on artworks
+  without authored texture sets.
+- Prevented Escape from closing Help/Preferences and also returning to the hub.
+- Made the gallery canvas an explicit programmatic focus target after hub entry.
+
+### Validation
+
+- `npm run import:artworks` ✅
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `node --check scripts/sync-customer-public.mjs` ✅
+- Manual Pages-base loading, initial focus, both hotspot selections, back
+  navigation, and missing-primary fallback ✅
+- Manual canvas focus, Help/Preferences Escape consumption, and unhandled
+  Escape back-navigation ✅
+- Hotspot calibration used the supplied reference; the local target image was
+  not opened for visual inspection ✅
+
+## v0.79 — Hub Hotspot Navigation (2026-07-31)
+
+### Summary
+
+- Added artwork hotspots to the Main Museum Hub: stable slots (`slot-1 … N`)
+  map to artwork IDs via one editable config model
+  (`src/config/hubHotspots.ts`), with a customer override in
+  `customer-artworks/hub-hotspots.json` injected as
+  `window.__FREYRAUM_HUB_HOTSPOTS` by the importer.
+- Hotspot coordinates are normalized `(cx, cy, w, h)` relative to the hub
+  image content box; defaults derive from wall-band/manifest-aspect formulas —
+  no image pixels are read.
+- Valid hotspot clicks jump the gallery to the target artwork behind a
+  1500 ms readiness gate (`materialApplied && shaderCompiled`), then enter;
+  timeout entry proceeds on the procedural surface. Missing/invalid IDs use
+  `fallback_to_gallery_default` (gallery opens at its current index).
+- Added back navigation to the hub: Topbar "Museum" button and guarded Escape.
+- Added the `--museum-wall-light: #ECEBE8` background token for the hub base
+  fill, image-error state, and hotspot focus-ring backdrop.
+- Added a non-dev hotspot calibration mode (config query flag; documented in
+  `docs/QUERY_PARAMETERS.md`) with drag/resize and a JSON copy panel.
+
+### Validation
+
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- `node --check scripts/import-artworks.mjs` ✅
+
+## v0.78 — Main Museum Hub (2026-07-31)
+
+### Summary
+
+- Changed startup to `Loading Screen → Main Museum Hub → Interactive Gallery`.
+- Added a static, responsive museum-room hub using the supplied visual and an
+  accessible central-artwork destination target.
+- Added a registration-based destination router with transition locking,
+  cancellation guards, lifecycle hooks, error recovery, and idempotent disposal.
+- Gated gallery pointer, touch, wheel, and keyboard input until gallery entry.
+- Preserved the existing gallery initialization, preload, GPU warmup, controls,
+  rendering, and artwork behavior after entry.
+- Added reduced-motion handling, responsive hub framing, focus restoration, and
+  hidden gallery chrome while the hub is active.
+
+### Validation
+
+- `npm run docs:check-config-authority` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run test:frame-budget` ✅
+- Manual loading → hub → gallery pointer/focus flow ✅
+- Visual comparison was not runnable because the repository does not install its
+  optional `pixelmatch`/`pngjs` comparison packages; no dependency was added.
 
 ## v0.77 — Fixed gallery presentation and metadata semantics (2026-07-19, **shipped**)
 

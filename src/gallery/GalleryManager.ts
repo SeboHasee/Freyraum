@@ -1,13 +1,27 @@
 import * as THREE from 'three';
 import type { Artwork } from '../config/artworks';
+import {
+  ARTWORK_PRESENTATION_PROFILES,
+  resolveArtworkPresentation,
+  type ArtworkPresentationId,
+  type ArtworkPresentationProfile,
+} from '../config/presentation';
 import { ArtworkMesh } from './ArtworkMesh';
 import { TextureManager } from './TextureManager';
 import { ProceduralTextureFactory } from '../materials/ProceduralTextureFactory';
 import { clamp, smoothDamp } from '../utils/math';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
+import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import type { QualityPreset } from '../config/quality';
 import type { StartupReadinessMode } from '../config/startup';
 import type { ResolvedPaintingTextures, PaintingMapRole } from '../materials/PaintingTextureSet';
+import { GALLERY_PRESENTATION_CONFIG } from '../config/galleryPresentation';
+import {
+  clampHoverRotationToWallClearance,
+  DEFAULT_INSPECTION_OVERSCROLL_X,
+  DEFAULT_INSPECTION_OVERSCROLL_Y,
+  getInspectionPanLimits,
+} from './inspectionSafety';
 
 export type NavigationCallback = (index: number) => void;
 export type FrameBudgetMarker = () => void;
@@ -64,9 +78,13 @@ const RESET_REFIT_EPSILON = 0.25;
  * reset-fit where a flat additive overscroll can feel too loose.
  * v0.14.2: split by axis so vertical pan can be tighter without reducing the
  * approved horizontal edge reach.
+ * v0.94: inspection panning no longer overscrolls past the artwork edge,
+ * because doing so exposed the gallery wall/plane through the single-work view.
+ * v0.95: restores a smaller bounded reveal margin now that the stage wall sits
+ * farther back, so close inspection regains some edge travel without reopening
+ * the original clipping issue.
  */
-const INSPECTION_OVERSCROLL_X = 1.2;
-const INSPECTION_OVERSCROLL_Y = 0.6;
+const INSPECTION_WALL_CLEARANCE_MARGIN = 0.004;
 
 /**
  * v0.15 — Frame-rate-independent smoothing factors (per second).
@@ -353,6 +371,7 @@ export class GalleryManager {
   private readonly proceduralQueue = new Set<number>();
   private proceduralQueueRunning = false;
   private renderDirtyFrames = 8;
+  private disposed = false;
 
   private targetX = 0;
   private targetY = 0;
@@ -532,7 +551,7 @@ export class GalleryManager {
     // Rebuild the current artwork's map set so preset-specific roles
     // (detailNormal, height, roughness, specular, AO) are added/removed
     // immediately on quality changes.
-    if (hadPreset && this.textureManager.get(this.artworks[this.currentIndex].webglImage ?? this.artworks[this.currentIndex].image)) {
+    if (hadPreset && this.textureManager.get(this.artworks[this.currentIndex].image)) {
       void this.showArtwork(this.currentIndex);
     }
   }
@@ -552,21 +571,23 @@ export class GalleryManager {
   }
 
   async init(): Promise<void> {
-    const artworkSources = this.artworks.map((a) => ({
-      id: a.id,
-      source: a.webglImage ? 'embedded-data-url' : 'file-url',
-      urlType: a.webglImage
-        ? `data-uri:${a.webglImage.slice(5, a.webglImage.indexOf(';'))}`
-        : 'local-relative',
-      hasWebglImage: !!a.webglImage,
-      dimensions: a.dimensions,
-    }));
+    const artworkSources = this.artworks.map((a) => {
+      const sourcePlan = resolveArtworkImageSources(a);
+      return {
+        id: a.id,
+        bundleId: sourcePlan.primary?.bundleId ?? null,
+        declaredImageUrlType: sourcePlan.primary?.declaredUrlType ?? null,
+        resolvedImageUrlType: sourcePlan.primary?.resolvedUrlType ?? null,
+        hasEmbeddedFallback: !!sourcePlan.fallback,
+        embeddedFallbackUrlType: sourcePlan.fallback?.resolvedUrlType ?? null,
+        dimensions: a.dimensions,
+      };
+    });
     this.diagnostics.info('init', 'Starting gallery init — preloading albedo textures', {
       artworkCount: artworkSources.length,
       artworks: artworkSources,
     });
-    const urls = this.artworks.map((a) => a.webglImage ?? a.image);
-    await this.textureManager.preload(urls);
+    await this.textureManager.preloadArtworkAlbedos(this.artworks);
     this.readiness.forEach((entry) => this.markReadiness(entry.index, 'albedoLoaded', 'init-preload'));
 
     const textureSetCount = this.artworks.filter((a) => !!a.textureSet).length;
@@ -626,7 +647,7 @@ export class GalleryManager {
     this.preGenerateProceduralWindow(0, this.readinessRadius, 'init-critical-window');
     this.logGalleryScaleValidation();
     this.diagnostics.info('init', 'Preload complete — showing first artwork', {
-      artworkCount: urls.length,
+      artworkCount: this.artworks.length,
       pbrPreloaded: pbrArtworks.length,
       criticalProceduralReady: this.getCriticalWindowIndices(0, this.readinessRadius).length,
     });
@@ -673,17 +694,17 @@ export class GalleryManager {
    * the artwork mesh. Async + race-protected: rapid navigation cannot apply
    * a stale map set (see audited Lifecycle Guardrails in plan.md).
    *
-   * v0.09: Uses `artwork.webglImage ?? artwork.image` as the albedo source for
-   * the central 3D painting. The `webglImage` field is an origin-clean base64
-   * data URL written by the importer so WebGL texture upload does not depend on
-   * `file://` image fetch behavior, which varies by browser.
+   * v0.90: Uses the shared artwork-source contract — declared image first,
+   * optional embedded `webglImage` only as an explicit fallback if the image
+   * asset fails to load as a WebGL albedo.
    */
   private async showArtwork(index: number): Promise<void> {
     const artwork = this.artworks[index];
-    // v0.09: prefer the embedded data URL for WebGL upload reliability.
-    const albedoUrl = artwork.webglImage ?? artwork.image;
-    const webglImageSource: 'embedded-data-url' | 'file-url' =
-      artwork.webglImage ? 'embedded-data-url' : 'file-url';
+    const presentation = this.resolvePresentation(index);
+    const presentationProfile = ARTWORK_PRESENTATION_PROFILES[presentation];
+    const sourcePlan = resolveArtworkImageSources(artwork);
+    const albedoSelection = this.textureManager.getArtworkAlbedoSelection(artwork);
+    const albedoUrl = albedoSelection?.selectedUrl ?? sourcePlan.primary?.resolvedUrl ?? artwork.image;
     const albedo = this.textureManager.get(albedoUrl);
 
     const token = ++this.artworkLoadToken;
@@ -703,13 +724,16 @@ export class GalleryManager {
       index,
       artworkId: artwork.id,
       token,
-      hasWebglImage: !!artwork.webglImage,
-      webglImageSource,
-      albedoUrlType: albedoUrl.startsWith('data:')
-        ? `data-uri:${albedoUrl.slice(5, albedoUrl.indexOf(';'))}`
-        : 'local-relative',
+      bundleId: albedoSelection?.bundleId ?? sourcePlan.primary?.bundleId ?? null,
+      hasEmbeddedFallback: !!artwork.webglImage,
+      albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
+      albedoDeclaredUrlType: sourcePlan.primary?.declaredUrlType ?? 'local-relative',
+      albedoResolvedUrlType: albedoSelection?.selectedUrlType ?? 'local-relative',
+      usedEmbeddedFallback: albedoSelection?.usedEmbeddedFallback ?? false,
+      generatedFallback: albedoSelection?.generatedFallback ?? false,
       dimensions: artwork.dimensions,
       surface: artwork.surface ?? null,
+      presentation,
     }));
 
     if (!albedo || !preset) {
@@ -717,10 +741,10 @@ export class GalleryManager {
         artworkId: artwork.id,
         hasAlbedo: !!albedo,
         hasPreset: !!preset,
-        webglImageSource,
-        albedoUrlType: albedoUrl.startsWith('data:')
-          ? `data-uri:${albedoUrl.slice(5, albedoUrl.indexOf(';'))}`
-          : 'local-relative',
+        bundleId: albedoSelection?.bundleId ?? sourcePlan.primary?.bundleId ?? null,
+        albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
+        albedoDeclaredUrlType: sourcePlan.primary?.declaredUrlType ?? 'local-relative',
+        albedoResolvedUrlType: albedoSelection?.selectedUrlType ?? 'local-relative',
       });
       // Albedo preload should have populated the cache; if not, give up.
       return;
@@ -749,7 +773,7 @@ export class GalleryManager {
     for (const role of PROCEDURAL_ROLES) {
       if (authored[role]) {
         resolved[role] = authored[role];
-      } else if (this.shouldFillRole(role, preset)) {
+      } else if (this.shouldFillRole(role, preset, presentationProfile)) {
         resolved[role] = this.generateProceduralMap(artwork.id, role, preset);
         proceduralGenerated = true;
       }
@@ -760,7 +784,10 @@ export class GalleryManager {
 
     // P-02 v0.40: update frame surface seed so each artwork shows a distinct
     // deterministic texture phase, preventing phase alignment across the gallery.
-    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
+    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions, presentation);
+    const constrainedHover = this.clampHoverTargetToStageClearance(this.targetX, this.targetY);
+    this.targetX = constrainedHover.targetRotX;
+    this.targetY = constrainedHover.targetRotY;
     this.markReadiness(index, 'materialApplied', 'show-artwork');
     this.markRenderDirty(8);
 
@@ -777,6 +804,7 @@ export class GalleryManager {
       maps: resolvedSummary,
       shaderVariant: preset.shaderVariant,
       inspectionMode: this.inspectionMode,
+      presentation,
     }));
 
     // v0.09: check fallback using the same URL that was loaded (albedoUrl).
@@ -784,8 +812,11 @@ export class GalleryManager {
     if (albedoIsFallback) {
       this.diagnostics.warn('show-artwork-fallback', 'Central 3D painting is using a GENERATED FALLBACK texture — the customer image could not be loaded as a WebGL texture', {
         artworkId: artwork.id,
-        imageUrl: artwork.image,
-        webglImageSource,
+        bundleId: albedoSelection?.bundleId ?? sourcePlan.primary?.bundleId ?? null,
+        imageUrl: sourcePlan.primary?.declaredUrl ?? artwork.image,
+        resolvedImageUrl: albedoSelection?.selectedUrl ?? albedoUrl,
+        albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
+        usedEmbeddedFallback: albedoSelection?.usedEmbeddedFallback ?? false,
         manifestWidth: artwork.dimensions?.width,
         manifestHeight: artwork.dimensions?.height,
         fallbackUsed: true,
@@ -797,10 +828,13 @@ export class GalleryManager {
     const isPortraitReset = this.isPortraitResetArtwork();
     this.diagnostics.info('show-artwork-complete', 'Artwork is ready', {
       artworkId: artwork.id,
+      bundleId: albedoSelection?.bundleId ?? sourcePlan.primary?.bundleId ?? null,
       activeMaps: this.artworkMesh.material.activeMaps(),
       inspectionMode: this.inspectionMode,
       fallbackUsed: albedoIsFallback,
-      webglImageSource,
+      albedoSourceMode: albedoSelection?.sourceMode ?? 'declared-image',
+      usedEmbeddedFallback: albedoSelection?.usedEmbeddedFallback ?? false,
+      generatedFallback: albedoSelection?.generatedFallback ?? albedoIsFallback,
       aspectSource: this.artworkMesh.lastAspectSource,
       manifestDimensions: this.artworkMesh.lastManifestDimensions,
       paintingWidth: this.artworkMesh.artworkWidth,
@@ -811,8 +845,8 @@ export class GalleryManager {
       closeZoomMinVisibleFraction: MIN_VISIBLE_ARTWORK_FRACTION,
       maxZoom: zoomBounds.maxOverviewZoom,
       overviewHeadroom: zoomBounds.maxOverviewZoom - zoomBounds.resetFitZoom,
-      panOverscrollX: INSPECTION_OVERSCROLL_X,
-      panOverscrollY: INSPECTION_OVERSCROLL_Y,
+      panOverscrollX: DEFAULT_INSPECTION_OVERSCROLL_X,
+      panOverscrollY: DEFAULT_INSPECTION_OVERSCROLL_Y,
       panLimitAtReset: {
         x: panLimitsAtReset.x,
         y: panLimitsAtReset.y,
@@ -831,6 +865,7 @@ export class GalleryManager {
       },
       parallaxEnabled: preset.parallaxEnabled,
       parallaxScale: preset.parallaxScale,
+      presentation,
       specularStrength: preset.specularStrength,
       selfShadowBias: preset.selfShadowBias,
       readiness: this.readiness[index],
@@ -965,10 +1000,15 @@ export class GalleryManager {
   warmArtworkForGPU(index: number, reason = 'gpu-warm'): boolean {
     const start = this.now();
     const artwork = this.artworks[index];
+    const presentation = this.resolvePresentation(index);
+    const presentationProfile = ARTWORK_PRESENTATION_PROFILES[presentation];
     const preset = this.currentPreset;
     if (!artwork || !preset) return false;
 
-    const albedoUrl = artwork.webglImage ?? artwork.image;
+    const albedoUrl =
+      this.textureManager.getArtworkAlbedoSelection(artwork)?.selectedUrl
+      ?? resolveArtworkImageSources(artwork).primary?.resolvedUrl
+      ?? artwork.image;
     const fallbackAlbedo = this.textureManager.get(albedoUrl);
     if (!fallbackAlbedo) {
       this.diagnostics.warn('warm-gpu', 'Cannot warm artwork because albedo is not cached', {
@@ -998,12 +1038,12 @@ export class GalleryManager {
     for (const role of PROCEDURAL_ROLES) {
       if (authored[role]) {
         resolved[role] = authored[role];
-      } else if (this.shouldFillRole(role, preset)) {
+      } else if (this.shouldFillRole(role, preset, presentationProfile)) {
         resolved[role] = this.generateProceduralMap(artwork.id, role, preset);
       }
     }
 
-    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions);
+    this.artworkMesh.setPaintingTextures(resolved, preset, artwork.dimensions, presentation);
     this.markReadiness(index, 'proceduralReady', reason);
     this.markReadiness(index, 'materialApplied', reason);
     this.diagnostics.debug('warm-gpu', 'Cached artwork textures bound for GPU warm render', {
@@ -1050,10 +1090,11 @@ export class GalleryManager {
     if (!preset) return;
     for (const index of this.getCriticalWindowIndices(center, radius)) {
       const artwork = this.artworks[index];
+      const presentationProfile = ARTWORK_PRESENTATION_PROFILES[this.resolvePresentation(index)];
       const start = this.now();
       let generated = 0;
       for (const role of PROCEDURAL_ROLES) {
-        if (artwork.textureSet?.[role] || !this.shouldFillRole(role, preset)) continue;
+        if (artwork.textureSet?.[role] || !this.shouldFillRole(role, preset, presentationProfile)) continue;
         this.generateProceduralMap(artwork.id, role, preset);
         generated += 1;
       }
@@ -1156,7 +1197,10 @@ export class GalleryManager {
     this.fullPrefetchScheduled = true;
     let index = 0;
     const runNext = (): void => {
-      while (index < this.artworks.length && this.prefetchedTextureSets.has(index)) {
+      while (
+        index < this.artworks.length &&
+        (!this.artworks[index]?.textureSet || this.prefetchedTextureSets.has(index))
+      ) {
         index += 1;
       }
       if (index >= this.artworks.length) {
@@ -1166,8 +1210,9 @@ export class GalleryManager {
         });
         return;
       }
-      this.scheduleTextureSetPrefetch(index, 'idle-sweep', 'background', runNext);
+      const scheduledIndex = index;
       index += 1;
+      this.scheduleTextureSetPrefetch(scheduledIndex, 'idle-sweep', 'background', runNext);
     };
     this.scheduleIdle(runNext, 500);
   }
@@ -1293,18 +1338,27 @@ export class GalleryManager {
   }
 
   private scheduleIdle(callback: () => void, timeout: number): void {
+    const invoke = (): void => {
+      if (this.disposed) return;
+      callback();
+    };
     const idle = (window as unknown as {
       requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
     }).requestIdleCallback;
     if (typeof idle === 'function') {
-      idle(callback, { timeout });
+      idle(invoke, { timeout });
       return;
     }
-    window.setTimeout(callback, 1);
+    window.setTimeout(invoke, 1);
   }
 
   /** Selects which procedural fallback roles to generate for the active preset. */
-  private shouldFillRole(role: PaintingMapRole, preset: QualityPreset): boolean {
+  private shouldFillRole(
+    role: PaintingMapRole,
+    preset: QualityPreset,
+    presentation: ArtworkPresentationProfile
+  ): boolean {
+    if (!presentation.proceduralRoles.includes(role)) return false;
     switch (role) {
       case 'normal':
         return true;
@@ -1316,11 +1370,17 @@ export class GalleryManager {
         return preset.shaderVariant !== 'painting-battery';
       case 'specular':
         return preset.specularStrength > 0;
+      case 'varnish':
+        return preset.clearcoatEnabled && presentation.clearcoatStrength > 0;
       case 'ao':
         return preset.aoEnabled;
       default:
         return false;
     }
+  }
+
+  private resolvePresentation(index: number): ArtworkPresentationId {
+    return resolveArtworkPresentation(this.artworks[index]?.presentation);
   }
 
   navigate(direction: 1 | -1): void {
@@ -1443,9 +1503,10 @@ export class GalleryManager {
   }
 
   setHoverTarget(x: number, y: number): void {
-    if (this.targetY === x && this.targetX === y) return;
-    this.targetY = x;
-    this.targetX = y;
+    const constrained = this.clampHoverTargetToStageClearance(y, x);
+    if (this.targetY === constrained.targetRotY && this.targetX === constrained.targetRotX) return;
+    this.targetY = constrained.targetRotY;
+    this.targetX = constrained.targetRotX;
     this.markRenderDirty(2);
   }
 
@@ -1455,6 +1516,42 @@ export class GalleryManager {
 
   get index(): number {
     return this.currentIndex;
+  }
+
+  /**
+   * v0.81 — exact-target readiness gate for hub selection. Resolves `'ready'`
+   * as soon as the artwork at `index` reaches an interactive presented
+   * surface (`albedoLoaded`, `materialApplied`, and `shaderCompiled` in the
+   * existing readiness ledger), or `'timeout'` after `timeoutMs`. Never
+   * rejects and never blocks entry: on timeout the same exact target is
+   * entered with its procedural surface while loading continues in the
+   * background.
+   */
+  whenArtworkInteractive(index: number, timeoutMs: number): Promise<'ready' | 'timeout'> {
+    const entry = this.readiness[index];
+    if (!entry || this.disposed) return Promise.resolve('timeout');
+    const isInteractive = (): boolean =>
+      entry.albedoLoaded && entry.materialApplied && entry.shaderCompiled;
+    if (isInteractive()) return Promise.resolve('ready');
+    return new Promise((resolve) => {
+      const startedAt = this.now();
+      const poll = (): void => {
+        if (this.disposed || !this.readiness[index]) {
+          resolve('timeout');
+          return;
+        }
+        if (isInteractive()) {
+          resolve('ready');
+          return;
+        }
+        if (this.now() - startedAt >= timeoutMs) {
+          resolve('timeout');
+          return;
+        }
+        window.setTimeout(poll, 50);
+      };
+      window.setTimeout(poll, 50);
+    });
   }
 
   get artworkAspect(): number {
@@ -1494,6 +1591,9 @@ export class GalleryManager {
     const bounds = this.getZoomBounds(metrics);
     this.targetZoom = this.clampZoom(this.targetZoom, bounds);
     this.clampPanTargets(metrics, bounds);
+    const constrainedHover = this.clampHoverTargetToStageClearance(this.targetX, this.targetY);
+    this.targetX = constrainedHover.targetRotX;
+    this.targetY = constrainedHover.targetRotY;
 
     if (dt <= 0) return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
 
@@ -1618,12 +1718,32 @@ export class GalleryManager {
       metrics.usableFracY;
     const visibleWidth = visibleHeight * metrics.effectiveAspect;
 
-    // v0.03: allow viewport centre to reach the artwork edge plus an explicit
-    // overscroll margin so every corner is reachable during close inspection.
-    return {
-      x: Math.max(0, (this.artworkMesh.artworkWidth - visibleWidth) * 0.5 + INSPECTION_OVERSCROLL_X),
-      y: Math.max(0, (this.artworkMesh.artworkHeight - visibleHeight) * 0.5 + INSPECTION_OVERSCROLL_Y),
-    };
+    // v0.95: inspection panning keeps a modest, deliberate wall reveal margin
+    // now that the front wall sits deeper behind the work. Users regain some
+    // edge travel without letting the mounted body clip back through the wall.
+    return getInspectionPanLimits({
+      artworkWidth: this.artworkMesh.artworkWidth,
+      artworkHeight: this.artworkMesh.artworkHeight,
+      visibleWidth,
+      visibleHeight,
+      overscrollX: DEFAULT_INSPECTION_OVERSCROLL_X,
+      overscrollY: DEFAULT_INSPECTION_OVERSCROLL_Y,
+    });
+  }
+
+  private clampHoverTargetToStageClearance(
+    targetRotX: number,
+    targetRotY: number
+  ): ReturnType<typeof clampHoverRotationToWallClearance> {
+    return clampHoverRotationToWallClearance({
+      targetRotX,
+      targetRotY,
+      artworkWidth: this.artworkMesh.artworkWidth,
+      artworkHeight: this.artworkMesh.artworkHeight,
+      bodyBackDepth: this.artworkMesh.bodyBackExtent,
+      wallZ: GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+      clearanceMargin: INSPECTION_WALL_CLEARANCE_MARGIN,
+    });
   }
 
   private getZoomBounds(metrics = this.getViewportMetrics()): ZoomBounds {
@@ -1757,5 +1877,14 @@ export class GalleryManager {
         readiness: entry,
       }
     );
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.prefetchQueue.length = 0;
+    this.proceduralQueue.clear();
+    this.activePrefetches.clear();
+    this.onNavigateCallback = null;
+    this.pendingNavigationProbe = null;
   }
 }

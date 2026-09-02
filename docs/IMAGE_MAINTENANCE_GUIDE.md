@@ -46,6 +46,13 @@ Until the planned high-resolution workflow ships:
    - above **8192 px** → high-memory / desktop-oriented territory
    - above **16384 px** → not reliable for WebGL at all
 
+If a valid source instead appears as a grey, blank, or placeholder artwork
+surface, preserve the generated customer bundle and collect runtime diagnostics
+before replacing the image. The active recovery distinguishes a
+missing/decode/path source failure from a blank local `file://` hub plane and a
+device texture-size limit, and requires a source-to-pixel result:
+`plan.md § v0.93`.
+
 ## Reliable target architecture (planned)
 
 The active plan in `plan.md` moves FREYRAUM to a safer two-tier model:
@@ -64,6 +71,9 @@ The active plan in `plan.md` moves FREYRAUM to a safer two-tier model:
 - Check `customer-artworks/last-import-report.txt` for 4K/8K/16K warnings.
 - If GitHub upload or deployment fails, check the offending file size before
   debugging the runtime.
+- If the issue is local preview only, confirm
+  `customer-preview/customer-artworks.js` exists, then reproduce
+  `customer-preview/app.html?debug=verbose&hubDebug=1` before re-importing.
 - If you change the image workflow, update:
   - `plan.md`
   - `FINDINGS.md`

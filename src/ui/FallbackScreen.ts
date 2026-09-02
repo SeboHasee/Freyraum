@@ -22,11 +22,19 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export function showFallbackScreen(container: HTMLElement, reason: string): void {
+export function showFallbackScreen(
+  container: HTMLElement,
+  reason: string,
+  surfaceColor?: string | null
+): void {
+  const diagnostics = getDiagnostics();
   const fallback = document.createElement('section');
   fallback.className = 'fallback-screen';
   fallback.setAttribute('role', 'alert');
   fallback.setAttribute('aria-live', 'assertive');
+  if (surfaceColor && surfaceColor.trim()) {
+    fallback.style.backgroundColor = surfaceColor.trim();
+  }
 
   const coarse = window.matchMedia?.('(pointer: coarse)')?.matches ?? false;
   const mobileTip = coarse
@@ -36,7 +44,7 @@ export function showFallbackScreen(container: HTMLElement, reason: string): void
        </p>`
     : '';
 
-  const showDetail = getDiagnostics().getMode() !== 'default';
+  const showDetail = diagnostics.getMode() !== 'default';
   const detailHtml = showDetail
     ? `<p class="fallback-screen__detail">Technischer Hinweis: ${escapeHtml(reason)}</p>`
     : '';
@@ -56,4 +64,13 @@ export function showFallbackScreen(container: HTMLElement, reason: string): void
   `;
 
   container.appendChild(fallback);
+  const rootStyle = getComputedStyle(document.documentElement);
+  const fallbackStyle = getComputedStyle(fallback);
+  diagnostics.info('fallback', 'surface-snapshot', 'Fallback surface colors resolved', {
+    requestedSurfaceColor: surfaceColor ?? null,
+    rootGalleryWall: rootStyle.getPropertyValue('--color-gallery-wall').trim(),
+    rootMuseumWall: rootStyle.getPropertyValue('--color-museum-wall').trim(),
+    fallbackBackgroundColor: fallbackStyle.backgroundColor,
+    fallbackBackgroundImage: fallbackStyle.backgroundImage,
+  });
 }

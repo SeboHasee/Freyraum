@@ -29,11 +29,14 @@ customer-artworks/inbox/
 - `.md` is accepted as secondary fallback.
 - Missing/invalid sidecars create warnings, not hard import failures.
 - `Surface` accepts any plain text, is shown with the artwork metadata, and does not alter canvas, material, or render settings.
+- `Presentation` is optional and affects only the interactive-gallery mounting profile. Valid values are `canvas`, `fine-art-paper`, `matte-print`, `satin-print`, and `glazed-print`.
+- If `Presentation` is omitted or invalid, the interactive gallery falls back to `matte-print`.
 
 Example:
 
 ```text
 Surface: Ölfarbe auf grober Leinwand
+Presentation: canvas
 ```
 
 ## Common report sections
@@ -47,5 +50,8 @@ Surface: Ölfarbe auf grober Leinwand
 ## Related docs
 
 - Picture workflow: `docs/CUSTOMER_PICTURE_GUIDE.md`
+- Museum hub mapping: `customer-artworks/museum-hub.json` (wall planes, safe
+  polygons, wall-local slot placement, exact artwork IDs, and visual tokens;
+  see the canonical config reference for the on-screen calibration workflow)
 - Canonical config reference: `docs/QUERY_PARAMETERS.md`
 - Historical release context: `CHANGELOG.md`

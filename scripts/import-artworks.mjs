@@ -27,7 +27,7 @@
  * The asset fields (`id`, `image`, `webglImage`, `dimensions`) remain
  * importer-owned. Sidecars only supply customer-facing metadata
  * (`title`, `subtitle`, `description`, `year`, `medium`, `alt`, `credit`,
- * `tags`, `surface`).
+ * `tags`, `surface`, `presentation`).
  *
  * No npm dependencies are required. Node 18+.
  */
@@ -42,6 +42,7 @@ import {
   readFileSync,
   rmSync,
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, extname, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -58,6 +59,8 @@ const PREVIEW_AUDIO = join(ROOT, 'customer-preview', 'audio');
 const PREVIEW_JS = join(ROOT, 'customer-preview', 'customer-artworks.js');
 const PREVIEW_AUDIO_JS = join(ROOT, 'customer-preview', 'customer-audio.js');
 const PREVIEW_HTML = join(ROOT, 'customer-preview', 'app.html');
+const HUB_HOTSPOTS_JSON = join(ROOT, 'customer-artworks', 'hub-hotspots.json');
+const MUSEUM_HUB_JSON = join(ROOT, 'customer-artworks', 'museum-hub.json');
 const REPORT_FILE = join(ROOT, 'customer-artworks', 'last-import-report.txt');
 
 // -------- Format policy --------
@@ -93,8 +96,17 @@ const SIDECAR_FIELD_KEYS = new Set([
   'alt',
   'tags',
   'surface',
+  'presentation',
   'medium',
   'description',
+]);
+
+const VALID_PRESENTATIONS = new Set([
+  'canvas',
+  'fine-art-paper',
+  'matte-print',
+  'satin-print',
+  'glazed-print',
 ]);
 
 /** MIME types for data URL encoding. */
@@ -288,7 +300,7 @@ function uniqueId(base, taken) {
  *     blank lines trimmed)
  *
  * Returns `{ fields, fieldWarnings }`. Field-level mistakes (invalid year,
- * unknown surface, unknown keys, blank required values) collect warnings
+ * invalid presentation, unknown keys, blank required values) collect warnings
  * but never throw — the import still succeeds. I/O errors throw so the
  * caller can decide how to surface them.
  */
@@ -371,6 +383,22 @@ function parseSidecar(filePath) {
   if (Object.prototype.hasOwnProperty.call(fields, 'surface')) {
     if (fields.surface === '') {
       delete fields.surface;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(fields, 'presentation')) {
+    if (fields.presentation === '') {
+      delete fields.presentation;
+    } else {
+      const normalized = String(fields.presentation).trim().toLowerCase();
+      if (!VALID_PRESENTATIONS.has(normalized)) {
+        fieldWarnings.push(
+          `Presentation "${fields.presentation}" is invalid — use ${Array.from(VALID_PRESENTATIONS).join(', ')}`
+        );
+        delete fields.presentation;
+      } else {
+        fields.presentation = normalized;
+      }
     }
   }
 
@@ -549,6 +577,7 @@ imageEntries.forEach((filename, i) => {
   const id = uniqueId(baseId, usedIds);
   const generatedTitle = generateTitle(stem) || `Artwork ${indexLabel}`;
   const destFilename = `${id}${ext}`;
+  const imagePath = `./images/${encodeURIComponent(destFilename)}`;
   const destPath = join(PREVIEW_IMAGES, destFilename);
 
   try {
@@ -558,8 +587,9 @@ imageEntries.forEach((filename, i) => {
     return;
   }
 
-  // v0.09: embed exact image bytes as a base64 data URL so the 3D painting
-  // can load the texture reliably from file:// without CORS / taint issues.
+  // v0.09/v0.90: embed exact image bytes as a base64 data URL so the gallery
+  // can fall back to a reliable WebGL albedo source on file:// or whenever the
+  // declared image asset is unavailable.
   // No crop, no scale, no recompression — the exact original bytes are encoded.
   let webglImage = '';
   try {
@@ -659,6 +689,7 @@ imageEntries.forEach((filename, i) => {
   const alt = (sidecarFields?.alt) || title;
   const tags = Array.isArray(sidecarFields?.tags) ? sidecarFields.tags : [];
   const surface = sidecarFields?.surface || '';
+  const presentation = sidecarFields?.presentation || '';
   const medium = (sidecarFields?.medium) || generateMedium(dims.width, dims.height);
 
   artworks.push({
@@ -668,13 +699,14 @@ imageEntries.forEach((filename, i) => {
     description,
     year,
     medium,
-    image: `./images/${destFilename}`,
+    image: imagePath,
     ...(webglImage ? { webglImage } : {}),
     dimensions: { width: dims.width, height: dims.height },
     alt,
     credit,
     tags,
     ...(surface ? { surface } : {}),
+    ...(presentation ? { presentation } : {}),
   });
 
   imported.push(`${filename} (${dims.width} × ${dims.height})`);
@@ -725,10 +757,82 @@ try {
 
 writeFileSync(MANIFEST_JSON, JSON.stringify(artworks, null, 2) + '\n', 'utf8');
 
+// v0.81 — unified customer museum-hub configuration. When
+// `customer-artworks/museum-hub.json` exists and parses as an object, it is
+// injected alongside the artwork manifest as `window.__FREYRAUM_MUSEUM_HUB`.
+// The runtime sanitizes slots/tokens/presets and falls back to the built-in
+// defaults when the file is missing or invalid, so broken JSON never blocks
+// the gallery. It replaces the v0.79 `hub-hotspots.json` array, which is only
+// kept as a temporary legacy migration path.
+let museumHub = null;
+if (existsSync(MUSEUM_HUB_JSON)) {
+  try {
+    const parsed = JSON.parse(readFileSync(MUSEUM_HUB_JSON, 'utf8'));
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      museumHub = parsed;
+    } else {
+      warnings.push('museum-hub.json — expected a JSON object with a "slots" array. Ignoring the file.');
+    }
+  } catch (err) {
+    warnings.push(`museum-hub.json — could not parse (${err.message}). Ignoring the file.`);
+  }
+}
+
+// v0.79 legacy hotspot array — still injected when present so existing
+// customer setups keep working, but the runtime migrates it with a
+// deprecation warning. Prefer museum-hub.json going forward.
+let hubHotspots = null;
+if (existsSync(HUB_HOTSPOTS_JSON)) {
+  try {
+    const parsed = JSON.parse(readFileSync(HUB_HOTSPOTS_JSON, 'utf8'));
+    if (Array.isArray(parsed)) {
+      hubHotspots = parsed;
+      if (!museumHub) {
+        warnings.push(
+          'hub-hotspots.json — legacy format detected without museum-hub.json. The runtime migrates it automatically, but please move the mappings into customer-artworks/museum-hub.json (see docs/CUSTOMER_PICTURE_GUIDE.md).'
+        );
+      }
+    } else {
+      warnings.push('hub-hotspots.json — expected a JSON array of hotspots. Ignoring the file.');
+    }
+  } catch (err) {
+    warnings.push(`hub-hotspots.json — could not parse (${err.message}). Ignoring the file.`);
+  }
+}
+
+const generatedAt = new Date().toISOString();
+const bundleId = `bundle-${createHash('sha1').update(JSON.stringify(artworks)).digest('hex').slice(0, 12)}`;
+const artworkBundle = JSON.stringify(
+  {
+    schemaVersion: 1,
+    bundleId,
+    generatedAt,
+    artworks,
+  },
+  null,
+  2
+);
 const js =
   '// Auto-generated by scripts/import-artworks.mjs — do not edit manually.\n' +
-  '// Last run: ' + new Date().toISOString() + '\n' +
-  'window.__FREYRAUM_ARTWORKS = ' + JSON.stringify(artworks, null, 2) + ';\n';
+  '// Last run: ' + generatedAt + '\n' +
+  '(() => {\n' +
+  "  const script = document.currentScript instanceof HTMLScriptElement ? document.currentScript : null;\n" +
+  "  const fallbackHref = typeof window !== 'undefined' && window.location ? window.location.href : '';\n" +
+  "  let assetBaseUrl = fallbackHref;\n" +
+  '  try {\n' +
+  "    assetBaseUrl = new URL('./', (script && script.src) || fallbackHref).href;\n" +
+  '  } catch {}\n' +
+  `  const bundle = ${artworkBundle};\n` +
+  '  bundle.assetBaseUrl = assetBaseUrl;\n' +
+  '  window.__FREYRAUM_ARTWORK_BUNDLE__ = bundle;\n' +
+  '  window.__FREYRAUM_ARTWORKS = bundle.artworks;\n' +
+  (museumHub
+    ? '  window.__FREYRAUM_MUSEUM_HUB = ' + JSON.stringify(museumHub, null, 2) + ';\n'
+    : '') +
+  (hubHotspots
+    ? '  window.__FREYRAUM_HUB_HOTSPOTS = ' + JSON.stringify(hubHotspots, null, 2) + ';\n'
+    : '') +
+  '})();\n';
 writeFileSync(PREVIEW_JS, js, 'utf8');
 
 const audioJs =
@@ -790,6 +894,7 @@ if (imported.length > 0) {
   imported.forEach((f) => lines.push(`  ✓ ${f}`));
   lines.push('');
   lines.push('  3D painting source: images embedded as data URLs for reliable offline WebGL.');
+  lines.push(`  Bundle ID: ${bundleId}`);
 }
 
 // v0.18 — Text-card sections. Missing/orphaned text and field problems are

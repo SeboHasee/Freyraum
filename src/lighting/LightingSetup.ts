@@ -54,9 +54,7 @@ export class LightingSetup {
 
   applyPreset(preset: QualityPreset): void {
     this.shadowsEnabled = preset.shadows;
-    for (const spot of this.spots) {
-      spot.castShadow = preset.shadows;
-    }
+    this.spots.forEach((spot, index) => this.applyShadowPreset(spot, preset, index === 0));
   }
 
   /** v0.74 Type B tooling — live lights for structural invariant checks. */
@@ -162,5 +160,26 @@ export class LightingSetup {
     // v0.03: aim every spot at the shared target anchored to world origin
     // so the new closer key positions actually illuminate the painting.
     spot.target = this.spotTarget;
+  }
+
+  private applyShadowPreset(spot: THREE.SpotLight, preset: QualityPreset, primary: boolean): void {
+    const enabled = preset.shadows && primary;
+    if (spot.castShadow !== enabled) {
+      spot.castShadow = enabled;
+    }
+    if (!enabled) return;
+    const mapSize = preset.id === 'high' ? 1024 : 512;
+    if (spot.shadow.mapSize.x !== mapSize || spot.shadow.mapSize.y !== mapSize) {
+      spot.shadow.mapSize.set(mapSize, mapSize);
+      spot.shadow.map?.dispose();
+      spot.shadow.map = null;
+    }
+    spot.shadow.bias = -0.00015;
+    spot.shadow.normalBias = 0.025;
+    spot.shadow.radius = 2.4;
+    spot.shadow.camera.near = 0.5;
+    spot.shadow.camera.far = 28;
+    spot.shadow.focus = 0.9;
+    spot.shadow.camera.updateProjectionMatrix();
   }
 }

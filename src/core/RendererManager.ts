@@ -31,6 +31,7 @@ export type RendererContextState = 'lost' | 'restored';
 export class RendererManager {
   readonly renderer: THREE.WebGLRenderer;
   private preset: QualityPreset;
+  private wallClearColor: string;
   private renderPaused = false;
   private disposed = false;
   private contextChangeCallback: ((state: RendererContextState) => void) | null = null;
@@ -39,8 +40,9 @@ export class RendererManager {
   // diagnostics snapshot (periodic in info/verbose modes).
   private readonly _sizeScratch = new THREE.Vector2();
 
-  constructor(container: HTMLElement, preset: QualityPreset) {
+  constructor(container: HTMLElement, preset: QualityPreset, wallClearColor = '#c7ced4') {
     this.preset = preset;
+    this.wallClearColor = wallClearColor;
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -55,8 +57,10 @@ export class RendererManager {
     // reduces contrast and shifts hues away from the source artwork.
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.toneMappingExposure = 1.0;
-    // Match the CSS --bg1 token so canvas creation/reveal cannot flash white.
-    this.renderer.setClearColor(0xeef1f3);
+    // v0.81 / v0.96 — clear color comes from the resolved wall token (default
+    // `#C7CED4`) so CSS and WebGL share one authoritative value and canvas
+    // creation/reveal cannot flash white.
+    this.renderer.setClearColor(new THREE.Color(this.wallClearColor));
     this.renderer.shadowMap.enabled = preset.shadows;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -84,6 +88,11 @@ export class RendererManager {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.shadowMap.enabled = preset.shadows;
     this.applyQualityDataAttribute(preset.id);
+  }
+
+  setWallClearColor(wallClearColor: string): void {
+    this.wallClearColor = wallClearColor;
+    this.renderer.setClearColor(new THREE.Color(this.wallClearColor));
   }
 
   /**
@@ -195,6 +204,7 @@ export class RendererManager {
     // for the framebuffer to be allocated at the right size.
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(getOptimalPixelRatio(this.preset.pixelRatioCap));
+    this.renderer.setClearColor(new THREE.Color(this.wallClearColor));
     this.contextChangeCallback?.('restored');
     diagnostics.info('context-restored', 'WebGL context restored', {});
   };

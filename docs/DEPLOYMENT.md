@@ -34,10 +34,18 @@ npm run import:artworks
 
 This does exactly what `Update Gallery.bat` / `Update Gallery.command` does,
 and additionally syncs the generated output to `public/` so a local
-`npm run build` or `npm run dev` includes your assets.
+`npm run build` or `npm run dev` includes your assets. The same sync copies the
+committed museum backgrounds from `customer-artworks/Backgrounds/` to
+`public/backgrounds/` (`museum-target.png` is excluded — it is a calibration
+reference asset, not a shipped runtime background).
 
 Open `customer-preview/app.html` to verify the local preview looks correct
 before publishing.
+
+> **Evidence note:** a fresh clone does not contain the generated
+> `customer-preview/customer-artworks.js` / `customer-preview/customer-audio.js`
+> bundle until you run the importer once. Do not treat a pre-import preview as
+> evidence for or against the current customer artwork state.
 
 > **Note:** `Update Gallery.bat` / `Update Gallery.command` still works for the
 > local file-based preview. Use `npm run import:artworks` when you want to
@@ -69,7 +77,8 @@ Pushing to `main` triggers the `Deploy to GitHub Pages` workflow
 
 1. Runs `npm run import:artworks` — identical to the local desktop step.
 2. Runs `npm run build` — Vite bundles the app with `base: '/Freyraum/'`.
-3. Validates that `dist/index.html` and the generated manifests exist.
+3. Validates that `dist/index.html`, the generated manifests, and both museum
+   backgrounds exist.
 4. Deploys `dist/` to GitHub Pages.
 
 The live gallery is updated within ~2 minutes of a successful push.
@@ -88,6 +97,7 @@ The live gallery is updated within ~2 minutes of a successful push.
 | All manifest images present in `dist/images/` | `images … absent from dist/images/` |
 | Audio sources linked → `dist/audio/` non-empty | `dist/audio/ is empty or missing` |
 | Build produces `dist/index.html` | `dist/index.html is missing` |
+| Hub room background reaches `dist/backgrounds/` (and `museum-target.png` stays excluded) | `dist/backgrounds/… is missing` |
 
 Each successful workflow run also writes a **CI diagnostic summary** to the
 job summary page (visible on the Actions run page) with:
@@ -106,9 +116,32 @@ After the workflow completes:
 
 - [ ] Root URL loads: **https://sebohasee.github.io/Freyraum/**
 - [ ] At least one custom artwork image is visible in the gallery.
+- [ ] At least one intended customer painting—not a grey generated fallback—is
+      visible in both the interactive gallery and museum hub.
 - [ ] Artwork title/description text (from `.txt` sidecar) is shown.
 - [ ] Background audio plays (if audio files were committed).
-- [ ] Browser console shows no 404 errors for `customer-artworks.js` or images.
+- [ ] Museum hub loads and its artwork hotspots align with the visible works.
+- [ ] Browser console shows no 404 errors for `customer-artworks.js`, artwork
+      images, or museum backgrounds.
+
+### If an artwork is grey after deployment
+
+1. Record whether the symptom is in the interactive gallery (generated
+   FREYRAUM-style fallback), the museum hub (title-bearing placeholder), or a
+   blank local `file://` hub wall plane.
+2. Download or preserve the exact deployed `customer-artworks.js` and matching
+   `images/` directory before rerunning the importer. The generated script now
+   carries `window.__FREYRAUM_ARTWORK_BUNDLE__.assetBaseUrl`; keep that value in
+   the evidence because it determines how relative artwork paths resolve.
+3. Open the same deployed URL with `?debug=verbose&hubDebug=1`, export
+   diagnostics, and save Network/console evidence for the failed artwork.
+4. Confirm the published image request resolves under `/Freyraum/images/` and
+   returns an image with a non-zero decoded size. Do not try to compensate by
+   changing lighting, material, or customer metadata.
+5. Follow the source-to-pixel recovery process in `plan.md § v0.93`; it covers
+   missing/stale bundles, relative-path resolution, fallback payloads, local
+   `file://` hub recovery, decode deadlines, GPU binding proof, and
+   texture-size limits.
 
 ---
 
@@ -119,10 +152,13 @@ After the workflow completes:
 | `customer-artworks/inbox/*.jpg` etc. | Customer (operator) | ✅ Yes |
 | `customer-artworks/inbox/*.txt` | Customer (operator) | ✅ Yes |
 | `customer-audio/inbox/*.mp3` etc. | Customer (operator) | ✅ Yes |
+| `customer-artworks/Backgrounds/*.png` | Hub visual source | ✅ Yes |
 | `customer-artworks/artworks.json` | Importer (generated) | ❌ No |
 | `customer-preview/images/` | Importer (generated) | ❌ No |
+| `customer-preview/backgrounds/` | Vite copy (generated) | ❌ No |
 | `customer-preview/customer-artworks.js` | Importer (generated) | ❌ No |
 | `public/images/` | Sync script (generated) | ❌ No |
+| `public/backgrounds/` | Sync script (generated) | ❌ No |
 | `public/customer-artworks.js` | Sync script (generated) | ❌ No |
 | `dist/` | Vite build (generated) | ❌ No |
 

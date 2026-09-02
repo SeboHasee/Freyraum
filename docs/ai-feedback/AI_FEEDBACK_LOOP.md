@@ -1,9 +1,19 @@
 # AI feedback loop
-> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
+> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
 
 ## v0.29 feedback-loop note
 
 When user feedback says a shipped preload/fidelity fix still fails, immediately downgrade the claim to follow-up in docs, audit the current source against the claim, add diagnostics-driven acceptance checks, then flip docs back to shipped only after implementation and validation. v0.29 is the shipped example for painting darkness, loading-screen ownership, entry glitching, and first-use lag.
+
+## v0.93 feedback-loop note
+
+A user screenshot of blank hub planes reopens the incident even when an earlier
+artwork-recovery change shipped. The next investigation must use the exact
+generated current artwork bundle, distinguish missing generated preview scripts
+from a true runtime failure, and reproduce the real `file://` preview before
+proposing material or lighting changes. The bounded shipped repair is: served
+environments keep the declared `image` primary, while the offline museum hub may
+prefer embedded `webglImage` when a local file URL is not WebGL-stable.
 
 
 

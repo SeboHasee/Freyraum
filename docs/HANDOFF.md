@@ -19,7 +19,20 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 3. For performance/regression reports, run the tools documented in `docs/REGRESSION_TOOLING.md` (`checkInvariants()`, `startPerf()` / `stopPerf()`, and `checkTier1Thresholds()` where applicable).
 4. Confirm whether behavior is expected under current startup mode/config.
 5. For publish/update failures, confirm the asset path did not rely on oversized GitHub-tracked originals.
-6. If behavior differs from docs, treat as drift and update canonical docs in the same fix PR.
+6. For a grey or blank artwork, first classify the route signature: gallery
+   generated fallback, hub title placeholder, or blank local `file://` hub wall
+   plane. Then check the `source-to-pixel-outcome` diagnostic entry for that
+   artwork/route (via the documented diagnostics API); it names the resolved
+   candidate and, on failure, the first failed stage (`candidate-selected`,
+   `request`, `decode`, `compatibility-check`, `gpu-upload`, or
+   `visible-pixel-probe`). Enable verbose diagnostics mode to also capture the
+   bounded GPU visible-pixel probe result. In a healthy local-preview hub
+   recovery, `candidateMode: "embedded-webgl-fallback"` is now expected when
+   the declared image file URL is not WebGL-stable. Preserve the generated
+   customer bundle before re-importing, and follow the implemented recovery in
+   `plan.md § v0.93`. Do not treat an importer report or a published asset file
+   as proof that a browser uploaded visible artwork pixels.
+7. If behavior differs from docs, treat as drift and update canonical docs in the same fix PR.
 
 ## Handoff checklist
 

@@ -314,6 +314,8 @@ export class PreferencesPanel {
 
   private handleEscape = (event: KeyboardEvent): void => {
     if (event.key === 'Escape' && this.isOpen) {
+      event.preventDefault();
+      event.stopPropagation();
       this.setOpen(false);
       this.trigger.focus();
     }

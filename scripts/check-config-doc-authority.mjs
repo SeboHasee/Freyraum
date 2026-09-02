@@ -19,6 +19,7 @@ const forbidden = [
   /\?startup\s*=/i,
   /\?debug\s*=/i,
   /\?backend\s*=\s*webgpu/i,
+  /\?hubCalibrate\s*=/i,
   /freyraum\.diagnostics\.mode/i,
   /freyraum:startup-readiness/i,
   /freyraum\.backend/i,

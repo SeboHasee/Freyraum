@@ -1,5 +1,5 @@
 # FREYRAUM AI rules
-> Latest markdown audit: 2026-07-07 (high-resolution asset delivery planning; active runtime frame baseline remains v0.69).
+> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
 
 ## v0.58 topbar/utility-button rule
 
@@ -22,6 +22,19 @@ When documenting metal/material upgrades, explicitly distinguish shipped runtime
 ## v0.29 preload/fidelity planning rule
 
 When addressing loading-screen smoothness or painting fidelity, do not rely on “loaded” or “compiled” as sufficient proof. Require diagnostics for full-size presented frames, final-path artwork warm coverage, post-processing readiness, UI/control prebuild, and source-vs-render color checks before describing the site as smooth or original-looking.
+
+## v0.93 artwork-recovery rule
+
+For a grey or blank customer artwork, first identify the visible route
+signature and prove the same source through request, decode, compatibility, GPU
+binding, and visible pixels. When the report is local-only, reproduce the exact
+`file://` preview, preserve the generated `customer-preview/customer-artworks.js`
+and matching `images/` output, and remember that a healthy local museum-hub
+recovery may deliberately choose embedded `webglImage` instead of the declared
+file URL. Do not claim a script-relative URL, importer report, or
+`LoadingManager` completion resolves the incident by itself. Keep hub
+`MeshBasicMaterial` recovery separate from gallery PBR/lighting fidelity, and
+preserve the existing PNG importer plus its bounded embedded fallback.
 
 
 
