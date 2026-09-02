@@ -53,7 +53,7 @@ export const HUB_WALL_SURFACE_PROFILE = Object.freeze({
   floorRoughness: 0.64,
   colorVariation: 0,
   roughnessVariation: 0.004,
-  minimumPatternPeriodM: 10.8,
+  minimumPatternPeriodM: 14.2,
 });
 
 type DetailRole = 'plasterNormal' | 'plasterRoughness' | 'floorNormal' | 'floorRoughness';

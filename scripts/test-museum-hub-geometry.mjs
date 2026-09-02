@@ -400,7 +400,7 @@ assert.equal(
   'hub wall must identify its non-repeating world-space response'
 );
 assert.ok(
-  architecture.HUB_WALL_SURFACE_PROFILE.minimumPatternPeriodM > ROOM_WIDTH,
+  architecture.HUB_WALL_SURFACE_PROFILE.minimumPatternPeriodM > Math.max(ROOM_WIDTH, ROOM_DEPTH),
   'hub wall variation periods must exceed the room envelope'
 );
 assert.ok(
