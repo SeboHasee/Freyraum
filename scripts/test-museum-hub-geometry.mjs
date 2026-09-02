@@ -48,7 +48,7 @@ const ROOM_HEIGHT = 3.4;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, quality, paintingMaterial] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, hubRoomRenderer, quality, paintingMaterial] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
@@ -58,6 +58,7 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/config/galleryPresentation.ts'),
   loadTsModule('src/lighting/LightProfile.ts'),
   loadTsModule('src/materials/ArchitecturalSurfaceFactory.ts'),
+  loadTsModule('src/hub/HubRoomRenderer.ts'),
   loadTsModule('src/config/quality.ts'),
   loadTsModule('src/materials/PaintingMaterial.ts'),
 ]);
@@ -352,6 +353,47 @@ assert.ok(
   'gallery ceiling texture must stay calmer than the wall'
 );
 surfaceFactory.dispose();
+const hubSurfaceFactory = new architecture.ArchitecturalSurfaceFactory(256, 'hub');
+const hubSurfaces = hubSurfaceFactory.getMaterials({ wall: '#C7CED4' });
+assert.equal(
+  hubSurfaces.wall.normalMap,
+  null,
+  'hub wall must not reuse the gallery plaster tile'
+);
+assert.equal(
+  hubSurfaces.wall.roughnessMap,
+  null,
+  'hub wall must not expose a repeating roughness tile'
+);
+assert.equal(
+  hubSurfaces.wall.userData.architecturalSurfaceProfile,
+  'hub-world-space',
+  'hub wall must identify its non-repeating world-space response'
+);
+assert.ok(
+  architecture.HUB_WALL_SURFACE_PROFILE.minimumPatternPeriodM > ROOM_SIZE,
+  'hub wall variation periods must exceed the room envelope'
+);
+assert.ok(
+  architecture.HUB_WALL_SURFACE_PROFILE.colorVariation <= 0.01
+    && architecture.HUB_WALL_SURFACE_PROFILE.roughnessVariation <= 0.015,
+  'hub wall variation must stay below visible-noise thresholds'
+);
+hubSurfaceFactory.dispose();
+assert.ok(
+  hubRoomRenderer.HUB_LIGHTING_PROFILE.hemisphere.intensity
+    > hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity * 0.85,
+  'hub ambient wash must remain broad enough to avoid directional wall hotspots'
+);
+assert.ok(
+  hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity
+    + hubRoomRenderer.HUB_LIGHTING_PROFILE.fill.intensity <= 1,
+  'hub directional energy must remain restrained'
+);
+assert.ok(
+  hubRoomRenderer.HUB_LIGHTING_PROFILE.key.position[1] >= 7,
+  'hub key must remain high enough to read as ceiling-led architectural light'
+);
 const balancedPreset = quality.getQualityPreset('balanced');
 const matteMaterial = new paintingMaterial.PaintingMaterial(balancedPreset);
 matteMaterial.applyPresentation('matte-print', balancedPreset);

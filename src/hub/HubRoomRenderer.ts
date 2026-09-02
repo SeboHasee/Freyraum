@@ -59,6 +59,27 @@ const COVE_RECESS_DEPTH = 0.06;
  *  flush so the glowing strip fills the opening even at grazing angles. */
 const COVE_STRIP_LIFT = 0.006;
 
+/** Static, low-energy hub rig: broad ambient wash plus two neutral directions. */
+export const HUB_LIGHTING_PROFILE = Object.freeze({
+  hemisphere: Object.freeze({
+    sky: 0xf5f6f6,
+    ground: 0xaeb4b9,
+    intensity: 0.66,
+  }),
+  key: Object.freeze({
+    color: 0xf5f6f5,
+    intensity: 0.72,
+    position: Object.freeze([-1.4, 7.2, 4.8] as const),
+    target: Object.freeze([0.25, 0.8, -0.6] as const),
+  }),
+  fill: Object.freeze({
+    color: 0xe7ecef,
+    intensity: 0.24,
+    position: Object.freeze([3.0, 4.8, 3.8] as const),
+    target: Object.freeze([-0.6, 1.5, -0.4] as const),
+  }),
+});
+
 /**
  * WebGL renderer for the museum hub room (v0.87).
  *
@@ -145,7 +166,7 @@ export class HubRoomRenderer {
     this.camera.lookAt(this.cameraTarget);
     this.applyLensShift();
 
-    this.surfaceFactory = new ArchitecturalSurfaceFactory(preset.hubSurfaceTileSize);
+    this.surfaceFactory = new ArchitecturalSurfaceFactory(preset.hubSurfaceTileSize, 'hub');
     this.surfaceFactory.setAnisotropy(this.effectiveAnisotropy());
     this.materials = this.surfaceFactory.getMaterials({
       wall: resolution.visualTokens.museumWall,
@@ -372,18 +393,21 @@ export class HubRoomRenderer {
   // ── Lighting ───────────────────────────────────────────────────────────────
 
   private buildLights(): void {
-    // Neutral skydome base so the authored wall token reads as concrete-grey
-    // instead of cream across both hub and gallery routes.
-    const hemisphere = new THREE.HemisphereLight(0xf3f5f6, 0xaab1b8, 0.56);
-    // Neutral key from high behind the viewer; the only shadow caster.
-    const key = new THREE.DirectionalLight(0xf4f6f7, 0.96);
-    key.position.set(-2.4, 6.4, 6.2);
-    key.target.position.set(0.4, 0.6, -0.4);
-    // Cooler low fill from the opposite side keeps dark trim and the right
-    // wall readable without pushing the room back toward amber.
-    const fill = new THREE.DirectionalLight(0xe2e9ef, 0.38);
-    fill.position.set(3.4, 2.6, 5.4);
-    fill.target.position.set(-0.8, 1.4, 0);
+    const profile = HUB_LIGHTING_PROFILE;
+    // Broad neutral wash lets the ceiling coves read as the architectural
+    // source while the weaker directional pair models form without hotspots.
+    const hemisphere = new THREE.HemisphereLight(
+      profile.hemisphere.sky,
+      profile.hemisphere.ground,
+      profile.hemisphere.intensity
+    );
+    // High neutral key is the only shadow caster.
+    const key = new THREE.DirectionalLight(profile.key.color, profile.key.intensity);
+    key.position.set(...profile.key.position);
+    key.target.position.set(...profile.key.target);
+    const fill = new THREE.DirectionalLight(profile.fill.color, profile.fill.intensity);
+    fill.position.set(...profile.fill.position);
+    fill.target.position.set(...profile.fill.target);
     this.keyLight = key;
     this.applyShadowPreset();
     this.scene.add(hemisphere, key, key.target, fill, fill.target);
