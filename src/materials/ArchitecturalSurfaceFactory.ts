@@ -47,7 +47,7 @@ export type ArchitecturalSurfaceProfile = 'gallery' | 'hub';
 
 /** Public contract for the hub's deliberately calm, non-repeating wall response. */
 export const HUB_WALL_SURFACE_PROFILE = Object.freeze({
-  wallColor: '#f0eee8',
+  wallColor: '#f3f3ef',
   wallRoughness: 0.88,
   ceilingRoughness: 0.92,
   floorRoughness: 0.64,
@@ -82,7 +82,7 @@ export class ArchitecturalSurfaceFactory {
       : new THREE.Color(palette.wall);
     const ceilingColor = wallColor.clone().multiplyScalar(1.04);
     const floorColor = this.surfaceProfile === 'hub'
-      ? new THREE.Color('#d7d2c9')
+      ? new THREE.Color('#d2d4d3')
       : wallColor.clone().multiplyScalar(0.82).lerp(new THREE.Color('#aab2ba'), 0.18);
 
     const plasterNormal = this.surfaceProfile === 'gallery'
@@ -150,13 +150,13 @@ export class ArchitecturalSurfaceFactory {
     });
 
     const pocket = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#8b8780' : '#565b5e'),
+      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#70736f' : '#565b5e'),
       roughness: this.surfaceProfile === 'hub' ? 0.94 : 0.96,
       metalness: 0.0,
     });
 
     const lightStrip = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#f5ead9' : '#edf1f4'),
+      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#f4f7f6' : '#edf1f4'),
       toneMapped: false,
     });
 

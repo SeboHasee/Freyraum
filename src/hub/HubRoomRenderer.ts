@@ -51,37 +51,41 @@ const DOORWAY_POCKET_DEPTH = 1.15;
 /** Skirting shadow-gap profile (metres). */
 const SKIRTING_HEIGHT = 0.075;
 const SKIRTING_DEPTH = 0.014;
-/** Recessed ceiling light-cove dimensions (metres). */
-export const HUB_COVE_WIDTH_M = 0.48;
-const COVE_SIDE_INSET = 0.85;
+/** Long perimeter light-channel and central clerestory dimensions (metres). */
+export const HUB_COVE_WIDTH_M = 0.34;
+const COVE_WALL_INSET = 0.55;
+const COVE_END_INSET = 0.72;
 const COVE_RECESS_DEPTH = 0.06;
+const CLERESTORY_WIDTH = 2.7;
+const CLERESTORY_END_INSET = 1.55;
+const CLERESTORY_RISE = 0.82;
 /** Height of the diffuser strip above the ceiling plane (metres). Nearly
  *  flush so the glowing strip fills the opening even at grazing angles. */
 const COVE_STRIP_LIFT = 0.006;
 
-/** Static, low-energy hub rig: broad warm-neutral wash plus two directions. */
+/** Static daylight rig: broad cool-neutral wash, perimeter panels, one shadow key. */
 export const HUB_LIGHTING_PROFILE = Object.freeze({
   hemisphere: Object.freeze({
-    sky: 0xfffaf1,
-    ground: 0xbab4aa,
-    intensity: 0.5,
+    sky: 0xf8fbff,
+    ground: 0xbfc1bd,
+    intensity: 0.56,
   }),
   key: Object.freeze({
-    color: 0xfff4e2,
-    intensity: 0.38,
-    position: Object.freeze([-1.4, 7.2, 4.8] as const),
-    target: Object.freeze([0.25, 0.8, -0.6] as const),
+    color: 0xf6f8f7,
+    intensity: 0.34,
+    position: Object.freeze([-1.8, 8.5, 5.6] as const),
+    target: Object.freeze([0.2, 1.1, -1.8] as const),
   }),
   fill: Object.freeze({
-    color: 0xf0f3f1,
-    intensity: 0.18,
-    position: Object.freeze([3.0, 4.8, 3.8] as const),
-    target: Object.freeze([-0.6, 1.5, -0.4] as const),
+    color: 0xe8edef,
+    intensity: 0.16,
+    position: Object.freeze([3.8, 5.8, 5.2] as const),
+    target: Object.freeze([-0.6, 1.6, -1.6] as const),
   }),
   ceilingPanel: Object.freeze({
-    color: 0xfff2dc,
-    intensity: 3.2,
-    edgeInset: 0.12,
+    color: 0xf4f8fa,
+    intensity: 2.8,
+    edgeInset: 0.05,
     ceilingOffset: 0.025,
   }),
 });
@@ -185,7 +189,7 @@ export class HubRoomRenderer {
       map: this.contactShadowMap(),
       color: 0x000000,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.16,
       depthWrite: false,
       toneMapped: false,
     });
@@ -347,8 +351,8 @@ export class HubRoomRenderer {
     state.edgeMesh.scale.set(width, height, ARTWORK_EDGE_DEPTH);
     state.edgeMesh.position.set(0, 0, -ARTWORK_EDGE_DEPTH / 2 - 0.001);
     // Soft radial contact shadow hugging the wall behind the mounted work.
-    state.shadowMesh.scale.set(width * 1.1, height * 1.1, 1);
-    state.shadowMesh.position.set(0, -0.01, -zOffset + 0.004);
+    state.shadowMesh.scale.set(width * 1.06, height * 1.06, 1);
+    state.shadowMesh.position.set(0.018, -0.026, -zOffset + 0.004);
     this.render();
     return { applied: true, usedImage: !missingImage, fit, visibleProbe };
   }
@@ -657,6 +661,7 @@ export class HubRoomRenderer {
     this.buildEntryShell();
     this.buildDoorwayPockets();
     this.buildSkirting();
+    this.buildCeilingReveal();
   }
 
   /** Rendered walls from the calibrated room model (doorway holes intact). */
@@ -701,8 +706,9 @@ export class HubRoomRenderer {
     );
     this.floorMeshes.push(floor);
 
-    // Ceiling with recessed light coves inside the original room area.
+    // Ceiling with longitudinal perimeter channels and a raised central light well.
     const coves = this.coveRects();
+    const clerestory = this.clerestoryRect();
     const ceilingShape = new THREE.Shape();
     ceilingShape.moveTo(shell.min.x, shell.min.z);
     ceilingShape.lineTo(shell.max.x, shell.min.z);
@@ -718,6 +724,13 @@ export class HubRoomRenderer {
       hole.closePath();
       ceilingShape.holes.push(hole);
     }
+    const clerestoryHole = new THREE.Path();
+    clerestoryHole.moveTo(clerestory.minX, clerestory.minZ);
+    clerestoryHole.lineTo(clerestory.maxX, clerestory.minZ);
+    clerestoryHole.lineTo(clerestory.maxX, clerestory.maxZ);
+    clerestoryHole.lineTo(clerestory.minX, clerestory.maxZ);
+    clerestoryHole.closePath();
+    ceilingShape.holes.push(clerestoryHole);
     const ceiling = new THREE.Mesh(new THREE.ShapeGeometry(ceilingShape), this.materials.ceiling);
     // Shape (x, z) rotated +90° about X maps to world (x, ceilingY, z) facing down.
     ceiling.rotation.x = Math.PI / 2;
@@ -727,42 +740,59 @@ export class HubRoomRenderer {
     for (const cove of coves) {
       this.buildCove(cove, shell.max.y);
     }
+    this.buildClerestory(clerestory, shell.max.y);
   }
 
   private coveRects(): { minX: number; maxX: number; minZ: number; maxZ: number }[] {
     const bounds = this.resolution.room.bounds;
-    const width = bounds.max.x - bounds.min.x;
     const depth = bounds.max.z - bounds.min.z;
-    if (width < 3 || depth < 3) return [];
-    const minX = bounds.min.x + COVE_SIDE_INSET;
-    const maxX = bounds.max.x - COVE_SIDE_INSET;
-    const rows = [bounds.min.z + depth * 0.24, bounds.min.z + depth * 0.62];
-    return rows.map((z) => ({
-      minX,
-      maxX,
-      minZ: z - HUB_COVE_WIDTH_M / 2,
-      maxZ: z + HUB_COVE_WIDTH_M / 2,
-    }));
+    if (bounds.max.x - bounds.min.x < 4 || depth < 5) return [];
+    const minZ = bounds.min.z + COVE_END_INSET;
+    const maxZ = bounds.max.z - COVE_END_INSET;
+    return [
+      {
+        minX: bounds.min.x + COVE_WALL_INSET,
+        maxX: bounds.min.x + COVE_WALL_INSET + HUB_COVE_WIDTH_M,
+        minZ,
+        maxZ,
+      },
+      {
+        minX: bounds.max.x - COVE_WALL_INSET - HUB_COVE_WIDTH_M,
+        maxX: bounds.max.x - COVE_WALL_INSET,
+        minZ,
+        maxZ,
+      },
+    ];
+  }
+
+  private clerestoryRect(): { minX: number; maxX: number; minZ: number; maxZ: number } {
+    const bounds = this.resolution.room.bounds;
+    return {
+      minX: -CLERESTORY_WIDTH / 2,
+      maxX: CLERESTORY_WIDTH / 2,
+      minZ: bounds.min.z + CLERESTORY_END_INSET,
+      maxZ: bounds.max.z - CLERESTORY_END_INSET,
+    };
   }
 
   private buildCove(
     cove: { minX: number; maxX: number; minZ: number; maxZ: number },
     ceilingY: number
   ): void {
-    const length = cove.maxX - cove.minX;
-    // Dark reveal returns along the two long edges of the recess.
+    const length = cove.maxZ - cove.minZ;
+    // Dark reveal returns along the long edges of each perimeter channel.
     this.addQuad(
       this.materials.trim,
-      new THREE.Vector3(cove.minX, ceilingY, cove.minZ),
-      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(cove.minX, ceilingY, cove.maxZ),
+      new THREE.Vector3(0, 0, -1),
       new THREE.Vector3(0, 1, 0),
       length,
       COVE_RECESS_DEPTH
     );
     this.addQuad(
       this.materials.trim,
-      new THREE.Vector3(cove.maxX, ceilingY, cove.maxZ),
-      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(cove.maxX, ceilingY, cove.minZ),
+      new THREE.Vector3(0, 0, 1),
       new THREE.Vector3(0, 1, 0),
       length,
       COVE_RECESS_DEPTH
@@ -771,12 +801,72 @@ export class HubRoomRenderer {
     // fills the opening from every viewing angle (no void visible past it).
     this.addQuad(
       this.materials.lightStrip,
-      new THREE.Vector3(cove.minX - 0.06, ceilingY + COVE_STRIP_LIFT, cove.minZ - 0.06),
+      new THREE.Vector3(cove.minX - 0.04, ceilingY + COVE_STRIP_LIFT, cove.minZ - 0.04),
       new THREE.Vector3(1, 0, 0),
       new THREE.Vector3(0, 0, 1),
-      length + 0.12,
-      cove.maxZ - cove.minZ + 0.12
+      cove.maxX - cove.minX + 0.08,
+      length + 0.08
     );
+  }
+
+  private buildClerestory(
+    opening: { minX: number; maxX: number; minZ: number; maxZ: number },
+    ceilingY: number
+  ): void {
+    const width = opening.maxX - opening.minX;
+    const depth = opening.maxZ - opening.minZ;
+    const topY = ceilingY + CLERESTORY_RISE;
+    this.addQuad(
+      this.materials.ceiling,
+      new THREE.Vector3(opening.minX, ceilingY, opening.maxZ),
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(0, 1, 0),
+      depth,
+      CLERESTORY_RISE
+    );
+    this.addQuad(
+      this.materials.ceiling,
+      new THREE.Vector3(opening.maxX, ceilingY, opening.minZ),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 1, 0),
+      depth,
+      CLERESTORY_RISE
+    );
+    this.addQuad(
+      this.materials.ceiling,
+      new THREE.Vector3(opening.minX, ceilingY, opening.minZ),
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 1, 0),
+      width,
+      CLERESTORY_RISE
+    );
+    this.addQuad(
+      this.materials.ceiling,
+      new THREE.Vector3(opening.maxX, ceilingY, opening.maxZ),
+      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(0, 1, 0),
+      width,
+      CLERESTORY_RISE
+    );
+    this.addQuad(
+      this.materials.lightStrip,
+      new THREE.Vector3(opening.minX, topY, opening.minZ),
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 0, 1),
+      width,
+      depth
+    );
+    const ribGeometry = new THREE.BoxGeometry(width + 0.06, 0.035, 0.035);
+    const ribCount = 9;
+    const ribs = new THREE.InstancedMesh(ribGeometry, this.materials.trim, ribCount);
+    const transform = new THREE.Matrix4();
+    for (let index = 0; index < ribCount; index += 1) {
+      const z = opening.minZ + (depth * index) / (ribCount - 1);
+      transform.makeTranslation(0, topY - 0.018, z);
+      ribs.setMatrixAt(index, transform);
+    }
+    ribs.instanceMatrix.needsUpdate = true;
+    this.scene.add(ribs);
   }
 
   /**
@@ -938,6 +1028,34 @@ export class HubRoomRenderer {
         new THREE.Vector3(0, 0, -1)
       );
     }
+  }
+
+  /** Narrow ceiling shadow lines ground the tall wall planes without an AO pass. */
+  private buildCeilingReveal(): void {
+    const shell = this.shellBounds();
+    const roomMinZ = this.resolution.room.bounds.min.z;
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const add = (
+      position: THREE.Vector3,
+      scale: THREE.Vector3
+    ): void => {
+      const reveal = new THREE.Mesh(geometry, this.materials.trim);
+      reveal.position.copy(position);
+      reveal.scale.copy(scale);
+      this.scene.add(reveal);
+    };
+    add(
+      new THREE.Vector3(0, shell.max.y - 0.018, roomMinZ + 0.012),
+      new THREE.Vector3(shell.max.x - shell.min.x, 0.025, 0.024)
+    );
+    add(
+      new THREE.Vector3(shell.min.x + 0.012, shell.max.y - 0.018, (shell.min.z + shell.max.z) / 2),
+      new THREE.Vector3(0.024, 0.025, shell.max.z - shell.min.z)
+    );
+    add(
+      new THREE.Vector3(shell.max.x - 0.012, shell.max.y - 0.018, (shell.min.z + shell.max.z) / 2),
+      new THREE.Vector3(0.024, 0.025, shell.max.z - shell.min.z)
+    );
   }
 
   // ── Artwork slots ──────────────────────────────────────────────────────────

@@ -272,20 +272,20 @@ export const DEFAULT_GALLERY_WALL = '#C7CED4';
 export const HUB_SELECTION_TIMEOUT_MS = 1500;
 export const HUB_MIN_PROJECTED_SHORT_EDGE_PX = 72;
 export const HUB_CAMERA: CameraCalibration = {
-  position: point3(0, 1.8, 7.5),
-  target: point3(0, 1.55, 0),
-  verticalFovDeg: 42,
+  position: point3(0, 1.72, 9),
+  target: point3(0, 2.05, -1.2),
+  verticalFovDeg: 48,
   near: 0.1,
   far: 40,
   lensShift: point(0, 0),
 };
 
-// ── Square hero-room envelope (v0.87) ────────────────────────────────────────
-// True 7 × 7 m square gallery: x ∈ [−3.5, +3.5], z ∈ [−2.5, +4.5], height 3.4 m.
-// Three rendered walls (front/left/right) plus a bounds-only entrance wall at
-// z = +4.5 that sits between the room and the camera and is never rendered.
-export const HUB_ROOM_SIZE = 7;
-export const HUB_ROOM_HEIGHT = 3.4;
+// ── Elongated hero-room envelope (v1.02) ─────────────────────────────────────
+// 9 × 12 m daylit gallery: x ∈ [−4.5, +4.5], z ∈ [−5.5, +6.5], height 5.2 m.
+// Three rendered walls plus a bounds-only entrance wall close the envelope.
+export const HUB_ROOM_WIDTH = 9;
+export const HUB_ROOM_DEPTH = 12;
+export const HUB_ROOM_HEIGHT = 5.2;
 /** Mirrored side-wall doorways: z ∈ [+1.5, +2.55], 1.05 × 2.30 m, floor-based. */
 export const HUB_DOORWAY_WIDTH = 1.05;
 export const HUB_DOORWAY_HEIGHT = 2.3;
@@ -341,92 +341,90 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
   {
     id: 'wall-front',
     group: 'front',
-    planeAspect: 2.06,
+    planeAspect: HUB_ROOM_WIDTH / HUB_ROOM_HEIGHT,
     quad: [
-      point(330.8, 189.56),
-      point(1035.2, 189.56),
-      point(1031.23, 529.84),
-      point(334.77, 529.84),
+      point(417.26, 206.29),
+      point(948.74, 206.29),
+      point(951.84, 514.71),
+      point(414.16, 514.71),
     ],
     safePolygon: [
-      point(348.54, 515.98),
-      point(1017.46, 515.98),
-      point(1020.95, 203.73),
-      point(345.05, 203.73),
+      point(422.61, 506.32),
+      point(943.39, 506.32),
+      point(940.55, 214.5),
+      point(425.45, 214.5),
     ],
-    drawableRegion: [point(0.14, 0.14), point(6.86, 0.14), point(6.86, 3.26), point(0.14, 3.26)],
-    transform: wallTransform(point3(-3.5, 0, -2.5), point3(1, 0, 0), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
-    hangingBand: { minY: 0.42, maxY: 3.12, margin: 0.08 },
+    drawableRegion: [point(0.14, 0.14), point(8.86, 0.14), point(8.86, 4.92), point(0.14, 4.92)],
+    transform: wallTransform(point3(-4.5, 0, -5.5), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
+    hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(0, 14),
-    room: roomWall(point3(-3.5, 0, -2.5), point3(1, 0, 0), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
+    room: roomWall(point3(-4.5, 0, -5.5), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
   },
   {
     id: 'wall-right',
     group: 'right',
-    planeAspect: 2.06,
+    planeAspect: HUB_ROOM_DEPTH / HUB_ROOM_HEIGHT,
     quad: [
-      point(1035.2, 189.56),
-      point(1871.86, -193.13),
-      point(1827.83, 939.75),
-      point(1031.23, 529.84),
+      point(948.74, 206.29),
+      point(2169.34, -738.13),
+      point(2271.63, 1019.43),
+      point(951.84, 514.71),
     ],
     safePolygon: [
-      point(1036.31, 518.32),
-      point(1779.34, 870.92),
-      point(1816.23, -122.33),
-      point(1040.05, 201.63),
+      point(954.38, 507.24),
+      point(2182.95, 938.83),
+      point(2096.06, -637.45),
+      point(951.4, 212.59),
     ],
-    drawableRegion: [point(0.14, 0.14), point(6.86, 0.14), point(6.86, 3.26), point(0.14, 3.26)],
-    // u = z + 2.5 → doorway z ∈ [1.5, 2.55] maps to u ∈ [4.0, 5.05].
+    drawableRegion: [point(0.14, 0.14), point(11.86, 0.14), point(11.86, 4.92), point(0.14, 4.92)],
     exclusionPolygons: [
-      [point(4, 0), point(5.05, 0), point(5.05, HUB_DOORWAY_HEIGHT), point(4, HUB_DOORWAY_HEIGHT)],
+      [point(8, 0), point(9.05, 0), point(9.05, HUB_DOORWAY_HEIGHT), point(8, HUB_DOORWAY_HEIGHT)],
     ],
-    transform: wallTransform(point3(3.5, 0, -2.5), point3(0, 0, 1), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
-    hangingBand: { minY: 0.42, maxY: 3.12, margin: 0.08 },
+    transform: wallTransform(point3(4.5, 0, -5.5), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
+    hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(8, 14),
-    room: roomWall(point3(3.5, 0, -2.5), point3(0, 0, 1), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT, [
-      [point(4, 0), point(5.05, 0), point(5.05, HUB_DOORWAY_HEIGHT), point(4, HUB_DOORWAY_HEIGHT)],
+    room: roomWall(point3(4.5, 0, -5.5), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
+      [point(8, 0), point(9.05, 0), point(9.05, HUB_DOORWAY_HEIGHT), point(8, HUB_DOORWAY_HEIGHT)],
     ]),
   },
   {
     id: 'wall-rear',
     group: 'rear',
     role: 'bounds-only',
-    planeAspect: 2.06,
-    transform: wallTransform(point3(3.5, 0, 4.5), point3(-1, 0, 0), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
+    planeAspect: HUB_ROOM_WIDTH / HUB_ROOM_HEIGHT,
+    transform: wallTransform(point3(4.5, 0, 6.5), point3(-1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
   },
   {
     id: 'wall-left',
     group: 'left',
-    planeAspect: 2.06,
+    planeAspect: HUB_ROOM_DEPTH / HUB_ROOM_HEIGHT,
     quad: [
-      point(-505.86, -193.13),
-      point(330.8, 189.56),
-      point(334.77, 529.84),
-      point(-461.83, 939.75),
+      point(-803.34, -738.13),
+      point(417.26, 206.29),
+      point(414.16, 514.71),
+      point(-905.63, 1019.43),
     ],
     safePolygon: [
-      point(-413.34, 870.92),
-      point(329.69, 518.32),
-      point(325.95, 201.63),
-      point(-450.23, -122.33),
+      point(-816.95, 938.83),
+      point(411.62, 507.24),
+      point(414.6, 212.59),
+      point(-730.06, -637.45),
     ],
-    drawableRegion: [point(0.14, 0.14), point(6.86, 0.14), point(6.86, 3.26), point(0.14, 3.26)],
-    // u = 4.5 − z → doorway z ∈ [1.5, 2.55] maps to u ∈ [1.95, 3.0].
+    drawableRegion: [point(0.14, 0.14), point(11.86, 0.14), point(11.86, 4.92), point(0.14, 4.92)],
     exclusionPolygons: [
-      [point(1.95, 0), point(3, 0), point(3, HUB_DOORWAY_HEIGHT), point(1.95, HUB_DOORWAY_HEIGHT)],
+      [point(2.95, 0), point(4, 0), point(4, HUB_DOORWAY_HEIGHT), point(2.95, HUB_DOORWAY_HEIGHT)],
     ],
-    transform: wallTransform(point3(-3.5, 0, 4.5), point3(0, 0, -1), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT),
-    hangingBand: { minY: 0.42, maxY: 3.12, margin: 0.08 },
+    transform: wallTransform(point3(-4.5, 0, 6.5), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
+    hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(-8, 14),
-    room: roomWall(point3(-3.5, 0, 4.5), point3(0, 0, -1), HUB_ROOM_SIZE, HUB_ROOM_HEIGHT, [
-      [point(1.95, 0), point(3, 0), point(3, HUB_DOORWAY_HEIGHT), point(1.95, HUB_DOORWAY_HEIGHT)],
+    room: roomWall(point3(-4.5, 0, 6.5), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
+      [point(2.95, 0), point(4, 0), point(4, HUB_DOORWAY_HEIGHT), point(2.95, HUB_DOORWAY_HEIGHT)],
     ]),
   },
 ];
 
 // 2 + 2 + 2 hero composition on a shared 1.55 m centerline. Side-wall pairs
-// are exact mirrors (u_left + u_right = 7): validated by resolveMuseumHub.
+// are exact mirrors across the elongated side-wall depth.
 const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
   {
     suffix: 'wall-front.a',
@@ -434,10 +432,10 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     intendedUse: 'portrait',
     placement: {
       wallId: 'wall-front',
-      center: point(0.2857, 0.5441),
-      anchor: point(2, 1.55),
-      uv: point(0.2857, 0.4559),
-      mountedHeight: 1.4,
+      center: point(0.2778, 0.6673),
+      anchor: point(2.5, 1.7),
+      uv: point(0.2778, 0.3269),
+      mountedHeight: 1.7,
       targetSizePolicy: 'contain',
       minScale: 0.7,
       maxScale: 1,
@@ -450,10 +448,10 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     intendedUse: 'panoramic',
     placement: {
       wallId: 'wall-front',
-      center: point(0.7143, 0.5441),
-      anchor: point(5, 1.55),
-      uv: point(0.7143, 0.4559),
-      mountedHeight: 1.4,
+      center: point(0.7222, 0.6673),
+      anchor: point(6.5, 1.7),
+      uv: point(0.7222, 0.3269),
+      mountedHeight: 1.7,
       targetSizePolicy: 'contain',
       minScale: 0.7,
       maxScale: 1,
@@ -466,10 +464,10 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     intendedUse: 'landscape',
     placement: {
       wallId: 'wall-left',
-      center: point(0.8, 0.5441),
-      anchor: point(5.6, 1.55),
-      uv: point(0.8, 0.4559),
-      mountedHeight: 0.95,
+      center: point(0.8, 0.6673),
+      anchor: point(9.6, 1.7),
+      uv: point(0.8, 0.3269),
+      mountedHeight: 1.7,
       targetSizePolicy: 'contain',
       minScale: 0.7,
       maxScale: 1,
@@ -482,10 +480,10 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     intendedUse: 'square',
     placement: {
       wallId: 'wall-left',
-      center: point(0.5679, 0.5441),
-      anchor: point(3.975, 1.55),
-      uv: point(0.5679, 0.4559),
-      mountedHeight: 1.2,
+      center: point(0.6, 0.6673),
+      anchor: point(7.2, 1.7),
+      uv: point(0.6, 0.3269),
+      mountedHeight: 1.75,
       targetSizePolicy: 'contain',
       minScale: 0.7,
       maxScale: 1,
@@ -498,10 +496,10 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     intendedUse: 'landscape',
     placement: {
       wallId: 'wall-right',
-      center: point(0.2, 0.5441),
-      anchor: point(1.4, 1.55),
-      uv: point(0.2, 0.4559),
-      mountedHeight: 0.95,
+      center: point(0.2, 0.6673),
+      anchor: point(2.4, 1.7),
+      uv: point(0.2, 0.3269),
+      mountedHeight: 1.7,
       targetSizePolicy: 'contain',
       minScale: 0.7,
       maxScale: 1,
@@ -514,10 +512,10 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     intendedUse: 'square',
     placement: {
       wallId: 'wall-right',
-      center: point(0.4321, 0.5441),
-      anchor: point(3.025, 1.55),
-      uv: point(0.4321, 0.4559),
-      mountedHeight: 1.2,
+      center: point(0.4, 0.6673),
+      anchor: point(4.8, 1.7),
+      uv: point(0.4, 0.3269),
+      mountedHeight: 1.75,
       targetSizePolicy: 'contain',
       minScale: 0.7,
       maxScale: 1,

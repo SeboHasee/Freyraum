@@ -43,8 +43,9 @@ function polygonSpan(polygon, axis) {
 }
 
 const MIRROR_TOLERANCE = 0.01;
-const ROOM_SIZE = 7;
-const ROOM_HEIGHT = 3.4;
+const ROOM_WIDTH = 9;
+const ROOM_DEPTH = 12;
+const ROOM_HEIGHT = 5.2;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
@@ -70,38 +71,36 @@ assert.equal(shippingConfig.visualTokens.museumWall, '#C7CED4');
 assert.equal(shippingConfig.backgroundFallback.src, 'Backgrounds/museum-empty.png');
 assert.ok(shippingConfig.camera, 'shipping config must define one camera calibration');
 assert.equal(shippingConfig.camera.far, 40, 'shipping config must define a finite camera far plane');
-assert.equal(shippingConfig.camera.target.y, 1.55, 'shipping camera target must sit on the shared 1.55 m artwork centerline');
+assert.equal(shippingConfig.camera.target.y, 2.05, 'shipping camera target must frame the raised daylit architecture');
 assert.deepEqual(shippingConfig.camera.lensShift, { x: 0, y: 0 }, 'shipping config must define the authoritative camera lens shift');
 assert.ok(shippingConfig.room, 'shipping config must define a room envelope');
 assert.ok(shippingConfig.hangingRules, 'shipping config must define shared hanging rules');
 assert.equal(shippingConfig.hangingRules.doorwayClearance, 0.35, 'hero layout must enforce the raised 0.35 m doorway clearance');
 assert.equal(shippingConfig.slotsPerPage, 6, 'shipping config must page six hero slots');
 
-// ── Square-room invariants ───────────────────────────────────────────────────
-// The hub room is a precise 7 × 7 m square with 90° corners and uniform 3.4 m
-// walls: three rendered walls (front/left/right) plus one bounds-only entrance
-// wall that closes the floor loop but is never rendered.
+// ── Elongated-room invariants ────────────────────────────────────────────────
+// The hub is a 9 × 12 m daylit room with exact corners and uniform 5.2 m walls.
 const outline = shippingConfig.room.floorOutline;
 assert.equal(outline.length, 4, 'floor outline must be a quad');
 const outlineX = polygonSpan(outline, 'x');
 const outlineZ = polygonSpan(outline, 'z');
-assert.ok(Math.abs(outlineX.max - outlineX.min - ROOM_SIZE) < 1e-9, 'floor outline must span exactly 7 m in x');
-assert.ok(Math.abs(outlineZ.max - outlineZ.min - ROOM_SIZE) < 1e-9, 'floor outline must span exactly 7 m in z');
+assert.ok(Math.abs(outlineX.max - outlineX.min - ROOM_WIDTH) < 1e-9, 'floor outline must span exactly 9 m in x');
+assert.ok(Math.abs(outlineZ.max - outlineZ.min - ROOM_DEPTH) < 1e-9, 'floor outline must span exactly 12 m in z');
 for (const corner of outline) {
   assert.ok(
     (corner.x === outlineX.min || corner.x === outlineX.max) && (corner.z === outlineZ.min || corner.z === outlineZ.max),
-    'floor outline must stay axis-aligned (true square, no splay)'
+    'floor outline must stay axis-aligned (true rectangle, no splay)'
   );
 }
 assert.equal(shippingConfig.room.floorY, 0);
 assert.equal(shippingConfig.room.ceilingY, ROOM_HEIGHT);
 
-assert.ok(Array.isArray(shippingConfig.walls) && shippingConfig.walls.length === 4, 'shipping config must define four square-room wall planes');
+assert.ok(Array.isArray(shippingConfig.walls) && shippingConfig.walls.length === 4, 'shipping config must define four room wall planes');
 const wallsById = new Map(shippingConfig.walls.map((wall) => [wall.id, wall]));
 const renderedWalls = shippingConfig.walls.filter((wall) => wall.role !== 'bounds-only');
 const boundsOnlyWalls = shippingConfig.walls.filter((wall) => wall.role === 'bounds-only');
-assert.equal(renderedWalls.length, 3, 'square room renders exactly three walls (front/left/right)');
-assert.equal(boundsOnlyWalls.length, 1, 'square room defines exactly one bounds-only entrance wall');
+assert.equal(renderedWalls.length, 3, 'room renders exactly three walls (front/left/right)');
+assert.equal(boundsOnlyWalls.length, 1, 'room defines exactly one bounds-only entrance wall');
 assert.equal(boundsOnlyWalls[0].group, 'rear', 'the unrendered wall must be the rear entrance wall');
 assert.deepEqual(
   new Set(renderedWalls.map((wall) => wall.group)),
@@ -110,8 +109,9 @@ assert.deepEqual(
 );
 for (const wall of shippingConfig.walls) {
   assert.ok(wall.transform, `${wall.id} must define an explicit wall transform`);
-  assert.ok(Math.abs(wall.transform.width - ROOM_SIZE) < 1e-9, `${wall.id} must be exactly 7 m wide`);
-  assert.ok(Math.abs(wall.transform.height - ROOM_HEIGHT) < 1e-9, `${wall.id} must be uniformly 3.4 m tall`);
+  const expectedWidth = wall.group === 'left' || wall.group === 'right' ? ROOM_DEPTH : ROOM_WIDTH;
+  assert.ok(Math.abs(wall.transform.width - expectedWidth) < 1e-9, `${wall.id} must match the elongated room envelope`);
+  assert.ok(Math.abs(wall.transform.height - ROOM_HEIGHT) < 1e-9, `${wall.id} must be uniformly 5.2 m tall`);
   assert.deepEqual(wall.transform.axisV, { x: 0, y: 1, z: 0 }, `${wall.id} must be vertical`);
   const u = wall.transform.axisU;
   assert.ok(
@@ -129,7 +129,7 @@ for (const wall of renderedWalls) {
 // have orthogonal axisU directions and form a closed perimeter loop.
 const perimeter = ['wall-front', 'wall-right', 'wall-rear', 'wall-left'].map((id) => {
   const wall = wallsById.get(id);
-  assert.ok(wall, `square room must keep the stable wall id "${id}"`);
+  assert.ok(wall, `room must keep the stable wall id "${id}"`);
   return wall.transform;
 });
 for (let i = 0; i < perimeter.length; i += 1) {
@@ -139,7 +139,7 @@ for (let i = 0; i < perimeter.length; i += 1) {
   assert.ok(Math.abs(dot) < 1e-9, 'adjacent walls must meet at exact 90° corners');
   const endX = a.origin.x + a.axisU.x * a.width;
   const endZ = a.origin.z + a.axisU.z * a.width;
-  assert.ok(Math.abs(endX - b.origin.x) < 1e-9 && Math.abs(endZ - b.origin.z) < 1e-9, 'wall perimeter must form a closed square loop');
+  assert.ok(Math.abs(endX - b.origin.x) < 1e-9 && Math.abs(endZ - b.origin.z) < 1e-9, 'wall perimeter must form a closed rectangular loop');
 }
 
 // Exactly two identical mirrored doorways, one per side wall, floor-based.
@@ -162,19 +162,19 @@ for (const [doorU, doorV, id] of [
   assert.ok(Math.abs(doorV.min) < 1e-9, `${id} doorway must be floor-based`);
 }
 assert.ok(
-  Math.abs(rightDoorU.min - (ROOM_SIZE - leftDoorU.max)) <= MIRROR_TOLERANCE
-    && Math.abs(rightDoorU.max - (ROOM_SIZE - leftDoorU.min)) <= MIRROR_TOLERANCE,
+  Math.abs(rightDoorU.min - (ROOM_DEPTH - leftDoorU.max)) <= MIRROR_TOLERANCE
+    && Math.abs(rightDoorU.max - (ROOM_DEPTH - leftDoorU.min)) <= MIRROR_TOLERANCE,
   'side-wall doorways must be mirrored within 1 cm'
 );
 
-// ── 2 + 2 + 2 slot composition on the shared 1.55 m centerline ──────────────
+// ── 2 + 2 + 2 slot composition on the shared 1.70 m centerline ──────────────
 assert.equal(shippingConfig.slots.length, 6, 'hero room must define six slots');
 const slotsByWall = { 'wall-front': [], 'wall-left': [], 'wall-right': [] };
 for (const slot of shippingConfig.slots) {
   assert.ok(slot.placement.anchor, `${slot.id} must use a metric-like wall-local anchor`);
   assert.ok(slot.placement.uv, `${slot.id} must define a normalized wall-local anchor`);
   assert.equal(slot.placement.targetSizePolicy, 'contain', `${slot.id} must use a deterministic size policy`);
-  assert.ok(Math.abs(slot.placement.anchor.y - 1.55) < 1e-9, `${slot.id} must sit on the shared 1.55 m centerline`);
+  assert.ok(Math.abs(slot.placement.anchor.y - 1.7) < 1e-9, `${slot.id} must sit on the shared 1.70 m centerline`);
   slotsByWall[slot.placement.wallId]?.push(slot);
 }
 assert.equal(slotsByWall['wall-front'].length, 2, 'front wall must carry exactly two slots');
@@ -186,7 +186,7 @@ for (const leftSlot of slotsByWall['wall-left']) {
   const rightSlot = shippingConfig.slots.find((slot) => slot.id === counterpartId);
   assert.ok(rightSlot, `${leftSlot.id} must have the mirrored counterpart ${counterpartId}`);
   assert.ok(
-    Math.abs(rightSlot.placement.anchor.x - (ROOM_SIZE - leftSlot.placement.anchor.x)) <= MIRROR_TOLERANCE,
+    Math.abs(rightSlot.placement.anchor.x - (ROOM_DEPTH - leftSlot.placement.anchor.x)) <= MIRROR_TOLERANCE,
     `${counterpartId} must mirror ${leftSlot.id} within 1 cm`
   );
   assert.ok(
@@ -389,9 +389,9 @@ assert.ok(
   'hub floor must retain restrained satin response'
 );
 assert.ok(
-  hubSurfaces.pocket.color.r > 0.2
-    && hubSurfaces.pocket.color.g > 0.2
-    && hubSurfaces.pocket.color.b > 0.2,
+  hubSurfaces.pocket.color.r > 0.12
+    && hubSurfaces.pocket.color.g > 0.12
+    && hubSurfaces.pocket.color.b > 0.12,
   'hub doorway pockets must retain visible material response instead of reading as black voids'
 );
 assert.equal(
@@ -400,7 +400,7 @@ assert.equal(
   'hub wall must identify its non-repeating world-space response'
 );
 assert.ok(
-  architecture.HUB_WALL_SURFACE_PROFILE.minimumPatternPeriodM > ROOM_SIZE,
+  architecture.HUB_WALL_SURFACE_PROFILE.minimumPatternPeriodM > ROOM_WIDTH,
   'hub wall variation periods must exceed the room envelope'
 );
 assert.ok(
@@ -427,8 +427,8 @@ assert.ok(
 );
 assert.equal(
   hubRoomRenderer.HUB_COVE_WIDTH_M,
-  0.48,
-  'hub ceiling luminaires must remain broad enough to read as architectural panels'
+  0.34,
+  'hub perimeter luminaires must remain narrow architectural channels'
 );
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.ceilingPanel.intensity > 0
@@ -637,7 +637,7 @@ assert.ok(
 for (const vanishing of vanishingPoints) {
   assert.ok(
     vanishing.x > 0 && vanishing.x < shipping.stage.width,
-    'square-room depth rays must converge toward the central vanishing point inside the stage'
+    'elongated-room depth rays must converge toward the central vanishing point inside the stage'
   );
 }
 
@@ -812,4 +812,4 @@ assert.match(hub, /projectedAnchor/);
 assert.match(shell, /#c7ced4/i);
 assert.ok(!/background:\s*#fff(?:fff)?\b/i.test(scss.slice(scss.indexOf('.museum-hub {'), scss.indexOf('.museum-hub[hidden]'))));
 
-console.log('PASS: 7×7 square room invariants, mirrored doorways, 2+2+2 hero composition, calibrated projection, fallback wall buckets, selection persistence hooks, token consistency, and 404 fallback are valid.');
+console.log('PASS: 9×12 m daylit room invariants, mirrored doorways, 2+2+2 hero composition, calibrated projection, fallback wall buckets, selection persistence hooks, token consistency, and 404 fallback are valid.');
