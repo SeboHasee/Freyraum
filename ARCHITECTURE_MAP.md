@@ -18,8 +18,8 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 - `src/materials/`
   - Painting and frame material behavior, procedural texture generation, and
     shared architectural materials. `ArchitecturalSurfaceFactory` selects
-    non-repeating world-space PBR micro response for hub plaster and mineral
-    flooring, and mapped tactile plaster for the closer interactive gallery.
+    smooth light-driven PBR plaster and satin-mineral hub finishes, and mapped
+    tactile plaster for the closer interactive gallery.
 - `src/config/`
   - Startup and quality/runtime config models
   - `galleryPresentation.ts`: compact interactive-gallery stage envelope and
@@ -37,9 +37,9 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     checks, and projected hub interaction geometry
   - `HubRoomRenderer`: on-demand 9 × 12 × 5.2 m WebGL hall, pitched glazed
     skylight over a raised clerestory, procedural atmospheric sky and matching
-    cached PMREM, longitudinal perimeter channels, page groups, restrained floor
-    reflection, quality-gated ceiling area fixtures, one shadow caster, and
-    preset-driven surface fidelity
+    cached low-energy PMREM, longitudinal perimeter channels, page groups,
+    high-only planar floor reflection, three quality-gated downward area sources,
+    one architectural shadow map, and preset-driven rendering fidelity
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback

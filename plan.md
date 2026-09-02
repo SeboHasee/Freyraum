@@ -1,5 +1,50 @@
 # FREYRAUM Plan
 
+## Implemented — Architectural lighting topology pass (v1.04, 2026-09-02)
+
+> **Status update:** The hub now derives room depth from explicitly room-facing
+> finite area sources, low non-occluded fill, and selective architectural
+> participation in the existing single shadow map rather than procedural surface
+> gradients or fullscreen ambient occlusion.
+
+### 1. As-built scope
+
+1. Two cove sources and one clerestory source explicitly face downward and create
+   local wall/floor response with finite-area attenuation.
+2. Hemisphere and sky-PMREM energy are secondary to local/direct illumination;
+   architectural ACES exposure remains fixed.
+3. Ceiling aperture, cove/clerestory returns, skylight steel, and doorway returns
+   cast through the existing one directional shadow map.
+4. Hub plaster and ceiling are smooth map-free PBR finishes; the pale floor keeps
+   a distinct satin response without procedural color or normal modulation.
+5. The floor gap is narrower and recessed, doorway plaster is no longer relied
+   upon as a black opening, and artwork uses a tight rounded contact card behind
+   its existing 4 cm shadow-casting body.
+6. High retains its downscaled on-demand planar floor reflection. Balanced uses
+   cached environment sheen; battery keeps reflection and local area lights off.
+7. Renderer diagnostics expose light directions and energy plus the bounded GPU
+   resource snapshot used for performance review.
+8. Fullscreen AO was deliberately not added after the geometry/light correction.
+
+### 2. Performance boundaries
+
+- One existing quality-gated shadow map remains authoritative.
+- One non-shadowing area source was added; balanced removes one reflection pass.
+- Procedural hub surface fragment work was removed.
+- No new dependency, external asset, continuous loop, SSAO, GTAO, bloom, SSR, or
+  additional shadow map was introduced.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run validate:museum-hub:visual`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
 ## Implemented — Procedural skylight and PBR hub surfaces (v1.03, 2026-09-02)
 
 > **Status update:** The raised hub clerestory now opens to a static atmospheric

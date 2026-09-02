@@ -1,5 +1,27 @@
 # FINDINGS
 
+## Architectural lighting topology findings (v1.04, 2026-09-02)
+
+1. Three.js `RectAreaLight` emits along local `-Z`; targeting a point directly
+   below each fixture makes the intended direction explicit and testable.
+2. Sky PMREM and hemisphere light are non-occluded. At strong levels they flatten
+   walls, corners, and recesses regardless of otherwise correct PBR materials.
+3. The ceiling aperture and doorway returns were receiving shadows but not
+   casting them. Selective participation in the existing one-map shadow pass
+   provides depth without adding another shadow map.
+4. A visible emissive diffuser and actual illumination are separate concerns.
+   Finite area sources beneath the coves and clerestory connect luminous geometry
+   to broad wall/floor highlights and naturally attenuate with distance.
+5. Smooth museum plaster does not require shader noise. Removing world-space sine
+   modulation reduces cost and forces large-scale form to come from light,
+   geometry, roughness, and contact.
+6. Balanced quality gains more from eliminating its planar reflection render
+   than from a slightly sharper floor image; PMREM sheen preserves material
+   separation at lower cost.
+7. Fullscreen AO remains rejected for this pass. Corrected local lighting,
+   selective shadows, recess geometry, and small contact cards address the
+   identified depth failures without artwork halos or another screen-space pass.
+
 ## Procedural skylight and PBR hub findings (v1.03, 2026-09-02)
 
 1. A luminous cap cannot communicate exterior depth. A static atmospheric sky

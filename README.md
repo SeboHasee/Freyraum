@@ -21,9 +21,9 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   into left/right wall focus pages.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy
-  (`planar`, `ibl`, `off`). The hub uses near-white PBR plaster and pale mineral
-  flooring with subtle non-repeating world-space micro response; the closer
-  gallery retains its tactile mapped plaster profile.
+  (`planar`, `ibl`, `off`). The hub uses smooth near-white PBR plaster and a
+  distinct pale satin-mineral floor; physical geometry and local light create
+  their form while the closer gallery retains its tactile mapped plaster profile.
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
 - The interactive gallery now mounts artworks inside a compact architectural stage
@@ -39,10 +39,11 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Lighting still uses one fixed balanced neutral-gallery configuration, but the
   single-artwork view now runs at a softer ambient/direct energy balance and a
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
-- The hub keeps a separate daylight architectural rig: the visible procedural
-  sky also supplies its cached reflection environment, one restrained key casts
-  shadows, and two longitudinal area fixtures provide secondary high/balanced
-  fill. Battery uses a simple gradient sky and inexpensive directional fallback.
+- The hub keeps a separate daylight architectural rig: three explicitly
+  downward-facing local area sources connect the coves/skylight to wall and
+  floor illumination, a restrained sky-aligned key casts architectural shadows,
+  and low environment/hemisphere levels supply only soft fill. Battery uses a
+  simple gradient sky and inexpensive directional fallback.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.

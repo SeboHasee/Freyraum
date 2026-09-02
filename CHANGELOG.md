@@ -1,5 +1,51 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-02 (v1.03 procedural skylight and PBR surfaces).
+> Latest markdown audit: 2026-09-02 (v1.04 architectural lighting topology).
+
+## v1.04 — Architectural lighting topology pass (2026-09-02)
+
+### Changed
+
+- Made every hub area source explicitly target the room and added one restrained
+  clerestory-sized source so the visible skylight produces local illumination.
+- Raised finite-area direct light while reducing non-occluded hemisphere and
+  PMREM fill; ACES exposure remains fixed so contrast comes from light topology.
+- Enabled the existing sole directional shadow map on the ceiling aperture,
+  clerestory returns, cove returns, skylight frame, and doorway headers/jambs.
+- Tightened its orthographic coverage to the visible hall instead of the entry
+  extension, improving useful shadow-map density without increasing resolution.
+- Removed hub surface sine modulation. Smooth plaster, matte ceiling, and satin
+  mineral flooring now derive form from geometry and physically coherent light.
+- Reduced and recessed the floor shadow gap, lightened doorway plaster so depth
+  comes primarily from geometry, and replaced radial artwork halos with smaller
+  soft rounded contact cards behind the existing shadow-casting bodies.
+- Limited the CSS contrast shade to the header region. High retains the on-demand
+  planar floor reflection; balanced now uses PMREM sheen and battery stays off.
+- Added renderer diagnostics for light direction/energy, exposure, environment,
+  shadow/reflection resources, draw calls, triangles, textures, and programs.
+
+### Performance
+
+- No fullscreen AO, additional shadow map, external asset, dependency, or
+  continuous render loop was added.
+- The third area light is high/balanced-only and non-shadowing.
+- Simplifying hub materials removes derivative procedural fragment work.
+- Balanced removes its additional planar reflection render.
+
+### Validation
+
+- `npm install` ✅ (seven existing audit findings remain: one moderate, six high)
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅ (existing large-chunk and Sass legacy-API warnings remain)
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
+- Deterministic Three.js direction probe confirmed local `-Z` resolves to
+  `(0, -1, 0)` after each area light targets the room.
+- Visual comparison was unavailable because the repository does not include
+  `pixelmatch`/`pngjs`; browser inspection was also unavailable after the
+  Playwright transport closed. Neither missing tool was installed or retried.
 
 ## v1.03 — Procedural skylight and PBR hub surfaces (2026-09-02)
 

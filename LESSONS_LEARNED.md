@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-02 (v0.98 wall surface realism + softer artwork-view lighting).
+> Latest markdown audit: 2026-09-02 (v1.04 hub lighting topology).
+
+## 2026-09-02 — Hub architectural-depth lesson
+
+### Lesson 96 — Correct local light before adding surface detail or AO
+
+When a pale room reads as a white void, inspect finite light direction, global
+fill, and architectural shadow participation before adding texture or a
+fullscreen AO pass. Future rule: make visible fixtures illuminate locally,
+keep non-occluded environment/hemisphere fill secondary, and let aperture,
+recess, and mounted-object geometry participate in the existing shadow system.
 
 ## 2026-09-02 — Wall texture and artwork-view lighting lesson
 
