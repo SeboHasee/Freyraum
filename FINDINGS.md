@@ -1,5 +1,31 @@
 # FINDINGS
 
+## Wall surface realism + softer artwork-view lighting findings (v0.98, 2026-09-02)
+
+1. After v0.97 the shared wall token and overall colour temperature were
+   neutral, but the single-artwork wall still read too smooth because the wall
+   plaster response had been flattened aggressively to kill the earlier amber
+   cast.
+2. The washed-out artwork look in the screenshot was not only a wall-colour
+   problem. The fixed gallery rig still pushed too much total light into the
+   artwork view, and matte presentations still kept a non-trivial base specular
+   fallback (`0.08`) even when they had no authored specular path.
+3. The shipped wall-material fix stays inside
+   `src/materials/ArchitecturalSurfaceFactory.ts`: stronger wall normal response
+   plus stronger plaster roughness breakup, while the ceiling remains calmer so
+   the whole room does not become noisy.
+4. The shipped artwork-view fix is two-part:
+   - reduce ambient/direct gallery light energy and keep the two-key geometry on
+     softer near-gallery angles in `src/lighting/LightProfile.ts`;
+   - lower the base specular fallback in `src/materials/PaintingMaterial.ts` so
+     matte presentations stay genuinely matte while satin/glazed works still
+     preserve more sheen.
+5. Lightweight regression protection is sufficient here. The existing
+   `scripts/test-museum-hub-geometry.mjs` harness now asserts the softer
+   lighting-energy budget, visible-but-restrained wall texture, calmer ceiling
+   response, and matte-vs-satin specular separation without requiring a new
+   render harness.
+
 ## Neutral gallery wall-lighting rebalance findings (v0.97, 2026-09-01)
 
 1. The remaining beige/amber wall cast after v0.96 was no longer a token-sync

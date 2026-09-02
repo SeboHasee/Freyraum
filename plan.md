@@ -1,15 +1,16 @@
 # FREYRAUM Plan
 
-## Planned — Wall surface realism + softer artwork-view lighting (v0.98, 2026-09-02)
+## Implemented — Wall surface realism + softer artwork-view lighting (v0.98, 2026-09-02)
 
-> **Planning/docs only.** No runtime code, generated preview assets, or
-> implementation PR were created in this pass.
->
-> **Latest visual evidence:** the current single-artwork route no longer has the
-> earlier amber wall cast, but the wall still reads too flat/smooth and the
-> artwork lighting is still strong enough to wash out highlights and reduce
-> natural contrast. The target is closer to a matte, softly textured modern
-> concrete/plaster wall with gentler, more pleasing picture illumination.
+> **Status update:** The interactive single-artwork route now keeps the neutral
+> grey wall family from v0.96/v0.97, but no longer presents it as a flat bright
+> cream-like surface. `src/materials/ArchitecturalSurfaceFactory.ts` restores
+> visible matte plaster texture with calmer ceiling response, while
+> `src/lighting/LightProfile.ts` lowers the close-view lighting energy and
+> `src/materials/PaintingMaterial.ts` lowers the matte sheen floor so bright
+> artworks keep more natural contrast instead of washing out. Focused guardrails
+> live in `/home/runner/work/Freyraum/Freyraum/scripts/test-museum-hub-geometry.mjs`,
+> and validation is recorded in `CHANGELOG.md`.
 
 ### 1. Current-state diagnosis
 
@@ -51,53 +52,45 @@
   - No reintroduction of the old theatrical warm spotlight look.
   - No regressions to the existing inspection pan / wall-clearance safety rules.
 
-### 3. Implementation plan
+### 3. As-built implementation
 
 #### A. Rebuild the wall-material balance around visible but restrained texture
 
-1. Re-audit the shared plaster recipe in
-   `src/materials/ArchitecturalSurfaceFactory.ts` and restore more perceptible
-   wall micro/mid-scale breakup without making the wall glossy or noisy.
-2. Retune the plaster roughness map and normal response together so the wall
-   gets clearer tactile variation first from roughness breakup, then from subtle
-   height relief, rather than from stronger warm lighting.
-3. Keep the ceiling calmer than the wall and preserve the current neutral floor,
-   trim, and cove-light palette so the added wall texture does not pull the
-   whole room back toward beige.
-4. If the shared factory cannot satisfy both routes cleanly, split only the
-   minimum gallery-vs-hub wall response needed while preserving the shared wall
-   token and overall visual family.
+1. `src/materials/ArchitecturalSurfaceFactory.ts` was retuned to restore more
+   perceptible wall micro/mid-scale breakup without making the wall glossy or
+   noisy.
+2. The plaster roughness map and normal response were increased together so the
+   wall gets clearer tactile variation from roughness breakup plus subtle height
+   relief rather than from warmer light.
+3. The ceiling remains calmer than the wall, and the neutral floor/trim/cove
+   palette was preserved so the added wall texture does not pull the room back
+   toward beige.
+4. The shared architectural surface factory remained sufficient; no new
+   gallery-vs-hub material split was required for this pass.
 
 #### B. Soften the artwork-view lighting before changing artwork color pipelines
 
-1. Rebalance the fixed gallery light composition in `src/lighting/LightProfile.ts`
-   so the wall remains neutral but the artwork plane is no longer overlit.
-2. Reduce washout by lowering direct-light pressure before changing wall color
-   again: bring key/fill/ambient energy into a more museum-like balance and keep
-   the existing neutral temperature direction.
-3. Review the artwork shading response in `src/materials/PaintingMaterial.ts`,
-   `src/config/presentation.ts`, and `src/config/quality.ts` so the picture can
-   hold contrast under the softer lights without looking dull:
-   - keep matte presentations matte;
-   - prevent bright/saturated works from clipping through specular or grazing
-     response;
-   - preserve detail readability instead of flattening the whole artwork.
-4. Maintain the current mounted-body separation and wall-shadow cue from
-   `src/gallery/ArtworkMesh.ts`; the goal is a better-lit picture, not a return
-   to contact-shadow artifacts on customer pixels.
+1. `src/lighting/LightProfile.ts` was rebalanced so the wall remains neutral
+   while the artwork plane is no longer overlit.
+2. Washout was reduced by lowering ambient/direct light pressure while keeping
+   the existing neutral temperature direction and balanced two-key composition.
+3. `src/materials/PaintingMaterial.ts` now keeps matte presentations genuinely
+   matte through a lower base specular fallback, while satin/glazed
+   presentations still preserve more sheen than matte works.
+4. The current mounted-body separation and wall-shadow cue from
+   `src/gallery/ArtworkMesh.ts` remain unchanged; the fix improves picture
+   lighting without reintroducing contact-shadow artifacts on customer pixels.
 
 #### C. Add proof that the tuning solved the right visual problem
 
-1. Extend the lightweight deterministic checks in
-   `scripts/test-museum-hub-geometry.mjs` so the fixed wall/lighting contract
-   continues to stay neutral, restrained, and non-theatrical after the retune.
-2. Use the existing visual-regression flow for the single-artwork route when the
-   environment has the required screenshot tooling, or otherwise capture explicit
-   before/after artwork-view evidence during implementation review because this
-   is a perceptual-risk change.
-3. Re-check both interactive gallery and hub routes so the wall gains texture
-   without reintroducing the earlier warm cast or making the hub feel like a
-   different material system.
+1. `scripts/test-museum-hub-geometry.mjs` now asserts the softer lighting
+   contract, visible-but-restrained wall texture, calmer ceiling response, and
+   matte-vs-satin specular separation.
+2. The existing visual-regression path remains the optional screenshot layer
+   when the environment provides the required tooling, but the deterministic
+   regression harness now captures the main structural guardrails for this pass.
+3. The interactive gallery and hub remain in the same neutral-grey material
+   family without reintroducing the earlier warm cast.
 
 ### 4. Acceptance criteria
 
@@ -113,7 +106,7 @@
   into a separate wall language.
 - Inspection pan/tilt safety remains intact.
 
-### 5. Validation plan for the future implementation pass
+### 5. Validation
 
 - `npm run import:artworks`
 - `npm run lint`

@@ -48,7 +48,7 @@ const ROOM_HEIGHT = 3.4;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, quality, paintingMaterial] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
@@ -57,6 +57,9 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/gallery/inspectionSafety.ts'),
   loadTsModule('src/config/galleryPresentation.ts'),
   loadTsModule('src/lighting/LightProfile.ts'),
+  loadTsModule('src/materials/ArchitecturalSurfaceFactory.ts'),
+  loadTsModule('src/config/quality.ts'),
+  loadTsModule('src/materials/PaintingMaterial.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
@@ -312,19 +315,58 @@ assert.ok(
   lightProfile.DRAMATIC_LIGHT_PROFILE.ambientKelvin >= 4800,
   'fixed gallery lighting must keep a neutral enough ambient color temperature for concrete-grey walls'
 );
+assert.ok(
+  lightProfile.DRAMATIC_LIGHT_PROFILE.ambientIntensity <= 0.8,
+  'fixed gallery lighting ambient fill must stay soft enough to avoid washing out close artwork views'
+);
 assert.equal(
   lightProfile.DRAMATIC_LIGHT_PROFILE.keys.length,
   2,
   'fixed gallery lighting must keep the balanced two-key setup that flattens the wall cast'
 );
 assert.ok(
-  lightProfile.DRAMATIC_LIGHT_PROFILE.keys[0].position.x > -4.5,
-  'fixed gallery lighting primary key must not return to the overly dramatic far-left position'
+  lightProfile.DRAMATIC_LIGHT_PROFILE.keys[0].position.x > -5.5
+    && lightProfile.DRAMATIC_LIGHT_PROFILE.keys[0].position.x < -3.5,
+  'fixed gallery lighting primary key must stay on the softer near-gallery angle instead of sliding too frontal or too far left'
 );
 assert.ok(
   lightProfile.DRAMATIC_LIGHT_PROFILE.keys[0].kelvin >= 4300,
   'fixed gallery lighting primary key must stay neutral enough to avoid amber wall casts'
 );
+assert.ok(
+  lightProfile.DRAMATIC_LIGHT_PROFILE.keys.reduce((sum, key) => sum + key.intensity, 0) <= 120,
+  'fixed gallery lighting direct energy must stay below the washout-prone range'
+);
+const surfaceFactory = new architecture.ArchitecturalSurfaceFactory(256);
+const surfaces = surfaceFactory.getMaterials({ wall: '#C7CED4' });
+assert.ok(
+  surfaces.wall.roughness >= 0.96,
+  'gallery wall material must stay decisively matte'
+);
+assert.ok(
+  surfaces.wall.normalScale.x >= 0.12 && surfaces.wall.normalScale.x <= 0.18,
+  'gallery wall material must keep visible but restrained plaster normal texture'
+);
+assert.ok(
+  surfaces.ceiling.normalScale.x < surfaces.wall.normalScale.x,
+  'gallery ceiling texture must stay calmer than the wall'
+);
+surfaceFactory.dispose();
+const balancedPreset = quality.getQualityPreset('balanced');
+const matteMaterial = new paintingMaterial.PaintingMaterial(balancedPreset);
+matteMaterial.applyPresentation('matte-print', balancedPreset);
+assert.ok(
+  matteMaterial.specularIntensity <= 0.02,
+  'matte artwork presentations must keep a very low base specular response so close views do not wash out'
+);
+const satinMaterial = new paintingMaterial.PaintingMaterial(balancedPreset);
+satinMaterial.applyPresentation('satin-print', balancedPreset);
+assert.ok(
+  satinMaterial.specularIntensity > matteMaterial.specularIntensity,
+  'satin presentations must still keep more sheen than matte presentations after the washout retune'
+);
+matteMaterial.dispose();
+satinMaterial.dispose();
 assert.ok(
   Math.abs(galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ + 0.182) < 1e-9,
   'interactive-gallery front wall position must reflect the deeper inspection setback'

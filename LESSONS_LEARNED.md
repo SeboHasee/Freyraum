@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-01 (v0.97 neutral gallery wall-lighting rebalance).
+> Latest markdown audit: 2026-09-02 (v0.98 wall surface realism + softer artwork-view lighting).
+
+## 2026-09-02 — Wall texture and artwork-view lighting lesson
+
+### Lesson 95 — Wall realism and artwork washout need different controls
+
+If a close artwork view feels flat and washed out, do not solve both symptoms
+with only wall-colour changes. Future rule: increase wall realism through the
+architectural roughness/normal response, but reduce artwork washout through
+lower light energy and a lower matte-specular floor so the wall gains texture
+without the picture becoming glossy or overexposed.
 
 ## 2026-09-01 — Neutral gallery wall-lighting rebalance lesson
 

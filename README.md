@@ -26,12 +26,16 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - The interactive gallery now mounts artworks inside a compact architectural stage
   (front display wall, floor, ceiling, side returns, shadow gap, and ceiling
   reveal) while keeping the hub on its independent v0.87 room renderer.
+- The interactive-gallery wall now keeps visible but restrained matte plaster
+  texture, with a calmer ceiling response so the room reads tactile rather than
+  flat.
 - Single-artwork inspection now keeps a small deliberate grey-wall reveal margin
   at extreme pan and clamps hover tilt against the deeper front-wall clearance,
   so detailed inspection regains some travel without letting the mounted work
   intersect the stage wall behind it.
-- Lighting still uses one fixed balanced neutral-gallery configuration; there is
-  no lighting-mode setting.
+- Lighting still uses one fixed balanced neutral-gallery configuration, but the
+  single-artwork view now runs at a softer ambient/direct energy balance and a
+  lower matte-sheen baseline so bright artworks no longer wash out as easily.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.

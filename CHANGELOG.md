@@ -1,5 +1,37 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-01 (v0.97 neutral gallery wall-lighting rebalance).
+> Latest markdown audit: 2026-09-02 (v0.98 wall surface realism + softer artwork-view lighting).
+
+## v0.98 — Wall surface realism + softer artwork-view lighting (2026-09-02)
+
+### Changed
+
+- Retuned `src/materials/ArchitecturalSurfaceFactory.ts` so the neutral-grey
+  gallery wall regains visible matte plaster texture: stronger wall normal
+  response, stronger plaster roughness breakup, and a calmer ceiling response.
+- Softened the fixed close-view lighting in `src/lighting/LightProfile.ts` by
+  lowering ambient/direct energy and keeping the two-key setup on softer
+  near-gallery angles, reducing the large bright hotspot that was washing out
+  the artwork view.
+- Lowered the matte artwork sheen floor in `src/materials/PaintingMaterial.ts`
+  so matte presentations no longer keep the old `0.08` base specular response;
+  satin and glazed presentations still preserve higher sheen than matte works.
+- Extended `scripts/test-museum-hub-geometry.mjs` with focused guards for the
+  softer lighting-energy contract, visible-but-restrained wall texture, calmer
+  ceiling response, and matte-vs-satin specular separation.
+- Rebuilt the tracked local preview bundle so
+  `/home/runner/work/Freyraum/Freyraum/customer-preview/freyraum-gallery.js`
+  matches the shipped runtime behavior.
+
+### Validation
+
+- `npm install` ✅
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
 
 ## v0.97 — Neutral gallery wall-lighting rebalance (2026-09-01)
 

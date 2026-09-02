@@ -37,24 +37,24 @@ export interface LightProfile {
 
 /** The gallery's single, fixed neutral-gallery lighting configuration. */
 export const DRAMATIC_LIGHT_PROFILE: LightProfile = {
-  ambientIntensity: 1.0,
-  ambientKelvin: 5000,
+  ambientIntensity: 0.75,
+  ambientKelvin: 4900,
   keys: [
     {
-      kelvin: 4600,
-      intensity: 115,
-      position: { x: -3.2, y: 5.4, z: 4.4 },
-      angle: 0.58,
-      penumbra: 0.92,
-      decay: 1.55,
+      kelvin: 4400,
+      intensity: 78,
+      position: { x: -4.2, y: 6.0, z: 5.1 },
+      angle: 0.66,
+      penumbra: 0.97,
+      decay: 1.6,
     },
     {
-      kelvin: 5200,
-      intensity: 55,
-      position: { x: 3.4, y: 4.8, z: 4.2 },
-      angle: 0.72,
-      penumbra: 0.97,
-      decay: 1.45,
+      kelvin: 5100,
+      intensity: 28,
+      position: { x: 4.4, y: 5.1, z: 4.8 },
+      angle: 0.82,
+      penumbra: 0.99,
+      decay: 1.5,
     },
   ],
 };

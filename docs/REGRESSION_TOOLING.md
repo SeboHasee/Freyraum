@@ -131,7 +131,10 @@ pan may use only the bounded reveal margin, close hover tilt must retain its
 full requested range after the wall setback, and larger hover motion must still
 stay within the available front-wall clearance. The same script now also checks
 the fixed gallery wall-lighting contract stays neutral enough (ambient Kelvin,
-balanced two-key setup, no return to the old dramatic far-left spotlight).
+balanced two-key setup, no return to the old dramatic far-left spotlight), and
+it now additionally guards the visible wall-material contract (matte wall,
+restrained wall normal scale, calmer ceiling) plus the low-sheen matte artwork
+response that prevents close-view washout.
 
 ## Acceptance thresholds (Phase 14)
 

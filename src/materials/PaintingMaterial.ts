@@ -112,6 +112,8 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
 
   constructor(preset: QualityPreset) {
     const initialPresentation = ARTWORK_PRESENTATION_PROFILES[DEFAULT_ARTWORK_PRESENTATION];
+    const initialBaseSpecular =
+      initialPresentation.clearcoatStrength > 0 ? 0.06 : initialPresentation.specularScale > 0 ? 0.04 : 0.015;
     super({
       roughness: initialPresentation.baseRoughness,
       metalness: 0,
@@ -122,7 +124,7 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
       clearcoat: 0.0,
       // v0.03 matte-first retune: was 1.0. Specular intensity map (when
       // present) controls the dynamic range, but the base term is muted.
-      specularIntensity: 0.08,
+      specularIntensity: initialBaseSpecular,
     });
 
     this.paintingUniforms = {
@@ -131,7 +133,7 @@ export class PaintingMaterial extends THREE.MeshPhysicalMaterial {
       uBumpStrength: { value: preset.bumpStrength },
       // v0.03 matte-first retune: was 0.6. Lower grazing boost keeps the
       // matte canvas look stable under side-lit profiles.
-      uLightGrazingBoost: { value: 0.25 },
+      uLightGrazingBoost: { value: 0.16 },
       uReducedMotionScalar: { value: 1.0 },
       tDetailNormal: { value: null },
       uParallaxScale: { value: preset.parallaxEnabled ? preset.parallaxScale : 0.0 },
@@ -550,12 +552,13 @@ ${LIGHTS_END_TOKEN}
 
     this.normalMap = textures.normal ?? null;
 
+    const presentation = ARTWORK_PRESENTATION_PROFILES[this.activePresentation];
     this.roughnessMap = preset.shaderVariant === 'painting-battery' ? null : (textures.roughness ?? null);
-    this.roughness = ARTWORK_PRESENTATION_PROFILES[this.activePresentation].baseRoughness;
+    this.roughness = presentation.baseRoughness;
 
-    const specularStrength = preset.specularStrength * ARTWORK_PRESENTATION_PROFILES[this.activePresentation].specularScale;
+    const specularStrength = preset.specularStrength * presentation.specularScale;
     this.specularIntensityMap = specularStrength > 0 ? (textures.specular ?? null) : null;
-    this.specularIntensity = specularStrength > 0 ? specularStrength : 0.08;
+    this.specularIntensity = specularStrength > 0 ? specularStrength : this.getPresentationBaseSpecularIntensity(presentation);
 
     this.paintingUniforms.tDetailNormal.value =
       preset.detailNormalEnabled && preset.detailNormalStrength > 0 ? (textures.detailNormal ?? null) : null;
@@ -574,7 +577,6 @@ ${LIGHTS_END_TOKEN}
     this.aoMap = textures.ao ?? null;
     this.aoMapIntensity = 1.0;
 
-    const presentation = ARTWORK_PRESENTATION_PROFILES[this.activePresentation];
     const nextClearcoatMap =
       preset.clearcoatEnabled && presentation.clearcoatStrength > 0 ? (textures.varnish ?? null) : null;
     const clearcoatMapChanged = nextClearcoatMap !== this.clearcoatMap;
@@ -693,7 +695,7 @@ ${LIGHTS_END_TOKEN}
     this.clearcoatRoughness =
       presentation.clearcoatStrength > 0 ? presentation.clearcoatRoughness : preset.clearcoatRoughnessValue;
     const specularStrength = preset.specularStrength * presentation.specularScale;
-    this.specularIntensity = specularStrength > 0 ? specularStrength : 0.08;
+    this.specularIntensity = specularStrength > 0 ? specularStrength : this.getPresentationBaseSpecularIntensity(presentation);
     if (presentation.clearcoatStrength <= 0) {
       this.clearcoat = 0;
     } else if (preset.clearcoatEnabled) {
@@ -701,5 +703,11 @@ ${LIGHTS_END_TOKEN}
     } else {
       this.clearcoat = 0;
     }
+  }
+
+  private getPresentationBaseSpecularIntensity(presentation: typeof ARTWORK_PRESENTATION_PROFILES[ArtworkPresentationId]): number {
+    if (presentation.clearcoatStrength > 0) return 0.06;
+    if (presentation.specularScale > 0) return 0.04;
+    return 0.015;
   }
 }

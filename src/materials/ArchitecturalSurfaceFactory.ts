@@ -74,10 +74,10 @@ export class ArchitecturalSurfaceFactory {
 
     const wall = new THREE.MeshStandardMaterial({
       color: wallColor,
-      roughness: 0.97,
+      roughness: 0.965,
       metalness: 0.0,
       normalMap: plasterNormal,
-      normalScale: new THREE.Vector2(0.08, 0.08),
+      normalScale: new THREE.Vector2(0.14, 0.14),
       roughnessMap: plasterRoughness,
     });
 
@@ -86,7 +86,7 @@ export class ArchitecturalSurfaceFactory {
       roughness: 0.97,
       metalness: 0.0,
       normalMap: plasterNormal,
-      normalScale: new THREE.Vector2(0.05, 0.05),
+      normalScale: new THREE.Vector2(0.06, 0.06),
     });
 
     const floor = new THREE.MeshStandardMaterial({
@@ -181,12 +181,12 @@ export class ArchitecturalSurfaceFactory {
     let texture: THREE.DataTexture;
     switch (role) {
       case 'plasterNormal':
-        texture = this.generateNormal(11, 2.2, 0.35, 0.03);
+        texture = this.generateNormal(11, 1.9, 0.42, 0.05);
         texture.repeat.setScalar(1 / PLASTER_TILE_PERIOD_M);
         break;
       case 'plasterRoughness':
-        // Painted mineral plaster: high roughness with ±0.045 macro variation.
-        texture = this.generateGrayscale(29, 226, 23, 0.5);
+        // Matte mineral plaster: high roughness with clearer trowel breakup.
+        texture = this.generateGrayscale(29, 220, 34, 0.62);
         texture.repeat.setScalar(1 / PLASTER_TILE_PERIOD_M);
         break;
       case 'floorNormal':
