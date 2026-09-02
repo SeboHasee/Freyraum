@@ -1,5 +1,130 @@
 # FREYRAUM Plan
 
+## Planned — Wall surface realism + softer artwork-view lighting (v0.98, 2026-09-02)
+
+> **Planning/docs only.** No runtime code, generated preview assets, or
+> implementation PR were created in this pass.
+>
+> **Latest visual evidence:** the current single-artwork route no longer has the
+> earlier amber wall cast, but the wall still reads too flat/smooth and the
+> artwork lighting is still strong enough to wash out highlights and reduce
+> natural contrast. The target is closer to a matte, softly textured modern
+> concrete/plaster wall with gentler, more pleasing picture illumination.
+
+### 1. Current-state diagnosis
+
+1. The problem is in the **interactive single-artwork gallery route**, not the
+   museum-hub artwork recovery path. The relevant implementation area is the
+   shared architectural surface factory plus the fixed gallery-lighting profile
+   that illuminates the close artwork view.
+2. The current wall material was intentionally flattened during v0.97 to remove
+   the warm/amber cast:
+   - `src/materials/ArchitecturalSurfaceFactory.ts` currently keeps the wall at
+     very high roughness with low plaster normal intensity;
+   - the plaster detail maps still exist, but they are now visually restrained
+     enough that the wall can read too smooth in the close artwork route.
+3. The current artwork-view lighting is also still strong for saturated images:
+   - `src/lighting/LightProfile.ts` uses one fixed neutral-gallery profile with
+     a fairly bright ambient fill plus two direct keys;
+   - `src/materials/PaintingMaterial.ts`, `src/config/presentation.ts`, and
+     `src/config/quality.ts` can still amplify that light through specular,
+     grazing, clearcoat, and roughness interactions depending on presentation
+     and quality preset.
+4. Because `src/materials/ArchitecturalSurfaceFactory.ts` is reused by both the
+   interactive gallery stage and the museum hub, wall-texture changes must keep
+   both routes in the same neutral-grey family even if the final tuning becomes
+   slightly gallery-biased.
+
+### 2. Scope and guardrails
+
+- **In scope**
+  - Increase wall surface realism so the background reads as intentional
+    concrete/plaster rather than a flat painted gradient.
+  - Reduce artwork washout in the single-artwork view so bright passages keep
+    detail and the overall scene feels softer and more natural.
+  - Add enough diagnostics/regression protection that future wall/lighting
+    retunes do not swing back to amber walls, blown-out artwork highlights, or
+    a featureless wall.
+- **Out of scope**
+  - No new artwork source-loading or blank-artwork recovery work.
+  - No new lighting-profile UI or preference surface.
+  - No reintroduction of the old theatrical warm spotlight look.
+  - No regressions to the existing inspection pan / wall-clearance safety rules.
+
+### 3. Implementation plan
+
+#### A. Rebuild the wall-material balance around visible but restrained texture
+
+1. Re-audit the shared plaster recipe in
+   `src/materials/ArchitecturalSurfaceFactory.ts` and restore more perceptible
+   wall micro/mid-scale breakup without making the wall glossy or noisy.
+2. Retune the plaster roughness map and normal response together so the wall
+   gets clearer tactile variation first from roughness breakup, then from subtle
+   height relief, rather than from stronger warm lighting.
+3. Keep the ceiling calmer than the wall and preserve the current neutral floor,
+   trim, and cove-light palette so the added wall texture does not pull the
+   whole room back toward beige.
+4. If the shared factory cannot satisfy both routes cleanly, split only the
+   minimum gallery-vs-hub wall response needed while preserving the shared wall
+   token and overall visual family.
+
+#### B. Soften the artwork-view lighting before changing artwork color pipelines
+
+1. Rebalance the fixed gallery light composition in `src/lighting/LightProfile.ts`
+   so the wall remains neutral but the artwork plane is no longer overlit.
+2. Reduce washout by lowering direct-light pressure before changing wall color
+   again: bring key/fill/ambient energy into a more museum-like balance and keep
+   the existing neutral temperature direction.
+3. Review the artwork shading response in `src/materials/PaintingMaterial.ts`,
+   `src/config/presentation.ts`, and `src/config/quality.ts` so the picture can
+   hold contrast under the softer lights without looking dull:
+   - keep matte presentations matte;
+   - prevent bright/saturated works from clipping through specular or grazing
+     response;
+   - preserve detail readability instead of flattening the whole artwork.
+4. Maintain the current mounted-body separation and wall-shadow cue from
+   `src/gallery/ArtworkMesh.ts`; the goal is a better-lit picture, not a return
+   to contact-shadow artifacts on customer pixels.
+
+#### C. Add proof that the tuning solved the right visual problem
+
+1. Extend the lightweight deterministic checks in
+   `scripts/test-museum-hub-geometry.mjs` so the fixed wall/lighting contract
+   continues to stay neutral, restrained, and non-theatrical after the retune.
+2. Use the existing visual-regression flow for the single-artwork route when the
+   environment has the required screenshot tooling, or otherwise capture explicit
+   before/after artwork-view evidence during implementation review because this
+   is a perceptual-risk change.
+3. Re-check both interactive gallery and hub routes so the wall gains texture
+   without reintroducing the earlier warm cast or making the hub feel like a
+   different material system.
+
+### 4. Acceptance criteria
+
+- The single-artwork background wall reads as a neutral grey concrete/plaster
+  surface with visible fine texture and roughness variation, not as a smooth
+  cream wall.
+- The artwork view no longer looks washed out: bright passages keep detail,
+  saturated colours keep separation, and the overall light feels softer and more
+  natural to the eye.
+- The interactive gallery keeps the current neutral-grey wall family and does
+  not regress to amber/orange.
+- The hub remains visually compatible with the gallery rather than diverging
+  into a separate wall language.
+- Inspection pan/tilt safety remains intact.
+
+### 5. Validation plan for the future implementation pass
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+- plus explicit screenshot/manual review of the single-artwork route because the
+  success criteria are strongly perceptual.
+
 ## Implemented — neutral gallery wall-lighting rebalance (v0.97, 2026-09-01)
 
 > **Status update:** The remaining amber wall cast after the concrete-grey token
