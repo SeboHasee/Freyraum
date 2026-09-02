@@ -1,5 +1,23 @@
 # FINDINGS
 
+## Main Museum Hub environment polish findings (v1.00, 2026-09-02)
+
+1. The hub's already-separated architectural profile is sufficient for premium
+   room polish; no scene-manager, camera, route, or gallery rewrite is needed.
+2. Removing hub ceiling and floor maps eliminates large-surface repetition and
+   also avoids their texture samples. The close gallery remains mapped because
+   its viewing distance and tactile target differ.
+3. Warm off-white hub plaster at `0.88` roughness retains a broad highlight that
+   describes smooth painted material better than the previous `0.965` finish.
+4. Procedural wall color modulation is unnecessary at museum viewing distance.
+   A `0.004` long-period roughness response is enough to prevent perfectly
+   uniform shading without exposing a visible pattern.
+5. Existing hemisphere and directional lights can support the target when their
+   colors match the warm ceiling diffusers. Additional area lights, bloom, and
+   shadow maps would add cost without proportionate benefit.
+6. The existing on-demand, downscaled planar reflection remains appropriate,
+   but lower strength keeps the floor material noticeable before the effect.
+
 ## Main Museum Hub plaster + lighting findings (v0.99, 2026-09-02)
 
 1. The hub and interactive gallery already own independent

@@ -20,9 +20,9 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   into left/right wall focus pages.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy
-  (`planar`, `ibl`, `off`). The hub wall uses a calm shader-space plaster
-  response with no repeating wall texture; the closer gallery retains its
-  tactile mapped plaster profile.
+  (`planar`, `ibl`, `off`). The hub uses warm off-white, mostly smooth wall
+  and ceiling finishes without repeating detail maps, plus a restrained satin
+  floor; the closer gallery retains its tactile mapped plaster profile.
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
 - The interactive gallery now mounts artworks inside a compact architectural stage
@@ -38,9 +38,9 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Lighting still uses one fixed balanced neutral-gallery configuration, but the
   single-artwork view now runs at a softer ambient/direct energy balance and a
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
-- The hub keeps a separate low-energy architectural rig: a broad neutral
-  hemisphere wash plus two restrained directions, with only the high key
-  casting shadows.
+- The hub keeps a separate low-energy architectural rig: a broad warm-neutral
+  hemisphere wash plus two restrained directions aligned with the ceiling
+  coves, with only the high key casting shadows.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.

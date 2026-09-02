@@ -1,5 +1,45 @@
 # FREYRAUM Plan
 
+## Implemented — Main Museum Hub environment polish (v1.00, 2026-09-02)
+
+> **Status update:** The hub-only architectural profile now presents smooth
+> warm off-white plaster, a calm map-free ceiling, and a restrained satin floor.
+> The existing low-cost light and reflection architecture is retained with
+> softer, fixture-coherent calibration.
+
+### 1. As-built scope
+
+1. Hub walls use `0.88` roughness, no detail maps, no procedural color
+   modulation, and only `0.004` long-period roughness variation.
+2. Hub ceilings and floors no longer bind repeating architectural detail maps.
+   The interactive gallery keeps its existing tactile mapped profile.
+3. The floor retains quality-gated planar/IBL/off behavior with reduced planar
+   strength rather than adding a new reflection technique.
+4. Existing hemisphere plus two-direction lighting is warmed to agree with the
+   recessed ceiling diffusers; the high key remains the only shadow caster.
+5. Camera, room geometry, route behavior, artwork imagery/mounting, interaction,
+   loading, and on-demand rendering are unchanged.
+
+### 2. Performance and acceptance guardrails
+
+- No added dependencies, textures, lights, draw calls, shadow maps, passes, or
+  animation loops.
+- Hub wall, ceiling, and floor avoid repeating detail maps.
+- Artwork remains unlit and color-faithful while mounted bodies and existing
+  contact shadows preserve physical separation.
+- Deterministic validation protects warm wall response, material roughness,
+  restrained light energy, and single-profile surface ownership.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
 ## Implemented — Main Museum Hub plaster + lighting refinement (v0.99, 2026-09-02)
 
 > **Status update:** The Main Museum Hub keeps its calibrated room, camera,

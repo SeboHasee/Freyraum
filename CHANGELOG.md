@@ -1,5 +1,31 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-02 (v0.99 Main Museum Hub plaster + lighting refinement).
+> Latest markdown audit: 2026-09-02 (v1.00 Main Museum Hub environment polish).
+
+## v1.00 — Main Museum Hub environment polish (2026-09-02)
+
+### Changed
+
+- Retuned the hub-only architectural profile to warm off-white plaster with
+  `0.88` wall roughness and no procedural color modulation.
+- Removed repeating normal/roughness maps from hub ceilings and floors while
+  preserving the interactive gallery's tactile mapped surface profile.
+- Reduced the hub's world-space wall response to imperceptible broad roughness
+  variation and softened the preset-gated planar floor reflection.
+- Warmed the existing low-energy hub lighting and ceiling diffusers without
+  adding lights, shadow maps, render passes, or continuous rendering.
+- Extended deterministic hub validation for material roughness, warm wall
+  response, and absence of repeating wall, ceiling, and floor maps.
+
+### Validation
+
+- `npm install` ✅ (seven existing audit findings remain: one moderate, six high)
+- `npm run import:artworks` ✅
+- `npm run lint` ✅
+- `npm run build:typecheck` ✅
+- `npm run build` ✅
+- `npm run validate:museum-hub` ✅
+- `npm run test:frame-budget` ✅
+- `npm run docs:check-config-authority` ✅
 
 ## v0.99 — Main Museum Hub plaster + lighting refinement (2026-09-02)
 
