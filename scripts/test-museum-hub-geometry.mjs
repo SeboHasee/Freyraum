@@ -388,6 +388,12 @@ assert.ok(
   hubSurfaces.floor.roughness >= 0.6 && hubSurfaces.floor.roughness <= 0.7,
   'hub floor must retain restrained satin response'
 );
+assert.ok(
+  hubSurfaces.pocket.color.r > 0.2
+    && hubSurfaces.pocket.color.g > 0.2
+    && hubSurfaces.pocket.color.b > 0.2,
+  'hub doorway pockets must retain visible material response instead of reading as black voids'
+);
 assert.equal(
   hubSurfaces.wall.userData.architecturalSurfaceProfile,
   'hub-world-space',
@@ -418,6 +424,20 @@ assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity
     + hubRoomRenderer.HUB_LIGHTING_PROFILE.fill.intensity <= 1,
   'hub directional energy must remain restrained'
+);
+assert.equal(
+  hubRoomRenderer.HUB_COVE_WIDTH_M,
+  0.48,
+  'hub ceiling luminaires must remain broad enough to read as architectural panels'
+);
+assert.ok(
+  hubRoomRenderer.HUB_LIGHTING_PROFILE.ceilingPanel.intensity > 0
+    && hubRoomRenderer.HUB_LIGHTING_PROFILE.ceilingPanel.intensity <= 4,
+  'hub area-panel energy must remain soft and controlled'
+);
+assert.ok(
+  hubRoomRenderer.HUB_LIGHTING_PROFILE.key.intensity < 0.5,
+  'hub directional key must remain secondary to the ceiling-aligned area fixtures'
 );
 assert.ok(
   hubRoomRenderer.HUB_LIGHTING_PROFILE.key.position[1] >= 7,

@@ -52,7 +52,7 @@ const DOORWAY_POCKET_DEPTH = 1.15;
 const SKIRTING_HEIGHT = 0.075;
 const SKIRTING_DEPTH = 0.014;
 /** Recessed ceiling light-cove dimensions (metres). */
-const COVE_WIDTH = 0.2;
+export const HUB_COVE_WIDTH_M = 0.48;
 const COVE_SIDE_INSET = 0.85;
 const COVE_RECESS_DEPTH = 0.06;
 /** Height of the diffuser strip above the ceiling plane (metres). Nearly
@@ -64,19 +64,25 @@ export const HUB_LIGHTING_PROFILE = Object.freeze({
   hemisphere: Object.freeze({
     sky: 0xfffaf1,
     ground: 0xbab4aa,
-    intensity: 0.64,
+    intensity: 0.5,
   }),
   key: Object.freeze({
     color: 0xfff4e2,
-    intensity: 0.7,
+    intensity: 0.38,
     position: Object.freeze([-1.4, 7.2, 4.8] as const),
     target: Object.freeze([0.25, 0.8, -0.6] as const),
   }),
   fill: Object.freeze({
     color: 0xf0f3f1,
-    intensity: 0.22,
+    intensity: 0.18,
     position: Object.freeze([3.0, 4.8, 3.8] as const),
     target: Object.freeze([-0.6, 1.5, -0.4] as const),
+  }),
+  ceilingPanel: Object.freeze({
+    color: 0xfff2dc,
+    intensity: 3.2,
+    edgeInset: 0.12,
+    ceilingOffset: 0.025,
   }),
 });
 
@@ -114,6 +120,8 @@ export class HubRoomRenderer {
   private contactShadowTexture: THREE.CanvasTexture | null = null;
   private readonly floorMeshes: THREE.Mesh[] = [];
   private keyLight: THREE.DirectionalLight | null = null;
+  private fillLight: THREE.DirectionalLight | null = null;
+  private readonly ceilingPanelLights: THREE.RectAreaLight[] = [];
   private environmentTarget: THREE.WebGLRenderTarget | null = null;
   private reflectionTarget: THREE.WebGLRenderTarget | null = null;
   private readonly reflectionCamera = new THREE.PerspectiveCamera();
@@ -177,7 +185,7 @@ export class HubRoomRenderer {
       map: this.contactShadowMap(),
       color: 0x000000,
       transparent: true,
-      opacity: 0.34,
+      opacity: 0.22,
       depthWrite: false,
       toneMapped: false,
     });
@@ -200,6 +208,7 @@ export class HubRoomRenderer {
     this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
     this.renderer.setSize(this.resolution.stage.width, this.resolution.stage.height, false);
     this.surfaceFactory.setTileSize(preset.hubSurfaceTileSize);
+    this.applyLightingPreset();
     this.applyShadowPreset();
     this.applyEnvironment();
     this.applyReflectionMode();
@@ -338,8 +347,8 @@ export class HubRoomRenderer {
     state.edgeMesh.scale.set(width, height, ARTWORK_EDGE_DEPTH);
     state.edgeMesh.position.set(0, 0, -ARTWORK_EDGE_DEPTH / 2 - 0.001);
     // Soft radial contact shadow hugging the wall behind the mounted work.
-    state.shadowMesh.scale.set(width * 1.22, height * 1.22, 1);
-    state.shadowMesh.position.set(0, -0.015, -zOffset + 0.004);
+    state.shadowMesh.scale.set(width * 1.1, height * 1.1, 1);
+    state.shadowMesh.position.set(0, -0.01, -zOffset + 0.004);
     this.render();
     return { applied: true, usedImage: !missingImage, fit, visibleProbe };
   }
@@ -394,14 +403,14 @@ export class HubRoomRenderer {
 
   private buildLights(): void {
     const profile = HUB_LIGHTING_PROFILE;
-    // Broad neutral wash lets the ceiling coves read as the architectural
-    // source while the weaker directional pair models form without hotspots.
+    // Broad indirect-looking wash supports the local ceiling panels without
+    // flattening the room into one uniform exposure.
     const hemisphere = new THREE.HemisphereLight(
       profile.hemisphere.sky,
       profile.hemisphere.ground,
       profile.hemisphere.intensity
     );
-    // High neutral key is the only shadow caster.
+    // The restrained high key is the only shadow caster.
     const key = new THREE.DirectionalLight(profile.key.color, profile.key.intensity);
     key.position.set(...profile.key.position);
     key.target.position.set(...profile.key.target);
@@ -409,8 +418,35 @@ export class HubRoomRenderer {
     fill.position.set(...profile.fill.position);
     fill.target.position.set(...profile.fill.target);
     this.keyLight = key;
-    this.applyShadowPreset();
+    this.fillLight = fill;
     this.scene.add(hemisphere, key, key.target, fill, fill.target);
+    for (const cove of this.coveRects()) {
+      const width = Math.max(0.1, cove.maxX - cove.minX - profile.ceilingPanel.edgeInset * 2);
+      const height = Math.max(0.1, cove.maxZ - cove.minZ - profile.ceilingPanel.edgeInset);
+      const panel = new THREE.RectAreaLight(
+        profile.ceilingPanel.color,
+        profile.ceilingPanel.intensity,
+        width,
+        height
+      );
+      panel.position.set(
+        (cove.minX + cove.maxX) / 2,
+        this.resolution.room.ceilingY - profile.ceilingPanel.ceilingOffset,
+        (cove.minZ + cove.maxZ) / 2
+      );
+      panel.rotation.x = -Math.PI / 2;
+      this.ceilingPanelLights.push(panel);
+      this.scene.add(panel);
+    }
+    this.applyLightingPreset();
+    this.applyShadowPreset();
+  }
+
+  /** Area fixtures are reserved for high/balanced; battery uses one cheap fill. */
+  private applyLightingPreset(): void {
+    const areaLightingEnabled = this.preset.id !== 'battery';
+    for (const panel of this.ceilingPanelLights) panel.visible = areaLightingEnabled;
+    if (this.fillLight) this.fillLight.visible = !areaLightingEnabled;
   }
 
   private applyShadowPreset(): void {
@@ -704,8 +740,8 @@ export class HubRoomRenderer {
     return rows.map((z) => ({
       minX,
       maxX,
-      minZ: z - COVE_WIDTH / 2,
-      maxZ: z + COVE_WIDTH / 2,
+      minZ: z - HUB_COVE_WIDTH_M / 2,
+      maxZ: z + HUB_COVE_WIDTH_M / 2,
     }));
   }
 

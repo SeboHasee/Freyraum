@@ -150,13 +150,13 @@ export class ArchitecturalSurfaceFactory {
     });
 
     const pocket = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#565b5e'),
-      roughness: 0.96,
+      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#8b8780' : '#565b5e'),
+      roughness: this.surfaceProfile === 'hub' ? 0.94 : 0.96,
       metalness: 0.0,
     });
 
     const lightStrip = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#fff5e6' : '#edf1f4'),
+      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#f5ead9' : '#edf1f4'),
       toneMapped: false,
     });
 
