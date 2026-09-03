@@ -22,6 +22,8 @@
 - Spacing and overlap checks are scoped to the room page currently represented.
 - Older six-slot configurations are clamped and reflowed without losing explicit
   artwork mappings.
+- Every migrated batch, including room one, is remounted through the 2+1+1
+  template, then page indices are normalized for navigation.
 
 ### 3. Preserved behavior
 

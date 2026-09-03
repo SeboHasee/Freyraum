@@ -2110,12 +2110,10 @@ export function resolveMuseumHub(
   }
   for (const [originalPageIndex, pageSlots] of slotsByOriginalPage) {
     if (pageSlots.length <= HUB_SLOTS_PER_PAGE) continue;
-    const overflowSlots = pageSlots.slice(HUB_SLOTS_PER_PAGE);
-    for (let offset = 0; offset < overflowSlots.length; offset += HUB_SLOTS_PER_PAGE) {
-      const targetPageIndex = nextReflowPageIndex;
-      nextReflowPageIndex += 1;
+    for (let offset = 0; offset < pageSlots.length; offset += HUB_SLOTS_PER_PAGE) {
+      const targetPageIndex = offset === 0 ? originalPageIndex : nextReflowPageIndex++;
       const templates = baselinePageSlots(targetPageIndex);
-      for (const [index, slot] of overflowSlots.slice(offset, offset + HUB_SLOTS_PER_PAGE).entries()) {
+      for (const [index, slot] of pageSlots.slice(offset, offset + HUB_SLOTS_PER_PAGE).entries()) {
         const template = templates[index]!;
         slot.pageIndex = targetPageIndex;
         slot.placement = {
@@ -2346,6 +2344,12 @@ export function resolveMuseumHub(
         }
       }
     }
+  }
+
+  const orderedPageIndices = [...new Set(resolved.map((slot) => slot.pageIndex))].sort((a, b) => a - b);
+  const normalizedPageIndex = new Map(orderedPageIndices.map((pageIndex, index) => [pageIndex, index]));
+  for (const slot of resolved) {
+    slot.pageIndex = normalizedPageIndex.get(slot.pageIndex) ?? 0;
   }
 
   const pageMap = new Map<number, ResolvedHubSlot[]>();

@@ -19,6 +19,9 @@
   reuse the same physical wall coordinates.
 - Clamped older `slotsPerPage: 6` configurations to four and reflowed explicit
   excess mappings into new 2+1+1 rooms instead of crashing or retaining crowding.
+- Reapplied the complete safe placement template to every migrated batch,
+  including the retained first room, and normalized sparse authored room numbers
+  to contiguous navigable page indices.
 
 ### Unchanged
 

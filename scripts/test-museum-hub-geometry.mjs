@@ -770,20 +770,22 @@ assert.ok(
 );
 const previousSixSlotConfig = structuredClone(shippingConfig);
 previousSixSlotConfig.slotsPerPage = 6;
-previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-left.a').artworkId = 'landscape-fixture';
-previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-right.a').artworkId = 'landscape-fixture-2';
-previousSixSlotConfig.slots.push(
-  {
-    ...structuredClone(previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-left.a')),
-    id: 'room-01.wall-left.b',
-    artworkId: 'square-fixture',
-  },
-  {
-    ...structuredClone(previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-right.a')),
-    id: 'room-01.wall-right.b',
-    artworkId: 'square-fixture-2',
-  }
+const previousLeftSlot = structuredClone(
+  previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-left.a')
 );
+const previousRightSlot = structuredClone(
+  previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-right.a')
+);
+previousLeftSlot.artworkId = 'landscape-fixture';
+previousRightSlot.artworkId = 'landscape-fixture-2';
+previousSixSlotConfig.slots = [
+  previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-front.a'),
+  previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-front.b'),
+  previousLeftSlot,
+  { ...structuredClone(previousLeftSlot), id: 'room-01.wall-left.b', artworkId: 'square-fixture' },
+  previousRightSlot,
+  { ...structuredClone(previousRightSlot), id: 'room-01.wall-right.b', artworkId: 'square-fixture-2' },
+];
 const migratedSixSlotResolution = museumHub.resolveMuseumHub(artworks, previousSixSlotConfig, null);
 assert.ok(
   migratedSixSlotResolution.warnings.some((warning) => warning.includes('supports at most 4 artworks')),
@@ -800,6 +802,21 @@ assert.equal(
     .filter((slot) => slot.selectable && slot.artworkId).length,
   6,
   'room-density migration must preserve every explicit artwork mapping'
+);
+const migratedFirstRoomCensus = { front: 0, left: 0, right: 0 };
+for (const slot of migratedSixSlotResolution.pages[0].slots) migratedFirstRoomCensus[slot.wallGroup] += 1;
+assert.deepEqual(
+  migratedFirstRoomCensus,
+  { front: 2, left: 1, right: 1 },
+  'legacy reflow must remount the retained first batch through the full 2+1+1 template'
+);
+const sparsePageConfig = structuredClone(shippingConfig);
+for (const slot of sparsePageConfig.slots) slot.id = slot.id.replace('room-01', 'room-03');
+const sparsePageResolution = museumHub.resolveMuseumHub(artworks.slice(0, 2), sparsePageConfig, null);
+assert.deepEqual(
+  sparsePageResolution.pages.map((page) => page.pageIndex),
+  [0],
+  'authored sparse room numbers must normalize to contiguous navigable page indices'
 );
 
 // Shipped production reality: only fraktal + akt-27 exist; empty slots suppress.

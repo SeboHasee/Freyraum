@@ -16,6 +16,10 @@
 5. Capacity migration must handle both automatic overflow and older explicit
    six-slot pages. Explicit excess mappings are preserved but remounted through
    the safe four-slot template in additional rooms.
+6. Reflow must remount the first four legacy entries too; merely moving entries
+   five and six preserves the former two-left/zero-right imbalance.
+7. Runtime navigation addresses contiguous page ordinals, so sparse authored
+   room numbers must be normalized after all overflow and collision moves.
 
 ## Optical hub alignment findings (v1.08, 2026-09-03)
 
