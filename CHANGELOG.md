@@ -15,7 +15,8 @@
 - Added deterministic validation of the real built-in artwork set alongside the
   customer/full-fixture layout.
 - Made aspect-mismatched automatic fallback placement collision-aware so unusual
-  source ratios move to overflow pages instead of shrinking or overlapping.
+  source ratios move to overflow pages instead of shrinking or overlapping;
+  pairwise interval checks cover non-adjacent wide-work conflicts.
 - Persisted final drawable-region fitting into the canonical mount, keeping the
   rendered body and projected interaction quad on one transform.
 

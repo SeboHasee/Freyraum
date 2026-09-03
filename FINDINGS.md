@@ -18,7 +18,8 @@
    customer/full-fixture composition, including the panoramic front-wall work.
 6. Aspect-class fallback can place two unusually wide works on one wall. The
    resolver now moves only the conflicting auto-placed work to an overflow page,
-   preserving the 0.50 m gap and every physical size.
+   preserving the 0.50 m gap and every physical size. Pairwise interval checks
+   also catch a wide work spanning across an intervening narrow work.
 7. Drawable fitting must be persisted back to the canonical anchor and height;
    otherwise rendering and DOM projection can resolve the same work differently.
 

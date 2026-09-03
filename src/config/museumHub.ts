@@ -2153,7 +2153,9 @@ export function resolveMuseumHub(
       anchor: targetWall.room ? point(uv.x * targetWall.room.width, uv.y * targetWall.room.height) : undefined,
       uv: clonePoint(uv),
       mountedHeight: targetWall.room
-        ? Math.max(0.04, normalizedHeight * targetHeight)
+        ? targetWall.id === sourceWall?.id
+          ? slot.placement.mountedHeight
+          : Math.max(0.04, normalizedHeight * targetHeight)
         : slot.placement.mountedHeight,
       targetSizePolicy: slot.placement.targetSizePolicy,
       minScale: slot.placement.minScale,
@@ -2162,7 +2164,9 @@ export function resolveMuseumHub(
       horizontalPosition: uv.x,
       centerHeight: targetWall.room ? uv.y * targetWall.room.height : undefined,
       physicalHeight: targetWall.room
-        ? normalizedHeight * targetWall.room.height
+        ? targetWall.id === sourceWall?.id
+          ? slot.placement.physicalHeight
+          : normalizedHeight * targetWall.room.height
         : slot.placement.physicalHeight,
       mountingGap: slot.placement.mountingGap,
       provisional: slot.placement.provisional,
@@ -2170,9 +2174,12 @@ export function resolveMuseumHub(
     const projection = projectSlotArtwork(targetWall, placement, slot.artworkAspect, stage);
     if (projection?.placement && targetWall.room) {
       const fitted = projection.placement;
+      const fittedHeight = Math.abs(fitted.mountedHeight - placement.mountedHeight) < 1e-9
+        ? placement.mountedHeight
+        : fitted.mountedHeight;
       placement.anchor = clonePoint(fitted.anchor);
-      placement.mountedHeight = fitted.mountedHeight;
-      placement.physicalHeight = fitted.mountedHeight;
+      placement.mountedHeight = fittedHeight;
+      placement.physicalHeight = fittedHeight;
       placement.uv = point(
         clamp01(fitted.anchor.x / Math.max(0.001, targetWall.room.width)),
         clamp01(fitted.anchor.y / Math.max(0.001, targetWall.room.height))
@@ -2224,11 +2231,10 @@ export function resolveMuseumHub(
       warnings.push(`slot "${slot.id}": moved from "${currentWall.id}" to fallback wall "${resolvedWall.id}" after doorway/containment validation.`);
     } else {
       slot.placement = {
-        ...slot.placement,
+        ...resolvedPlacement,
         center: clonePoint(resolvedPlacement.center),
         anchor: resolvedPlacement.anchor ? clonePoint(resolvedPlacement.anchor) : undefined,
         uv: resolvedPlacement.uv ? clonePoint(resolvedPlacement.uv) : undefined,
-        mountedHeight: resolvedPlacement.mountedHeight,
       };
     }
     if (slot.placement.provisional) {
@@ -2250,27 +2256,30 @@ export function resolveMuseumHub(
     }
     for (const slots of candidateGroups.values()) {
       slots.sort((a, b) => a.placement.anchor!.x - b.placement.anchor!.x);
-      for (let index = 1; index < slots.length; index += 1) {
-        const previous = slots[index - 1]!;
-        const current = slots[index]!;
-        const gap = current.placement.anchor!.x
-          - current.placement.mountedHeight * current.artworkAspect * 0.5
-          - previous.placement.anchor!.x
-          - previous.placement.mountedHeight * previous.artworkAspect * 0.5;
-        if (gap + 1e-6 >= HUB_MIN_ARTWORK_SPACING_M) continue;
-        const overflowSlot = current.mappingSource === 'auto-placed'
-          ? current
-          : previous.mappingSource === 'auto-placed'
-            ? previous
-            : null;
-        if (!overflowSlot) continue;
-        overflowSlot.pageIndex = nextOverflowPageIndex;
-        nextOverflowPageIndex += 1;
-        movedConflict = true;
-        warnings.push(
-          `slot "${overflowSlot.id}": moved to an overflow page to preserve ${HUB_MIN_ARTWORK_SPACING_M.toFixed(2)} m wall spacing.`
-        );
-        break;
+      for (let previousIndex = 0; previousIndex < slots.length; previousIndex += 1) {
+        const previous = slots[previousIndex]!;
+        for (let currentIndex = previousIndex + 1; currentIndex < slots.length; currentIndex += 1) {
+          const current = slots[currentIndex]!;
+          const gap = current.placement.anchor!.x
+            - current.placement.mountedHeight * current.artworkAspect * 0.5
+            - previous.placement.anchor!.x
+            - previous.placement.mountedHeight * previous.artworkAspect * 0.5;
+          if (gap + 1e-6 >= HUB_MIN_ARTWORK_SPACING_M) continue;
+          const overflowSlot = current.mappingSource === 'auto-placed'
+            ? current
+            : previous.mappingSource === 'auto-placed'
+              ? previous
+              : null;
+          if (!overflowSlot) continue;
+          overflowSlot.pageIndex = nextOverflowPageIndex;
+          nextOverflowPageIndex += 1;
+          movedConflict = true;
+          warnings.push(
+            `slot "${overflowSlot.id}": moved to an overflow page to preserve ${HUB_MIN_ARTWORK_SPACING_M.toFixed(2)} m wall spacing.`
+          );
+          break;
+        }
+        if (movedConflict) break;
       }
       if (movedConflict) break;
     }
@@ -2299,17 +2308,19 @@ export function resolveMuseumHub(
   }
   for (const slots of slotsByWallAndPage.values()) {
     slots.sort((a, b) => a.placement.anchor!.x - b.placement.anchor!.x);
-    for (let index = 1; index < slots.length; index += 1) {
-      const previous = slots[index - 1]!;
-      const current = slots[index]!;
-      const gap = current.placement.anchor!.x
-        - current.placement.mountedHeight * current.artworkAspect * 0.5
-        - previous.placement.anchor!.x
-        - previous.placement.mountedHeight * previous.artworkAspect * 0.5;
-      if (gap + 1e-6 < HUB_MIN_ARTWORK_SPACING_M) {
-        warnings.push(
-          `slots "${previous.id}" and "${current.id}": wall spacing ${gap.toFixed(3)} m is below the ${HUB_MIN_ARTWORK_SPACING_M.toFixed(2)} m curator minimum.`
-        );
+    for (let previousIndex = 0; previousIndex < slots.length; previousIndex += 1) {
+      const previous = slots[previousIndex]!;
+      for (let currentIndex = previousIndex + 1; currentIndex < slots.length; currentIndex += 1) {
+        const current = slots[currentIndex]!;
+        const gap = current.placement.anchor!.x
+          - current.placement.mountedHeight * current.artworkAspect * 0.5
+          - previous.placement.anchor!.x
+          - previous.placement.mountedHeight * previous.artworkAspect * 0.5;
+        if (gap + 1e-6 < HUB_MIN_ARTWORK_SPACING_M) {
+          warnings.push(
+            `slots "${previous.id}" and "${current.id}": wall spacing ${gap.toFixed(3)} m is below the ${HUB_MIN_ARTWORK_SPACING_M.toFixed(2)} m curator minimum.`
+          );
+        }
       }
     }
   }

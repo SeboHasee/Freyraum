@@ -302,7 +302,70 @@ for (const slot of mixedFallbackResolution.pages.flatMap((page) => page.slots)) 
     Math.abs(projected.placement.mountedHeight - slot.placement.mountedHeight) < 1e-6,
     `${slot.id} renderer and interaction heights must share the fitted placement`
   );
+  assert.equal(
+    slot.placement.physicalHeight,
+    slot.placement.mountedHeight,
+    `${slot.id} canonical and legacy physical heights must stay synchronized after fitting`
+  );
+  assert.equal(
+    slot.placement.horizontalPosition,
+    slot.placement.uv.x,
+    `${slot.id} canonical horizontal position must stay synchronized after fitting`
+  );
+  assert.equal(
+    slot.placement.centerHeight,
+    slot.placement.anchor.y,
+    `${slot.id} canonical center height must stay synchronized after fitting`
+  );
 }
+const frontSlotA = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.a');
+const frontSlotB = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.b');
+const nonAdjacentConflictConfig = {
+  ...shippingConfig,
+  slots: [
+    {
+      ...frontSlotA,
+      artworkId: 'wide-explicit',
+      placement: { ...frontSlotA.placement, horizontalPosition: 0.2, physicalHeight: 2 },
+    },
+    {
+      ...frontSlotB,
+      artworkId: 'narrow-explicit',
+      placement: { ...frontSlotB.placement, horizontalPosition: 0.278, physicalHeight: 1 },
+    },
+    {
+      ...frontSlotA,
+      id: 'room-01.wall-front.c',
+      artworkId: null,
+      placement: { ...frontSlotA.placement, horizontalPosition: 0.4, physicalHeight: 1 },
+    },
+  ],
+};
+const nonAdjacentConflictResolution = museumHub.resolveMuseumHub(
+  [
+    { id: 'wide-explicit', title: 'Wide', image: 'wide.png', dimensions: { width: 2400, height: 1000 } },
+    { id: 'narrow-explicit', title: 'Narrow', image: 'narrow.png', dimensions: { width: 500, height: 1000 } },
+    { id: 'auto-narrow', title: 'Auto', image: 'auto.png', dimensions: { width: 500, height: 1000 } },
+  ],
+  nonAdjacentConflictConfig
+);
+const autoConflictSlot = nonAdjacentConflictResolution.pages
+  .flatMap((page) => page.slots)
+  .find((slot) => slot.artworkId === 'auto-narrow');
+assert.ok(
+  autoConflictSlot?.pageIndex > 0,
+  `a non-adjacent auto-placement conflict must move to an overflow page: ${JSON.stringify({
+    slot: autoConflictSlot,
+    warnings: nonAdjacentConflictResolution.warnings,
+  })}`
+);
+assert.equal(
+  nonAdjacentConflictResolution.warnings.some(
+    (warning) => warning.includes('overlaps slot') && warning.includes('wall-front.c')
+  ),
+  false,
+  'the non-adjacent auto-placement conflict must not survive into final projected geometry'
+);
 const sourcePlan = artworkImageSources.resolveArtworkImageSources(artworks[0]);
 assert.equal(sourcePlan.primary?.mode, 'declared-image', 'artwork source resolution must keep the declared image as primary');
 assert.equal(sourcePlan.primary?.declaredUrl, 'fraktal.png');
