@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-03 (v1.08 optical artwork alignment).
+> Latest markdown audit: 2026-09-03 (v1.09 realistic room density).
+
+## 2026-09-03 — Museum room-density lesson
+
+### Lesson 101 — Protect corners by limiting works per room
+
+Independent wall containment does not guarantee a believable shared corner:
+works on perpendicular walls can both be technically valid yet form an
+impossible-looking cluster. Future rule: cap this room at four works in a 2+1+1
+composition and paginate overflow before adding a second work to either side
+wall.
 
 ## 2026-09-03 — Optical alignment lesson
 

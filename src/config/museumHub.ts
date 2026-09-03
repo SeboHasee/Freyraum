@@ -274,7 +274,7 @@ export interface MuseumHubResolution {
 
 // ── Baseline inventory and defaults ──────────────────────────────────────────
 
-export const HUB_SLOTS_PER_PAGE = 6;
+export const HUB_SLOTS_PER_PAGE = 4;
 export const HUB_STAGE: StageReference = { width: 1366, height: 768 };
 export const HUB_BACKGROUND_ASPECT = HUB_STAGE.width / HUB_STAGE.height;
 export const HUB_BACKGROUND_SRC = 'Backgrounds/museum-empty.png';
@@ -433,9 +433,9 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
   },
 ];
 
-export const HUB_FRONT_CENTERLINE_M = 2.02;
-export const HUB_LEFT_CENTERLINE_M = 2.1;
-export const HUB_RIGHT_CENTERLINE_M = 2.08;
+export const HUB_FRONT_CENTERLINE_M = 2.32;
+export const HUB_LEFT_CENTERLINE_M = 2.3;
+export const HUB_RIGHT_CENTERLINE_M = 2.28;
 export const HUB_ARTWORK_MOUNTING_GAP_M = 0.002;
 export const HUB_MIN_ARTWORK_SPACING_M = 0.5;
 
@@ -464,44 +464,32 @@ function curatedPlacement(
   };
 }
 
-// 2 + 2 + 2 hero composition. Wall-specific optical centerlines compensate for
-// the primary wide-angle view without changing the wall-parallel orientation.
+// Four-work room: two focal works on the front wall and one centered work on
+// each side wall. Overflow becomes another room instead of crowding corners.
 const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
   {
     suffix: 'wall-front.a',
     wallId: 'wall-front',
     intendedUse: 'portrait',
-    placement: curatedPlacement('wall-front', 0.29, HUB_ROOM_WIDTH, 1.72, HUB_FRONT_CENTERLINE_M),
+    placement: curatedPlacement('wall-front', 0.3, HUB_ROOM_WIDTH, 1.62, HUB_FRONT_CENTERLINE_M),
   },
   {
     suffix: 'wall-front.b',
     wallId: 'wall-front',
     intendedUse: 'panoramic',
-    placement: curatedPlacement('wall-front', 0.71, HUB_ROOM_WIDTH, 1.62, HUB_FRONT_CENTERLINE_M),
+    placement: curatedPlacement('wall-front', 0.7, HUB_ROOM_WIDTH, 1.48, HUB_FRONT_CENTERLINE_M),
   },
   {
     suffix: 'wall-left.a',
     wallId: 'wall-left',
     intendedUse: 'landscape',
-    placement: curatedPlacement('wall-left', 0.78, HUB_ROOM_DEPTH, 1.6, HUB_LEFT_CENTERLINE_M),
-  },
-  {
-    suffix: 'wall-left.b',
-    wallId: 'wall-left',
-    intendedUse: 'square',
-    placement: curatedPlacement('wall-left', 0.53, HUB_ROOM_DEPTH, 1.45, HUB_LEFT_CENTERLINE_M),
+    placement: curatedPlacement('wall-left', 0.64, HUB_ROOM_DEPTH, 1.45, HUB_LEFT_CENTERLINE_M),
   },
   {
     suffix: 'wall-right.a',
     wallId: 'wall-right',
     intendedUse: 'landscape',
-    placement: curatedPlacement('wall-right', 0.22, HUB_ROOM_DEPTH, 1.6, HUB_RIGHT_CENTERLINE_M),
-  },
-  {
-    suffix: 'wall-right.b',
-    wallId: 'wall-right',
-    intendedUse: 'square',
-    placement: curatedPlacement('wall-right', 0.49, HUB_ROOM_DEPTH, 1.45, HUB_RIGHT_CENTERLINE_M),
+    placement: curatedPlacement('wall-right', 0.36, HUB_ROOM_DEPTH, 1.45, HUB_RIGHT_CENTERLINE_M),
   },
 ];
 
@@ -513,7 +501,7 @@ const BUILT_IN_SLOT_MAPPINGS: Readonly<Record<string, string>> = {
   'room-01.wall-front.a': 'quiet-coastline',
   'room-01.wall-front.b': 'golden-desert',
   'room-01.wall-left.a': 'electric-storm',
-  'room-01.wall-left.b': 'tokyo-passage',
+  'room-01.wall-right.a': 'tokyo-passage',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

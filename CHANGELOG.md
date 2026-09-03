@@ -1,5 +1,27 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-03 (v1.08 optical artwork alignment).
+> Latest markdown audit: 2026-09-03 (v1.09 realistic room density).
+
+## v1.09 — Realistic room density and corner clearance (2026-09-03)
+
+### Changed
+
+- Restored the intended four-artwork room capacity. Exhibitions now paginate
+  after four works instead of filling all six visible wall slots at once.
+- Replaced the crowded 2+2+2 arrangement with two front-wall works and one
+  safely inset work on each side wall.
+- Removed the second side-wall slots that could place paintings unrealistically
+  close to the front corners.
+- Raised the physical lower edges to at least 1.50 m in the current room scale
+  and retained stronger projected wall clearance below each work.
+- Updated built-in slot mappings so all four default artworks use the complete
+  2+1+1 room composition.
+- Made spacing validation page-aware because separate room pages intentionally
+  reuse the same physical wall coordinates.
+
+### Unchanged
+
+- Architecture, camera, lighting, materials, wall-relative transforms, artwork
+  aspect ratios, selection, interactions, and gallery navigation.
 
 ## v1.08 — Optical hub artwork alignment (2026-09-03)
 

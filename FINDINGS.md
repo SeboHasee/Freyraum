@@ -1,5 +1,19 @@
 # FINDINGS
 
+## Realistic room-density findings (v1.09, 2026-09-03)
+
+1. The visible failure was room density, not wall-normal math: five works were
+   simultaneously visible, with two works competing for one side wall and
+   approaching the front-wall corner from both planes.
+2. The module header still documented four artworks per room, but the active
+   constant and shipping config had drifted to six. Restoring four also restores
+   the existing multi-room pagination behavior requested for larger exhibitions.
+3. A 2+1+1 room provides one continuous corner-clearance zone on each side wall:
+   two focal works on the front wall and one work centered within each side
+   wall's usable span.
+4. Page-scoped spacing is essential because successive virtual rooms reuse the
+   same wall geometry while only one page group is visible.
+
 ## Optical hub alignment findings (v1.08, 2026-09-03)
 
 1. The primary wide-angle view compressed the 1.90 m world centerline toward the

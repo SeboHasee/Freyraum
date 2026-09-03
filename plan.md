@@ -1,5 +1,32 @@
 # FREYRAUM Plan
 
+## Implemented — Realistic room density (v1.09, 2026-09-03)
+
+> **Status update:** Each virtual museum room now contains at most four works.
+> Overflow creates additional rooms instead of crowding perpendicular walls at
+> their shared corners.
+
+### 1. Room composition
+
+- Two front-wall works at 30% and 70%.
+- One left-wall work at 64%, safely separated from its doorway and corners.
+- One right-wall work at 36%, safely separated from its doorway and corners.
+- Front works use a 2.32 m optical centerline; side works use 2.30 m/2.28 m.
+- Physical heights are 1.40–1.62 m with at least 1.50 m lower-edge clearance.
+
+### 2. Pagination
+
+- `slotsPerPage` is four in both built-in and shipping configuration.
+- The fifth artwork starts a new virtual room page.
+- Every overflow room reuses the same tested 2+1+1 placement template.
+- Spacing and overlap checks are scoped to the room page currently represented.
+
+### 3. Preserved behavior
+
+Wall-parallel U/V/N mounting, 22 mm bodies, 2 mm mounting gaps, source aspect
+ratios, exact-ID selection, pointer/touch/keyboard interaction, and gallery
+navigation remain unchanged.
+
 ## Implemented — Optical hub artwork alignment (v1.08, 2026-09-03)
 
 > **Status update:** The primary-camera exhibition now uses wall-specific optical

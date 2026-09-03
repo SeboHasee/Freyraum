@@ -89,7 +89,7 @@ assert.deepEqual(shippingConfig.camera.lensShift, { x: 0, y: 0 }, 'shipping conf
 assert.ok(shippingConfig.room, 'shipping config must define a room envelope');
 assert.ok(shippingConfig.hangingRules, 'shipping config must define shared hanging rules');
 assert.equal(shippingConfig.hangingRules.doorwayClearance, 0.35, 'hero layout must enforce the raised 0.35 m doorway clearance');
-assert.equal(shippingConfig.slotsPerPage, 6, 'shipping config must page six hero slots');
+assert.equal(shippingConfig.slotsPerPage, 4, 'shipping config must limit each room to four realistically spaced works');
 
 // ── Elongated-room invariants ────────────────────────────────────────────────
 // The hub is a 9 × 12 m daylit room with exact corners and uniform 5.2 m walls.
@@ -180,29 +180,25 @@ assert.ok(
   'side-wall doorways must be mirrored within 1 cm'
 );
 
-// ── 2 + 2 + 2 optically balanced slot composition ───────────────────────────
-assert.equal(shippingConfig.slots.length, 6, 'hero room must define six slots');
+// ── 2 + 1 + 1 optically balanced room composition ────────────────────────────
+assert.equal(shippingConfig.slots.length, 4, 'each room must define four slots');
 const slotsByWall = { 'wall-front': [], 'wall-left': [], 'wall-right': [] };
 const expectedPhysicalHeightBySlot = new Map([
-  ['room-01.wall-front.a', 1.72],
-  ['room-01.wall-front.b', 1.62],
-  ['room-01.wall-left.a', 1.6],
-  ['room-01.wall-left.b', 1.45],
-  ['room-01.wall-right.a', 1.6],
-  ['room-01.wall-right.b', 1.45],
+  ['room-01.wall-front.a', 1.62],
+  ['room-01.wall-front.b', 1.48],
+  ['room-01.wall-left.a', 1.45],
+  ['room-01.wall-right.a', 1.45],
 ]);
 const expectedCenterHeightByWall = new Map([
-  ['wall-front', 2.02],
-  ['wall-left', 2.1],
-  ['wall-right', 2.08],
+  ['wall-front', 2.32],
+  ['wall-left', 2.3],
+  ['wall-right', 2.28],
 ]);
 const expectedHorizontalPositionBySlot = new Map([
-  ['room-01.wall-front.a', 0.29],
-  ['room-01.wall-front.b', 0.71],
-  ['room-01.wall-left.a', 0.78],
-  ['room-01.wall-left.b', 0.53],
-  ['room-01.wall-right.a', 0.22],
-  ['room-01.wall-right.b', 0.49],
+  ['room-01.wall-front.a', 0.3],
+  ['room-01.wall-front.b', 0.7],
+  ['room-01.wall-left.a', 0.64],
+  ['room-01.wall-right.a', 0.36],
 ]);
 for (const slot of shippingConfig.slots) {
   assert.equal(typeof slot.placement.horizontalPosition, 'number', `${slot.id} must author one normalized wall position`);
@@ -213,8 +209,8 @@ for (const slot of shippingConfig.slots) {
   assert.equal(slot.placement.mountingGap, 0.002, `${slot.id} must keep the 2 mm mounting gap`);
   const bottom = slot.placement.centerHeight - slot.placement.physicalHeight / 2;
   const top = slot.placement.centerHeight + slot.placement.physicalHeight / 2;
-  assert.ok(bottom >= 1.15, `${slot.id} must retain a clear museum-scale floor margin`);
-  assert.ok(top >= 2.8 && top <= 2.91, `${slot.id} must form a calm upper exhibition band`);
+  assert.ok(bottom >= 1.5, `${slot.id} must retain a clear museum-scale floor margin`);
+  assert.ok(top >= 3 && top <= 3.14, `${slot.id} must form a calm upper exhibition band`);
   assert.equal(slot.placement.center, undefined, `${slot.id} must not author a duplicate legacy center`);
   assert.equal(slot.placement.anchor, undefined, `${slot.id} must not author a duplicate metric anchor`);
   assert.equal(slot.placement.uv, undefined, `${slot.id} must not author a duplicate UV anchor`);
@@ -222,18 +218,8 @@ for (const slot of shippingConfig.slots) {
   slotsByWall[slot.placement.wallId]?.push(slot);
 }
 assert.equal(slotsByWall['wall-front'].length, 2, 'front wall must carry exactly two slots');
-assert.equal(slotsByWall['wall-left'].length, 2, 'left wall must carry exactly two slots');
-assert.equal(slotsByWall['wall-right'].length, 2, 'right wall must carry exactly two slots');
-// Side pairs retain related scale while allowing slight optical asymmetry.
-for (const leftSlot of slotsByWall['wall-left']) {
-  const counterpartId = leftSlot.id.replace('wall-left', 'wall-right');
-  const rightSlot = shippingConfig.slots.find((slot) => slot.id === counterpartId);
-  assert.ok(rightSlot, `${leftSlot.id} must have the mirrored counterpart ${counterpartId}`);
-  assert.ok(
-    Math.abs(rightSlot.placement.physicalHeight - leftSlot.placement.physicalHeight) <= MIRROR_TOLERANCE,
-    `${counterpartId} must match the physical height of ${leftSlot.id}`
-  );
-}
+assert.equal(slotsByWall['wall-left'].length, 1, 'left wall must carry exactly one slot');
+assert.equal(slotsByWall['wall-right'].length, 1, 'right wall must carry exactly one slot');
 
 const artworks = [
   {
@@ -735,7 +721,7 @@ assert.ok(
 const shipping = museumHub.resolveMuseumHub(artworks, shippingConfig, null);
 assert.deepEqual(shipping.warnings, [], `shipping calibration warnings: ${shipping.warnings.join('; ')}`);
 assert.equal(shipping.camera.verticalFovDeg, shippingConfig.camera.verticalFovDeg);
-assert.equal(shipping.slotsPerPage, 6, 'resolved hub must page six hero slots');
+assert.equal(shipping.slotsPerPage, 4, 'resolved hub must limit each room to four artworks');
 assert.equal(shipping.walls.length, 3, 'resolver must render exactly three walls (bounds-only rear wall skipped)');
 assert.equal(shipping.room.wallIds.length, 3, 'resolved room must track the rendered wall ids');
 assert.deepEqual(shipping.hangingRules, shippingConfig.hangingRules, 'resolved room must retain hanging rules');
@@ -769,12 +755,19 @@ assert.ok(
   'artwork pairs below the curator spacing minimum must produce a deterministic validation warning'
 );
 
-// Census: with a full fixture set the hero page fills 2 + 2 + 2.
+// Census: four works fill one room; overflow must become additional rooms.
 const selectableSlots = shipping.pages.flatMap((page) => page.slots).filter((slot) => slot.selectable && slot.artworkId);
-assert.equal(selectableSlots.length, 6, 'all six hero slots must resolve exactly once');
-const census = { front: 0, left: 0, right: 0 };
-for (const slot of selectableSlots) census[slot.wallGroup] += 1;
-assert.deepEqual(census, { front: 2, left: 2, right: 2 }, 'hero composition must be exactly 2 + 2 + 2');
+assert.equal(selectableSlots.length, 6, 'all six fixture artworks must resolve exactly once across rooms');
+assert.equal(shipping.pages.length, 2, 'six artworks must paginate into two museum rooms');
+const firstRoomSlots = shipping.pages.find((page) => page.pageIndex === 0).slots
+  .filter((slot) => slot.selectable && slot.artworkId);
+const firstRoomCensus = { front: 0, left: 0, right: 0 };
+for (const slot of firstRoomSlots) firstRoomCensus[slot.wallGroup] += 1;
+assert.deepEqual(firstRoomCensus, { front: 2, left: 1, right: 1 }, 'each full room must use a 2 + 1 + 1 composition');
+assert.ok(
+  shipping.pages.every((page) => page.slots.filter((slot) => slot.selectable && slot.artworkId).length <= 4),
+  'no museum room may contain more than four artworks'
+);
 
 // Shipped production reality: only fraktal + akt-27 exist; empty slots suppress.
 const shippedOnly = museumHub.resolveMuseumHub(artworks.slice(0, 2), shippingConfig, null);
@@ -809,7 +802,8 @@ for (const slot of selectableSlots) {
     orientationConsistent: true,
   }, `${slot.id} must pass all local placement validity checks`);
   assert.equal(slot.placement.centerHeight, expectedCenterHeightByWall.get(slot.placement.wallId), `${slot.id} resolved optical center height must remain authoritative`);
-  assert.equal(slot.placement.physicalHeight, expectedPhysicalHeightBySlot.get(slot.id), `${slot.id} resolved physical height must remain authoritative`);
+  const baselineSlotId = slot.id.replace(/^room-\d+/, 'room-01');
+  assert.equal(slot.placement.physicalHeight, expectedPhysicalHeightBySlot.get(baselineSlotId), `${slot.id} resolved physical height must remain authoritative`);
   assert.equal(slot.placement.mountingGap, 0.002, `${slot.id} resolved mounting gap must remain authoritative`);
   const mountingFrame = geometry.createArtworkMountingFrame(
     wall.room,
@@ -843,8 +837,8 @@ for (const slot of selectableSlots) {
   );
   assert.ok(floorPoint, `${slot.id} must project its local floor reference`);
   assert.ok(
-    floorPoint.y - projection.bounds.maxY >= 20,
-    `${slot.id} must retain at least 20 px of visible wall below the artwork`
+    floorPoint.y - projection.bounds.maxY >= 38,
+    `${slot.id} must retain at least 38 px of visible wall below the artwork`
   );
   const localSpan = polygonSpan(projection.localQuad, 'x');
   assert.ok(
@@ -865,9 +859,10 @@ for (const slot of selectableSlots) {
     assert.ok(gap >= clearance - 1e-6, `${slot.id} must keep ≥ 0.35 m clearance to the doorway (got ${(gap / (wall.localCalibrationScale?.x ?? 1)).toFixed(3)} m)`);
   }
   projectedBySlot.set(slot.id, { wall, projection });
-  const wallPlacements = localPlacementsByWall.get(wall.id) ?? [];
+  const wallPageKey = `${slot.pageIndex}:${wall.id}`;
+  const wallPlacements = localPlacementsByWall.get(wallPageKey) ?? [];
   wallPlacements.push({ slot, projection });
-  localPlacementsByWall.set(wall.id, wallPlacements);
+  localPlacementsByWall.set(wallPageKey, wallPlacements);
 }
 
 for (const placements of localPlacementsByWall.values()) {
@@ -878,13 +873,13 @@ for (const placements of localPlacementsByWall.values()) {
   assert.ok(centerDelta <= 18, `same-wall optical centers must remain within 18 px (got ${centerDelta.toFixed(1)} px)`);
 }
 
-for (const [wallId, placements] of localPlacementsByWall) {
+for (const [wallPageKey, placements] of localPlacementsByWall) {
   placements.sort((a, b) => a.projection.placement.anchor.x - b.projection.placement.anchor.x);
   for (let index = 1; index < placements.length; index += 1) {
     const previous = polygonSpan(placements[index - 1].projection.localQuad, 'x');
     const current = polygonSpan(placements[index].projection.localQuad, 'x');
     const gap = current.min - previous.max;
-    assert.ok(gap >= 0.5 - 1e-6, `${wallId} artworks must keep at least 0.50 m breathing room (got ${gap.toFixed(3)} m)`);
+    assert.ok(gap >= 0.5 - 1e-6, `${wallPageKey} artworks must keep at least 0.50 m breathing room (got ${gap.toFixed(3)} m)`);
   }
 }
 
@@ -1120,4 +1115,4 @@ assert.match(hub, /projectedAnchor/);
 assert.match(shell, /#c7ced4/i);
 assert.ok(!/background:\s*#fff(?:fff)?\b/i.test(scss.slice(scss.indexOf('.museum-hub {'), scss.indexOf('.museum-hub[hidden]'))));
 
-console.log('PASS: 9×12 m daylit room invariants, mirrored doorways, 2+2+2 hero composition, calibrated projection, fallback wall buckets, selection persistence hooks, token consistency, and 404 fallback are valid.');
+console.log('PASS: 9×12 m daylit room invariants, mirrored doorways, four-work 2+1+1 rooms, overflow pagination, calibrated projection, selection persistence hooks, token consistency, and 404 fallback are valid.');
