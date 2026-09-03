@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-03 (v1.05 WebGL resilience).
+> Latest markdown audit: 2026-09-03 (v1.06 hub artwork mounting).
+
+## 2026-09-03 — Wall-relative artwork mounting lesson
+
+### Lesson 98 — Define clearance at the artwork back, not at its image plane
+
+Positioning a front image plane a small distance from a wall is insufficient
+when the mounted body is deeper than that offset. Future rule: derive every
+artwork transform from one orthonormal wall U/V/N frame, define the wall-to-back
+clearance explicitly, and use the resulting front-face world quad for both
+rendering and interaction projection.
 
 ## 2026-09-03 — Renderer capability and recovery lesson
 

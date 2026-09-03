@@ -20,11 +20,14 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   sky, mounted artwork depth, and soft directional contact shadows.
 - Hub interaction DOM is now only the screen-space accessibility bridge. Slots
   resolve by exact `Artwork.id` from `customer-artworks/museum-hub.json`; the
-  shipping v4 hub contract persists camera far/lens-shift, room envelope,
+  shipping v5 hub contract persists camera far/lens-shift, room envelope,
   hanging rules, wall transforms/drawable regions/exclusion polygons, and
-  normalized slot UV / scale / z-offset metadata. Larger exhibitions paginate
-  into additional room pages, and narrow-portrait viewports split each room
-  into left/right wall focus pages.
+  canonical wall-relative artwork placement (`horizontalPosition`,
+  `centerHeight`, `physicalHeight`, `mountingGap`). Runtime U/V/N mounting
+  frames derive the metric anchor, preserve source aspect ratio, point every
+  artwork into the room, and project the actual mounted front face for the DOM
+  interaction bridge. Larger exhibitions paginate into additional room pages,
+  and narrow-portrait viewports split each room into left/right wall focus pages.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy
   (`planar`, `ibl`, `off`). The hub uses smooth near-white PBR plaster and a

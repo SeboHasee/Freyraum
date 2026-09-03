@@ -27,19 +27,22 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - `presentation.ts`: validated interactive-gallery presentation profiles
   - `museumHub.ts`: unified museum-hub schema, v1/legacy migration, calibrated
     wall-plane contract (stage + multi-plane wall quads + stage-space safe
-    polygons + wall-local slot placement), reference-quad room reconciliation,
-    wall-realism gating, exact-ID slot resolver (auto-placement + paginated
-    overflow), deterministic local placement fitting, and visual-token
-    resolution
+    polygons + canonical normalized-U/center-height/physical-height/mounting-gap
+    slot placement), reference-quad room reconciliation, wall-realism gating,
+    exact-ID slot resolver (auto-placement + paginated overflow), deterministic
+    local placement/spacing validation, legacy placement derivation, and
+    visual-token resolution
 - `src/hub/`
   - `projectiveGeometry.ts`: camera/room projection math, room-plane/reference
     reconciliation, doorway-safe deterministic placement solving, polygon
-    checks, and projected hub interaction geometry
+    checks, validated U/V/N artwork mounting frames, and mounted-front-face
+    projection for hub interaction geometry
   - `HubRoomRenderer`: on-demand 9 × 12 × 5.2 m WebGL hall, pitched glazed
     skylight over a raised clerestory, procedural atmospheric sky and matching
     cached low-energy PMREM, longitudinal perimeter channels, page groups,
     high-only planar floor reflection, three quality-gated downward area sources,
-    one architectural shadow map, and preset-driven rendering fidelity
+    one architectural shadow map, wall-relative 4 cm artwork bodies with exact
+    6 mm back clearance, and preset-driven rendering fidelity
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback

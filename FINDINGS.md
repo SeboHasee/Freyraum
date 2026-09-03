@@ -1,5 +1,22 @@
 # FINDINGS
 
+## Hub artwork mounting findings (v1.06, 2026-09-03)
+
+1. The hub already had correct wall planes, but authored placement duplicated
+   normalized, metric, and stage-oriented coordinates. Runtime use of only the
+   metric anchor allowed those representations to disagree.
+2. The former 2 cm front-plane offset was smaller than the 4 cm body depth, so
+   the artwork body could extend behind the wall plane. Mounting must specify
+   back clearance, with front distance derived as clearance plus body depth.
+3. A single U/V/N frame keeps front wall, left wall, and right wall transforms
+   physically correct without camera-facing rotations.
+4. Projecting the wall-plane rectangle for DOM interaction was subtly different
+   from the rendered face. The interaction quad now comes from the same mounted
+   front-face world corners as the renderer.
+5. A 1.55 m visual centerline, 1.82 m physical height, and wider mirrored side
+   positions satisfy the existing 72 px interaction guidance while retaining at
+   least 0.50 m spacing and clearing both doorway exclusions.
+
 ## WebGL startup resilience findings (v1.05, 2026-09-03)
 
 1. A boolean capability probe was both incomplete evidence and an extra live GPU

@@ -1,5 +1,48 @@
 # FREYRAUM Plan
 
+## Implemented — Wall-relative hub artwork mounting (v1.06, 2026-09-03)
+
+> **Status update:** All hero-room artwork transforms now derive from one
+> validated wall U/V/N frame. The shipping configuration authors only curator
+> controls, physical backs clear their walls, and interaction follows the
+> mounted front face.
+
+### 1. As-built placement contract
+
+1. `horizontalPosition` is normalized distance along wall U.
+2. `centerHeight` is the visual center above the wall origin in metres.
+3. `physicalHeight` sets uniform scale; width is always height multiplied by the
+   source artwork aspect ratio.
+4. `mountingGap` is wall-to-back clearance, not front-plane offset.
+5. Runtime derives metric anchor and legacy center/UV aliases. Older v1–v4
+   configurations retain their migration path.
+
+### 2. Curated hero composition
+
+- Front pair: 28% and 72% along the 9 m front wall.
+- Left pair: 60% and 85% along the left wall U axis.
+- Right pair: 15% and 40%, exactly mirroring the left wall.
+- Every work uses a 1.55 m centerline, 1.82 m physical height, 4 cm mounted-body
+  depth, and 6 mm wall-to-back clearance.
+- Existing safe regions, hanging band, doorway clearance, exact artwork IDs, and
+  pagination remain authoritative.
+
+### 3. Shared transform and interaction
+
+- The mounting frame normalizes wall U/V, rejects non-orthogonal axes, derives
+  inward N as U×V, and returns wall/back/front centers plus both face quads.
+- `HubRoomRenderer` uses the frame directly; no camera-facing rotation exists.
+- `MainMuseumHub` projects the frame's mounted front face, keeping DOM click,
+  keyboard, touch, selection, and gallery transition targets aligned.
+- Deterministic validation covers inward orientation, parallelism, clearance,
+  depth, aspect, boundaries, doorways, pair spacing, and exact front-face
+  projection.
+
+### 4. Preserved boundaries
+
+Museum architecture, camera, materials, lighting, post-processing, artwork
+textures/content, and interactive-gallery navigation are unchanged.
+
 ## Implemented — WebGL startup resilience and 2D museum (v1.05, 2026-09-03)
 
 > **Status update:** Renderer capability is now proven by the real renderer,

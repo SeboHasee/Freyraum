@@ -1,5 +1,28 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-03 (v1.05 WebGL resilience).
+> Latest markdown audit: 2026-09-03 (v1.06 hub artwork mounting).
+
+## v1.06 — Wall-relative hub artwork mounting (2026-09-03)
+
+### Changed
+
+- Replaced authored `center`/`anchor`/`uv`/`mountedHeight` duplication in the
+  shipping hub config with normalized wall position, visual center height,
+  physical height, and mounting gap. Legacy configurations are still migrated.
+- Added one shared wall U/V/N mounting frame used by WebGL artwork transforms
+  and DOM interaction projection. Side-wall works remain parallel to their
+  architecture and are never rotated toward the camera.
+- Standardized the hero room at a 1.55 m visual centerline and 1.82 m physical
+  height, with mirrored side-wall positions and at least 0.50 m breathing room.
+- Defined mounting offset as back clearance: every 4 cm artwork body now keeps
+  exactly 6 mm behind it rather than extending through the wall.
+- Projected the actual mounted front face for accessible pointer/keyboard
+  targets and added deterministic checks for inward normals, orthogonal axes,
+  depth clearance, source aspect, doorway clearance, spacing, and collisions.
+
+### Unchanged
+
+- Museum architecture, camera, lighting, materials, post-processing, artwork
+  imagery, exact-ID selection, gallery transitions, and gallery navigation.
 
 ## v1.05 — Resilient WebGL startup and 2D museum (2026-09-03)
 
