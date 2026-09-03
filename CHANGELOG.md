@@ -14,6 +14,8 @@
   floating panels.
 - Added deterministic validation of the real built-in artwork set alongside the
   customer/full-fixture layout.
+- Made aspect-mismatched automatic fallback sizing collision-aware so unusual
+  source ratios preserve the curator gap instead of rendering overlaps.
 
 ### Unchanged
 

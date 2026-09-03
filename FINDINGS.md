@@ -16,6 +16,9 @@
    exclusions, remain parallel to their walls, and mirror through the room.
 5. Built-in artwork aspect ratios now pass the same resolver constraints as the
    customer/full-fixture composition, including the panoramic front-wall work.
+6. Aspect-class fallback can place two unusually wide works on one wall. The
+   resolver now scales only auto-placed works when necessary to preserve the
+   0.50 m curator gap; explicit physical sizes remain authoritative.
 
 ## Hub artwork mounting findings (v1.06, 2026-09-03)
 

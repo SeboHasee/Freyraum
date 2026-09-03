@@ -2109,6 +2109,47 @@ export function resolveMuseumHub(
     }
   }
 
+  const autoSlotsByWallAndPage = new Map<string, ResolvedHubSlot[]>();
+  for (const slot of resolved) {
+    if (!slot.selectable || !slot.artworkId || !slot.placement.anchor) continue;
+    const key = `${slot.pageIndex}:${slot.placement.wallId}`;
+    const slots = autoSlotsByWallAndPage.get(key) ?? [];
+    slots.push(slot);
+    autoSlotsByWallAndPage.set(key, slots);
+  }
+  for (const slots of autoSlotsByWallAndPage.values()) {
+    slots.sort((a, b) => a.placement.anchor!.x - b.placement.anchor!.x);
+    for (let pass = 0; pass < slots.length; pass += 1) {
+      for (let index = 1; index < slots.length; index += 1) {
+        const previous = slots[index - 1]!;
+        const current = slots[index]!;
+        const centerDistance = current.placement.anchor!.x - previous.placement.anchor!.x;
+        const previousHalfWidth = previous.placement.mountedHeight * previous.artworkAspect * 0.5;
+        const currentHalfWidth = current.placement.mountedHeight * current.artworkAspect * 0.5;
+        const availableHalfWidth = centerDistance - HUB_MIN_ARTWORK_SPACING_M;
+        if (previousHalfWidth + currentHalfWidth <= availableHalfWidth + 1e-6) continue;
+
+        const adjustable = [previous, current].filter((slot) => slot.mappingSource === 'auto-placed');
+        if (adjustable.length === 0) continue;
+        const fixedHalfWidth = [previous, current]
+          .filter((slot) => slot.mappingSource !== 'auto-placed')
+          .reduce((sum, slot) => sum + slot.placement.mountedHeight * slot.artworkAspect * 0.5, 0);
+        const adjustableHalfWidth = adjustable.reduce(
+          (sum, slot) => sum + slot.placement.mountedHeight * slot.artworkAspect * 0.5,
+          0
+        );
+        const scale = Math.min(1, Math.max(0.001, (availableHalfWidth - fixedHalfWidth) / adjustableHalfWidth));
+        for (const slot of adjustable) {
+          slot.placement.mountedHeight *= scale;
+          slot.placement.physicalHeight = slot.placement.mountedHeight;
+        }
+        warnings.push(
+          `slots "${previous.id}" and "${current.id}": auto-placed artwork sizes were reduced to preserve ${HUB_MIN_ARTWORK_SPACING_M.toFixed(2)} m wall spacing.`
+        );
+      }
+    }
+  }
+
   for (const slot of resolved) {
     if (!slot.selectable || !slot.artworkId) continue;
     const wall = wallById.get(slot.placement.wallId);

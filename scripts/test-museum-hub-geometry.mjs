@@ -246,6 +246,26 @@ assert.deepEqual(
   [],
   'the curated built-in exhibition must remain within every wall, doorway, and spacing constraint'
 );
+const unassignedShippingConfig = {
+  ...shippingConfig,
+  slots: shippingConfig.slots.map((slot) => ({ ...slot, artworkId: null })),
+};
+const panoramicFallbackResolution = museumHub.resolveMuseumHub(
+  [
+    { id: 'panoramic-a', title: 'Panoramic A', image: 'a.png', dimensions: { width: 2400, height: 1000 } },
+    { id: 'panoramic-b', title: 'Panoramic B', image: 'b.png', dimensions: { width: 2400, height: 1000 } },
+  ],
+  unassignedShippingConfig
+);
+assert.ok(
+  panoramicFallbackResolution.warnings.some((warning) => warning.includes('auto-placed artwork sizes were reduced')),
+  'aspect-mismatched fallback assignment must resize rather than render overlapping wall mounts'
+);
+assert.equal(
+  panoramicFallbackResolution.warnings.some((warning) => warning.includes('curator minimum')),
+  false,
+  'collision-aware fallback sizing must preserve the minimum wall spacing'
+);
 const sourcePlan = artworkImageSources.resolveArtworkImageSources(artworks[0]);
 assert.equal(sourcePlan.primary?.mode, 'declared-image', 'artwork source resolution must keep the declared image as primary');
 assert.equal(sourcePlan.primary?.declaredUrl, 'fraktal.png');
