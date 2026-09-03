@@ -13,8 +13,8 @@
 - Right pair: 16% and 41.5%, exactly mirroring the left wall.
 - Every work shares a 1.90 m visual centerline.
 - Artwork width remains derived from source aspect ratio.
-- Explicit curator sizes remain authoritative; only unmatched auto-placement
-  fallback is reduced when an unusual aspect would violate the 0.50 m wall gap.
+- Explicit curator sizes remain authoritative; unmatched automatic placements
+  move to an overflow page when an unusual aspect would violate the 0.50 m gap.
 
 ### 2. Physical installation
 

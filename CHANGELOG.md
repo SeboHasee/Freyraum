@@ -14,8 +14,10 @@
   floating panels.
 - Added deterministic validation of the real built-in artwork set alongside the
   customer/full-fixture layout.
-- Made aspect-mismatched automatic fallback sizing collision-aware so unusual
-  source ratios preserve the curator gap instead of rendering overlaps.
+- Made aspect-mismatched automatic fallback placement collision-aware so unusual
+  source ratios move to overflow pages instead of shrinking or overlapping.
+- Persisted final drawable-region fitting into the canonical mount, keeping the
+  rendered body and projected interaction quad on one transform.
 
 ### Unchanged
 

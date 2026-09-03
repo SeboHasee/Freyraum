@@ -17,8 +17,10 @@
 5. Built-in artwork aspect ratios now pass the same resolver constraints as the
    customer/full-fixture composition, including the panoramic front-wall work.
 6. Aspect-class fallback can place two unusually wide works on one wall. The
-   resolver now scales only auto-placed works when necessary to preserve the
-   0.50 m curator gap; explicit physical sizes remain authoritative.
+   resolver now moves only the conflicting auto-placed work to an overflow page,
+   preserving the 0.50 m gap and every physical size.
+7. Drawable fitting must be persisted back to the canonical anchor and height;
+   otherwise rendering and DOM projection can resolve the same work differently.
 
 ## Hub artwork mounting findings (v1.06, 2026-09-03)
 

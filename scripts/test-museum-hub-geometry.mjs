@@ -281,6 +281,28 @@ assert.equal(
   false,
   'final projected interaction geometry must remain non-overlapping after fallback-wall assignment'
 );
+for (const slot of mixedFallbackResolution.pages.flatMap((page) => page.slots)) {
+  if (!slot.selectable || !slot.artworkId) continue;
+  const wall = mixedFallbackResolution.wallById.get(slot.placement.wallId);
+  const projected = geometry.projectSlotArtwork(
+    wall,
+    slot.placement,
+    slot.artworkAspect,
+    mixedFallbackResolution.stage
+  );
+  assert.ok(projected?.placement, `${slot.id} must retain valid final mounting geometry`);
+  assert.ok(
+    Math.hypot(
+      projected.placement.anchor.x - slot.placement.anchor.x,
+      projected.placement.anchor.y - slot.placement.anchor.y
+    ) < 1e-6,
+    `${slot.id} renderer and interaction anchors must share the fitted placement`
+  );
+  assert.ok(
+    Math.abs(projected.placement.mountedHeight - slot.placement.mountedHeight) < 1e-6,
+    `${slot.id} renderer and interaction heights must share the fitted placement`
+  );
+}
 const sourcePlan = artworkImageSources.resolveArtworkImageSources(artworks[0]);
 assert.equal(sourcePlan.primary?.mode, 'declared-image', 'artwork source resolution must keep the declared image as primary');
 assert.equal(sourcePlan.primary?.declaredUrl, 'fraktal.png');

@@ -2167,10 +2167,21 @@ export function resolveMuseumHub(
       mountingGap: slot.placement.mountingGap,
       provisional: slot.placement.provisional,
     };
-    return {
-      projection: projectSlotArtwork(targetWall, placement, slot.artworkAspect, stage),
-      placement,
-    };
+    const projection = projectSlotArtwork(targetWall, placement, slot.artworkAspect, stage);
+    if (projection?.placement && targetWall.room) {
+      const fitted = projection.placement;
+      placement.anchor = clonePoint(fitted.anchor);
+      placement.mountedHeight = fitted.mountedHeight;
+      placement.physicalHeight = fitted.mountedHeight;
+      placement.uv = point(
+        clamp01(fitted.anchor.x / Math.max(0.001, targetWall.room.width)),
+        clamp01(fitted.anchor.y / Math.max(0.001, targetWall.room.height))
+      );
+      placement.horizontalPosition = placement.uv.x;
+      placement.centerHeight = fitted.anchor.y;
+      placement.center = point(placement.uv.x, 1 - placement.uv.y);
+    }
+    return { projection, placement };
   };
 
   const projectedBySlot = new Map<string, ReturnType<typeof projectSlotArtwork>>();
@@ -2225,44 +2236,43 @@ export function resolveMuseumHub(
     }
   }
 
-  const slotsByWallAndPage = new Map<string, ResolvedHubSlot[]>();
-  for (const slot of resolved) {
-    if (!slot.selectable || !slot.artworkId || !slot.placement.anchor) continue;
-    const key = `${slot.pageIndex}:${slot.placement.wallId}`;
-    const slots = slotsByWallAndPage.get(key) ?? [];
-    slots.push(slot);
-    slotsByWallAndPage.set(key, slots);
-  }
-  for (const slots of slotsByWallAndPage.values()) {
-    slots.sort((a, b) => a.placement.anchor!.x - b.placement.anchor!.x);
-    for (let pass = 0; pass < slots.length; pass += 1) {
+  let nextOverflowPageIndex = resolved.reduce((max, slot) => Math.max(max, slot.pageIndex), 0) + 1;
+  let movedConflict = true;
+  while (movedConflict) {
+    movedConflict = false;
+    const candidateGroups = new Map<string, ResolvedHubSlot[]>();
+    for (const slot of resolved) {
+      if (!slot.selectable || !slot.artworkId || !slot.placement.anchor) continue;
+      const key = `${slot.pageIndex}:${slot.placement.wallId}`;
+      const slots = candidateGroups.get(key) ?? [];
+      slots.push(slot);
+      candidateGroups.set(key, slots);
+    }
+    for (const slots of candidateGroups.values()) {
+      slots.sort((a, b) => a.placement.anchor!.x - b.placement.anchor!.x);
       for (let index = 1; index < slots.length; index += 1) {
         const previous = slots[index - 1]!;
         const current = slots[index]!;
-        const centerDistance = current.placement.anchor!.x - previous.placement.anchor!.x;
-        const previousHalfWidth = previous.placement.mountedHeight * previous.artworkAspect * 0.5;
-        const currentHalfWidth = current.placement.mountedHeight * current.artworkAspect * 0.5;
-        const availableHalfWidth = centerDistance - HUB_MIN_ARTWORK_SPACING_M;
-        if (previousHalfWidth + currentHalfWidth <= availableHalfWidth + 1e-6) continue;
-
-        const adjustable = [previous, current].filter((slot) => slot.mappingSource === 'auto-placed');
-        if (adjustable.length === 0) continue;
-        const fixedHalfWidth = [previous, current]
-          .filter((slot) => slot.mappingSource !== 'auto-placed')
-          .reduce((sum, slot) => sum + slot.placement.mountedHeight * slot.artworkAspect * 0.5, 0);
-        const adjustableHalfWidth = adjustable.reduce(
-          (sum, slot) => sum + slot.placement.mountedHeight * slot.artworkAspect * 0.5,
-          0
-        );
-        const scale = Math.min(1, Math.max(0.001, (availableHalfWidth - fixedHalfWidth) / adjustableHalfWidth));
-        for (const slot of adjustable) {
-          slot.placement.mountedHeight *= scale;
-          slot.placement.physicalHeight = slot.placement.mountedHeight;
-        }
+        const gap = current.placement.anchor!.x
+          - current.placement.mountedHeight * current.artworkAspect * 0.5
+          - previous.placement.anchor!.x
+          - previous.placement.mountedHeight * previous.artworkAspect * 0.5;
+        if (gap + 1e-6 >= HUB_MIN_ARTWORK_SPACING_M) continue;
+        const overflowSlot = current.mappingSource === 'auto-placed'
+          ? current
+          : previous.mappingSource === 'auto-placed'
+            ? previous
+            : null;
+        if (!overflowSlot) continue;
+        overflowSlot.pageIndex = nextOverflowPageIndex;
+        nextOverflowPageIndex += 1;
+        movedConflict = true;
         warnings.push(
-          `slots "${previous.id}" and "${current.id}": auto-placed artwork sizes were reduced to preserve ${HUB_MIN_ARTWORK_SPACING_M.toFixed(2)} m wall spacing.`
+          `slot "${overflowSlot.id}": moved to an overflow page to preserve ${HUB_MIN_ARTWORK_SPACING_M.toFixed(2)} m wall spacing.`
         );
+        break;
       }
+      if (movedConflict) break;
     }
   }
 
@@ -2279,7 +2289,16 @@ export function resolveMuseumHub(
     }
   }
 
+  const slotsByWallAndPage = new Map<string, ResolvedHubSlot[]>();
+  for (const slot of resolved) {
+    if (!slot.selectable || !slot.artworkId || !slot.placement.anchor) continue;
+    const key = `${slot.pageIndex}:${slot.placement.wallId}`;
+    const slots = slotsByWallAndPage.get(key) ?? [];
+    slots.push(slot);
+    slotsByWallAndPage.set(key, slots);
+  }
   for (const slots of slotsByWallAndPage.values()) {
+    slots.sort((a, b) => a.placement.anchor!.x - b.placement.anchor!.x);
     for (let index = 1; index < slots.length; index += 1) {
       const previous = slots[index - 1]!;
       const current = slots[index]!;
