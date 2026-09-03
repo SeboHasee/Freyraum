@@ -20,6 +20,8 @@
 - The fifth artwork starts a new virtual room page.
 - Every overflow room reuses the same tested 2+1+1 placement template.
 - Spacing and overlap checks are scoped to the room page currently represented.
+- Older six-slot configurations are clamped and reflowed without losing explicit
+  artwork mappings.
 
 ### 3. Preserved behavior
 

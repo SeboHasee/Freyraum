@@ -17,6 +17,8 @@
   2+1+1 room composition.
 - Made spacing validation page-aware because separate room pages intentionally
   reuse the same physical wall coordinates.
+- Clamped older `slotsPerPage: 6` configurations to four and reflowed explicit
+  excess mappings into new 2+1+1 rooms instead of crashing or retaining crowding.
 
 ### Unchanged
 

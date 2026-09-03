@@ -1472,10 +1472,12 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   const fallbacks = sanitizeFallbacks(cfg['fallbacks']);
   const slotsPerPage =
     typeof cfg['slotsPerPage'] === 'number' && Number.isFinite(cfg['slotsPerPage'])
-      ? Math.max(1, Math.min(8, Math.round(cfg['slotsPerPage'] as number)))
+      ? Math.max(1, Math.min(HUB_SLOTS_PER_PAGE, Math.round(cfg['slotsPerPage'] as number)))
       : HUB_SLOTS_PER_PAGE;
   if (cfg['slotsPerPage'] !== undefined && slotsPerPage !== cfg['slotsPerPage']) {
-    warnings.push(`museum-hub slotsPerPage was clamped to ${slotsPerPage} (allowed range 1–8).`);
+    warnings.push(
+      `museum-hub slotsPerPage was clamped to ${slotsPerPage} (this room supports at most ${HUB_SLOTS_PER_PAGE} artworks).`
+    );
   }
   const rawSlots = Array.isArray(cfg['slots']) ? (cfg['slots'] as unknown[]) : [];
   if (rawSlots.length === 0) {
@@ -2082,7 +2084,7 @@ export function resolveMuseumHub(
           wallGroup: heuristicWallGroup(slot.placement.wallId),
         };
       });
-      const batch = overflow.slice(0, slotsPerPage);
+      const batch = overflow.slice(0, Math.min(slotsPerPage, pageSlots.length));
       const consumed = new Set<string>();
       for (const artwork of batch) {
         const aspectClass = classifyArtworkAspect(artworkAspect(artwork));
@@ -2097,6 +2099,37 @@ export function resolveMuseumHub(
       overflow = artworks.filter((artwork) => !mappedArtworkIds.has(artwork.id));
       pageIndex += 1;
     }
+  }
+
+  let nextReflowPageIndex = resolved.reduce((max, slot) => Math.max(max, slot.pageIndex), 0) + 1;
+  const slotsByOriginalPage = new Map<number, ResolvedHubSlot[]>();
+  for (const slot of resolved) {
+    const pageSlots = slotsByOriginalPage.get(slot.pageIndex) ?? [];
+    pageSlots.push(slot);
+    slotsByOriginalPage.set(slot.pageIndex, pageSlots);
+  }
+  for (const [originalPageIndex, pageSlots] of slotsByOriginalPage) {
+    if (pageSlots.length <= HUB_SLOTS_PER_PAGE) continue;
+    const overflowSlots = pageSlots.slice(HUB_SLOTS_PER_PAGE);
+    for (let offset = 0; offset < overflowSlots.length; offset += HUB_SLOTS_PER_PAGE) {
+      const targetPageIndex = nextReflowPageIndex;
+      nextReflowPageIndex += 1;
+      const templates = baselinePageSlots(targetPageIndex);
+      for (const [index, slot] of overflowSlots.slice(offset, offset + HUB_SLOTS_PER_PAGE).entries()) {
+        const template = templates[index]!;
+        slot.pageIndex = targetPageIndex;
+        slot.placement = {
+          ...template.placement,
+          center: clonePoint(template.placement.center),
+          anchor: template.placement.anchor ? clonePoint(template.placement.anchor) : undefined,
+          uv: template.placement.uv ? clonePoint(template.placement.uv) : undefined,
+        };
+        slot.wallGroup = heuristicWallGroup(template.placement.wallId);
+      }
+    }
+    warnings.push(
+      `museum-hub page ${originalPageIndex + 1} exceeded ${HUB_SLOTS_PER_PAGE} artworks; overflow was moved to additional rooms.`
+    );
   }
 
   for (const slot of resolved) {

@@ -768,6 +768,39 @@ assert.ok(
   shipping.pages.every((page) => page.slots.filter((slot) => slot.selectable && slot.artworkId).length <= 4),
   'no museum room may contain more than four artworks'
 );
+const previousSixSlotConfig = structuredClone(shippingConfig);
+previousSixSlotConfig.slotsPerPage = 6;
+previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-left.a').artworkId = 'landscape-fixture';
+previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-right.a').artworkId = 'landscape-fixture-2';
+previousSixSlotConfig.slots.push(
+  {
+    ...structuredClone(previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-left.a')),
+    id: 'room-01.wall-left.b',
+    artworkId: 'square-fixture',
+  },
+  {
+    ...structuredClone(previousSixSlotConfig.slots.find((slot) => slot.id === 'room-01.wall-right.a')),
+    id: 'room-01.wall-right.b',
+    artworkId: 'square-fixture-2',
+  }
+);
+const migratedSixSlotResolution = museumHub.resolveMuseumHub(artworks, previousSixSlotConfig, null);
+assert.ok(
+  migratedSixSlotResolution.warnings.some((warning) => warning.includes('supports at most 4 artworks')),
+  'previous six-slot configurations must report the four-work room migration'
+);
+assert.ok(
+  migratedSixSlotResolution.pages.every(
+    (page) => page.slots.filter((slot) => slot.selectable && slot.artworkId).length <= 4
+  ),
+  'previous explicit six-slot rooms must reflow overflow into additional rooms'
+);
+assert.equal(
+  migratedSixSlotResolution.pages.flatMap((page) => page.slots)
+    .filter((slot) => slot.selectable && slot.artworkId).length,
+  6,
+  'room-density migration must preserve every explicit artwork mapping'
+);
 
 // Shipped production reality: only fraktal + akt-27 exist; empty slots suppress.
 const shippedOnly = museumHub.resolveMuseumHub(artworks.slice(0, 2), shippingConfig, null);

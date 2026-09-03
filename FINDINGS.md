@@ -13,6 +13,9 @@
    wall's usable span.
 4. Page-scoped spacing is essential because successive virtual rooms reuse the
    same wall geometry while only one page group is visible.
+5. Capacity migration must handle both automatic overflow and older explicit
+   six-slot pages. Explicit excess mappings are preserved but remounted through
+   the safe four-slot template in additional rooms.
 
 ## Optical hub alignment findings (v1.08, 2026-09-03)
 
