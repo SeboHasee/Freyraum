@@ -1,5 +1,25 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-03 (v1.06 hub artwork mounting).
+> Latest markdown audit: 2026-09-03 (v1.07 curated hub composition).
+
+## v1.07 — Curated hub exhibition composition (2026-09-03)
+
+### Changed
+
+- Raised the shared visual centerline from 1.55 m to 1.90 m and replaced the
+  uniform artwork height with 1.75–2.25 m role-specific physical sizes.
+- Refined the back-wall focal pair and mirrored side-wall groups while retaining
+  doorway/corner clearance and at least 0.50 m between works.
+- Reduced artwork bodies to 22 mm, wall-to-back clearance to 2 mm, and tightened
+  the contact card so mounted works read as wall installations rather than
+  floating panels.
+- Added deterministic validation of the real built-in artwork set alongside the
+  customer/full-fixture layout.
+
+### Unchanged
+
+- Wall-relative U/V/N orientation, source aspect ratios, exact-ID interaction,
+  pagination, gallery transition/navigation, architecture, camera, lighting,
+  materials, post-processing, and artwork imagery.
 
 ## v1.06 — Wall-relative hub artwork mounting (2026-09-03)
 

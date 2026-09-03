@@ -1,5 +1,33 @@
 # FREYRAUM Plan
 
+## Implemented — Curated hub exhibition composition (v1.07, 2026-09-03)
+
+> **Status update:** The wall-relative mounting architecture now uses a higher
+> professional viewing line, role-specific physical sizes, and tighter wall
+> contact so the exhibition fills the architecture without reading as cards.
+
+### 1. As-built composition
+
+- Front pair: 28% and 72% along the 9 m front wall, at 2.25 m and 2.05 m high.
+- Left pair: 58.5% and 84% along the left wall U axis, at 1.75 m and 2.00 m high.
+- Right pair: 16% and 41.5%, exactly mirroring the left wall.
+- Every work shares a 1.90 m visual centerline.
+- Artwork width remains derived from source aspect ratio.
+
+### 2. Physical installation
+
+- Mounted bodies are 22 mm deep.
+- Wall-to-back clearance is 2 mm, and the renderer derives the front face from
+  clearance plus full body depth.
+- Contact cards remain behind the body but now extend only enough to reinforce
+  edge contact rather than reading as a separate floating panel.
+
+### 3. Preserved boundaries
+
+The existing U/V/N transform, source-aspect scaling, exact-ID interaction,
+pagination, hub-to-gallery transition, architecture, camera, materials, lighting,
+and post-processing remain authoritative.
+
 ## Implemented — Wall-relative hub artwork mounting (v1.06, 2026-09-03)
 
 > **Status update:** All hero-room artwork transforms now derive from one

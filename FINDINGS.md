@@ -1,5 +1,22 @@
 # FINDINGS
 
+## Curated hub composition findings (v1.07, 2026-09-03)
+
+1. The v1.06 mount was geometrically correct but visually uniform: assigning
+   every aspect ratio the same 1.82 m height produced mathematically regular
+   cards rather than an exhibition hierarchy.
+2. A 1.55 m centerline left artwork bottoms near 0.64 m and most of the 5.2 m
+   wall empty above. A 1.90 m visual centerline with 1.75–2.25 m role-specific
+   heights keeps floor clearance at 0.775 m or more and raises the top edges to
+   2.775–3.025 m.
+3. Reducing the physical body from 40 mm to 22 mm and wall-to-back clearance
+   from 6 mm to 2 mm preserves non-intersection while removing the visible
+   card-like standoff.
+4. The final side pairs retain at least 0.50 m clear spacing, avoid doorway
+   exclusions, remain parallel to their walls, and mirror through the room.
+5. Built-in artwork aspect ratios now pass the same resolver constraints as the
+   customer/full-fixture composition, including the panoramic front-wall work.
+
 ## Hub artwork mounting findings (v1.06, 2026-09-03)
 
 1. The hub already had correct wall planes, but authored placement duplicated

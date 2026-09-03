@@ -41,8 +41,8 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     skylight over a raised clerestory, procedural atmospheric sky and matching
     cached low-energy PMREM, longitudinal perimeter channels, page groups,
     high-only planar floor reflection, three quality-gated downward area sources,
-    one architectural shadow map, wall-relative 4 cm artwork bodies with exact
-    6 mm back clearance, and preset-driven rendering fidelity
+    one architectural shadow map, wall-relative 22 mm artwork bodies with exact
+    2 mm back clearance, and preset-driven rendering fidelity
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback

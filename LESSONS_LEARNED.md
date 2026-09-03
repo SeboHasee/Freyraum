@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-03 (v1.06 hub artwork mounting).
+> Latest markdown audit: 2026-09-03 (v1.07 curated hub composition).
+
+## 2026-09-03 — Exhibition composition lesson
+
+### Lesson 99 — Geometric correctness does not create curatorial rhythm
+
+A shared wall-relative transform can still look synthetic when every source
+aspect receives one physical height and a low centerline. Future rule: preserve
+one professional visual centerline, curate physical height by artwork role and
+available wall span, then validate the resulting bottoms, tops, clear spacing,
+doorways, and real source aspects together.
 
 ## 2026-09-03 — Wall-relative artwork mounting lesson
 
