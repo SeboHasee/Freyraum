@@ -38,6 +38,8 @@ export interface SlotProjectionModel {
   mountedHeight: number;
   /** v3 authoring uses metres in a wall-local coordinate system. */
   anchor?: Point2D;
+  /** Physical clearance between the wall plane and the artwork back face. */
+  mountingGap?: number;
   provisional?: boolean;
 }
 
@@ -161,6 +163,25 @@ export interface ProjectedArtworkGeometry {
 }
 
 const EPSILON = 1e-6;
+/** Physical depth of the hub's stretched-canvas artwork body. */
+export const HUB_ARTWORK_DEPTH_M = 0.04;
+/** Museum mounting clearance: enough to prevent z-fighting without visible floating. */
+export const HUB_DEFAULT_MOUNTING_GAP_M = 0.006;
+
+export interface ArtworkMountingFrame {
+  basisU: Point3D;
+  basisV: Point3D;
+  basisN: Point3D;
+  wallCenter: Point3D;
+  backCenter: Point3D;
+  frontCenter: Point3D;
+  width: number;
+  height: number;
+  depth: number;
+  mountingGap: number;
+  backQuad: readonly [Point3D, Point3D, Point3D, Point3D];
+  frontQuad: readonly [Point3D, Point3D, Point3D, Point3D];
+}
 
 export const point = (x: number, y: number): Point2D => ({ x, y });
 export const point3 = (x: number, y: number, z: number): Point3D => ({ x, y, z });
@@ -492,6 +513,75 @@ export function roomWallPoint(wall: RoomWallModel, local: Point2D): Point3D {
 
 export function roomWallNormal(wall: RoomWallModel): Point3D | null {
   return normalize3(cross3(wall.axisU, wall.axisV));
+}
+
+function mountingQuad(
+  center: Point3D,
+  basisU: Point3D,
+  basisV: Point3D,
+  width: number,
+  height: number
+): readonly [Point3D, Point3D, Point3D, Point3D] {
+  const halfU = scale3(basisU, width / 2);
+  const halfV = scale3(basisV, height / 2);
+  return [
+    add3(subtract3(center, halfU), halfV),
+    add3(add3(center, halfU), halfV),
+    subtract3(add3(center, halfU), halfV),
+    subtract3(subtract3(center, halfU), halfV),
+  ];
+}
+
+/**
+ * Builds the single authoritative wall-relative mounting frame. The wall's
+ * U/V axes define horizontal/vertical alignment and U×V defines the inward
+ * normal; no camera-facing correction is permitted.
+ */
+export function createArtworkMountingFrame(
+  wall: RoomWallModel,
+  anchor: Point2D,
+  physicalHeight: number,
+  artworkAspect: number,
+  mountingGap = HUB_DEFAULT_MOUNTING_GAP_M,
+  depth = HUB_ARTWORK_DEPTH_M
+): ArtworkMountingFrame | null {
+  const basisU = normalize3(wall.axisU);
+  const basisV = normalize3(wall.axisV);
+  if (
+    !basisU ||
+    !basisV ||
+    Math.abs(dot3(basisU, basisV)) > 1e-5 ||
+    !Number.isFinite(physicalHeight) ||
+    physicalHeight <= EPSILON ||
+    !Number.isFinite(artworkAspect) ||
+    artworkAspect <= EPSILON ||
+    !Number.isFinite(mountingGap) ||
+    mountingGap < 0 ||
+    !Number.isFinite(depth) ||
+    depth <= EPSILON
+  ) {
+    return null;
+  }
+  const basisN = normalize3(cross3(basisU, basisV));
+  if (!basisN) return null;
+  const width = physicalHeight * artworkAspect;
+  const wallCenter = roomWallPoint(wall, anchor);
+  const backCenter = add3(wallCenter, scale3(basisN, mountingGap));
+  const frontCenter = add3(backCenter, scale3(basisN, depth));
+  return {
+    basisU,
+    basisV,
+    basisN,
+    wallCenter,
+    backCenter,
+    frontCenter,
+    width,
+    height: physicalHeight,
+    depth,
+    mountingGap,
+    backQuad: mountingQuad(backCenter, basisU, basisV, width, physicalHeight),
+    frontQuad: mountingQuad(frontCenter, basisU, basisV, width, physicalHeight),
+  };
 }
 
 export function roomWallWorldQuad(
@@ -1012,11 +1102,19 @@ export function projectSlotArtwork(
       return null;
     }
     if (wall.projectionRealism && !wall.projectionRealism.passes) return null;
-    const projected = placement.localQuad.map((corner) =>
-      projectRoomWallPoint(wall.room!, wall.camera!, corner, stage)
+    const mountingFrame = createArtworkMountingFrame(
+      wall.room,
+      placement.anchor,
+      placement.mountedHeight,
+      artworkAspect,
+      slot.mountingGap
+    );
+    if (!mountingFrame) return null;
+    const projected = mountingFrame.frontQuad.map((corner) =>
+      projectWorldPoint(wall.camera!, corner, stage)
     );
     if (projected.some((corner) => corner === null)) return null;
-    const worldQuad = roomWallWorldQuad(wall.room, placement.localQuad);
+    const worldQuad = mountingFrame.frontQuad;
     const projectedQuad = normalizeQuadClockwise([
       projected[0]!,
       projected[1]!,
@@ -1042,7 +1140,7 @@ export function projectSlotArtwork(
       cssMatrix3d: homographyToCssMatrix3d(sourceHomography),
       shortEdge: shortestEdge(projectedQuad),
       placement,
-      projectedAnchor: projectRoomWallPoint(wall.room, wall.camera, placement.anchor, stage),
+      projectedAnchor: projectWorldPoint(wall.camera, mountingFrame.frontCenter, stage),
       validity: placement.validity,
       realism: wall.projectionRealism,
     };

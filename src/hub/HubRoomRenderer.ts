@@ -3,7 +3,12 @@ import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import type { MuseumHubResolution, ResolvedHubSlot, ResolvedHubWall } from '../config/museumHub';
 import type { QualityPreset } from '../config/quality';
 import type { ArtworkImageUrlType } from '../utils/artworkImageSources';
-import { roomWallNormal, roomWallPoint } from './projectiveGeometry';
+import {
+  createArtworkMountingFrame,
+  HUB_ARTWORK_DEPTH_M,
+  roomWallNormal,
+  roomWallPoint,
+} from './projectiveGeometry';
 import {
   ArchitecturalSurfaceFactory,
   type ArchitecturalMaterials,
@@ -48,7 +53,6 @@ export interface SlotUpsertResult {
 
 const PLACEHOLDER_SIZE = 512;
 /** Perceived stretched-canvas depth of a mounted artwork (metres). */
-const ARTWORK_EDGE_DEPTH = 0.04;
 /** How far the entry-zone shell extends past the camera (metres). */
 const ENTRY_SHELL_MARGIN = 1.5;
 /** Depth of the dim passage pocket behind each doorway opening (metres). */
@@ -308,8 +312,7 @@ export class HubRoomRenderer {
       return { applied: false, usedImage: false };
     }
     const slotAnchor = slot.placement.anchor;
-    const normal = roomWallNormal(wall.room);
-    if (!slotAnchor || !normal) {
+    if (!slotAnchor) {
       state.group.visible = false;
       this.render();
       return { applied: false, usedImage: false };
@@ -384,30 +387,57 @@ export class HubRoomRenderer {
       state.textureKind = missingImage ? 'placeholder' : 'image';
     }
 
-    const width = slot.placement.mountedHeight * Math.max(0.25, slot.artworkAspect);
-    const height = slot.placement.mountedHeight;
-    const zOffset = slot.placement.zOffset ?? 0.02;
-    const center = roomWallPoint(wall.room, slotAnchor);
-    const basisU = new THREE.Vector3(wall.room.axisU.x, wall.room.axisU.y, wall.room.axisU.z).normalize();
-    const basisV = new THREE.Vector3(wall.room.axisV.x, wall.room.axisV.y, wall.room.axisV.z).normalize();
-    const basisN = new THREE.Vector3(normal.x, normal.y, normal.z).normalize();
+    const mountingFrame = createArtworkMountingFrame(
+      wall.room,
+      slotAnchor,
+      slot.placement.physicalHeight ?? slot.placement.mountedHeight,
+      Math.max(0.25, slot.artworkAspect),
+      slot.placement.mountingGap
+    );
+    if (!mountingFrame) {
+      state.group.visible = false;
+      this.render();
+      return { applied: false, usedImage: false };
+    }
+    const { width, height } = mountingFrame;
+    const basisU = new THREE.Vector3(
+      mountingFrame.basisU.x,
+      mountingFrame.basisU.y,
+      mountingFrame.basisU.z
+    );
+    const basisV = new THREE.Vector3(
+      mountingFrame.basisV.x,
+      mountingFrame.basisV.y,
+      mountingFrame.basisV.z
+    );
+    const basisN = new THREE.Vector3(
+      mountingFrame.basisN.x,
+      mountingFrame.basisN.y,
+      mountingFrame.basisN.z
+    );
     const matrix = new THREE.Matrix4().makeBasis(basisU, basisV, basisN);
     state.group.matrixAutoUpdate = false;
     matrix.setPosition(
-      center.x + basisN.x * zOffset,
-      center.y + basisN.y * zOffset,
-      center.z + basisN.z * zOffset
+      mountingFrame.frontCenter.x,
+      mountingFrame.frontCenter.y,
+      mountingFrame.frontCenter.z
     );
     state.group.matrix.copy(matrix);
     state.group.matrixWorldNeedsUpdate = true;
     state.group.visible = state.pageIndex === this.activePageIndex;
     state.artworkMesh.scale.set(width, height, 1);
     // Stretched-canvas body: front face sits just behind the artwork plane.
-    state.edgeMesh.scale.set(width, height, ARTWORK_EDGE_DEPTH);
-    state.edgeMesh.position.set(0, 0, -ARTWORK_EDGE_DEPTH / 2 - 0.001);
+    // Keep the box's front face 1 mm behind the image plane while its back
+    // remains exactly at the mounting-frame back plane.
+    state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
+    state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
     // Tight directional contact card; the body supplies the broader real shadow.
     state.shadowMesh.scale.set(width * 1.035, height * 1.04, 1);
-    state.shadowMesh.position.set(0.012, -0.018, -zOffset + 0.004);
+    state.shadowMesh.position.set(
+      0.012,
+      -0.018,
+      -mountingFrame.depth - mountingFrame.mountingGap + 0.001
+    );
     this.render();
     return { applied: true, usedImage: !missingImage, fit, visibleProbe };
   }

@@ -117,7 +117,17 @@ export interface HubWallConfig {
 
 export interface HubSlotPlacement {
   wallId: string;
+  /** v5 canonical horizontal position along wall U, normalized to 0..1. */
+  horizontalPosition?: number;
+  /** v5 canonical visual center above the wall origin, in metres. */
+  centerHeight?: number;
+  /** v5 canonical physical artwork height, in metres. */
+  physicalHeight?: number;
+  /** v5 canonical clearance between wall and artwork back, in metres. */
+  mountingGap?: number;
+  /** Legacy/projected alias, derived from the canonical fields for runtime compatibility. */
   center: Point2D;
+  /** Legacy physical-height alias. */
   mountedHeight: number;
   /** v3 wall-local anchor in metric-like units; `center` remains migration-only. */
   anchor?: Point2D;
@@ -423,104 +433,74 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
   },
 ];
 
-// 2 + 2 + 2 hero composition on a shared 1.55 m centerline. Side-wall pairs
-// are exact mirrors across the elongated side-wall depth.
+export const HUB_HERO_CENTERLINE_M = 1.55;
+export const HUB_HERO_ARTWORK_HEIGHT_M = 1.82;
+export const HUB_ARTWORK_MOUNTING_GAP_M = 0.006;
+export const HUB_MIN_ARTWORK_SPACING_M = 0.5;
+
+function curatedPlacement(
+  wallId: string,
+  horizontalPosition: number,
+  wallWidth: number
+): HubSlotPlacement {
+  const centerHeight = HUB_HERO_CENTERLINE_M;
+  const physicalHeight = HUB_HERO_ARTWORK_HEIGHT_M;
+  const mountingGap = HUB_ARTWORK_MOUNTING_GAP_M;
+  return {
+    wallId,
+    horizontalPosition,
+    centerHeight,
+    physicalHeight,
+    mountingGap,
+    center: point(horizontalPosition, 1 - centerHeight / HUB_ROOM_HEIGHT),
+    anchor: point(horizontalPosition * wallWidth, centerHeight),
+    uv: point(horizontalPosition, centerHeight / HUB_ROOM_HEIGHT),
+    mountedHeight: physicalHeight,
+    targetSizePolicy: 'fixed-height',
+    minScale: 1,
+    maxScale: 1,
+    zOffset: mountingGap + 0.04,
+  };
+}
+
+// 2 + 2 + 2 hero composition on a shared 1.55 m visual centerline. Side-wall
+// pairs are exact mirrors and retain at least half a metre of breathing room.
 const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
   {
     suffix: 'wall-front.a',
     wallId: 'wall-front',
     intendedUse: 'portrait',
-    placement: {
-      wallId: 'wall-front',
-      center: point(0.2778, 0.6673),
-      anchor: point(2.5, 1.7),
-      uv: point(0.2778, 0.3269),
-      mountedHeight: 1.7,
-      targetSizePolicy: 'contain',
-      minScale: 0.7,
-      maxScale: 1,
-      zOffset: 0.02,
-    },
+    placement: curatedPlacement('wall-front', 0.28, HUB_ROOM_WIDTH),
   },
   {
     suffix: 'wall-front.b',
     wallId: 'wall-front',
     intendedUse: 'panoramic',
-    placement: {
-      wallId: 'wall-front',
-      center: point(0.7222, 0.6673),
-      anchor: point(6.5, 1.7),
-      uv: point(0.7222, 0.3269),
-      mountedHeight: 1.7,
-      targetSizePolicy: 'contain',
-      minScale: 0.7,
-      maxScale: 1,
-      zOffset: 0.02,
-    },
+    placement: curatedPlacement('wall-front', 0.72, HUB_ROOM_WIDTH),
   },
   {
     suffix: 'wall-left.a',
     wallId: 'wall-left',
     intendedUse: 'landscape',
-    placement: {
-      wallId: 'wall-left',
-      center: point(0.8, 0.6673),
-      anchor: point(9.6, 1.7),
-      uv: point(0.8, 0.3269),
-      mountedHeight: 1.7,
-      targetSizePolicy: 'contain',
-      minScale: 0.7,
-      maxScale: 1,
-      zOffset: 0.02,
-    },
+    placement: curatedPlacement('wall-left', 0.85, HUB_ROOM_DEPTH),
   },
   {
     suffix: 'wall-left.b',
     wallId: 'wall-left',
     intendedUse: 'square',
-    placement: {
-      wallId: 'wall-left',
-      center: point(0.6, 0.6673),
-      anchor: point(7.2, 1.7),
-      uv: point(0.6, 0.3269),
-      mountedHeight: 1.75,
-      targetSizePolicy: 'contain',
-      minScale: 0.7,
-      maxScale: 1,
-      zOffset: 0.02,
-    },
+    placement: curatedPlacement('wall-left', 0.6, HUB_ROOM_DEPTH),
   },
   {
     suffix: 'wall-right.a',
     wallId: 'wall-right',
     intendedUse: 'landscape',
-    placement: {
-      wallId: 'wall-right',
-      center: point(0.2, 0.6673),
-      anchor: point(2.4, 1.7),
-      uv: point(0.2, 0.3269),
-      mountedHeight: 1.7,
-      targetSizePolicy: 'contain',
-      minScale: 0.7,
-      maxScale: 1,
-      zOffset: 0.02,
-    },
+    placement: curatedPlacement('wall-right', 0.15, HUB_ROOM_DEPTH),
   },
   {
     suffix: 'wall-right.b',
     wallId: 'wall-right',
     intendedUse: 'square',
-    placement: {
-      wallId: 'wall-right',
-      center: point(0.4, 0.6673),
-      anchor: point(4.8, 1.7),
-      uv: point(0.4, 0.3269),
-      mountedHeight: 1.75,
-      targetSizePolicy: 'contain',
-      minScale: 0.7,
-      maxScale: 1,
-      zOffset: 0.02,
-    },
+    placement: curatedPlacement('wall-right', 0.4, HUB_ROOM_DEPTH),
   },
 ];
 
@@ -726,6 +706,15 @@ function baselinePageSlots(pageIndex: number): HubSlotConfig[] {
       center: clonePoint(def.placement.center),
       mountedHeight: def.placement.mountedHeight,
       anchor: def.placement.anchor ? clonePoint(def.placement.anchor) : undefined,
+      uv: def.placement.uv ? clonePoint(def.placement.uv) : undefined,
+      horizontalPosition: def.placement.horizontalPosition,
+      centerHeight: def.placement.centerHeight,
+      physicalHeight: def.placement.physicalHeight,
+      mountingGap: def.placement.mountingGap,
+      targetSizePolicy: def.placement.targetSizePolicy,
+      minScale: def.placement.minScale,
+      maxScale: def.placement.maxScale,
+      zOffset: def.placement.zOffset,
       provisional: false,
     },
   }));
@@ -741,6 +730,16 @@ function derivePlacementUv(
   placement: HubSlotPlacement,
   wall?: Pick<ResolvedHubWall, 'room'>
 ): Point2D | undefined {
+  if (
+    placement.horizontalPosition !== undefined &&
+    placement.centerHeight !== undefined &&
+    wall?.room
+  ) {
+    return point(
+      clamp01(placement.horizontalPosition),
+      clamp01(placement.centerHeight / Math.max(0.001, wall.room.height))
+    );
+  }
   if (placement.uv) return clonePoint(placement.uv);
   if (placement.anchor && wall?.room) {
     return point(
@@ -755,6 +754,16 @@ function derivePlacementAnchor(
   placement: HubSlotPlacement,
   wall?: Pick<ResolvedHubWall, 'room'>
 ): Point2D | undefined {
+  if (
+    placement.horizontalPosition !== undefined &&
+    placement.centerHeight !== undefined &&
+    wall?.room
+  ) {
+    return point(
+      clamp01(placement.horizontalPosition) * wall.room.width,
+      placement.centerHeight
+    );
+  }
   if (placement.anchor) return clonePoint(placement.anchor);
   const uv = derivePlacementUv(placement, wall);
   if (!uv || !wall?.room) return undefined;
@@ -1254,16 +1263,35 @@ function sanitizeV2Placement(raw: unknown): HubSlotPlacement | null {
   if (!raw || typeof raw !== 'object') return null;
   const candidate = raw as Record<string, unknown>;
   const wallId = typeof candidate['wallId'] === 'string' ? candidate['wallId'].trim() : '';
+  const horizontalPosition =
+    typeof candidate['horizontalPosition'] === 'number' && Number.isFinite(candidate['horizontalPosition'])
+      ? clamp01(candidate['horizontalPosition'] as number)
+      : undefined;
+  const centerHeight =
+    typeof candidate['centerHeight'] === 'number' && Number.isFinite(candidate['centerHeight'])
+      ? Math.max(0, Math.min(8, candidate['centerHeight'] as number))
+      : undefined;
+  const physicalHeight =
+    typeof candidate['physicalHeight'] === 'number' && Number.isFinite(candidate['physicalHeight'])
+      ? Math.max(0.04, Math.min(8, candidate['physicalHeight'] as number))
+      : undefined;
   const uv = parsePoint(candidate['uv'], true);
-  const center = parsePoint(candidate['center'], true) ?? (uv ? point(clamp01(uv.x), clamp01(1 - uv.y)) : null);
+  const center =
+    parsePoint(candidate['center'], true)
+    ?? (uv ? point(clamp01(uv.x), clamp01(1 - uv.y)) : null)
+    ?? (horizontalPosition !== undefined && centerHeight !== undefined
+      ? point(horizontalPosition, 0)
+      : null);
   const anchor = parsePoint(candidate['anchor']);
   const maxMountedHeight = anchor || uv ? 8 : 0.9;
   const mountedHeight =
     typeof candidate['mountedHeight'] === 'number' && Number.isFinite(candidate['mountedHeight'])
       ? Math.max(0.04, Math.min(maxMountedHeight, candidate['mountedHeight'] as number))
-      : NaN;
+      : physicalHeight ?? NaN;
   const targetSizePolicy =
-    candidate['targetSizePolicy'] === 'fixed-height' ? 'fixed-height' : 'contain';
+    candidate['targetSizePolicy'] === 'fixed-height' || physicalHeight !== undefined
+      ? 'fixed-height'
+      : 'contain';
   const minScale =
     typeof candidate['minScale'] === 'number' && Number.isFinite(candidate['minScale'])
       ? Math.max(0.4, Math.min(1, candidate['minScale'] as number))
@@ -1276,9 +1304,17 @@ function sanitizeV2Placement(raw: unknown): HubSlotPlacement | null {
     typeof candidate['zOffset'] === 'number' && Number.isFinite(candidate['zOffset'])
       ? Math.max(0.001, Math.min(0.12, candidate['zOffset'] as number))
       : 0.02;
+  const mountingGap =
+    typeof candidate['mountingGap'] === 'number' && Number.isFinite(candidate['mountingGap'])
+      ? Math.max(0.001, Math.min(0.03, candidate['mountingGap'] as number))
+      : HUB_ARTWORK_MOUNTING_GAP_M;
   if (!wallId || !center || Number.isNaN(mountedHeight)) return null;
   return {
     wallId,
+    horizontalPosition,
+    centerHeight,
+    physicalHeight: physicalHeight ?? mountedHeight,
+    mountingGap,
     center,
     mountedHeight,
     anchor: anchor ?? undefined,
@@ -1536,7 +1572,7 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
 
   return {
     config: {
-      version: Math.max(4, version),
+      version: Math.max(5, version),
       coverage: 'all-active-artworks',
       stage,
       background: { src: backgroundSrc, aspect: backgroundAspect },
@@ -1613,7 +1649,7 @@ export function migrateLegacyHotspots(raw: unknown): SanitizedConfig {
   if (slots.length === 0) return { config: null, warnings, source: 'built-in-default' };
   return {
     config: {
-      version: 4,
+      version: 5,
       coverage: 'all-active-artworks',
       stage: { ...HUB_STAGE },
       background: { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT },
@@ -1652,7 +1688,7 @@ export function resolveMuseumHub(
     config = sanitized.config;
   } else {
     config = {
-      version: 4,
+      version: 5,
       coverage: 'all-active-artworks',
       stage: { ...HUB_STAGE },
       background: { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT },
@@ -1831,14 +1867,23 @@ export function resolveMuseumHub(
     const wall = wallById.get(slot.placement.wallId);
     const wallGroup = wall?.group ?? heuristicWallGroup(slot.placement.wallId);
     const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
+    const canonicalPlacement =
+      slot.placement.horizontalPosition !== undefined &&
+      slot.placement.centerHeight !== undefined &&
+      slot.placement.physicalHeight !== undefined;
     const placementUv = derivePlacementUv(slot.placement, wall);
-    if (wall?.room && !slot.placement.anchor) {
+    if (
+      wall?.room &&
+      !slot.placement.anchor &&
+      (slot.placement.horizontalPosition === undefined || slot.placement.centerHeight === undefined)
+    ) {
       warnings.push(`slot "${slot.id}": room-local anchor missing; deriving it from the normalized center for calibrated placement.`);
     }
     const migratedAnchor =
       (() => {
         const explicitAnchor = derivePlacementAnchor(slot.placement, wall);
         if (explicitAnchor) {
+          if (canonicalPlacement) return explicitAnchor;
           return point(explicitAnchor.x * localScale.x, explicitAnchor.y * localScale.y);
         }
         if (placementUv && wall?.room) {
@@ -1854,9 +1899,26 @@ export function resolveMuseumHub(
       placement: {
         wallId: slot.placement.wallId,
         center: placementUv ? point(placementUv.x, 1 - placementUv.y) : clonePoint(slot.placement.center),
-        mountedHeight: wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight,
+        mountedHeight:
+          canonicalPlacement
+            ? slot.placement.physicalHeight!
+            : wall?.room
+              ? slot.placement.mountedHeight * localScale.y
+              : slot.placement.mountedHeight,
         anchor: migratedAnchor ? clonePoint(migratedAnchor) : undefined,
         uv: placementUv ? clonePoint(placementUv) : undefined,
+        horizontalPosition:
+          migratedAnchor && wall?.room
+            ? clamp01(migratedAnchor.x / Math.max(0.001, wall.room.width))
+            : placementUv?.x,
+        centerHeight: migratedAnchor?.y,
+        physicalHeight:
+          canonicalPlacement
+            ? slot.placement.physicalHeight
+            : wall?.room
+              ? slot.placement.mountedHeight * localScale.y
+              : slot.placement.mountedHeight,
+        mountingGap: slot.placement.mountingGap ?? HUB_ARTWORK_MOUNTING_GAP_M,
         targetSizePolicy: slot.placement.targetSizePolicy ?? 'contain',
         minScale: slot.placement.minScale ?? 0.7,
         maxScale: slot.placement.maxScale ?? 1,
@@ -1997,14 +2059,24 @@ export function resolveMuseumHub(
           placement: {
             wallId: slot.placement.wallId,
             center: clonePoint(slot.placement.center),
-            mountedHeight: wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight,
+            mountedHeight:
+              slot.placement.physicalHeight
+              ?? (wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight),
             anchor:
               wall?.room && slot.placement.anchor
-                ? point(slot.placement.anchor.x * localScale.x, slot.placement.anchor.y * localScale.y)
+                ? slot.placement.horizontalPosition !== undefined && slot.placement.centerHeight !== undefined
+                  ? clonePoint(slot.placement.anchor)
+                  : point(slot.placement.anchor.x * localScale.x, slot.placement.anchor.y * localScale.y)
                 : slot.placement.anchor
                   ? clonePoint(slot.placement.anchor)
                   : undefined,
             uv: slot.placement.uv ? clonePoint(slot.placement.uv) : undefined,
+            horizontalPosition: slot.placement.horizontalPosition,
+            centerHeight: slot.placement.centerHeight,
+            physicalHeight:
+              slot.placement.physicalHeight
+              ?? (wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight),
+            mountingGap: slot.placement.mountingGap ?? HUB_ARTWORK_MOUNTING_GAP_M,
             targetSizePolicy: slot.placement.targetSizePolicy ?? 'contain',
             minScale: slot.placement.minScale ?? 0.7,
             maxScale: slot.placement.maxScale ?? 1,
@@ -2054,8 +2126,46 @@ export function resolveMuseumHub(
       slot.placement.center = point(slot.placement.uv.x, 1 - slot.placement.uv.y);
     }
     slot.placement.mountedHeight = fitted.mountedHeight;
+    slot.placement.physicalHeight = fitted.mountedHeight;
+    slot.placement.horizontalPosition = slot.placement.uv?.x;
+    slot.placement.centerHeight = fitted.anchor?.y;
+    warnings.push(
+      `slot "${slot.id}": authored wall placement was adjusted to remain inside the usable mounting area.`
+    );
     if (slot.placement.provisional) {
       warnings.push(`slot "${slot.id}": provisional placement was clamped to the wall drawable region.`);
+    }
+  }
+
+  const placementsByWallAndPage = new Map<string, { id: string; minX: number; maxX: number }[]>();
+  for (const slot of resolved) {
+    if (!slot.selectable || !slot.artworkId || !slot.placement.anchor) continue;
+    const wall = wallById.get(slot.placement.wallId);
+    if (!wall?.room) continue;
+    const fitted = solveRoomArtworkPlacement(
+      wall.room,
+      slot.placement.anchor,
+      slot.placement.mountedHeight,
+      slot.artworkAspect
+    );
+    if (fitted.rejectionReason !== 'none') continue;
+    const x = fitted.localQuad.map((corner) => corner.x);
+    const key = `${slot.pageIndex}:${wall.id}`;
+    const placements = placementsByWallAndPage.get(key) ?? [];
+    placements.push({ id: slot.id, minX: Math.min(...x), maxX: Math.max(...x) });
+    placementsByWallAndPage.set(key, placements);
+  }
+  for (const placements of placementsByWallAndPage.values()) {
+    placements.sort((a, b) => a.minX - b.minX);
+    for (let index = 1; index < placements.length; index += 1) {
+      const previous = placements[index - 1]!;
+      const current = placements[index]!;
+      const gap = current.minX - previous.maxX;
+      if (gap + 1e-6 < HUB_MIN_ARTWORK_SPACING_M) {
+        warnings.push(
+          `slots "${previous.id}" and "${current.id}": wall spacing ${gap.toFixed(3)} m is below the ${HUB_MIN_ARTWORK_SPACING_M.toFixed(2)} m curator minimum.`
+        );
+      }
     }
   }
 
@@ -2082,6 +2192,12 @@ export function resolveMuseumHub(
       minScale: slot.placement.minScale,
       maxScale: slot.placement.maxScale,
       zOffset: slot.placement.zOffset,
+      horizontalPosition: uv.x,
+      centerHeight: targetWall.room ? uv.y * targetWall.room.height : undefined,
+      physicalHeight: targetWall.room
+        ? normalizedHeight * targetWall.room.height
+        : slot.placement.physicalHeight,
+      mountingGap: slot.placement.mountingGap,
       provisional: slot.placement.provisional,
     };
     return {
@@ -2323,18 +2439,34 @@ function validateMirrorSymmetry(config: MuseumHubConfig, warnings: string[]): vo
     }
   }
   for (const slot of config.slots) {
-    if (slot.placement.wallId !== leftWall.id || !slot.placement.anchor) continue;
+    if (slot.placement.wallId !== leftWall.id) continue;
     const counterpartId = slot.id.replace('wall-left', 'wall-right');
     if (counterpartId === slot.id) continue;
     const counterpart = config.slots.find((entry) => entry.id === counterpartId);
-    if (!counterpart || counterpart.placement.wallId !== rightWall.id || !counterpart.placement.anchor) {
+    if (!counterpart || counterpart.placement.wallId !== rightWall.id) {
       warnings.push(`museum-hub mirror symmetry: slot "${slot.id}" has no mirrored counterpart "${counterpartId}".`);
       continue;
     }
+    const leftU =
+      slot.placement.horizontalPosition
+      ?? (slot.placement.anchor ? slot.placement.anchor.x / width : slot.placement.center.x);
+    const rightU =
+      counterpart.placement.horizontalPosition
+      ?? (counterpart.placement.anchor ? counterpart.placement.anchor.x / width : counterpart.placement.center.x);
+    const leftCenterHeight =
+      slot.placement.centerHeight
+      ?? slot.placement.anchor?.y
+      ?? (1 - slot.placement.center.y) * leftWall.room.height;
+    const rightCenterHeight =
+      counterpart.placement.centerHeight
+      ?? counterpart.placement.anchor?.y
+      ?? (1 - counterpart.placement.center.y) * rightWall.room.height;
+    const leftHeight = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
+    const rightHeight = counterpart.placement.physicalHeight ?? counterpart.placement.mountedHeight;
     if (
-      Math.abs(counterpart.placement.anchor.x - (width - slot.placement.anchor.x)) > MIRROR_TOLERANCE_M ||
-      Math.abs(counterpart.placement.anchor.y - slot.placement.anchor.y) > MIRROR_TOLERANCE_M ||
-      Math.abs(counterpart.placement.mountedHeight - slot.placement.mountedHeight) > MIRROR_TOLERANCE_M
+      Math.abs((rightU - (1 - leftU)) * width) > MIRROR_TOLERANCE_M ||
+      Math.abs(rightCenterHeight - leftCenterHeight) > MIRROR_TOLERANCE_M ||
+      Math.abs(rightHeight - leftHeight) > MIRROR_TOLERANCE_M
     ) {
       warnings.push(
         `museum-hub mirror symmetry: slot "${counterpartId}" does not mirror "${slot.id}" within the 1 cm tolerance.`

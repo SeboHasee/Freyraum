@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "coverage": "all-active-artworks",
   "stage": {
     "width": 1366,
@@ -372,23 +372,10 @@
       "artworkId": "fraktal",
       "placement": {
         "wallId": "wall-front",
-        "center": {
-          "x": 0.2778,
-          "y": 0.6673
-        },
-        "anchor": {
-          "x": 2.5,
-          "y": 1.7
-        },
-        "uv": {
-          "x": 0.2778,
-          "y": 0.3269
-        },
-        "mountedHeight": 1.7,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.28,
+        "centerHeight": 1.55,
+        "physicalHeight": 1.82,
+        "mountingGap": 0.006
       }
     },
     {
@@ -398,23 +385,10 @@
       "artworkId": "akt-27",
       "placement": {
         "wallId": "wall-front",
-        "center": {
-          "x": 0.7222,
-          "y": 0.6673
-        },
-        "anchor": {
-          "x": 6.5,
-          "y": 1.7
-        },
-        "uv": {
-          "x": 0.7222,
-          "y": 0.3269
-        },
-        "mountedHeight": 1.7,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.72,
+        "centerHeight": 1.55,
+        "physicalHeight": 1.82,
+        "mountingGap": 0.006
       }
     },
     {
@@ -423,23 +397,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-left",
-        "center": {
-          "x": 0.8,
-          "y": 0.6673
-        },
-        "anchor": {
-          "x": 9.6,
-          "y": 1.7
-        },
-        "uv": {
-          "x": 0.8,
-          "y": 0.3269
-        },
-        "mountedHeight": 1.7,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.85,
+        "centerHeight": 1.55,
+        "physicalHeight": 1.82,
+        "mountingGap": 0.006
       }
     },
     {
@@ -448,23 +409,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-left",
-        "center": {
-          "x": 0.6,
-          "y": 0.6673
-        },
-        "anchor": {
-          "x": 7.2,
-          "y": 1.7
-        },
-        "uv": {
-          "x": 0.6,
-          "y": 0.3269
-        },
-        "mountedHeight": 1.75,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.6,
+        "centerHeight": 1.55,
+        "physicalHeight": 1.82,
+        "mountingGap": 0.006
       }
     },
     {
@@ -473,23 +421,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-right",
-        "center": {
-          "x": 0.2,
-          "y": 0.6673
-        },
-        "anchor": {
-          "x": 2.4,
-          "y": 1.7
-        },
-        "uv": {
-          "x": 0.2,
-          "y": 0.3269
-        },
-        "mountedHeight": 1.7,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.15,
+        "centerHeight": 1.55,
+        "physicalHeight": 1.82,
+        "mountingGap": 0.006
       }
     },
     {
@@ -498,23 +433,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-right",
-        "center": {
-          "x": 0.4,
-          "y": 0.6673
-        },
-        "anchor": {
-          "x": 4.8,
-          "y": 1.7
-        },
-        "uv": {
-          "x": 0.4,
-          "y": 0.3269
-        },
-        "mountedHeight": 1.75,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.4,
+        "centerHeight": 1.55,
+        "physicalHeight": 1.82,
+        "mountingGap": 0.006
       }
     }
   ],
