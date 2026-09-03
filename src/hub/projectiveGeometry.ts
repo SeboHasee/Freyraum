@@ -163,10 +163,10 @@ export interface ProjectedArtworkGeometry {
 }
 
 const EPSILON = 1e-6;
-/** Physical depth of the hub's stretched-canvas artwork body. */
-export const HUB_ARTWORK_DEPTH_M = 0.04;
-/** Museum mounting clearance: enough to prevent z-fighting without visible floating. */
-export const HUB_DEFAULT_MOUNTING_GAP_M = 0.006;
+/** Slim contemporary mounted-panel depth; avoids the previous floating-card silhouette. */
+export const HUB_ARTWORK_DEPTH_M = 0.022;
+/** Two-millimetre wall-to-back clearance prevents z-fighting without visible separation. */
+export const HUB_DEFAULT_MOUNTING_GAP_M = 0.002;
 
 export interface ArtworkMountingFrame {
   basisU: Point3D;

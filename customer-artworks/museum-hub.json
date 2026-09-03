@@ -373,9 +373,9 @@
       "placement": {
         "wallId": "wall-front",
         "horizontalPosition": 0.28,
-        "centerHeight": 1.55,
-        "physicalHeight": 1.82,
-        "mountingGap": 0.006
+        "centerHeight": 1.9,
+        "physicalHeight": 2.25,
+        "mountingGap": 0.002
       }
     },
     {
@@ -386,9 +386,9 @@
       "placement": {
         "wallId": "wall-front",
         "horizontalPosition": 0.72,
-        "centerHeight": 1.55,
-        "physicalHeight": 1.82,
-        "mountingGap": 0.006
+        "centerHeight": 1.9,
+        "physicalHeight": 2.05,
+        "mountingGap": 0.002
       }
     },
     {
@@ -397,10 +397,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-left",
-        "horizontalPosition": 0.85,
-        "centerHeight": 1.55,
-        "physicalHeight": 1.82,
-        "mountingGap": 0.006
+        "horizontalPosition": 0.84,
+        "centerHeight": 1.9,
+        "physicalHeight": 2,
+        "mountingGap": 0.002
       }
     },
     {
@@ -409,10 +409,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-left",
-        "horizontalPosition": 0.6,
-        "centerHeight": 1.55,
-        "physicalHeight": 1.82,
-        "mountingGap": 0.006
+        "horizontalPosition": 0.585,
+        "centerHeight": 1.9,
+        "physicalHeight": 1.75,
+        "mountingGap": 0.002
       }
     },
     {
@@ -421,10 +421,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-right",
-        "horizontalPosition": 0.15,
-        "centerHeight": 1.55,
-        "physicalHeight": 1.82,
-        "mountingGap": 0.006
+        "horizontalPosition": 0.16,
+        "centerHeight": 1.9,
+        "physicalHeight": 2,
+        "mountingGap": 0.002
       }
     },
     {
@@ -433,10 +433,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-right",
-        "horizontalPosition": 0.4,
-        "centerHeight": 1.55,
-        "physicalHeight": 1.82,
-        "mountingGap": 0.006
+        "horizontalPosition": 0.415,
+        "centerHeight": 1.9,
+        "physicalHeight": 1.75,
+        "mountingGap": 0.002
       }
     }
   ],

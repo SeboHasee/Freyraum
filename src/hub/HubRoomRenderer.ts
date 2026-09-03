@@ -431,11 +431,11 @@ export class HubRoomRenderer {
     // remains exactly at the mounting-frame back plane.
     state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
     state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
-    // Tight directional contact card; the body supplies the broader real shadow.
-    state.shadowMesh.scale.set(width * 1.035, height * 1.04, 1);
+    // Tight wall contact only; the mounted body supplies the broader real shadow.
+    state.shadowMesh.scale.set(width * 1.012, height * 1.016, 1);
     state.shadowMesh.position.set(
-      0.012,
-      -0.018,
+      0.006,
+      -0.009,
       -mountingFrame.depth - mountingFrame.mountingGap + 0.001
     );
     this.render();

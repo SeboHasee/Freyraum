@@ -61,7 +61,7 @@ const ROOM_HEIGHT = 5.2;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, hubRoomRenderer, quality, paintingMaterial] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, hubRoomRenderer, quality, paintingMaterial, builtInArtworks] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
@@ -74,6 +74,7 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/hub/HubRoomRenderer.ts'),
   loadTsModule('src/config/quality.ts'),
   loadTsModule('src/materials/PaintingMaterial.ts'),
+  loadTsModule('src/config/artworks.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
@@ -179,15 +180,27 @@ assert.ok(
   'side-wall doorways must be mirrored within 1 cm'
 );
 
-// ── 2 + 2 + 2 slot composition on the shared 1.55 m centerline ──────────────
+// ── 2 + 2 + 2 slot composition on the shared 1.90 m centerline ──────────────
 assert.equal(shippingConfig.slots.length, 6, 'hero room must define six slots');
 const slotsByWall = { 'wall-front': [], 'wall-left': [], 'wall-right': [] };
+const expectedPhysicalHeightBySlot = new Map([
+  ['room-01.wall-front.a', 2.25],
+  ['room-01.wall-front.b', 2.05],
+  ['room-01.wall-left.a', 2],
+  ['room-01.wall-left.b', 1.75],
+  ['room-01.wall-right.a', 2],
+  ['room-01.wall-right.b', 1.75],
+]);
 for (const slot of shippingConfig.slots) {
   assert.equal(typeof slot.placement.horizontalPosition, 'number', `${slot.id} must author one normalized wall position`);
   assert.ok(slot.placement.horizontalPosition > 0 && slot.placement.horizontalPosition < 1, `${slot.id} wall position must be interior`);
-  assert.equal(slot.placement.centerHeight, 1.55, `${slot.id} must sit on the shared 1.55 m visual centerline`);
-  assert.equal(slot.placement.physicalHeight, 1.82, `${slot.id} must use the curated 1.82 m physical height`);
-  assert.equal(slot.placement.mountingGap, 0.006, `${slot.id} must keep the 6 mm mounting gap`);
+  assert.equal(slot.placement.centerHeight, 1.9, `${slot.id} must sit on the shared 1.90 m visual centerline`);
+  assert.equal(slot.placement.physicalHeight, expectedPhysicalHeightBySlot.get(slot.id), `${slot.id} must use its curated physical height`);
+  assert.equal(slot.placement.mountingGap, 0.002, `${slot.id} must keep the 2 mm mounting gap`);
+  const bottom = slot.placement.centerHeight - slot.placement.physicalHeight / 2;
+  const top = slot.placement.centerHeight + slot.placement.physicalHeight / 2;
+  assert.ok(bottom >= 0.75, `${slot.id} must retain a museum-scale floor margin`);
+  assert.ok(top >= 2.75 && top <= 3.05, `${slot.id} must occupy the tall wall without crowding the hanging band`);
   assert.equal(slot.placement.center, undefined, `${slot.id} must not author a duplicate legacy center`);
   assert.equal(slot.placement.anchor, undefined, `${slot.id} must not author a duplicate metric anchor`);
   assert.equal(slot.placement.uv, undefined, `${slot.id} must not author a duplicate UV anchor`);
@@ -226,6 +239,13 @@ const artworks = [
   { id: 'square-fixture', title: 'Square', image: 'square.png', dimensions: { width: 1000, height: 1000 } },
   { id: 'square-fixture-2', title: 'Square II', image: 'square-2.png', dimensions: { width: 1100, height: 1100 } },
 ];
+const builtInResolution = museumHub.resolveMuseumHub(builtInArtworks.artworks, undefined);
+assert.equal(builtInResolution.source, 'built-in-default');
+assert.deepEqual(
+  builtInResolution.warnings.filter((warning) => /fallback wall|overlap|spacing|hanging band|exclusion zone/i.test(warning)),
+  [],
+  'the curated built-in exhibition must remain within every wall, doorway, and spacing constraint'
+);
 const sourcePlan = artworkImageSources.resolveArtworkImageSources(artworks[0]);
 assert.equal(sourcePlan.primary?.mode, 'declared-image', 'artwork source resolution must keep the declared image as primary');
 assert.equal(sourcePlan.primary?.declaredUrl, 'fraktal.png');
@@ -605,7 +625,7 @@ const invalidFrameWall = {
   axisV: { x: 1, y: 0, z: 0 },
 };
 assert.equal(
-  geometry.createArtworkMountingFrame(invalidFrameWall, { x: 4.5, y: 1.55 }, 1.82, 1, 0.006),
+  geometry.createArtworkMountingFrame(invalidFrameWall, { x: 4.5, y: 1.9 }, 2, 1, 0.002),
   null,
   'non-orthogonal wall axes must be rejected before an artwork transform is created'
 );
@@ -658,9 +678,9 @@ for (const slot of selectableSlots) {
     inHangingBand: true,
     orientationConsistent: true,
   }, `${slot.id} must pass all local placement validity checks`);
-  assert.equal(slot.placement.centerHeight, 1.55, `${slot.id} resolved center height must remain authoritative`);
-  assert.equal(slot.placement.physicalHeight, 1.82, `${slot.id} resolved physical height must remain authoritative`);
-  assert.equal(slot.placement.mountingGap, 0.006, `${slot.id} resolved mounting gap must remain authoritative`);
+  assert.equal(slot.placement.centerHeight, 1.9, `${slot.id} resolved center height must remain authoritative`);
+  assert.equal(slot.placement.physicalHeight, expectedPhysicalHeightBySlot.get(slot.id), `${slot.id} resolved physical height must remain authoritative`);
+  assert.equal(slot.placement.mountingGap, 0.002, `${slot.id} resolved mounting gap must remain authoritative`);
   const mountingFrame = geometry.createArtworkMountingFrame(
     wall.room,
     slot.placement.anchor,
@@ -674,8 +694,8 @@ for (const slot of selectableSlots) {
   assert.ok(dot3(mountingFrame.basisN, inward) > 0, `${slot.id} front face must point into the museum`);
   const backOffset = vector3(mountingFrame.wallCenter, mountingFrame.backCenter);
   const frontOffset = vector3(mountingFrame.backCenter, mountingFrame.frontCenter);
-  assert.ok(Math.abs(dot3(backOffset, mountingFrame.basisN) - 0.006) < 1e-9, `${slot.id} back must clear wall by exactly 6 mm`);
-  assert.ok(Math.abs(dot3(frontOffset, mountingFrame.basisN) - 0.04) < 1e-9, `${slot.id} body must retain exactly 4 cm depth`);
+  assert.ok(Math.abs(dot3(backOffset, mountingFrame.basisN) - 0.002) < 1e-9, `${slot.id} back must clear wall by exactly 2 mm`);
+  assert.ok(Math.abs(dot3(frontOffset, mountingFrame.basisN) - 0.022) < 1e-9, `${slot.id} body must retain exactly 22 mm depth`);
   assert.ok(Math.abs(length3(vector3(mountingFrame.frontQuad[0], mountingFrame.frontQuad[1])) / length3(vector3(mountingFrame.frontQuad[0], mountingFrame.frontQuad[3])) - slot.artworkAspect) < 1e-9, `${slot.id} must preserve source aspect ratio`);
   for (let cornerIndex = 0; cornerIndex < 4; cornerIndex += 1) {
     assert.ok(

@@ -433,18 +433,17 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
   },
 ];
 
-export const HUB_HERO_CENTERLINE_M = 1.55;
-export const HUB_HERO_ARTWORK_HEIGHT_M = 1.82;
-export const HUB_ARTWORK_MOUNTING_GAP_M = 0.006;
+export const HUB_HERO_CENTERLINE_M = 1.9;
+export const HUB_ARTWORK_MOUNTING_GAP_M = 0.002;
 export const HUB_MIN_ARTWORK_SPACING_M = 0.5;
 
 function curatedPlacement(
   wallId: string,
   horizontalPosition: number,
-  wallWidth: number
+  wallWidth: number,
+  physicalHeight: number
 ): HubSlotPlacement {
   const centerHeight = HUB_HERO_CENTERLINE_M;
-  const physicalHeight = HUB_HERO_ARTWORK_HEIGHT_M;
   const mountingGap = HUB_ARTWORK_MOUNTING_GAP_M;
   return {
     wallId,
@@ -459,48 +458,48 @@ function curatedPlacement(
     targetSizePolicy: 'fixed-height',
     minScale: 1,
     maxScale: 1,
-    zOffset: mountingGap + 0.04,
+    zOffset: mountingGap + 0.022,
   };
 }
 
-// 2 + 2 + 2 hero composition on a shared 1.55 m visual centerline. Side-wall
-// pairs are exact mirrors and retain at least half a metre of breathing room.
+// 2 + 2 + 2 hero composition on a shared 1.90 m visual centerline. Physical
+// heights are curated per role/aspect rather than forced to one generic size.
 const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
   {
     suffix: 'wall-front.a',
     wallId: 'wall-front',
     intendedUse: 'portrait',
-    placement: curatedPlacement('wall-front', 0.28, HUB_ROOM_WIDTH),
+    placement: curatedPlacement('wall-front', 0.28, HUB_ROOM_WIDTH, 2.25),
   },
   {
     suffix: 'wall-front.b',
     wallId: 'wall-front',
     intendedUse: 'panoramic',
-    placement: curatedPlacement('wall-front', 0.72, HUB_ROOM_WIDTH),
+    placement: curatedPlacement('wall-front', 0.72, HUB_ROOM_WIDTH, 2.05),
   },
   {
     suffix: 'wall-left.a',
     wallId: 'wall-left',
     intendedUse: 'landscape',
-    placement: curatedPlacement('wall-left', 0.85, HUB_ROOM_DEPTH),
+    placement: curatedPlacement('wall-left', 0.84, HUB_ROOM_DEPTH, 2),
   },
   {
     suffix: 'wall-left.b',
     wallId: 'wall-left',
     intendedUse: 'square',
-    placement: curatedPlacement('wall-left', 0.6, HUB_ROOM_DEPTH),
+    placement: curatedPlacement('wall-left', 0.585, HUB_ROOM_DEPTH, 1.75),
   },
   {
     suffix: 'wall-right.a',
     wallId: 'wall-right',
     intendedUse: 'landscape',
-    placement: curatedPlacement('wall-right', 0.15, HUB_ROOM_DEPTH),
+    placement: curatedPlacement('wall-right', 0.16, HUB_ROOM_DEPTH, 2),
   },
   {
     suffix: 'wall-right.b',
     wallId: 'wall-right',
     intendedUse: 'square',
-    placement: curatedPlacement('wall-right', 0.4, HUB_ROOM_DEPTH),
+    placement: curatedPlacement('wall-right', 0.415, HUB_ROOM_DEPTH, 1.75),
   },
 ];
 
