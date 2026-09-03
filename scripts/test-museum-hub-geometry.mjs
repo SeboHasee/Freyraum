@@ -180,27 +180,41 @@ assert.ok(
   'side-wall doorways must be mirrored within 1 cm'
 );
 
-// ── 2 + 2 + 2 slot composition on the shared 1.90 m centerline ──────────────
+// ── 2 + 2 + 2 optically balanced slot composition ───────────────────────────
 assert.equal(shippingConfig.slots.length, 6, 'hero room must define six slots');
 const slotsByWall = { 'wall-front': [], 'wall-left': [], 'wall-right': [] };
 const expectedPhysicalHeightBySlot = new Map([
-  ['room-01.wall-front.a', 2.25],
-  ['room-01.wall-front.b', 2.05],
-  ['room-01.wall-left.a', 2],
-  ['room-01.wall-left.b', 1.75],
-  ['room-01.wall-right.a', 2],
-  ['room-01.wall-right.b', 1.75],
+  ['room-01.wall-front.a', 1.72],
+  ['room-01.wall-front.b', 1.62],
+  ['room-01.wall-left.a', 1.6],
+  ['room-01.wall-left.b', 1.45],
+  ['room-01.wall-right.a', 1.6],
+  ['room-01.wall-right.b', 1.45],
+]);
+const expectedCenterHeightByWall = new Map([
+  ['wall-front', 2.02],
+  ['wall-left', 2.1],
+  ['wall-right', 2.08],
+]);
+const expectedHorizontalPositionBySlot = new Map([
+  ['room-01.wall-front.a', 0.29],
+  ['room-01.wall-front.b', 0.71],
+  ['room-01.wall-left.a', 0.78],
+  ['room-01.wall-left.b', 0.53],
+  ['room-01.wall-right.a', 0.22],
+  ['room-01.wall-right.b', 0.49],
 ]);
 for (const slot of shippingConfig.slots) {
   assert.equal(typeof slot.placement.horizontalPosition, 'number', `${slot.id} must author one normalized wall position`);
   assert.ok(slot.placement.horizontalPosition > 0 && slot.placement.horizontalPosition < 1, `${slot.id} wall position must be interior`);
-  assert.equal(slot.placement.centerHeight, 1.9, `${slot.id} must sit on the shared 1.90 m visual centerline`);
+  assert.equal(slot.placement.horizontalPosition, expectedHorizontalPositionBySlot.get(slot.id), `${slot.id} must use its curated wall position`);
+  assert.equal(slot.placement.centerHeight, expectedCenterHeightByWall.get(slot.placement.wallId), `${slot.id} must use its wall-specific optical centerline`);
   assert.equal(slot.placement.physicalHeight, expectedPhysicalHeightBySlot.get(slot.id), `${slot.id} must use its curated physical height`);
   assert.equal(slot.placement.mountingGap, 0.002, `${slot.id} must keep the 2 mm mounting gap`);
   const bottom = slot.placement.centerHeight - slot.placement.physicalHeight / 2;
   const top = slot.placement.centerHeight + slot.placement.physicalHeight / 2;
-  assert.ok(bottom >= 0.75, `${slot.id} must retain a museum-scale floor margin`);
-  assert.ok(top >= 2.75 && top <= 3.05, `${slot.id} must occupy the tall wall without crowding the hanging band`);
+  assert.ok(bottom >= 1.15, `${slot.id} must retain a clear museum-scale floor margin`);
+  assert.ok(top >= 2.8 && top <= 2.91, `${slot.id} must form a calm upper exhibition band`);
   assert.equal(slot.placement.center, undefined, `${slot.id} must not author a duplicate legacy center`);
   assert.equal(slot.placement.anchor, undefined, `${slot.id} must not author a duplicate metric anchor`);
   assert.equal(slot.placement.uv, undefined, `${slot.id} must not author a duplicate UV anchor`);
@@ -210,15 +224,11 @@ for (const slot of shippingConfig.slots) {
 assert.equal(slotsByWall['wall-front'].length, 2, 'front wall must carry exactly two slots');
 assert.equal(slotsByWall['wall-left'].length, 2, 'left wall must carry exactly two slots');
 assert.equal(slotsByWall['wall-right'].length, 2, 'right wall must carry exactly two slots');
-// Exact mirror pairing: wall-left.X ↔ wall-right.X.
+// Side pairs retain related scale while allowing slight optical asymmetry.
 for (const leftSlot of slotsByWall['wall-left']) {
   const counterpartId = leftSlot.id.replace('wall-left', 'wall-right');
   const rightSlot = shippingConfig.slots.find((slot) => slot.id === counterpartId);
   assert.ok(rightSlot, `${leftSlot.id} must have the mirrored counterpart ${counterpartId}`);
-  assert.ok(
-    Math.abs(rightSlot.placement.horizontalPosition - (1 - leftSlot.placement.horizontalPosition)) <= MIRROR_TOLERANCE,
-    `${counterpartId} must mirror ${leftSlot.id} within 1 cm`
-  );
   assert.ok(
     Math.abs(rightSlot.placement.physicalHeight - leftSlot.placement.physicalHeight) <= MIRROR_TOLERANCE,
     `${counterpartId} must match the physical height of ${leftSlot.id}`
@@ -798,7 +808,7 @@ for (const slot of selectableSlots) {
     inHangingBand: true,
     orientationConsistent: true,
   }, `${slot.id} must pass all local placement validity checks`);
-  assert.equal(slot.placement.centerHeight, 1.9, `${slot.id} resolved center height must remain authoritative`);
+  assert.equal(slot.placement.centerHeight, expectedCenterHeightByWall.get(slot.placement.wallId), `${slot.id} resolved optical center height must remain authoritative`);
   assert.equal(slot.placement.physicalHeight, expectedPhysicalHeightBySlot.get(slot.id), `${slot.id} resolved physical height must remain authoritative`);
   assert.equal(slot.placement.mountingGap, 0.002, `${slot.id} resolved mounting gap must remain authoritative`);
   const mountingFrame = geometry.createArtworkMountingFrame(
@@ -825,6 +835,22 @@ for (const slot of selectableSlots) {
   }
   assert.ok(projection.realism?.passes ?? wall.projectionRealism?.passes, `${slot.id} must inherit a passing wall realism profile`);
   assert.ok(geometry.pointInPolygon(projection.projectedAnchor, projection.projectedQuad), `${slot.id} projected anchor must remain inside the final projected quad`);
+  const floorPoint = geometry.projectRoomWallPoint(
+    wall.room,
+    wall.camera,
+    { x: projection.placement.anchor.x, y: 0 },
+    shipping.stage
+  );
+  assert.ok(floorPoint, `${slot.id} must project its local floor reference`);
+  assert.ok(
+    floorPoint.y - projection.bounds.maxY >= 20,
+    `${slot.id} must retain at least 20 px of visible wall below the artwork`
+  );
+  const localSpan = polygonSpan(projection.localQuad, 'x');
+  assert.ok(
+    localSpan.min >= 0.65 && wall.room.width - localSpan.max >= 0.65,
+    `${slot.id} must retain at least 0.65 m from both wall corners`
+  );
   for (const corner of projection.projectedQuad) {
     assert.ok(geometry.pointInPolygon(corner, wall.safePolygon), `${slot.id} must stay within its projected wall safe polygon`);
   }
@@ -842,6 +868,14 @@ for (const slot of selectableSlots) {
   const wallPlacements = localPlacementsByWall.get(wall.id) ?? [];
   wallPlacements.push({ slot, projection });
   localPlacementsByWall.set(wall.id, wallPlacements);
+}
+
+for (const placements of localPlacementsByWall.values()) {
+  if (placements.length !== 2) continue;
+  const centerDelta = Math.abs(
+    placements[0].projection.projectedAnchor.y - placements[1].projection.projectedAnchor.y
+  );
+  assert.ok(centerDelta <= 18, `same-wall optical centers must remain within 18 px (got ${centerDelta.toFixed(1)} px)`);
 }
 
 for (const [wallId, placements] of localPlacementsByWall) {

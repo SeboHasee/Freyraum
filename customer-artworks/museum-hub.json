@@ -372,9 +372,9 @@
       "artworkId": "fraktal",
       "placement": {
         "wallId": "wall-front",
-        "horizontalPosition": 0.28,
-        "centerHeight": 1.9,
-        "physicalHeight": 2.25,
+        "horizontalPosition": 0.29,
+        "centerHeight": 2.02,
+        "physicalHeight": 1.72,
         "mountingGap": 0.002
       }
     },
@@ -385,9 +385,9 @@
       "artworkId": "akt-27",
       "placement": {
         "wallId": "wall-front",
-        "horizontalPosition": 0.72,
-        "centerHeight": 1.9,
-        "physicalHeight": 2.05,
+        "horizontalPosition": 0.71,
+        "centerHeight": 2.02,
+        "physicalHeight": 1.62,
         "mountingGap": 0.002
       }
     },
@@ -397,9 +397,9 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-left",
-        "horizontalPosition": 0.84,
-        "centerHeight": 1.9,
-        "physicalHeight": 2,
+        "horizontalPosition": 0.78,
+        "centerHeight": 2.1,
+        "physicalHeight": 1.6,
         "mountingGap": 0.002
       }
     },
@@ -409,9 +409,9 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-left",
-        "horizontalPosition": 0.585,
-        "centerHeight": 1.9,
-        "physicalHeight": 1.75,
+        "horizontalPosition": 0.53,
+        "centerHeight": 2.1,
+        "physicalHeight": 1.45,
         "mountingGap": 0.002
       }
     },
@@ -421,9 +421,9 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-right",
-        "horizontalPosition": 0.16,
-        "centerHeight": 1.9,
-        "physicalHeight": 2,
+        "horizontalPosition": 0.22,
+        "centerHeight": 2.08,
+        "physicalHeight": 1.6,
         "mountingGap": 0.002
       }
     },
@@ -433,9 +433,9 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-right",
-        "horizontalPosition": 0.415,
-        "centerHeight": 1.9,
-        "physicalHeight": 1.75,
+        "horizontalPosition": 0.49,
+        "centerHeight": 2.08,
+        "physicalHeight": 1.45,
         "mountingGap": 0.002
       }
     }

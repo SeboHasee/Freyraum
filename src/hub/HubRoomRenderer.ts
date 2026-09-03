@@ -29,7 +29,6 @@ interface SlotMeshState {
   group: THREE.Group;
   artworkMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   edgeMesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
-  shadowMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   textureKind: 'image' | 'placeholder' | null;
   textureKey: string | null;
 }
@@ -157,10 +156,8 @@ export class HubRoomRenderer {
   private readonly placeholderTextures = new Map<string, THREE.CanvasTexture>();
   private readonly surfaceFactory: ArchitecturalSurfaceFactory;
   private readonly materials: ArchitecturalMaterials;
-  private readonly shadowMaterial: THREE.MeshBasicMaterial;
   private readonly edgeGeometry = new THREE.BoxGeometry(1, 1, 1);
   private readonly artworkPlaneGeometry = new THREE.PlaneGeometry(1, 1);
-  private contactShadowTexture: THREE.CanvasTexture | null = null;
   private readonly floorMeshes: THREE.Mesh[] = [];
   private keyLight: THREE.DirectionalLight | null = null;
   private fillLight: THREE.DirectionalLight | null = null;
@@ -238,15 +235,6 @@ export class HubRoomRenderer {
     this.materials.ceiling.shadowSide = THREE.DoubleSide;
     this.materials.trim.shadowSide = THREE.DoubleSide;
     this.attachFloorReflectionShader(this.materials.floor);
-
-    this.shadowMaterial = new THREE.MeshBasicMaterial({
-      map: this.contactShadowMap(),
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.12,
-      depthWrite: false,
-      toneMapped: false,
-    });
 
     this.buildRoom();
     this.buildLights();
@@ -431,13 +419,6 @@ export class HubRoomRenderer {
     // remains exactly at the mounting-frame back plane.
     state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
     state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
-    // Tight wall contact only; the mounted body supplies the broader real shadow.
-    state.shadowMesh.scale.set(width * 1.012, height * 1.016, 1);
-    state.shadowMesh.position.set(
-      0.006,
-      -0.009,
-      -mountingFrame.depth - mountingFrame.mountingGap + 0.001
-    );
     this.render();
     return { applied: true, usedImage: !missingImage, fit, visibleProbe };
   }
@@ -452,8 +433,6 @@ export class HubRoomRenderer {
       state.artworkMesh.material.dispose();
     }
     for (const texture of this.placeholderTextures.values()) texture.dispose();
-    this.shadowMaterial.dispose();
-    this.contactShadowTexture?.dispose();
     this.edgeGeometry.dispose();
     this.artworkPlaneGeometry.dispose();
     this.scene.traverse((object) => {
@@ -1383,12 +1362,10 @@ export class HubRoomRenderer {
     const edgeMesh = new THREE.Mesh(this.edgeGeometry, this.materials.artworkEdge);
     edgeMesh.castShadow = true;
     edgeMesh.receiveShadow = false;
-    const shadowMesh = new THREE.Mesh(this.artworkPlaneGeometry, this.shadowMaterial);
-    shadowMesh.renderOrder = 1;
     edgeMesh.renderOrder = 2;
     artworkMesh.renderOrder = 3;
     const group = new THREE.Group();
-    group.add(shadowMesh, edgeMesh, artworkMesh);
+    group.add(edgeMesh, artworkMesh);
     const pageGroup = this.ensurePageGroup(slot.pageIndex);
     pageGroup.add(group);
     const state: SlotMeshState = {
@@ -1396,7 +1373,6 @@ export class HubRoomRenderer {
       group,
       artworkMesh,
       edgeMesh,
-      shadowMesh,
       textureKind: null,
       textureKey: null,
     };
@@ -1452,38 +1428,6 @@ export class HubRoomRenderer {
     texture.needsUpdate = true;
     texture.anisotropy = this.effectiveAnisotropy();
     return { texture, fit: compatible.fit };
-  }
-
-  /** Shared soft rounded contact card for physically mounted artworks. */
-  private contactShadowMap(): THREE.CanvasTexture {
-    if (this.contactShadowTexture) return this.contactShadowTexture;
-    const size = 128;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext('2d');
-    if (context) {
-      const inset = 10;
-      const radius = 7;
-      context.filter = 'blur(6px)';
-      context.fillStyle = 'rgba(255,255,255,0.9)';
-      context.beginPath();
-      context.moveTo(inset + radius, inset);
-      context.lineTo(size - inset - radius, inset);
-      context.quadraticCurveTo(size - inset, inset, size - inset, inset + radius);
-      context.lineTo(size - inset, size - inset - radius);
-      context.quadraticCurveTo(size - inset, size - inset, size - inset - radius, size - inset);
-      context.lineTo(inset + radius, size - inset);
-      context.quadraticCurveTo(inset, size - inset, inset, size - inset - radius);
-      context.lineTo(inset, inset + radius);
-      context.quadraticCurveTo(inset, inset, inset + radius, inset);
-      context.closePath();
-      context.fill();
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.NoColorSpace;
-    this.contactShadowTexture = texture;
-    return texture;
   }
 
   private placeholderTexture(label: string): THREE.CanvasTexture {
