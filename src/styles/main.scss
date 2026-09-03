@@ -466,6 +466,18 @@ canvas {
    inset 0 -1px 1px rgba(10, 12, 14, 0.2);
 }
 
+.museum-hub.is-2d .museum-hub__art {
+  opacity: 1;
+}
+
+.museum-hub.is-2d .museum-hub__image {
+  opacity: 1;
+}
+
+.museum-hub.is-2d .museum-hub__introduction::after {
+  content: ' Die räumliche Museumsansicht ist nicht verfügbar; Auswahl und Galerie bleiben bedienbar.';
+}
+
 .museum-hub__art-placeholder {
   position: absolute;
   inset: 0;
@@ -2268,14 +2280,15 @@ button {
 .fallback-screen {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 32px;
+  overflow: auto;
+  padding: max(32px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   background: var(--color-gallery-wall);
   z-index: 300;
 }
 
 .fallback-screen__card {
+  margin: 0 auto 32px;
   width: min(540px, calc(100vw - var(--safe-left) - var(--safe-right) - 32px));
   background: var(--glass-bg-strong);
   backdrop-filter: blur(var(--glass-blur));
@@ -2316,6 +2329,77 @@ button {
   letter-spacing: 0.04em;
   color: var(--text-muted);
   opacity: 0.7;
+}
+
+.fallback-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.fallback-screen__action {
+  appearance: none;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-pill);
+  padding: 10px 16px;
+  background: var(--glass-bg-strong);
+  color: var(--text-strong);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.fallback-screen__action:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.fallback-screen__museum {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 20px;
+}
+
+.fallback-screen__artwork {
+  display: grid;
+  grid-template-columns: minmax(180px, 34%) 1fr;
+  gap: clamp(18px, 4vw, 36px);
+  align-items: center;
+  padding: clamp(18px, 4vw, 32px);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong);
+}
+
+.fallback-screen__artwork img {
+  width: 100%;
+  max-height: 56vh;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.fallback-screen__artwork h2 {
+  margin-bottom: 8px;
+  color: var(--text-strong);
+}
+
+.fallback-screen__artwork p {
+  margin-top: 10px;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+.fallback-screen__metadata {
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .fallback-screen__artwork {
+    grid-template-columns: 1fr;
+  }
 }
 
 // =============================================================================

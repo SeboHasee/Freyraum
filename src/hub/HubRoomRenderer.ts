@@ -13,6 +13,11 @@ import { createScopedDiagnostics } from '../utils/Diagnostics';
 import { createCompatibleTextureImage, type TextureUploadFit } from '../utils/textureUploadCompatibility';
 import { probeTextureVisiblePixels, type VisiblePixelProbeResult } from '../utils/sourceToPixelProbe';
 import { getRuntimeProtocol, shouldRunVisiblePixelProbe } from '../utils/sourceToPixelOutcome';
+import {
+  createResilientWebGLRenderer,
+  describeWebGLContext,
+  type WebGLRendererMode,
+} from '../utils/webgl';
 
 interface SlotMeshState {
   pageIndex: number;
@@ -138,6 +143,7 @@ export class HubRoomRenderer {
 
   private readonly diagnostics = createScopedDiagnostics('hub-room');
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly rendererMode: WebGLRendererMode;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
   private readonly cameraTarget = new THREE.Vector3();
@@ -176,24 +182,30 @@ export class HubRoomRenderer {
   constructor(container: HTMLElement, resolution: MuseumHubResolution, preset: QualityPreset) {
     this.resolution = resolution;
     this.preset = preset;
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-      powerPreference: 'high-performance',
-    });
-    this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
+    const creation = createResilientWebGLRenderer({ alpha: false });
+    this.renderer = creation.renderer;
+    this.rendererMode = creation.mode;
+    this.renderer.setPixelRatio(
+      creation.mode === 'preferred' ? getOptimalPixelRatio(preset.pixelRatioCap) : 1
+    );
     this.renderer.setSize(resolution.stage.width, resolution.stage.height, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     // Architectural highlights use a restrained photographic shoulder. Artwork
     // planes explicitly opt out so customer imagery remains source-faithful.
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = HUB_RENDER_PROFILE.toneMappingExposure;
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = creation.mode === 'preferred';
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setClearColor(new THREE.Color(resolution.visualTokens.museumWall), 1);
     this.renderer.domElement.classList.add('museum-hub__canvas');
     container.appendChild(this.renderer.domElement);
     this.canvas = this.renderer.domElement;
+    this.diagnostics.info('created', 'Hub WebGL renderer initialized', {
+      mode: creation.mode,
+      attempts: creation.attempts,
+      context: describeWebGLContext(this.renderer),
+      protocol: window.location.protocol,
+    });
 
     this.camera = new THREE.PerspectiveCamera(
       resolution.camera.verticalFovDeg,
@@ -248,7 +260,9 @@ export class HubRoomRenderer {
   applyPreset(preset: QualityPreset): void {
     if (this.disposed) return;
     this.preset = preset;
-    this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
+    this.renderer.setPixelRatio(
+      this.rendererMode === 'preferred' ? getOptimalPixelRatio(preset.pixelRatioCap) : 1
+    );
     this.renderer.setSize(this.resolution.stage.width, this.resolution.stage.height, false);
     this.surfaceFactory.setTileSize(preset.hubSurfaceTileSize);
     this.applyLightingPreset();

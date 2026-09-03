@@ -1,5 +1,37 @@
 # FREYRAUM Plan
 
+## Implemented — WebGL startup resilience and 2D museum (v1.05, 2026-09-03)
+
+> **Status update:** Renderer capability is now proven by the real renderer,
+> failed contexts are released, hub GPU failure recovers locally, and complete
+> customer artwork content remains accessible when immersive 3D cannot start.
+
+### 1. As-built scope
+
+1. Preferred, compatibility, and battery renderer attempts replace the boolean
+   preflight; unsuccessful partial contexts are explicitly lost.
+2. Compatibility modes use DPR 1 and disable shadow allocation.
+3. Hub renderer creation has a local recovery boundary and nullable lifecycle;
+   the existing DOM projection, paging, selection, keyboard, and swipe paths
+   remain active with visible artwork imagery.
+4. Fatal renderer recovery provides a responsive 2D artwork collection, accurate
+   failure copy, diagnostic-only technical detail, and a controlled retry.
+5. Unrelated startup failures use their own category and never claim that WebGL
+   is absent.
+6. Stored quality choices remain authoritative; constrained first runs use the
+   battery preset and skip non-active shader-variant compilation.
+7. Local preview startup has no external-font dependency and names missing local
+   bundle files directly.
+8. The removed probe bounds runtime context pressure to the two real renderers.
+   Route-triggered force-loss was deliberately rejected as higher-risk than the
+   existing stable context-restoration and texture lifecycle.
+
+### 2. Support boundary
+
+- Three-dimensional gallery rendering requires a working WebGL 2 implementation.
+- Browser brand alone does not determine support.
+- Museum content remains readable and navigable without immersive rendering.
+
 ## Implemented — Architectural lighting topology pass (v1.04, 2026-09-02)
 
 > **Status update:** The hub now derives room depth from explicitly room-facing

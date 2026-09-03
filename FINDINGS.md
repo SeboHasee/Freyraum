@@ -1,5 +1,23 @@
 # FINDINGS
 
+## WebGL startup resilience findings (v1.05, 2026-09-03)
+
+1. A boolean capability probe was both incomplete evidence and an extra live GPU
+   context. The production renderer is the authoritative capability test.
+2. Edge and Opera support WebGL; renderer allocation, driver policy, GPU process
+   failure, and unrelated startup exceptions must not be collapsed into a
+   “change browser” message.
+3. Current Three.js requires WebGL 2. Compatibility therefore means safer
+   context attributes, no antialiasing, conservative DPR/shadows, and ultimately
+   DOM recovery—not pretending a WebGL 1 renderer exists.
+4. The hub already had exact-ID DOM buttons, image decoding, paging, keyboard,
+   and touch behavior. Making its renderer nullable preserves these mature paths
+   and is safer than creating a second museum implementation.
+5. Two application renderers remain possible while the hub is active, but the
+   leaked detection context is gone and the process is now bounded at two.
+   Aggressive context loss/restoration during route transitions was rejected
+   because it risks repeated texture re-upload and mobile driver instability.
+
 ## Architectural lighting topology findings (v1.04, 2026-09-02)
 
 1. Three.js `RectAreaLight` emits along local `-Z`; targeting a point directly

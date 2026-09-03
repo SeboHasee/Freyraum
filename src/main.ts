@@ -32,7 +32,6 @@ import { normalizeArtworkPresentation } from './config/presentation';
 import { DestinationRouter } from './navigation/DestinationRouter';
 import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
 import { PreferencesStore } from './utils/preferences';
-import { isWebGLAvailable } from './utils/webgl';
 import { FrameBudgetMonitor } from './utils/FrameBudgetMonitor';
 import { installPerformanceTooling } from './utils/performanceTooling';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
@@ -57,6 +56,7 @@ const DEFAULT_GPU_WARM_CRITICAL_COUNT = WARM_BUDGET.defaultPreEntryWarmCount;
 const DEFAULT_GPU_WARM_FRAME_BUDGET_MS = WARM_BUDGET.defaultPostRevealFrameBudgetMs;
 const DEFAULT_GPU_WARM_BATCH_CAP = WARM_BUDGET.defaultPostRevealBatchCap;
 const QUALITY_PREWARM_IDS: readonly QualityPresetId[] = ['high', 'balanced', 'battery'];
+let recoveryArtworks: readonly Artwork[] = builtInArtworks;
 
 /**
  * v0.25 T-01/T-02/T-05: Yields to the browser compositor for one animation
@@ -774,18 +774,15 @@ async function main(): Promise<void> {
     dpr: initialCaps.dpr,
   });
 
-  // v0.11 / v0.67 — startup quality heuristic is now diagnostics-only.
-  // Per the v0.67 quality-lock model, first-run startup must NOT silently
-  // switch the preset. We keep a deterministic default (the preference
-  // store's DEFAULT_QUALITY_PRESET) and only log what the legacy heuristic
-  // would have suggested, so the signal is still visible in diagnostics
-  // without changing the user's preset. Stored user choices are unaffected.
+  // Stored choices remain authoritative. First-run devices that are
+  // unambiguously constrained start conservatively to avoid GPU allocation
+  // failures before the preferences UI is available.
   if (!PreferencesStore.hasStoredQuality()) {
     const suggested = suggestStartupQuality();
-    if (suggested !== preferences.current.quality) {
-      diagnostics.info('quality', 'startup-suggestion-suppressed', 'Startup quality heuristic suppressed (quality lock); keeping deterministic default', {
-        kept: preferences.current.quality,
-        wouldSuggest: suggested,
+    if (suggested === 'battery' && suggested !== preferences.current.quality) {
+      preferences.setQuality(suggested);
+      diagnostics.info('quality', 'startup-capability-default', 'Applied conservative first-run quality', {
+        applied: suggested,
         tier: initialCaps.layoutTier,
         pointer: initialCaps.pointerPrimary,
         dpr: initialCaps.dpr,
@@ -809,6 +806,7 @@ async function main(): Promise<void> {
   const customerArtworks = injectedArtworkPayload?.artworks ?? null;
   const artworks: readonly Artwork[] =
     customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
+  recoveryArtworks = artworks;
   const artworkManifest = artworks.map((a) => {
     const sourcePlan = resolveArtworkImageSources(a);
     return {
@@ -868,12 +866,6 @@ async function main(): Promise<void> {
   const customerAudio = sanitizeInjectedAudio(injectedAudio, diagnostics);
   backgroundAudio.load(customerAudio);
 
-  if (!isWebGLAvailable()) {
-    diagnostics.error('boot', 'webgl-unavailable', 'WebGL is not available in the current browser');
-    showFallbackScreen(app, 'WebGL ist im aktuellen Browser nicht verfügbar.', resolvedWallTokens.galleryWall);
-    return;
-  }
-
   const loadingOverlay = createLoadingOverlay(app);
   const loadingManager = new THREE.LoadingManager();
   loadingManager.onStart = (_url, loaded, total) => {
@@ -905,11 +897,13 @@ async function main(): Promise<void> {
     diagnostics.error('renderer', 'init-failed', 'RendererManager initialization failed', err);
     loadingOverlay.dispose();
     loadingOverlay.overlay.remove();
-    showFallbackScreen(
-      app,
-      err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.',
-      resolvedWallTokens.galleryWall
-    );
+    showFallbackScreen(app, {
+      category: 'renderer-initialization',
+      reason: err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.',
+      surfaceColor: resolvedWallTokens.galleryWall,
+      artworks,
+      onRetry: () => window.location.reload(),
+    });
     return;
   }
   applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
@@ -1491,7 +1485,25 @@ async function main(): Promise<void> {
   // before entry. This avoids first-switch JIT stalls while keeping startup
   // cost bounded by warming only one representative artwork per variant.
   const activeQualityId = preferences.current.quality;
-  const qualityVariants = QUALITY_PREWARM_IDS.filter((id) => id !== activeQualityId);
+  const constrainedStartup =
+    activeQualityId === 'battery'
+    || initialCaps.pointerPrimary === 'coarse'
+    || rendererManager.rendererMode !== 'preferred';
+  const qualityVariants = constrainedStartup
+    ? []
+    : QUALITY_PREWARM_IDS.filter((id) => id !== activeQualityId);
+  if (constrainedStartup) {
+    diagnostics.info(
+      'boot',
+      'quality-variant-prewarm-skipped',
+      'Skipped non-active shader variants on a constrained renderer',
+      {
+        activeQuality: activeQualityId,
+        pointer: initialCaps.pointerPrimary,
+        rendererMode: rendererManager.rendererMode,
+      }
+    );
+  }
   if (qualityVariants.length > 0) {
     const variantWarmIndex = galleryManager.index;
     const variantWarmStart = performance.now();
@@ -2323,6 +2335,12 @@ main().catch((err) => {
     document.documentElement.style.backgroundColor = resolvedGalleryWall;
     document.body.style.backgroundColor = resolvedGalleryWall;
     app.style.backgroundColor = resolvedGalleryWall;
-    showFallbackScreen(app, err instanceof Error ? err.message : 'Unbekannter Fehler beim Initialisieren.', resolvedGalleryWall);
+    showFallbackScreen(app, {
+      category: 'startup',
+      reason: err instanceof Error ? err.message : 'Unbekannter Fehler beim Initialisieren.',
+      surfaceColor: resolvedGalleryWall,
+      artworks: recoveryArtworks,
+      onRetry: () => window.location.reload(),
+    });
   }
 });

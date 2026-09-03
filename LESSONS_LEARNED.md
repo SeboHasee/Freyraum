@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-02 (v1.04 hub lighting topology).
+> Latest markdown audit: 2026-09-03 (v1.05 WebGL resilience).
+
+## 2026-09-03 — Renderer capability and recovery lesson
+
+### Lesson 97 — Test the real renderer and preserve content without it
+
+A successful throwaway context does not prove that the application renderer can
+initialize, while the throwaway context itself consumes scarce GPU resources.
+Future rule: initialize the real renderer through bounded, explicitly cleaned-up
+attempts; classify unrelated startup failures separately; and keep customer
+content navigable in DOM/CSS whenever immersive rendering is unavailable.
 
 ## 2026-09-02 — Hub architectural-depth lesson
 

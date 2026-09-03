@@ -62,6 +62,12 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - Diagnostics, preferences, performance and utility primitives
 - `src/rendering/`
   - Backend detection/probe boundary (WebGL production, optional WebGPU probe)
+  - `webgl.ts`: real-renderer retry ladder (`preferred` → `compatibility` →
+    `battery`), typed failure, context diagnostics, and explicit release of
+    unsuccessful contexts. It does not allocate a separate preflight context.
+  - `FallbackScreen`: categorized recovery UI. Renderer failures retain a
+    keyboard/screen-reader-friendly 2D artwork collection; unrelated startup
+    failures are not described as WebGL absence.
 
 ## Startup sequence ownership
 
@@ -71,8 +77,10 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
    and initializes managers with that authoritative value.
 2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
 3. `RendererManager` prewarms renderer pipeline.
-4. `MainMuseumHub` prepares the hub (background fallback + room scene +
+4. `MainMuseumHub` prepares the hub (background fallback + optional room scene +
    first-page artwork primary/fallback decode) under the loading overlay via
+   the existing DOM artwork controls. If its independent room renderer fails,
+   it switches locally to visible DOM artwork imagery without aborting startup.
    `DestinationRouter.startAt('hub')`.
 5. UI entry flow continues after readiness gates are satisfied.
 

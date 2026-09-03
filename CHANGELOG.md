@@ -1,5 +1,29 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-02 (v1.04 architectural lighting topology).
+> Latest markdown audit: 2026-09-03 (v1.05 WebGL resilience).
+
+## v1.05 — Resilient WebGL startup and 2D museum (2026-09-03)
+
+### Changed
+
+- Removed the retained throwaway WebGL preflight and now initialize the real
+  renderer through preferred, compatibility, and battery-safe attempts.
+- Explicitly release unsuccessful partial contexts and report the selected
+  renderer mode/context attributes in diagnostics.
+- Isolated hub-renderer failure: its existing DOM artwork controls become a
+  visible, paged, touch/keyboard-accessible museum without aborting the gallery.
+- Replaced the generic WebGL alert with categorized startup messaging, one-shot
+  retry, and a responsive 2D artwork collection containing customer metadata.
+- First-run devices use battery quality only when the capability heuristic marks
+  them constrained; stored choices remain authoritative. Constrained starts no
+  longer compile non-active quality variants.
+- Removed external font requests from the generated local preview and added
+  self-contained missing-bundle-file messages.
+
+### Compatibility
+
+- Immersive rendering requires WebGL 2 as required by the installed Three.js
+  renderer. Browsers without a working implementation retain museum content and
+  navigation in 2D rather than receiving a blocking or misleading browser prompt.
 
 ## v1.04 — Architectural lighting topology pass (2026-09-02)
 

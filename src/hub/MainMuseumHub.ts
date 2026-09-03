@@ -44,6 +44,7 @@ import {
   shouldPreferEmbeddedWebglFallback,
   shouldRetryEmbeddedFallbackAfterPostUploadFailure,
 } from '../utils/sourceToPixelOutcome';
+import { releaseWebGLContext } from '../utils/webgl';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -126,7 +127,7 @@ export class MainMuseumHub {
   private readonly resolution: MuseumHubResolution;
   private readonly visual: HTMLElement;
   private readonly stage: HTMLElement;
-  private readonly hubRoomRenderer: HubRoomRenderer;
+  private readonly hubRoomRenderer: HubRoomRenderer | null;
   private readonly roomLayers: HTMLElement[] = [];
   private readonly slotViews: SlotView[] = [];
   private readonly entryButton: HTMLButtonElement;
@@ -235,7 +236,25 @@ export class MainMuseumHub {
       );
     });
     stage.appendChild(image);
-    this.hubRoomRenderer = new HubRoomRenderer(stage, resolution, preset);
+    let hubRoomRenderer: HubRoomRenderer | null = null;
+    try {
+      hubRoomRenderer = new HubRoomRenderer(stage, resolution, preset);
+    } catch (error) {
+      const failedCanvas = stage.querySelector('canvas');
+      releaseWebGLContext(failedCanvas?.getContext('webgl2') ?? null);
+      failedCanvas?.remove();
+      hub.classList.add('is-2d');
+      this.diagnostics.warn(
+        'renderer-fallback',
+        'Hub renderer failed; continuing with the accessible DOM museum',
+        {
+          stage: 'hub-renderer-initialization',
+          message: error instanceof Error ? error.message : String(error),
+          protocol: window.location.protocol,
+        }
+      );
+    }
+    this.hubRoomRenderer = hubRoomRenderer;
 
     const shade = document.createElement('div');
     shade.className = 'museum-hub__shade';
@@ -362,7 +381,7 @@ export class MainMuseumHub {
   /** Forwards quality-preset changes to the hub room renderer (v0.87). */
   applyPreset(preset: QualityPreset): void {
     if (this.disposed) return;
-    this.hubRoomRenderer.applyPreset(preset);
+    this.hubRoomRenderer?.applyPreset(preset);
   }
 
   onSelectSlot(callback: (slot: ResolvedHubSlot) => void): void {
@@ -596,7 +615,7 @@ export class MainMuseumHub {
     if (!wall) {
       button.classList.add('is-invalid-geometry');
       this.projectedSlotGeometry.delete(slot.id);
-      this.hubRoomRenderer.setSlotHidden(slot.id);
+      this.hubRoomRenderer?.setSlotHidden(slot.id);
       button.style.width = '0px';
       button.style.height = '0px';
       button.style.clipPath = 'none';
@@ -611,7 +630,7 @@ export class MainMuseumHub {
     if (!projection) {
       button.classList.add('is-invalid-geometry');
       this.projectedSlotGeometry.delete(slot.id);
-      this.hubRoomRenderer.setSlotHidden(slot.id);
+      this.hubRoomRenderer?.setSlotHidden(slot.id);
       button.style.width = '0px';
       button.style.height = '0px';
       button.style.clipPath = 'none';
@@ -656,6 +675,10 @@ export class MainMuseumHub {
   }
 
   private syncSlotRenderer(view: SlotView): void {
+    if (!this.hubRoomRenderer) {
+      view.lastUpsertResult = null;
+      return;
+    }
     const wall = this.resolution.wallById.get(view.slot.placement.wallId);
     if (!wall) return;
     const missingImage =
@@ -849,7 +872,7 @@ export class MainMuseumHub {
           uploadWidth: null,
           uploadHeight: null,
           downscaleApplied: false,
-          rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
+          rendererMaxTextureSize: this.hubRoomRenderer?.getMaxTextureSize() ?? null,
           visibleProbe: null,
         });
       }
@@ -1208,7 +1231,7 @@ export class MainMuseumHub {
       uploadWidth: upsert?.fit?.targetWidth ?? null,
       uploadHeight: upsert?.fit?.targetHeight ?? null,
       downscaleApplied: upsert?.fit?.needsDownscale ?? false,
-      rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
+      rendererMaxTextureSize: this.hubRoomRenderer?.getMaxTextureSize() ?? null,
       visibleProbe: upsert?.visibleProbe ?? null,
     });
   }
@@ -1246,7 +1269,7 @@ export class MainMuseumHub {
       uploadWidth: options.upsert?.fit?.targetWidth ?? null,
       uploadHeight: options.upsert?.fit?.targetHeight ?? null,
       downscaleApplied: options.upsert?.fit?.needsDownscale ?? false,
-      rendererMaxTextureSize: this.hubRoomRenderer.getMaxTextureSize(),
+      rendererMaxTextureSize: this.hubRoomRenderer?.getMaxTextureSize() ?? null,
       visibleProbe: options.upsert?.visibleProbe ?? null,
     });
   }
@@ -1443,7 +1466,7 @@ export class MainMuseumHub {
     const wallFocus = this.narrowMode
       ? MainMuseumHub.NARROW_WALL_ORDER[this.viewIndex % MainMuseumHub.NARROW_VIEWS_PER_PAGE]!
       : 'full';
-    this.hubRoomRenderer.setActivePage(pageIndex);
+    this.hubRoomRenderer?.setActivePage(pageIndex);
 
     for (const room of this.roomLayers) {
       const roomPage = Number.parseInt(room.dataset['page'] ?? '0', 10);
@@ -2143,7 +2166,7 @@ export class MainMuseumHub {
     this.entryButton.removeEventListener('click', this.handleActivate);
     this.activateCallback = null;
     this.selectSlotCallback = null;
-    this.hubRoomRenderer.dispose();
+    this.hubRoomRenderer?.dispose();
     this.projectedSlotGeometry.clear();
     this.debugProjectionSignatureBySlot.clear();
     this.slotViews.length = 0;

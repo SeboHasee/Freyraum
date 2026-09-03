@@ -14,6 +14,7 @@
     "build:preview": "vite build --config vite.local.config.ts",
     "build:preview-html": "node scripts/write-local-preview.mjs",
     "test:frame-budget": "node scripts/test-frame-budget.mjs",
+    "test:webgl-resilience": "node scripts/test-webgl-resilience.mjs",
     "validate:museum-hub": "node scripts/test-museum-hub-geometry.mjs",
     "validate:museum-hub:visual": "node scripts/visual-regression.mjs compare",
     "validate:visual": "node scripts/visual-regression.mjs",

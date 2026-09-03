@@ -5,6 +5,12 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 ## Current project state
 
 - Runtime renderer: WebGL (WebGPU is opt-in probe mode only).
+- Resilient startup: the real renderer is attempted directly with preferred,
+  compatibility, then battery-safe attributes. Failed partial contexts are
+  released; no separate detection context is retained.
+- Support contract: immersive rendering requires working WebGL 2. If it cannot
+  initialize, artwork images, titles, metadata, and descriptions remain
+  available in an accessible, responsive 2D museum instead of a blocking alert.
 - Startup flows from the loading screen into a manifest-driven Main Museum Hub:
   the customer room backdrop remains the environmental plate, while a dedicated
   on-demand WebGL room scene renders calibrated front/left/right walls inside a
