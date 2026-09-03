@@ -1,5 +1,20 @@
 # FINDINGS
 
+## Optical hub alignment findings (v1.08, 2026-09-03)
+
+1. The primary wide-angle view compressed the 1.90 m world centerline toward the
+   floor junction. Large 1.75–2.25 m works consequently left almost no visible
+   wall below them despite passing local wall bounds.
+2. Optical balance is a projected-view constraint, not mirror symmetry. Small
+   wall-specific centerline differences preserve wall-parallel mounting while
+   balancing the visible centers from the fixed primary camera.
+3. The detached rounded contact card was redundant with the shadow-casting
+   22 mm artwork body and could become visible outside artwork edges. Removing
+   it eliminates the false backing-panel silhouette and one mesh per slot.
+4. The corrected composition keeps physical bottoms at or above 1.15 m, tops in
+   a narrow 2.80–2.90 m band, projected floor clearance of at least 20 px, and
+   at least 0.65 m from wall corners in the calibrated primary view.
+
 ## Curated hub composition findings (v1.07, 2026-09-03)
 
 1. The v1.06 mount was geometrically correct but visually uniform: assigning

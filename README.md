@@ -26,7 +26,9 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   `centerHeight`, `physicalHeight`, `mountingGap`). Runtime U/V/N mounting
   frames derive the metric anchor, preserve source aspect ratio, point every
   artwork into the room, and project the actual mounted front face for the DOM
-  interaction bridge. Larger exhibitions paginate into additional room pages,
+  interaction bridge. The hero room uses wall-specific optical centerlines,
+  1.45–1.72 m artwork heights, and physical edge-cast contact shadows without
+  oversized backing cards. Larger exhibitions paginate into additional room pages,
   and narrow-portrait viewports split each room into left/right wall focus pages.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy

@@ -1,5 +1,26 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-03 (v1.07 curated hub composition).
+> Latest markdown audit: 2026-09-03 (v1.08 optical artwork alignment).
+
+## v1.08 — Optical hub artwork alignment (2026-09-03)
+
+### Changed
+
+- Replaced the single hero centerline with restrained optical centerlines:
+  2.02 m on the front wall, 2.10 m on the left, and 2.08 m on the right.
+- Reduced hero heights to 1.45–1.72 m and redistributed the side-wall groups
+  away from the back corners, preserving source aspect ratios and clear wall
+  below every work in the primary wide-angle view.
+- Balanced the front focal pair at 29%/71% of its wall and allowed slight
+  side-wall asymmetry instead of enforcing camera-visible mirror geometry.
+- Removed the separate blurred contact-shadow card. The 22 mm physical body now
+  provides the only artwork shadow/contact silhouette.
+- Added deterministic projected floor-gap, corner-margin, optical-center,
+  doorway, spacing, orientation, and fitted interaction-transform checks.
+
+### Unchanged
+
+- Museum architecture, camera, lighting, materials, post-processing, artwork
+  imagery, wall-parallel U/V/N transforms, interaction, and gallery navigation.
 
 ## v1.07 — Curated hub exhibition composition (2026-09-03)
 

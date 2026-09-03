@@ -1,5 +1,32 @@
 # FREYRAUM Plan
 
+## Implemented — Optical hub artwork alignment (v1.08, 2026-09-03)
+
+> **Status update:** The primary-camera exhibition now uses wall-specific optical
+> centerlines, smaller museum-scale works, broader side-wall distribution, and
+> only physical edge-cast contact shadows.
+
+### 1. As-built optical composition
+
+- Front: 29%/71%, 2.02 m centerline, 1.72 m/1.62 m heights.
+- Left: 53%/78%, 2.10 m centerline, 1.45 m/1.60 m heights.
+- Right: 22%/49%, 2.08 m centerline, 1.60 m/1.45 m heights.
+- Width remains derived from each source aspect ratio.
+- The composition retains at least 1.15 m physical floor clearance, 20 px
+  projected floor clearance, 0.65 m corner clearance, and 0.50 m pair spacing.
+
+### 2. Physical contact
+
+- The 22 mm body and 2 mm wall-to-back clearance remain unchanged.
+- The separate blurred contact card is removed; the body supplies edge depth and
+  participates in the existing architectural shadow map.
+- Rendering and DOM interaction continue to share the fitted mounted front face.
+
+### 3. Preserved boundaries
+
+Architecture, camera, lighting, materials, post-processing, artwork imagery,
+wall-parallel orientation, selection, paging, and gallery navigation are unchanged.
+
 ## Implemented — Curated hub exhibition composition (v1.07, 2026-09-03)
 
 > **Status update:** The wall-relative mounting architecture now uses a higher

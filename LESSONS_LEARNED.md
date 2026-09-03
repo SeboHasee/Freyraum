@@ -1,5 +1,14 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-03 (v1.07 curated hub composition).
+> Latest markdown audit: 2026-09-03 (v1.08 optical artwork alignment).
+
+## 2026-09-03 — Optical alignment lesson
+
+### Lesson 100 — Validate visible wall clearance, not only world-space bounds
+
+A mount can be physically valid yet appear floor-bound through a fixed
+wide-angle camera. Future rule: retain wall-relative U/V/N transforms, but
+validate projected floor clearance and optical center grouping; avoid separate
+shadow cards when the physical artwork body already casts the contact shadow.
 
 ## 2026-09-03 — Exhibition composition lesson
 
