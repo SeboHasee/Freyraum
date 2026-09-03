@@ -257,14 +257,29 @@ const panoramicFallbackResolution = museumHub.resolveMuseumHub(
   ],
   unassignedShippingConfig
 );
-assert.ok(
-  panoramicFallbackResolution.warnings.some((warning) => warning.includes('auto-placed artwork sizes were reduced')),
-  'aspect-mismatched fallback assignment must resize rather than render overlapping wall mounts'
-);
 assert.equal(
   panoramicFallbackResolution.warnings.some((warning) => warning.includes('curator minimum')),
   false,
   'collision-aware fallback sizing must preserve the minimum wall spacing'
+);
+const mixedFallbackResolution = museumHub.resolveMuseumHub(
+  [0.6, 2.4, 7, 1, 0.2, 2.4].map((aspect, index) => ({
+    id: `mixed-${index}`,
+    title: `Mixed ${index}`,
+    image: `mixed-${index}.png`,
+    dimensions: { width: aspect * 1000, height: 1000 },
+  })),
+  unassignedShippingConfig
+);
+assert.equal(
+  mixedFallbackResolution.warnings.some((warning) => warning.includes('curator minimum')),
+  false,
+  'collision sizing must run after drawable fitting and fallback-wall assignment'
+);
+assert.equal(
+  mixedFallbackResolution.warnings.some((warning) => warning.includes('overlaps slot')),
+  false,
+  'final projected interaction geometry must remain non-overlapping after fallback-wall assignment'
 );
 const sourcePlan = artworkImageSources.resolveArtworkImageSources(artworks[0]);
 assert.equal(sourcePlan.primary?.mode, 'declared-image', 'artwork source resolution must keep the declared image as primary');
