@@ -135,8 +135,22 @@ for (const wall of shippingConfig.walls) {
 for (const wall of renderedWalls) {
   assert.ok(wall.quad, `${wall.id} must define a stage reference quad`);
   assert.ok(wall.drawableRegion, `${wall.id} must define a drawable region`);
+  assert.equal(wall.mountingZone?.length, 4, `${wall.id} must define an explicit four-corner mounting zone`);
   assert.ok(wall.hangingBand, `${wall.id} must define an authoritative wall hanging band`);
   assert.ok(Array.isArray(wall.exclusionPolygons), `${wall.id} must define explicit doorway exclusion polygons`);
+}
+
+const sanitizedShipping = museumHub.sanitizeMuseumHubConfig(shippingConfig);
+assert.ok(sanitizedShipping.config, 'shipping v5 config must survive sanitizer round-trip');
+assert.deepEqual(sanitizedShipping.warnings, [], `shipping v5 round-trip warnings: ${sanitizedShipping.warnings.join('; ')}`);
+const sanitizedSlotsById = new Map(sanitizedShipping.config.slots.map((slot) => [slot.id, slot]));
+for (const authored of shippingConfig.slots) {
+  const restored = sanitizedSlotsById.get(authored.id);
+  assert.ok(restored, `${authored.id} must survive export/import`);
+  assert.equal(restored.placement.wallId, authored.placement.wallId, `${authored.id} wall ownership must round-trip exactly`);
+  for (const field of ['horizontalPosition', 'centerHeight', 'physicalHeight', 'mountingGap']) {
+    assert.equal(restored.placement[field], authored.placement[field], `${authored.id} ${field} must round-trip exactly`);
+  }
 }
 // 90° corners: consecutive perimeter walls (front → right → rear → left) must
 // have orthogonal axisU directions and form a closed perimeter loop.
@@ -1102,8 +1116,8 @@ for (const probe of [
   assert.notEqual(first.adjustmentReason, 'none', `${probe.wall.id} doorway-edge placement must record its deterministic adjustment reason`);
 }
 
-// If one wall is fully invalid, resolution must deterministically fall back to
-// the nearest valid wall bucket instead of rendering into a doorway.
+// Explicit wall ownership is immutable. If its wall is invalid, resolution
+// suppresses the slot instead of guessing another wall.
 const fallbackWallConfig = JSON.parse(JSON.stringify(shippingConfig));
 fallbackWallConfig.walls = fallbackWallConfig.walls.map((wall) =>
   wall.id === 'wall-left'
@@ -1124,12 +1138,9 @@ fallbackWallConfig.slots = [
 ];
 const fallbackWallResolution = museumHub.resolveMuseumHub([artworks[0]], fallbackWallConfig, null);
 const fallbackSlot = fallbackWallResolution.pages.flatMap((page) => page.slots)[0];
-assert.equal(fallbackSlot.selectable, true, 'fallback-wall placement must remain selectable');
-assert.notEqual(fallbackSlot.placement.wallId, 'wall-left', 'fallback-wall placement must leave the invalid wall');
-assert.ok(
-  ['wall-front', 'wall-right'].includes(fallbackSlot.placement.wallId),
-  'fallback-wall placement must move to another rendered wall bucket'
-);
+assert.equal(fallbackSlot.selectable, false, 'invalid explicit placement must be suppressed');
+assert.equal(fallbackSlot.placement.wallId, 'wall-left', 'explicit wall ownership must never change');
+assert.equal(fallbackSlot.disabledReason, 'invalid-projection', 'invalid explicit placement must explain why export is blocked');
 
 // A v1 profile still resolves deterministic exact targets through the v4 model.
 const legacy = museumHub.resolveMuseumHub(

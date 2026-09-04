@@ -659,13 +659,22 @@ canvas {
   stroke-dasharray: 10 6;
 }
 
+.museum-hub__calibration-mounting-zone {
+  fill: rgba(100, 255, 170, 0.1);
+  stroke: rgba(100, 255, 170, 0.95);
+  stroke-width: 2.5;
+  stroke-dasharray: 5 4;
+}
+
 .museum-hub__calibration-wall.is-active,
-.museum-hub__calibration-safe.is-active {
+.museum-hub__calibration-safe.is-active,
+.museum-hub__calibration-mounting-zone.is-active {
   opacity: 1;
 }
 
 .museum-hub__calibration-wall:not(.is-active),
-.museum-hub__calibration-safe:not(.is-active) {
+.museum-hub__calibration-safe:not(.is-active),
+.museum-hub__calibration-mounting-zone:not(.is-active) {
   opacity: 0.45;
 }
 
@@ -678,6 +687,20 @@ canvas {
 
 .museum-hub__calibration-handle--safe {
   fill: rgba(100, 191, 255, 0.95);
+}
+
+.museum-hub__calibration-handle--mounting-zone {
+  fill: rgba(70, 220, 135, 0.98);
+}
+
+.museum-hub__artwork.is-calibration-selected {
+  outline: 3px solid rgba(100, 255, 170, 0.98);
+  outline-offset: 4px;
+}
+
+.museum-hub__artwork.is-invalid-calibration {
+  outline: 4px solid rgba(255, 65, 45, 0.98);
+  outline-offset: 5px;
 }
 
 .museum-hub__debug-axis {
@@ -810,6 +833,55 @@ canvas {
   display: grid;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.museum-hub__calibration-numeric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.museum-hub__calibration-number {
+  display: grid;
+  gap: 4px;
+  font-size: 0.68rem;
+}
+
+.museum-hub__calibration-number input {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.34);
+  color: inherit;
+}
+
+.museum-hub__calibration-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.museum-hub__calibration-action,
+.museum-hub__calibration-import {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.34);
+  color: inherit;
+  font-size: 0.7rem;
+}
+
+.museum-hub__calibration-action:disabled {
+  opacity: 0.42;
+}
+
+.museum-hub__calibration-import {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 8px;
 }
 
 .museum-hub__calibration-label {

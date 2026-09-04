@@ -107,6 +107,8 @@ export interface HubWallConfig {
   /** Stage-space reference quad; required for rendered walls. */
   quad?: Quad;
   safePolygon?: Polygon;
+  /** Stage-space polygon that the complete projected artwork must remain inside. */
+  mountingZone?: Polygon;
   drawableRegion?: Polygon;
   exclusionPolygons?: readonly Polygon[];
   transform?: HubWallTransform;
@@ -180,6 +182,7 @@ export interface ResolvedHubWall extends WallProjectionModel {
   group: HubWallGroup;
   transform: HubWallTransform;
   safePolygon: Point2D[];
+  mountingZone: Point2D[];
   drawableRegion?: Polygon;
   exclusionPolygons?: readonly Polygon[];
   hangingBand?: HangingBand;
@@ -783,24 +786,6 @@ function polygonCentroid(points: readonly Point2D[]): Point2D {
   return point(total.x / Math.max(1, points.length), total.y / Math.max(1, points.length));
 }
 
-function candidateFallbackWalls(
-  currentWallId: string,
-  walls: readonly ResolvedHubWall[],
-  preferredGroup: HubWallGroup
-): ResolvedHubWall[] {
-  const currentIndex = Math.max(0, walls.findIndex((wall) => wall.id === currentWallId));
-  return [...walls].sort((a, b) => {
-    const aSameWall = a.id === currentWallId ? -1 : 0;
-    const bSameWall = b.id === currentWallId ? -1 : 0;
-    if (aSameWall !== bSameWall) return aSameWall - bSameWall;
-    const aGroup = a.group === preferredGroup ? 0 : 1;
-    const bGroup = b.group === preferredGroup ? 0 : 1;
-    if (aGroup !== bGroup) return aGroup - bGroup;
-    return Math.abs(currentIndex - walls.findIndex((wall) => wall.id === a.id))
-      - Math.abs(currentIndex - walls.findIndex((wall) => wall.id === b.id));
-  });
-}
-
 function sideWallPlacementHasArchitecturalClearance(
   wall: ResolvedHubWall,
   projection: ReturnType<typeof projectSlotArtwork>
@@ -885,7 +870,7 @@ function clampSlotPlacementToDrawableRegion(
   const containedCornerCount = (projected: ReturnType<typeof projectSlotArtwork> | null): number => {
     if (!projected) return -1;
     return projected.projectedQuad.reduce(
-      (count, vertex) => count + (pointInPolygon(vertex, wall.safePolygon) ? 1 : 0),
+      (count, vertex) => count + (pointInPolygon(vertex, wall.mountingZone) ? 1 : 0),
       0
     );
   };
@@ -898,7 +883,7 @@ function clampSlotPlacementToDrawableRegion(
   }
 
   const safeLocalAnchor = (() => {
-    const local = invertWallPoint(wall, polygonCentroid(wall.safePolygon));
+    const local = invertWallPoint(wall, polygonCentroid(wall.mountingZone));
     return local ? point(clamp01(local.x), clamp01(local.y)) : point(0.5, 0.5);
   })();
 
@@ -1215,6 +1200,9 @@ function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | n
   const safePolygon =
     parsePolygon(candidate['safePolygon'])
     ?? clonePolygon(shrinkPolygonTowardsCentroid(quad, 0.92));
+  const mountingZone =
+    parsePolygon(candidate['mountingZone'])
+    ?? clonePolygon(safePolygon);
   const drawableRegion =
     parsePolygon(candidate['drawableRegion'])
     ?? parsePolygon(candidate['safePolygon'])
@@ -1269,6 +1257,7 @@ function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | n
     planeAspect,
     quad,
     safePolygon,
+    mountingZone,
     drawableRegion: drawableRegion ? clonePolygon(drawableRegion) : undefined,
     exclusionPolygons: exclusionPolygons?.map((polygon) => clonePolygon(polygon)),
     transform: transform ? cloneWallTransform(transform) : room ? {
@@ -1305,7 +1294,7 @@ function sanitizeV2Placement(raw: unknown): HubSlotPlacement | null {
     parsePoint(candidate['center'], true)
     ?? (uv ? point(clamp01(uv.x), clamp01(1 - uv.y)) : null)
     ?? (horizontalPosition !== undefined && centerHeight !== undefined
-      ? point(horizontalPosition, 0)
+      ? point(horizontalPosition, 1 - clamp01(centerHeight / HUB_ROOM_HEIGHT))
       : null);
   const anchor = parsePoint(candidate['anchor']);
   const maxMountedHeight = anchor || uv ? 8 : 0.9;
@@ -1844,6 +1833,7 @@ export function resolveMuseumHub(
       planeAspect: wall.planeAspect,
       quad,
       safePolygon,
+      mountingZone: wall.mountingZone ? clonePolygon(wall.mountingZone) : clonePolygon(safePolygon),
       shadowVector: wall.shadowVector ? clonePoint(wall.shadowVector) : undefined,
       room,
       camera: room ? camera : undefined,
@@ -2201,11 +2191,7 @@ export function resolveMuseumHub(
       ?? derivePlacementUv(slot.placement, targetWall)
       ?? point(slot.placement.center.x, 1 - slot.placement.center.y);
     const sourceWall = wallById.get(slot.placement.wallId);
-    const targetUv = sourceWall?.id !== targetWall.id && targetWall.group === 'left'
-      ? point(HUB_LEFT_ARTWORK_POSITION, uv.y)
-      : sourceWall?.id !== targetWall.id && targetWall.group === 'right'
-        ? point(HUB_RIGHT_ARTWORK_POSITION, uv.y)
-        : uv;
+    const targetUv = uv;
     const sourceHeight = sourceWall?.room?.height ?? targetWall.room?.height ?? 1;
     const targetHeight = targetWall.room?.height ?? sourceHeight;
     const normalizedHeight = slot.placement.mountedHeight / Math.max(0.001, sourceHeight);
@@ -2261,14 +2247,18 @@ export function resolveMuseumHub(
     let resolvedWall: ResolvedHubWall | null = null;
     let resolvedPlacement: HubSlotPlacement | null = null;
     let projected: ReturnType<typeof projectSlotArtwork> = null;
-    const fallbackWalls = candidateFallbackWalls(currentWall.id, walls, currentWall.group);
+    // Wall ownership is authoritative. Invalid geometry is surfaced and
+    // suppressed instead of silently remounting an artwork on another wall.
+    const fallbackWalls = [currentWall];
     for (const candidateWall of fallbackWalls) {
       if (candidateWall.projectionRealism && !candidateWall.projectionRealism.passes) continue;
       const attempt = tryProjectResolvedSlot(slot, candidateWall);
       if (!attempt.projection) continue;
       if (!sideWallPlacementHasArchitecturalClearance(candidateWall, attempt.projection)) continue;
-      const withinSafePolygon = attempt.projection.projectedQuad.every((vertex) => pointInPolygon(vertex, candidateWall.safePolygon));
-      if (!withinSafePolygon) continue;
+      const withinMountingZone = attempt.projection.projectedQuad.every((vertex) =>
+        pointInPolygon(vertex, candidateWall.mountingZone)
+      );
+      if (!withinMountingZone) continue;
       resolvedWall = candidateWall;
       resolvedPlacement = attempt.placement;
       projected = attempt.projection;
