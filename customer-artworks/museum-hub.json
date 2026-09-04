@@ -397,7 +397,7 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-left",
-        "horizontalPosition": 0.55,
+        "horizontalPosition": 0.5,
         "centerHeight": 2.3,
         "physicalHeight": 1.45,
         "mountingGap": 0.002
@@ -409,7 +409,7 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-right",
-        "horizontalPosition": 0.45,
+        "horizontalPosition": 0.5,
         "centerHeight": 2.28,
         "physicalHeight": 1.45,
         "mountingGap": 0.002

@@ -34,9 +34,10 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - **Open visual acceptance incident:** the latest customer screenshot supplied
   on 2026-09-04 confirms the four-slot 2+1+1 room, but shows both side works too
   crossing the front-wall corner seams after v1.13 moved them in the wrong
-  direction. v1.14 corrects them to mirrored 55%/45% positions centered in the
-  usable side-wall strips and restores the 4 m front-corner guard. A post-fix
-  screenshot of the same artifact is still required for final acceptance.
+  direction. The next screenshot showed 55%/45% still crossing the photographed
+  seams despite passing wall-space checks. v1.16 uses 50%/50% wall midpoints and
+  adds projected 12 px guards against both visible doorway reveals and corner
+  seams. A post-fix screenshot is still required for final acceptance.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy
   (`planar`, `ibl`, `off`). The hub uses smooth near-white PBR plaster and a

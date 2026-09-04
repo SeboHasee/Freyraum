@@ -64,8 +64,10 @@ Notes:
   `horizontalPosition`, `centerHeight`, `physicalHeight`, and `mountingGap`.
 - A resolved page contains at most four works in the 2-front + 1-left + 1-right
   composition. Additional works overflow into contiguous virtual rooms.
-- Automatic side-wall fallback placement must retain at least 1.25 m beside the
-  doorway and 4.00 m from the front-wall corner.
+- Automatic side-wall fallback placement must retain at least 0.35 m in the
+  calibrated wall model and 4.00 m from its front corner. Shipping regression
+  checks additionally require 12 px against the photographed doorway reveal and
+  front-wall seam in the calibrated primary camera.
 - Slot/page navigation is disabled while calibrating.
 
 ### `?hubDebug=1`

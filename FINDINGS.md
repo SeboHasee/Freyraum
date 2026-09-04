@@ -1,6 +1,20 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Screen-space side-wall correction (v1.16, 2026-09-04)
+
+1. The supplied post-v1.14 screenshot proves that 55%/45% still crosses both
+   photographed front-wall seams even though local 4 m corner checks pass.
+2. The 1.25 m local doorway requirement conflicts with the calibrated image:
+   moving the left work to the visible strip midpoint caused the resolver to
+   reject its side wall and remount it on the front wall.
+3. The correction uses 50%/50% side-wall midpoints, retains non-overlap plus
+   0.35 m local doorway clearance, and adds primary-camera tests requiring 12 px
+   from both the visible doorway reveal and front-wall seam.
+4. Future placement work must pass both coordinate systems. Wall-space geometry
+   protects physical mounting; projected guards protect the photographed
+   composition actually judged by the customer.
+
 ## Calculated side-wall orientation (v1.15, 2026-09-04)
 
 The supplied v1.14 screenshot was checked against the actual calibrated camera
@@ -25,9 +39,8 @@ orientation drift.
 
 1. The post-v1.13 screenshot proves 65%/35% moved both works into the front-wall
    corner seams; the prior direction assumption was wrong.
-2. The visible side-wall strips run between the inner doorway reveals and the
-   front-wall seams. Mirrored 55%/45% positions place the artwork bodies near the
-   centers of those strips rather than optimizing for either boundary.
+2. The attempted 55%/45% correction was later disproved by screenshot evidence;
+   wall-space clearance did not match the visible seam.
 3. The 4 m front-corner guard is restored. Final acceptance still requires a
    screenshot from the rebuilt customer artifact.
 

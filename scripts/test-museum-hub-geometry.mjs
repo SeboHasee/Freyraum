@@ -197,8 +197,8 @@ const expectedCenterHeightByWall = new Map([
 const expectedHorizontalPositionBySlot = new Map([
   ['room-01.wall-front.a', 0.3],
   ['room-01.wall-front.b', 0.7],
-  ['room-01.wall-left.a', 0.55],
-  ['room-01.wall-right.a', 0.45],
+  ['room-01.wall-left.a', 0.5],
+  ['room-01.wall-right.a', 0.5],
 ]);
 for (const slot of shippingConfig.slots) {
   assert.equal(typeof slot.placement.horizontalPosition, 'number', `${slot.id} must author one normalized wall position`);
@@ -920,6 +920,55 @@ for (const slot of selectableSlots) {
       `${slot.id} must remain at least 4.00 m from the right/front-wall corner`
     );
   }
+  if (slot.wallGroup === 'left' || slot.wallGroup === 'right') {
+    const frontLocalX = slot.wallGroup === 'left' ? wall.room.width : 0;
+    const seamBottom = geometry.projectRoomWallPoint(
+      wall.room,
+      wall.camera,
+      { x: frontLocalX, y: 0 },
+      shipping.stage
+    );
+    const seamTop = geometry.projectRoomWallPoint(
+      wall.room,
+      wall.camera,
+      { x: frontLocalX, y: wall.room.height },
+      shipping.stage
+    );
+    assert.ok(seamBottom && seamTop, `${slot.id} must project the visible front-wall seam`);
+    for (const corner of projection.projectedQuad) {
+      const seamProgress = (corner.y - seamTop.y) / (seamBottom.y - seamTop.y);
+      const seamX = seamTop.x + (seamBottom.x - seamTop.x) * seamProgress;
+      assert.ok(
+        slot.wallGroup === 'left' ? corner.x <= seamX - 12 : corner.x >= seamX + 12,
+        `${slot.id} must retain at least 12 px from the visible front-wall corner seam`
+      );
+    }
+    const doorway = wall.room.doorwayExclusions[0];
+    const doorwayInnerLocalX = slot.wallGroup === 'left'
+      ? Math.max(...doorway.map((corner) => corner.x))
+      : Math.min(...doorway.map((corner) => corner.x));
+    const doorwayBottom = geometry.projectRoomWallPoint(
+      wall.room,
+      wall.camera,
+      { x: doorwayInnerLocalX, y: 0 },
+      shipping.stage
+    );
+    const doorwayTop = geometry.projectRoomWallPoint(
+      wall.room,
+      wall.camera,
+      { x: doorwayInnerLocalX, y: Math.max(...doorway.map((corner) => corner.y)) },
+      shipping.stage
+    );
+    assert.ok(doorwayBottom && doorwayTop, `${slot.id} must project the visible doorway reveal`);
+    for (const corner of projection.projectedQuad) {
+      const doorwayProgress = (corner.y - doorwayTop.y) / (doorwayBottom.y - doorwayTop.y);
+      const doorwayX = doorwayTop.x + (doorwayBottom.x - doorwayTop.x) * doorwayProgress;
+      assert.ok(
+        slot.wallGroup === 'left' ? corner.x >= doorwayX + 12 : corner.x <= doorwayX - 12,
+        `${slot.id} must retain at least 12 px from the visible doorway reveal`
+      );
+    }
+  }
   for (const corner of projection.projectedQuad) {
     assert.ok(geometry.pointInPolygon(corner, wall.safePolygon), `${slot.id} must stay within its projected wall safe polygon`);
   }
@@ -932,12 +981,6 @@ for (const slot of selectableSlots) {
     const doorSpan = polygonSpan(doorway, 'x');
     const gap = artSpan.max <= doorSpan.min ? doorSpan.min - artSpan.max : artSpan.min - doorSpan.max;
     assert.ok(gap >= clearance - 1e-6, `${slot.id} must keep ≥ 0.35 m clearance to the doorway (got ${(gap / (wall.localCalibrationScale?.x ?? 1)).toFixed(3)} m)`);
-    if (slot.wallGroup === 'left' || slot.wallGroup === 'right') {
-      assert.ok(
-        gap / (wall.localCalibrationScale?.x ?? 1) >= 1.25,
-        `${slot.id} must retain at least 1.25 m of wall between the artwork and side doorway`
-      );
-    }
   }
   projectedBySlot.set(slot.id, { wall, projection });
   const wallPageKey = `${slot.pageIndex}:${wall.id}`;

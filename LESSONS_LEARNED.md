@@ -1,6 +1,16 @@
 # FREYRAUM lessons learned
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## 2026-09-04 — Projected architectural-boundary lesson
+
+### Lesson 106 — Validate the boundary the customer can see
+
+A wall-space clearance can pass while calibrated artwork still crosses a seam
+in the primary camera. A stricter local rule can also reject a visually valid
+position and remount it to the wrong wall. Future rule: validate both physical
+wall coordinates and projected doorway/corner lines, and never declare a visual
+fix complete from local geometry alone.
+
 ## 2026-09-04 — Perspective validation lesson
 
 ### Lesson 105 — Do not correct perspective taper by eye

@@ -1,6 +1,19 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## v1.16 — Screen-space doorway and corner guards (2026-09-04)
+
+- Corrected both side works to 50% wall midpoints after the supplied screenshot
+  showed 55%/45% still crossing the photographed front-wall seams.
+- Replaced the contradictory 1.25 m side-doorway rule with the existing 0.35 m
+  calibrated local clearance, while retaining the 4 m local corner guard.
+- Added primary-camera regression checks requiring every projected side-artwork
+  corner to stay at least 12 px inside both the visible doorway reveal and
+  front-wall seam.
+- The resolver no longer remounts a visually valid side work onto the front wall
+  because of a wall-space rule contradicted by the calibrated photograph.
+- Final visual acceptance remains pending a screenshot of the rebuilt artifact.
+
 ## v1.15 — Mathematical side-wall orientation validation (2026-09-04)
 
 - Added an explicit rigid-plane alignment result for every projected artwork:
@@ -16,6 +29,9 @@
   camera-facing angle correction was introduced.
 
 ## v1.14 — Correct side artworks away from front corners (2026-09-04)
+
+> **Superseded by v1.16:** the next screenshot showed that local wall-space
+> clearance alone still allowed both works to cross the photographed seams.
 
 - Used the post-v1.13 customer screenshot to identify both artwork bodies
   crossing the front-wall corner seams.

@@ -1,6 +1,15 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Implemented — Screen-space doorway/corner protection (v1.16)
+
+- [x] Use the supplied post-v1.14 screenshot without retrying its external URL.
+- [x] Move both side works to 50% wall midpoints.
+- [x] Retain 0.35 m local doorway and 4 m front-corner constraints.
+- [x] Add 12 px projected guards against doorway reveals and front-wall seams.
+- [x] Prevent invalid fallback remounting caused by the contradictory 1.25 m rule.
+- [ ] Obtain a post-v1.16 customer screenshot for final visual acceptance.
+
 ## Implemented — Calculated wall-orientation proof (v1.15)
 
 - [x] Derive each artwork frame from normalized wall U/V axes and `N=U×V`.
@@ -18,13 +27,13 @@ for a panel mounted flush to the side wall. A less tapered appearance would
 require changing the camera composition or deliberately toeing the artworks
 toward the viewer, which is not physically wall-mounted behavior.
 
-## Implemented — Center side works between doorway and corner (v1.14)
+## Superseded — Center side works between doorway and corner (v1.14)
 
 - [x] Use the supplied post-v1.13 screenshot as the placement reference.
 - [x] Correct the wrong movement direction from 65%/35% to mirrored 55%/45%.
 - [x] Restore the 4 m front-corner full-body guard.
 - [x] Synchronize authored, fallback, test, and generated-preview output.
-- [ ] Obtain a post-v1.14 screenshot for final visual acceptance.
+- [x] Post-v1.14 screenshot received; it showed both works still crossing seams.
 
 ## Superseded — Move side works away from doorways (v1.13)
 

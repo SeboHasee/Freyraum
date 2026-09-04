@@ -438,10 +438,10 @@ export const HUB_LEFT_CENTERLINE_M = 2.3;
 export const HUB_RIGHT_CENTERLINE_M = 2.28;
 export const HUB_ARTWORK_MOUNTING_GAP_M = 0.002;
 export const HUB_MIN_ARTWORK_SPACING_M = 0.5;
-export const HUB_SIDE_DOORWAY_CLEARANCE_M = 1.25;
+export const HUB_SIDE_DOORWAY_CLEARANCE_M = 0.35;
 export const HUB_SIDE_FRONT_CORNER_CLEARANCE_M = 4;
-export const HUB_LEFT_ARTWORK_POSITION = 0.55;
-export const HUB_RIGHT_ARTWORK_POSITION = 0.45;
+export const HUB_LEFT_ARTWORK_POSITION = 0.5;
+export const HUB_RIGHT_ARTWORK_POSITION = 0.5;
 
 function curatedPlacement(
   wallId: string,
