@@ -2423,8 +2423,11 @@ export class MainMuseumHub {
     const local = this.applyInverseHomography(wall, centroid);
     if (!local) return;
     this.recordCalibrationHistory();
-    slot.placement.uv = point(this.clampLocalX(local.x), this.clampLocalY(1 - local.y));
-    this.syncCanonicalPlacement(slot, wall);
+    this.setSlotCenterClampedToMountingZone(
+      slot,
+      wall,
+      point(this.clampLocalX(local.x), this.clampLocalY(local.y))
+    );
     this.applyAllSlotGeometry();
     this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
