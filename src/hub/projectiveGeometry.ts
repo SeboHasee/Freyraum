@@ -597,10 +597,14 @@ export function evaluateArtworkWallAlignment(
         artworkVanishingPoint.y - wallVanishingPoint.y
       )
       : null;
+  const requiresFiniteVanishingPoint = classifyProjectionConvergence(projectedWall) !== 'flat';
+  const vanishingPointPasses = requiresFiniteVanishingPoint
+    ? horizontalVanishingResidualPx !== null && horizontalVanishingResidualPx <= 0.01
+    : artworkVanishingPoint === null && wallVanishingPoint === null;
   const passes =
     normalDot >= 1 - 1e-6
     && wallOffsetSpread <= 1e-6
-    && (horizontalVanishingResidualPx === null || horizontalVanishingResidualPx <= 0.01);
+    && vanishingPointPasses;
   return {
     normalDot,
     wallOffsetSpread,
