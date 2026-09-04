@@ -1,5 +1,14 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-04 (v1.10 side-wall setback).
+> Latest markdown audit: 2026-09-04 (v1.11 balanced side-wall placement).
+
+## 2026-09-04 — Side-wall usable-segment lesson
+
+### Lesson 103 — Constrain both ends of a wall segment
+
+Moving artwork away from a corner can push it into a doorway. Future rule:
+validate side-wall placement against both architectural boundaries—the hallway
+opening and the perpendicular front-wall corner—rather than maximizing either
+clearance independently.
 
 ## 2026-09-04 — Side-wall coordinate lesson
 

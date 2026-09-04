@@ -1,5 +1,19 @@
 # FREYRAUM Plan
 
+## Implemented — Balanced side-wall placement (v1.11, 2026-09-04)
+
+> **Status update:** Side-wall works are centered within the usable wall segment
+> between the hallway opening and the front-wall corner.
+
+### As-built placement
+
+- Left wall: 56% along its rear-to-front U axis.
+- Right wall: 44% along its front-to-rear U axis.
+- Artwork bounds retain at least 1.25 m from the doorway and 4.00 m from the
+  relevant front-wall corner.
+- Existing size, centerline, body depth, mounting gap, and wall-parallel
+  orientation remain unchanged.
+
 ## Implemented — Side-wall front-corner setback (v1.10, 2026-09-04)
 
 > **Status update:** Side-wall works now sit toward the viewer rather than
@@ -23,8 +37,8 @@
 ### 1. Room composition
 
 - Two front-wall works at 30% and 70%.
-- One left-wall work at 48%, safely separated from its doorway and front corner.
-- One right-wall work at 52%, safely separated from its doorway and front corner.
+- One left-wall work at 56%, balanced between its doorway and front corner.
+- One right-wall work at 44%, balanced between its doorway and front corner.
 - Front works use a 2.32 m optical centerline; side works use 2.30 m/2.28 m.
 - Physical heights are 1.40–1.62 m with at least 1.50 m lower-edge clearance.
 

@@ -197,8 +197,8 @@ const expectedCenterHeightByWall = new Map([
 const expectedHorizontalPositionBySlot = new Map([
   ['room-01.wall-front.a', 0.3],
   ['room-01.wall-front.b', 0.7],
-  ['room-01.wall-left.a', 0.48],
-  ['room-01.wall-right.a', 0.52],
+  ['room-01.wall-left.a', 0.56],
+  ['room-01.wall-right.a', 0.44],
 ]);
 for (const slot of shippingConfig.slots) {
   assert.equal(typeof slot.placement.horizontalPosition, 'number', `${slot.id} must author one normalized wall position`);
@@ -897,13 +897,13 @@ for (const slot of selectableSlots) {
   );
   if (slot.wallGroup === 'left') {
     assert.ok(
-      wall.room.width - localSpan.max >= 4.5,
-      `${slot.id} must remain at least 4.50 m from the left/front-wall corner`
+      wall.room.width - localSpan.max >= 4,
+      `${slot.id} must remain at least 4.00 m from the left/front-wall corner`
     );
   } else if (slot.wallGroup === 'right') {
     assert.ok(
-      localSpan.min >= 4.5,
-      `${slot.id} must remain at least 4.50 m from the right/front-wall corner`
+      localSpan.min >= 4,
+      `${slot.id} must remain at least 4.00 m from the right/front-wall corner`
     );
   }
   for (const corner of projection.projectedQuad) {
@@ -918,6 +918,12 @@ for (const slot of selectableSlots) {
     const doorSpan = polygonSpan(doorway, 'x');
     const gap = artSpan.max <= doorSpan.min ? doorSpan.min - artSpan.max : artSpan.min - doorSpan.max;
     assert.ok(gap >= clearance - 1e-6, `${slot.id} must keep ≥ 0.35 m clearance to the doorway (got ${(gap / (wall.localCalibrationScale?.x ?? 1)).toFixed(3)} m)`);
+    if (slot.wallGroup === 'left' || slot.wallGroup === 'right') {
+      assert.ok(
+        gap / (wall.localCalibrationScale?.x ?? 1) >= 1.25,
+        `${slot.id} must retain at least 1.25 m of wall between the artwork and side doorway`
+      );
+    }
   }
   projectedBySlot.set(slot.id, { wall, projection });
   const wallPageKey = `${slot.pageIndex}:${wall.id}`;

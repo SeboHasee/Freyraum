@@ -1,5 +1,14 @@
 # FINDINGS
 
+## Balanced side-wall placement findings (v1.11, 2026-09-04)
+
+1. The v1.10 correction solved the front-corner collision but over-shifted both
+   works toward the side hallway openings.
+2. For the current 1.45 m landscape mount, 56% left and 44% right place the
+   artwork within the usable wall segment between doorway and front corner.
+3. The correct acceptance rule constrains both sides of that segment: at least
+   1.25 m from the doorway and 4.00 m from the front-wall corner.
+
 ## Side-wall setback findings (v1.10, 2026-09-04)
 
 1. Both side-wall U axes use opposite directions: left runs from the viewer

@@ -1,5 +1,22 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-04 (v1.10 side-wall setback).
+> Latest markdown audit: 2026-09-04 (v1.11 balanced side-wall placement).
+
+## v1.11 — Balanced side-wall doorway/corner placement (2026-09-04)
+
+### Changed
+
+- Corrected the over-shift from v1.10 by placing the left work at 56% and the
+  right work at 44% along their respective wall axes.
+- Balanced both architectural constraints: every side work now retains at least
+  1.25 m of uninterrupted wall beside its doorway and at least 4.00 m from the
+  perpendicular front-wall corner.
+- Added explicit doorway-to-artwork wall-span validation so future placement
+  changes cannot satisfy corner clearance by crowding the hallway opening.
+
+### Unchanged
+
+- Four-work 2+1+1 room capacity, overflow pagination, artwork size/height,
+  wall-parallel mounting, architecture, camera, lighting, and interactions.
 
 ## v1.10 — Side-wall front-corner setback (2026-09-04)
 
