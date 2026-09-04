@@ -62,6 +62,16 @@ assumed to match that state unless the matching `customer-artworks.js`,
 `museum-hub.json`, route, and build are preserved. The 2026-09-04 customer
 screenshot currently disagrees with the checked-in four-work page contract, so
 visual acceptance remains open even though deterministic geometry checks pass.
+
+## Deterministic curator editor
+
+`MainMuseumHub` owns the curator editor documented in
+`docs/QUERY_PARAMETERS.md` and mutates only the in-memory
+resolved model. `museumHub.ts` owns schema sanitization, wall ownership,
+mounting-zone containment, and canonical v5 placement. Each rendered wall has an
+explicit stage-space `mountingZone`; every projected artwork corner must remain
+inside it. Export is blocked on any warning and is accepted only after
+sanitize/re-import preserves wall ID plus all four canonical placement fields.
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`

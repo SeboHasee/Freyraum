@@ -1613,6 +1613,10 @@ export class MainMuseumHub {
     const heading = document.createElement('p');
     heading.className = 'museum-hub__calibration-title';
     heading.textContent = 'Kurator-Editor — gültige Wandbereiche und Bildpositionen';
+    const instructions = document.createElement('p');
+    instructions.className = 'museum-hub__calibration-help';
+    instructions.textContent =
+      'Grüne Griffe markieren Tür-, Eck-, Boden- und Deckengrenzen. Bild ziehen; Eckgriff skaliert proportional. Pfeiltasten verschieben, Umschalt beschleunigt.';
 
     const controls = document.createElement('div');
     controls.className = 'museum-hub__calibration-controls';
@@ -1687,6 +1691,7 @@ export class MainMuseumHub {
     };
     const centerButton = makeAction('Zwischen Grenzen zentrieren', () => this.centerActiveSlotInMountingZone());
     centerButton.title = 'Zentriert den vollständigen Bildkörper im gültigen Wandpolygon.';
+    makeAction('Aktive Grenzen bestätigen', () => this.confirmActiveMountingZone());
     this.calibrationUndoButton = makeAction('Rückgängig', () => this.undoCalibration());
     this.calibrationRedoButton = makeAction('Wiederholen', () => this.redoCalibration());
     makeAction('Ausgangszustand', () => this.resetCalibration());
@@ -1727,7 +1732,7 @@ export class MainMuseumHub {
     importInput.addEventListener('change', () => void this.importCalibrationFile(importInput.files?.[0] ?? null));
     importLabel.appendChild(importInput);
 
-    panel.append(heading, controls, warningTitle, warningList, exportRow, importLabel, output);
+    panel.append(heading, instructions, controls, warningTitle, warningList, exportRow, importLabel, output);
     hub.appendChild(panel);
     this.calibrationOutput = output;
     this.calibrationWarnings = warningList;
@@ -1831,6 +1836,9 @@ export class MainMuseumHub {
       if (!targetPoint) return;
       targetPoint.x = stagePoint.x;
       targetPoint.y = stagePoint.y;
+      if (drag.target === 'mounting-zone' || drag.target === 'quad') {
+        wall.mountingZoneConfirmed = false;
+      }
       this.applyAllSlotGeometry();
     }
     this.renderCalibrationOverlay();
@@ -1859,13 +1867,6 @@ export class MainMuseumHub {
       const wallPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       wallPolygon.setAttribute('points', this.pointsToSvg(wall.quad));
       wallPolygon.setAttribute('class', `museum-hub__calibration-wall${active ? ' is-active' : ''}`);
-      if (this.calibrating) {
-        wallPolygon.addEventListener('pointerdown', () => {
-          this.activeCalibrationWallId = wall.id;
-          if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
-          this.renderCalibrationOverlay();
-        });
-      }
       this.calibrationSvg.appendChild(wallPolygon);
 
       const safePolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -1875,7 +1876,12 @@ export class MainMuseumHub {
 
       const mountingZone = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       mountingZone.setAttribute('points', this.pointsToSvg(wall.mountingZone));
-      mountingZone.setAttribute('class', `museum-hub__calibration-mounting-zone${active ? ' is-active' : ''}`);
+      mountingZone.setAttribute(
+        'class',
+        `museum-hub__calibration-mounting-zone${active ? ' is-active' : ''}${
+          wall.mountingZoneConfirmed ? ' is-confirmed' : ' is-unconfirmed'
+        }`
+      );
       this.calibrationSvg.appendChild(mountingZone);
 
       if (this.debugGeometry) {
@@ -2093,6 +2099,9 @@ export class MainMuseumHub {
       ) {
         warnings.push(`Wall ${wall.id}: the mounting zone must remain convex and non-degenerate.`);
       }
+      if (!wall.mountingZoneConfirmed) {
+        warnings.push(`Wall ${wall.id}: mounting zone must be aligned and explicitly confirmed.`);
+      }
     }
     const visibleByPage = new Map<number, { slot: ResolvedHubSlot; quad: ProjectedArtworkGeometry }[]>();
     for (const view of this.slotViews) {
@@ -2216,6 +2225,7 @@ export class MainMuseumHub {
         quad: wall.quad.map((corner) => this.roundPoint(corner)),
         safePolygon: wall.safePolygon.map((corner) => this.roundPoint(corner)),
         mountingZone: wall.mountingZone.map((corner) => this.roundPoint(corner)),
+        mountingZoneConfirmed: wall.mountingZoneConfirmed,
         ...(wall.shadowVector ? { shadowVector: this.roundPoint(wall.shadowVector) } : {}),
         ...(wall.room
           ? {
@@ -2421,6 +2431,18 @@ export class MainMuseumHub {
     this.syncCalibrationControls();
   }
 
+  private confirmActiveMountingZone(): void {
+    const wall = this.activeCalibrationWallId
+      ? this.resolution.wallById.get(this.activeCalibrationWallId)
+      : null;
+    if (!wall) return;
+    this.recordCalibrationHistory();
+    wall.mountingZoneConfirmed = true;
+    this.updateCalibrationOutput(true);
+    this.renderCalibrationOverlay();
+    this.syncCalibrationControls();
+  }
+
   private recordCalibrationHistory(): void {
     const snapshot = JSON.stringify(this.buildCurrentCalibrationConfig(), null, 2);
     if (this.calibrationUndoStack[this.calibrationUndoStack.length - 1] !== snapshot) {
@@ -2585,6 +2607,7 @@ export class MainMuseumHub {
         currentWall.mountingZone.length,
         ...(wall.mountingZone ?? wall.safePolygon ?? []).map((corner) => clonePoint(corner))
       );
+      currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
       currentWall.planeAspect = wall.planeAspect;
       if (wall.shadowVector) currentWall.shadowVector = clonePoint(wall.shadowVector);
       if (wall.transform) currentWall.transform = wall.transform;

@@ -95,6 +95,7 @@
           "y": 214.5
         }
       ],
+      "mountingZoneConfirmed": false,
       "drawableRegion": [
         {
           "x": 0.14,
@@ -201,6 +202,7 @@
           "y": 212.59
         }
       ],
+      "mountingZoneConfirmed": false,
       "drawableRegion": [
         {
           "x": 0.14,
@@ -350,6 +352,7 @@
           "y": -637.45
         }
       ],
+      "mountingZoneConfirmed": false,
       "drawableRegion": [
         {
           "x": 0.14,

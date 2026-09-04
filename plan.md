@@ -1,6 +1,21 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Implemented — Deterministic curator placement editor (v1.17)
+
+- [x] Preserve explicit wall ownership; invalid work is never remounted.
+- [x] Store and edit full stage-space mounting-zone polygons.
+- [x] Clamp dragging by the complete projected artwork quad.
+- [x] Provide selection, canonical numeric fields, keyboard nudging,
+  proportional resize, zone centering, undo/redo/reset, copy/download/import.
+- [x] Block export on invalid geometry or failed v5 canonical round-trip.
+- [x] Display wall ownership and measured pixel/metre clearances.
+- [x] Cover mounting zones, immutable walls, canonical fields, aspect fixtures,
+  pages, and projection with deterministic tests.
+- [ ] Customer defines/approves the final green mounting polygons and artwork
+  positions in the exact generated preview; that exported JSON becomes the
+  visual baseline.
+
 ## Implemented — Screen-space doorway/corner protection (v1.16)
 
 - [x] Use the supplied post-v1.14 screenshot without retrying its external URL.

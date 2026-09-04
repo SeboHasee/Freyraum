@@ -640,6 +640,7 @@ canvas {
   inset: 0;
   z-index: 4;
   overflow: visible;
+  pointer-events: none;
 }
 
 .museum-hub.is-debug-geometry:not(.is-calibrating) .museum-hub__calibration-svg {
@@ -666,6 +667,10 @@ canvas {
   stroke-dasharray: 5 4;
 }
 
+.museum-hub__calibration-mounting-zone.is-unconfirmed {
+  stroke: rgba(255, 190, 70, 0.98);
+}
+
 .museum-hub__calibration-wall.is-active,
 .museum-hub__calibration-safe.is-active,
 .museum-hub__calibration-mounting-zone.is-active {
@@ -683,6 +688,7 @@ canvas {
   stroke: rgba(255, 255, 255, 0.95);
   stroke-width: 2;
   cursor: move;
+  pointer-events: all;
 }
 
 .museum-hub__calibration-handle--safe {
@@ -827,6 +833,13 @@ canvas {
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.museum-hub__calibration-help {
+  margin: 0 0 10px;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .museum-hub__calibration-controls {

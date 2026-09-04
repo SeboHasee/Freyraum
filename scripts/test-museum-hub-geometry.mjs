@@ -136,6 +136,11 @@ for (const wall of renderedWalls) {
   assert.ok(wall.quad, `${wall.id} must define a stage reference quad`);
   assert.ok(wall.drawableRegion, `${wall.id} must define a drawable region`);
   assert.equal(wall.mountingZone?.length, 4, `${wall.id} must define an explicit four-corner mounting zone`);
+  assert.equal(
+    wall.mountingZoneConfirmed,
+    false,
+    `${wall.id} mounting zone must require explicit curator confirmation before editor export`
+  );
   assert.ok(wall.hangingBand, `${wall.id} must define an authoritative wall hanging band`);
   assert.ok(Array.isArray(wall.exclusionPolygons), `${wall.id} must define explicit doorway exclusion polygons`);
 }
@@ -985,6 +990,7 @@ for (const slot of selectableSlots) {
   }
   for (const corner of projection.projectedQuad) {
     assert.ok(geometry.pointInPolygon(corner, wall.safePolygon), `${slot.id} must stay within its projected wall safe polygon`);
+    assert.ok(geometry.pointInPolygon(corner, wall.mountingZone), `${slot.id} complete body must stay within its explicit mounting zone`);
   }
   for (const doorway of wall.room.doorwayExclusions) {
     assert.ok(!geometry.polygonsIntersect(projection.localQuad, doorway), `${slot.id} must not intersect a doorway exclusion`);

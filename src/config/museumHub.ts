@@ -109,6 +109,8 @@ export interface HubWallConfig {
   safePolygon?: Polygon;
   /** Stage-space polygon that the complete projected artwork must remain inside. */
   mountingZone?: Polygon;
+  /** Curator confirmation that the mounting zone matches the visible architecture. */
+  mountingZoneConfirmed?: boolean;
   drawableRegion?: Polygon;
   exclusionPolygons?: readonly Polygon[];
   transform?: HubWallTransform;
@@ -183,6 +185,7 @@ export interface ResolvedHubWall extends WallProjectionModel {
   transform: HubWallTransform;
   safePolygon: Point2D[];
   mountingZone: Point2D[];
+  mountingZoneConfirmed: boolean;
   drawableRegion?: Polygon;
   exclusionPolygons?: readonly Polygon[];
   hangingBand?: HangingBand;
@@ -1258,6 +1261,7 @@ function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | n
     quad,
     safePolygon,
     mountingZone,
+    mountingZoneConfirmed: candidate['mountingZoneConfirmed'] === true,
     drawableRegion: drawableRegion ? clonePolygon(drawableRegion) : undefined,
     exclusionPolygons: exclusionPolygons?.map((polygon) => clonePolygon(polygon)),
     transform: transform ? cloneWallTransform(transform) : room ? {
@@ -1834,6 +1838,7 @@ export function resolveMuseumHub(
       quad,
       safePolygon,
       mountingZone: wall.mountingZone ? clonePolygon(wall.mountingZone) : clonePolygon(safePolygon),
+      mountingZoneConfirmed: wall.mountingZoneConfirmed === true,
       shadowVector: wall.shadowVector ? clonePoint(wall.shadowVector) : undefined,
       room,
       camera: room ? camera : undefined,

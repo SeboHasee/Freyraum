@@ -1,6 +1,19 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Deterministic editor findings (v1.17, 2026-09-04)
+
+1. The prior calibration UI exported schema v4 and legacy aliases even though
+   runtime authoring had moved to v5 canonical placement fields.
+2. Runtime fallback could silently change wall ownership after a constraint
+   failed, turning a coordinate error into a hallway/front-wall placement.
+3. Numeric wall clearance cannot define the customer's desired composition when
+   the visible doorway and corner boundaries are judged in a specific camera.
+   Explicit stage-space mounting polygons are the authoritative visual boundary.
+4. A valid export now requires complete-quad containment, doorway clearance,
+   immutable wall ownership, page non-overlap, minimum projected size, and an
+   exact sanitize/re-import round trip.
+
 ## Screen-space side-wall correction (v1.16, 2026-09-04)
 
 1. The supplied post-v1.14 screenshot proves that 55%/45% still crosses both

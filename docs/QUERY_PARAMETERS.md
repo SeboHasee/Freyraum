@@ -45,11 +45,24 @@ Museum-hub wall-plane calibration mode (`src/hub/MainMuseumHub.ts`).
 
 Notes:
 - Exposes the projected artwork surfaces plus an SVG calibration overlay for
-  wall-corner points and safe-zone points.
+  wall corners, safe zones, and green authoritative mounting zones.
 - Drag an artwork to move it on its wall plane; drag its corner handle to
   change mounted height. Drag wall/safe handles to recalibrate the wall plane.
+- Select a work, edit its four canonical values numerically, or nudge it with
+  arrow keys (`Shift` for larger steps). “Zwischen Grenzen zentrieren” uses the
+  actual green mounting polygon rather than a fixed percentage.
+- Green handles define the visible doorway, corner, floor, and ceiling margins.
+  The complete projected artwork body is clamped inside that polygon.
+- A changed/imported mounting zone is unconfirmed. Align it with the visible
+  architecture and press “Aktive Grenzen bestätigen” for every rendered wall;
+  export remains disabled until all zones are explicitly confirmed.
+- Undo, redo, reset, and restore-last-valid are available. Invalid work is
+  highlighted red and remains assigned to its original wall.
 - The panel includes an active-wall selector, live overlap/convexity/safe-zone/
   minimum-size warnings, and a restore-last-valid action.
+- Copy/download remains disabled until every geometry check and a sanitized
+  export/re-import comparison passes. Re-import accepts a local JSON file and
+  rejects wall-ownership changes.
 - On release, the complete v5 `museum-hub.json` schema (single calibrated
   camera, metric-like wall planes, doorway exclusions, hanging bands, slot
   anchors, fallback background, visual tokens, and slots) appears in the

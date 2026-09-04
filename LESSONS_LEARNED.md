@@ -1,6 +1,15 @@
 # FREYRAUM lessons learned
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## 2026-09-04 — Deterministic placement tooling lesson
+
+### Lesson 107 — Do not iterate artistic placement through guessed constants
+
+Repeated percentage changes cannot establish correctness when wall calibration,
+door openings, perspective, and customer intent interact. Future rule: preserve
+wall ownership, let the curator draw the valid visible region and place the
+artwork directly, block invalid export, and prove export/re-import equivalence.
+
 ## 2026-09-04 — Projected architectural-boundary lesson
 
 ### Lesson 106 — Validate the boundary the customer can see

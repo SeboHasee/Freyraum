@@ -141,6 +141,11 @@ it now additionally guards the visible wall-material contract (matte wall,
 restrained wall normal scale, calmer ceiling) plus the low-sheen matte artwork
 response that prevents close-view washout.
 
+The v1.17 contract additionally requires explicit four-corner mounting zones,
+immutable explicit wall ownership, complete-quad zone containment, and exact
+v5 canonical placement preservation through sanitize/re-import. Invalid
+placements are suppressed instead of falling back to another wall.
+
 The v1.15 orientation gate additionally proves that every artwork is a rigid
 wall-parallel plane. It requires wall-normal alignment and zero relative corner
 offset, then intersects the projected upper/lower U edges and compares that

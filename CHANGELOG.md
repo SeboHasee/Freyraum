@@ -1,6 +1,24 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## v1.17 — Deterministic curator placement editor (2026-09-04)
+
+- Replaced silent cross-wall fallback with strict wall ownership: invalid
+  explicit placement is highlighted and suppressed, never moved into a hallway
+  or onto another wall.
+- Added explicit stage-space `mountingZone` polygons for every rendered wall.
+- Requires explicit curator confirmation of every mounting zone before export;
+  checked-in initial zones remain deliberately unconfirmed.
+- Upgraded `?hubCalibrate=1` with artwork selection, direct drag, proportional
+  resize, canonical numeric fields, keyboard nudging, analytic zone centering,
+  editable boundary handles, undo/redo/reset, and live metre/pixel proof.
+- Export now emits schema v5 canonical placement fields only and remains blocked
+  while any full artwork quad, doorway, wall ownership, overlap, size, or
+  export/re-import invariant fails.
+- Added valid-only clipboard/download actions and sanitized JSON re-import.
+- Added deterministic mounting-zone, wall-ownership, and canonical round-trip
+  regression coverage.
+
 ## v1.16 — Screen-space doorway and corner guards (2026-09-04)
 
 - Corrected both side works to 50% wall midpoints after the supplied screenshot

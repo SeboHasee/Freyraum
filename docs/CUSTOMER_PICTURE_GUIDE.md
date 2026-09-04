@@ -78,6 +78,15 @@ copies into `customer-artworks/inbox/`.
 - Use the documented museum-hub calibration mode from `docs/QUERY_PARAMETERS.md`
   to adjust wall corners, safe zones, and artwork size/placement visually, then
   copy the exported JSON back into `customer-artworks/museum-hub.json`.
+- Open the calibration mode documented in `docs/QUERY_PARAMETERS.md`. First
+  align each green mounting-zone boundary with the visible doorway, corner,
+  floor, and ceiling.
+  Then select and drag each artwork or enter exact values. Red outlines mean
+  export is blocked. Confirm each wall's green boundaries after alignment. Use
+  Copy or Download only when all proof rows are green,
+  replace `customer-artworks/museum-hub.json`, rerun Update Gallery, and re-import
+  that file once to confirm an identical round trip.
+- The editor never moves an explicitly assigned work to another wall.
 - Older hotspot arrays and v1/v2 slot boxes still load through migration, but
   they should be re-saved from the current calibration flow.
 - Each museum room shows at most four works: two on the front wall and one on
