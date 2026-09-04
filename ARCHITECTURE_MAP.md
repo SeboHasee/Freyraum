@@ -33,7 +33,7 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     exact-ID slot resolver (four-work 2+1+1 pages + paginated overflow),
     contiguous page-index normalization, v1–v4 legacy reflow, deterministic
     local placement/spacing validation, side-wall doorway/front-corner
-    clearance gates (1.25 m / 4.00 m), and visual-token resolution
+    clearance gates (1.25 m doorway / 3.00 m front corner), and visual-token resolution
 - `src/hub/`
   - `projectiveGeometry.ts`: camera/room projection math, room-plane/reference
     reconciliation, doorway-safe deterministic placement solving, polygon

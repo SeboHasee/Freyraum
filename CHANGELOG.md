@@ -1,6 +1,18 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## v1.13 — Side artworks moved clear of doorways (2026-09-04)
+
+- Moved the left side work from 56% to 65% along its rear-to-front wall axis.
+- Moved the right side work from 44% to 35% along its front-to-rear wall axis.
+- Shifted both centers about 1.1 m toward the front wall while retaining full
+  doorway exclusion and a 3 m front-corner safety boundary.
+- Reused the same constants for authored slots and runtime fallback remounting.
+- Updated the shipping config, geometry regression expectations, and generated
+  customer preview.
+- The latest pre-fix screenshot confirms four works; final placement acceptance
+  remains pending a post-fix screenshot.
+
 ## v1.12 — Full documentation sync and reopened visual acceptance (2026-09-04)
 
 ### Documentation

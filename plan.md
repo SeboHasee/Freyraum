@@ -1,11 +1,20 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Implemented — Move side works away from doorways (v1.13)
+
+- [x] Confirm the latest screenshot contains four works in the 2+1+1 layout.
+- [x] Move left/right works from 56%/44% to mirrored 65%/35% positions.
+- [x] Apply the same positions to authored slots and runtime fallback remounting.
+- [x] Retain full-body doorway validation and a 3 m front-corner guard.
+- [x] Update deterministic geometry expectations and generated preview output.
+- [ ] Obtain a post-fix customer screenshot for final visual acceptance.
+
 ## Active — Reconcile customer screenshot with four-work runtime (v1.12)
 
-> **Status:** Open. The 2026-09-04 customer screenshot shows `Raum 1 / 2` and
-> five visible works, while the checked-in v5 config/resolver permits at most
-> four per room. v1.11 is implemented but not visually accepted.
+> **Status update:** a later screenshot confirms four visible works. The
+> artifact-count mismatch is no longer reproduced; side-wall visual acceptance
+> remains open pending a screenshot of the v1.13 coordinates.
 
 ### Required evidence
 

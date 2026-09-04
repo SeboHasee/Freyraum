@@ -1,6 +1,17 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Side-artwork doorway correction (v1.13, 2026-09-04)
+
+1. The replacement customer screenshot confirms the intended four-work 2+1+1
+   room, narrowing the remaining defect to side-wall placement.
+2. At 56% left / 44% right, both side works read against the doorway reveals.
+   Moving them to 65% / 35% shifts each center about 1.1 m toward the front wall.
+3. The mirrored values are required because left-wall U runs rear-to-front while
+   right-wall U runs front-to-rear.
+4. The front-corner guard is now 3 m rather than 4 m, leaving enough usable wall
+   to move away from the doors without entering the front-wall corner.
+
 ## Reopened hub visual acceptance findings (v1.12, 2026-09-04)
 
 1. The latest customer screenshot visibly reports `Raum 1 / 2` but shows five
