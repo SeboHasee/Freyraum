@@ -878,6 +878,20 @@ for (const slot of selectableSlots) {
     );
   }
   assert.ok(projection.realism?.passes ?? wall.projectionRealism?.passes, `${slot.id} must inherit a passing wall realism profile`);
+  assert.ok(projection.alignment?.passes, `${slot.id} must remain rigid and parallel to its wall`);
+  assert.ok(projection.alignment.normalDot >= 1 - 1e-6, `${slot.id} normal must match its wall normal`);
+  assert.ok(projection.alignment.wallOffsetSpread <= 1e-6, `${slot.id} corners must share one wall-parallel plane`);
+  if (slot.wallGroup === 'left' || slot.wallGroup === 'right') {
+    assert.ok(
+      projection.alignment.horizontalVanishingResidualPx !== null
+      && projection.alignment.horizontalVanishingResidualPx <= 0.01,
+      `${slot.id} horizontal edges must share the calibrated side-wall vanishing point`
+    );
+    assert.ok(
+      Math.abs(projection.alignment.wallHorizontalVanishingPoint.x - shipping.stage.width / 2) <= 0.01,
+      `${slot.id} side-wall vanishing point must remain on the calibrated horizontal center`
+    );
+  }
   assert.ok(geometry.pointInPolygon(projection.projectedAnchor, projection.projectedQuad), `${slot.id} projected anchor must remain inside the final projected quad`);
   const floorPoint = geometry.projectRoomWallPoint(
     wall.room,

@@ -139,6 +139,13 @@ it now additionally guards the visible wall-material contract (matte wall,
 restrained wall normal scale, calmer ceiling) plus the low-sheen matte artwork
 response that prevents close-view washout.
 
+The v1.15 orientation gate additionally proves that every artwork is a rigid
+wall-parallel plane. It requires wall-normal alignment and zero relative corner
+offset, then intersects the projected upper/lower U edges and compares that
+vanishing point with the calibrated wall's U-edge vanishing point. Side-wall
+residual must be no more than `0.01 px`; this prevents visual angle tuning,
+billboarding, or a twisted quadrilateral from passing geometry validation.
+
 ### Open v1.12 artifact mismatch
 
 The 2026-09-04 customer screenshot shows five visible works while its counter

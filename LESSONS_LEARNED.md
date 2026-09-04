@@ -1,6 +1,15 @@
 # FREYRAUM lessons learned
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## 2026-09-04 — Perspective validation lesson
+
+### Lesson 105 — Do not correct perspective taper by eye
+
+A rectangle flush to a receding wall must appear trapezoidal. Judge its
+orientation by wall-normal alignment, coplanarity, and a shared wall/artwork
+vanishing point—not by whether its top and bottom edges look horizontal.
+Camera-facing correction would make the physical mounting wrong.
+
 ## 2026-09-04 — Visual artifact provenance lesson
 
 ### Lesson 104 — Geometry tests do not identify the rendered artifact

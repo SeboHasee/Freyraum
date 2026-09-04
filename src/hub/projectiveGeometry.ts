@@ -160,6 +160,16 @@ export interface ProjectedArtworkGeometry {
   projectedAnchor?: Point2D | null;
   validity?: ArtworkPlacementValidity;
   realism?: WallProjectionRealism;
+  alignment?: ArtworkWallAlignment;
+}
+
+export interface ArtworkWallAlignment {
+  normalDot: number;
+  wallOffsetSpread: number;
+  artworkHorizontalVanishingPoint: Point2D | null;
+  wallHorizontalVanishingPoint: Point2D | null;
+  horizontalVanishingResidualPx: number | null;
+  passes: boolean;
 }
 
 const EPSILON = 1e-6;
@@ -530,6 +540,75 @@ function mountingQuad(
     subtract3(add3(center, halfU), halfV),
     subtract3(subtract3(center, halfU), halfV),
   ];
+}
+
+function infiniteLineIntersection(
+  a: Point2D,
+  b: Point2D,
+  c: Point2D,
+  d: Point2D
+): Point2D | null {
+  const denominator = (a.x - b.x) * (c.y - d.y) - (a.y - b.y) * (c.x - d.x);
+  if (Math.abs(denominator) <= EPSILON) return null;
+  const ab = a.x * b.y - a.y * b.x;
+  const cd = c.x * d.y - c.y * d.x;
+  return point(
+    (ab * (c.x - d.x) - (a.x - b.x) * cd) / denominator,
+    (ab * (c.y - d.y) - (a.y - b.y) * cd) / denominator
+  );
+}
+
+/**
+ * Proves that a rendered artwork is a rigid rectangle parallel to its wall.
+ * Side-wall U edges must converge to the same calibrated vanishing point as
+ * the wall; camera-facing or hand-tuned rotations fail this invariant.
+ */
+export function evaluateArtworkWallAlignment(
+  wall: RoomWallModel,
+  frame: ArtworkMountingFrame,
+  projectedArtwork: Quad,
+  projectedWall: Quad
+): ArtworkWallAlignment {
+  const artworkU = subtract3(frame.frontQuad[1], frame.frontQuad[0]);
+  const artworkV = subtract3(frame.frontQuad[3], frame.frontQuad[0]);
+  const artworkNormal = normalize3(cross3(artworkU, artworkV));
+  const wallNormal = roomWallNormal(wall);
+  const normalDot = artworkNormal && wallNormal ? Math.abs(dot3(artworkNormal, wallNormal)) : 0;
+  const offsets = frame.frontQuad.map((corner) =>
+    dot3(subtract3(corner, frame.wallCenter), frame.basisN)
+  );
+  const wallOffsetSpread = Math.max(...offsets) - Math.min(...offsets);
+  const artworkVanishingPoint = infiniteLineIntersection(
+    projectedArtwork[0],
+    projectedArtwork[1],
+    projectedArtwork[3],
+    projectedArtwork[2]
+  );
+  const wallVanishingPoint = infiniteLineIntersection(
+    projectedWall[0],
+    projectedWall[1],
+    projectedWall[3],
+    projectedWall[2]
+  );
+  const horizontalVanishingResidualPx =
+    artworkVanishingPoint && wallVanishingPoint
+      ? Math.hypot(
+        artworkVanishingPoint.x - wallVanishingPoint.x,
+        artworkVanishingPoint.y - wallVanishingPoint.y
+      )
+      : null;
+  const passes =
+    normalDot >= 1 - 1e-6
+    && wallOffsetSpread <= 1e-6
+    && (horizontalVanishingResidualPx === null || horizontalVanishingResidualPx <= 0.01);
+  return {
+    normalDot,
+    wallOffsetSpread,
+    artworkHorizontalVanishingPoint: artworkVanishingPoint,
+    wallHorizontalVanishingPoint: wallVanishingPoint,
+    horizontalVanishingResidualPx,
+    passes,
+  };
 }
 
 /**
@@ -1115,12 +1194,13 @@ export function projectSlotArtwork(
     );
     if (projected.some((corner) => corner === null)) return null;
     const worldQuad = mountingFrame.frontQuad;
-    const projectedQuad = normalizeQuadClockwise([
+    const orderedProjectedQuad: Quad = [
       projected[0]!,
       projected[1]!,
       projected[2]!,
       projected[3]!,
-    ]);
+    ];
+    const projectedQuad = normalizeQuadClockwise(orderedProjectedQuad);
     if (quadIsDegenerate(projectedQuad) || !quadIsConvex(projectedQuad)) return null;
     if (wall.safePolygon && !projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
       return null;
@@ -1130,6 +1210,15 @@ export function projectSlotArtwork(
     const quadHomography = computeHomographyFromUnitSquare(projectedQuad);
     if (!quadHomography) return null;
     const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
+    const projectedWall = projectRoomWallQuad(wall.room, wall.camera, stage);
+    if (!projectedWall) return null;
+    const alignment = evaluateArtworkWallAlignment(
+      wall.room,
+      mountingFrame,
+      orderedProjectedQuad,
+      projectedWall
+    );
+    if (!alignment.passes) return null;
     return {
       localQuad: placement.localQuad,
       worldQuad,
@@ -1143,6 +1232,7 @@ export function projectSlotArtwork(
       projectedAnchor: projectWorldPoint(wall.camera, mountingFrame.frontCenter, stage),
       validity: placement.validity,
       realism: wall.projectionRealism,
+      alignment,
     };
   }
 

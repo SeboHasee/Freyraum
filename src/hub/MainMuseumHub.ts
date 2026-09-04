@@ -725,6 +725,7 @@ export class MainMuseumHub {
       placement: projection.placement,
       validity: projection.validity ?? null,
       realism: projection.realism ?? wall.projectionRealism ?? null,
+      alignment: projection.alignment ?? null,
     });
   }
 
@@ -754,6 +755,7 @@ export class MainMuseumHub {
               ? projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))
               : false,
           validity: projection?.validity ?? null,
+          alignment: projection?.alignment ?? null,
         };
       });
     this.diagnostics.info('hub-debug-geometry', 'Hub debug geometry snapshot', {

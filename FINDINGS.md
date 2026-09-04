@@ -1,6 +1,26 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Calculated side-wall orientation (v1.15, 2026-09-04)
+
+The supplied v1.14 screenshot was checked against the actual calibrated camera
+and wall transforms rather than by eye:
+
+- Camera: `(0, 1.72, 9)`, target `(0, 2.05, -1.2)`, vertical FOV `48°`.
+- Left wall basis: `U=(0,0,-1)`, `V=(0,1,0)`, inward `N=(1,0,0)`.
+- Right wall basis: `U=(0,0,1)`, `V=(0,1,0)`, inward `N=(-1,0,0)`.
+- Both side-wall horizontal edge families converge to the same calibrated stage
+  vanishing point: approximately `(683.00, 411.90)` in the 1366×768 stage.
+- Each artwork normal has absolute dot product `1` with its wall normal, and all
+  four front-face corners have zero relative wall-offset spread.
+
+Therefore the visible trapezoidal “tilt” is the mathematically correct
+one-point-perspective projection of a rigid rectangle mounted parallel to a
+receding side wall. Rotating either work to look rectangular on screen would
+toe it toward the camera and make it physically incorrect. v1.15 adds runtime
+and regression invariants that reject such camera-facing or non-coplanar
+orientation drift.
+
 ## Front-corner screenshot correction (v1.14, 2026-09-04)
 
 1. The post-v1.13 screenshot proves 65%/35% moved both works into the front-wall

@@ -1,6 +1,20 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## v1.15 — Mathematical side-wall orientation validation (2026-09-04)
+
+- Added an explicit rigid-plane alignment result for every projected artwork:
+  wall-normal dot product, front-face wall-offset spread, artwork vanishing
+  point, wall vanishing point, and residual.
+- Invalid orientation is now rejected before rendering or interaction geometry
+  is accepted.
+- Hub diagnostics export the calculated alignment proof.
+- Geometry regression requires side-artwork and wall horizontal edges to share
+  a vanishing point within `0.01 px`.
+- Verified the current mirrored side works are flush to their walls and converge
+  at approximately `(683, 411.90)` on the 1366×768 calibrated stage. No
+  camera-facing angle correction was introduced.
+
 ## v1.14 — Correct side artworks away from front corners (2026-09-04)
 
 - Used the post-v1.13 customer screenshot to identify both artwork bodies

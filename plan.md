@@ -1,6 +1,23 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Implemented — Calculated wall-orientation proof (v1.15)
+
+- [x] Derive each artwork frame from normalized wall U/V axes and `N=U×V`.
+- [x] Measure artwork-plane normal alignment against the wall normal.
+- [x] Measure front-face wall-offset spread to reject twisted/non-coplanar quads.
+- [x] Calculate artwork and wall horizontal vanishing points in screen space.
+- [x] Reject any side artwork whose edges do not converge to the calibrated wall
+  vanishing point within 0.01 px.
+- [x] Include alignment metrics and vanishing points in hub debug diagnostics.
+- [x] Verify the current side artworks converge at approximately `(683, 411.90)`
+  in the 1366×768 stage with normal dot `1` and zero offset spread.
+
+No visual angle was hand-tuned: the screenshot’s perspective taper is required
+for a panel mounted flush to the side wall. A less tapered appearance would
+require changing the camera composition or deliberately toeing the artworks
+toward the viewer, which is not physically wall-mounted behavior.
+
 ## Implemented — Center side works between doorway and corner (v1.14)
 
 - [x] Use the supplied post-v1.13 screenshot as the placement reference.
