@@ -1,4 +1,5 @@
 # Documentation Rules
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 ## Goal
 
@@ -24,6 +25,11 @@ Keep documentation authoritative, minimal, and resistant to drift.
 4. Prefer links to canonical documents over copied content.
 5. When customer feedback reopens a documented visual incident, downgrade the
    prior fixed claim and link the current evidence and active recovery plan.
+6. A screenshot is evidence of one rendered artifact, not automatically the
+   current source tree. Record its date and visible state, but require the
+   matching generated bundle/config/environment before assigning root cause.
+7. Keep archived Markdown immutable except for its index; a full audit reviews
+   archive discoverability rather than rewriting historical claims.
 
 ## Documentation freshness policy
 

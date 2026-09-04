@@ -1,5 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-04 (v1.11 balanced side-wall placement).
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## 2026-09-04 — Visual artifact provenance lesson
+
+### Lesson 104 — Geometry tests do not identify the rendered artifact
+
+A customer screenshot can contradict a passing source-tree geometry contract
+because generated preview data, injected configuration, deployed output, or page
+visibility may differ. Future rule: reopen visual acceptance immediately,
+preserve the exact artifact and generated bundles, and do not call placement
+fixed until that same artifact passes the primary-camera visual check.
 
 ## 2026-09-04 — Side-wall usable-segment lesson
 

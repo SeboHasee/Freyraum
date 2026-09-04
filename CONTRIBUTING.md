@@ -1,4 +1,5 @@
 # Contributing
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 ## Validation baseline
 
@@ -56,6 +57,12 @@ matching `images/` evidence, and only then choose a runtime fix.
 - Current product overview belongs in `README.md`.
 
 Other docs should link to canonical sources instead of duplicating them.
+
+For museum-layout reports, preserve the exact environment (`file://` customer
+preview, Vite dev/build, or deployed Pages), visible room counter, generated
+`customer-artworks.js`, injected `museum-hub.json`, and screenshot together.
+Passing `validate:museum-hub` proves geometry contracts, not perceptual
+acceptance or that the observed artifact was built from the current branch.
 
 ## Architecture drift audit (required when architecture-affecting changes occur)
 

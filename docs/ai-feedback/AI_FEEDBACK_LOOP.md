@@ -1,5 +1,12 @@
 # AI feedback loop
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## v1.12 feedback-loop note
+
+Customer screenshots are artifact-specific evidence. If they contradict the
+checked-in four-work hub contract, reopen visual acceptance, retain the exact
+generated/config bundles and route, and separate tool-availability limitations
+from any claim about account usage.
 
 ## v0.29 feedback-loop note
 

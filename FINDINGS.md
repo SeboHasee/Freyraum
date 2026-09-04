@@ -1,4 +1,24 @@
 # FINDINGS
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## Reopened hub visual acceptance findings (v1.12, 2026-09-04)
+
+1. The latest customer screenshot visibly reports `Raum 1 / 2` but shows five
+   artworks at once. That contradicts the checked-in v5 configuration and
+   resolver invariant of at most four selectable works per page.
+2. The screenshot also shows a side-wall composition the customer still judges
+   physically incorrect. Therefore v1.11's numerical doorway/corner checks are
+   implementation evidence, not final visual acceptance.
+3. The screenshot alone cannot identify whether the mismatch comes from stale
+   generated preview output, a deployed artifact, injected configuration,
+   incorrect page-group visibility, or another runtime path. Root cause requires
+   the exact observed build plus its generated artwork/config bundles.
+4. Remote-image viewing limits and account usage budget are separate concerns.
+   Tool unavailability must be reported accurately and must never be treated as
+   evidence about the user's billing or remaining allowance.
+5. Repository geometry tests remain necessary but insufficient: acceptance must
+   include a primary-camera screenshot of the exact customer artifact, with the
+   visible room count and active artwork IDs recorded.
 
 ## Balanced side-wall placement findings (v1.11, 2026-09-04)
 

@@ -1,6 +1,12 @@
 # Autonomous agent prompt
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+> Last full markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## v1.12 current context
+
+The v5 museum hub intends four works per room (2 front + 1 left + 1 right), but
+the latest customer screenshot shows five visible works in `Raum 1 / 2`.
+Treat visual acceptance as open and preserve exact artifact provenance.
 
 ## v0.29 current context
 

@@ -1,5 +1,14 @@
 # FREYRAUM AI rules
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## v1.12 hub visual-acceptance rule
+
+Treat the v5 museum-hub config and resolved U/V/N geometry as source truth, but
+do not call placement fixed from structural tests alone. Preserve the exact
+customer artifact, generated bundle, config, room counter, and screenshot;
+reopen acceptance whenever visible artwork count or composition disagrees with
+the four-work 2+1+1 contract. Never infer billing/usage state from an unavailable
+image or browser tool.
 
 ## v0.58 topbar/utility-button rule
 

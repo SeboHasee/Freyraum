@@ -1,4 +1,5 @@
 # Architecture Docs
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 Use [`../../ARCHITECTURE_MAP.md`](../../ARCHITECTURE_MAP.md) as the canonical architecture source.
 

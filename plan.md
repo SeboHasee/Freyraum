@@ -1,4 +1,37 @@
 # FREYRAUM Plan
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## Active — Reconcile customer screenshot with four-work runtime (v1.12)
+
+> **Status:** Open. The 2026-09-04 customer screenshot shows `Raum 1 / 2` and
+> five visible works, while the checked-in v5 config/resolver permits at most
+> four per room. v1.11 is implemented but not visually accepted.
+
+### Required evidence
+
+1. Identify whether the screenshot came from `customer-preview/app.html`, Vite
+   dev/build, or deployed GitHub Pages.
+2. Preserve the exact generated `customer-artworks.js`, injected
+   `museum-hub.json`, artwork manifest, route/query, and commit/build identifier.
+3. Export hub diagnostics for active page index, resolved page count, slot IDs,
+   artwork IDs, wall IDs, placement anchors, and page-group visibility.
+4. Capture the primary-camera state from that same artifact after any fix.
+
+### Acceptance
+
+- At most four visible/selectable works in a room (2 front + 1 left + 1 right).
+- Only the active page group is visible.
+- Side works remain parallel to their walls, outside doorway/corner clearance,
+  and visually credible from the primary camera.
+- DOM interaction quads match the rendered mounted faces.
+- Customer screenshot approval is required in addition to automated geometry,
+  build, resilience, performance, documentation, secret, and security checks.
+
+### Tooling boundary
+
+If browser/image tooling is unavailable in a session, report that limitation
+without attributing it to account budget. Continue repository analysis, but keep
+visual acceptance open until an actual screenshot can be inspected.
 
 ## Implemented — Balanced side-wall placement (v1.11, 2026-09-04)
 

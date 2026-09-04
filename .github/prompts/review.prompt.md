@@ -1,6 +1,12 @@
 # Review prompt
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+> Last full markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## v1.12 current context
+
+Review hub changes against both the v5 four-work U/V/N contract and the exact
+rendered artifact. Passing geometry does not close the current screenshot
+mismatch or establish customer visual acceptance.
 
 ## v0.29 current context
 

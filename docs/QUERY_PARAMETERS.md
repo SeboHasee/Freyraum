@@ -1,9 +1,10 @@
 # FREYRAUM Query Parameters & Stored Configuration
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
 
-Verified against runtime code on 2026-09-01.
+Verified against runtime code and schema v5 on 2026-09-04.
 
 ## Query parameters
 
@@ -49,7 +50,7 @@ Notes:
   change mounted height. Drag wall/safe handles to recalibrate the wall plane.
 - The panel includes an active-wall selector, live overlap/convexity/safe-zone/
   minimum-size warnings, and a restore-last-valid action.
-- On release, the complete v4 `museum-hub.json` schema (single calibrated
+- On release, the complete v5 `museum-hub.json` schema (single calibrated
   camera, metric-like wall planes, doorway exclusions, hanging bands, slot
   anchors, fallback background, visual tokens, and slots) appears in the
   on-screen copy panel and is logged via diagnostics. Exported room planes are
@@ -57,9 +58,14 @@ Notes:
   quads used by the photographed room.
 - Paste the JSON into `customer-artworks/museum-hub.json` and re-run the
   gallery update (`npm run import:artworks`) to apply it.
-- Legacy `customer-artworks/hub-hotspots.json` and v1/v2 box placements still
-  migrate automatically with warnings; new exports always use the v4
-  calibrated-room format.
+- Legacy `customer-artworks/hub-hotspots.json` and v1–v4 placements still
+  migrate automatically with warnings; new exports always use the v5
+  calibrated-room format. Canonical artwork mounting uses
+  `horizontalPosition`, `centerHeight`, `physicalHeight`, and `mountingGap`.
+- A resolved page contains at most four works in the 2-front + 1-left + 1-right
+  composition. Additional works overflow into contiguous virtual rooms.
+- Automatic side-wall fallback placement must retain at least 1.25 m beside the
+  doorway and 4.00 m from the front-wall corner.
 - Slot/page navigation is disabled while calibrating.
 
 ### `?hubDebug=1`

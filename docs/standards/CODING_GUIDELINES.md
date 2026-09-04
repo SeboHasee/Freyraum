@@ -1,5 +1,13 @@
 # FREYRAUM coding guidelines
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## v1.12 hub-layout guideline
+
+Keep authored/resolved hub transforms in the shared wall U/V/N frame and keep
+rendered faces, accessibility projection, and hit targets on the same fitted
+quad. Preserve the four-work 2+1+1 page cap, overflow migration, and side-wall
+doorway/front-corner clearance checks. A passing geometry test does not close a
+customer visual incident without checking the exact reported artifact.
 
 ## v0.29 rendering/preload coding guideline
 

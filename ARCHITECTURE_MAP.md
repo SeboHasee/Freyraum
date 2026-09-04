@@ -1,4 +1,5 @@
 # FREYRAUM Architecture Map
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -29,9 +30,10 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     wall-plane contract (stage + multi-plane wall quads + stage-space safe
     polygons + canonical normalized-U/center-height/physical-height/mounting-gap
     slot placement), reference-quad room reconciliation, wall-realism gating,
-    exact-ID slot resolver (auto-placement + paginated overflow), deterministic
-    local placement/spacing validation, legacy placement derivation, and
-    visual-token resolution
+    exact-ID slot resolver (four-work 2+1+1 pages + paginated overflow),
+    contiguous page-index normalization, v1–v4 legacy reflow, deterministic
+    local placement/spacing validation, side-wall doorway/front-corner
+    clearance gates (1.25 m / 4.00 m), and visual-token resolution
 - `src/hub/`
   - `projectiveGeometry.ts`: camera/room projection math, room-plane/reference
     reconciliation, doorway-safe deterministic placement solving, polygon
@@ -50,6 +52,15 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     slot state, offline `file://` hub source preference/decode deadlines for
     local customer preview reliability, and read-only geometry/source
     diagnostics overlay
+
+## Current hub-layout acceptance boundary
+
+The source-of-truth geometry is the resolved v5 config and its page-scoped U/V/N
+mounting output. A screenshot from a generated or deployed artifact is not
+assumed to match that state unless the matching `customer-artworks.js`,
+`museum-hub.json`, route, and build are preserved. The 2026-09-04 customer
+screenshot currently disagrees with the checked-in four-work page contract, so
+visual acceptance remains open even though deterministic geometry checks pass.
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`

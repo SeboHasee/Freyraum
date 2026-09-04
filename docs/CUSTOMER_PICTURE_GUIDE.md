@@ -1,4 +1,5 @@
 # FREYRAUM — Customer Picture Guide
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 This guide documents the current customer workflow only.
 
@@ -70,7 +71,7 @@ copies into `customer-artworks/inbox/`.
 
 ## Museum hub placement
 
-- The current `customer-artworks/museum-hub.json` format is **version 4**:
+- The current `customer-artworks/museum-hub.json` format is **version 5**:
   camera, room envelope, calibrated front/left/right wall transforms, drawable
   regions, doorway exclusions, visual tokens, exact artwork IDs, normalized
   wall-local slot placement, and mounted sizes live in the same file.
@@ -79,6 +80,13 @@ copies into `customer-artworks/inbox/`.
   copy the exported JSON back into `customer-artworks/museum-hub.json`.
 - Older hotspot arrays and v1/v2 slot boxes still load through migration, but
   they should be re-saved from the current calibration flow.
+- Each museum room shows at most four works: two on the front wall and one on
+  each side wall. Further artworks automatically continue in another room.
+- Canonical placement fields are `horizontalPosition`, `centerHeight`,
+  `physicalHeight`, and `mountingGap`; the image aspect ratio determines width.
+- If a screenshot shows more than four works in one room, preserve that exact
+  preview/deployment and its generated `customer-artworks.js` before rerunning
+  Update Gallery. It may not match the current checked-in config.
 
 ## Troubleshooting
 

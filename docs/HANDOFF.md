@@ -1,4 +1,5 @@
 # FREYRAUM Handoff Guide
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -33,6 +34,12 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
    `plan.md § v0.93`. Do not treat an importer report or a published asset file
    as proof that a browser uploaded visible artwork pixels.
 7. If behavior differs from docs, treat as drift and update canonical docs in the same fix PR.
+8. For a hub-layout mismatch, preserve the exact route/environment, visible room
+   counter, commit/build identity, generated `customer-artworks.js`, injected
+   `museum-hub.json`, resolved slot/page diagnostics, and screenshot before
+   regenerating output. Confirm that only the active page group is visible.
+9. Do not infer account usage or billing state from unavailable image/browser
+   tooling; report the tool limitation independently.
 
 ## Handoff checklist
 
@@ -41,6 +48,19 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - [ ] Customer-facing instructions verified end-to-end
 - [ ] Asset-size constraints and publish-path assumptions explicitly handed off
 - [ ] Known risks and deferred upgrades linked from maintenance docs
+- [ ] Screenshot-producing artifact and generated bundles preserved for visual incidents
+
+## 2026-09-04 full Markdown audit matrix
+
+| Class | Reviewed files | Audit outcome |
+|---|---|---|
+| Canonical | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | Current v1.12 state and reopened incident synchronized |
+| Operational | `docs/CUSTOMER_PICTURE_GUIDE.md`, `CUSTOMER_TEXT_GUIDE.md`, `DEPENDENCY_MAINTENANCE_PLAN.md`, `DEPLOYMENT.md`, `HANDOFF.md`, `IMAGE_MAINTENANCE_GUIDE.md`, `QUERY_PARAMETERS.md`, `REGRESSION_TOOLING.md`, `ai-feedback/AI_FEEDBACK_LOOP.md`, `architecture/README.md`, `lessons-learned/README.md`, `standards/CODING_GUIDELINES.md` | Current instructions reviewed; affected files updated |
+| Agent/template | `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `autonomous-agent.prompt.md`, `refactor.prompt.md`, `review.prompt.md` | Audit metadata and current v1.12 boundary synchronized |
+| Historical | `docs/archive/README.md` and its five `*-history-2026-06-21.md` snapshots | Index reviewed; snapshots intentionally unchanged |
+
+All 32 repository Markdown files were reviewed. Historical snapshots retain
+their original dates and claims by design.
 
 ## Canonical references
 

@@ -1,4 +1,5 @@
 # Dependency & Tooling Maintenance Plan
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync; advisory plan unchanged).
 
 ## Current dependency risk matrix
 

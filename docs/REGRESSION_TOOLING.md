@@ -1,4 +1,5 @@
-# Regression Validation Tooling (v0.93)
+# Regression Validation Tooling (v1.12)
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -114,13 +115,15 @@ numerically identical to the original O(N) reference across a 435-frame
 sequence including edge cases.
 
 `scripts/test-museum-hub-geometry.mjs` is a focused hub geometry regression
-check: it loads the shipping TypeScript modules, verifies v1/v2 migration keeps
-exact artwork targets, validates the checked-in v4 camera/room/wall/slot
+check: it loads the shipping TypeScript modules, verifies v1–v4 migration keeps
+exact artwork targets, validates the checked-in v5 camera/room/wall/slot
 contract, reconciles wall-local planes against the photographed reference
 quads, and asserts deterministic doorway-edge placement, fallback wall buckets,
 projected containment, hanging-band containment, perspective foreshortening,
 world-space quad export, selected-state runtime hooks, grey-token reach, and
-the bounded missing-background fallback. Threshold breaches hard-fail
+the bounded missing-background fallback. It also guards four-work 2+1+1 pages,
+overflow pagination, contiguous migrated page indices, pairwise wall intervals,
+and 1.25 m doorway / 4.00 m front-corner side-wall clearances. Threshold breaches hard-fail
 `npm run validate:museum-hub` and CI. `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the
@@ -135,6 +138,14 @@ balanced two-key setup, no return to the old dramatic far-left spotlight), and
 it now additionally guards the visible wall-material contract (matte wall,
 restrained wall normal scale, calmer ceiling) plus the low-sheen matte artwork
 response that prevents close-view washout.
+
+### Open v1.12 artifact mismatch
+
+The 2026-09-04 customer screenshot shows five visible works while its counter
+reads `Raum 1 / 2`. This contradicts the tested four-work contract. Geometry
+validation therefore remains green evidence for the checked-in source, but the
+visual incident is open until the exact screenshot-producing preview/deployment,
+generated bundle, config, and page-group visibility are captured together.
 
 ## Acceptance thresholds (Phase 14)
 

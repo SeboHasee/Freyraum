@@ -1,4 +1,5 @@
 # FREYRAUM — GitHub Pages Deployment Guide
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
 This document describes the full operator flow for publishing the gallery to
 GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
@@ -8,6 +9,11 @@ GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
 In the GitHub repository go to **Settings → Pages → Source** and choose
 **GitHub Actions**. No branch source is required; the workflow uploads and
 deploys the build artifact directly.
+
+For visual hub incidents, record the deployed commit/run and preserve the
+generated artwork/config bundle before redeploying. A deployed screenshot must
+not be assumed to represent the current workspace merely because the URL is
+unchanged.
 
 ---
 

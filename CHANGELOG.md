@@ -1,7 +1,31 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-04 (v1.11 balanced side-wall placement).
+> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+
+## v1.12 — Full documentation sync and reopened visual acceptance (2026-09-04)
+
+### Documentation
+
+- Audited all current Markdown against the v1.05–v1.11 implementation sequence:
+  resilient WebGL startup/2D fallback, U/V/N mounting, optical alignment,
+  four-work room pagination and legacy reflow, contact-card removal, and
+  side-wall doorway/corner constraints.
+- Corrected current schema references from museum-hub v4 to v5.
+- Documented the latest customer screenshot: `Raum 1 / 2` visibly contains five
+  works, contradicting the checked-in four-work page invariant.
+- Reopened visual acceptance and added an artifact-provenance handoff procedure.
+- Recorded that image/tool availability and account usage budget are separate;
+  no billing conclusion should be inferred from a session tool limit.
+
+### Runtime
+
+- No runtime change in this documentation-only release.
+- v1.11 remains implemented, but its visual acceptance claim is no longer
+  considered closed until the exact customer artifact is reproduced.
 
 ## v1.11 — Balanced side-wall doorway/corner placement (2026-09-04)
+
+> **Acceptance update:** implementation shipped, but customer screenshot evidence
+> received later on 2026-09-04 reopened the visual incident; see v1.12.
 
 ### Changed
 
