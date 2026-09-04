@@ -439,7 +439,9 @@ export const HUB_RIGHT_CENTERLINE_M = 2.28;
 export const HUB_ARTWORK_MOUNTING_GAP_M = 0.002;
 export const HUB_MIN_ARTWORK_SPACING_M = 0.5;
 export const HUB_SIDE_DOORWAY_CLEARANCE_M = 1.25;
-export const HUB_SIDE_FRONT_CORNER_CLEARANCE_M = 4;
+export const HUB_SIDE_FRONT_CORNER_CLEARANCE_M = 3;
+export const HUB_LEFT_ARTWORK_POSITION = 0.65;
+export const HUB_RIGHT_ARTWORK_POSITION = 0.35;
 
 function curatedPlacement(
   wallId: string,
@@ -485,13 +487,25 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     suffix: 'wall-left.a',
     wallId: 'wall-left',
     intendedUse: 'landscape',
-    placement: curatedPlacement('wall-left', 0.56, HUB_ROOM_DEPTH, 1.45, HUB_LEFT_CENTERLINE_M),
+    placement: curatedPlacement(
+      'wall-left',
+      HUB_LEFT_ARTWORK_POSITION,
+      HUB_ROOM_DEPTH,
+      1.45,
+      HUB_LEFT_CENTERLINE_M
+    ),
   },
   {
     suffix: 'wall-right.a',
     wallId: 'wall-right',
     intendedUse: 'landscape',
-    placement: curatedPlacement('wall-right', 0.44, HUB_ROOM_DEPTH, 1.45, HUB_RIGHT_CENTERLINE_M),
+    placement: curatedPlacement(
+      'wall-right',
+      HUB_RIGHT_ARTWORK_POSITION,
+      HUB_ROOM_DEPTH,
+      1.45,
+      HUB_RIGHT_CENTERLINE_M
+    ),
   },
 ];
 
@@ -2188,9 +2202,9 @@ export function resolveMuseumHub(
       ?? point(slot.placement.center.x, 1 - slot.placement.center.y);
     const sourceWall = wallById.get(slot.placement.wallId);
     const targetUv = sourceWall?.id !== targetWall.id && targetWall.group === 'left'
-      ? point(0.56, uv.y)
+      ? point(HUB_LEFT_ARTWORK_POSITION, uv.y)
       : sourceWall?.id !== targetWall.id && targetWall.group === 'right'
-        ? point(0.44, uv.y)
+        ? point(HUB_RIGHT_ARTWORK_POSITION, uv.y)
         : uv;
     const sourceHeight = sourceWall?.room?.height ?? targetWall.room?.height ?? 1;
     const targetHeight = targetWall.room?.height ?? sourceHeight;
