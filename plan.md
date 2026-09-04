@@ -1,5 +1,19 @@
 # FREYRAUM Plan
 
+## Implemented — Side-wall front-corner setback (v1.10, 2026-09-04)
+
+> **Status update:** Side-wall works now sit toward the viewer rather than
+> visually entering the perpendicular front wall.
+
+### As-built placement
+
+- Left wall: 48% along its rear-to-front U axis.
+- Right wall: 52% along its front-to-rear U axis.
+- Both retain the existing optical centerlines, 1.45 m height, 22 mm body, and
+  2 mm wall-to-back clearance.
+- Bounds retain at least 4.50 m from the relevant front-wall corner, alongside
+  the existing doorway and general wall-edge checks.
+
 ## Implemented — Realistic room density (v1.09, 2026-09-03)
 
 > **Status update:** Each virtual museum room now contains at most four works.
@@ -9,8 +23,8 @@
 ### 1. Room composition
 
 - Two front-wall works at 30% and 70%.
-- One left-wall work at 64%, safely separated from its doorway and corners.
-- One right-wall work at 36%, safely separated from its doorway and corners.
+- One left-wall work at 48%, safely separated from its doorway and front corner.
+- One right-wall work at 52%, safely separated from its doorway and front corner.
 - Front works use a 2.32 m optical centerline; side works use 2.30 m/2.28 m.
 - Physical heights are 1.40–1.62 m with at least 1.50 m lower-edge clearance.
 

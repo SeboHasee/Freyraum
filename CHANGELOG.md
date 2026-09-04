@@ -1,5 +1,22 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-03 (v1.09 realistic room density).
+> Latest markdown audit: 2026-09-04 (v1.10 side-wall setback).
+
+## v1.10 — Side-wall front-corner setback (2026-09-04)
+
+### Changed
+
+- Moved the left side-wall work from 64% to 48% along its rear-to-front wall
+  axis, bringing it toward the viewer and away from the front-wall corner.
+- Moved the right side-wall work from 36% to 52% along its front-to-rear wall
+  axis for the equivalent viewer-facing setback.
+- Added deterministic validation requiring side-wall artwork bounds to remain at
+  least 4.50 m from their respective front-wall corners while retaining doorway
+  clearance.
+
+### Unchanged
+
+- Four-work 2+1+1 room capacity, overflow pagination, artwork size/height,
+  wall-parallel orientation, architecture, camera, lighting, and interactions.
 
 ## v1.09 — Realistic room density and corner clearance (2026-09-03)
 

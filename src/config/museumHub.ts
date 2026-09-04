@@ -483,13 +483,13 @@ const BASELINE_SLOTS: readonly BaselineSlotDef[] = [
     suffix: 'wall-left.a',
     wallId: 'wall-left',
     intendedUse: 'landscape',
-    placement: curatedPlacement('wall-left', 0.64, HUB_ROOM_DEPTH, 1.45, HUB_LEFT_CENTERLINE_M),
+    placement: curatedPlacement('wall-left', 0.48, HUB_ROOM_DEPTH, 1.45, HUB_LEFT_CENTERLINE_M),
   },
   {
     suffix: 'wall-right.a',
     wallId: 'wall-right',
     intendedUse: 'landscape',
-    placement: curatedPlacement('wall-right', 0.36, HUB_ROOM_DEPTH, 1.45, HUB_RIGHT_CENTERLINE_M),
+    placement: curatedPlacement('wall-right', 0.52, HUB_ROOM_DEPTH, 1.45, HUB_RIGHT_CENTERLINE_M),
   },
 ];
 

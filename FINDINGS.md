@@ -1,5 +1,17 @@
 # FINDINGS
 
+## Side-wall setback findings (v1.10, 2026-09-04)
+
+1. Both side-wall U axes use opposite directions: left runs from the viewer
+   toward the front wall, while right runs from the front wall toward the
+   viewer. Moving both paintings toward the viewer therefore requires decreasing
+   left U and increasing right U.
+2. The previous 64%/36% positions put the paintings visually into the
+   perpendicular front-wall corner even though each individual wall containment
+   test passed.
+3. The corrected 48%/52% positions preserve doorway clearance and leave at least
+   4.50 m between each artwork bound and its front-wall corner.
+
 ## Realistic room-density findings (v1.09, 2026-09-03)
 
 1. The visible failure was room density, not wall-normal math: five works were

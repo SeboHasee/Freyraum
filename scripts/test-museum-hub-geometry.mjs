@@ -197,8 +197,8 @@ const expectedCenterHeightByWall = new Map([
 const expectedHorizontalPositionBySlot = new Map([
   ['room-01.wall-front.a', 0.3],
   ['room-01.wall-front.b', 0.7],
-  ['room-01.wall-left.a', 0.64],
-  ['room-01.wall-right.a', 0.36],
+  ['room-01.wall-left.a', 0.48],
+  ['room-01.wall-right.a', 0.52],
 ]);
 for (const slot of shippingConfig.slots) {
   assert.equal(typeof slot.placement.horizontalPosition, 'number', `${slot.id} must author one normalized wall position`);
@@ -895,6 +895,17 @@ for (const slot of selectableSlots) {
     localSpan.min >= 0.65 && wall.room.width - localSpan.max >= 0.65,
     `${slot.id} must retain at least 0.65 m from both wall corners`
   );
+  if (slot.wallGroup === 'left') {
+    assert.ok(
+      wall.room.width - localSpan.max >= 4.5,
+      `${slot.id} must remain at least 4.50 m from the left/front-wall corner`
+    );
+  } else if (slot.wallGroup === 'right') {
+    assert.ok(
+      localSpan.min >= 4.5,
+      `${slot.id} must remain at least 4.50 m from the right/front-wall corner`
+    );
+  }
   for (const corner of projection.projectedQuad) {
     assert.ok(geometry.pointInPolygon(corner, wall.safePolygon), `${slot.id} must stay within its projected wall safe polygon`);
   }

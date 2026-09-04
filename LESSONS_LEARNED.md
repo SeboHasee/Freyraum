@@ -1,5 +1,14 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-03 (v1.09 realistic room density).
+> Latest markdown audit: 2026-09-04 (v1.10 side-wall setback).
+
+## 2026-09-04 — Side-wall coordinate lesson
+
+### Lesson 102 — Front-corner setback follows each wall's U direction
+
+Mirrored world-space movement does not mean applying the same normalized delta:
+the left and right wall U axes point in opposite longitudinal directions.
+Future rule: define side placement by physical front-corner clearance and move
+left U downward/right U upward when bringing works toward the viewer.
 
 ## 2026-09-03 — Museum room-density lesson
 
