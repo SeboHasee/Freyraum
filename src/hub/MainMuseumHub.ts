@@ -1680,13 +1680,17 @@ export class MainMuseumHub {
 
     const actionRow = document.createElement('div');
     actionRow.className = 'museum-hub__calibration-actions';
-    const makeAction = (text: string, action: () => void): HTMLButtonElement => {
+    const makeAction = (
+      text: string,
+      action: () => void,
+      container: HTMLElement = actionRow
+    ): HTMLButtonElement => {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'museum-hub__calibration-action';
       button.textContent = text;
       button.addEventListener('click', action);
-      actionRow.appendChild(button);
+      container.appendChild(button);
       return button;
     };
     const centerButton = makeAction('Zwischen Grenzen zentrieren', () => this.centerActiveSlotInMountingZone());
@@ -1719,9 +1723,16 @@ export class MainMuseumHub {
 
     const exportRow = document.createElement('div');
     exportRow.className = 'museum-hub__calibration-actions';
-    this.calibrationCopyButton = makeAction.call(null, 'JSON kopieren', () => void this.copyCalibrationJson());
-    this.calibrationDownloadButton = makeAction.call(null, 'museum-hub.json laden', () => this.downloadCalibrationJson());
-    exportRow.append(this.calibrationCopyButton, this.calibrationDownloadButton);
+    this.calibrationCopyButton = makeAction(
+      'JSON kopieren',
+      () => void this.copyCalibrationJson(),
+      exportRow
+    );
+    this.calibrationDownloadButton = makeAction(
+      'museum-hub.json laden',
+      () => this.downloadCalibrationJson(),
+      exportRow
+    );
 
     const importLabel = document.createElement('label');
     importLabel.className = 'museum-hub__calibration-import';
@@ -2478,15 +2489,23 @@ export class MainMuseumHub {
 
   private async copyCalibrationJson(): Promise<void> {
     if (!this.calibrationExportValid || !this.calibrationOutput) return;
+    let copied = false;
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
       await navigator.clipboard.writeText(this.calibrationOutput.value);
+      copied = true;
     } catch {
       this.calibrationOutput.focus();
       this.calibrationOutput.select();
-      document.execCommand('copy');
+      try {
+        copied = document.execCommand('copy');
+      } catch {
+        copied = false;
+      }
     }
-    this.status.textContent = 'Gültige Museum-Konfiguration wurde kopiert.';
+    this.status.textContent = copied
+      ? 'Gültige Museum-Konfiguration wurde kopiert.'
+      : 'Kopieren fehlgeschlagen. Bitte den JSON-Text manuell kopieren.';
   }
 
   private downloadCalibrationJson(): void {

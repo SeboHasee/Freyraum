@@ -1017,6 +1017,11 @@ export class HubRoomRenderer {
     const depth = opening.maxZ - opening.minZ;
     const slopeLength = Math.hypot(halfWidth, SKYLIGHT_ROOF_RISE);
     const roofAngle = Math.atan2(SKYLIGHT_ROOF_RISE, halfWidth);
+    for (const glass of this.skylightGlassMeshes) {
+      glass.removeFromParent();
+      glass.geometry.dispose();
+    }
+    this.skylightGlassMeshes.length = 0;
     this.skylightGlassMaterial?.dispose();
     this.skylightGlassFallback?.dispose();
     this.skylightGlassMaterial = new THREE.MeshPhysicalMaterial({
