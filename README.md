@@ -33,10 +33,10 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
   and narrow-portrait viewports split each room into left/right wall focus pages.
 - **Open visual acceptance incident:** the latest customer screenshot supplied
   on 2026-09-04 confirms the four-slot 2+1+1 room, but shows both side works too
-  close to the doorway openings. v1.13 moves them about 1.1 m toward the front
-  wall, from 56%/44% to 65%/35% along the mirrored wall axes, while retaining a
-  3 m front-corner guard. A post-fix screenshot of the same artifact is still
-  required for final visual acceptance.
+  crossing the front-wall corner seams after v1.13 moved them in the wrong
+  direction. v1.14 corrects them to mirrored 55%/45% positions centered in the
+  usable side-wall strips and restores the 4 m front-corner guard. A post-fix
+  screenshot of the same artifact is still required for final acceptance.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy
   (`planar`, `ibl`, `off`). The hub uses smooth near-white PBR plaster and a

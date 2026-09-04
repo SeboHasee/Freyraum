@@ -123,7 +123,7 @@ projected containment, hanging-band containment, perspective foreshortening,
 world-space quad export, selected-state runtime hooks, grey-token reach, and
 the bounded missing-background fallback. It also guards four-work 2+1+1 pages,
 overflow pagination, contiguous migrated page indices, pairwise wall intervals,
-and 1.25 m doorway / 3.00 m front-corner side-wall clearances. Threshold breaches hard-fail
+and 1.25 m doorway / 4.00 m front-corner side-wall clearances. Threshold breaches hard-fail
 `npm run validate:museum-hub` and CI. `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the

@@ -65,7 +65,7 @@ Notes:
 - A resolved page contains at most four works in the 2-front + 1-left + 1-right
   composition. Additional works overflow into contiguous virtual rooms.
 - Automatic side-wall fallback placement must retain at least 1.25 m beside the
-  doorway and 3.00 m from the front-wall corner.
+  doorway and 4.00 m from the front-wall corner.
 - Slot/page navigation is disabled while calibrating.
 
 ### `?hubDebug=1`

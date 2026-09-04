@@ -1,14 +1,22 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
-## Implemented — Move side works away from doorways (v1.13)
+## Implemented — Center side works between doorway and corner (v1.14)
+
+- [x] Use the supplied post-v1.13 screenshot as the placement reference.
+- [x] Correct the wrong movement direction from 65%/35% to mirrored 55%/45%.
+- [x] Restore the 4 m front-corner full-body guard.
+- [x] Synchronize authored, fallback, test, and generated-preview output.
+- [ ] Obtain a post-v1.14 screenshot for final visual acceptance.
+
+## Superseded — Move side works away from doorways (v1.13)
 
 - [x] Confirm the latest screenshot contains four works in the 2+1+1 layout.
 - [x] Move left/right works from 56%/44% to mirrored 65%/35% positions.
 - [x] Apply the same positions to authored slots and runtime fallback remounting.
 - [x] Retain full-body doorway validation and a 3 m front-corner guard.
 - [x] Update deterministic geometry expectations and generated preview output.
-- [ ] Obtain a post-fix customer screenshot for final visual acceptance.
+- [x] Post-fix screenshot received; it disproved the placement and reopened work.
 
 ## Active — Reconcile customer screenshot with four-work runtime (v1.12)
 

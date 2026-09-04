@@ -1,16 +1,25 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
-## Side-artwork doorway correction (v1.13, 2026-09-04)
+## Front-corner screenshot correction (v1.14, 2026-09-04)
+
+1. The post-v1.13 screenshot proves 65%/35% moved both works into the front-wall
+   corner seams; the prior direction assumption was wrong.
+2. The visible side-wall strips run between the inner doorway reveals and the
+   front-wall seams. Mirrored 55%/45% positions place the artwork bodies near the
+   centers of those strips rather than optimizing for either boundary.
+3. The 4 m front-corner guard is restored. Final acceptance still requires a
+   screenshot from the rebuilt customer artifact.
+
+## Superseded side-artwork doorway attempt (v1.13, 2026-09-04)
 
 1. The replacement customer screenshot confirms the intended four-work 2+1+1
    room, narrowing the remaining defect to side-wall placement.
-2. At 56% left / 44% right, both side works read against the doorway reveals.
-   Moving them to 65% / 35% shifts each center about 1.1 m toward the front wall.
+2. The attempted 65% / 35% movement was later disproved by screenshot evidence:
+   it shifted both works into the front-wall seams.
 3. The mirrored values are required because left-wall U runs rear-to-front while
    right-wall U runs front-to-rear.
-4. The front-corner guard is now 3 m rather than 4 m, leaving enough usable wall
-   to move away from the doors without entering the front-wall corner.
+4. v1.14 replaces this attempt and restores the 4 m front-corner guard.
 
 ## Reopened hub visual acceptance findings (v1.12, 2026-09-04)
 

@@ -1,7 +1,21 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## v1.14 — Correct side artworks away from front corners (2026-09-04)
+
+- Used the post-v1.13 customer screenshot to identify both artwork bodies
+  crossing the front-wall corner seams.
+- Replaced the incorrect 65%/35% positions with mirrored 55%/45% positions,
+  centered in the usable side-wall strips.
+- Restored the 4 m full-body front-corner guard.
+- Synchronized authored config, runtime fallback placement, geometry tests,
+  generated preview output, and current documentation.
+- Final visual acceptance remains pending a screenshot of this rebuilt artifact.
+
 ## v1.13 — Side artworks moved clear of doorways (2026-09-04)
+
+> **Superseded by v1.14:** screenshot evidence showed this movement pushed both
+> works into the front-wall corner seams.
 
 - Moved the left side work from 56% to 65% along its rear-to-front wall axis.
 - Moved the right side work from 44% to 35% along its front-to-rear wall axis.
