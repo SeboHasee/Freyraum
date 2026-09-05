@@ -1812,6 +1812,8 @@ export class MainMuseumHub {
     if (this.activeCalibrationWallId) select.value = this.activeCalibrationWallId;
     select.addEventListener('change', () => {
       this.activeCalibrationWallId = select.value;
+      this.calibrationRoomBoundaryVisible = select.value === 'wall-rear';
+      this.calibrationEditMode = this.calibrationRoomBoundaryVisible ? 'room-boundary' : 'wall';
       this.renderCalibrationOverlay();
       this.announceCalibrationAction(`Currently editing: ${select.value === 'wall-rear' ? 'entrance boundary' : select.value.toUpperCase()}.`);
     });
@@ -2097,7 +2099,7 @@ export class MainMuseumHub {
     this.recordCalibrationHistory();
     wall.quad = wall.quad.map((corner) => point(corner.x + dx, corner.y + dy)) as unknown as Quad;
     this.applyAllSlotGeometry();
-    this.renderCalibrationOverlay();
+    this.updateCalibrationOverlayGeometry();
     this.updateCalibrationOutput(true);
   }
 
@@ -3396,6 +3398,7 @@ export class MainMuseumHub {
       if (applyRenderedWallGeometry && wall.quad && wall.quad.length === currentWall.quad.length) {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
       }
+      if (!applyRenderedWallGeometry) continue;
       const nextSafe = wall.safePolygon ?? [];
       currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
       currentWall.mountingZone.splice(
