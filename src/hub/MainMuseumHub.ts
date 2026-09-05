@@ -120,6 +120,8 @@ type CalibrationDrag =
       index: number;
       startPoint: Point2D;
       startQuad?: Quad;
+      startSafePolygon?: Point2D[];
+      startMountingZone?: Point2D[];
     };
 
 interface SlotView {
@@ -397,6 +399,7 @@ export class MainMuseumHub {
 
     if (this.calibrating || this.debugGeometry) {
       this.buildCalibrationOverlay();
+      if (this.calibrating) this.fitCalibrationWallsToView();
       if (this.calibrating) this.buildCalibrationPanel(hub);
       this.renderCalibrationOverlay();
     }
@@ -1917,6 +1920,12 @@ export class MainMuseumHub {
     makeAction('Reset all geometry', () => this.resetCalibration());
     makeAction('Center artwork in green area', () => this.centerActiveSlotInMountingZone());
     makeAction('Confirm green mounting area', () => this.confirmActiveMountingZone());
+    makeAction('Artwork left', () => this.nudgeActiveArtwork(-0.01, 0));
+    makeAction('Artwork right', () => this.nudgeActiveArtwork(0.01, 0));
+    makeAction('Artwork up', () => this.nudgeActiveArtwork(0, -0.01));
+    makeAction('Artwork down', () => this.nudgeActiveArtwork(0, 0.01));
+    const tiltUnavailable = makeAction('Tilt (not available for this wall model)', () => {});
+    tiltUnavailable.disabled = true;
     this.calibrationUndoButton = makeAction('Undo', () => this.undoCalibration());
     this.calibrationRedoButton = makeAction('Redo', () => this.redoCalibration());
     this.calibrationGuideToggle = makeAction('Hide guides', () => {
@@ -2056,6 +2065,8 @@ export class MainMuseumHub {
       index,
       startPoint,
       startQuad: currentQuad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
+      startSafePolygon: wall?.safePolygon.map((corner) => point(corner.x, corner.y)),
+      startMountingZone: wall?.mountingZone.map((corner) => point(corner.x, corner.y)),
     };
     captureElement.setPointerCapture(event.pointerId);
     captureElement.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
@@ -2098,6 +2109,14 @@ export class MainMuseumHub {
     if (!wall) return;
     this.recordCalibrationHistory();
     wall.quad = wall.quad.map((corner) => point(corner.x + dx, corner.y + dy)) as unknown as Quad;
+    wall.safePolygon.forEach((corner) => {
+      corner.x += dx;
+      corner.y += dy;
+    });
+    wall.mountingZone.forEach((corner) => {
+      corner.x += dx;
+      corner.y += dy;
+    });
     this.applyAllSlotGeometry();
     this.updateCalibrationOverlayGeometry();
     this.updateCalibrationOutput(true);
@@ -2164,6 +2183,19 @@ export class MainMuseumHub {
         }
         if (drag.wallId === 'wall-rear') {
           this.entranceBoundaryQuad = mutableQuad as unknown as Quad;
+        } else if (wall && drag.startQuad) {
+          const startBounds = this.pointsBounds(drag.startQuad);
+          const nextBounds = this.pointsBounds(candidate);
+          const remap = (source: Point2D): Point2D => point(
+            nextBounds.minX + ((source.x - startBounds.minX) / Math.max(1, startBounds.width)) * nextBounds.width,
+            nextBounds.minY + ((source.y - startBounds.minY) / Math.max(1, startBounds.height)) * nextBounds.height
+          );
+          if (drag.startSafePolygon) {
+            wall.safePolygon.splice(0, wall.safePolygon.length, ...drag.startSafePolygon.map(remap));
+          }
+          if (drag.startMountingZone) {
+            wall.mountingZone.splice(0, wall.mountingZone.length, ...drag.startMountingZone.map(remap));
+          }
         }
       } else if (wall) {
       const targetPoints = drag.target === 'safe' ? wall.safePolygon : wall.mountingZone;
@@ -2181,6 +2213,42 @@ export class MainMuseumHub {
     this.updateCalibrationOutput(false);
     this.syncCalibrationControls();
   };
+
+  private pointsBounds(points: readonly Point2D[]): { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number } {
+    const xs = points.map((value) => value.x);
+    const ys = points.map((value) => value.y);
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    return {
+      minX,
+      minY,
+      maxX: Math.max(...xs),
+      maxY: Math.max(...ys),
+      width: Math.max(1, Math.max(...xs) - minX),
+      height: Math.max(1, Math.max(...ys) - minY),
+    };
+  }
+
+  private fitCalibrationWallsToView(): void {
+    for (const wall of this.resolution.walls) {
+      const bounds = this.pointsBounds(wall.quad);
+      const dx = bounds.minX < 24 ? 24 - bounds.minX : bounds.maxX > this.stageWidth - 24 ? this.stageWidth - 24 - bounds.maxX : 0;
+      const dy = bounds.minY < 24 ? 24 - bounds.minY : bounds.maxY > this.stageHeight - 24 ? this.stageHeight - 24 - bounds.maxY : 0;
+      if (dx === 0 && dy === 0) continue;
+      wall.quad.forEach((corner) => {
+        corner.x += dx;
+        corner.y += dy;
+      });
+      wall.safePolygon.forEach((corner) => {
+        corner.x += dx;
+        corner.y += dy;
+      });
+      wall.mountingZone.forEach((corner) => {
+        corner.x += dx;
+        corner.y += dy;
+      });
+    }
+  }
 
   private updateCalibrationOverlayGeometry(): void {
     if (!this.calibrationSvg) return;
@@ -2461,7 +2529,7 @@ export class MainMuseumHub {
     handle.dataset.calibrationHandle = `${wallId}:${target}:${index}`;
     handle.setAttribute('cx', position.x.toFixed(2));
     handle.setAttribute('cy', position.y.toFixed(2));
-    handle.setAttribute('r', '8');
+    handle.setAttribute('r', '5');
     handle.setAttribute('tabindex', '0');
     handle.setAttribute('role', 'button');
     handle.setAttribute(
@@ -2506,7 +2574,7 @@ export class MainMuseumHub {
     circle.dataset.calibrationCornerHit = `${wallId}:${index}`;
     circle.setAttribute('cx', position.x.toFixed(2));
     circle.setAttribute('cy', position.y.toFixed(2));
-    circle.setAttribute('r', '18');
+    circle.setAttribute('r', '12');
     circle.setAttribute('class', 'museum-hub__calibration-corner-hit');
     circle.setAttribute('tabindex', '0');
     circle.setAttribute('role', 'button');
@@ -3087,6 +3155,23 @@ export class MainMuseumHub {
     this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
     this.syncCalibrationControls();
+  }
+
+  private nudgeActiveArtwork(dx: number, dy: number): void {
+    const slot = this.activeCalibrationSlot;
+    if (!slot) return;
+    const wall = this.resolution.wallById.get(slot.placement.wallId);
+    if (!wall) return;
+    this.recordCalibrationHistory();
+    this.setSlotCenterClampedToMountingZone(
+      slot,
+      wall,
+      point(slot.placement.center.x + dx, slot.placement.center.y + dy)
+    );
+    this.applyAllSlotGeometry();
+    this.updateCalibrationOutput(true);
+    this.syncCalibrationControls();
+    this.announceCalibrationAction('Artwork moved. Use the corner marker to resize it.');
   }
 
   private confirmActiveMountingZone(): void {
