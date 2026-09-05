@@ -51,6 +51,7 @@ import {
   type StageReference,
   type WallProjectionRealism,
   type WallProjectionModel,
+  type ReferenceImageCalibration,
 } from '../hub/projectiveGeometry';
 import { isReferenceOnlyHubAssetPath } from '../hub/backgroundFallback';
 
@@ -284,6 +285,18 @@ export interface MuseumHubResolution {
 
 export const HUB_SLOTS_PER_PAGE = 4;
 export const HUB_STAGE: StageReference = { width: 1366, height: 768 };
+export const HUB_REFERENCE_IMAGE: ReferenceImageCalibration = {
+  width: 2048,
+  height: 1354,
+  fit: 'contain',
+};
+/** Reference wall corners use clockwise quad order: TL, TR, BR, BL. */
+export const HUB_REFERENCE_BACK_WALL_QUAD: Quad = [
+  point(531, 511),
+  point(1445, 512),
+  point(1552, 820),
+  point(487, 819),
+];
 export const HUB_BACKGROUND_ASPECT = HUB_STAGE.width / HUB_STAGE.height;
 export const HUB_BACKGROUND_SRC = 'Backgrounds/museum-empty.png';
 export const DEFAULT_GALLERY_WALL = '#C7CED4';
@@ -367,10 +380,10 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
     group: 'front',
     planeAspect: HUB_ROOM_WIDTH / HUB_ROOM_HEIGHT,
     quad: [
-      point(417.26, 206.29),
-      point(948.74, 206.29),
-      point(951.84, 514.71),
-      point(414.16, 514.71),
+      point(403.366322, 289.843427),
+      point(921.794682, 290.410635),
+      point(982.485968, 465.110783),
+      point(378.409158, 464.543575),
     ],
     safePolygon: [
       point(422.61, 506.32),

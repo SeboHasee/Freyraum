@@ -18,6 +18,32 @@ export interface StageReference {
   height: number;
 }
 
+export interface ReferenceImageCalibration {
+  width: number;
+  height: number;
+  fit: 'contain' | 'cover';
+}
+
+export interface WallCalibrationError {
+  index: number;
+  target: Point2D;
+  projected: Point2D;
+  residual: Point2D;
+  distancePx: number;
+}
+
+export interface WallCalibrationReport {
+  reference: ReferenceImageCalibration;
+  stage: StageReference;
+  scale: number;
+  offset: Point2D;
+  targetQuad: Quad;
+  projectedQuad: Quad;
+  corners: readonly WallCalibrationError[];
+  averageErrorPx: number;
+  maximumErrorPx: number;
+}
+
 export interface WallProjectionModel {
   id: string;
   planeAspect: number;
@@ -762,6 +788,86 @@ export function projectRoomWallQuad(
   if (projected.some((corner) => corner === null)) return null;
   const quad: Quad = [projected[0]!, projected[1]!, projected[2]!, projected[3]!];
   return quadIsDegenerate(quad) || !quadIsConvex(quad) ? null : normalizeQuadClockwise(quad);
+}
+
+/**
+ * Maps image pixels into the logical stage without involving CSS pixels or the
+ * WebGL drawing buffer. Contain is the shipping calibration policy so the
+ * complete reference remains visible and any horizontal padding is explicit.
+ */
+export function mapReferencePointToStage(
+  imagePoint: Point2D,
+  reference: ReferenceImageCalibration,
+  stage: StageReference
+): Point2D | null {
+  if (
+    !Number.isFinite(imagePoint.x) ||
+    !Number.isFinite(imagePoint.y) ||
+    reference.width <= 0 ||
+    reference.height <= 0 ||
+    stage.width <= 0 ||
+    stage.height <= 0
+  ) return null;
+  const scale = reference.fit === 'cover'
+    ? Math.max(stage.width / reference.width, stage.height / reference.height)
+    : Math.min(stage.width / reference.width, stage.height / reference.height);
+  const renderedWidth = reference.width * scale;
+  const renderedHeight = reference.height * scale;
+  return point(
+    imagePoint.x * scale + (stage.width - renderedWidth) / 2,
+    imagePoint.y * scale + (stage.height - renderedHeight) / 2
+  );
+}
+
+export function mapReferenceQuadToStage(
+  imageQuad: Quad,
+  reference: ReferenceImageCalibration,
+  stage: StageReference
+): Quad | null {
+  const mapped = imageQuad.map((corner) => mapReferencePointToStage(corner, reference, stage));
+  return mapped.some((corner) => corner === null)
+    ? null
+    : [mapped[0]!, mapped[1]!, mapped[2]!, mapped[3]!];
+}
+
+export function evaluateWallCalibration(
+  projectedQuad: Quad,
+  referenceQuad: Quad,
+  reference: ReferenceImageCalibration,
+  stage: StageReference
+): WallCalibrationReport | null {
+  const targetQuad = mapReferenceQuadToStage(referenceQuad, reference, stage);
+  if (!targetQuad) return null;
+  const scale = reference.fit === 'cover'
+    ? Math.max(stage.width / reference.width, stage.height / reference.height)
+    : Math.min(stage.width / reference.width, stage.height / reference.height);
+  const offset = point(
+    (stage.width - reference.width * scale) / 2,
+    (stage.height - reference.height * scale) / 2
+  );
+  const corners = targetQuad.map((target, index) => {
+    const projected = projectedQuad[index];
+    const residual = point(projected.x - target.x, projected.y - target.y);
+    return {
+      index,
+      target,
+      projected,
+      residual,
+      distancePx: Math.hypot(residual.x, residual.y),
+    };
+  });
+  const distances = corners.map((corner) => corner.distancePx);
+  return {
+    reference,
+    stage,
+    scale,
+    offset,
+    targetQuad,
+    projectedQuad,
+    corners,
+    averageErrorPx: distances.reduce((sum, value) => sum + value, 0) / distances.length,
+    maximumErrorPx: Math.max(...distances),
+  };
 }
 
 export function projectRoomPolygon(

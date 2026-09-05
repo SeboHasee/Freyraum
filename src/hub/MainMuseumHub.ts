@@ -9,6 +9,8 @@
  */
 
 import {
+  HUB_REFERENCE_BACK_WALL_QUAD,
+  HUB_REFERENCE_IMAGE,
   HUB_MIN_PROJECTED_SHORT_EDGE_PX,
   type MuseumHubResolution,
   type MuseumHubConfig,
@@ -23,6 +25,7 @@ import {
   pointInPolygon,
   polygonsIntersect,
   projectRoomDoorwayPolygons,
+  evaluateWallCalibration,
   projectWorldPoint,
   projectSlotArtwork,
   quadIsConvex,
@@ -802,6 +805,15 @@ export class MainMuseumHub {
             : [],
         projectionRealism: wall.projectionRealism,
         expectedConvergence: wall.expectedConvergence,
+        referenceCalibration:
+          wall.id === 'wall-front' && wall.projectedQuad
+            ? evaluateWallCalibration(
+              wall.projectedQuad,
+              HUB_REFERENCE_BACK_WALL_QUAD,
+              HUB_REFERENCE_IMAGE,
+              this.resolution.stage
+            )
+            : null,
       })),
       slots: slotDiagnostics,
     });
