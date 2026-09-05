@@ -3,7 +3,7 @@
 
 ## v1.25 — Unified wall editing and non-blocking room boundary (2026-09-05)
 
-- Hidden the purple bounds-only room boundary from normal editor interaction.
+- Hid the purple bounds-only room boundary from normal editor interaction.
 - Limited wall corner and edge hit targets to the selected wall's wall-edit mode.
 - Made blue safe and green mounting guides informational by default, with
   explicit actions for editing their points.
