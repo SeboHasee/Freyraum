@@ -50,9 +50,12 @@ Developers can run `npm run editor`.
 
 Notes:
 - Exposes the projected artwork surfaces plus an SVG calibration overlay for
-  wall corners, safe zones, and green authoritative mounting zones.
+  fixed wall outlines, editable safe zones, and green authoritative mounting
+  zones.
 - Drag an artwork to move it on its wall plane; drag its corner handle to
-  change mounted height. Drag wall/safe handles to recalibrate the wall plane.
+  change mounted height. Blue and green handles adjust safe and mounting zones.
+  The orange wall projection is build-owned and read-only so an edit cannot leave
+  the live projection and exported configuration out of sync.
 - Select a work, edit its four canonical values numerically, or nudge it with
   arrow keys (`Shift` for larger steps). “Zwischen Grenzen zentrieren” uses the
   actual green mounting polygon rather than a fixed percentage.

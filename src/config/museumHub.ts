@@ -272,6 +272,7 @@ export interface MuseumHubResolution {
   walls: readonly ResolvedHubWall[];
   wallById: ReadonlyMap<string, ResolvedHubWall>;
   slotsPerPage: number;
+  fallbacks: MuseumHubConfig['fallbacks'];
   selectionTimeoutMs: number;
   source: MuseumHubSource;
   warnings: readonly string[];
@@ -2463,6 +2464,7 @@ export function resolveMuseumHub(
     walls,
     wallById,
     slotsPerPage,
+    fallbacks: config.fallbacks,
     selectionTimeoutMs,
     source,
     warnings,

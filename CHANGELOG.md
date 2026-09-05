@@ -12,6 +12,12 @@
   the existing hub instead of creating a second placement implementation.
 - Added `npm run editor` for contributors and generated
   `customer-preview/placement-editor.html` for customers.
+- Made build-calibrated wall projection outlines read-only; editable safe and
+  mounting zones remain available without creating stale projection transforms.
+- Import now rejects changed slot inventories, assignments, activation states,
+  and incompatible wall projections instead of creating a hybrid configuration.
+- Export preserves `slotsPerPage` and room `wallThickness`; arrow-key artwork
+  nudging no longer overrides native number/select controls.
 
 ## v1.17 — Deterministic curator placement editor (2026-09-04)
 

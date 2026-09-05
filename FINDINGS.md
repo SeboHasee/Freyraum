@@ -10,6 +10,11 @@
    drift.
 3. A persistent sidebar beside the museum view keeps controls readable without
    covering the artwork being positioned.
+4. Stage wall quads cannot be mutated independently of their derived homography
+   and room plane. The customer editor therefore keeps wall projection fixed and
+   limits direct boundary editing to safe and mounting zones.
+5. Import must match the active artwork inventory, assignments, and fixed wall
+   projection exactly; partial application creates unreproducible hybrid state.
 
 ## Deterministic editor findings (v1.17, 2026-09-04)
 

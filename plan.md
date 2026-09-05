@@ -7,6 +7,8 @@
 - [x] Generate a dedicated file-safe editor page with the customer preview.
 - [x] Present numbered, plain-language controls in a persistent sidebar.
 - [x] Keep placement, validation, and v5 export in the shared deterministic engine.
+- [x] Keep derived wall projections read-only and reject incompatible imports.
+- [x] Preserve room thickness and page capacity during export.
 - [ ] Customer places and approves the final artworks, then supplies the exported
   `museum-hub.json` for the accepted preview baseline.
 

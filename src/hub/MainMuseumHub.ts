@@ -1553,6 +1553,14 @@ export class MainMuseumHub {
   private handleKeydown = (event: KeyboardEvent): void => {
     if (this.calibrating) {
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      if (
+        event.target instanceof HTMLInputElement
+        || event.target instanceof HTMLSelectElement
+        || event.target instanceof HTMLTextAreaElement
+        || event.target instanceof HTMLButtonElement
+      ) {
+        return;
+      }
       const slot = this.activeCalibrationSlot;
       const wall = slot ? this.resolution.wallById.get(slot.placement.wallId) : null;
       if (!slot || !wall) return;
@@ -1876,17 +1884,13 @@ export class MainMuseumHub {
     } else {
       const wall = this.resolution.wallById.get(drag.wallId);
       if (!wall) return;
-      const targetPoints =
-        drag.target === 'quad'
-          ? wall.quad
-          : drag.target === 'safe'
-            ? wall.safePolygon
-            : wall.mountingZone;
+      if (drag.target === 'quad') return;
+      const targetPoints = drag.target === 'safe' ? wall.safePolygon : wall.mountingZone;
       const targetPoint = targetPoints[drag.index];
       if (!targetPoint) return;
       targetPoint.x = stagePoint.x;
       targetPoint.y = stagePoint.y;
-      if (drag.target === 'mounting-zone' || drag.target === 'quad') {
+      if (drag.target === 'mounting-zone') {
         wall.mountingZoneConfirmed = false;
       }
       this.applyAllSlotGeometry();
@@ -1939,7 +1943,6 @@ export class MainMuseumHub {
         this.renderWallDebugAxes(wall);
       }
       if (!this.calibrating || !active) continue;
-      wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle')));
       wall.safePolygon.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'safe', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--safe')));
       wall.mountingZone.forEach((corner, index) =>
         this.calibrationSvg!.appendChild(
@@ -2262,6 +2265,7 @@ export class MainMuseumHub {
         dimensions: this.resolution.room.dimensions,
         floorY: this.resolution.room.floorY,
         ceilingY: this.resolution.room.ceilingY,
+        wallThickness: this.resolution.room.wallThickness,
         floorOutline: this.resolution.room.floorOutline.map((corner) => ({
           x: this.round(corner.x),
           z: this.round(corner.z),
@@ -2296,15 +2300,8 @@ export class MainMuseumHub {
         ...(wall.exclusionPolygons ? { exclusionPolygons: wall.exclusionPolygons } : {}),
         ...(wall.hangingBand ? { hangingBand: wall.hangingBand } : {}),
       })),
-      fallbacks: {
-        requireAllMapped: true,
-        autoPlaceUnmapped: true,
-        overflow: 'paginate',
-        invalidMapping: 'disable-slot',
-        missingImage: 'placeholder-exact-target',
-        selectionTimeoutMs: this.resolution.selectionTimeoutMs,
-        selectionTimeout: 'open-exact-target-procedural',
-      },
+      fallbacks: this.resolution.fallbacks,
+      slotsPerPage: this.resolution.slotsPerPage,
       slots: this.slotViews.map(({ slot }) => ({
         id: slot.id,
         enabled: slot.disabledReason !== 'explicitly-disabled',
@@ -2578,6 +2575,48 @@ export class MainMuseumHub {
     if (!sanitized.config || sanitized.warnings.length > 0) {
       this.announceCalibrationAction(
         `Import blockiert: ${sanitized.warnings.join(' ') || 'ungültige Konfiguration'}`
+      );
+      return;
+    }
+    const currentSlots = new Map(this.slotViews.map(({ slot }) => [slot.id, slot]));
+    const slotInventoryMatches =
+      sanitized.config.slots.length === currentSlots.size
+      && sanitized.config.slots.every((slot) => {
+        const current = currentSlots.get(slot.id);
+        return Boolean(
+          current
+          && slot.artworkId === (current.artworkId ?? undefined)
+          && slot.enabled === (current.disabledReason !== 'explicitly-disabled')
+          && slot.selectable === current.selectable
+        );
+      });
+    if (!slotInventoryMatches) {
+      this.announceCalibrationAction(
+        'Import blockiert: Kunstwerk-Liste, Zuordnung oder Aktivierungsstatus weicht vom geöffneten Editor ab.'
+      );
+      return;
+    }
+    const wallGeometryMatches =
+      sanitized.config.walls.length === this.resolution.walls.length
+      && sanitized.config.walls.every((wall) => {
+        const current = this.resolution.wallById.get(wall.id);
+        return Boolean(
+          current
+          && wall.quad
+          && wall.quad.length === current.quad.length
+          && wall.quad.every((corner, index) => {
+            const currentCorner = current.quad[index];
+            return Boolean(
+              currentCorner
+              && Math.abs(corner.x - currentCorner.x) <= 0.001
+              && Math.abs(corner.y - currentCorner.y) <= 0.001
+            );
+          })
+        );
+      });
+    if (!wallGeometryMatches) {
+      this.announceCalibrationAction(
+        'Import blockiert: Die feste Wandprojektion weicht von diesem Editor-Build ab.'
       );
       return;
     }
