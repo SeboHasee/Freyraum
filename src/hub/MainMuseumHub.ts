@@ -1712,11 +1712,12 @@ export class MainMuseumHub {
       if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
       const objectUrl = URL.createObjectURL(file);
       this.editorBackgroundObjectUrl = objectUrl;
+      const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '') || 'museum-background.png';
       const probe = new Image();
       probe.onload = () => {
         if (this.editorBackgroundObjectUrl !== objectUrl) return;
         this.resolution.background = {
-          src: `Backgrounds/${file.name}`,
+          src: `Backgrounds/${safeFilename}`,
           aspect: probe.naturalWidth / probe.naturalHeight,
           fit: fitSelect.value as 'contain' | 'cover',
           width: probe.naturalWidth,
@@ -3209,6 +3210,10 @@ export class MainMuseumHub {
     if (!config) return;
     const activeBackgroundSrc = this.resolution.background.src;
     const activeBackgroundObjectUrl = this.editorBackgroundObjectUrl;
+    if (activeBackgroundObjectUrl && config.background.src !== activeBackgroundSrc) {
+      URL.revokeObjectURL(activeBackgroundObjectUrl);
+      this.editorBackgroundObjectUrl = null;
+    }
     for (const wall of config.walls) {
       const currentWall = this.resolution.wallById.get(wall.id);
       if (!currentWall) continue;
