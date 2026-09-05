@@ -2526,6 +2526,11 @@ export class MainMuseumHub {
     this.applyCalibrationSnapshot(this.initialCalibrationSnapshot);
   }
 
+  private announceCalibrationAction(message: string): void {
+    this.status.textContent = message;
+    if (this.calibrationActionStatus) this.calibrationActionStatus.textContent = message;
+  }
+
   private async copyCalibrationJson(): Promise<void> {
     if (!this.calibrationExportValid || !this.calibrationOutput) return;
     let copied = false;
@@ -2545,8 +2550,7 @@ export class MainMuseumHub {
     const message = copied
       ? 'Gültige Museum-Konfiguration wurde kopiert.'
       : 'Kopieren fehlgeschlagen. Bitte den JSON-Text manuell kopieren.';
-    this.status.textContent = message;
-    if (this.calibrationActionStatus) this.calibrationActionStatus.textContent = message;
+    this.announceCalibrationAction(message);
   }
 
   private downloadCalibrationJson(): void {
@@ -2557,10 +2561,9 @@ export class MainMuseumHub {
     anchor.download = 'museum-hub.json';
     anchor.click();
     URL.revokeObjectURL(url);
-    if (this.calibrationActionStatus) {
-      this.calibrationActionStatus.textContent =
-        'museum-hub.json wurde heruntergeladen. Ersetzen Sie damit die Datei im Ordner customer-artworks.';
-    }
+    this.announceCalibrationAction(
+      'museum-hub.json wurde heruntergeladen. Ersetzen Sie damit die Datei im Ordner customer-artworks.'
+    );
   }
 
   private async importCalibrationFile(file: File | null): Promise<void> {
@@ -2569,12 +2572,14 @@ export class MainMuseumHub {
     try {
       parsed = JSON.parse(await file.text());
     } catch {
-      this.status.textContent = 'Import blockiert: Datei enthält kein gültiges JSON.';
+      this.announceCalibrationAction('Import blockiert: Datei enthält kein gültiges JSON.');
       return;
     }
     const sanitized = sanitizeMuseumHubConfig(parsed);
     if (!sanitized.config || sanitized.warnings.length > 0) {
-      this.status.textContent = `Import blockiert: ${sanitized.warnings.join(' ') || 'ungültige Konfiguration'}`;
+      this.announceCalibrationAction(
+        `Import blockiert: ${sanitized.warnings.join(' ') || 'ungültige Konfiguration'}`
+      );
       return;
     }
     const ownershipChange = sanitized.config.slots.find((slot) => {
@@ -2582,14 +2587,16 @@ export class MainMuseumHub {
       return ownedWall && ownedWall !== slot.placement.wallId;
     });
     if (ownershipChange) {
-      this.status.textContent = `Import blockiert: ${ownershipChange.id} muss auf ${
-        this.calibrationWallOwnership.get(ownershipChange.id)
-      } bleiben.`;
+      this.announceCalibrationAction(
+        `Import blockiert: ${ownershipChange.id} muss auf ${
+          this.calibrationWallOwnership.get(ownershipChange.id)
+        } bleiben.`
+      );
       return;
     }
     this.recordCalibrationHistory();
     this.applyCalibrationSnapshot(JSON.stringify(sanitized.config));
-    this.status.textContent = 'Konfiguration wurde importiert und erneut geprüft.';
+    this.announceCalibrationAction('Konfiguration wurde importiert und erneut geprüft.');
   }
 
   private calibrationRoundTripWarnings(json: string): string[] {
