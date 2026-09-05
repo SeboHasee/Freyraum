@@ -21,6 +21,8 @@ import {
 import {
   applyHomography,
   clonePoint,
+  computeHomographyFromUnitSquare,
+  invertMatrix3x3,
   point,
   pointInPolygon,
   polygonsIntersect,
@@ -320,10 +322,13 @@ export class MainMuseumHub {
     entryButton.className = 'museum-hub__destination';
     entryButton.type = 'button';
     entryButton.setAttribute('aria-describedby', 'museum-hub-entry-description');
-    entryButton.innerHTML = `
-      <span class="museum-hub__destination-frame" aria-hidden="true"></span>
-      <span class="museum-hub__destination-label">Ausstellung betreten</span>
-    `;
+    const entryFrame = document.createElement('span');
+    entryFrame.className = 'museum-hub__destination-frame';
+    entryFrame.setAttribute('aria-hidden', 'true');
+    const entryLabel = document.createElement('span');
+    entryLabel.className = 'museum-hub__destination-label';
+    entryLabel.textContent = 'Ausstellung betreten';
+    entryButton.append(entryFrame, entryLabel);
 
     const description = document.createElement('p');
     description.id = 'museum-hub-entry-description';
@@ -343,8 +348,7 @@ export class MainMuseumHub {
     pagerPrev.type = 'button';
     pagerPrev.className = 'museum-hub__pager-arrow museum-hub__pager-arrow--prev';
     pagerPrev.setAttribute('aria-label', 'Vorherige Wand');
-    pagerPrev.innerHTML =
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>';
+    pagerPrev.textContent = '‹';
     const pagerCounter = document.createElement('span');
     pagerCounter.className = 'museum-hub__pager-counter';
     pagerCounter.setAttribute('aria-live', 'polite');
@@ -352,8 +356,7 @@ export class MainMuseumHub {
     pagerNext.type = 'button';
     pagerNext.className = 'museum-hub__pager-arrow museum-hub__pager-arrow--next';
     pagerNext.setAttribute('aria-label', 'Nächste Wand');
-    pagerNext.innerHTML =
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>';
+    pagerNext.textContent = '›';
     pager.append(pagerPrev, pagerCounter, pagerNext);
 
     stage.appendChild(entryButton);
@@ -399,7 +402,6 @@ export class MainMuseumHub {
 
     if (this.calibrating || this.debugGeometry) {
       this.buildCalibrationOverlay();
-      if (this.calibrating) this.fitCalibrationWallsToView();
       if (this.calibrating) this.buildCalibrationPanel(hub);
       this.renderCalibrationOverlay();
     }
@@ -1924,6 +1926,13 @@ export class MainMuseumHub {
     makeAction('Artwork right', () => this.nudgeActiveArtwork(0.01, 0));
     makeAction('Artwork up', () => this.nudgeActiveArtwork(0, -0.01));
     makeAction('Artwork down', () => this.nudgeActiveArtwork(0, 0.01));
+    makeAction('Fit walls to view', () => {
+      this.recordCalibrationHistory();
+      this.fitCalibrationWallsToView();
+      this.applyAllSlotGeometry();
+      this.renderCalibrationOverlay();
+      this.updateCalibrationOutput(true);
+    });
     const tiltUnavailable = makeAction('Tilt (not available for this wall model)', () => {});
     tiltUnavailable.disabled = true;
     this.calibrationUndoButton = makeAction('Undo', () => this.undoCalibration());
@@ -2184,12 +2193,14 @@ export class MainMuseumHub {
         if (drag.wallId === 'wall-rear') {
           this.entranceBoundaryQuad = mutableQuad as unknown as Quad;
         } else if (wall && drag.startQuad) {
-          const startBounds = this.pointsBounds(drag.startQuad);
-          const nextBounds = this.pointsBounds(candidate);
-          const remap = (source: Point2D): Point2D => point(
-            nextBounds.minX + ((source.x - startBounds.minX) / Math.max(1, startBounds.width)) * nextBounds.width,
-            nextBounds.minY + ((source.y - startBounds.minY) / Math.max(1, startBounds.height)) * nextBounds.height
-          );
+          const startHomography = computeHomographyFromUnitSquare(drag.startQuad);
+          const nextHomography = computeHomographyFromUnitSquare(candidate);
+          const inverseStart = startHomography ? invertMatrix3x3(startHomography) : null;
+          const remap = (source: Point2D): Point2D => {
+            if (!startHomography || !nextHomography || !inverseStart) return clonePoint(source);
+            const normalized = applyHomography(inverseStart, source.x, source.y);
+            return normalized ? (applyHomography(nextHomography, normalized.x, normalized.y) ?? clonePoint(source)) : clonePoint(source);
+          };
           if (drag.startSafePolygon) {
             wall.safePolygon.splice(0, wall.safePolygon.length, ...drag.startSafePolygon.map(remap));
           }
@@ -2257,6 +2268,16 @@ export class MainMuseumHub {
         `[data-calibration-wall="${wall.id}"]`
       );
       polygon?.setAttribute('points', this.pointsToSvg(wall.quad));
+      const label = this.calibrationSvg.querySelector<SVGTextElement>(
+        `[data-calibration-wall-label="${wall.id}"]`
+      );
+      if (label) {
+        const center = wall.quad.reduce((sum, corner) => point(sum.x + corner.x, sum.y + corner.y), point(0, 0));
+        center.x /= wall.quad.length;
+        center.y /= wall.quad.length;
+        label.setAttribute('x', center.x.toFixed(2));
+        label.setAttribute('y', center.y.toFixed(2));
+      }
       wall.quad.forEach((corner, index) => {
         const next = wall.quad[(index + 1) % wall.quad.length]!;
         const edge = this.calibrationSvg!.querySelector<SVGLineElement>(
@@ -2388,6 +2409,7 @@ export class MainMuseumHub {
       wallLabel.setAttribute('x', wallCenter.x.toFixed(2));
       wallLabel.setAttribute('y', wallCenter.y.toFixed(2));
       wallLabel.setAttribute('class', `museum-hub__calibration-wall-label${active ? ' is-active' : ''}`);
+      wallLabel.dataset.calibrationWallLabel = wall.id;
       wallLabel.textContent = wallLabelText;
       wallLabel.setAttribute('aria-hidden', 'true');
       this.calibrationSvg.appendChild(wallLabel);
@@ -3350,6 +3372,19 @@ export class MainMuseumHub {
           this.calibrationWallOwnership.get(ownershipChange.id)
         } bleiben.`
       );
+      return;
+    }
+    const renderedWallGeometry = (config: MuseumHubConfig) =>
+      config.walls
+        .filter((wall) => wall.role !== 'bounds-only')
+        .map((wall) => ({
+          id: wall.id,
+          quad: wall.quad,
+          safePolygon: wall.safePolygon,
+          mountingZone: wall.mountingZone,
+        }));
+    if (JSON.stringify(renderedWallGeometry(sanitized.config)) !== JSON.stringify(renderedWallGeometry(this.buildCurrentCalibrationConfig() as MuseumHubConfig))) {
+      this.announceCalibrationAction('Import blockiert: Die gerenderten Wandflächen oder Führungsbereiche weichen ab.');
       return;
     }
     this.recordCalibrationHistory();
