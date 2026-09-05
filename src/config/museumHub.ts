@@ -269,6 +269,7 @@ export interface MuseumHubResolution {
   camera: CameraCalibration;
   room: ResolvedHubRoom;
   hangingRules: HubHangingRules;
+  configuredWalls: readonly HubWallConfig[];
   walls: readonly ResolvedHubWall[];
   wallById: ReadonlyMap<string, ResolvedHubWall>;
   slotsPerPage: number;
@@ -2461,6 +2462,7 @@ export function resolveMuseumHub(
     camera,
     room,
     hangingRules,
+    configuredWalls: config.walls,
     walls,
     wallById,
     slotsPerPage,

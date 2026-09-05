@@ -2273,34 +2273,39 @@ export class MainMuseumHub {
         })),
       },
       hangingRules: this.resolution.hangingRules,
-      walls: this.resolution.walls.map((wall) => ({
-        id: wall.id,
-        group: wall.group,
-        planeAspect: Math.round(wall.planeAspect * 1000) / 1000,
-        quad: wall.quad.map((corner) => this.roundPoint(corner)),
-        safePolygon: wall.safePolygon.map((corner) => this.roundPoint(corner)),
-        mountingZone: wall.mountingZone.map((corner) => this.roundPoint(corner)),
-        mountingZoneConfirmed: wall.mountingZoneConfirmed,
-        ...(wall.shadowVector ? { shadowVector: this.roundPoint(wall.shadowVector) } : {}),
-        ...(wall.room
-          ? {
-              room: {
-                origin: wall.room.origin,
-                axisU: wall.room.axisU,
-                axisV: wall.room.axisV,
-                width: wall.room.width,
-                height: wall.room.height,
-                safePolygon: wall.room.safePolygon.map((corner) => this.roundPoint(corner)),
-                doorwayExclusions: wall.room.doorwayExclusions.map((polygon) => polygon.map((corner) => this.roundPoint(corner))),
-                hangingBand: wall.room.hangingBand,
-              },
-            }
-          : {}),
-        ...(wall.transform ? { transform: wall.transform } : {}),
-        ...(wall.drawableRegion ? { drawableRegion: wall.drawableRegion } : {}),
-        ...(wall.exclusionPolygons ? { exclusionPolygons: wall.exclusionPolygons } : {}),
-        ...(wall.hangingBand ? { hangingBand: wall.hangingBand } : {}),
-      })),
+      walls: this.resolution.configuredWalls.map((sourceWall) => {
+        const wall = this.resolution.wallById.get(sourceWall.id);
+        if (!wall) return sourceWall;
+        return {
+          id: wall.id,
+          group: wall.group,
+          ...(sourceWall.role ? { role: sourceWall.role } : {}),
+          planeAspect: Math.round(wall.planeAspect * 1000) / 1000,
+          quad: wall.quad.map((corner) => this.roundPoint(corner)),
+          safePolygon: wall.safePolygon.map((corner) => this.roundPoint(corner)),
+          mountingZone: wall.mountingZone.map((corner) => this.roundPoint(corner)),
+          mountingZoneConfirmed: wall.mountingZoneConfirmed,
+          ...(wall.shadowVector ? { shadowVector: this.roundPoint(wall.shadowVector) } : {}),
+          ...(wall.room
+            ? {
+                room: {
+                  origin: wall.room.origin,
+                  axisU: wall.room.axisU,
+                  axisV: wall.room.axisV,
+                  width: wall.room.width,
+                  height: wall.room.height,
+                  safePolygon: wall.room.safePolygon.map((corner) => this.roundPoint(corner)),
+                  doorwayExclusions: wall.room.doorwayExclusions.map((polygon) => polygon.map((corner) => this.roundPoint(corner))),
+                  hangingBand: wall.room.hangingBand,
+                },
+              }
+            : {}),
+          ...(wall.transform ? { transform: wall.transform } : {}),
+          ...(wall.drawableRegion ? { drawableRegion: wall.drawableRegion } : {}),
+          ...(wall.exclusionPolygons ? { exclusionPolygons: wall.exclusionPolygons } : {}),
+          ...(wall.hangingBand ? { hangingBand: wall.hangingBand } : {}),
+        };
+      }),
       fallbacks: this.resolution.fallbacks,
       slotsPerPage: this.resolution.slotsPerPage,
       slots: this.slotViews.map(({ slot }) => ({
@@ -2314,6 +2319,21 @@ export class MainMuseumHub {
           centerHeight: this.round(slot.placement.centerHeight ?? slot.placement.anchor?.y ?? 0),
           physicalHeight: this.round(slot.placement.physicalHeight ?? slot.placement.mountedHeight),
           mountingGap: this.round(slot.placement.mountingGap ?? 0.002),
+          ...(slot.placement.targetSizePolicy
+            ? { targetSizePolicy: slot.placement.targetSizePolicy }
+            : {}),
+          ...(slot.placement.minScale !== undefined
+            ? { minScale: slot.placement.minScale }
+            : {}),
+          ...(slot.placement.maxScale !== undefined
+            ? { maxScale: slot.placement.maxScale }
+            : {}),
+          ...(slot.placement.zOffset !== undefined
+            ? { zOffset: slot.placement.zOffset }
+            : {}),
+          ...(slot.placement.provisional !== undefined
+            ? { provisional: slot.placement.provisional }
+            : {}),
         },
       })),
     };
