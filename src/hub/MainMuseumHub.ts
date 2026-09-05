@@ -1729,7 +1729,11 @@ export class MainMuseumHub {
         this.updateCalibrationOutput(true);
       };
       probe.onerror = () => {
-        if (this.editorBackgroundObjectUrl === objectUrl) updateBackgroundInfo();
+        if (this.editorBackgroundObjectUrl === objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+          this.editorBackgroundObjectUrl = null;
+          updateBackgroundInfo();
+        }
       };
       probe.src = objectUrl;
     });
@@ -2066,6 +2070,9 @@ export class MainMuseumHub {
             mutableQuad[index].y = source.y + delta.y;
           }
         }
+        if (drag.wallId === 'wall-rear') {
+          this.entranceBoundaryQuad = mutableQuad as unknown as Quad;
+        }
       } else if (wall) {
       const targetPoints = drag.target === 'safe' ? wall.safePolygon : wall.mountingZone;
       const targetPoint = targetPoints[drag.index];
@@ -2150,6 +2157,10 @@ export class MainMuseumHub {
     const drag = this.calibrationDrag;
     this.calibrationDrag = null;
     const element = drag.captureElement;
+    element.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
+    element.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
+    element.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    element.removeEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
     if (element && 'releasePointerCapture' in element) {
       try {
         (element as Element & { releasePointerCapture(pointerId: number): void }).releasePointerCapture(drag.pointerId);
