@@ -1716,6 +1716,7 @@ export class MainMuseumHub {
     backgroundInfo.className = 'museum-hub__calibration-background-info';
     const fitSelect = document.createElement('select');
     fitSelect.className = 'museum-hub__calibration-select';
+    fitSelect.setAttribute('aria-label', 'Reference image fitting');
     for (const fit of ['contain', 'cover'] as const) {
       const option = document.createElement('option');
       option.value = fit;
@@ -2274,15 +2275,6 @@ export class MainMuseumHub {
       wallPolygon.setAttribute('points', this.pointsToSvg(wall.quad));
       wallPolygon.dataset.calibrationWall = wall.id;
       wallPolygon.setAttribute('class', `museum-hub__calibration-wall${active ? ' is-active' : ''}`);
-      wallPolygon.setAttribute('aria-label', `${wall.id.toUpperCase()} WALL — drag corners or wall`);
-      this.calibrationSvg.appendChild(wallPolygon);
-      const wallLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      const wallCenter = wall.quad.reduce((sum, corner) => point(sum.x + corner.x, sum.y + corner.y), point(0, 0));
-      wallCenter.x /= wall.quad.length;
-      wallCenter.y /= wall.quad.length;
-      wallLabel.setAttribute('x', wallCenter.x.toFixed(2));
-      wallLabel.setAttribute('y', wallCenter.y.toFixed(2));
-      wallLabel.setAttribute('class', `museum-hub__calibration-wall-label${active ? ' is-active' : ''}`);
       const wallLabelText =
         wall.id === 'wall-front'
           ? 'FRONT WALL — drag corners or wall'
@@ -2291,6 +2283,15 @@ export class MainMuseumHub {
             : wall.id === 'wall-right'
               ? 'RIGHT WALL — drag corners or wall'
               : `${wall.id.toUpperCase()} WALL — drag corners or wall`;
+      wallPolygon.setAttribute('aria-label', wallLabelText);
+      this.calibrationSvg.appendChild(wallPolygon);
+      const wallLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      const wallCenter = wall.quad.reduce((sum, corner) => point(sum.x + corner.x, sum.y + corner.y), point(0, 0));
+      wallCenter.x /= wall.quad.length;
+      wallCenter.y /= wall.quad.length;
+      wallLabel.setAttribute('x', wallCenter.x.toFixed(2));
+      wallLabel.setAttribute('y', wallCenter.y.toFixed(2));
+      wallLabel.setAttribute('class', `museum-hub__calibration-wall-label${active ? ' is-active' : ''}`);
       wallLabel.textContent = wallLabelText;
       wallLabel.setAttribute('aria-hidden', 'true');
       this.calibrationSvg.appendChild(wallLabel);
@@ -2318,7 +2319,7 @@ export class MainMuseumHub {
         ));
         wallPolygon.setAttribute('tabindex', '0');
         wallPolygon.setAttribute('role', 'button');
-        wallPolygon.setAttribute('aria-label', `${wall.id} Wand verschieben`);
+        wallPolygon.setAttribute('aria-label', wallLabelText);
         wallPolygon.addEventListener('keydown', (event) => {
           const distance = event.shiftKey ? 10 : 1;
           if (event.key === 'ArrowLeft') this.translateWall(wall.id, -distance, 0);
