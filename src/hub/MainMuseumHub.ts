@@ -3386,7 +3386,10 @@ export class MainMuseumHub {
           safePolygon: wall.safePolygon,
           mountingZone: wall.mountingZone,
         }));
-    if (JSON.stringify(renderedWallGeometry(sanitized.config)) !== JSON.stringify(renderedWallGeometry(this.buildCurrentCalibrationConfig() as MuseumHubConfig))) {
+    const baselineConfig = this.initialCalibrationSnapshot
+      ? sanitizeMuseumHubConfig(JSON.parse(this.initialCalibrationSnapshot)).config
+      : this.buildCurrentCalibrationConfig() as MuseumHubConfig;
+    if (!baselineConfig || JSON.stringify(renderedWallGeometry(sanitized.config)) !== JSON.stringify(renderedWallGeometry(baselineConfig))) {
       this.announceCalibrationAction('Import blockiert: Die gerenderten Wandflächen oder Führungsbereiche weichen ab.');
       return;
     }
@@ -3507,10 +3510,8 @@ export class MainMuseumHub {
     if (!config) return;
     const activeBackgroundSrc = this.resolution.background.src;
     const activeBackgroundObjectUrl = this.editorBackgroundObjectUrl;
-    if (activeBackgroundObjectUrl && config.background.src !== activeBackgroundSrc) {
-      URL.revokeObjectURL(activeBackgroundObjectUrl);
-      this.editorBackgroundObjectUrl = null;
-    }
+    const shouldRevokeBackgroundObjectUrl =
+      Boolean(activeBackgroundObjectUrl && config.background.src !== activeBackgroundSrc);
     for (const wall of config.walls) {
       if (wall.id === 'wall-rear' && wall.quad && wall.quad.length === 4) {
         this.entranceBoundaryQuad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
@@ -3547,6 +3548,10 @@ export class MainMuseumHub {
       activeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
         ? activeBackgroundObjectUrl
         : resolveBackgroundUrl(config.background.src);
+    if (shouldRevokeBackgroundObjectUrl && activeBackgroundObjectUrl) {
+      URL.revokeObjectURL(activeBackgroundObjectUrl);
+      this.editorBackgroundObjectUrl = null;
+    }
     this.backgroundImage.style.objectFit = config.background.fit ?? 'contain';
     this.element.style.setProperty('--hub-aspect', String(config.background.aspect));
     for (const slot of config.slots) {
