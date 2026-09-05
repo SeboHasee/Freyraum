@@ -2558,7 +2558,11 @@ export class MainMuseumHub {
       await navigator.clipboard.writeText(this.calibrationOutput.value);
       copied = true;
     } catch {
-      this.calibrationOutput.closest('details')?.setAttribute('open', '');
+      const details = this.calibrationOutput.closest('details');
+      if (details && !details.open) {
+        details.open = true;
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      }
       this.calibrationOutput.focus();
       this.calibrationOutput.select();
       try {
