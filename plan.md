@@ -1,6 +1,18 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Editor background and continuous wall calibration (v1.21)
+
+- [x] Add local background selection with intrinsic dimensions, aspect ratio,
+  contain/cover choice, preview, reset, and export metadata.
+- [x] Permit editor-owned background and rendered-wall quad changes while keeping
+  camera, room envelope, wall roles, doorways, inventory, and fallback policy fixed.
+- [x] Add continuous pointer capture for artwork, wall, safe-zone, and mounting-zone
+  editing, including lost-pointer-capture cleanup.
+- [x] Add rendered-wall corner handles and whole-wall translation in the editor.
+- [ ] Customer must copy the selected image into `customer-artworks/Backgrounds/`
+  before running the importer; the browser cannot write repository files.
+
 ## Implemented — Reference wall calibration diagnostics (v1.20)
 
 - [x] Define the repository-only 2048×1354 reference contract and clockwise

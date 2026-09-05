@@ -112,6 +112,8 @@ type CalibrationDrag =
       pointerId: number;
       target: 'quad' | 'safe' | 'mounting-zone';
       index: number;
+      startPoint: Point2D;
+      startQuad?: Quad;
     };
 
 interface SlotView {
@@ -186,6 +188,9 @@ export class MainMuseumHub {
   private swipeStartX: number | null = null;
   private swipeStartY: number | null = null;
   private resizeRafId = 0;
+  private editorBackgroundObjectUrl: string | null = null;
+  private readonly defaultBackgroundSrc: string;
+  private readonly backgroundImage: HTMLImageElement;
 
   constructor(app: HTMLElement, resolution: MuseumHubResolution, preset: QualityPreset) {
     this.resolution = resolution;
@@ -195,6 +200,7 @@ export class MainMuseumHub {
     this.stageWidth = resolution.stage.width;
     this.stageHeight = resolution.stage.height;
     this.activeCalibrationWallId = resolution.walls[0]?.id ?? null;
+    this.defaultBackgroundSrc = resolution.background.src;
 
     const hub = document.createElement('section');
     hub.className = 'museum-hub';
@@ -212,10 +218,12 @@ export class MainMuseumHub {
     stage.className = 'museum-hub__stage';
 
     const image = document.createElement('img');
+    this.backgroundImage = image;
     image.className = 'museum-hub__image';
     image.alt = '';
     image.decoding = 'async';
     image.draggable = false;
+    image.style.objectFit = resolution.background.fit ?? 'contain';
     const primaryBackgroundUrl = resolveBackgroundUrl(resolution.background.src);
     const fallbackBackgroundUrl = resolveBackgroundUrl(resolution.backgroundFallback.src);
     const backgroundReady = loadHubImageAsset({
@@ -1655,6 +1663,74 @@ export class MainMuseumHub {
     instructions.textContent =
       'Tipp: Pfeiltasten verschieben fein, Umschalt + Pfeiltaste verschiebt schneller. Rot bedeutet: Position noch ungültig.';
 
+    const backgroundControls = document.createElement('div');
+    backgroundControls.className = 'museum-hub__calibration-background';
+    const backgroundLabel = document.createElement('label');
+    backgroundLabel.className = 'museum-hub__calibration-label';
+    backgroundLabel.textContent = 'Referenz-Hintergrund auswählen';
+    const backgroundInput = document.createElement('input');
+    backgroundInput.type = 'file';
+    backgroundInput.accept = 'image/*';
+    const backgroundInfo = document.createElement('span');
+    backgroundInfo.className = 'museum-hub__calibration-background-info';
+    const fitSelect = document.createElement('select');
+    fitSelect.className = 'museum-hub__calibration-select';
+    for (const fit of ['contain', 'cover'] as const) {
+      const option = document.createElement('option');
+      option.value = fit;
+      option.textContent = fit === 'contain' ? 'Bild vollständig zeigen' : 'Fläche vollständig füllen';
+      fitSelect.appendChild(option);
+    }
+    fitSelect.value = this.resolution.background.fit ?? 'contain';
+    const resetBackground = document.createElement('button');
+    resetBackground.type = 'button';
+    resetBackground.className = 'museum-hub__calibration-action';
+    resetBackground.textContent = 'Hintergrund zurücksetzen';
+    const updateBackgroundInfo = (width = 0, height = 0, name = this.resolution.background.src): void => {
+      backgroundInfo.textContent = width > 0 && height > 0
+        ? `${name} · ${width}×${height}px · ${(width / height).toFixed(3)}`
+        : `${name} · Datei muss nach customer-artworks/Backgrounds kopiert werden`;
+    };
+    backgroundInput.addEventListener('change', () => {
+      const file = backgroundInput.files?.[0];
+      if (!file) return;
+      if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
+      this.editorBackgroundObjectUrl = URL.createObjectURL(file);
+      const probe = new Image();
+      probe.onload = () => {
+        this.resolution.background = {
+          src: `Backgrounds/${file.name}`,
+          aspect: probe.naturalWidth / probe.naturalHeight,
+          fit: fitSelect.value as 'contain' | 'cover',
+          width: probe.naturalWidth,
+          height: probe.naturalHeight,
+        };
+        this.backgroundImage.src = this.editorBackgroundObjectUrl!;
+        this.backgroundImage.style.objectFit = this.resolution.background.fit ?? 'contain';
+        this.element.style.setProperty('--hub-aspect', String(this.resolution.background.aspect));
+        updateBackgroundInfo(probe.naturalWidth, probe.naturalHeight, file.name);
+        this.updateCalibrationOutput(true);
+      };
+      probe.onerror = () => updateBackgroundInfo();
+      probe.src = this.editorBackgroundObjectUrl;
+    });
+    fitSelect.addEventListener('change', () => {
+      this.resolution.background.fit = fitSelect.value as 'contain' | 'cover';
+      this.backgroundImage.style.objectFit = this.resolution.background.fit;
+      this.updateCalibrationOutput(true);
+    });
+    resetBackground.addEventListener('click', () => {
+      if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
+      this.editorBackgroundObjectUrl = null;
+      this.resolution.background = { ...this.resolution.background, src: this.defaultBackgroundSrc };
+      this.backgroundImage.src = resolveBackgroundUrl(this.defaultBackgroundSrc);
+      this.backgroundImage.style.objectFit = this.resolution.background.fit ?? 'contain';
+      updateBackgroundInfo();
+      this.updateCalibrationOutput(true);
+    });
+    backgroundLabel.append(backgroundInput, fitSelect);
+    backgroundControls.append(backgroundLabel, backgroundInfo, resetBackground);
+
     const controls = document.createElement('div');
     controls.className = 'museum-hub__calibration-controls';
 
@@ -1795,6 +1871,7 @@ export class MainMuseumHub {
       intro,
       steps,
       instructions,
+      backgroundControls,
       controls,
       warningTitle,
       warningList,
@@ -1835,6 +1912,7 @@ export class MainMuseumHub {
     button.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     button.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     button.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    button.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
   }
 
   private startWallPointCalibrationDrag(
@@ -1846,18 +1924,48 @@ export class MainMuseumHub {
     event.preventDefault();
     this.recordCalibrationHistory();
     const element = event.currentTarget as SVGCircleElement;
+    const wall = this.resolution.wallById.get(wallId);
+    if (!wall) return;
+    const startPoint = this.pointerEventToStage(event);
+    if (!startPoint) return;
     this.calibrationDrag = {
       kind: 'wall-point',
       wallId,
       pointerId: event.pointerId,
       target,
       index,
+      startPoint,
+      startQuad: wall.quad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
     };
     element.setPointerCapture(event.pointerId);
     element.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     element.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     element.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
   }
+
+  private startWallTranslateDrag = (event: PointerEvent, wallId: string): void => {
+    if (!this.calibrating) return;
+    event.preventDefault();
+    const wall = this.resolution.wallById.get(wallId);
+    const startPoint = this.pointerEventToStage(event);
+    if (!wall || !startPoint) return;
+    this.recordCalibrationHistory();
+    this.calibrationDrag = {
+      kind: 'wall-point',
+      wallId,
+      pointerId: event.pointerId,
+      target: 'quad',
+      index: -1,
+      startPoint,
+      startQuad: wall.quad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
+    };
+    const element = event.currentTarget as SVGPolygonElement;
+    element.setPointerCapture(event.pointerId);
+    element.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
+    element.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
+    element.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    element.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+  };
 
   private pointerEventToStage(event: PointerEvent): Point2D | null {
     const rect = this.visual.getBoundingClientRect();
@@ -1897,7 +2005,21 @@ export class MainMuseumHub {
     } else {
       const wall = this.resolution.wallById.get(drag.wallId);
       if (!wall) return;
-      if (drag.target === 'quad') return;
+      if (drag.target === 'quad') {
+        if (!drag.startQuad) return;
+        const wallQuad = wall.quad as unknown as Point2D[];
+        const delta = point(stagePoint.x - drag.startPoint.x, stagePoint.y - drag.startPoint.y);
+        if (drag.index >= 0) {
+          wallQuad[drag.index].x = stagePoint.x;
+          wallQuad[drag.index].y = stagePoint.y;
+        } else {
+          for (let index = 0; index < wallQuad.length; index += 1) {
+            const source = drag.startQuad[index];
+            wallQuad[index].x = source.x + delta.x;
+            wallQuad[index].y = source.y + delta.y;
+          }
+        }
+      } else {
       const targetPoints = drag.target === 'safe' ? wall.safePolygon : wall.mountingZone;
       const targetPoint = targetPoints[drag.index];
       if (!targetPoint) return;
@@ -1905,6 +2027,7 @@ export class MainMuseumHub {
       targetPoint.y = stagePoint.y;
       if (drag.target === 'mounting-zone') {
         wall.mountingZoneConfirmed = false;
+      }
       }
       this.applyAllSlotGeometry();
     }
@@ -1921,6 +2044,7 @@ export class MainMuseumHub {
     currentTarget?.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
     currentTarget?.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     currentTarget?.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    currentTarget?.removeEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
     this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
   };
@@ -1935,6 +2059,12 @@ export class MainMuseumHub {
       wallPolygon.setAttribute('points', this.pointsToSvg(wall.quad));
       wallPolygon.setAttribute('class', `museum-hub__calibration-wall${active ? ' is-active' : ''}`);
       this.calibrationSvg.appendChild(wallPolygon);
+      if (this.calibrating && active) {
+        wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(
+          this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--wall')
+        ));
+        wallPolygon.addEventListener('pointerdown', (event) => this.startWallTranslateDrag(event, wall.id));
+      }
 
       const safePolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       safePolygon.setAttribute('points', this.pointsToSvg(wall.safePolygon));
@@ -2649,33 +2779,6 @@ export class MainMuseumHub {
       );
       return;
     }
-    const importedRenderedWalls = sanitized.config.walls.filter(
-      (wall) => wall.role !== 'bounds-only'
-    );
-    const wallGeometryMatches =
-      importedRenderedWalls.length === this.resolution.walls.length
-      && importedRenderedWalls.every((wall) => {
-        const current = this.resolution.wallById.get(wall.id);
-        return Boolean(
-          current
-          && wall.quad
-          && wall.quad.length === current.quad.length
-          && wall.quad.every((corner, index) => {
-            const currentCorner = current.quad[index];
-            return Boolean(
-              currentCorner
-              && Math.abs(corner.x - currentCorner.x) <= 0.001
-              && Math.abs(corner.y - currentCorner.y) <= 0.001
-            );
-          })
-        );
-      });
-    if (!wallGeometryMatches) {
-      this.announceCalibrationAction(
-        'Import blockiert: Die feste Wandprojektion weicht von diesem Editor-Build ab.'
-      );
-      return;
-    }
     const ownershipChange = sanitized.config.slots.find((slot) => {
       const ownedWall = this.calibrationWallOwnership.get(slot.id);
       return ownedWall && ownedWall !== slot.placement.wallId;
@@ -2698,7 +2801,6 @@ export class MainMuseumHub {
       version: config.version,
       coverage: config.coverage,
       stage: config.stage,
-      background: config.background,
       backgroundFallback: config.backgroundFallback,
       visualTokens: config.visualTokens,
       camera: config.camera,
@@ -2708,6 +2810,7 @@ export class MainMuseumHub {
       fallbacks: config.fallbacks,
       walls: config.walls.map((wall) => {
         const fixedWall = { ...wall };
+        delete fixedWall.quad;
         delete fixedWall.safePolygon;
         delete fixedWall.mountingZone;
         delete fixedWall.mountingZoneConfirmed;
@@ -2805,6 +2908,9 @@ export class MainMuseumHub {
     for (const wall of config.walls) {
       const currentWall = this.resolution.wallById.get(wall.id);
       if (!currentWall) continue;
+      if (wall.quad && wall.quad.length === currentWall.quad.length) {
+        currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
+      }
       const nextSafe = wall.safePolygon ?? [];
       currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
       currentWall.mountingZone.splice(
@@ -2814,6 +2920,10 @@ export class MainMuseumHub {
       );
       currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
     }
+    this.resolution.background = { ...config.background };
+    this.backgroundImage.src = resolveBackgroundUrl(config.background.src);
+    this.backgroundImage.style.objectFit = config.background.fit ?? 'contain';
+    this.element.style.setProperty('--hub-aspect', String(config.background.aspect));
     for (const slot of config.slots) {
       const currentSlot = this.slotViews.find((view) => view.slot.id === slot.id)?.slot;
       if (!currentSlot) continue;

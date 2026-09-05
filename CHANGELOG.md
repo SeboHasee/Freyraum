@@ -1,6 +1,14 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.21 — Editor background and continuous wall calibration (2026-09-05)
+
+- Added local background-file selection with dimensions, aspect metadata,
+  contain/cover preview, reset, and export instructions.
+- Added draggable rendered-wall corners and whole-wall translation.
+- Fixed calibration pointer sessions to continue through pointer capture and
+  clean up on pointer cancellation or lost capture.
+
 ## v1.20 — Reference wall calibration diagnostics (2026-09-05)
 
 - Added the measured 2048×1354 reference wall contract and explicit contain-fit

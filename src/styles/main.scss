@@ -695,6 +695,31 @@ canvas {
   fill: rgba(100, 191, 255, 0.95);
 }
 
+.museum-hub__calibration-handle--wall {
+  fill: #f08a24;
+  stroke: #fff;
+  stroke-width: 2;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.museum-hub__calibration-svg polygon.museum-hub__calibration-wall.is-active {
+  cursor: move;
+  pointer-events: all;
+  touch-action: none;
+}
+
+.museum-hub__calibration-background {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.museum-hub__calibration-background-info {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
 .museum-hub__calibration-handle--mounting-zone {
   fill: rgba(70, 220, 135, 0.98);
 }

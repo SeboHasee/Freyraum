@@ -157,7 +157,7 @@ export interface MuseumHubConfig {
   version: number;
   coverage: 'all-active-artworks';
   stage: StageReference;
-  background: { src: string; aspect: number };
+  background: { src: string; aspect: number; fit?: 'contain' | 'cover'; width?: number; height?: number };
   backgroundFallback: { src: string };
   visualTokens: HubVisualTokens;
   camera?: CameraCalibration;
@@ -263,7 +263,7 @@ export interface MuseumHubResolution {
       imageSourceContext?: Artwork['imageSourceContext'];
     }
   >;
-  background: { src: string; aspect: number };
+  background: { src: string; aspect: number; fit?: 'contain' | 'cover'; width?: number; height?: number };
   backgroundFallback: { src: string };
   stage: StageReference;
   visualTokens: HubVisualTokens;
@@ -1487,6 +1487,9 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   const stage = sanitizeStage(cfg['stage']);
   let backgroundAspect = HUB_BACKGROUND_ASPECT;
   let backgroundSrc = HUB_BACKGROUND_SRC;
+  let backgroundFit: 'contain' | 'cover' = 'contain';
+  let backgroundWidth: number | undefined;
+  let backgroundHeight: number | undefined;
   let backgroundFallbackSrc = HUB_BACKGROUND_SRC;
   if (cfg['background'] && typeof cfg['background'] === 'object') {
     const background = cfg['background'] as Record<string, unknown>;
@@ -1500,6 +1503,13 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
     }
     if (typeof background['src'] === 'string' && background['src'].trim()) {
       backgroundSrc = (background['src'] as string).trim();
+    }
+    if (background['fit'] === 'contain' || background['fit'] === 'cover') backgroundFit = background['fit'];
+    if (typeof background['width'] === 'number' && Number.isInteger(background['width']) && background['width'] > 0) {
+      backgroundWidth = background['width'];
+    }
+    if (typeof background['height'] === 'number' && Number.isInteger(background['height']) && background['height'] > 0) {
+      backgroundHeight = background['height'];
     }
   }
   if (cfg['backgroundFallback'] && typeof cfg['backgroundFallback'] === 'object') {
@@ -1624,7 +1634,7 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
       version: Math.max(5, version),
       coverage: 'all-active-artworks',
       stage,
-      background: { src: backgroundSrc, aspect: backgroundAspect },
+      background: { src: backgroundSrc, aspect: backgroundAspect, fit: backgroundFit, width: backgroundWidth, height: backgroundHeight },
       backgroundFallback: { src: backgroundFallbackSrc },
       visualTokens: tokens,
       camera,
