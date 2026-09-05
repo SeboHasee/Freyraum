@@ -1,6 +1,16 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Self-explanatory calibration editor (v1.24)
+
+- [x] Add a permanent legend with plain-language, color-independent meanings.
+- [x] Add visible labels for front, left, right, and entrance boundaries.
+- [x] Replace the normal panel flow with four short guided steps.
+- [x] Add explicit wall, entrance, reset, undo, redo, and guide controls.
+- [x] Add accessible target names, focus styling, active-edit status, and
+  deterministic regression assertions.
+- [x] Keep JSON and diagnostics inside collapsed technical details.
+
 ## Implemented — Robust calibration hit targets (v1.23)
 
 - [x] Enable calibration-stage pointer input only while calibration mode is active.

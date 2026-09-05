@@ -1886,6 +1886,8 @@ export class MainMuseumHub {
     });
     makeAction('Reset selected boundary', () => this.resetSelectedCalibrationBoundary());
     makeAction('Reset all geometry', () => this.resetCalibration());
+    makeAction('Center artwork in green area', () => this.centerActiveSlotInMountingZone());
+    makeAction('Confirm green mounting area', () => this.confirmActiveMountingZone());
     this.calibrationUndoButton = makeAction('Undo', () => this.undoCalibration());
     this.calibrationRedoButton = makeAction('Redo', () => this.redoCalibration());
     this.calibrationGuideToggle = makeAction('Hide guides', () => {

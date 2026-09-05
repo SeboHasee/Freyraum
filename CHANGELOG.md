@@ -1,6 +1,15 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.24 — Self-explanatory calibration editor (2026-09-05)
+
+- Added a permanent legend describing wall corners, wall edges, safe areas,
+  mounting areas, and the entrance boundary without relying on color alone.
+- Replaced technical control wording with a four-step guided workflow and
+  explicit edit, reset, undo, redo, and guide-visibility actions.
+- Added accessible names, visible wall labels, active-edit status, keyboard
+  focus styling, and deterministic UI contract checks.
+
 ## v1.23 — Robust calibration hit targets (2026-09-05)
 
 - Added enlarged transparent SVG edge and corner hit targets so visible wall
