@@ -840,7 +840,16 @@ export function mapReferenceQuadToStage(
   reference: ReferenceImageCalibration,
   stage: StageReference
 ): Quad | null {
-  const mapped = imageQuad.map((corner) => mapReferencePointToStage(corner, reference, stage));
+  const transform = referenceFitTransform(reference, stage);
+  if (!transform) return null;
+  const mapped = imageQuad.map((corner) =>
+    !Number.isFinite(corner.x) || !Number.isFinite(corner.y)
+      ? null
+      : point(
+        corner.x * transform.scale + transform.offset.x,
+        corner.y * transform.scale + transform.offset.y
+      )
+  );
   return mapped.some((corner) => corner === null)
     ? null
     : [mapped[0]!, mapped[1]!, mapped[2]!, mapped[3]!];
