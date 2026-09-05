@@ -87,8 +87,9 @@ copies into `customer-artworks/inbox/`.
   camera, room envelope, calibrated front/left/right wall transforms, drawable
   regions, doorway exclusions, visual tokens, exact artwork IDs, normalized
   wall-local slot placement, and mounted sizes live in the same file.
-- The legacy `?hubCalibrate=1` route remains available for developers. Customers
-  should use `OPEN_ARTWORK_EDITOR.html`. First
+- The legacy calibration route remains available for developers and is documented
+  in `docs/QUERY_PARAMETERS.md`. Customers should use
+  `OPEN_ARTWORK_EDITOR.html`. First
   align each green mounting-zone boundary with the visible doorway, corner,
   floor, and ceiling.
   Then select and drag each artwork or enter exact values. Red outlines mean
