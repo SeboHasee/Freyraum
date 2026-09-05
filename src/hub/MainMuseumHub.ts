@@ -1688,7 +1688,11 @@ export class MainMuseumHub {
     resetBackground.type = 'button';
     resetBackground.className = 'museum-hub__calibration-action';
     resetBackground.textContent = 'Hintergrund zurücksetzen';
-    const updateBackgroundInfo = (width = 0, height = 0, name = this.resolution.background.src): void => {
+    const updateBackgroundInfo = (
+      width = this.resolution.background.width ?? 0,
+      height = this.resolution.background.height ?? 0,
+      name = this.resolution.background.src
+    ): void => {
       backgroundInfo.textContent = width > 0 && height > 0
         ? `${name} · ${width}×${height}px · ${(width / height).toFixed(3)}`
         : `${name} · Datei muss nach customer-artworks/Backgrounds kopiert werden`;
@@ -1729,6 +1733,7 @@ export class MainMuseumHub {
       if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
       this.editorBackgroundObjectUrl = null;
       this.resolution.background = { ...this.defaultBackground };
+      backgroundInput.value = '';
       this.backgroundImage.src = resolveBackgroundUrl(this.defaultBackgroundSrc);
       this.backgroundImage.style.objectFit = this.resolution.background.fit ?? 'contain';
       updateBackgroundInfo();
@@ -2934,6 +2939,8 @@ export class MainMuseumHub {
     const sanitized = sanitizeMuseumHubConfig(JSON.parse(snapshot));
     const config = sanitized.config;
     if (!config) return;
+    const activeBackgroundSrc = this.resolution.background.src;
+    const activeBackgroundObjectUrl = this.editorBackgroundObjectUrl;
     for (const wall of config.walls) {
       const currentWall = this.resolution.wallById.get(wall.id);
       if (!currentWall) continue;
@@ -2950,7 +2957,10 @@ export class MainMuseumHub {
       currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
     }
     this.resolution.background = { ...config.background };
-    this.backgroundImage.src = resolveBackgroundUrl(config.background.src);
+    this.backgroundImage.src =
+      activeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
+        ? activeBackgroundObjectUrl
+        : resolveBackgroundUrl(config.background.src);
     this.backgroundImage.style.objectFit = config.background.fit ?? 'contain';
     this.element.style.setProperty('--hub-aspect', String(config.background.aspect));
     for (const slot of config.slots) {
