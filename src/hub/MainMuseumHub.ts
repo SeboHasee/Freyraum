@@ -3242,10 +3242,10 @@ export class MainMuseumHub {
     const wallId = this.activeCalibrationWallId;
     if (!wallId || !this.initialCalibrationSnapshot) return;
     const initial = JSON.parse(this.initialCalibrationSnapshot) as {
-      walls: Array<{ id: string; quad: Quad }>;
+      walls: Array<{ id: string; quad: Quad; safePolygon?: Point2D[]; mountingZone?: Point2D[]; mountingZoneConfirmed?: boolean }>;
     };
     const current = this.buildCurrentCalibrationConfig() as {
-      walls: Array<{ id: string; quad: Quad }>;
+      walls: Array<{ id: string; quad: Quad; safePolygon?: Point2D[]; mountingZone?: Point2D[]; mountingZoneConfirmed?: boolean }>;
     };
     const initialWall = initial.walls.find((wall) => wall.id === wallId);
     const currentWall = current.walls.find((wall) => wall.id === wallId);
@@ -3259,6 +3259,9 @@ export class MainMuseumHub {
     }
     this.recordCalibrationHistory();
     currentWall.quad = initialWall.quad;
+    currentWall.safePolygon = initialWall.safePolygon;
+    currentWall.mountingZone = initialWall.mountingZone;
+    currentWall.mountingZoneConfirmed = initialWall.mountingZoneConfirmed;
     this.applyCalibrationSnapshot(JSON.stringify(current));
     this.announceCalibrationAction(`Reset ${wallId.toUpperCase()}.`);
   }
@@ -3517,6 +3520,17 @@ export class MainMuseumHub {
       if (!currentWall) continue;
       if (applyRenderedWallGeometry && wall.quad && wall.quad.length === currentWall.quad.length) {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
+      }
+      if (!applyRenderedWallGeometry && wall.role !== 'bounds-only') {
+        const nextSafe = wall.safePolygon ?? [];
+        currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
+        currentWall.mountingZone.splice(
+          0,
+          currentWall.mountingZone.length,
+          ...(wall.mountingZone ?? wall.safePolygon ?? []).map((corner) => clonePoint(corner))
+        );
+        currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
+        continue;
       }
       if (!applyRenderedWallGeometry) continue;
       const nextSafe = wall.safePolygon ?? [];
