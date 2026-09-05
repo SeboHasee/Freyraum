@@ -11,6 +11,7 @@
 import {
   HUB_MIN_PROJECTED_SHORT_EDGE_PX,
   type MuseumHubResolution,
+  type MuseumHubConfig,
   type ResolvedHubSlot,
   type ResolvedHubWall,
   sanitizeMuseumHubConfig,
@@ -2578,6 +2579,17 @@ export class MainMuseumHub {
       );
       return;
     }
+    const currentConfig = sanitizeMuseumHubConfig(this.buildCurrentCalibrationConfig()).config;
+    if (
+      !currentConfig
+      || this.fixedCalibrationConfigSignature(sanitized.config)
+        !== this.fixedCalibrationConfigSignature(currentConfig)
+    ) {
+      this.announceCalibrationAction(
+        'Import blockiert: Kamera, Raum, Wandmodell oder andere feste Editor-Einstellungen weichen ab.'
+      );
+      return;
+    }
     const currentSlots = new Map(this.slotViews.map(({ slot }) => [slot.id, slot]));
     const slotInventoryMatches =
       sanitized.config.slots.length === currentSlots.size
@@ -2635,6 +2647,43 @@ export class MainMuseumHub {
     this.recordCalibrationHistory();
     this.applyCalibrationSnapshot(JSON.stringify(sanitized.config));
     this.announceCalibrationAction('Konfiguration wurde importiert und erneut geprüft.');
+  }
+
+  private fixedCalibrationConfigSignature(config: MuseumHubConfig): string {
+    return JSON.stringify({
+      version: config.version,
+      coverage: config.coverage,
+      stage: config.stage,
+      background: config.background,
+      backgroundFallback: config.backgroundFallback,
+      visualTokens: config.visualTokens,
+      camera: config.camera,
+      room: config.room,
+      hangingRules: config.hangingRules,
+      slotsPerPage: config.slotsPerPage,
+      fallbacks: config.fallbacks,
+      walls: config.walls.map((wall) => {
+        const fixedWall = { ...wall };
+        delete fixedWall.safePolygon;
+        delete fixedWall.mountingZone;
+        delete fixedWall.mountingZoneConfirmed;
+        return fixedWall;
+      }),
+      slots: config.slots.map((slot) => ({
+        id: slot.id,
+        enabled: slot.enabled,
+        selectable: slot.selectable,
+        artworkId: slot.artworkId,
+        placement: {
+          wallId: slot.placement.wallId,
+          targetSizePolicy: slot.placement.targetSizePolicy,
+          minScale: slot.placement.minScale,
+          maxScale: slot.placement.maxScale,
+          zOffset: slot.placement.zOffset,
+          provisional: slot.placement.provisional,
+        },
+      })),
+    });
   }
 
   private calibrationRoundTripWarnings(json: string): string[] {
@@ -2711,12 +2760,7 @@ export class MainMuseumHub {
     if (!config) return;
     for (const wall of config.walls) {
       const currentWall = this.resolution.wallById.get(wall.id);
-      if (!currentWall || !wall.quad) continue;
-      const nextQuad = wall.quad;
-      currentWall.quad.forEach((corner, index) => {
-        corner.x = nextQuad[index]!.x;
-        corner.y = nextQuad[index]!.y;
-      });
+      if (!currentWall) continue;
       const nextSafe = wall.safePolygon ?? [];
       currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
       currentWall.mountingZone.splice(
@@ -2725,42 +2769,26 @@ export class MainMuseumHub {
         ...(wall.mountingZone ?? wall.safePolygon ?? []).map((corner) => clonePoint(corner))
       );
       currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
-      currentWall.planeAspect = wall.planeAspect;
-      if (wall.shadowVector) currentWall.shadowVector = clonePoint(wall.shadowVector);
-      if (wall.transform) currentWall.transform = wall.transform;
-      currentWall.drawableRegion = wall.drawableRegion;
-      currentWall.exclusionPolygons = wall.exclusionPolygons;
-      currentWall.hangingBand = wall.hangingBand;
-      if (wall.room) {
-        currentWall.room = {
-          origin: { ...wall.room.origin },
-          axisU: { ...wall.room.axisU },
-          axisV: { ...wall.room.axisV },
-          width: wall.room.width,
-          height: wall.room.height,
-          safePolygon: wall.room.safePolygon.map(clonePoint),
-          doorwayExclusions: wall.room.doorwayExclusions.map((polygon) => polygon.map(clonePoint)),
-          hangingBand: { ...wall.room.hangingBand },
-        };
-      }
     }
     for (const slot of config.slots) {
       const currentSlot = this.slotViews.find((view) => view.slot.id === slot.id)?.slot;
       if (!currentSlot) continue;
-      currentSlot.placement.wallId = slot.placement.wallId;
-      currentSlot.placement.center = clonePoint(slot.placement.center);
-      currentSlot.placement.anchor = slot.placement.anchor ? clonePoint(slot.placement.anchor) : undefined;
-      currentSlot.placement.uv = slot.placement.uv ? clonePoint(slot.placement.uv) : undefined;
-      currentSlot.placement.mountedHeight = slot.placement.mountedHeight;
-      currentSlot.placement.horizontalPosition = slot.placement.horizontalPosition;
-      currentSlot.placement.centerHeight = slot.placement.centerHeight;
-      currentSlot.placement.physicalHeight = slot.placement.physicalHeight;
+      const wall = this.resolution.wallById.get(currentSlot.placement.wallId);
+      if (!wall?.room) continue;
+      currentSlot.placement.horizontalPosition =
+        slot.placement.horizontalPosition ?? currentSlot.placement.horizontalPosition;
+      currentSlot.placement.centerHeight =
+        slot.placement.centerHeight ?? currentSlot.placement.centerHeight;
+      currentSlot.placement.physicalHeight =
+        slot.placement.physicalHeight ?? currentSlot.placement.physicalHeight;
       currentSlot.placement.mountingGap = slot.placement.mountingGap;
-      currentSlot.placement.targetSizePolicy = slot.placement.targetSizePolicy;
-      currentSlot.placement.minScale = slot.placement.minScale;
-      currentSlot.placement.maxScale = slot.placement.maxScale;
-      currentSlot.placement.zOffset = slot.placement.zOffset;
-      currentSlot.placement.provisional = slot.placement.provisional === true;
+      currentSlot.placement.mountedHeight =
+        currentSlot.placement.physicalHeight ?? currentSlot.placement.mountedHeight;
+      currentSlot.placement.uv = point(
+        currentSlot.placement.horizontalPosition ?? currentSlot.placement.center.x,
+        (currentSlot.placement.centerHeight ?? wall.room.height / 2) / wall.room.height
+      );
+      this.syncCanonicalPlacement(currentSlot, wall);
     }
     this.applyAllSlotGeometry();
     this.renderCalibrationOverlay();
