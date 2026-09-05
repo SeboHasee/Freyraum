@@ -3376,7 +3376,7 @@ export class MainMuseumHub {
     this.applyCalibrationSnapshot(this.lastValidCalibrationSnapshot);
   }
 
-  private applyCalibrationSnapshot(snapshot: string, preserveRenderedWallGeometry = true): void {
+  private applyCalibrationSnapshot(snapshot: string, applyRenderedWallGeometry = true): void {
     const sanitized = sanitizeMuseumHubConfig(JSON.parse(snapshot));
     const config = sanitized.config;
     if (!config) return;
@@ -3393,7 +3393,7 @@ export class MainMuseumHub {
       }
       const currentWall = this.resolution.wallById.get(wall.id);
       if (!currentWall) continue;
-      if (preserveRenderedWallGeometry && wall.quad && wall.quad.length === currentWall.quad.length) {
+      if (applyRenderedWallGeometry && wall.quad && wall.quad.length === currentWall.quad.length) {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
       }
       const nextSafe = wall.safePolygon ?? [];
