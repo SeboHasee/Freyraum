@@ -1317,8 +1317,18 @@ assert.match(hub, /createCalibrationEdgeHitTarget/);
 assert.match(hub, /createCalibrationCornerHitTarget/);
 assert.match(hub, /calibrationSvg\?\.getBoundingClientRect/);
 assert.match(hub, /captureElement\.setPointerCapture/);
+assert.match(hub, /calibrationRoomBoundaryVisible\s*=\s*false/);
+assert.match(hub, /calibrationEditMode:\s*'wall'\s*\|\s*'safe'\s*\|\s*'mounting-zone'\s*\|\s*'room-boundary'/);
+assert.match(hub, /calibrating && this\.calibrationRoomBoundaryVisible && this\.entranceBoundaryQuad/);
+assert.match(hub, /calibrating && active && this\.calibrationEditMode === 'wall'/);
+assert.match(hub, /Edit safe boundary/);
+assert.match(hub, /Edit mounting area/);
+assert.match(hub, /Show room boundary/);
 assert.match(scss, /\.museum-hub\.is-calibrating \.museum-hub__calibration-svg\s*\{[\s\S]*?pointer-events:\s*auto/);
 assert.match(scss, /\.museum-hub__calibration-edge-hit\s*\{[\s\S]*?stroke-width:\s*28/);
+assert.match(scss, /\.museum-hub__calibration-envelope\s*\{[\s\S]*?pointer-events:\s*all/);
+assert.match(scss, /\.museum-hub__calibration-safe\s*\{[\s\S]*?pointer-events:\s*none/);
+assert.match(scss, /\.museum-hub__calibration-mounting-zone\s*\{[\s\S]*?pointer-events:\s*none/);
 for (const label of [
   'Orange points',
   'Striped orange lines',

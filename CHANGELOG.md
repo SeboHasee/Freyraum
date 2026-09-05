@@ -1,6 +1,15 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.25 — Unified wall editing and non-blocking room boundary (2026-09-05)
+
+- Hidden the purple bounds-only room boundary from normal editor interaction.
+- Limited wall corner and edge hit targets to the selected wall's wall-edit mode.
+- Made blue safe and green mounting guides informational by default, with
+  explicit actions for editing their points.
+- Preserved the room boundary internally and exposed it only through an
+  explicit diagnostic/edit action.
+
 ## v1.24 — Self-explanatory calibration editor (2026-09-05)
 
 - Added a permanent legend describing wall corners, wall edges, safe areas,

@@ -1,6 +1,15 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Unified wall editing and non-blocking room boundary (v1.25)
+
+- [x] Keep the purple bounds-only room boundary hidden from normal wall editing.
+- [x] Expose the room boundary only through an explicit diagnostic/edit action.
+- [x] Make wall edge and corner targets belong to the selected wall and edit mode.
+- [x] Keep blue safe and green mounting areas informational until explicitly edited.
+- [x] Preserve the bounds-only boundary internally for validation and export.
+- [x] Add deterministic assertions for non-blocking guide and boundary behavior.
+
 ## Implemented — Self-explanatory calibration editor (v1.24)
 
 - [x] Add a permanent legend with plain-language, color-independent meanings.

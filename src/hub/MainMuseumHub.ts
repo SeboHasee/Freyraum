@@ -169,6 +169,8 @@ export class MainMuseumHub {
   private calibrationActionStatus: HTMLParagraphElement | null = null;
   private calibrationGuideToggle: HTMLButtonElement | null = null;
   private calibrationGuidesVisible = true;
+  private calibrationRoomBoundaryVisible = false;
+  private calibrationEditMode: 'wall' | 'safe' | 'mounting-zone' | 'room-boundary' = 'wall';
   private calibrationSvg: SVGSVGElement | null = null;
   private calibrationDrag: CalibrationDrag | null = null;
   private entranceBoundaryQuad: Quad | null = null;
@@ -1870,20 +1872,44 @@ export class MainMuseumHub {
       return button;
     };
     const editCorners = makeAction('Edit wall corners', () => {
+      this.calibrationEditMode = 'wall';
       this.announceCalibrationAction('Currently editing wall corners. Drag an orange point.');
       this.focusCalibrationWall();
     });
     editCorners.title = 'Drag an orange point to reshape the selected wall.';
     const moveWall = makeAction('Move complete wall', () => {
+      this.calibrationEditMode = 'wall';
       this.announceCalibrationAction('Currently moving the complete wall. Drag a striped orange line.');
       this.focusCalibrationWall();
     });
     moveWall.title = 'Drag a striped orange line to move the selected wall.';
+    makeAction('Edit safe boundary', () => {
+      this.calibrationEditMode = 'safe';
+      this.renderCalibrationOverlay();
+      this.announceCalibrationAction('Currently editing the blue safe boundary for the selected wall.');
+    });
+    makeAction('Edit mounting area', () => {
+      this.calibrationEditMode = 'mounting-zone';
+      this.renderCalibrationOverlay();
+      this.announceCalibrationAction('Currently editing the green mounting area for the selected wall.');
+    });
     makeAction('Edit entrance boundary', () => {
+      this.calibrationEditMode = 'room-boundary';
+      this.calibrationRoomBoundaryVisible = true;
       if (this.calibrationWallSelect) this.calibrationWallSelect.value = 'wall-rear';
       this.activeCalibrationWallId = 'wall-rear';
       this.renderCalibrationOverlay();
       this.announceCalibrationAction('Currently editing the entrance boundary. No artwork can be placed here.');
+    });
+    makeAction('Show room boundary', () => {
+      this.calibrationRoomBoundaryVisible = !this.calibrationRoomBoundaryVisible;
+      this.calibrationEditMode = this.calibrationRoomBoundaryVisible ? 'room-boundary' : 'wall';
+      this.renderCalibrationOverlay();
+      this.announceCalibrationAction(
+        this.calibrationRoomBoundaryVisible
+          ? 'Room boundary shown for diagnostics. It is not a normal artwork wall.'
+          : 'Room boundary hidden. Select a rendered wall to edit it.'
+      );
     });
     makeAction('Reset selected boundary', () => this.resetSelectedCalibrationBoundary());
     makeAction('Reset all geometry', () => this.resetCalibration());
@@ -2306,6 +2332,7 @@ export class MainMuseumHub {
       }
       if (this.calibrating) {
         wallPolygon.addEventListener('pointerdown', (event) => {
+          this.calibrationEditMode = 'wall';
           this.activeCalibrationWallId = wall.id;
           if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
           this.announceCalibrationAction(`Currently editing: ${wall.id.toUpperCase()}. Drag a striped orange line to move the complete wall.`);
@@ -2313,7 +2340,7 @@ export class MainMuseumHub {
           this.startWallTranslateDrag(event, wall.id);
         });
       }
-      if (this.calibrating && active) {
+      if (this.calibrating && active && this.calibrationEditMode === 'wall') {
         wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(
           this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--wall')
         ));
@@ -2353,8 +2380,10 @@ export class MainMuseumHub {
         this.renderWallDebugAxes(wall);
       }
       if (!this.calibrating || !active) continue;
-      wall.safePolygon.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'safe', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--safe')));
-      wall.mountingZone.forEach((corner, index) =>
+      if (this.calibrationEditMode === 'safe') {
+        wall.safePolygon.forEach((corner, index) => this.calibrationSvg!.appendChild(this.createCalibrationHandle(wall.id, 'safe', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--safe')));
+      }
+      if (this.calibrationEditMode === 'mounting-zone') wall.mountingZone.forEach((corner, index) =>
         this.calibrationSvg!.appendChild(
           this.createCalibrationHandle(
             wall.id,
@@ -2366,7 +2395,7 @@ export class MainMuseumHub {
         )
       );
     }
-    if (this.calibrating && this.entranceBoundaryQuad) {
+    if (this.calibrating && this.calibrationRoomBoundaryVisible && this.entranceBoundaryQuad) {
       const envelope = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       envelope.dataset.calibrationEnvelope = 'wall-rear';
       envelope.setAttribute('points', this.pointsToSvg(this.entranceBoundaryQuad));
