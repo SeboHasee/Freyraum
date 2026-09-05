@@ -1,6 +1,15 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Robust calibration hit targets (v1.23)
+
+- [x] Enable calibration-stage pointer input only while calibration mode is active.
+- [x] Add enlarged transparent edge and corner hit targets for every editable
+  rendered wall and the bounds-only entrance boundary.
+- [x] Capture pointer sessions on the stable calibration SVG and convert pointer
+  coordinates from that SVG's transformed bounds.
+- [x] Keep hit-target geometry synchronized during continuous movement.
+
 ## Implemented — Stable editor calibration overlay and room envelope (v1.22)
 
 - [x] Keep SVG wall polygons and handles stable during pointer movement; update

@@ -1951,6 +1951,7 @@ export class MainMuseumHub {
     event.preventDefault();
     this.recordCalibrationHistory();
     const element = event.currentTarget as SVGCircleElement;
+    const captureElement = this.calibrationSvg ?? element;
     const wall = this.resolution.wallById.get(wallId);
     const currentQuad = wall?.quad ?? (wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
     if (!currentQuad) return;
@@ -1960,17 +1961,17 @@ export class MainMuseumHub {
       kind: 'wall-point',
       wallId,
       pointerId: event.pointerId,
-      captureElement: element,
+      captureElement,
       target,
       index,
       startPoint,
       startQuad: currentQuad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
     };
-    element.setPointerCapture(event.pointerId);
-    element.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
-    element.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
-    element.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
-    element.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    captureElement.setPointerCapture(event.pointerId);
+    captureElement.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
+    captureElement.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
+    captureElement.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    captureElement.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
   }
 
   private startWallTranslateDrag = (event: PointerEvent, wallId: string): void => {
@@ -1982,23 +1983,24 @@ export class MainMuseumHub {
     const startPoint = this.pointerEventToStage(event);
     if (!currentQuad || !startPoint) return;
     const element = event.currentTarget as SVGPolygonElement;
+    const captureElement = this.calibrationSvg ?? element;
     this.recordCalibrationHistory();
     this.calibrationDrag = {
       kind: 'wall-point',
       wallId,
       pointerId: event.pointerId,
-      captureElement: element,
+      captureElement,
       target: 'quad',
       index: -1,
       startPoint,
       startQuad: currentQuad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
     };
 
-    element.setPointerCapture(event.pointerId);
-    element.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
-    element.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
-    element.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
-    element.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    captureElement.setPointerCapture(event.pointerId);
+    captureElement.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
+    captureElement.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
+    captureElement.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    captureElement.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
   };
 
   private translateWall(wallId: string, dx: number, dy: number): void {
@@ -2012,7 +2014,7 @@ export class MainMuseumHub {
   }
 
   private pointerEventToStage(event: PointerEvent): Point2D | null {
-    const rect = this.visual.getBoundingClientRect();
+    const rect = this.calibrationSvg?.getBoundingClientRect() ?? this.visual.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
     return point(
       Math.min(this.stageWidth, Math.max(0, ((event.clientX - rect.left) / rect.width) * this.stageWidth)),
@@ -2097,6 +2099,16 @@ export class MainMuseumHub {
         `[data-calibration-wall="${wall.id}"]`
       );
       polygon?.setAttribute('points', this.pointsToSvg(wall.quad));
+      wall.quad.forEach((corner, index) => {
+        const next = wall.quad[(index + 1) % wall.quad.length]!;
+        const edge = this.calibrationSvg!.querySelector<SVGLineElement>(
+          `[data-calibration-edge-hit="${wall.id}:${index}"]`
+        );
+        edge?.setAttribute('x1', corner.x.toFixed(2));
+        edge?.setAttribute('y1', corner.y.toFixed(2));
+        edge?.setAttribute('x2', next.x.toFixed(2));
+        edge?.setAttribute('y2', next.y.toFixed(2));
+      });
       this.calibrationSvg
         .querySelector<SVGPolygonElement>(`[data-calibration-safe="${wall.id}"]`)
         ?.setAttribute('points', this.pointsToSvg(wall.safePolygon));
@@ -2104,6 +2116,12 @@ export class MainMuseumHub {
         .querySelector<SVGPolygonElement>(`[data-calibration-mounting-zone="${wall.id}"]`)
         ?.setAttribute('points', this.pointsToSvg(wall.mountingZone));
       wall.quad.forEach((corner, index) => {
+        this.calibrationSvg!.querySelector<SVGCircleElement>(
+          `[data-calibration-corner-hit="${wall.id}:${index}"]`
+        )?.setAttribute('cx', corner.x.toFixed(2));
+        this.calibrationSvg!.querySelector<SVGCircleElement>(
+          `[data-calibration-corner-hit="${wall.id}:${index}"]`
+        )?.setAttribute('cy', corner.y.toFixed(2));
         const handle = this.calibrationSvg!.querySelector<SVGCircleElement>(
           `[data-calibration-handle="${wall.id}:quad:${index}"]`
         );
@@ -2130,6 +2148,19 @@ export class MainMuseumHub {
     if (envelope && this.entranceBoundaryQuad) {
       envelope.setAttribute('points', this.pointsToSvg(this.entranceBoundaryQuad));
       this.entranceBoundaryQuad.forEach((corner, index) => {
+        const cornerHit = this.calibrationSvg!.querySelector<SVGCircleElement>(
+          `[data-calibration-corner-hit="wall-rear:${index}"]`
+        );
+        cornerHit?.setAttribute('cx', corner.x.toFixed(2));
+        cornerHit?.setAttribute('cy', corner.y.toFixed(2));
+        const next = this.entranceBoundaryQuad![(index + 1) % this.entranceBoundaryQuad!.length]!;
+        const edge = this.calibrationSvg!.querySelector<SVGLineElement>(
+          `[data-calibration-edge-hit="wall-rear:${index}"]`
+        );
+        edge?.setAttribute('x1', corner.x.toFixed(2));
+        edge?.setAttribute('y1', corner.y.toFixed(2));
+        edge?.setAttribute('x2', next.x.toFixed(2));
+        edge?.setAttribute('y2', next.y.toFixed(2));
         const handle = this.calibrationSvg!.querySelector<SVGCircleElement>(
           `[data-calibration-handle="wall-rear:quad:${index}"]`
         );
@@ -2183,6 +2214,15 @@ export class MainMuseumHub {
       wallPolygon.dataset.calibrationWall = wall.id;
       wallPolygon.setAttribute('class', `museum-hub__calibration-wall${active ? ' is-active' : ''}`);
       this.calibrationSvg.appendChild(wallPolygon);
+      if (this.calibrating) {
+        wall.quad.forEach((corner, index) => {
+          const next = wall.quad[(index + 1) % wall.quad.length]!;
+          this.calibrationSvg!.appendChild(this.createCalibrationEdgeHitTarget(wall.id, index, corner, next));
+        });
+        wall.quad.forEach((corner, index) => {
+          this.calibrationSvg!.appendChild(this.createCalibrationCornerHitTarget(wall.id, index, corner));
+        });
+      }
       if (this.calibrating) {
         wallPolygon.addEventListener('pointerdown', (event) => {
           this.activeCalibrationWallId = wall.id;
@@ -2263,6 +2303,13 @@ export class MainMuseumHub {
       });
       this.calibrationSvg.appendChild(envelope);
       this.entranceBoundaryQuad.forEach((corner, index) => {
+        const next = this.entranceBoundaryQuad![(index + 1) % this.entranceBoundaryQuad!.length]!;
+        this.calibrationSvg!.appendChild(this.createCalibrationEdgeHitTarget('wall-rear', index, corner, next));
+      });
+      this.entranceBoundaryQuad.forEach((corner, index) => {
+        this.calibrationSvg!.appendChild(this.createCalibrationCornerHitTarget('wall-rear', index, corner));
+      });
+      this.entranceBoundaryQuad.forEach((corner, index) => {
         this.calibrationSvg!.appendChild(
           this.createCalibrationHandle(
             'wall-rear',
@@ -2295,6 +2342,40 @@ export class MainMuseumHub {
     handle.setAttribute('r', '8');
     handle.addEventListener('pointerdown', (event) => this.startWallPointCalibrationDrag(event, wallId, target, index));
     return handle;
+  }
+
+  private createCalibrationEdgeHitTarget(
+    wallId: string,
+    index: number,
+    start: Point2D,
+    end: Point2D
+  ): SVGLineElement {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.dataset.calibrationEdgeHit = `${wallId}:${index}`;
+    line.setAttribute('x1', start.x.toFixed(2));
+    line.setAttribute('y1', start.y.toFixed(2));
+    line.setAttribute('x2', end.x.toFixed(2));
+    line.setAttribute('y2', end.y.toFixed(2));
+    line.setAttribute('class', 'museum-hub__calibration-edge-hit');
+    line.addEventListener('pointerdown', (event) => this.startWallTranslateDrag(event, wallId));
+    return line;
+  }
+
+  private createCalibrationCornerHitTarget(
+    wallId: string,
+    index: number,
+    position: Point2D
+  ): SVGCircleElement {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.dataset.calibrationCornerHit = `${wallId}:${index}`;
+    circle.setAttribute('cx', position.x.toFixed(2));
+    circle.setAttribute('cy', position.y.toFixed(2));
+    circle.setAttribute('r', '18');
+    circle.setAttribute('class', 'museum-hub__calibration-corner-hit');
+    circle.addEventListener('pointerdown', (event) =>
+      this.startWallPointCalibrationDrag(event, wallId, 'quad', index)
+    );
+    return circle;
   }
 
   private projectEntranceBoundary(): Quad | null {

@@ -708,6 +708,15 @@ canvas {
   pointer-events: all;
 }
 
+.museum-hub__calibration-edge-hit {
+  stroke: transparent;
+  stroke-width: 28;
+  fill: none;
+  pointer-events: stroke;
+  cursor: move;
+  touch-action: none;
+}
+
 .museum-hub__calibration-handle--safe {
   fill: rgba(100, 191, 255, 0.95);
 }

@@ -1,6 +1,13 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.23 — Robust calibration hit targets (2026-09-05)
+
+- Added enlarged transparent SVG edge and corner hit targets so visible wall
+  boundaries remain clickable at the transformed editor scale.
+- Calibration pointer capture now uses the stable SVG overlay, with coordinates
+  measured from its actual screen bounds.
+
 ## v1.22 — Stable editor calibration overlay and room envelope (2026-09-05)
 
 - Stabilized SVG calibration nodes and update their geometry in place during
