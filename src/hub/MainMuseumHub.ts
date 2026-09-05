@@ -2235,6 +2235,15 @@ export class MainMuseumHub {
       envelope.setAttribute('role', 'button');
       envelope.setAttribute('aria-label', 'Raum-Eingangsgrenze verschieben');
       envelope.addEventListener('pointerdown', (event) => this.startWallTranslateDrag(event, 'wall-rear'));
+      envelope.addEventListener('keydown', (event) => {
+        const distance = event.shiftKey ? 10 : 1;
+        if (event.key === 'ArrowLeft') this.translateEnvelope(-distance, 0);
+        else if (event.key === 'ArrowRight') this.translateEnvelope(distance, 0);
+        else if (event.key === 'ArrowUp') this.translateEnvelope(0, -distance);
+        else if (event.key === 'ArrowDown') this.translateEnvelope(0, distance);
+        else return;
+        event.preventDefault();
+      });
       this.calibrationSvg.appendChild(envelope);
       this.entranceBoundaryQuad.forEach((corner, index) => {
         this.calibrationSvg!.appendChild(
@@ -2299,6 +2308,16 @@ export class MainMuseumHub {
     return projected.every((corner): corner is Point2D => corner !== null)
       ? (projected as unknown as Quad)
       : null;
+  }
+
+  private translateEnvelope(dx: number, dy: number): void {
+    if (!this.entranceBoundaryQuad) return;
+    this.recordCalibrationHistory();
+    this.entranceBoundaryQuad = this.entranceBoundaryQuad.map((corner) =>
+      point(corner.x + dx, corner.y + dy)
+    ) as unknown as Quad;
+    this.updateCalibrationOverlayGeometry();
+    this.updateCalibrationOutput(true);
   }
 
   private renderWallDebugAxes(wall: ResolvedHubWall): void {

@@ -823,12 +823,12 @@ export function mapReferencePointToStage(
   reference: ReferenceImageCalibration,
   stage: StageReference
 ): Point2D | null {
+  const transform = referenceFitTransform(reference, stage);
   if (
     !Number.isFinite(imagePoint.x) ||
     !Number.isFinite(imagePoint.y) ||
-    !referenceFitTransform(reference, stage)
+    !transform
   ) return null;
-  const transform = referenceFitTransform(reference, stage)!;
   return point(
     imagePoint.x * transform.scale + transform.offset.x,
     imagePoint.y * transform.scale + transform.offset.y
