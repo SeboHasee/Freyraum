@@ -24,8 +24,10 @@
 - Both generated `file://` entries now cache-bust imported artwork and audio
   bundles, preventing the standalone editor from reopening stale customer data.
 - Review hardening corrected vertical zone centering, released replaced skylight
-  meshes/materials, kept export controls in the editor panel, and routed copy,
-  fallback-download, and error feedback through one visible live status region.
+  meshes/materials, kept canonical height controls synchronized, kept export
+  controls in the editor panel, revealed manual-copy JSON before focus, and
+  routed copy, fallback-download, and error feedback through one visible live
+  status region.
 - Retried the full validation workflow after restoring locked dependencies:
   import, build/typecheck, lint, hub geometry, frame budget, WebGL resilience,
   documentation authority, secret scanning, and focused final review passed.

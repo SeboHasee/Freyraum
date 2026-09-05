@@ -2371,7 +2371,8 @@ export class MainMuseumHub {
     slot.placement.center = point(slot.placement.uv.x, 1 - slot.placement.uv.y);
     slot.placement.horizontalPosition = slot.placement.uv.x;
     slot.placement.centerHeight = slot.placement.anchor.y;
-    slot.placement.physicalHeight = slot.placement.mountedHeight;
+    slot.placement.physicalHeight ??= slot.placement.mountedHeight;
+    slot.placement.mountedHeight = slot.placement.physicalHeight;
     slot.placement.mountingGap ??= 0.002;
   }
 
@@ -2466,7 +2467,8 @@ export class MainMuseumHub {
         point(slot.placement.center.x, 1 - this.clampLocalY(value / wall.room.height))
       );
     } else if (field === 'physicalHeight') {
-      slot.placement.mountedHeight = Math.max(0.04, Math.min(wall.room.height, value));
+      slot.placement.physicalHeight = Math.max(0.04, Math.min(wall.room.height, value));
+      slot.placement.mountedHeight = slot.placement.physicalHeight;
     } else if (field === 'mountingGap') {
       slot.placement.mountingGap = Math.max(0.001, Math.min(0.03, value));
     }
@@ -2556,6 +2558,7 @@ export class MainMuseumHub {
       await navigator.clipboard.writeText(this.calibrationOutput.value);
       copied = true;
     } catch {
+      this.calibrationOutput.closest('details')?.setAttribute('open', '');
       this.calibrationOutput.focus();
       this.calibrationOutput.select();
       try {
