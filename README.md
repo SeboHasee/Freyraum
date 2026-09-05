@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -9,6 +9,14 @@ Double-click **`OPEN_ARTWORK_EDITOR.html`**. It opens the dedicated placement
 program from `customer-preview/placement-editor.html`; no URL parameter is
 required. Use the numbered sidebar to select, drag, resize, validate, and
 download the finished `museum-hub.json`.
+
+The editor keeps artwork wall ownership fixed, validates the complete projected
+artwork body against the confirmed green mounting zone, and blocks export until
+all checks pass. Orange wall projections are read-only because their homography
+and room-plane state is build-derived; blue safe zones and green mounting zones
+remain editable. Imported JSON must match the current artwork inventory and all
+fixed camera/room/wall settings. The generated file preview cache-busts customer
+artwork and audio bundles after every import.
 
 ## Current project state
 
@@ -38,13 +46,12 @@ download the finished `museum-hub.json`.
   wall and one safely inset on each side wall—with physical edge-cast contact
   shadows and no oversized backing cards. Larger exhibitions paginate into additional room pages,
   and narrow-portrait viewports split each room into left/right wall focus pages.
-- **Open visual acceptance incident:** the latest customer screenshot supplied
-  on 2026-09-04 confirms the four-slot 2+1+1 room, but shows both side works too
-  crossing the front-wall corner seams after v1.13 moved them in the wrong
-  direction. The next screenshot showed 55%/45% still crossing the photographed
-  seams despite passing wall-space checks. v1.16 uses 50%/50% wall midpoints and
-  adds projected 12 px guards against both visible doorway reveals and corner
-  seams. A post-fix screenshot is still required for final acceptance.
+- **Open visual acceptance:** repeated percentage changes did not establish the
+  requested side-wall composition. v1.17 stopped cross-wall fallback and added
+  deterministic mounting-zone validation; v1.18 provides the standalone editor
+  so the customer controls the final positions directly. Acceptance remains open
+  until the customer exports `museum-hub.json` and approves a screenshot from
+  the exact rebuilt preview.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy
   (`planar`, `ibl`, `off`). The hub uses smooth near-white PBR plaster and a

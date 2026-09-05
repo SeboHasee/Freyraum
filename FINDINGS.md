@@ -1,5 +1,5 @@
 # FINDINGS
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 ## Standalone editor usability findings (v1.18, 2026-09-05)
 
@@ -15,6 +15,16 @@
    limits direct boundary editing to safe and mounting zones.
 5. Import must match the active artwork inventory, assignments, and fixed wall
    projection exactly; partial application creates unreproducible hybrid state.
+6. Exact reproduction also requires rejecting differences in camera, global
+   room, fallback policy, pagination, bounds-only walls, and fixed slot policy.
+   Accepted imports apply only editor-owned boundary and placement fields.
+7. Exporting only rendered walls drops the rear bounds-only enclosure. Export
+   must retain the complete configured wall inventory and every fixed slot field.
+8. A separate file entry must share the importer cache-busting contract;
+   otherwise Chromium may reopen stale artwork/audio bundles after an import.
+9. Validation must start from installed locked dependencies. After `npm ci`, the
+   complete importer/build/typecheck/lint/geometry/frame/WebGL/docs/secret suite
+   passed, followed by a focused review with no blocking findings.
 
 ## Deterministic editor findings (v1.17, 2026-09-04)
 

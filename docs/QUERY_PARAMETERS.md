@@ -1,10 +1,10 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
 
-Verified against runtime code and schema v5 on 2026-09-04.
+Verified against runtime code and schema v5 on 2026-09-05.
 
 ## Query parameters
 
@@ -70,7 +70,12 @@ Notes:
   minimum-size warnings, and a restore-last-valid action.
 - Copy/download remains disabled until every geometry check and a sanitized
   export/re-import comparison passes. Re-import accepts a local JSON file and
-  rejects wall-ownership changes.
+  rejects wall-ownership changes. It also rejects different artwork inventory,
+  assignment/enabled/selectable state, camera, room, fallback, pagination,
+  fixed wall projection, bounds-only wall, and fixed slot policy.
+- Accepted imports mutate only safe/mounting zones, zone confirmation, and the
+  canonical placement fields. Export preserves the complete configured wall
+  inventory—including bounds-only walls—plus all fixed configuration fields.
 - On release, the complete v5 `museum-hub.json` schema (single calibrated
   camera, metric-like wall planes, doorway exclusions, hanging bands, slot
   anchors, fallback background, visual tokens, and slots) appears in the

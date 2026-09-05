@@ -1,5 +1,5 @@
 # Documentation Rules
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 ## Goal
 

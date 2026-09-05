@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -77,6 +77,15 @@ sanitize/re-import preserves wall ID plus all four canonical placement fields.
 `OPEN_ARTWORK_EDITOR.html` is the customer-facing one-click launcher. All three
 reuse the same runtime and schema rather than maintaining a second placement
 implementation.
+
+Editor state is deliberately split into fixed and editable data. Camera,
+global room values, rendered/bounds-only wall inventory, wall projection
+transforms, fallback policy, pagination, slot inventory, assignment, and fixed
+slot policies must match the active build on import. Only safe/mounting zones,
+zone confirmation, and canonical placement values are applied. Export starts
+from the complete configured wall inventory so bounds-only walls and fixed
+fields survive the round trip. `scripts/import-artworks.mjs` and
+`scripts/write-local-preview.mjs` cache-bust customer data in both file entries.
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`

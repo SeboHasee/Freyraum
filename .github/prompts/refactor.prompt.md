@@ -1,6 +1,13 @@
 # Refactor prompt
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Last full markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 current context
+
+Do not split the standalone editor into a separate placement engine. Preserve
+the shared resolver, fixed wall ownership, build-derived read-only projection,
+complete configured-model export, incompatible-import rejection, and generated
+file-preview cache contract.
 
 ## v1.12 current context
 

@@ -1,5 +1,5 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 ## Implemented — Standalone Artwork Placement Editor (v1.18)
 
@@ -8,7 +8,12 @@
 - [x] Present numbered, plain-language controls in a persistent sidebar.
 - [x] Keep placement, validation, and v5 export in the shared deterministic engine.
 - [x] Keep derived wall projections read-only and reject incompatible imports.
-- [x] Preserve room thickness and page capacity during export.
+- [x] Reject fixed camera/room/wall/fallback/slot differences before import.
+- [x] Apply only editor-owned zones, confirmations, and canonical placements.
+- [x] Preserve bounds-only walls, room thickness, page capacity, fallback policy,
+  and fixed slot fields during export.
+- [x] Cache-bust artwork/audio bundles in both generated file-preview entries.
+- [x] Pass the full validation suite and focused final review without errors.
 - [ ] Customer places and approves the final artworks, then supplies the exported
   `museum-hub.json` for the accepted preview baseline.
 

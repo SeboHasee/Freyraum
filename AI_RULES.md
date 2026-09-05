@@ -1,5 +1,15 @@
 # FREYRAUM AI rules
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 artwork-editor rule
+
+Use `OPEN_ARTWORK_EDITOR.html` for customer placement. Keep build-derived wall
+projection geometry read-only unless every dependent homography, room plane, and
+renderer object is rebuilt atomically. Import may apply only editor-owned zones
+and canonical placements after the fixed camera/room/wall/fallback/slot signature
+matches. Export must preserve rendered and bounds-only walls plus all fixed
+configuration fields. Keep customer-data cache busting synchronized across every
+generated `file://` entry.
 
 ## v1.12 hub visual-acceptance rule
 

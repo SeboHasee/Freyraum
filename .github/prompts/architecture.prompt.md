@@ -1,6 +1,14 @@
 # Architecture prompt
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Last full markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 current context
+
+Treat the standalone placement editor as another entry into the shared hub
+runtime, not a second placement implementation. Keep projection-derived state
+read-only, separate fixed configuration from editor-owned zones/placements,
+preserve bounds-only walls and fixed fields on export, and maintain cache-busting
+for every generated file-preview entry.
 
 ## v1.12 current context
 

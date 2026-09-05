@@ -1,6 +1,16 @@
 # FREYRAUM Copilot instructions
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Last full markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 current context
+
+The standalone placement workflow is `OPEN_ARTWORK_EDITOR.html` →
+`customer-preview/placement-editor.html`. Preserve strict wall ownership,
+complete-quad mounting-zone validation, canonical v5 placement, and valid-only
+export. Build-derived wall projections are read-only. Import must reject any
+fixed camera/room/wall/fallback/pagination/inventory/assignment/slot-policy
+difference; export must preserve rendered and bounds-only walls plus all fixed
+fields. Keep customer data cache-busted in both generated `file://` entries.
 
 ## v1.12 current context
 

@@ -1,5 +1,5 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 ## v1.18 — Standalone Artwork Placement Editor (2026-09-05)
 
@@ -15,9 +15,20 @@
 - Made build-calibrated wall projection outlines read-only; editable safe and
   mounting zones remain available without creating stale projection transforms.
 - Import now rejects changed slot inventories, assignments, activation states,
-  and incompatible wall projections instead of creating a hybrid configuration.
-- Export preserves `slotsPerPage` and room `wallThickness`; arrow-key artwork
+  camera/room/fallback settings, and incompatible wall projections instead of
+  creating a hybrid configuration. Accepted imports mutate only safe zones,
+  mounting zones, confirmations, and canonical placement values.
+- Export preserves rendered and bounds-only walls, fixed slot policy fields,
+  fallback policy, `slotsPerPage`, and room `wallThickness`; arrow-key artwork
   nudging no longer overrides native number/select controls.
+- Both generated `file://` entries now cache-bust imported artwork and audio
+  bundles, preventing the standalone editor from reopening stale customer data.
+- Review hardening corrected vertical zone centering, released replaced skylight
+  meshes/materials, kept export controls in the editor panel, and routed copy,
+  fallback-download, and error feedback through one visible live status region.
+- Retried the full validation workflow after restoring locked dependencies:
+  import, build/typecheck, lint, hub geometry, frame budget, WebGL resilience,
+  documentation authority, secret scanning, and focused final review passed.
 
 ## v1.17 — Deterministic curator placement editor (2026-09-04)
 

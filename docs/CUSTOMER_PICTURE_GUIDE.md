@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This guide documents the current customer workflow only.
 
@@ -83,6 +83,8 @@ copies into `customer-artworks/inbox/`.
   6. Click **Konfiguration herunterladen** when the button becomes available.
 - Replace `customer-artworks/museum-hub.json` with the downloaded file and run
   `Update Gallery.command` or `Update Gallery.bat`.
+- Reopening the generated editor after an update loads cache-busted artwork and
+  audio bundles, so it does not intentionally reuse the previous import.
 - The current `customer-artworks/museum-hub.json` format is **version 5**:
   camera, room envelope, calibrated front/left/right wall transforms, drawable
   regions, doorway exclusions, visual tokens, exact artwork IDs, normalized
@@ -98,6 +100,9 @@ copies into `customer-artworks/inbox/`.
   replace `customer-artworks/museum-hub.json`, rerun Update Gallery, and re-import
   that file once to confirm an identical round trip.
 - The editor never moves an explicitly assigned work to another wall.
+- Orange wall outlines are read-only. Blue safe-zone and green mounting-zone
+  handles are editable. Imports with different artwork assignments or fixed
+  camera/room/wall settings are rejected instead of partially merged.
 - Older hotspot arrays and v1/v2 slot boxes still load through migration, but
   they should be re-saved from the current calibration flow.
 - Each museum room shows at most four works: two on the front wall and one on

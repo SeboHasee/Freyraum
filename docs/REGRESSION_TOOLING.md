@@ -1,5 +1,5 @@
-# Regression Validation Tooling (v1.12)
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+# Regression Validation Tooling (v1.18)
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -145,6 +145,12 @@ The v1.17 contract additionally requires explicit four-corner mounting zones,
 immutable explicit wall ownership, complete-quad zone containment, and exact
 v5 canonical placement preservation through sanitize/re-import. Invalid
 placements are suppressed instead of falling back to another wall.
+
+The v1.18 editor contract additionally requires a discoverable file-safe entry,
+read-only build-derived wall projection, native keyboard behavior inside form
+controls, rejection of incompatible fixed configuration on import, preservation
+of rendered and bounds-only walls plus fixed settings on export, and cache-busted
+customer artwork/audio scripts in both generated file entries.
 
 The v1.15 orientation gate additionally proves that every artwork is a rigid
 wall-parallel plane. It requires wall-normal alignment and zero relative corner

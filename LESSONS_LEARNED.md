@@ -1,5 +1,27 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## 2026-09-05 — Standalone editor reproducibility lessons
+
+### Lesson 110 — Import only editor-owned state
+
+An in-place editor cannot safely accept camera, room, wall-transform, inventory,
+assignment, or fixed-policy changes without rebuilding the complete resolution
+and renderer. Reject those differences and apply only explicitly editable safe
+zones, mounting zones, confirmations, and canonical placement values.
+
+### Lesson 109 — Export from the complete configured model
+
+The runtime list of rendered walls is not the complete configuration: bounds-only
+walls still define the architectural envelope. Round-trip export must retain
+those walls plus pagination, fallback policy, room thickness, and fixed slot
+settings instead of reconstructing JSON from visible objects alone.
+
+### Lesson 108 — Every file entry needs the same cache contract
+
+Adding a second `file://` launcher creates another browser cache boundary.
+Customer artwork and audio URLs must be cache-busted in both the gallery preview
+and placement editor whenever the importer rewrites those bundles.
 
 ## 2026-09-04 — Deterministic placement tooling lesson
 

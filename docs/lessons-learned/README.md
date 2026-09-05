@@ -1,5 +1,11 @@
 # Lessons learned docs
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 lesson index update
+
+See `../../LESSONS_LEARNED.md § 2026-09-05 — Standalone editor reproducibility
+lessons` for the fixed/editable import boundary, complete configured-model
+export rule, and multi-entry `file://` cache-busting requirement.
 
 ## v1.12 lesson index update
 

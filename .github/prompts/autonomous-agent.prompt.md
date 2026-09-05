@@ -1,6 +1,13 @@
 # Autonomous agent prompt
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Last full markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 current context
+
+For artwork placement, direct customers to `OPEN_ARTWORK_EDITOR.html`; do not
+resume coordinate guessing. Preserve strict wall ownership and fixed/editable
+configuration boundaries, validate complete v5 export/re-import, rebuild the
+generated editor, and keep both file entries cache-fresh.
 
 ## v1.12 current context
 

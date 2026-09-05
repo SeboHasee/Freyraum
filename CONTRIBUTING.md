@@ -1,5 +1,5 @@
 # Contributing
-> Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 ## Validation baseline
 
@@ -63,6 +63,13 @@ preview, Vite dev/build, or deployed Pages), visible room counter, generated
 `customer-artworks.js`, injected `museum-hub.json`, and screenshot together.
 Passing `validate:museum-hub` proves geometry contracts, not perceptual
 acceptance or that the observed artifact was built from the current branch.
+
+When changing the standalone placement editor, verify both
+`placement-editor.html` and generated
+`customer-preview/placement-editor.html`. Preserve fixed camera/room/wall,
+fallback, pagination, inventory, assignment, and slot-policy fields across
+export/import. If importer output changes, confirm both file-preview entries use
+fresh cache-busting query strings.
 
 ## Architecture drift audit (required when architecture-affecting changes occur)
 
