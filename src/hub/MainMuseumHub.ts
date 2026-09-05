@@ -1770,6 +1770,12 @@ export class MainMuseumHub {
       option.textContent = `${wall.id} (${wall.group})`;
       select.appendChild(option);
     }
+    if (this.entranceBoundaryQuad) {
+      const option = document.createElement('option');
+      option.value = 'wall-rear';
+      option.textContent = 'wall-rear (room entrance boundary)';
+      select.appendChild(option);
+    }
     if (this.activeCalibrationWallId) select.value = this.activeCalibrationWallId;
     select.addEventListener('change', () => {
       this.activeCalibrationWallId = select.value;
@@ -2294,6 +2300,8 @@ export class MainMuseumHub {
       envelope.setAttribute('aria-label', 'Raum-Eingangsgrenze verschieben');
       envelope.addEventListener('pointerdown', (event) => this.startWallTranslateDrag(event, 'wall-rear'));
       envelope.addEventListener('keydown', (event) => {
+        this.activeCalibrationWallId = 'wall-rear';
+        if (this.calibrationWallSelect) this.calibrationWallSelect.value = 'wall-rear';
         const distance = event.shiftKey ? 10 : 1;
         if (event.key === 'ArrowLeft') this.translateEnvelope(-distance, 0);
         else if (event.key === 'ArrowRight') this.translateEnvelope(distance, 0);
@@ -3215,12 +3223,12 @@ export class MainMuseumHub {
       this.editorBackgroundObjectUrl = null;
     }
     for (const wall of config.walls) {
-      const currentWall = this.resolution.wallById.get(wall.id);
-      if (!currentWall) continue;
       if (wall.id === 'wall-rear' && wall.quad && wall.quad.length === 4) {
         this.entranceBoundaryQuad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
         continue;
       }
+      const currentWall = this.resolution.wallById.get(wall.id);
+      if (!currentWall) continue;
       if (wall.quad && wall.quad.length === currentWall.quad.length) {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
       }
