@@ -1,26 +1,62 @@
 # FREYRAUM
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
+
+## Place artworks
+
+Double-click **`OPEN_ARTWORK_EDITOR.html`**. It opens the dedicated placement
+program from `customer-preview/placement-editor.html`; no URL parameter is
+required. Use the numbered sidebar to select, drag, resize, validate, and
+download the finished `museum-hub.json`.
+
+The editor keeps artwork wall ownership fixed, validates the complete projected
+artwork body against the confirmed green mounting zone, and blocks export until
+all checks pass. Orange wall projections are read-only because their homography
+and room-plane state is build-derived; blue safe zones and green mounting zones
+remain editable. Imported JSON must match the current artwork inventory and all
+fixed camera/room/wall settings. The generated file preview cache-busts customer
+artwork and audio bundles after every import.
 
 ## Current project state
 
 - Runtime renderer: WebGL (WebGPU is opt-in probe mode only).
+- Resilient startup: the real renderer is attempted directly with preferred,
+  compatibility, then battery-safe attributes. Failed partial contexts are
+  released; no separate detection context is retained.
+- Support contract: immersive rendering requires working WebGL 2. If it cannot
+  initialize, artwork images, titles, metadata, and descriptions remain
+  available in an accessible, responsive 2D museum instead of a blocking alert.
 - Startup flows from the loading screen into a manifest-driven Main Museum Hub:
   the customer room backdrop remains the environmental plate, while a dedicated
   on-demand WebGL room scene renders calibrated front/left/right walls inside a
-  7 × 7 × 3.4 m square shell plus an entry enclosure behind the camera,
-  doorway passage pockets, skirting shadow gaps, recessed ceiling coves,
-  mounted artwork depth, and soft contact shadows.
+  tall 9 × 12 × 5.2 m architectural hall plus an entry enclosure behind the
+  camera, doorway passage pockets, floor/ceiling shadow gaps, longitudinal
+  perimeter luminaires, a pitched glazed skylight with procedural atmospheric
+  sky, mounted artwork depth, and soft directional contact shadows.
 - Hub interaction DOM is now only the screen-space accessibility bridge. Slots
   resolve by exact `Artwork.id` from `customer-artworks/museum-hub.json`; the
-  shipping v4 hub contract persists camera far/lens-shift, room envelope,
+  shipping v5 hub contract persists camera far/lens-shift, room envelope,
   hanging rules, wall transforms/drawable regions/exclusion polygons, and
-  normalized slot UV / scale / z-offset metadata. Larger exhibitions paginate
-  into additional room pages, and narrow-portrait viewports split each room
-  into left/right wall focus pages.
+  canonical wall-relative artwork placement (`horizontalPosition`,
+  `centerHeight`, `physicalHeight`, `mountingGap`). Runtime U/V/N mounting
+  frames derive the metric anchor, preserve source aspect ratio, point every
+  artwork into the room, and project the actual mounted front face for the DOM
+  interaction bridge. Each room uses a maximum of four works—two on the front
+  wall and one safely inset on each side wall—with physical edge-cast contact
+  shadows and no oversized backing cards. Larger exhibitions paginate into additional room pages,
+  and narrow-portrait viewports split each room into left/right wall focus pages.
+- **Open visual acceptance:** repeated percentage changes did not establish the
+  requested side-wall composition. v1.17 stopped cross-wall fallback and added
+  deterministic mounting-zone validation; v1.18 provides the standalone editor
+  so the customer controls the final positions directly. Acceptance remains open
+  until the customer exports `museum-hub.json` and approves a screenshot from
+  the exact rebuilt preview.
 - Quality presets now also drive the hub room pixel ratio, architectural
-  surface tile size, skylight shadowing, and floor reflection strategy
-  (`planar`, `ibl`, `off`).
+  detail resolution, skylight shadowing, and floor reflection strategy
+  (`planar`, `ibl`, `off`). The hub uses smooth near-white PBR plaster and a
+  distinct pale satin-mineral floor; physical geometry and local light create
+  their form while the closer gallery retains its tactile mapped plaster profile.
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
 - The interactive gallery now mounts artworks inside a compact architectural stage
@@ -36,6 +72,11 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Lighting still uses one fixed balanced neutral-gallery configuration, but the
   single-artwork view now runs at a softer ambient/direct energy balance and a
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
+- The hub keeps a separate daylight architectural rig: three explicitly
+  downward-facing local area sources connect the coves/skylight to wall and
+  floor illumination, a restrained sky-aligned key casts architectural shadows,
+  and low environment/hemisphere levels supply only soft fill. Battery uses a
+  simple gradient sky and inexpensive directional fallback.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.
@@ -72,6 +113,7 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 - Current publishing still depends on GitHub-tracked customer artwork files; for oversized originals see `docs/IMAGE_MAINTENANCE_GUIDE.md` and `plan.md`.
 
 Historical release details are maintained in [`CHANGELOG.md`](./CHANGELOG.md).
+Active visual follow-up is tracked in [`plan.md`](./plan.md).
 
 ## Quick start (developers)
 

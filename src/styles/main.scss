@@ -304,9 +304,12 @@ canvas {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(4, 8, 11, 0.36) 0%, transparent 28%),
-    linear-gradient(0deg, rgba(4, 8, 11, 0.26) 0%, transparent 26%);
+  background: radial-gradient(
+    ellipse 52% 38% at 0% 0%,
+    rgba(4, 8, 11, 0.4) 0%,
+    rgba(4, 8, 11, 0.18) 42%,
+    transparent 76%
+  );
 }
 
 .museum-hub__header {
@@ -461,6 +464,18 @@ canvas {
   box-shadow:
    inset 0 0 0 1px rgba(12, 18, 22, 0.14),
    inset 0 -1px 1px rgba(10, 12, 14, 0.2);
+}
+
+.museum-hub.is-2d .museum-hub__art {
+  opacity: 1;
+}
+
+.museum-hub.is-2d .museum-hub__image {
+  opacity: 1;
+}
+
+.museum-hub.is-2d .museum-hub__introduction::after {
+  content: ' Die räumliche Museumsansicht ist nicht verfügbar; Auswahl und Galerie bleiben bedienbar.';
 }
 
 .museum-hub__art-placeholder {
@@ -625,6 +640,7 @@ canvas {
   inset: 0;
   z-index: 4;
   overflow: visible;
+  pointer-events: none;
 }
 
 .museum-hub.is-debug-geometry:not(.is-calibrating) .museum-hub__calibration-svg {
@@ -644,13 +660,26 @@ canvas {
   stroke-dasharray: 10 6;
 }
 
+.museum-hub__calibration-mounting-zone {
+  fill: rgba(100, 255, 170, 0.1);
+  stroke: rgba(100, 255, 170, 0.95);
+  stroke-width: 2.5;
+  stroke-dasharray: 5 4;
+}
+
+.museum-hub__calibration-mounting-zone.is-unconfirmed {
+  stroke: rgba(255, 190, 70, 0.98);
+}
+
 .museum-hub__calibration-wall.is-active,
-.museum-hub__calibration-safe.is-active {
+.museum-hub__calibration-safe.is-active,
+.museum-hub__calibration-mounting-zone.is-active {
   opacity: 1;
 }
 
 .museum-hub__calibration-wall:not(.is-active),
-.museum-hub__calibration-safe:not(.is-active) {
+.museum-hub__calibration-safe:not(.is-active),
+.museum-hub__calibration-mounting-zone:not(.is-active) {
   opacity: 0.45;
 }
 
@@ -659,10 +688,25 @@ canvas {
   stroke: rgba(255, 255, 255, 0.95);
   stroke-width: 2;
   cursor: move;
+  pointer-events: all;
 }
 
 .museum-hub__calibration-handle--safe {
   fill: rgba(100, 191, 255, 0.95);
+}
+
+.museum-hub__calibration-handle--mounting-zone {
+  fill: rgba(70, 220, 135, 0.98);
+}
+
+.museum-hub__artwork.is-calibration-selected {
+  outline: 3px solid rgba(100, 255, 170, 0.98);
+  outline-offset: 4px;
+}
+
+.museum-hub__artwork.is-invalid-calibration {
+  outline: 4px solid rgba(255, 65, 45, 0.98);
+  outline-offset: 5px;
 }
 
 .museum-hub__debug-axis {
@@ -786,15 +830,96 @@ canvas {
 
 .museum-hub__calibration-title {
   margin-bottom: 8px;
-  font-size: 0.72rem;
+  font-size: 1.15rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.01em;
+}
+
+.museum-hub__calibration-intro {
+  margin-bottom: 12px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.museum-hub__calibration-steps {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding-left: 20px;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.museum-hub__calibration-help {
+  margin: 0 0 10px;
+  font-size: 0.7rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .museum-hub__calibration-controls {
   display: grid;
   gap: 10px;
   margin-bottom: 10px;
+}
+
+.museum-hub__calibration-numeric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.museum-hub__calibration-number {
+  display: grid;
+  gap: 4px;
+  font-size: 0.68rem;
+}
+
+.museum-hub__calibration-number input {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.34);
+  color: inherit;
+}
+
+.museum-hub__calibration-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.museum-hub__calibration-action,
+.museum-hub__calibration-import {
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.34);
+  color: inherit;
+  font-size: 0.7rem;
+}
+
+.museum-hub__calibration-action:disabled {
+  opacity: 0.42;
+}
+
+.museum-hub__calibration-import {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+
+.museum-hub__calibration-action-status {
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 .museum-hub__calibration-label {
@@ -838,6 +963,94 @@ canvas {
   font-family: monospace;
   font-size: 0.7rem;
   line-height: 1.4;
+}
+
+.museum-hub__calibration-advanced {
+  margin-top: 10px;
+  font-size: 0.72rem;
+
+  summary {
+    padding: 8px 0;
+    cursor: pointer;
+    font-weight: 700;
+  }
+}
+
+// Dedicated editor page: keep the complete museum view visible beside a
+// persistent control sidebar instead of covering the artwork with a small panel.
+body.placement-editor {
+  --placement-editor-width: clamp(360px, 31vw, 460px);
+  overflow: hidden;
+
+  .museum-hub__header,
+  .museum-hub__shade,
+  .museum-hub__pager {
+    display: none;
+  }
+
+  .museum-hub__visual {
+    left: calc((100vw - var(--placement-editor-width)) / 2);
+    width: min(
+      calc(100vw - var(--placement-editor-width)),
+      calc(100vh * var(--hub-aspect))
+    );
+    height: min(
+      100vh,
+      calc((100vw - var(--placement-editor-width)) / var(--hub-aspect))
+    );
+  }
+
+  .museum-hub__calibration {
+    position: fixed;
+    inset: 0 0 0 auto;
+    width: var(--placement-editor-width);
+    padding: 22px;
+    overflow: auto;
+    border-radius: 0;
+    background: rgba(10, 14, 17, 0.96);
+  }
+
+  .museum-hub__calibration-title {
+    font-size: 1.45rem;
+  }
+
+  .museum-hub__calibration-help {
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(100, 191, 255, 0.12);
+  }
+
+  .museum-hub__calibration-action,
+  .museum-hub__calibration-import,
+  .museum-hub__calibration-select,
+  .museum-hub__calibration-restore,
+  .museum-hub__calibration-number input {
+    font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 820px) {
+  body.placement-editor {
+    --placement-editor-height: min(48vh, 430px);
+
+    .museum-hub__visual {
+      top: calc((100vh - var(--placement-editor-height)) / 2);
+      left: 50%;
+      width: min(100vw, calc((100vh - var(--placement-editor-height)) * var(--hub-aspect)));
+      height: min(
+        calc(100vh - var(--placement-editor-height)),
+        calc(100vw / var(--hub-aspect))
+      );
+    }
+
+    .museum-hub__calibration {
+      inset: auto 0 0;
+      width: 100%;
+      height: var(--placement-editor-height);
+      padding: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.18);
+    }
+  }
 }
 
 #app:not([data-experience='gallery']) {
@@ -2265,14 +2478,15 @@ button {
 .fallback-screen {
   position: fixed;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 32px;
+  overflow: auto;
+  padding: max(32px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   background: var(--color-gallery-wall);
   z-index: 300;
 }
 
 .fallback-screen__card {
+  margin: 0 auto 32px;
   width: min(540px, calc(100vw - var(--safe-left) - var(--safe-right) - 32px));
   background: var(--glass-bg-strong);
   backdrop-filter: blur(var(--glass-blur));
@@ -2313,6 +2527,77 @@ button {
   letter-spacing: 0.04em;
   color: var(--text-muted);
   opacity: 0.7;
+}
+
+.fallback-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.fallback-screen__action {
+  appearance: none;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-pill);
+  padding: 10px 16px;
+  background: var(--glass-bg-strong);
+  color: var(--text-strong);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.fallback-screen__action:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.fallback-screen__museum {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 20px;
+}
+
+.fallback-screen__artwork {
+  display: grid;
+  grid-template-columns: minmax(180px, 34%) 1fr;
+  gap: clamp(18px, 4vw, 36px);
+  align-items: center;
+  padding: clamp(18px, 4vw, 32px);
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg-strong);
+}
+
+.fallback-screen__artwork img {
+  width: 100%;
+  max-height: 56vh;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.fallback-screen__artwork h2 {
+  margin-bottom: 8px;
+  color: var(--text-strong);
+}
+
+.fallback-screen__artwork p {
+  margin-top: 10px;
+  color: var(--text-muted);
+  line-height: 1.65;
+}
+
+.fallback-screen__metadata {
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .fallback-screen__artwork {
+    grid-template-columns: 1fr;
+  }
 }
 
 // =============================================================================

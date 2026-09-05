@@ -1,9 +1,10 @@
 # FREYRAUM Query Parameters & Stored Configuration
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
 
-Verified against runtime code on 2026-09-01.
+Verified against runtime code and schema v5 on 2026-09-05.
 
 ## Query parameters
 
@@ -42,14 +43,40 @@ Notes:
 
 Museum-hub wall-plane calibration mode (`src/hub/MainMuseumHub.ts`).
 
+Customers do not need to construct this URL. Double-click
+`OPEN_ARTWORK_EDITOR.html`, which opens the dedicated
+`customer-preview/placement-editor.html` program with the editor mode enabled.
+Developers can run `npm run editor`.
+
 Notes:
 - Exposes the projected artwork surfaces plus an SVG calibration overlay for
-  wall-corner points and safe-zone points.
+  fixed wall outlines, editable safe zones, and green authoritative mounting
+  zones.
 - Drag an artwork to move it on its wall plane; drag its corner handle to
-  change mounted height. Drag wall/safe handles to recalibrate the wall plane.
+  change mounted height. Blue and green handles adjust safe and mounting zones.
+  The orange wall projection is build-owned and read-only so an edit cannot leave
+  the live projection and exported configuration out of sync.
+- Select a work, edit its four canonical values numerically, or nudge it with
+  arrow keys (`Shift` for larger steps). “Zwischen Grenzen zentrieren” uses the
+  actual green mounting polygon rather than a fixed percentage.
+- Green handles define the visible doorway, corner, floor, and ceiling margins.
+  The complete projected artwork body is clamped inside that polygon.
+- A changed/imported mounting zone is unconfirmed. Align it with the visible
+  architecture and press “Aktive Grenzen bestätigen” for every rendered wall;
+  export remains disabled until all zones are explicitly confirmed.
+- Undo, redo, reset, and restore-last-valid are available. Invalid work is
+  highlighted red and remains assigned to its original wall.
 - The panel includes an active-wall selector, live overlap/convexity/safe-zone/
   minimum-size warnings, and a restore-last-valid action.
-- On release, the complete v4 `museum-hub.json` schema (single calibrated
+- Copy/download remains disabled until every geometry check and a sanitized
+  export/re-import comparison passes. Re-import accepts a local JSON file and
+  rejects wall-ownership changes. It also rejects different artwork inventory,
+  assignment/enabled/selectable state, camera, room, fallback, pagination,
+  fixed wall projection, bounds-only wall, and fixed slot policy.
+- Accepted imports mutate only safe/mounting zones, zone confirmation, and the
+  canonical placement fields. Export preserves the complete configured wall
+  inventory—including bounds-only walls—plus all fixed configuration fields.
+- On release, the complete v5 `museum-hub.json` schema (single calibrated
   camera, metric-like wall planes, doorway exclusions, hanging bands, slot
   anchors, fallback background, visual tokens, and slots) appears in the
   on-screen copy panel and is logged via diagnostics. Exported room planes are
@@ -57,9 +84,16 @@ Notes:
   quads used by the photographed room.
 - Paste the JSON into `customer-artworks/museum-hub.json` and re-run the
   gallery update (`npm run import:artworks`) to apply it.
-- Legacy `customer-artworks/hub-hotspots.json` and v1/v2 box placements still
-  migrate automatically with warnings; new exports always use the v4
-  calibrated-room format.
+- Legacy `customer-artworks/hub-hotspots.json` and v1–v4 placements still
+  migrate automatically with warnings; new exports always use the v5
+  calibrated-room format. Canonical artwork mounting uses
+  `horizontalPosition`, `centerHeight`, `physicalHeight`, and `mountingGap`.
+- A resolved page contains at most four works in the 2-front + 1-left + 1-right
+  composition. Additional works overflow into contiguous virtual rooms.
+- Automatic side-wall fallback placement must retain at least 0.35 m in the
+  calibrated wall model and 4.00 m from its front corner. Shipping regression
+  checks additionally require 12 px against the photographed doorway reveal and
+  front-wall seam in the calibrated primary camera.
 - Slot/page navigation is disabled while calibrating.
 
 ### `?hubDebug=1`

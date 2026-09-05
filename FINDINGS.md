@@ -1,4 +1,356 @@
 # FINDINGS
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## Standalone editor usability findings (v1.18, 2026-09-05)
+
+1. A query parameter is an implementation switch, not a discoverable customer
+   program. Placement needs a clearly named file that can be opened directly.
+2. The same deterministic runtime can serve both the embedded developer mode and
+   the customer editor; separate placement logic would risk schema and geometry
+   drift.
+3. A persistent sidebar beside the museum view keeps controls readable without
+   covering the artwork being positioned.
+4. Stage wall quads cannot be mutated independently of their derived homography
+   and room plane. The customer editor therefore keeps wall projection fixed and
+   limits direct boundary editing to safe and mounting zones.
+5. Import must match the active artwork inventory, assignments, and fixed wall
+   projection exactly; partial application creates unreproducible hybrid state.
+6. Exact reproduction also requires rejecting differences in camera, global
+   room, fallback policy, pagination, bounds-only walls, and fixed slot policy.
+   Accepted imports apply only editor-owned boundary and placement fields.
+7. Exporting only rendered walls drops the rear bounds-only enclosure. Export
+   must retain the complete configured wall inventory and every fixed slot field.
+8. A separate file entry must share the importer cache-busting contract;
+   otherwise Chromium may reopen stale artwork/audio bundles after an import.
+9. Validation must start from installed locked dependencies. After `npm ci`, the
+   complete importer/build/typecheck/lint/geometry/frame/WebGL/docs/secret suite
+   passed, followed by a focused review with no blocking findings.
+
+## Deterministic editor findings (v1.17, 2026-09-04)
+
+1. The prior calibration UI exported schema v4 and legacy aliases even though
+   runtime authoring had moved to v5 canonical placement fields.
+2. Runtime fallback could silently change wall ownership after a constraint
+   failed, turning a coordinate error into a hallway/front-wall placement.
+3. Numeric wall clearance cannot define the customer's desired composition when
+   the visible doorway and corner boundaries are judged in a specific camera.
+   Explicit stage-space mounting polygons are the authoritative visual boundary.
+4. A valid export now requires complete-quad containment, doorway clearance,
+   immutable wall ownership, page non-overlap, minimum projected size, and an
+   exact sanitize/re-import round trip.
+
+## Screen-space side-wall correction (v1.16, 2026-09-04)
+
+1. The supplied post-v1.14 screenshot proves that 55%/45% still crosses both
+   photographed front-wall seams even though local 4 m corner checks pass.
+2. The 1.25 m local doorway requirement conflicts with the calibrated image:
+   moving the left work to the visible strip midpoint caused the resolver to
+   reject its side wall and remount it on the front wall.
+3. The correction uses 50%/50% side-wall midpoints, retains non-overlap plus
+   0.35 m local doorway clearance, and adds primary-camera tests requiring 12 px
+   from both the visible doorway reveal and front-wall seam.
+4. Future placement work must pass both coordinate systems. Wall-space geometry
+   protects physical mounting; projected guards protect the photographed
+   composition actually judged by the customer.
+
+## Calculated side-wall orientation (v1.15, 2026-09-04)
+
+The supplied v1.14 screenshot was checked against the actual calibrated camera
+and wall transforms rather than by eye:
+
+- Camera: `(0, 1.72, 9)`, target `(0, 2.05, -1.2)`, vertical FOV `48°`.
+- Left wall basis: `U=(0,0,-1)`, `V=(0,1,0)`, inward `N=(1,0,0)`.
+- Right wall basis: `U=(0,0,1)`, `V=(0,1,0)`, inward `N=(-1,0,0)`.
+- Both side-wall horizontal edge families converge to the same calibrated stage
+  vanishing point: approximately `(683.00, 411.90)` in the 1366×768 stage.
+- Each artwork normal has absolute dot product `1` with its wall normal, and all
+  four front-face corners have zero relative wall-offset spread.
+
+Therefore the visible trapezoidal “tilt” is the mathematically correct
+one-point-perspective projection of a rigid rectangle mounted parallel to a
+receding side wall. Rotating either work to look rectangular on screen would
+toe it toward the camera and make it physically incorrect. v1.15 adds runtime
+and regression invariants that reject such camera-facing or non-coplanar
+orientation drift.
+
+## Front-corner screenshot correction (v1.14, 2026-09-04)
+
+1. The post-v1.13 screenshot proves 65%/35% moved both works into the front-wall
+   corner seams; the prior direction assumption was wrong.
+2. The attempted 55%/45% correction was later disproved by screenshot evidence;
+   wall-space clearance did not match the visible seam.
+3. The 4 m front-corner guard is restored. Final acceptance still requires a
+   screenshot from the rebuilt customer artifact.
+
+## Superseded side-artwork doorway attempt (v1.13, 2026-09-04)
+
+1. The replacement customer screenshot confirms the intended four-work 2+1+1
+   room, narrowing the remaining defect to side-wall placement.
+2. The attempted 65% / 35% movement was later disproved by screenshot evidence:
+   it shifted both works into the front-wall seams.
+3. The mirrored values are required because left-wall U runs rear-to-front while
+   right-wall U runs front-to-rear.
+4. v1.14 replaces this attempt and restores the 4 m front-corner guard.
+
+## Reopened hub visual acceptance findings (v1.12, 2026-09-04)
+
+1. The latest customer screenshot visibly reports `Raum 1 / 2` but shows five
+   artworks at once. That contradicts the checked-in v5 configuration and
+   resolver invariant of at most four selectable works per page.
+2. The screenshot also shows a side-wall composition the customer still judges
+   physically incorrect. Therefore v1.11's numerical doorway/corner checks are
+   implementation evidence, not final visual acceptance.
+3. The screenshot alone cannot identify whether the mismatch comes from stale
+   generated preview output, a deployed artifact, injected configuration,
+   incorrect page-group visibility, or another runtime path. Root cause requires
+   the exact observed build plus its generated artwork/config bundles.
+4. Remote-image viewing limits and account usage budget are separate concerns.
+   Tool unavailability must be reported accurately and must never be treated as
+   evidence about the user's billing or remaining allowance.
+5. Repository geometry tests remain necessary but insufficient: acceptance must
+   include a primary-camera screenshot of the exact customer artifact, with the
+   visible room count and active artwork IDs recorded.
+
+## Balanced side-wall placement findings (v1.11, 2026-09-04)
+
+1. The v1.10 correction solved the front-corner collision but over-shifted both
+   works toward the side hallway openings.
+2. For the current 1.45 m landscape mount, 56% left and 44% right place the
+   artwork within the usable wall segment between doorway and front corner.
+3. The correct acceptance rule constrains both sides of that segment: at least
+   1.25 m from the doorway and 4.00 m from the front-wall corner.
+
+## Side-wall setback findings (v1.10, 2026-09-04)
+
+1. Both side-wall U axes use opposite directions: left runs from the viewer
+   toward the front wall, while right runs from the front wall toward the
+   viewer. Moving both paintings toward the viewer therefore requires decreasing
+   left U and increasing right U.
+2. The previous 64%/36% positions put the paintings visually into the
+   perpendicular front-wall corner even though each individual wall containment
+   test passed.
+3. The corrected 48%/52% positions preserve doorway clearance and leave at least
+   4.50 m between each artwork bound and its front-wall corner.
+
+## Realistic room-density findings (v1.09, 2026-09-03)
+
+1. The visible failure was room density, not wall-normal math: five works were
+   simultaneously visible, with two works competing for one side wall and
+   approaching the front-wall corner from both planes.
+2. The module header still documented four artworks per room, but the active
+   constant and shipping config had drifted to six. Restoring four also restores
+   the existing multi-room pagination behavior requested for larger exhibitions.
+3. A 2+1+1 room provides one continuous corner-clearance zone on each side wall:
+   two focal works on the front wall and one work centered within each side
+   wall's usable span.
+4. Page-scoped spacing is essential because successive virtual rooms reuse the
+   same wall geometry while only one page group is visible.
+5. Capacity migration must handle both automatic overflow and older explicit
+   six-slot pages. Explicit excess mappings are preserved but remounted through
+   the safe four-slot template in additional rooms.
+6. Reflow must remount the first four legacy entries too; merely moving entries
+   five and six preserves the former two-left/zero-right imbalance.
+7. Runtime navigation addresses contiguous page ordinals, so sparse authored
+   room numbers must be normalized after all overflow and collision moves.
+
+## Optical hub alignment findings (v1.08, 2026-09-03)
+
+1. The primary wide-angle view compressed the 1.90 m world centerline toward the
+   floor junction. Large 1.75–2.25 m works consequently left almost no visible
+   wall below them despite passing local wall bounds.
+2. Optical balance is a projected-view constraint, not mirror symmetry. Small
+   wall-specific centerline differences preserve wall-parallel mounting while
+   balancing the visible centers from the fixed primary camera.
+3. The detached rounded contact card was redundant with the shadow-casting
+   22 mm artwork body and could become visible outside artwork edges. Removing
+   it eliminates the false backing-panel silhouette and one mesh per slot.
+4. The corrected composition keeps physical bottoms at or above 1.15 m, tops in
+   a narrow 2.80–2.90 m band, projected floor clearance of at least 20 px, and
+   at least 0.65 m from wall corners in the calibrated primary view.
+
+## Curated hub composition findings (v1.07, 2026-09-03)
+
+1. The v1.06 mount was geometrically correct but visually uniform: assigning
+   every aspect ratio the same 1.82 m height produced mathematically regular
+   cards rather than an exhibition hierarchy.
+2. A 1.55 m centerline left artwork bottoms near 0.64 m and most of the 5.2 m
+   wall empty above. A 1.90 m visual centerline with 1.75–2.25 m role-specific
+   heights keeps floor clearance at 0.775 m or more and raises the top edges to
+   2.775–3.025 m.
+3. Reducing the physical body from 40 mm to 22 mm and wall-to-back clearance
+   from 6 mm to 2 mm preserves non-intersection while removing the visible
+   card-like standoff.
+4. The final side pairs retain at least 0.50 m clear spacing, avoid doorway
+   exclusions, remain parallel to their walls, and mirror through the room.
+5. Built-in artwork aspect ratios now pass the same resolver constraints as the
+   customer/full-fixture composition, including the panoramic front-wall work.
+6. Aspect-class fallback can place two unusually wide works on one wall. The
+   resolver now moves only the conflicting auto-placed work to an overflow page,
+   preserving the 0.50 m gap and every physical size. Pairwise interval checks
+   also catch a wide work spanning across an intervening narrow work.
+7. Drawable fitting must be persisted back to the canonical anchor and height;
+   otherwise rendering and DOM projection can resolve the same work differently.
+
+## Hub artwork mounting findings (v1.06, 2026-09-03)
+
+1. The hub already had correct wall planes, but authored placement duplicated
+   normalized, metric, and stage-oriented coordinates. Runtime use of only the
+   metric anchor allowed those representations to disagree.
+2. The former 2 cm front-plane offset was smaller than the 4 cm body depth, so
+   the artwork body could extend behind the wall plane. Mounting must specify
+   back clearance, with front distance derived as clearance plus body depth.
+3. A single U/V/N frame keeps front wall, left wall, and right wall transforms
+   physically correct without camera-facing rotations.
+4. Projecting the wall-plane rectangle for DOM interaction was subtly different
+   from the rendered face. The interaction quad now comes from the same mounted
+   front-face world corners as the renderer.
+5. A 1.55 m visual centerline, 1.82 m physical height, and wider mirrored side
+   positions satisfy the existing 72 px interaction guidance while retaining at
+   least 0.50 m spacing and clearing both doorway exclusions.
+
+## WebGL startup resilience findings (v1.05, 2026-09-03)
+
+1. A boolean capability probe was both incomplete evidence and an extra live GPU
+   context. The production renderer is the authoritative capability test.
+2. Edge and Opera support WebGL; renderer allocation, driver policy, GPU process
+   failure, and unrelated startup exceptions must not be collapsed into a
+   “change browser” message.
+3. Current Three.js requires WebGL 2. Compatibility therefore means safer
+   context attributes, no antialiasing, conservative DPR/shadows, and ultimately
+   DOM recovery—not pretending a WebGL 1 renderer exists.
+4. The hub already had exact-ID DOM buttons, image decoding, paging, keyboard,
+   and touch behavior. Making its renderer nullable preserves these mature paths
+   and is safer than creating a second museum implementation.
+5. Two application renderers remain possible while the hub is active, but the
+   leaked detection context is gone and the process is now bounded at two.
+   Aggressive context loss/restoration during route transitions was rejected
+   because it risks repeated texture re-upload and mobile driver instability.
+
+## Architectural lighting topology findings (v1.04, 2026-09-02)
+
+1. Three.js `RectAreaLight` emits along local `-Z`; targeting a point directly
+   below each fixture makes the intended direction explicit and testable.
+2. Sky PMREM and hemisphere light are non-occluded. At strong levels they flatten
+   walls, corners, and recesses regardless of otherwise correct PBR materials.
+3. The ceiling aperture and doorway returns were receiving shadows but not
+   casting them. Selective participation in the existing one-map shadow pass
+   provides depth without adding another shadow map.
+4. A visible emissive diffuser and actual illumination are separate concerns.
+   Finite area sources beneath the coves and clerestory connect luminous geometry
+   to broad wall/floor highlights and naturally attenuate with distance.
+5. Smooth museum plaster does not require shader noise. Removing world-space sine
+   modulation reduces cost and forces large-scale form to come from light,
+   geometry, roughness, and contact.
+6. Balanced quality gains more from eliminating its planar reflection render
+   than from a slightly sharper floor image; PMREM sheen preserves material
+   separation at lower cost.
+7. Fullscreen AO remains rejected for this pass. Corrected local lighting,
+   selective shadows, recess geometry, and small contact cards address the
+   identified depth failures without artwork halos or another screen-space pass.
+
+## Procedural skylight and PBR hub findings (v1.03, 2026-09-02)
+
+1. A luminous cap cannot communicate exterior depth. A static atmospheric sky
+   behind two pitched glass planes gives the clerestory a legible outside world
+   without an HDRI, downloaded asset, or animation loop.
+2. Generating the cached PMREM from the visible sky keeps glazing, mineral-floor
+   sheen, and daylight direction coherent. Battery can omit the PMREM because it
+   already disables environment and planar reflection.
+3. Restrained architectural tone mapping improves highlight roll-off, while
+   `toneMapped: false` on artwork planes preserves customer image output.
+4. Hub plaster and mineral flooring benefit from derivative-based world-space
+   micro-normal response. It avoids repeat seams and texture memory, and the
+   battery preset can compile the plain variant.
+5. Floor color and roughness variation must remain below visible grunge strength;
+   realism comes from grazing response and broad daylight gradients rather than
+   obvious procedural patterning.
+6. Cove diffusers read more physically when emissive PBR material participates
+   in environmental shading instead of bypassing it with an unlit material.
+
+## Main Museum Hub architectural redesign findings (v1.02, 2026-09-02)
+
+1. The remaining prototype appearance was architectural rather than textural.
+   A compact low room could not reproduce the strong perspective, daylight, and
+   vertical breathing room of the supplied contemporary-museum reference.
+2. The wall-plane calibration contract supports a larger hall when camera,
+   reference quads, safe polygons, metric transforms, doorway exclusions, and
+   artwork anchors are revised together. Changing renderer geometry alone would
+   have caused DOM/WebGL interaction drift.
+3. A `9 × 12 × 5.2 m` envelope and 48° camera create longer floor/wall lines
+   while keeping the existing three selectable wall groups and route behavior.
+4. Long perimeter light channels plus one raised clerestory provide stronger
+   architectural identity than adding more surface detail or post-processing.
+5. The clerestory uses only simple planes and one instanced rib mesh. It adds no
+   texture, shadow map, fullscreen pass, or animation.
+6. Larger architecture requires larger mounted works to retain the existing
+   minimum projected-edge guidance. The accepted heights keep every hero slot
+   above the 72 px desktop threshold.
+7. Neutral daylight and pale grey flooring are closer to the supplied reference
+   than the prior cream-weighted palette while preserving exact unlit artwork
+   color and the map-free wall finish.
+
+## Main Museum Hub architectural lighting findings (v1.01, 2026-09-02)
+
+1. After the v1.00 material pass, the highest-impact remaining mismatch was
+   spatial: broad directional lighting was not visibly connected to the recessed
+   ceiling luminaires.
+2. Two room-scale `RectAreaLight` fixtures provide localized wall and floor
+   gradients without shadow maps, textures, fullscreen passes, or per-artwork
+   lights. They are excluded from battery-quality light collection.
+3. The directional key remains useful at lower intensity because artwork bodies
+   and architectural geometry still need one coherent soft shadow direction.
+4. A directional fill is cheaper than area-light evaluation on integrated GPUs,
+   so it remains only as the battery fallback.
+5. The existing shared artwork shadow plane is sufficient when its extent and
+   opacity are reduced. A dedicated shadow map or light per artwork would cost
+   more and risk uneven curation.
+6. Doorway depth was already geometric. Raising the pocket material from
+   near-charcoal to warm mid-grey reveals that depth more naturally than adding
+   ambient occlusion.
+7. The named visual references were not present in the repository, so this pass
+   was evaluated against repository invariants and the supplied written art
+   direction only; no external retrieval was attempted.
+
+## Main Museum Hub environment polish findings (v1.00, 2026-09-02)
+
+1. The hub's already-separated architectural profile is sufficient for premium
+   room polish; no scene-manager, camera, route, or gallery rewrite is needed.
+2. Removing hub ceiling and floor maps eliminates large-surface repetition and
+   also avoids their texture samples. The close gallery remains mapped because
+   its viewing distance and tactile target differ.
+3. Warm off-white hub plaster at `0.88` roughness retains a broad highlight that
+   describes smooth painted material better than the previous `0.965` finish.
+4. Procedural wall color modulation is unnecessary at museum viewing distance.
+   A `0.004` long-period roughness response is enough to prevent perfectly
+   uniform shading without exposing a visible pattern.
+5. Existing hemisphere and directional lights can support the target when their
+   colors match the warm ceiling diffusers. Additional area lights, bloom, and
+   shadow maps would add cost without proportionate benefit.
+6. The existing on-demand, downscaled planar reflection remains appropriate,
+   but lower strength keeps the floor material noticeable before the effect.
+
+## Main Museum Hub plaster + lighting findings (v0.99, 2026-09-02)
+
+1. The hub and interactive gallery already own independent
+   `ArchitecturalSurfaceFactory` instances, so the wall treatment can diverge
+   without splitting renderer ownership or changing the shared wall-color token.
+2. Reusing the close-gallery plaster maps in the seven-metre hub room made their
+   2.6 m repeat period perceptible. Raising texture resolution would sharpen the
+   same repetition rather than remove it.
+3. The hub now opts into a world-space wall profile with two broad,
+   incommensurate scalar waves. Their periods exceed the room envelope and their
+   color/roughness amplitudes remain below one and 1.5 percent respectively, so
+   the finish breaks perfect CG uniformity without reading as procedural noise.
+4. The interactive gallery remains on the mapped plaster profile introduced in
+   v0.98. This preserves close-view tactile response while keeping the calmer hub
+   wall appropriate to a spacious premium room.
+5. The hub light rig did not need more lights or a new post-processing pass.
+   Raising the broad hemisphere contribution and lowering/repositioning the two
+   directions produces softer architectural modeling while retaining one
+   preset-gated shadow caster.
+6. Existing performance boundaries remain intact: the hub still renders only on
+   mutation, shares one wall material, uses no animated shader state, and keeps
+   the existing reflection and shadow quality gates.
 
 ## Wall surface realism + softer artwork-view lighting findings (v0.98, 2026-09-02)
 

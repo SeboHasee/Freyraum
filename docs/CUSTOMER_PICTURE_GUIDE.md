@@ -1,4 +1,5 @@
 # FREYRAUM — Customer Picture Guide
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This guide documents the current customer workflow only.
 
@@ -70,15 +71,47 @@ copies into `customer-artworks/inbox/`.
 
 ## Museum hub placement
 
-- The current `customer-artworks/museum-hub.json` format is **version 4**:
+- Double-click **`OPEN_ARTWORK_EDITOR.html`** in the main FREYRAUM folder. This
+  opens the separate, file-safe Artwork Placement Editor. You do not need to
+  edit a URL or start a development server.
+- In the editor:
+  1. Choose a wall and artwork in the right sidebar.
+  2. Drag the artwork directly in the museum view.
+  3. Drag its red corner handle to resize it without changing its proportions.
+  4. Check the green usable wall area, then click **Grüne Wandfläche bestätigen**.
+  5. Repeat for all walls. Resolve every red warning.
+  6. Click **Konfiguration herunterladen** when the button becomes available.
+- Replace `customer-artworks/museum-hub.json` with the downloaded file and run
+  `Update Gallery.command` or `Update Gallery.bat`.
+- Reopening the generated editor after an update loads cache-busted artwork and
+  audio bundles, so it does not intentionally reuse the previous import.
+- The current `customer-artworks/museum-hub.json` format is **version 5**:
   camera, room envelope, calibrated front/left/right wall transforms, drawable
   regions, doorway exclusions, visual tokens, exact artwork IDs, normalized
   wall-local slot placement, and mounted sizes live in the same file.
-- Use the documented museum-hub calibration mode from `docs/QUERY_PARAMETERS.md`
-  to adjust wall corners, safe zones, and artwork size/placement visually, then
-  copy the exported JSON back into `customer-artworks/museum-hub.json`.
+- The legacy calibration route remains available for developers and is documented
+  in `docs/QUERY_PARAMETERS.md`. Customers should use
+  `OPEN_ARTWORK_EDITOR.html`. First
+  align each green mounting-zone boundary with the visible doorway, corner,
+  floor, and ceiling.
+  Then select and drag each artwork or enter exact values. Red outlines mean
+  export is blocked. Confirm each wall's green boundaries after alignment. Use
+  Copy or Download only when all proof rows are green,
+  replace `customer-artworks/museum-hub.json`, rerun Update Gallery, and re-import
+  that file once to confirm an identical round trip.
+- The editor never moves an explicitly assigned work to another wall.
+- Orange wall outlines are read-only. Blue safe-zone and green mounting-zone
+  handles are editable. Imports with different artwork assignments or fixed
+  camera/room/wall settings are rejected instead of partially merged.
 - Older hotspot arrays and v1/v2 slot boxes still load through migration, but
   they should be re-saved from the current calibration flow.
+- Each museum room shows at most four works: two on the front wall and one on
+  each side wall. Further artworks automatically continue in another room.
+- Canonical placement fields are `horizontalPosition`, `centerHeight`,
+  `physicalHeight`, and `mountingGap`; the image aspect ratio determines width.
+- If a screenshot shows more than four works in one room, preserve that exact
+  preview/deployment and its generated `customer-artworks.js` before rerunning
+  Update Gallery. It may not match the current checked-in config.
 
 ## Troubleshooting
 

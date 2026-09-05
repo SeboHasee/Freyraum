@@ -2,6 +2,11 @@ import * as THREE from 'three';
 import { getOptimalPixelRatio } from '../utils/performance';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import type { QualityPreset } from '../config/quality';
+import {
+  createResilientWebGLRenderer,
+  describeWebGLContext,
+  type WebGLRendererMode,
+} from '../utils/webgl';
 
 const diagnostics = createScopedDiagnostics('renderer');
 
@@ -30,6 +35,7 @@ export type RendererContextState = 'lost' | 'restored';
 
 export class RendererManager {
   readonly renderer: THREE.WebGLRenderer;
+  readonly rendererMode: WebGLRendererMode;
   private preset: QualityPreset;
   private wallClearColor: string;
   private renderPaused = false;
@@ -44,12 +50,13 @@ export class RendererManager {
     this.preset = preset;
     this.wallClearColor = wallClearColor;
 
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      powerPreference: 'high-performance',
-    });
+    const creation = createResilientWebGLRenderer();
+    this.renderer = creation.renderer;
+    this.rendererMode = creation.mode;
 
-    this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
+    this.renderer.setPixelRatio(
+      creation.mode === 'preferred' ? getOptimalPixelRatio(preset.pixelRatioCap) : 1
+    );
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     // No tone mapping — the scene does not use HDR rendering, so any
@@ -61,7 +68,7 @@ export class RendererManager {
     // `#C7CED4`) so CSS and WebGL share one authoritative value and canvas
     // creation/reveal cannot flash white.
     this.renderer.setClearColor(new THREE.Color(this.wallClearColor));
-    this.renderer.shadowMap.enabled = preset.shadows;
+    this.renderer.shadowMap.enabled = preset.shadows && creation.mode === 'preferred';
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     // v0.16 — mirror the active preset id to a CSS data attribute so
@@ -81,12 +88,20 @@ export class RendererManager {
     canvas.addEventListener('webglcontextrestored', this.onContextRestored as EventListener, false);
 
     container.appendChild(canvas);
+    diagnostics.info('created', 'WebGL renderer initialized', {
+      mode: creation.mode,
+      attempts: creation.attempts,
+      context: describeWebGLContext(this.renderer),
+      protocol: window.location.protocol,
+    });
   }
 
   applyPreset(preset: QualityPreset): void {
     this.preset = preset;
-    this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
-    this.renderer.shadowMap.enabled = preset.shadows;
+    this.renderer.setPixelRatio(
+      this.rendererMode === 'preferred' ? getOptimalPixelRatio(preset.pixelRatioCap) : 1
+    );
+    this.renderer.shadowMap.enabled = preset.shadows && this.rendererMode === 'preferred';
     this.applyQualityDataAttribute(preset.id);
   }
 
@@ -103,7 +118,9 @@ export class RendererManager {
    */
   resize(width: number, height: number): void {
     this.renderer.setSize(Math.max(1, width), Math.max(1, height));
-    this.renderer.setPixelRatio(getOptimalPixelRatio(this.preset.pixelRatioCap));
+    this.renderer.setPixelRatio(
+      this.rendererMode === 'preferred' ? getOptimalPixelRatio(this.preset.pixelRatioCap) : 1
+    );
   }
 
   /** v0.11 — `true` while the WebGL context is lost; the render loop
@@ -203,7 +220,9 @@ export class RendererManager {
     // resources lazily on the next draw, so a fresh resize is enough
     // for the framebuffer to be allocated at the right size.
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(getOptimalPixelRatio(this.preset.pixelRatioCap));
+    this.renderer.setPixelRatio(
+      this.rendererMode === 'preferred' ? getOptimalPixelRatio(this.preset.pixelRatioCap) : 1
+    );
     this.renderer.setClearColor(new THREE.Color(this.wallClearColor));
     this.contextChangeCallback?.('restored');
     diagnostics.info('context-restored', 'WebGL context restored', {});

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="FREYRAUM Artwork Placement Editor" />
+  <title>FREYRAUM — Artwork Placement Editor</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      color: #12171b;
+      background: #c7ced4;
+    }
+    body { display: grid; place-items: center; padding: 32px; }
+    main {
+      width: min(680px, 100%);
+      padding: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.1);
+    }
+    h1 { margin: 0 0 16px; font-size: clamp(2rem, 6vw, 3.6rem); line-height: 1; }
+    p { margin: 0 0 24px; line-height: 1.65; }
+    a {
+      display: inline-flex;
+      min-height: 52px;
+      align-items: center;
+      justify-content: center;
+      padding: 0 22px;
+      border-radius: 999px;
+      background: #12171b;
+      color: #fff;
+      font-weight: 700;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Artwork Placement Editor</h1>
+    <p>
+      Hier können Sie Kunstwerke direkt an den sichtbaren Museumswänden verschieben,
+      vergrößern und verkleinern. Es sind keine Koordinaten oder URL-Parameter nötig.
+    </p>
+    <a href="./customer-preview/placement-editor.html">Editor öffnen →</a>
+  </main>
+</body>
+</html>

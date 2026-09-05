@@ -1,6 +1,12 @@
 # Documentation Archive
+> Archive index reviewed: 2026-09-05 (v1.18 full Markdown audit).
 
 This folder preserves historical rationale and long-form engineering context that is no longer suitable for operational docs.
+The five dated snapshots were reviewed for discoverability during the v1.18
+audit and intentionally left unchanged so they remain faithful historical records.
+Their original relative links are also preserved and may refer to the repository
+layout that existed when each snapshot was captured; use current canonical docs
+for operational navigation.
 
 ## Purpose
 

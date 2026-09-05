@@ -1,4 +1,554 @@
 # FREYRAUM Plan
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## Implemented — Standalone Artwork Placement Editor (v1.18)
+
+- [x] Add a clearly named one-click launcher requiring no URL editing.
+- [x] Generate a dedicated file-safe editor page with the customer preview.
+- [x] Present numbered, plain-language controls in a persistent sidebar.
+- [x] Keep placement, validation, and v5 export in the shared deterministic engine.
+- [x] Keep derived wall projections read-only and reject incompatible imports.
+- [x] Reject fixed camera/room/wall/fallback/slot differences before import.
+- [x] Apply only editor-owned zones, confirmations, and canonical placements.
+- [x] Preserve bounds-only walls, room thickness, page capacity, fallback policy,
+  and fixed slot fields during export.
+- [x] Cache-bust artwork/audio bundles in both generated file-preview entries.
+- [x] Pass the full validation suite and focused final review without errors.
+- [ ] Customer places and approves the final artworks, then supplies the exported
+  `museum-hub.json` for the accepted preview baseline.
+
+## Implemented — Deterministic curator placement editor (v1.17)
+
+- [x] Preserve explicit wall ownership; invalid work is never remounted.
+- [x] Store and edit full stage-space mounting-zone polygons.
+- [x] Clamp dragging by the complete projected artwork quad.
+- [x] Provide selection, canonical numeric fields, keyboard nudging,
+  proportional resize, zone centering, undo/redo/reset, copy/download/import.
+- [x] Block export on invalid geometry or failed v5 canonical round-trip.
+- [x] Display wall ownership and measured pixel/metre clearances.
+- [x] Cover mounting zones, immutable walls, canonical fields, aspect fixtures,
+  pages, and projection with deterministic tests.
+- [ ] Customer defines/approves the final green mounting polygons and artwork
+  positions in the exact generated preview; that exported JSON becomes the
+  visual baseline.
+
+## Implemented — Screen-space doorway/corner protection (v1.16)
+
+- [x] Use the supplied post-v1.14 screenshot without retrying its external URL.
+- [x] Move both side works to 50% wall midpoints.
+- [x] Retain 0.35 m local doorway and 4 m front-corner constraints.
+- [x] Add 12 px projected guards against doorway reveals and front-wall seams.
+- [x] Prevent invalid fallback remounting caused by the contradictory 1.25 m rule.
+- [ ] Obtain a post-v1.16 customer screenshot for final visual acceptance.
+
+## Implemented — Calculated wall-orientation proof (v1.15)
+
+- [x] Derive each artwork frame from normalized wall U/V axes and `N=U×V`.
+- [x] Measure artwork-plane normal alignment against the wall normal.
+- [x] Measure front-face wall-offset spread to reject twisted/non-coplanar quads.
+- [x] Calculate artwork and wall horizontal vanishing points in screen space.
+- [x] Reject any side artwork whose edges do not converge to the calibrated wall
+  vanishing point within 0.01 px.
+- [x] Include alignment metrics and vanishing points in hub debug diagnostics.
+- [x] Verify the current side artworks converge at approximately `(683, 411.90)`
+  in the 1366×768 stage with normal dot `1` and zero offset spread.
+
+No visual angle was hand-tuned: the screenshot’s perspective taper is required
+for a panel mounted flush to the side wall. A less tapered appearance would
+require changing the camera composition or deliberately toeing the artworks
+toward the viewer, which is not physically wall-mounted behavior.
+
+## Superseded — Center side works between doorway and corner (v1.14)
+
+- [x] Use the supplied post-v1.13 screenshot as the placement reference.
+- [x] Correct the wrong movement direction from 65%/35% to mirrored 55%/45%.
+- [x] Restore the 4 m front-corner full-body guard.
+- [x] Synchronize authored, fallback, test, and generated-preview output.
+- [x] Post-v1.14 screenshot received; it showed both works still crossing seams.
+
+## Superseded — Move side works away from doorways (v1.13)
+
+- [x] Confirm the latest screenshot contains four works in the 2+1+1 layout.
+- [x] Move left/right works from 56%/44% to mirrored 65%/35% positions.
+- [x] Apply the same positions to authored slots and runtime fallback remounting.
+- [x] Retain full-body doorway validation and a 3 m front-corner guard.
+- [x] Update deterministic geometry expectations and generated preview output.
+- [x] Post-fix screenshot received; it disproved the placement and reopened work.
+
+## Active — Reconcile customer screenshot with four-work runtime (v1.12)
+
+> **Status update:** a later screenshot confirms four visible works. The
+> artifact-count mismatch is no longer reproduced; side-wall visual acceptance
+> remains open pending a screenshot of the v1.13 coordinates.
+
+### Required evidence
+
+1. Identify whether the screenshot came from `customer-preview/app.html`, Vite
+   dev/build, or deployed GitHub Pages.
+2. Preserve the exact generated `customer-artworks.js`, injected
+   `museum-hub.json`, artwork manifest, route/query, and commit/build identifier.
+3. Export hub diagnostics for active page index, resolved page count, slot IDs,
+   artwork IDs, wall IDs, placement anchors, and page-group visibility.
+4. Capture the primary-camera state from that same artifact after any fix.
+
+### Acceptance
+
+- At most four visible/selectable works in a room (2 front + 1 left + 1 right).
+- Only the active page group is visible.
+- Side works remain parallel to their walls, outside doorway/corner clearance,
+  and visually credible from the primary camera.
+- DOM interaction quads match the rendered mounted faces.
+- Customer screenshot approval is required in addition to automated geometry,
+  build, resilience, performance, documentation, secret, and security checks.
+
+### Tooling boundary
+
+If browser/image tooling is unavailable in a session, report that limitation
+without attributing it to account budget. Continue repository analysis, but keep
+visual acceptance open until an actual screenshot can be inspected.
+
+## Implemented — Balanced side-wall placement (v1.11, 2026-09-04)
+
+> **Status update:** Side-wall works are centered within the usable wall segment
+> between the hallway opening and the front-wall corner.
+
+### As-built placement
+
+- Left wall: 56% along its rear-to-front U axis.
+- Right wall: 44% along its front-to-rear U axis.
+- Artwork bounds retain at least 1.25 m from the doorway and 4.00 m from the
+  relevant front-wall corner.
+- Existing size, centerline, body depth, mounting gap, and wall-parallel
+  orientation remain unchanged.
+
+## Implemented — Side-wall front-corner setback (v1.10, 2026-09-04)
+
+> **Status update:** Side-wall works now sit toward the viewer rather than
+> visually entering the perpendicular front wall.
+
+### As-built placement
+
+- Left wall: 48% along its rear-to-front U axis.
+- Right wall: 52% along its front-to-rear U axis.
+- Both retain the existing optical centerlines, 1.45 m height, 22 mm body, and
+  2 mm wall-to-back clearance.
+- Bounds retain at least 4.50 m from the relevant front-wall corner, alongside
+  the existing doorway and general wall-edge checks.
+
+## Implemented — Realistic room density (v1.09, 2026-09-03)
+
+> **Status update:** Each virtual museum room now contains at most four works.
+> Overflow creates additional rooms instead of crowding perpendicular walls at
+> their shared corners.
+
+### 1. Room composition
+
+- Two front-wall works at 30% and 70%.
+- One left-wall work at 56%, balanced between its doorway and front corner.
+- One right-wall work at 44%, balanced between its doorway and front corner.
+- Front works use a 2.32 m optical centerline; side works use 2.30 m/2.28 m.
+- Physical heights are 1.40–1.62 m with at least 1.50 m lower-edge clearance.
+
+### 2. Pagination
+
+- `slotsPerPage` is four in both built-in and shipping configuration.
+- The fifth artwork starts a new virtual room page.
+- Every overflow room reuses the same tested 2+1+1 placement template.
+- Spacing and overlap checks are scoped to the room page currently represented.
+- Older six-slot configurations are clamped and reflowed without losing explicit
+  artwork mappings.
+- Every migrated batch, including room one, is remounted through the 2+1+1
+  template, then page indices are normalized for navigation.
+
+### 3. Preserved behavior
+
+Wall-parallel U/V/N mounting, 22 mm bodies, 2 mm mounting gaps, source aspect
+ratios, exact-ID selection, pointer/touch/keyboard interaction, and gallery
+navigation remain unchanged.
+
+## Implemented — Optical hub artwork alignment (v1.08, 2026-09-03)
+
+> **Status update:** The primary-camera exhibition now uses wall-specific optical
+> centerlines, smaller museum-scale works, broader side-wall distribution, and
+> only physical edge-cast contact shadows.
+
+### 1. As-built optical composition
+
+- Front: 29%/71%, 2.02 m centerline, 1.72 m/1.62 m heights.
+- Left: 53%/78%, 2.10 m centerline, 1.45 m/1.60 m heights.
+- Right: 22%/49%, 2.08 m centerline, 1.60 m/1.45 m heights.
+- Width remains derived from each source aspect ratio.
+- The composition retains at least 1.15 m physical floor clearance, 20 px
+  projected floor clearance, 0.65 m corner clearance, and 0.50 m pair spacing.
+
+### 2. Physical contact
+
+- The 22 mm body and 2 mm wall-to-back clearance remain unchanged.
+- The separate blurred contact card is removed; the body supplies edge depth and
+  participates in the existing architectural shadow map.
+- Rendering and DOM interaction continue to share the fitted mounted front face.
+
+### 3. Preserved boundaries
+
+Architecture, camera, lighting, materials, post-processing, artwork imagery,
+wall-parallel orientation, selection, paging, and gallery navigation are unchanged.
+
+## Implemented — Curated hub exhibition composition (v1.07, 2026-09-03)
+
+> **Status update:** The wall-relative mounting architecture now uses a higher
+> professional viewing line, role-specific physical sizes, and tighter wall
+> contact so the exhibition fills the architecture without reading as cards.
+
+### 1. As-built composition
+
+- Front pair: 28% and 72% along the 9 m front wall, at 2.25 m and 2.05 m high.
+- Left pair: 58.5% and 84% along the left wall U axis, at 1.75 m and 2.00 m high.
+- Right pair: 16% and 41.5%, exactly mirroring the left wall.
+- Every work shares a 1.90 m visual centerline.
+- Artwork width remains derived from source aspect ratio.
+- Explicit curator sizes remain authoritative; unmatched automatic placements
+  move to an overflow page when an unusual aspect would violate the 0.50 m gap.
+
+### 2. Physical installation
+
+- Mounted bodies are 22 mm deep.
+- Wall-to-back clearance is 2 mm, and the renderer derives the front face from
+  clearance plus full body depth.
+- Contact cards remain behind the body but now extend only enough to reinforce
+  edge contact rather than reading as a separate floating panel.
+
+### 3. Preserved boundaries
+
+The existing U/V/N transform, source-aspect scaling, exact-ID interaction,
+pagination, hub-to-gallery transition, architecture, camera, materials, lighting,
+and post-processing remain authoritative.
+
+## Implemented — Wall-relative hub artwork mounting (v1.06, 2026-09-03)
+
+> **Status update:** All hero-room artwork transforms now derive from one
+> validated wall U/V/N frame. The shipping configuration authors only curator
+> controls, physical backs clear their walls, and interaction follows the
+> mounted front face.
+
+### 1. As-built placement contract
+
+1. `horizontalPosition` is normalized distance along wall U.
+2. `centerHeight` is the visual center above the wall origin in metres.
+3. `physicalHeight` sets uniform scale; width is always height multiplied by the
+   source artwork aspect ratio.
+4. `mountingGap` is wall-to-back clearance, not front-plane offset.
+5. Runtime derives metric anchor and legacy center/UV aliases. Older v1–v4
+   configurations retain their migration path.
+
+### 2. Curated hero composition
+
+- Front pair: 28% and 72% along the 9 m front wall.
+- Left pair: 60% and 85% along the left wall U axis.
+- Right pair: 15% and 40%, exactly mirroring the left wall.
+- Every work uses a 1.55 m centerline, 1.82 m physical height, 4 cm mounted-body
+  depth, and 6 mm wall-to-back clearance.
+- Existing safe regions, hanging band, doorway clearance, exact artwork IDs, and
+  pagination remain authoritative.
+
+### 3. Shared transform and interaction
+
+- The mounting frame normalizes wall U/V, rejects non-orthogonal axes, derives
+  inward N as U×V, and returns wall/back/front centers plus both face quads.
+- `HubRoomRenderer` uses the frame directly; no camera-facing rotation exists.
+- `MainMuseumHub` projects the frame's mounted front face, keeping DOM click,
+  keyboard, touch, selection, and gallery transition targets aligned.
+- Deterministic validation covers inward orientation, parallelism, clearance,
+  depth, aspect, boundaries, doorways, pair spacing, and exact front-face
+  projection.
+
+### 4. Preserved boundaries
+
+Museum architecture, camera, materials, lighting, post-processing, artwork
+textures/content, and interactive-gallery navigation are unchanged.
+
+## Implemented — WebGL startup resilience and 2D museum (v1.05, 2026-09-03)
+
+> **Status update:** Renderer capability is now proven by the real renderer,
+> failed contexts are released, hub GPU failure recovers locally, and complete
+> customer artwork content remains accessible when immersive 3D cannot start.
+
+### 1. As-built scope
+
+1. Preferred, compatibility, and battery renderer attempts replace the boolean
+   preflight; unsuccessful partial contexts are explicitly lost.
+2. Compatibility modes use DPR 1 and disable shadow allocation.
+3. Hub renderer creation has a local recovery boundary and nullable lifecycle;
+   the existing DOM projection, paging, selection, keyboard, and swipe paths
+   remain active with visible artwork imagery.
+4. Fatal renderer recovery provides a responsive 2D artwork collection, accurate
+   failure copy, diagnostic-only technical detail, and a controlled retry.
+5. Unrelated startup failures use their own category and never claim that WebGL
+   is absent.
+6. Stored quality choices remain authoritative; constrained first runs use the
+   battery preset and skip non-active shader-variant compilation.
+7. Local preview startup has no external-font dependency and names missing local
+   bundle files directly.
+8. The removed probe bounds runtime context pressure to the two real renderers.
+   Route-triggered force-loss was deliberately rejected as higher-risk than the
+   existing stable context-restoration and texture lifecycle.
+
+### 2. Support boundary
+
+- Three-dimensional gallery rendering requires a working WebGL 2 implementation.
+- Browser brand alone does not determine support.
+- Museum content remains readable and navigable without immersive rendering.
+
+## Implemented — Architectural lighting topology pass (v1.04, 2026-09-02)
+
+> **Status update:** The hub now derives room depth from explicitly room-facing
+> finite area sources, low non-occluded fill, and selective architectural
+> participation in the existing single shadow map rather than procedural surface
+> gradients or fullscreen ambient occlusion.
+
+### 1. As-built scope
+
+1. Two cove sources and one clerestory source explicitly face downward and create
+   local wall/floor response with finite-area attenuation.
+2. Hemisphere and sky-PMREM energy are secondary to local/direct illumination;
+   architectural ACES exposure remains fixed.
+3. Ceiling aperture, cove/clerestory returns, skylight steel, and doorway returns
+   cast through the existing one directional shadow map.
+4. Hub plaster and ceiling are smooth map-free PBR finishes; the pale floor keeps
+   a distinct satin response without procedural color or normal modulation.
+5. The floor gap is narrower and recessed, doorway plaster is no longer relied
+   upon as a black opening, and artwork uses a tight rounded contact card behind
+   its existing 4 cm shadow-casting body.
+6. High retains its downscaled on-demand planar floor reflection. Balanced uses
+   cached environment sheen; battery keeps reflection and local area lights off.
+7. Renderer diagnostics expose light directions and energy plus the bounded GPU
+   resource snapshot used for performance review.
+8. Fullscreen AO was deliberately not added after the geometry/light correction.
+
+### 2. Performance boundaries
+
+- One existing quality-gated shadow map remains authoritative.
+- One non-shadowing area source was added; balanced removes one reflection pass.
+- Procedural hub surface fragment work was removed.
+- No new dependency, external asset, continuous loop, SSAO, GTAO, bloom, SSR, or
+  additional shadow map was introduced.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run validate:museum-hub:visual`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
+## Implemented — Procedural skylight and PBR hub surfaces (v1.03, 2026-09-02)
+
+> **Status update:** The raised hub clerestory now opens to a static atmospheric
+> sky through pitched glazing and instanced steel rafters. Its visible daylight,
+> cached environment response, architectural tone mapping, and subtle PBR
+> surfaces form one coherent render path.
+
+### 1. As-built scope
+
+1. A local procedural atmosphere replaces the flat clerestory cap; battery uses
+   a reduced gradient sphere and no environment generation.
+2. Two pitched physical-glass planes, a ridge, and eighteen instanced rafter
+   segments form the skylight without downloaded assets.
+3. The hub PMREM is generated from the same sky model used in the visible scene.
+4. ACES tone mapping is limited to architectural materials; artwork and contact
+   shadows remain explicitly untone-mapped.
+5. Hub wall, ceiling, and floor materials use shared, non-repeating world-space
+   micro-normal and roughness response. Pale floor variation remains restrained.
+6. Perimeter diffusers are emissive PBR surfaces, area lights remain secondary,
+   and the sole directional key retains quality-gated shadows.
+7. The reflection target renders in linear space without tone mapping and blends
+   at reduced high/balanced strengths.
+
+### 2. Performance boundaries
+
+- Static mutation-driven rendering remains unchanged.
+- No downloaded textures, new dependencies, extra shadow maps, fullscreen
+  passes, SSAO, SSR, bloom, or animation were added.
+- Battery omits area lights, PMREM, surface-detail shader work, shadows, and
+  planar reflection.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
+## Implemented — Main Museum Hub architectural redesign (v1.02, 2026-09-02)
+
+> **Status update:** The hub is now a tall, elongated daylit hall rather than a
+> compact square room. Long perimeter luminaires, a raised central clerestory,
+> neutral near-white walls, and stronger perspective establish the architectural
+> character before surface micro-detail.
+
+### 1. As-built scope
+
+1. The authoritative room is `9 × 12 × 5.2 m`; its camera is positioned at
+   `(0, 1.72, 9)`, targets the raised architecture, and uses a 48° vertical FOV.
+2. All calibrated wall quads, safe regions, metric transforms, doorway
+   exclusions, hanging bands, slot anchors, and normalized UVs are synchronized.
+3. Two longitudinal perimeter channels replace the cross-room panels.
+4. A raised 0.82 m central clerestory uses simple shared-material planes and one
+   nine-instance rib mesh.
+5. The hub palette is neutral daylight: clean near-white plaster, a pale grey
+   mineral floor, cool-white luminaires, and subdued doorway recesses.
+6. Artwork imagery remains unlit. Mounted heights increase only as needed to
+   remain legible in the expanded room, while physical depth and exact IDs stay
+   unchanged.
+7. Camera navigation, route behavior, gallery rendering, artwork assets,
+   reflection tiers, and on-demand rendering remain unchanged.
+
+### 2. Performance boundaries
+
+- No new dependencies, textures, shadow maps, fullscreen passes, bloom, SSAO,
+  SSR, or animation loops.
+- Clerestory ribs use one instanced draw call.
+- Existing non-shadowing area lights remain high/balanced-only.
+- Battery retains the directional fallback and disables hub reflections/shadows.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
+## Implemented — Main Museum Hub architectural lighting polish (v1.01, 2026-09-02)
+
+> **Status update:** High and balanced hub quality now connect the room's soft
+> gradients to two broad recessed ceiling fixtures. Artwork mounting shadows
+> are tighter, doorway recesses retain visible depth, and battery quality keeps
+> the prior inexpensive light path.
+
+### 1. As-built scope
+
+1. Two non-shadowing rectangular area lights match the room's cove positions
+   and dimensions on high/balanced quality.
+2. The warm hemisphere wash and directional shadow key remain at reduced energy.
+   Battery hides the area lights and enables one restrained directional fill.
+3. Ceiling openings are broadened to 0.48 m while retaining their recessed
+   returns and low-key diffuser surfaces.
+4. Artwork image planes remain unlit and color-faithful. Existing mounted bodies
+   retain 4 cm depth; their shared approximate contact shadow is reduced from
+   `0.34` to `0.22` opacity and from `1.22×` to `1.10×` extent.
+5. Doorway pockets retain their 1.15 m geometry with lighter warm-grey plaster.
+6. Camera, navigation, artwork assets, gallery renderer, tone mapping, floor
+   reflection hierarchy, and on-demand rendering are unchanged.
+
+### 2. Performance boundaries
+
+- No additional shadow maps, texture maps, fullscreen effects, render passes,
+  per-artwork lights, or animation loops.
+- Area lights are non-shadowing and omitted from the battery-quality light set.
+- The hub still renders only after state mutations.
+- One existing directional shadow caster remains quality-gated.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
+## Implemented — Main Museum Hub environment polish (v1.00, 2026-09-02)
+
+> **Status update:** The hub-only architectural profile now presents smooth
+> warm off-white plaster, a calm map-free ceiling, and a restrained satin floor.
+> The existing low-cost light and reflection architecture is retained with
+> softer, fixture-coherent calibration.
+
+### 1. As-built scope
+
+1. Hub walls use `0.88` roughness, no detail maps, no procedural color
+   modulation, and only `0.004` long-period roughness variation.
+2. Hub ceilings and floors no longer bind repeating architectural detail maps.
+   The interactive gallery keeps its existing tactile mapped profile.
+3. The floor retains quality-gated planar/IBL/off behavior with reduced planar
+   strength rather than adding a new reflection technique.
+4. Existing hemisphere plus two-direction lighting is warmed to agree with the
+   recessed ceiling diffusers; the high key remains the only shadow caster.
+5. Camera, room geometry, route behavior, artwork imagery/mounting, interaction,
+   loading, and on-demand rendering are unchanged.
+
+### 2. Performance and acceptance guardrails
+
+- No added dependencies, textures, lights, draw calls, shadow maps, passes, or
+  animation loops.
+- Hub wall, ceiling, and floor avoid repeating detail maps.
+- Artwork remains unlit and color-faithful while mounted bodies and existing
+  contact shadows preserve physical separation.
+- Deterministic validation protects warm wall response, material roughness,
+  restrained light energy, and single-profile surface ownership.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
+
+## Implemented — Main Museum Hub plaster + lighting refinement (v0.99, 2026-09-02)
+
+> **Status update:** The Main Museum Hub keeps its calibrated room, camera,
+> artwork-slot, on-demand rendering, floor-reflection, and quality-preset
+> architecture. Its walls now opt into a calm non-repeating world-space plaster
+> response, while the close interactive gallery retains its mapped tactile
+> plaster. The hub light rig is rebalanced toward a broad neutral wash with
+> restrained directional modeling and one shadow caster.
+
+### 1. As-built scope
+
+1. `src/materials/ArchitecturalSurfaceFactory.ts` now accepts an explicit
+   `gallery` or `hub` profile.
+2. The gallery profile remains the default and preserves the v0.98 plaster
+   normal/roughness maps.
+3. The hub profile removes repeating wall maps and adds a shared, static
+   world-space color/roughness response with periods larger than the room and
+   deliberately sub-perceptual amplitudes.
+4. `src/hub/HubRoomRenderer.ts` opts into the hub profile and exposes one
+   deterministic low-energy lighting contract used by the room.
+5. Room geometry, camera calibration, slots, artwork loading, contact shadows,
+   environment map, floor reflection, and route transitions are unchanged.
+
+### 2. Performance and acceptance guardrails
+
+- No additional draw calls, textures, lights, render passes, or animation loop.
+- One shared hub wall shader program and one preset-gated shadow caster.
+- No repeating wall normal/roughness maps in the hub.
+- Hub variation remains below visible-noise thresholds and spans beyond the
+  seven-metre room envelope.
+- Gallery wall texture remains visible but restrained.
+- `scripts/test-museum-hub-geometry.mjs` guards the material split and hub light
+  energy/placement.
+
+### 3. Validation
+
+- `npm run import:artworks`
+- `npm run lint`
+- `npm run build:typecheck`
+- `npm run build`
+- `npm run validate:museum-hub`
+- `npm run test:frame-budget`
+- `npm run docs:check-config-authority`
 
 ## Implemented — Wall surface realism + softer artwork-view lighting (v0.98, 2026-09-02)
 

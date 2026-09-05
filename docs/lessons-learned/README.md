@@ -1,5 +1,17 @@
 # Lessons learned docs
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 lesson index update
+
+See `../../LESSONS_LEARNED.md § 2026-09-05 — Standalone editor reproducibility
+lessons` for the fixed/editable import boundary, complete configured-model
+export rule, and multi-entry `file://` cache-busting requirement.
+
+## v1.12 lesson index update
+
+See `../../LESSONS_LEARNED.md § 2026-09-04 — Visual artifact provenance
+lesson` and Lessons 97–104 for current hub placement, mounting, migration,
+clearance, and artifact-verification rules.
 
 ## v0.93 lesson index update
 

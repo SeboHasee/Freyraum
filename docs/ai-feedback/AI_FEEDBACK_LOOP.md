@@ -1,5 +1,20 @@
 # AI feedback loop
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 placement-editor feedback-loop note
+
+When placement feedback shows that numeric iteration is not converging, stop
+guessing and use the standalone editor. Keep wall ownership fixed, distinguish
+build-derived projection from editable zones, reject partial/hybrid imports,
+preserve the complete fixed configuration during export, and require the
+customer's exported JSON plus screenshot for final visual acceptance.
+
+## v1.12 feedback-loop note
+
+Customer screenshots are artifact-specific evidence. If they contradict the
+checked-in four-work hub contract, reopen visual acceptance, retain the exact
+generated/config bundles and route, and separate tool-availability limitations
+from any claim about account usage.
 
 ## v0.29 feedback-loop note
 

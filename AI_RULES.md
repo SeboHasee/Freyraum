@@ -1,5 +1,24 @@
 # FREYRAUM AI rules
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 artwork-editor rule
+
+Use `OPEN_ARTWORK_EDITOR.html` for customer placement. Keep build-derived wall
+projection geometry read-only unless every dependent homography, room plane, and
+renderer object is rebuilt atomically. Import may apply only editor-owned zones
+and canonical placements after the fixed camera/room/wall/fallback/slot signature
+matches. Export must preserve rendered and bounds-only walls plus all fixed
+configuration fields. Keep customer-data cache busting synchronized across every
+generated `file://` entry.
+
+## v1.12 hub visual-acceptance rule
+
+Treat the v5 museum-hub config and resolved U/V/N geometry as source truth, but
+do not call placement fixed from structural tests alone. Preserve the exact
+customer artifact, generated bundle, config, room counter, and screenshot;
+reopen acceptance whenever visible artwork count or composition disagrees with
+the four-work 2+1+1 contract. Never infer billing/usage state from an unavailable
+image or browser tool.
 
 ## v0.58 topbar/utility-button rule
 

@@ -1,5 +1,22 @@
 # FREYRAUM coding guidelines
-> Latest markdown audit: 2026-09-01 (v0.93 local file-preview artwork recovery).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 placement-editor guideline
+
+Keep derived wall projection read-only unless the resolution and renderer are
+rebuilt atomically. Apply imported data only after fixed camera/room/wall,
+fallback, pagination, inventory, assignment, and slot-policy state matches.
+Export from the complete configured model, including bounds-only walls. Preserve
+native keyboard behavior in form controls and cache-bust customer bundles in
+every generated file-preview entry.
+
+## v1.12 hub-layout guideline
+
+Keep authored/resolved hub transforms in the shared wall U/V/N frame and keep
+rendered faces, accessibility projection, and hit targets on the same fitted
+quad. Preserve the four-work 2+1+1 page cap, overflow migration, and side-wall
+doorway/front-corner clearance checks. A passing geometry test does not close a
+customer visual incident without checking the exact reported artifact.
 
 ## v0.29 rendering/preload coding guideline
 

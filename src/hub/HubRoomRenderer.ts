@@ -1,9 +1,14 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import type { MuseumHubResolution, ResolvedHubSlot, ResolvedHubWall } from '../config/museumHub';
 import type { QualityPreset } from '../config/quality';
 import type { ArtworkImageUrlType } from '../utils/artworkImageSources';
-import { roomWallNormal, roomWallPoint } from './projectiveGeometry';
+import {
+  createArtworkMountingFrame,
+  HUB_ARTWORK_DEPTH_M,
+  roomWallNormal,
+  roomWallPoint,
+} from './projectiveGeometry';
 import {
   ArchitecturalSurfaceFactory,
   type ArchitecturalMaterials,
@@ -13,13 +18,17 @@ import { createScopedDiagnostics } from '../utils/Diagnostics';
 import { createCompatibleTextureImage, type TextureUploadFit } from '../utils/textureUploadCompatibility';
 import { probeTextureVisiblePixels, type VisiblePixelProbeResult } from '../utils/sourceToPixelProbe';
 import { getRuntimeProtocol, shouldRunVisiblePixelProbe } from '../utils/sourceToPixelOutcome';
+import {
+  createResilientWebGLRenderer,
+  describeWebGLContext,
+  type WebGLRendererMode,
+} from '../utils/webgl';
 
 interface SlotMeshState {
   pageIndex: number;
   group: THREE.Group;
   artworkMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   edgeMesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
-  shadowMesh: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   textureKind: 'image' | 'placeholder' | null;
   textureKey: string | null;
 }
@@ -43,21 +52,80 @@ export interface SlotUpsertResult {
 
 const PLACEHOLDER_SIZE = 512;
 /** Perceived stretched-canvas depth of a mounted artwork (metres). */
-const ARTWORK_EDGE_DEPTH = 0.04;
 /** How far the entry-zone shell extends past the camera (metres). */
 const ENTRY_SHELL_MARGIN = 1.5;
 /** Depth of the dim passage pocket behind each doorway opening (metres). */
 const DOORWAY_POCKET_DEPTH = 1.15;
 /** Skirting shadow-gap profile (metres). */
-const SKIRTING_HEIGHT = 0.075;
-const SKIRTING_DEPTH = 0.014;
-/** Recessed ceiling light-cove dimensions (metres). */
-const COVE_WIDTH = 0.2;
-const COVE_SIDE_INSET = 0.85;
+const SKIRTING_HEIGHT = 0.026;
+const SKIRTING_DEPTH = 0.012;
+/** Long perimeter light-channel and central clerestory dimensions (metres). */
+export const HUB_COVE_WIDTH_M = 0.34;
+const COVE_WALL_INSET = 0.55;
+const COVE_END_INSET = 0.72;
 const COVE_RECESS_DEPTH = 0.06;
+const CLERESTORY_WIDTH = 2.7;
+const CLERESTORY_END_INSET = 1.55;
+const CLERESTORY_RISE = 0.82;
+const SKYLIGHT_ROOF_RISE = 0.72;
 /** Height of the diffuser strip above the ceiling plane (metres). Nearly
  *  flush so the glowing strip fills the opening even at grazing angles. */
 const COVE_STRIP_LIFT = 0.006;
+
+/** Static daylight rig: broad cool-neutral wash, perimeter panels, one shadow key. */
+export const HUB_LIGHTING_PROFILE = Object.freeze({
+  hemisphere: Object.freeze({
+    sky: 0xeaf2f6,
+    ground: 0xc7c3b9,
+    intensity: 0.14,
+  }),
+  key: Object.freeze({
+    color: 0xf4f7f6,
+    intensity: 0.55,
+    position: Object.freeze([-3.4, 9.8, 5.9] as const),
+    target: Object.freeze([0.2, 1.1, -1.8] as const),
+  }),
+  fill: Object.freeze({
+    color: 0xe8edef,
+    intensity: 0.16,
+    position: Object.freeze([3.8, 5.8, 5.2] as const),
+    target: Object.freeze([-0.6, 1.6, -1.6] as const),
+  }),
+  ceilingPanel: Object.freeze({
+    color: 0xf4f8fa,
+    intensity: 5,
+    edgeInset: 0.05,
+    ceilingOffset: 0.045,
+  }),
+  skylightPanel: Object.freeze({
+    color: 0xe8f0f2,
+    intensity: 3.2,
+    edgeInset: 0.12,
+    ceilingOffset: 0.12,
+  }),
+});
+
+/** RectAreaLight emits along local -Z; this target keeps every panel room-facing. */
+export const HUB_AREA_LIGHT_DIRECTION = Object.freeze([0, -1, 0] as const);
+
+export const HUB_SKYLIGHT_PROFILE = Object.freeze({
+  turbidity: 5.6,
+  rayleigh: 1.25,
+  mieCoefficient: 0.004,
+  mieDirectionalG: 0.78,
+  sunDirection: Object.freeze([-0.3, 0.87, 0.39] as const),
+  roofRise: SKYLIGHT_ROOF_RISE,
+  ribCount: 9,
+  glassRoughness: 0.19,
+  glassTransmission: 0.72,
+});
+
+export const HUB_RENDER_PROFILE = Object.freeze({
+  toneMappingExposure: 0.92,
+  environmentIntensity: 0.18,
+  planarReflectionHigh: 0.16,
+  planarReflectionBalanced: 0,
+});
 
 /**
  * WebGL renderer for the museum hub room (v0.87).
@@ -78,6 +146,7 @@ export class HubRoomRenderer {
 
   private readonly diagnostics = createScopedDiagnostics('hub-room');
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly rendererMode: WebGLRendererMode;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
   private readonly cameraTarget = new THREE.Vector3();
@@ -87,12 +156,17 @@ export class HubRoomRenderer {
   private readonly placeholderTextures = new Map<string, THREE.CanvasTexture>();
   private readonly surfaceFactory: ArchitecturalSurfaceFactory;
   private readonly materials: ArchitecturalMaterials;
-  private readonly shadowMaterial: THREE.MeshBasicMaterial;
   private readonly edgeGeometry = new THREE.BoxGeometry(1, 1, 1);
   private readonly artworkPlaneGeometry = new THREE.PlaneGeometry(1, 1);
-  private contactShadowTexture: THREE.CanvasTexture | null = null;
   private readonly floorMeshes: THREE.Mesh[] = [];
   private keyLight: THREE.DirectionalLight | null = null;
+  private fillLight: THREE.DirectionalLight | null = null;
+  private readonly ceilingPanelLights: THREE.RectAreaLight[] = [];
+  private sky: Sky | null = null;
+  private batterySky: THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> | null = null;
+  private skylightGlassMaterial: THREE.MeshPhysicalMaterial | null = null;
+  private skylightGlassFallback: THREE.MeshBasicMaterial | null = null;
+  private readonly skylightGlassMeshes: THREE.Mesh[] = [];
   private environmentTarget: THREE.WebGLRenderTarget | null = null;
   private reflectionTarget: THREE.WebGLRenderTarget | null = null;
   private readonly reflectionCamera = new THREE.PerspectiveCamera();
@@ -109,22 +183,30 @@ export class HubRoomRenderer {
   constructor(container: HTMLElement, resolution: MuseumHubResolution, preset: QualityPreset) {
     this.resolution = resolution;
     this.preset = preset;
-    this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: false,
-      powerPreference: 'high-performance',
-    });
-    this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
+    const creation = createResilientWebGLRenderer({ alpha: false });
+    this.renderer = creation.renderer;
+    this.rendererMode = creation.mode;
+    this.renderer.setPixelRatio(
+      creation.mode === 'preferred' ? getOptimalPixelRatio(preset.pixelRatioCap) : 1
+    );
     this.renderer.setSize(resolution.stage.width, resolution.stage.height, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // No tone mapping: artwork planes must reproduce customer imagery exactly.
-    this.renderer.toneMapping = THREE.NoToneMapping;
-    this.renderer.shadowMap.enabled = true;
+    // Architectural highlights use a restrained photographic shoulder. Artwork
+    // planes explicitly opt out so customer imagery remains source-faithful.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = HUB_RENDER_PROFILE.toneMappingExposure;
+    this.renderer.shadowMap.enabled = creation.mode === 'preferred';
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setClearColor(new THREE.Color(resolution.visualTokens.museumWall), 1);
     this.renderer.domElement.classList.add('museum-hub__canvas');
     container.appendChild(this.renderer.domElement);
     this.canvas = this.renderer.domElement;
+    this.diagnostics.info('created', 'Hub WebGL renderer initialized', {
+      mode: creation.mode,
+      attempts: creation.attempts,
+      context: describeWebGLContext(this.renderer),
+      protocol: window.location.protocol,
+    });
 
     this.camera = new THREE.PerspectiveCamera(
       resolution.camera.verticalFovDeg,
@@ -145,21 +227,14 @@ export class HubRoomRenderer {
     this.camera.lookAt(this.cameraTarget);
     this.applyLensShift();
 
-    this.surfaceFactory = new ArchitecturalSurfaceFactory(preset.hubSurfaceTileSize);
+    this.surfaceFactory = new ArchitecturalSurfaceFactory(preset.hubSurfaceTileSize, 'hub');
     this.surfaceFactory.setAnisotropy(this.effectiveAnisotropy());
     this.materials = this.surfaceFactory.getMaterials({
       wall: resolution.visualTokens.museumWall,
     });
+    this.materials.ceiling.shadowSide = THREE.DoubleSide;
+    this.materials.trim.shadowSide = THREE.DoubleSide;
     this.attachFloorReflectionShader(this.materials.floor);
-
-    this.shadowMaterial = new THREE.MeshBasicMaterial({
-      map: this.contactShadowMap(),
-      color: 0x000000,
-      transparent: true,
-      opacity: 0.34,
-      depthWrite: false,
-      toneMapped: false,
-    });
 
     this.buildRoom();
     this.buildLights();
@@ -167,6 +242,7 @@ export class HubRoomRenderer {
     this.applyReflectionMode();
     this.setActivePage(0);
     this.render();
+    this.logRenderingDiagnostics();
   }
 
   /**
@@ -176,13 +252,18 @@ export class HubRoomRenderer {
   applyPreset(preset: QualityPreset): void {
     if (this.disposed) return;
     this.preset = preset;
-    this.renderer.setPixelRatio(getOptimalPixelRatio(preset.pixelRatioCap));
+    this.renderer.setPixelRatio(
+      this.rendererMode === 'preferred' ? getOptimalPixelRatio(preset.pixelRatioCap) : 1
+    );
     this.renderer.setSize(this.resolution.stage.width, this.resolution.stage.height, false);
     this.surfaceFactory.setTileSize(preset.hubSurfaceTileSize);
+    this.applyLightingPreset();
+    this.applySkyPreset();
     this.applyShadowPreset();
     this.applyEnvironment();
     this.applyReflectionMode();
     this.render();
+    this.logRenderingDiagnostics();
   }
 
   setActivePage(pageIndex: number): void {
@@ -219,8 +300,7 @@ export class HubRoomRenderer {
       return { applied: false, usedImage: false };
     }
     const slotAnchor = slot.placement.anchor;
-    const normal = roomWallNormal(wall.room);
-    if (!slotAnchor || !normal) {
+    if (!slotAnchor) {
       state.group.visible = false;
       this.render();
       return { applied: false, usedImage: false };
@@ -295,30 +375,50 @@ export class HubRoomRenderer {
       state.textureKind = missingImage ? 'placeholder' : 'image';
     }
 
-    const width = slot.placement.mountedHeight * Math.max(0.25, slot.artworkAspect);
-    const height = slot.placement.mountedHeight;
-    const zOffset = slot.placement.zOffset ?? 0.02;
-    const center = roomWallPoint(wall.room, slotAnchor);
-    const basisU = new THREE.Vector3(wall.room.axisU.x, wall.room.axisU.y, wall.room.axisU.z).normalize();
-    const basisV = new THREE.Vector3(wall.room.axisV.x, wall.room.axisV.y, wall.room.axisV.z).normalize();
-    const basisN = new THREE.Vector3(normal.x, normal.y, normal.z).normalize();
+    const mountingFrame = createArtworkMountingFrame(
+      wall.room,
+      slotAnchor,
+      slot.placement.physicalHeight ?? slot.placement.mountedHeight,
+      Math.max(0.25, slot.artworkAspect),
+      slot.placement.mountingGap
+    );
+    if (!mountingFrame) {
+      state.group.visible = false;
+      this.render();
+      return { applied: false, usedImage: false };
+    }
+    const { width, height } = mountingFrame;
+    const basisU = new THREE.Vector3(
+      mountingFrame.basisU.x,
+      mountingFrame.basisU.y,
+      mountingFrame.basisU.z
+    );
+    const basisV = new THREE.Vector3(
+      mountingFrame.basisV.x,
+      mountingFrame.basisV.y,
+      mountingFrame.basisV.z
+    );
+    const basisN = new THREE.Vector3(
+      mountingFrame.basisN.x,
+      mountingFrame.basisN.y,
+      mountingFrame.basisN.z
+    );
     const matrix = new THREE.Matrix4().makeBasis(basisU, basisV, basisN);
     state.group.matrixAutoUpdate = false;
     matrix.setPosition(
-      center.x + basisN.x * zOffset,
-      center.y + basisN.y * zOffset,
-      center.z + basisN.z * zOffset
+      mountingFrame.frontCenter.x,
+      mountingFrame.frontCenter.y,
+      mountingFrame.frontCenter.z
     );
     state.group.matrix.copy(matrix);
     state.group.matrixWorldNeedsUpdate = true;
     state.group.visible = state.pageIndex === this.activePageIndex;
     state.artworkMesh.scale.set(width, height, 1);
     // Stretched-canvas body: front face sits just behind the artwork plane.
-    state.edgeMesh.scale.set(width, height, ARTWORK_EDGE_DEPTH);
-    state.edgeMesh.position.set(0, 0, -ARTWORK_EDGE_DEPTH / 2 - 0.001);
-    // Soft radial contact shadow hugging the wall behind the mounted work.
-    state.shadowMesh.scale.set(width * 1.22, height * 1.22, 1);
-    state.shadowMesh.position.set(0, -0.015, -zOffset + 0.004);
+    // Keep the box's front face 1 mm behind the image plane while its back
+    // remains exactly at the mounting-frame back plane.
+    state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
+    state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
     this.render();
     return { applied: true, usedImage: !missingImage, fit, visibleProbe };
   }
@@ -333,8 +433,6 @@ export class HubRoomRenderer {
       state.artworkMesh.material.dispose();
     }
     for (const texture of this.placeholderTextures.values()) texture.dispose();
-    this.shadowMaterial.dispose();
-    this.contactShadowTexture?.dispose();
     this.edgeGeometry.dispose();
     this.artworkPlaneGeometry.dispose();
     this.scene.traverse((object) => {
@@ -346,6 +444,10 @@ export class HubRoomRenderer {
     this.keyLight?.shadow.map?.dispose();
     this.reflectionTarget?.dispose();
     this.environmentTarget?.dispose();
+    this.sky?.material.dispose();
+    this.batterySky?.material.dispose();
+    this.skylightGlassMaterial?.dispose();
+    this.skylightGlassFallback?.dispose();
     this.surfaceFactory.dispose();
     this.renderer.dispose();
     this.slotMeshes.clear();
@@ -372,21 +474,84 @@ export class HubRoomRenderer {
   // ── Lighting ───────────────────────────────────────────────────────────────
 
   private buildLights(): void {
-    // Neutral skydome base so the authored wall token reads as concrete-grey
-    // instead of cream across both hub and gallery routes.
-    const hemisphere = new THREE.HemisphereLight(0xf3f5f6, 0xaab1b8, 0.56);
-    // Neutral key from high behind the viewer; the only shadow caster.
-    const key = new THREE.DirectionalLight(0xf4f6f7, 0.96);
-    key.position.set(-2.4, 6.4, 6.2);
-    key.target.position.set(0.4, 0.6, -0.4);
-    // Cooler low fill from the opposite side keeps dark trim and the right
-    // wall readable without pushing the room back toward amber.
-    const fill = new THREE.DirectionalLight(0xe2e9ef, 0.38);
-    fill.position.set(3.4, 2.6, 5.4);
-    fill.target.position.set(-0.8, 1.4, 0);
+    const profile = HUB_LIGHTING_PROFILE;
+    // Broad indirect-looking wash supports the local ceiling panels without
+    // flattening the room into one uniform exposure.
+    const hemisphere = new THREE.HemisphereLight(
+      profile.hemisphere.sky,
+      profile.hemisphere.ground,
+      profile.hemisphere.intensity
+    );
+    // The restrained high key is the only shadow caster.
+    const key = new THREE.DirectionalLight(profile.key.color, profile.key.intensity);
+    key.position.set(...profile.key.position);
+    key.target.position.set(...profile.key.target);
+    const fill = new THREE.DirectionalLight(profile.fill.color, profile.fill.intensity);
+    fill.position.set(...profile.fill.position);
+    fill.target.position.set(...profile.fill.target);
     this.keyLight = key;
-    this.applyShadowPreset();
+    this.fillLight = fill;
     this.scene.add(hemisphere, key, key.target, fill, fill.target);
+    for (const cove of this.coveRects()) {
+      const width = Math.max(0.1, cove.maxX - cove.minX - profile.ceilingPanel.edgeInset * 2);
+      const height = Math.max(0.1, cove.maxZ - cove.minZ - profile.ceilingPanel.edgeInset);
+      const panel = new THREE.RectAreaLight(
+        profile.ceilingPanel.color,
+        profile.ceilingPanel.intensity,
+        width,
+        height
+      );
+      panel.position.set(
+        (cove.minX + cove.maxX) / 2,
+        this.resolution.room.ceilingY - profile.ceilingPanel.ceilingOffset,
+        (cove.minZ + cove.maxZ) / 2
+      );
+      this.orientAreaLightIntoRoom(panel);
+      this.ceilingPanelLights.push(panel);
+      this.scene.add(panel);
+    }
+    const clerestory = this.clerestoryRect();
+    const skylightPanel = new THREE.RectAreaLight(
+      profile.skylightPanel.color,
+      profile.skylightPanel.intensity,
+      Math.max(0.1, clerestory.maxX - clerestory.minX - profile.skylightPanel.edgeInset * 2),
+      Math.max(0.1, clerestory.maxZ - clerestory.minZ - profile.skylightPanel.edgeInset * 2)
+    );
+    skylightPanel.position.set(
+      0,
+      this.resolution.room.ceilingY + CLERESTORY_RISE - profile.skylightPanel.ceilingOffset,
+      (clerestory.minZ + clerestory.maxZ) / 2
+    );
+    this.orientAreaLightIntoRoom(skylightPanel);
+    this.ceilingPanelLights.push(skylightPanel);
+    this.scene.add(skylightPanel);
+    this.applyLightingPreset();
+    this.applyShadowPreset();
+  }
+
+  private orientAreaLightIntoRoom(light: THREE.RectAreaLight): void {
+    light.lookAt(
+      light.position.x + HUB_AREA_LIGHT_DIRECTION[0],
+      light.position.y + HUB_AREA_LIGHT_DIRECTION[1],
+      light.position.z + HUB_AREA_LIGHT_DIRECTION[2]
+    );
+  }
+
+  /** Area fixtures are reserved for high/balanced; battery uses one cheap fill. */
+  private applyLightingPreset(): void {
+    const areaLightingEnabled = this.preset.id !== 'battery';
+    for (const panel of this.ceilingPanelLights) panel.visible = areaLightingEnabled;
+    if (this.fillLight) this.fillLight.visible = !areaLightingEnabled;
+  }
+
+  private applySkyPreset(): void {
+    const battery = this.preset.id === 'battery';
+    if (this.sky) this.sky.visible = !battery;
+    if (this.batterySky) this.batterySky.visible = battery;
+    const material = battery ? this.skylightGlassFallback : this.skylightGlassMaterial;
+    if (material) {
+      for (const glass of this.skylightGlassMeshes) glass.material = material;
+    }
   }
 
   private applyShadowPreset(): void {
@@ -402,9 +567,9 @@ export class HubRoomRenderer {
       key.shadow.map?.dispose();
       key.shadow.map = null;
     }
-    // Ortho frustum fitted to the room envelope (including entry extension).
-    const shell = this.shellBounds();
-    const radius = Math.max(shell.max.x - shell.min.x, shell.max.z - shell.min.z);
+    // Fit the single map to the visible room rather than the entry extension.
+    const bounds = this.resolution.room.bounds;
+    const radius = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) * 0.72;
     key.shadow.camera.left = -radius;
     key.shadow.camera.right = radius;
     key.shadow.camera.top = radius;
@@ -416,18 +581,59 @@ export class HubRoomRenderer {
     key.shadow.camera.updateProjectionMatrix();
   }
 
-  /** PMREM room environment for subtle material response; skipped on battery. */
+  private logRenderingDiagnostics(): void {
+    const direction = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const areaLights = this.ceilingPanelLights.map((light) => {
+      light.getWorldQuaternion(quaternion);
+      direction.set(0, 0, -1).applyQuaternion(quaternion).normalize();
+      return {
+        intensity: light.intensity,
+        size: `${light.width.toFixed(2)}x${light.height.toFixed(2)}`,
+        direction: direction.toArray().map((value) => Number(value.toFixed(3))),
+        visible: light.visible,
+      };
+    });
+    const info = this.renderer.info;
+    this.diagnostics.info('rendering-profile', 'Hub architectural rendering profile', {
+      preset: this.preset.id,
+      toneMapping: this.renderer.toneMapping,
+      exposure: this.renderer.toneMappingExposure,
+      environmentIntensity: this.scene.environment ? this.scene.environmentIntensity : 0,
+      hemisphereIntensity: HUB_LIGHTING_PROFILE.hemisphere.intensity,
+      directionalIntensity: this.keyLight?.intensity ?? 0,
+      areaLights,
+      shadowMapSize: this.keyLight?.castShadow ? this.keyLight.shadow.mapSize.x : 0,
+      reflectionTarget: this.reflectionTarget
+        ? `${this.reflectionTarget.width}x${this.reflectionTarget.height}`
+        : 'off',
+      drawCalls: info.render.calls,
+      triangles: info.render.triangles,
+      textures: info.memory.textures,
+      programs: info.programs?.length ?? 0,
+    });
+  }
+
+  /** Cached PMREM generated from the same procedural sky visible through the roof. */
   private applyEnvironment(): void {
     const wantsEnvironment = this.preset.hubReflection !== 'off';
     if (wantsEnvironment && !this.environmentTarget) {
       const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-      pmremGenerator.compileEquirectangularShader();
-      const roomEnv = new RoomEnvironment(this.renderer);
-      this.environmentTarget = pmremGenerator.fromScene(roomEnv);
+      pmremGenerator.compileCubemapShader();
+      const environmentScene = new THREE.Scene();
+      environmentScene.add(this.createAtmosphericSky());
+      this.environmentTarget = pmremGenerator.fromScene(environmentScene, 0.08);
       pmremGenerator.dispose();
-      roomEnv.dispose();
+      environmentScene.traverse((object) => {
+        const mesh = object as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.geometry.dispose();
+          const material = mesh.material as THREE.Material;
+          material.dispose();
+        }
+      });
       this.scene.environment = this.environmentTarget.texture;
-      this.scene.environmentIntensity = 0.32;
+      this.scene.environmentIntensity = HUB_RENDER_PROFILE.environmentIntensity;
     } else if (!wantsEnvironment && this.environmentTarget) {
       this.scene.environment = null;
       this.environmentTarget.dispose();
@@ -446,7 +652,9 @@ export class HubRoomRenderer {
    */
   private attachFloorReflectionShader(material: THREE.MeshStandardMaterial): void {
     const uniforms = this.reflectionUniforms;
+    const applySurfaceResponse = material.onBeforeCompile;
     material.onBeforeCompile = (shader) => {
+      applySurfaceResponse(shader, this.renderer);
       shader.uniforms.uReflectionMap = uniforms.uReflectionMap;
       shader.uniforms.uReflectionMatrix = uniforms.uReflectionMatrix;
       shader.uniforms.uReflectionStrength = uniforms.uReflectionStrength;
@@ -480,7 +688,8 @@ export class HubRoomRenderer {
             '#include <opaque_fragment>'
         );
     };
-    material.customProgramCacheKey = () => 'hub-floor-reflection';
+    const surfaceCacheKey = material.customProgramCacheKey;
+    material.customProgramCacheKey = () => `hub-floor-reflection-${surfaceCacheKey()}`;
   }
 
   private applyReflectionMode(): void {
@@ -495,18 +704,20 @@ export class HubRoomRenderer {
           minFilter: THREE.LinearFilter,
           magFilter: THREE.LinearFilter,
         });
-        this.reflectionTarget.texture.colorSpace = this.renderer.outputColorSpace;
+        this.reflectionTarget.texture.colorSpace = THREE.LinearSRGBColorSpace;
       }
       this.reflectionUniforms.uReflectionMap.value = this.reflectionTarget.texture;
-      this.reflectionUniforms.uReflectionStrength.value = this.preset.id === 'high' ? 0.34 : 0.3;
-      this.materials.floor.roughness = 0.62;
+      this.reflectionUniforms.uReflectionStrength.value = this.preset.id === 'high'
+        ? HUB_RENDER_PROFILE.planarReflectionHigh
+        : HUB_RENDER_PROFILE.planarReflectionBalanced;
+      this.materials.floor.roughness = 0.6;
     } else {
       this.reflectionUniforms.uReflectionMap.value = null;
       this.reflectionUniforms.uReflectionStrength.value = 0;
       this.reflectionTarget?.dispose();
       this.reflectionTarget = null;
       // ibl: environment gloss only; off: fully diffuse mineral floor.
-      this.materials.floor.roughness = mode === 'ibl' ? 0.55 : 0.78;
+      this.materials.floor.roughness = mode === 'ibl' ? 0.62 : 0.76;
     }
   }
 
@@ -535,9 +746,12 @@ export class HubRoomRenderer {
     this.reflectionUniforms.uReflectionMatrix.value.copy(this.reflectionMatrix);
 
     for (const floor of this.floorMeshes) floor.visible = false;
+    const toneMapping = this.renderer.toneMapping;
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.setRenderTarget(target);
     this.renderer.render(this.scene, cam);
     this.renderer.setRenderTarget(null);
+    this.renderer.toneMapping = toneMapping;
     for (const floor of this.floorMeshes) floor.visible = true;
   }
 
@@ -597,6 +811,7 @@ export class HubRoomRenderer {
     this.buildEntryShell();
     this.buildDoorwayPockets();
     this.buildSkirting();
+    this.buildCeilingReveal();
   }
 
   /** Rendered walls from the calibrated room model (doorway holes intact). */
@@ -641,8 +856,9 @@ export class HubRoomRenderer {
     );
     this.floorMeshes.push(floor);
 
-    // Ceiling with recessed light coves inside the original room area.
+    // Ceiling with longitudinal perimeter channels and a raised central light well.
     const coves = this.coveRects();
+    const clerestory = this.clerestoryRect();
     const ceilingShape = new THREE.Shape();
     ceilingShape.moveTo(shell.min.x, shell.min.z);
     ceilingShape.lineTo(shell.max.x, shell.min.z);
@@ -658,65 +874,272 @@ export class HubRoomRenderer {
       hole.closePath();
       ceilingShape.holes.push(hole);
     }
+    const clerestoryHole = new THREE.Path();
+    clerestoryHole.moveTo(clerestory.minX, clerestory.minZ);
+    clerestoryHole.lineTo(clerestory.maxX, clerestory.minZ);
+    clerestoryHole.lineTo(clerestory.maxX, clerestory.maxZ);
+    clerestoryHole.lineTo(clerestory.minX, clerestory.maxZ);
+    clerestoryHole.closePath();
+    ceilingShape.holes.push(clerestoryHole);
     const ceiling = new THREE.Mesh(new THREE.ShapeGeometry(ceilingShape), this.materials.ceiling);
     // Shape (x, z) rotated +90° about X maps to world (x, ceilingY, z) facing down.
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = shell.max.y;
+    ceiling.castShadow = true;
+    ceiling.receiveShadow = true;
     this.scene.add(ceiling);
 
     for (const cove of coves) {
       this.buildCove(cove, shell.max.y);
     }
+    this.buildClerestory(clerestory, shell.max.y);
   }
 
   private coveRects(): { minX: number; maxX: number; minZ: number; maxZ: number }[] {
     const bounds = this.resolution.room.bounds;
-    const width = bounds.max.x - bounds.min.x;
     const depth = bounds.max.z - bounds.min.z;
-    if (width < 3 || depth < 3) return [];
-    const minX = bounds.min.x + COVE_SIDE_INSET;
-    const maxX = bounds.max.x - COVE_SIDE_INSET;
-    const rows = [bounds.min.z + depth * 0.24, bounds.min.z + depth * 0.62];
-    return rows.map((z) => ({
-      minX,
-      maxX,
-      minZ: z - COVE_WIDTH / 2,
-      maxZ: z + COVE_WIDTH / 2,
-    }));
+    if (bounds.max.x - bounds.min.x < 4 || depth < 5) return [];
+    const minZ = bounds.min.z + COVE_END_INSET;
+    const maxZ = bounds.max.z - COVE_END_INSET;
+    return [
+      {
+        minX: bounds.min.x + COVE_WALL_INSET,
+        maxX: bounds.min.x + COVE_WALL_INSET + HUB_COVE_WIDTH_M,
+        minZ,
+        maxZ,
+      },
+      {
+        minX: bounds.max.x - COVE_WALL_INSET - HUB_COVE_WIDTH_M,
+        maxX: bounds.max.x - COVE_WALL_INSET,
+        minZ,
+        maxZ,
+      },
+    ];
+  }
+
+  private clerestoryRect(): { minX: number; maxX: number; minZ: number; maxZ: number } {
+    const bounds = this.resolution.room.bounds;
+    return {
+      minX: -CLERESTORY_WIDTH / 2,
+      maxX: CLERESTORY_WIDTH / 2,
+      minZ: bounds.min.z + CLERESTORY_END_INSET,
+      maxZ: bounds.max.z - CLERESTORY_END_INSET,
+    };
   }
 
   private buildCove(
     cove: { minX: number; maxX: number; minZ: number; maxZ: number },
     ceilingY: number
   ): void {
-    const length = cove.maxX - cove.minX;
-    // Dark reveal returns along the two long edges of the recess.
+    const length = cove.maxZ - cove.minZ;
+    // Dark reveal returns along the long edges of each perimeter channel.
     this.addQuad(
       this.materials.trim,
-      new THREE.Vector3(cove.minX, ceilingY, cove.minZ),
-      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(cove.minX, ceilingY, cove.maxZ),
+      new THREE.Vector3(0, 0, -1),
       new THREE.Vector3(0, 1, 0),
       length,
       COVE_RECESS_DEPTH
-    );
+    ).castShadow = true;
     this.addQuad(
       this.materials.trim,
-      new THREE.Vector3(cove.maxX, ceilingY, cove.maxZ),
-      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(cove.maxX, ceilingY, cove.minZ),
+      new THREE.Vector3(0, 0, 1),
       new THREE.Vector3(0, 1, 0),
       length,
       COVE_RECESS_DEPTH
-    );
+    ).castShadow = true;
     // Warm-white diffuser strip just above the ceiling plane, oversized so it
     // fills the opening from every viewing angle (no void visible past it).
     this.addQuad(
       this.materials.lightStrip,
-      new THREE.Vector3(cove.minX - 0.06, ceilingY + COVE_STRIP_LIFT, cove.minZ - 0.06),
+      new THREE.Vector3(cove.minX - 0.04, ceilingY + COVE_STRIP_LIFT, cove.minZ - 0.04),
       new THREE.Vector3(1, 0, 0),
       new THREE.Vector3(0, 0, 1),
-      length + 0.12,
-      cove.maxZ - cove.minZ + 0.12
+      cove.maxX - cove.minX + 0.08,
+      length + 0.08
     );
+  }
+
+  private buildClerestory(
+    opening: { minX: number; maxX: number; minZ: number; maxZ: number },
+    ceilingY: number
+  ): void {
+    const width = opening.maxX - opening.minX;
+    const depth = opening.maxZ - opening.minZ;
+    const topY = ceilingY + CLERESTORY_RISE;
+    this.addQuad(
+      this.materials.ceiling,
+      new THREE.Vector3(opening.minX, ceilingY, opening.maxZ),
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(0, 1, 0),
+      depth,
+      CLERESTORY_RISE
+    ).castShadow = true;
+    this.addQuad(
+      this.materials.ceiling,
+      new THREE.Vector3(opening.maxX, ceilingY, opening.minZ),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(0, 1, 0),
+      depth,
+      CLERESTORY_RISE
+    ).castShadow = true;
+    this.addQuad(
+      this.materials.ceiling,
+      new THREE.Vector3(opening.minX, ceilingY, opening.minZ),
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 1, 0),
+      width,
+      CLERESTORY_RISE
+    ).castShadow = true;
+    this.addQuad(
+      this.materials.ceiling,
+      new THREE.Vector3(opening.maxX, ceilingY, opening.maxZ),
+      new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(0, 1, 0),
+      width,
+      CLERESTORY_RISE
+    ).castShadow = true;
+    this.buildSkylightRoof(opening, topY);
+    if (!this.sky) {
+      this.sky = this.createAtmosphericSky();
+      this.batterySky = this.createBatterySky();
+      this.scene.add(this.sky, this.batterySky);
+    }
+    this.applySkyPreset();
+  }
+
+  private buildSkylightRoof(
+    opening: { minX: number; maxX: number; minZ: number; maxZ: number },
+    eaveY: number
+  ): void {
+    const halfWidth = (opening.maxX - opening.minX) / 2;
+    const depth = opening.maxZ - opening.minZ;
+    const slopeLength = Math.hypot(halfWidth, SKYLIGHT_ROOF_RISE);
+    const roofAngle = Math.atan2(SKYLIGHT_ROOF_RISE, halfWidth);
+    for (const glass of this.skylightGlassMeshes) {
+      glass.removeFromParent();
+      glass.geometry.dispose();
+    }
+    this.skylightGlassMeshes.length = 0;
+    this.skylightGlassMaterial?.dispose();
+    this.skylightGlassFallback?.dispose();
+    this.skylightGlassMaterial = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#dbe8e9'),
+      roughness: HUB_SKYLIGHT_PROFILE.glassRoughness,
+      metalness: 0,
+      transmission: HUB_SKYLIGHT_PROFILE.glassTransmission,
+      thickness: 0.018,
+      ior: 1.48,
+      transparent: true,
+      opacity: 0.62,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      envMapIntensity: 0.72,
+    });
+    this.skylightGlassFallback = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#d8e5e7'),
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      toneMapped: true,
+    });
+    const leftGlass = this.addQuad(
+      this.skylightGlassMaterial,
+      new THREE.Vector3(opening.minX, eaveY, opening.minZ),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(halfWidth / slopeLength, SKYLIGHT_ROOF_RISE / slopeLength, 0),
+      depth,
+      slopeLength
+    );
+    const rightGlass = this.addQuad(
+      this.skylightGlassMaterial,
+      new THREE.Vector3(opening.maxX, eaveY, opening.maxZ),
+      new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(-halfWidth / slopeLength, SKYLIGHT_ROOF_RISE / slopeLength, 0),
+      depth,
+      slopeLength
+    );
+    leftGlass.renderOrder = -1;
+    rightGlass.renderOrder = -1;
+    this.skylightGlassMeshes.push(leftGlass, rightGlass);
+
+    const frameThickness = 0.045;
+    const ridge = new THREE.Mesh(
+      new THREE.BoxGeometry(frameThickness, frameThickness, depth + 0.08),
+      this.materials.trim
+    );
+    ridge.position.set(0, eaveY + SKYLIGHT_ROOF_RISE, (opening.minZ + opening.maxZ) / 2);
+    ridge.castShadow = true;
+    this.scene.add(ridge);
+
+    const rafterGeometry = new THREE.BoxGeometry(slopeLength + 0.06, frameThickness, frameThickness);
+    const rafters = new THREE.InstancedMesh(
+      rafterGeometry,
+      this.materials.trim,
+      HUB_SKYLIGHT_PROFILE.ribCount * 2
+    );
+    const transform = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3(1, 1, 1);
+    for (let index = 0; index < HUB_SKYLIGHT_PROFILE.ribCount; index += 1) {
+      const z = opening.minZ + (depth * index) / (HUB_SKYLIGHT_PROFILE.ribCount - 1);
+      position.set(-halfWidth / 2, eaveY + SKYLIGHT_ROOF_RISE / 2, z);
+      quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), roofAngle);
+      transform.compose(position, quaternion, scale);
+      rafters.setMatrixAt(index * 2, transform);
+      position.set(halfWidth / 2, eaveY + SKYLIGHT_ROOF_RISE / 2, z);
+      quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -roofAngle);
+      transform.compose(position, quaternion, scale);
+      rafters.setMatrixAt(index * 2 + 1, transform);
+    }
+    rafters.instanceMatrix.needsUpdate = true;
+    rafters.castShadow = true;
+    this.scene.add(rafters);
+  }
+
+  private createAtmosphericSky(): Sky {
+    const sky = new Sky();
+    sky.scale.setScalar(80);
+    const uniforms = sky.material.uniforms;
+    uniforms.turbidity!.value = HUB_SKYLIGHT_PROFILE.turbidity;
+    uniforms.rayleigh!.value = HUB_SKYLIGHT_PROFILE.rayleigh;
+    uniforms.mieCoefficient!.value = HUB_SKYLIGHT_PROFILE.mieCoefficient;
+    uniforms.mieDirectionalG!.value = HUB_SKYLIGHT_PROFILE.mieDirectionalG;
+    uniforms.sunPosition!.value.set(...HUB_SKYLIGHT_PROFILE.sunDirection);
+    sky.material.depthWrite = false;
+    sky.renderOrder = -10;
+    return sky;
+  }
+
+  private createBatterySky(): THREE.Mesh<THREE.SphereGeometry, THREE.ShaderMaterial> {
+    const material = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      toneMapped: true,
+      vertexShader: [
+        'varying vec3 vWorldDirection;',
+        'void main() {',
+        '  vec4 worldPosition = modelMatrix * vec4(position, 1.0);',
+        '  vWorldDirection = normalize(worldPosition.xyz - cameraPosition);',
+        '  gl_Position = projectionMatrix * viewMatrix * worldPosition;',
+        '}',
+      ].join('\n'),
+      fragmentShader: [
+        'varying vec3 vWorldDirection;',
+        'void main() {',
+        '  float horizon = smoothstep(-0.12, 0.72, vWorldDirection.y);',
+        '  vec3 low = vec3(0.78, 0.82, 0.82);',
+        '  vec3 high = vec3(0.60, 0.72, 0.80);',
+        '  gl_FragColor = vec4(mix(low, high, horizon), 1.0);',
+        '}',
+      ].join('\n'),
+    });
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(60, 16, 8), material);
+    mesh.renderOrder = -10;
+    return mesh;
   }
 
   /**
@@ -788,11 +1211,32 @@ export class HubRoomRenderer {
         const width = u1 - u0;
         const height = v1 - v0;
         // Jamb at u0 (faces across the opening toward the other jamb).
-        this.addQuad(this.materials.pocket, cornerLow(u0, v0, 0), back.clone(), v.clone(), DOORWAY_POCKET_DEPTH, height);
+        this.addQuad(
+          this.materials.pocket,
+          cornerLow(u0, v0, 0),
+          back.clone(),
+          v.clone(),
+          DOORWAY_POCKET_DEPTH,
+          height
+        ).castShadow = true;
         // Jamb at u1 (faces back toward the first jamb).
-        this.addQuad(this.materials.pocket, cornerLow(u1, v0, DOORWAY_POCKET_DEPTH), back.clone().negate(), v.clone(), DOORWAY_POCKET_DEPTH, height);
+        this.addQuad(
+          this.materials.pocket,
+          cornerLow(u1, v0, DOORWAY_POCKET_DEPTH),
+          back.clone().negate(),
+          v.clone(),
+          DOORWAY_POCKET_DEPTH,
+          height
+        ).castShadow = true;
         // Header underside (faces down).
-        this.addQuad(this.materials.pocket, cornerLow(u0, v1, 0), back.clone(), u.clone(), DOORWAY_POCKET_DEPTH, width);
+        this.addQuad(
+          this.materials.pocket,
+          cornerLow(u0, v1, 0),
+          back.clone(),
+          u.clone(),
+          DOORWAY_POCKET_DEPTH,
+          width
+        ).castShadow = true;
         // Threshold floor (faces up). Registered with the floor meshes so the
         // planar-reflection pass hides every surface that samples its target.
         this.floorMeshes.push(
@@ -824,7 +1268,7 @@ export class HubRoomRenderer {
       const center = start
         .clone()
         .addScaledVector(direction, length / 2)
-        .addScaledVector(inward, SKIRTING_DEPTH / 2)
+        .addScaledVector(inward, -SKIRTING_DEPTH * 0.25)
         .setY(shell.min.y + SKIRTING_HEIGHT / 2);
       mesh.position.copy(center);
       if (Math.abs(direction.z) > Math.abs(direction.x)) mesh.rotation.y = Math.PI / 2;
@@ -880,6 +1324,34 @@ export class HubRoomRenderer {
     }
   }
 
+  /** Narrow ceiling shadow lines ground the tall wall planes without an AO pass. */
+  private buildCeilingReveal(): void {
+    const shell = this.shellBounds();
+    const roomMinZ = this.resolution.room.bounds.min.z;
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const add = (
+      position: THREE.Vector3,
+      scale: THREE.Vector3
+    ): void => {
+      const reveal = new THREE.Mesh(geometry, this.materials.trim);
+      reveal.position.copy(position);
+      reveal.scale.copy(scale);
+      this.scene.add(reveal);
+    };
+    add(
+      new THREE.Vector3(0, shell.max.y - 0.018, roomMinZ + 0.012),
+      new THREE.Vector3(shell.max.x - shell.min.x, 0.025, 0.024)
+    );
+    add(
+      new THREE.Vector3(shell.min.x + 0.012, shell.max.y - 0.018, (shell.min.z + shell.max.z) / 2),
+      new THREE.Vector3(0.024, 0.025, shell.max.z - shell.min.z)
+    );
+    add(
+      new THREE.Vector3(shell.max.x - 0.012, shell.max.y - 0.018, (shell.min.z + shell.max.z) / 2),
+      new THREE.Vector3(0.024, 0.025, shell.max.z - shell.min.z)
+    );
+  }
+
   // ── Artwork slots ──────────────────────────────────────────────────────────
 
   private ensureSlotState(slot: ResolvedHubSlot): SlotMeshState {
@@ -897,12 +1369,10 @@ export class HubRoomRenderer {
     const edgeMesh = new THREE.Mesh(this.edgeGeometry, this.materials.artworkEdge);
     edgeMesh.castShadow = true;
     edgeMesh.receiveShadow = false;
-    const shadowMesh = new THREE.Mesh(this.artworkPlaneGeometry, this.shadowMaterial);
-    shadowMesh.renderOrder = 1;
     edgeMesh.renderOrder = 2;
     artworkMesh.renderOrder = 3;
     const group = new THREE.Group();
-    group.add(shadowMesh, edgeMesh, artworkMesh);
+    group.add(edgeMesh, artworkMesh);
     const pageGroup = this.ensurePageGroup(slot.pageIndex);
     pageGroup.add(group);
     const state: SlotMeshState = {
@@ -910,7 +1380,6 @@ export class HubRoomRenderer {
       group,
       artworkMesh,
       edgeMesh,
-      shadowMesh,
       textureKind: null,
       textureKey: null,
     };
@@ -966,35 +1435,6 @@ export class HubRoomRenderer {
     texture.needsUpdate = true;
     texture.anisotropy = this.effectiveAnisotropy();
     return { texture, fit: compatible.fit };
-  }
-
-  /** Shared soft radial-gradient texture for artwork contact shadows. */
-  private contactShadowMap(): THREE.CanvasTexture {
-    if (this.contactShadowTexture) return this.contactShadowTexture;
-    const size = 128;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const context = canvas.getContext('2d');
-    if (context) {
-      const gradient = context.createRadialGradient(
-        size / 2,
-        size / 2,
-        size * 0.18,
-        size / 2,
-        size / 2,
-        size * 0.5
-      );
-      gradient.addColorStop(0, 'rgba(255,255,255,1)');
-      gradient.addColorStop(0.55, 'rgba(255,255,255,0.45)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, size, size);
-    }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    this.contactShadowTexture = texture;
-    return texture;
   }
 
   private placeholderTexture(label: string): THREE.CanvasTexture {

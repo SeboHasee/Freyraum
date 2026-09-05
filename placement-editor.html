@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="FREYRAUM Artwork Placement Editor" />
+  <title>FREYRAUM — Artwork Placement Editor</title>
+  <style>
+    :root { --color-gallery-wall: #c7ced4; --color-museum-wall: var(--color-gallery-wall); }
+    html, body, #app { min-height: 100%; margin: 0; background: var(--color-gallery-wall); }
+  </style>
+  <script>
+    const editorUrl = new URL(window.location.href);
+    editorUrl.searchParams.set('hubCalibrate', '1');
+    editorUrl.searchParams.set('placementEditor', '1');
+    window.history.replaceState(null, '', editorUrl);
+  </script>
+</head>
+<body class="placement-editor">
+  <div id="app"></div>
+  <noscript>
+    <p>Für den Artwork Placement Editor wird JavaScript benötigt.</p>
+  </noscript>
+  <script src="./customer-artworks.js"></script>
+  <script src="./customer-audio.js"></script>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

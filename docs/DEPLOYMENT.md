@@ -1,4 +1,5 @@
 # FREYRAUM — GitHub Pages Deployment Guide
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This document describes the full operator flow for publishing the gallery to
 GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
@@ -8,6 +9,11 @@ GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
 In the GitHub repository go to **Settings → Pages → Source** and choose
 **GitHub Actions**. No branch source is required; the workflow uploads and
 deploys the build artifact directly.
+
+For visual hub incidents, record the deployed commit/run and preserve the
+generated artwork/config bundle before redeploying. A deployed screenshot must
+not be assumed to represent the current workspace merely because the URL is
+unchanged.
 
 ---
 
@@ -41,6 +47,11 @@ reference asset, not a shipped runtime background).
 
 Open `customer-preview/app.html` to verify the local preview looks correct
 before publishing.
+
+For museum placement, open `OPEN_ARTWORK_EDITOR.html`. It forwards to the
+generated `customer-preview/placement-editor.html` editor. Both generated file
+entries receive cache-busted artwork/audio script URLs when customer bundles are
+regenerated.
 
 > **Evidence note:** a fresh clone does not contain the generated
 > `customer-preview/customer-artworks.js` / `customer-preview/customer-audio.js`
@@ -115,6 +126,8 @@ job summary page (visible on the Actions run page) with:
 After the workflow completes:
 
 - [ ] Root URL loads: **https://sebohasee.github.io/Freyraum/**
+- [ ] Standalone editor entry loads at
+      **https://sebohasee.github.io/Freyraum/placement-editor.html**.
 - [ ] At least one custom artwork image is visible in the gallery.
 - [ ] At least one intended customer painting—not a grey generated fallback—is
       visible in both the interactive gallery and museum hub.

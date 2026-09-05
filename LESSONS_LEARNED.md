@@ -1,5 +1,142 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-02 (v0.98 wall surface realism + softer artwork-view lighting).
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## 2026-09-05 — Standalone editor reproducibility lessons
+
+### Lesson 110 — Import only editor-owned state
+
+An in-place editor cannot safely accept camera, room, wall-transform, inventory,
+assignment, or fixed-policy changes without rebuilding the complete resolution
+and renderer. Reject those differences and apply only explicitly editable safe
+zones, mounting zones, confirmations, and canonical placement values.
+
+### Lesson 109 — Export from the complete configured model
+
+The runtime list of rendered walls is not the complete configuration: bounds-only
+walls still define the architectural envelope. Round-trip export must retain
+those walls plus pagination, fallback policy, room thickness, and fixed slot
+settings instead of reconstructing JSON from visible objects alone.
+
+### Lesson 108 — Every file entry needs the same cache contract
+
+Adding a second `file://` launcher creates another browser cache boundary.
+Customer artwork and audio URLs must be cache-busted in both the gallery preview
+and placement editor whenever the importer rewrites those bundles.
+
+## 2026-09-04 — Deterministic placement tooling lesson
+
+### Lesson 107 — Do not iterate artistic placement through guessed constants
+
+Repeated percentage changes cannot establish correctness when wall calibration,
+door openings, perspective, and customer intent interact. Future rule: preserve
+wall ownership, let the curator draw the valid visible region and place the
+artwork directly, block invalid export, and prove export/re-import equivalence.
+
+## 2026-09-04 — Projected architectural-boundary lesson
+
+### Lesson 106 — Validate the boundary the customer can see
+
+A wall-space clearance can pass while calibrated artwork still crosses a seam
+in the primary camera. A stricter local rule can also reject a visually valid
+position and remount it to the wrong wall. Future rule: validate both physical
+wall coordinates and projected doorway/corner lines, and never declare a visual
+fix complete from local geometry alone.
+
+## 2026-09-04 — Perspective validation lesson
+
+### Lesson 105 — Do not correct perspective taper by eye
+
+A rectangle flush to a receding wall must appear trapezoidal. Judge its
+orientation by wall-normal alignment, coplanarity, and a shared wall/artwork
+vanishing point—not by whether its top and bottom edges look horizontal.
+Camera-facing correction would make the physical mounting wrong.
+
+## 2026-09-04 — Visual artifact provenance lesson
+
+### Lesson 104 — Geometry tests do not identify the rendered artifact
+
+A customer screenshot can contradict a passing source-tree geometry contract
+because generated preview data, injected configuration, deployed output, or page
+visibility may differ. Future rule: reopen visual acceptance immediately,
+preserve the exact artifact and generated bundles, and do not call placement
+fixed until that same artifact passes the primary-camera visual check.
+
+## 2026-09-04 — Side-wall usable-segment lesson
+
+### Lesson 103 — Constrain both ends of a wall segment
+
+Moving artwork away from a corner can push it into a doorway. Future rule:
+validate side-wall placement against both architectural boundaries—the hallway
+opening and the perpendicular front-wall corner—rather than maximizing either
+clearance independently.
+
+## 2026-09-04 — Side-wall coordinate lesson
+
+### Lesson 102 — Front-corner setback follows each wall's U direction
+
+Mirrored world-space movement does not mean applying the same normalized delta:
+the left and right wall U axes point in opposite longitudinal directions.
+Future rule: define side placement by physical front-corner clearance and move
+left U downward/right U upward when bringing works toward the viewer.
+
+## 2026-09-03 — Museum room-density lesson
+
+### Lesson 101 — Protect corners by limiting works per room
+
+Independent wall containment does not guarantee a believable shared corner:
+works on perpendicular walls can both be technically valid yet form an
+impossible-looking cluster. Future rule: cap this room at four works in a 2+1+1
+composition and paginate overflow before adding a second work to either side
+wall.
+
+## 2026-09-03 — Optical alignment lesson
+
+### Lesson 100 — Validate visible wall clearance, not only world-space bounds
+
+A mount can be physically valid yet appear floor-bound through a fixed
+wide-angle camera. Future rule: retain wall-relative U/V/N transforms, but
+validate projected floor clearance and optical center grouping; avoid separate
+shadow cards when the physical artwork body already casts the contact shadow.
+
+## 2026-09-03 — Exhibition composition lesson
+
+### Lesson 99 — Geometric correctness does not create curatorial rhythm
+
+A shared wall-relative transform can still look synthetic when every source
+aspect receives one physical height and a low centerline. Future rule: preserve
+one professional visual centerline, curate physical height by artwork role and
+available wall span, then validate the resulting bottoms, tops, clear spacing,
+doorways, and real source aspects together.
+
+## 2026-09-03 — Wall-relative artwork mounting lesson
+
+### Lesson 98 — Define clearance at the artwork back, not at its image plane
+
+Positioning a front image plane a small distance from a wall is insufficient
+when the mounted body is deeper than that offset. Future rule: derive every
+artwork transform from one orthonormal wall U/V/N frame, define the wall-to-back
+clearance explicitly, and use the resulting front-face world quad for both
+rendering and interaction projection.
+
+## 2026-09-03 — Renderer capability and recovery lesson
+
+### Lesson 97 — Test the real renderer and preserve content without it
+
+A successful throwaway context does not prove that the application renderer can
+initialize, while the throwaway context itself consumes scarce GPU resources.
+Future rule: initialize the real renderer through bounded, explicitly cleaned-up
+attempts; classify unrelated startup failures separately; and keep customer
+content navigable in DOM/CSS whenever immersive rendering is unavailable.
+
+## 2026-09-02 — Hub architectural-depth lesson
+
+### Lesson 96 — Correct local light before adding surface detail or AO
+
+When a pale room reads as a white void, inspect finite light direction, global
+fill, and architectural shadow participation before adding texture or a
+fullscreen AO pass. Future rule: make visible fixtures illuminate locally,
+keep non-occluded environment/hemisphere fill secondary, and let aperture,
+recess, and mounted-object geometry participate in the existing shadow system.
 
 ## 2026-09-02 — Wall texture and artwork-view lighting lesson
 

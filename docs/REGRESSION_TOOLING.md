@@ -1,4 +1,5 @@
-# Regression Validation Tooling (v0.93)
+# Regression Validation Tooling (v1.18)
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -114,13 +115,17 @@ numerically identical to the original O(N) reference across a 435-frame
 sequence including edge cases.
 
 `scripts/test-museum-hub-geometry.mjs` is a focused hub geometry regression
-check: it loads the shipping TypeScript modules, verifies v1/v2 migration keeps
-exact artwork targets, validates the checked-in v4 camera/room/wall/slot
+check: it loads the shipping TypeScript modules, verifies v1–v4 migration keeps
+exact artwork targets, validates the checked-in v5 camera/room/wall/slot
 contract, reconciles wall-local planes against the photographed reference
 quads, and asserts deterministic doorway-edge placement, fallback wall buckets,
 projected containment, hanging-band containment, perspective foreshortening,
 world-space quad export, selected-state runtime hooks, grey-token reach, and
-the bounded missing-background fallback. Threshold breaches hard-fail
+the bounded missing-background fallback. It also guards four-work 2+1+1 pages,
+overflow pagination, contiguous migrated page indices, pairwise wall intervals,
+and 0.35 m doorway / 4.00 m front-corner wall-space clearances. Primary-camera
+projection additionally hard-fails if a side artwork comes within 12 px of the
+visible doorway reveal or front-wall corner seam. Threshold breaches hard-fail
 `npm run validate:museum-hub` and CI. `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the
@@ -135,6 +140,32 @@ balanced two-key setup, no return to the old dramatic far-left spotlight), and
 it now additionally guards the visible wall-material contract (matte wall,
 restrained wall normal scale, calmer ceiling) plus the low-sheen matte artwork
 response that prevents close-view washout.
+
+The v1.17 contract additionally requires explicit four-corner mounting zones,
+immutable explicit wall ownership, complete-quad zone containment, and exact
+v5 canonical placement preservation through sanitize/re-import. Invalid
+placements are suppressed instead of falling back to another wall.
+
+The v1.18 editor contract additionally requires a discoverable file-safe entry,
+read-only build-derived wall projection, native keyboard behavior inside form
+controls, rejection of incompatible fixed configuration on import, preservation
+of rendered and bounds-only walls plus fixed settings on export, and cache-busted
+customer artwork/audio scripts in both generated file entries.
+
+The v1.15 orientation gate additionally proves that every artwork is a rigid
+wall-parallel plane. It requires wall-normal alignment and zero relative corner
+offset, then intersects the projected upper/lower U edges and compares that
+vanishing point with the calibrated wall's U-edge vanishing point. Side-wall
+residual must be no more than `0.01 px`; this prevents visual angle tuning,
+billboarding, or a twisted quadrilateral from passing geometry validation.
+
+### Open v1.12 artifact mismatch
+
+The 2026-09-04 customer screenshot shows five visible works while its counter
+reads `Raum 1 / 2`. This contradicts the tested four-work contract. Geometry
+validation therefore remains green evidence for the checked-in source, but the
+visual incident is open until the exact screenshot-producing preview/deployment,
+generated bundle, config, and page-group visibility are captured together.
 
 ## Acceptance thresholds (Phase 14)
 

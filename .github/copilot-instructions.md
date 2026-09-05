@@ -1,6 +1,24 @@
 # FREYRAUM Copilot instructions
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-06-05 (v0.73 merge-readiness sync).
+> Last full markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+
+## v1.18 current context
+
+The standalone placement workflow is `OPEN_ARTWORK_EDITOR.html` →
+`customer-preview/placement-editor.html`. Preserve strict wall ownership,
+complete-quad mounting-zone validation, canonical v5 placement, and valid-only
+export. Build-derived wall projections are read-only. Import must reject any
+fixed camera/room/wall/fallback/pagination/inventory/assignment/slot-policy
+difference; export must preserve rendered and bounds-only walls plus all fixed
+fields. Keep customer data cache-busted in both generated `file://` entries.
+
+## v1.12 current context
+
+The v5 museum hub intends four works per room (2 front + 1 left + 1 right), but
+the latest customer screenshot shows five visible works in `Raum 1 / 2`.
+Visual acceptance is open. Preserve the exact screenshot-producing artifact,
+generated bundle, config, and route before changing placement again; never infer
+account usage from unavailable image/browser tooling.
 
 ## v0.29 current context
 

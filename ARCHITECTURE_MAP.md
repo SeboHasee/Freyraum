@@ -1,4 +1,5 @@
 # FREYRAUM Architecture Map
+> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -17,7 +18,9 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     and mounted-work composition
 - `src/materials/`
   - Painting and frame material behavior, procedural texture generation, and
-    shared architectural hub-shell materials/detail maps
+    shared architectural materials. `ArchitecturalSurfaceFactory` selects
+    smooth light-driven PBR plaster and satin-mineral hub finishes, and mapped
+    tactile plaster for the closer interactive gallery.
 - `src/config/`
   - Startup and quality/runtime config models
   - `galleryPresentation.ts`: compact interactive-gallery stage envelope and
@@ -25,23 +28,64 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - `presentation.ts`: validated interactive-gallery presentation profiles
   - `museumHub.ts`: unified museum-hub schema, v1/legacy migration, calibrated
     wall-plane contract (stage + multi-plane wall quads + stage-space safe
-    polygons + wall-local slot placement), reference-quad room reconciliation,
-    wall-realism gating, exact-ID slot resolver (auto-placement + paginated
-    overflow), deterministic local placement fitting, and visual-token
-    resolution
+    polygons + canonical normalized-U/center-height/physical-height/mounting-gap
+    slot placement), reference-quad room reconciliation, wall-realism gating,
+    exact-ID slot resolver (four-work 2+1+1 pages + paginated overflow),
+    contiguous page-index normalization, v1–v4 legacy reflow, deterministic
+    local placement/spacing validation, side-wall doorway/front-corner
+    local clearance gates (0.35 m doorway / 4.00 m front corner), projected
+    doorway/corner-seam guards, and visual-token resolution
 - `src/hub/`
   - `projectiveGeometry.ts`: camera/room projection math, room-plane/reference
     reconciliation, doorway-safe deterministic placement solving, polygon
-    checks, and projected hub interaction geometry
-  - `HubRoomRenderer`: on-demand WebGL hub room shell, page groups, floor
-    reflection, shadow/environment setup, and quality-preset-driven hub surface
-    fidelity
+    checks, validated U/V/N artwork mounting frames, and mounted-front-face
+    projection for hub interaction geometry
+  - `HubRoomRenderer`: on-demand 9 × 12 × 5.2 m WebGL hall, pitched glazed
+    skylight over a raised clerestory, procedural atmospheric sky and matching
+    cached low-energy PMREM, longitudinal perimeter channels, page groups,
+    high-only planar floor reflection, three quality-gated downward area sources,
+    one architectural shadow map, wall-relative 22 mm artwork bodies with exact
+    2 mm back clearance, edge-cast wall contact without a separate shadow card,
+    and preset-driven rendering fidelity
   - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback
     slot state, offline `file://` hub source preference/decode deadlines for
     local customer preview reliability, and read-only geometry/source
     diagnostics overlay
+
+## Current hub-layout acceptance boundary
+
+The source-of-truth geometry is the resolved v5 config and its page-scoped U/V/N
+mounting output. A screenshot from a generated or deployed artifact is not
+assumed to match that state unless the matching `customer-artworks.js`,
+`museum-hub.json`, route, and build are preserved. The 2026-09-04 customer
+screenshot currently disagrees with the checked-in four-work page contract, so
+visual acceptance remains open even though deterministic geometry checks pass.
+
+## Deterministic curator editor
+
+`MainMuseumHub` owns the curator editor documented in
+`docs/QUERY_PARAMETERS.md` and mutates only the in-memory
+resolved model. `museumHub.ts` owns schema sanitization, wall ownership,
+mounting-zone containment, and canonical v5 placement. Each rendered wall has an
+explicit stage-space `mountingZone`; every projected artwork corner must remain
+inside it. Export is blocked on any warning and is accepted only after
+sanitize/re-import preserves wall ID plus all four canonical placement fields.
+`placement-editor.html` is the served editor entry,
+`customer-preview/placement-editor.html` is its generated file-safe build, and
+`OPEN_ARTWORK_EDITOR.html` is the customer-facing one-click launcher. All three
+reuse the same runtime and schema rather than maintaining a second placement
+implementation.
+
+Editor state is deliberately split into fixed and editable data. Camera,
+global room values, rendered/bounds-only wall inventory, wall projection
+transforms, fallback policy, pagination, slot inventory, assignment, and fixed
+slot policies must match the active build on import. Only safe/mounting zones,
+zone confirmation, and canonical placement values are applied. Export starts
+from the complete configured wall inventory so bounds-only walls and fixed
+fields survive the round trip. `scripts/import-artworks.mjs` and
+`scripts/write-local-preview.mjs` cache-bust customer data in both file entries.
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
@@ -58,6 +102,12 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
   - Diagnostics, preferences, performance and utility primitives
 - `src/rendering/`
   - Backend detection/probe boundary (WebGL production, optional WebGPU probe)
+  - `webgl.ts`: real-renderer retry ladder (`preferred` → `compatibility` →
+    `battery`), typed failure, context diagnostics, and explicit release of
+    unsuccessful contexts. It does not allocate a separate preflight context.
+  - `FallbackScreen`: categorized recovery UI. Renderer failures retain a
+    keyboard/screen-reader-friendly 2D artwork collection; unrelated startup
+    failures are not described as WebGL absence.
 
 ## Startup sequence ownership
 
@@ -67,8 +117,10 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
    and initializes managers with that authoritative value.
 2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
 3. `RendererManager` prewarms renderer pipeline.
-4. `MainMuseumHub` prepares the hub (background fallback + room scene +
+4. `MainMuseumHub` prepares the hub (background fallback + optional room scene +
    first-page artwork primary/fallback decode) under the loading overlay via
+   the existing DOM artwork controls. If its independent room renderer fails,
+   it switches locally to visible DOM artwork imagery without aborting startup.
    `DestinationRouter.startAt('hub')`.
 5. UI entry flow continues after readiness gates are satisfied.
 

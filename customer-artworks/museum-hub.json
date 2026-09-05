@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "coverage": "all-active-artworks",
   "stage": {
     "width": 1366,
@@ -19,15 +19,15 @@
   "camera": {
     "position": {
       "x": 0,
-      "y": 1.8,
-      "z": 7.5
+      "y": 1.72,
+      "z": 9
     },
     "target": {
       "x": 0,
-      "y": 1.55,
-      "z": 0
+      "y": 2.05,
+      "z": -1.2
     },
-    "verticalFovDeg": 42,
+    "verticalFovDeg": 48,
     "near": 0.1,
     "far": 40,
     "lensShift": {
@@ -35,72 +35,91 @@
       "y": 0
     }
   },
-  "slotsPerPage": 6,
+  "slotsPerPage": 4,
   "walls": [
     {
       "id": "wall-front",
       "group": "front",
-      "planeAspect": 2.06,
+      "planeAspect": 1.730769,
       "quad": [
         {
-          "x": 330.8,
-          "y": 189.56
+          "x": 417.26,
+          "y": 206.29
         },
         {
-          "x": 1035.2,
-          "y": 189.56
+          "x": 948.74,
+          "y": 206.29
         },
         {
-          "x": 1031.23,
-          "y": 529.84
+          "x": 951.84,
+          "y": 514.71
         },
         {
-          "x": 334.77,
-          "y": 529.84
+          "x": 414.16,
+          "y": 514.71
         }
       ],
       "safePolygon": [
         {
-          "x": 348.54,
-          "y": 515.98
+          "x": 422.61,
+          "y": 506.32
         },
         {
-          "x": 1017.46,
-          "y": 515.98
+          "x": 943.39,
+          "y": 506.32
         },
         {
-          "x": 1020.95,
-          "y": 203.73
+          "x": 940.55,
+          "y": 214.5
         },
         {
-          "x": 345.05,
-          "y": 203.73
+          "x": 425.45,
+          "y": 214.5
         }
       ],
+      "mountingZone": [
+        {
+          "x": 422.61,
+          "y": 506.32
+        },
+        {
+          "x": 943.39,
+          "y": 506.32
+        },
+        {
+          "x": 940.55,
+          "y": 214.5
+        },
+        {
+          "x": 425.45,
+          "y": 214.5
+        }
+      ],
+      "mountingZoneConfirmed": false,
       "drawableRegion": [
         {
           "x": 0.14,
           "y": 0.14
         },
         {
-          "x": 6.86,
+          "x": 8.86,
           "y": 0.14
         },
         {
-          "x": 6.86,
-          "y": 3.26
+          "x": 8.86,
+          "y": 4.92
         },
         {
           "x": 0.14,
-          "y": 3.26
+          "y": 4.92
         }
       ],
       "exclusionPolygons": [],
       "transform": {
         "origin": {
-          "x": -3.5,
+          "x": -4.5,
           "y": 0,
-          "z": -2.5
+          "z": -5.5
         },
         "axisU": {
           "x": 1,
@@ -112,12 +131,12 @@
           "y": 1,
           "z": 0
         },
-        "width": 7,
-        "height": 3.4
+        "width": 9,
+        "height": 5.2
       },
       "hangingBand": {
         "minY": 0.42,
-        "maxY": 3.12,
+        "maxY": 3.4,
         "margin": 0.08
       },
       "shadowVector": {
@@ -128,86 +147,105 @@
     {
       "id": "wall-right",
       "group": "right",
-      "planeAspect": 2.06,
+      "planeAspect": 2.307692,
       "quad": [
         {
-          "x": 1035.2,
-          "y": 189.56
+          "x": 948.74,
+          "y": 206.29
         },
         {
-          "x": 1871.86,
-          "y": -193.13
+          "x": 2169.34,
+          "y": -738.13
         },
         {
-          "x": 1827.83,
-          "y": 939.75
+          "x": 2271.63,
+          "y": 1019.43
         },
         {
-          "x": 1031.23,
-          "y": 529.84
+          "x": 951.84,
+          "y": 514.71
         }
       ],
       "safePolygon": [
         {
-          "x": 1036.31,
-          "y": 518.32
+          "x": 954.38,
+          "y": 507.24
         },
         {
-          "x": 1779.34,
-          "y": 870.92
+          "x": 2182.95,
+          "y": 938.83
         },
         {
-          "x": 1816.23,
-          "y": -122.33
+          "x": 2096.06,
+          "y": -637.45
         },
         {
-          "x": 1040.05,
-          "y": 201.63
+          "x": 951.4,
+          "y": 212.59
         }
       ],
+      "mountingZone": [
+        {
+          "x": 954.38,
+          "y": 507.24
+        },
+        {
+          "x": 2182.95,
+          "y": 938.83
+        },
+        {
+          "x": 2096.06,
+          "y": -637.45
+        },
+        {
+          "x": 951.4,
+          "y": 212.59
+        }
+      ],
+      "mountingZoneConfirmed": false,
       "drawableRegion": [
         {
           "x": 0.14,
           "y": 0.14
         },
         {
-          "x": 6.86,
+          "x": 11.86,
           "y": 0.14
         },
         {
-          "x": 6.86,
-          "y": 3.26
+          "x": 11.86,
+          "y": 4.92
         },
         {
           "x": 0.14,
-          "y": 3.26
+          "y": 4.92
         }
       ],
       "exclusionPolygons": [
         [
           {
-            "x": 4,
+            "x": 8,
             "y": 0
           },
           {
-            "x": 5.05,
+            "x": 9.05,
             "y": 0
           },
           {
-            "x": 5.05,
+            "x": 9.05,
             "y": 2.3
           },
           {
-            "x": 4,
+            "x": 8,
             "y": 2.3
           }
         ]
       ],
       "transform": {
         "origin": {
-          "x": 3.5,
+          "x": 4.5,
           "y": 0,
-          "z": -2.5
+          "z": -5.5
         },
         "axisU": {
           "x": 0,
@@ -219,12 +257,12 @@
           "y": 1,
           "z": 0
         },
-        "width": 7,
-        "height": 3.4
+        "width": 12,
+        "height": 5.2
       },
       "hangingBand": {
         "minY": 0.42,
-        "maxY": 3.12,
+        "maxY": 3.4,
         "margin": 0.08
       },
       "shadowVector": {
@@ -238,9 +276,9 @@
       "role": "bounds-only",
       "transform": {
         "origin": {
-          "x": 3.5,
+          "x": 4.5,
           "y": 0,
-          "z": 4.5
+          "z": 6.5
         },
         "axisU": {
           "x": -1,
@@ -252,93 +290,112 @@
           "y": 1,
           "z": 0
         },
-        "width": 7,
-        "height": 3.4
+        "width": 9,
+        "height": 5.2
       }
     },
     {
       "id": "wall-left",
       "group": "left",
-      "planeAspect": 2.06,
+      "planeAspect": 2.307692,
       "quad": [
         {
-          "x": -505.86,
-          "y": -193.13
+          "x": -803.34,
+          "y": -738.13
         },
         {
-          "x": 330.8,
-          "y": 189.56
+          "x": 417.26,
+          "y": 206.29
         },
         {
-          "x": 334.77,
-          "y": 529.84
+          "x": 414.16,
+          "y": 514.71
         },
         {
-          "x": -461.83,
-          "y": 939.75
+          "x": -905.63,
+          "y": 1019.43
         }
       ],
       "safePolygon": [
         {
-          "x": -413.34,
-          "y": 870.92
+          "x": -816.95,
+          "y": 938.83
         },
         {
-          "x": 329.69,
-          "y": 518.32
+          "x": 411.62,
+          "y": 507.24
         },
         {
-          "x": 325.95,
-          "y": 201.63
+          "x": 414.6,
+          "y": 212.59
         },
         {
-          "x": -450.23,
-          "y": -122.33
+          "x": -730.06,
+          "y": -637.45
         }
       ],
+      "mountingZone": [
+        {
+          "x": -816.95,
+          "y": 938.83
+        },
+        {
+          "x": 411.62,
+          "y": 507.24
+        },
+        {
+          "x": 414.6,
+          "y": 212.59
+        },
+        {
+          "x": -730.06,
+          "y": -637.45
+        }
+      ],
+      "mountingZoneConfirmed": false,
       "drawableRegion": [
         {
           "x": 0.14,
           "y": 0.14
         },
         {
-          "x": 6.86,
+          "x": 11.86,
           "y": 0.14
         },
         {
-          "x": 6.86,
-          "y": 3.26
+          "x": 11.86,
+          "y": 4.92
         },
         {
           "x": 0.14,
-          "y": 3.26
+          "y": 4.92
         }
       ],
       "exclusionPolygons": [
         [
           {
-            "x": 1.95,
+            "x": 2.95,
             "y": 0
           },
           {
-            "x": 3,
+            "x": 4,
             "y": 0
           },
           {
-            "x": 3,
+            "x": 4,
             "y": 2.3
           },
           {
-            "x": 1.95,
+            "x": 2.95,
             "y": 2.3
           }
         ]
       ],
       "transform": {
         "origin": {
-          "x": -3.5,
+          "x": -4.5,
           "y": 0,
-          "z": 4.5
+          "z": 6.5
         },
         "axisU": {
           "x": 0,
@@ -350,12 +407,12 @@
           "y": 1,
           "z": 0
         },
-        "width": 7,
-        "height": 3.4
+        "width": 12,
+        "height": 5.2
       },
       "hangingBand": {
         "minY": 0.42,
-        "maxY": 3.12,
+        "maxY": 3.4,
         "margin": 0.08
       },
       "shadowVector": {
@@ -372,23 +429,10 @@
       "artworkId": "fraktal",
       "placement": {
         "wallId": "wall-front",
-        "center": {
-          "x": 0.2857,
-          "y": 0.5441
-        },
-        "anchor": {
-          "x": 2,
-          "y": 1.55
-        },
-        "uv": {
-          "x": 0.2857,
-          "y": 0.4559
-        },
-        "mountedHeight": 1.4,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.3,
+        "centerHeight": 2.32,
+        "physicalHeight": 1.62,
+        "mountingGap": 0.002
       }
     },
     {
@@ -398,23 +442,10 @@
       "artworkId": "akt-27",
       "placement": {
         "wallId": "wall-front",
-        "center": {
-          "x": 0.7143,
-          "y": 0.5441
-        },
-        "anchor": {
-          "x": 5,
-          "y": 1.55
-        },
-        "uv": {
-          "x": 0.7143,
-          "y": 0.4559
-        },
-        "mountedHeight": 1.4,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.7,
+        "centerHeight": 2.32,
+        "physicalHeight": 1.48,
+        "mountingGap": 0.002
       }
     },
     {
@@ -423,48 +454,10 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-left",
-        "center": {
-          "x": 0.8,
-          "y": 0.5441
-        },
-        "anchor": {
-          "x": 5.6,
-          "y": 1.55
-        },
-        "uv": {
-          "x": 0.8,
-          "y": 0.4559
-        },
-        "mountedHeight": 0.95,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
-      }
-    },
-    {
-      "id": "room-01.wall-left.b",
-      "enabled": true,
-      "selectable": true,
-      "placement": {
-        "wallId": "wall-left",
-        "center": {
-          "x": 0.5679,
-          "y": 0.5441
-        },
-        "anchor": {
-          "x": 3.975,
-          "y": 1.55
-        },
-        "uv": {
-          "x": 0.5679,
-          "y": 0.4559
-        },
-        "mountedHeight": 1.2,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.5,
+        "centerHeight": 2.3,
+        "physicalHeight": 1.45,
+        "mountingGap": 0.002
       }
     },
     {
@@ -473,82 +466,44 @@
       "selectable": true,
       "placement": {
         "wallId": "wall-right",
-        "center": {
-          "x": 0.2,
-          "y": 0.5441
-        },
-        "anchor": {
-          "x": 1.4,
-          "y": 1.55
-        },
-        "uv": {
-          "x": 0.2,
-          "y": 0.4559
-        },
-        "mountedHeight": 0.95,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
-      }
-    },
-    {
-      "id": "room-01.wall-right.b",
-      "enabled": true,
-      "selectable": true,
-      "placement": {
-        "wallId": "wall-right",
-        "center": {
-          "x": 0.4321,
-          "y": 0.5441
-        },
-        "anchor": {
-          "x": 3.025,
-          "y": 1.55
-        },
-        "uv": {
-          "x": 0.4321,
-          "y": 0.4559
-        },
-        "mountedHeight": 1.2,
-        "targetSizePolicy": "contain",
-        "minScale": 0.7,
-        "maxScale": 1,
-        "zOffset": 0.02
+        "horizontalPosition": 0.5,
+        "centerHeight": 2.28,
+        "physicalHeight": 1.45,
+        "mountingGap": 0.002
       }
     }
   ],
   "room": {
     "floorOutline": [
       {
-        "x": -3.5,
+        "x": -4.5,
         "y": 0,
-        "z": -2.5
+        "z": -5.5
       },
       {
-        "x": 3.5,
+        "x": 4.5,
         "y": 0,
-        "z": -2.5
+        "z": -5.5
       },
       {
-        "x": 3.5,
+        "x": 4.5,
         "y": 0,
-        "z": 4.5
+        "z": 6.5
       },
       {
-        "x": -3.5,
+        "x": -4.5,
         "y": 0,
-        "z": 4.5
+        "z": 6.5
       }
     ],
     "floorY": 0,
-    "ceilingY": 3.4,
+    "ceilingY": 5.2,
     "wallThickness": 0.08
   },
   "hangingRules": {
     "verticalBand": {
       "minY": 0.42,
-      "maxY": 3.12
+      "maxY": 3.4
     },
     "sideMargin": 0.14,
     "doorwayClearance": 0.35

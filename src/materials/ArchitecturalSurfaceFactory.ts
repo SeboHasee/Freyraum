@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * Architectural surface factory for the museum hub room (v0.87).
+ * Architectural surface factory for the museum hub and interactive gallery.
  *
  * Owns the small set of shared, physically plausible materials the hub room
  * shell is built from (plaster walls, mineral floor, ceiling, dark trim,
@@ -10,12 +10,11 @@ import * as THREE from 'three';
  * Design constraints:
  *  - One material instance per surface role; every mesh with the same role
  *    shares the instance so the hub keeps a handful of shader programs.
- *  - Detail maps are square, tileable value-noise textures generated once per
- *    tile size (`QualityPreset.hubSurfaceTileSize`) and cached. Non-color data
- *    (normal/roughness) stays in linear color space.
+ *  - The close gallery keeps tileable tactile detail, while the hub uses
+ *    calm, map-free PBR finishes whose form comes from architectural light.
  *  - Geometry UVs are authored in metres (see `HubRoomRenderer`); the factory
- *    applies real-world tile periods through `texture.repeat` so plaster and
- *    floor grain read at believable physical scale without visible repetition.
+ *    applies real-world tile periods through `texture.repeat` for gallery
+ *    plaster and floor grain.
  *  - The factory owns disposal of everything it creates.
  */
 
@@ -38,11 +37,26 @@ export interface ArchitecturalMaterials {
   trim: THREE.MeshStandardMaterial;
   /** Dim plaster used inside doorway pockets so openings read as passages. */
   pocket: THREE.MeshStandardMaterial;
-  /** Neutral-white emissive strip inside the ceiling light coves. */
-  lightStrip: THREE.MeshBasicMaterial;
+  /** Neutral-white emissive PBR strip inside the ceiling light coves. */
+  lightStrip: THREE.MeshStandardMaterial;
   /** Neutral gesso-like side faces for artwork canvas edges. */
   artworkEdge: THREE.MeshStandardMaterial;
 }
+
+export type ArchitecturalSurfaceProfile = 'gallery' | 'hub';
+
+/** Public contract for the hub's deliberately calm, non-repeating wall response. */
+export const HUB_WALL_SURFACE_PROFILE = Object.freeze({
+  wallColor: '#f3f3ef',
+  wallRoughness: 0.86,
+  ceilingRoughness: 0.93,
+  floorRoughness: 0.6,
+  colorVariation: 0,
+  roughnessVariation: 0,
+  wallNormalStrength: 0,
+  floorNormalStrength: 0,
+  floorColorVariation: 0,
+});
 
 type DetailRole = 'plasterNormal' | 'plasterRoughness' | 'floorNormal' | 'floorRoughness';
 
@@ -51,9 +65,11 @@ export class ArchitecturalSurfaceFactory {
   private materials: ArchitecturalMaterials | null = null;
   private tileSize: number;
   private anisotropy = 1;
+  private readonly surfaceProfile: ArchitecturalSurfaceProfile;
 
-  constructor(tileSize: number) {
+  constructor(tileSize: number, surfaceProfile: ArchitecturalSurfaceProfile = 'gallery') {
     this.tileSize = Math.max(64, tileSize | 0);
+    this.surfaceProfile = surfaceProfile;
   }
 
   /**
@@ -63,41 +79,71 @@ export class ArchitecturalSurfaceFactory {
   getMaterials(palette: ArchitecturalPalette): ArchitecturalMaterials {
     if (this.materials) return this.materials;
 
-    const wallColor = new THREE.Color(palette.wall);
+    const wallColor = this.surfaceProfile === 'hub'
+      ? new THREE.Color(HUB_WALL_SURFACE_PROFILE.wallColor)
+      : new THREE.Color(palette.wall);
     const ceilingColor = wallColor.clone().multiplyScalar(1.04);
-    const floorColor = wallColor.clone().multiplyScalar(0.82).lerp(new THREE.Color('#aab2ba'), 0.18);
+    const floorColor = this.surfaceProfile === 'hub'
+      ? new THREE.Color('#d2d4d3')
+      : wallColor.clone().multiplyScalar(0.82).lerp(new THREE.Color('#aab2ba'), 0.18);
 
-    const plasterNormal = this.detailTexture('plasterNormal');
-    const plasterRoughness = this.detailTexture('plasterRoughness');
-    const floorNormal = this.detailTexture('floorNormal');
-    const floorRoughness = this.detailTexture('floorRoughness');
+    const plasterNormal = this.surfaceProfile === 'gallery'
+      ? this.detailTexture('plasterNormal')
+      : null;
+    const plasterRoughness = this.surfaceProfile === 'gallery'
+      ? this.detailTexture('plasterRoughness')
+      : null;
+    const floorNormal = this.surfaceProfile === 'gallery'
+      ? this.detailTexture('floorNormal')
+      : null;
+    const floorRoughness = this.surfaceProfile === 'gallery'
+      ? this.detailTexture('floorRoughness')
+      : null;
 
     const wall = new THREE.MeshStandardMaterial({
       color: wallColor,
-      roughness: 0.965,
+      roughness: this.surfaceProfile === 'hub'
+        ? HUB_WALL_SURFACE_PROFILE.wallRoughness
+        : 0.965,
       metalness: 0.0,
-      normalMap: plasterNormal,
-      normalScale: new THREE.Vector2(0.14, 0.14),
+      normalMap: this.surfaceProfile === 'gallery' ? plasterNormal : null,
+      normalScale: new THREE.Vector2(
+        this.surfaceProfile === 'gallery' ? 0.14 : 0,
+        this.surfaceProfile === 'gallery' ? 0.14 : 0
+      ),
       roughnessMap: plasterRoughness,
     });
+    if (this.surfaceProfile === 'hub') wall.userData.architecturalSurfaceProfile = 'hub-smooth-plaster';
 
     const ceiling = new THREE.MeshStandardMaterial({
       color: ceilingColor,
-      roughness: 0.97,
+      roughness: this.surfaceProfile === 'hub'
+        ? HUB_WALL_SURFACE_PROFILE.ceilingRoughness
+        : 0.97,
       metalness: 0.0,
       normalMap: plasterNormal,
-      normalScale: new THREE.Vector2(0.06, 0.06),
+      normalScale: new THREE.Vector2(
+        this.surfaceProfile === 'gallery' ? 0.06 : 0,
+        this.surfaceProfile === 'gallery' ? 0.06 : 0
+      ),
     });
+    if (this.surfaceProfile === 'hub') ceiling.userData.architecturalSurfaceProfile = 'hub-matte-ceiling';
 
     const floor = new THREE.MeshStandardMaterial({
       color: floorColor,
-      roughness: 0.62,
+      roughness: this.surfaceProfile === 'hub'
+        ? HUB_WALL_SURFACE_PROFILE.floorRoughness
+        : 0.62,
       metalness: 0.0,
       normalMap: floorNormal,
-      normalScale: new THREE.Vector2(0.22, 0.22),
+      normalScale: new THREE.Vector2(
+        this.surfaceProfile === 'gallery' ? 0.22 : 0,
+        this.surfaceProfile === 'gallery' ? 0.22 : 0
+      ),
       roughnessMap: floorRoughness,
       envMapIntensity: 0.5,
     });
+    if (this.surfaceProfile === 'hub') floor.userData.architecturalSurfaceProfile = 'hub-satin-mineral';
 
     // Dark powder-coated metal, intentionally not pure black so edges keep
     // form under grazing light.
@@ -108,14 +154,18 @@ export class ArchitecturalSurfaceFactory {
     });
 
     const pocket = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#565b5e'),
-      roughness: 0.96,
+      color: new THREE.Color(this.surfaceProfile === 'hub' ? '#8c8f8b' : '#565b5e'),
+      roughness: this.surfaceProfile === 'hub' ? 0.94 : 0.96,
       metalness: 0.0,
     });
 
-    const lightStrip = new THREE.MeshBasicMaterial({
-      color: new THREE.Color('#edf1f4'),
-      toneMapped: false,
+    const lightStripColor = new THREE.Color(this.surfaceProfile === 'hub' ? '#eef3f1' : '#e8edef');
+    const lightStrip = new THREE.MeshStandardMaterial({
+      color: lightStripColor,
+      emissive: lightStripColor,
+      emissiveIntensity: this.surfaceProfile === 'hub' ? 0.72 : 0.56,
+      roughness: 0.48,
+      metalness: 0,
     });
 
     const artworkEdge = new THREE.MeshStandardMaterial({
@@ -140,11 +190,16 @@ export class ArchitecturalSurfaceFactory {
     if (!this.materials) return;
     const previous = [...this.textureCache.values()];
     this.textureCache.clear();
-    this.materials.wall.normalMap = this.detailTexture('plasterNormal');
-    this.materials.wall.roughnessMap = this.detailTexture('plasterRoughness');
-    this.materials.ceiling.normalMap = this.detailTexture('plasterNormal');
-    this.materials.floor.normalMap = this.detailTexture('floorNormal');
-    this.materials.floor.roughnessMap = this.detailTexture('floorRoughness');
+    if (this.surfaceProfile === 'gallery') {
+      this.materials.wall.normalMap = this.detailTexture('plasterNormal');
+      this.materials.wall.roughnessMap = this.detailTexture('plasterRoughness');
+    }
+
+    if (this.surfaceProfile === 'gallery') {
+      this.materials.ceiling.normalMap = this.detailTexture('plasterNormal');
+      this.materials.floor.normalMap = this.detailTexture('floorNormal');
+      this.materials.floor.roughnessMap = this.detailTexture('floorRoughness');
+    }
     this.materials.wall.needsUpdate = true;
     this.materials.ceiling.needsUpdate = true;
     this.materials.floor.needsUpdate = true;
