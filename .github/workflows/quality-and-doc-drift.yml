@@ -23,6 +23,7 @@ jobs:
         run: npm run validate:museum-hub
       - run: npm run test:frame-budget
       - run: npm run test:webgl-resilience
+      - run: npm run test --if-present
       - name: npm audit (moderate)
         run: npm audit --audit-level=moderate
         continue-on-error: true
