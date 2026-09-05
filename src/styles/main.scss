@@ -658,6 +658,22 @@ canvas {
   stroke-width: 2.5;
 }
 
+.museum-hub__calibration-wall-label {
+  fill: #ffffff;
+  paint-order: stroke;
+  stroke: rgba(10, 14, 17, 0.86);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.museum-hub__calibration-wall-label:not(.is-active) {
+  opacity: 0.5;
+}
+
 .museum-hub__calibration-envelope {
   fill: rgba(190, 150, 255, 0.08);
   stroke: rgba(190, 150, 255, 0.95);
@@ -737,6 +753,22 @@ canvas {
   cursor: move;
   pointer-events: all;
   touch-action: none;
+}
+
+.museum-hub__calibration-svg.is-guides-hidden
+  :is(.museum-hub__calibration-safe, .museum-hub__calibration-mounting-zone, .museum-hub__calibration-handle--safe, .museum-hub__calibration-handle--mounting-zone) {
+  display: none;
+}
+
+.museum-hub__calibration-corner-hit:focus,
+.museum-hub__calibration-edge-hit:focus,
+.museum-hub__calibration-wall:focus,
+.museum-hub__calibration-envelope:focus,
+.museum-hub__calibration-handle:focus {
+  outline: none;
+  stroke: #ffffff;
+  stroke-width: 4;
+  filter: drop-shadow(0 0 5px #000);
 }
 
 .museum-hub__calibration-background {
@@ -911,6 +943,66 @@ canvas {
   font-size: 0.7rem;
   line-height: 1.45;
   color: rgba(255, 255, 255, 0.8);
+}
+
+.museum-hub__calibration-legend {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.museum-hub__calibration-legend h3 {
+  margin: 0 0 2px;
+  font-size: 0.78rem;
+}
+
+.museum-hub__calibration-legend-item {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: 7px;
+}
+
+.museum-hub__calibration-legend-swatch {
+  display: block;
+  width: 16px;
+  height: 12px;
+  border: 2px solid #fff;
+  border-radius: 3px;
+}
+
+.museum-hub__calibration-legend-item--wall-corner .museum-hub__calibration-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #f08a24;
+}
+
+.museum-hub__calibration-legend-item--wall-edge .museum-hub__calibration-legend-swatch {
+  border-color: #f08a24;
+  background: repeating-linear-gradient(135deg, #f08a24 0 3px, transparent 3px 6px);
+}
+
+.museum-hub__calibration-legend-item--safe-area .museum-hub__calibration-legend-swatch {
+  border-color: #64bfff;
+  background: rgba(100, 191, 255, 0.3);
+}
+
+.museum-hub__calibration-legend-item--mounting-area .museum-hub__calibration-legend-swatch {
+  border-color: #64ffaa;
+  background: rgba(100, 255, 170, 0.3);
+}
+
+.museum-hub__calibration-legend-item--entrance-boundary .museum-hub__calibration-legend-swatch {
+  border-color: #be96ff;
+  border-style: dashed;
+  background: rgba(190, 150, 255, 0.25);
 }
 
 .museum-hub__calibration-controls {

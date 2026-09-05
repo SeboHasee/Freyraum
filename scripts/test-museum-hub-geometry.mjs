@@ -1319,6 +1319,32 @@ assert.match(hub, /calibrationSvg\?\.getBoundingClientRect/);
 assert.match(hub, /captureElement\.setPointerCapture/);
 assert.match(scss, /\.museum-hub\.is-calibrating \.museum-hub__calibration-svg\s*\{[\s\S]*?pointer-events:\s*auto/);
 assert.match(scss, /\.museum-hub__calibration-edge-hit\s*\{[\s\S]*?stroke-width:\s*28/);
+for (const label of [
+  'Orange points',
+  'Striped orange lines',
+  'Blue area',
+  'Green area',
+  'Purple dashed area',
+  'FRONT WALL — drag corners or wall',
+  'LEFT WALL — drag corners or wall',
+  'RIGHT WALL — drag corners or wall',
+  'ENTRANCE BOUNDARY — room shape only',
+  'Edit wall corners',
+  'Move complete wall',
+  'Edit entrance boundary',
+  'Reset selected boundary',
+  'Reset all geometry',
+  'Undo',
+  'Redo',
+  'Hide guides',
+  'Technical details (JSON and diagnostics)',
+]) {
+  assert.ok(hub.includes(label), `calibration editor must expose self-explanatory control: ${label}`);
+}
+assert.match(hub, /Currently editing:/);
+assert.match(hub, /setAttribute\(\s*'aria-label'/);
+assert.match(scss, /\.museum-hub__calibration-legend/);
+assert.match(scss, /\.museum-hub__calibration-svg\.is-guides-hidden/);
 assert.match(shell, /#c7ced4/i);
 assert.match(editorShell, /hubCalibrate['"],\s*['"]1/);
 assert.match(editorShell, /class="placement-editor"/);
