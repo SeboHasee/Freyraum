@@ -9,6 +9,7 @@ import {
   roomWallNormal,
   roomWallPoint,
 } from './projectiveGeometry';
+import { HUB_ENTRY_SHELL_MARGIN_M } from '../config/museumHub';
 import {
   ArchitecturalSurfaceFactory,
   type ArchitecturalMaterials,
@@ -52,8 +53,6 @@ export interface SlotUpsertResult {
 
 const PLACEHOLDER_SIZE = 512;
 /** Perceived stretched-canvas depth of a mounted artwork (metres). */
-/** How far the entry-zone shell extends past the camera (metres). */
-const ENTRY_SHELL_MARGIN = 1.5;
 /** Depth of the dim passage pocket behind each doorway opening (metres). */
 const DOORWAY_POCKET_DEPTH = 1.15;
 /** Skirting shadow-gap profile (metres). */
@@ -764,8 +763,8 @@ export class HubRoomRenderer {
     const min = new THREE.Vector3(bounds.min.x, this.resolution.room.floorY, bounds.min.z);
     const max = new THREE.Vector3(bounds.max.x, this.resolution.room.ceilingY, bounds.max.z);
     const cameraZ = this.resolution.camera.position.z;
-    if (cameraZ + ENTRY_SHELL_MARGIN > max.z) {
-      max.z = cameraZ + ENTRY_SHELL_MARGIN;
+    if (cameraZ + HUB_ENTRY_SHELL_MARGIN_M > max.z) {
+      max.z = cameraZ + HUB_ENTRY_SHELL_MARGIN_M;
     }
     return { min, max };
   }

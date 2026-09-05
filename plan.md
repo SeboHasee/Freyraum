@@ -1,6 +1,16 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Architectural wall contract correction (v1.19)
+
+- [x] Centralize the room front/rear coordinates, wall thickness, entry-shell
+  margin, and doorway world-Z interval in the hub configuration.
+- [x] Make the mirrored side-wall doorway interval explicit at
+  `z = 2.5..3.55 m` without changing canonical artwork placement.
+- [x] Reuse the shared entry-shell margin in the Three.js room renderer.
+- [x] Add deterministic checks for camera envelope placement, inward wall
+  normals, wall thickness, and doorway world coordinates.
+
 ## Implemented — Standalone Artwork Placement Editor (v1.18)
 
 - [x] Add a clearly named one-click launcher requiring no URL editing.

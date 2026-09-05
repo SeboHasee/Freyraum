@@ -107,6 +107,12 @@ for (const corner of outline) {
 }
 assert.equal(shippingConfig.room.floorY, 0);
 assert.equal(shippingConfig.room.ceilingY, ROOM_HEIGHT);
+assert.equal(shippingConfig.room.wallThickness, 0.08, 'room envelope must retain the 80 mm wall thickness contract');
+assert.equal(shippingConfig.camera.position.z, 9, 'camera must remain in the defined entry extension');
+assert.ok(
+  shippingConfig.camera.position.z > outlineZ.max,
+  'camera must be outside the nominal room so the entry shell is intentional'
+);
 
 assert.ok(Array.isArray(shippingConfig.walls) && shippingConfig.walls.length === 4, 'shipping config must define four room wall planes');
 const wallsById = new Map(shippingConfig.walls.map((wall) => [wall.id, wall]));
@@ -173,6 +179,22 @@ for (let i = 0; i < perimeter.length; i += 1) {
   const endZ = a.origin.z + a.axisU.z * a.width;
   assert.ok(Math.abs(endX - b.origin.x) < 1e-9 && Math.abs(endZ - b.origin.z) < 1e-9, 'wall perimeter must form a closed rectangular loop');
 }
+const architecturalCenter = { x: (outlineX.min + outlineX.max) / 2, z: (outlineZ.min + outlineZ.max) / 2 };
+for (const wall of shippingConfig.walls) {
+  const { axisU, axisV, origin } = wall.transform;
+  const normal = {
+    x: axisU.y * axisV.z - axisU.z * axisV.y,
+    y: axisU.z * axisV.x - axisU.x * axisV.z,
+    z: axisU.x * axisV.y - axisU.y * axisV.x,
+  };
+  const towardCenter = {
+    x: architecturalCenter.x - origin.x,
+    y: 0,
+    z: architecturalCenter.z - origin.z,
+  };
+  const inwardDot = normal.x * towardCenter.x + normal.z * towardCenter.z;
+  assert.ok(inwardDot > 0, `${wall.id} wall normal must face into the room`);
+}
 
 // Exactly two identical mirrored doorways, one per side wall, floor-based.
 const leftWall = wallsById.get('wall-left');
@@ -192,6 +214,19 @@ for (const [doorU, doorV, id] of [
   assert.ok(Math.abs(doorU.max - doorU.min - DOORWAY_WIDTH) < 1e-9, `${id} doorway must be exactly 1.05 m wide`);
   assert.ok(Math.abs(doorV.max - doorV.min - DOORWAY_HEIGHT) < 1e-9, `${id} doorway must be exactly 2.30 m tall`);
   assert.ok(Math.abs(doorV.min) < 1e-9, `${id} doorway must be floor-based`);
+}
+const worldDoorwayZ = (wall, span) => {
+  const originZ = wall.transform.origin.z;
+  const axisZ = wall.transform.axisU.z;
+  return {
+    min: Math.min(originZ + axisZ * span.min, originZ + axisZ * span.max),
+    max: Math.max(originZ + axisZ * span.min, originZ + axisZ * span.max),
+  };
+};
+for (const [wall, span] of [[leftWall, leftDoorU], [rightWall, rightDoorU]]) {
+  const worldSpan = worldDoorwayZ(wall, span);
+  assert.ok(Math.abs(worldSpan.min - 2.5) < 1e-9 && Math.abs(worldSpan.max - 3.55) < 1e-9,
+    `${wall.id} doorway must occupy world z=2.5..3.55`);
 }
 assert.ok(
   Math.abs(rightDoorU.min - (ROOM_DEPTH - leftDoorU.max)) <= MIRROR_TOLERANCE

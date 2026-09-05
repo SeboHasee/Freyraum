@@ -1,6 +1,15 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.19 — Architectural wall contract correction (2026-09-05)
+
+- Centralized the museum room front/rear coordinates, wall thickness,
+  entry-shell margin, and doorway interval in the hub configuration.
+- Made the mirrored side-wall doorway openings explicit at world
+  `z = 2.5..3.55 m`, preserving the accepted centered side-wall composition.
+- Added deterministic geometry checks for inward wall normals, camera placement,
+  wall thickness, and doorway world coordinates.
+
 ## v1.18 — Standalone Artwork Placement Editor (2026-09-05)
 
 - Added `OPEN_ARTWORK_EDITOR.html`, a clearly named one-click launcher for the

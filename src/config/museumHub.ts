@@ -304,7 +304,13 @@ export const HUB_CAMERA: CameraCalibration = {
 export const HUB_ROOM_WIDTH = 9;
 export const HUB_ROOM_DEPTH = 12;
 export const HUB_ROOM_HEIGHT = 5.2;
-/** Mirrored side-wall doorways: z ∈ [+1.5, +2.55], 1.05 × 2.30 m, floor-based. */
+export const HUB_ROOM_FRONT_Z = -5.5;
+export const HUB_ROOM_REAR_Z = HUB_ROOM_FRONT_Z + HUB_ROOM_DEPTH;
+export const HUB_WALL_THICKNESS_M = 0.08;
+export const HUB_ENTRY_SHELL_MARGIN_M = 1.5;
+/** Mirrored side-wall doorways: world z ∈ [+2.5, +3.55], 1.05 × 2.30 m, floor-based. */
+export const HUB_DOORWAY_MIN_Z = 2.5;
+export const HUB_DOORWAY_MAX_Z = HUB_DOORWAY_MIN_Z + 1.05;
 export const HUB_DOORWAY_WIDTH = 1.05;
 export const HUB_DOORWAY_HEIGHT = 2.3;
 
@@ -373,10 +379,10 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
       point(425.45, 214.5),
     ],
     drawableRegion: [point(0.14, 0.14), point(8.86, 0.14), point(8.86, 4.92), point(0.14, 4.92)],
-    transform: wallTransform(point3(-4.5, 0, -5.5), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
+    transform: wallTransform(point3(-4.5, 0, HUB_ROOM_FRONT_Z), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
     hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(0, 14),
-    room: roomWall(point3(-4.5, 0, -5.5), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
+    room: roomWall(point3(-4.5, 0, HUB_ROOM_FRONT_Z), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
   },
   {
     id: 'wall-right',
@@ -396,13 +402,17 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
     ],
     drawableRegion: [point(0.14, 0.14), point(11.86, 0.14), point(11.86, 4.92), point(0.14, 4.92)],
     exclusionPolygons: [
-      [point(8, 0), point(9.05, 0), point(9.05, HUB_DOORWAY_HEIGHT), point(8, HUB_DOORWAY_HEIGHT)],
+      [point(HUB_DOORWAY_MIN_Z - HUB_ROOM_FRONT_Z, 0), point(HUB_DOORWAY_MAX_Z - HUB_ROOM_FRONT_Z, 0),
+        point(HUB_DOORWAY_MAX_Z - HUB_ROOM_FRONT_Z, HUB_DOORWAY_HEIGHT),
+        point(HUB_DOORWAY_MIN_Z - HUB_ROOM_FRONT_Z, HUB_DOORWAY_HEIGHT)],
     ],
-    transform: wallTransform(point3(4.5, 0, -5.5), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
+    transform: wallTransform(point3(4.5, 0, HUB_ROOM_FRONT_Z), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
     hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(8, 14),
-    room: roomWall(point3(4.5, 0, -5.5), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
-      [point(8, 0), point(9.05, 0), point(9.05, HUB_DOORWAY_HEIGHT), point(8, HUB_DOORWAY_HEIGHT)],
+    room: roomWall(point3(4.5, 0, HUB_ROOM_FRONT_Z), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
+      [point(HUB_DOORWAY_MIN_Z - HUB_ROOM_FRONT_Z, 0), point(HUB_DOORWAY_MAX_Z - HUB_ROOM_FRONT_Z, 0),
+        point(HUB_DOORWAY_MAX_Z - HUB_ROOM_FRONT_Z, HUB_DOORWAY_HEIGHT),
+        point(HUB_DOORWAY_MIN_Z - HUB_ROOM_FRONT_Z, HUB_DOORWAY_HEIGHT)],
     ]),
   },
   {
@@ -410,7 +420,7 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
     group: 'rear',
     role: 'bounds-only',
     planeAspect: HUB_ROOM_WIDTH / HUB_ROOM_HEIGHT,
-    transform: wallTransform(point3(4.5, 0, 6.5), point3(-1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
+    transform: wallTransform(point3(4.5, 0, HUB_ROOM_REAR_Z), point3(-1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
   },
   {
     id: 'wall-left',
@@ -430,13 +440,17 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
     ],
     drawableRegion: [point(0.14, 0.14), point(11.86, 0.14), point(11.86, 4.92), point(0.14, 4.92)],
     exclusionPolygons: [
-      [point(2.95, 0), point(4, 0), point(4, HUB_DOORWAY_HEIGHT), point(2.95, HUB_DOORWAY_HEIGHT)],
+      [point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MAX_Z, 0), point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MIN_Z, 0),
+        point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MIN_Z, HUB_DOORWAY_HEIGHT),
+        point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MAX_Z, HUB_DOORWAY_HEIGHT)],
     ],
-    transform: wallTransform(point3(-4.5, 0, 6.5), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
+    transform: wallTransform(point3(-4.5, 0, HUB_ROOM_REAR_Z), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
     hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(-8, 14),
-    room: roomWall(point3(-4.5, 0, 6.5), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
-      [point(2.95, 0), point(4, 0), point(4, HUB_DOORWAY_HEIGHT), point(2.95, HUB_DOORWAY_HEIGHT)],
+    room: roomWall(point3(-4.5, 0, HUB_ROOM_REAR_Z), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
+      [point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MAX_Z, 0), point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MIN_Z, 0),
+        point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MIN_Z, HUB_DOORWAY_HEIGHT),
+        point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MAX_Z, HUB_DOORWAY_HEIGHT)],
     ]),
   },
 ];
