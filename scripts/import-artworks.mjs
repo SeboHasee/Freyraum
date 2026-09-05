@@ -59,6 +59,7 @@ const PREVIEW_AUDIO = join(ROOT, 'customer-preview', 'audio');
 const PREVIEW_JS = join(ROOT, 'customer-preview', 'customer-artworks.js');
 const PREVIEW_AUDIO_JS = join(ROOT, 'customer-preview', 'customer-audio.js');
 const PREVIEW_HTML = join(ROOT, 'customer-preview', 'app.html');
+const PREVIEW_EDITOR_HTML = join(ROOT, 'customer-preview', 'placement-editor.html');
 const HUB_HOTSPOTS_JSON = join(ROOT, 'customer-artworks', 'hub-hotspots.json');
 const MUSEUM_HUB_JSON = join(ROOT, 'customer-artworks', 'museum-hub.json');
 const REPORT_FILE = join(ROOT, 'customer-artworks', 'last-import-report.txt');
@@ -841,7 +842,7 @@ const audioJs =
   'window.__FREYRAUM_AUDIO = ' + JSON.stringify(audioPayload, null, 2) + ';\n';
 writeFileSync(PREVIEW_AUDIO_JS, audioJs, 'utf8');
 
-// v0.20 — Cache-bust the dynamic script tags in app.html on every import run.
+// v0.20 — Cache-bust dynamic script tags in every file:// entry on each import.
 //
 // When the customer opens app.html as a file:// URL, Chromium-family browsers
 // cache script resources keyed by their full URL. Re-importing (which rewrites
@@ -855,15 +856,16 @@ writeFileSync(PREVIEW_AUDIO_JS, audioJs, 'utf8');
 // changes on every import. freyraum-gallery.js is left unversioned because it
 // changes only on developer-issued gallery updates, not customer data imports.
 try {
-  if (existsSync(PREVIEW_HTML)) {
-    const ts = Date.now();
-    const originalHtml = readFileSync(PREVIEW_HTML, 'utf8');
+  const ts = Date.now();
+  for (const previewEntry of [PREVIEW_HTML, PREVIEW_EDITOR_HTML]) {
+    if (!existsSync(previewEntry)) continue;
+    const originalHtml = readFileSync(previewEntry, 'utf8');
     const updatedHtml = originalHtml
       // Match only inside src="..." attributes to avoid touching comments or other text.
       .replace(/(src=["'][^"']*?)customer-artworks\.js(\?t=\d+)?/g, `$1customer-artworks.js?t=${ts}`)
       .replace(/(src=["'][^"']*?)customer-audio\.js(\?t=\d+)?/g, `$1customer-audio.js?t=${ts}`);
     if (updatedHtml !== originalHtml) {
-      writeFileSync(PREVIEW_HTML, updatedHtml, 'utf8');
+      writeFileSync(previewEntry, updatedHtml, 'utf8');
     }
   }
 } catch {

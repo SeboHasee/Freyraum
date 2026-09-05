@@ -2628,9 +2628,12 @@ export class MainMuseumHub {
       );
       return;
     }
+    const importedRenderedWalls = sanitized.config.walls.filter(
+      (wall) => wall.role !== 'bounds-only'
+    );
     const wallGeometryMatches =
-      sanitized.config.walls.length === this.resolution.walls.length
-      && sanitized.config.walls.every((wall) => {
+      importedRenderedWalls.length === this.resolution.walls.length
+      && importedRenderedWalls.every((wall) => {
         const current = this.resolution.wallById.get(wall.id);
         return Boolean(
           current
