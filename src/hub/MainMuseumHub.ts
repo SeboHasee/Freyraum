@@ -2527,7 +2527,6 @@ export class MainMuseumHub {
   }
 
   private announceCalibrationAction(message: string): void {
-    this.status.textContent = message;
     if (this.calibrationActionStatus) this.calibrationActionStatus.textContent = message;
   }
 
