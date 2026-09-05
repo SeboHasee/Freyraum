@@ -44,6 +44,29 @@ export interface WallCalibrationReport {
   maximumErrorPx: number;
 }
 
+function referenceFitTransform(
+  reference: ReferenceImageCalibration,
+  stage: StageReference
+): { scale: number; offset: Point2D } | null {
+  if (
+    (reference.fit !== 'contain' && reference.fit !== 'cover') ||
+    reference.width <= 0 ||
+    reference.height <= 0 ||
+    stage.width <= 0 ||
+    stage.height <= 0
+  ) return null;
+  const scale = reference.fit === 'cover'
+    ? Math.max(stage.width / reference.width, stage.height / reference.height)
+    : Math.min(stage.width / reference.width, stage.height / reference.height);
+  return {
+    scale,
+    offset: point(
+      (stage.width - reference.width * scale) / 2,
+      (stage.height - reference.height * scale) / 2
+    ),
+  };
+}
+
 export interface WallProjectionModel {
   id: string;
   planeAspect: number;
@@ -803,19 +826,12 @@ export function mapReferencePointToStage(
   if (
     !Number.isFinite(imagePoint.x) ||
     !Number.isFinite(imagePoint.y) ||
-    reference.width <= 0 ||
-    reference.height <= 0 ||
-    stage.width <= 0 ||
-    stage.height <= 0
+    !referenceFitTransform(reference, stage)
   ) return null;
-  const scale = reference.fit === 'cover'
-    ? Math.max(stage.width / reference.width, stage.height / reference.height)
-    : Math.min(stage.width / reference.width, stage.height / reference.height);
-  const renderedWidth = reference.width * scale;
-  const renderedHeight = reference.height * scale;
+  const transform = referenceFitTransform(reference, stage)!;
   return point(
-    imagePoint.x * scale + (stage.width - renderedWidth) / 2,
-    imagePoint.y * scale + (stage.height - renderedHeight) / 2
+    imagePoint.x * transform.scale + transform.offset.x,
+    imagePoint.y * transform.scale + transform.offset.y
   );
 }
 
@@ -837,14 +853,8 @@ export function evaluateWallCalibration(
   stage: StageReference
 ): WallCalibrationReport | null {
   const targetQuad = mapReferenceQuadToStage(referenceQuad, reference, stage);
-  if (!targetQuad) return null;
-  const scale = reference.fit === 'cover'
-    ? Math.max(stage.width / reference.width, stage.height / reference.height)
-    : Math.min(stage.width / reference.width, stage.height / reference.height);
-  const offset = point(
-    (stage.width - reference.width * scale) / 2,
-    (stage.height - reference.height * scale) / 2
-  );
+  const transform = referenceFitTransform(reference, stage);
+  if (!targetQuad || !transform) return null;
   const corners = targetQuad.map((target, index) => {
     const projected = projectedQuad[index];
     const residual = point(projected.x - target.x, projected.y - target.y);
@@ -860,8 +870,8 @@ export function evaluateWallCalibration(
   return {
     reference,
     stage,
-    scale,
-    offset,
+    scale: transform.scale,
+    offset: transform.offset,
     targetQuad,
     projectedQuad,
     corners,
