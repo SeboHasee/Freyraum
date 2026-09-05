@@ -3102,6 +3102,7 @@ export class MainMuseumHub {
       version: config.version,
       coverage: config.coverage,
       stage: config.stage,
+      background: config.background,
       backgroundFallback: config.backgroundFallback,
       visualTokens: config.visualTokens,
       camera: config.camera,
