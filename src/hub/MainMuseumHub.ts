@@ -95,8 +95,11 @@ const isHubDebugRequested = (): boolean => {
 };
 
 function resolveBackgroundUrl(src: string): string {
-  if (window.location.protocol === 'file:') return `${HUB_BACKGROUND_BASE_URL}${src}`;
-  return `${HUB_BACKGROUND_BASE_URL}${src.replace(/^Backgrounds\//, 'backgrounds/')}`;
+  const safeSrc = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(src) && !src.includes('..')
+    ? src
+    : 'Backgrounds/museum-empty.png';
+  if (window.location.protocol === 'file:') return `${HUB_BACKGROUND_BASE_URL}${safeSrc}`;
+  return `${HUB_BACKGROUND_BASE_URL}${safeSrc.replace(/^Backgrounds\//, 'backgrounds/')}`;
 }
 
 type CalibrationDrag =
@@ -104,6 +107,7 @@ type CalibrationDrag =
       kind: 'slot';
       slot: ResolvedHubSlot;
       button: HTMLButtonElement;
+      captureElement: Element;
       pointerId: number;
       mode: 'move' | 'resize';
     }
@@ -111,6 +115,7 @@ type CalibrationDrag =
       kind: 'wall-point';
       wallId: string;
       pointerId: number;
+      captureElement: Element;
       target: 'quad' | 'safe' | 'mounting-zone';
       index: number;
       startPoint: Point2D;
@@ -1922,6 +1927,7 @@ export class MainMuseumHub {
       slot,
       button,
       pointerId: event.pointerId,
+      captureElement: button,
       mode,
     };
     button.setPointerCapture(event.pointerId);
@@ -1950,6 +1956,7 @@ export class MainMuseumHub {
       kind: 'wall-point',
       wallId,
       pointerId: event.pointerId,
+      captureElement: element,
       target,
       index,
       startPoint,
@@ -1970,18 +1977,19 @@ export class MainMuseumHub {
     const currentQuad = wall?.quad ?? (wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
     const startPoint = this.pointerEventToStage(event);
     if (!currentQuad || !startPoint) return;
+    const element = event.currentTarget as SVGPolygonElement;
     this.recordCalibrationHistory();
     this.calibrationDrag = {
       kind: 'wall-point',
       wallId,
       pointerId: event.pointerId,
+      captureElement: element,
       target: 'quad',
       index: -1,
       startPoint,
       startQuad: currentQuad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
     };
 
-    const element = event.currentTarget as SVGPolygonElement;
     element.setPointerCapture(event.pointerId);
     element.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     element.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
@@ -2128,7 +2136,7 @@ export class MainMuseumHub {
     const drag = this.calibrationDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     this.calibrationDrag = null;
-    const currentTarget = event.currentTarget as Element | null;
+    const currentTarget = drag.captureElement;
     currentTarget?.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
     currentTarget?.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     currentTarget?.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
@@ -2141,7 +2149,7 @@ export class MainMuseumHub {
     if (!this.calibrationDrag) return;
     const drag = this.calibrationDrag;
     this.calibrationDrag = null;
-    const element = drag.kind === 'slot' ? drag.button : this.calibrationSvg;
+    const element = drag.captureElement;
     if (element && 'releasePointerCapture' in element) {
       try {
         (element as Element & { releasePointerCapture(pointerId: number): void }).releasePointerCapture(drag.pointerId);
@@ -2589,7 +2597,11 @@ export class MainMuseumHub {
       hangingRules: this.resolution.hangingRules,
       walls: this.resolution.configuredWalls.map((sourceWall) => {
         const wall = this.resolution.wallById.get(sourceWall.id);
-        if (!wall) return sourceWall;
+        if (!wall) {
+          return sourceWall.id === 'wall-rear' && this.entranceBoundaryQuad
+            ? { ...sourceWall, quad: this.entranceBoundaryQuad.map((corner) => this.roundPoint(corner)) }
+            : sourceWall;
+        }
         return {
           id: wall.id,
           group: wall.group,
@@ -3082,6 +3094,10 @@ export class MainMuseumHub {
     for (const wall of config.walls) {
       const currentWall = this.resolution.wallById.get(wall.id);
       if (!currentWall) continue;
+      if (wall.id === 'wall-rear' && wall.quad && wall.quad.length === 4) {
+        this.entranceBoundaryQuad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
+        continue;
+      }
       if (wall.quad && wall.quad.length === currentWall.quad.length) {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
       }
