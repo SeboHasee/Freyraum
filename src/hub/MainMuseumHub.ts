@@ -2172,11 +2172,17 @@ export class MainMuseumHub {
       wallPolygon.dataset.calibrationWall = wall.id;
       wallPolygon.setAttribute('class', `museum-hub__calibration-wall${active ? ' is-active' : ''}`);
       this.calibrationSvg.appendChild(wallPolygon);
+      if (this.calibrating) {
+        wallPolygon.addEventListener('pointerdown', (event) => {
+          this.activeCalibrationWallId = wall.id;
+          if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
+          this.startWallTranslateDrag(event, wall.id);
+        });
+      }
       if (this.calibrating && active) {
         wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(
           this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--wall')
         ));
-        wallPolygon.addEventListener('pointerdown', (event) => this.startWallTranslateDrag(event, wall.id));
         wallPolygon.setAttribute('tabindex', '0');
         wallPolygon.setAttribute('role', 'button');
         wallPolygon.setAttribute('aria-label', `${wall.id} Wand verschieben`);

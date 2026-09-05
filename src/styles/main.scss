@@ -643,6 +643,11 @@ canvas {
   pointer-events: none;
 }
 
+.museum-hub.is-calibrating .museum-hub__calibration-svg {
+  pointer-events: auto;
+  touch-action: none;
+}
+
 .museum-hub.is-debug-geometry:not(.is-calibrating) .museum-hub__calibration-svg {
   pointer-events: none;
 }
