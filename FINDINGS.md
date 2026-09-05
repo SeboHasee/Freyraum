@@ -1,6 +1,16 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Standalone editor usability findings (v1.18, 2026-09-05)
+
+1. A query parameter is an implementation switch, not a discoverable customer
+   program. Placement needs a clearly named file that can be opened directly.
+2. The same deterministic runtime can serve both the embedded developer mode and
+   the customer editor; separate placement logic would risk schema and geometry
+   drift.
+3. A persistent sidebar beside the museum view keeps controls readable without
+   covering the artwork being positioned.
+
 ## Deterministic editor findings (v1.17, 2026-09-04)
 
 1. The prior calibration UI exported schema v4 and legacy aliases even though

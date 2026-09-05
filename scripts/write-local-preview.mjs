@@ -36,6 +36,30 @@ const html = `<!DOCTYPE html>
 </html>
 `;
 
+const editorHtml = `<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="FREYRAUM Artwork Placement Editor" />
+  <title>FREYRAUM — Artwork Placement Editor</title>
+  <link rel="stylesheet" href="./style.css" />
+  <script>
+    const editorUrl = new URL(window.location.href);
+    editorUrl.searchParams.set('hubCalibrate', '1');
+    editorUrl.searchParams.set('placementEditor', '1');
+    window.history.replaceState(null, '', editorUrl);
+  </script>
+</head>
+<body class="placement-editor">
+  <div id="app"></div>
+  <script src="./customer-artworks.js"></script>
+  <script src="./customer-audio.js"></script>
+  <script src="./freyraum-gallery.js"></script>
+</body>
+</html>
+`;
+
 const bundlePath = 'customer-preview/freyraum-gallery.js';
 const secureRandom = `function freyraumPseudoRandom(){const cryptoApi=globalThis.crypto;if(cryptoApi&&cryptoApi.getRandomValues){const values=new Uint32Array(1);cryptoApi.getRandomValues(values);return values[0]/4294967296}const now=Date.now();const perf=globalThis.performance&&globalThis.performance.now?globalThis.performance.now():0;return (Math.sin(now+perf)*10000)%1}\n`;
 const bundle = readFileSync(bundlePath, 'utf8')
@@ -43,6 +67,7 @@ const bundle = readFileSync(bundlePath, 'utf8')
 
 writeFileSync(bundlePath, secureRandom + bundle);
 writeFileSync('customer-preview/app.html', html);
+writeFileSync('customer-preview/placement-editor.html', editorHtml);
 
 // v0.07: write a stub customer-artworks.js when none exists yet so the
 // `<script src="./customer-artworks.js">` tag does not 404 before the

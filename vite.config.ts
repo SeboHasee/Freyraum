@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { resolve } from 'node:path';
 
 export default defineConfig({
   base: '/Freyraum/',
@@ -7,8 +8,12 @@ export default defineConfig({
     target: 'es2018',
     minify: 'esbuild',
     rollupOptions: {
-      // app.html is the Vite development entry; root index.html is reserved as the one-click local launcher.
-      input: 'app.html',
+      // Root index.html remains the local preview launcher. The placement editor
+      // is a dedicated entry that reuses the same application runtime.
+      input: {
+        app: resolve(process.cwd(), 'app.html'),
+        'placement-editor': resolve(process.cwd(), 'placement-editor.html'),
+      },
     },
   },
   css: {

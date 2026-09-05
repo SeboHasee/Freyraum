@@ -3,6 +3,13 @@
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
+## Place artworks
+
+Double-click **`OPEN_ARTWORK_EDITOR.html`**. It opens the dedicated placement
+program from `customer-preview/placement-editor.html`; no URL parameter is
+required. Use the numbered sidebar to select, drag, resize, validate, and
+download the finished `museum-hub.json`.
+
 ## Current project state
 
 - Runtime renderer: WebGL (WebGPU is opt-in probe mode only).

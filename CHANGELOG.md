@@ -1,6 +1,18 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## v1.18 — Standalone Artwork Placement Editor (2026-09-05)
+
+- Added `OPEN_ARTWORK_EDITOR.html`, a clearly named one-click launcher for the
+  dedicated file-safe placement program.
+- Added a full-height, numbered editor sidebar beside the unobstructed museum
+  view with plain-language wall, artwork, movement, sizing, validation, import,
+  and download controls.
+- Kept the deterministic v5 geometry engine and export safeguards shared with
+  the existing hub instead of creating a second placement implementation.
+- Added `npm run editor` for contributors and generated
+  `customer-preview/placement-editor.html` for customers.
+
 ## v1.17 — Deterministic curator placement editor (2026-09-04)
 
 - Replaced silent cross-wall fallback with strict wall ownership: invalid

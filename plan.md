@@ -1,6 +1,15 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-04 (v1.12 full conversation documentation sync).
 
+## Implemented — Standalone Artwork Placement Editor (v1.18)
+
+- [x] Add a clearly named one-click launcher requiring no URL editing.
+- [x] Generate a dedicated file-safe editor page with the customer preview.
+- [x] Present numbered, plain-language controls in a persistent sidebar.
+- [x] Keep placement, validation, and v5 export in the shared deterministic engine.
+- [ ] Customer places and approves the final artworks, then supplies the exported
+  `museum-hub.json` for the accepted preview baseline.
+
 ## Implemented — Deterministic curator placement editor (v1.17)
 
 - [x] Preserve explicit wall ownership; invalid work is never remounted.

@@ -43,6 +43,11 @@ Notes:
 
 Museum-hub wall-plane calibration mode (`src/hub/MainMuseumHub.ts`).
 
+Customers do not need to construct this URL. Double-click
+`OPEN_ARTWORK_EDITOR.html`, which opens the dedicated
+`customer-preview/placement-editor.html` program with the editor mode enabled.
+Developers can run `npm run editor`.
+
 Notes:
 - Exposes the projected artwork surfaces plus an SVG calibration overlay for
   wall corners, safe zones, and green authoritative mounting zones.

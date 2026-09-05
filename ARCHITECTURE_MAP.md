@@ -72,6 +72,11 @@ mounting-zone containment, and canonical v5 placement. Each rendered wall has an
 explicit stage-space `mountingZone`; every projected artwork corner must remain
 inside it. Export is blocked on any warning and is accepted only after
 sanitize/re-import preserves wall ID plus all four canonical placement fields.
+`placement-editor.html` is the served editor entry,
+`customer-preview/placement-editor.html` is its generated file-safe build, and
+`OPEN_ARTWORK_EDITOR.html` is the customer-facing one-click launcher. All three
+reuse the same runtime and schema rather than maintaining a second placement
+implementation.
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`

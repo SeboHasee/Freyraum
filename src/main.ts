@@ -106,6 +106,15 @@ function isHubDebugEnabled(): boolean {
   }
 }
 
+function isPlacementEditorRequested(): boolean {
+  try {
+    return document.body.classList.contains('placement-editor')
+      || new URLSearchParams(window.location.search).get('placementEditor') === '1';
+  } catch {
+    return false;
+  }
+}
+
 function normalizeCssColorToHex(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
@@ -580,6 +589,7 @@ function verifyMuseumWallColorConsistency(
 }
 
 function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
+  const placementEditor = isPlacementEditorRequested();
   const hints = [
     'Kunstwerke werden vorbereitet …',
     'Texturen werden geladen …',
@@ -650,7 +660,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   wordmark.appendChild(wordmarkText);
   const subtitle = document.createElement('div');
   subtitle.className = 'loading-subtitle';
-  subtitle.textContent = 'Museum wird geladen';
+  subtitle.textContent = placementEditor ? 'Artwork Placement Editor wird geladen' : 'Museum wird geladen';
   const track = document.createElement('div');
   track.className = 'loading-progress-track';
   const fill = document.createElement('div');
@@ -664,8 +674,11 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   hint.textContent = hints[0];
   const startButton = document.createElement('button');
   startButton.className = 'loading-start-btn';
-  startButton.textContent = 'Museum betreten';
-  startButton.setAttribute('aria-label', 'Museum betreten und Ausstellungen entdecken');
+  startButton.textContent = placementEditor ? 'Placement Editor öffnen' : 'Museum betreten';
+  startButton.setAttribute(
+    'aria-label',
+    placementEditor ? 'Artwork Placement Editor öffnen' : 'Museum betreten und Ausstellungen entdecken'
+  );
   startButton.disabled = true;
   card.append(wordmark, subtitle, track, pct, hint, startButton);
   overlay.appendChild(card);
@@ -701,9 +714,16 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
       startButton.addEventListener('click', () => {
         startButton.style.removeProperty('will-change');
       }, { once: true });
-      subtitle.textContent = 'Museum bereit — zum Starten klicken';
-      hint.textContent = 'Alle Inhalte sind vollständig vorbereitet.';
-      overlay.setAttribute('aria-label', 'Museum bereit — zum Starten klicken');
+      subtitle.textContent = placementEditor
+        ? 'Placement Editor bereit'
+        : 'Museum bereit — zum Starten klicken';
+      hint.textContent = placementEditor
+        ? 'Klicken Sie unten, um Ihre Kunstwerke zu platzieren.'
+        : 'Alle Inhalte sind vollständig vorbereitet.';
+      overlay.setAttribute(
+        'aria-label',
+        placementEditor ? 'Placement Editor bereit' : 'Museum bereit — zum Starten klicken'
+      );
       return new Promise<void>((resolve) => {
         let entered = false;
         const go = (): void => {

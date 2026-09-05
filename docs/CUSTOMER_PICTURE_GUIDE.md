@@ -71,14 +71,24 @@ copies into `customer-artworks/inbox/`.
 
 ## Museum hub placement
 
+- Double-click **`OPEN_ARTWORK_EDITOR.html`** in the main FREYRAUM folder. This
+  opens the separate, file-safe Artwork Placement Editor. You do not need to
+  edit a URL or start a development server.
+- In the editor:
+  1. Choose a wall and artwork in the right sidebar.
+  2. Drag the artwork directly in the museum view.
+  3. Drag its red corner handle to resize it without changing its proportions.
+  4. Check the green usable wall area, then click **Grüne Wandfläche bestätigen**.
+  5. Repeat for all walls. Resolve every red warning.
+  6. Click **Konfiguration herunterladen** when the button becomes available.
+- Replace `customer-artworks/museum-hub.json` with the downloaded file and run
+  `Update Gallery.command` or `Update Gallery.bat`.
 - The current `customer-artworks/museum-hub.json` format is **version 5**:
   camera, room envelope, calibrated front/left/right wall transforms, drawable
   regions, doorway exclusions, visual tokens, exact artwork IDs, normalized
   wall-local slot placement, and mounted sizes live in the same file.
-- Use the documented museum-hub calibration mode from `docs/QUERY_PARAMETERS.md`
-  to adjust wall corners, safe zones, and artwork size/placement visually, then
-  copy the exported JSON back into `customer-artworks/museum-hub.json`.
-- Open the calibration mode documented in `docs/QUERY_PARAMETERS.md`. First
+- The legacy `?hubCalibrate=1` route remains available for developers. Customers
+  should use `OPEN_ARTWORK_EDITOR.html`. First
   align each green mounting-zone boundary with the visible doorway, corner,
   floor, and ceiling.
   Then select and drag each artwork or enter exact values. Red outlines mean

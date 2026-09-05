@@ -1239,6 +1239,8 @@ const main = readFileSync(resolve(ROOT, 'src/main.ts'), 'utf8');
 const renderer = readFileSync(resolve(ROOT, 'src/core/RendererManager.ts'), 'utf8');
 const hub = readFileSync(resolve(ROOT, 'src/hub/MainMuseumHub.ts'), 'utf8');
 const shell = readFileSync(resolve(ROOT, 'app.html'), 'utf8');
+const editorShell = readFileSync(resolve(ROOT, 'placement-editor.html'), 'utf8');
+const editorLauncher = readFileSync(resolve(ROOT, 'OPEN_ARTWORK_EDITOR.html'), 'utf8');
 assert.match(scss, /#app\s*\{[\s\S]*?background:\s*var\(--color-gallery-wall\)/);
 assert.match(scss, /\.fallback-screen\s*\{[\s\S]*?background:\s*var\(--color-gallery-wall\)/);
 assert.match(scss, /\.museum-hub\s*\{[\s\S]*?background-color:\s*var\(--color-museum-wall\)/);
@@ -1254,6 +1256,9 @@ assert.match(hub, /hub-selection-lifecycle/);
 assert.match(hub, /worldQuad/);
 assert.match(hub, /projectedAnchor/);
 assert.match(shell, /#c7ced4/i);
+assert.match(editorShell, /hubCalibrate['"],\s*['"]1/);
+assert.match(editorShell, /class="placement-editor"/);
+assert.match(editorLauncher, /customer-preview\/placement-editor\.html/);
 assert.ok(!/background:\s*#fff(?:fff)?\b/i.test(scss.slice(scss.indexOf('.museum-hub {'), scss.indexOf('.museum-hub[hidden]'))));
 
 console.log('PASS: 9×12 m daylit room invariants, mirrored doorways, four-work 2+1+1 rooms, overflow pagination, calibrated projection, selection persistence hooks, token consistency, and 404 fallback are valid.');
