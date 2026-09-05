@@ -1,6 +1,15 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.20 — Reference wall calibration diagnostics (2026-09-05)
+
+- Added the measured 2048×1354 reference wall contract and explicit contain-fit
+  conversion into the fixed 1366×768 logical stage.
+- Added per-corner, average, and maximum calibration error reporting to hub
+  debug geometry snapshots.
+- Kept the physical room and canonical artwork placement unchanged while the
+  reference wall is treated as a fixed-view calibration target.
+
 ## v1.19 — Architectural wall contract correction (2026-09-05)
 
 - Centralized the museum room front/rear coordinates, wall thickness,

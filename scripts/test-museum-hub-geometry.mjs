@@ -79,6 +79,13 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
 assert.equal(shippingConfig.version, 5, 'shipping config must use the canonical v5 wall-mounting model');
+assert.deepEqual(museumHub.HUB_REFERENCE_IMAGE, { width: 2048, height: 1354, fit: 'contain' });
+assert.deepEqual(museumHub.HUB_REFERENCE_BACK_WALL_QUAD, [
+  { x: 531, y: 511 },
+  { x: 1445, y: 512 },
+  { x: 1552, y: 820 },
+  { x: 487, y: 819 },
+], 'reference wall corners must remain in clockwise TL/TR/BR/BL order');
 assert.equal(shippingConfig.visualTokens.galleryWall, '#C7CED4');
 assert.equal(shippingConfig.visualTokens.museumWall, '#C7CED4');
 assert.equal(shippingConfig.backgroundFallback.src, 'Backgrounds/museum-empty.png');
@@ -162,6 +169,7 @@ for (const authored of shippingConfig.slots) {
   for (const field of ['horizontalPosition', 'centerHeight', 'physicalHeight', 'mountingGap']) {
     assert.equal(restored.placement[field], authored.placement[field], `${authored.id} ${field} must round-trip exactly`);
   }
+
 }
 // 90° corners: consecutive perimeter walls (front → right → rear → left) must
 // have orthogonal axisU directions and form a closed perimeter loop.
@@ -789,6 +797,21 @@ for (const wall of shipping.walls) {
   assert.ok(wall.projectedQuad, `${wall.id} must retain a projected wall quad for debug/reality checks`);
   assert.ok(wall.transform, `${wall.id} must expose an authoritative world transform`);
 }
+const calibrationReport = geometry.evaluateWallCalibration(
+  geometry.mapReferenceQuadToStage(
+    museumHub.HUB_REFERENCE_BACK_WALL_QUAD,
+    museumHub.HUB_REFERENCE_IMAGE,
+    shipping.stage
+  ),
+  museumHub.HUB_REFERENCE_BACK_WALL_QUAD,
+  museumHub.HUB_REFERENCE_IMAGE,
+  shipping.stage
+);
+assert.ok(calibrationReport, 'reference wall must map into the logical stage');
+assert.ok(calibrationReport.averageErrorPx <= 0.01, `front wall average calibration error must be <= 0.01px (got ${calibrationReport.averageErrorPx})`);
+assert.ok(calibrationReport.maximumErrorPx <= 0.01, `front wall maximum calibration error must be <= 0.01px (got ${calibrationReport.maximumErrorPx})`);
+assert.equal(calibrationReport.offset.y, 0, 'contain mapping must preserve the full reference height');
+assert.ok(Math.abs(calibrationReport.offset.x - 102.17872968980794) < 1e-9, 'contain mapping must center horizontal padding explicitly');
 
 const invalidFrameWall = {
   ...shipping.wallById.get('wall-front').room,

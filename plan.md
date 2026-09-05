@@ -1,6 +1,18 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Reference wall calibration diagnostics (v1.20)
+
+- [x] Define the repository-only 2048×1354 reference contract and clockwise
+  target-corner order.
+- [x] Map reference pixels to the fixed logical hub stage with explicit
+  contain-fit scale and padding; CSS and framebuffer sizes remain separate.
+- [x] Add pure projected-corner residual metrics and expose them in hub debug
+  snapshots without changing canonical artwork placement.
+- [x] Validate the mapping and preserve the existing coherent room until a
+  reference-to-room correspondence is confirmed; a single 2D image cannot
+  uniquely determine the complete 3D envelope.
+
 ## Implemented — Architectural wall contract correction (v1.19)
 
 - [x] Centralize the room front/rear coordinates, wall thickness, entry-shell

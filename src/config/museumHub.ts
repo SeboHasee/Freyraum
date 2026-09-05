@@ -380,10 +380,10 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
     group: 'front',
     planeAspect: HUB_ROOM_WIDTH / HUB_ROOM_HEIGHT,
     quad: [
-      point(403.366322, 289.843427),
-      point(921.794682, 290.410635),
-      point(982.485968, 465.110783),
-      point(378.409158, 464.543575),
+      point(417.26, 206.29),
+      point(948.74, 206.29),
+      point(951.84, 514.71),
+      point(414.16, 514.71),
     ],
     safePolygon: [
       point(422.61, 506.32),
