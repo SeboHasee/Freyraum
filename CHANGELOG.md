@@ -31,6 +31,10 @@
 - Retried the full validation workflow after restoring locked dependencies:
   import, build/typecheck, lint, hub geometry, frame budget, WebGL resilience,
   documentation authority, secret scanning, and focused final review passed.
+- Added the committed `customer-artworks/Backgrounds/museum-empty.png`
+  fallback and made customer-public syncing fail fast when the required hub
+  background is absent. CI now runs both resilience checks explicitly on the
+  same Node.js LTS version used by Pages deployment.
 
 ## v1.17 — Deterministic curator placement editor (2026-09-04)
 

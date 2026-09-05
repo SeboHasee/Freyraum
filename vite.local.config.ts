@@ -13,4 +13,11 @@ export default defineConfig({
       fileName: () => 'freyraum-gallery.js',
     },
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+      },
+    },
+  },
 });
