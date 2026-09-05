@@ -2095,7 +2095,11 @@ export class MainMuseumHub {
         handle?.setAttribute('cx', corner.x.toFixed(2));
         handle?.setAttribute('cy', corner.y.toFixed(2));
       });
-      for (const [target, points] of [['safe', wall.safePolygon], ['mounting-zone', wall.mountingZone] as const]) {
+      const editablePolygons: readonly (readonly ['safe' | 'mounting-zone', Point2D[]])[] = [
+        ['safe', wall.safePolygon],
+        ['mounting-zone', wall.mountingZone],
+      ];
+      for (const [target, points] of editablePolygons) {
         points.forEach((corner, index) => {
           const handle = this.calibrationSvg!.querySelector<SVGCircleElement>(
             `[data-calibration-handle="${wall.id}:${target}:${index}"]`
@@ -2284,7 +2288,9 @@ export class MainMuseumHub {
       },
     ];
     const projected = corners.map((corner) => projectWorldPoint(this.resolution.camera, corner, this.resolution.stage));
-    return projected.every((corner): corner is Point2D => corner !== null) ? (projected as Quad) : null;
+    return projected.every((corner): corner is Point2D => corner !== null)
+      ? (projected as unknown as Quad)
+      : null;
   }
 
   private renderWallDebugAxes(wall: ResolvedHubWall): void {

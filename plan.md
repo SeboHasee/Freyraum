@@ -1,6 +1,17 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Stable editor calibration overlay and room envelope (v1.22)
+
+- [x] Keep SVG wall polygons and handles stable during pointer movement; update
+  geometry attributes in place so pointer capture survives continuous dragging.
+- [x] Reject competing calibration drags and clean up sessions on blur,
+  cancellation, lost capture, and disposal.
+- [x] Expose the bounds-only `wall-rear` as a distinct, purple room-envelope
+  guide with four editable projected points; it remains unavailable for artwork.
+- [x] Validate candidate corner quads for convexity and non-degeneracy before
+  applying movement.
+
 ## Implemented — Editor background and continuous wall calibration (v1.21)
 
 - [x] Add local background selection with intrinsic dimensions, aspect ratio,

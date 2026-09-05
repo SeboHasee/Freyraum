@@ -1,6 +1,14 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.22 — Stable editor calibration overlay and room envelope (2026-09-05)
+
+- Stabilized SVG calibration nodes and update their geometry in place during
+  pointer movement, preventing capture loss after the first drag event.
+- Added blur, competing-pointer, and invalid-quad safeguards.
+- Added a visibly distinct editable front-of-camera room-envelope guide for
+  bounds-only `wall-rear`; it cannot receive artwork assignments.
+
 ## v1.21 — Editor background and continuous wall calibration (2026-09-05)
 
 - Added local background-file selection with dimensions, aspect metadata,

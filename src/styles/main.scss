@@ -653,6 +653,16 @@ canvas {
   stroke-width: 2.5;
 }
 
+.museum-hub__calibration-envelope {
+  fill: rgba(190, 150, 255, 0.08);
+  stroke: rgba(190, 150, 255, 0.95);
+  stroke-width: 2.5;
+  stroke-dasharray: 12 7;
+  cursor: move;
+  pointer-events: all;
+  touch-action: none;
+}
+
 .museum-hub__calibration-safe {
   fill: rgba(100, 191, 255, 0.08);
   stroke: rgba(100, 191, 255, 0.78);
@@ -701,6 +711,10 @@ canvas {
   stroke-width: 2;
   cursor: nwse-resize;
   touch-action: none;
+}
+
+.museum-hub__calibration-handle--envelope {
+  fill: rgba(190, 150, 255, 0.98);
 }
 
 .museum-hub__calibration-svg polygon.museum-hub__calibration-wall.is-active {
