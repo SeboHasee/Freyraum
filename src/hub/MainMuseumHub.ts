@@ -2307,6 +2307,8 @@ export class MainMuseumHub {
         wallPolygon.addEventListener('pointerdown', (event) => {
           this.activeCalibrationWallId = wall.id;
           if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
+          this.announceCalibrationAction(`Currently editing: ${wall.id.toUpperCase()}. Drag a striped orange line to move the complete wall.`);
+          this.renderCalibrationOverlay();
           this.startWallTranslateDrag(event, wall.id);
         });
       }
@@ -2371,7 +2373,13 @@ export class MainMuseumHub {
       envelope.setAttribute('tabindex', '0');
       envelope.setAttribute('role', 'button');
       envelope.setAttribute('aria-label', 'ENTRANCE BOUNDARY — room shape only; no artwork allowed');
-      envelope.addEventListener('pointerdown', (event) => this.startWallTranslateDrag(event, 'wall-rear'));
+      envelope.addEventListener('pointerdown', (event) => {
+        this.activeCalibrationWallId = 'wall-rear';
+        if (this.calibrationWallSelect) this.calibrationWallSelect.value = 'wall-rear';
+        this.announceCalibrationAction('Currently editing: ENTRANCE BOUNDARY. No artwork can be placed here.');
+        this.renderCalibrationOverlay();
+        this.startWallTranslateDrag(event, 'wall-rear');
+      });
       envelope.addEventListener('keydown', (event) => {
         this.activeCalibrationWallId = 'wall-rear';
         if (this.calibrationWallSelect) this.calibrationWallSelect.value = 'wall-rear';
@@ -3247,7 +3255,7 @@ export class MainMuseumHub {
       fallbacks: config.fallbacks,
       walls: config.walls.map((wall) => {
         const fixedWall = { ...wall };
-        delete fixedWall.quad;
+        if (wall.id !== 'wall-rear') delete fixedWall.quad;
         delete fixedWall.safePolygon;
         delete fixedWall.mountingZone;
         delete fixedWall.mountingZoneConfirmed;
