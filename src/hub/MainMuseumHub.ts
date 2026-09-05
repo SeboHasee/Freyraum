@@ -32,6 +32,7 @@ import {
   quadIsDegenerate,
   type ProjectedArtworkGeometry,
   type Point2D,
+  type Point3D,
   type Quad,
 } from './projectiveGeometry';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
@@ -163,6 +164,7 @@ export class MainMuseumHub {
   private calibrationActionStatus: HTMLParagraphElement | null = null;
   private calibrationSvg: SVGSVGElement | null = null;
   private calibrationDrag: CalibrationDrag | null = null;
+  private entranceBoundaryQuad: Quad | null = null;
   private activeCalibrationWallId: string | null = null;
   private activeCalibrationSlotId: string | null = null;
   private lastValidCalibrationSnapshot: string | null = null;
@@ -201,6 +203,7 @@ export class MainMuseumHub {
     this.stageWidth = resolution.stage.width;
     this.stageHeight = resolution.stage.height;
     this.activeCalibrationWallId = resolution.walls[0]?.id ?? null;
+    this.entranceBoundaryQuad = this.projectEntranceBoundary();
     this.defaultBackgroundSrc = resolution.background.src;
     this.defaultBackground = { ...resolution.background };
 
@@ -377,6 +380,7 @@ export class MainMuseumHub {
         : null;
     this.resizeObserver?.observe(this.visual);
     window.addEventListener('resize', this.handleResize);
+    window.addEventListener('blur', this.handleCalibrationBlur);
 
     hub.addEventListener('pointerdown', this.handleSwipeStart, { passive: true });
     hub.addEventListener('pointerup', this.handleSwipeEnd, { passive: true });
@@ -1909,6 +1913,7 @@ export class MainMuseumHub {
     button: HTMLButtonElement,
     mode: 'move' | 'resize'
   ): void {
+    if (this.calibrationDrag) return;
     event.preventDefault();
     this.selectCalibrationSlot(slot.id);
     this.recordCalibrationHistory();
@@ -1932,11 +1937,13 @@ export class MainMuseumHub {
     target: 'quad' | 'safe' | 'mounting-zone',
     index: number
   ): void {
+    if (this.calibrationDrag) return;
     event.preventDefault();
     this.recordCalibrationHistory();
     const element = event.currentTarget as SVGCircleElement;
     const wall = this.resolution.wallById.get(wallId);
-    if (!wall) return;
+    const currentQuad = wall?.quad ?? (wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
+    if (!currentQuad) return;
     const startPoint = this.pointerEventToStage(event);
     if (!startPoint) return;
     this.calibrationDrag = {
@@ -1946,20 +1953,23 @@ export class MainMuseumHub {
       target,
       index,
       startPoint,
-      startQuad: wall.quad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
+      startQuad: currentQuad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
     };
     element.setPointerCapture(event.pointerId);
     element.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     element.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     element.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    element.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
   }
 
   private startWallTranslateDrag = (event: PointerEvent, wallId: string): void => {
+    if (this.calibrationDrag) return;
     if (!this.calibrating) return;
     event.preventDefault();
     const wall = this.resolution.wallById.get(wallId);
+    const currentQuad = wall?.quad ?? (wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
     const startPoint = this.pointerEventToStage(event);
-    if (!wall || !startPoint) return;
+    if (!currentQuad || !startPoint) return;
     this.recordCalibrationHistory();
     this.calibrationDrag = {
       kind: 'wall-point',
@@ -1968,7 +1978,7 @@ export class MainMuseumHub {
       target: 'quad',
       index: -1,
       startPoint,
-      startQuad: wall.quad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
+      startQuad: currentQuad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
     };
 
     const element = event.currentTarget as SVGPolygonElement;
@@ -2026,22 +2036,29 @@ export class MainMuseumHub {
       this.applySlotGeometry(drag.button, drag.slot);
     } else {
       const wall = this.resolution.wallById.get(drag.wallId);
-      if (!wall) return;
+      const wallQuad = wall?.quad ?? (drag.wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
+      if (!wallQuad) return;
       if (drag.target === 'quad') {
         if (!drag.startQuad) return;
-        const wallQuad = wall.quad as unknown as Point2D[];
+        const mutableQuad = wallQuad as unknown as Point2D[];
         const delta = point(stagePoint.x - drag.startPoint.x, stagePoint.y - drag.startPoint.y);
+        const candidate = drag.startQuad.map((source, index) =>
+          drag.index >= 0 && index === drag.index
+            ? point(stagePoint.x, stagePoint.y)
+            : point(source.x + (drag.index >= 0 ? 0 : delta.x), source.y + (drag.index >= 0 ? 0 : delta.y))
+        ) as unknown as Quad;
+        if (quadIsDegenerate(candidate) || !quadIsConvex(candidate)) return;
         if (drag.index >= 0) {
-          wallQuad[drag.index].x = stagePoint.x;
-          wallQuad[drag.index].y = stagePoint.y;
+          mutableQuad[drag.index].x = stagePoint.x;
+          mutableQuad[drag.index].y = stagePoint.y;
         } else {
           for (let index = 0; index < wallQuad.length; index += 1) {
             const source = drag.startQuad[index];
-            wallQuad[index].x = source.x + delta.x;
-            wallQuad[index].y = source.y + delta.y;
+            mutableQuad[index].x = source.x + delta.x;
+            mutableQuad[index].y = source.y + delta.y;
           }
         }
-      } else {
+      } else if (wall) {
       const targetPoints = drag.target === 'safe' ? wall.safePolygon : wall.mountingZone;
       const targetPoint = targetPoints[drag.index];
       if (!targetPoint) return;
@@ -2051,12 +2068,57 @@ export class MainMuseumHub {
         wall.mountingZoneConfirmed = false;
       }
       }
-      this.applyAllSlotGeometry();
+      if (wall) this.applyAllSlotGeometry();
     }
-    this.renderCalibrationOverlay();
+    this.updateCalibrationOverlayGeometry();
     this.updateCalibrationOutput(false);
     this.syncCalibrationControls();
   };
+
+  private updateCalibrationOverlayGeometry(): void {
+    if (!this.calibrationSvg) return;
+    for (const wall of this.resolution.walls) {
+      const polygon = this.calibrationSvg.querySelector<SVGPolygonElement>(
+        `[data-calibration-wall="${wall.id}"]`
+      );
+      polygon?.setAttribute('points', this.pointsToSvg(wall.quad));
+      this.calibrationSvg
+        .querySelector<SVGPolygonElement>(`[data-calibration-safe="${wall.id}"]`)
+        ?.setAttribute('points', this.pointsToSvg(wall.safePolygon));
+      this.calibrationSvg
+        .querySelector<SVGPolygonElement>(`[data-calibration-mounting-zone="${wall.id}"]`)
+        ?.setAttribute('points', this.pointsToSvg(wall.mountingZone));
+      wall.quad.forEach((corner, index) => {
+        const handle = this.calibrationSvg!.querySelector<SVGCircleElement>(
+          `[data-calibration-handle="${wall.id}:quad:${index}"]`
+        );
+        handle?.setAttribute('cx', corner.x.toFixed(2));
+        handle?.setAttribute('cy', corner.y.toFixed(2));
+      });
+      for (const [target, points] of [['safe', wall.safePolygon], ['mounting-zone', wall.mountingZone] as const]) {
+        points.forEach((corner, index) => {
+          const handle = this.calibrationSvg!.querySelector<SVGCircleElement>(
+            `[data-calibration-handle="${wall.id}:${target}:${index}"]`
+          );
+          handle?.setAttribute('cx', corner.x.toFixed(2));
+          handle?.setAttribute('cy', corner.y.toFixed(2));
+        });
+      }
+    }
+    const envelope = this.calibrationSvg.querySelector<SVGPolygonElement>(
+      '[data-calibration-envelope="wall-rear"]'
+    );
+    if (envelope && this.entranceBoundaryQuad) {
+      envelope.setAttribute('points', this.pointsToSvg(this.entranceBoundaryQuad));
+      this.entranceBoundaryQuad.forEach((corner, index) => {
+        const handle = this.calibrationSvg!.querySelector<SVGCircleElement>(
+          `[data-calibration-handle="wall-rear:quad:${index}"]`
+        );
+        handle?.setAttribute('cx', corner.x.toFixed(2));
+        handle?.setAttribute('cy', corner.y.toFixed(2));
+      });
+    }
+  }
 
   private handleCalibrationEnd = (event: PointerEvent): void => {
     const drag = this.calibrationDrag;
@@ -2071,6 +2133,22 @@ export class MainMuseumHub {
     this.updateCalibrationOutput(true);
   };
 
+  private handleCalibrationBlur = (): void => {
+    if (!this.calibrationDrag) return;
+    const drag = this.calibrationDrag;
+    this.calibrationDrag = null;
+    const element = drag.kind === 'slot' ? drag.button : this.calibrationSvg;
+    if (element && 'releasePointerCapture' in element) {
+      try {
+        (element as Element & { releasePointerCapture(pointerId: number): void }).releasePointerCapture(drag.pointerId);
+      } catch {
+        // Capture may already have been released by the browser.
+      }
+    }
+    this.renderCalibrationOverlay();
+    this.updateCalibrationOutput(true);
+  };
+
   private renderCalibrationOverlay(): void {
     if (!this.calibrationSvg) return;
     this.calibrationSvg.replaceChildren();
@@ -2079,6 +2157,7 @@ export class MainMuseumHub {
       const active = this.calibrating ? wall.id === activeWallId : true;
       const wallPolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       wallPolygon.setAttribute('points', this.pointsToSvg(wall.quad));
+      wallPolygon.dataset.calibrationWall = wall.id;
       wallPolygon.setAttribute('class', `museum-hub__calibration-wall${active ? ' is-active' : ''}`);
       this.calibrationSvg.appendChild(wallPolygon);
       if (this.calibrating && active) {
@@ -2102,11 +2181,13 @@ export class MainMuseumHub {
 
       const safePolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       safePolygon.setAttribute('points', this.pointsToSvg(wall.safePolygon));
+      safePolygon.dataset.calibrationSafe = wall.id;
       safePolygon.setAttribute('class', `museum-hub__calibration-safe${active ? ' is-active' : ''}`);
       this.calibrationSvg.appendChild(safePolygon);
 
       const mountingZone = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
       mountingZone.setAttribute('points', this.pointsToSvg(wall.mountingZone));
+      mountingZone.dataset.calibrationMountingZone = wall.id;
       mountingZone.setAttribute(
         'class',
         `museum-hub__calibration-mounting-zone${active ? ' is-active' : ''}${
@@ -2133,6 +2214,28 @@ export class MainMuseumHub {
         )
       );
     }
+    if (this.calibrating && this.entranceBoundaryQuad) {
+      const envelope = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      envelope.dataset.calibrationEnvelope = 'wall-rear';
+      envelope.setAttribute('points', this.pointsToSvg(this.entranceBoundaryQuad));
+      envelope.setAttribute('class', 'museum-hub__calibration-envelope');
+      envelope.setAttribute('tabindex', '0');
+      envelope.setAttribute('role', 'button');
+      envelope.setAttribute('aria-label', 'Raum-Eingangsgrenze verschieben');
+      envelope.addEventListener('pointerdown', (event) => this.startWallTranslateDrag(event, 'wall-rear'));
+      this.calibrationSvg.appendChild(envelope);
+      this.entranceBoundaryQuad.forEach((corner, index) => {
+        this.calibrationSvg!.appendChild(
+          this.createCalibrationHandle(
+            'wall-rear',
+            'quad',
+            index,
+            corner,
+            'museum-hub__calibration-handle museum-hub__calibration-handle--envelope'
+          )
+        );
+      });
+    }
     if (this.debugGeometry) {
       this.renderCameraDebugGuides();
       this.renderProjectedSlotDebugOverlay();
@@ -2148,11 +2251,40 @@ export class MainMuseumHub {
   ): SVGCircleElement {
     const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     handle.setAttribute('class', className);
+    handle.dataset.calibrationHandle = `${wallId}:${target}:${index}`;
     handle.setAttribute('cx', position.x.toFixed(2));
     handle.setAttribute('cy', position.y.toFixed(2));
     handle.setAttribute('r', '8');
     handle.addEventListener('pointerdown', (event) => this.startWallPointCalibrationDrag(event, wallId, target, index));
     return handle;
+  }
+
+  private projectEntranceBoundary(): Quad | null {
+    const rear = this.resolution.configuredWalls.find(
+      (wall) => wall.id === 'wall-rear' && wall.role === 'bounds-only'
+    );
+    const transform = rear?.transform;
+    if (!transform) return null;
+    const corners: Point3D[] = [
+      transform.origin,
+      {
+        x: transform.origin.x + transform.axisU.x * transform.width,
+        y: transform.origin.y + transform.axisU.y * transform.width,
+        z: transform.origin.z + transform.axisU.z * transform.width,
+      },
+      {
+        x: transform.origin.x + transform.axisU.x * transform.width + transform.axisV.x * transform.height,
+        y: transform.origin.y + transform.axisU.y * transform.width + transform.axisV.y * transform.height,
+        z: transform.origin.z + transform.axisU.z * transform.width + transform.axisV.z * transform.height,
+      },
+      {
+        x: transform.origin.x + transform.axisV.x * transform.height,
+        y: transform.origin.y + transform.axisV.y * transform.height,
+        z: transform.origin.z + transform.axisV.z * transform.height,
+      },
+    ];
+    const projected = corners.map((corner) => projectWorldPoint(this.resolution.camera, corner, this.resolution.stage));
+    return projected.every((corner): corner is Point2D => corner !== null) ? (projected as Quad) : null;
   }
 
   private renderWallDebugAxes(wall: ResolvedHubWall): void {
@@ -3017,6 +3149,7 @@ export class MainMuseumHub {
     this.resizeObserver?.disconnect();
     this.narrowQuery.removeEventListener('change', this.handleNarrowChange);
     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('blur', this.handleCalibrationBlur);
     this.element.removeEventListener('pointerdown', this.handleSwipeStart);
     this.element.removeEventListener('pointerup', this.handleSwipeEnd);
     this.element.removeEventListener('keydown', this.handleKeydown);
