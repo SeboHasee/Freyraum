@@ -668,6 +668,7 @@ canvas {
   stroke: rgba(100, 191, 255, 0.78);
   stroke-width: 2;
   stroke-dasharray: 10 6;
+  pointer-events: none;
 }
 
 .museum-hub__calibration-mounting-zone {
@@ -675,6 +676,7 @@ canvas {
   stroke: rgba(100, 255, 170, 0.95);
   stroke-width: 2.5;
   stroke-dasharray: 5 4;
+  pointer-events: none;
 }
 
 .museum-hub__calibration-mounting-zone.is-unconfirmed {
