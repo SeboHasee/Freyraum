@@ -2552,6 +2552,7 @@ export class MainMuseumHub {
 
   private async copyCalibrationJson(): Promise<void> {
     if (!this.calibrationExportValid || !this.calibrationOutput) return;
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let copied = false;
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
@@ -2570,6 +2571,7 @@ export class MainMuseumHub {
       } catch {
         copied = false;
       }
+      if (copied) trigger?.focus();
     }
     const message = copied
       ? 'Gültige Museum-Konfiguration wurde kopiert.'
@@ -2803,7 +2805,19 @@ export class MainMuseumHub {
     for (const slot of config.slots) {
       const currentSlot = this.slotViews.find((view) => view.slot.id === slot.id)?.slot;
       if (!currentSlot) continue;
-      const wall = this.resolution.wallById.get(currentSlot.placement.wallId);
+      if (slot.placement.wallId !== currentSlot.placement.wallId) {
+        this.diagnostics.warn(
+          'hub-calibration-wall-ownership',
+          'Calibration snapshot slot skipped because wall ownership is immutable',
+          {
+            slotId: slot.id,
+            expectedWallId: currentSlot.placement.wallId,
+            receivedWallId: slot.placement.wallId,
+          }
+        );
+        continue;
+      }
+      const wall = this.resolution.wallById.get(slot.placement.wallId);
       if (!wall?.room) continue;
       currentSlot.placement.horizontalPosition =
         slot.placement.horizontalPosition ?? currentSlot.placement.horizontalPosition;
