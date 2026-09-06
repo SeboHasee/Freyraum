@@ -1784,7 +1784,7 @@ export class MainMuseumHub {
     ): void => {
       backgroundInfo.textContent = width > 0 && height > 0
         ? `${name} · ${width}×${height}px · ${(width / height).toFixed(3)}`
-        : `${name} · Datei muss nach customer-artworks/Backgrounds kopiert werden`;
+        : `${name} · Copy the file to customer-artworks/Backgrounds`;
     };
     backgroundInput.addEventListener('change', () => {
       const file = backgroundInput.files?.[0];
@@ -1923,12 +1923,14 @@ export class MainMuseumHub {
     };
     const editCorners = makeAction('Edit wall corners', () => {
       this.calibrationEditMode = 'wall';
+      this.renderCalibrationOverlay();
       this.announceCalibrationAction('Currently editing wall corners. Drag an orange point.');
       this.focusCalibrationWall();
     });
     editCorners.title = 'Drag an orange point to reshape the selected wall.';
     const moveWall = makeAction('Move complete wall', () => {
       this.calibrationEditMode = 'wall';
+      this.renderCalibrationOverlay();
       this.announceCalibrationAction('Currently moving the complete wall. Drag a striped orange line.');
       this.focusCalibrationWall();
     });
