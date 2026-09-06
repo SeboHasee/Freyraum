@@ -2139,7 +2139,9 @@ export class MainMuseumHub {
     if (this.calibrationWallSelect) this.calibrationWallSelect.value = wallId;
     this.recordCalibrationHistory();
     const element = event.currentTarget as SVGCircleElement;
-    const captureElement = this.calibrationSvg ?? element;
+    // Capture on the visible handle itself. The overview handles live in the
+    // editor SVG, which is intentionally layered above the projected overlay.
+    const captureElement = element;
     const wall = this.resolution.wallById.get(wallId);
     const currentQuad = wall?.quad ?? (wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
     if (!currentQuad) return;
@@ -2413,10 +2415,11 @@ export class MainMuseumHub {
     const display = this.projectedEdgePoint(edgeStart ?? corner, corner);
     circle.setAttribute('cx', display.x.toFixed(2));
     circle.setAttribute('cy', display.y.toFixed(2));
-    circle.setAttribute('r', '14');
+    circle.setAttribute('r', '22');
     circle.setAttribute('class', 'museum-hub__editor-viewport-corner is-edge-anchored');
     circle.setAttribute('tabindex', '0');
     circle.setAttribute('role', 'button');
+    circle.style.pointerEvents = 'all';
     circle.setAttribute('aria-label', `${wallId} existing projected corner ${cornerIndex + 1}`);
     circle.addEventListener('pointerdown', (event) =>
       this.startWallPointCalibrationDrag(event, wallId, 'quad', cornerIndex)
