@@ -2463,10 +2463,13 @@ export class MainMuseumHub {
       capture.removeEventListener('pointermove', move);
       capture.removeEventListener('pointerup', end);
       capture.removeEventListener('pointercancel', end);
+      capture.removeEventListener('lostpointercapture', end);
+      if (capture.hasPointerCapture(event.pointerId)) capture.releasePointerCapture(event.pointerId);
     };
     capture.addEventListener('pointermove', move);
     capture.addEventListener('pointerup', end, { once: true });
     capture.addEventListener('pointercancel', end, { once: true });
+    capture.addEventListener('lostpointercapture', end);
     event.preventDefault();
   }
 

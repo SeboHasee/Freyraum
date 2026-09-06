@@ -106,7 +106,16 @@ export class EditorViewport {
       1
     );
     this.target.set(center.x, center.y, center.z);
-    this.perspectiveCamera.position.set(center.x, center.y + radius * 0.55, center.z + radius * 2.6);
+    const direction = new THREE.Vector3(0, 0.55, 2.6).normalize();
+    const verticalHalfFov = THREE.MathUtils.degToRad(this.perspectiveCamera.fov) / 2;
+    const horizontalHalfFov = Math.atan(Math.tan(verticalHalfFov) * this.perspectiveCamera.aspect);
+    const limitingHalfFov = Math.max(THREE.MathUtils.degToRad(1), Math.min(verticalHalfFov, horizontalHalfFov));
+    const cameraDistance = (radius / Math.tan(limitingHalfFov)) * 1.2;
+    this.perspectiveCamera.position.set(
+      center.x + direction.x * cameraDistance,
+      center.y + direction.y * cameraDistance,
+      center.z + direction.z * cameraDistance
+    );
     this.perspectiveCamera.lookAt(this.target);
     this.perspectiveCamera.near = 0.01;
     this.perspectiveCamera.far = radius * 8;
