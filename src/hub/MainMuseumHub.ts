@@ -190,6 +190,7 @@ export class MainMuseumHub {
   private calibrationUndoStack: string[] = [];
   private calibrationRedoStack: string[] = [];
   private calibrationExportValid = false;
+  private editorGeometryDirty = false;
   private readonly calibrationWallOwnership = new Map<string, string>();
   private activateCallback: (() => void) | null = null;
   private selectSlotCallback: ((slot: ResolvedHubSlot) => void) | null = null;
@@ -2407,6 +2408,7 @@ export class MainMuseumHub {
       room.width = frame.width;
       room.height = frame.height;
       this.renderEditorViewportHandles();
+      this.updateCalibrationOutput(false);
     };
     const end = (): void => {
       capture.removeEventListener('pointermove', move);
@@ -3439,6 +3441,7 @@ export class MainMuseumHub {
   private resetCalibration(): void {
     if (!this.initialCalibrationSnapshot) return;
     this.recordCalibrationHistory();
+    this.editorGeometryDirty = false;
     this.applyCalibrationSnapshot(this.initialCalibrationSnapshot);
   }
 
@@ -3665,6 +3668,9 @@ export class MainMuseumHub {
     const config = this.buildCurrentCalibrationConfig();
     const json = JSON.stringify(config, null, 2);
     const warnings = [...this.collectCalibrationWarnings(), ...this.calibrationRoundTripWarnings(json)];
+    if (this.editorGeometryDirty) {
+      warnings.push('3D wall corner edits are not exportable in v5 until renderer and persistence integration is approved.');
+    }
     this.calibrationExportValid = warnings.length === 0;
     if (this.calibrationOutput) this.calibrationOutput.value = json;
     if (this.calibrationCopyButton) this.calibrationCopyButton.disabled = !this.calibrationExportValid;
