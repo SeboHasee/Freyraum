@@ -1577,23 +1577,7 @@ export function projectSlotArtwork(
       inHangingBand: true,
       orientationConsistent: true,
     },
-    placement: slot.anchor ? {
-      anchor: point(slot.anchor.x, slot.anchor.y),
-      mountedHeight: slot.mountedHeight,
-      localQuad,
-      validity: {
-        finite: true,
-        contained: true,
-        doorwayClear: true,
-        inHangingBand: true,
-        orientationConsistent: true,
-      },
-      moved: false,
-      scaleFactor: 1,
-      candidateCount: 1,
-      adjustmentReason: 'none',
-      rejectionReason: 'none',
-    } : null,
+    placement: null,
     projectiveFallback: true,
   };
   }

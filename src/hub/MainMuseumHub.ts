@@ -1382,12 +1382,20 @@ export class MainMuseumHub {
       });
       return { status: 'failed', stage: 'visible-pixel-probe', reason: 'native-aspect-ratio-changed' };
     }
+    const previousArtworkAspect = view.slot.artworkAspect;
+    view.slot.artworkAspect = nativeAspectRatio;
+    this.setSlotImageState(view, 'ready', source, fallbackReason);
+    const renderFailure = this.getSlotRenderFailure(view);
+    if (renderFailure) {
+      // Do not commit the ratio until the decoded source has passed rendering.
+      // This lets an embedded fallback be selected without poisoning the slot
+      // with a source that failed GPU upload or the visible-pixel probe.
+      view.slot.artworkAspect = previousArtworkAspect;
+      return { status: 'failed', ...renderFailure };
+    }
     view.nativeAspectRatio ??= nativeAspectRatio;
     view.slot.artworkAspect = view.nativeAspectRatio;
     view.button.dataset['nativeAspectRatio'] = view.nativeAspectRatio.toPrecision(12);
-    this.setSlotImageState(view, 'ready', source, fallbackReason);
-    const renderFailure = this.getSlotRenderFailure(view);
-    if (renderFailure) return { status: 'failed', ...renderFailure };
     this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
       slotId: view.slot.id,
       artworkId: view.slot.artworkId,
@@ -3998,14 +4006,9 @@ export class MainMuseumHub {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
       }
       if (!applyRenderedWallGeometry && wall.role !== 'bounds-only') {
-        const nextSafe = wall.safePolygon ?? [];
-        currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
-        currentWall.mountingZone.splice(
-          0,
-          currentWall.mountingZone.length,
-          ...(wall.mountingZone ?? wall.safePolygon ?? []).map((corner) => clonePoint(corner))
-        );
-        currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
+        // Keep guide polygons paired with the fixed rendered quad. Imported
+        // polygons use the import's coordinate space and cannot be copied
+        // safely when rendered geometry is intentionally preserved.
         continue;
       }
       if (!applyRenderedWallGeometry) continue;
