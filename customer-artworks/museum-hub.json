@@ -6,8 +6,11 @@
     "height": 768
   },
   "background": {
-    "src": "Backgrounds/museum-empty.png",
-    "aspect": 1.778646
+    "src": "Backgrounds/Museum_ohne_Bilder.png",
+    "aspect": 1.7777777777777777,
+    "fit": "contain",
+    "width": 4000,
+    "height": 2250
   },
   "backgroundFallback": {
     "src": "Backgrounds/museum-empty.png"
@@ -43,77 +46,59 @@
       "planeAspect": 1.730769,
       "quad": [
         {
-          "x": 417.26,
-          "y": 206.29
+          "x": 322.9,
+          "y": 270.677
         },
         {
-          "x": 948.74,
-          "y": 206.29
+          "x": 1031.998,
+          "y": 272.897
         },
         {
-          "x": 951.84,
-          "y": 514.71
+          "x": 1029.548,
+          "y": 478.076
         },
         {
-          "x": 414.16,
-          "y": 514.71
+          "x": 325.351,
+          "y": 474.746
         }
       ],
       "safePolygon": [
         {
-          "x": 422.61,
-          "y": 506.32
+          "x": 336.188,
+          "y": 469.345
         },
         {
-          "x": 943.39,
-          "y": 506.32
+          "x": 1018.592,
+          "y": 472.543
         },
         {
-          "x": 940.55,
-          "y": 214.5
+          "x": 1020.84,
+          "y": 278.423
         },
         {
-          "x": 425.45,
-          "y": 214.5
+          "x": 333.939,
+          "y": 276.242
         }
       ],
       "mountingZone": [
         {
-          "x": 422.61,
-          "y": 506.32
+          "x": 336.188,
+          "y": 469.345
         },
         {
-          "x": 943.39,
-          "y": 506.32
+          "x": 1018.592,
+          "y": 472.543
         },
         {
-          "x": 940.55,
-          "y": 214.5
+          "x": 1020.84,
+          "y": 278.423
         },
         {
-          "x": 425.45,
-          "y": 214.5
+          "x": 333.939,
+          "y": 276.242
         }
       ],
-      "mountingZoneConfirmed": false,
-      "drawableRegion": [
-        {
-          "x": 0.14,
-          "y": 0.14
-        },
-        {
-          "x": 8.86,
-          "y": 0.14
-        },
-        {
-          "x": 8.86,
-          "y": 4.92
-        },
-        {
-          "x": 0.14,
-          "y": 4.92
-        }
-      ],
+      "mountingZoneConfirmed": true,
       "exclusionPolygons": [],
       "transform": {
         "origin": {
@@ -142,7 +127,68 @@
       "shadowVector": {
         "x": 0,
         "y": 14
-      }
+      },
+      "room": {
+        "origin": {
+          "x": -4.499999999999998,
+          "y": 6.843191089522804e-05,
+          "z": -5.499857906756729
+        },
+        "axisU": {
+          "x": 1,
+          "y": 0,
+          "z": 0
+        },
+        "axisV": {
+          "x": -8.673617379884035e-17,
+          "y": 0.9999999986904785,
+          "z": -5.1176587452836375e-05
+        },
+        "width": 9,
+        "height": 5.199941380876918,
+        "safePolygon": [
+          {
+            "x": 0.14,
+            "y": 0.14
+          },
+          {
+            "x": 8.86,
+            "y": 0.14
+          },
+          {
+            "x": 8.86,
+            "y": 5.06
+          },
+          {
+            "x": 0.14,
+            "y": 5.06
+          }
+        ],
+        "doorwayExclusions": [],
+        "hangingBand": {
+          "minY": 0.4199952653785203,
+          "maxY": 3.399961672111831,
+          "margin": 0.0799990981673372
+        }
+      },
+      "drawableRegion": [
+        {
+          "x": 0.14,
+          "y": 0.14
+        },
+        {
+          "x": 8.86,
+          "y": 0.14
+        },
+        {
+          "x": 8.86,
+          "y": 4.92
+        },
+        {
+          "x": 0.14,
+          "y": 4.92
+        }
+      ]
     },
     {
       "id": "wall-right",
@@ -150,77 +196,59 @@
       "planeAspect": 2.307692,
       "quad": [
         {
-          "x": 948.74,
-          "y": 206.29
+          "x": 1025.856,
+          "y": 273.435
         },
         {
-          "x": 2169.34,
-          "y": -738.13
+          "x": 1366,
+          "y": 150.975
         },
         {
-          "x": 2271.63,
-          "y": 1019.43
+          "x": 1359.339,
+          "y": 559.299
         },
         {
-          "x": 951.84,
-          "y": 514.71
+          "x": 1025.625,
+          "y": 476.394
         }
       ],
       "safePolygon": [
         {
-          "x": 954.38,
-          "y": 507.24
+          "x": 1027.586,
+          "y": 471.436
         },
         {
-          "x": 2182.95,
-          "y": 938.83
+          "x": 1351.81,
+          "y": 546.712
         },
         {
-          "x": 2096.06,
-          "y": -637.45
+          "x": 1357.903,
+          "y": 164.884
         },
         {
-          "x": 951.4,
-          "y": 212.59
+          "x": 1027.83,
+          "y": 278.27
         }
       ],
       "mountingZone": [
         {
-          "x": 954.38,
-          "y": 507.24
+          "x": 1027.586,
+          "y": 471.436
         },
         {
-          "x": 2182.95,
-          "y": 938.83
+          "x": 1351.81,
+          "y": 546.712
         },
         {
-          "x": 2096.06,
-          "y": -637.45
+          "x": 1357.903,
+          "y": 164.884
         },
         {
-          "x": 951.4,
-          "y": 212.59
+          "x": 1027.83,
+          "y": 278.27
         }
       ],
-      "mountingZoneConfirmed": false,
-      "drawableRegion": [
-        {
-          "x": 0.14,
-          "y": 0.14
-        },
-        {
-          "x": 11.86,
-          "y": 0.14
-        },
-        {
-          "x": 11.86,
-          "y": 4.92
-        },
-        {
-          "x": 0.14,
-          "y": 4.92
-        }
-      ],
+      "mountingZoneConfirmed": true,
       "exclusionPolygons": [
         [
           {
@@ -268,7 +296,87 @@
       "shadowVector": {
         "x": 8,
         "y": 14
-      }
+      },
+      "room": {
+        "origin": {
+          "x": 4.500047723408059,
+          "y": 5.0191689550560525e-05,
+          "z": -5.500011680675788
+        },
+        "axisU": {
+          "x": -3.137596536473275e-06,
+          "y": -4.244699551542164e-06,
+          "z": 0.999999999986069
+        },
+        "axisV": {
+          "x": -2.0192013669456665e-05,
+          "y": 0.9999999996997266,
+          "z": 1.388632502059145e-05
+        },
+        "width": 12,
+        "height": 5.199915324332238,
+        "safePolygon": [
+          {
+            "x": 0.14,
+            "y": 0.14
+          },
+          {
+            "x": 11.86,
+            "y": 0.14
+          },
+          {
+            "x": 11.86,
+            "y": 5.06
+          },
+          {
+            "x": 0.14,
+            "y": 5.06
+          }
+        ],
+        "doorwayExclusions": [
+          [
+            {
+              "x": 8,
+              "y": 0
+            },
+            {
+              "x": 9.05,
+              "y": 0
+            },
+            {
+              "x": 9.05,
+              "y": 2.3
+            },
+            {
+              "x": 8,
+              "y": 2.3
+            }
+          ]
+        ],
+        "hangingBand": {
+          "minY": 0.41999316081145,
+          "maxY": 3.3999446351403098,
+          "margin": 0.07999869729741906
+        }
+      },
+      "drawableRegion": [
+        {
+          "x": 0.14,
+          "y": 0.14
+        },
+        {
+          "x": 11.86,
+          "y": 0.14
+        },
+        {
+          "x": 11.86,
+          "y": 4.92
+        },
+        {
+          "x": 0.14,
+          "y": 4.92
+        }
+      ]
     },
     {
       "id": "wall-rear",
@@ -300,77 +408,59 @@
       "planeAspect": 2.307692,
       "quad": [
         {
-          "x": -803.34,
-          "y": -738.13
+          "x": 0,
+          "y": 139.874
         },
         {
-          "x": 417.26,
-          "y": 206.29
+          "x": 328.451,
+          "y": 264.016
         },
         {
-          "x": 414.16,
-          "y": 514.71
+          "x": 329.791,
+          "y": 476.966
         },
         {
-          "x": -905.63,
-          "y": 1019.43
+          "x": 0,
+          "y": 554.858
         }
       ],
       "safePolygon": [
         {
-          "x": -816.95,
-          "y": 938.83
+          "x": 7.431,
+          "y": 541.968
         },
         {
-          "x": 411.62,
-          "y": 507.24
+          "x": 327.778,
+          "y": 471.648
         },
         {
-          "x": 414.6,
-          "y": 212.59
+          "x": 326.502,
+          "y": 269.011
         },
         {
-          "x": -730.06,
-          "y": -637.45
+          "x": 7.377,
+          "y": 153.627
         }
       ],
       "mountingZone": [
         {
-          "x": -816.95,
-          "y": 938.83
+          "x": 7.431,
+          "y": 541.968
         },
         {
-          "x": 411.62,
-          "y": 507.24
+          "x": 327.778,
+          "y": 471.648
         },
         {
-          "x": 414.6,
-          "y": 212.59
+          "x": 326.502,
+          "y": 269.011
         },
         {
-          "x": -730.06,
-          "y": -637.45
+          "x": 7.377,
+          "y": 153.627
         }
       ],
-      "mountingZoneConfirmed": false,
-      "drawableRegion": [
-        {
-          "x": 0.14,
-          "y": 0.14
-        },
-        {
-          "x": 11.86,
-          "y": 0.14
-        },
-        {
-          "x": 11.86,
-          "y": 4.92
-        },
-        {
-          "x": 0.14,
-          "y": 4.92
-        }
-      ],
+      "mountingZoneConfirmed": true,
       "exclusionPolygons": [
         [
           {
@@ -418,7 +508,87 @@
       "shadowVector": {
         "x": -8,
         "y": 14
-      }
+      },
+      "room": {
+        "origin": {
+          "x": -4.500010072249614,
+          "y": -7.447050682785061e-07,
+          "z": 6.499988319157055
+        },
+        "axisU": {
+          "x": -3.1375965366953196e-06,
+          "y": 4.244699551708697e-06,
+          "z": -0.9999999999860689
+        },
+        "axisV": {
+          "x": 2.0192013669109724e-05,
+          "y": 0.9999999996997267,
+          "z": 1.3886325020376344e-05
+        },
+        "width": 12,
+        "height": 5.199915324332236,
+        "safePolygon": [
+          {
+            "x": 0.14,
+            "y": 0.14
+          },
+          {
+            "x": 11.86,
+            "y": 0.14
+          },
+          {
+            "x": 11.86,
+            "y": 5.06
+          },
+          {
+            "x": 0.14,
+            "y": 5.06
+          }
+        ],
+        "doorwayExclusions": [
+          [
+            {
+              "x": 2.95,
+              "y": 0
+            },
+            {
+              "x": 4,
+              "y": 0
+            },
+            {
+              "x": 4,
+              "y": 2.3
+            },
+            {
+              "x": 2.95,
+              "y": 2.3
+            }
+          ]
+        ],
+        "hangingBand": {
+          "minY": 0.4199931608114498,
+          "maxY": 3.399944635140308,
+          "margin": 0.079998697297419
+        }
+      },
+      "drawableRegion": [
+        {
+          "x": 0.14,
+          "y": 0.14
+        },
+        {
+          "x": 11.86,
+          "y": 0.14
+        },
+        {
+          "x": 11.86,
+          "y": 4.92
+        },
+        {
+          "x": 0.14,
+          "y": 4.92
+        }
+      ]
     }
   ],
   "slots": [
@@ -432,7 +602,12 @@
         "horizontalPosition": 0.3,
         "centerHeight": 2.32,
         "physicalHeight": 1.62,
-        "mountingGap": 0.002
+        "mountingGap": 0.002,
+        "targetSizePolicy": "fixed-height",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02,
+        "provisional": false
       }
     },
     {
@@ -445,7 +620,12 @@
         "horizontalPosition": 0.7,
         "centerHeight": 2.32,
         "physicalHeight": 1.48,
-        "mountingGap": 0.002
+        "mountingGap": 0.002,
+        "targetSizePolicy": "fixed-height",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02,
+        "provisional": false
       }
     },
     {
@@ -457,7 +637,12 @@
         "horizontalPosition": 0.5,
         "centerHeight": 2.3,
         "physicalHeight": 1.45,
-        "mountingGap": 0.002
+        "mountingGap": 0.002,
+        "targetSizePolicy": "fixed-height",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02,
+        "provisional": false
       }
     },
     {
@@ -469,36 +654,78 @@
         "horizontalPosition": 0.5,
         "centerHeight": 2.28,
         "physicalHeight": 1.45,
-        "mountingGap": 0.002
+        "mountingGap": 0.002,
+        "targetSizePolicy": "fixed-height",
+        "minScale": 0.7,
+        "maxScale": 1,
+        "zOffset": 0.02,
+        "provisional": false
+      }
+    },
+    {
+      "id": "room-02.wall-front.a",
+      "enabled": true,
+      "selectable": true,
+      "artworkId": "gartenszene",
+      "placement": {
+        "wallId": "wall-front",
+        "horizontalPosition": 0.3,
+        "centerHeight": 2.32,
+        "physicalHeight": 1.62,
+        "mountingGap": 0.002,
+        "targetSizePolicy": "fixed-height",
+        "minScale": 1,
+        "maxScale": 1,
+        "zOffset": 0.024,
+        "provisional": false
+      }
+    },
+    {
+      "id": "room-02.wall-left.a",
+      "enabled": true,
+      "selectable": true,
+      "artworkId": "zdigital",
+      "placement": {
+        "wallId": "wall-left",
+        "horizontalPosition": 0.5,
+        "centerHeight": 2.3,
+        "physicalHeight": 1.45,
+        "mountingGap": 0.002,
+        "targetSizePolicy": "fixed-height",
+        "minScale": 1,
+        "maxScale": 1,
+        "zOffset": 0.024,
+        "provisional": false
       }
     }
   ],
   "room": {
+    "dimensions": {
+      "width": 9,
+      "height": 5.2,
+      "depth": 12
+    },
+    "floorY": 0,
+    "ceilingY": 5.2,
+    "wallThickness": 0.08,
     "floorOutline": [
       {
         "x": -4.5,
-        "y": 0,
         "z": -5.5
       },
       {
         "x": 4.5,
-        "y": 0,
         "z": -5.5
       },
       {
         "x": 4.5,
-        "y": 0,
         "z": 6.5
       },
       {
         "x": -4.5,
-        "y": 0,
         "z": 6.5
       }
-    ],
-    "floorY": 0,
-    "ceilingY": 5.2,
-    "wallThickness": 0.08
+    ]
   },
   "hangingRules": {
     "verticalBand": {
