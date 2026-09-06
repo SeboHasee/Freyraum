@@ -680,7 +680,7 @@ export class MainMuseumHub {
     return view;
   }
 
-  private applySlotGeometry(button: HTMLButtonElement, slot: ResolvedHubSlot): void {
+  private applySlotGeometry(button: HTMLButtonElement, slot: ResolvedHubSlot, syncRenderer = true): void {
     const wall = this.resolution.wallById.get(slot.placement.wallId);
     if (!wall) {
       button.classList.add('is-invalid-geometry');
@@ -740,11 +740,11 @@ export class MainMuseumHub {
     button.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
     const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
-    if (view) this.syncSlotRenderer(view);
+    if (view && syncRenderer) this.syncSlotRenderer(view);
     if (this.debugGeometry) this.logSlotProjection(slot, wall, projection);
   }
 
-  private syncSlotRenderer(view: SlotView): void {
+  private syncSlotRenderer(view: SlotView, render = true): void {
     if (!this.hubRoomRenderer) {
       view.lastUpsertResult = null;
       return;
@@ -761,7 +761,8 @@ export class MainMuseumHub {
       wall,
       view.image,
       missingImage,
-      view.resolvedSource?.resolvedUrlType ?? null
+      view.resolvedSource?.resolvedUrlType ?? null,
+      render
     );
   }
 
@@ -2281,7 +2282,7 @@ export class MainMuseumHub {
           : Math.max(0.04, Math.min(0.9, localHeight));
         drag.slot.placement.physicalHeight = drag.slot.placement.mountedHeight;
       }
-      this.applySlotGeometry(drag.button, drag.slot);
+      this.applySlotGeometry(drag.button, drag.slot, false);
     } else {
       const wall = this.resolution.wallById.get(drag.wallId);
       const wallQuad = wall?.quad ?? (drag.wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
@@ -2339,9 +2340,11 @@ export class MainMuseumHub {
       }
       if (wall) this.applyAllSlotGeometry();
     }
-    this.updateCalibrationOverlayGeometry();
-    if (drag.kind !== 'slot') this.updateCalibrationOutput(false);
-    if (drag.kind !== 'slot') this.syncCalibrationControls();
+    if (drag.kind !== 'slot') {
+      this.updateCalibrationOverlayGeometry();
+      this.updateCalibrationOutput(false);
+      this.syncCalibrationControls();
+    }
   };
 
   private pointsBounds(points: readonly Point2D[]): { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number } {
@@ -2752,6 +2755,10 @@ export class MainMuseumHub {
     window.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
     window.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     window.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    if (drag.kind === 'slot') {
+      const view = this.slotViews.find((candidate) => candidate.slot.id === drag.slot.id);
+      if (view) this.syncSlotRenderer(view);
+    }
     this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
   };

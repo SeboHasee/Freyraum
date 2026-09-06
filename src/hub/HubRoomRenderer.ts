@@ -290,18 +290,19 @@ export class HubRoomRenderer {
     wall: ResolvedHubWall,
     image: HTMLImageElement | null,
     missingImage: boolean,
-    sourceUrlType: ArtworkImageUrlType | null
+    sourceUrlType: ArtworkImageUrlType | null,
+    render = true
   ): SlotUpsertResult {
     const state = this.ensureSlotState(slot);
     if (!state || !wall.room || !slot.selectable || !slot.artworkId) {
       if (state) state.group.visible = false;
-      this.render();
+      if (render) this.render();
       return { applied: false, usedImage: false };
     }
     const slotAnchor = slot.placement.anchor;
     if (!slotAnchor) {
       state.group.visible = false;
-      this.render();
+      if (render) this.render();
       return { applied: false, usedImage: false };
     }
 
@@ -383,7 +384,7 @@ export class HubRoomRenderer {
     );
     if (!mountingFrame) {
       state.group.visible = false;
-      this.render();
+      if (render) this.render();
       return { applied: false, usedImage: false };
     }
     const { width, height } = mountingFrame;
@@ -418,7 +419,7 @@ export class HubRoomRenderer {
     // remains exactly at the mounting-frame back plane.
     state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
     state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
-    this.render();
+    if (render) this.render();
     return { applied: true, usedImage: !missingImage, fit, visibleProbe };
   }
 

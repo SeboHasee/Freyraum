@@ -696,7 +696,12 @@ canvas {
 }
 
 .museum-hub.is-calibrating .museum-hub__calibration-svg {
-  pointer-events: auto;
+  /*
+   * The SVG spans the complete stage. Keep the transparent root pass-through
+   * so projected artwork buttons underneath remain draggable; only the
+   * explicitly styled calibration handles/edges should receive pointer input.
+   */
+  pointer-events: none;
   touch-action: none;
 }
 
