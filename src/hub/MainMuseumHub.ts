@@ -1808,6 +1808,7 @@ export class MainMuseumHub {
         this.backgroundImage.style.objectFit = this.resolution.background.fit ?? 'contain';
         this.element.style.setProperty('--hub-aspect', String(this.resolution.background.aspect));
         updateBackgroundInfo(probe.naturalWidth, probe.naturalHeight, file.name);
+        this.updateCalibrationOverlayGeometry();
         this.updateCalibrationOutput(true);
       };
       probe.onerror = () => {
@@ -1822,6 +1823,7 @@ export class MainMuseumHub {
     fitSelect.addEventListener('change', () => {
       this.resolution.background.fit = fitSelect.value as 'contain' | 'cover';
       this.backgroundImage.style.objectFit = this.resolution.background.fit;
+      this.updateCalibrationOverlayGeometry();
       this.updateCalibrationOutput(true);
     });
     resetBackground.addEventListener('click', () => {
@@ -1832,6 +1834,7 @@ export class MainMuseumHub {
       this.backgroundImage.src = resolveBackgroundUrl(this.defaultBackgroundSrc);
       this.backgroundImage.style.objectFit = this.resolution.background.fit ?? 'contain';
       updateBackgroundInfo();
+      this.updateCalibrationOverlayGeometry();
       this.updateCalibrationOutput(true);
     });
     backgroundLabel.append(backgroundInput, fitSelect);
