@@ -681,6 +681,12 @@ canvas {
   outline: none;
 }
 
+.museum-hub__editor-viewport-corner.is-edge-anchored {
+  fill: #111;
+  stroke: #fff;
+  stroke-width: 4;
+}
+
 .museum-hub.is-calibrating .museum-hub__calibration-svg {
   pointer-events: auto;
   touch-action: none;

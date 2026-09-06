@@ -2404,7 +2404,16 @@ export class MainMuseumHub {
     circle.setAttribute('tabindex', '0');
     circle.setAttribute('role', 'button');
     circle.setAttribute('aria-label', `${handle.wallId} 3D corner ${handle.cornerIndex + 1}`);
-    circle.classList.add('museum-hub__editor-viewport-corner');
+    circle.classList.add(
+      'museum-hub__editor-viewport-corner',
+      ...(handle.edgeAnchored ? ['is-edge-anchored'] : [])
+    );
+    if (handle.edgeAnchored) {
+      circle.setAttribute(
+        'data-editor-edge-anchor',
+        'This dot is an on-screen editing anchor for the real 3D corner.'
+      );
+    }
     circle.style.pointerEvents = 'auto';
     circle.addEventListener('pointerdown', (event) => {
       if (this.editorViewport?.viewMode !== 'wall-edit') {

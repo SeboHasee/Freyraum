@@ -131,6 +131,17 @@ for (const [index, wall] of overviewWalls.entries()) {
     assert.ok(handle.screen.y > 8 && handle.screen.y < 760, 'overview corner must be on screen vertically');
   }
 }
+const sideEdgeHandles = viewport.projectWallCorners('wall-left', overviewFrames[1]);
+assert.equal(
+  sideEdgeHandles.filter((handle) => handle.edgeAnchored).length,
+  2,
+  'both camera-facing side-wall edge corners must receive visible edge anchors'
+);
+for (const handle of sideEdgeHandles.filter((candidate) => candidate.edgeAnchored)) {
+  assert.ok(handle.screen.x >= 24 && handle.screen.x <= 1342, 'edge anchor must be inside horizontal hit area');
+  assert.ok(handle.screen.y >= 24 && handle.screen.y <= 744, 'edge anchor must be inside vertical hit area');
+  assert.equal(handle.world, overviewFrames[1].corners[handle.cornerIndex], 'edge anchor must retain the real 3D corner reference');
+}
 for (const [wallId, origin, axisU, width] of [
   ['front', { x: -4.5, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 9],
   ['left', { x: -4.5, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 12],

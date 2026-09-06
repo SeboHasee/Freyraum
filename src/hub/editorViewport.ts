@@ -8,6 +8,7 @@ export interface EditorCornerHandle {
   cornerIndex: number;
   world: Point3D;
   screen: { x: number; y: number };
+  edgeAnchored: boolean;
 }
 
 export interface EditorViewportOptions {
@@ -139,14 +140,32 @@ export class EditorViewport {
     if (!frame) return [];
     return frame.corners.flatMap((world, cornerIndex) => {
       const screen = this.project(world);
-      return screen ? [{ wallId, cornerIndex, world, screen }] : [];
+      return screen ? [{ wallId, cornerIndex, world, screen, edgeAnchored: false }] : [];
     });
   }
 
-  projectWallCorners(wallId: string, frame: WallFrame): EditorCornerHandle[] {
+  projectWallCorners(wallId: string, frame: WallFrame, edgeMargin = 24): EditorCornerHandle[] {
+    const sideWall = wallId === 'wall-left' || wallId === 'wall-right' || wallId.includes('left') || wallId.includes('right');
     return frame.corners.flatMap((world, cornerIndex) => {
       const screen = this.project(world);
-      return screen ? [{ wallId, cornerIndex, world, screen }] : [];
+      if (!screen) return [];
+      const edgeAnchored =
+        (sideWall && (cornerIndex === 1 || cornerIndex === 2))
+        ||
+        screen.x < edgeMargin
+        || screen.x > this.width - edgeMargin
+        || screen.y < edgeMargin
+        || screen.y > this.height - edgeMargin;
+      return [{
+        wallId,
+        cornerIndex,
+        world,
+        screen: {
+          x: Math.min(this.width - edgeMargin, Math.max(edgeMargin, screen.x)),
+          y: Math.min(this.height - edgeMargin, Math.max(edgeMargin, screen.y)),
+        },
+        edgeAnchored,
+      }];
     });
   }
 
