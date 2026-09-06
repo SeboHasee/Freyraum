@@ -3460,13 +3460,6 @@ export class MainMuseumHub {
       );
       return;
     }
-    const renderedWallGeometry = (config: MuseumHubConfig) =>
-      config.walls
-        .filter((wall) => wall.role !== 'bounds-only')
-        .map((wall) => ({
-          id: wall.id,
-          quad: wall.quad,
-        }));
     const unexpectedBoundsWall = sanitized.config.walls.find(
       (wall) => wall.role === 'bounds-only' && wall.id !== 'wall-rear'
     );
@@ -3474,10 +3467,6 @@ export class MainMuseumHub {
       this.announceCalibrationAction(
         `Import blockiert: ${unexpectedBoundsWall.id} ist kein unterstützter Raumgrenzbereich.`
       );
-      return;
-    }
-    if (!baselineConfig || JSON.stringify(renderedWallGeometry(sanitized.config)) !== JSON.stringify(renderedWallGeometry(baselineConfig))) {
-      this.announceCalibrationAction('Import blockiert: Die gerenderten Wandflächen weichen ab.');
       return;
     }
     this.recordCalibrationHistory();
@@ -3500,7 +3489,7 @@ export class MainMuseumHub {
       fallbacks: config.fallbacks,
       walls: config.walls.map((wall) => {
         const fixedWall = { ...wall };
-        if (wall.id !== 'wall-rear') delete fixedWall.quad;
+        if (wall.role === 'bounds-only') delete fixedWall.quad;
         delete fixedWall.safePolygon;
         delete fixedWall.mountingZone;
         delete fixedWall.mountingZoneConfirmed;
