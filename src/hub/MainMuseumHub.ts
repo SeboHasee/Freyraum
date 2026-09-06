@@ -3326,12 +3326,17 @@ export class MainMuseumHub {
     const initialWall = initial.walls.find((wall) => wall.id === wallId);
     const currentWall = current.walls.find((wall) => wall.id === wallId);
     this.recordCalibrationHistory();
-    if (!initialWall || !currentWall) {
-      if (wallId === 'wall-rear') {
-        this.entranceBoundaryQuad = this.projectEntranceBoundary();
+    if (wallId === 'wall-rear') {
+      const initialBoundary = initialWall?.quad;
+      if (initialBoundary) {
+        this.entranceBoundaryQuad = initialBoundary.map((corner) => clonePoint(corner)) as unknown as Quad;
         this.renderCalibrationOverlay();
         this.updateCalibrationOutput(true);
       }
+      this.announceCalibrationAction('Reset WALL-REAR.');
+      return;
+    }
+    if (!initialWall || !currentWall) {
       return;
     }
     currentWall.quad = initialWall.quad;
@@ -3412,11 +3417,13 @@ export class MainMuseumHub {
       );
       return;
     }
-    const currentConfig = sanitizeMuseumHubConfig(this.buildCurrentCalibrationConfig()).config;
+    const baselineConfig = this.initialCalibrationSnapshot
+      ? sanitizeMuseumHubConfig(JSON.parse(this.initialCalibrationSnapshot)).config
+      : sanitizeMuseumHubConfig(this.buildCurrentCalibrationConfig()).config;
     if (
-      !currentConfig
+      !baselineConfig
       || this.fixedCalibrationConfigSignature(sanitized.config)
-        !== this.fixedCalibrationConfigSignature(currentConfig)
+        !== this.fixedCalibrationConfigSignature(baselineConfig)
     ) {
       this.announceCalibrationAction(
         'Import blockiert: Kamera, Raum, Wandmodell oder andere feste Editor-Einstellungen weichen ab.'
@@ -3469,9 +3476,6 @@ export class MainMuseumHub {
       );
       return;
     }
-    const baselineConfig = this.initialCalibrationSnapshot
-      ? sanitizeMuseumHubConfig(JSON.parse(this.initialCalibrationSnapshot)).config
-      : this.buildCurrentCalibrationConfig() as MuseumHubConfig;
     if (!baselineConfig || JSON.stringify(renderedWallGeometry(sanitized.config)) !== JSON.stringify(renderedWallGeometry(baselineConfig))) {
       this.announceCalibrationAction('Import blockiert: Die gerenderten Wandflächen weichen ab.');
       return;
