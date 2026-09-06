@@ -666,6 +666,14 @@ canvas {
   pointer-events: none;
 }
 
+.museum-hub__editor-viewport-guide {
+  stroke: rgba(255, 157, 61, 0.85);
+  stroke-width: 3;
+  stroke-dasharray: 8 6;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
 .museum-hub__editor-viewport-corner {
   fill: #ff9d3d;
   stroke: #fff;

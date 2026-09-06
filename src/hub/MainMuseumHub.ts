@@ -2382,10 +2382,45 @@ export class MainMuseumHub {
     }
     const walls = this.resolution.walls.filter((wall) => wall.room && wall.id !== 'wall-rear');
     const frames = viewport.frameAllWalls(walls.map((wall) => wall.room!));
+    const frontIndex = walls.findIndex((wall) => wall.id === 'wall-front');
+    if (frontIndex < 0 || !frames[frontIndex]) return;
+    const frontWall = walls[frontIndex];
+    const frontHandles = viewport.projectWallCorners(frontWall.id, frames[frontIndex]!);
+    this.renderEditorWall(svg, frontHandles);
+    const frontCornerByIndex = new Map(
+      frontHandles.map((handle) => [handle.cornerIndex, handle.screen] as const)
+    );
     walls.forEach((wall, index) => {
-      const handles = viewport.projectWallCorners(wall.id, frames[index]!);
-      this.renderEditorWall(svg, handles);
+      if (wall.id !== 'wall-left' && wall.id !== 'wall-right') return;
+      const frame = frames[index];
+      if (!frame) return;
+      const sharedCorners = wall.id === 'wall-left'
+        ? [[0, 0], [3, 3]]
+        : [[0, 1], [3, 2]];
+      sharedCorners.forEach(([sideIndex, frontIndexForGuide]) => {
+        const start = frontCornerByIndex.get(frontIndexForGuide);
+        const projectedEnd = viewport.project(frame.corners[sideIndex === 0 ? 1 : 2]);
+        if (!start || !projectedEnd) return;
+        this.renderEditorGuideLine(svg, start, {
+          x: Math.min(this.stageWidth - 24, Math.max(24, projectedEnd.x)),
+          y: Math.min(this.stageHeight - 24, Math.max(24, projectedEnd.y)),
+        });
+      });
     });
+  }
+
+  private renderEditorGuideLine(
+    svg: SVGSVGElement,
+    start: { x: number; y: number },
+    end: { x: number; y: number }
+  ): void {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', start.x.toFixed(2));
+    line.setAttribute('y1', start.y.toFixed(2));
+    line.setAttribute('x2', end.x.toFixed(2));
+    line.setAttribute('y2', end.y.toFixed(2));
+    line.setAttribute('class', 'museum-hub__editor-viewport-guide');
+    svg.appendChild(line);
   }
 
   private renderEditorWall(
