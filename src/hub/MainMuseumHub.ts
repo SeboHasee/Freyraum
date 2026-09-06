@@ -2456,6 +2456,14 @@ export class MainMuseumHub {
       );
     }
     circle.style.pointerEvents = 'auto';
+    circle.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      this.activeCalibrationWallId = handle.wallId;
+      if (this.calibrationWallSelect) this.calibrationWallSelect.value = handle.wallId;
+      this.frameEditorWall(handle.wallId, handle.cornerIndex);
+      this.announceCalibrationAction(`${handle.wallId.toUpperCase()} selected. Wall Edit Mode is ready.`);
+    });
     circle.addEventListener('pointerdown', (event) => {
       if (this.editorViewport?.viewMode !== 'wall-edit') {
         this.activeCalibrationWallId = handle.wallId;
