@@ -2388,8 +2388,8 @@ export class MainMuseumHub {
     // in this overview layer.
     for (const wall of this.resolution.walls) {
       if (wall.id !== 'wall-left' && wall.id !== 'wall-right') continue;
-      const entranceCornerIndices = wall.id === 'wall-left' ? [0, 3] : [1, 2];
-      const frontCornerIndices = wall.id === 'wall-left' ? [1, 2] : [0, 3];
+      const entranceCornerIndices = wall.id === 'wall-left' ? [2, 3] : [0, 1];
+      const frontCornerIndices = wall.id === 'wall-left' ? [1, 0] : [3, 2];
       entranceCornerIndices.forEach((cornerIndex) => {
         const corner = wall.quad[cornerIndex];
         const frontCornerIndex = cornerIndex === entranceCornerIndices[0]
