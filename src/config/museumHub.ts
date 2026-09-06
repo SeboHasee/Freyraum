@@ -2543,19 +2543,20 @@ function rescaleRoomWallAboutCamera(
   scale: number
 ): RoomWallModel {
   const scaled = (value: Point2D): Point2D => point(value.x * scale, value.y * scale);
+  const scaledOrigin = point3(
+    cameraPosition.x + (room.origin.x - cameraPosition.x) * scale,
+    cameraPosition.y + (room.origin.y - cameraPosition.y) * scale,
+    cameraPosition.z + (room.origin.z - cameraPosition.z) * scale
+  );
   return {
-    corners: wallCornersFromTransform(room.origin, room.axisU, room.axisV, room.width * scale, room.height * scale).map((corner) =>
-      point3(
-        cameraPosition.x + (corner.x - cameraPosition.x) * scale,
-        cameraPosition.y + (corner.y - cameraPosition.y) * scale,
-        cameraPosition.z + (corner.z - cameraPosition.z) * scale
-      )
-    ) as unknown as RoomWallModel['corners'],
-    origin: point3(
-      cameraPosition.x + (room.origin.x - cameraPosition.x) * scale,
-      cameraPosition.y + (room.origin.y - cameraPosition.y) * scale,
-      cameraPosition.z + (room.origin.z - cameraPosition.z) * scale
+    corners: wallCornersFromTransform(
+      scaledOrigin,
+      room.axisU,
+      room.axisV,
+      room.width * scale,
+      room.height * scale
     ),
+    origin: scaledOrigin,
     axisU: clonePoint3(room.axisU),
     axisV: clonePoint3(room.axisV),
     width: room.width * scale,
