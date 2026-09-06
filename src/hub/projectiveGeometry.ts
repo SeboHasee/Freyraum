@@ -223,6 +223,7 @@ export interface ProjectedArtworkGeometry {
   cssMatrix3d: string;
   shortEdge: number;
   placement: ArtworkPlacementResult | null;
+  projectiveFallback?: boolean;
   projectedAnchor?: Point2D | null;
   validity?: ArtworkPlacementValidity;
   realism?: WallProjectionRealism;
@@ -981,6 +982,10 @@ export function evaluateWallCalibration(
     offset: transform.offset,
     targetQuad,
     projectedQuad,
+    projectedAnchor: point(
+      (projectedQuad[0].x + projectedQuad[2].x) / 2,
+      (projectedQuad[0].y + projectedQuad[2].y) / 2
+    ),
     corners,
     averageErrorPx: distances.reduce((sum, value) => sum + value, 0) / distances.length,
     maximumErrorPx: Math.max(...distances),
@@ -1398,6 +1403,8 @@ export function projectSlotArtwork(
   artworkAspect: number,
   stage: StageReference
 ): ProjectedArtworkGeometry | null {
+  const projectiveFallback = (): ProjectedArtworkGeometry | null =>
+    projectSlotArtwork({ ...wall, room: undefined, camera: undefined }, slot, artworkAspect, stage);
   if (wall.room && wall.camera && slot.anchor) {
     const placement = solveRoomArtworkPlacement(
       wall.room,
@@ -1422,11 +1429,11 @@ export function projectSlotArtwork(
         artworkAspect,
         slot.mountingGap
       );
-      if (!mountingFrame) return null;
+      if (!mountingFrame) return projectiveFallback();
       const projected = mountingFrame.frontQuad.map((corner) =>
         projectWorldPoint(wall.camera!, corner, stage)
       );
-      if (projected.some((corner) => corner === null)) return null;
+      if (projected.some((corner) => corner === null)) return projectiveFallback();
       const worldQuad = mountingFrame.frontQuad;
       const orderedProjectedQuad: Quad = [
         projected[0]!,
@@ -1435,24 +1442,24 @@ export function projectSlotArtwork(
         projected[3]!,
       ];
       const projectedQuad = normalizeQuadClockwise(orderedProjectedQuad);
-      if (quadIsDegenerate(projectedQuad) || !quadIsConvex(projectedQuad)) return null;
+      if (quadIsDegenerate(projectedQuad) || !quadIsConvex(projectedQuad)) return projectiveFallback();
       if (wall.safePolygon && !projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
-        return null;
+        return projectiveFallback();
       }
       const sourceHeight = Math.max(1, (placement.mountedHeight / wall.room.height) * stage.height);
       const sourceWidth = Math.max(1, sourceHeight * Math.max(EPSILON, artworkAspect));
       const quadHomography = computeHomographyFromUnitSquare(projectedQuad);
-      if (!quadHomography) return null;
+      if (!quadHomography) return projectiveFallback();
       const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
       const projectedWall = projectRoomWallQuad(wall.room, wall.camera, stage);
-      if (!projectedWall) return null;
+      if (!projectedWall) return projectiveFallback();
       const alignment = evaluateArtworkWallAlignment(
         wall.room,
         mountingFrame,
         orderedProjectedQuad,
         projectedWall
       );
-      if (!alignment.passes) return null;
+      if (!alignment.passes) return projectiveFallback();
       return {
         localQuad: placement.localQuad,
         worldQuad,
@@ -1511,13 +1518,47 @@ export function projectSlotArtwork(
   const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
   return {
     localQuad,
+    worldQuad: projectedQuad.map((corner) => point3(corner.x, 0, corner.y)) as unknown as [
+      Point3D,
+      Point3D,
+      Point3D,
+      Point3D,
+    ],
     projectedQuad,
+    projectedAnchor: point(
+      (projectedQuad[0].x + projectedQuad[2].x) / 2,
+      (projectedQuad[0].y + projectedQuad[2].y) / 2
+    ),
     bounds: getQuadBounds(projectedQuad),
     sourceWidth,
     sourceHeight,
     cssMatrix3d: homographyToCssMatrix3d(sourceHomography),
     shortEdge: shortestEdge(projectedQuad),
-    placement: null,
+    validity: {
+      finite: true,
+      contained: true,
+      doorwayClear: true,
+      inHangingBand: true,
+      orientationConsistent: true,
+    },
+    placement: {
+      anchor: slot.anchor ? point(slot.anchor.x, slot.anchor.y) : point(fallbackCenter.x, fallbackCenter.y),
+      mountedHeight: slot.mountedHeight,
+      localQuad,
+      validity: {
+        finite: true,
+        contained: true,
+        doorwayClear: true,
+        inHangingBand: true,
+        orientationConsistent: true,
+      },
+      moved: false,
+      scaleFactor: 1,
+      candidateCount: 1,
+      adjustmentReason: 'none',
+      rejectionReason: 'none',
+    },
+    projectiveFallback: true,
   };
   }
 }

@@ -2215,6 +2215,7 @@ export function resolveMuseumHub(
     if (!slot.selectable || !slot.artworkId) continue;
     const wall = wallById.get(slot.placement.wallId);
     if (!wall) continue;
+    if (wall.mountingZoneConfirmed) continue;
     const fitted = clampSlotPlacementToDrawableRegion(wall, slot.placement, slot.artworkAspect, stage);
     if (!fitted.adjusted) continue;
     slot.placement.center = fitted.center;
@@ -2275,7 +2276,7 @@ export function resolveMuseumHub(
       provisional: slot.placement.provisional,
     };
     const projection = projectSlotArtwork(targetWall, placement, slot.artworkAspect, stage);
-    if (projection?.placement && targetWall.room) {
+    if (projection?.placement && targetWall.room && !projection.projectiveFallback) {
       const fitted = projection.placement;
       const fittedHeight = Math.abs(fitted.mountedHeight - placement.mountedHeight) < 1e-9
         ? placement.mountedHeight
@@ -2320,14 +2321,23 @@ export function resolveMuseumHub(
         }
       }
       if (!attempt.projection) continue;
-      if (!sideWallPlacementHasArchitecturalClearance(candidateWall, attempt.projection)) continue;
+      if (
+        attempt.projection.projectiveFallback
+        && (candidateWall.exclusionPolygons ?? []).some((polygon) =>
+          attempt.projection?.projectedQuad.every((vertex) => pointInPolygon(vertex, polygon))
+        )
+      ) continue;
+      if (
+        !sideWallPlacementHasArchitecturalClearance(candidateWall, attempt.projection)
+        && !attempt.projection.projectiveFallback
+      ) continue;
       const withinMountingZone = attempt.projection.projectedQuad.every((vertex) =>
         pointInPolygon(vertex, candidateWall.mountingZone)
       );
       // Edited v5 quads are the authoritative visible wall geometry. If the
       // derived metric room cannot reproduce a slot exactly, retain the
       // projective artwork fallback so the editor can still show and place it.
-      if (!withinMountingZone && attempt.projection.placement !== null) continue;
+      if (!withinMountingZone && !attempt.projection.projectiveFallback) continue;
       resolvedWall = candidateWall;
       resolvedPlacement = attempt.placement;
       projected = attempt.projection;
