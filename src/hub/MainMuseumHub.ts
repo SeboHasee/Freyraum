@@ -1790,6 +1790,8 @@ export class MainMuseumHub {
     backgroundInput.addEventListener('change', () => {
       const file = backgroundInput.files?.[0];
       if (!file) return;
+      const previousBackground = { ...this.resolution.background };
+      const previousBackgroundSrc = this.backgroundImage.src;
       if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
       const objectUrl = URL.createObjectURL(file);
       this.editorBackgroundObjectUrl = objectUrl;
@@ -1815,7 +1817,13 @@ export class MainMuseumHub {
         if (this.editorBackgroundObjectUrl === objectUrl) {
           URL.revokeObjectURL(objectUrl);
           this.editorBackgroundObjectUrl = null;
+          this.resolution.background = previousBackground;
+          this.backgroundImage.src = previousBackgroundSrc;
+          this.backgroundImage.style.objectFit = previousBackground.fit ?? 'contain';
+          this.element.style.setProperty('--hub-aspect', String(previousBackground.aspect));
           updateBackgroundInfo();
+          this.updateCalibrationOverlayGeometry();
+          this.updateCalibrationOutput(true);
         }
       };
       probe.src = objectUrl;
@@ -3916,17 +3924,6 @@ export class MainMuseumHub {
       if (applyRenderedWallGeometry && wall.quad && wall.quad.length === currentWall.quad.length) {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
       }
-      if (!applyRenderedWallGeometry && wall.role !== 'bounds-only') {
-        const nextSafe = wall.safePolygon ?? [];
-        currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
-        currentWall.mountingZone.splice(
-          0,
-          currentWall.mountingZone.length,
-          ...(wall.mountingZone ?? wall.safePolygon ?? []).map((corner) => clonePoint(corner))
-        );
-        currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
-        continue;
-      }
       if (!applyRenderedWallGeometry) continue;
       const nextSafe = wall.safePolygon ?? [];
       currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
@@ -3938,12 +3935,7 @@ export class MainMuseumHub {
       currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
     }
     this.resolution.background = { ...config.background };
-    const safeBackgroundObjectUrl =
-      activeBackgroundObjectUrl?.startsWith('blob:') ? activeBackgroundObjectUrl : null;
-    this.backgroundImage.src =
-      safeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
-        ? safeBackgroundObjectUrl
-        : resolveBackgroundUrl(config.background.src);
+    this.backgroundImage.src = resolveBackgroundUrl(config.background.src);
     if (shouldRevokeBackgroundObjectUrl && activeBackgroundObjectUrl) {
       URL.revokeObjectURL(activeBackgroundObjectUrl);
       this.editorBackgroundObjectUrl = null;

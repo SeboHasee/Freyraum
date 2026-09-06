@@ -1536,8 +1536,8 @@ export function projectSlotArtwork(
       inHangingBand: true,
       orientationConsistent: true,
     },
-    placement: {
-      anchor: slot.anchor ? point(slot.anchor.x, slot.anchor.y) : point(fallbackCenter.x, fallbackCenter.y),
+    placement: slot.anchor ? {
+      anchor: point(slot.anchor.x, slot.anchor.y),
       mountedHeight: slot.mountedHeight,
       localQuad,
       validity: {
@@ -1552,7 +1552,7 @@ export function projectSlotArtwork(
       candidateCount: 1,
       adjustmentReason: 'none',
       rejectionReason: 'none',
-    },
+    } : null,
     projectiveFallback: true,
   };
   }
