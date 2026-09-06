@@ -36,6 +36,7 @@ import {
   type Point2D,
   type Point3D,
   type Quad,
+  deriveWallFrame,
 } from './projectiveGeometry';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import {
@@ -191,6 +192,7 @@ export class MainMuseumHub {
   private calibrationRedoStack: string[] = [];
   private calibrationExportValid = false;
   private editorGeometryDirty = false;
+  private readonly initialEditorCorners = new Map<string, readonly [Point3D, Point3D, Point3D, Point3D]>();
   private readonly calibrationWallOwnership = new Map<string, string>();
   private activateCallback: (() => void) | null = null;
   private selectSlotCallback: ((slot: ResolvedHubSlot) => void) | null = null;
@@ -222,6 +224,13 @@ export class MainMuseumHub {
     this.stageWidth = resolution.stage.width;
     this.stageHeight = resolution.stage.height;
     this.activeCalibrationWallId = resolution.walls[0]?.id ?? null;
+    for (const wall of resolution.walls) {
+      if (!wall.room) continue;
+      this.initialEditorCorners.set(
+        wall.id,
+        wall.room.corners.map((corner) => ({ ...corner })) as unknown as [Point3D, Point3D, Point3D, Point3D]
+      );
+    }
     this.entranceBoundaryQuad = this.projectEntranceBoundary();
     this.defaultBackgroundSrc = resolution.background.src;
     this.defaultBackground = { ...resolution.background };
@@ -2407,6 +2416,7 @@ export class MainMuseumHub {
       room.axisV = { ...frame.axisV };
       room.width = frame.width;
       room.height = frame.height;
+      this.editorGeometryDirty = true;
       this.renderEditorViewportHandles();
       this.updateCalibrationOutput(false);
     };
@@ -3442,7 +3452,26 @@ export class MainMuseumHub {
     if (!this.initialCalibrationSnapshot) return;
     this.recordCalibrationHistory();
     this.editorGeometryDirty = false;
+    for (const wall of this.resolution.walls) this.restoreInitialEditorWall(wall.id);
     this.applyCalibrationSnapshot(this.initialCalibrationSnapshot);
+  }
+
+  private restoreInitialEditorWall(wallId: string): void {
+    const wall = this.resolution.wallById.get(wallId);
+    const initial = this.initialEditorCorners.get(wallId);
+    if (!wall?.room || !initial) return;
+    initial.forEach((corner, index) => {
+      wall.room!.corners[index].x = corner.x;
+      wall.room!.corners[index].y = corner.y;
+      wall.room!.corners[index].z = corner.z;
+    });
+    const frame = deriveWallFrame(wall.room.corners);
+    if (!frame) return;
+    wall.room.origin = { ...frame.origin };
+    wall.room.axisU = { ...frame.axisU };
+    wall.room.axisV = { ...frame.axisV };
+    wall.room.width = frame.width;
+    wall.room.height = frame.height;
   }
 
   private resetSelectedCalibrationBoundary(): void {
@@ -3468,6 +3497,7 @@ export class MainMuseumHub {
     if (!initialWall || !currentWall) {
       return;
     }
+    this.restoreInitialEditorWall(wallId);
     currentWall.quad = initialWall.quad;
     currentWall.safePolygon = initialWall.safePolygon;
     currentWall.mountingZone = initialWall.mountingZone;
