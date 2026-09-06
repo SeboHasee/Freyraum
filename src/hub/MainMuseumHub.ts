@@ -1795,6 +1795,7 @@ export class MainMuseumHub {
       if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
       const objectUrl = URL.createObjectURL(file);
       this.editorBackgroundObjectUrl = objectUrl;
+      backgroundInput.value = '';
       const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '') || 'museum-background.png';
       const probe = new Image();
       probe.onload = () => {
@@ -3788,6 +3789,18 @@ export class MainMuseumHub {
         `Import blockiert: ${ownershipChange.id} muss auf ${
           this.calibrationWallOwnership.get(ownershipChange.id)
         } bleiben.`
+      );
+      return;
+    }
+    const baselineWalls = new Map(baselineConfig.walls.map((wall) => [wall.id, wall]));
+    const changedRenderedWall = sanitized.config.walls.find((wall) => {
+      if (wall.role === 'bounds-only') return false;
+      const baseline = baselineWalls.get(wall.id);
+      return !baseline || JSON.stringify(wall.quad) !== JSON.stringify(baseline.quad);
+    });
+    if (changedRenderedWall) {
+      this.announceCalibrationAction(
+        `Import blockiert: Geometrie von ${changedRenderedWall.id} weicht von der geöffneten Wandkalibrierung ab.`
       );
       return;
     }
