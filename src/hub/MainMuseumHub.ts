@@ -177,6 +177,7 @@ export class MainMuseumHub {
   private calibrationEditMode: 'wall' | 'safe' | 'mounting-zone' | 'room-boundary' = 'wall';
   private calibrationSvg: SVGSVGElement | null = null;
   private calibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
+  private initialCalibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private calibrationDrag: CalibrationDrag | null = null;
   private entranceBoundaryQuad: Quad | null = null;
   private activeCalibrationWallId: string | null = null;
@@ -404,7 +405,10 @@ export class MainMuseumHub {
     if (this.calibrating || this.debugGeometry) {
       this.buildCalibrationOverlay();
       if (this.calibrating) this.buildCalibrationPanel(hub);
-      if (this.calibrating) this.fitCalibrationWallsToView();
+      if (this.calibrating) {
+        this.fitCalibrationWallsToView();
+        this.initialCalibrationViewport = { ...this.calibrationViewport };
+      }
       this.renderCalibrationOverlay();
     }
 
@@ -1943,7 +1947,8 @@ export class MainMuseumHub {
       this.announceCalibrationAction('All walls fitted to the visible calibration stage.');
     });
     makeAction('Reset viewport', () => {
-      this.fitCalibrationWallsToView();
+      this.calibrationViewport = { ...this.initialCalibrationViewport };
+      this.applyCalibrationViewport();
       this.applyAllSlotGeometry();
       this.renderCalibrationOverlay();
       this.announceCalibrationAction('Viewport reset and all wall corners are visible.');
@@ -3317,9 +3322,7 @@ export class MainMuseumHub {
     const initial = JSON.parse(this.initialCalibrationSnapshot) as {
       walls: Array<{ id: string; quad: Quad; safePolygon?: Point2D[]; mountingZone?: Point2D[]; mountingZoneConfirmed?: boolean }>;
     };
-    const current = this.buildCurrentCalibrationConfig() as {
-      walls: Array<{ id: string; quad: Quad; safePolygon?: Point2D[]; mountingZone?: Point2D[]; mountingZoneConfirmed?: boolean }>;
-    };
+    const current = this.buildCurrentCalibrationConfig() as MuseumHubConfig;
     const initialWall = initial.walls.find((wall) => wall.id === wallId);
     const currentWall = current.walls.find((wall) => wall.id === wallId);
     this.recordCalibrationHistory();

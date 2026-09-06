@@ -769,11 +769,11 @@ canvas {
   display: none;
 }
 
-.museum-hub__calibration-corner-hit:focus,
-.museum-hub__calibration-edge-hit:focus,
-.museum-hub__calibration-wall:focus,
-.museum-hub__calibration-envelope:focus,
-.museum-hub__calibration-handle:focus {
+.museum-hub__calibration-corner-hit:focus-visible,
+.museum-hub__calibration-edge-hit:focus-visible,
+.museum-hub__calibration-wall:focus-visible,
+.museum-hub__calibration-envelope:focus-visible,
+.museum-hub__calibration-handle:focus-visible {
   outline: none;
   stroke: #ffffff;
   stroke-width: 4;
