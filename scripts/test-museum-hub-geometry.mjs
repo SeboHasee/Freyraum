@@ -485,6 +485,85 @@ for (const slot of mixedFallbackResolution.pages.flatMap((page) => page.slots)) 
     `${slot.id} canonical center height must stay synchronized after fitting`
   );
 }
+
+// Native image aspect is the only artwork rectangle authority. Wall orientation,
+// perspective, movement, resizing, and deformation may change the projected
+// quad, but never the source rectangle ratio.
+const nativeAspectFixtures = [
+  ['portrait', 900 / 1200],
+  ['square', 1000 / 1000],
+  ['landscape', 1800 / 1100],
+  ['panoramic', 2400 / 1000],
+];
+const strictAspectTolerance = 1e-12;
+const assertProjectedSourceAspect = (projection, expectedAspect, context) => {
+  assert.ok(projection, `${context} must produce artwork geometry`);
+  assert.ok(
+    Math.abs(projection.sourceWidth / projection.sourceHeight - expectedAspect) <= strictAspectTolerance,
+    `${context} must preserve native source aspect ratio`
+  );
+};
+for (const wallId of ['wall-front', 'wall-left', 'wall-right']) {
+  const wall = builtInResolution.wallById.get(wallId);
+  const template = builtInResolution.pages[0].slots.find((slot) => slot.placement.wallId === wallId)
+    ?? builtInResolution.pages[0].slots[0];
+  for (const [label, expectedAspect] of nativeAspectFixtures) {
+    const basePlacement = {
+      ...template.placement,
+      mountedHeight: 1.25,
+      physicalHeight: 1.25,
+      anchor: template.placement.anchor ? { ...template.placement.anchor } : undefined,
+    };
+    const slot = { ...template, placement: basePlacement, artworkAspect: expectedAspect };
+    assertProjectedSourceAspect(
+      geometry.projectSlotArtwork(wall, slot.placement, expectedAspect, builtInResolution.stage),
+      expectedAspect,
+      `${label} ${wallId} initial placement`
+    );
+    assertProjectedSourceAspect(
+      geometry.projectSlotArtwork(
+        wall,
+        { ...slot.placement, mountedHeight: 0.8, physicalHeight: 0.8 },
+        expectedAspect,
+        builtInResolution.stage
+      ),
+      expectedAspect,
+      `${label} ${wallId} resize`
+    );
+    assertProjectedSourceAspect(
+      geometry.projectSlotArtwork(
+        wall,
+        {
+          ...slot.placement,
+          anchor: slot.placement.anchor
+            ? { ...slot.placement.anchor, x: slot.placement.anchor.x + 0.15 }
+            : undefined,
+        },
+        expectedAspect,
+        builtInResolution.stage
+      ),
+      expectedAspect,
+      `${label} ${wallId} move`
+    );
+    const deformedWall = {
+      ...wall,
+      quad: wall.quad.map((corner, index) => ({
+        x: corner.x + (index === 1 || index === 2 ? 18 : -8),
+        y: corner.y + (index >= 2 ? 11 : -4),
+      })),
+      camera: {
+        ...wall.camera,
+        verticalFovDeg: wall.camera.verticalFovDeg + 3,
+      },
+    };
+    assertProjectedSourceAspect(
+      geometry.projectSlotArtwork(deformedWall, slot.placement, expectedAspect, builtInResolution.stage),
+      expectedAspect,
+      `${label} ${wallId} wall deformation and camera change`
+    );
+  }
+}
+
 const frontSlotA = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.a');
 const frontSlotB = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.b');
 const nonAdjacentConflictConfig = {

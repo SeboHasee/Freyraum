@@ -379,7 +379,7 @@ export class HubRoomRenderer {
       wall.room,
       slotAnchor,
       slot.placement.physicalHeight ?? slot.placement.mountedHeight,
-      Math.max(0.25, slot.artworkAspect),
+      Math.max(Number.EPSILON, slot.artworkAspect),
       slot.placement.mountingGap
     );
     if (!mountingFrame) {

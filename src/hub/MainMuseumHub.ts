@@ -133,6 +133,8 @@ interface SlotView {
   button: HTMLButtonElement;
   image: HTMLImageElement | null;
   imageLoadToken: number;
+  /** Immutable ratio captured from the decoded source image. */
+  nativeAspectRatio: number | null;
   imageState: 'idle' | 'loading' | 'ready' | 'missing';
   resolvedSource: ArtworkImageSourceCandidate | null;
   fallbackReason: string | null;
@@ -671,6 +673,7 @@ export class MainMuseumHub {
       button,
       image,
       imageLoadToken: 0,
+      nativeAspectRatio: null,
       imageState: 'idle',
       resolvedSource: null,
       fallbackReason: null,
@@ -696,7 +699,12 @@ export class MainMuseumHub {
       });
       return;
     }
-    const projection = projectSlotArtwork(wall, slot.placement, Math.max(0.25, slot.artworkAspect), this.resolution.stage);
+    const projection = projectSlotArtwork(
+      wall,
+      slot.placement,
+      Math.max(Number.EPSILON, slot.artworkAspect),
+      this.resolution.stage
+    );
     if (!projection) {
       button.classList.add('is-invalid-geometry');
       this.projectedSlotGeometry.delete(slot.id);
@@ -1362,6 +1370,21 @@ export class MainMuseumHub {
     requestStatus: 'loaded' | 'fallback-loaded',
     dimensions: { width: number; height: number }
   ): { status: 'ready' } | { status: 'failed'; stage: 'gpu-upload' | 'visible-pixel-probe'; reason: string } {
+    const nativeAspectRatio = dimensions.width / dimensions.height;
+    if (!Number.isFinite(nativeAspectRatio) || nativeAspectRatio <= 0) {
+      return { status: 'failed', stage: 'visible-pixel-probe', reason: 'invalid-native-aspect-ratio' };
+    }
+    if (view.nativeAspectRatio !== null && Math.abs(view.nativeAspectRatio - nativeAspectRatio) > 1e-9) {
+      this.diagnostics.warn('artwork-native-aspect-changed', 'Artwork source changed its immutable native aspect ratio', {
+        slotId: view.slot.id,
+        previousAspectRatio: view.nativeAspectRatio,
+        nextAspectRatio: nativeAspectRatio,
+      });
+      return { status: 'failed', stage: 'visible-pixel-probe', reason: 'native-aspect-ratio-changed' };
+    }
+    view.nativeAspectRatio ??= nativeAspectRatio;
+    view.slot.artworkAspect = view.nativeAspectRatio;
+    view.button.dataset['nativeAspectRatio'] = view.nativeAspectRatio.toPrecision(12);
     this.setSlotImageState(view, 'ready', source, fallbackReason);
     const renderFailure = this.getSlotRenderFailure(view);
     if (renderFailure) return { status: 'failed', ...renderFailure };
