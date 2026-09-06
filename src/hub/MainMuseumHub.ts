@@ -2380,50 +2380,35 @@ export class MainMuseumHub {
       this.renderEditorWall(svg, handles);
       return;
     }
-    const walls = this.resolution.walls.filter((wall) => wall.room && wall.id !== 'wall-rear');
-    const frames = viewport.frameAllWalls(walls.map((wall) => wall.room!));
-    const frontIndex = walls.findIndex((wall) => wall.id === 'wall-front');
-    if (frontIndex < 0 || !frames[frontIndex]) return;
-    const frontWall = walls[frontIndex];
-    const frontHandles = viewport.projectWallCorners(frontWall.id, frames[frontIndex]!);
-    this.renderEditorWall(svg, frontHandles);
-    const frontCornerByIndex = new Map(
-      frontHandles.map((handle) => [handle.cornerIndex, handle.screen] as const)
-    );
-    walls.forEach((wall, index) => {
-      if (wall.id !== 'wall-left' && wall.id !== 'wall-right') return;
-      const frame = frames[index];
-      if (!frame) return;
-      const sideHandles = viewport.projectWallCorners(wall.id, frame)
-        .filter((handle) => handle.cornerIndex === 1 || handle.cornerIndex === 2);
-      const sharedCorners = wall.id === 'wall-left'
-        ? [[1, 0], [2, 3]]
-        : [[1, 1], [2, 2]];
-      sideHandles.forEach((handle) => {
-        const frontIndexForGuide = sharedCorners.find(([sideIndex]) => sideIndex === handle.cornerIndex)?.[1];
-        const start = frontIndexForGuide === undefined ? undefined : frontCornerByIndex.get(frontIndexForGuide);
-        if (!start) return;
-        this.renderEditorGuideLine(svg, start, {
-          x: handle.screen.x,
-          y: handle.screen.y,
-        });
-        svg.appendChild(this.createEditorCornerHandle(handle));
+    // The overview must use the existing projected walls, not a second
+    // centered 3D room. Keep all four corners of each existing side wall
+    // visible, clamping only the entrance-side corners to the viewport edge.
+    for (const wall of this.resolution.walls) {
+      if (wall.id !== 'wall-left' && wall.id !== 'wall-right') continue;
+      wall.quad.forEach((corner, cornerIndex) => {
+        svg.appendChild(this.createProjectedWallCornerHandle(wall.id, cornerIndex, corner));
       });
-    });
+    }
   }
 
-  private renderEditorGuideLine(
-    svg: SVGSVGElement,
-    start: { x: number; y: number },
-    end: { x: number; y: number }
-  ): void {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', start.x.toFixed(2));
-    line.setAttribute('y1', start.y.toFixed(2));
-    line.setAttribute('x2', end.x.toFixed(2));
-    line.setAttribute('y2', end.y.toFixed(2));
-    line.setAttribute('class', 'museum-hub__editor-viewport-guide');
-    svg.appendChild(line);
+  private createProjectedWallCornerHandle(
+    wallId: string,
+    cornerIndex: number,
+    corner: Point2D
+  ): SVGCircleElement {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    const display = this.clampDisplayPoint(corner);
+    circle.setAttribute('cx', display.x.toFixed(2));
+    circle.setAttribute('cy', display.y.toFixed(2));
+    circle.setAttribute('r', '14');
+    circle.setAttribute('class', 'museum-hub__editor-viewport-corner is-edge-anchored');
+    circle.setAttribute('tabindex', '0');
+    circle.setAttribute('role', 'button');
+    circle.setAttribute('aria-label', `${wallId} existing projected corner ${cornerIndex + 1}`);
+    circle.addEventListener('pointerdown', (event) =>
+      this.startWallPointCalibrationDrag(event, wallId, 'quad', cornerIndex)
+    );
+    return circle;
   }
 
   private renderEditorWall(
