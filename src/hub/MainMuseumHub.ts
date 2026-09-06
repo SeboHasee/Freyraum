@@ -715,27 +715,17 @@ export class MainMuseumHub {
     }
     this.projectedSlotGeometry.set(slot.id, projection);
     button.classList.remove('is-invalid-geometry');
-    const bounds = projection.projectedQuad.reduce(
-      (accumulator, corner) => ({
-        minX: Math.min(accumulator.minX, corner.x),
-        maxX: Math.max(accumulator.maxX, corner.x),
-        minY: Math.min(accumulator.minY, corner.y),
-        maxY: Math.max(accumulator.maxY, corner.y),
-      }),
-      { minX: Number.POSITIVE_INFINITY, maxX: Number.NEGATIVE_INFINITY, minY: Number.POSITIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY }
-    );
-    const width = Math.max(1, bounds.maxX - bounds.minX);
-    const height = Math.max(1, bounds.maxY - bounds.minY);
-    const clipPath = `polygon(${projection.projectedQuad
-      .map((corner) => `${(((corner.x - bounds.minX) / width) * 100).toFixed(3)}% ${(((corner.y - bounds.minY) / height) * 100).toFixed(3)}%`)
-      .join(', ')})`;
-    button.style.left = `${bounds.minX}px`;
-    button.style.top = `${bounds.minY}px`;
-    button.style.width = `${width}px`;
-    button.style.height = `${height}px`;
-    button.style.transform = 'none';
-    button.style.clipPath = clipPath;
-    button.style.setProperty('--hub-clip-path', clipPath);
+    // The homography maps the source rectangle to the wall quad. Using the
+    // projected bounding box here stretches portrait/panoramic works before
+    // clipping, which changes their original aspect ratio on front walls.
+    button.style.left = '0px';
+    button.style.top = '0px';
+    button.style.width = `${projection.sourceWidth}px`;
+    button.style.height = `${projection.sourceHeight}px`;
+    button.style.transformOrigin = '0 0';
+    button.style.transform = projection.cssMatrix3d;
+    button.style.clipPath = 'none';
+    button.style.setProperty('--hub-clip-path', 'none');
     const shadow = wall.shadowVector ?? point(wall.group === 'left' ? -10 : 10, 16);
     button.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
