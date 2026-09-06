@@ -146,6 +146,23 @@ for (const [wallId, origin, axisU, width] of [
     assert.ok(handle.screen.y > 64 && handle.screen.y < 704, `${wallId} corner must be vertically visible`);
   }
 }
+const dragCorners = geometry.wallCornersFromTransform(
+  { x: -4.5, y: 0, z: 0 },
+  { x: 1, y: 0, z: 0 },
+  { x: 0, y: 1, z: 0 },
+  9,
+  5.2
+);
+viewport.frameWall(dragCorners);
+const dragStart = viewport.projectCorners('drag-test')[0];
+assert.ok(dragStart, 'corner drag test must start from a projected real corner');
+const dragPoint = viewport.cornerFromScreen(dragStart.screen.x, dragStart.screen.y);
+assert.ok(dragPoint, 'screen pointer must resolve onto the authoritative wall plane');
+assert.ok(Math.hypot(
+  dragPoint.x - dragStart.world.x,
+  dragPoint.y - dragStart.world.y,
+  dragPoint.z - dragStart.world.z
+) < 1e-6, 'screen-to-wall conversion must round-trip the real corner');
 assert.deepEqual(museumHub.HUB_REFERENCE_IMAGE, { width: 2048, height: 1354, fit: 'contain' });
 assert.deepEqual(museumHub.HUB_REFERENCE_BACK_WALL_QUAD, [
   { x: 531, y: 511 },
