@@ -130,6 +130,9 @@ Notes:
   ID can be supplied to select another work.
 - The report is logged as `[Freyraum artwork-debug]` and exposed as
   `window.__freyraumArtworkDebug`.
+- The console payload is one JSON object containing source, canonical, live
+  Three.js local/world, DOM, texture UV bounds, visible-owner evidence, and
+  exactly one `ASPECT PIPELINE:` verdict.
 - It reads the live DOM node with `getBoundingClientRect()` and
   `getComputedStyle()`, and reads the live Three.js mesh, geometry, world
   matrix, texture, and UV attributes. It does not alter artwork sizing.

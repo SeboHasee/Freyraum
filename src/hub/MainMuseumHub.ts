@@ -805,49 +805,122 @@ export class MainMuseumHub {
     const imageComputed = image ? getComputedStyle(image) : null;
     const rect = element.getBoundingClientRect();
     const imageRect = image?.getBoundingClientRect() ?? null;
-    const dom = {
-      owner: image ? 'DOM <img> overlay plus Three.js canvas' : 'Three.js canvas',
-      tag: element.tagName,
-      rect: { width: rect.width, height: rect.height },
-      computed: {
-        width: computed.width,
-        height: computed.height,
-        transform: computed.transform,
-        transformOrigin: computed.transformOrigin,
-      },
-      client: { width: element.clientWidth, height: element.clientHeight },
-      offset: { width: element.offsetWidth, height: element.offsetHeight },
-      image: image
-        ? {
-            naturalWidth: image.naturalWidth,
-            naturalHeight: image.naturalHeight,
-            rect: imageRect ? { width: imageRect.width, height: imageRect.height } : null,
-            computedWidth: imageComputed?.width ?? null,
-            computedHeight: imageComputed?.height ?? null,
-            computedTransform: imageComputed?.transform ?? null,
-            computedTransformOrigin: imageComputed?.transformOrigin ?? null,
-          }
-        : null,
-      clipPath: computed.clipPath,
-      homography: element.style.getPropertyValue('--hub-artwork-transform'),
-    };
     const renderer = this.hubRoomRenderer?.inspectArtwork(view.slot.id) ?? null;
+    const canvas = this.element.querySelector<HTMLCanvasElement>('.museum-hub__canvas canvas, canvas');
+    const canvasRect = canvas?.getBoundingClientRect() ?? null;
+    const canvasStyle = canvas ? getComputedStyle(canvas) : null;
+    const imageVisible = Boolean(
+      image &&
+      image.complete &&
+      image.naturalWidth > 0 &&
+      imageRect &&
+      imageRect.width > 0 &&
+      imageRect.height > 0 &&
+      imageComputed &&
+      imageComputed.display !== 'none' &&
+      imageComputed.visibility !== 'hidden' &&
+      Number(imageComputed.opacity) > 0
+    );
+    const webglVisible = Boolean(
+      canvas &&
+      canvasRect &&
+      canvasRect.width > 0 &&
+      canvasRect.height > 0 &&
+      canvasStyle &&
+      canvasStyle.display !== 'none' &&
+      canvasStyle.visibility !== 'hidden' &&
+      Number(canvasStyle.opacity) > 0
+    );
+    const probeRect = imageRect ?? rect;
+    let hitStack: string[] = [];
+    if (probeRect.width > 0 && probeRect.height > 0) {
+      hitStack = document
+        .elementsFromPoint(probeRect.left + probeRect.width / 2, probeRect.top + probeRect.height / 2)
+        .slice(0, 8)
+        .map((node) => node.tagName.toLowerCase() + (node.className ? `.${String(node.className).replace(/\s+/g, '.')}` : ''));
+    }
+    const topHit = hitStack[0] ?? '';
+    const visibleOwner = imageVisible && topHit.startsWith('img.')
+      ? 'DOM'
+      : webglVisible && topHit.startsWith('canvas')
+        ? 'WebGL'
+        : imageVisible && webglVisible
+          ? 'hybrid'
+          : imageVisible
+            ? 'DOM'
+            : webglVisible
+              ? 'WebGL'
+              : 'unknown';
+    const ratio = (width: number, height: number): number | null =>
+      width > 0 && height > 0 ? width / height : null;
+    const sourceRatio = ratio(image?.naturalWidth ?? 0, image?.naturalHeight ?? 0);
+    const canonicalWidth = view.slot.placement.mountedHeight * view.slot.artworkAspect;
+    const canonicalHeight = view.slot.placement.mountedHeight;
+    const localRatio = ratio(renderer?.localGeometry.width ?? 0, renderer?.localGeometry.height ?? 0);
+    const worldRatio = ratio(renderer?.worldDimensions.width ?? 0, renderer?.worldDimensions.height ?? 0);
+    const domWidth = imageRect?.width ?? rect.width;
+    const domHeight = imageRect?.height ?? rect.height;
+    const domRatio = ratio(domWidth, domHeight);
+    const textureRatio = ratio(renderer?.texture?.width ?? 0, renderer?.texture?.height ?? 0);
+    const uvValues = renderer?.texture?.uv ?? [];
+    const uvPairs = Array.from({ length: Math.floor(uvValues.length / 2) }, (_, index) => [
+      uvValues[index * 2],
+      uvValues[index * 2 + 1],
+    ]);
+    const uvMin = uvPairs.length
+      ? [Math.min(...uvPairs.map(([u]) => u)), Math.min(...uvPairs.map(([, v]) => v))]
+      : null;
+    const uvMax = uvPairs.length
+      ? [Math.max(...uvPairs.map(([u]) => u)), Math.max(...uvPairs.map(([, v]) => v))]
+      : null;
+    const stages: Array<[string, number | null]> = [
+      ['source-to-canonical', sourceRatio && ratio(canonicalWidth, canonicalHeight)],
+      ['canonical-to-three-local', ratio(canonicalWidth, canonicalHeight) && localRatio],
+      ['three-local-to-world', localRatio && worldRatio],
+      ['three-to-dom', sourceRatio && domRatio],
+      ['source-to-texture', sourceRatio && textureRatio],
+    ];
+    const brokenStage = stages.find(([, value]) => value === null || Math.abs(value - (sourceRatio ?? value)) > 0.001)?.[0] ?? null;
+    const verdict = brokenStage
+      ? `ASPECT PIPELINE: BROKEN AT ${brokenStage}`
+      : 'ASPECT PIPELINE: CONSISTENT — NO GEOMETRIC DISTORTION FOUND';
     const report = {
-      slotId: view.slot.id,
       artworkId: view.slot.artworkId,
-      nativeAspectRatio: view.nativeAspectRatio,
-      canonicalWidth: view.slot.placement.mountedHeight * view.slot.artworkAspect,
-      canonicalHeight: view.slot.placement.mountedHeight,
-      storedAspectRatio: view.slot.artworkAspect,
-      dom,
-      three: renderer,
+      source: {
+        naturalWidth: image?.naturalWidth ?? 0,
+        naturalHeight: image?.naturalHeight ?? 0,
+        ratio: sourceRatio,
+      },
+      canonical: { width: canonicalWidth, height: canonicalHeight, ratio: ratio(canonicalWidth, canonicalHeight) },
+      threeJsLocalGeometry: {
+        width: renderer?.localGeometry.width ?? 0,
+        height: renderer?.localGeometry.height ?? 0,
+        ratio: localRatio,
+      },
+      threeJsWorld: {
+        width: renderer?.worldDimensions.width ?? 0,
+        height: renderer?.worldDimensions.height ?? 0,
+        ratio: worldRatio,
+      },
+      dom: {
+        tag: element.tagName,
+        rectWidth: domWidth,
+        rectHeight: domHeight,
+        rectRatio: domRatio,
+        cssTransform: imageComputed?.transform ?? computed.transform,
+      },
+      texture: {
+        width: renderer?.texture?.width ?? 0,
+        height: renderer?.texture?.height ?? 0,
+        ratio: textureRatio,
+        uvMin,
+        uvMax,
+      },
+      visibleOwner,
+      ownerEvidence: { imageVisible, webglVisible, topHit, hitStack },
+      verdict,
     };
-    console.groupCollapsed(`[Freyraum artwork-debug] ${view.slot.id}`);
-    console.log(report);
-    console.log('SOURCE_RATIO', image ? image.naturalWidth / image.naturalHeight : null);
-    console.log('DOM_RATIO', imageRect ? imageRect.width / imageRect.height : rect.width / rect.height);
-    console.log('CANVAS/MESH', renderer);
-    console.groupEnd();
+    console.log(`[Freyraum artwork-debug] ${JSON.stringify(report)}`);
     (window as Window & { __freyraumArtworkDebug?: typeof report }).__freyraumArtworkDebug = report;
   }
 

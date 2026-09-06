@@ -54,6 +54,7 @@ export interface SlotUpsertResult {
 export interface ArtworkRuntimeInspection {
   slotId: string;
   geometryType: string;
+  localGeometry: { width: number; height: number };
   geometryPositions: number[];
   geometryBounds: { min: [number, number, number]; max: [number, number, number] } | null;
   meshScale: [number, number, number];
@@ -457,6 +458,10 @@ export class HubRoomRenderer {
       slotId,
       geometryType: geometry.type,
       geometryPositions: Array.from(position.array as ArrayLike<number>),
+      localGeometry: {
+        width: bounds ? (bounds.max.x - bounds.min.x) * Math.abs(state.artworkMesh.scale.x) : 0,
+        height: bounds ? (bounds.max.y - bounds.min.y) * Math.abs(state.artworkMesh.scale.y) : 0,
+      },
       geometryBounds: bounds
         ? {
             min: [bounds.min.x, bounds.min.y, bounds.min.z],
