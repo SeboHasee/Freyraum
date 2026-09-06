@@ -1,6 +1,17 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.26 — Viewport-safe calibration and direct artwork selection (2026-09-06)
+
+- Added a display-only, uniform calibration viewport fit so initial wall geometry
+  remains visible without rewriting canonical export coordinates.
+- Added selected/all-wall fit actions, viewport reset, and continuous edge
+  clamping for wall, safe-area, and mounting-area handles.
+- Kept default wall movement composite across the wall, safe polygon, mounting
+  zone, and projected artwork while preserving explicit guide edit modes.
+- Allowed artwork selection and dragging directly through the reference image by
+  making wall fills non-blocking.
+
 ## v1.25 — Unified wall editing and non-blocking room boundary (2026-09-05)
 
 - Hid the purple bounds-only room boundary from normal editor interaction.

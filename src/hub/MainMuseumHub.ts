@@ -176,6 +176,7 @@ export class MainMuseumHub {
   private calibrationRoomBoundaryVisible = false;
   private calibrationEditMode: 'wall' | 'safe' | 'mounting-zone' | 'room-boundary' = 'wall';
   private calibrationSvg: SVGSVGElement | null = null;
+  private calibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private calibrationDrag: CalibrationDrag | null = null;
   private entranceBoundaryQuad: Quad | null = null;
   private activeCalibrationWallId: string | null = null;
@@ -403,6 +404,7 @@ export class MainMuseumHub {
     if (this.calibrating || this.debugGeometry) {
       this.buildCalibrationOverlay();
       if (this.calibrating) this.buildCalibrationPanel(hub);
+      if (this.calibrating) this.fitCalibrationWallsToView();
       this.renderCalibrationOverlay();
     }
 
@@ -1580,6 +1582,7 @@ export class MainMuseumHub {
       this.updateStageScale();
       this.applyView();
       this.applyAllSlotGeometry();
+      if (this.calibrating) this.applyCalibrationViewport();
       if (this.debugGeometry) this.emitDebugGeometrySnapshot('resize');
     });
   };
@@ -1926,12 +1929,24 @@ export class MainMuseumHub {
     makeAction('Artwork right', () => this.nudgeActiveArtwork(0.01, 0));
     makeAction('Artwork up', () => this.nudgeActiveArtwork(0, -0.01));
     makeAction('Artwork down', () => this.nudgeActiveArtwork(0, 0.01));
-    makeAction('Fit walls to view', () => {
+    makeAction('Fit selected wall to view', () => {
       this.recordCalibrationHistory();
+      this.fitCalibrationWallsToView(this.activeCalibrationWallId ?? undefined);
+      this.applyAllSlotGeometry();
+      this.renderCalibrationOverlay();
+      this.announceCalibrationAction('Selected wall fitted to the visible calibration stage.');
+    });
+    makeAction('Fit all walls to view', () => {
       this.fitCalibrationWallsToView();
       this.applyAllSlotGeometry();
       this.renderCalibrationOverlay();
-      this.updateCalibrationOutput(true);
+      this.announceCalibrationAction('All walls fitted to the visible calibration stage.');
+    });
+    makeAction('Reset viewport', () => {
+      this.fitCalibrationWallsToView();
+      this.applyAllSlotGeometry();
+      this.renderCalibrationOverlay();
+      this.announceCalibrationAction('Viewport reset and all wall corners are visible.');
     });
     const tiltUnavailable = makeAction('Tilt (not available for this wall model)', () => {});
     tiltUnavailable.disabled = true;
@@ -2057,6 +2072,8 @@ export class MainMuseumHub {
   ): void {
     if (this.calibrationDrag) return;
     event.preventDefault();
+    this.activeCalibrationWallId = wallId;
+    if (this.calibrationWallSelect) this.calibrationWallSelect.value = wallId;
     this.recordCalibrationHistory();
     const element = event.currentTarget as SVGCircleElement;
     const captureElement = this.calibrationSvg ?? element;
@@ -2088,6 +2105,8 @@ export class MainMuseumHub {
     if (this.calibrationDrag) return;
     if (!this.calibrating) return;
     event.preventDefault();
+    this.activeCalibrationWallId = wallId;
+    if (this.calibrationWallSelect) this.calibrationWallSelect.value = wallId;
     const wall = this.resolution.wallById.get(wallId);
     const currentQuad = wall?.quad ?? (wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
     const startPoint = this.pointerEventToStage(event);
@@ -2104,6 +2123,8 @@ export class MainMuseumHub {
       index: -1,
       startPoint,
       startQuad: currentQuad.map((corner) => point(corner.x, corner.y)) as unknown as Quad,
+      startSafePolygon: wall?.safePolygon.map((corner) => point(corner.x, corner.y)),
+      startMountingZone: wall?.mountingZone.map((corner) => point(corner.x, corner.y)),
     };
 
     captureElement.setPointerCapture(event.pointerId);
@@ -2117,14 +2138,15 @@ export class MainMuseumHub {
     const wall = this.resolution.wallById.get(wallId);
     if (!wall) return;
     this.recordCalibrationHistory();
-    wall.quad = wall.quad.map((corner) => point(corner.x + dx, corner.y + dy)) as unknown as Quad;
+    const clamped = this.clampWallDelta(wall.quad, point(dx, dy));
+    wall.quad = wall.quad.map((corner) => point(corner.x + clamped.x, corner.y + clamped.y)) as unknown as Quad;
     wall.safePolygon.forEach((corner) => {
-      corner.x += dx;
-      corner.y += dy;
+      corner.x += clamped.x;
+      corner.y += clamped.y;
     });
     wall.mountingZone.forEach((corner) => {
-      corner.x += dx;
-      corner.y += dy;
+      corner.x += clamped.x;
+      corner.y += clamped.y;
     });
     this.applyAllSlotGeometry();
     this.updateCalibrationOverlayGeometry();
@@ -2132,11 +2154,13 @@ export class MainMuseumHub {
   }
 
   private pointerEventToStage(event: PointerEvent): Point2D | null {
-    const rect = this.calibrationSvg?.getBoundingClientRect() ?? this.visual.getBoundingClientRect();
+    const rect = this.visual.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
+    const displayX = ((event.clientX - rect.left) / rect.width) * this.stageWidth;
+    const displayY = ((event.clientY - rect.top) / rect.height) * this.stageHeight;
     return point(
-      Math.min(this.stageWidth, Math.max(0, ((event.clientX - rect.left) / rect.width) * this.stageWidth)),
-      Math.min(this.stageHeight, Math.max(0, ((event.clientY - rect.top) / rect.height) * this.stageHeight))
+      (displayX - this.calibrationViewport.offsetX) / this.calibrationViewport.scale,
+      (displayY - this.calibrationViewport.offsetY) / this.calibrationViewport.scale
     );
   }
 
@@ -2173,16 +2197,18 @@ export class MainMuseumHub {
       if (drag.target === 'quad') {
         if (!drag.startQuad) return;
         const mutableQuad = wallQuad as unknown as Point2D[];
-        const delta = point(stagePoint.x - drag.startPoint.x, stagePoint.y - drag.startPoint.y);
+        let delta = point(stagePoint.x - drag.startPoint.x, stagePoint.y - drag.startPoint.y);
+        if (drag.index < 0) delta = this.clampWallDelta(drag.startQuad, delta);
         const candidate = drag.startQuad.map((source, index) =>
           drag.index >= 0 && index === drag.index
-            ? point(stagePoint.x, stagePoint.y)
+            ? this.clampDisplayPoint(point(stagePoint.x, stagePoint.y))
             : point(source.x + (drag.index >= 0 ? 0 : delta.x), source.y + (drag.index >= 0 ? 0 : delta.y))
         ) as unknown as Quad;
         if (quadIsDegenerate(candidate) || !quadIsConvex(candidate)) return;
         if (drag.index >= 0) {
-          mutableQuad[drag.index].x = stagePoint.x;
-          mutableQuad[drag.index].y = stagePoint.y;
+          const clamped = this.clampDisplayPoint(point(stagePoint.x, stagePoint.y));
+          mutableQuad[drag.index].x = clamped.x;
+          mutableQuad[drag.index].y = clamped.y;
         } else {
           for (let index = 0; index < wallQuad.length; index += 1) {
             const source = drag.startQuad[index];
@@ -2212,8 +2238,9 @@ export class MainMuseumHub {
       const targetPoints = drag.target === 'safe' ? wall.safePolygon : wall.mountingZone;
       const targetPoint = targetPoints[drag.index];
       if (!targetPoint) return;
-      targetPoint.x = stagePoint.x;
-      targetPoint.y = stagePoint.y;
+      const clamped = this.clampDisplayPoint(stagePoint);
+      targetPoint.x = clamped.x;
+      targetPoint.y = clamped.y;
       if (drag.target === 'mounting-zone') {
         wall.mountingZoneConfirmed = false;
       }
@@ -2240,25 +2267,65 @@ export class MainMuseumHub {
     };
   }
 
-  private fitCalibrationWallsToView(): void {
-    for (const wall of this.resolution.walls) {
-      const bounds = this.pointsBounds(wall.quad);
-      const dx = bounds.minX < 24 ? 24 - bounds.minX : bounds.maxX > this.stageWidth - 24 ? this.stageWidth - 24 - bounds.maxX : 0;
-      const dy = bounds.minY < 24 ? 24 - bounds.minY : bounds.maxY > this.stageHeight - 24 ? this.stageHeight - 24 - bounds.maxY : 0;
-      if (dx === 0 && dy === 0) continue;
-      wall.quad.forEach((corner) => {
-        corner.x += dx;
-        corner.y += dy;
-      });
-      wall.safePolygon.forEach((corner) => {
-        corner.x += dx;
-        corner.y += dy;
-      });
-      wall.mountingZone.forEach((corner) => {
-        corner.x += dx;
-        corner.y += dy;
-      });
-    }
+  private fitCalibrationWallsToView(selectedWallId?: string): void {
+    const walls = selectedWallId
+      ? this.resolution.walls.filter((wall) => wall.id === selectedWallId)
+      : this.resolution.walls;
+    const points = walls.flatMap((wall) => [wall.quad, wall.safePolygon, wall.mountingZone]).flat();
+    if (!points.length) return;
+    const bounds = this.pointsBounds(points);
+    const margin = 32;
+    const scale = Math.min(
+      1,
+      (this.stageWidth - margin * 2) / Math.max(1, bounds.width),
+      (this.stageHeight - margin * 2) / Math.max(1, bounds.height)
+    );
+    this.calibrationViewport = {
+      scale,
+      offsetX: (this.stageWidth - bounds.width * scale) / 2 - bounds.minX * scale,
+      offsetY: (this.stageHeight - bounds.height * scale) / 2 - bounds.minY * scale,
+    };
+    this.applyCalibrationViewport();
+  }
+
+  private applyCalibrationViewport(): void {
+    const { scale, offsetX, offsetY } = this.calibrationViewport;
+    const transform = `matrix(${scale} 0 0 ${scale} ${offsetX} ${offsetY})`;
+    this.calibrationSvg?.style.setProperty('transform', transform);
+    const rooms = this.stage.querySelector<HTMLElement>('.museum-hub__rooms');
+    rooms?.style.setProperty('transform', transform);
+  }
+
+  private displayPoint(value: Point2D): Point2D {
+    return point(
+      value.x * this.calibrationViewport.scale + this.calibrationViewport.offsetX,
+      value.y * this.calibrationViewport.scale + this.calibrationViewport.offsetY
+    );
+  }
+
+  private clampDisplayPoint(value: Point2D): Point2D {
+    const margin = 18;
+    const display = this.displayPoint(value);
+    return point(
+      (Math.min(this.stageWidth - margin, Math.max(margin, display.x)) - this.calibrationViewport.offsetX) / this.calibrationViewport.scale,
+      (Math.min(this.stageHeight - margin, Math.max(margin, display.y)) - this.calibrationViewport.offsetY) / this.calibrationViewport.scale
+    );
+  }
+
+  private clampWallDelta(points: readonly Point2D[], delta: Point2D): Point2D {
+    const margin = 18;
+    const display = points.map((value) => this.displayPoint(point(value.x + delta.x, value.y + delta.y)));
+    const dx = display.reduce((result, value) => Math.min(result, value.x), Infinity) < margin
+      ? margin - Math.min(...display.map((value) => value.x))
+      : Math.max(...display.map((value) => value.x)) > this.stageWidth - margin
+        ? this.stageWidth - margin - Math.max(...display.map((value) => value.x))
+        : 0;
+    const dy = display.reduce((result, value) => Math.min(result, value.y), Infinity) < margin
+      ? margin - Math.min(...display.map((value) => value.y))
+      : Math.max(...display.map((value) => value.y)) > this.stageHeight - margin
+        ? this.stageHeight - margin - Math.max(...display.map((value) => value.y))
+        : 0;
+    return point(delta.x + dx / this.calibrationViewport.scale, delta.y + dy / this.calibrationViewport.scale);
   }
 
   private updateCalibrationOverlayGeometry(): void {
@@ -2537,6 +2604,7 @@ export class MainMuseumHub {
       this.renderCameraDebugGuides();
       this.renderProjectedSlotDebugOverlay();
     }
+    this.applyCalibrationViewport();
   }
 
   private createCalibrationHandle(

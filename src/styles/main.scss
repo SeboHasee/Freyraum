@@ -760,7 +760,7 @@ canvas {
 
 .museum-hub__calibration-svg polygon.museum-hub__calibration-wall.is-active {
   cursor: move;
-  pointer-events: all;
+  pointer-events: none;
   touch-action: none;
 }
 
