@@ -2160,10 +2160,8 @@ export class MainMuseumHub {
       startMountingZone: wall?.mountingZone.map((corner) => point(corner.x, corner.y)),
     };
     captureElement.setPointerCapture(event.pointerId);
-    captureElement.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     captureElement.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     captureElement.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
-    captureElement.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
     window.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     window.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     window.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
@@ -2196,10 +2194,11 @@ export class MainMuseumHub {
     };
 
     captureElement.setPointerCapture(event.pointerId);
-    captureElement.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     captureElement.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     captureElement.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
-    captureElement.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    window.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
+    window.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
+    window.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
   };
 
   private translateWall(wallId: string, dx: number, dy: number): void {
