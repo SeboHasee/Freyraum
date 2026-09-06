@@ -116,6 +116,21 @@ assert.equal(
   'outward/reversed wall winding must be rejected when inward normal is declared'
 );
 const viewport = new editorViewport.EditorViewport({ width: 1366, height: 768, margin: 64 });
+const overviewWalls = [
+  { corners: geometry.wallCornersFromTransform({ x: -4.5, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, 9, 5.2) },
+  { corners: geometry.wallCornersFromTransform({ x: -4.5, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { x: 0, y: 1, z: 0 }, 12, 5.2) },
+  { corners: geometry.wallCornersFromTransform({ x: 4.5, y: 0, z: 12 }, { x: 0, y: 0, z: -1 }, { x: 0, y: 1, z: 0 }, 12, 5.2) },
+];
+const overviewFrames = viewport.frameAllWalls(overviewWalls);
+assert.equal(overviewFrames.length, 3, 'editor overview must frame every editable wall');
+for (const [index, wall] of overviewWalls.entries()) {
+  const handles = viewport.projectWallCorners(`overview-${index}`, overviewFrames[index]);
+  assert.equal(handles.length, 4, 'editor overview must expose four handles per wall');
+  for (const handle of handles) {
+    assert.ok(handle.screen.x > 8 && handle.screen.x < 1358, 'overview corner must be on screen horizontally');
+    assert.ok(handle.screen.y > 8 && handle.screen.y < 760, 'overview corner must be on screen vertically');
+  }
+}
 for (const [wallId, origin, axisU, width] of [
   ['front', { x: -4.5, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 9],
   ['left', { x: -4.5, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 12],

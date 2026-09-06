@@ -272,6 +272,10 @@ canvas {
   transform: scale(var(--hub-stage-scale, 1));
 }
 
+.museum-hub.is-calibrating .museum-hub__stage {
+  overflow: visible;
+}
+
 .museum-hub__image {
   position: absolute;
   inset: 0;
@@ -651,6 +655,7 @@ canvas {
   height: 100%;
   z-index: 12;
   overflow: visible;
+  pointer-events: none;
 }
 
 .museum-hub__editor-viewport-wall {

@@ -1690,7 +1690,12 @@ export class MainMuseumHub {
     viewportSvg.style.pointerEvents = 'none';
     this.stage.appendChild(viewportSvg);
     this.editorViewportSvg = viewportSvg;
-    this.frameEditorWall(this.activeCalibrationWallId);
+    this.editorViewport.frameAllWalls(
+      this.resolution.walls
+        .filter((wall) => wall.room && wall.id !== 'wall-rear')
+        .map((wall) => wall.room!)
+    );
+    this.renderEditorViewportHandles();
   }
 
   private buildCalibrationPanel(hub: HTMLElement): void {
@@ -1936,7 +1941,14 @@ export class MainMuseumHub {
     makeAction('Frame Wall', () => this.frameEditorWall(this.activeCalibrationWallId));
     makeAction('Frame Corner', () => this.frameEditorWall(this.activeCalibrationWallId, 0));
     makeAction('Reset View', () => {
-      this.editorViewport?.resetView();
+      if (this.editorViewport) {
+        this.editorViewport.resetView();
+        this.editorViewport.frameAllWalls(
+          this.resolution.walls
+            .filter((wall) => wall.room && wall.id !== 'wall-rear')
+            .map((wall) => wall.room!)
+        );
+      }
       this.renderEditorViewportHandles();
       this.announceCalibrationAction('Editor view reset without changing wall geometry.');
     });
@@ -2356,10 +2368,27 @@ export class MainMuseumHub {
     const wallId = this.activeCalibrationWallId;
     if (!svg) return;
     svg.replaceChildren();
-    if (!viewport || !wallId || wallId === 'wall-rear' || viewport.viewMode !== 'wall-edit') return;
-    const wall = this.resolution.wallById.get(wallId);
-    if (!wall?.room) return;
-    const handles = viewport.projectCorners(wall.id);
+    if (!viewport) return;
+    if (viewport.viewMode === 'wall-edit') {
+      if (!wallId || wallId === 'wall-rear') return;
+      const wall = this.resolution.wallById.get(wallId);
+      if (!wall?.room) return;
+      const handles = viewport.projectCorners(wall.id);
+      this.renderEditorWall(svg, handles);
+      return;
+    }
+    const walls = this.resolution.walls.filter((wall) => wall.room && wall.id !== 'wall-rear');
+    const frames = viewport.frameAllWalls(walls.map((wall) => wall.room!));
+    walls.forEach((wall, index) => {
+      const handles = viewport.projectWallCorners(wall.id, frames[index]!);
+      this.renderEditorWall(svg, handles);
+    });
+  }
+
+  private renderEditorWall(
+    svg: SVGSVGElement,
+    handles: readonly EditorCornerHandle[]
+  ): void {
     const wallLine = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     wallLine.setAttribute('points', handles.map(({ screen }) => `${screen.x},${screen.y}`).join(' '));
     wallLine.setAttribute('class', 'museum-hub__editor-viewport-wall');
@@ -2377,7 +2406,17 @@ export class MainMuseumHub {
     circle.setAttribute('aria-label', `${handle.wallId} 3D corner ${handle.cornerIndex + 1}`);
     circle.classList.add('museum-hub__editor-viewport-corner');
     circle.style.pointerEvents = 'auto';
-    circle.addEventListener('pointerdown', (event) => this.startEditorCornerDrag(event, handle));
+    circle.addEventListener('pointerdown', (event) => {
+      if (this.editorViewport?.viewMode !== 'wall-edit') {
+        this.activeCalibrationWallId = handle.wallId;
+        if (this.calibrationWallSelect) this.calibrationWallSelect.value = handle.wallId;
+        this.frameEditorWall(handle.wallId, handle.cornerIndex);
+        this.announceCalibrationAction(`${handle.wallId.toUpperCase()} selected. Wall Edit Mode is ready.`);
+        event.preventDefault();
+        return;
+      }
+      this.startEditorCornerDrag(event, handle);
+    });
     return circle;
   }
 

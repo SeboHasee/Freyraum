@@ -88,6 +88,33 @@ export class EditorViewport {
     return frame;
   }
 
+  frameAllWalls(walls: readonly RoomWallModel[]): WallFrame[] {
+    const frames = walls.map((wall) => deriveWallFrame(wall.corners)).filter((frame): frame is WallFrame => frame !== null);
+    if (!frames.length) return [];
+    this.mode = 'perspective';
+    this.activeFrame = null;
+    const points = frames.flatMap((frame) => frame.corners);
+    const center = points.reduce(
+      (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y, z: sum.z + point.z }),
+      { x: 0, y: 0, z: 0 }
+    );
+    center.x /= points.length;
+    center.y /= points.length;
+    center.z /= points.length;
+    const radius = Math.max(
+      ...points.map((point) => Math.hypot(point.x - center.x, point.y - center.y, point.z - center.z)),
+      1
+    );
+    this.target.set(center.x, center.y, center.z);
+    this.perspectiveCamera.position.set(center.x, center.y + radius * 0.55, center.z + radius * 2.6);
+    this.perspectiveCamera.lookAt(this.target);
+    this.perspectiveCamera.near = 0.01;
+    this.perspectiveCamera.far = radius * 8;
+    this.perspectiveCamera.updateProjectionMatrix();
+    this.perspectiveCamera.updateMatrixWorld(true);
+    return frames;
+  }
+
   project(world: Point3D): { x: number; y: number } | null {
     const camera = this.mode === 'wall-edit' ? this.wallEditCamera : this.perspectiveCamera;
     camera.updateMatrixWorld(true);
@@ -101,6 +128,13 @@ export class EditorViewport {
 
   projectCorners(wallId: string, frame = this.activeFrame): EditorCornerHandle[] {
     if (!frame) return [];
+    return frame.corners.flatMap((world, cornerIndex) => {
+      const screen = this.project(world);
+      return screen ? [{ wallId, cornerIndex, world, screen }] : [];
+    });
+  }
+
+  projectWallCorners(wallId: string, frame: WallFrame): EditorCornerHandle[] {
     return frame.corners.flatMap((world, cornerIndex) => {
       const screen = this.project(world);
       return screen ? [{ wallId, cornerIndex, world, screen }] : [];
