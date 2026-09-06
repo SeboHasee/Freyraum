@@ -55,7 +55,12 @@ export class EditorViewport {
   frameWall(
     wall: RoomWallModel | WallFrame | readonly [Point3D, Point3D, Point3D, Point3D]
   ): WallFrame | null {
-    const frame = 'normal' in wall ? wall : deriveWallFrame('corners' in wall ? wall.corners : wall);
+    const isWallFrame = !Array.isArray(wall)
+      && Object.prototype.hasOwnProperty.call(wall, 'normal')
+      && Object.prototype.hasOwnProperty.call(wall, 'center');
+    const frame = isWallFrame
+      ? wall as WallFrame
+      : deriveWallFrame('corners' in wall ? wall.corners : wall);
     if (!frame) return null;
     this.mode = 'wall-edit';
     this.activeFrame = frame;
