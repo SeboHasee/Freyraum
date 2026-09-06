@@ -40,6 +40,7 @@ import {
   quadIsDegenerate,
   solveRoomArtworkPlacement,
   shrinkPolygonTowardsCentroid,
+  wallCornersFromTransform,
   type CameraCalibration,
   type HangingBand,
   type Point2D,
@@ -336,6 +337,7 @@ function roomWall(
 ): RoomWallModel {
   const inset = 0.14;
   return {
+    corners: wallCornersFromTransform(origin, axisU, point3(0, 1, 0), width, height),
     origin,
     axisU,
     axisV: point3(0, 1, 0),
@@ -620,6 +622,7 @@ function cloneWallTransform(transform: HubWallTransform): HubWallTransform {
 
 function cloneRoomWall(room: RoomWallModel): RoomWallModel {
   return {
+    corners: room.corners.map(clonePoint3) as unknown as RoomWallModel['corners'],
     origin: clonePoint3(room.origin),
     axisU: clonePoint3(room.axisU),
     axisV: clonePoint3(room.axisV),
@@ -1120,6 +1123,7 @@ function parseRoomWall(raw: unknown): RoomWallModel | null {
     corner.x >= 0 && corner.x <= transform.width && corner.y >= 0 && corner.y <= transform.height;
   if (!safePolygon.every(inBounds) || doorwayExclusions.some((doorway) => !doorway.every(inBounds))) return null;
   return {
+    corners: wallCornersFromTransform(transform.origin, transform.axisU, transform.axisV, transform.width, transform.height),
     origin: transform.origin,
     axisU: transform.axisU,
     axisV: transform.axisV,
@@ -1257,6 +1261,13 @@ function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | n
   }
   if (transform) {
     room = {
+      corners: wallCornersFromTransform(
+        transform.origin,
+        transform.axisU,
+        transform.axisV,
+        transform.width,
+        transform.height
+      ),
       origin: clonePoint3(transform.origin),
       axisU: clonePoint3(transform.axisU),
       axisV: clonePoint3(transform.axisV),
@@ -2533,6 +2544,13 @@ function rescaleRoomWallAboutCamera(
 ): RoomWallModel {
   const scaled = (value: Point2D): Point2D => point(value.x * scale, value.y * scale);
   return {
+    corners: wallCornersFromTransform(room.origin, room.axisU, room.axisV, room.width * scale, room.height * scale).map((corner) =>
+      point3(
+        cameraPosition.x + (corner.x - cameraPosition.x) * scale,
+        cameraPosition.y + (corner.y - cameraPosition.y) * scale,
+        cameraPosition.z + (corner.z - cameraPosition.z) * scale
+      )
+    ) as unknown as RoomWallModel['corners'],
     origin: point3(
       cameraPosition.x + (room.origin.x - cameraPosition.x) * scale,
       cameraPosition.y + (room.origin.y - cameraPosition.y) * scale,

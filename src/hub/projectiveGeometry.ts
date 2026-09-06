@@ -112,6 +112,12 @@ export interface HangingBand {
  * wall corner; local x/y values are measured in the supplied width/height units.
  */
 export interface RoomWallModel {
+  /**
+   * Canonical in-memory boundary for editor-authoring work. Existing v5
+   * origin/axes/size fields remain the compatibility representation until the
+   * renderer migration milestone consumes this boundary directly.
+   */
+  corners: readonly [Point3D, Point3D, Point3D, Point3D];
   origin: Point3D;
   axisU: Point3D;
   axisV: Point3D;
@@ -120,6 +126,17 @@ export interface RoomWallModel {
   safePolygon: Polygon;
   doorwayExclusions: readonly Polygon[];
   hangingBand: HangingBand;
+}
+
+export interface WallFrame {
+  corners: readonly [Point3D, Point3D, Point3D, Point3D];
+  origin: Point3D;
+  axisU: Point3D;
+  axisV: Point3D;
+  normal: Point3D;
+  center: Point3D;
+  width: number;
+  height: number;
 }
 
 export type ProjectionConvergence = 'left' | 'right' | 'flat';
@@ -244,6 +261,21 @@ export interface ArtworkMountingFrame {
 
 export const point = (x: number, y: number): Point2D => ({ x, y });
 export const point3 = (x: number, y: number, z: number): Point3D => ({ x, y, z });
+
+export function wallCornersFromTransform(
+  origin: Point3D,
+  axisU: Point3D,
+  axisV: Point3D,
+  width: number,
+  height: number
+): readonly [Point3D, Point3D, Point3D, Point3D] {
+  return [
+    point3(origin.x, origin.y, origin.z),
+    add3(origin, scale3(axisU, width)),
+    add3(add3(origin, scale3(axisU, width)), scale3(axisV, height)),
+    add3(origin, scale3(axisV, height)),
+  ];
+}
 
 export function clonePoint(value: Point2D): Point2D {
   return { x: value.x, y: value.y };
@@ -504,6 +536,72 @@ function cross3(a: Point3D, b: Point3D): Point3D {
 function normalize3(value: Point3D): Point3D | null {
   const length = Math.hypot(value.x, value.y, value.z);
   return Number.isFinite(length) && length > EPSILON ? scale3(value, 1 / length) : null;
+}
+
+function distance3(a: Point3D, b: Point3D): number {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+/**
+ * Derives the wall-local frame from the canonical four-corner boundary.
+ * Corners are ordered lower-left, lower-right, upper-right, upper-left.
+ * This validates the boundary without changing the existing v5 projection
+ * representation; renderer consumption is introduced in a later milestone.
+ */
+export function deriveWallFrame(
+  corners: readonly [Point3D, Point3D, Point3D, Point3D],
+  tolerance = 1e-5,
+  inwardNormal?: Point3D
+): WallFrame | null {
+  if (!corners.every(isFinitePoint3D)) return null;
+  const [corner0, corner1, corner2, corner3] = corners;
+  const edgeU = subtract3(corner1, corner0);
+  const edgeV = subtract3(corner3, corner0);
+  const axisU = normalize3(edgeU);
+  if (!axisU || !normalize3(edgeV)) return null;
+  const rawNormal = cross3(edgeU, edgeV);
+  const normal = normalize3(rawNormal);
+  if (!normal) return null;
+  if (inwardNormal) {
+    const expectedNormal = normalize3(inwardNormal);
+    if (!expectedNormal || dot3(normal, expectedNormal) < 1 - tolerance) return null;
+  }
+
+  const planeDistance = dot3(subtract3(corner2, corner0), normal);
+  if (Math.abs(planeDistance) > tolerance) return null;
+
+  const projectedV = subtract3(edgeV, scale3(axisU, dot3(edgeV, axisU)));
+  const axisV = normalize3(projectedV);
+  if (!axisV || Math.abs(dot3(axisU, axisV)) > tolerance) return null;
+
+  const local = corners.map((corner) => {
+    const offset = subtract3(corner, corner0);
+    return point(dot3(offset, axisU), dot3(offset, axisV));
+  });
+  const localQuad = local as unknown as Quad;
+  if (quadIsDegenerate(localQuad) || !quadIsConvex(localQuad)) return null;
+
+  const width = Math.max(distance3(corner0, corner1), distance3(corner3, corner2));
+  const height = Math.max(distance3(corner0, corner3), distance3(corner1, corner2));
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= EPSILON || height <= EPSILON) {
+    return null;
+  }
+
+  const center = point3(
+    (corner0.x + corner1.x + corner2.x + corner3.x) / 4,
+    (corner0.y + corner1.y + corner2.y + corner3.y) / 4,
+    (corner0.z + corner1.z + corner2.z + corner3.z) / 4
+  );
+  return {
+    corners,
+    origin: corner0,
+    axisU,
+    axisV,
+    normal,
+    center,
+    width,
+    height,
+  };
 }
 
 function cameraBasis(
@@ -1063,6 +1161,13 @@ export function calibrateRoomWallToReferenceQuad(
       : room.safePolygon.map(scaledPoint);
 
   const calibratedRoom: RoomWallModel = {
+    corners: wallCornersFromTransform(
+      add3(camera.position, originWorldOffset),
+      axisUWorld,
+      axisVWorld,
+      calibratedWidth,
+      calibratedHeight
+    ),
     origin: add3(camera.position, originWorldOffset),
     axisU: axisUWorld,
     axisV: axisVWorld,

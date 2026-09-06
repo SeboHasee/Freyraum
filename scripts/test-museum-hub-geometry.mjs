@@ -79,6 +79,41 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
 assert.equal(shippingConfig.version, 5, 'shipping config must use the canonical v5 wall-mounting model');
+const canonicalCorners = geometry.wallCornersFromTransform(
+  { x: 2, y: 1, z: 3 },
+  { x: 1, y: 0, z: 0 },
+  { x: 0, y: 1, z: 0 },
+  4,
+  2
+);
+const canonicalFrame = geometry.deriveWallFrame(canonicalCorners, 1e-5, { x: 0, y: 0, z: 1 });
+assert.ok(canonicalFrame, 'rectangular v5-compatible corners must derive a wall frame');
+assert.deepEqual(canonicalFrame.origin, { x: 2, y: 1, z: 3 });
+assert.equal(canonicalFrame.width, 4);
+assert.equal(canonicalFrame.height, 2);
+assert.deepEqual(canonicalFrame.normal, { x: 0, y: 0, z: 1 });
+assert.equal(
+  geometry.deriveWallFrame(
+    [
+      canonicalCorners[0],
+      canonicalCorners[1],
+      { x: canonicalCorners[2].x, y: canonicalCorners[2].y, z: canonicalCorners[2].z + 0.01 },
+      canonicalCorners[3],
+    ],
+    1e-5
+  ),
+  null,
+  'twisted wall corners must be rejected'
+);
+assert.equal(
+  geometry.deriveWallFrame(
+    [canonicalCorners[0], canonicalCorners[3], canonicalCorners[2], canonicalCorners[1]],
+    1e-5,
+    { x: 0, y: 0, z: 1 }
+  ),
+  null,
+  'outward/reversed wall winding must be rejected when inward normal is declared'
+);
 assert.deepEqual(museumHub.HUB_REFERENCE_IMAGE, { width: 2048, height: 1354, fit: 'contain' });
 assert.deepEqual(museumHub.HUB_REFERENCE_BACK_WALL_QUAD, [
   { x: 531, y: 511 },
