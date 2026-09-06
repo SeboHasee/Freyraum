@@ -2381,11 +2381,14 @@ export class MainMuseumHub {
       return;
     }
     // The overview must use the existing projected walls, not a second
-    // centered 3D room. Keep all four corners of each existing side wall
-    // visible, clamping only the entrance-side corners to the viewport edge.
+    // centered 3D room. The shared front-wall corners are already represented
+    // by the existing calibration overlay; only entrance-side corners belong
+    // in this overview layer.
     for (const wall of this.resolution.walls) {
       if (wall.id !== 'wall-left' && wall.id !== 'wall-right') continue;
-      wall.quad.forEach((corner, cornerIndex) => {
+      const entranceCornerIndices = wall.id === 'wall-left' ? [0, 3] : [1, 2];
+      entranceCornerIndices.forEach((cornerIndex) => {
+        const corner = wall.quad[cornerIndex];
         svg.appendChild(this.createProjectedWallCornerHandle(wall.id, cornerIndex, corner));
       });
     }
