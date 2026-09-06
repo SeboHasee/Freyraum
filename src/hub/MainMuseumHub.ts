@@ -2206,12 +2206,12 @@ export class MainMuseumHub {
         if (drag.index < 0) delta = this.clampWallDelta(drag.startQuad, delta);
         const candidate = drag.startQuad.map((source, index) =>
           drag.index >= 0 && index === drag.index
-            ? this.clampDisplayPoint(point(stagePoint.x, stagePoint.y))
+            ? this.clampDisplayPoint(point(source.x + delta.x, source.y + delta.y))
             : point(source.x + (drag.index >= 0 ? 0 : delta.x), source.y + (drag.index >= 0 ? 0 : delta.y))
         ) as unknown as Quad;
         if (quadIsDegenerate(candidate) || !quadIsConvex(candidate)) return;
         if (drag.index >= 0) {
-          const clamped = this.clampDisplayPoint(point(stagePoint.x, stagePoint.y));
+          const clamped = candidate[drag.index];
           mutableQuad[drag.index].x = clamped.x;
           mutableQuad[drag.index].y = clamped.y;
         } else {

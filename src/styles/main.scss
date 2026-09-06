@@ -641,6 +641,7 @@ canvas {
   z-index: 4;
   overflow: visible;
   pointer-events: none;
+  transform-origin: 0 0;
 }
 
 .museum-hub.is-calibrating .museum-hub__calibration-svg {
@@ -890,6 +891,7 @@ canvas {
   content: '';
   position: absolute;
   inset: 0;
+  transform-origin: 0 0;
   border: 2px dashed rgba(255, 90, 60, 0.92);
 }
 
