@@ -1405,82 +1405,94 @@ export function projectSlotArtwork(
       slot.mountedHeight,
       artworkAspect
     );
+    const roomPlacementValid =
+      placement.validity.finite &&
+      placement.validity.contained &&
+      placement.validity.doorwayClear &&
+      placement.validity.inHangingBand &&
+      placement.validity.orientationConsistent;
     if (
-      !placement.validity.finite ||
-      !placement.validity.contained ||
-      !placement.validity.doorwayClear ||
-      !placement.validity.inHangingBand ||
-      !placement.validity.orientationConsistent
+      roomPlacementValid &&
+      !(wall.projectionRealism && !wall.projectionRealism.passes)
     ) {
-      return null;
+      const mountingFrame = createArtworkMountingFrame(
+        wall.room,
+        placement.anchor,
+        placement.mountedHeight,
+        artworkAspect,
+        slot.mountingGap
+      );
+      if (!mountingFrame) return null;
+      const projected = mountingFrame.frontQuad.map((corner) =>
+        projectWorldPoint(wall.camera!, corner, stage)
+      );
+      if (projected.some((corner) => corner === null)) return null;
+      const worldQuad = mountingFrame.frontQuad;
+      const orderedProjectedQuad: Quad = [
+        projected[0]!,
+        projected[1]!,
+        projected[2]!,
+        projected[3]!,
+      ];
+      const projectedQuad = normalizeQuadClockwise(orderedProjectedQuad);
+      if (quadIsDegenerate(projectedQuad) || !quadIsConvex(projectedQuad)) return null;
+      if (wall.safePolygon && !projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
+        return null;
+      }
+      const sourceHeight = Math.max(1, (placement.mountedHeight / wall.room.height) * stage.height);
+      const sourceWidth = Math.max(1, sourceHeight * Math.max(EPSILON, artworkAspect));
+      const quadHomography = computeHomographyFromUnitSquare(projectedQuad);
+      if (!quadHomography) return null;
+      const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
+      const projectedWall = projectRoomWallQuad(wall.room, wall.camera, stage);
+      if (!projectedWall) return null;
+      const alignment = evaluateArtworkWallAlignment(
+        wall.room,
+        mountingFrame,
+        orderedProjectedQuad,
+        projectedWall
+      );
+      if (!alignment.passes) return null;
+      return {
+        localQuad: placement.localQuad,
+        worldQuad,
+        projectedQuad,
+        bounds: getQuadBounds(projectedQuad),
+        sourceWidth,
+        sourceHeight,
+        cssMatrix3d: homographyToCssMatrix3d(sourceHomography),
+        shortEdge: shortestEdge(projectedQuad),
+        placement,
+        projectedAnchor: projectWorldPoint(wall.camera, mountingFrame.frontCenter, stage),
+        validity: placement.validity,
+        realism: wall.projectionRealism,
+        alignment,
+      };
     }
-    if (wall.projectionRealism && !wall.projectionRealism.passes) return null;
-    const mountingFrame = createArtworkMountingFrame(
-      wall.room,
-      placement.anchor,
-      placement.mountedHeight,
-      artworkAspect,
-      slot.mountingGap
-    );
-    if (!mountingFrame) return null;
-    const projected = mountingFrame.frontQuad.map((corner) =>
-      projectWorldPoint(wall.camera!, corner, stage)
-    );
-    if (projected.some((corner) => corner === null)) return null;
-    const worldQuad = mountingFrame.frontQuad;
-    const orderedProjectedQuad: Quad = [
-      projected[0]!,
-      projected[1]!,
-      projected[2]!,
-      projected[3]!,
-    ];
-    const projectedQuad = normalizeQuadClockwise(orderedProjectedQuad);
-    if (quadIsDegenerate(projectedQuad) || !quadIsConvex(projectedQuad)) return null;
-    if (wall.safePolygon && !projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
-      return null;
-    }
-    const sourceHeight = Math.max(1, (placement.mountedHeight / wall.room.height) * stage.height);
-    const sourceWidth = Math.max(1, sourceHeight * Math.max(EPSILON, artworkAspect));
-    const quadHomography = computeHomographyFromUnitSquare(projectedQuad);
-    if (!quadHomography) return null;
-    const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
-    const projectedWall = projectRoomWallQuad(wall.room, wall.camera, stage);
-    if (!projectedWall) return null;
-    const alignment = evaluateArtworkWallAlignment(
-      wall.room,
-      mountingFrame,
-      orderedProjectedQuad,
-      projectedWall
-    );
-    if (!alignment.passes) return null;
-    return {
-      localQuad: placement.localQuad,
-      worldQuad,
-      projectedQuad,
-      bounds: getQuadBounds(projectedQuad),
-      sourceWidth,
-      sourceHeight,
-      cssMatrix3d: homographyToCssMatrix3d(sourceHomography),
-      shortEdge: shortestEdge(projectedQuad),
-      placement,
-      projectedAnchor: projectWorldPoint(wall.camera, mountingFrame.frontCenter, stage),
-      validity: placement.validity,
-      realism: wall.projectionRealism,
-      alignment,
-    };
   }
 
+  const fallbackCenter = wall.room && slot.anchor
+    ? point(
+        slot.anchor.x / Math.max(EPSILON, wall.room.width),
+        1 - slot.anchor.y / Math.max(EPSILON, wall.room.height)
+      )
+    : slot.center;
+  const fallbackMountedHeight = wall.room && slot.anchor
+    ? slot.mountedHeight / Math.max(EPSILON, wall.room.height)
+    : slot.mountedHeight;
+
+  {
   const safeAspect = Math.max(EPSILON, artworkAspect);
   const containHeightLimit = Math.max(EPSILON, Math.min(1, wall.planeAspect / safeAspect));
-  const mountedHeight = Math.max(EPSILON, Math.min(slot.mountedHeight, containHeightLimit));
+  const mountedHeight = Math.max(EPSILON, Math.min(fallbackMountedHeight, containHeightLimit));
   const mountedWidth = mountedHeight * safeAspect / Math.max(EPSILON, wall.planeAspect);
   const halfWidth = mountedWidth / 2;
   const halfHeight = mountedHeight / 2;
   const localQuad: Quad = [
-    point(slot.center.x - halfWidth, slot.center.y - halfHeight),
-    point(slot.center.x + halfWidth, slot.center.y - halfHeight),
-    point(slot.center.x + halfWidth, slot.center.y + halfHeight),
-    point(slot.center.x - halfWidth, slot.center.y + halfHeight),
+    point(fallbackCenter.x - halfWidth, fallbackCenter.y - halfHeight),
+    point(fallbackCenter.x + halfWidth, fallbackCenter.y - halfHeight),
+    point(fallbackCenter.x + halfWidth, fallbackCenter.y + halfHeight),
+    point(fallbackCenter.x - halfWidth, fallbackCenter.y + halfHeight),
   ];
   const homography = computeHomographyFromUnitSquare(wall.quad);
   if (!homography) return null;
@@ -1507,4 +1519,5 @@ export function projectSlotArtwork(
     shortEdge: shortestEdge(projectedQuad),
     placement: null,
   };
+  }
 }

@@ -661,42 +661,6 @@
         "zOffset": 0.02,
         "provisional": false
       }
-    },
-    {
-      "id": "room-02.wall-front.a",
-      "enabled": true,
-      "selectable": true,
-      "artworkId": "gartenszene",
-      "placement": {
-        "wallId": "wall-front",
-        "horizontalPosition": 0.3,
-        "centerHeight": 2.32,
-        "physicalHeight": 1.62,
-        "mountingGap": 0.002,
-        "targetSizePolicy": "fixed-height",
-        "minScale": 1,
-        "maxScale": 1,
-        "zOffset": 0.024,
-        "provisional": false
-      }
-    },
-    {
-      "id": "room-02.wall-left.a",
-      "enabled": true,
-      "selectable": true,
-      "artworkId": "zdigital",
-      "placement": {
-        "wallId": "wall-left",
-        "horizontalPosition": 0.5,
-        "centerHeight": 2.3,
-        "physicalHeight": 1.45,
-        "mountingGap": 0.002,
-        "targetSizePolicy": "fixed-height",
-        "minScale": 1,
-        "maxScale": 1,
-        "zOffset": 0.024,
-        "provisional": false
-      }
     }
   ],
   "room": {

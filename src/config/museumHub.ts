@@ -2307,13 +2307,27 @@ export function resolveMuseumHub(
     const fallbackWalls = [currentWall];
     for (const candidateWall of fallbackWalls) {
       if (candidateWall.projectionRealism && !candidateWall.projectionRealism.passes) continue;
-      const attempt = tryProjectResolvedSlot(slot, candidateWall);
+      let attempt = tryProjectResolvedSlot(slot, candidateWall);
+      if (!attempt.projection) {
+        const projectiveFallback = projectSlotArtwork(
+          { ...candidateWall, room: undefined, camera: undefined },
+          slot.placement,
+          slot.artworkAspect,
+          stage
+        );
+        if (projectiveFallback) {
+          attempt = { projection: projectiveFallback, placement: slot.placement };
+        }
+      }
       if (!attempt.projection) continue;
       if (!sideWallPlacementHasArchitecturalClearance(candidateWall, attempt.projection)) continue;
       const withinMountingZone = attempt.projection.projectedQuad.every((vertex) =>
         pointInPolygon(vertex, candidateWall.mountingZone)
       );
-      if (!withinMountingZone) continue;
+      // Edited v5 quads are the authoritative visible wall geometry. If the
+      // derived metric room cannot reproduce a slot exactly, retain the
+      // projective artwork fallback so the editor can still show and place it.
+      if (!withinMountingZone && attempt.projection.placement !== null) continue;
       resolvedWall = candidateWall;
       resolvedPlacement = attempt.placement;
       projected = attempt.projection;
