@@ -2800,6 +2800,8 @@ export class MainMuseumHub {
         });
       }
       if (this.calibrating) {
+        wallPolygon.setAttribute('tabindex', '0');
+        wallPolygon.setAttribute('role', 'button');
         wallPolygon.addEventListener('pointerdown', (event) => {
           this.calibrationEditMode = 'wall';
           this.activeCalibrationWallId = wall.id;
@@ -2808,13 +2810,19 @@ export class MainMuseumHub {
           this.renderCalibrationOverlay();
           this.startWallTranslateDrag(event, wall.id);
         });
+        wallPolygon.addEventListener('keydown', (event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          this.calibrationEditMode = 'wall';
+          this.activeCalibrationWallId = wall.id;
+          if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
+          this.renderCalibrationOverlay();
+        });
       }
       if (this.calibrating && active && this.calibrationEditMode === 'wall') {
         wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(
           this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--wall')
         ));
-        wallPolygon.setAttribute('tabindex', '0');
-        wallPolygon.setAttribute('role', 'button');
         wallPolygon.setAttribute('aria-label', wallLabelText);
         wallPolygon.addEventListener('keydown', (event) => {
           const distance = event.shiftKey ? 10 : 1;
@@ -3923,6 +3931,17 @@ export class MainMuseumHub {
       if ((wall.role === 'bounds-only') !== !currentWall.room) continue;
       if (applyRenderedWallGeometry && wall.quad && wall.quad.length === currentWall.quad.length) {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
+      }
+      if (!applyRenderedWallGeometry && wall.role !== 'bounds-only') {
+        const nextSafe = wall.safePolygon ?? [];
+        currentWall.safePolygon.splice(0, currentWall.safePolygon.length, ...nextSafe.map((corner) => clonePoint(corner)));
+        currentWall.mountingZone.splice(
+          0,
+          currentWall.mountingZone.length,
+          ...(wall.mountingZone ?? wall.safePolygon ?? []).map((corner) => clonePoint(corner))
+        );
+        currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
+        continue;
       }
       if (!applyRenderedWallGeometry) continue;
       const nextSafe = wall.safePolygon ?? [];
