@@ -941,6 +941,17 @@ canvas {
 .museum-hub.is-calibrating .museum-hub__artwork {
   cursor: move;
   touch-action: none;
+  /*
+   * Keep the hit surface rectangular while editing. The artwork itself and
+   * its selection outline retain the projected clip; clipping the button also
+   * clips the resize handle at oblique wall corners.
+   */
+  clip-path: none;
+}
+
+.museum-hub.is-calibrating .museum-hub__artwork
+  :is(.museum-hub__art, .museum-hub__art-placeholder) {
+  clip-path: var(--hub-clip-path, none);
 }
 
 .museum-hub.is-calibrating .museum-hub__artwork::after {
