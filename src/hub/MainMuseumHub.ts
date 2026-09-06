@@ -183,6 +183,8 @@ export class MainMuseumHub {
   private calibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private initialCalibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private calibrationDrag: CalibrationDrag | null = null;
+  private calibrationMoveRaf = 0;
+  private pendingCalibrationMove: PointerEvent | null = null;
   private entranceBoundaryQuad: Quad | null = null;
   private activeCalibrationWallId: string | null = null;
   private activeCalibrationSlotId: string | null = null;
@@ -1723,7 +1725,7 @@ export class MainMuseumHub {
     const instructions = document.createElement('p');
     instructions.className = 'museum-hub__calibration-help';
     instructions.textContent =
-      'Drag orange points to reshape a wall. Drag the striped orange edge to move the complete wall. Keyboard arrows make precise adjustments.';
+      'Drag an artwork to move it along its wall. Drag the red corner handle to resize it while preserving perspective. Drag orange points to reshape a wall; keyboard arrows make precise adjustments.';
 
     const legend = document.createElement('section');
     legend.className = 'museum-hub__calibration-legend';
@@ -2244,6 +2246,17 @@ export class MainMuseumHub {
   }
 
   private handleCalibrationMove = (event: PointerEvent): void => {
+    this.pendingCalibrationMove = event;
+    if (this.calibrationMoveRaf !== 0) return;
+    this.calibrationMoveRaf = requestAnimationFrame(() => {
+      this.calibrationMoveRaf = 0;
+      const pending = this.pendingCalibrationMove;
+      this.pendingCalibrationMove = null;
+      if (pending) this.applyCalibrationMove(pending);
+    });
+  };
+
+  private applyCalibrationMove = (event: PointerEvent): void => {
     const drag = this.calibrationDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
     const stagePoint = this.pointerEventToStage(event);
@@ -2327,8 +2340,8 @@ export class MainMuseumHub {
       if (wall) this.applyAllSlotGeometry();
     }
     this.updateCalibrationOverlayGeometry();
-    this.updateCalibrationOutput(false);
-    this.syncCalibrationControls();
+    if (drag.kind !== 'slot') this.updateCalibrationOutput(false);
+    if (drag.kind !== 'slot') this.syncCalibrationControls();
   };
 
   private pointsBounds(points: readonly Point2D[]): { minX: number; minY: number; maxX: number; maxY: number; width: number; height: number } {
@@ -2725,6 +2738,11 @@ export class MainMuseumHub {
   private handleCalibrationEnd = (event: PointerEvent): void => {
     const drag = this.calibrationDrag;
     if (!drag || event.pointerId !== drag.pointerId) return;
+    if (this.calibrationMoveRaf !== 0) {
+      cancelAnimationFrame(this.calibrationMoveRaf);
+      this.calibrationMoveRaf = 0;
+    }
+    this.pendingCalibrationMove = null;
     this.calibrationDrag = null;
     const currentTarget = drag.captureElement;
     currentTarget?.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
@@ -2741,6 +2759,11 @@ export class MainMuseumHub {
   private handleCalibrationBlur = (): void => {
     if (!this.calibrationDrag) return;
     const drag = this.calibrationDrag;
+    if (this.calibrationMoveRaf !== 0) {
+      cancelAnimationFrame(this.calibrationMoveRaf);
+      this.calibrationMoveRaf = 0;
+    }
+    this.pendingCalibrationMove = null;
     this.calibrationDrag = null;
     const element = drag.captureElement;
     element.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);

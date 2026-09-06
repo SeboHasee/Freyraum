@@ -953,15 +953,17 @@ canvas {
 
 .museum-hub__artwork-handle {
   position: absolute;
-  right: -8px;
-  bottom: -8px;
+  right: 6px;
+  bottom: 6px;
   z-index: 5;
-  width: 10px;
-  height: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  border-radius: 3px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 4px;
   background: rgba(255, 90, 60, 0.95);
   cursor: nwse-resize;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .museum-hub__calibration {
