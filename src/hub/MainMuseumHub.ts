@@ -2480,7 +2480,7 @@ export class MainMuseumHub {
       wallLabel.textContent = wallLabelText;
       wallLabel.setAttribute('aria-hidden', 'true');
       this.calibrationSvg.appendChild(wallLabel);
-      if (this.calibrating) {
+      if (this.calibrating && active && this.calibrationEditMode === 'wall') {
         wall.quad.forEach((corner, index) => {
           const next = wall.quad[(index + 1) % wall.quad.length]!;
           this.calibrationSvg!.appendChild(this.createCalibrationEdgeHitTarget(wall.id, index, corner, next));
@@ -2711,8 +2711,9 @@ export class MainMuseumHub {
   private translateEnvelope(dx: number, dy: number): void {
     if (!this.entranceBoundaryQuad) return;
     this.recordCalibrationHistory();
+    const clamped = this.clampWallDelta(this.entranceBoundaryQuad, point(dx, dy));
     this.entranceBoundaryQuad = this.entranceBoundaryQuad.map((corner) =>
-      point(corner.x + dx, corner.y + dy)
+      point(corner.x + clamped.x, corner.y + clamped.y)
     ) as unknown as Quad;
     this.updateCalibrationOverlayGeometry();
     this.updateCalibrationOutput(true);
