@@ -1784,7 +1784,7 @@ export class MainMuseumHub {
     ): void => {
       backgroundInfo.textContent = width > 0 && height > 0
         ? `${name} · ${width}×${height}px · ${(width / height).toFixed(3)}`
-        : `${name} · Copy the file to customer-artworks/Backgrounds`;
+        : `${name} · Copy this file to customer-artworks/Backgrounds under the exported filename`;
     };
     updateBackgroundInfo();
     backgroundInput.addEventListener('change', () => {
@@ -3744,7 +3744,6 @@ export class MainMuseumHub {
       fallbacks: config.fallbacks,
       walls: config.walls.map((wall) => {
         const fixedWall = { ...wall };
-        if (wall.role === 'bounds-only') delete fixedWall.quad;
         delete fixedWall.safePolygon;
         delete fixedWall.mountingZone;
         delete fixedWall.mountingZoneConfirmed;
