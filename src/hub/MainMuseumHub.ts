@@ -2676,7 +2676,6 @@ export class MainMuseumHub {
       wallLabel.setAttribute('class', `museum-hub__calibration-wall-label${active ? ' is-active' : ''}`);
       wallLabel.dataset.calibrationWallLabel = wall.id;
       wallLabel.textContent = wallLabelText;
-      wallLabel.setAttribute('aria-hidden', 'true');
       this.calibrationSvg.appendChild(wallLabel);
       if (this.calibrating && active && this.calibrationEditMode === 'wall') {
         wall.quad.forEach((corner, index) => {
@@ -3808,6 +3807,7 @@ export class MainMuseumHub {
       }
       const currentWall = this.resolution.wallById.get(wall.id);
       if (!currentWall) continue;
+      if ((wall.role === 'bounds-only') !== !currentWall.room) continue;
       if (applyRenderedWallGeometry && wall.quad && wall.quad.length === currentWall.quad.length) {
         currentWall.quad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
       }
