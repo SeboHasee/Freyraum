@@ -61,7 +61,7 @@ const ROOM_HEIGHT = 5.2;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, hubRoomRenderer, quality, paintingMaterial, builtInArtworks] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, hubRoomRenderer, quality, paintingMaterial, builtInArtworks, editorViewport] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
@@ -75,6 +75,7 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/config/quality.ts'),
   loadTsModule('src/materials/PaintingMaterial.ts'),
   loadTsModule('src/config/artworks.ts'),
+  loadTsModule('src/hub/editorViewport.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
@@ -114,6 +115,22 @@ assert.equal(
   null,
   'outward/reversed wall winding must be rejected when inward normal is declared'
 );
+const viewport = new editorViewport.EditorViewport({ width: 1366, height: 768, margin: 64 });
+for (const [wallId, origin, axisU, width] of [
+  ['front', { x: -4.5, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 9],
+  ['left', { x: -4.5, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 12],
+  ['right', { x: 4.5, y: 0, z: 0 }, { x: 0, y: 0, z: -1 }, 12],
+  ['rear', { x: 4.5, y: 0, z: -12 }, { x: -1, y: 0, z: 0 }, 9],
+]) {
+  const corners = geometry.wallCornersFromTransform(origin, axisU, { x: 0, y: 1, z: 0 }, width, 5.2);
+  assert.ok(viewport.frameWall(corners), `${wallId} wall must be frameable from authoritative corners`);
+  const handles = viewport.projectCorners(wallId);
+  assert.equal(handles.length, 4, `${wallId} wall must expose all four corner handles`);
+  for (const handle of handles) {
+    assert.ok(handle.screen.x > 64 && handle.screen.x < 1302, `${wallId} corner must be horizontally visible`);
+    assert.ok(handle.screen.y > 64 && handle.screen.y < 704, `${wallId} corner must be vertically visible`);
+  }
+}
 assert.deepEqual(museumHub.HUB_REFERENCE_IMAGE, { width: 2048, height: 1354, fit: 'contain' });
 assert.deepEqual(museumHub.HUB_REFERENCE_BACK_WALL_QUAD, [
   { x: 531, y: 511 },

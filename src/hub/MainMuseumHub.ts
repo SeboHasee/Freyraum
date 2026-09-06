@@ -53,6 +53,7 @@ import {
   shouldRetryEmbeddedFallbackAfterPostUploadFailure,
 } from '../utils/sourceToPixelOutcome';
 import { releaseWebGLContext } from '../utils/webgl';
+import { EditorViewport, type EditorCornerHandle } from './editorViewport';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -176,6 +177,8 @@ export class MainMuseumHub {
   private calibrationRoomBoundaryVisible = false;
   private calibrationEditMode: 'wall' | 'safe' | 'mounting-zone' | 'room-boundary' = 'wall';
   private calibrationSvg: SVGSVGElement | null = null;
+  private editorViewportSvg: SVGSVGElement | null = null;
+  private editorViewport: EditorViewport | null = null;
   private calibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private initialCalibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private calibrationDrag: CalibrationDrag | null = null;
@@ -1587,6 +1590,10 @@ export class MainMuseumHub {
       this.applyView();
       this.applyAllSlotGeometry();
       if (this.calibrating) this.applyCalibrationViewport();
+      if (this.calibrating) {
+        this.editorViewport?.resize(this.stageWidth, this.stageHeight);
+        this.renderEditorViewportHandles();
+      }
       if (this.debugGeometry) this.emitDebugGeometrySnapshot('resize');
     });
   };
@@ -1661,6 +1668,19 @@ export class MainMuseumHub {
     svg.setAttribute('aria-hidden', 'true');
     this.stage.appendChild(svg);
     this.calibrationSvg = svg;
+    this.editorViewport = new EditorViewport({
+      width: this.stageWidth,
+      height: this.stageHeight,
+      margin: 64,
+    });
+    const viewportSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    viewportSvg.classList.add('museum-hub__editor-viewport');
+    viewportSvg.setAttribute('viewBox', `0 0 ${this.stageWidth} ${this.stageHeight}`);
+    viewportSvg.setAttribute('aria-label', '3D wall edit view');
+    viewportSvg.style.pointerEvents = 'none';
+    this.stage.appendChild(viewportSvg);
+    this.editorViewportSvg = viewportSvg;
+    this.frameEditorWall(this.activeCalibrationWallId);
   }
 
   private buildCalibrationPanel(hub: HTMLElement): void {
@@ -1826,6 +1846,7 @@ export class MainMuseumHub {
       this.activeCalibrationWallId = select.value;
       this.calibrationRoomBoundaryVisible = select.value === 'wall-rear';
       this.calibrationEditMode = this.calibrationRoomBoundaryVisible ? 'room-boundary' : 'wall';
+      if (!this.calibrationRoomBoundaryVisible) this.frameEditorWall(select.value);
       this.renderCalibrationOverlay();
       this.announceCalibrationAction(`Currently editing: ${select.value === 'wall-rear' ? 'entrance boundary' : select.value.toUpperCase()}.`);
     });
@@ -1897,6 +1918,18 @@ export class MainMuseumHub {
       this.focusCalibrationWall();
     });
     moveWall.title = 'Drag a striped orange line to move the selected wall.';
+    makeAction('Wall Edit Mode', () => {
+      this.calibrationEditMode = 'wall';
+      this.frameEditorWall(this.activeCalibrationWallId);
+      this.announceCalibrationAction('Wall Edit Mode: all four authoritative 3D corners are visible and selectable.');
+    });
+    makeAction('Frame Wall', () => this.frameEditorWall(this.activeCalibrationWallId));
+    makeAction('Frame Corner', () => this.frameEditorWall(this.activeCalibrationWallId, 0));
+    makeAction('Reset View', () => {
+      this.editorViewport?.resetView();
+      this.renderEditorViewportHandles();
+      this.announceCalibrationAction('Editor view reset without changing wall geometry.');
+    });
     makeAction('Edit safe boundary', () => {
       this.calibrationEditMode = 'safe';
       this.renderCalibrationOverlay();
@@ -2291,6 +2324,92 @@ export class MainMuseumHub {
       offsetY: (this.stageHeight - bounds.height * scale) / 2 - bounds.minY * scale,
     };
     this.applyCalibrationViewport();
+  }
+
+  private frameEditorWall(wallId: string | null, cornerIndex?: number): void {
+    if (!this.editorViewport || !this.editorViewportSvg || !wallId || wallId === 'wall-rear') return;
+    const wall = this.resolution.wallById.get(wallId);
+    if (!wall?.room) return;
+    const frame = cornerIndex === undefined
+      ? this.editorViewport.frameWall(wall.room)
+      : this.editorViewport.frameCorner(wall.room, cornerIndex);
+    if (!frame) {
+      this.announceCalibrationAction(`Cannot frame ${wallId}: authoritative wall corners are invalid.`);
+      return;
+    }
+    this.renderEditorViewportHandles();
+  }
+
+  private renderEditorViewportHandles(): void {
+    const svg = this.editorViewportSvg;
+    const viewport = this.editorViewport;
+    const wallId = this.activeCalibrationWallId;
+    if (!svg) return;
+    svg.replaceChildren();
+    if (!viewport || !wallId || wallId === 'wall-rear' || viewport.viewMode !== 'wall-edit') return;
+    const wall = this.resolution.wallById.get(wallId);
+    if (!wall?.room) return;
+    const handles = viewport.projectCorners(wall.id);
+    const wallLine = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    wallLine.setAttribute('points', handles.map(({ screen }) => `${screen.x},${screen.y}`).join(' '));
+    wallLine.setAttribute('class', 'museum-hub__editor-viewport-wall');
+    svg.appendChild(wallLine);
+    handles.forEach((handle) => svg.appendChild(this.createEditorCornerHandle(handle)));
+  }
+
+  private createEditorCornerHandle(handle: EditorCornerHandle): SVGCircleElement {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', handle.screen.x.toFixed(2));
+    circle.setAttribute('cy', handle.screen.y.toFixed(2));
+    circle.setAttribute('r', '14');
+    circle.setAttribute('tabindex', '0');
+    circle.setAttribute('role', 'button');
+    circle.setAttribute('aria-label', `${handle.wallId} 3D corner ${handle.cornerIndex + 1}`);
+    circle.classList.add('museum-hub__editor-viewport-corner');
+    circle.style.pointerEvents = 'auto';
+    circle.addEventListener('pointerdown', (event) => this.startEditorCornerDrag(event, handle));
+    return circle;
+  }
+
+  private startEditorCornerDrag(event: PointerEvent, handle: EditorCornerHandle): void {
+    const wall = this.resolution.wallById.get(handle.wallId);
+    const room = wall?.room;
+    if (!room || !this.editorViewportSvg || !this.editorViewport) return;
+    const capture = this.editorViewportSvg;
+    capture.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent): void => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      const rect = capture.getBoundingClientRect();
+      const screenX = ((moveEvent.clientX - rect.left) / Math.max(1, rect.width)) * this.stageWidth;
+      const screenY = ((moveEvent.clientY - rect.top) / Math.max(1, rect.height)) * this.stageHeight;
+      const next = this.editorViewport!.cornerFromScreen(screenX, screenY);
+      if (!next) return;
+      const candidate = room.corners.map((corner, index) => index === handle.cornerIndex ? next : corner) as [
+        Point3D,
+        Point3D,
+        Point3D,
+        Point3D
+      ];
+      const frame = this.editorViewport!.frameWall(candidate);
+      if (!frame) return;
+      room.corners.forEach((corner, index) => {
+        if (index === handle.cornerIndex) {
+          corner.x = next.x;
+          corner.y = next.y;
+          corner.z = next.z;
+        }
+      });
+      this.renderEditorViewportHandles();
+    };
+    const end = (): void => {
+      capture.removeEventListener('pointermove', move);
+      capture.removeEventListener('pointerup', end);
+      capture.removeEventListener('pointercancel', end);
+    };
+    capture.addEventListener('pointermove', move);
+    capture.addEventListener('pointerup', end, { once: true });
+    capture.addEventListener('pointercancel', end, { once: true });
+    event.preventDefault();
   }
 
   private applyCalibrationViewport(): void {
