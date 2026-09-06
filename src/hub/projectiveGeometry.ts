@@ -1404,8 +1404,25 @@ export function projectSlotArtwork(
   artworkAspect: number,
   stage: StageReference
 ): ProjectedArtworkGeometry | null {
-  const projectiveFallback = (): ProjectedArtworkGeometry | null =>
-    projectSlotArtwork({ ...wall, room: undefined, camera: undefined }, slot, artworkAspect, stage);
+  const projectiveFallback = (): ProjectedArtworkGeometry | null => {
+    const normalizedSlot = wall.room && slot.anchor
+      ? {
+          ...slot,
+          center: point(
+            slot.anchor.x / Math.max(EPSILON, wall.room.width),
+            1 - slot.anchor.y / Math.max(EPSILON, wall.room.height)
+          ),
+          mountedHeight: slot.mountedHeight / Math.max(EPSILON, wall.room.height),
+          anchor: undefined,
+        }
+      : slot;
+    return projectSlotArtwork(
+      { ...wall, room: undefined, camera: undefined },
+      normalizedSlot,
+      artworkAspect,
+      stage
+    );
+  };
   if (wall.room && wall.camera && slot.anchor) {
     const placement = solveRoomArtworkPlacement(
       wall.room,

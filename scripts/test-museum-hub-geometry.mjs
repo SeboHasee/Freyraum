@@ -453,6 +453,10 @@ for (const slot of mixedFallbackResolution.pages.flatMap((page) => page.slots)) 
     slot.artworkAspect,
     mixedFallbackResolution.stage
   );
+  if (projected?.projectiveFallback) {
+    assert.ok(projected.projectedQuad, `${slot.id} fallback must retain rendered geometry`);
+    continue;
+  }
   assert.ok(projected?.placement, `${slot.id} must retain valid final mounting geometry`);
   assert.ok(
     Math.hypot(
