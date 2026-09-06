@@ -2397,7 +2397,9 @@ export class MainMuseumHub {
     corner: Point2D
   ): SVGCircleElement {
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    const display = this.clampDisplayPoint(corner);
+    const display = this.displayPoint(corner);
+    display.x = Math.min(this.stageWidth - 24, Math.max(24, display.x));
+    display.y = Math.min(this.stageHeight - 24, Math.max(24, display.y));
     circle.setAttribute('cx', display.x.toFixed(2));
     circle.setAttribute('cy', display.y.toFixed(2));
     circle.setAttribute('r', '14');
