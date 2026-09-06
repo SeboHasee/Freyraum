@@ -1786,6 +1786,7 @@ export class MainMuseumHub {
         ? `${name} · ${width}×${height}px · ${(width / height).toFixed(3)}`
         : `${name} · Copy the file to customer-artworks/Backgrounds`;
     };
+    updateBackgroundInfo();
     backgroundInput.addEventListener('change', () => {
       const file = backgroundInput.files?.[0];
       if (!file) return;
@@ -3803,7 +3804,7 @@ export class MainMuseumHub {
     const shouldRevokeBackgroundObjectUrl =
       Boolean(activeBackgroundObjectUrl && config.background.src !== activeBackgroundSrc);
     for (const wall of config.walls) {
-      if (wall.id === 'wall-rear' && wall.quad && wall.quad.length === 4) {
+      if (applyRenderedWallGeometry && wall.id === 'wall-rear' && wall.quad && wall.quad.length === 4) {
         this.entranceBoundaryQuad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
         continue;
       }
