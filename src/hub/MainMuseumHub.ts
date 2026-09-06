@@ -3460,6 +3460,15 @@ export class MainMuseumHub {
           id: wall.id,
           quad: wall.quad,
         }));
+    const unexpectedBoundsWall = sanitized.config.walls.find(
+      (wall) => wall.role === 'bounds-only' && wall.id !== 'wall-rear'
+    );
+    if (unexpectedBoundsWall) {
+      this.announceCalibrationAction(
+        `Import blockiert: ${unexpectedBoundsWall.id} ist kein unterstützter Raumgrenzbereich.`
+      );
+      return;
+    }
     const baselineConfig = this.initialCalibrationSnapshot
       ? sanitizeMuseumHubConfig(JSON.parse(this.initialCalibrationSnapshot)).config
       : this.buildCurrentCalibrationConfig() as MuseumHubConfig;
