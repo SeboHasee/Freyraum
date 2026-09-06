@@ -119,6 +119,21 @@ Notes:
   `?hubDebug=1` sessions can correlate geometry, current artwork ownership, and
   transition background state.
 
+### `?artworkDebug=1` or `?artworkDebug=<slot-or-artwork-id>`
+
+Development-only live artwork inspection (`src/hub/MainMuseumHub.ts`).
+
+Notes:
+- Run it against the generated file preview, for example
+  `customer-preview/placement-editor.html?artworkDebug=1`.
+- The first selectable artwork is inspected for `1`; an exact slot or artwork
+  ID can be supplied to select another work.
+- The report is logged as `[Freyraum artwork-debug]` and exposed as
+  `window.__freyraumArtworkDebug`.
+- It reads the live DOM node with `getBoundingClientRect()` and
+  `getComputedStyle()`, and reads the live Three.js mesh, geometry, world
+  matrix, texture, and UV attributes. It does not alter artwork sizing.
+
 ### Grey-artwork incident capture
 
 There is no separate query parameter. Use `?debug=verbose&hubDebug=1` when the
