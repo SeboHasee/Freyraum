@@ -2387,9 +2387,18 @@ export class MainMuseumHub {
     for (const wall of this.resolution.walls) {
       if (wall.id !== 'wall-left' && wall.id !== 'wall-right') continue;
       const entranceCornerIndices = wall.id === 'wall-left' ? [0, 3] : [1, 2];
+      const frontCornerIndices = wall.id === 'wall-left' ? [1, 2] : [0, 3];
       entranceCornerIndices.forEach((cornerIndex) => {
         const corner = wall.quad[cornerIndex];
-        svg.appendChild(this.createProjectedWallCornerHandle(wall.id, cornerIndex, corner));
+        const frontCornerIndex = cornerIndex === entranceCornerIndices[0]
+          ? frontCornerIndices[0]
+          : frontCornerIndices[1];
+        svg.appendChild(this.createProjectedWallCornerHandle(
+          wall.id,
+          cornerIndex,
+          corner,
+          wall.quad[frontCornerIndex]
+        ));
       });
     }
   }
@@ -2397,12 +2406,11 @@ export class MainMuseumHub {
   private createProjectedWallCornerHandle(
     wallId: string,
     cornerIndex: number,
-    corner: Point2D
+    corner: Point2D,
+    edgeStart?: Point2D
   ): SVGCircleElement {
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    const display = this.displayPoint(corner);
-    display.x = Math.min(this.stageWidth - 24, Math.max(24, display.x));
-    display.y = Math.min(this.stageHeight - 24, Math.max(24, display.y));
+    const display = this.projectedEdgePoint(edgeStart ?? corner, corner);
     circle.setAttribute('cx', display.x.toFixed(2));
     circle.setAttribute('cy', display.y.toFixed(2));
     circle.setAttribute('r', '14');
@@ -2414,6 +2422,43 @@ export class MainMuseumHub {
       this.startWallPointCalibrationDrag(event, wallId, 'quad', cornerIndex)
     );
     return circle;
+  }
+
+  private projectedEdgePoint(start: Point2D, end: Point2D): Point2D {
+    const startDisplay = this.displayPoint(start);
+    const endDisplay = this.displayPoint(end);
+    const margin = 24;
+    const minX = margin;
+    const maxX = this.stageWidth - margin;
+    const minY = margin;
+    const maxY = this.stageHeight - margin;
+    if (
+      endDisplay.x >= minX && endDisplay.x <= maxX
+      && endDisplay.y >= minY && endDisplay.y <= maxY
+    ) {
+      return endDisplay;
+    }
+    const dx = endDisplay.x - startDisplay.x;
+    const dy = endDisplay.y - startDisplay.y;
+    const candidates: Array<{ t: number; point: Point2D }> = [];
+    if (Math.abs(dx) > 1e-6) {
+      for (const x of [minX, maxX]) {
+        const t = (x - startDisplay.x) / dx;
+        const y = startDisplay.y + dy * t;
+        if (t > 0 && t <= 1 && y >= minY && y <= maxY) candidates.push({ t, point: { x, y } });
+      }
+    }
+    if (Math.abs(dy) > 1e-6) {
+      for (const y of [minY, maxY]) {
+        const t = (y - startDisplay.y) / dy;
+        const x = startDisplay.x + dx * t;
+        if (t > 0 && t <= 1 && x >= minX && x <= maxX) candidates.push({ t, point: { x, y } });
+      }
+    }
+    return candidates.sort((a, b) => a.t - b.t)[0]?.point ?? {
+      x: Math.min(maxX, Math.max(minX, endDisplay.x)),
+      y: Math.min(maxY, Math.max(minY, endDisplay.y)),
+    };
   }
 
   private renderEditorWall(
