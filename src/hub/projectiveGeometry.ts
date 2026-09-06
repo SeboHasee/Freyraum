@@ -39,6 +39,7 @@ export interface WallCalibrationReport {
   offset: Point2D;
   targetQuad: Quad;
   projectedQuad: Quad;
+  projectedAnchor?: Point2D;
   corners: readonly WallCalibrationError[];
   averageErrorPx: number;
   maximumErrorPx: number;
