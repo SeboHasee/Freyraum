@@ -4008,7 +4008,9 @@ export class MainMuseumHub {
       Boolean(activeBackgroundObjectUrl && config.background.src !== activeBackgroundSrc);
     for (const wall of config.walls) {
       if (wall.id === 'wall-rear' && wall.quad && wall.quad.length === 4) {
-        this.entranceBoundaryQuad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
+        if (applyRenderedWallGeometry) {
+          this.entranceBoundaryQuad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
+        }
         continue;
       }
       const currentWall = this.resolution.wallById.get(wall.id);
