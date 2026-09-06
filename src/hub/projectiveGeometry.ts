@@ -1519,12 +1519,6 @@ export function projectSlotArtwork(
   const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
   return {
     localQuad,
-    worldQuad: projectedQuad.map((corner) => point3(corner.x, 0, corner.y)) as unknown as [
-      Point3D,
-      Point3D,
-      Point3D,
-      Point3D,
-    ],
     projectedQuad,
     projectedAnchor: point(
       (projectedQuad[0].x + projectedQuad[2].x) / 2,

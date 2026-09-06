@@ -3938,9 +3938,11 @@ export class MainMuseumHub {
       currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
     }
     this.resolution.background = { ...config.background };
+    const safeBackgroundObjectUrl =
+      activeBackgroundObjectUrl?.startsWith('blob:') ? activeBackgroundObjectUrl : null;
     this.backgroundImage.src =
-      activeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
-        ? activeBackgroundObjectUrl
+      safeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
+        ? safeBackgroundObjectUrl
         : resolveBackgroundUrl(config.background.src);
     if (shouldRevokeBackgroundObjectUrl && activeBackgroundObjectUrl) {
       URL.revokeObjectURL(activeBackgroundObjectUrl);

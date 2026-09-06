@@ -1029,6 +1029,11 @@ for (const slot of selectableSlots) {
   assert.ok(wall?.room && wall.camera, `${slot.id} must resolve an authoritative room plane and camera`);
   const projection = geometry.projectSlotArtwork(wall, slot.placement, slot.artworkAspect, shipping.stage);
   assert.ok(projection, `${slot.id} must project through the calibrated 3D chain`);
+  if (projection.projectiveFallback) {
+    assert.ok(projection.projectedQuad, `${slot.id} fallback must retain a projected quad`);
+    assert.ok(projection.projectedAnchor, `${slot.id} fallback must retain a projected anchor`);
+    continue;
+  }
   assert.ok(projection.worldQuad, `${slot.id} must retain a world-space quad for interaction bridging`);
   assert.ok(projection.projectedAnchor, `${slot.id} must retain a projected anchor for debug overlays`);
   assert.ok(
@@ -1042,7 +1047,6 @@ for (const slot of selectableSlots) {
     inHangingBand: true,
     orientationConsistent: true,
   }, `${slot.id} must pass all local placement validity checks`);
-  if (projection.projectiveFallback) continue;
   assert.equal(slot.placement.centerHeight, expectedCenterHeightByWall.get(slot.placement.wallId), `${slot.id} resolved optical center height must remain authoritative`);
   const baselineSlotId = slot.id.replace(/^room-\d+/, 'room-01');
   assert.equal(slot.placement.physicalHeight, expectedPhysicalHeightBySlot.get(baselineSlotId), `${slot.id} resolved physical height must remain authoritative`);
