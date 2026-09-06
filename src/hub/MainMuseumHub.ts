@@ -3856,7 +3856,19 @@ export class MainMuseumHub {
     const changedRenderedWall = sanitized.config.walls.find((wall) => {
       if (wall.role === 'bounds-only') return false;
       const baseline = baselineWalls.get(wall.id);
-      return !baseline || JSON.stringify(wall.quad) !== JSON.stringify(baseline.quad);
+      const quad = wall.quad;
+      const baselineQuad = baseline?.quad;
+      return (
+        !baseline ||
+        !quad ||
+        !baselineQuad ||
+        quad.length !== baselineQuad.length ||
+        quad.some(
+          (corner, index) =>
+            Math.abs(corner.x - baselineQuad[index]!.x) > 1e-6 ||
+            Math.abs(corner.y - baselineQuad[index]!.y) > 1e-6
+        )
+      );
     });
     if (changedRenderedWall) {
       this.announceCalibrationAction(
@@ -4009,6 +4021,7 @@ export class MainMuseumHub {
         // Keep guide polygons paired with the fixed rendered quad. Imported
         // polygons use the import's coordinate space and cannot be copied
         // safely when rendered geometry is intentionally preserved.
+        currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
         continue;
       }
       if (!applyRenderedWallGeometry) continue;
