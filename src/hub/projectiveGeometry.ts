@@ -476,6 +476,20 @@ export function scaleHomographyForSourceRect(matrix: Matrix3x3, width: number, h
   ];
 }
 
+function translateHomographyOutput(matrix: Matrix3x3, offsetX: number, offsetY: number): Matrix3x3 {
+  return [
+    matrix[0] - offsetX * matrix[6],
+    matrix[1] - offsetX * matrix[7],
+    matrix[2] - offsetX * matrix[8],
+    matrix[3] - offsetY * matrix[6],
+    matrix[4] - offsetY * matrix[7],
+    matrix[5] - offsetY * matrix[8],
+    matrix[6],
+    matrix[7],
+    matrix[8],
+  ];
+}
+
 export function homographyToCssMatrix3d(matrix: Matrix3x3): string {
   return `matrix3d(${matrix[0]}, ${matrix[3]}, 0, ${matrix[6]}, ${matrix[1]}, ${matrix[4]}, 0, ${matrix[7]}, 0, 0, 1, 0, ${matrix[2]}, ${matrix[5]}, 0, ${matrix[8]})`;
 }
@@ -1468,7 +1482,12 @@ export function projectSlotArtwork(
       const sourceWidth = Math.max(1, sourceHeight * Math.max(EPSILON, artworkAspect));
       const quadHomography = computeHomographyFromUnitSquare(projectedQuad);
       if (!quadHomography) return projectiveFallback();
-      const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
+      const bounds = getQuadBounds(projectedQuad);
+      const sourceHomography = translateHomographyOutput(
+        scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight),
+        bounds.minX,
+        bounds.minY
+      );
       const projectedWall = projectRoomWallQuad(wall.room, wall.camera, stage);
       if (!projectedWall) return projectiveFallback();
       const alignment = evaluateArtworkWallAlignment(
@@ -1533,7 +1552,12 @@ export function projectSlotArtwork(
   const sourceWidth = Math.max(1, sourceHeight * artworkAspect);
   const quadHomography = computeHomographyFromUnitSquare(projectedQuad);
   if (!quadHomography) return null;
-  const sourceHomography = scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight);
+  const bounds = getQuadBounds(projectedQuad);
+  const sourceHomography = translateHomographyOutput(
+    scaleHomographyForSourceRect(quadHomography, sourceWidth, sourceHeight),
+    bounds.minX,
+    bounds.minY
+  );
   return {
     localQuad,
     projectedQuad,

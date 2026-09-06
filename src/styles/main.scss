@@ -462,7 +462,9 @@ canvas {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: fill;
+  transform-origin: 0 0;
+  transform: var(--hub-artwork-transform, none);
   user-select: none;
   opacity: 0;
   box-shadow:
@@ -947,11 +949,6 @@ canvas {
    * clips the resize handle at oblique wall corners.
    */
   clip-path: none;
-}
-
-.museum-hub.is-calibrating .museum-hub__artwork
-  :is(.museum-hub__art, .museum-hub__art-placeholder) {
-  clip-path: var(--hub-clip-path, none);
 }
 
 .museum-hub.is-calibrating .museum-hub__artwork::after {
