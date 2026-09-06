@@ -1396,6 +1396,10 @@ export class MainMuseumHub {
     view.nativeAspectRatio ??= nativeAspectRatio;
     view.slot.artworkAspect = view.nativeAspectRatio;
     view.button.dataset['nativeAspectRatio'] = view.nativeAspectRatio.toPrecision(12);
+    // The renderer was synchronized while resolving the source, but the DOM
+    // projection was still calculated with the manifest ratio. Reproject both
+    // paths after the decoded native ratio becomes authoritative.
+    this.applySlotGeometry(view.button, view.slot);
     this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
       slotId: view.slot.id,
       artworkId: view.slot.artworkId,
