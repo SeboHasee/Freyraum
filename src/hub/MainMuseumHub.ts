@@ -2399,6 +2399,13 @@ export class MainMuseumHub {
           corner.z = next.z;
         }
       });
+      // Keep the v5 rectangular fields as a derived compatibility view of the
+      // edited room plane until renderer integration consumes corners directly.
+      room.origin = { ...frame.origin };
+      room.axisU = { ...frame.axisU };
+      room.axisV = { ...frame.axisV };
+      room.width = frame.width;
+      room.height = frame.height;
       this.renderEditorViewportHandles();
     };
     const end = (): void => {
