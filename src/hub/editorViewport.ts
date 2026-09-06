@@ -146,6 +146,7 @@ export class EditorViewport {
 
   projectWallCorners(wallId: string, frame: WallFrame, edgeMargin = 24): EditorCornerHandle[] {
     const sideWall = wallId === 'wall-left' || wallId === 'wall-right' || wallId.includes('left') || wallId.includes('right');
+    const leftSideWall = wallId === 'wall-left' || wallId.includes('left');
     return frame.corners.flatMap((world, cornerIndex) => {
       const screen = this.project(world);
       if (!screen) return [];
@@ -161,7 +162,12 @@ export class EditorViewport {
         cornerIndex,
         world,
         screen: {
-          x: Math.min(this.width - edgeMargin, Math.max(edgeMargin, screen.x)),
+          // Keep the two rear corners of each side wall on its own screen edge.
+          // Their projected positions can coincide with the front wall at the
+          // extreme perspective angles used by the customer preview.
+          x: sideWall && (cornerIndex === 1 || cornerIndex === 2)
+            ? (leftSideWall ? edgeMargin : this.width - edgeMargin)
+            : Math.min(this.width - edgeMargin, Math.max(edgeMargin, screen.x)),
           y: Math.min(this.height - edgeMargin, Math.max(edgeMargin, screen.y)),
         },
         edgeAnchored,

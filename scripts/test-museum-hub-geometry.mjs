@@ -137,6 +137,10 @@ assert.equal(
   2,
   'both camera-facing side-wall edge corners must receive visible edge anchors'
 );
+assert.ok(
+  sideEdgeHandles.filter((handle) => handle.edgeAnchored).every((handle) => handle.screen.x === 24),
+  'left side-wall anchors must sit on the left screen edge'
+);
 for (const handle of sideEdgeHandles.filter((candidate) => candidate.edgeAnchored)) {
   assert.ok(handle.screen.x >= 24 && handle.screen.x <= 1342, 'edge anchor must be inside horizontal hit area');
   assert.ok(handle.screen.y >= 24 && handle.screen.y <= 744, 'edge anchor must be inside vertical hit area');
