@@ -98,6 +98,15 @@ const isHubDebugRequested = (): boolean => {
   }
 };
 
+const artworkRuntimeInspectionId = (): string | null => {
+  try {
+    const value = new URLSearchParams(window.location.search).get('artworkDebug');
+    return value === '1' ? '__first__' : value;
+  } catch {
+    return null;
+  }
+};
+
 function resolveBackgroundUrl(src: string): string {
   const safeSrc = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(src) && !src.includes('..')
     ? src
@@ -433,6 +442,7 @@ export class MainMuseumHub {
       this.applyView(true);
       this.updateStageScale();
       this.applyAllSlotGeometry();
+      this.inspectArtworkRuntime();
       this.applySelectionState('composition-ready');
       this.scheduleIdlePageDecode();
       if (this.calibrating) this.updateCalibrationOutput(true);
@@ -777,6 +787,68 @@ export class MainMuseumHub {
     for (const view of this.slotViews) this.applySlotGeometry(view.button, view.slot);
     this.applySelectionState('geometry-refresh');
     if (this.calibrating || this.debugGeometry) this.renderCalibrationOverlay();
+  }
+
+  private inspectArtworkRuntime(): void {
+    const requestedId = artworkRuntimeInspectionId();
+    if (!requestedId) return;
+    const view = this.slotViews.find(({ slot }) =>
+      requestedId === '__first__' ? Boolean(slot.artworkId && slot.selectable) : slot.artworkId === requestedId || slot.id === requestedId
+    );
+    if (!view) {
+      console.warn('[Freyraum artwork-debug] slot not found', { requestedId });
+      return;
+    }
+    const image = view.image;
+    const element = view.button;
+    const computed = getComputedStyle(element);
+    const imageComputed = image ? getComputedStyle(image) : null;
+    const rect = element.getBoundingClientRect();
+    const imageRect = image?.getBoundingClientRect() ?? null;
+    const dom = {
+      owner: image ? 'DOM <img> overlay plus Three.js canvas' : 'Three.js canvas',
+      tag: element.tagName,
+      rect: { width: rect.width, height: rect.height },
+      computed: {
+        width: computed.width,
+        height: computed.height,
+        transform: computed.transform,
+        transformOrigin: computed.transformOrigin,
+      },
+      client: { width: element.clientWidth, height: element.clientHeight },
+      offset: { width: element.offsetWidth, height: element.offsetHeight },
+      image: image
+        ? {
+            naturalWidth: image.naturalWidth,
+            naturalHeight: image.naturalHeight,
+            rect: imageRect ? { width: imageRect.width, height: imageRect.height } : null,
+            computedWidth: imageComputed?.width ?? null,
+            computedHeight: imageComputed?.height ?? null,
+            computedTransform: imageComputed?.transform ?? null,
+            computedTransformOrigin: imageComputed?.transformOrigin ?? null,
+          }
+        : null,
+      clipPath: computed.clipPath,
+      homography: element.style.getPropertyValue('--hub-artwork-transform'),
+    };
+    const renderer = this.hubRoomRenderer?.inspectArtwork(view.slot.id) ?? null;
+    const report = {
+      slotId: view.slot.id,
+      artworkId: view.slot.artworkId,
+      nativeAspectRatio: view.nativeAspectRatio,
+      canonicalWidth: view.slot.placement.mountedHeight * view.slot.artworkAspect,
+      canonicalHeight: view.slot.placement.mountedHeight,
+      storedAspectRatio: view.slot.artworkAspect,
+      dom,
+      three: renderer,
+    };
+    console.groupCollapsed(`[Freyraum artwork-debug] ${view.slot.id}`);
+    console.log(report);
+    console.log('SOURCE_RATIO', image ? image.naturalWidth / image.naturalHeight : null);
+    console.log('DOM_RATIO', imageRect ? imageRect.width / imageRect.height : rect.width / rect.height);
+    console.log('CANVAS/MESH', renderer);
+    console.groupEnd();
+    (window as Window & { __freyraumArtworkDebug?: typeof report }).__freyraumArtworkDebug = report;
   }
 
   private logSlotProjection(slot: ResolvedHubSlot, wall: ResolvedHubWall, projection: ProjectedArtworkGeometry): void {
@@ -1400,6 +1472,7 @@ export class MainMuseumHub {
     // projection was still calculated with the manifest ratio. Reproject both
     // paths after the decoded native ratio becomes authoritative.
     this.applySlotGeometry(view.button, view.slot);
+    this.inspectArtworkRuntime();
     this.diagnostics.info('artwork-source-resolved', 'Hub artwork source resolved', {
       slotId: view.slot.id,
       artworkId: view.slot.artworkId,

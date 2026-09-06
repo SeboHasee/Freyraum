@@ -51,6 +51,23 @@ export interface SlotUpsertResult {
   failureReason?: string;
 }
 
+export interface ArtworkRuntimeInspection {
+  slotId: string;
+  geometryType: string;
+  geometryPositions: number[];
+  geometryBounds: { min: [number, number, number]; max: [number, number, number] } | null;
+  meshScale: [number, number, number];
+  worldMatrix: number[];
+  worldDimensions: { width: number; height: number; depth: number };
+  texture: {
+    width: number;
+    height: number;
+    repeat: [number, number];
+    offset: [number, number];
+    uv: number[];
+  } | null;
+}
+
 const PLACEHOLDER_SIZE = 512;
 /** Perceived stretched-canvas depth of a mounted artwork (metres). */
 /** Depth of the dim passage pocket behind each doorway opening (metres). */
@@ -299,6 +316,7 @@ export class HubRoomRenderer {
       if (render) this.render();
       return { applied: false, usedImage: false };
     }
+
     const slotAnchor = slot.placement.anchor;
     if (!slotAnchor) {
       state.group.visible = false;
@@ -421,6 +439,47 @@ export class HubRoomRenderer {
     state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
     if (render) this.render();
     return { applied: true, usedImage: !missingImage, fit, visibleProbe };
+  }
+
+  inspectArtwork(slotId: string): ArtworkRuntimeInspection | null {
+    const state = this.slotMeshes.get(slotId);
+    if (!state) return null;
+    state.group.updateMatrixWorld(true);
+    const geometry = state.artworkMesh.geometry;
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox;
+    const position = geometry.getAttribute('position');
+    const uv = geometry.getAttribute('uv');
+    const texture = state.artworkMesh.material.map;
+    const worldBox = new THREE.Box3().setFromObject(state.artworkMesh);
+    const image = texture?.image as { width?: number; height?: number } | undefined;
+    return {
+      slotId,
+      geometryType: geometry.type,
+      geometryPositions: Array.from(position.array as ArrayLike<number>),
+      geometryBounds: bounds
+        ? {
+            min: [bounds.min.x, bounds.min.y, bounds.min.z],
+            max: [bounds.max.x, bounds.max.y, bounds.max.z],
+          }
+        : null,
+      meshScale: [state.artworkMesh.scale.x, state.artworkMesh.scale.y, state.artworkMesh.scale.z],
+      worldMatrix: Array.from(state.artworkMesh.matrixWorld.elements),
+      worldDimensions: {
+        width: worldBox.max.x - worldBox.min.x,
+        height: worldBox.max.y - worldBox.min.y,
+        depth: worldBox.max.z - worldBox.min.z,
+      },
+      texture: texture
+        ? {
+            width: image?.width ?? 0,
+            height: image?.height ?? 0,
+            repeat: [texture.repeat.x, texture.repeat.y],
+            offset: [texture.offset.x, texture.offset.y],
+            uv: uv ? Array.from(uv.array as ArrayLike<number>) : [],
+          }
+        : null,
+    };
   }
 
   dispose(): void {
