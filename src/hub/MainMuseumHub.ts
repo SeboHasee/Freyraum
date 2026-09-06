@@ -2164,6 +2164,7 @@ export class MainMuseumHub {
     captureElement.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     captureElement.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     captureElement.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    window.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     window.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     window.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
   }
@@ -2719,6 +2720,7 @@ export class MainMuseumHub {
     currentTarget?.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     currentTarget?.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     currentTarget?.removeEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    window.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
     window.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     window.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     this.renderCalibrationOverlay();
@@ -2734,6 +2736,7 @@ export class MainMuseumHub {
     element.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     element.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     element.removeEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    window.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
     window.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     window.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     if (element && 'releasePointerCapture' in element) {
