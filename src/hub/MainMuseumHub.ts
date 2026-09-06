@@ -2306,9 +2306,13 @@ export class MainMuseumHub {
   private clampDisplayPoint(value: Point2D): Point2D {
     const margin = 18;
     const display = this.displayPoint(value);
-    return point(
+    const canonical = point(
       (Math.min(this.stageWidth - margin, Math.max(margin, display.x)) - this.calibrationViewport.offsetX) / this.calibrationViewport.scale,
       (Math.min(this.stageHeight - margin, Math.max(margin, display.y)) - this.calibrationViewport.offsetY) / this.calibrationViewport.scale
+    );
+    return point(
+      Math.min(this.stageWidth, Math.max(0, canonical.x)),
+      Math.min(this.stageHeight, Math.max(0, canonical.y))
     );
   }
 
@@ -3318,6 +3322,7 @@ export class MainMuseumHub {
     };
     const initialWall = initial.walls.find((wall) => wall.id === wallId);
     const currentWall = current.walls.find((wall) => wall.id === wallId);
+    this.recordCalibrationHistory();
     if (!initialWall || !currentWall) {
       if (wallId === 'wall-rear') {
         this.entranceBoundaryQuad = this.projectEntranceBoundary();
@@ -3326,7 +3331,6 @@ export class MainMuseumHub {
       }
       return;
     }
-    this.recordCalibrationHistory();
     currentWall.quad = initialWall.quad;
     currentWall.safePolygon = initialWall.safePolygon;
     currentWall.mountingZone = initialWall.mountingZone;
@@ -3452,14 +3456,12 @@ export class MainMuseumHub {
         .map((wall) => ({
           id: wall.id,
           quad: wall.quad,
-          safePolygon: wall.safePolygon,
-          mountingZone: wall.mountingZone,
         }));
     const baselineConfig = this.initialCalibrationSnapshot
       ? sanitizeMuseumHubConfig(JSON.parse(this.initialCalibrationSnapshot)).config
       : this.buildCurrentCalibrationConfig() as MuseumHubConfig;
     if (!baselineConfig || JSON.stringify(renderedWallGeometry(sanitized.config)) !== JSON.stringify(renderedWallGeometry(baselineConfig))) {
-      this.announceCalibrationAction('Import blockiert: Die gerenderten Wandflächen oder Führungsbereiche weichen ab.');
+      this.announceCalibrationAction('Import blockiert: Die gerenderten Wandflächen weichen ab.');
       return;
     }
     this.recordCalibrationHistory();
