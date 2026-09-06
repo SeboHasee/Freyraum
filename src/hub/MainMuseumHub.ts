@@ -2438,6 +2438,7 @@ export class MainMuseumHub {
     if (!room || !this.editorViewportSvg || !this.editorViewport) return;
     const capture = this.editorViewportSvg;
     capture.setPointerCapture(event.pointerId);
+    let historyRecorded = false;
     const move = (moveEvent: PointerEvent): void => {
       if (moveEvent.pointerId !== event.pointerId) return;
       const rect = capture.getBoundingClientRect();
@@ -2453,6 +2454,10 @@ export class MainMuseumHub {
       ];
       const frame = this.editorViewport!.frameWall(candidate);
       if (!frame) return;
+      if (!historyRecorded) {
+        this.recordCalibrationHistory();
+        historyRecorded = true;
+      }
       room.corners.forEach((corner, index) => {
         if (index === handle.cornerIndex) {
           corner.x = next.x;
@@ -3551,9 +3556,9 @@ export class MainMuseumHub {
       return;
     }
     this.restoreInitialEditorWall(wallId);
-    currentWall.quad = initialWall.quad;
-    currentWall.safePolygon = initialWall.safePolygon;
-    currentWall.mountingZone = initialWall.mountingZone;
+    currentWall.quad = initialWall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
+    currentWall.safePolygon = (initialWall.safePolygon ?? []).map((corner) => clonePoint(corner));
+    currentWall.mountingZone = (initialWall.mountingZone ?? []).map((corner) => clonePoint(corner));
     currentWall.mountingZoneConfirmed = initialWall.mountingZoneConfirmed;
     this.applyCalibrationSnapshot(JSON.stringify(current));
     this.announceCalibrationAction(`Reset ${wallId.toUpperCase()}.`);
@@ -3804,7 +3809,7 @@ export class MainMuseumHub {
     const shouldRevokeBackgroundObjectUrl =
       Boolean(activeBackgroundObjectUrl && config.background.src !== activeBackgroundSrc);
     for (const wall of config.walls) {
-      if (applyRenderedWallGeometry && wall.id === 'wall-rear' && wall.quad && wall.quad.length === 4) {
+      if (wall.id === 'wall-rear' && wall.quad && wall.quad.length === 4) {
         this.entranceBoundaryQuad = wall.quad.map((corner) => clonePoint(corner)) as unknown as Quad;
         continue;
       }
