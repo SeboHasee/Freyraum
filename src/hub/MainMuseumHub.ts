@@ -2164,6 +2164,8 @@ export class MainMuseumHub {
     captureElement.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     captureElement.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     captureElement.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    window.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
+    window.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
   }
 
   private startWallTranslateDrag = (event: PointerEvent, wallId: string): void => {
@@ -2717,6 +2719,8 @@ export class MainMuseumHub {
     currentTarget?.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     currentTarget?.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     currentTarget?.removeEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    window.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
+    window.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
   };
@@ -2730,6 +2734,8 @@ export class MainMuseumHub {
     element.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     element.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     element.removeEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    window.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
+    window.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     if (element && 'releasePointerCapture' in element) {
       try {
         (element as Element & { releasePointerCapture(pointerId: number): void }).releasePointerCapture(drag.pointerId);
@@ -2957,6 +2963,7 @@ export class MainMuseumHub {
     circle.setAttribute('cy', position.y.toFixed(2));
     circle.setAttribute('r', '12');
     circle.setAttribute('class', 'museum-hub__calibration-corner-hit');
+    circle.style.pointerEvents = 'all';
     circle.setAttribute('tabindex', '0');
     circle.setAttribute('role', 'button');
     circle.setAttribute(
