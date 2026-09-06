@@ -2394,17 +2394,20 @@ export class MainMuseumHub {
       if (wall.id !== 'wall-left' && wall.id !== 'wall-right') return;
       const frame = frames[index];
       if (!frame) return;
+      const sideHandles = viewport.projectWallCorners(wall.id, frame)
+        .filter((handle) => handle.cornerIndex === 1 || handle.cornerIndex === 2);
       const sharedCorners = wall.id === 'wall-left'
-        ? [[0, 0], [3, 3]]
-        : [[0, 1], [3, 2]];
-      sharedCorners.forEach(([sideIndex, frontIndexForGuide]) => {
-        const start = frontCornerByIndex.get(frontIndexForGuide);
-        const projectedEnd = viewport.project(frame.corners[sideIndex === 0 ? 1 : 2]);
-        if (!start || !projectedEnd) return;
+        ? [[1, 0], [2, 3]]
+        : [[1, 1], [2, 2]];
+      sideHandles.forEach((handle) => {
+        const frontIndexForGuide = sharedCorners.find(([sideIndex]) => sideIndex === handle.cornerIndex)?.[1];
+        const start = frontIndexForGuide === undefined ? undefined : frontCornerByIndex.get(frontIndexForGuide);
+        if (!start) return;
         this.renderEditorGuideLine(svg, start, {
-          x: Math.min(this.stageWidth - 24, Math.max(24, projectedEnd.x)),
-          y: Math.min(this.stageHeight - 24, Math.max(24, projectedEnd.y)),
+          x: handle.screen.x,
+          y: handle.screen.y,
         });
+        svg.appendChild(this.createEditorCornerHandle(handle));
       });
     });
   }

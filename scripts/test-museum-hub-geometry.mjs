@@ -146,6 +146,13 @@ for (const handle of sideEdgeHandles.filter((candidate) => candidate.edgeAnchore
   assert.ok(handle.screen.y >= 24 && handle.screen.y <= 744, 'edge anchor must be inside vertical hit area');
   assert.equal(handle.world, overviewFrames[1].corners[handle.cornerIndex], 'edge anchor must retain the real 3D corner reference');
 }
+const rightSideEdgeHandles = viewport.projectWallCorners('wall-right', overviewFrames[2])
+  .filter((handle) => handle.edgeAnchored);
+assert.equal(rightSideEdgeHandles.length, 2, 'right side wall must expose both entrance edge handles');
+assert.ok(
+  rightSideEdgeHandles.every((handle) => handle.screen.x === 1342),
+  'right side-wall entrance handles must sit on the right screen edge'
+);
 for (const [wallId, origin, axisU, width] of [
   ['front', { x: -4.5, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 9],
   ['left', { x: -4.5, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 12],
