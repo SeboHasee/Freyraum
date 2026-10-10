@@ -1,6 +1,14 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.27 — Explicit artwork and placeholder presentation state (2026-10-10)
+
+- Kept placeholder textures and geometry on an explicit square placeholder
+  presentation instead of reusing the active artwork ratio.
+- Bound decoded artwork textures, native ratios, mesh dimensions, and DOM
+  projection as one artwork presentation state.
+- Added texture/presentation identity keys and runtime mismatch diagnostics.
+
 ## v1.26 — Viewport-safe calibration and direct artwork selection (2026-09-06)
 
 - Added a display-only, uniform calibration viewport fit so initial wall geometry

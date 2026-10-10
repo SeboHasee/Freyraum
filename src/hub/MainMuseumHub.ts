@@ -45,7 +45,7 @@ import {
   type ArtworkImageSourceCandidate,
 } from '../utils/artworkImageSources';
 import { loadHubImageAsset } from './hubAssetLoader';
-import { HubRoomRenderer, type SlotUpsertResult } from './HubRoomRenderer';
+import { HubRoomRenderer, type HubArtworkPresentationKind, type SlotUpsertResult } from './HubRoomRenderer';
 import type { QualityPreset } from '../config/quality';
 import {
   getRuntimeProtocol,
@@ -677,7 +677,6 @@ export class MainMuseumHub {
       button.addEventListener('click', () => this.handleSlotClick(slot));
     }
 
-    this.applySlotGeometry(button, slot);
     const view: SlotView = {
       slot,
       button,
@@ -689,11 +688,17 @@ export class MainMuseumHub {
       fallbackReason: null,
       lastUpsertResult: null,
     };
+    this.applySlotGeometry(button, slot, false, 1);
     this.syncSlotRenderer(view);
     return view;
   }
 
-  private applySlotGeometry(button: HTMLButtonElement, slot: ResolvedHubSlot, syncRenderer = true): void {
+  private applySlotGeometry(
+    button: HTMLButtonElement,
+    slot: ResolvedHubSlot,
+    syncRenderer = true,
+    aspectOverride?: number
+  ): void {
     const wall = this.resolution.wallById.get(slot.placement.wallId);
     if (!wall) {
       button.classList.add('is-invalid-geometry');
@@ -712,7 +717,7 @@ export class MainMuseumHub {
     const projection = projectSlotArtwork(
       wall,
       slot.placement,
-      Math.max(Number.EPSILON, slot.artworkAspect),
+      Math.max(Number.EPSILON, aspectOverride ?? this.presentationAspectForSlot(slot)),
       this.resolution.stage
     );
     if (!projection) {
@@ -773,14 +778,28 @@ export class MainMuseumHub {
       || !view.image
       || !view.image.complete
       || view.image.naturalWidth <= 0;
+    const presentationKind: HubArtworkPresentationKind = missingImage ? 'placeholder' : 'artwork';
+    const presentationAspect = this.presentationAspectForView(view, presentationKind);
     view.lastUpsertResult = this.hubRoomRenderer.upsertSlot(
       view.slot,
       wall,
       view.image,
       missingImage,
       view.resolvedSource?.resolvedUrlType ?? null,
+      presentationKind,
+      presentationAspect,
       render
     );
+  }
+
+  private presentationAspectForSlot(slot: ResolvedHubSlot): number {
+    const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
+    return view ? this.presentationAspectForView(view, view.imageState === 'ready' ? 'artwork' : 'placeholder') : 1;
+  }
+
+  private presentationAspectForView(view: SlotView, kind: HubArtworkPresentationKind): number {
+    if (kind === 'placeholder') return 1;
+    return Math.max(Number.EPSILON, view.nativeAspectRatio ?? view.slot.artworkAspect);
   }
 
   private applyAllSlotGeometry(): void {
@@ -862,6 +881,10 @@ export class MainMuseumHub {
     const domHeight = imageRect?.height ?? rect.height;
     const domRatio = ratio(domWidth, domHeight);
     const textureRatio = ratio(renderer?.texture?.width ?? 0, renderer?.texture?.height ?? 0);
+    const presentationKind = renderer?.presentationKind ?? (imageVisible ? 'artwork' : 'placeholder');
+    const presentationRatio = presentationKind === 'placeholder'
+      ? 1
+      : sourceRatio ?? Math.max(Number.EPSILON, view.slot.artworkAspect);
     const uvValues = renderer?.texture?.uv ?? [];
     const uvPairs = Array.from({ length: Math.floor(uvValues.length / 2) }, (_, index) => [
       uvValues[index * 2],
@@ -874,18 +897,24 @@ export class MainMuseumHub {
       ? [Math.max(...uvPairs.map(([u]) => u)), Math.max(...uvPairs.map(([, v]) => v))]
       : null;
     const stages: Array<[string, number | null]> = [
-      ['source-to-canonical', sourceRatio && ratio(canonicalWidth, canonicalHeight)],
-      ['canonical-to-three-local', ratio(canonicalWidth, canonicalHeight) && localRatio],
-      ['three-local-to-world', localRatio && worldRatio],
-      ['three-to-dom', sourceRatio && domRatio],
-      ['source-to-texture', sourceRatio && textureRatio],
+      ...(presentationKind === 'artwork'
+        ? [['source-to-canonical', sourceRatio && ratio(canonicalWidth, canonicalHeight)] as [string, number | null]]
+        : []),
+      ['presentation-to-three-local', localRatio],
+      ['three-local-to-world', worldRatio],
+      ['presentation-to-dom', domRatio],
+      ['presentation-to-texture', textureRatio],
     ];
-    const brokenStage = stages.find(([, value]) => value === null || Math.abs(value - (sourceRatio ?? value)) > 0.001)?.[0] ?? null;
+    const brokenStage = stages.find(([, value]) =>
+      value === null || Math.abs(value - presentationRatio) > 0.001
+    )?.[0] ?? null;
     const verdict = brokenStage
       ? `ASPECT PIPELINE: BROKEN AT ${brokenStage}`
       : 'ASPECT PIPELINE: CONSISTENT — NO GEOMETRIC DISTORTION FOUND';
     const report = {
       artworkId: view.slot.artworkId,
+      presentationKind,
+      presentationRatio,
       source: {
         naturalWidth: image?.naturalWidth ?? 0,
         naturalHeight: image?.naturalHeight ?? 0,
@@ -1536,6 +1565,7 @@ export class MainMuseumHub {
       // This lets an embedded fallback be selected without poisoning the slot
       // with a source that failed GPU upload or the visible-pixel probe.
       view.slot.artworkAspect = previousArtworkAspect;
+      this.setSlotImageState(view, 'missing', null, `${source.mode}:${renderFailure.stage}:${renderFailure.reason}`);
       return { status: 'failed', ...renderFailure };
     }
     view.nativeAspectRatio ??= nativeAspectRatio;
@@ -1610,7 +1640,7 @@ export class MainMuseumHub {
     } else {
       delete view.button.dataset['artworkFallbackReason'];
     }
-    this.syncSlotRenderer(view);
+    this.applySlotGeometry(view.button, view.slot);
   }
 
   private async loadSlotImageCandidate(

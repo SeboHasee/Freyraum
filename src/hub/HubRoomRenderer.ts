@@ -32,7 +32,12 @@ interface SlotMeshState {
   edgeMesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
   textureKind: 'image' | 'placeholder' | null;
   textureKey: string | null;
+  presentationKind: 'artwork' | 'placeholder' | null;
+  presentationAspect: number;
+  textureDimensions: { width: number; height: number };
 }
+
+export type HubArtworkPresentationKind = 'artwork' | 'placeholder';
 
 /**
  * v0.92: result of {@link HubRoomRenderer.upsertSlot}, letting
@@ -54,6 +59,9 @@ export interface SlotUpsertResult {
 export interface ArtworkRuntimeInspection {
   slotId: string;
   geometryType: string;
+  presentationKind: HubArtworkPresentationKind | null;
+  textureKind: 'image' | 'placeholder' | null;
+  presentationAspect: number;
   localGeometry: { width: number; height: number };
   geometryPositions: number[];
   geometryBounds: { min: [number, number, number]; max: [number, number, number] } | null;
@@ -69,7 +77,8 @@ export interface ArtworkRuntimeInspection {
   } | null;
 }
 
-const PLACEHOLDER_SIZE = 512;
+const PLACEHOLDER_WIDTH = 512;
+const PLACEHOLDER_HEIGHT = 512;
 /** Perceived stretched-canvas depth of a mounted artwork (metres). */
 /** Depth of the dim passage pocket behind each doorway opening (metres). */
 const DOORWAY_POCKET_DEPTH = 1.15;
@@ -309,6 +318,8 @@ export class HubRoomRenderer {
     image: HTMLImageElement | null,
     missingImage: boolean,
     sourceUrlType: ArtworkImageUrlType | null,
+    presentationKind: HubArtworkPresentationKind,
+    presentationAspect: number,
     render = true
   ): SlotUpsertResult {
     const state = this.ensureSlotState(slot);
@@ -325,14 +336,19 @@ export class HubRoomRenderer {
       return { applied: false, usedImage: false };
     }
 
-    const textureKey = !missingImage && image && image.complete && image.naturalWidth > 0
-      ? image.currentSrc || image.src || `${slot.id}:image`
-      : `${slot.id}:placeholder:${slot.displayLabel}`;
+    const hasArtworkImage = Boolean(presentationKind === 'artwork'
+      && !missingImage
+      && image
+      && image.complete
+      && image.naturalWidth > 0);
+    const textureKey = hasArtworkImage && image
+      ? `artwork:${image.currentSrc || image.src || slot.id}:${image.naturalWidth}x${image.naturalHeight}`
+      : `placeholder:${slot.id}:${PLACEHOLDER_WIDTH}x${PLACEHOLDER_HEIGHT}`;
     let fit: TextureUploadFit | undefined;
     let visibleProbe: VisiblePixelProbeResult | undefined;
     if (state.textureKey !== textureKey) {
       let targetTexture: THREE.Texture;
-      if (!missingImage && image && image.complete && image.naturalWidth > 0) {
+      if (hasArtworkImage && image) {
         const built = this.imageTexture(image);
         targetTexture = built.texture;
         fit = built.fit;
@@ -391,14 +407,19 @@ export class HubRoomRenderer {
       state.artworkMesh.material.map = targetTexture;
       state.artworkMesh.material.needsUpdate = true;
       state.textureKey = textureKey;
-      state.textureKind = missingImage ? 'placeholder' : 'image';
+      state.textureKind = hasArtworkImage ? 'image' : 'placeholder';
+      const textureImage = targetTexture.image as { width?: number; height?: number } | undefined;
+      state.textureDimensions = {
+        width: textureImage?.width ?? 0,
+        height: textureImage?.height ?? 0,
+      };
     }
 
     const mountingFrame = createArtworkMountingFrame(
       wall.room,
       slotAnchor,
       slot.placement.physicalHeight ?? slot.placement.mountedHeight,
-      Math.max(Number.EPSILON, slot.artworkAspect),
+      Math.max(Number.EPSILON, presentationAspect),
       slot.placement.mountingGap
     );
     if (!mountingFrame) {
@@ -438,8 +459,33 @@ export class HubRoomRenderer {
     // remains exactly at the mounting-frame back plane.
     state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
     state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
+    state.presentationKind = presentationKind;
+    state.presentationAspect = presentationAspect;
+    const expectedTextureKind = presentationKind === 'artwork' ? 'image' : 'placeholder';
+    if (state.textureKind !== expectedTextureKind) {
+      this.diagnostics.warn('hub-presentation-texture-kind-mismatch', 'Hub presentation kind and bound texture kind differ', {
+        slotId: slot.id,
+        artworkId: slot.artworkId,
+        presentationKind,
+        textureKind: state.textureKind,
+      });
+    }
+    const textureRatio = state.textureDimensions.height > 0
+      ? state.textureDimensions.width / state.textureDimensions.height
+      : 0;
+    if (textureRatio > 0 && Math.abs(textureRatio - presentationAspect) > 1e-6) {
+      this.diagnostics.warn('hub-presentation-aspect-mismatch', 'Hub presentation texture and geometry use different aspect ratios', {
+        slotId: slot.id,
+        artworkId: slot.artworkId,
+        presentationKind,
+        presentationAspect,
+        textureWidth: state.textureDimensions.width,
+        textureHeight: state.textureDimensions.height,
+        textureRatio,
+      });
+    }
     if (render) this.render();
-    return { applied: true, usedImage: !missingImage, fit, visibleProbe };
+    return { applied: true, usedImage: hasArtworkImage, fit, visibleProbe };
   }
 
   inspectArtwork(slotId: string): ArtworkRuntimeInspection | null {
@@ -457,6 +503,9 @@ export class HubRoomRenderer {
     return {
       slotId,
       geometryType: geometry.type,
+      presentationKind: state.presentationKind,
+      textureKind: state.textureKind,
+      presentationAspect: state.presentationAspect,
       geometryPositions: Array.from(position.array as ArrayLike<number>),
       localGeometry: {
         width: bounds ? (bounds.max.x - bounds.min.x) * Math.abs(state.artworkMesh.scale.x) : 0,
@@ -477,8 +526,8 @@ export class HubRoomRenderer {
       },
       texture: texture
         ? {
-            width: image?.width ?? 0,
-            height: image?.height ?? 0,
+            width: image?.width ?? state.textureDimensions.width,
+            height: image?.height ?? state.textureDimensions.height,
             repeat: [texture.repeat.x, texture.repeat.y],
             offset: [texture.offset.x, texture.offset.y],
             uv: uv ? Array.from(uv.array as ArrayLike<number>) : [],
@@ -1446,6 +1495,9 @@ export class HubRoomRenderer {
       edgeMesh,
       textureKind: null,
       textureKey: null,
+      presentationKind: null,
+      presentationAspect: 1,
+      textureDimensions: { width: 0, height: 0 },
     };
     this.slotMeshes.set(slot.id, state);
     return state;
@@ -1505,8 +1557,8 @@ export class HubRoomRenderer {
     const existing = this.placeholderTextures.get(label);
     if (existing) return existing;
     const canvas = document.createElement('canvas');
-    canvas.width = PLACEHOLDER_SIZE;
-    canvas.height = PLACEHOLDER_SIZE;
+    canvas.width = PLACEHOLDER_WIDTH;
+    canvas.height = PLACEHOLDER_HEIGHT;
     const context = canvas.getContext('2d');
     if (!context) {
       const fallback = new THREE.CanvasTexture(canvas);

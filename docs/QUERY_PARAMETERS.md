@@ -136,6 +136,9 @@ Notes:
 - It reads the live DOM node with `getBoundingClientRect()` and
   `getComputedStyle()`, and reads the live Three.js mesh, geometry, world
   matrix, texture, and UV attributes. It does not alter artwork sizing.
+- The report also identifies the active presentation (`artwork` or
+  `placeholder`) and bound texture kind. A placeholder uses its own square
+  presentation ratio; a decoded artwork uses its native decoded ratio.
 
 ### Grey-artwork incident capture
 
