@@ -9,6 +9,13 @@
   projection as one artwork presentation state.
 - Added texture/presentation identity keys and runtime mismatch diagnostics.
 
+## v1.28 — Calibration uses native artwork presentation (2026-10-10)
+
+- Made the calibration editor use the projected DOM artwork image as its pixel
+  owner, avoiding perspective-mesh scaling being mistaken for source distortion.
+- Added a front-wall asset regression check for source PNG and generated bundle
+  dimensions.
+
 ## v1.26 — Viewport-safe calibration and direct artwork selection (2026-09-06)
 
 - Added a display-only, uniform calibration viewport fit so initial wall geometry

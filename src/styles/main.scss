@@ -476,6 +476,15 @@ canvas {
   opacity: 1;
 }
 
+.museum-hub.is-calibrating .museum-hub__art {
+  /*
+   * Calibration is a projective 2D authoring surface. Prefer the DOM image
+   * over the perspective mesh so the editor shows the decoded source ratio
+   * without a second camera projection being mistaken for image distortion.
+   */
+  opacity: 1;
+}
+
 .museum-hub.is-2d .museum-hub__image {
   opacity: 1;
 }

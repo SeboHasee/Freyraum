@@ -4219,10 +4219,12 @@ export class MainMuseumHub {
     this.resolution.background = { ...config.background };
     const safeBackgroundObjectUrl =
       activeBackgroundObjectUrl?.startsWith('blob:') ? activeBackgroundObjectUrl : null;
-    this.backgroundImage.src =
+    this.backgroundImage.setAttribute(
+      'src',
       safeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
         ? safeBackgroundObjectUrl
-        : resolveBackgroundUrl(config.background.src);
+        : resolveBackgroundUrl(config.background.src)
+    );
     if (shouldRevokeBackgroundObjectUrl && activeBackgroundObjectUrl) {
       URL.revokeObjectURL(activeBackgroundObjectUrl);
       this.editorBackgroundObjectUrl = null;
