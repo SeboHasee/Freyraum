@@ -115,6 +115,12 @@ function resolveBackgroundUrl(src: string): string {
   return `${HUB_BACKGROUND_BASE_URL}${safeSrc.replace(/^Backgrounds\//, 'backgrounds/')}`;
 }
 
+function setResolvedBackgroundSource(image: HTMLImageElement, src: string): void {
+  const resolved = new URL(src, window.location.href);
+  if (!['blob:', 'file:', 'http:', 'https:'].includes(resolved.protocol)) return;
+  Reflect.set(image, 'src', resolved.href);
+}
+
 type CalibrationDrag =
   | {
       kind: 'slot';
@@ -4219,8 +4225,8 @@ export class MainMuseumHub {
     this.resolution.background = { ...config.background };
     const safeBackgroundObjectUrl =
       activeBackgroundObjectUrl?.startsWith('blob:') ? activeBackgroundObjectUrl : null;
-    this.backgroundImage.setAttribute(
-      'src',
+    setResolvedBackgroundSource(
+      this.backgroundImage,
       safeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
         ? safeBackgroundObjectUrl
         : resolveBackgroundUrl(config.background.src)
