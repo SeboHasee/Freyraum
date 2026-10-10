@@ -981,6 +981,7 @@ canvas {
   content: '';
   position: absolute;
   inset: 0;
+  clip-path: var(--hub-clip-path, none);
   transform-origin: 0 0;
   border: 2px dashed rgba(255, 90, 60, 0.92);
 }

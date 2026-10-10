@@ -55,6 +55,11 @@ import {
 } from '../utils/sourceToPixelOutcome';
 import { releaseWebGLContext } from '../utils/webgl';
 import { EditorViewport } from './editorViewport';
+import {
+  buildArtworkRatioReport,
+  createNativeSourceRect,
+  nativeArtworkAspect,
+} from './artworkAspect';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -153,6 +158,7 @@ interface SlotView {
   nativeAspectRatio: number | null;
   nativeWidth: number | null;
   nativeHeight: number | null;
+  assetRevision: string | null;
   imageState: 'idle' | 'loading' | 'ready' | 'missing';
   resolvedSource: ArtworkImageSourceCandidate | null;
   fallbackReason: string | null;
@@ -696,6 +702,7 @@ export class MainMuseumHub {
       nativeAspectRatio: null,
       nativeWidth: null,
       nativeHeight: null,
+      assetRevision: null,
       imageState: 'idle',
       resolvedSource: null,
       fallbackReason: null,
@@ -1557,7 +1564,7 @@ export class MainMuseumHub {
     requestStatus: 'loaded' | 'fallback-loaded',
     dimensions: { width: number; height: number }
   ): { status: 'ready' } | { status: 'failed'; stage: 'gpu-upload' | 'visible-pixel-probe'; reason: string } {
-    const nativeAspectRatio = dimensions.width / dimensions.height;
+    const nativeAspectRatio = nativeArtworkAspect(dimensions);
     if (!Number.isFinite(nativeAspectRatio) || nativeAspectRatio <= 0) {
       return { status: 'failed', stage: 'visible-pixel-probe', reason: 'invalid-native-aspect-ratio' };
     }
@@ -1624,8 +1631,18 @@ export class MainMuseumHub {
       await probe.decode();
       const width = probe.naturalWidth;
       const height = probe.naturalHeight;
-      const aspect = width > 0 && height > 0 ? width / height : 0;
+      const aspect = width > 0 && height > 0 ? nativeArtworkAspect({ width, height }) : 0;
       if (!Number.isFinite(aspect) || aspect <= 0) throw new Error('invalid-image-dimensions');
+      const accepted = window.confirm(
+        `Replace ${slot.displayLabel} with ${file.name}?\n\n` +
+        `${width} × ${height}px · ratio ${aspect.toFixed(4)}\n\n` +
+        'The current artwork remains unchanged if you cancel.'
+      );
+      if (!accepted) {
+        URL.revokeObjectURL(objectUrl);
+        this.announceCalibrationAction('Replacement cancelled; the current artwork remains active.');
+        return;
+      }
       view.imageLoadToken += 1;
       view.image.src = objectUrl;
       await view.image.decode();
@@ -1633,6 +1650,7 @@ export class MainMuseumHub {
       view.nativeHeight = height;
       view.nativeAspectRatio = aspect;
       view.slot.artworkAspect = aspect;
+      view.assetRevision = `${file.name}:${file.size}:${file.lastModified}:${width}x${height}`;
       view.imageState = 'ready';
       view.resolvedSource = null;
       view.fallbackReason = 'editor-upload-preview';
@@ -1663,9 +1681,26 @@ export class MainMuseumHub {
     }
     const width = view.nativeWidth ?? view.image?.naturalWidth ?? 0;
     const height = view.nativeHeight ?? view.image?.naturalHeight ?? 0;
-    const aspect = view.nativeAspectRatio ?? (width > 0 && height > 0 ? width / height : slot.artworkAspect);
+    const aspect = view.nativeAspectRatio ?? (width > 0 && height > 0 ? nativeArtworkAspect({ width, height }) : slot.artworkAspect);
     const source = view.fallbackReason === 'editor-upload-preview' ? 'temporary upload preview' : 'decoded source';
-    this.calibrationArtworkInfo.textContent = `${slot.artworkId} · ${width > 0 && height > 0 ? `${width} × ${height}px` : 'dimensions pending'} · ratio ${aspect.toFixed(4)} · ${source}`;
+    const physicalHeight = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
+    const sourceRect = width > 0 && height > 0
+      ? createNativeSourceRect({ width, height }, Math.max(1, physicalHeight))
+      : null;
+    const report = sourceRect
+      ? buildArtworkRatioReport(
+          { width, height },
+          { width: physicalHeight * aspect, height: physicalHeight },
+          sourceRect,
+          view.lastUpsertResult?.fit
+            ? { width: view.lastUpsertResult.fit.targetWidth, height: view.lastUpsertResult.fit.targetHeight }
+            : null
+        )
+      : null;
+    this.calibrationArtworkInfo.textContent =
+      `${slot.artworkId} · ${width > 0 && height > 0 ? `${width} × ${height}px` : 'dimensions pending'} · ` +
+      `native ratio ${aspect.toFixed(4)} · source rect ${report?.domSource.toFixed(4) ?? '—'} · ` +
+      `${report?.status === 'valid' ? 'ratio valid' : 'ratio needs attention'} · ${source}`;
   }
 
   private getSlotRenderFailure(
@@ -2143,7 +2178,7 @@ export class MainMuseumHub {
 
     const selectLabel = document.createElement('label');
     selectLabel.className = 'museum-hub__calibration-label';
-    selectLabel.textContent = 'Choose wall to edit';
+    selectLabel.textContent = '1. Select wall';
     const select = document.createElement('select');
     select.className = 'museum-hub__calibration-select';
     for (const wall of this.resolution.walls) {
@@ -2173,7 +2208,7 @@ export class MainMuseumHub {
 
     const slotLabel = document.createElement('label');
     slotLabel.className = 'museum-hub__calibration-label';
-    slotLabel.textContent = 'Choose artwork';
+    slotLabel.textContent = '2. Select artwork';
     const slotSelect = document.createElement('select');
     slotSelect.className = 'museum-hub__calibration-select';
     for (const { slot } of this.slotViews) {
@@ -2209,10 +2244,10 @@ export class MainMuseumHub {
     const numericGrid = document.createElement('div');
     numericGrid.className = 'museum-hub__calibration-numeric-grid';
     const numericFields: readonly [string, string, number, number, number][] = [
-      ['horizontalPosition', 'Position links/rechts', 0, 1, 0.001],
-      ['centerHeight', 'Höhe der Bildmitte (m)', 0, 8, 0.01],
-      ['physicalHeight', 'Bildgröße/Höhe (m)', 0.04, 8, 0.01],
-      ['mountingGap', 'Abstand zur Wand (m)', 0.001, 0.03, 0.001],
+      ['horizontalPosition', 'Horizontal position (0–1)', 0, 1, 0.001],
+      ['centerHeight', 'Artwork center height (m)', 0, 8, 0.01],
+      ['physicalHeight', 'Artwork height (m; width follows ratio)', 0.04, 8, 0.01],
+      ['mountingGap', 'Distance from wall (m)', 0.001, 0.03, 0.001],
     ];
     for (const [field, labelText, min, max, step] of numericFields) {
       const label = document.createElement('label');

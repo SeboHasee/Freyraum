@@ -1,3 +1,5 @@
+import { createNativeSourceRect } from './artworkAspect';
+
 export interface Point2D {
   x: number;
   y: number;
@@ -1479,7 +1481,11 @@ export function projectSlotArtwork(
         return projectiveFallback();
       }
       const sourceHeight = Math.max(1, (placement.mountedHeight / wall.room.height) * stage.height);
-      const sourceWidth = Math.max(1, sourceHeight * Math.max(EPSILON, artworkAspect));
+      const sourceRect = createNativeSourceRect(
+        { width: Math.max(EPSILON, artworkAspect), height: 1 },
+        sourceHeight
+      );
+      const sourceWidth = sourceRect.width;
       const quadHomography = computeHomographyFromUnitSquare(projectedQuad);
       if (!quadHomography) return projectiveFallback();
       const bounds = getQuadBounds(projectedQuad);
@@ -1549,7 +1555,11 @@ export function projectSlotArtwork(
     projected[3]!,
   ]);
   const sourceHeight = Math.max(1, mountedHeight * stage.height);
-  const sourceWidth = Math.max(1, sourceHeight * artworkAspect);
+  const sourceRect = createNativeSourceRect(
+    { width: Math.max(EPSILON, artworkAspect), height: 1 },
+    sourceHeight
+  );
+  const sourceWidth = sourceRect.width;
   const quadHomography = computeHomographyFromUnitSquare(projectedQuad);
   if (!quadHomography) return null;
   const bounds = getQuadBounds(projectedQuad);
