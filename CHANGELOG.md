@@ -1,6 +1,15 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.29 — Deterministic placement editor preview (2026-10-10)
+
+- Selecting a wall now changes the existing projected calibration selection
+  without automatically creating a second orthographic wall rectangle.
+- Calibration hides WebGL pixels so the projected DOM artwork is the single
+  visible editor owner.
+- Added decoded native dimensions, ratio inspection, and safe temporary artwork
+  replacement previews with object-URL cleanup.
+
 ## v1.27 — Explicit artwork and placeholder presentation state (2026-10-10)
 
 - Kept placeholder textures and geometry on an explicit square placeholder

@@ -1,6 +1,14 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Deterministic editor preview (v1.29)
+
+- [x] Keep wall selection on the existing projected calibration quad.
+- [x] Make camera framing an explicit action instead of a selector side effect.
+- [x] Hide WebGL artwork pixels during calibration.
+- [x] Display decoded native artwork dimensions and aspect ratios.
+- [x] Support validated temporary artwork replacement previews with cleanup.
+
 ## Implemented — Unified wall editing and non-blocking room boundary (v1.25)
 
 - [x] Keep the purple bounds-only room boundary hidden from normal wall editing.

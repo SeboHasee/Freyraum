@@ -54,7 +54,7 @@ import {
   shouldRetryEmbeddedFallbackAfterPostUploadFailure,
 } from '../utils/sourceToPixelOutcome';
 import { releaseWebGLContext } from '../utils/webgl';
-import { EditorViewport, type EditorCornerHandle } from './editorViewport';
+import { EditorViewport } from './editorViewport';
 
 const HUB_BACKGROUND_BASE_URL =
   window.location.protocol === 'file:'
@@ -78,64 +78,6 @@ type SlotImageAttemptResult =
       height: number;
     }
 
-    private async replaceCalibrationArtwork(file: File): Promise<void> {
-      const slot = this.activeCalibrationSlot;
-      const view = slot ? this.slotViews.find((candidate) => candidate.slot.id === slot.id) : null;
-      if (!view?.image || !slot?.artworkId) {
-        this.announceCalibrationAction('Select an artwork before uploading a replacement.');
-        return;
-      }
-      const objectUrl = URL.createObjectURL(file);
-      const previousUrl = this.editorArtworkObjectUrls.get(slot.id);
-      const probe = new Image();
-      try {
-        probe.src = objectUrl;
-        await probe.decode();
-        const width = probe.naturalWidth;
-        const height = probe.naturalHeight;
-        const aspect = width > 0 && height > 0 ? width / height : 0;
-        if (!Number.isFinite(aspect) || aspect <= 0) throw new Error('invalid-image-dimensions');
-        view.imageLoadToken += 1;
-        view.image.src = objectUrl;
-        await view.image.decode();
-        view.nativeWidth = width;
-        view.nativeHeight = height;
-        view.nativeAspectRatio = aspect;
-        view.slot.artworkAspect = aspect;
-        view.imageState = 'ready';
-        view.resolvedSource = null;
-        view.fallbackReason = 'editor-upload-preview';
-        view.button.dataset['artworkSourceState'] = 'ready';
-        view.button.dataset['artworkSourceMode'] = 'editor-upload-preview';
-        this.editorArtworkObjectUrls.set(slot.id, objectUrl);
-        if (previousUrl) URL.revokeObjectURL(previousUrl);
-        this.applySlotGeometry(view.button, view.slot);
-        this.updateCalibrationArtworkInfo();
-        this.renderCalibrationOverlay();
-        this.updateCalibrationOutput(true);
-        this.announceCalibrationAction(
-          `${slot.displayLabel} preview replaced. Native dimensions: ${width} × ${height}px; ratio ${aspect.toFixed(4)}.`
-        );
-      } catch {
-        URL.revokeObjectURL(objectUrl);
-        this.announceCalibrationAction('The replacement image could not be decoded; the previous artwork remains active.');
-      }
-    }
-
-    private updateCalibrationArtworkInfo(): void {
-      if (!this.calibrationArtworkInfo) return;
-      const slot = this.activeCalibrationSlot;
-      const view = slot ? this.slotViews.find((candidate) => candidate.slot.id === slot.id) : null;
-      if (!slot || !view) {
-        this.calibrationArtworkInfo.textContent = 'Select an artwork to inspect its decoded dimensions and ratio.';
-        return;
-      }
-      const width = view.nativeWidth ?? view.image?.naturalWidth ?? 0;
-      const height = view.nativeHeight ?? view.image?.naturalHeight ?? 0;
-      const aspect = view.nativeAspectRatio ?? (width > 0 && height > 0 ? width / height : slot.artworkAspect);
-      const source = view.fallbackReason === 'editor-upload-preview' ? 'temporary upload preview' : 'decoded source';
-      this.calibrationArtworkInfo.textContent = `${slot.artworkId} · ${width > 0 && height > 0 ? `${width} × ${height}px` : 'dimensions pending'} · ratio ${aspect.toFixed(4)} · ${source}`;
-    }
   | {
       status: 'failed';
       reason: SlotImageAttemptFailureReason;
@@ -1667,6 +1609,65 @@ export class MainMuseumHub {
     return { status: 'ready' };
   }
 
+  private async replaceCalibrationArtwork(file: File): Promise<void> {
+    const slot = this.activeCalibrationSlot;
+    const view = slot ? this.slotViews.find((candidate) => candidate.slot.id === slot.id) : null;
+    if (!view?.image || !slot?.artworkId) {
+      this.announceCalibrationAction('Select an artwork before uploading a replacement.');
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    const previousUrl = this.editorArtworkObjectUrls.get(slot.id);
+    const probe = new Image();
+    try {
+      probe.src = objectUrl;
+      await probe.decode();
+      const width = probe.naturalWidth;
+      const height = probe.naturalHeight;
+      const aspect = width > 0 && height > 0 ? width / height : 0;
+      if (!Number.isFinite(aspect) || aspect <= 0) throw new Error('invalid-image-dimensions');
+      view.imageLoadToken += 1;
+      view.image.src = objectUrl;
+      await view.image.decode();
+      view.nativeWidth = width;
+      view.nativeHeight = height;
+      view.nativeAspectRatio = aspect;
+      view.slot.artworkAspect = aspect;
+      view.imageState = 'ready';
+      view.resolvedSource = null;
+      view.fallbackReason = 'editor-upload-preview';
+      view.button.dataset['artworkSourceState'] = 'ready';
+      view.button.dataset['artworkSourceMode'] = 'editor-upload-preview';
+      this.editorArtworkObjectUrls.set(slot.id, objectUrl);
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      this.applySlotGeometry(view.button, view.slot);
+      this.updateCalibrationArtworkInfo();
+      this.renderCalibrationOverlay();
+      this.updateCalibrationOutput(true);
+      this.announceCalibrationAction(
+        `${slot.displayLabel} preview replaced. Native dimensions: ${width} × ${height}px; ratio ${aspect.toFixed(4)}.`
+      );
+    } catch {
+      URL.revokeObjectURL(objectUrl);
+      this.announceCalibrationAction('The replacement image could not be decoded; the previous artwork remains active.');
+    }
+  }
+
+  private updateCalibrationArtworkInfo(): void {
+    if (!this.calibrationArtworkInfo) return;
+    const slot = this.activeCalibrationSlot;
+    const view = slot ? this.slotViews.find((candidate) => candidate.slot.id === slot.id) : null;
+    if (!slot || !view) {
+      this.calibrationArtworkInfo.textContent = 'Select an artwork to inspect its decoded dimensions and ratio.';
+      return;
+    }
+    const width = view.nativeWidth ?? view.image?.naturalWidth ?? 0;
+    const height = view.nativeHeight ?? view.image?.naturalHeight ?? 0;
+    const aspect = view.nativeAspectRatio ?? (width > 0 && height > 0 ? width / height : slot.artworkAspect);
+    const source = view.fallbackReason === 'editor-upload-preview' ? 'temporary upload preview' : 'decoded source';
+    this.calibrationArtworkInfo.textContent = `${slot.artworkId} · ${width > 0 && height > 0 ? `${width} × ${height}px` : 'dimensions pending'} · ratio ${aspect.toFixed(4)} · ${source}`;
+  }
+
   private getSlotRenderFailure(
     view: SlotView
   ): { stage: 'gpu-upload' | 'visible-pixel-probe'; reason: string } | null {
@@ -2706,7 +2707,6 @@ export class MainMuseumHub {
   private renderEditorViewportHandles(): void {
     const svg = this.editorViewportSvg;
     const viewport = this.editorViewport;
-    const wallId = this.activeCalibrationWallId;
     if (!svg) return;
     svg.replaceChildren();
     if (!viewport) return;
@@ -2797,116 +2797,6 @@ export class MainMuseumHub {
       x: Math.min(maxX, Math.max(minX, endDisplay.x)),
       y: Math.min(maxY, Math.max(minY, endDisplay.y)),
     };
-  }
-
-  private renderEditorWall(
-    svg: SVGSVGElement,
-    handles: readonly EditorCornerHandle[]
-  ): void {
-    const wallLine = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    wallLine.setAttribute('points', handles.map(({ screen }) => `${screen.x},${screen.y}`).join(' '));
-    wallLine.setAttribute('class', 'museum-hub__editor-viewport-wall');
-    svg.appendChild(wallLine);
-    handles.forEach((handle) => svg.appendChild(this.createEditorCornerHandle(handle)));
-  }
-
-  private createEditorCornerHandle(handle: EditorCornerHandle): SVGCircleElement {
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', handle.screen.x.toFixed(2));
-    circle.setAttribute('cy', handle.screen.y.toFixed(2));
-    circle.setAttribute('r', '14');
-    circle.setAttribute('tabindex', '0');
-    circle.setAttribute('role', 'button');
-    circle.setAttribute('aria-label', `${handle.wallId} 3D corner ${handle.cornerIndex + 1}`);
-    circle.classList.add(
-      'museum-hub__editor-viewport-corner',
-      ...(handle.edgeAnchored ? ['is-edge-anchored'] : [])
-    );
-    if (handle.edgeAnchored) {
-      circle.setAttribute(
-        'data-editor-edge-anchor',
-        'This dot is an on-screen editing anchor for the real 3D corner.'
-      );
-    }
-    circle.style.pointerEvents = 'auto';
-    circle.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
-      event.preventDefault();
-      this.activeCalibrationWallId = handle.wallId;
-      if (this.calibrationWallSelect) this.calibrationWallSelect.value = handle.wallId;
-      this.frameEditorWall(handle.wallId, handle.cornerIndex);
-      this.announceCalibrationAction(`${handle.wallId.toUpperCase()} selected. Wall Edit Mode is ready.`);
-    });
-    circle.addEventListener('pointerdown', (event) => {
-      if (this.editorViewport?.viewMode !== 'wall-edit') {
-        this.activeCalibrationWallId = handle.wallId;
-        if (this.calibrationWallSelect) this.calibrationWallSelect.value = handle.wallId;
-        this.frameEditorWall(handle.wallId, handle.cornerIndex);
-        this.announceCalibrationAction(`${handle.wallId.toUpperCase()} selected. Wall Edit Mode is ready.`);
-        event.preventDefault();
-        return;
-      }
-      this.startEditorCornerDrag(event, handle);
-    });
-    return circle;
-  }
-
-  private startEditorCornerDrag(event: PointerEvent, handle: EditorCornerHandle): void {
-    const wall = this.resolution.wallById.get(handle.wallId);
-    const room = wall?.room;
-    if (!room || !this.editorViewportSvg || !this.editorViewport) return;
-    const capture = this.editorViewportSvg;
-    capture.setPointerCapture(event.pointerId);
-    let historyRecorded = false;
-    const move = (moveEvent: PointerEvent): void => {
-      if (moveEvent.pointerId !== event.pointerId) return;
-      const rect = capture.getBoundingClientRect();
-      const screenX = ((moveEvent.clientX - rect.left) / Math.max(1, rect.width)) * this.stageWidth;
-      const screenY = ((moveEvent.clientY - rect.top) / Math.max(1, rect.height)) * this.stageHeight;
-      const next = this.editorViewport!.cornerFromScreen(screenX, screenY);
-      if (!next) return;
-      const candidate = room.corners.map((corner, index) => index === handle.cornerIndex ? next : corner) as [
-        Point3D,
-        Point3D,
-        Point3D,
-        Point3D
-      ];
-      const frame = this.editorViewport!.frameWall(candidate);
-      if (!frame) return;
-      if (!historyRecorded) {
-        this.recordCalibrationHistory();
-        historyRecorded = true;
-      }
-      room.corners.forEach((corner, index) => {
-        if (index === handle.cornerIndex) {
-          corner.x = next.x;
-          corner.y = next.y;
-          corner.z = next.z;
-        }
-      });
-      // Keep the v5 rectangular fields as a derived compatibility view of the
-      // edited room plane until renderer integration consumes corners directly.
-      room.origin = { ...frame.origin };
-      room.axisU = { ...frame.axisU };
-      room.axisV = { ...frame.axisV };
-      room.width = frame.width;
-      room.height = frame.height;
-      this.editorGeometryDirty = true;
-      this.renderEditorViewportHandles();
-      this.updateCalibrationOutput(false);
-    };
-    const end = (): void => {
-      capture.removeEventListener('pointermove', move);
-      capture.removeEventListener('pointerup', end);
-      capture.removeEventListener('pointercancel', end);
-      capture.removeEventListener('lostpointercapture', end);
-      if (capture.hasPointerCapture(event.pointerId)) capture.releasePointerCapture(event.pointerId);
-    };
-    capture.addEventListener('pointermove', move);
-    capture.addEventListener('pointerup', end, { once: true });
-    capture.addEventListener('pointercancel', end, { once: true });
-    capture.addEventListener('lostpointercapture', end);
-    event.preventDefault();
   }
 
   private applyCalibrationViewport(): void {

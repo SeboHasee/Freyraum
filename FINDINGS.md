@@ -1,6 +1,17 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Deterministic editor preview findings (v1.29, 2026-10-10)
+
+1. Wall selection must not invoke camera framing: the projected calibration
+   quad is the authoritative editable wall, while framing is an explicit
+   viewport action.
+2. Calibration must have one visible artwork pixel owner. Hiding WebGL pixels
+   prevents a valid DOM homography from being visually contradicted by a
+   second renderer.
+3. Temporary uploads are decoded before use and retain native dimensions and
+   ratio; they are preview replacements, not silently exported customer assets.
+
 ## Standalone editor usability findings (v1.18, 2026-09-05)
 
 1. A query parameter is an implementation switch, not a discoverable customer
