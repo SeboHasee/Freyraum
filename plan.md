@@ -1,6 +1,14 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Ratio-safe artwork replacement (v1.30)
+
+- [x] Centralize native aspect, source-rectangle, and ratio validation helpers.
+- [x] Decode and confirm replacement uploads before committing them.
+- [x] Preserve the previous valid artwork when upload or confirmation fails.
+- [x] Distinguish projected artwork boundaries from rectangular hit areas.
+- [x] Explain derived artwork width in the editor controls and inspector.
+
 ## Implemented — Deterministic editor preview (v1.29)
 
 - [x] Keep wall selection on the existing projected calibration quad.

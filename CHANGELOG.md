@@ -1,6 +1,14 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.30 — Ratio-safe artwork replacement (2026-10-10)
+
+- Added a shared native-dimension/source-rectangle ratio contract.
+- Replacements are decoded and confirmed before changing the active artwork.
+- The editor now reports native and source-rectangle ratios and marks the
+  projected boundary separately from the rectangular interaction surface.
+- Artwork height remains editable while width is derived from the native ratio.
+
 ## v1.29 — Deterministic placement editor preview (2026-10-10)
 
 - Selecting a wall now changes the existing projected calibration selection

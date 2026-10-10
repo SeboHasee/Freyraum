@@ -1,6 +1,18 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Ratio-safe replacement findings (v1.30, 2026-10-10)
+
+1. A temporary upload must be decoded and confirmed before it mutates the
+   selected slot; failed or cancelled replacements must preserve the prior
+   valid source.
+2. Screen-space projected bounds are interaction geometry, not artwork pixels.
+   The editor therefore clips its selection outline to the projected quad and
+   reports the native source rectangle separately.
+3. Native dimensions and source-rectangle dimensions now share a pure ratio
+   contract so DOM and renderer callers cannot silently invent an independent
+   artwork width.
+
 ## Deterministic editor preview findings (v1.29, 2026-10-10)
 
 1. Wall selection must not invoke camera framing: the projected calibration
