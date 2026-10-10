@@ -77,6 +77,65 @@ type SlotImageAttemptResult =
       width: number;
       height: number;
     }
+
+    private async replaceCalibrationArtwork(file: File): Promise<void> {
+      const slot = this.activeCalibrationSlot;
+      const view = slot ? this.slotViews.find((candidate) => candidate.slot.id === slot.id) : null;
+      if (!view?.image || !slot?.artworkId) {
+        this.announceCalibrationAction('Select an artwork before uploading a replacement.');
+        return;
+      }
+      const objectUrl = URL.createObjectURL(file);
+      const previousUrl = this.editorArtworkObjectUrls.get(slot.id);
+      const probe = new Image();
+      try {
+        probe.src = objectUrl;
+        await probe.decode();
+        const width = probe.naturalWidth;
+        const height = probe.naturalHeight;
+        const aspect = width > 0 && height > 0 ? width / height : 0;
+        if (!Number.isFinite(aspect) || aspect <= 0) throw new Error('invalid-image-dimensions');
+        view.imageLoadToken += 1;
+        view.image.src = objectUrl;
+        await view.image.decode();
+        view.nativeWidth = width;
+        view.nativeHeight = height;
+        view.nativeAspectRatio = aspect;
+        view.slot.artworkAspect = aspect;
+        view.imageState = 'ready';
+        view.resolvedSource = null;
+        view.fallbackReason = 'editor-upload-preview';
+        view.button.dataset['artworkSourceState'] = 'ready';
+        view.button.dataset['artworkSourceMode'] = 'editor-upload-preview';
+        this.editorArtworkObjectUrls.set(slot.id, objectUrl);
+        if (previousUrl) URL.revokeObjectURL(previousUrl);
+        this.applySlotGeometry(view.button, view.slot);
+        this.updateCalibrationArtworkInfo();
+        this.renderCalibrationOverlay();
+        this.updateCalibrationOutput(true);
+        this.announceCalibrationAction(
+          `${slot.displayLabel} preview replaced. Native dimensions: ${width} × ${height}px; ratio ${aspect.toFixed(4)}.`
+        );
+      } catch {
+        URL.revokeObjectURL(objectUrl);
+        this.announceCalibrationAction('The replacement image could not be decoded; the previous artwork remains active.');
+      }
+    }
+
+    private updateCalibrationArtworkInfo(): void {
+      if (!this.calibrationArtworkInfo) return;
+      const slot = this.activeCalibrationSlot;
+      const view = slot ? this.slotViews.find((candidate) => candidate.slot.id === slot.id) : null;
+      if (!slot || !view) {
+        this.calibrationArtworkInfo.textContent = 'Select an artwork to inspect its decoded dimensions and ratio.';
+        return;
+      }
+      const width = view.nativeWidth ?? view.image?.naturalWidth ?? 0;
+      const height = view.nativeHeight ?? view.image?.naturalHeight ?? 0;
+      const aspect = view.nativeAspectRatio ?? (width > 0 && height > 0 ? width / height : slot.artworkAspect);
+      const source = view.fallbackReason === 'editor-upload-preview' ? 'temporary upload preview' : 'decoded source';
+      this.calibrationArtworkInfo.textContent = `${slot.artworkId} · ${width > 0 && height > 0 ? `${width} × ${height}px` : 'dimensions pending'} · ratio ${aspect.toFixed(4)} · ${source}`;
+    }
   | {
       status: 'failed';
       reason: SlotImageAttemptFailureReason;
@@ -150,6 +209,8 @@ interface SlotView {
   imageLoadToken: number;
   /** Immutable ratio captured from the decoded source image. */
   nativeAspectRatio: number | null;
+  nativeWidth: number | null;
+  nativeHeight: number | null;
   imageState: 'idle' | 'loading' | 'ready' | 'missing';
   resolvedSource: ArtworkImageSourceCandidate | null;
   fallbackReason: string | null;
@@ -190,6 +251,7 @@ export class MainMuseumHub {
   private calibrationUndoButton: HTMLButtonElement | null = null;
   private calibrationRedoButton: HTMLButtonElement | null = null;
   private calibrationActionStatus: HTMLParagraphElement | null = null;
+  private calibrationArtworkInfo: HTMLParagraphElement | null = null;
   private calibrationGuideToggle: HTMLButtonElement | null = null;
   private calibrationGuidesVisible = true;
   private calibrationRoomBoundaryVisible = false;
@@ -231,6 +293,7 @@ export class MainMuseumHub {
   private swipeStartY: number | null = null;
   private resizeRafId = 0;
   private editorBackgroundObjectUrl: string | null = null;
+  private readonly editorArtworkObjectUrls = new Map<string, string>();
   private readonly defaultBackgroundSrc: string;
   private readonly defaultBackground: MuseumHubResolution['background'];
   private readonly backgroundImage: HTMLImageElement;
@@ -689,6 +752,8 @@ export class MainMuseumHub {
       image,
       imageLoadToken: 0,
       nativeAspectRatio: null,
+      nativeWidth: null,
+      nativeHeight: null,
       imageState: 'idle',
       resolvedSource: null,
       fallbackReason: null,
@@ -1575,6 +1640,8 @@ export class MainMuseumHub {
       return { status: 'failed', ...renderFailure };
     }
     view.nativeAspectRatio ??= nativeAspectRatio;
+    view.nativeWidth ??= dimensions.width;
+    view.nativeHeight ??= dimensions.height;
     view.slot.artworkAspect = view.nativeAspectRatio;
     view.button.dataset['nativeAspectRatio'] = view.nativeAspectRatio.toPrecision(12);
     // The renderer was synchronized while resolving the source, but the DOM
@@ -2057,6 +2124,8 @@ export class MainMuseumHub {
     resetBackground.addEventListener('click', () => {
       if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
       this.editorBackgroundObjectUrl = null;
+      for (const objectUrl of this.editorArtworkObjectUrls.values()) URL.revokeObjectURL(objectUrl);
+      this.editorArtworkObjectUrls.clear();
       this.resolution.background = { ...this.defaultBackground };
       backgroundInput.value = '';
       this.backgroundImage.src = resolveBackgroundUrl(this.defaultBackgroundSrc);
@@ -2093,7 +2162,9 @@ export class MainMuseumHub {
       this.activeCalibrationWallId = select.value;
       this.calibrationRoomBoundaryVisible = select.value === 'wall-rear';
       this.calibrationEditMode = this.calibrationRoomBoundaryVisible ? 'room-boundary' : 'wall';
-      if (!this.calibrationRoomBoundaryVisible) this.frameEditorWall(select.value);
+      // Selection is deliberately independent from camera framing. The
+      // projected calibration quad is the only authoritative wall surface;
+      // framing is available through the explicit action below.
       this.renderCalibrationOverlay();
       this.announceCalibrationAction(`Currently editing: ${select.value === 'wall-rear' ? 'entrance boundary' : select.value.toUpperCase()}.`);
     });
@@ -2114,6 +2185,25 @@ export class MainMuseumHub {
     this.activeCalibrationSlotId = slotSelect.value || null;
     slotSelect.addEventListener('change', () => this.selectCalibrationSlot(slotSelect.value));
     slotLabel.appendChild(slotSelect);
+
+    const artworkUpload = document.createElement('label');
+    artworkUpload.className = 'museum-hub__calibration-label';
+    artworkUpload.textContent = 'Replace selected artwork (preview only)';
+    const artworkInput = document.createElement('input');
+    artworkInput.type = 'file';
+    artworkInput.accept = 'image/*';
+    artworkInput.addEventListener('change', () => {
+      const file = artworkInput.files?.[0];
+      if (file) void this.replaceCalibrationArtwork(file);
+      artworkInput.value = '';
+    });
+    artworkUpload.appendChild(artworkInput);
+
+    const artworkInfo = document.createElement('p');
+    artworkInfo.className = 'museum-hub__calibration-artwork-info';
+    artworkInfo.setAttribute('aria-live', 'polite');
+    artworkInfo.textContent = 'Select an artwork to inspect its decoded dimensions and ratio.';
+    this.calibrationArtworkInfo = artworkInfo;
 
     const numericGrid = document.createElement('div');
     numericGrid.className = 'museum-hub__calibration-numeric-grid';
@@ -2259,7 +2349,7 @@ export class MainMuseumHub {
     restoreButton.disabled = true;
     restoreButton.addEventListener('click', () => this.restoreLastValidCalibrationSnapshot());
 
-    controls.append(selectLabel, slotLabel, numericGrid, actionRow, restoreButton);
+    controls.append(selectLabel, slotLabel, artworkUpload, artworkInfo, numericGrid, actionRow, restoreButton);
 
     const warningTitle = document.createElement('p');
     warningTitle.className = 'museum-hub__calibration-label';
@@ -2621,11 +2711,8 @@ export class MainMuseumHub {
     svg.replaceChildren();
     if (!viewport) return;
     if (viewport.viewMode === 'wall-edit') {
-      if (!wallId || wallId === 'wall-rear') return;
-      const wall = this.resolution.wallById.get(wallId);
-      if (!wall?.room) return;
-      const handles = viewport.projectCorners(wall.id);
-      this.renderEditorWall(svg, handles);
+      // The projected calibration SVG remains the sole editable wall surface.
+      // Do not draw a second orthographic wall rectangle over it.
       return;
     }
     // The overview must use the existing projected walls, not a second
@@ -3664,6 +3751,7 @@ export class MainMuseumHub {
       candidate.button.classList.toggle('is-calibration-selected', candidate.slot.id === slotId);
     }
     this.syncCalibrationControls();
+    this.updateCalibrationArtworkInfo();
     this.renderCalibrationOverlay();
   }
 

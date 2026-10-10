@@ -295,6 +295,16 @@ canvas {
   display: block;
 }
 
+.museum-hub.is-calibrating .museum-hub__canvas {
+  /*
+   * Calibration edits the projected DOM artwork. Keep WebGL available for
+   * renderer validation, but never let its pixels compete with the editor
+   * preview or make a native-ratio image look stretched.
+   */
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .museum-hub.has-image-error .museum-hub__image {
   opacity: 0;
 }
@@ -857,6 +867,13 @@ canvas {
 .museum-hub__calibration-background-info {
   font-size: 0.8rem;
   opacity: 0.8;
+}
+
+.museum-hub__calibration-artwork-info {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.8rem;
+  line-height: 1.35;
 }
 
 .museum-hub__calibration-handle--mounting-zone {
