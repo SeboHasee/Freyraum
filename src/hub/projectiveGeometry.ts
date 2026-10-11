@@ -1480,7 +1480,7 @@ export function projectSlotArtwork(
       // projection here would visibly stretch a portrait on that surface.
       // Preserve the calibrated centre and vertical size while deriving the
       // front-wall screen width from the native artwork ratio.
-      const orderedProjectedQuad: Quad = wall.group === 'front'
+      const orderedProjectedQuad: Quad = wall.id === 'wall-front'
         ? (() => {
             const center = point(
               (worldProjectedQuad[0].x + worldProjectedQuad[2].x) / 2,
