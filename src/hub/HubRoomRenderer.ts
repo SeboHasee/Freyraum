@@ -62,6 +62,11 @@ export interface ArtworkRuntimeInspection {
   presentationKind: HubArtworkPresentationKind | null;
   textureKind: 'image' | 'placeholder' | null;
   presentationAspect: number;
+  ratios: {
+    mesh: number;
+    world: number;
+    texture: number;
+  };
   localGeometry: { width: number; height: number };
   geometryPositions: number[];
   geometryBounds: { min: [number, number, number]; max: [number, number, number] } | null;
@@ -506,6 +511,18 @@ export class HubRoomRenderer {
       presentationKind: state.presentationKind,
       textureKind: state.textureKind,
       presentationAspect: state.presentationAspect,
+      ratios: {
+        mesh: bounds && bounds.max.y !== bounds.min.y
+          ? ((bounds.max.x - bounds.min.x) * Math.abs(state.artworkMesh.scale.x))
+            / ((bounds.max.y - bounds.min.y) * Math.abs(state.artworkMesh.scale.y))
+          : 0,
+        world: worldBox.max.y !== worldBox.min.y
+          ? (worldBox.max.x - worldBox.min.x) / (worldBox.max.y - worldBox.min.y)
+          : 0,
+        texture: image?.height
+          ? (image.width ?? state.textureDimensions.width) / image.height
+          : 0,
+      },
       geometryPositions: Array.from(position.array as ArrayLike<number>),
       localGeometry: {
         width: bounds ? (bounds.max.x - bounds.min.x) * Math.abs(state.artworkMesh.scale.x) : 0,

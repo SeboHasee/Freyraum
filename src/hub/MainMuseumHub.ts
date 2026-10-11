@@ -59,6 +59,7 @@ import {
   buildArtworkRatioReport,
   createNativeSourceRect,
   nativeArtworkAspect,
+  validateProjectedSourceMapping,
 } from './artworkAspect';
 
 const HUB_BACKGROUND_BASE_URL =
@@ -189,6 +190,7 @@ export class MainMuseumHub {
   private readonly stageHeight: number;
   private readonly resizeObserver: ResizeObserver | null;
   private calibrationOutput: HTMLTextAreaElement | null = null;
+  private calibrationDiagnosticsButton: HTMLButtonElement | null = null;
   private calibrationWarnings: HTMLUListElement | null = null;
   private calibrationRestoreButton: HTMLButtonElement | null = null;
   private calibrationWallSelect: HTMLSelectElement | null = null;
@@ -981,6 +983,18 @@ export class MainMuseumHub {
     this.debugProjectionSignatureBySlot.set(slot.id, signature);
 
     const withinSafePolygon = projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon));
+    const sourceMapping = computeHomographyFromUnitSquare(projection.projectedQuad);
+    const sourceMappingReport = sourceMapping
+      ? validateProjectedSourceMapping(
+          { width: projection.sourceWidth, height: projection.sourceHeight },
+          projection.projectedQuad,
+          (x, y) => applyHomography(
+            sourceMapping,
+            x / projection.sourceWidth,
+            y / projection.sourceHeight
+          )
+        )
+      : null;
     this.diagnostics.info('hub-debug-slot-projection', 'Projected slot geometry snapshot', {
       slotId: slot.id,
       wallId: wall.id,
@@ -998,6 +1012,12 @@ export class MainMuseumHub {
       validity: projection.validity ?? null,
       realism: projection.realism ?? wall.projectionRealism ?? null,
       alignment: projection.alignment ?? null,
+      sourceRectangle: {
+        width: projection.sourceWidth,
+        height: projection.sourceHeight,
+        ratio: projection.sourceWidth / projection.sourceHeight,
+      },
+      sourceMapping: sourceMappingReport,
     });
   }
 
@@ -2409,6 +2429,11 @@ export class MainMuseumHub {
     this.calibrationDownloadButton = makeAction(
       'Export configuration',
       () => this.downloadCalibrationJson(),
+      exportRow
+    );
+    this.calibrationDiagnosticsButton = makeAction(
+      'Download diagnostics',
+      () => this.downloadArtworkDiagnostics(),
       exportRow
     );
     const actionStatus = document.createElement('p');
@@ -3990,6 +4015,96 @@ export class MainMuseumHub {
     this.announceCalibrationAction(
       'museum-hub.json wurde heruntergeladen. Ersetzen Sie damit die Datei im Ordner customer-artworks.'
     );
+  }
+
+  private downloadArtworkDiagnostics(): void {
+    const selectedView = this.activeCalibrationSlotId
+      ? this.slotViews.find((view) => view.slot.id === this.activeCalibrationSlotId) ?? null
+      : null;
+    const entries = this.slotViews
+      .filter(({ slot }) => slot.selectable && slot.artworkId)
+      .map((view) => {
+        const wall = this.resolution.wallById.get(view.slot.placement.wallId);
+        const projection = this.projectedSlotGeometry.get(view.slot.id) ?? null;
+        const renderer = this.hubRoomRenderer?.inspectArtwork(view.slot.id) ?? null;
+        const width = view.nativeWidth ?? view.image?.naturalWidth ?? 0;
+        const height = view.nativeHeight ?? view.image?.naturalHeight ?? 0;
+        const native = width > 0 && height > 0 ? width / height : null;
+        const physicalHeight = view.slot.placement.physicalHeight ?? view.slot.placement.mountedHeight;
+        return {
+          slotId: view.slot.id,
+          artworkId: view.slot.artworkId,
+          wallId: view.slot.placement.wallId,
+          source: {
+            state: view.imageState,
+            mode: view.resolvedSource?.mode ?? null,
+            urlType: view.resolvedSource?.resolvedUrlType ?? null,
+            fallbackReason: view.fallbackReason,
+            revision: view.assetRevision,
+            nativeWidth: width,
+            nativeHeight: height,
+            nativeAspect: native,
+          },
+          physical: {
+            width: native === null ? null : physicalHeight * native,
+            height: physicalHeight,
+            ratio: native,
+          },
+          projection: projection
+            ? {
+                projectedQuad: projection.projectedQuad,
+                bounds: projection.bounds,
+                sourceWidth: projection.sourceWidth,
+                sourceHeight: projection.sourceHeight,
+                sourceRatio: projection.sourceWidth / projection.sourceHeight,
+                cssMatrix3d: projection.cssMatrix3d,
+                wallProjection: wall?.quad ?? null,
+              }
+            : null,
+          dom: {
+            buttonRect: view.button.getBoundingClientRect().toJSON(),
+            imageRect: view.image?.getBoundingClientRect().toJSON() ?? null,
+            imageNaturalWidth: view.image?.naturalWidth ?? 0,
+            imageNaturalHeight: view.image?.naturalHeight ?? 0,
+            computedTransform: view.image ? getComputedStyle(view.image).transform : null,
+            visible: Boolean(view.image && getComputedStyle(view.image).opacity !== '0'),
+          },
+          webgl: renderer,
+        };
+      });
+    const diagnostics = {
+      schemaVersion: 1,
+      createdAt: new Date().toISOString(),
+      appVersion: document.documentElement.dataset['version'] ?? null,
+      bundleId: selectedView?.resolvedSource?.bundleId ?? null,
+      runtime: {
+        url: window.location.href,
+        protocol: window.location.protocol,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        devicePixelRatio: window.devicePixelRatio,
+        webglAvailable: Boolean(this.hubRoomRenderer),
+        maxTextureSize: this.hubRoomRenderer?.getMaxTextureSize() ?? null,
+      },
+      selection: {
+        wallId: this.activeCalibrationWallId,
+        slotId: this.activeCalibrationSlotId,
+        artworkId: selectedView?.slot.artworkId ?? null,
+        mode: this.calibrating ? 'calibration' : 'gallery',
+      },
+      entries,
+      validation: {
+        exportValid: this.calibrationExportValid,
+        warnings: this.collectCalibrationWarnings(),
+      },
+    };
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+    const url = URL.createObjectURL(new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `freyraum-artwork-diagnostics-${stamp}.json`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    this.announceCalibrationAction('Artwork diagnostics downloaded.');
   }
 
   private async importCalibrationFile(file: File | null): Promise<void> {

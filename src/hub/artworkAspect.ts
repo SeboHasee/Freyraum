@@ -11,6 +11,13 @@ export interface ArtworkRatioReport {
   status: 'valid' | 'mismatch';
 }
 
+export interface ProjectedSourceMappingReport {
+  expected: Array<{ x: number; y: number }>;
+  actual: Array<{ x: number; y: number }>;
+  maxError: number;
+  valid: boolean;
+}
+
 export function nativeArtworkAspect(dimensions: NativeArtworkDimensions): number {
   if (!Number.isFinite(dimensions.width) || !Number.isFinite(dimensions.height)
     || dimensions.width <= 0 || dimensions.height <= 0) {
@@ -34,6 +41,27 @@ export function createNativeSourceRect(
 
 export function ratiosMatch(a: number, b: number, epsilon = 1e-6): boolean {
   return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= epsilon;
+}
+
+export function validateProjectedSourceMapping(
+  source: NativeArtworkDimensions,
+  projected: readonly { x: number; y: number }[],
+  map: (x: number, y: number) => { x: number; y: number } | null,
+  epsilon = 1e-4
+): ProjectedSourceMappingReport {
+  const expected = projected.map(({ x, y }) => ({ x, y }));
+  const corners = [
+    { x: 0, y: 0 },
+    { x: source.width, y: 0 },
+    { x: source.width, y: source.height },
+    { x: 0, y: source.height },
+  ];
+  const actual = corners.map((corner) => map(corner.x, corner.y) ?? { x: NaN, y: NaN });
+  const maxError = actual.reduce((maximum, corner, index) => {
+    const target = expected[index];
+    return Math.max(maximum, Math.hypot(corner.x - target.x, corner.y - target.y));
+  }, 0);
+  return { expected, actual, maxError, valid: maxError <= epsilon };
 }
 
 export function buildArtworkRatioReport(
