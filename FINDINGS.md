@@ -1317,3 +1317,8 @@ running the repo toolchain on a fresh clone.
 - `npm run build:preview`
 - `npm run docs:check-config-authority`
 - `npm run test:frame-budget`
+# 2026-10-11 — ratio diagnostic milestone
+
+- The reported screenshot is an editor calibration view, where the rectangular artwork button remains a separate interaction surface from the projected image.
+- The editor now exposes a downloadable JSON report with source, DOM, projection, and WebGL measurements. This is required before changing calibrated wall geometry because projected screen bounds are not a valid native-ratio measurement.
+- WebGL inspection now reports mesh, world, and texture ratios independently. A mismatch can therefore be localized to asset decoding, physical placement, DOM projection, or renderer geometry.

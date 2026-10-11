@@ -4024,3 +4024,7 @@ Three vertical slices shipped against `src/`; root causes RC-1/RC-2/RC-3 from th
 ### Fixed
 
 - blank screen when opening the downloaded repository locally via `index.html`
+# v1.31 — Artwork ratio diagnostics
+
+- Added a downloadable artwork diagnostics report covering decoded source dimensions, physical dimensions, projected bounds, DOM transforms, WebGL mesh dimensions, texture dimensions, and ratio state.
+- Added projected source-corner validation and explicit mesh/world/texture ratio reporting so perspective bounds are not mistaken for source distortion.

@@ -5138,3 +5138,14 @@ a real browser session.
 ---
 
 *Audit completed and enhanced 2026-06-21. Phases 12–14 added 2026-06-21 based on reviewer feedback: Phase 0 architecture decision rule, GPU-1/2.5 TBDR qualifier, regression risk model, cross-optimization coupling map, and measurement success criteria per tier. No runtime profiling was performed — all estimates are derived from code structure analysis. Implement Phase 10 (Profiling Validation Plan) before starting any Tier 1+ code changes to establish measured baselines.*
+# v1.31 — Ratio-safe diagnostics
+
+Completed:
+
+- Added a pure projected-source corner validation helper.
+- Added mesh/world/texture ratio fields to runtime WebGL inspection.
+- Added `Download diagnostics` to the placement editor. The report intentionally excludes image data and credentials while preserving the measurements needed to reproduce an aspect-ratio failure.
+
+Next:
+
+- Use the downloaded report from the exact failing browser session to determine whether the remaining visual discrepancy is calibration scale, DOM ownership, or source selection before changing wall geometry.

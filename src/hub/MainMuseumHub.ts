@@ -190,7 +190,6 @@ export class MainMuseumHub {
   private readonly stageHeight: number;
   private readonly resizeObserver: ResizeObserver | null;
   private calibrationOutput: HTMLTextAreaElement | null = null;
-  private calibrationDiagnosticsButton: HTMLButtonElement | null = null;
   private calibrationWarnings: HTMLUListElement | null = null;
   private calibrationRestoreButton: HTMLButtonElement | null = null;
   private calibrationWallSelect: HTMLSelectElement | null = null;
@@ -2431,7 +2430,7 @@ export class MainMuseumHub {
       () => this.downloadCalibrationJson(),
       exportRow
     );
-    this.calibrationDiagnosticsButton = makeAction(
+    makeAction(
       'Download diagnostics',
       () => this.downloadArtworkDiagnostics(),
       exportRow
