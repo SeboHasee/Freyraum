@@ -155,8 +155,9 @@ export class EditorViewport {
     return frame.corners.flatMap((world, cornerIndex) => {
       const screen = this.project(world);
       if (!screen) return [];
+      const rearCorner = leftSideWall ? (cornerIndex === 0 || cornerIndex === 3) : (cornerIndex === 1 || cornerIndex === 2);
       const edgeAnchored =
-        (sideWall && (cornerIndex === 1 || cornerIndex === 2))
+        (sideWall && rearCorner)
         ||
         screen.x < edgeMargin
         || screen.x > this.width - edgeMargin
@@ -170,7 +171,7 @@ export class EditorViewport {
           // Keep the two rear corners of each side wall on its own screen edge.
           // Their projected positions can coincide with the front wall at the
           // extreme perspective angles used by the customer preview.
-          x: sideWall && (cornerIndex === 1 || cornerIndex === 2)
+          x: sideWall && rearCorner
             ? (leftSideWall ? edgeMargin : this.width - edgeMargin)
             : Math.min(this.width - edgeMargin, Math.max(edgeMargin, screen.x)),
           y: Math.min(this.height - edgeMargin, Math.max(edgeMargin, screen.y)),

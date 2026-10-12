@@ -1527,7 +1527,7 @@ assert.match(hub, /applyRenderedWallGeometry = true/);
 assert.match(hub, /if \(!applyRenderedWallGeometry\) continue/);
 assert.match(hub, /calibrationRoomBoundaryVisible = select\.value === 'wall-rear'/);
 assert.match(hub, /this\.updateCalibrationOverlayGeometry\(\);\s*this\.updateCalibrationOutput\(true\)/);
-assert.match(scss, /\.museum-hub\.is-calibrating \.museum-hub__calibration-svg\s*\{[\s\S]*?pointer-events:\s*auto/);
+assert.match(scss, /\.museum-hub\.is-calibrating \.museum-hub__calibration-svg\s*\{[\s\S]*?pointer-events:\s*none/);
 assert.match(scss, /\.museum-hub__calibration-edge-hit\s*\{[\s\S]*?stroke-width:\s*18/);
 assert.match(hub, /startSafePolygon/);
 assert.match(hub, /startMountingZone/);

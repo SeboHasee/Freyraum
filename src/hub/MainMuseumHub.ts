@@ -827,7 +827,7 @@ export class MainMuseumHub {
   private applyAllSlotGeometry(): void {
     for (const view of this.slotViews) this.applySlotGeometry(view.button, view.slot);
     this.applySelectionState('geometry-refresh');
-    if (this.calibrating || this.debugGeometry) this.renderCalibrationOverlay();
+    if ((this.calibrating || this.debugGeometry) && !this.calibrationDrag) this.renderCalibrationOverlay();
   }
 
   private inspectArtworkRuntime(): void {
