@@ -1,6 +1,16 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## 2026-10-12 — Main museum versus editor authority
+
+- The supplied target is the main museum presentation, not the placement editor.
+- Customer artwork bundles can contain only the currently authored works. The
+  museum resolver therefore receives a merged curated inventory so its four-work
+  2+1+1 composition remains populated, while the customer gallery timeline stays
+  customer-only.
+- Presentation mode hides selection borders and labels; the editor retains them
+  for calibration and interaction.
+
 ## Ratio-safe replacement findings (v1.30, 2026-10-10)
 
 1. A temporary upload must be decoded and confirmed before it mutates the

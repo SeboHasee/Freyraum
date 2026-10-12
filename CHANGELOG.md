@@ -1,6 +1,14 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## v1.31 — Main museum presentation authority (2026-10-12)
+
+- The main museum overview now resolves missing curated side-wall slots from
+  the built-in companion inventory without adding those companions to the
+  customer gallery inventory.
+- Presentation mode hides calibration selection borders and labels; calibration
+  mode remains the only mode that exposes authoring overlays.
+
 ## v1.30 — Ratio-safe artwork replacement (2026-10-10)
 
 - Added a shared native-dimension/source-rectangle ratio contract.

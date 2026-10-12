@@ -467,6 +467,11 @@ canvas {
   transition: opacity var(--dur-control) var(--ease-out);
 }
 
+.museum-hub:not(.is-calibrating):not(.is-debug-geometry) .museum-hub__artwork::before,
+.museum-hub:not(.is-calibrating):not(.is-debug-geometry) .museum-hub__artwork-label {
+  display: none;
+}
+
 .museum-hub__art {
   position: absolute;
   inset: 0 auto auto 0;

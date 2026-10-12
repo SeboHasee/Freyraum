@@ -1,6 +1,19 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Main museum target (v1.31, 2026-10-12)
+
+The supplied reference is the acceptance target for the main index museum
+overview. WebGL owns visible artwork pixels in presentation mode; the editor
+uses the calibrated DOM projection only for authoring and fallback. Native
+source dimensions remain authoritative in both paths, while projected AABB
+dimensions remain hit-area metadata only.
+
+- [x] Keep curated museum companions available when customer bundles are partial.
+- [x] Keep built-in companions out of the customer gallery inventory.
+- [x] Hide presentation-mode calibration borders and labels.
+- [ ] Validate the target composition in a browser screenshot at the reference viewport.
+
 ## Implemented — Ratio-safe artwork replacement (v1.30)
 
 - [x] Centralize native aspect, source-rectangle, and ratio validation helpers.
