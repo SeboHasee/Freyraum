@@ -2671,9 +2671,8 @@ export class MainMuseumHub {
           mutableQuad[drag.index].y = clamped.y;
         } else {
           for (let index = 0; index < wallQuad.length; index += 1) {
-            const source = drag.startQuad[index];
-            mutableQuad[index].x = source.x + delta.x;
-            mutableQuad[index].y = source.y + delta.y;
+            mutableQuad[index].x = candidate[index].x;
+            mutableQuad[index].y = candidate[index].y;
           }
         }
         if (drag.wallId === 'wall-rear') {
@@ -2890,15 +2889,19 @@ export class MainMuseumHub {
   private clampWallDelta(points: readonly Point2D[], delta: Point2D): Point2D {
     const margin = 18;
     const display = points.map((value) => this.displayPoint(point(value.x + delta.x, value.y + delta.y)));
-    const dx = display.reduce((result, value) => Math.min(result, value.x), Infinity) < margin
-      ? margin - Math.min(...display.map((value) => value.x))
-      : Math.max(...display.map((value) => value.x)) > this.stageWidth - margin
-        ? this.stageWidth - margin - Math.max(...display.map((value) => value.x))
+    const minX = Math.min(...display.map((value) => value.x));
+    const maxX = Math.max(...display.map((value) => value.x));
+    const minY = Math.min(...display.map((value) => value.y));
+    const maxY = Math.max(...display.map((value) => value.y));
+    const dx = minX < margin
+      ? margin - minX
+      : maxX > this.stageWidth - margin
+        ? this.stageWidth - margin - maxX
         : 0;
-    const dy = display.reduce((result, value) => Math.min(result, value.y), Infinity) < margin
-      ? margin - Math.min(...display.map((value) => value.y))
-      : Math.max(...display.map((value) => value.y)) > this.stageHeight - margin
-        ? this.stageHeight - margin - Math.max(...display.map((value) => value.y))
+    const dy = minY < margin
+      ? margin - minY
+      : maxY > this.stageHeight - margin
+        ? this.stageHeight - margin - maxY
         : 0;
     return point(delta.x + dx / this.calibrationViewport.scale, delta.y + dy / this.calibrationViewport.scale);
   }
@@ -3095,20 +3098,14 @@ export class MainMuseumHub {
           this.startWallTranslateDrag(event, wall.id);
         });
         wallPolygon.addEventListener('keydown', (event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') return;
-          event.preventDefault();
-          this.calibrationEditMode = 'wall';
-          this.activeCalibrationWallId = wall.id;
-          if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
-          this.renderCalibrationOverlay();
-        });
-      }
-      if (this.calibrating && active && this.calibrationEditMode === 'wall') {
-        wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(
-          this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--wall')
-        ));
-        wallPolygon.setAttribute('aria-label', wallLabelText);
-        wallPolygon.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            this.calibrationEditMode = 'wall';
+            this.activeCalibrationWallId = wall.id;
+            if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
+            this.renderCalibrationOverlay();
+            return;
+          }
           const distance = event.shiftKey ? 10 : 1;
           if (event.key === 'ArrowLeft') this.translateWall(wall.id, -distance, 0);
           else if (event.key === 'ArrowRight') this.translateWall(wall.id, distance, 0);
@@ -3117,6 +3114,12 @@ export class MainMuseumHub {
           else return;
           event.preventDefault();
         });
+      }
+      if (this.calibrating && active && this.calibrationEditMode === 'wall') {
+        wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(
+          this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--wall')
+        ));
+        wallPolygon.setAttribute('aria-label', wallLabelText);
       }
 
       const safePolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');

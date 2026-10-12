@@ -155,7 +155,7 @@ export class EditorViewport {
     return frame.corners.flatMap((world, cornerIndex) => {
       const screen = this.project(world);
       if (!screen) return [];
-      const rearCorner = leftSideWall ? (cornerIndex === 0 || cornerIndex === 3) : (cornerIndex === 1 || cornerIndex === 2);
+      const rearCorner = leftSideWall ? cornerIndex === 0 || cornerIndex === 3 : cornerIndex === 1 || cornerIndex === 2;
       const edgeAnchored =
         (sideWall && rearCorner)
         ||
