@@ -346,6 +346,12 @@ export class HubRoomRenderer {
       && image
       && image.complete
       && image.naturalWidth > 0);
+    // The decoded source is the final authority for artwork proportions. The
+    // manifest ratio can be stale after customer replacement or import, so
+    // never let it size a real image mesh.
+    const decodedArtworkAspect = hasArtworkImage && image && image.naturalHeight > 0
+      ? image.naturalWidth / image.naturalHeight
+      : null;
     const textureKey = hasArtworkImage && image
       ? `artwork:${image.currentSrc || image.src || slot.id}:${image.naturalWidth}x${image.naturalHeight}`
       : `placeholder:${slot.id}:${PLACEHOLDER_WIDTH}x${PLACEHOLDER_HEIGHT}`;
@@ -424,7 +430,7 @@ export class HubRoomRenderer {
       wall.room,
       slotAnchor,
       slot.placement.physicalHeight ?? slot.placement.mountedHeight,
-      Math.max(Number.EPSILON, presentationAspect),
+      Math.max(Number.EPSILON, decodedArtworkAspect ?? presentationAspect),
       slot.placement.mountingGap
     );
     if (!mountingFrame) {
@@ -465,7 +471,7 @@ export class HubRoomRenderer {
     state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
     state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
     state.presentationKind = presentationKind;
-    state.presentationAspect = presentationAspect;
+    state.presentationAspect = decodedArtworkAspect ?? presentationAspect;
     const expectedTextureKind = presentationKind === 'artwork' ? 'image' : 'placeholder';
     if (state.textureKind !== expectedTextureKind) {
       this.diagnostics.warn('hub-presentation-texture-kind-mismatch', 'Hub presentation kind and bound texture kind differ', {
@@ -478,12 +484,12 @@ export class HubRoomRenderer {
     const textureRatio = state.textureDimensions.height > 0
       ? state.textureDimensions.width / state.textureDimensions.height
       : 0;
-    if (textureRatio > 0 && Math.abs(textureRatio - presentationAspect) > 1e-6) {
+    if (textureRatio > 0 && Math.abs(textureRatio - state.presentationAspect) > 1e-6) {
       this.diagnostics.warn('hub-presentation-aspect-mismatch', 'Hub presentation texture and geometry use different aspect ratios', {
         slotId: slot.id,
         artworkId: slot.artworkId,
         presentationKind,
-        presentationAspect,
+        presentationAspect: state.presentationAspect,
         textureWidth: state.textureDimensions.width,
         textureHeight: state.textureDimensions.height,
         textureRatio,
