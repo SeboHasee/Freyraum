@@ -1418,7 +1418,8 @@ export function projectSlotArtwork(
   wall: WallProjectionModel,
   slot: SlotProjectionModel,
   artworkAspect: number,
-  stage: StageReference
+  stage: StageReference,
+  projectionMode: 'room' | 'calibrated' = 'room'
 ): ProjectedArtworkGeometry | null {
   const projectiveFallback = (): ProjectedArtworkGeometry | null => {
     const normalizedSlot = wall.room && slot.anchor
@@ -1439,7 +1440,7 @@ export function projectSlotArtwork(
       stage
     );
   };
-  if (wall.room && wall.camera && slot.anchor) {
+  if (projectionMode === 'room' && wall.room && wall.camera && slot.anchor) {
     const placement = solveRoomArtworkPlacement(
       wall.room,
       slot.anchor,
@@ -1475,40 +1476,7 @@ export function projectSlotArtwork(
         projected[2]!,
         projected[3]!,
       ];
-      // The front-wall calibration is a 2D authoring surface. Its reference
-      // quad can have a non-physical screen aspect, so using the raw 3D
-      // projection here would visibly stretch a portrait on that surface.
-      // Preserve the calibrated centre and vertical size while deriving the
-      // front-wall screen width from the native artwork ratio.
-      const orderedProjectedQuad: Quad = wall.id === 'wall-front'
-        ? (() => {
-            const center = point(
-              (worldProjectedQuad[0].x + worldProjectedQuad[2].x) / 2,
-              (worldProjectedQuad[0].y + worldProjectedQuad[2].y) / 2
-            );
-            const horizontal = point(
-              worldProjectedQuad[1].x - worldProjectedQuad[0].x,
-              worldProjectedQuad[1].y - worldProjectedQuad[0].y
-            );
-            const vertical = point(
-              worldProjectedQuad[3].x - worldProjectedQuad[0].x,
-              worldProjectedQuad[3].y - worldProjectedQuad[0].y
-            );
-            const horizontalLength = Math.hypot(horizontal.x, horizontal.y);
-            const verticalLength = Math.hypot(vertical.x, vertical.y);
-            if (horizontalLength <= EPSILON || verticalLength <= EPSILON) return worldProjectedQuad;
-            const verticalUnit = point(vertical.x / verticalLength, vertical.y / verticalLength);
-            const horizontalUnit = point(horizontal.x / horizontalLength, horizontal.y / horizontalLength);
-            const halfHeight = verticalLength / 2;
-            const halfWidth = halfHeight * Math.max(EPSILON, artworkAspect);
-            return [
-              point(center.x - horizontalUnit.x * halfWidth - verticalUnit.x * halfHeight, center.y - horizontalUnit.y * halfWidth - verticalUnit.y * halfHeight),
-              point(center.x + horizontalUnit.x * halfWidth - verticalUnit.x * halfHeight, center.y + horizontalUnit.y * halfWidth - verticalUnit.y * halfHeight),
-              point(center.x + horizontalUnit.x * halfWidth + verticalUnit.x * halfHeight, center.y + horizontalUnit.y * halfWidth + verticalUnit.y * halfHeight),
-              point(center.x - horizontalUnit.x * halfWidth + verticalUnit.x * halfHeight, center.y - horizontalUnit.y * halfWidth + verticalUnit.y * halfHeight),
-            ] as Quad;
-          })()
-        : worldProjectedQuad;
+      const orderedProjectedQuad: Quad = worldProjectedQuad;
       const projectedQuad = normalizeQuadClockwise(orderedProjectedQuad);
       if (quadIsDegenerate(projectedQuad) || !quadIsConvex(projectedQuad)) return projectiveFallback();
       if (wall.safePolygon && !projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
