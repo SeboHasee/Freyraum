@@ -1698,7 +1698,7 @@ assert.match(hub, /createCalibrationCornerHitTarget/);
 assert.match(hub, /calibrationViewport\.offsetX/);
 assert.match(hub, /captureElement\.setPointerCapture/);
 assert.match(hub, /grabOffset/, 'artwork drags must keep the grabbed point under the pointer');
-assert.match(hub, /slideXFirst[\s\S]*slideYFirst/, 'blocked artwork drags must slide along the mounting-zone edge');
+assert.match(hub, /slideToValid\(start, target, applyCenter/, 'blocked artwork drags must slide along the mounting-zone edge');
 assert.match(hub, /event\.type === 'pointerup' \? event : this\.pendingCalibrationMove/, 'drag release must commit the final pointer position');
 assert.match(hub, /private isPrimaryPointerDown/, 'only primary pointer presses may start editor drags');
 assert.doesNotMatch(

@@ -600,7 +600,7 @@
       "placement": {
         "wallId": "wall-front",
         "horizontalPosition": 0.3,
-        "centerHeight": 2.32,
+        "centerHeight": 1.3,
         "physicalHeight": 1.62,
         "mountingGap": 0.002,
         "targetSizePolicy": "fixed-height",
@@ -618,7 +618,7 @@
       "placement": {
         "wallId": "wall-front",
         "horizontalPosition": 0.7,
-        "centerHeight": 2.32,
+        "centerHeight": 1.3,
         "physicalHeight": 1.48,
         "mountingGap": 0.002,
         "targetSizePolicy": "fixed-height",

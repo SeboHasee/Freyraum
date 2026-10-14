@@ -16,6 +16,9 @@ import {
   type MuseumHubConfig,
   type ResolvedHubSlot,
   type ResolvedHubWall,
+  evaluateDisplayedPlacement,
+  exportHubSlotPlacement,
+  projectDisplayedPlacement,
   sanitizeMuseumHubConfig,
 } from '../config/museumHub';
 import {
@@ -29,7 +32,6 @@ import {
   projectRoomDoorwayPolygons,
   evaluateWallCalibration,
   projectWorldPoint,
-  projectSlotArtwork,
   quadIsConvex,
   quadIsDegenerate,
   type ProjectedArtworkGeometry,
@@ -38,6 +40,7 @@ import {
   type Quad,
   deriveWallFrame,
 } from './projectiveGeometry';
+import { advanceToValid, nearestPolygonEdge, polygonIsSimple, slideToValid } from './constrainedDrag';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import {
   redactArtworkImageUrlForLog,
@@ -213,6 +216,8 @@ export class MainMuseumHub {
   private calibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private initialCalibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private calibrationDrag: CalibrationDrag | null = null;
+  /** Last artwork move that hit a limit; drives the edge highlight while dragging. */
+  private lastSlotDragBlocked: { slotId: string; target: Point2D } | null = null;
   private calibrationMoveRaf = 0;
   private pendingCalibrationMove: PointerEvent | null = null;
   private entranceBoundaryQuad: Quad | null = null;
@@ -242,6 +247,7 @@ export class MainMuseumHub {
   private debugProjectionSignatureBySlot = new Map<string, string>();
   private swipeStartX: number | null = null;
   private swipeStartY: number | null = null;
+  private swipePointerId: number | null = null;
   private resizeRafId = 0;
   private editorBackgroundObjectUrl: string | null = null;
   private readonly editorArtworkObjectUrls = new Map<string, string>();
@@ -446,6 +452,7 @@ export class MainMuseumHub {
 
     hub.addEventListener('pointerdown', this.handleSwipeStart, { passive: true });
     hub.addEventListener('pointerup', this.handleSwipeEnd, { passive: true });
+    hub.addEventListener('pointercancel', this.handleSwipeCancel, { passive: true });
     hub.addEventListener('keydown', this.handleKeydown);
 
     if (this.calibrating || this.debugGeometry) {
@@ -757,6 +764,12 @@ export class MainMuseumHub {
     }
     this.projectedSlotGeometry.set(slot.id, projection);
     button.classList.remove('is-invalid-geometry');
+    // Same rule as evaluateDisplayedPlacement: flag (never move) invalid placements.
+    button.classList.toggle(
+      'is-placement-invalid',
+      projection.validity?.doorwayClear === false
+        || !(wall.mountingZone.length >= 3 && projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.mountingZone)))
+    );
     const bounds = projection.bounds;
     const width = Math.max(1, bounds.maxX - bounds.minX);
     const height = Math.max(1, bounds.maxY - bounds.minY);
@@ -798,13 +811,28 @@ export class MainMuseumHub {
     const decodedAspect = view?.image && view.image.complete && view.image.naturalWidth > 0 && view.image.naturalHeight > 0
       ? view.image.naturalWidth / view.image.naturalHeight
       : null;
-    return projectSlotArtwork(
+    return projectDisplayedPlacement(
       wall,
       slot.placement,
-      Math.max(Number.EPSILON, decodedAspect ?? aspectOverride ?? this.presentationAspectForSlot(slot)),
-      this.resolution.stage,
-      'room-fixed'
+      decodedAspect ?? aspectOverride ?? this.presentationAspectForSlot(slot),
+      this.resolution.stage
     );
+  }
+
+  /** Aspect used by the displayed projection (decoded image first, like the 3D renderer). */
+  private displayedAspectForSlot(slot: ResolvedHubSlot): number {
+    const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
+    return view?.image && view.image.complete && view.image.naturalWidth > 0 && view.image.naturalHeight > 0
+      ? view.image.naturalWidth / view.image.naturalHeight
+      : this.presentationAspectForSlot(slot);
+  }
+
+  private syncAllSlotRenderers(): void {
+    if (!this.hubRoomRenderer) return;
+    for (const view of this.slotViews) {
+      if (this.projectedSlotGeometry.has(view.slot.id)) this.syncSlotRenderer(view, false);
+    }
+    this.hubRoomRenderer.renderFrame();
   }
 
   private syncSlotRenderer(view: SlotView, render = true): void {
@@ -843,8 +871,14 @@ export class MainMuseumHub {
     return Math.max(Number.EPSILON, view.nativeAspectRatio ?? view.slot.artworkAspect);
   }
 
-  private applyAllSlotGeometry(): void {
-    for (const view of this.slotViews) this.applySlotGeometry(view.button, view.slot);
+  /**
+   * Re-projects every slot. The 3D scene is synced in one batch and rendered
+   * once; pass `syncRenderer = false` during wall/zone drags so only the 2D
+   * overlay updates and the 3D scene is redrawn once on release.
+   */
+  private applyAllSlotGeometry(syncRenderer = true): void {
+    for (const view of this.slotViews) this.applySlotGeometry(view.button, view.slot, false);
+    if (syncRenderer) this.syncAllSlotRenderers();
     this.applySelectionState('geometry-refresh');
     if ((this.calibrating || this.debugGeometry) && !this.calibrationDrag) this.renderCalibrationOverlay();
   }
@@ -1723,6 +1757,7 @@ export class MainMuseumHub {
     const aspect = view.nativeAspectRatio ?? (width > 0 && height > 0 ? nativeArtworkAspect({ width, height }) : slot.artworkAspect);
     const source = view.fallbackReason === 'editor-upload-preview' ? 'temporary upload preview' : 'decoded source';
     const physicalHeight = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
+    const wallRoom = this.resolution.wallById.get(slot.placement.wallId)?.room ?? null;
     const sourceRect = width > 0 && height > 0
       ? createNativeSourceRect({ width, height }, Math.max(1, physicalHeight))
       : null;
@@ -1739,7 +1774,9 @@ export class MainMuseumHub {
     this.calibrationArtworkInfo.textContent =
       `${slot.artworkId} · ${width > 0 && height > 0 ? `${width} × ${height}px` : 'dimensions pending'} · ` +
       `native ratio ${aspect.toFixed(4)} · source rect ${report?.domSource.toFixed(4) ?? '—'} · ` +
-      `${report?.status === 'valid' ? 'ratio valid' : 'ratio needs attention'} · ${source}`;
+      `${report?.status === 'valid' ? 'ratio valid' : 'ratio needs attention'} · ${source}` +
+      // Wall size comes from the calibrated (measured) wall, not the nominal room height.
+      (wallRoom ? ` · wall ${wallRoom.width.toFixed(2)} × ${wallRoom.height.toFixed(2)} m (calibrated)` : '');
   }
 
   private getSlotRenderFailure(
@@ -1983,25 +2020,24 @@ export class MainMuseumHub {
         event.target instanceof HTMLInputElement
         || event.target instanceof HTMLSelectElement
         || event.target instanceof HTMLTextAreaElement
-        || event.target instanceof HTMLButtonElement
       ) {
         return;
       }
-      const slot = this.activeCalibrationSlot;
-      const wall = slot ? this.resolution.wallById.get(slot.placement.wallId) : null;
-      if (!slot || !wall) return;
-      this.recordCalibrationHistory();
-      const step = event.shiftKey ? 0.01 : 0.002;
-      const current = slot.placement.center;
-      const next = point(
-        current.x + (event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0),
-        current.y + (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0)
+      if (event.target instanceof HTMLButtonElement) {
+        // Arrow keys move a focused artwork; other buttons keep native behaviour.
+        const focusedView = this.slotViews.find((candidate) => candidate.button === event.target);
+        if (!focusedView) return;
+        if (focusedView.slot.id !== this.activeCalibrationSlotId) this.selectCalibrationSlot(focusedView.slot.id);
+      }
+      if (!this.activeCalibrationSlot) return;
+      // Real distances: 1 cm per step, 10 cm with Shift. A held key produces
+      // one undo entry (auto-repeat events do not record history).
+      const step = event.shiftKey ? 0.1 : 0.01;
+      this.nudgeActiveArtwork(
+        event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0,
+        event.key === 'ArrowUp' ? step : event.key === 'ArrowDown' ? -step : 0,
+        !event.repeat
       );
-      this.setSlotCenterClampedToMountingZone(slot, wall, next);
-      this.applyAllSlotGeometry();
-      this.renderCalibrationOverlay();
-      this.updateCalibrationOutput(true);
-      this.syncCalibrationControls();
       event.preventDefault();
       return;
     }
@@ -2014,20 +2050,35 @@ export class MainMuseumHub {
     }
   };
 
+  /**
+   * Swipe navigation tracks only the primary pointer that started the gesture
+   * (like CanvasInteraction): a second finger, a non-left mouse button, or a
+   * cancelled gesture can never trigger a room change.
+   */
   private handleSwipeStart = (event: PointerEvent): void => {
-    if (this.calibrating) return;
+    if (!event.isPrimary) {
+      this.handleSwipeCancel();
+      return;
+    }
+    if (this.calibrating || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    this.swipePointerId = event.pointerId;
     this.swipeStartX = event.clientX;
     this.swipeStartY = event.clientY;
   };
 
   private handleSwipeEnd = (event: PointerEvent): void => {
-    if (this.swipeStartX === null || this.swipeStartY === null) return;
+    if (this.swipeStartX === null || this.swipeStartY === null || event.pointerId !== this.swipePointerId) return;
     const dx = event.clientX - this.swipeStartX;
     const dy = event.clientY - this.swipeStartY;
+    this.handleSwipeCancel();
+    if (this.calibrating || Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    this.stepView(dx < 0 ? 1 : -1);
+  };
+
+  private handleSwipeCancel = (): void => {
+    this.swipePointerId = null;
     this.swipeStartX = null;
     this.swipeStartY = null;
-    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
-    this.stepView(dx < 0 ? 1 : -1);
   };
 
   // ── Calibration mode (?hubCalibrate=1) ───────────────────────────────────
@@ -2383,10 +2434,10 @@ export class MainMuseumHub {
     makeAction('Reset all geometry', () => this.resetCalibration());
     makeAction('Center artwork in green area', () => this.centerActiveSlotInMountingZone());
     makeAction('Confirm green mounting area', () => this.confirmActiveMountingZone());
-    makeAction('Artwork left', () => this.nudgeActiveArtwork(-0.01, 0));
-    makeAction('Artwork right', () => this.nudgeActiveArtwork(0.01, 0));
-    makeAction('Artwork up', () => this.nudgeActiveArtwork(0, -0.01));
-    makeAction('Artwork down', () => this.nudgeActiveArtwork(0, 0.01));
+    makeAction('Artwork left', () => this.nudgeActiveArtwork(-0.1, 0));
+    makeAction('Artwork right', () => this.nudgeActiveArtwork(0.1, 0));
+    makeAction('Artwork up', () => this.nudgeActiveArtwork(0, 0.1));
+    makeAction('Artwork down', () => this.nudgeActiveArtwork(0, -0.1));
     makeAction('Fit selected wall to view', () => {
       this.recordCalibrationHistory();
       this.fitCalibrationWallsToView(this.activeCalibrationWallId ?? undefined);
@@ -2512,6 +2563,7 @@ export class MainMuseumHub {
     if (this.calibrationDrag || !this.isPrimaryPointerDown(event)) return;
     event.preventDefault();
     this.selectCalibrationSlot(slot.id);
+    button.focus({ preventScroll: true });
     this.recordCalibrationHistory();
     // Keep the grabbed point under the pointer instead of snapping the
     // artwork centre to it, which made the first move jump.
@@ -2547,7 +2599,6 @@ export class MainMuseumHub {
     event.preventDefault();
     this.activeCalibrationWallId = wallId;
     if (this.calibrationWallSelect) this.calibrationWallSelect.value = wallId;
-    this.recordCalibrationHistory();
     const element = event.currentTarget as SVGCircleElement;
     // Capture on the visible handle itself. The overview handles live in the
     // editor SVG, which is intentionally layered above the projected overlay.
@@ -2557,6 +2608,7 @@ export class MainMuseumHub {
     if (!currentQuad) return;
     const startPoint = this.pointerEventToStage(event);
     if (!startPoint) return;
+    this.recordCalibrationHistory();
     this.calibrationDrag = {
       kind: 'wall-point',
       wallId,
@@ -2572,6 +2624,7 @@ export class MainMuseumHub {
     captureElement.setPointerCapture(event.pointerId);
     captureElement.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     captureElement.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    captureElement.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
     window.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     window.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     window.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
@@ -2606,6 +2659,7 @@ export class MainMuseumHub {
     captureElement.setPointerCapture(event.pointerId);
     captureElement.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     captureElement.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    captureElement.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
     window.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     window.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     window.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
@@ -2625,9 +2679,47 @@ export class MainMuseumHub {
       corner.x += clamped.x;
       corner.y += clamped.y;
     });
+    const refitMessage = this.refitSlotsOnWall(wallId);
     this.applyAllSlotGeometry();
     this.updateCalibrationOverlayGeometry();
     this.updateCalibrationOutput(true);
+    if (refitMessage) this.announceCalibrationAction(refitMessage);
+  }
+
+  /**
+   * After a wall or green-zone edit, pulls each artwork on the wall back to the
+   * nearest valid position inside the new zone (keeping its physical size), or
+   * marks it invalid when no position fits. Returns an announcement, if any.
+   */
+  private refitSlotsOnWall(wallId: string): string | null {
+    const wall = this.resolution.wallById.get(wallId);
+    if (!wall?.room) return null;
+    const moved: string[] = [];
+    const invalid: string[] = [];
+    for (const view of this.slotViews) {
+      const { slot } = view;
+      if (slot.placement.wallId !== wallId || !slot.artworkId || !slot.selectable) continue;
+      this.syncCanonicalPlacement(slot, wall);
+      if (this.isSlotPlacementInsideMountingZone(slot, wall)) continue;
+      const original = clonePoint(slot.placement.center);
+      const applyCenter = (center: Point2D): boolean => {
+        slot.placement.center = point(this.clampLocalX(center.x), this.clampLocalY(center.y));
+        slot.placement.uv = point(slot.placement.center.x, 1 - slot.placement.center.y);
+        this.syncCanonicalPlacement(slot, wall);
+        return this.isSlotPlacementInsideMountingZone(slot, wall);
+      };
+      const refit = this.findNearestValidSlotCenter(wall, original, applyCenter);
+      if (refit && applyCenter(refit)) {
+        moved.push(slot.id);
+      } else {
+        applyCenter(original);
+        invalid.push(slot.id);
+      }
+    }
+    const parts: string[] = [];
+    if (moved.length) parts.push(`Moved back inside the green zone: ${moved.join(', ')}.`);
+    if (invalid.length) parts.push(`Does not fit the green zone and is marked invalid: ${invalid.join(', ')}.`);
+    return parts.length ? parts.join(' ') : null;
   }
 
   /** Only the primary mouse button / first touch or pen contact starts a drag. */
@@ -2676,9 +2768,11 @@ export class MainMuseumHub {
           point(local.x + drag.grabOffset.x, local.y + drag.grabOffset.y)
         );
       } else {
+        this.lastSlotDragBlocked = null;
         this.setSlotHeightClampedToMountingZone(drag.slot, wall, Math.abs(local.y - drag.slot.placement.center.y) * 2);
       }
       this.applySlotGeometry(drag.button, drag.slot, false);
+      this.renderDragLimitHighlight(drag.slot, wall);
     } else {
       const wall = this.resolution.wallById.get(drag.wallId);
       const wallQuad = wall?.quad ?? (drag.wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
@@ -2688,12 +2782,25 @@ export class MainMuseumHub {
         const mutableQuad = wallQuad as unknown as Point2D[];
         let delta = point(stagePoint.x - drag.startPoint.x, stagePoint.y - drag.startPoint.y);
         if (drag.index < 0) delta = this.clampWallDelta(drag.startQuad, delta);
-        const candidate = drag.startQuad.map((source, index) =>
-          drag.index >= 0 && index === drag.index
-            ? this.clampDisplayPoint(point(source.x + delta.x, source.y + delta.y))
-            : point(source.x + (drag.index >= 0 ? 0 : delta.x), source.y + (drag.index >= 0 ? 0 : delta.y))
-        ) as unknown as Quad;
-        if (quadIsDegenerate(candidate) || !quadIsConvex(candidate)) return;
+        const startQuad = drag.startQuad;
+        const quadWithCorner = (corner: Point2D): Quad =>
+          startQuad.map((source, index) => (index === drag.index ? corner : point(source.x, source.y))) as unknown as Quad;
+        let candidate: Quad;
+        if (drag.index >= 0) {
+          // Stop at the limit (degenerate/non-convex quad) and slide along it
+          // from the current valid corner instead of freezing the handle.
+          const source = startQuad[drag.index]!;
+          const target = this.clampDisplayPoint(point(source.x + delta.x, source.y + delta.y));
+          const current = point(mutableQuad[drag.index]!.x, mutableQuad[drag.index]!.y);
+          const isValidCorner = (corner: Point2D): boolean => {
+            const quad = quadWithCorner(corner);
+            return !quadIsDegenerate(quad) && quadIsConvex(quad);
+          };
+          const result = slideToValid(current, target, isValidCorner);
+          candidate = quadWithCorner(result.startValid ? result.point : target);
+        } else {
+          candidate = startQuad.map((source) => point(source.x + delta.x, source.y + delta.y)) as unknown as Quad;
+        }
         if (drag.index >= 0) {
           const clamped = candidate[drag.index];
           mutableQuad[drag.index].x = clamped.x;
@@ -2726,14 +2833,27 @@ export class MainMuseumHub {
       const targetPoints = drag.target === 'safe' ? wall.safePolygon : wall.mountingZone;
       const targetPoint = targetPoints[drag.index];
       if (!targetPoint) return;
-      const clamped = this.clampDisplayPoint(stagePoint);
-      targetPoint.x = clamped.x;
-      targetPoint.y = clamped.y;
+      const target = this.clampDisplayPoint(stagePoint);
+      const current = point(targetPoint.x, targetPoint.y);
+      // Green-zone and safe-area points must keep a simple (non-crossing)
+      // polygon on the wall; a 4-point zone must stay convex. Blocked moves
+      // slide along the limit like artwork and wall-corner drags.
+      const keepInsideWall = pointInPolygon(current, wall.quad);
+      const isValidPoint = (candidatePoint: Point2D): boolean => {
+        const polygon = targetPoints.map((existing, index) => (index === drag.index ? candidatePoint : existing));
+        if (!polygonIsSimple(polygon)) return false;
+        if (polygon.length === 4 && !quadIsConvex(polygon as unknown as Quad)) return false;
+        return !keepInsideWall || pointInPolygon(candidatePoint, wall.quad);
+      };
+      const result = slideToValid(current, target, isValidPoint);
+      const next = result.startValid ? result.point : target;
+      targetPoint.x = next.x;
+      targetPoint.y = next.y;
       if (drag.target === 'mounting-zone') {
         wall.mountingZoneConfirmed = false;
       }
       }
-      if (wall) this.applyAllSlotGeometry();
+      if (wall) this.applyAllSlotGeometry(false);
     }
     if (drag.kind !== 'slot') {
       this.updateCalibrationOverlayGeometry();
@@ -3044,12 +3164,20 @@ export class MainMuseumHub {
     window.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
     window.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     window.removeEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
+    this.lastSlotDragBlocked = null;
+    let refitMessage: string | null = null;
     if (drag.kind === 'slot') {
       const view = this.slotViews.find((candidate) => candidate.slot.id === drag.slot.id);
       if (view) this.syncSlotRenderer(view);
+    } else {
+      // Wall/zone drags deferred 3D updates; re-fit artworks and render once.
+      refitMessage = this.refitSlotsOnWall(drag.wallId);
+      this.applyAllSlotGeometry();
     }
     this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
+    if (drag.kind === 'slot') this.announceSlotPosition(drag.slot);
+    if (refitMessage) this.announceCalibrationAction(refitMessage);
   };
 
   private handleCalibrationBlur = (): void => {
@@ -3061,6 +3189,7 @@ export class MainMuseumHub {
     }
     this.pendingCalibrationMove = null;
     this.calibrationDrag = null;
+    this.lastSlotDragBlocked = null;
     const element = drag.captureElement;
     element.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
     element.removeEventListener('pointerup', this.handleCalibrationEnd as EventListener);
@@ -3075,6 +3204,13 @@ export class MainMuseumHub {
       } catch {
         // Capture may already have been released by the browser.
       }
+    }
+    if (drag.kind === 'wall-point') {
+      this.refitSlotsOnWall(drag.wallId);
+      this.applyAllSlotGeometry();
+    } else {
+      const view = this.slotViews.find((candidate) => candidate.slot.id === drag.slot.id);
+      if (view) this.syncSlotRenderer(view);
     }
     this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
@@ -3359,10 +3495,12 @@ export class MainMuseumHub {
   }
 
   private renderWallDebugAxes(wall: ResolvedHubWall): void {
-    if (!this.calibrationSvg || !wall.homography) return;
-    const origin = applyHomography(wall.homography, 0.1, 0.1);
-    const axisX = applyHomography(wall.homography, 0.28, 0.1);
-    const axisY = applyHomography(wall.homography, 0.1, 0.28);
+    // Use the current (possibly edited) quad; the resolved homography is load-time only.
+    const homography = computeHomographyFromUnitSquare(wall.quad) ?? wall.homography;
+    if (!this.calibrationSvg || !homography) return;
+    const origin = applyHomography(homography, 0.1, 0.1);
+    const axisX = applyHomography(homography, 0.28, 0.1);
+    const axisY = applyHomography(homography, 0.1, 0.28);
     if (!origin || !axisX || !axisY) return;
 
     this.appendSvgLine(origin, axisX, 'museum-hub__debug-axis museum-hub__debug-axis--x');
@@ -3391,8 +3529,10 @@ export class MainMuseumHub {
       if (!slot.selectable || !slot.artworkId) continue;
       const wall = this.resolution.wallById.get(slot.placement.wallId);
       const projection = this.projectedSlotGeometry.get(slot.id);
-      if (!wall || !projection || !wall.homography) continue;
-      const centerStage = applyHomography(wall.homography, slot.placement.center.x, slot.placement.center.y);
+      const homography = wall ? computeHomographyFromUnitSquare(wall.quad) ?? wall.homography : null;
+      if (!wall || !projection || !homography) continue;
+      const centerStage = applyHomography(homography, slot.placement.center.x, slot.placement.center.y);
+      const displayedValid = evaluateDisplayedPlacement(wall, slot.placement, this.displayedAspectForSlot(slot), this.resolution.stage).valid;
       this.calibrationSvg.appendChild(this.createProjectedQuadElement(projection.projectedQuad));
       if (centerStage) {
         this.appendSvgCircle(centerStage, 'museum-hub__debug-slot-center', 3.2);
@@ -3414,9 +3554,7 @@ export class MainMuseumHub {
         this.appendSvgLabel(
           point(labelAnchor.x + 8, labelAnchor.y - 8),
           `${slot.id} · ${slot.placement.wallId} · ${selectionState} · ${localAnchor} · ${stageAnchor} · ${projectedAnchor} · ${
-            projection.validity?.contained && projection.validity.doorwayClear && projection.validity.inHangingBand
-              ? 'valid'
-              : 'invalid'
+            displayedValid ? 'valid' : 'invalid'
           }`,
           'museum-hub__debug-slot-label'
         );
@@ -3460,8 +3598,8 @@ export class MainMuseumHub {
     return polygon;
   }
 
-  private appendSvgLine(start: Point2D, end: Point2D, className: string): void {
-    if (!this.calibrationSvg) return;
+  private appendSvgLine(start: Point2D, end: Point2D, className: string): SVGLineElement | null {
+    if (!this.calibrationSvg) return null;
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('class', className);
     line.setAttribute('x1', start.x.toFixed(2));
@@ -3469,6 +3607,7 @@ export class MainMuseumHub {
     line.setAttribute('x2', end.x.toFixed(2));
     line.setAttribute('y2', end.y.toFixed(2));
     this.calibrationSvg.appendChild(line);
+    return line;
   }
 
   private appendSvgCircle(position: Point2D, className: string, radius: number): void {
@@ -3554,15 +3693,16 @@ export class MainMuseumHub {
       if (ownedWallId && slot.placement.wallId !== ownedWallId) {
         warnings.push(`Bild ${slot.id}: Wandzuordnung wurde von ${ownedWallId} zu ${slot.placement.wallId} geändert.`);
       }
-      const projection = this.projectDisplayedSlot(slot, wall);
+      const evaluation = evaluateDisplayedPlacement(wall, slot.placement, this.displayedAspectForSlot(slot), this.resolution.stage);
+      const projection = evaluation.projection;
       if (!projection) {
         warnings.push(`Bild ${slot.id}: Position kann nicht berechnet werden.`);
         continue;
       }
-      if (!projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.mountingZone))) {
+      if (!evaluation.insideMountingZone) {
         warnings.push(`Bild ${slot.id}: Das vollständige Bild liegt außerhalb der grünen Wandfläche.`);
       }
-      if (!projection.validity?.doorwayClear) {
+      if (!evaluation.doorwayClear) {
         warnings.push(`Bild ${slot.id}: Das Bild überschneidet einen Türbereich.`);
       }
       if (projection.shortEdge < HUB_MIN_PROJECTED_SHORT_EDGE_PX) {
@@ -3699,28 +3839,7 @@ export class MainMuseumHub {
         enabled: slot.disabledReason !== 'explicitly-disabled',
         selectable: slot.selectable,
         ...(slot.artworkId ? { artworkId: slot.artworkId } : {}),
-        placement: {
-          wallId: slot.placement.wallId,
-          horizontalPosition: this.round(slot.placement.horizontalPosition ?? slot.placement.uv?.x ?? 0),
-          centerHeight: this.round(slot.placement.centerHeight ?? slot.placement.anchor?.y ?? 0),
-          physicalHeight: this.round(slot.placement.physicalHeight ?? slot.placement.mountedHeight),
-          mountingGap: this.round(slot.placement.mountingGap ?? 0.002),
-          ...(slot.placement.targetSizePolicy
-            ? { targetSizePolicy: slot.placement.targetSizePolicy }
-            : {}),
-          ...(slot.placement.minScale !== undefined
-            ? { minScale: slot.placement.minScale }
-            : {}),
-          ...(slot.placement.maxScale !== undefined
-            ? { maxScale: slot.placement.maxScale }
-            : {}),
-          ...(slot.placement.zOffset !== undefined
-            ? { zOffset: slot.placement.zOffset }
-            : {}),
-          ...(slot.placement.provisional !== undefined
-            ? { provisional: slot.placement.provisional }
-            : {}),
-        },
+        placement: exportHubSlotPlacement(slot.placement),
       })),
     };
   }
@@ -3764,12 +3883,7 @@ export class MainMuseumHub {
   }
 
   private isSlotPlacementInsideMountingZone(slot: ResolvedHubSlot, wall: ResolvedHubWall): boolean {
-    const projection = this.projectDisplayedSlot(slot, wall);
-    return Boolean(
-      projection
-      && projection.validity?.doorwayClear
-      && projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.mountingZone))
-    );
+    return evaluateDisplayedPlacement(wall, slot.placement, this.displayedAspectForSlot(slot), this.resolution.stage).valid;
   }
 
   /**
@@ -3809,9 +3923,10 @@ export class MainMuseumHub {
   /**
    * Moves a slot toward `requestedCenter` (wall-local unit coordinates) while
    * keeping the complete displayed artwork inside the green mounting zone and
-   * clear of doorways. Blocked motion slides along the zone edge per axis
-   * (like a constrained drag) instead of being pulled toward the zone centroid,
-   * so every reachable edge of the zone, including the top, can be reached.
+   * clear of doorways. Blocked motion stops at the limit and slides along it
+   * (shared `slideToValid` solver) instead of being pulled toward the zone
+   * centroid, so every reachable edge of the zone, including the top, can be
+   * reached. Returns false when no valid position exists (placement unchanged).
    */
   private setSlotCenterClampedToMountingZone(
     slot: ResolvedHubSlot,
@@ -3837,65 +3952,48 @@ export class MainMuseumHub {
       this.syncCanonicalPlacement(slot, wall);
       return this.isSlotPlacementInsideMountingZone(slot, wall);
     };
-    const lerp = (from: Point2D, to: Point2D, t: number): Point2D =>
-      point(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t);
-    // `from` must be valid. Returns the furthest valid point on from→to.
-    const advance = (from: Point2D, to: Point2D): Point2D => {
-      if (applyCenter(to)) return to;
-      let valid = 0;
-      let invalid = 1;
-      for (let iteration = 0; iteration < 16; iteration += 1) {
-        const t = (valid + invalid) / 2;
-        if (applyCenter(lerp(from, to, t))) valid = t;
-        else invalid = t;
-      }
-      return lerp(from, to, valid);
-    };
+    const metricDistance = (a: Point2D, b: Point2D): number =>
+      Math.hypot((a.x - b.x) * room.width, (a.y - b.y) * room.height);
     const target = point(this.clampLocalX(requestedCenter.x), this.clampLocalY(requestedCenter.y));
-    if (applyCenter(target)) return true;
+    let start = point(this.clampLocalX(previous.center.x), this.clampLocalY(previous.center.y));
 
-    const start = point(this.clampLocalX(previous.center.x), this.clampLocalY(previous.center.y));
-    if (applyCenter(start)) {
-      const metricDistance = (candidate: Point2D): number =>
-        Math.hypot((candidate.x - target.x) * room.width, (candidate.y - target.y) * room.height);
-      const slideXFirst = (() => {
-        const afterX = advance(start, point(target.x, start.y));
-        return advance(afterX, point(afterX.x, target.y));
-      })();
-      const slideYFirst = (() => {
-        const afterY = advance(start, point(start.x, target.y));
-        return advance(afterY, point(target.x, afterY.y));
-      })();
-      const direct = advance(start, target);
-      const best = [slideXFirst, slideYFirst, direct].reduce((winner, candidate) =>
-        metricDistance(candidate) < metricDistance(winner) - 1e-9 ? candidate : winner
-      );
-      if (applyCenter(best)) return true;
-      applyCenter(start);
-      return true;
+    if (!applyCenter(start) && !applyCenter(target)) {
+      // The current placement is already invalid (e.g. after a wall edit):
+      // start from the closest valid point between the zone centre and the
+      // request so the artwork re-enters the zone near where it was.
+      const refit = this.findNearestValidSlotCenter(wall, target, applyCenter);
+      if (!refit) {
+        restorePrevious();
+        this.lastSlotDragBlocked = null;
+        return false;
+      }
+      start = refit;
     }
+    const result = slideToValid(start, target, applyCenter, { distance: metricDistance });
+    applyCenter(result.point);
+    this.lastSlotDragBlocked = result.blocked ? { slotId: slot.id, target } : null;
+    return true;
+  }
 
-    // The current placement is already invalid (e.g. after a wall edit): pull
-    // the requested position toward the zone centre until it becomes valid.
+  /**
+   * Nearest valid centre on the segment from `preferred` toward the zone
+   * centre, or null when even the zone centre cannot host the artwork.
+   */
+  private findNearestValidSlotCenter(
+    wall: ResolvedHubWall,
+    preferred: Point2D,
+    applyCenter: (center: Point2D) => boolean
+  ): Point2D | null {
+    if (wall.mountingZone.length < 3) return null;
     const zoneCenter = wall.mountingZone.reduce(
-      (sum, current) => point(sum.x + current.x, sum.y + current.y),
+      (sum, current) => point(sum.x + current.x / wall.mountingZone.length, sum.y + current.y / wall.mountingZone.length),
       point(0, 0)
     );
-    zoneCenter.x /= Math.max(1, wall.mountingZone.length);
-    zoneCenter.y /= Math.max(1, wall.mountingZone.length);
     const localZoneCenter = this.applyInverseHomography(wall, zoneCenter);
-    if (!localZoneCenter || !applyCenter(localZoneCenter)) {
-      restorePrevious();
-      return false;
-    }
-    let invalidWeight = 0;
-    let validWeight = 1;
-    for (let iteration = 0; iteration < 16; iteration += 1) {
-      const weight = (invalidWeight + validWeight) / 2;
-      if (applyCenter(lerp(target, localZoneCenter, weight))) validWeight = weight;
-      else invalidWeight = weight;
-    }
-    return applyCenter(lerp(target, localZoneCenter, validWeight));
+    if (!localZoneCenter || !applyCenter(localZoneCenter)) return null;
+    // advanceToValid walks from the valid zone centre toward the preferred
+    // point and returns the last valid position before the boundary.
+    return advanceToValid(localZoneCenter, preferred, applyCenter);
   }
 
   private syncCalibrationControls(): void {
@@ -3972,21 +4070,82 @@ export class MainMuseumHub {
     this.syncCalibrationControls();
   }
 
-  private nudgeActiveArtwork(dx: number, dy: number): void {
+  /**
+   * Moves the active artwork by a real wall distance in metres (`up` is
+   * positive). Falls back to wall-normalized units for walls without a room.
+   */
+  private nudgeActiveArtwork(rightMetres: number, upMetres: number, recordHistory = true): void {
     const slot = this.activeCalibrationSlot;
     if (!slot) return;
     const wall = this.resolution.wallById.get(slot.placement.wallId);
     if (!wall) return;
-    this.recordCalibrationHistory();
+    if (recordHistory) this.recordCalibrationHistory();
+    const width = wall.room?.width ?? 1;
+    const height = wall.room?.height ?? 1;
     this.setSlotCenterClampedToMountingZone(
       slot,
       wall,
-      point(slot.placement.center.x + dx, slot.placement.center.y + dy)
+      point(slot.placement.center.x + rightMetres / width, slot.placement.center.y - upMetres / height)
     );
+    this.lastSlotDragBlocked = null;
     this.applyAllSlotGeometry();
+    this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
     this.syncCalibrationControls();
-    this.announceCalibrationAction('Artwork moved. Use the corner marker to resize it.');
+    this.announceSlotPosition(slot);
+  }
+
+  /** Screen-reader announcement of the artwork position in real units. */
+  private announceSlotPosition(slot: ResolvedHubSlot): void {
+    const wall = this.resolution.wallById.get(slot.placement.wallId);
+    const room = wall?.room;
+    const fromLeft = room ? (slot.placement.horizontalPosition ?? 0) * room.width : null;
+    const centerHeight = slot.placement.centerHeight;
+    const valid = wall ? this.isSlotPlacementInsideMountingZone(slot, wall) : false;
+    this.announceCalibrationAction(
+      fromLeft !== null && centerHeight !== undefined
+        ? `${slot.id}: ${fromLeft.toFixed(2)} m from the left wall edge, centre ${centerHeight.toFixed(2)} m high${valid ? '' : ' (outside the green zone)'}.`
+        : `${slot.id} moved.`
+    );
+  }
+
+  /**
+   * While an artwork drag is blocked, highlights the green-zone edges (or the
+   * doorway) that stopped it. Cleared on release by the overlay re-render.
+   */
+  private renderDragLimitHighlight(slot: ResolvedHubSlot, wall: ResolvedHubWall): void {
+    const svg = this.calibrationSvg;
+    if (!svg) return;
+    svg.querySelectorAll('[data-calibration-limit]').forEach((element) => element.remove());
+    const blocked = this.lastSlotDragBlocked;
+    if (!blocked || blocked.slotId !== slot.id || !wall.room) return;
+    const probe: ResolvedHubSlot = {
+      ...slot,
+      placement: { ...slot.placement, uv: point(blocked.target.x, 1 - blocked.target.y) },
+    };
+    this.syncCanonicalPlacement(probe, wall);
+    const evaluation = evaluateDisplayedPlacement(wall, probe.placement, this.displayedAspectForSlot(slot), this.resolution.stage);
+    if (!evaluation.projection) return;
+    const edges = new Set<string>();
+    for (const corner of evaluation.projection.projectedQuad) {
+      if (pointInPolygon(corner, wall.mountingZone)) continue;
+      const edge = nearestPolygonEdge(corner, wall.mountingZone);
+      if (!edge) continue;
+      const key = `${edge[0].x},${edge[0].y}`;
+      if (edges.has(key)) continue;
+      edges.add(key);
+      const line = this.appendSvgLine(edge[0], edge[1], 'museum-hub__calibration-limit');
+      line?.setAttribute('data-calibration-limit', 'zone-edge');
+    }
+    if (!evaluation.doorwayClear && wall.camera) {
+      for (const doorway of projectRoomDoorwayPolygons(wall.room, wall.camera, this.resolution.stage)) {
+        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        polygon.setAttribute('points', this.pointsToSvg(doorway));
+        polygon.setAttribute('class', 'museum-hub__calibration-limit museum-hub__calibration-limit--doorway');
+        polygon.setAttribute('data-calibration-limit', 'doorway');
+        svg.appendChild(polygon);
+      }
+    }
   }
 
   private confirmActiveMountingZone(): void {
@@ -4542,6 +4701,7 @@ export class MainMuseumHub {
     window.removeEventListener('blur', this.handleCalibrationBlur);
     this.element.removeEventListener('pointerdown', this.handleSwipeStart);
     this.element.removeEventListener('pointerup', this.handleSwipeEnd);
+    this.element.removeEventListener('pointercancel', this.handleSwipeCancel);
     this.element.removeEventListener('keydown', this.handleKeydown);
     this.entryButton.removeEventListener('click', this.handleActivate);
     this.activateCallback = null;

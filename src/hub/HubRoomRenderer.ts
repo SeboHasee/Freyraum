@@ -307,6 +307,12 @@ export class HubRoomRenderer {
     this.render();
   }
 
+  /** Renders one frame after batched `upsertSlot(..., render = false)` updates. */
+  renderFrame(): void {
+    if (this.disposed) return;
+    this.render();
+  }
+
   setSlotHidden(slotId: string): void {
     const state = this.slotMeshes.get(slotId);
     if (!state) return;

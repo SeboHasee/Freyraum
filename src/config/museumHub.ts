@@ -53,6 +53,7 @@ import {
   type WallProjectionRealism,
   type WallProjectionModel,
   type ReferenceImageCalibration,
+  type ProjectedArtworkGeometry,
 } from '../hub/projectiveGeometry';
 import { isReferenceOnlyHubAssetPath } from '../hub/backgroundFallback';
 
@@ -224,6 +225,12 @@ export interface ResolvedHubSlot {
   mappingSource: 'explicit' | 'auto-placed';
   artworkAspect: number;
   wallGroup: HubWallGroup;
+  /**
+   * Problems with the stored placement found at load time. Canonical
+   * (fixed-height) placements are never relocated while loading; invalid ones
+   * keep their exact position and are flagged here for the editor instead.
+   */
+  placementIssues?: readonly DisplayedPlacementIssue[];
 }
 
 export interface ResolvedHubPage {
@@ -793,7 +800,7 @@ function derivePlacementUv(
   return point(clamp01(placement.center.x), clamp01(1 - placement.center.y));
 }
 
-function derivePlacementAnchor(
+export function derivePlacementAnchor(
   placement: HubSlotPlacement,
   wall?: Pick<ResolvedHubWall, 'room'>
 ): Point2D | undefined {
@@ -839,6 +846,82 @@ function sideWallPlacementHasArchitecturalClearance(
       && wall.room.width - artworkMax >= HUB_SIDE_FRONT_CORNER_CLEARANCE_M - 1e-6
     : artworkMin >= HUB_SIDE_FRONT_CORNER_CLEARANCE_M - 1e-6
       && doorwayMin - artworkMax >= HUB_SIDE_DOORWAY_CLEARANCE_M - 1e-6;
+}
+
+export type DisplayedPlacementIssue = 'missing-projection' | 'outside-mounting-zone' | 'doorway-overlap';
+
+export interface DisplayedPlacementEvaluation {
+  projection: ProjectedArtworkGeometry | null;
+  insideMountingZone: boolean;
+  doorwayClear: boolean;
+  valid: boolean;
+  issues: DisplayedPlacementIssue[];
+}
+
+/**
+ * The one projection shared by the placement editor overlay, drag clamping,
+ * editor/export warnings, load-time validation, and debug overlays. It honors
+ * the stored anchor exactly (`room-fixed`), which is also where the WebGL
+ * renderer mounts the artwork, so all views agree on position and validity.
+ */
+export function projectDisplayedPlacement(
+  wall: WallProjectionModel,
+  placement: HubSlotPlacement,
+  artworkAspect: number,
+  stage: StageReference
+): ProjectedArtworkGeometry | null {
+  return projectSlotArtwork(wall, placement, Math.max(Number.EPSILON, artworkAspect), stage, 'room-fixed');
+}
+
+/** Editor validity rule: whole artwork inside the green mounting zone and clear of doorways. */
+export function evaluateDisplayedPlacement(
+  wall: WallProjectionModel & { mountingZone: Polygon },
+  placement: HubSlotPlacement,
+  artworkAspect: number,
+  stage: StageReference
+): DisplayedPlacementEvaluation {
+  const projection = projectDisplayedPlacement(wall, placement, artworkAspect, stage);
+  if (!projection) {
+    return { projection: null, insideMountingZone: false, doorwayClear: false, valid: false, issues: ['missing-projection'] };
+  }
+  const insideMountingZone = wall.mountingZone.length >= 3
+    && projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.mountingZone));
+  const doorwayClear = projection.validity?.doorwayClear !== false;
+  const issues: DisplayedPlacementIssue[] = [];
+  if (!insideMountingZone) issues.push('outside-mounting-zone');
+  if (!doorwayClear) issues.push('doorway-overlap');
+  return { projection, insideMountingZone, doorwayClear, valid: issues.length === 0, issues };
+}
+
+export interface HubSlotPlacementExport {
+  wallId: string;
+  horizontalPosition: number;
+  centerHeight: number;
+  physicalHeight: number;
+  mountingGap: number;
+  targetSizePolicy?: 'contain' | 'fixed-height';
+  minScale?: number;
+  maxScale?: number;
+  zOffset?: number;
+  provisional?: boolean;
+}
+
+const roundPlacementValue = (value: number): number => Math.round(value * 1000) / 1000;
+
+/** Canonical v5 placement written by the editor export (and used by round-trip tests). */
+export function exportHubSlotPlacement(placement: HubSlotPlacement): HubSlotPlacementExport {
+  return {
+    wallId: placement.wallId,
+    horizontalPosition: roundPlacementValue(placement.horizontalPosition ?? placement.uv?.x ?? 0),
+    centerHeight: roundPlacementValue(placement.centerHeight ?? placement.anchor?.y ?? 0),
+    physicalHeight: roundPlacementValue(placement.physicalHeight ?? placement.mountedHeight),
+    mountingGap: roundPlacementValue(placement.mountingGap ?? 0.002),
+    ...(placement.targetSizePolicy ? { targetSizePolicy: placement.targetSizePolicy } : {}),
+    ...(placement.minScale !== undefined ? { minScale: placement.minScale } : {}),
+    ...(placement.maxScale !== undefined ? { maxScale: placement.maxScale } : {}),
+    ...(placement.zOffset !== undefined ? { zOffset: placement.zOffset } : {}),
+    ...(placement.provisional !== undefined ? { provisional: placement.provisional } : {}),
+  };
 }
 
 function clampSlotPlacementToDrawableRegion(
@@ -2217,6 +2300,9 @@ export function resolveMuseumHub(
     const wall = wallById.get(slot.placement.wallId);
     if (!wall) continue;
     if (wall.mountingZoneConfirmed) continue;
+    // Canonical placements are authoritative; they are validated (and flagged)
+    // below instead of being moved. Only legacy migrations are auto-fitted.
+    if (slot.placement.targetSizePolicy === 'fixed-height') continue;
     const fitted = clampSlotPlacementToDrawableRegion(wall, slot.placement, slot.artworkAspect, stage);
     if (!fitted.adjusted) continue;
     slot.placement.center = fitted.center;
@@ -2293,6 +2379,39 @@ export function resolveMuseumHub(
     let resolvedWall: ResolvedHubWall | null = null;
     let resolvedPlacement: HubSlotPlacement | null = null;
     let projected: ReturnType<typeof projectSlotArtwork> = null;
+    if (slot.placement.targetSizePolicy === 'fixed-height' && currentWall.room) {
+      // Exported editor positions survive reloading unchanged: evaluate the
+      // exact stored anchor with the shared displayed projection and flag
+      // problems rather than relocating or resizing the artwork.
+      if (currentWall.projectionRealism && !currentWall.projectionRealism.passes) {
+        projectedBySlot.set(slot.id, null);
+        slot.selectable = false;
+        slot.disabledReason = 'projection-realism';
+        warnings.push(`slot "${slot.id}": projected geometry is invalid and the slot was suppressed.`);
+        continue;
+      }
+      const evaluation = evaluateDisplayedPlacement(currentWall, slot.placement, slot.artworkAspect, stage);
+      projectedBySlot.set(slot.id, evaluation.projection);
+      if (!evaluation.projection) {
+        slot.selectable = false;
+        slot.disabledReason = 'invalid-projection';
+        warnings.push(`slot "${slot.id}": projected geometry is invalid and the slot was suppressed.`);
+        continue;
+      }
+      if (!evaluation.valid) {
+        slot.placementIssues = evaluation.issues;
+        warnings.push(
+          `slot "${slot.id}": stored placement is invalid (${evaluation.issues.join(', ')}); it was kept unchanged and flagged for correction in the placement editor.`
+        );
+      }
+      if (!sideWallPlacementHasArchitecturalClearance(currentWall, evaluation.projection)) {
+        warnings.push(`slot "${slot.id}": placement is closer than the curator doorway/corner guidance on "${currentWall.id}".`);
+      }
+      if (slot.placement.provisional) {
+        warnings.push(`slot "${slot.id}": placement was migrated provisionally and should be recalibrated.`);
+      }
+      continue;
+    }
     // Wall ownership is authoritative. Invalid geometry is surfaced and
     // suppressed instead of silently remounting an artwork on another wall.
     const fallbackWalls = [currentWall];
@@ -2411,7 +2530,7 @@ export function resolveMuseumHub(
     if (!slot.selectable || !slot.artworkId) continue;
     const wall = wallById.get(slot.placement.wallId);
     if (!wall) continue;
-    const projected = projectSlotArtwork(wall, slot.placement, slot.artworkAspect, stage);
+    const projected = projectDisplayedPlacement(wall, slot.placement, slot.artworkAspect, stage);
     projectedBySlot.set(slot.id, projected);
     if (projected && projected.shortEdge < HUB_MIN_PROJECTED_SHORT_EDGE_PX) {
       warnings.push(

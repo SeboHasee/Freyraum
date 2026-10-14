@@ -895,6 +895,24 @@ canvas {
   outline-offset: 5px;
 }
 
+.museum-hub.is-calibrating .museum-hub__artwork.is-placement-invalid {
+  outline: 3px dashed rgba(255, 65, 45, 0.98);
+  outline-offset: 5px;
+}
+
+.museum-hub__calibration-limit {
+  fill: none;
+  stroke: rgba(255, 196, 60, 0.98);
+  stroke-width: 4;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.museum-hub__calibration-limit--doorway {
+  fill: rgba(255, 196, 60, 0.2);
+  stroke-dasharray: 6 4;
+}
+
 .museum-hub__debug-axis {
   stroke-width: 2;
   stroke-linecap: round;
