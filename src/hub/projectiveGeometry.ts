@@ -1512,7 +1512,7 @@ const projectiveFallback = (): ProjectedArtworkGeometry | null => {
             );
             return mapped.some((corner) => corner === null)
               ? null
-              : mapped as Quad;
+              : mapped as unknown as Quad;
           })()
         : null;
       const orderedProjectedQuad: Quad = calibratedProjectedQuad ?? worldProjectedQuad;

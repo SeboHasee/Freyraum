@@ -17,6 +17,12 @@
    for its fallback artwork quad. Fixed-size editor projection now uses the
    same physical mounting frame as WebGL, while projected bounds remain
    interaction metadata.
+5. Wall-corner dragging mutates the resolved wall's stage-space `quad` only;
+   it does not mutate the authored room-space `origin`/axes. The editor must
+   therefore use that current quad for DOM projection, while retaining the
+   room-space mounting frame as the physical geometry authority. Otherwise
+   artwork dimensions remain correct but the artwork appears disconnected from
+   the edited wall.
 
 ## 2026-10-12 — Main museum versus editor authority
 

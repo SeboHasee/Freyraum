@@ -9,6 +9,9 @@
   invalid oversized placement instead of silently shrinking it.
 - The placement editor now projects fixed-size artwork from the calibrated
   world wall frame instead of the wall-normalized fallback path.
+- Calibration-only wall edits now remap the editor artwork quadrilateral
+  through the current edited wall quad while preserving the physical WebGL
+  mounting frame.
 
 ## v1.31 — Main museum presentation authority (2026-10-12)
 
