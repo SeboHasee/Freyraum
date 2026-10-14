@@ -852,7 +852,8 @@ function clampSlotPlacementToDrawableRegion(
       wall.room,
       placement.anchor,
       placement.mountedHeight,
-      artworkAspectRatio
+      artworkAspectRatio,
+      placement.targetSizePolicy === 'fixed-height'
     );
     return {
       center: placement.center,
@@ -2248,30 +2249,20 @@ export function resolveMuseumHub(
       ?? point(slot.placement.center.x, 1 - slot.placement.center.y);
     const sourceWall = wallById.get(slot.placement.wallId);
     const targetUv = uv;
-    const sourceHeight = sourceWall?.room?.height ?? targetWall.room?.height ?? 1;
-    const targetHeight = targetWall.room?.height ?? sourceHeight;
-    const normalizedHeight = slot.placement.mountedHeight / Math.max(0.001, sourceHeight);
+    const physicalHeight = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
     const placement: HubSlotPlacement = {
       wallId: targetWall.id,
       center: point(targetUv.x, 1 - targetUv.y),
       anchor: targetWall.room ? point(targetUv.x * targetWall.room.width, targetUv.y * targetWall.room.height) : undefined,
       uv: clonePoint(targetUv),
-      mountedHeight: targetWall.room
-        ? targetWall.id === sourceWall?.id
-          ? slot.placement.mountedHeight
-          : Math.max(0.04, normalizedHeight * targetHeight)
-        : slot.placement.mountedHeight,
+      mountedHeight: physicalHeight,
       targetSizePolicy: slot.placement.targetSizePolicy,
       minScale: slot.placement.minScale,
       maxScale: slot.placement.maxScale,
       zOffset: slot.placement.zOffset,
       horizontalPosition: targetUv.x,
       centerHeight: targetWall.room ? targetUv.y * targetWall.room.height : undefined,
-      physicalHeight: targetWall.room
-        ? targetWall.id === sourceWall?.id
-          ? slot.placement.physicalHeight
-          : normalizedHeight * targetWall.room.height
-        : slot.placement.physicalHeight,
+      physicalHeight,
       mountingGap: slot.placement.mountingGap,
       provisional: slot.placement.provisional,
     };

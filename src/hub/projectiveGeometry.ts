@@ -1255,13 +1255,16 @@ export function solveRoomArtworkPlacement(
   wall: RoomWallModel,
   requestedAnchor: Point2D,
   requestedHeight: number,
-  artworkAspect: number
+  artworkAspect: number,
+  preserveSize = false
 ): ArtworkPlacementResult {
   const safeBounds = localBounds(wall.safePolygon);
   const aspect = Math.max(EPSILON, artworkAspect);
   const maxWidth = Math.max(EPSILON, safeBounds.maxX - safeBounds.minX);
   const maxHeight = Math.max(EPSILON, wall.hangingBand.maxY - wall.hangingBand.minY - wall.hangingBand.margin * 2);
-  const baseHeight = Math.max(EPSILON, Math.min(requestedHeight, maxHeight, maxWidth / aspect));
+  const baseHeight = preserveSize
+    ? Math.max(EPSILON, requestedHeight)
+    : Math.max(EPSILON, Math.min(requestedHeight, maxHeight, maxWidth / aspect));
 
   const evaluateCandidate = (anchor: Point2D, height: number): ArtworkPlacementResult => {
     const localQuad = localArtworkQuad(anchor, height * aspect, height);
@@ -1305,7 +1308,9 @@ export function solveRoomArtworkPlacement(
     };
   };
 
-  const shrinkSteps = [1, 0.97, 0.94, 0.91, 0.88, 0.85, 0.82, 0.79, 0.76, 0.73, 0.7, 0.67, 0.64, 0.61, 0.58, 0.55];
+  const shrinkSteps = preserveSize
+    ? [1]
+    : [1, 0.97, 0.94, 0.91, 0.88, 0.85, 0.82, 0.79, 0.76, 0.73, 0.7, 0.67, 0.64, 0.61, 0.58, 0.55];
   const doorwayBounds = wall.doorwayExclusions.map((doorway) => localBounds(doorway));
   const roundCandidate = (value: number): number => Math.round(value * 10000) / 10000;
   const pushUnique = (list: number[], value: number, min: number, max: number): void => {
@@ -1445,7 +1450,8 @@ export function projectSlotArtwork(
       wall.room,
       slot.anchor,
       slot.mountedHeight,
-      artworkAspect
+      artworkAspect,
+      slot.targetSizePolicy === 'fixed-height'
     );
     const roomPlacementValid =
       placement.validity.finite &&
