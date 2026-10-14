@@ -1,6 +1,23 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Implemented — Wall-following artwork placement (2026-10-14)
+
+The museum hub now preserves canonical artwork geometry while keeping the
+artwork connected to the wall representation being edited. Physical artwork
+height and native aspect determine the world-space width; wall edits update
+the mounting anchor/orientation or the applicable projected calibration, never
+the artwork dimensions.
+
+- [x] Preserve physical width, height, aspect ratio, frame dimensions, and depth during wall edits.
+- [x] Build WebGL artwork from the current room-space wall U/V/N mounting frame.
+- [x] Project editor artwork from fixed physical corners and the current stage-space wall quad.
+- [x] Keep projected bounds limited to interaction metadata.
+- [x] Reject or warn on oversized fixed-height placements instead of silently shrinking them.
+- [x] Add short-wide, tall-narrow, and wall-calibration projection regressions.
+- [x] Rebuild `customer-preview/app.html` and `customer-preview/placement-editor.html`.
+- [x] Validate typecheck, lint, geometry, aspect, WebGL, frame budget, documentation, secret scan, and CodeQL.
+
 ## Implemented — Main museum target (v1.31, 2026-10-12)
 
 The supplied reference is the acceptance target for the main index museum
