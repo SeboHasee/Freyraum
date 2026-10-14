@@ -1975,7 +1975,7 @@ export function resolveMuseumHub(
           canonicalPlacement
             ? slot.placement.physicalHeight!
             : wall?.room
-              ? slot.placement.mountedHeight * localScale.y
+              ? slot.placement.mountedHeight
               : slot.placement.mountedHeight,
         anchor: migratedAnchor ? clonePoint(migratedAnchor) : undefined,
         uv: placementUv ? clonePoint(placementUv) : undefined,
@@ -1988,7 +1988,7 @@ export function resolveMuseumHub(
           canonicalPlacement
             ? slot.placement.physicalHeight
             : wall?.room
-              ? slot.placement.mountedHeight * localScale.y
+              ? slot.placement.mountedHeight
               : slot.placement.mountedHeight,
         mountingGap: slot.placement.mountingGap ?? HUB_ARTWORK_MOUNTING_GAP_M,
         targetSizePolicy: slot.placement.targetSizePolicy ?? 'contain',
@@ -2124,7 +2124,6 @@ export function resolveMuseumHub(
     while (overflow.length > 0) {
       const pageSlots = baselinePageSlots(pageIndex).map<ResolvedHubSlot>((slot) => {
         const wall = wallById.get(slot.placement.wallId);
-        const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
         return {
           id: slot.id,
           pageIndex,
@@ -2133,7 +2132,7 @@ export function resolveMuseumHub(
             center: clonePoint(slot.placement.center),
             mountedHeight:
               slot.placement.physicalHeight
-              ?? (wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight),
+              ?? slot.placement.mountedHeight,
             anchor:
               wall?.room && slot.placement.anchor
                 ? slot.placement.horizontalPosition !== undefined && slot.placement.centerHeight !== undefined
@@ -2147,7 +2146,7 @@ export function resolveMuseumHub(
             centerHeight: slot.placement.centerHeight,
             physicalHeight:
               slot.placement.physicalHeight
-              ?? (wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight),
+              ?? slot.placement.mountedHeight,
             mountingGap: slot.placement.mountingGap ?? HUB_ARTWORK_MOUNTING_GAP_M,
             targetSizePolicy: slot.placement.targetSizePolicy ?? 'contain',
             minScale: slot.placement.minScale ?? 0.7,

@@ -977,6 +977,22 @@ assert.equal(
 assert.equal(shipping.slotToArtwork.size, 6, 'shipping configuration must retain all active artwork slots');
 assert.equal(shipping.camera.verticalFovDeg, shippingConfig.camera.verticalFovDeg);
 assert.equal(shipping.slotsPerPage, 4, 'resolved hub must limit each room to four artworks');
+
+// Legacy-shaped placements retain their authored physical size when wall
+// calibration changes the room frame.
+const legacySizedConfig = JSON.parse(JSON.stringify(shippingConfig));
+const legacySizedPlacement = legacySizedConfig.slots[0].placement;
+delete legacySizedPlacement.horizontalPosition;
+delete legacySizedPlacement.centerHeight;
+delete legacySizedPlacement.physicalHeight;
+legacySizedPlacement.mountedHeight = 1.23;
+legacySizedPlacement.anchor = { x: 2.7, y: 2.32 };
+const legacySized = museumHub.resolveMuseumHub(artworks, legacySizedConfig, null);
+const legacySizedSlot = legacySized.pages.flatMap((page) => page.slots)
+  .find((slot) => slot.id === legacySizedConfig.slots[0].id);
+assert.ok(legacySizedSlot, 'legacy-sized artwork slot must resolve');
+assert.equal(legacySizedSlot.placement.physicalHeight, 1.23, 'wall calibration must not scale artwork physical height');
+assert.equal(legacySizedSlot.placement.mountedHeight, 1.23, 'wall calibration must not scale resolved artwork height');
 assert.equal(shipping.walls.length, 3, 'resolver must render exactly three walls (bounds-only rear wall skipped)');
 assert.equal(shipping.room.wallIds.length, 3, 'resolved room must track the rendered wall ids');
 assert.deepEqual(shipping.hangingRules, shippingConfig.hangingRules, 'resolved room must retain hanging rules');
