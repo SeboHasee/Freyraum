@@ -1,5 +1,19 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-14 (v1.34 editor geometry authority sync).
+
+## Implemented — Editor geometry authority (v1.34, 2026-10-14)
+
+- [x] Shared displayed projection/evaluation/export helpers in `src/config/museumHub.ts`; editor, loader, warnings, debug overlay and export use them; consistency test (editor ↔ loader ↔ 3D mounting frame).
+- [x] No relocation on load for canonical placements; invalid ones flagged; export → reload round-trip test.
+- [x] Wall-height decision: accept calibrated heights (documented in FINDINGS); front placements fixed (centerHeight 1.30 m).
+- [x] Shared `slideToValid` solver (`src/hub/constrainedDrag.ts`) for artwork, wall-corner, green-zone and safe-area drags; lost-capture handling everywhere; history recorded after abort checks.
+- [x] Re-fit artworks after wall/zone edits (or mark invalid).
+- [x] Keyboard: focused-artwork arrows, 1 cm / 10 cm metric steps, one undo per held key, live announcements.
+- [x] Wall drags defer the 3D render to release.
+- [x] Blocking zone edge / doorway highlight while dragging.
+- [x] Swipe navigation pointer tracking.
+- [x] `npm run test:editor-drag` (Playwright on demand, file:// generated editor) — passes locally.
+- [ ] Optional snapping (centre lines, matching heights, equal spacing) — not implemented; candidate for a follow-up.
 
 ## Implemented — Stable editor artwork drag (v1.33, 2026-10-14)
 
@@ -8,7 +22,7 @@
 - [x] Per-axis edge sliding from the last valid position; centroid pull only when the start is already invalid.
 - [x] Grab offset, primary-button filter, final `pointerup` commit, current-quad inverse mapping.
 - [x] Regression tests in `scripts/test-museum-hub-geometry.mjs`; rebuilt `customer-preview/`.
-- [ ] Manual browser drag check in `OPEN_ARTWORK_EDITOR.html` (Playwright was unavailable in the agent sandbox).
+- [x] Browser drag check — automated in v1.34 by `npm run test:editor-drag` on the generated editor.
 
 ## Implemented — Wall-following artwork placement (2026-10-14)
 

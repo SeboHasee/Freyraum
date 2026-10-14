@@ -1,5 +1,37 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-14 (v1.34 editor geometry authority sync).
+
+## v1.34 — One placement truth for editor, loader and 3D (2026-10-14)
+
+- One shared displayed projection (`projectDisplayedPlacement` /
+  `evaluateDisplayedPlacement` in `src/config/museumHub.ts`) now drives the
+  editor overlay, drag limits, editor and load warnings, the debug overlay, and
+  export checks; it matches the WebGL mounting frame.
+- Exported editor positions survive reloading unchanged. Canonical
+  (fixed-height) placements are never moved while loading; invalid ones keep
+  their position, are flagged (`placementIssues`, dashed red outline), and are
+  listed as warnings. Export uses the shared `exportHubSlotPlacement`.
+- Calibrated (measured) wall heights are authoritative and shown in the editor
+  info. The shipped front-wall works now hang at 1.30 m centre height so they
+  sit fully inside the green zone of the ~2.61 m calibrated front wall.
+- Every editor drag (artworks, wall corners, green-zone and safe-area points)
+  stops at its limit and slides along it, including sloped limits; all drags
+  end on release, cancel, and lost pointer capture. Other artworks in the same
+  room block a dragged artwork.
+- Pointer positions past a side wall's vanishing line no longer flip the drag
+  direction (dragging the left-wall artwork to the right edge works).
+- Artworks are re-fitted to the nearest valid spot after wall or green-zone
+  edits, or marked invalid when they no longer fit.
+- Keyboard: arrows work on a focused artwork, 1 cm per step (10 cm with
+  Shift), one undo entry per held key, positions announced to screen readers;
+  move buttons step 10 cm.
+- Wall/zone drags update only the 2D overlay and redraw the 3D scene once on
+  release; slot renderer syncs are batched into one frame.
+- The blocking green-zone edge or doorway is highlighted while dragging.
+- Swipe navigation follows only the primary starting pointer and resets on
+  cancel.
+- New `npm run test:editor-drag` browser test drags every artwork to all four
+  zone edges in `customer-preview/placement-editor.html`.
 
 ## v1.33 — Stable artwork drag in the placement editor (2026-10-14)
 

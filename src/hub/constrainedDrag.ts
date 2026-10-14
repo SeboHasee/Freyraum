@@ -15,7 +15,15 @@ export interface SlideOptions {
   iterations?: number;
   /** Distance used to pick the best candidate (default Euclidean). */
   distance?: (a: Point2D, b: Point2D) => number;
+  /**
+   * Extra rounds that also try directions rotated away from the remaining
+   * offset, so a handle glides along sloped (non axis-aligned) limits instead
+   * of sticking to them (default 2).
+   */
+  refinements?: number;
 }
+
+const REFINEMENT_ANGLES = [Math.PI / 4, -Math.PI / 4, (4 * Math.PI) / 9, (-4 * Math.PI) / 9];
 
 export interface SlideResult {
   point: Point2D;
@@ -57,14 +65,34 @@ export function slideToValid(
   if (!isValid(start)) return { point: start, blocked: true, startValid: false };
   const iterations = options.iterations ?? 16;
   const distance = options.distance ?? ((a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y));
-  const afterX = advanceToValid(start, point(target.x, start.y), isValid, iterations);
-  const xThenY = advanceToValid(afterX, point(afterX.x, target.y), isValid, iterations);
-  const afterY = advanceToValid(start, point(start.x, target.y), isValid, iterations);
-  const yThenX = advanceToValid(afterY, point(target.x, afterY.y), isValid, iterations);
-  const direct = advanceToValid(start, target, isValid, iterations);
-  const best = [xThenY, yThenX, direct].reduce((winner, candidate) =>
-    distance(candidate, target) < distance(winner, target) - 1e-12 ? candidate : winner
-  );
+  const closer = (winner: Point2D, candidate: Point2D): Point2D =>
+    distance(candidate, target) < distance(winner, target) - 1e-12 ? candidate : winner;
+  const step = (from: Point2D, withRotations: boolean): Point2D => {
+    const afterX = advanceToValid(from, point(target.x, from.y), isValid, iterations);
+    const xThenY = advanceToValid(afterX, point(afterX.x, target.y), isValid, iterations);
+    const afterY = advanceToValid(from, point(from.x, target.y), isValid, iterations);
+    const yThenX = advanceToValid(afterY, point(target.x, afterY.y), isValid, iterations);
+    const direct = advanceToValid(from, target, isValid, iterations);
+    const candidates = [xThenY, yThenX, direct];
+    if (withRotations) {
+      const dx = target.x - from.x;
+      const dy = target.y - from.y;
+      for (const angle of REFINEMENT_ANGLES) {
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        // Rotated toward a possible tangent of a sloped limit.
+        candidates.push(advanceToValid(from, point(from.x + dx * cos - dy * sin, from.y + dx * sin + dy * cos), isValid, iterations));
+      }
+    }
+    return candidates.reduce(closer, from);
+  };
+  let best = step(start, false);
+  const refinements = options.refinements ?? 2;
+  for (let round = 0; round < refinements; round += 1) {
+    const next = step(best, true);
+    if (next === best) break;
+    best = next;
+  }
   return { point: best, blocked: true, startValid: true };
 }
 

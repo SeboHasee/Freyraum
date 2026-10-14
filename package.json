@@ -19,6 +19,7 @@
     "diagnose:artwork-aspect": "node scripts/diagnose-artwork-aspect.mjs",
     "test:webgl-resilience": "node scripts/test-webgl-resilience.mjs",
     "validate:museum-hub": "node scripts/test-museum-hub-geometry.mjs",
+    "test:editor-drag": "node scripts/test-editor-drag.mjs",
     "validate:museum-hub:visual": "node scripts/visual-regression.mjs compare",
     "validate:visual": "node scripts/visual-regression.mjs",
     "docs:check-config-authority": "node scripts/check-config-doc-authority.mjs"

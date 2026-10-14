@@ -77,6 +77,7 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/config/artworks.ts'),
   loadTsModule('src/hub/editorViewport.ts'),
 ]);
+const constrainedDrag = await loadTsModule('src/hub/constrainedDrag.ts');
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
 assert.equal(shippingConfig.version, 5, 'shipping config must use the canonical v5 wall-mounting model');
@@ -357,8 +358,11 @@ const expectedPhysicalHeightBySlot = new Map([
   ['room-01.wall-left.a', 1.45],
   ['room-01.wall-right.a', 1.45],
 ]);
+// v1.34: calibrated (measured) wall heights are authoritative. The shipped
+// front wall calibrates to ~2.61 m, so its works hang at 1.30 m to sit fully
+// inside the green mounting zone (validated by the shared-projection test).
 const expectedCenterHeightByWall = new Map([
-  ['wall-front', 2.32],
+  ['wall-front', 1.3],
   ['wall-left', 2.3],
   ['wall-right', 2.28],
 ]);
@@ -377,8 +381,12 @@ for (const slot of shippingConfig.slots) {
   assert.equal(slot.placement.mountingGap, 0.002, `${slot.id} must keep the 2 mm mounting gap`);
   const bottom = slot.placement.centerHeight - slot.placement.physicalHeight / 2;
   const top = slot.placement.centerHeight + slot.placement.physicalHeight / 2;
-  assert.ok(bottom >= 1.5, `${slot.id} must retain a clear museum-scale floor margin`);
-  assert.ok(top >= 3 && top <= 3.14, `${slot.id} must form a calm upper exhibition band`);
+  if (slot.placement.wallId !== 'wall-front') {
+    assert.ok(bottom >= 1.5, `${slot.id} must retain a clear museum-scale floor margin`);
+    assert.ok(top >= 3 && top <= 3.14, `${slot.id} must form a calm upper exhibition band`);
+  } else {
+    assert.ok(bottom > 0.3 && top < 2.4, `${slot.id} must stay within the calibrated ~2.61 m front wall`);
+  }
   assert.equal(slot.placement.center, undefined, `${slot.id} must not author a duplicate legacy center`);
   assert.equal(slot.placement.anchor, undefined, `${slot.id} must not author a duplicate metric anchor`);
   assert.equal(slot.placement.uv, undefined, `${slot.id} must not author a duplicate UV anchor`);
@@ -1670,6 +1678,134 @@ assert.ok(
   'reference-only hub asset paths must warn instead of silently failing hosted downloads'
 );
 
+// v1.34 shared "stop at the limit and slide along it" solver used by every
+// editor drag (artworks, wall corners, green-zone and safe-area points).
+{
+  const inUnitSquare = (candidate) => candidate.x >= 0 && candidate.x <= 1 && candidate.y >= 0 && candidate.y <= 1;
+  const start = { x: 0.5, y: 0.5 };
+  const up = constrainedDrag.slideToValid(start, { x: 0.5, y: 2 }, inUnitSquare);
+  assert.equal(up.blocked, true, 'slide must report a blocked target');
+  assert.ok(Math.abs(up.point.y - 1) < 1e-3 && Math.abs(up.point.x - 0.5) < 1e-9, 'slide must reach the blocking edge');
+  const slide = constrainedDrag.slideToValid(start, { x: 2, y: 0.7 }, inUnitSquare);
+  assert.ok(Math.abs(slide.point.x - 1) < 1e-3 && Math.abs(slide.point.y - 0.7) < 1e-9, 'blocked motion must slide along the edge');
+  const corner = constrainedDrag.slideToValid(start, { x: 3, y: -4 }, inUnitSquare);
+  assert.ok(Math.abs(corner.point.x - 1) < 1e-3 && Math.abs(corner.point.y) < 1e-3, 'diagonal overshoot must reach the zone corner');
+  // Sloped limit: blocked horizontal motion must glide along the slope
+  // instead of sticking (the bottom edge of a skewed green zone).
+  const aboveSlope = (candidate) => candidate.y >= -0.1 * candidate.x && Math.abs(candidate.x) <= 5 && candidate.y <= 5;
+  const glide = constrainedDrag.slideToValid({ x: 0, y: 0 }, { x: -4, y: 0 }, aboveSlope);
+  assert.ok(glide.point.x < -3.9 && Math.abs(glide.point.y - 0.4) < 0.02, 'blocked motion must glide along sloped limits');
+  const free = constrainedDrag.slideToValid(start, { x: 0.2, y: 0.9 }, inUnitSquare);
+  assert.deepEqual(free, { point: { x: 0.2, y: 0.9 }, blocked: false, startValid: true }, 'valid targets are applied exactly');
+  const invalidStart = constrainedDrag.slideToValid({ x: 4, y: 4 }, { x: 5, y: 5 }, inUnitSquare);
+  assert.equal(invalidStart.startValid, false, 'invalid starts must be reported so callers can recover');
+  assert.equal(constrainedDrag.polygonIsSimple(rect(0, 0, 1, 1)), true, 'rectangles are simple polygons');
+  assert.equal(
+    constrainedDrag.polygonIsSimple([{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 0 }, { x: 0, y: 1 }]),
+    false,
+    'bow-tie polygons must be rejected'
+  );
+  const edge = constrainedDrag.nearestPolygonEdge({ x: 0.5, y: 1.4 }, rect(0, 0, 1, 1));
+  assert.deepEqual(edge, [{ x: 1, y: 1 }, { x: 0, y: 1 }], 'nearest zone edge must be the one closest to the blocked corner');
+}
+
+// v1.34 one shared projection: the shipped config must report the same
+// validity in the editor (displayed projection), after loading (resolver), and
+// in the 3D view (renderer mounting frame).
+const shippingArtworksWithRealAspects = [
+  ['fraktal', 3780, 5046],
+  ['akt-27', 3150, 3150],
+  ['side-a', 1000, 1300],
+  ['side-b', 1000, 1300],
+].map(([id, width, height]) => ({ id, title: id, image: `${id}.png`, dimensions: { width, height } }));
+{
+  const resolution = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, shippingConfig);
+  assert.equal(
+    resolution.warnings.some((warning) => warning.includes('stored placement is invalid')),
+    false,
+    `shipped placements must load valid: ${resolution.warnings.join(' | ')}`
+  );
+  for (const slot of resolution.pages[0].slots) {
+    const wall = resolution.wallById.get(slot.placement.wallId);
+    assert.ok(wall?.room && slot.selectable, `${slot.id} must be a visible shipped slot`);
+    assert.equal(slot.placementIssues, undefined, `${slot.id} must load without placement issues`);
+    const evaluation = museumHub.evaluateDisplayedPlacement(wall, slot.placement, slot.artworkAspect, resolution.stage);
+    assert.equal(evaluation.valid, true, `${slot.id} must be valid in the editor projection (${evaluation.issues.join(', ')})`);
+    const frame = geometry.createArtworkMountingFrame(
+      wall.room,
+      slot.placement.anchor,
+      slot.placement.physicalHeight ?? slot.placement.mountedHeight,
+      slot.artworkAspect,
+      slot.placement.mountingGap,
+      geometry.HUB_ARTWORK_DEPTH_M,
+      true
+    );
+    assert.ok(frame, `${slot.id} must mount in 3D`);
+    frame.frontQuad.forEach((corner, index) => {
+      const displayed = evaluation.projection.worldQuad[index];
+      assert.ok(
+        Math.hypot(corner.x - displayed.x, corner.y - displayed.y, corner.z - displayed.z) < 1e-9,
+        `${slot.id} 3D mounting corner ${index} must match the editor projection`
+      );
+      // The editor draws through the current wall calibration; the 3D camera
+      // projects the same world corner. Both must agree within a few pixels
+      // and both must sit inside the green mounting zone.
+      const projected = geometry.projectWorldPoint(wall.camera, corner, resolution.stage);
+      const nearestShown = Math.min(
+        ...evaluation.projection.projectedQuad.map((shown) => Math.hypot(projected.x - shown.x, projected.y - shown.y))
+      );
+      assert.ok(nearestShown < 3, `${slot.id} 3D corner ${index} must project where the editor draws it (${nearestShown.toFixed(2)}px)`);
+      assert.ok(geometry.pointInPolygon(projected, wall.mountingZone), `${slot.id} 3D corner ${index} must be inside the green zone`);
+    });
+  }
+}
+
+// v1.34 editor positions survive reloading: export → reload → compare every
+// placement; invalid positions are flagged, never relocated.
+{
+  const first = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, shippingConfig);
+  const edited = {
+    ...shippingConfig,
+    slots: shippingConfig.slots.map((slot) => {
+      if (slot.id === 'room-01.wall-left.a') {
+        return { ...slot, placement: { ...slot.placement, horizontalPosition: 0.612, centerHeight: 2.947 } };
+      }
+      if (slot.id === 'room-01.wall-front.a') {
+        // Deliberately outside the green zone: must stay exactly here, flagged.
+        return { ...slot, placement: { ...slot.placement, centerHeight: 2.32 } };
+      }
+      return slot;
+    }),
+  };
+  const loaded = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, edited);
+  const exported = {
+    ...edited,
+    slots: edited.slots.map((slot) => {
+      const resolved = loaded.pages.flatMap((page) => page.slots).find((candidate) => candidate.id === slot.id);
+      return resolved ? { ...slot, placement: museumHub.exportHubSlotPlacement(resolved.placement) } : slot;
+    }),
+  };
+  const reloaded = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, JSON.parse(JSON.stringify(exported)));
+  for (const slot of exported.slots) {
+    const original = edited.slots.find((candidate) => candidate.id === slot.id);
+    const resolved = reloaded.pages.flatMap((page) => page.slots).find((candidate) => candidate.id === slot.id);
+    assert.ok(resolved, `${slot.id} must survive reload`);
+    assert.deepEqual(museumHub.exportHubSlotPlacement(resolved.placement), slot.placement, `${slot.id} placement must round-trip exactly`);
+    for (const key of ['wallId', 'horizontalPosition', 'centerHeight', 'physicalHeight']) {
+      assert.equal(slot.placement[key], original.placement[key], `${slot.id} ${key} must not be moved by loading`);
+    }
+  }
+  const flagged = reloaded.pages[0].slots.find((slot) => slot.id === 'room-01.wall-front.a');
+  assert.deepEqual(flagged.placementIssues, ['outside-mounting-zone'], 'invalid stored placements must be flagged');
+  assert.equal(flagged.selectable, true, 'flagged placements stay visible for correction');
+  assert.equal(flagged.placement.anchor.y, 2.32, 'flagged placements keep their exact stored anchor');
+  assert.ok(
+    reloaded.warnings.some((warning) => warning.includes('room-01.wall-front.a') && warning.includes('kept unchanged')),
+    'flagged placements must produce a load warning'
+  );
+  assert.ok(first.pages[0].slots.every((slot) => !slot.placementIssues), 'baseline shipped config must not be flagged');
+}
+
 // Token sources for artwork, boot, fallback, and renderer must never use a
 // white background fallback.
 const scss = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
@@ -1736,7 +1872,7 @@ assert.match(hub, /matrix\(\$\{scale\} 0 0 \$\{scale\} \$\{offsetX\} \$\{offsetY
 assert.match(hub, /clampWallDelta\(drag\.startQuad, delta\)/);
 assert.match(hub, /startSafePolygon: wall\?\.safePolygon/);
 assert.match(hub, /startMountingZone: wall\?\.mountingZone/);
-assert.match(hub, /const clamped = this\.clampDisplayPoint\(stagePoint\)/);
+assert.match(hub, /const target = this\.clampDisplayPoint\(stagePoint\)/);
 assert.match(scss, /polygon\.museum-hub__calibration-wall\.is-active \{[\s\S]*?pointer-events: none/);
 assert.match(hub, /this\.clampDisplayPoint\(point\(source\.x \+ delta\.x, source\.y \+ delta\.y\)\)/);
 assert.match(scss, /\.museum-hub__calibration-svg \{[\s\S]*?transform-origin: 0 0/);
@@ -1781,4 +1917,13 @@ assert.match(editorShell, /class="placement-editor"/);
 assert.match(editorLauncher, /customer-preview\/placement-editor\.html/);
 assert.ok(!/background:\s*#fff(?:fff)?\b/i.test(scss.slice(scss.indexOf('.museum-hub {'), scss.indexOf('.museum-hub[hidden]'))));
 
+assert.match(hub, /addEventListener\('lostpointercapture', this\.handleCalibrationEnd[\s\S]*addEventListener\('lostpointercapture', this\.handleCalibrationEnd[\s\S]*addEventListener\('lostpointercapture', this\.handleCalibrationEnd/, 'every editor drag must end on lost pointer capture');
+assert.match(hub, /slideToValid\(current, target, isValidCorner\)/, 'wall-corner drags must slide along the convexity limit');
+assert.match(hub, /slideToValid\(current, target, isValidPoint\)/, 'green-zone and safe-area point drags must slide along their limits');
+assert.match(hub, /applyAllSlotGeometry\(false\)/, 'wall drags must defer 3D rendering until release');
+assert.match(hub, /refitSlotsOnWall\(drag\.wallId\)/, 'artworks must be re-fitted after wall or green-zone edits');
+assert.match(hub, /!event\.repeat/, 'held arrow keys must produce a single undo entry');
+assert.match(hub, /swipePointerId/, 'swipe navigation must track the starting pointer');
+assert.match(hub, /addEventListener\('pointercancel', this\.handleSwipeCancel/, 'swipe navigation must reset on pointer cancel');
+assert.doesNotMatch(hub, /projectSlotArtwork\(/, 'the editor must use the shared displayed projection from the config layer');
 console.log('PASS: 9×12 m daylit room invariants, mirrored doorways, four-work 2+1+1 rooms, overflow pagination, calibrated projection, selection persistence hooks, token consistency, and 404 fallback are valid.');

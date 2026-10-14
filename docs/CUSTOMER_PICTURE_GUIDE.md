@@ -76,7 +76,10 @@ copies into `customer-artworks/inbox/`.
   edit a URL or start a development server.
 - In the editor:
   1. Choose a wall and artwork in the right sidebar.
-  2. Drag the artwork directly in the museum view.
+  2. Drag the artwork directly in the museum view. It stops at the edge of the
+     green area (or a doorway / another artwork, highlighted in yellow) and
+     slides along it. Alternatively click it and use the arrow keys: 1 cm per
+     press, 10 cm with Shift.
   3. Drag its red corner handle to resize it without changing its proportions.
   4. Check the green usable wall area, then click **Grüne Wandfläche bestätigen**.
   5. Repeat for all walls. Resolve every red warning.
@@ -100,6 +103,10 @@ copies into `customer-artworks/inbox/`.
   replace `customer-artworks/museum-hub.json`, rerun Update Gallery, and re-import
   that file once to confirm an identical round trip.
 - The editor never moves an explicitly assigned work to another wall.
+- Loading never moves a saved position. If a saved artwork no longer fits the
+  green area, it keeps its place, gets a dashed red outline, and is listed as a
+  warning so you can move it yourself. After changing a wall or green area,
+  artworks are pulled back inside automatically when possible.
 - Orange wall outlines are read-only. Blue safe-zone and green mounting-zone
   handles are editable. Imports with different artwork assignments or fixed
   camera/room/wall settings are rejected instead of partially merged.

@@ -2758,7 +2758,7 @@ export class MainMuseumHub {
       const wall = this.resolution.wallById.get(drag.slot.placement.wallId);
       if (!wall) return;
       const local = wall.inverseHomography
-        ? this.applyInverseHomography(wall, stagePoint)
+        ? this.applyInverseHomography(wall, stagePoint, true)
         : null;
       if (!local) return;
       if (drag.mode === 'move') {
@@ -3634,7 +3634,11 @@ export class MainMuseumHub {
     return points.map((current) => `${current.x.toFixed(2)},${current.y.toFixed(2)}`).join(' ');
   }
 
-  private applyInverseHomography(wall: ResolvedHubWall, stagePoint: Point2D): Point2D | null {
+  private applyInverseHomography(
+    wall: ResolvedHubWall,
+    stagePoint: Point2D,
+    limitToWallSide = false
+  ): Point2D | null {
     // Invert the *current* (possibly edited) wall quad. The resolved
     // inverseHomography is computed once at load, so after calibration edits it
     // no longer matches the projection used to draw the artwork.
@@ -3642,6 +3646,25 @@ export class MainMuseumHub {
     const inverse = (currentHomography ? invertMatrix3x3(currentHomography) : null) ?? wall.inverseHomography;
     if (!inverse) return null;
     const [a, b, c, d, e, f, g, h, i] = inverse;
+    if (limitToWallSide) {
+      // A strongly receding side wall has a vanishing line on screen. Pointer
+      // positions past it map "behind" the wall and flip direction, which made
+      // e.g. dragging the left-wall artwork to the right edge of the screen go
+      // nowhere. Pull such points back along the ray from the wall centre to
+      // just before the vanishing line, where they map far beyond the wall in
+      // the intended direction (the caller then clamps to the zone limit).
+      const center = wall.quad.reduce(
+        (sum, corner) => point(sum.x + corner.x / wall.quad.length, sum.y + corner.y / wall.quad.length),
+        point(0, 0)
+      );
+      const centerDenominator = g * center.x + h * center.y + i;
+      const pointerDenominator = g * stagePoint.x + h * stagePoint.y + i;
+      const minimum = 0.02 * Math.abs(centerDenominator);
+      if (Math.abs(centerDenominator) > 1e-12 && pointerDenominator * Math.sign(centerDenominator) < minimum) {
+        const t = (0.98 * centerDenominator) / (centerDenominator - pointerDenominator);
+        stagePoint = point(center.x + (stagePoint.x - center.x) * t, center.y + (stagePoint.y - center.y) * t);
+      }
+    }
     const denominator = g * stagePoint.x + h * stagePoint.y + i;
     if (Math.abs(denominator) <= 1e-6) return null;
     return point(
@@ -3946,11 +3969,27 @@ export class MainMuseumHub {
       slot.placement.anchor = previous.anchor;
       this.syncCanonicalPlacement(slot, wall);
     };
-    const applyCenter = (center: Point2D): boolean => {
+    // Other artworks in the same room act as obstacles, unless the moved
+    // artwork already overlaps one (then it may be dragged free).
+    const obstacles = this.slotViews
+      .filter(({ slot: other }) => other.id !== slot.id && other.pageIndex === slot.pageIndex && other.selectable && other.artworkId)
+      .map(({ slot: other }) => this.projectedSlotGeometry.get(other.id)?.projectedQuad)
+      .filter((quad): quad is Quad => Boolean(quad));
+    const overlapsObstacle = (): boolean => {
+      if (obstacles.length === 0) return false;
+      const own = this.projectDisplayedSlot(slot, wall);
+      return Boolean(own && obstacles.some((quad) => polygonsIntersect(own.projectedQuad, quad)));
+    };
+    const placeCenter = (center: Point2D): void => {
       slot.placement.center = point(this.clampLocalX(center.x), this.clampLocalY(center.y));
       slot.placement.uv = point(slot.placement.center.x, 1 - slot.placement.center.y);
       this.syncCanonicalPlacement(slot, wall);
-      return this.isSlotPlacementInsideMountingZone(slot, wall);
+    };
+    placeCenter(previous.center);
+    const avoidOverlap = !overlapsObstacle();
+    const applyCenter = (center: Point2D): boolean => {
+      placeCenter(center);
+      return this.isSlotPlacementInsideMountingZone(slot, wall) && (!avoidOverlap || !overlapsObstacle());
     };
     const metricDistance = (a: Point2D, b: Point2D): number =>
       Math.hypot((a.x - b.x) * room.width, (a.y - b.y) * room.height);

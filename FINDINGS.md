@@ -1,5 +1,41 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-14 (v1.34 editor geometry authority sync).
+
+## 2026-10-14 — Editor geometry authority (v1.34)
+
+- **Shared projection.** Load-time validation used solver-relocated `room`
+  projections while the editor used `room-fixed`, so the same JSON could be
+  valid in one place and invalid (or moved) in another. The config layer now
+  owns `projectDisplayedPlacement`/`evaluateDisplayedPlacement`; the 3D mounting
+  frame matches the displayed world quad exactly and its camera projection
+  stays within ~2.2 px of the editor's calibration-quad drawing (tested).
+- **Wall-height decision.** Calibration rescales walls by width only, so the
+  measured heights (front ≈ 2.61 m, right ≈ 5.62 m, left ≈ 6.09 m) differ from
+  the nominal 5.2 m. Scaling height separately would make the 3D wall frame
+  disagree with the photographed wall and distort physical artwork aspect, so
+  the calibrated heights are accepted as authoritative. Consequence: the shipped
+  front works at 2.32 m centre height were partly above the wall/green zone;
+  valid centre heights on the calibrated front wall are ~0.90–1.70 m, and 1.30 m
+  is used. The built-in (uncalibrated) defaults keep 2.32 m.
+- **Drag lessons.** Axis-only sliding still stuck on sloped zone edges (front
+  artwork could not move left along the slightly skewed bottom edge); the solver
+  now also tries rotated directions. Side walls have an on-screen vanishing
+  line: pointer positions past it inverted the mapped direction, so the pointer
+  is pulled back to just before that line. The browser test found an overlap
+  case (front works could be dragged over each other); other artworks in the
+  room are now obstacles unless the artwork already overlaps one.
+- **Overview handles.** Wall-point drags used window listeners but no
+  `lostpointercapture`, and recorded undo history before abort checks.
+- **Browser test.** `scripts/test-editor-drag.mjs` must click the loader's
+  start button and test only the active room; it uses Shift+arrow (10 cm) to
+  prove the artwork stopped at the limit because `horizontalPosition` is
+  exported with 0.001 (≈1 cm) precision.
+- References for the interaction decisions (could not be fetched in the agent
+  sandbox; recorded for maintainers): pointer capture loss
+  https://developer.mozilla.org/en-US/docs/Web/API/Element/lostpointercapture_event,
+  primary pointers https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent/isPrimary,
+  WCAG 2.5.7 Dragging Movements (single-pointer/keyboard alternative)
+  https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html.
 
 ## 2026-10-14 — Glitchy side-wall artwork drag (v1.33)
 

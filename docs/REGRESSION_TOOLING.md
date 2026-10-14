@@ -126,7 +126,13 @@ overflow pagination, contiguous migrated page indices, pairwise wall intervals,
 and 0.35 m doorway / 4.00 m front-corner wall-space clearances. Primary-camera
 projection additionally hard-fails if a side artwork comes within 12 px of the
 visible doorway reveal or front-wall corner seam. Threshold breaches hard-fail
-`npm run validate:museum-hub` and CI. `npm run validate:museum-hub:visual`
+`npm run validate:museum-hub` and CI. `npm run test:editor-drag` (v1.34, Playwright
+installed on demand with `npm i --no-save playwright`, or `FREYRAUM_CHROME_PATH`
+pointing at a local Chrome) drags every artwork of the active room in the
+generated `customer-preview/placement-editor.html` to all four green-zone edges
+and fails if it stops short of a limit, moves the wrong way, or produces a
+zone/doorway/overlap warning; run it after `npm run import:artworks && npm run build`.
+`npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the
 dedicated `.museum-hub__canvas` scene bridge rather than per-slot DOM
