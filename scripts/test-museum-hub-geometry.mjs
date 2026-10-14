@@ -665,6 +665,48 @@ for (const wallId of ['wall-front', 'wall-left', 'wall-right']) {
   );
 }
 
+// Editor drag stability: the displayed (room-fixed) projection must honor the
+// exact stored anchor, which is also what the 3D renderer mounts. Relocating
+// it (e.g. into the hanging band) made side-wall artwork stall below the top of
+// the green mounting zone while the stored/3D position kept moving.
+for (const wallId of ['wall-left', 'wall-right']) {
+  const shippingResolution = museumHub.resolveMuseumHub(
+    ['fraktal', 'akt-27', 'side-a', 'side-b'].map((id) => ({
+      id,
+      title: id,
+      image: `${id}.jpg`,
+      dimensions: { width: 1000, height: 1300 },
+    })),
+    shippingConfig
+  );
+  const wall = shippingResolution.wallById.get(wallId);
+  const slot = shippingResolution.pages[0].slots.find((candidate) => candidate.placement.wallId === wallId);
+  assert.ok(wall?.room && slot, `${wallId} must have a shipping side-wall artwork`);
+  const bandTop = wall.room.hangingBand.maxY - wall.room.hangingBand.margin;
+  const height = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
+  const requestedAnchor = { x: slot.placement.anchor.x, y: bandTop + height / 2 + 0.25 };
+  const projection = geometry.projectSlotArtwork(
+    wall,
+    { ...slot.placement, anchor: requestedAnchor },
+    slot.artworkAspect,
+    shippingResolution.stage,
+    'room-fixed'
+  );
+  assert.ok(projection?.placement, `${wallId} must project an artwork above the hanging band`);
+  assert.deepEqual(
+    projection.placement.anchor,
+    requestedAnchor,
+    `${wallId} room-fixed projection must not relocate the stored anchor`
+  );
+  assert.equal(projection.placement.validity.inHangingBand, false, `${wallId} must report the real hanging-band state`);
+  assert.ok(
+    projection.projectedQuad.every((corner) => geometry.pointInPolygon(corner, wall.mountingZone)),
+    `${wallId} artwork above the hanging band must still fit inside the green mounting zone`
+  );
+  const relocated = geometry.solveRoomArtworkPlacement(wall.room, requestedAnchor, height, slot.artworkAspect, true);
+  assert.notDeepEqual(relocated.anchor, requestedAnchor, 'default solver relocation must remain available for runtime fitting');
+}
+
 const frontSlotA = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.a');
 const frontSlotB = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.b');
 const nonAdjacentConflictConfig = {
@@ -1655,6 +1697,15 @@ assert.match(hub, /createCalibrationEdgeHitTarget/);
 assert.match(hub, /createCalibrationCornerHitTarget/);
 assert.match(hub, /calibrationViewport\.offsetX/);
 assert.match(hub, /captureElement\.setPointerCapture/);
+assert.match(hub, /grabOffset/, 'artwork drags must keep the grabbed point under the pointer');
+assert.match(hub, /slideXFirst[\s\S]*slideYFirst/, 'blocked artwork drags must slide along the mounting-zone edge');
+assert.match(hub, /event\.type === 'pointerup' \? event : this\.pendingCalibrationMove/, 'drag release must commit the final pointer position');
+assert.match(hub, /private isPrimaryPointerDown/, 'only primary pointer presses may start editor drags');
+assert.doesNotMatch(
+  hub,
+  /projectSlotArtwork\(wall, slot\.placement, slot\.artworkAspect, this\.resolution\.stage\)/,
+  'editor validation must use the displayed room-fixed projection'
+);
 assert.match(hub, /calibrationRoomBoundaryVisible\s*=\s*false/);
 assert.match(hub, /calibrationEditMode:\s*'wall'\s*\|\s*'safe'\s*\|\s*'mounting-zone'\s*\|\s*'room-boundary'/);
 assert.match(hub, /calibrating && this\.calibrationRoomBoundaryVisible && this\.entranceBoundaryQuad/);

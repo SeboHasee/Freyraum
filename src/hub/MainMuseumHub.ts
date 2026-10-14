@@ -136,6 +136,8 @@ type CalibrationDrag =
       captureElement: Element;
       pointerId: number;
       mode: 'move' | 'resize';
+      /** Wall-local offset from the grabbed point to the artwork centre. */
+      grabOffset: Point2D;
     }
   | {
       kind: 'wall-point';
@@ -736,16 +738,7 @@ export class MainMuseumHub {
       return;
     }
     const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
-    const decodedAspect = view?.image && view.image.complete && view.image.naturalWidth > 0 && view.image.naturalHeight > 0
-      ? view.image.naturalWidth / view.image.naturalHeight
-      : null;
-    const projection = projectSlotArtwork(
-      wall,
-      slot.placement,
-      Math.max(Number.EPSILON, decodedAspect ?? aspectOverride ?? this.presentationAspectForSlot(slot)),
-      this.resolution.stage,
-      'room-fixed'
-    );
+    const projection = this.projectDisplayedSlot(slot, wall, aspectOverride);
     if (!projection) {
       button.classList.add('is-invalid-geometry');
       this.projectedSlotGeometry.delete(slot.id);
@@ -789,6 +782,29 @@ export class MainMuseumHub {
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
     if (view && syncRenderer) this.syncSlotRenderer(view);
     if (this.debugGeometry) this.logSlotProjection(slot, wall, projection);
+  }
+
+  /**
+   * The single projection used for the visible editor overlay, drag clamping,
+   * and editor warnings. Using one path keeps what the user sees, what is
+   * validated, and what the 3D renderer mounts identical.
+   */
+  private projectDisplayedSlot(
+    slot: ResolvedHubSlot,
+    wall: ResolvedHubWall,
+    aspectOverride?: number
+  ): ProjectedArtworkGeometry | null {
+    const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
+    const decodedAspect = view?.image && view.image.complete && view.image.naturalWidth > 0 && view.image.naturalHeight > 0
+      ? view.image.naturalWidth / view.image.naturalHeight
+      : null;
+    return projectSlotArtwork(
+      wall,
+      slot.placement,
+      Math.max(Number.EPSILON, decodedAspect ?? aspectOverride ?? this.presentationAspectForSlot(slot)),
+      this.resolution.stage,
+      'room-fixed'
+    );
   }
 
   private syncSlotRenderer(view: SlotView, render = true): void {
@@ -2493,10 +2509,18 @@ export class MainMuseumHub {
     button: HTMLButtonElement,
     mode: 'move' | 'resize'
   ): void {
-    if (this.calibrationDrag) return;
+    if (this.calibrationDrag || !this.isPrimaryPointerDown(event)) return;
     event.preventDefault();
     this.selectCalibrationSlot(slot.id);
     this.recordCalibrationHistory();
+    // Keep the grabbed point under the pointer instead of snapping the
+    // artwork centre to it, which made the first move jump.
+    const wall = this.resolution.wallById.get(slot.placement.wallId);
+    const startPoint = this.pointerEventToStage(event);
+    const grabLocal = wall && startPoint ? this.applyInverseHomography(wall, startPoint) : null;
+    const grabOffset = grabLocal && mode === 'move'
+      ? point(slot.placement.center.x - grabLocal.x, slot.placement.center.y - grabLocal.y)
+      : point(0, 0);
     this.calibrationDrag = {
       kind: 'slot',
       slot,
@@ -2504,6 +2528,7 @@ export class MainMuseumHub {
       pointerId: event.pointerId,
       captureElement: button,
       mode,
+      grabOffset,
     };
     button.setPointerCapture(event.pointerId);
     button.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
@@ -2518,7 +2543,7 @@ export class MainMuseumHub {
     target: 'quad' | 'safe' | 'mounting-zone',
     index: number
   ): void {
-    if (this.calibrationDrag) return;
+    if (this.calibrationDrag || !this.isPrimaryPointerDown(event)) return;
     event.preventDefault();
     this.activeCalibrationWallId = wallId;
     if (this.calibrationWallSelect) this.calibrationWallSelect.value = wallId;
@@ -2553,7 +2578,7 @@ export class MainMuseumHub {
   }
 
   private startWallTranslateDrag = (event: PointerEvent, wallId: string): void => {
-    if (this.calibrationDrag) return;
+    if (this.calibrationDrag || !this.isPrimaryPointerDown(event)) return;
     if (!this.calibrating) return;
     event.preventDefault();
     this.activeCalibrationWallId = wallId;
@@ -2605,6 +2630,11 @@ export class MainMuseumHub {
     this.updateCalibrationOutput(true);
   }
 
+  /** Only the primary mouse button / first touch or pen contact starts a drag. */
+  private isPrimaryPointerDown(event: PointerEvent): boolean {
+    return event.isPrimary !== false && event.button === 0;
+  }
+
   private pointerEventToStage(event: PointerEvent): Point2D | null {
     const rect = this.visual.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
@@ -2643,14 +2673,10 @@ export class MainMuseumHub {
         this.setSlotCenterClampedToMountingZone(
           drag.slot,
           wall,
-          point(this.clampLocalX(local.x), this.clampLocalY(local.y))
+          point(local.x + drag.grabOffset.x, local.y + drag.grabOffset.y)
         );
       } else {
-        const localHeight = Math.abs(local.y - drag.slot.placement.center.y) * 2;
-        drag.slot.placement.mountedHeight = wall.room
-          ? Math.max(0.12, Math.min(wall.room.height, localHeight * wall.room.height))
-          : Math.max(0.04, Math.min(0.9, localHeight));
-        drag.slot.placement.physicalHeight = drag.slot.placement.mountedHeight;
+        this.setSlotHeightClampedToMountingZone(drag.slot, wall, Math.abs(local.y - drag.slot.placement.center.y) * 2);
       }
       this.applySlotGeometry(drag.button, drag.slot, false);
     } else {
@@ -3004,7 +3030,11 @@ export class MainMuseumHub {
       cancelAnimationFrame(this.calibrationMoveRaf);
       this.calibrationMoveRaf = 0;
     }
+    // Commit the release position (or the last coalesced move) so the drop
+    // lands exactly where the pointer was released instead of one frame behind.
+    const finalMove = event.type === 'pointerup' ? event : this.pendingCalibrationMove;
     this.pendingCalibrationMove = null;
+    if (finalMove) this.applyCalibrationMove(finalMove);
     this.calibrationDrag = null;
     const currentTarget = drag.captureElement;
     currentTarget?.removeEventListener('pointermove', this.handleCalibrationMove as EventListener);
@@ -3466,8 +3496,13 @@ export class MainMuseumHub {
   }
 
   private applyInverseHomography(wall: ResolvedHubWall, stagePoint: Point2D): Point2D | null {
-    if (!wall.inverseHomography) return null;
-    const [a, b, c, d, e, f, g, h, i] = wall.inverseHomography;
+    // Invert the *current* (possibly edited) wall quad. The resolved
+    // inverseHomography is computed once at load, so after calibration edits it
+    // no longer matches the projection used to draw the artwork.
+    const currentHomography = computeHomographyFromUnitSquare(wall.quad);
+    const inverse = (currentHomography ? invertMatrix3x3(currentHomography) : null) ?? wall.inverseHomography;
+    if (!inverse) return null;
+    const [a, b, c, d, e, f, g, h, i] = inverse;
     const denominator = g * stagePoint.x + h * stagePoint.y + i;
     if (Math.abs(denominator) <= 1e-6) return null;
     return point(
@@ -3519,7 +3554,7 @@ export class MainMuseumHub {
       if (ownedWallId && slot.placement.wallId !== ownedWallId) {
         warnings.push(`Bild ${slot.id}: Wandzuordnung wurde von ${ownedWallId} zu ${slot.placement.wallId} geändert.`);
       }
-      const projection = projectSlotArtwork(wall, slot.placement, slot.artworkAspect, this.resolution.stage);
+      const projection = this.projectDisplayedSlot(slot, wall);
       if (!projection) {
         warnings.push(`Bild ${slot.id}: Position kann nicht berechnet werden.`);
         continue;
@@ -3566,9 +3601,7 @@ export class MainMuseumHub {
     for (const { slot } of this.slotViews) {
       if (!slot.selectable || !slot.artworkId) continue;
       const wall = this.resolution.wallById.get(slot.placement.wallId);
-      const projection = wall
-        ? projectSlotArtwork(wall, slot.placement, slot.artworkAspect, this.resolution.stage)
-        : null;
+      const projection = wall ? this.projectDisplayedSlot(slot, wall) : null;
       if (!wall?.room || !projection) continue;
       const zoneDistancePx = Math.min(
         ...projection.projectedQuad.flatMap((corner) =>
@@ -3730,29 +3763,120 @@ export class MainMuseumHub {
     slot.placement.mountingGap ??= 0.002;
   }
 
+  private isSlotPlacementInsideMountingZone(slot: ResolvedHubSlot, wall: ResolvedHubWall): boolean {
+    const projection = this.projectDisplayedSlot(slot, wall);
+    return Boolean(
+      projection
+      && projection.validity?.doorwayClear
+      && projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.mountingZone))
+    );
+  }
+
+  /**
+   * Resizes around the fixed centre. When the requested size would leave the
+   * mounting zone, it stops at the largest valid size between the previous
+   * and requested height instead of overshooting.
+   */
+  private setSlotHeightClampedToMountingZone(
+    slot: ResolvedHubSlot,
+    wall: ResolvedHubWall,
+    requestedLocalHeight: number
+  ): void {
+    const toMetres = (localHeight: number): number => wall.room
+      ? Math.max(0.12, Math.min(wall.room.height, localHeight * wall.room.height))
+      : Math.max(0.04, Math.min(0.9, localHeight));
+    const applyHeight = (height: number): boolean => {
+      slot.placement.mountedHeight = height;
+      slot.placement.physicalHeight = height;
+      return this.isSlotPlacementInsideMountingZone(slot, wall);
+    };
+    const previousHeight = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
+    const requestedHeight = toMetres(requestedLocalHeight);
+    if (applyHeight(requestedHeight) || !applyHeight(previousHeight)) {
+      applyHeight(requestedHeight);
+      return;
+    }
+    let valid = previousHeight;
+    let invalid = requestedHeight;
+    for (let iteration = 0; iteration < 16; iteration += 1) {
+      const middle = (valid + invalid) / 2;
+      if (applyHeight(middle)) valid = middle;
+      else invalid = middle;
+    }
+    applyHeight(valid);
+  }
+
+  /**
+   * Moves a slot toward `requestedCenter` (wall-local unit coordinates) while
+   * keeping the complete displayed artwork inside the green mounting zone and
+   * clear of doorways. Blocked motion slides along the zone edge per axis
+   * (like a constrained drag) instead of being pulled toward the zone centroid,
+   * so every reachable edge of the zone, including the top, can be reached.
+   */
   private setSlotCenterClampedToMountingZone(
     slot: ResolvedHubSlot,
     wall: ResolvedHubWall,
     requestedCenter: Point2D
   ): boolean {
     if (!wall.room) return false;
+    const room = wall.room;
     const previous = {
       center: clonePoint(slot.placement.center),
       uv: slot.placement.uv ? clonePoint(slot.placement.uv) : undefined,
       anchor: slot.placement.anchor ? clonePoint(slot.placement.anchor) : undefined,
     };
+    const restorePrevious = (): void => {
+      slot.placement.center = previous.center;
+      slot.placement.uv = previous.uv;
+      slot.placement.anchor = previous.anchor;
+      this.syncCanonicalPlacement(slot, wall);
+    };
     const applyCenter = (center: Point2D): boolean => {
       slot.placement.center = point(this.clampLocalX(center.x), this.clampLocalY(center.y));
       slot.placement.uv = point(slot.placement.center.x, 1 - slot.placement.center.y);
       this.syncCanonicalPlacement(slot, wall);
-      const projection = projectSlotArtwork(wall, slot.placement, slot.artworkAspect, this.resolution.stage);
-      return Boolean(
-        projection
-        && projection.validity?.doorwayClear
-        && projection.projectedQuad.every((corner) => pointInPolygon(corner, wall.mountingZone))
-      );
+      return this.isSlotPlacementInsideMountingZone(slot, wall);
     };
-    if (applyCenter(requestedCenter)) return true;
+    const lerp = (from: Point2D, to: Point2D, t: number): Point2D =>
+      point(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t);
+    // `from` must be valid. Returns the furthest valid point on from→to.
+    const advance = (from: Point2D, to: Point2D): Point2D => {
+      if (applyCenter(to)) return to;
+      let valid = 0;
+      let invalid = 1;
+      for (let iteration = 0; iteration < 16; iteration += 1) {
+        const t = (valid + invalid) / 2;
+        if (applyCenter(lerp(from, to, t))) valid = t;
+        else invalid = t;
+      }
+      return lerp(from, to, valid);
+    };
+    const target = point(this.clampLocalX(requestedCenter.x), this.clampLocalY(requestedCenter.y));
+    if (applyCenter(target)) return true;
+
+    const start = point(this.clampLocalX(previous.center.x), this.clampLocalY(previous.center.y));
+    if (applyCenter(start)) {
+      const metricDistance = (candidate: Point2D): number =>
+        Math.hypot((candidate.x - target.x) * room.width, (candidate.y - target.y) * room.height);
+      const slideXFirst = (() => {
+        const afterX = advance(start, point(target.x, start.y));
+        return advance(afterX, point(afterX.x, target.y));
+      })();
+      const slideYFirst = (() => {
+        const afterY = advance(start, point(start.x, target.y));
+        return advance(afterY, point(target.x, afterY.y));
+      })();
+      const direct = advance(start, target);
+      const best = [slideXFirst, slideYFirst, direct].reduce((winner, candidate) =>
+        metricDistance(candidate) < metricDistance(winner) - 1e-9 ? candidate : winner
+      );
+      if (applyCenter(best)) return true;
+      applyCenter(start);
+      return true;
+    }
+
+    // The current placement is already invalid (e.g. after a wall edit): pull
+    // the requested position toward the zone centre until it becomes valid.
     const zoneCenter = wall.mountingZone.reduce(
       (sum, current) => point(sum.x + current.x, sum.y + current.y),
       point(0, 0)
@@ -3761,27 +3885,17 @@ export class MainMuseumHub {
     zoneCenter.y /= Math.max(1, wall.mountingZone.length);
     const localZoneCenter = this.applyInverseHomography(wall, zoneCenter);
     if (!localZoneCenter || !applyCenter(localZoneCenter)) {
-      slot.placement.center = previous.center;
-      slot.placement.uv = previous.uv;
-      slot.placement.anchor = previous.anchor;
-      this.syncCanonicalPlacement(slot, wall);
+      restorePrevious();
       return false;
     }
     let invalidWeight = 0;
     let validWeight = 1;
     for (let iteration = 0; iteration < 16; iteration += 1) {
       const weight = (invalidWeight + validWeight) / 2;
-      const candidate = point(
-        requestedCenter.x + (localZoneCenter.x - requestedCenter.x) * weight,
-        requestedCenter.y + (localZoneCenter.y - requestedCenter.y) * weight
-      );
-      if (applyCenter(candidate)) validWeight = weight;
+      if (applyCenter(lerp(target, localZoneCenter, weight))) validWeight = weight;
       else invalidWeight = weight;
     }
-    return applyCenter(point(
-      requestedCenter.x + (localZoneCenter.x - requestedCenter.x) * validWeight,
-      requestedCenter.y + (localZoneCenter.y - requestedCenter.y) * validWeight
-    ));
+    return applyCenter(lerp(target, localZoneCenter, validWeight));
   }
 
   private syncCalibrationControls(): void {

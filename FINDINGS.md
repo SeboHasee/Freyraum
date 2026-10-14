@@ -1,6 +1,34 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
+## 2026-10-14 — Glitchy side-wall artwork drag (v1.33)
+
+Root causes found in `MainMuseumHub` / `projectiveGeometry`:
+
+1. The overlay used `projectSlotArtwork(..., 'room-fixed')`, whose solver
+   silently moved the anchor into the hanging band (top ≈ 3.9 m of a 6.1 m
+   left wall), while the stored anchor and the WebGL mesh kept the requested
+   position. The artwork visually stalled below the top of the green zone.
+2. The drag clamp validated with default `'room'` mode, which on the shipped
+   side walls fell back to a wall-normalized quad of a different size, so
+   accepted/rejected positions did not match what was drawn.
+3. Invalid moves were bisected toward the mounting-zone centroid, pulling the
+   artwork sideways/down instead of sliding along the blocked edge.
+4. No grab offset (centre jumped to the pointer), stale load-time inverse
+   homography after wall edits, last move dropped on `pointerup`, and any
+   mouse button started a drag.
+
+Decision: one displayed projection is authoritative for drawing, clamping, and
+warnings; the green mounting zone and doorways are the editor's hard limits.
+Runtime fitting keeps the relocating solver by default.
+
+Sources (drag best practice — pointer capture, grab offset, rAF throttling,
+`pointercancel`/`lostpointercapture`, primary-button filtering):
+- https://developer.mozilla.org/en-US/docs/Web/API/Element/setPointerCapture
+- https://developer.mozilla.org/en-US/docs/Web/API/Pointer_events
+- https://www.w3.org/TR/pointerevents3/
+- https://github.com/GoogleChrome/modern-web-guidance/blob/main/skills/modern-web-guidance/guides/ui-behaviors/drag.md
+
 ## 2026-10-14 — Physical artwork size versus wall calibration
 
 1. Normalized source-wall-to-target-wall height conversion made artwork size

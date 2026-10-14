@@ -1,6 +1,15 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
+## Implemented — Stable editor artwork drag (v1.33, 2026-10-14)
+
+- [x] `room-fixed` projection honors the exact stored anchor (`solveRoomArtworkPlacement(..., allowRelocation=false)`).
+- [x] Drag/nudge/numeric clamps and editor warnings use `projectDisplayedSlot` (the rendered geometry).
+- [x] Per-axis edge sliding from the last valid position; centroid pull only when the start is already invalid.
+- [x] Grab offset, primary-button filter, final `pointerup` commit, current-quad inverse mapping.
+- [x] Regression tests in `scripts/test-museum-hub-geometry.mjs`; rebuilt `customer-preview/`.
+- [ ] Manual browser drag check in `OPEN_ARTWORK_EDITOR.html` (Playwright was unavailable in the agent sandbox).
+
 ## Implemented — Wall-following artwork placement (2026-10-14)
 
 The museum hub now preserves canonical artwork geometry while keeping the

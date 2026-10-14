@@ -1,6 +1,21 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
+## v1.33 — Stable artwork drag in the placement editor (2026-10-14)
+
+- Side-wall artwork can now be dragged all the way to the top (and every other
+  edge) of the green mounting zone. The displayed `room-fixed` projection no
+  longer relocates the stored anchor into the hanging band, so the overlay, the
+  WebGL artwork, and the exported placement are always the same position.
+- Drag, keyboard nudge, and numeric edits validate the exact displayed
+  geometry (decoded aspect) instead of a different `room`/fallback projection;
+  editor warnings and proofs use the same geometry.
+- Blocked drags slide along the zone edge per axis instead of being pulled
+  toward the zone centroid; resize stops at the largest valid size.
+- Dragging keeps the grab offset (no jump), only the primary button starts a
+  drag, the release position is committed on `pointerup`, and pointer-to-wall
+  mapping uses the current edited wall quad instead of the load-time inverse.
+
 ## v1.32 — Wall-following artwork placement (2026-10-14)
 
 - Canonical artwork height remains independent of wall calibration and wall

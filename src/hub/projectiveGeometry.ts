@@ -1262,7 +1262,8 @@ export function solveRoomArtworkPlacement(
   requestedAnchor: Point2D,
   requestedHeight: number,
   artworkAspect: number,
-  preserveSize = false
+  preserveSize = false,
+  allowRelocation = true
 ): ArtworkPlacementResult {
   const safeBounds = localBounds(wall.safePolygon);
   const aspect = Math.max(EPSILON, artworkAspect);
@@ -1330,6 +1331,10 @@ export function solveRoomArtworkPlacement(
     point(requestedAnchor.x, requestedAnchor.y),
     baseHeight
   );
+  // Editor/room-fixed display: the stored anchor is authoritative and is what
+  // the 3D renderer mounts, so report its real validity instead of silently
+  // snapping the overlay to a different candidate position.
+  if (!allowRelocation) return bestRequested;
   let fallback = bestRequested;
   let bestValid: ArtworkPlacementResult | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -1460,7 +1465,8 @@ const projectiveFallback = (): ProjectedArtworkGeometry | null => {
       slot.anchor,
       slot.mountedHeight,
       artworkAspect,
-      slot.targetSizePolicy === 'fixed-height'
+      slot.targetSizePolicy === 'fixed-height',
+      !preserveSize
     );
     const roomPlacementValid = preserveSize
       ? placement.validity.finite && placement.validity.orientationConsistent
