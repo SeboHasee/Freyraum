@@ -2124,6 +2124,7 @@ export function resolveMuseumHub(
     while (overflow.length > 0) {
       const pageSlots = baselinePageSlots(pageIndex).map<ResolvedHubSlot>((slot) => {
         const wall = wallById.get(slot.placement.wallId);
+        const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
         return {
           id: slot.id,
           pageIndex,
