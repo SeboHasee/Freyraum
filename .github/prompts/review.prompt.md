@@ -1,8 +1,8 @@
 # Review prompt
 > v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Last full markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
-## v1.18 current context
+## v1.32 current context
 
 Review editor changes for file:// and GitHub Pages entry behavior, native form
 keyboard controls, immutable wall ownership, complete-quad containment,

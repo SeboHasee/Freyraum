@@ -1,5 +1,5 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
@@ -118,6 +118,27 @@ Notes:
 - Runtime navigation also logs selection lifecycle and wall-surface snapshots, so
   `?hubDebug=1` sessions can correlate geometry, current artwork ownership, and
   transition background state.
+
+### `?artworkDebug=1` or `?artworkDebug=<slot-or-artwork-id>`
+
+Development-only live artwork inspection (`src/hub/MainMuseumHub.ts`).
+
+Notes:
+- Run it against the generated file preview, for example
+  `customer-preview/placement-editor.html?artworkDebug=1`.
+- The first selectable artwork is inspected for `1`; an exact slot or artwork
+  ID can be supplied to select another work.
+- The report is logged as `[Freyraum artwork-debug]` and exposed as
+  `window.__freyraumArtworkDebug`.
+- The console payload is one JSON object containing source, canonical, live
+  Three.js local/world, DOM, texture UV bounds, visible-owner evidence, and
+  exactly one `ASPECT PIPELINE:` verdict.
+- It reads the live DOM node with `getBoundingClientRect()` and
+  `getComputedStyle()`, and reads the live Three.js mesh, geometry, world
+  matrix, texture, and UV attributes. It does not alter artwork sizing.
+- The report also identifies the active presentation (`artwork` or
+  `placeholder`) and bound texture kind. A placeholder uses its own square
+  presentation ratio; a decoded artwork uses its native decoded ratio.
 
 ### Grey-artwork incident capture
 

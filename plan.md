@@ -1,5 +1,124 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+
+## Implemented — Wall-following artwork placement (2026-10-14)
+
+The museum hub now preserves canonical artwork geometry while keeping the
+artwork connected to the wall representation being edited. Physical artwork
+height and native aspect determine the world-space width; wall edits update
+the mounting anchor/orientation or the applicable projected calibration, never
+the artwork dimensions.
+
+- [x] Preserve physical width, height, aspect ratio, frame dimensions, and depth during wall edits.
+- [x] Build WebGL artwork from the current room-space wall U/V/N mounting frame.
+- [x] Project editor artwork from fixed physical corners and the current stage-space wall quad.
+- [x] Keep projected bounds limited to interaction metadata.
+- [x] Reject or warn on oversized fixed-height placements instead of silently shrinking them.
+- [x] Add short-wide, tall-narrow, and wall-calibration projection regressions.
+- [x] Rebuild `customer-preview/app.html` and `customer-preview/placement-editor.html`.
+- [x] Validate typecheck, lint, geometry, aspect, WebGL, frame budget, documentation, secret scan, and CodeQL.
+
+## Implemented — Main museum target (v1.31, 2026-10-12)
+
+The supplied reference is the acceptance target for the main index museum
+overview. WebGL owns visible artwork pixels in presentation mode; the editor
+uses the calibrated DOM projection only for authoring and fallback. Native
+source dimensions remain authoritative in both paths, while projected AABB
+dimensions remain hit-area metadata only.
+
+- [x] Keep curated museum companions available when customer bundles are partial.
+- [x] Keep built-in companions out of the customer gallery inventory.
+- [x] Hide presentation-mode calibration borders and labels.
+- [ ] Validate the target composition in a browser screenshot at the reference viewport.
+
+## Implemented — Ratio-safe artwork replacement (v1.30)
+
+- [x] Centralize native aspect, source-rectangle, and ratio validation helpers.
+- [x] Decode and confirm replacement uploads before committing them.
+- [x] Preserve the previous valid artwork when upload or confirmation fails.
+- [x] Distinguish projected artwork boundaries from rectangular hit areas.
+- [x] Explain derived artwork width in the editor controls and inspector.
+
+## Implemented — Deterministic editor preview (v1.29)
+
+- [x] Keep wall selection on the existing projected calibration quad.
+- [x] Make camera framing an explicit action instead of a selector side effect.
+- [x] Hide WebGL artwork pixels during calibration.
+- [x] Display decoded native artwork dimensions and aspect ratios.
+- [x] Support validated temporary artwork replacement previews with cleanup.
+
+## Implemented — Unified wall editing and non-blocking room boundary (v1.25)
+
+- [x] Keep the purple bounds-only room boundary hidden from normal wall editing.
+- [x] Expose the room boundary only through an explicit diagnostic/edit action.
+- [x] Make wall edge and corner targets belong to the selected wall and edit mode.
+- [x] Keep blue safe and green mounting areas informational until explicitly edited.
+- [x] Preserve the bounds-only boundary internally for validation and export.
+- [x] Add deterministic assertions for non-blocking guide and boundary behavior.
+
+## Implemented — Self-explanatory calibration editor (v1.24)
+
+- [x] Add a permanent legend with plain-language, color-independent meanings.
+- [x] Add visible labels for front, left, right, and entrance boundaries.
+- [x] Replace the normal panel flow with four short guided steps.
+- [x] Add explicit wall, entrance, reset, undo, redo, and guide controls.
+- [x] Add accessible target names, focus styling, active-edit status, and
+  deterministic regression assertions.
+- [x] Keep JSON and diagnostics inside collapsed technical details.
+
+## Implemented — Robust calibration hit targets (v1.23)
+
+- [x] Enable calibration-stage pointer input only while calibration mode is active.
+- [x] Add enlarged transparent edge and corner hit targets for every editable
+  rendered wall and the bounds-only entrance boundary.
+- [x] Capture pointer sessions on the stable calibration SVG and convert pointer
+  coordinates from that SVG's transformed bounds.
+- [x] Keep hit-target geometry synchronized during continuous movement.
+
+## Implemented — Stable editor calibration overlay and room envelope (v1.22)
+
+- [x] Keep SVG wall polygons and handles stable during pointer movement; update
+  geometry attributes in place so pointer capture survives continuous dragging.
+- [x] Reject competing calibration drags and clean up sessions on blur,
+  cancellation, lost capture, and disposal.
+- [x] Expose the bounds-only `wall-rear` as a distinct, purple room-envelope
+  guide with four editable projected points; it remains unavailable for artwork.
+- [x] Validate candidate corner quads for convexity and non-degeneracy before
+  applying movement.
+
+## Implemented — Editor background and continuous wall calibration (v1.21)
+
+- [x] Add local background selection with intrinsic dimensions, aspect ratio,
+  contain/cover choice, preview, reset, and export metadata.
+- [x] Permit editor-owned background and rendered-wall quad changes while keeping
+  camera, room envelope, wall roles, doorways, inventory, and fallback policy fixed.
+- [x] Add continuous pointer capture for artwork, wall, safe-zone, and mounting-zone
+  editing, including lost-pointer-capture cleanup.
+- [x] Add rendered-wall corner handles and whole-wall translation in the editor.
+- [ ] Customer must copy the selected image into `customer-artworks/Backgrounds/`
+  before running the importer; the browser cannot write repository files.
+
+## Implemented — Reference wall calibration diagnostics (v1.20)
+
+- [x] Define the repository-only 2048×1354 reference contract and clockwise
+  target-corner order.
+- [x] Map reference pixels to the fixed logical hub stage with explicit
+  contain-fit scale and padding; CSS and framebuffer sizes remain separate.
+- [x] Add pure projected-corner residual metrics and expose them in hub debug
+  snapshots without changing canonical artwork placement.
+- [x] Validate the mapping and preserve the existing coherent room until a
+  reference-to-room correspondence is confirmed; a single 2D image cannot
+  uniquely determine the complete 3D envelope.
+
+## Implemented — Architectural wall contract correction (v1.19)
+
+- [x] Centralize the room front/rear coordinates, wall thickness, entry-shell
+  margin, and doorway world-Z interval in the hub configuration.
+- [x] Make the mirrored side-wall doorway interval explicit at
+  `z = 2.5..3.55 m` without changing canonical artwork placement.
+- [x] Reuse the shared entry-shell margin in the Three.js room renderer.
+- [x] Add deterministic checks for camera envelope placement, inward wall
+  normals, wall thickness, and doorway world coordinates.
 
 ## Implemented — Standalone Artwork Placement Editor (v1.18)
 
@@ -5049,3 +5168,14 @@ a real browser session.
 ---
 
 *Audit completed and enhanced 2026-06-21. Phases 12–14 added 2026-06-21 based on reviewer feedback: Phase 0 architecture decision rule, GPU-1/2.5 TBDR qualifier, regression risk model, cross-optimization coupling map, and measurement success criteria per tier. No runtime profiling was performed — all estimates are derived from code structure analysis. Implement Phase 10 (Profiling Validation Plan) before starting any Tier 1+ code changes to establish measured baselines.*
+# v1.31 — Ratio-safe diagnostics
+
+Completed:
+
+- Added a pure projected-source corner validation helper.
+- Added mesh/world/texture ratio fields to runtime WebGL inspection.
+- Added `Download diagnostics` to the placement editor. The report intentionally excludes image data and credentials while preserving the measurements needed to reproduce an aspect-ratio failure.
+
+Next:
+
+- Use the downloaded report from the exact failing browser session to determine whether the remaining visual discrepancy is calibration scale, DOM ownership, or source selection before changing wall geometry.

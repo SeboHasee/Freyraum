@@ -40,6 +40,7 @@ import {
   quadIsDegenerate,
   solveRoomArtworkPlacement,
   shrinkPolygonTowardsCentroid,
+  wallCornersFromTransform,
   type CameraCalibration,
   type HangingBand,
   type Point2D,
@@ -51,6 +52,7 @@ import {
   type StageReference,
   type WallProjectionRealism,
   type WallProjectionModel,
+  type ReferenceImageCalibration,
 } from '../hub/projectiveGeometry';
 import { isReferenceOnlyHubAssetPath } from '../hub/backgroundFallback';
 
@@ -156,7 +158,7 @@ export interface MuseumHubConfig {
   version: number;
   coverage: 'all-active-artworks';
   stage: StageReference;
-  background: { src: string; aspect: number };
+  background: { src: string; aspect: number; fit?: 'contain' | 'cover'; width?: number; height?: number };
   backgroundFallback: { src: string };
   visualTokens: HubVisualTokens;
   camera?: CameraCalibration;
@@ -262,7 +264,7 @@ export interface MuseumHubResolution {
       imageSourceContext?: Artwork['imageSourceContext'];
     }
   >;
-  background: { src: string; aspect: number };
+  background: { src: string; aspect: number; fit?: 'contain' | 'cover'; width?: number; height?: number };
   backgroundFallback: { src: string };
   stage: StageReference;
   visualTokens: HubVisualTokens;
@@ -284,6 +286,18 @@ export interface MuseumHubResolution {
 
 export const HUB_SLOTS_PER_PAGE = 4;
 export const HUB_STAGE: StageReference = { width: 1366, height: 768 };
+export const HUB_REFERENCE_IMAGE: ReferenceImageCalibration = {
+  width: 2048,
+  height: 1354,
+  fit: 'contain',
+};
+/** Reference wall corners use clockwise quad order: TL, TR, BR, BL. */
+export const HUB_REFERENCE_BACK_WALL_QUAD: Quad = [
+  point(531, 511),
+  point(1445, 512),
+  point(1552, 820),
+  point(487, 819),
+];
 export const HUB_BACKGROUND_ASPECT = HUB_STAGE.width / HUB_STAGE.height;
 export const HUB_BACKGROUND_SRC = 'Backgrounds/museum-empty.png';
 export const DEFAULT_GALLERY_WALL = '#C7CED4';
@@ -304,7 +318,13 @@ export const HUB_CAMERA: CameraCalibration = {
 export const HUB_ROOM_WIDTH = 9;
 export const HUB_ROOM_DEPTH = 12;
 export const HUB_ROOM_HEIGHT = 5.2;
-/** Mirrored side-wall doorways: z ∈ [+1.5, +2.55], 1.05 × 2.30 m, floor-based. */
+export const HUB_ROOM_FRONT_Z = -5.5;
+export const HUB_ROOM_REAR_Z = HUB_ROOM_FRONT_Z + HUB_ROOM_DEPTH;
+export const HUB_WALL_THICKNESS_M = 0.08;
+export const HUB_ENTRY_SHELL_MARGIN_M = 1.5;
+/** Mirrored side-wall doorways: world z ∈ [+2.5, +3.55], 1.05 × 2.30 m, floor-based. */
+export const HUB_DOORWAY_MIN_Z = 2.5;
+export const HUB_DOORWAY_MAX_Z = HUB_DOORWAY_MIN_Z + 1.05;
 export const HUB_DOORWAY_WIDTH = 1.05;
 export const HUB_DOORWAY_HEIGHT = 2.3;
 
@@ -317,6 +337,7 @@ function roomWall(
 ): RoomWallModel {
   const inset = 0.14;
   return {
+    corners: wallCornersFromTransform(origin, axisU, point3(0, 1, 0), width, height),
     origin,
     axisU,
     axisV: point3(0, 1, 0),
@@ -373,10 +394,10 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
       point(425.45, 214.5),
     ],
     drawableRegion: [point(0.14, 0.14), point(8.86, 0.14), point(8.86, 4.92), point(0.14, 4.92)],
-    transform: wallTransform(point3(-4.5, 0, -5.5), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
+    transform: wallTransform(point3(-4.5, 0, HUB_ROOM_FRONT_Z), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
     hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(0, 14),
-    room: roomWall(point3(-4.5, 0, -5.5), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
+    room: roomWall(point3(-4.5, 0, HUB_ROOM_FRONT_Z), point3(1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
   },
   {
     id: 'wall-right',
@@ -396,13 +417,17 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
     ],
     drawableRegion: [point(0.14, 0.14), point(11.86, 0.14), point(11.86, 4.92), point(0.14, 4.92)],
     exclusionPolygons: [
-      [point(8, 0), point(9.05, 0), point(9.05, HUB_DOORWAY_HEIGHT), point(8, HUB_DOORWAY_HEIGHT)],
+      [point(HUB_DOORWAY_MIN_Z - HUB_ROOM_FRONT_Z, 0), point(HUB_DOORWAY_MAX_Z - HUB_ROOM_FRONT_Z, 0),
+        point(HUB_DOORWAY_MAX_Z - HUB_ROOM_FRONT_Z, HUB_DOORWAY_HEIGHT),
+        point(HUB_DOORWAY_MIN_Z - HUB_ROOM_FRONT_Z, HUB_DOORWAY_HEIGHT)],
     ],
-    transform: wallTransform(point3(4.5, 0, -5.5), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
+    transform: wallTransform(point3(4.5, 0, HUB_ROOM_FRONT_Z), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
     hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(8, 14),
-    room: roomWall(point3(4.5, 0, -5.5), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
-      [point(8, 0), point(9.05, 0), point(9.05, HUB_DOORWAY_HEIGHT), point(8, HUB_DOORWAY_HEIGHT)],
+    room: roomWall(point3(4.5, 0, HUB_ROOM_FRONT_Z), point3(0, 0, 1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
+      [point(HUB_DOORWAY_MIN_Z - HUB_ROOM_FRONT_Z, 0), point(HUB_DOORWAY_MAX_Z - HUB_ROOM_FRONT_Z, 0),
+        point(HUB_DOORWAY_MAX_Z - HUB_ROOM_FRONT_Z, HUB_DOORWAY_HEIGHT),
+        point(HUB_DOORWAY_MIN_Z - HUB_ROOM_FRONT_Z, HUB_DOORWAY_HEIGHT)],
     ]),
   },
   {
@@ -410,7 +435,7 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
     group: 'rear',
     role: 'bounds-only',
     planeAspect: HUB_ROOM_WIDTH / HUB_ROOM_HEIGHT,
-    transform: wallTransform(point3(4.5, 0, 6.5), point3(-1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
+    transform: wallTransform(point3(4.5, 0, HUB_ROOM_REAR_Z), point3(-1, 0, 0), HUB_ROOM_WIDTH, HUB_ROOM_HEIGHT),
   },
   {
     id: 'wall-left',
@@ -430,13 +455,17 @@ const DEFAULT_WALLS: readonly HubWallConfig[] = [
     ],
     drawableRegion: [point(0.14, 0.14), point(11.86, 0.14), point(11.86, 4.92), point(0.14, 4.92)],
     exclusionPolygons: [
-      [point(2.95, 0), point(4, 0), point(4, HUB_DOORWAY_HEIGHT), point(2.95, HUB_DOORWAY_HEIGHT)],
+      [point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MAX_Z, 0), point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MIN_Z, 0),
+        point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MIN_Z, HUB_DOORWAY_HEIGHT),
+        point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MAX_Z, HUB_DOORWAY_HEIGHT)],
     ],
-    transform: wallTransform(point3(-4.5, 0, 6.5), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
+    transform: wallTransform(point3(-4.5, 0, HUB_ROOM_REAR_Z), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT),
     hangingBand: { minY: 0.42, maxY: 3.4, margin: 0.08 },
     shadowVector: point(-8, 14),
-    room: roomWall(point3(-4.5, 0, 6.5), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
-      [point(2.95, 0), point(4, 0), point(4, HUB_DOORWAY_HEIGHT), point(2.95, HUB_DOORWAY_HEIGHT)],
+    room: roomWall(point3(-4.5, 0, HUB_ROOM_REAR_Z), point3(0, 0, -1), HUB_ROOM_DEPTH, HUB_ROOM_HEIGHT, [
+      [point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MAX_Z, 0), point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MIN_Z, 0),
+        point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MIN_Z, HUB_DOORWAY_HEIGHT),
+        point(HUB_ROOM_REAR_Z - HUB_DOORWAY_MAX_Z, HUB_DOORWAY_HEIGHT)],
     ]),
   },
 ];
@@ -593,6 +622,7 @@ function cloneWallTransform(transform: HubWallTransform): HubWallTransform {
 
 function cloneRoomWall(room: RoomWallModel): RoomWallModel {
   return {
+    corners: room.corners.map(clonePoint3) as unknown as RoomWallModel['corners'],
     origin: clonePoint3(room.origin),
     axisU: clonePoint3(room.axisU),
     axisV: clonePoint3(room.axisV),
@@ -822,7 +852,8 @@ function clampSlotPlacementToDrawableRegion(
       wall.room,
       placement.anchor,
       placement.mountedHeight,
-      artworkAspectRatio
+      artworkAspectRatio,
+      placement.targetSizePolicy === 'fixed-height'
     );
     return {
       center: placement.center,
@@ -1093,6 +1124,7 @@ function parseRoomWall(raw: unknown): RoomWallModel | null {
     corner.x >= 0 && corner.x <= transform.width && corner.y >= 0 && corner.y <= transform.height;
   if (!safePolygon.every(inBounds) || doorwayExclusions.some((doorway) => !doorway.every(inBounds))) return null;
   return {
+    corners: wallCornersFromTransform(transform.origin, transform.axisU, transform.axisV, transform.width, transform.height),
     origin: transform.origin,
     axisU: transform.axisU,
     axisV: transform.axisV,
@@ -1230,6 +1262,13 @@ function sanitizeWallConfig(raw: unknown, warnings: string[]): HubWallConfig | n
   }
   if (transform) {
     room = {
+      corners: wallCornersFromTransform(
+        transform.origin,
+        transform.axisU,
+        transform.axisV,
+        transform.width,
+        transform.height
+      ),
       origin: clonePoint3(transform.origin),
       axisU: clonePoint3(transform.axisU),
       axisV: clonePoint3(transform.axisV),
@@ -1460,6 +1499,9 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   const stage = sanitizeStage(cfg['stage']);
   let backgroundAspect = HUB_BACKGROUND_ASPECT;
   let backgroundSrc = HUB_BACKGROUND_SRC;
+  let backgroundFit: 'contain' | 'cover' = 'contain';
+  let backgroundWidth: number | undefined;
+  let backgroundHeight: number | undefined;
   let backgroundFallbackSrc = HUB_BACKGROUND_SRC;
   if (cfg['background'] && typeof cfg['background'] === 'object') {
     const background = cfg['background'] as Record<string, unknown>;
@@ -1473,6 +1515,13 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
     }
     if (typeof background['src'] === 'string' && background['src'].trim()) {
       backgroundSrc = (background['src'] as string).trim();
+    }
+    if (background['fit'] === 'contain' || background['fit'] === 'cover') backgroundFit = background['fit'];
+    if (typeof background['width'] === 'number' && Number.isInteger(background['width']) && background['width'] > 0) {
+      backgroundWidth = background['width'];
+    }
+    if (typeof background['height'] === 'number' && Number.isInteger(background['height']) && background['height'] > 0) {
+      backgroundHeight = background['height'];
     }
   }
   if (cfg['backgroundFallback'] && typeof cfg['backgroundFallback'] === 'object') {
@@ -1597,7 +1646,7 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
       version: Math.max(5, version),
       coverage: 'all-active-artworks',
       stage,
-      background: { src: backgroundSrc, aspect: backgroundAspect },
+      background: { src: backgroundSrc, aspect: backgroundAspect, fit: backgroundFit, width: backgroundWidth, height: backgroundHeight },
       backgroundFallback: { src: backgroundFallbackSrc },
       visualTokens: tokens,
       camera,
@@ -1927,7 +1976,7 @@ export function resolveMuseumHub(
           canonicalPlacement
             ? slot.placement.physicalHeight!
             : wall?.room
-              ? slot.placement.mountedHeight * localScale.y
+              ? slot.placement.mountedHeight
               : slot.placement.mountedHeight,
         anchor: migratedAnchor ? clonePoint(migratedAnchor) : undefined,
         uv: placementUv ? clonePoint(placementUv) : undefined,
@@ -1940,7 +1989,7 @@ export function resolveMuseumHub(
           canonicalPlacement
             ? slot.placement.physicalHeight
             : wall?.room
-              ? slot.placement.mountedHeight * localScale.y
+              ? slot.placement.mountedHeight
               : slot.placement.mountedHeight,
         mountingGap: slot.placement.mountingGap ?? HUB_ARTWORK_MOUNTING_GAP_M,
         targetSizePolicy: slot.placement.targetSizePolicy ?? 'contain',
@@ -2085,7 +2134,7 @@ export function resolveMuseumHub(
             center: clonePoint(slot.placement.center),
             mountedHeight:
               slot.placement.physicalHeight
-              ?? (wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight),
+              ?? slot.placement.mountedHeight,
             anchor:
               wall?.room && slot.placement.anchor
                 ? slot.placement.horizontalPosition !== undefined && slot.placement.centerHeight !== undefined
@@ -2099,7 +2148,7 @@ export function resolveMuseumHub(
             centerHeight: slot.placement.centerHeight,
             physicalHeight:
               slot.placement.physicalHeight
-              ?? (wall?.room ? slot.placement.mountedHeight * localScale.y : slot.placement.mountedHeight),
+              ?? slot.placement.mountedHeight,
             mountingGap: slot.placement.mountingGap ?? HUB_ARTWORK_MOUNTING_GAP_M,
             targetSizePolicy: slot.placement.targetSizePolicy ?? 'contain',
             minScale: slot.placement.minScale ?? 0.7,
@@ -2167,6 +2216,7 @@ export function resolveMuseumHub(
     if (!slot.selectable || !slot.artworkId) continue;
     const wall = wallById.get(slot.placement.wallId);
     if (!wall) continue;
+    if (wall.mountingZoneConfirmed) continue;
     const fitted = clampSlotPlacementToDrawableRegion(wall, slot.placement, slot.artworkAspect, stage);
     if (!fitted.adjusted) continue;
     slot.placement.center = fitted.center;
@@ -2197,37 +2247,26 @@ export function resolveMuseumHub(
     const uv = slot.placement.uv
       ?? derivePlacementUv(slot.placement, targetWall)
       ?? point(slot.placement.center.x, 1 - slot.placement.center.y);
-    const sourceWall = wallById.get(slot.placement.wallId);
     const targetUv = uv;
-    const sourceHeight = sourceWall?.room?.height ?? targetWall.room?.height ?? 1;
-    const targetHeight = targetWall.room?.height ?? sourceHeight;
-    const normalizedHeight = slot.placement.mountedHeight / Math.max(0.001, sourceHeight);
+    const physicalHeight = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
     const placement: HubSlotPlacement = {
       wallId: targetWall.id,
       center: point(targetUv.x, 1 - targetUv.y),
       anchor: targetWall.room ? point(targetUv.x * targetWall.room.width, targetUv.y * targetWall.room.height) : undefined,
       uv: clonePoint(targetUv),
-      mountedHeight: targetWall.room
-        ? targetWall.id === sourceWall?.id
-          ? slot.placement.mountedHeight
-          : Math.max(0.04, normalizedHeight * targetHeight)
-        : slot.placement.mountedHeight,
+      mountedHeight: physicalHeight,
       targetSizePolicy: slot.placement.targetSizePolicy,
       minScale: slot.placement.minScale,
       maxScale: slot.placement.maxScale,
       zOffset: slot.placement.zOffset,
       horizontalPosition: targetUv.x,
       centerHeight: targetWall.room ? targetUv.y * targetWall.room.height : undefined,
-      physicalHeight: targetWall.room
-        ? targetWall.id === sourceWall?.id
-          ? slot.placement.physicalHeight
-          : normalizedHeight * targetWall.room.height
-        : slot.placement.physicalHeight,
+      physicalHeight,
       mountingGap: slot.placement.mountingGap,
       provisional: slot.placement.provisional,
     };
     const projection = projectSlotArtwork(targetWall, placement, slot.artworkAspect, stage);
-    if (projection?.placement && targetWall.room) {
+    if (projection?.placement && targetWall.room && !projection.projectiveFallback) {
       const fitted = projection.placement;
       const fittedHeight = Math.abs(fitted.mountedHeight - placement.mountedHeight) < 1e-9
         ? placement.mountedHeight
@@ -2259,13 +2298,36 @@ export function resolveMuseumHub(
     const fallbackWalls = [currentWall];
     for (const candidateWall of fallbackWalls) {
       if (candidateWall.projectionRealism && !candidateWall.projectionRealism.passes) continue;
-      const attempt = tryProjectResolvedSlot(slot, candidateWall);
+      let attempt = tryProjectResolvedSlot(slot, candidateWall);
+      if (!attempt.projection) {
+        const projectiveFallback = projectSlotArtwork(
+          { ...candidateWall, room: undefined, camera: undefined },
+          slot.placement,
+          slot.artworkAspect,
+          stage
+        );
+        if (projectiveFallback) {
+          attempt = { projection: projectiveFallback, placement: slot.placement };
+        }
+      }
       if (!attempt.projection) continue;
-      if (!sideWallPlacementHasArchitecturalClearance(candidateWall, attempt.projection)) continue;
+      if (
+        attempt.projection.projectiveFallback
+        && (candidateWall.exclusionPolygons ?? []).some((polygon) =>
+          attempt.projection?.projectedQuad.every((vertex) => pointInPolygon(vertex, polygon))
+        )
+      ) continue;
+      if (
+        !sideWallPlacementHasArchitecturalClearance(candidateWall, attempt.projection)
+        && !attempt.projection.projectiveFallback
+      ) continue;
       const withinMountingZone = attempt.projection.projectedQuad.every((vertex) =>
         pointInPolygon(vertex, candidateWall.mountingZone)
       );
-      if (!withinMountingZone) continue;
+      // Edited v5 quads are the authoritative visible wall geometry. If the
+      // derived metric room cannot reproduce a slot exactly, retain the
+      // projective artwork fallback so the editor can still show and place it.
+      if (!withinMountingZone && !attempt.projection.projectiveFallback) continue;
       resolvedWall = candidateWall;
       resolvedPlacement = attempt.placement;
       projected = attempt.projection;
@@ -2495,12 +2557,20 @@ function rescaleRoomWallAboutCamera(
   scale: number
 ): RoomWallModel {
   const scaled = (value: Point2D): Point2D => point(value.x * scale, value.y * scale);
+  const scaledOrigin = point3(
+    cameraPosition.x + (room.origin.x - cameraPosition.x) * scale,
+    cameraPosition.y + (room.origin.y - cameraPosition.y) * scale,
+    cameraPosition.z + (room.origin.z - cameraPosition.z) * scale
+  );
   return {
-    origin: point3(
-      cameraPosition.x + (room.origin.x - cameraPosition.x) * scale,
-      cameraPosition.y + (room.origin.y - cameraPosition.y) * scale,
-      cameraPosition.z + (room.origin.z - cameraPosition.z) * scale
+    corners: wallCornersFromTransform(
+      scaledOrigin,
+      room.axisU,
+      room.axisV,
+      room.width * scale,
+      room.height * scale
     ),
+    origin: scaledOrigin,
     axisU: clonePoint3(room.axisU),
     axisV: clonePoint3(room.axisV),
     width: room.width * scale,

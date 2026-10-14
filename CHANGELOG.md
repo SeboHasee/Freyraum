@@ -1,5 +1,127 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+
+## v1.32 — Wall-following artwork placement (2026-10-14)
+
+- Canonical artwork height remains independent of wall calibration and wall
+  transfers; wall-relative changes now update the anchor and projection only.
+- Fixed-height placement fitting preserves the authored size and reports an
+  invalid oversized placement instead of silently shrinking it.
+- The placement editor now projects fixed-size artwork from the calibrated
+  world wall frame instead of the wall-normalized fallback path.
+- Calibration-only wall edits now remap the editor artwork quadrilateral
+  through the current edited wall quad while preserving the physical WebGL
+  mounting frame.
+
+## v1.31 — Main museum presentation authority (2026-10-12)
+
+- The main museum overview now resolves missing curated side-wall slots from
+  the built-in companion inventory without adding those companions to the
+  customer gallery inventory.
+- Presentation mode hides calibration selection borders and labels; calibration
+  mode remains the only mode that exposes authoring overlays.
+
+## v1.30 — Ratio-safe artwork replacement (2026-10-10)
+
+- Added a shared native-dimension/source-rectangle ratio contract.
+- Replacements are decoded and confirmed before changing the active artwork.
+- The editor now reports native and source-rectangle ratios and marks the
+  projected boundary separately from the rectangular interaction surface.
+- Artwork height remains editable while width is derived from the native ratio.
+
+## v1.29 — Deterministic placement editor preview (2026-10-10)
+
+- Selecting a wall now changes the existing projected calibration selection
+  without automatically creating a second orthographic wall rectangle.
+- Calibration hides WebGL pixels so the projected DOM artwork is the single
+  visible editor owner.
+- Added decoded native dimensions, ratio inspection, and safe temporary artwork
+  replacement previews with object-URL cleanup.
+
+## v1.27 — Explicit artwork and placeholder presentation state (2026-10-10)
+
+- Kept placeholder textures and geometry on an explicit square placeholder
+  presentation instead of reusing the active artwork ratio.
+- Bound decoded artwork textures, native ratios, mesh dimensions, and DOM
+  projection as one artwork presentation state.
+- Added texture/presentation identity keys and runtime mismatch diagnostics.
+
+## v1.28 — Calibration uses native artwork presentation (2026-10-10)
+
+- Made the calibration editor use the projected DOM artwork image as its pixel
+  owner, avoiding perspective-mesh scaling being mistaken for source distortion.
+- Added a front-wall asset regression check for source PNG and generated bundle
+  dimensions.
+
+## v1.26 — Viewport-safe calibration and direct artwork selection (2026-09-06)
+
+- Added a display-only, uniform calibration viewport fit so initial wall geometry
+  remains visible without rewriting canonical export coordinates.
+- Added selected/all-wall fit actions, viewport reset, and continuous edge
+  clamping for wall, safe-area, and mounting-area handles.
+- Kept default wall movement composite across the wall, safe polygon, mounting
+  zone, and projected artwork while preserving explicit guide edit modes.
+- Allowed artwork selection and dragging directly through the reference image by
+  making wall fills non-blocking.
+
+## v1.25 — Unified wall editing and non-blocking room boundary (2026-09-05)
+
+- Hid the purple bounds-only room boundary from normal editor interaction.
+- Limited wall corner and edge hit targets to the selected wall's wall-edit mode.
+- Made blue safe and green mounting guides informational by default, with
+  explicit actions for editing their points.
+- Preserved the room boundary internally and exposed it only through an
+  explicit diagnostic/edit action.
+
+## v1.24 — Self-explanatory calibration editor (2026-09-05)
+
+- Added a permanent legend describing wall corners, wall edges, safe areas,
+  mounting areas, and the entrance boundary without relying on color alone.
+- Replaced technical control wording with a four-step guided workflow and
+  explicit edit, reset, undo, redo, and guide-visibility actions.
+- Added accessible names, visible wall labels, active-edit status, keyboard
+  focus styling, and deterministic UI contract checks.
+
+## v1.23 — Robust calibration hit targets (2026-09-05)
+
+- Added enlarged transparent SVG edge and corner hit targets so visible wall
+  boundaries remain clickable at the transformed editor scale.
+- Calibration pointer capture now uses the stable SVG overlay, with coordinates
+  measured from its actual screen bounds.
+
+## v1.22 — Stable editor calibration overlay and room envelope (2026-09-05)
+
+- Stabilized SVG calibration nodes and update their geometry in place during
+  pointer movement, preventing capture loss after the first drag event.
+- Added blur, competing-pointer, and invalid-quad safeguards.
+- Added a visibly distinct editable front-of-camera room-envelope guide for
+  bounds-only `wall-rear`; it cannot receive artwork assignments.
+
+## v1.21 — Editor background and continuous wall calibration (2026-09-05)
+
+- Added local background-file selection with dimensions, aspect metadata,
+  contain/cover preview, reset, and export instructions.
+- Added draggable rendered-wall corners and whole-wall translation.
+- Fixed calibration pointer sessions to continue through pointer capture and
+  clean up on pointer cancellation or lost capture.
+
+## v1.20 — Reference wall calibration diagnostics (2026-09-05)
+
+- Added the measured 2048×1354 reference wall contract and explicit contain-fit
+  conversion into the fixed 1366×768 logical stage.
+- Added per-corner, average, and maximum calibration error reporting to hub
+  debug geometry snapshots.
+- Kept the physical room and canonical artwork placement unchanged while the
+  reference wall is treated as a fixed-view calibration target.
+
+## v1.19 — Architectural wall contract correction (2026-09-05)
+
+- Centralized the museum room front/rear coordinates, wall thickness,
+  entry-shell margin, and doorway interval in the hub configuration.
+- Made the mirrored side-wall doorway openings explicit at world
+  `z = 2.5..3.55 m`, preserving the accepted centered side-wall composition.
+- Added deterministic geometry checks for inward wall normals, camera placement,
+  wall thickness, and doorway world coordinates.
 
 ## v1.18 — Standalone Artwork Placement Editor (2026-09-05)
 
@@ -31,6 +153,10 @@
 - Retried the full validation workflow after restoring locked dependencies:
   import, build/typecheck, lint, hub geometry, frame budget, WebGL resilience,
   documentation authority, secret scanning, and focused final review passed.
+- Added the committed `customer-artworks/Backgrounds/museum-empty.png`
+  fallback and made customer-public syncing fail fast when the required hub
+  background is absent. CI now runs both resilience checks explicitly on the
+  same Node.js LTS version used by Pages deployment.
 
 ## v1.17 — Deterministic curator placement editor (2026-09-04)
 
@@ -3918,3 +4044,7 @@ Three vertical slices shipped against `src/`; root causes RC-1/RC-2/RC-3 from th
 ### Fixed
 
 - blank screen when opening the downloaded repository locally via `index.html`
+# v1.31 — Artwork ratio diagnostics
+
+- Added a downloadable artwork diagnostics report covering decoded source dimensions, physical dimensions, projected bounds, DOM transforms, WebGL mesh dimensions, texture dimensions, and ratio state.
+- Added projected source-corner validation and explicit mesh/world/texture ratio reporting so perspective bounds are not mistaken for source distortion.

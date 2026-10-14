@@ -109,6 +109,21 @@ const backgroundsCopied = syncDir(
   (name) => name !== 'museum-target.png',
 );
 
+if (backgroundsCopied === undefined) {
+  process.stderr.write(
+    'sync-customer-public: customer-artworks/Backgrounds is missing. ' +
+      'Add the committed museum-empty.png fallback before building.\n',
+  );
+  process.exit(1);
+}
+
+if (!existsSync(join(PUBLIC, 'backgrounds', 'museum-empty.png'))) {
+  process.stderr.write(
+    'sync-customer-public: required backgrounds/museum-empty.png is missing.\n',
+  );
+  process.exit(1);
+}
+
 process.stdout.write(
   `sync-customer-public: synced customer-artworks.js, customer-audio.js` +
   (imagesCopied  !== undefined ? `, ${imagesCopied} image(s)`  : '') +

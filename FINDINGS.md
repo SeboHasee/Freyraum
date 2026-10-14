@@ -1,5 +1,61 @@
 # FINDINGS
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+
+## 2026-10-14 — Physical artwork size versus wall calibration
+
+1. Normalized source-wall-to-target-wall height conversion made artwork size
+   depend on the destination wall dimensions. Transfer now carries the
+   canonical physical height unchanged.
+2. Fixed-height placements must not enter the legacy shrink ladder. The solver
+   may reposition a valid-size artwork, but an artwork that cannot fit retains
+   its physical dimensions and is rejected or warned instead of being silently
+   resized.
+3. WebGL mounting continues to derive width from physical height and the
+   decoded native aspect; perspective is applied only by the wall frame and
+   camera projection.
+4. The editor's calibrated projection previously used normalized wall height
+   for its fallback artwork quad. Fixed-size editor projection now uses the
+   same physical mounting frame as WebGL, while projected bounds remain
+   interaction metadata.
+5. Wall-corner dragging mutates the resolved wall's stage-space `quad` only;
+   it does not mutate the authored room-space `origin`/axes. The editor must
+   therefore use that current quad for DOM projection, while retaining the
+   room-space mounting frame as the physical geometry authority. Otherwise
+   artwork dimensions remain correct but the artwork appears disconnected from
+   the edited wall.
+
+## 2026-10-12 — Main museum versus editor authority
+
+- The supplied target is the main museum presentation, not the placement editor.
+- Customer artwork bundles can contain only the currently authored works. The
+  museum resolver therefore receives a merged curated inventory so its four-work
+  2+1+1 composition remains populated, while the customer gallery timeline stays
+  customer-only.
+- Presentation mode hides selection borders and labels; the editor retains them
+  for calibration and interaction.
+
+## Ratio-safe replacement findings (v1.30, 2026-10-10)
+
+1. A temporary upload must be decoded and confirmed before it mutates the
+   selected slot; failed or cancelled replacements must preserve the prior
+   valid source.
+2. Screen-space projected bounds are interaction geometry, not artwork pixels.
+   The editor therefore clips its selection outline to the projected quad and
+   reports the native source rectangle separately.
+3. Native dimensions and source-rectangle dimensions now share a pure ratio
+   contract so DOM and renderer callers cannot silently invent an independent
+   artwork width.
+
+## Deterministic editor preview findings (v1.29, 2026-10-10)
+
+1. Wall selection must not invoke camera framing: the projected calibration
+   quad is the authoritative editable wall, while framing is an explicit
+   viewport action.
+2. Calibration must have one visible artwork pixel owner. Hiding WebGL pixels
+   prevents a valid DOM homography from being visually contradicted by a
+   second renderer.
+3. Temporary uploads are decoded before use and retain native dimensions and
+   ratio; they are preview replacements, not silently exported customer assets.
 
 ## Standalone editor usability findings (v1.18, 2026-09-05)
 
@@ -1294,3 +1350,8 @@ running the repo toolchain on a fresh clone.
 - `npm run build:preview`
 - `npm run docs:check-config-authority`
 - `npm run test:frame-budget`
+# 2026-10-11 — ratio diagnostic milestone
+
+- The reported screenshot is an editor calibration view, where the rectangular artwork button remains a separate interaction surface from the projected image.
+- The editor now exposes a downloadable JSON report with source, DOM, projection, and WebGL measurements. This is required before changing calibrated wall geometry because projected screen bounds are not a valid native-ratio measurement.
+- WebGL inspection now reports mesh, world, and texture ratios independently. A mismatch can therefore be localized to asset decoding, physical placement, DOM projection, or renderer geometry.

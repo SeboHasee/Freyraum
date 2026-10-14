@@ -827,6 +827,17 @@ async function main(): Promise<void> {
   const artworks: readonly Artwork[] =
     customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
   recoveryArtworks = artworks;
+  // The museum overview is a curated four-work composition. Customer bundles
+  // may contain only the works currently being authored, so keep the built-in
+  // museum companions available for unassigned side-wall slots without adding
+  // them to the main gallery inventory.
+  const museumArtworks: readonly Artwork[] =
+    customerArtworks && customerArtworks.length > 0
+      ? [
+          ...customerArtworks,
+          ...builtInArtworks.filter((artwork) => !customerArtworks.some((candidate) => candidate.id === artwork.id)),
+        ]
+      : artworks;
   const artworkManifest = artworks.map((a) => {
     const sourcePlan = resolveArtworkImageSources(a);
     return {
@@ -862,7 +873,7 @@ async function main(): Promise<void> {
     .__FREYRAUM_MUSEUM_HUB;
   const injectedLegacyHotspots = (window as unknown as { __FREYRAUM_HUB_HOTSPOTS?: unknown })
     .__FREYRAUM_HUB_HOTSPOTS;
-  const museumHubResolution = resolveMuseumHub(artworks, injectedMuseumHub, injectedLegacyHotspots);
+  const museumHubResolution = resolveMuseumHub(museumArtworks, injectedMuseumHub, injectedLegacyHotspots);
   diagnostics.info('boot', 'museum-hub-resolved', 'Museum hub configuration resolved', {
     source: museumHubResolution.source,
     pages: museumHubResolution.pages.length,

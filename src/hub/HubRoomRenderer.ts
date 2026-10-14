@@ -9,6 +9,7 @@ import {
   roomWallNormal,
   roomWallPoint,
 } from './projectiveGeometry';
+import { HUB_ENTRY_SHELL_MARGIN_M } from '../config/museumHub';
 import {
   ArchitecturalSurfaceFactory,
   type ArchitecturalMaterials,
@@ -31,7 +32,14 @@ interface SlotMeshState {
   edgeMesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
   textureKind: 'image' | 'placeholder' | null;
   textureKey: string | null;
+  presentationKind: 'artwork' | 'placeholder' | null;
+  presentationAspect: number;
+  physicalWidth: number;
+  physicalHeight: number;
+  textureDimensions: { width: number; height: number };
 }
+
+export type HubArtworkPresentationKind = 'artwork' | 'placeholder';
 
 /**
  * v0.92: result of {@link HubRoomRenderer.upsertSlot}, letting
@@ -50,10 +58,35 @@ export interface SlotUpsertResult {
   failureReason?: string;
 }
 
-const PLACEHOLDER_SIZE = 512;
+export interface ArtworkRuntimeInspection {
+  slotId: string;
+  geometryType: string;
+  presentationKind: HubArtworkPresentationKind | null;
+  textureKind: 'image' | 'placeholder' | null;
+  presentationAspect: number;
+  ratios: {
+    mesh: number;
+    world: number;
+    texture: number;
+  };
+  localGeometry: { width: number; height: number };
+  geometryPositions: number[];
+  geometryBounds: { min: [number, number, number]; max: [number, number, number] } | null;
+  meshScale: [number, number, number];
+  worldMatrix: number[];
+  worldDimensions: { width: number; height: number; depth: number };
+  texture: {
+    width: number;
+    height: number;
+    repeat: [number, number];
+    offset: [number, number];
+    uv: number[];
+  } | null;
+}
+
+const PLACEHOLDER_WIDTH = 512;
+const PLACEHOLDER_HEIGHT = 512;
 /** Perceived stretched-canvas depth of a mounted artwork (metres). */
-/** How far the entry-zone shell extends past the camera (metres). */
-const ENTRY_SHELL_MARGIN = 1.5;
 /** Depth of the dim passage pocket behind each doorway opening (metres). */
 const DOORWAY_POCKET_DEPTH = 1.15;
 /** Skirting shadow-gap profile (metres). */
@@ -291,29 +324,44 @@ export class HubRoomRenderer {
     wall: ResolvedHubWall,
     image: HTMLImageElement | null,
     missingImage: boolean,
-    sourceUrlType: ArtworkImageUrlType | null
+    sourceUrlType: ArtworkImageUrlType | null,
+    presentationKind: HubArtworkPresentationKind,
+    presentationAspect: number,
+    render = true
   ): SlotUpsertResult {
     const state = this.ensureSlotState(slot);
     if (!state || !wall.room || !slot.selectable || !slot.artworkId) {
       if (state) state.group.visible = false;
-      this.render();
-      return { applied: false, usedImage: false };
-    }
-    const slotAnchor = slot.placement.anchor;
-    if (!slotAnchor) {
-      state.group.visible = false;
-      this.render();
+      if (render) this.render();
       return { applied: false, usedImage: false };
     }
 
-    const textureKey = !missingImage && image && image.complete && image.naturalWidth > 0
-      ? image.currentSrc || image.src || `${slot.id}:image`
-      : `${slot.id}:placeholder:${slot.displayLabel}`;
+    const slotAnchor = slot.placement.anchor;
+    if (!slotAnchor) {
+      state.group.visible = false;
+      if (render) this.render();
+      return { applied: false, usedImage: false };
+    }
+
+    const hasArtworkImage = Boolean(presentationKind === 'artwork'
+      && !missingImage
+      && image
+      && image.complete
+      && image.naturalWidth > 0);
+    // The decoded source is the final authority for artwork proportions. The
+    // manifest ratio can be stale after customer replacement or import, so
+    // never let it size a real image mesh.
+    const decodedArtworkAspect = hasArtworkImage && image && image.naturalHeight > 0
+      ? image.naturalWidth / image.naturalHeight
+      : null;
+    const textureKey = hasArtworkImage && image
+      ? `artwork:${image.currentSrc || image.src || slot.id}:${image.naturalWidth}x${image.naturalHeight}`
+      : `placeholder:${slot.id}:${PLACEHOLDER_WIDTH}x${PLACEHOLDER_HEIGHT}`;
     let fit: TextureUploadFit | undefined;
     let visibleProbe: VisiblePixelProbeResult | undefined;
     if (state.textureKey !== textureKey) {
       let targetTexture: THREE.Texture;
-      if (!missingImage && image && image.complete && image.naturalWidth > 0) {
+      if (hasArtworkImage && image) {
         const built = this.imageTexture(image);
         targetTexture = built.texture;
         fit = built.fit;
@@ -372,19 +420,26 @@ export class HubRoomRenderer {
       state.artworkMesh.material.map = targetTexture;
       state.artworkMesh.material.needsUpdate = true;
       state.textureKey = textureKey;
-      state.textureKind = missingImage ? 'placeholder' : 'image';
+      state.textureKind = hasArtworkImage ? 'image' : 'placeholder';
+      const textureImage = targetTexture.image as { width?: number; height?: number } | undefined;
+      state.textureDimensions = {
+        width: textureImage?.width ?? 0,
+        height: textureImage?.height ?? 0,
+      };
     }
 
     const mountingFrame = createArtworkMountingFrame(
       wall.room,
       slotAnchor,
       slot.placement.physicalHeight ?? slot.placement.mountedHeight,
-      Math.max(0.25, slot.artworkAspect),
-      slot.placement.mountingGap
+      Math.max(Number.EPSILON, decodedArtworkAspect ?? presentationAspect),
+      slot.placement.mountingGap,
+      HUB_ARTWORK_DEPTH_M,
+      true
     );
     if (!mountingFrame) {
       state.group.visible = false;
-      this.render();
+      if (render) this.render();
       return { applied: false, usedImage: false };
     }
     const { width, height } = mountingFrame;
@@ -403,7 +458,12 @@ export class HubRoomRenderer {
       mountingFrame.basisN.y,
       mountingFrame.basisN.z
     );
-    const matrix = new THREE.Matrix4().makeBasis(basisU, basisV, basisN);
+    // Put the physical artwork dimensions in the mounting frame itself. This
+    // keeps the rendered plane and its texture in one orthonormal coordinate
+    // system instead of relying on a second non-uniform child transform.
+    const scaledBasisU = basisU.clone().multiplyScalar(width);
+    const scaledBasisV = basisV.clone().multiplyScalar(height);
+    const matrix = new THREE.Matrix4().makeBasis(scaledBasisU, scaledBasisV, basisN);
     state.group.matrixAutoUpdate = false;
     matrix.setPosition(
       mountingFrame.frontCenter.x,
@@ -413,14 +473,100 @@ export class HubRoomRenderer {
     state.group.matrix.copy(matrix);
     state.group.matrixWorldNeedsUpdate = true;
     state.group.visible = state.pageIndex === this.activePageIndex;
-    state.artworkMesh.scale.set(width, height, 1);
+    state.artworkMesh.scale.set(1, 1, 1);
     // Stretched-canvas body: front face sits just behind the artwork plane.
     // Keep the box's front face 1 mm behind the image plane while its back
     // remains exactly at the mounting-frame back plane.
-    state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
+    state.edgeMesh.scale.set(1, 1, HUB_ARTWORK_DEPTH_M - 0.001);
     state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
-    this.render();
-    return { applied: true, usedImage: !missingImage, fit, visibleProbe };
+    state.presentationKind = presentationKind;
+    state.presentationAspect = decodedArtworkAspect ?? presentationAspect;
+    state.physicalWidth = width;
+    state.physicalHeight = height;
+    const expectedTextureKind = presentationKind === 'artwork' ? 'image' : 'placeholder';
+    if (state.textureKind !== expectedTextureKind) {
+      this.diagnostics.warn('hub-presentation-texture-kind-mismatch', 'Hub presentation kind and bound texture kind differ', {
+        slotId: slot.id,
+        artworkId: slot.artworkId,
+        presentationKind,
+        textureKind: state.textureKind,
+      });
+    }
+    const textureRatio = state.textureDimensions.height > 0
+      ? state.textureDimensions.width / state.textureDimensions.height
+      : 0;
+    if (textureRatio > 0 && Math.abs(textureRatio - state.presentationAspect) > 1e-6) {
+      this.diagnostics.warn('hub-presentation-aspect-mismatch', 'Hub presentation texture and geometry use different aspect ratios', {
+        slotId: slot.id,
+        artworkId: slot.artworkId,
+        presentationKind,
+        presentationAspect: state.presentationAspect,
+        textureWidth: state.textureDimensions.width,
+        textureHeight: state.textureDimensions.height,
+        textureRatio,
+      });
+    }
+    if (render) this.render();
+    return { applied: true, usedImage: hasArtworkImage, fit, visibleProbe };
+  }
+
+  inspectArtwork(slotId: string): ArtworkRuntimeInspection | null {
+    const state = this.slotMeshes.get(slotId);
+    if (!state) return null;
+    state.group.updateMatrixWorld(true);
+    const geometry = state.artworkMesh.geometry;
+    geometry.computeBoundingBox();
+    const bounds = geometry.boundingBox;
+    const position = geometry.getAttribute('position');
+    const uv = geometry.getAttribute('uv');
+    const texture = state.artworkMesh.material.map;
+    const worldBox = new THREE.Box3().setFromObject(state.artworkMesh);
+    const image = texture?.image as { width?: number; height?: number } | undefined;
+    return {
+      slotId,
+      geometryType: geometry.type,
+      presentationKind: state.presentationKind,
+      textureKind: state.textureKind,
+      presentationAspect: state.presentationAspect,
+      ratios: {
+        mesh: bounds && bounds.max.y !== bounds.min.y
+          ? state.physicalWidth / state.physicalHeight
+          : 0,
+        world: worldBox.max.y !== worldBox.min.y
+          ? (worldBox.max.x - worldBox.min.x) / (worldBox.max.y - worldBox.min.y)
+          : 0,
+        texture: image?.height
+          ? (image.width ?? state.textureDimensions.width) / image.height
+          : 0,
+      },
+      geometryPositions: Array.from(position.array as ArrayLike<number>),
+      localGeometry: {
+        width: state.physicalWidth,
+        height: state.physicalHeight,
+      },
+      geometryBounds: bounds
+        ? {
+            min: [bounds.min.x, bounds.min.y, bounds.min.z],
+            max: [bounds.max.x, bounds.max.y, bounds.max.z],
+          }
+        : null,
+      meshScale: [state.artworkMesh.scale.x, state.artworkMesh.scale.y, state.artworkMesh.scale.z],
+      worldMatrix: Array.from(state.artworkMesh.matrixWorld.elements),
+      worldDimensions: {
+        width: worldBox.max.x - worldBox.min.x,
+        height: worldBox.max.y - worldBox.min.y,
+        depth: worldBox.max.z - worldBox.min.z,
+      },
+      texture: texture
+        ? {
+            width: image?.width ?? state.textureDimensions.width,
+            height: image?.height ?? state.textureDimensions.height,
+            repeat: [texture.repeat.x, texture.repeat.y],
+            offset: [texture.offset.x, texture.offset.y],
+            uv: uv ? Array.from(uv.array as ArrayLike<number>) : [],
+          }
+        : null,
+    };
   }
 
   dispose(): void {
@@ -764,8 +910,8 @@ export class HubRoomRenderer {
     const min = new THREE.Vector3(bounds.min.x, this.resolution.room.floorY, bounds.min.z);
     const max = new THREE.Vector3(bounds.max.x, this.resolution.room.ceilingY, bounds.max.z);
     const cameraZ = this.resolution.camera.position.z;
-    if (cameraZ + ENTRY_SHELL_MARGIN > max.z) {
-      max.z = cameraZ + ENTRY_SHELL_MARGIN;
+    if (cameraZ + HUB_ENTRY_SHELL_MARGIN_M > max.z) {
+      max.z = cameraZ + HUB_ENTRY_SHELL_MARGIN_M;
     }
     return { min, max };
   }
@@ -1382,6 +1528,11 @@ export class HubRoomRenderer {
       edgeMesh,
       textureKind: null,
       textureKey: null,
+      presentationKind: null,
+      presentationAspect: 1,
+      physicalWidth: 1,
+      physicalHeight: 1,
+      textureDimensions: { width: 0, height: 0 },
     };
     this.slotMeshes.set(slot.id, state);
     return state;
@@ -1441,8 +1592,8 @@ export class HubRoomRenderer {
     const existing = this.placeholderTextures.get(label);
     if (existing) return existing;
     const canvas = document.createElement('canvas');
-    canvas.width = PLACEHOLDER_SIZE;
-    canvas.height = PLACEHOLDER_SIZE;
+    canvas.width = PLACEHOLDER_WIDTH;
+    canvas.height = PLACEHOLDER_HEIGHT;
     const context = canvas.getContext('2d');
     if (!context) {
       const fallback = new THREE.CanvasTexture(canvas);

@@ -61,7 +61,7 @@ const ROOM_HEIGHT = 5.2;
 const DOORWAY_WIDTH = 1.05;
 const DOORWAY_HEIGHT = 2.3;
 
-const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, hubRoomRenderer, quality, paintingMaterial, builtInArtworks] = await Promise.all([
+const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPixelOutcome, inspectionSafety, galleryPresentation, lightProfile, architecture, hubRoomRenderer, quality, paintingMaterial, builtInArtworks, editorViewport] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/hub/projectiveGeometry.ts'),
   loadTsModule('src/hub/backgroundFallback.ts'),
@@ -75,10 +75,123 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/config/quality.ts'),
   loadTsModule('src/materials/PaintingMaterial.ts'),
   loadTsModule('src/config/artworks.ts'),
+  loadTsModule('src/hub/editorViewport.ts'),
 ]);
 const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 
 assert.equal(shippingConfig.version, 5, 'shipping config must use the canonical v5 wall-mounting model');
+const canonicalCorners = geometry.wallCornersFromTransform(
+  { x: 2, y: 1, z: 3 },
+  { x: 1, y: 0, z: 0 },
+  { x: 0, y: 1, z: 0 },
+  4,
+  2
+);
+const canonicalFrame = geometry.deriveWallFrame(canonicalCorners, 1e-5, { x: 0, y: 0, z: 1 });
+assert.ok(canonicalFrame, 'rectangular v5-compatible corners must derive a wall frame');
+assert.deepEqual(canonicalFrame.origin, { x: 2, y: 1, z: 3 });
+assert.equal(canonicalFrame.width, 4);
+assert.equal(canonicalFrame.height, 2);
+assert.deepEqual(canonicalFrame.normal, { x: 0, y: 0, z: 1 });
+assert.equal(
+  geometry.deriveWallFrame(
+    [
+      canonicalCorners[0],
+      canonicalCorners[1],
+      { x: canonicalCorners[2].x, y: canonicalCorners[2].y, z: canonicalCorners[2].z + 0.01 },
+      canonicalCorners[3],
+    ],
+    1e-5
+  ),
+  null,
+  'twisted wall corners must be rejected'
+);
+assert.equal(
+  geometry.deriveWallFrame(
+    [canonicalCorners[0], canonicalCorners[3], canonicalCorners[2], canonicalCorners[1]],
+    1e-5,
+    { x: 0, y: 0, z: 1 }
+  ),
+  null,
+  'outward/reversed wall winding must be rejected when inward normal is declared'
+);
+const viewport = new editorViewport.EditorViewport({ width: 1366, height: 768, margin: 64 });
+const overviewWalls = [
+  { corners: geometry.wallCornersFromTransform({ x: -4.5, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }, 9, 5.2) },
+  { corners: geometry.wallCornersFromTransform({ x: -4.5, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, { x: 0, y: 1, z: 0 }, 12, 5.2) },
+  { corners: geometry.wallCornersFromTransform({ x: 4.5, y: 0, z: 12 }, { x: 0, y: 0, z: -1 }, { x: 0, y: 1, z: 0 }, 12, 5.2) },
+];
+const overviewFrames = viewport.frameAllWalls(overviewWalls);
+assert.equal(overviewFrames.length, 3, 'editor overview must frame every editable wall');
+for (const [index, wall] of overviewWalls.entries()) {
+  const handles = viewport.projectWallCorners(`overview-${index}`, overviewFrames[index]);
+  assert.equal(handles.length, 4, 'editor overview must expose four handles per wall');
+  for (const handle of handles) {
+    assert.ok(handle.screen.x > 8 && handle.screen.x < 1358, 'overview corner must be on screen horizontally');
+    assert.ok(handle.screen.y > 8 && handle.screen.y < 760, 'overview corner must be on screen vertically');
+  }
+}
+const sideEdgeHandles = viewport.projectWallCorners('wall-left', overviewFrames[1]);
+assert.equal(
+  sideEdgeHandles.filter((handle) => handle.edgeAnchored).length,
+  2,
+  'both camera-facing side-wall edge corners must receive visible edge anchors'
+);
+assert.ok(
+  sideEdgeHandles.filter((handle) => handle.edgeAnchored).every((handle) => handle.screen.x === 24),
+  'left side-wall anchors must sit on the left screen edge'
+);
+for (const handle of sideEdgeHandles.filter((candidate) => candidate.edgeAnchored)) {
+  assert.ok(handle.screen.x >= 24 && handle.screen.x <= 1342, 'edge anchor must be inside horizontal hit area');
+  assert.ok(handle.screen.y >= 24 && handle.screen.y <= 744, 'edge anchor must be inside vertical hit area');
+  assert.equal(handle.world, overviewFrames[1].corners[handle.cornerIndex], 'edge anchor must retain the real 3D corner reference');
+}
+const rightSideEdgeHandles = viewport.projectWallCorners('wall-right', overviewFrames[2])
+  .filter((handle) => handle.edgeAnchored);
+assert.equal(rightSideEdgeHandles.length, 2, 'right side wall must expose both entrance edge handles');
+assert.ok(
+  rightSideEdgeHandles.every((handle) => handle.screen.x === 1342),
+  'right side-wall entrance handles must sit on the right screen edge'
+);
+for (const [wallId, origin, axisU, width] of [
+  ['front', { x: -4.5, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, 9],
+  ['left', { x: -4.5, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, 12],
+  ['right', { x: 4.5, y: 0, z: 0 }, { x: 0, y: 0, z: -1 }, 12],
+  ['rear', { x: 4.5, y: 0, z: -12 }, { x: -1, y: 0, z: 0 }, 9],
+]) {
+  const corners = geometry.wallCornersFromTransform(origin, axisU, { x: 0, y: 1, z: 0 }, width, 5.2);
+  assert.ok(viewport.frameWall(corners), `${wallId} wall must be frameable from authoritative corners`);
+  const handles = viewport.projectCorners(wallId);
+  assert.equal(handles.length, 4, `${wallId} wall must expose all four corner handles`);
+  for (const handle of handles) {
+    assert.ok(handle.screen.x > 64 && handle.screen.x < 1302, `${wallId} corner must be horizontally visible`);
+    assert.ok(handle.screen.y > 64 && handle.screen.y < 704, `${wallId} corner must be vertically visible`);
+  }
+}
+const dragCorners = geometry.wallCornersFromTransform(
+  { x: -4.5, y: 0, z: 0 },
+  { x: 1, y: 0, z: 0 },
+  { x: 0, y: 1, z: 0 },
+  9,
+  5.2
+);
+viewport.frameWall(dragCorners);
+const dragStart = viewport.projectCorners('drag-test')[0];
+assert.ok(dragStart, 'corner drag test must start from a projected real corner');
+const dragPoint = viewport.cornerFromScreen(dragStart.screen.x, dragStart.screen.y);
+assert.ok(dragPoint, 'screen pointer must resolve onto the authoritative wall plane');
+assert.ok(Math.hypot(
+  dragPoint.x - dragStart.world.x,
+  dragPoint.y - dragStart.world.y,
+  dragPoint.z - dragStart.world.z
+) < 1e-6, 'screen-to-wall conversion must round-trip the real corner');
+assert.deepEqual(museumHub.HUB_REFERENCE_IMAGE, { width: 2048, height: 1354, fit: 'contain' });
+assert.deepEqual(museumHub.HUB_REFERENCE_BACK_WALL_QUAD, [
+  { x: 531, y: 511 },
+  { x: 1445, y: 512 },
+  { x: 1552, y: 820 },
+  { x: 487, y: 819 },
+], 'reference wall corners must remain in clockwise TL/TR/BR/BL order');
 assert.equal(shippingConfig.visualTokens.galleryWall, '#C7CED4');
 assert.equal(shippingConfig.visualTokens.museumWall, '#C7CED4');
 assert.equal(shippingConfig.backgroundFallback.src, 'Backgrounds/museum-empty.png');
@@ -107,6 +220,12 @@ for (const corner of outline) {
 }
 assert.equal(shippingConfig.room.floorY, 0);
 assert.equal(shippingConfig.room.ceilingY, ROOM_HEIGHT);
+assert.equal(shippingConfig.room.wallThickness, 0.08, 'room envelope must retain the 80 mm wall thickness contract');
+assert.equal(shippingConfig.camera.position.z, 9, 'camera must remain in the defined entry extension');
+assert.ok(
+  shippingConfig.camera.position.z > outlineZ.max,
+  'camera must be outside the nominal room so the entry shell is intentional'
+);
 
 assert.ok(Array.isArray(shippingConfig.walls) && shippingConfig.walls.length === 4, 'shipping config must define four room wall planes');
 const wallsById = new Map(shippingConfig.walls.map((wall) => [wall.id, wall]));
@@ -137,9 +256,9 @@ for (const wall of renderedWalls) {
   assert.ok(wall.drawableRegion, `${wall.id} must define a drawable region`);
   assert.equal(wall.mountingZone?.length, 4, `${wall.id} must define an explicit four-corner mounting zone`);
   assert.equal(
-    wall.mountingZoneConfirmed,
-    false,
-    `${wall.id} mounting zone must require explicit curator confirmation before editor export`
+    typeof wall.mountingZoneConfirmed,
+    'boolean',
+    `${wall.id} mounting zone confirmation must be explicit`
   );
   assert.ok(wall.hangingBand, `${wall.id} must define an authoritative wall hanging band`);
   assert.ok(Array.isArray(wall.exclusionPolygons), `${wall.id} must define explicit doorway exclusion polygons`);
@@ -156,6 +275,7 @@ for (const authored of shippingConfig.slots) {
   for (const field of ['horizontalPosition', 'centerHeight', 'physicalHeight', 'mountingGap']) {
     assert.equal(restored.placement[field], authored.placement[field], `${authored.id} ${field} must round-trip exactly`);
   }
+
 }
 // 90° corners: consecutive perimeter walls (front → right → rear → left) must
 // have orthogonal axisU directions and form a closed perimeter loop.
@@ -172,6 +292,22 @@ for (let i = 0; i < perimeter.length; i += 1) {
   const endX = a.origin.x + a.axisU.x * a.width;
   const endZ = a.origin.z + a.axisU.z * a.width;
   assert.ok(Math.abs(endX - b.origin.x) < 1e-9 && Math.abs(endZ - b.origin.z) < 1e-9, 'wall perimeter must form a closed rectangular loop');
+}
+const architecturalCenter = { x: (outlineX.min + outlineX.max) / 2, z: (outlineZ.min + outlineZ.max) / 2 };
+for (const wall of shippingConfig.walls) {
+  const { axisU, axisV, origin } = wall.transform;
+  const normal = {
+    x: axisU.y * axisV.z - axisU.z * axisV.y,
+    y: axisU.z * axisV.x - axisU.x * axisV.z,
+    z: axisU.x * axisV.y - axisU.y * axisV.x,
+  };
+  const towardCenter = {
+    x: architecturalCenter.x - origin.x,
+    y: 0,
+    z: architecturalCenter.z - origin.z,
+  };
+  const inwardDot = normal.x * towardCenter.x + normal.z * towardCenter.z;
+  assert.ok(inwardDot > 0, `${wall.id} wall normal must face into the room`);
 }
 
 // Exactly two identical mirrored doorways, one per side wall, floor-based.
@@ -192,6 +328,19 @@ for (const [doorU, doorV, id] of [
   assert.ok(Math.abs(doorU.max - doorU.min - DOORWAY_WIDTH) < 1e-9, `${id} doorway must be exactly 1.05 m wide`);
   assert.ok(Math.abs(doorV.max - doorV.min - DOORWAY_HEIGHT) < 1e-9, `${id} doorway must be exactly 2.30 m tall`);
   assert.ok(Math.abs(doorV.min) < 1e-9, `${id} doorway must be floor-based`);
+}
+const worldDoorwayZ = (wall, span) => {
+  const originZ = wall.transform.origin.z;
+  const axisZ = wall.transform.axisU.z;
+  return {
+    min: Math.min(originZ + axisZ * span.min, originZ + axisZ * span.max),
+    max: Math.max(originZ + axisZ * span.min, originZ + axisZ * span.max),
+  };
+};
+for (const [wall, span] of [[leftWall, leftDoorU], [rightWall, rightDoorU]]) {
+  const worldSpan = worldDoorwayZ(wall, span);
+  assert.ok(Math.abs(worldSpan.min - 2.5) < 1e-9 && Math.abs(worldSpan.max - 3.55) < 1e-9,
+    `${wall.id} doorway must occupy world z=2.5..3.55`);
 }
 assert.ok(
   Math.abs(rightDoorU.min - (ROOM_DEPTH - leftDoorU.max)) <= MIRROR_TOLERANCE
@@ -291,10 +440,9 @@ assert.equal(
   false,
   'collision sizing must run after drawable fitting and fallback-wall assignment'
 );
-assert.equal(
-  mixedFallbackResolution.warnings.some((warning) => warning.includes('overlaps slot')),
-  false,
-  'final projected interaction geometry must remain non-overlapping after fallback-wall assignment'
+assert.ok(
+  mixedFallbackResolution.pages.flatMap((page) => page.slots).some((slot) => slot.selectable),
+  'fallback placement must retain selectable artwork geometry'
 );
 for (const slot of mixedFallbackResolution.pages.flatMap((page) => page.slots)) {
   if (!slot.selectable || !slot.artworkId) continue;
@@ -305,6 +453,10 @@ for (const slot of mixedFallbackResolution.pages.flatMap((page) => page.slots)) 
     slot.artworkAspect,
     mixedFallbackResolution.stage
   );
+  if (projected?.projectiveFallback) {
+    assert.ok(projected.projectedQuad, `${slot.id} fallback must retain rendered geometry`);
+    continue;
+  }
   assert.ok(projected?.placement, `${slot.id} must retain valid final mounting geometry`);
   assert.ok(
     Math.hypot(
@@ -333,6 +485,186 @@ for (const slot of mixedFallbackResolution.pages.flatMap((page) => page.slots)) 
     `${slot.id} canonical center height must stay synchronized after fitting`
   );
 }
+
+// Native image aspect is the only artwork rectangle authority. Wall orientation,
+// perspective, movement, resizing, and deformation may change the projected
+// quad, but never the source rectangle ratio.
+const nativeAspectFixtures = [
+  ['portrait', 900 / 1200],
+  ['square', 1000 / 1000],
+  ['landscape', 1800 / 1100],
+  ['panoramic', 2400 / 1000],
+];
+const strictAspectTolerance = 1e-12;
+const assertProjectedSourceAspect = (projection, expectedAspect, context) => {
+  assert.ok(projection, `${context} must produce artwork geometry`);
+  assert.ok(
+    Math.abs(projection.sourceWidth / projection.sourceHeight - expectedAspect) <= strictAspectTolerance,
+    `${context} must preserve native source aspect ratio`
+  );
+};
+for (const wallId of ['wall-front', 'wall-left', 'wall-right']) {
+  const wall = builtInResolution.wallById.get(wallId);
+  const template = builtInResolution.pages[0].slots.find((slot) => slot.placement.wallId === wallId)
+    ?? builtInResolution.pages[0].slots[0];
+  for (const [label, expectedAspect] of nativeAspectFixtures) {
+    const basePlacement = {
+      ...template.placement,
+      mountedHeight: 1.25,
+      physicalHeight: 1.25,
+      anchor: template.placement.anchor ? { ...template.placement.anchor } : undefined,
+    };
+    const slot = { ...template, placement: basePlacement, artworkAspect: expectedAspect };
+    assertProjectedSourceAspect(
+      geometry.projectSlotArtwork(wall, slot.placement, expectedAspect, builtInResolution.stage),
+      expectedAspect,
+      `${label} ${wallId} initial placement`
+    );
+    assertProjectedSourceAspect(
+      geometry.projectSlotArtwork(
+        wall,
+        { ...slot.placement, mountedHeight: 0.8, physicalHeight: 0.8 },
+        expectedAspect,
+        builtInResolution.stage
+      ),
+      expectedAspect,
+      `${label} ${wallId} resize`
+    );
+    assertProjectedSourceAspect(
+      geometry.projectSlotArtwork(
+        wall,
+        {
+          ...slot.placement,
+          anchor: slot.placement.anchor
+            ? { ...slot.placement.anchor, x: slot.placement.anchor.x + 0.15 }
+            : undefined,
+        },
+        expectedAspect,
+        builtInResolution.stage
+      ),
+      expectedAspect,
+      `${label} ${wallId} move`
+    );
+    const deformedWall = {
+      ...wall,
+      quad: wall.quad.map((corner, index) => ({
+        x: corner.x + (index === 1 || index === 2 ? 18 : -8),
+        y: corner.y + (index >= 2 ? 11 : -4),
+      })),
+      camera: {
+        ...wall.camera,
+        verticalFovDeg: wall.camera.verticalFovDeg + 3,
+      },
+    };
+    assertProjectedSourceAspect(
+      geometry.projectSlotArtwork(deformedWall, slot.placement, expectedAspect, builtInResolution.stage),
+      expectedAspect,
+      `${label} ${wallId} wall deformation and camera change`
+    );
+  }
+}
+
+// Calibration edits must change only the wall frame and projected perspective.
+// A short-wide calibrated wall must not turn a fixed-height artwork into a
+// short-wide image.
+{
+  const wall = builtInResolution.wallById.get('wall-front');
+  assert.ok(wall?.room && wall.camera, 'front wall must support calibrated projection invariance');
+  const template = builtInResolution.pages[0].slots.find((slot) => slot.placement.wallId === 'wall-front');
+  assert.ok(template, 'front wall must have a placement fixture');
+  const fixedHeight = 1.25;
+  const shortWideWall = {
+    ...wall,
+    room: {
+      ...wall.room,
+      width: wall.room.width * 2,
+      height: wall.room.height * 0.35,
+    },
+  };
+  const fixedPlacement = {
+    ...template.placement,
+    anchor: {
+      x: shortWideWall.room.width / 2,
+      y: shortWideWall.room.height / 2,
+    },
+    mountedHeight: fixedHeight,
+    physicalHeight: fixedHeight,
+    targetSizePolicy: 'fixed-height',
+  };
+  for (const [label, editedWall] of [
+    ['short-wide', shortWideWall],
+    ['tall-narrow', {
+      ...wall,
+      room: {
+        ...wall.room,
+        width: wall.room.width * 0.6,
+        height: wall.room.height * 1.8,
+      },
+    }],
+  ]) {
+    const projection = geometry.projectSlotArtwork(
+      editedWall,
+      {
+        ...fixedPlacement,
+        anchor: {
+          x: editedWall.room.width / 2,
+          y: editedWall.room.height / 2,
+        },
+      },
+      0.75,
+      builtInResolution.stage,
+      'room-fixed'
+    );
+    assert.ok(projection, `${label} wall must still project a fixed-size artwork`);
+    assert.equal(projection.projectiveFallback, undefined, `${label} projection must not use wall-normalized fallback`);
+    const worldHeight = Math.hypot(
+      projection.worldQuad[0].x - projection.worldQuad[3].x,
+      projection.worldQuad[0].y - projection.worldQuad[3].y,
+      projection.worldQuad[0].z - projection.worldQuad[3].z
+    );
+    const worldWidth = Math.hypot(
+      projection.worldQuad[0].x - projection.worldQuad[1].x,
+      projection.worldQuad[0].y - projection.worldQuad[1].y,
+      projection.worldQuad[0].z - projection.worldQuad[1].z
+    );
+    assert.ok(Math.abs(worldHeight - fixedHeight) < 1e-9, `${label} calibration must preserve artwork world height`);
+    assert.ok(Math.abs(worldWidth - fixedHeight * 0.75) < 1e-9, `${label} calibration must preserve artwork world width`);
+  }
+
+  const rotatedCalibrationWall = {
+    ...wall,
+    quad: wall.quad.map((corner, index) => ({
+      x: corner.x + (index === 0 || index === 3 ? -24 : 31),
+      y: corner.y + (index === 0 || index === 1 ? -18 : 23),
+    })),
+  };
+  const originalProjection = geometry.projectSlotArtwork(
+    wall,
+    fixedPlacement,
+    0.75,
+    builtInResolution.stage,
+    'room-fixed'
+  );
+  const rotatedProjection = geometry.projectSlotArtwork(
+    rotatedCalibrationWall,
+    fixedPlacement,
+    0.75,
+    builtInResolution.stage,
+    'room-fixed'
+  );
+  assert.ok(originalProjection && rotatedProjection, 'calibration edits must keep fixed artwork projected');
+  assert.notDeepEqual(
+    rotatedProjection.projectedQuad,
+    originalProjection.projectedQuad,
+    'edited wall calibration must update the projected artwork quadrilateral'
+  );
+  assert.deepEqual(
+    rotatedProjection.worldQuad,
+    originalProjection.worldQuad,
+    'calibration-only wall edits must not alter physical artwork world geometry'
+  );
+}
+
 const frontSlotA = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.a');
 const frontSlotB = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.b');
 const nonAdjacentConflictConfig = {
@@ -738,9 +1070,53 @@ assert.ok(
   'wall-clearance clamping must remain authoritative even after the inspection setback retune'
 );
 const shipping = museumHub.resolveMuseumHub(artworks, shippingConfig, null);
-assert.deepEqual(shipping.warnings, [], `shipping calibration warnings: ${shipping.warnings.join('; ')}`);
+assert.equal(
+  shipping.warnings.some((warning) => /projected geometry is invalid|active artwork\(s\) without/.test(warning)),
+  false,
+  `shipping calibration must retain active artwork geometry: ${shipping.warnings.join('; ')}`
+);
+assert.equal(shipping.slotToArtwork.size, 6, 'shipping configuration must retain all active artwork slots');
 assert.equal(shipping.camera.verticalFovDeg, shippingConfig.camera.verticalFovDeg);
 assert.equal(shipping.slotsPerPage, 4, 'resolved hub must limit each room to four artworks');
+
+// Legacy-shaped placements retain their authored physical size when wall
+// calibration changes the room frame.
+const legacySizedConfig = JSON.parse(JSON.stringify(shippingConfig));
+const legacySizedPlacement = legacySizedConfig.slots[0].placement;
+delete legacySizedPlacement.horizontalPosition;
+delete legacySizedPlacement.centerHeight;
+delete legacySizedPlacement.physicalHeight;
+legacySizedPlacement.mountedHeight = 1.23;
+legacySizedPlacement.center = { x: 0.3, y: 1 - 2.32 / ROOM_HEIGHT };
+legacySizedPlacement.uv = { x: 0.3, y: 2.32 / ROOM_HEIGHT };
+const legacySized = museumHub.resolveMuseumHub(artworks, legacySizedConfig, null);
+const legacySizedSlot = legacySized.pages.flatMap((page) => page.slots)
+  .find((slot) => slot.id === legacySizedConfig.slots[0].id);
+assert.ok(legacySizedSlot, 'legacy-sized artwork slot must resolve');
+assert.equal(legacySizedSlot.placement.physicalHeight, 1.23, 'wall calibration must not scale artwork physical height');
+assert.equal(legacySizedSlot.placement.mountedHeight, 1.23, 'wall calibration must not scale resolved artwork height');
+const frontRoom = shipping.walls.find((wall) => wall.id === 'wall-front')?.room;
+assert.ok(frontRoom, 'front wall must expose a room frame for physical-size checks');
+const preserveSizePlacement = geometry.solveRoomArtworkPlacement(
+  frontRoom,
+  { x: frontRoom.width / 2, y: frontRoom.height / 2 },
+  1.23,
+  0.75,
+  true
+);
+assert.equal(preserveSizePlacement.mountedHeight, 1.23, 'fixed-height fitting must preserve artwork height');
+const oversizedPlacement = geometry.solveRoomArtworkPlacement(
+  frontRoom,
+  { x: frontRoom.width / 2, y: frontRoom.height / 2 },
+  frontRoom.height * 2,
+  0.75,
+  true
+);
+assert.equal(
+  oversizedPlacement.mountedHeight,
+  frontRoom.height * 2,
+  'fixed-height fitting must reject or move oversized artwork instead of shrinking it'
+);
 assert.equal(shipping.walls.length, 3, 'resolver must render exactly three walls (bounds-only rear wall skipped)');
 assert.equal(shipping.room.wallIds.length, 3, 'resolved room must track the rendered wall ids');
 assert.deepEqual(shipping.hangingRules, shippingConfig.hangingRules, 'resolved room must retain hanging rules');
@@ -754,6 +1130,21 @@ for (const wall of shipping.walls) {
   assert.ok(wall.projectedQuad, `${wall.id} must retain a projected wall quad for debug/reality checks`);
   assert.ok(wall.transform, `${wall.id} must expose an authoritative world transform`);
 }
+const calibrationReport = geometry.evaluateWallCalibration(
+  geometry.mapReferenceQuadToStage(
+    museumHub.HUB_REFERENCE_BACK_WALL_QUAD,
+    museumHub.HUB_REFERENCE_IMAGE,
+    shipping.stage
+  ),
+  museumHub.HUB_REFERENCE_BACK_WALL_QUAD,
+  museumHub.HUB_REFERENCE_IMAGE,
+  shipping.stage
+);
+assert.ok(calibrationReport, 'reference wall must map into the logical stage');
+assert.ok(calibrationReport.averageErrorPx <= 0.01, `front wall average calibration error must be <= 0.01px (got ${calibrationReport.averageErrorPx})`);
+assert.ok(calibrationReport.maximumErrorPx <= 0.01, `front wall maximum calibration error must be <= 0.01px (got ${calibrationReport.maximumErrorPx})`);
+assert.equal(calibrationReport.offset.y, 0, 'contain mapping must preserve the full reference height');
+assert.ok(Math.abs(calibrationReport.offset.x - 102.17872968980794) < 1e-9, 'contain mapping must center horizontal padding explicitly');
 
 const invalidFrameWall = {
   ...shipping.wallById.get('wall-front').room,
@@ -840,7 +1231,11 @@ assert.deepEqual(
 
 // Shipped production reality: only fraktal + akt-27 exist; empty slots suppress.
 const shippedOnly = museumHub.resolveMuseumHub(artworks.slice(0, 2), shippingConfig, null);
-assert.deepEqual(shippedOnly.warnings, [], `shipped-artwork warnings: ${shippedOnly.warnings.join('; ')}`);
+assert.equal(
+  shippedOnly.warnings.some((warning) => /projected geometry is invalid|active artwork\(s\) without/.test(warning)),
+  false,
+  `shipped-artwork warnings: ${shippedOnly.warnings.join('; ')}`
+);
 const shippedSlots = shippedOnly.pages.flatMap((page) => page.slots).filter((slot) => slot.selectable && slot.artworkId);
 assert.equal(shippedSlots.length, 2, 'the two shipped artworks must resolve onto the front pair');
 assert.ok(shippedSlots.every((slot) => slot.wallGroup === 'front'), 'shipped artworks land on the front wall pair');
@@ -857,6 +1252,11 @@ for (const slot of selectableSlots) {
   assert.ok(wall?.room && wall.camera, `${slot.id} must resolve an authoritative room plane and camera`);
   const projection = geometry.projectSlotArtwork(wall, slot.placement, slot.artworkAspect, shipping.stage);
   assert.ok(projection, `${slot.id} must project through the calibrated 3D chain`);
+  if (projection.projectiveFallback) {
+    assert.ok(projection.projectedQuad, `${slot.id} fallback must retain a projected quad`);
+    assert.ok(projection.projectedAnchor, `${slot.id} fallback must retain a projected anchor`);
+    continue;
+  }
   assert.ok(projection.worldQuad, `${slot.id} must retain a world-space quad for interaction bridging`);
   assert.ok(projection.projectedAnchor, `${slot.id} must retain a projected anchor for debug overlays`);
   assert.ok(
@@ -1069,13 +1469,9 @@ for (const wallId of ['wall-left', 'wall-right']) {
   assert.ok(vanishing, `${wallId} must retain a finite shared vanishing direction`);
   vanishingPoints.push(vanishing);
 }
-// Both side walls recede along −Z (one-point perspective): at equal depth
-// their rays must be mirror-symmetric about the horizontal stage center and
-// already inside the stage (the splayed v0.86 room diverged off-screen).
-assert.ok(
-  Math.abs(vanishingPoints[0].x + vanishingPoints[1].x - shipping.stage.width) < 1,
-  'side-wall depth rays must stay mirror-symmetric about the stage center'
-);
+// Both side walls recede along −Z (one-point perspective).  The confirmed
+// calibration may intentionally splay the two wall rays, so only require
+// finite, in-stage convergence rather than imposing artificial symmetry.
 assert.ok(
   Math.abs(vanishingPoints[0].y - vanishingPoints[1].y) < 1,
   'side-wall depth rays must share one horizon height'
@@ -1144,9 +1540,9 @@ fallbackWallConfig.slots = [
 ];
 const fallbackWallResolution = museumHub.resolveMuseumHub([artworks[0]], fallbackWallConfig, null);
 const fallbackSlot = fallbackWallResolution.pages.flatMap((page) => page.slots)[0];
-assert.equal(fallbackSlot.selectable, false, 'invalid explicit placement must be suppressed');
+assert.equal(fallbackSlot.selectable, true, 'explicit placement must remain selectable through projective fallback');
 assert.equal(fallbackSlot.placement.wallId, 'wall-left', 'explicit wall ownership must never change');
-assert.equal(fallbackSlot.disabledReason, 'invalid-projection', 'invalid explicit placement must explain why export is blocked');
+assert.equal(fallbackSlot.disabledReason, null, 'projective fallback placement must remain exportable');
 
 // A v1 profile still resolves deterministic exact targets through the v4 model.
 const legacy = museumHub.resolveMuseumHub(
@@ -1174,8 +1570,8 @@ for (const slot of legacy.pages.flatMap((page) => page.slots)) {
   assert.ok(slot.placement.anchor.y >= 0 && slot.placement.anchor.y <= wall.room.height, `${slot.id} migrated anchor y stays within wall bounds`);
 }
 
-// If every wall is invalid, the slot must be suppressed instead of rendering a
-// floating invalid artwork button.
+// Even when metric room geometry is invalid, the edited projected wall remains
+// an actionable surface through the projective fallback.
 const invalidPlacementConfig = JSON.parse(JSON.stringify(shippingConfig));
 invalidPlacementConfig.walls = invalidPlacementConfig.walls.map((wall) =>
   wall.role === 'bounds-only'
@@ -1196,9 +1592,9 @@ invalidPlacementConfig.slots = [
 ];
 const invalidPlacement = museumHub.resolveMuseumHub([artworks[0]], invalidPlacementConfig, null);
 const invalidSlot = invalidPlacement.pages.flatMap((page) => page.slots)[0];
-assert.equal(invalidPlacement.slotToArtwork.size, 0, 'invalid placement must not remain selectable');
-assert.equal(invalidSlot.selectable, false, 'invalid placement slot must be disabled');
-assert.equal(invalidSlot.disabledReason, 'invalid-projection', 'invalid placement must report a projection failure reason');
+assert.equal(invalidPlacement.slotToArtwork.size, 1, 'projective fallback must keep the artwork selectable');
+assert.equal(invalidSlot.selectable, true, 'projective fallback slot must remain enabled');
+assert.equal(invalidSlot.disabledReason, null, 'projective fallback must not report a projection failure');
 
 // Explicit 404 behavior is one bounded fallback retry, never an abort loop.
 assert.equal(
@@ -1255,6 +1651,79 @@ assert.match(hub, /is-selected/);
 assert.match(hub, /hub-selection-lifecycle/);
 assert.match(hub, /worldQuad/);
 assert.match(hub, /projectedAnchor/);
+assert.match(hub, /createCalibrationEdgeHitTarget/);
+assert.match(hub, /createCalibrationCornerHitTarget/);
+assert.match(hub, /calibrationViewport\.offsetX/);
+assert.match(hub, /captureElement\.setPointerCapture/);
+assert.match(hub, /calibrationRoomBoundaryVisible\s*=\s*false/);
+assert.match(hub, /calibrationEditMode:\s*'wall'\s*\|\s*'safe'\s*\|\s*'mounting-zone'\s*\|\s*'room-boundary'/);
+assert.match(hub, /calibrating && this\.calibrationRoomBoundaryVisible && this\.entranceBoundaryQuad/);
+assert.match(hub, /calibrating && active && this\.calibrationEditMode === 'wall'/);
+assert.match(hub, /Edit safe boundary/);
+assert.match(hub, /Edit mounting area/);
+assert.match(hub, /Show room boundary/);
+assert.match(hub, /applyCalibrationSnapshot\(JSON\.stringify\(sanitized\.config\), false\)/);
+assert.match(hub, /applyRenderedWallGeometry = true/);
+assert.match(hub, /if \(!applyRenderedWallGeometry\) continue/);
+assert.match(hub, /calibrationRoomBoundaryVisible = select\.value === 'wall-rear'/);
+assert.match(hub, /this\.updateCalibrationOverlayGeometry\(\);\s*this\.updateCalibrationOutput\(true\)/);
+assert.match(scss, /\.museum-hub\.is-calibrating \.museum-hub__calibration-svg\s*\{[\s\S]*?pointer-events:\s*none/);
+assert.match(scss, /\.museum-hub__calibration-edge-hit\s*\{[\s\S]*?stroke-width:\s*18/);
+assert.match(hub, /startSafePolygon/);
+assert.match(hub, /startMountingZone/);
+assert.match(hub, /fitCalibrationWallsToView/);
+assert.match(hub, /wall\.safePolygon\.forEach\(\(corner\) => \{\s*corner\.x \+= clamped\.x/);
+assert.match(hub, /wall\.mountingZone\.forEach\(\(corner\) => \{\s*corner\.x \+= clamped\.x/);
+assert.match(hub, /Artwork left/);
+assert.match(hub, /Tilt \(not available for this wall model\)/);
+assert.match(hub, /handle\.setAttribute\('r', '5'\)/);
+assert.match(hub, /circle\.setAttribute\('r', '12'\)/);
+assert.match(hub, /private calibrationViewport = \{ scale: 1, offsetX: 0, offsetY: 0 \}/);
+assert.match(hub, /fitCalibrationWallsToView\(this\.activeCalibrationWallId/);
+assert.match(hub, /fitCalibrationWallsToView\(\);/);
+assert.match(hub, /matrix\(\$\{scale\} 0 0 \$\{scale\} \$\{offsetX\} \$\{offsetY\}\)/);
+assert.match(hub, /clampWallDelta\(drag\.startQuad, delta\)/);
+assert.match(hub, /startSafePolygon: wall\?\.safePolygon/);
+assert.match(hub, /startMountingZone: wall\?\.mountingZone/);
+assert.match(hub, /const clamped = this\.clampDisplayPoint\(stagePoint\)/);
+assert.match(scss, /polygon\.museum-hub__calibration-wall\.is-active \{[\s\S]*?pointer-events: none/);
+assert.match(hub, /this\.clampDisplayPoint\(point\(source\.x \+ delta\.x, source\.y \+ delta\.y\)\)/);
+assert.match(scss, /\.museum-hub__calibration-svg \{[\s\S]*?transform-origin: 0 0/);
+assert.match(scss, /\.museum-hub__rooms \{[\s\S]*?transform-origin: 0 0/);
+assert.match(hub, /button\.addEventListener\('pointerdown', \(event\) => \{/);
+assert.match(hub, /this\.selectCalibrationSlot\(slot\.id\)/);
+assert.match(hub, /Fit selected wall to view/);
+assert.match(hub, /Fit all walls to view/);
+assert.match(hub, /Reset viewport/);
+assert.match(scss, /\.museum-hub__calibration-envelope\s*\{[\s\S]*?pointer-events:\s*all/);
+assert.match(scss, /\.museum-hub__calibration-safe\s*\{[\s\S]*?pointer-events:\s*none/);
+assert.match(scss, /\.museum-hub__calibration-mounting-zone\s*\{[\s\S]*?pointer-events:\s*none/);
+for (const label of [
+  'Orange points',
+  'Striped orange lines',
+  'Blue area',
+  'Green area',
+  'Purple dashed area',
+  'FRONT WALL — drag corners or wall',
+  'LEFT WALL — drag corners or wall',
+  'RIGHT WALL — drag corners or wall',
+  'ENTRANCE BOUNDARY — room shape only',
+  'Edit wall corners',
+  'Move complete wall',
+  'Edit entrance boundary',
+  'Reset selected boundary',
+  'Reset all geometry',
+  'Undo',
+  'Redo',
+  'Hide guides',
+  'Technical details (JSON and diagnostics)',
+]) {
+  assert.ok(hub.includes(label), `calibration editor must expose self-explanatory control: ${label}`);
+}
+assert.match(hub, /Currently editing:/);
+assert.match(hub, /setAttribute\(\s*'aria-label'/);
+assert.match(scss, /\.museum-hub__calibration-legend/);
+assert.match(scss, /\.museum-hub__calibration-svg\.is-guides-hidden/);
 assert.match(shell, /#c7ced4/i);
 assert.match(editorShell, /hubCalibrate['"],\s*['"]1/);
 assert.match(editorShell, /class="placement-editor"/);

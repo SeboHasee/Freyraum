@@ -1,5 +1,5 @@
 # FREYRAUM — Image Maintenance Guide
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor sync; image policy unchanged).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync; image policy unchanged).
 
 This guide documents the **current** image workflow, the verified GitHub limits
 that affect it, and the planned direction for reliable high-resolution support.

@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -54,16 +54,16 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - [ ] Known risks and deferred upgrades linked from maintenance docs
 - [ ] Screenshot-producing artifact and generated bundles preserved for visual incidents
 
-## 2026-09-05 full Markdown audit matrix
+## 2026-10-14 full Markdown audit matrix
 
 | Class | Reviewed files | Audit outcome |
 |---|---|---|
-| Canonical | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | Current v1.18 editor, deterministic placement, and open customer acceptance synchronized |
+| Canonical | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | Current v1.32 wall-following editor, deterministic placement, generated previews, and validation synchronized |
 | Operational | `docs/CUSTOMER_PICTURE_GUIDE.md`, `CUSTOMER_TEXT_GUIDE.md`, `DEPENDENCY_MAINTENANCE_PLAN.md`, `DEPLOYMENT.md`, `HANDOFF.md`, `IMAGE_MAINTENANCE_GUIDE.md`, `QUERY_PARAMETERS.md`, `REGRESSION_TOOLING.md`, `ai-feedback/AI_FEEDBACK_LOOP.md`, `architecture/README.md`, `lessons-learned/README.md`, `standards/CODING_GUIDELINES.md` | Standalone editor workflow, fixed/editable boundary, exact round trip, cache behavior, and validation synchronized; unaffected policies re-reviewed |
-| Agent/template | `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `autonomous-agent.prompt.md`, `refactor.prompt.md`, `review.prompt.md` | Current v1.18 editor safeguards and acceptance boundary synchronized |
+| Agent/template | `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `autonomous-agent.prompt.md`, `refactor.prompt.md`, `review.prompt.md` | Current v1.32 editor safeguards, wall-following invariant, and acceptance boundary synchronized |
 | Historical | `docs/archive/README.md` and its five `*-history-2026-06-21.md` snapshots | Index reviewed on 2026-09-05; snapshots intentionally unchanged |
 
-All 32 repository Markdown files were reviewed. Historical snapshots retain
+All 32 repository Markdown files were reviewed on 2026-10-14. Historical snapshots retain
 their original dates and claims by design.
 
 ## Canonical references
