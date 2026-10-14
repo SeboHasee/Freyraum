@@ -986,7 +986,8 @@ delete legacySizedPlacement.horizontalPosition;
 delete legacySizedPlacement.centerHeight;
 delete legacySizedPlacement.physicalHeight;
 legacySizedPlacement.mountedHeight = 1.23;
-legacySizedPlacement.anchor = { x: 2.7, y: 2.32 };
+legacySizedPlacement.center = { x: 0.3, y: 1 - 2.32 / ROOM_HEIGHT };
+legacySizedPlacement.uv = { x: 0.3, y: 2.32 / ROOM_HEIGHT };
 const legacySized = museumHub.resolveMuseumHub(artworks, legacySizedConfig, null);
 const legacySizedSlot = legacySized.pages.flatMap((page) => page.slots)
   .find((slot) => slot.id === legacySizedConfig.slots[0].id);
