@@ -591,27 +591,45 @@ for (const wallId of ['wall-front', 'wall-left', 'wall-right']) {
     physicalHeight: fixedHeight,
     targetSizePolicy: 'fixed-height',
   };
-  const fixedProjection = geometry.projectSlotArtwork(
-    shortWideWall,
-    fixedPlacement,
-    0.75,
-    builtInResolution.stage,
-    'room-fixed'
-  );
-  assert.ok(fixedProjection, 'short-wide wall must still project a fixed-size artwork');
-  assert.equal(fixedProjection.projectiveFallback, undefined, 'fixed-size projection must not use wall-normalized fallback');
-  const worldHeight = Math.hypot(
-    fixedProjection.worldQuad[0].x - fixedProjection.worldQuad[3].x,
-    fixedProjection.worldQuad[0].y - fixedProjection.worldQuad[3].y,
-    fixedProjection.worldQuad[0].z - fixedProjection.worldQuad[3].z
-  );
-  const worldWidth = Math.hypot(
-    fixedProjection.worldQuad[0].x - fixedProjection.worldQuad[1].x,
-    fixedProjection.worldQuad[0].y - fixedProjection.worldQuad[1].y,
-    fixedProjection.worldQuad[0].z - fixedProjection.worldQuad[1].z
-  );
-  assert.ok(Math.abs(worldHeight - fixedHeight) < 1e-9, 'short-wide calibration must preserve artwork world height');
-  assert.ok(Math.abs(worldWidth - fixedHeight * 0.75) < 1e-9, 'short-wide calibration must preserve artwork world width');
+  for (const [label, editedWall] of [
+    ['short-wide', shortWideWall],
+    ['tall-narrow', {
+      ...wall,
+      room: {
+        ...wall.room,
+        width: wall.room.width * 0.6,
+        height: wall.room.height * 1.8,
+      },
+    }],
+  ]) {
+    const projection = geometry.projectSlotArtwork(
+      editedWall,
+      {
+        ...fixedPlacement,
+        anchor: {
+          x: editedWall.room.width / 2,
+          y: editedWall.room.height / 2,
+        },
+      },
+      0.75,
+      builtInResolution.stage,
+      'room-fixed'
+    );
+    assert.ok(projection, `${label} wall must still project a fixed-size artwork`);
+    assert.equal(projection.projectiveFallback, undefined, `${label} projection must not use wall-normalized fallback`);
+    const worldHeight = Math.hypot(
+      projection.worldQuad[0].x - projection.worldQuad[3].x,
+      projection.worldQuad[0].y - projection.worldQuad[3].y,
+      projection.worldQuad[0].z - projection.worldQuad[3].z
+    );
+    const worldWidth = Math.hypot(
+      projection.worldQuad[0].x - projection.worldQuad[1].x,
+      projection.worldQuad[0].y - projection.worldQuad[1].y,
+      projection.worldQuad[0].z - projection.worldQuad[1].z
+    );
+    assert.ok(Math.abs(worldHeight - fixedHeight) < 1e-9, `${label} calibration must preserve artwork world height`);
+    assert.ok(Math.abs(worldWidth - fixedHeight * 0.75) < 1e-9, `${label} calibration must preserve artwork world width`);
+  }
 }
 
 const frontSlotA = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.a');

@@ -13,6 +13,10 @@
 3. WebGL mounting continues to derive width from physical height and the
    decoded native aspect; perspective is applied only by the wall frame and
    camera projection.
+4. The editor's calibrated projection previously used normalized wall height
+   for its fallback artwork quad. Fixed-size editor projection now uses the
+   same physical mounting frame as WebGL, while projected bounds remain
+   interaction metadata.
 
 ## 2026-10-12 — Main museum versus editor authority
 
