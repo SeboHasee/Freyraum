@@ -630,6 +630,39 @@ for (const wallId of ['wall-front', 'wall-left', 'wall-right']) {
     assert.ok(Math.abs(worldHeight - fixedHeight) < 1e-9, `${label} calibration must preserve artwork world height`);
     assert.ok(Math.abs(worldWidth - fixedHeight * 0.75) < 1e-9, `${label} calibration must preserve artwork world width`);
   }
+
+  const rotatedCalibrationWall = {
+    ...wall,
+    quad: wall.quad.map((corner, index) => ({
+      x: corner.x + (index === 0 || index === 3 ? -24 : 31),
+      y: corner.y + (index === 0 || index === 1 ? -18 : 23),
+    })),
+  };
+  const originalProjection = geometry.projectSlotArtwork(
+    wall,
+    fixedPlacement,
+    0.75,
+    builtInResolution.stage,
+    'room-fixed'
+  );
+  const rotatedProjection = geometry.projectSlotArtwork(
+    rotatedCalibrationWall,
+    fixedPlacement,
+    0.75,
+    builtInResolution.stage,
+    'room-fixed'
+  );
+  assert.ok(originalProjection && rotatedProjection, 'calibration edits must keep fixed artwork projected');
+  assert.notDeepEqual(
+    rotatedProjection.projectedQuad,
+    originalProjection.projectedQuad,
+    'edited wall calibration must update the projected artwork quadrilateral'
+  );
+  assert.deepEqual(
+    rotatedProjection.worldQuad,
+    originalProjection.worldQuad,
+    'calibration-only wall edits must not alter physical artwork world geometry'
+  );
 }
 
 const frontSlotA = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.a');

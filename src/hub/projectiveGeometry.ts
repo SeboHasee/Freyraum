@@ -1494,7 +1494,28 @@ const projectiveFallback = (): ProjectedArtworkGeometry | null => {
         projected[2]!,
         projected[3]!,
       ];
-      const orderedProjectedQuad: Quad = worldProjectedQuad;
+      // Calibration handles edit the stage-space wall quad, not the authored
+      // metric room transform. Keep the physical world quad authoritative, but
+      // project the editor artwork through the current calibration so it
+      // follows wall rotation/perspective without changing its world size.
+      const calibratedProjectedQuad = preserveSize && wall.quad && wall.room
+        ? (() => {
+            const calibrated = wall.quad.map((corner) => ({ ...corner })) as unknown as Quad;
+            const homography = computeHomographyFromUnitSquare(calibrated);
+            if (!homography) return null;
+            const mapped = placement.localQuad.map((corner) =>
+              applyHomography(
+                homography,
+                corner.x / Math.max(EPSILON, wall.room!.width),
+                1 - corner.y / Math.max(EPSILON, wall.room!.height)
+              )
+            );
+            return mapped.some((corner) => corner === null)
+              ? null
+              : mapped as Quad;
+          })()
+        : null;
+      const orderedProjectedQuad: Quad = calibratedProjectedQuad ?? worldProjectedQuad;
       const projectedQuad = normalizeQuadClockwise(orderedProjectedQuad);
       if (quadIsDegenerate(projectedQuad) || !quadIsConvex(projectedQuad)) return projectiveFallback();
       if (!preserveSize && wall.safePolygon && !projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
