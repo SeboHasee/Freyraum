@@ -1,5 +1,5 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
 ## 2026-09-05 — Standalone editor reproducibility lessons
 

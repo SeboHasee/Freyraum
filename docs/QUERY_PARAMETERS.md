@@ -1,5 +1,5 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.

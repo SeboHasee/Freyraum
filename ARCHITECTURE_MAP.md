@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.

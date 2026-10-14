@@ -1,5 +1,5 @@
 # Dependency & Tooling Maintenance Plan
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor sync; advisory plan unchanged).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync; advisory plan unchanged).
 
 ## Current dependency risk matrix
 

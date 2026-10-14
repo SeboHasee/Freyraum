@@ -1,7 +1,7 @@
 # CHANGELOG
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
 
-## Unreleased — Preserve physical artwork dimensions
+## v1.32 — Wall-following artwork placement (2026-10-14)
 
 - Canonical artwork height remains independent of wall calibration and wall
   transfers; wall-relative changes now update the anchor and projection only.

@@ -1,5 +1,12 @@
 # Lessons learned docs
-> Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
+> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+
+## v1.32 lesson index update
+
+See `../../FINDINGS.md § 2026-10-14 — Physical artwork size versus wall
+calibration` for the wall-following invariant: fixed physical artwork geometry
+is independent of wall dimensions, while the editor projection follows the
+current wall calibration.
 
 ## v1.18 lesson index update
 
