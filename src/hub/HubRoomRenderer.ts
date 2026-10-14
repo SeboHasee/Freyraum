@@ -34,6 +34,8 @@ interface SlotMeshState {
   textureKey: string | null;
   presentationKind: 'artwork' | 'placeholder' | null;
   presentationAspect: number;
+  physicalWidth: number;
+  physicalHeight: number;
   textureDimensions: { width: number; height: number };
 }
 
@@ -454,7 +456,12 @@ export class HubRoomRenderer {
       mountingFrame.basisN.y,
       mountingFrame.basisN.z
     );
-    const matrix = new THREE.Matrix4().makeBasis(basisU, basisV, basisN);
+    // Put the physical artwork dimensions in the mounting frame itself. This
+    // keeps the rendered plane and its texture in one orthonormal coordinate
+    // system instead of relying on a second non-uniform child transform.
+    const scaledBasisU = basisU.clone().multiplyScalar(width);
+    const scaledBasisV = basisV.clone().multiplyScalar(height);
+    const matrix = new THREE.Matrix4().makeBasis(scaledBasisU, scaledBasisV, basisN);
     state.group.matrixAutoUpdate = false;
     matrix.setPosition(
       mountingFrame.frontCenter.x,
@@ -464,14 +471,16 @@ export class HubRoomRenderer {
     state.group.matrix.copy(matrix);
     state.group.matrixWorldNeedsUpdate = true;
     state.group.visible = state.pageIndex === this.activePageIndex;
-    state.artworkMesh.scale.set(width, height, 1);
+    state.artworkMesh.scale.set(1, 1, 1);
     // Stretched-canvas body: front face sits just behind the artwork plane.
     // Keep the box's front face 1 mm behind the image plane while its back
     // remains exactly at the mounting-frame back plane.
-    state.edgeMesh.scale.set(width, height, HUB_ARTWORK_DEPTH_M - 0.001);
+    state.edgeMesh.scale.set(1, 1, HUB_ARTWORK_DEPTH_M - 0.001);
     state.edgeMesh.position.set(0, 0, -(HUB_ARTWORK_DEPTH_M + 0.001) / 2);
     state.presentationKind = presentationKind;
     state.presentationAspect = decodedArtworkAspect ?? presentationAspect;
+    state.physicalWidth = width;
+    state.physicalHeight = height;
     const expectedTextureKind = presentationKind === 'artwork' ? 'image' : 'placeholder';
     if (state.textureKind !== expectedTextureKind) {
       this.diagnostics.warn('hub-presentation-texture-kind-mismatch', 'Hub presentation kind and bound texture kind differ', {
@@ -519,8 +528,7 @@ export class HubRoomRenderer {
       presentationAspect: state.presentationAspect,
       ratios: {
         mesh: bounds && bounds.max.y !== bounds.min.y
-          ? ((bounds.max.x - bounds.min.x) * Math.abs(state.artworkMesh.scale.x))
-            / ((bounds.max.y - bounds.min.y) * Math.abs(state.artworkMesh.scale.y))
+          ? state.physicalWidth / state.physicalHeight
           : 0,
         world: worldBox.max.y !== worldBox.min.y
           ? (worldBox.max.x - worldBox.min.x) / (worldBox.max.y - worldBox.min.y)
@@ -531,8 +539,8 @@ export class HubRoomRenderer {
       },
       geometryPositions: Array.from(position.array as ArrayLike<number>),
       localGeometry: {
-        width: bounds ? (bounds.max.x - bounds.min.x) * Math.abs(state.artworkMesh.scale.x) : 0,
-        height: bounds ? (bounds.max.y - bounds.min.y) * Math.abs(state.artworkMesh.scale.y) : 0,
+        width: state.physicalWidth,
+        height: state.physicalHeight,
       },
       geometryBounds: bounds
         ? {
@@ -1520,6 +1528,8 @@ export class HubRoomRenderer {
       textureKey: null,
       presentationKind: null,
       presentationAspect: 1,
+      physicalWidth: 1,
+      physicalHeight: 1,
       textureDimensions: { width: 0, height: 0 },
     };
     this.slotMeshes.set(slot.id, state);

@@ -735,10 +735,14 @@ export class MainMuseumHub {
       });
       return;
     }
+    const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
+    const decodedAspect = view?.image && view.image.complete && view.image.naturalWidth > 0 && view.image.naturalHeight > 0
+      ? view.image.naturalWidth / view.image.naturalHeight
+      : null;
     const projection = projectSlotArtwork(
       wall,
       slot.placement,
-      Math.max(Number.EPSILON, aspectOverride ?? this.presentationAspectForSlot(slot)),
+      Math.max(Number.EPSILON, decodedAspect ?? aspectOverride ?? this.presentationAspectForSlot(slot)),
       this.resolution.stage,
       this.calibrating || this.debugGeometry ? 'calibrated' : 'room'
     );
@@ -783,7 +787,6 @@ export class MainMuseumHub {
     const shadow = wall.shadowVector ?? point(wall.group === 'left' ? -10 : 10, 16);
     button.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
-    const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
     if (view && syncRenderer) this.syncSlotRenderer(view);
     if (this.debugGeometry) this.logSlotProjection(slot, wall, projection);
   }
