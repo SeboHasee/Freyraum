@@ -564,6 +564,56 @@ for (const wallId of ['wall-front', 'wall-left', 'wall-right']) {
   }
 }
 
+// Calibration edits must change only the wall frame and projected perspective.
+// A short-wide calibrated wall must not turn a fixed-height artwork into a
+// short-wide image.
+{
+  const wall = builtInResolution.wallById.get('wall-front');
+  assert.ok(wall?.room && wall.camera, 'front wall must support calibrated projection invariance');
+  const template = builtInResolution.pages[0].slots.find((slot) => slot.placement.wallId === 'wall-front');
+  assert.ok(template, 'front wall must have a placement fixture');
+  const fixedHeight = 1.25;
+  const shortWideWall = {
+    ...wall,
+    room: {
+      ...wall.room,
+      width: wall.room.width * 2,
+      height: wall.room.height * 0.35,
+    },
+  };
+  const fixedPlacement = {
+    ...template.placement,
+    anchor: {
+      x: shortWideWall.room.width / 2,
+      y: shortWideWall.room.height / 2,
+    },
+    mountedHeight: fixedHeight,
+    physicalHeight: fixedHeight,
+    targetSizePolicy: 'fixed-height',
+  };
+  const fixedProjection = geometry.projectSlotArtwork(
+    shortWideWall,
+    fixedPlacement,
+    0.75,
+    builtInResolution.stage,
+    'room-fixed'
+  );
+  assert.ok(fixedProjection, 'short-wide wall must still project a fixed-size artwork');
+  assert.equal(fixedProjection.projectiveFallback, undefined, 'fixed-size projection must not use wall-normalized fallback');
+  const worldHeight = Math.hypot(
+    fixedProjection.worldQuad[0].x - fixedProjection.worldQuad[3].x,
+    fixedProjection.worldQuad[0].y - fixedProjection.worldQuad[3].y,
+    fixedProjection.worldQuad[0].z - fixedProjection.worldQuad[3].z
+  );
+  const worldWidth = Math.hypot(
+    fixedProjection.worldQuad[0].x - fixedProjection.worldQuad[1].x,
+    fixedProjection.worldQuad[0].y - fixedProjection.worldQuad[1].y,
+    fixedProjection.worldQuad[0].z - fixedProjection.worldQuad[1].z
+  );
+  assert.ok(Math.abs(worldHeight - fixedHeight) < 1e-9, 'short-wide calibration must preserve artwork world height');
+  assert.ok(Math.abs(worldWidth - fixedHeight * 0.75) < 1e-9, 'short-wide calibration must preserve artwork world width');
+}
+
 const frontSlotA = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.a');
 const frontSlotB = shippingConfig.slots.find((slot) => slot.id === 'room-01.wall-front.b');
 const nonAdjacentConflictConfig = {

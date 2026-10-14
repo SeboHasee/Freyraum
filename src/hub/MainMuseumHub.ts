@@ -744,7 +744,7 @@ export class MainMuseumHub {
       slot.placement,
       Math.max(Number.EPSILON, decodedAspect ?? aspectOverride ?? this.presentationAspectForSlot(slot)),
       this.resolution.stage,
-      this.calibrating || this.debugGeometry ? 'calibrated' : 'room'
+      'room-fixed'
     );
     if (!projection) {
       button.classList.add('is-invalid-geometry');

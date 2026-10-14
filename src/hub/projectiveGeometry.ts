@@ -792,14 +792,19 @@ export function createArtworkMountingFrame(
   physicalHeight: number,
   artworkAspect: number,
   mountingGap = HUB_DEFAULT_MOUNTING_GAP_M,
-  depth = HUB_ARTWORK_DEPTH_M
+  depth = HUB_ARTWORK_DEPTH_M,
+  orthogonalizeBasis = false
 ): ArtworkMountingFrame | null {
   const basisU = normalize3(wall.axisU);
-  const basisV = normalize3(wall.axisV);
+  const normalizedBasisV = normalize3(wall.axisV);
+  const rawBasisV = orthogonalizeBasis && basisU
+    ? subtract3(wall.axisV, scale3(basisU, dot3(wall.axisV, basisU)))
+    : wall.axisV;
+  const basisV = orthogonalizeBasis ? normalize3(rawBasisV) : normalizedBasisV;
   if (
     !basisU ||
     !basisV ||
-    Math.abs(dot3(basisU, basisV)) > 1e-5 ||
+    (!orthogonalizeBasis && Math.abs(dot3(basisU, basisV)) > 1e-5) ||
     !Number.isFinite(physicalHeight) ||
     physicalHeight <= EPSILON ||
     !Number.isFinite(artworkAspect) ||
@@ -1425,9 +1430,11 @@ export function projectSlotArtwork(
   slot: SlotProjectionModel,
   artworkAspect: number,
   stage: StageReference,
-  projectionMode: 'room' | 'calibrated' = 'room'
+projectionMode: 'room' | 'room-fixed' | 'calibrated' = 'room'
 ): ProjectedArtworkGeometry | null {
-  const projectiveFallback = (): ProjectedArtworkGeometry | null => {
+const preserveSize = projectionMode === 'room-fixed' && slot.targetSizePolicy === 'fixed-height';
+const projectiveFallback = (): ProjectedArtworkGeometry | null => {
+  if (preserveSize) return null;
     const normalizedSlot = wall.room && slot.anchor
       ? {
           ...slot,
@@ -1443,10 +1450,11 @@ export function projectSlotArtwork(
       { ...wall, room: undefined, camera: undefined },
       normalizedSlot,
       artworkAspect,
-      stage
+      stage,
+      projectionMode
     );
   };
-  if (projectionMode === 'room' && wall.room && wall.camera && slot.anchor) {
+  if ((projectionMode === 'room' || projectionMode === 'room-fixed') && wall.room && wall.camera && slot.anchor) {
     const placement = solveRoomArtworkPlacement(
       wall.room,
       slot.anchor,
@@ -1454,22 +1462,25 @@ export function projectSlotArtwork(
       artworkAspect,
       slot.targetSizePolicy === 'fixed-height'
     );
-    const roomPlacementValid =
-      placement.validity.finite &&
-      placement.validity.contained &&
-      placement.validity.doorwayClear &&
-      placement.validity.inHangingBand &&
-      placement.validity.orientationConsistent;
+    const roomPlacementValid = preserveSize
+      ? placement.validity.finite && placement.validity.orientationConsistent
+      : placement.validity.finite
+        && placement.validity.contained
+        && placement.validity.doorwayClear
+        && placement.validity.inHangingBand
+        && placement.validity.orientationConsistent;
     if (
       roomPlacementValid &&
-      !(wall.projectionRealism && !wall.projectionRealism.passes)
+      (preserveSize || !(wall.projectionRealism && !wall.projectionRealism.passes))
     ) {
       const mountingFrame = createArtworkMountingFrame(
         wall.room,
         placement.anchor,
         placement.mountedHeight,
         artworkAspect,
-        slot.mountingGap
+        slot.mountingGap,
+        HUB_ARTWORK_DEPTH_M,
+        preserveSize
       );
       if (!mountingFrame) return projectiveFallback();
       const projected = mountingFrame.frontQuad.map((corner) =>
@@ -1486,7 +1497,7 @@ export function projectSlotArtwork(
       const orderedProjectedQuad: Quad = worldProjectedQuad;
       const projectedQuad = normalizeQuadClockwise(orderedProjectedQuad);
       if (quadIsDegenerate(projectedQuad) || !quadIsConvex(projectedQuad)) return projectiveFallback();
-      if (wall.safePolygon && !projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
+      if (!preserveSize && wall.safePolygon && !projectedQuad.every((corner) => pointInPolygon(corner, wall.safePolygon))) {
         return projectiveFallback();
       }
       const sourceHeight = Math.max(1, (placement.mountedHeight / wall.room.height) * stage.height);
@@ -1511,7 +1522,7 @@ export function projectSlotArtwork(
         orderedProjectedQuad,
         projectedWall
       );
-      if (!alignment.passes) return projectiveFallback();
+      if (!preserveSize && !alignment.passes) return projectiveFallback();
       return {
         localQuad: placement.localQuad,
         worldQuad,
@@ -1530,6 +1541,7 @@ export function projectSlotArtwork(
     }
   }
 
+  if (preserveSize) return null;
   const fallbackCenter = wall.room && slot.anchor
     ? point(
         slot.anchor.x / Math.max(EPSILON, wall.room.width),

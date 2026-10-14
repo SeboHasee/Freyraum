@@ -433,7 +433,9 @@ export class HubRoomRenderer {
       slotAnchor,
       slot.placement.physicalHeight ?? slot.placement.mountedHeight,
       Math.max(Number.EPSILON, decodedArtworkAspect ?? presentationAspect),
-      slot.placement.mountingGap
+      slot.placement.mountingGap,
+      HUB_ARTWORK_DEPTH_M,
+      true
     );
     if (!mountingFrame) {
       state.group.visible = false;
