@@ -1,6 +1,13 @@
 # CHANGELOG
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## Unreleased — Preserve physical artwork dimensions
+
+- Canonical artwork height remains independent of wall calibration and wall
+  transfers; wall-relative changes now update the anchor and projection only.
+- Fixed-height placement fitting preserves the authored size and reports an
+  invalid oversized placement instead of silently shrinking it.
+
 ## v1.31 — Main museum presentation authority (2026-10-12)
 
 - The main museum overview now resolves missing curated side-wall slots from

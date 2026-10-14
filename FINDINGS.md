@@ -1,6 +1,19 @@
 # FINDINGS
 > Latest markdown audit: 2026-09-05 (v1.18 artwork-editor conversation sync).
 
+## 2026-10-14 — Physical artwork size versus wall calibration
+
+1. Normalized source-wall-to-target-wall height conversion made artwork size
+   depend on the destination wall dimensions. Transfer now carries the
+   canonical physical height unchanged.
+2. Fixed-height placements must not enter the legacy shrink ladder. The solver
+   may reposition a valid-size artwork, but an artwork that cannot fit retains
+   its physical dimensions and is rejected or warned instead of being silently
+   resized.
+3. WebGL mounting continues to derive width from physical height and the
+   decoded native aspect; perspective is applied only by the wall frame and
+   camera projection.
+
 ## 2026-10-12 — Main museum versus editor authority
 
 - The supplied target is the main museum presentation, not the placement editor.
