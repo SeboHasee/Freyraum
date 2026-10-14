@@ -994,6 +994,28 @@ const legacySizedSlot = legacySized.pages.flatMap((page) => page.slots)
 assert.ok(legacySizedSlot, 'legacy-sized artwork slot must resolve');
 assert.equal(legacySizedSlot.placement.physicalHeight, 1.23, 'wall calibration must not scale artwork physical height');
 assert.equal(legacySizedSlot.placement.mountedHeight, 1.23, 'wall calibration must not scale resolved artwork height');
+const frontRoom = shipping.walls.find((wall) => wall.id === 'wall-front')?.room;
+assert.ok(frontRoom, 'front wall must expose a room frame for physical-size checks');
+const preserveSizePlacement = geometry.solveRoomArtworkPlacement(
+  frontRoom,
+  { x: frontRoom.width / 2, y: frontRoom.height / 2 },
+  1.23,
+  0.75,
+  true
+);
+assert.equal(preserveSizePlacement.mountedHeight, 1.23, 'fixed-height fitting must preserve artwork height');
+const oversizedPlacement = geometry.solveRoomArtworkPlacement(
+  frontRoom,
+  { x: frontRoom.width / 2, y: frontRoom.height / 2 },
+  frontRoom.height * 2,
+  0.75,
+  true
+);
+assert.equal(
+  oversizedPlacement.mountedHeight,
+  frontRoom.height * 2,
+  'fixed-height fitting must reject or move oversized artwork instead of shrinking it'
+);
 assert.equal(shipping.walls.length, 3, 'resolver must render exactly three walls (bounds-only rear wall skipped)');
 assert.equal(shipping.room.wallIds.length, 3, 'resolved room must track the rendered wall ids');
 assert.deepEqual(shipping.hangingRules, shippingConfig.hangingRules, 'resolved room must retain hanging rules');

@@ -92,6 +92,7 @@ export interface SlotProjectionModel {
   anchor?: Point2D;
   /** Physical clearance between the wall plane and the artwork back face. */
   mountingGap?: number;
+  targetSizePolicy?: 'contain' | 'fixed-height';
   provisional?: boolean;
 }
 

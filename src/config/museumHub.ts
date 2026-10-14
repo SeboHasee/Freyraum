@@ -2247,7 +2247,6 @@ export function resolveMuseumHub(
     const uv = slot.placement.uv
       ?? derivePlacementUv(slot.placement, targetWall)
       ?? point(slot.placement.center.x, 1 - slot.placement.center.y);
-    const sourceWall = wallById.get(slot.placement.wallId);
     const targetUv = uv;
     const physicalHeight = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
     const placement: HubSlotPlacement = {
