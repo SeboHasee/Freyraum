@@ -74,16 +74,53 @@ copies into `customer-artworks/inbox/`.
 - Double-click **`OPEN_ARTWORK_EDITOR.html`** in the main FREYRAUM folder. This
   opens the separate, file-safe Artwork Placement Editor. You do not need to
   edit a URL or start a development server.
-- In the editor:
-  1. Choose a wall and artwork in the right sidebar.
-  2. Drag the artwork directly in the museum view. It stops at the edge of the
-     green area (or a doorway / another artwork, highlighted in yellow) and
-     slides along it. Alternatively click it and use the arrow keys: 1 cm per
-     press, 10 cm with Shift.
-  3. Drag its red corner handle to resize it without changing its proportions.
-  4. Check the green usable wall area, then click **Grüne Wandfläche bestätigen**.
-  5. Repeat for all walls. Resolve every red warning.
-  6. Click **Konfiguration herunterladen** when the button becomes available.
+- The editor panel on the right has three tabs (all German), in workflow order:
+  1. **Raum** — the room bar (*Raum 1 von 1*, ◀ ▶, coloured room chips),
+     **+ Neuer Raum**, **Raum duplizieren**, **Raum löschen** (asks whether the
+     room's artworks move to the previous room or become *Nicht platziert*),
+     an optional room name, and **◀ Früher / Später ▶** to change the order
+     visitors walk through. Below: the wall check with
+     **Wandecken bearbeiten**, **Grüne Fläche bearbeiten**, **Zurücksetzen**,
+     the optional tick **Grüne Fläche geprüft ✓**, the view switch
+     **Ganzer Raum / Ausgewählte Wand**, and a collapsed **Erweitert** section
+     (safe area, entrance area, room boundary, reset all geometry, background).
+  2. **Bilder** (main tab) — the four places of the current room (front left,
+     front right, left wall, right wall; empty places are dashed), the selected
+     artwork's values in metres/centimetres, **Im grünen Bereich zentrieren**,
+     **Bild entfernen**, **Bild ersetzen (Vorschau)**, and the list of all
+     artworks grouped into *In diesem Raum*, *In anderen Räumen* and
+     *Nicht platziert*.
+     - Click an empty place, then click an artwork to hang it there (or drag
+       the artwork from the list onto a place). Dragging one place onto another
+       swaps the two artworks. **Leere Plätze automatisch füllen** fills the
+       room's empty places with unplaced artworks.
+     - Drag the artwork directly in the museum view; it stops at the green
+       area, a doorway, or another artwork and slides along the limit. Arrow
+       keys move a focused artwork 1 cm, 10 cm with Shift. Drag the red corner
+       to resize it; the width follows the artwork's proportions.
+     - Selecting an artwork that hangs in another room opens that room.
+  3. **Speichern** — a status card (*Alles bereit*, *N Hinweise* or
+     *N Fehler*), every message with its room and place (click it to jump
+     there), **Konfiguration herunterladen**, **JSON kopieren**,
+     **Datei öffnen**, **Letzte gültige Version wiederherstellen**, the setting
+     for unplaced artworks, and **Erweitert: Diagnose und JSON**.
+- The bar at the bottom of the panel always shows **↶ Rückgängig**,
+  **↷ Wiederholen**, **Hilfslinien aus/ein**, and a status dot that opens the
+  Speichern tab. Each room or artwork change is one undo step.
+- **What blocks saving:** only real errors — a broken wall shape or green
+  area, an artwork without its wall, a position that cannot be calculated, or
+  a failed export check. Layout hints never block saving: outside the green
+  area, near a doorway, overlapping, smaller than 72 px on screen, green area
+  not ticked as checked, an empty room, or unplaced artworks.
+- **Rooms are your decision.** Each room holds up to four artworks (two on the
+  front wall, one on each side wall) and shares the same walls and green areas.
+  A new room copies the current room's layout without artworks. Empty rooms are
+  skipped in the gallery.
+- **Unplaced artworks** stay hidden in the gallery by default and are always
+  listed under *Nicht platziert*. In the Speichern tab you can instead let the
+  gallery hang them automatically in extra rooms (the old behaviour).
+- A short guide is shown once; the **?** button shows it again. Volume,
+  settings and fullscreen icons are hidden while the editor is open.
 - Replace `customer-artworks/museum-hub.json` with the downloaded file and run
   `Update Gallery.command` or `Update Gallery.bat`.
 - Reopening the generated editor after an update loads cache-busted artwork and
@@ -97,9 +134,8 @@ copies into `customer-artworks/inbox/`.
   `OPEN_ARTWORK_EDITOR.html`. First
   align each green mounting-zone boundary with the visible doorway, corner,
   floor, and ceiling.
-  Then select and drag each artwork or enter exact values. Red outlines mean
-  export is blocked. Confirm each wall's green boundaries after alignment. Use
-  Copy or Download only when all proof rows are green,
+  Then select and drag each artwork or enter exact values. Red outlines mark
+  errors that block saving; amber marks layout hints. Use Copy or Download,
   replace `customer-artworks/museum-hub.json`, rerun Update Gallery, and re-import
   that file once to confirm an identical round trip.
 - The editor never moves an explicitly assigned work to another wall.
@@ -107,13 +143,18 @@ copies into `customer-artworks/inbox/`.
   green area, it keeps its place, gets a dashed red outline, and is listed as a
   warning so you can move it yourself. After changing a wall or green area,
   artworks are pulled back inside automatically when possible.
-- Orange wall outlines are read-only. Blue safe-zone and green mounting-zone
-  handles are editable. Imports with different artwork assignments or fixed
-  camera/room/wall settings are rejected instead of partially merged.
+- Wall corner handles appear only while **Wandecken bearbeiten** is on. Blue
+  safe-zone and green mounting-zone handles are editable. **Datei öffnen**
+  accepts files with a different number of rooms or a different artwork
+  assignment; it rejects unreadable files and files whose camera, room shape or
+  walls differ. Artwork IDs that are not in the current artwork list are
+  reported and dropped; the rest is imported.
 - Older hotspot arrays and v1/v2 slot boxes still load through migration, but
   they should be re-saved from the current calibration flow.
 - Each museum room shows at most four works: two on the front wall and one on
-  each side wall. Further artworks automatically continue in another room.
+  each side wall. Files saved by the editor list their rooms (`rooms`); older
+  files without that list still continue further artworks automatically in
+  extra rooms, exactly as before.
 - Canonical placement fields are `horizontalPosition`, `centerHeight`,
   `physicalHeight`, and `mountingGap`; the image aspect ratio determines width.
 - If a screenshot shows more than four works in one room, preserve that exact

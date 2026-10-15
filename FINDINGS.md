@@ -1,5 +1,29 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-14 (v1.34 editor geometry authority sync).
+> Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
+
+## 2026-10-15 — Editor rooms and panel (v1.35)
+
+- **Lesson: invisible automatic rooms caused unfixable validation failures.**
+  Rooms 2 and 3 were created by the loader for artworks without a place, used
+  the old 2.32 m overflow height (outside the calibrated front-wall green
+  area), could not be reached in the editor, and could not be changed through
+  import. The customer saw errors they had no control to fix. Rooms are now
+  explicit data (`rooms`), switchable and editable in the editor, and automatic
+  rooms are opt-in (`fallbacks.autoPlaceUnmapped`).
+- **Lesson: hints must not block saving.** Export used to stop on layout
+  hints such as an unconfirmed green area or a small artwork, so a valid scene
+  could not be saved. Only errors that make the file unreadable or the geometry
+  broken block export now.
+- **Old files.** Files without a room list default to automatic extra rooms,
+  so existing deployments render exactly as before; the editor writes the room
+  list and `autoPlaceUnmapped: false`.
+- **Slot reconciliation.** Room edits go through the same snapshot path as
+  undo/redo/import: the snapshot is resolved in editor mode and only changed
+  places are rebuilt; the 3D scene redraws once afterwards.
+- **Browser tests.** The "Bild ersetzen" and "Datei öffnen" inputs share the
+  hidden file-input class; tests must target the Speichern tab's input
+  (`#museum-hub-editor-panel-save .museum-hub__file-input`). Empty rooms show a
+  "Raum löschen" confirm button instead of "Bilder nicht platzieren".
 
 ## 2026-10-14 — Editor geometry authority (v1.34)
 

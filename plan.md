@@ -1,5 +1,20 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-14 (v1.34 editor geometry authority sync).
+> Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
+
+## Implemented — Editor rooms and simpler panel (v1.35, 2026-10-15)
+
+Defaults used because the plan questions were not answered: unplaced artworks
+are hidden in the gallery (option B) for files with a room list; the shipped
+file keeps only Raum 1; all rooms share walls and green areas.
+
+- [x] `rooms` list, `fallbacks.autoPlaceUnmapped`, pure room/assignment helpers and relaxed import helpers in `src/config/museumHub.ts`; editor resolution keeps empty rooms, gallery skips them.
+- [x] New rooms copy the current layout (fallback front centre 1.30 m); placements are evaluated, never moved.
+- [x] Editor modules in `src/hub/editor/` (tabs, room bar, artwork list, save tab, German texts); `MainMuseumHub` reconciles places after room changes (one 3D redraw, one undo step).
+- [x] Three German tabs, bottom bar, one-time guide, merged/removed controls, hidden gallery icons.
+- [x] Errors vs hints: only errors block export; messages show and open their room.
+- [x] Import accepts other room counts/assignments; fixed fields still enforced; unknown artworks dropped and reported.
+- [x] Geometry tests and `npm run test:editor-rooms`; `test:editor-drag` updated.
+- [ ] Optional: per-room wall shapes (not needed — every room is the same physical space).
 
 ## Implemented — Editor geometry authority (v1.34, 2026-10-14)
 

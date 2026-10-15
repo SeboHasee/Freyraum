@@ -131,7 +131,11 @@ installed on demand with `npm i --no-save playwright`, or `FREYRAUM_CHROME_PATH`
 pointing at a local Chrome) drags every artwork of the active room in the
 generated `customer-preview/placement-editor.html` to all four green-zone edges
 and fails if it stops short of a limit, moves the wrong way, or produces a
-zone/doorway/overlap warning; run it after `npm run import:artworks && npm run build`.
+zone/doorway/overlap warning; run it after `npm run import:artworks && npm run build`. `npm run test:editor-rooms` (v1.35, same
+Playwright setup) adds Raum 2, assigns two artworks, drags in Raum 2, switches
+rooms, checks one-step undo/redo of a room, deletes Raum 3, checks that saving
+stays enabled with layout hints, opens a validation message in another room,
+and reloads the downloaded file into the same rooms and assignments.
 `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the

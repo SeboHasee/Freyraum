@@ -1,5 +1,39 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-14 (v1.34 editor geometry authority sync).
+> Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
+
+## v1.35 — Rooms you control, simpler German editor panel (2026-10-15)
+
+- `museum-hub.json` can list its rooms (`rooms: [{ id, name? }]`). The editor
+  adds, duplicates, deletes, renames and reorders rooms; every room shares the
+  same walls, camera and green areas. Room ids stay `room-NN`, so old files load
+  unchanged.
+- New setting `fallbacks.autoPlaceUnmapped`: files with a room list hide
+  artworks without a place (listed in diagnostics and under
+  *Nicht platziert*); files without a room list keep the automatic extra rooms.
+  The shipped file now lists only Raum 1 and hides the other artworks.
+- New rooms copy the current room's layout without artworks; the fallback
+  layout uses a 1.30 m front centre height inside the green area. Copied places
+  are checked with `evaluateDisplayedPlacement`, never moved silently.
+- Import accepts a different room count and assignment; it still rejects
+  unreadable files and changed camera/room/wall fields, and drops (and
+  reports) unknown artwork ids.
+- Editor panel: three German tabs (Raum / Bilder / Speichern), a room bar with
+  status chips, place cards and an artwork list (click or drag to assign, drag
+  to swap, "Bild entfernen"), a sticky bottom bar (undo, redo, guides, status),
+  a one-time guide, and room-aware messages that open their room. Duplicate or
+  English controls (artwork arrow buttons, tilt, frame/fit/reset-view buttons,
+  separate wall-edit modes) were removed or merged. Gallery icons no longer
+  cover the panel.
+- Only real errors block saving; layout hints (outside the green area,
+  doorway, overlap, small on screen, unconfirmed green area, empty room,
+  unplaced artworks) never do. "Grüne Fläche geprüft ✓" is an optional tick.
+- Wall corner handles and wall labels appear only while
+  "Wandecken bearbeiten" is on, and only for the selected wall.
+- Room changes rebuild only the affected places and redraw the 3D view once;
+  each room or assignment change is one undo step.
+- Tests: room add/delete/duplicate/rename/move, legacy loading, hidden
+  unplaced artworks, copied-layout validity and import rules in
+  `npm run validate:museum-hub`; new browser test `npm run test:editor-rooms`.
 
 ## v1.34 — One placement truth for editor, loader and 3D (2026-10-14)
 
