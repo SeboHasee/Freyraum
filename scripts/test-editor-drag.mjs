@@ -66,7 +66,11 @@ function requirePreview() {
 async function readExport(page) {
   return page.evaluate(() => {
     const output = document.querySelector('.museum-hub__calibration-output');
-    const warnings = [...document.querySelectorAll('.museum-hub__calibration-warnings li')].map((item) => item.textContent ?? '');
+    // Messages live in the "Speichern" tab; each carries its place in data-slot-id.
+    const warnings = [...document.querySelectorAll('.museum-hub__calibration-warnings li')].map((item) => ({
+      slotId: item.getAttribute('data-slot-id'),
+      text: item.textContent ?? '',
+    }));
     try {
       return { config: JSON.parse(output?.value ?? output?.textContent ?? ''), warnings };
     } catch {
@@ -121,7 +125,8 @@ async function main() {
     await page.waitForFunction(() => !document.querySelector('.loading-start-btn')?.hasAttribute('disabled'));
     await start.click();
     await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 30_000 });
-    const activeArtworks = '.museum-hub__room.is-active .museum-hub__artwork[data-slot-id]:not([disabled])';
+    const activeArtworks =
+      '.museum-hub__room.is-active .museum-hub__artwork[data-slot-id]:not([disabled]):not(.is-empty-slot)';
     await page.waitForSelector(activeArtworks, { timeout: 30_000 });
     const slotIds = await page.$$eval(activeArtworks, (buttons) =>
       buttons
@@ -155,8 +160,10 @@ async function main() {
         if (!(extra <= AT_LIMIT_TOLERANCE)) {
           failures.push(`${label}: stopped ${extra.toFixed(3)} before the zone limit (drag did not reach the edge)`);
         }
-        const slotWarnings = afterKey.warnings.filter((warning) => warning.includes(slotId) && PLACEMENT_WARNING.test(warning));
-        if (slotWarnings.length) failures.push(`${label}: ${slotWarnings.join(' | ')}`);
+        const slotWarnings = afterKey.warnings.filter(
+          (warning) => warning.slotId === slotId && PLACEMENT_WARNING.test(warning.text)
+        );
+        if (slotWarnings.length) failures.push(`${label}: ${slotWarnings.map((warning) => warning.text).join(' | ')}`);
         console.log(
           `${failures.length ? '…' : '✓'} ${label}: ${direction.axis} ${before[direction.axis]} → ${dragged[direction.axis]}` +
             ` (extra step ${Number.isFinite(extra) ? extra.toFixed(3) : 'n/a'})`

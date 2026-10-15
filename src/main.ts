@@ -106,6 +106,14 @@ function isHubDebugEnabled(): boolean {
   }
 }
 
+function isHubCalibrationRequested(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('hubCalibrate') === '1';
+  } catch {
+    return false;
+  }
+}
+
 function isPlacementEditorRequested(): boolean {
   try {
     return document.body.classList.contains('placement-editor')
@@ -873,10 +881,20 @@ async function main(): Promise<void> {
     .__FREYRAUM_MUSEUM_HUB;
   const injectedLegacyHotspots = (window as unknown as { __FREYRAUM_HUB_HOTSPOTS?: unknown })
     .__FREYRAUM_HUB_HOTSPOTS;
-  const museumHubResolution = resolveMuseumHub(museumArtworks, injectedMuseumHub, injectedLegacyHotspots);
+  // The placement editor keeps empty places and empty rooms so they can be
+  // filled, switched to, or deleted; the gallery skips them.
+  const museumHubEditorMode = isHubCalibrationRequested();
+  const museumHubResolution = resolveMuseumHub(
+    museumArtworks,
+    injectedMuseumHub,
+    injectedLegacyHotspots,
+    { editor: museumHubEditorMode }
+  );
   diagnostics.info('boot', 'museum-hub-resolved', 'Museum hub configuration resolved', {
     source: museumHubResolution.source,
     pages: museumHubResolution.pages.length,
+    rooms: museumHubResolution.rooms.map((room) => room.id),
+    unplacedArtworkIds: museumHubResolution.unplacedArtworkIds,
     selectableSlots: museumHubResolution.slotToArtwork.size,
     unmappedArtworkCount: museumHubResolution.unmappedArtworkCount,
     disabledSlots: museumHubResolution.pages
@@ -1170,7 +1188,7 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
-  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset);
+  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset, museumArtworks);
   museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
     alignPage: false,
     source: 'boot-gallery-selection',

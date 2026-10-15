@@ -78,7 +78,13 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/hub/editorViewport.ts'),
 ]);
 const constrainedDrag = await loadTsModule('src/hub/constrainedDrag.ts');
-const shippingConfig = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
+const shippedConfigFile = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
+// v1.35: the shipped editor file lists its rooms explicitly and hides artworks
+// without a room (option B). The geometry fixtures below exercise automatic
+// overflow rooms, so they opt into automatic placement (option A).
+assert.deepEqual(shippedConfigFile.rooms, [{ id: 'room-01', name: 'Raum 1' }], 'shipped file must list exactly Raum 1');
+assert.equal(shippedConfigFile.fallbacks?.autoPlaceUnmapped, false, 'shipped file must hide artworks without a room');
+const shippingConfig = { ...shippedConfigFile, fallbacks: { ...shippedConfigFile.fallbacks, autoPlaceUnmapped: true } };
 
 assert.equal(shippingConfig.version, 5, 'shipping config must use the canonical v5 wall-mounting model');
 const canonicalCorners = geometry.wallCornersFromTransform(
@@ -1845,10 +1851,10 @@ assert.doesNotMatch(
 assert.match(hub, /calibrationRoomBoundaryVisible\s*=\s*false/);
 assert.match(hub, /calibrationEditMode:\s*'wall'\s*\|\s*'safe'\s*\|\s*'mounting-zone'\s*\|\s*'room-boundary'/);
 assert.match(hub, /calibrating && this\.calibrationRoomBoundaryVisible && this\.entranceBoundaryQuad/);
-assert.match(hub, /calibrating && active && this\.calibrationEditMode === 'wall'/);
-assert.match(hub, /Edit safe boundary/);
-assert.match(hub, /Edit mounting area/);
-assert.match(hub, /Show room boundary/);
+assert.match(hub, /this\.calibrating && active && this\.isWallCornerEditing\(\)/, 'wall corner handles appear only while "Wandecken bearbeiten" is on');
+assert.match(hub, /Sicherheitsbereich bearbeiten/);
+assert.match(hub, /Grüne Fläche bearbeiten/);
+assert.match(hub, /Raumgrenze anzeigen/);
 assert.match(hub, /applyCalibrationSnapshot\(JSON\.stringify\(sanitized\.config\), false\)/);
 assert.match(hub, /applyRenderedWallGeometry = true/);
 assert.match(hub, /if \(!applyRenderedWallGeometry\) continue/);
@@ -1861,8 +1867,8 @@ assert.match(hub, /startMountingZone/);
 assert.match(hub, /fitCalibrationWallsToView/);
 assert.match(hub, /wall\.safePolygon\.forEach\(\(corner\) => \{\s*corner\.x \+= clamped\.x/);
 assert.match(hub, /wall\.mountingZone\.forEach\(\(corner\) => \{\s*corner\.x \+= clamped\.x/);
-assert.match(hub, /Artwork left/);
-assert.match(hub, /Tilt \(not available for this wall model\)/);
+assert.doesNotMatch(hub, /Artwork left/, 'arrow-button artwork moves were replaced by keys and dragging');
+assert.doesNotMatch(hub, /Tilt \(not available/, 'the unavailable tilt control was removed');
 assert.match(hub, /handle\.setAttribute\('r', '5'\)/);
 assert.match(hub, /circle\.setAttribute\('r', '12'\)/);
 assert.match(hub, /private calibrationViewport = \{ scale: 1, offsetX: 0, offsetY: 0 \}/);
@@ -1879,35 +1885,63 @@ assert.match(scss, /\.museum-hub__calibration-svg \{[\s\S]*?transform-origin: 0 
 assert.match(scss, /\.museum-hub__rooms \{[\s\S]*?transform-origin: 0 0/);
 assert.match(hub, /button\.addEventListener\('pointerdown', \(event\) => \{/);
 assert.match(hub, /this\.selectCalibrationSlot\(slot\.id\)/);
-assert.match(hub, /Fit selected wall to view/);
-assert.match(hub, /Fit all walls to view/);
-assert.match(hub, /Reset viewport/);
+assert.doesNotMatch(hub, /Fit selected wall to view|Fit all walls to view|Reset viewport|Frame Wall|Frame Corner/, 'view controls are merged into one German view group');
+assert.match(hub, /'Ganzer Raum'/);
+assert.match(hub, /'Ausgewählte Wand'/);
 assert.match(scss, /\.museum-hub__calibration-envelope\s*\{[\s\S]*?pointer-events:\s*all/);
 assert.match(scss, /\.museum-hub__calibration-safe\s*\{[\s\S]*?pointer-events:\s*none/);
 assert.match(scss, /\.museum-hub__calibration-mounting-zone\s*\{[\s\S]*?pointer-events:\s*none/);
+const editorText = readFileSync(resolve(ROOT, 'src/hub/editor/editorText.ts'), 'utf8');
+const editorUi = [
+  hub,
+  editorText,
+  readFileSync(resolve(ROOT, 'src/hub/editor/roomBar.ts'), 'utf8'),
+  readFileSync(resolve(ROOT, 'src/hub/editor/artworkLibrary.ts'), 'utf8'),
+  readFileSync(resolve(ROOT, 'src/hub/editor/saveTab.ts'), 'utf8'),
+  readFileSync(resolve(ROOT, 'src/hub/editor/editorTabs.ts'), 'utf8'),
+].join('\n');
 for (const label of [
-  'Orange points',
-  'Striped orange lines',
-  'Blue area',
-  'Green area',
-  'Purple dashed area',
-  'FRONT WALL — drag corners or wall',
-  'LEFT WALL — drag corners or wall',
-  'RIGHT WALL — drag corners or wall',
-  'ENTRANCE BOUNDARY — room shape only',
-  'Edit wall corners',
-  'Move complete wall',
-  'Edit entrance boundary',
-  'Reset selected boundary',
-  'Reset all geometry',
-  'Undo',
-  'Redo',
-  'Hide guides',
-  'Technical details (JSON and diagnostics)',
+  'Orange Punkte',
+  'Orange Kanten',
+  'Blaue Fläche',
+  'Grüne Fläche',
+  'Violette Fläche',
+  'Frontwand',
+  'Linke Wand',
+  'Rechte Wand',
+  'Wandecken bearbeiten',
+  'Grüne Fläche bearbeiten',
+  'Eingangsbereich bearbeiten',
+  'Zurücksetzen',
+  'Gesamte Geometrie zurücksetzen',
+  'Rückgängig',
+  'Wiederholen',
+  'Hilfslinien aus',
+  'Erweitert: Diagnose und JSON',
+  '+ Neuer Raum',
+  'Raum duplizieren',
+  'Raum löschen',
+  'Nicht platziert',
+  'Konfiguration herunterladen',
+  'JSON kopieren',
+  'Datei öffnen',
+  'Letzte gültige Version wiederherstellen',
+  'Im grünen Bereich zentrieren',
+  'Bild entfernen',
+  'Grüne Fläche geprüft ✓',
 ]) {
-  assert.ok(hub.includes(label), `calibration editor must expose self-explanatory control: ${label}`);
+  assert.ok(editorUi.includes(label), `calibration editor must expose self-explanatory German control: ${label}`);
 }
-assert.match(hub, /Currently editing:/);
+for (const english of ['Wall Edit Mode', 'Edit wall corners', 'Move complete wall', 'Currently editing:', 'LEFT WALL — drag', 'Confirm green mounting area']) {
+  assert.ok(!editorUi.includes(english), `editor UI must not show the old English control: ${english}`);
+}
+assert.match(hub, /createEditorTabs\('museum-hub-editor'/, 'editor panel uses the three-tab pattern');
+assert.match(editorUi, /'Raum'[\s\S]*'Bilder'[\s\S]*'Speichern'/);
+assert.match(readFileSync(resolve(ROOT, 'src/hub/editor/editorTabs.ts'), 'utf8'), /ArrowRight[\s\S]*ArrowLeft[\s\S]*Home[\s\S]*End/, 'tabs switch with arrow keys');
+assert.match(scss, /body\.placement-editor \{[\s\S]*?\.audio-controls,\s*\.prefs,\s*\.fullscreen-btn \{\s*display: none !important/, 'overlapping gallery icons are hidden in the editor');
+assert.match(scss, /\.museum-hub__room-switcher/);
+assert.match(scss, /\.museum-hub__editor-tab \{/);
+assert.match(scss, /\.museum-hub__artwork\.is-empty-slot/);
 assert.match(hub, /setAttribute\(\s*'aria-label'/);
 assert.match(scss, /\.museum-hub__calibration-legend/);
 assert.match(scss, /\.museum-hub__calibration-svg\.is-guides-hidden/);

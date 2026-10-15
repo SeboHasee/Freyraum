@@ -39,6 +39,15 @@
     }
   },
   "slotsPerPage": 4,
+  "fallbacks": {
+    "autoPlaceUnmapped": false
+  },
+  "rooms": [
+    {
+      "id": "room-01",
+      "name": "Raum 1"
+    }
+  ],
   "walls": [
     {
       "id": "wall-front",

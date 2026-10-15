@@ -320,6 +320,23 @@ export class HubRoomRenderer {
     this.render();
   }
 
+  /**
+   * Removes a slot's meshes after its room was deleted or its place removed
+   * in the placement editor. Image textures are owned per slot and disposed;
+   * shared placeholder textures stay cached. Pass `render = false` when
+   * batching several removals and call `renderFrame()` once afterwards.
+   */
+  removeSlot(slotId: string, render = true): void {
+    if (this.disposed) return;
+    const state = this.slotMeshes.get(slotId);
+    if (!state) return;
+    state.group.removeFromParent();
+    if (state.textureKind === 'image') state.artworkMesh.material.map?.dispose();
+    state.artworkMesh.material.dispose();
+    this.slotMeshes.delete(slotId);
+    if (render) this.render();
+  }
+
   /** v0.92: live renderer GPU capability used by the shared source-to-pixel outcome contract. */
   getMaxTextureSize(): number {
     return this.renderer.capabilities.maxTextureSize;
@@ -1508,7 +1525,15 @@ export class HubRoomRenderer {
 
   private ensureSlotState(slot: ResolvedHubSlot): SlotMeshState {
     const existing = this.slotMeshes.get(slot.id);
-    if (existing) return existing;
+    if (existing) {
+      // Rooms can be reordered, added, or deleted in the editor; keep each
+      // slot inside the page group of its current room.
+      if (existing.pageIndex !== slot.pageIndex) {
+        this.ensurePageGroup(slot.pageIndex).add(existing.group);
+        existing.pageIndex = slot.pageIndex;
+      }
+      return existing;
+    }
     const artworkMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
       toneMapped: false,

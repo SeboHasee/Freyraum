@@ -12,15 +12,39 @@ import {
   HUB_REFERENCE_BACK_WALL_QUAD,
   HUB_REFERENCE_IMAGE,
   HUB_MIN_PROJECTED_SHORT_EDGE_PX,
+  HUB_ROOM_NAME_MAX_LENGTH,
+  type HubEditableConfig,
   type MuseumHubResolution,
   type MuseumHubConfig,
+  type ResolvedHubPage,
   type ResolvedHubSlot,
   type ResolvedHubWall,
+  addRoomToConfig,
+  assignArtworkInConfig,
+  deleteRoomFromConfig,
+  dropUnknownArtworkAssignments,
   evaluateDisplayedPlacement,
   exportHubSlotPlacement,
+  hubFixedFieldsSignature,
+  moveRoomInConfig,
   projectDisplayedPlacement,
+  renameRoomInConfig,
+  resolveMuseumHub,
   sanitizeMuseumHubConfig,
 } from '../config/museumHub';
+import type { Artwork } from '../config/artworks';
+import { createEditorTabs, type EditorTabs } from './editor/editorTabs';
+import { EditorRoomBar } from './editor/roomBar';
+import { EditorArtworkLibrary, type LibraryArtwork, type LibraryPlace } from './editor/artworkLibrary';
+import { EditorSaveTab } from './editor/saveTab';
+import {
+  countLabel,
+  placeLabel,
+  roomLabel,
+  statusOfIssues,
+  wallLabel,
+  type CalibrationIssue,
+} from './editor/editorText';
 import {
   applyHomography,
   clonePoint,
@@ -195,10 +219,7 @@ export class MainMuseumHub {
   private readonly stageHeight: number;
   private readonly resizeObserver: ResizeObserver | null;
   private calibrationOutput: HTMLTextAreaElement | null = null;
-  private calibrationWarnings: HTMLUListElement | null = null;
-  private calibrationRestoreButton: HTMLButtonElement | null = null;
   private calibrationWallSelect: HTMLSelectElement | null = null;
-  private calibrationSlotSelect: HTMLSelectElement | null = null;
   private calibrationFields = new Map<string, HTMLInputElement>();
   private calibrationCopyButton: HTMLButtonElement | null = null;
   private calibrationDownloadButton: HTMLButtonElement | null = null;
@@ -210,11 +231,29 @@ export class MainMuseumHub {
   private calibrationGuidesVisible = true;
   private calibrationRoomBoundaryVisible = false;
   private calibrationEditMode: 'wall' | 'safe' | 'mounting-zone' | 'room-boundary' = 'wall';
+  /** "Wandecken bearbeiten": wall corner/edge handles are only shown while on. */
+  private wallEditingEnabled = false;
+  private readonly artworks: readonly Artwork[];
+  private calibrationPanel: HTMLElement | null = null;
+  private editorTabs: EditorTabs | null = null;
+  private roomBar: EditorRoomBar | null = null;
+  private artworkLibrary: EditorArtworkLibrary | null = null;
+  private saveTab: EditorSaveTab | null = null;
+  private calibrationIssues: CalibrationIssue[] = [];
+  /** Option A (true) hangs unplaced artworks into extra rooms in the gallery. */
+  private autoPlaceUnmappedSetting = false;
+  private editorStatusButton: HTMLButtonElement | null = null;
+  private editorToolButtons = new Map<string, HTMLButtonElement>();
+  private editorViewButtons = new Map<'room' | 'wall', HTMLButtonElement>();
+  private zoneConfirmedInput: HTMLInputElement | null = null;
+  private editorDetailTitle: HTMLElement | null = null;
+  private editorDetailBody: HTMLElement | null = null;
+  private removeArtworkButton: HTMLButtonElement | null = null;
+  private editorGuide: HTMLElement | null = null;
   private calibrationSvg: SVGSVGElement | null = null;
   private editorViewportSvg: SVGSVGElement | null = null;
   private editorViewport: EditorViewport | null = null;
   private calibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
-  private initialCalibrationViewport = { scale: 1, offsetX: 0, offsetY: 0 };
   private calibrationDrag: CalibrationDrag | null = null;
   /** Last artwork move that hit a limit; drives the edge highlight while dragging. */
   private lastSlotDragBlocked: { slotId: string; target: Point2D } | null = null;
@@ -255,11 +294,19 @@ export class MainMuseumHub {
   private readonly defaultBackground: MuseumHubResolution['background'];
   private readonly backgroundImage: HTMLImageElement;
 
-  constructor(app: HTMLElement, resolution: MuseumHubResolution, preset: QualityPreset) {
+  constructor(
+    app: HTMLElement,
+    resolution: MuseumHubResolution,
+    preset: QualityPreset,
+    artworks: readonly Artwork[] = []
+  ) {
     this.resolution = resolution;
+    this.artworks = artworks;
     this.calibrating = isCalibrationRequested();
     this.debugGeometry = isHubDebugRequested();
-    this.pageCount = Math.max(1, resolution.pages.length);
+    // The editor also shows empty rooms, so its room list can exceed the pages.
+    this.pageCount = Math.max(1, resolution.pages.length, this.calibrating ? resolution.rooms.length : 0);
+    this.autoPlaceUnmappedSetting = resolution.explicitRooms ? resolution.fallbacks.autoPlaceUnmapped : false;
     this.stageWidth = resolution.stage.width;
     this.stageHeight = resolution.stage.height;
     this.activeCalibrationWallId = resolution.walls[0]?.id ?? null;
@@ -458,10 +505,7 @@ export class MainMuseumHub {
     if (this.calibrating || this.debugGeometry) {
       this.buildCalibrationOverlay();
       if (this.calibrating) this.buildCalibrationPanel(hub);
-      if (this.calibrating) {
-        this.fitCalibrationWallsToView();
-        this.initialCalibrationViewport = { ...this.calibrationViewport };
-      }
+      if (this.calibrating) this.fitCalibrationWallsToView();
       this.renderCalibrationOverlay();
     }
 
@@ -619,7 +663,8 @@ export class MainMuseumHub {
   private setButtonsDisabled(disabled: boolean): void {
     this.entryButton.disabled = disabled;
     for (const view of this.slotViews) {
-      view.button.disabled = disabled || !view.slot.selectable;
+      // Editor places (including empty ones) stay focusable and draggable.
+      view.button.disabled = disabled || (!view.slot.selectable && !(this.calibrating && !view.slot.disabledReason));
     }
     if (disabled) {
       this.pagerPrev.disabled = true;
@@ -641,23 +686,33 @@ export class MainMuseumHub {
   private buildSlots(): void {
     const rooms = document.createElement('div');
     rooms.className = 'museum-hub__rooms';
+    this.stage.appendChild(rooms);
+    this.syncRoomLayers();
     for (const page of this.resolution.pages) {
-      const room = document.createElement('div');
-      room.className = 'museum-hub__room';
-      room.dataset['page'] = String(page.pageIndex);
       for (const slot of page.slots) {
         if (!this.calibrating && !this.debugGeometry && (!slot.selectable || !slot.artworkId)) continue;
         const view = this.buildSlotButton(slot);
-        room.appendChild(view.button);
+        this.roomLayers[slot.pageIndex]?.appendChild(view.button);
         this.slotViews.push(view);
       }
-      rooms.appendChild(room);
-      this.roomLayers.push(room);
     }
-    this.stage.appendChild(rooms);
   }
 
-  private buildSlotButton(slot: ResolvedHubSlot): SlotView {
+  /** Keeps one DOM room layer per room (the editor adds and deletes rooms). */
+  private syncRoomLayers(): void {
+    const container = this.stage.querySelector<HTMLElement>('.museum-hub__rooms');
+    if (!container) return;
+    while (this.roomLayers.length < this.pageCount) {
+      const room = document.createElement('div');
+      room.className = 'museum-hub__room';
+      room.dataset['page'] = String(this.roomLayers.length);
+      container.appendChild(room);
+      this.roomLayers.push(room);
+    }
+    while (this.roomLayers.length > this.pageCount) this.roomLayers.pop()?.remove();
+  }
+
+  private buildSlotButton(slot: ResolvedHubSlot, render = true): SlotView {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'museum-hub__artwork';
@@ -687,10 +742,21 @@ export class MainMuseumHub {
     const label = document.createElement('span');
     label.className = 'museum-hub__artwork-label';
     label.setAttribute('aria-hidden', 'true');
-    label.textContent = this.calibrating || this.debugGeometry ? `${slot.id} · ${slot.displayLabel}` : slot.displayLabel;
+    label.textContent = this.calibrating
+      ? `${placeLabel(slot.id, slot.placement.wallId)} · ${slot.artworkId ? slot.displayLabel : 'leer'}`
+      : this.debugGeometry ? `${slot.id} · ${slot.displayLabel}` : slot.displayLabel;
     button.appendChild(label);
 
     if (this.calibrating) {
+      const place = placeLabel(slot.id, slot.placement.wallId);
+      if (!slot.artworkId) {
+        // Empty places are dashed placeholders that can be selected and filled.
+        button.classList.add('is-empty-slot');
+        button.removeAttribute('aria-disabled');
+        button.setAttribute('aria-label', `Leerer Platz ${place}. Auswählen und im Bereich „Bilder“ ein Kunstwerk zuweisen.`);
+      } else {
+        button.setAttribute('aria-label', `„${slot.displayLabel}“ auf ${place}. Ziehen oder Pfeiltasten verschieben.`);
+      }
       const handle = document.createElement('span');
       handle.className = 'museum-hub__artwork-handle';
       handle.setAttribute('aria-hidden', 'true');
@@ -719,7 +785,7 @@ export class MainMuseumHub {
       lastUpsertResult: null,
     };
     this.applySlotGeometry(button, slot, false, 1);
-    this.syncSlotRenderer(view);
+    this.syncSlotRenderer(view, render);
     return view;
   }
 
@@ -1178,6 +1244,8 @@ export class MainMuseumHub {
     const waits: Promise<void>[] = [];
     for (const view of this.slotViews) {
       if (view.slot.pageIndex !== pageIndex || !view.image || !view.slot.artworkId) continue;
+      // Views kept across editor room changes are already loaded or loading.
+      if (view.imageState !== 'idle') continue;
       waits.push(this.resolveSlotImage(view));
     }
     return Promise.all(waits).then(() => undefined);
@@ -1693,7 +1761,7 @@ export class MainMuseumHub {
     const slot = this.activeCalibrationSlot;
     const view = slot ? this.slotViews.find((candidate) => candidate.slot.id === slot.id) : null;
     if (!view?.image || !slot?.artworkId) {
-      this.announceCalibrationAction('Select an artwork before uploading a replacement.');
+      this.announceCalibrationAction('Zuerst ein Bild auf einem Platz wählen.');
       return;
     }
     const objectUrl = URL.createObjectURL(file);
@@ -1707,13 +1775,13 @@ export class MainMuseumHub {
       const aspect = width > 0 && height > 0 ? nativeArtworkAspect({ width, height }) : 0;
       if (!Number.isFinite(aspect) || aspect <= 0) throw new Error('invalid-image-dimensions');
       const accepted = window.confirm(
-        `Replace ${slot.displayLabel} with ${file.name}?\n\n` +
-        `${width} × ${height}px · ratio ${aspect.toFixed(4)}\n\n` +
-        'The current artwork remains unchanged if you cancel.'
+        `${slot.displayLabel} in der Vorschau durch ${file.name} ersetzen?\n\n` +
+        `${width} × ${height} px · Seitenverhältnis ${aspect.toFixed(4)}\n\n` +
+        'Bei „Abbrechen“ bleibt das aktuelle Bild.'
       );
       if (!accepted) {
         URL.revokeObjectURL(objectUrl);
-        this.announceCalibrationAction('Replacement cancelled; the current artwork remains active.');
+        this.announceCalibrationAction('Ersetzen abgebrochen; das aktuelle Bild bleibt.');
         return;
       }
       view.imageLoadToken += 1;
@@ -1736,11 +1804,11 @@ export class MainMuseumHub {
       this.renderCalibrationOverlay();
       this.updateCalibrationOutput(true);
       this.announceCalibrationAction(
-        `${slot.displayLabel} preview replaced. Native dimensions: ${width} × ${height}px; ratio ${aspect.toFixed(4)}.`
+        `Vorschau von ${slot.displayLabel} ersetzt: ${width} × ${height} px, Seitenverhältnis ${aspect.toFixed(4)}. Nur Vorschau, wird nicht gespeichert.`
       );
     } catch {
       URL.revokeObjectURL(objectUrl);
-      this.announceCalibrationAction('The replacement image could not be decoded; the previous artwork remains active.');
+      this.announceCalibrationAction('Das Ersatzbild konnte nicht gelesen werden; das bisherige Bild bleibt.');
     }
   }
 
@@ -1749,13 +1817,13 @@ export class MainMuseumHub {
     const slot = this.activeCalibrationSlot;
     const view = slot ? this.slotViews.find((candidate) => candidate.slot.id === slot.id) : null;
     if (!slot || !view) {
-      this.calibrationArtworkInfo.textContent = 'Select an artwork to inspect its decoded dimensions and ratio.';
+      this.calibrationArtworkInfo.textContent = 'Ein Bild wählen, um Pixelmaße und Seitenverhältnis zu sehen.';
       return;
     }
     const width = view.nativeWidth ?? view.image?.naturalWidth ?? 0;
     const height = view.nativeHeight ?? view.image?.naturalHeight ?? 0;
     const aspect = view.nativeAspectRatio ?? (width > 0 && height > 0 ? nativeArtworkAspect({ width, height }) : slot.artworkAspect);
-    const source = view.fallbackReason === 'editor-upload-preview' ? 'temporary upload preview' : 'decoded source';
+    const source = view.fallbackReason === 'editor-upload-preview' ? 'temporäre Vorschau' : 'Originaldatei';
     const physicalHeight = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
     const wallRoom = this.resolution.wallById.get(slot.placement.wallId)?.room ?? null;
     const sourceRect = width > 0 && height > 0
@@ -1772,11 +1840,11 @@ export class MainMuseumHub {
         )
       : null;
     this.calibrationArtworkInfo.textContent =
-      `${slot.artworkId} · ${width > 0 && height > 0 ? `${width} × ${height}px` : 'dimensions pending'} · ` +
-      `native ratio ${aspect.toFixed(4)} · source rect ${report?.domSource.toFixed(4) ?? '—'} · ` +
-      `${report?.status === 'valid' ? 'ratio valid' : 'ratio needs attention'} · ${source}` +
+      `${slot.artworkId ?? 'leer'} · ${width > 0 && height > 0 ? `${width} × ${height} px` : 'Maße werden geladen'} · ` +
+      `Seitenverhältnis ${aspect.toFixed(4)} · Quellrechteck ${report?.domSource.toFixed(4) ?? '—'} · ` +
+      `${report?.status === 'valid' ? 'Verhältnis korrekt' : 'Verhältnis prüfen'} · ${source}` +
       // Wall size comes from the calibrated (measured) wall, not the nominal room height.
-      (wallRoom ? ` · wall ${wallRoom.width.toFixed(2)} × ${wallRoom.height.toFixed(2)} m (calibrated)` : '');
+      (wallRoom ? ` · Wand ${wallRoom.width.toFixed(2)} × ${wallRoom.height.toFixed(2)} m (kalibriert)` : '');
   }
 
   private getSlotRenderFailure(
@@ -1934,6 +2002,13 @@ export class MainMuseumHub {
     this.applyView();
   }
 
+  /** Room (page) currently shown, also in the narrow three-views-per-room mode. */
+  private currentPageIndex(): number {
+    return this.narrowMode
+      ? Math.floor(this.viewIndex / MainMuseumHub.NARROW_VIEWS_PER_PAGE)
+      : this.viewIndex;
+  }
+
   private applyView(initial = false): void {
     if (this.disposed) return;
     this.viewIndex = Math.max(0, Math.min(this.viewCount - 1, this.viewIndex));
@@ -1976,6 +2051,7 @@ export class MainMuseumHub {
     }
     this.applySelectionState(initial ? 'initial-view' : 'view-change');
     if (!initial) void this.decodePageImages(pageIndex);
+    if (this.calibrating) this.refreshEditorPanels();
   }
 
   private handleNarrowChange = (): void => {
@@ -2016,6 +2092,8 @@ export class MainMuseumHub {
   private handleKeydown = (event: KeyboardEvent): void => {
     if (this.calibrating) {
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+      // Panel controls (tabs, lists, dialogs) keep their own arrow-key behaviour.
+      if (event.target instanceof Node && this.calibrationPanel?.contains(event.target)) return;
       if (
         event.target instanceof HTMLInputElement
         || event.target instanceof HTMLSelectElement
@@ -2098,7 +2176,7 @@ export class MainMuseumHub {
     const viewportSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     viewportSvg.classList.add('museum-hub__editor-viewport');
     viewportSvg.setAttribute('viewBox', `0 0 ${this.stageWidth} ${this.stageHeight}`);
-    viewportSvg.setAttribute('aria-label', '3D wall edit view');
+    viewportSvg.setAttribute('aria-label', 'Wandecken am Eingang');
     viewportSvg.style.pointerEvents = 'none';
     this.stage.appendChild(viewportSvg);
     this.editorViewportSvg = viewportSvg;
@@ -2113,43 +2191,197 @@ export class MainMuseumHub {
   private buildCalibrationPanel(hub: HTMLElement): void {
     const panel = document.createElement('div');
     panel.className = 'museum-hub__calibration';
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-labelledby', 'calibration-title');
+    this.calibrationPanel = panel;
 
+    const makeAction = (
+      text: string,
+      action: () => void,
+      container: HTMLElement,
+      className = 'museum-hub__calibration-action'
+    ): HTMLButtonElement => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = className;
+      button.textContent = text;
+      button.addEventListener('click', action);
+      container.appendChild(button);
+      return button;
+    };
+    const makeSection = (titleText: string, id: string): HTMLElement => {
+      const section = document.createElement('section');
+      section.className = 'museum-hub__editor-section';
+      section.setAttribute('aria-labelledby', id);
+      const title = document.createElement('h3');
+      title.id = id;
+      title.textContent = titleText;
+      section.appendChild(title);
+      return section;
+    };
+    const makeRow = (container: HTMLElement): HTMLDivElement => {
+      const row = document.createElement('div');
+      row.className = 'museum-hub__editor-actions';
+      container.appendChild(row);
+      return row;
+    };
+
+    // ── Header, first-time guide, and room switcher ─────────────────────────
+    const header = document.createElement('div');
+    header.className = 'museum-hub__calibration-header';
     const heading = document.createElement('h2');
+    heading.id = 'calibration-title';
     heading.className = 'museum-hub__calibration-title';
-    heading.textContent = 'Artwork Placement Editor';
-    const intro = document.createElement('p');
-    intro.className = 'museum-hub__calibration-intro';
-    intro.textContent = 'Adjust the room in four simple steps. The labels on the picture explain every control.';
-    const steps = document.createElement('ol');
-    steps.className = 'museum-hub__calibration-steps';
+    heading.textContent = 'Bilder-Editor';
+    const helpButton = makeAction('?', () => this.showEditorGuide(true), header, 'museum-hub__editor-icon-button');
+    helpButton.setAttribute('aria-label', 'Kurzanleitung anzeigen');
+    header.prepend(heading);
+
+    const guide = document.createElement('section');
+    guide.className = 'museum-hub__editor-guide';
+    guide.setAttribute('aria-labelledby', 'editor-guide-title');
+    guide.hidden = true;
+    const guideTitle = document.createElement('h3');
+    guideTitle.id = 'editor-guide-title';
+    guideTitle.textContent = 'So geht es';
+    const guideSteps = document.createElement('ol');
     for (const text of [
-      'Choose what to edit.',
-      'Drag a corner or the striped wall.',
-      'Check the green mounting area.',
-      'Export when validation is green.',
+      'Raum wählen oder mit „+ Neuer Raum“ anlegen.',
+      'Im Bereich „Bilder“ Kunstwerke auf die Plätze ziehen und im Bild verschieben.',
+      'Im Bereich „Speichern“ die Konfiguration herunterladen.',
     ]) {
       const item = document.createElement('li');
       item.textContent = text;
-      steps.appendChild(item);
+      guideSteps.appendChild(item);
     }
-    const instructions = document.createElement('p');
-    instructions.className = 'museum-hub__calibration-help';
-    instructions.textContent =
-      'Drag an artwork to move it along its wall. Drag the red corner handle to resize it while preserving perspective. Drag orange points to reshape a wall; keyboard arrows make precise adjustments.';
+    guide.append(guideTitle, guideSteps);
+    makeAction('Verstanden', () => this.hideEditorGuide(), guide, 'museum-hub__calibration-action is-primary');
+    this.editorGuide = guide;
+
+    this.roomBar = new EditorRoomBar(
+      {
+        onSelect: (pageIndex) => this.goToRoom(pageIndex),
+        onAdd: () => this.addRoom(false),
+        onDuplicate: () => this.addRoom(true),
+        onDelete: (target) => this.deleteCurrentRoom(target),
+        onRename: (name) => this.renameCurrentRoom(name),
+        onMove: (delta) => this.moveCurrentRoom(delta),
+      },
+      HUB_ROOM_NAME_MAX_LENGTH
+    );
+
+    // ── Tab "Raum": rooms, wall check, wall tools ───────────────────────────
+    const roomTab = document.createElement('div');
+    roomTab.appendChild(this.roomBar.manager);
+
+    const wallSection = makeSection('Wände prüfen', 'editor-wall-title');
+    const wallHint = document.createElement('p');
+    wallHint.className = 'museum-hub__editor-hint';
+    wallHint.textContent = 'Alle Räume teilen dieselben Wände und grünen Flächen. Bilder müssen im grünen Bereich hängen.';
+    const selectLabel = document.createElement('label');
+    selectLabel.className = 'museum-hub__calibration-label';
+    selectLabel.textContent = 'Wand';
+    const select = document.createElement('select');
+    select.className = 'museum-hub__calibration-select';
+    for (const wall of this.resolution.walls) {
+      const option = document.createElement('option');
+      option.value = wall.id;
+      option.textContent = wallLabel(wall.id);
+      select.appendChild(option);
+    }
+    if (this.entranceBoundaryQuad) {
+      const option = document.createElement('option');
+      option.value = 'wall-rear';
+      option.textContent = 'Eingangsbereich (nur Raumform)';
+      select.appendChild(option);
+    }
+    if (this.activeCalibrationWallId) select.value = this.activeCalibrationWallId;
+    select.addEventListener('change', () => {
+      this.activeCalibrationWallId = select.value;
+      this.calibrationRoomBoundaryVisible = select.value === 'wall-rear';
+      this.calibrationEditMode = this.calibrationRoomBoundaryVisible ? 'room-boundary' : 'wall';
+      // Selection is deliberately independent from camera framing. The
+      // projected calibration quad is the only authoritative wall surface.
+      this.renderCalibrationOverlay();
+      this.syncEditorToolState();
+      this.announceCalibrationAction(`Ausgewählt: ${wallLabel(select.value)}.`);
+    });
+    selectLabel.appendChild(select);
+    this.calibrationWallSelect = select;
+
+    const confirmLabel = document.createElement('label');
+    confirmLabel.className = 'museum-hub__editor-check';
+    const confirmInput = document.createElement('input');
+    confirmInput.type = 'checkbox';
+    confirmInput.addEventListener('change', () => this.setActiveMountingZoneConfirmed(confirmInput.checked));
+    confirmLabel.append(confirmInput, 'Grüne Fläche geprüft ✓');
+    this.zoneConfirmedInput = confirmInput;
+
+    const toolRow = makeRow(wallSection);
+    toolRow.setAttribute('role', 'group');
+    toolRow.setAttribute('aria-label', 'Wandwerkzeuge');
+    const wallTool = makeAction('Wandecken bearbeiten', () => this.toggleEditorTool('wall'), toolRow);
+    wallTool.title = 'Zeigt die orangen Eckpunkte. Ecke ziehen formt die Wand, Kante ziehen verschiebt die ganze Wand.';
+    const zoneTool = makeAction('Grüne Fläche bearbeiten', () => this.toggleEditorTool('mounting-zone'), toolRow);
+    zoneTool.title = 'Zeigt die grünen Eckpunkte des Bereichs, in dem Bilder hängen dürfen.';
+    makeAction('Zurücksetzen', () => this.resetSelectedCalibrationBoundary(), toolRow);
+    this.editorToolButtons.set('wall', wallTool);
+    this.editorToolButtons.set('mounting-zone', zoneTool);
+
+    const viewGroup = document.createElement('div');
+    viewGroup.className = 'museum-hub__editor-segmented';
+    viewGroup.setAttribute('role', 'group');
+    viewGroup.setAttribute('aria-label', 'Ansicht');
+    const viewLabel = document.createElement('span');
+    viewLabel.className = 'museum-hub__calibration-label';
+    viewLabel.textContent = 'Ansicht:';
+    viewGroup.appendChild(viewLabel);
+    const viewRoom = makeAction('Ganzer Raum', () => this.setEditorView('room'), viewGroup);
+    const viewWall = makeAction('Ausgewählte Wand', () => this.setEditorView('wall'), viewGroup);
+    this.editorViewButtons.set('room', viewRoom);
+    this.editorViewButtons.set('wall', viewWall);
+    wallSection.append(wallHint, selectLabel, confirmLabel, toolRow, viewGroup);
+
+    const roomAdvanced = document.createElement('details');
+    roomAdvanced.className = 'museum-hub__calibration-advanced';
+    const roomAdvancedSummary = document.createElement('summary');
+    roomAdvancedSummary.textContent = 'Erweitert';
+    roomAdvanced.appendChild(roomAdvancedSummary);
+    const advancedRow = makeRow(roomAdvanced);
+    const safeTool = makeAction('Sicherheitsbereich bearbeiten', () => this.toggleEditorTool('safe'), advancedRow);
+    const entranceTool = makeAction('Eingangsbereich bearbeiten', () => {
+      this.calibrationRoomBoundaryVisible = true;
+      if (this.calibrationWallSelect) this.calibrationWallSelect.value = 'wall-rear';
+      this.activeCalibrationWallId = 'wall-rear';
+      this.toggleEditorTool('room-boundary', true);
+      this.announceCalibrationAction('Eingangsbereich: nur Raumform, hier hängen keine Bilder.');
+    }, advancedRow);
+    this.editorToolButtons.set('safe', safeTool);
+    this.editorToolButtons.set('room-boundary', entranceTool);
+    const boundaryToggle = makeAction('Raumgrenze anzeigen', () => {
+      this.calibrationRoomBoundaryVisible = !this.calibrationRoomBoundaryVisible;
+      boundaryToggle.setAttribute('aria-pressed', String(this.calibrationRoomBoundaryVisible));
+      this.renderCalibrationOverlay();
+      this.announceCalibrationAction(
+        this.calibrationRoomBoundaryVisible ? 'Raumgrenze wird angezeigt.' : 'Raumgrenze ausgeblendet.'
+      );
+    }, advancedRow);
+    boundaryToggle.setAttribute('aria-pressed', 'false');
+    makeAction('Gesamte Geometrie zurücksetzen', () => this.resetCalibration(), advancedRow);
 
     const legend = document.createElement('section');
     legend.className = 'museum-hub__calibration-legend';
     legend.setAttribute('aria-labelledby', 'calibration-legend-title');
-    const legendTitle = document.createElement('h3');
+    const legendTitle = document.createElement('h4');
     legendTitle.id = 'calibration-legend-title';
-    legendTitle.textContent = 'What the picture means';
+    legendTitle.textContent = 'Was das Bild zeigt';
     legend.appendChild(legendTitle);
     const legendItems: readonly [string, string, string][] = [
-      ['wall-corner', 'Orange points', 'Move one wall corner.'],
-      ['wall-edge', 'Striped orange lines', 'Move the complete wall.'],
-      ['safe-area', 'Blue area', 'Safe boundary; artwork must stay inside.'],
-      ['mounting-area', 'Green area', 'Artwork mounting area.'],
-      ['entrance-boundary', 'Purple dashed area', 'Entrance boundary; room shape only, no artwork.'],
+      ['wall-corner', 'Orange Punkte', 'eine Wandecke verschieben.'],
+      ['wall-edge', 'Orange Kanten', 'die ganze Wand verschieben.'],
+      ['safe-area', 'Blaue Fläche', 'Sicherheitsbereich.'],
+      ['mounting-area', 'Grüne Fläche', 'hier dürfen Bilder hängen.'],
+      ['entrance-boundary', 'Violette Fläche', 'Eingangsbereich, nur Raumform.'],
     ];
     for (const [kind, label, description] of legendItems) {
       const item = document.createElement('div');
@@ -2164,7 +2396,152 @@ export class MainMuseumHub {
       item.append(swatch, text);
       legend.appendChild(item);
     }
+    roomAdvanced.append(legend, this.buildBackgroundControls());
+    roomTab.append(wallSection, roomAdvanced);
 
+    // ── Tab "Bilder": places, selected artwork, library ────────────────────
+    const artworkTab = document.createElement('div');
+    this.artworkLibrary = new EditorArtworkLibrary({
+      onSelectPlace: (slotId) => {
+        this.selectCalibrationSlot(slotId);
+        this.slotViews.find((view) => view.slot.id === slotId)?.button.focus({ preventScroll: true });
+      },
+      onArtworkClick: (artworkId) => this.handleLibraryArtworkClick(artworkId),
+      onAssign: (slotId, artworkId) => this.assignArtwork(slotId, artworkId),
+      onUnplace: (artworkId) => {
+        const slotId = this.slotViews.find((view) => view.slot.artworkId === artworkId)?.slot.id;
+        if (slotId) this.assignArtwork(slotId, null);
+      },
+      onAutoFill: () => this.autoFillCurrentRoom(),
+    });
+
+    const detail = document.createElement('section');
+    detail.className = 'museum-hub__editor-section museum-hub__editor-detail';
+    detail.setAttribute('aria-labelledby', 'editor-detail-title');
+    const detailTitle = document.createElement('h3');
+    detailTitle.id = 'editor-detail-title';
+    const detailBody = document.createElement('p');
+    detailBody.className = 'museum-hub__editor-hint';
+    this.editorDetailTitle = detailTitle;
+    this.editorDetailBody = detailBody;
+
+    const numericGrid = document.createElement('div');
+    numericGrid.className = 'museum-hub__calibration-numeric-grid';
+    const numericFields: readonly [string, string, number, number, number][] = [
+      ['horizontalPosition', 'Von links (m)', 0, 20, 0.01],
+      ['centerHeight', 'Höhe der Bildmitte (m)', 0, 8, 0.01],
+      ['physicalHeight', 'Bildhöhe (m)', 0.04, 8, 0.01],
+      ['mountingGap', 'Wandabstand (cm)', 0.1, 3, 0.1],
+    ];
+    for (const [field, labelText, min, max, step] of numericFields) {
+      const label = document.createElement('label');
+      label.className = 'museum-hub__calibration-number';
+      label.textContent = labelText;
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.inputMode = 'decimal';
+      input.min = String(min);
+      input.max = String(max);
+      input.step = String(step);
+      input.addEventListener('change', () => this.applyCalibrationNumber(field, input.valueAsNumber));
+      label.appendChild(input);
+      numericGrid.appendChild(label);
+      this.calibrationFields.set(field, input);
+    }
+    const sizeHint = document.createElement('p');
+    sizeHint.className = 'museum-hub__editor-hint';
+    sizeHint.textContent = 'Die Breite folgt dem Bildformat.';
+
+    const detailActions = document.createElement('div');
+    detailActions.className = 'museum-hub__editor-actions';
+    makeAction('Im grünen Bereich zentrieren', () => this.centerActiveSlotInMountingZone(), detailActions);
+    this.removeArtworkButton = makeAction('Bild entfernen', () => {
+      const slot = this.activeCalibrationSlot;
+      if (slot?.artworkId) this.assignArtwork(slot.id, null);
+    }, detailActions);
+    const artworkUpload = document.createElement('label');
+    artworkUpload.className = 'museum-hub__calibration-action museum-hub__calibration-import';
+    artworkUpload.textContent = 'Bild ersetzen (Vorschau)';
+    artworkUpload.title = 'Nur zur Vorschau im Editor; die Datei im Ordner customer-artworks bleibt unverändert.';
+    const artworkInput = document.createElement('input');
+    artworkInput.type = 'file';
+    artworkInput.accept = 'image/*';
+    artworkInput.className = 'museum-hub__file-input';
+    artworkInput.addEventListener('change', () => {
+      const file = artworkInput.files?.[0];
+      if (file) void this.replaceCalibrationArtwork(file);
+      artworkInput.value = '';
+    });
+    artworkUpload.appendChild(artworkInput);
+    detailActions.appendChild(artworkUpload);
+
+    const artworkDetails = document.createElement('details');
+    artworkDetails.className = 'museum-hub__calibration-advanced';
+    const artworkDetailsSummary = document.createElement('summary');
+    artworkDetailsSummary.textContent = 'Bilddetails';
+    const artworkInfo = document.createElement('p');
+    artworkInfo.className = 'museum-hub__calibration-artwork-info';
+    artworkInfo.textContent = 'Bild auswählen, um Pixelmaße und Seitenverhältnis zu sehen.';
+    this.calibrationArtworkInfo = artworkInfo;
+    artworkDetails.append(artworkDetailsSummary, artworkInfo);
+    detail.append(detailTitle, detailBody, numericGrid, sizeHint, detailActions, artworkDetails);
+    artworkTab.append(this.artworkLibrary.places, detail, this.artworkLibrary.library);
+
+    // ── Tab "Speichern" ──────────────────────────────────────────────────────
+    this.saveTab = new EditorSaveTab({
+      onDownload: () => this.downloadCalibrationJson(),
+      onCopy: () => void this.copyCalibrationJson(),
+      onImport: (file) => void this.importCalibrationFile(file),
+      onRestore: () => this.restoreLastValidCalibrationSnapshot(),
+      onDiagnostics: () => this.downloadArtworkDiagnostics(),
+      onAutoPlaceChange: (enabled) => this.setAutoPlaceUnmapped(enabled),
+      onIssueSelect: (issue) => this.openCalibrationIssue(issue),
+    });
+
+    this.editorTabs = createEditorTabs('museum-hub-editor', 'Editor-Bereiche', [
+      { id: 'room', label: 'Raum', panel: roomTab },
+      { id: 'artworks', label: 'Bilder', panel: artworkTab },
+      { id: 'save', label: 'Speichern', panel: this.saveTab.element },
+    ]);
+    this.editorTabs.select('artworks');
+
+    // ── Always-visible bottom bar ───────────────────────────────────────────
+    const bottomBar = document.createElement('div');
+    bottomBar.className = 'museum-hub__editor-bottom';
+    const actionStatus = document.createElement('p');
+    actionStatus.className = 'museum-hub__calibration-action-status';
+    actionStatus.setAttribute('role', 'status');
+    actionStatus.setAttribute('aria-live', 'polite');
+    const bottomActions = document.createElement('div');
+    bottomActions.className = 'museum-hub__editor-actions';
+    this.calibrationUndoButton = makeAction('↶ Rückgängig', () => this.undoCalibration(), bottomActions);
+    this.calibrationRedoButton = makeAction('↷ Wiederholen', () => this.redoCalibration(), bottomActions);
+    this.calibrationGuideToggle = makeAction('Hilfslinien aus', () => {
+      this.calibrationGuidesVisible = !this.calibrationGuidesVisible;
+      this.calibrationGuideToggle!.textContent = this.calibrationGuidesVisible ? 'Hilfslinien aus' : 'Hilfslinien ein';
+      this.calibrationGuideToggle!.setAttribute('aria-pressed', String(!this.calibrationGuidesVisible));
+      this.calibrationSvg?.classList.toggle('is-guides-hidden', !this.calibrationGuidesVisible);
+    }, bottomActions);
+    this.calibrationGuideToggle.setAttribute('aria-pressed', 'false');
+    this.editorStatusButton = makeAction('Status', () => this.editorTabs?.select('save', true), bottomActions, 'museum-hub__editor-status');
+    bottomBar.append(actionStatus, bottomActions);
+
+    panel.append(header, guide, this.roomBar.switcher, this.editorTabs.list, ...this.editorTabs.panels, bottomBar);
+    hub.appendChild(panel);
+    this.calibrationOutput = this.saveTab.output;
+    this.calibrationActionStatus = actionStatus;
+    this.calibrationCopyButton = this.saveTab.copyButton;
+    this.calibrationDownloadButton = this.saveTab.downloadButton;
+    this.initialCalibrationSnapshot = JSON.stringify(this.buildCurrentCalibrationConfig(), null, 2);
+    const first = this.firstSlotOfPage(this.currentPageIndex());
+    if (first) this.selectCalibrationSlot(first.slot.id);
+    else this.syncCalibrationControls();
+    this.syncEditorToolState();
+    this.showEditorGuide(false);
+    actionStatus.textContent = `${this.currentRoomLabel()} von ${this.pageCount} geöffnet.`;
+  }
+
+  private buildBackgroundControls(): HTMLElement {
     const backgroundControls = document.createElement('div');
     backgroundControls.className = 'museum-hub__calibration-background';
     const backgroundLabel = document.createElement('label');
@@ -2177,7 +2554,7 @@ export class MainMuseumHub {
     backgroundInfo.className = 'museum-hub__calibration-background-info';
     const fitSelect = document.createElement('select');
     fitSelect.className = 'museum-hub__calibration-select';
-    fitSelect.setAttribute('aria-label', 'Reference image fitting');
+    fitSelect.setAttribute('aria-label', 'Einpassung des Referenzbilds');
     for (const fit of ['contain', 'cover'] as const) {
       const option = document.createElement('option');
       option.value = fit;
@@ -2196,7 +2573,7 @@ export class MainMuseumHub {
     ): void => {
       backgroundInfo.textContent = width > 0 && height > 0
         ? `${name} · ${width}×${height}px · ${(width / height).toFixed(3)}`
-        : `${name} · Copy this file to customer-artworks/Backgrounds under the exported filename`;
+        : `${name} · Datei unter diesem Namen nach customer-artworks/Backgrounds kopieren`;
     };
     updateBackgroundInfo();
     backgroundInput.addEventListener('change', () => {
@@ -2262,296 +2639,97 @@ export class MainMuseumHub {
     });
     backgroundLabel.append(backgroundInput, fitSelect);
     backgroundControls.append(backgroundLabel, backgroundInfo, resetBackground);
+    return backgroundControls;
+  }
 
-    const controls = document.createElement('div');
-    controls.className = 'museum-hub__calibration-controls';
+  // ── Editor tools, view, and guide ─────────────────────────────────────────
 
-    const selectLabel = document.createElement('label');
-    selectLabel.className = 'museum-hub__calibration-label';
-    selectLabel.textContent = '1. Select wall';
-    const select = document.createElement('select');
-    select.className = 'museum-hub__calibration-select';
-    for (const wall of this.resolution.walls) {
-      const option = document.createElement('option');
-      option.value = wall.id;
-      option.textContent = `${wall.id.toUpperCase()} — ${wall.group}`;
-      select.appendChild(option);
+  /** Wall corner/edge handles are only interactive while wall editing is on. */
+  private isWallCornerEditing(): boolean {
+    return this.calibrationEditMode === 'wall' && this.wallEditingEnabled;
+  }
+
+  private toggleEditorTool(tool: 'wall' | 'safe' | 'mounting-zone' | 'room-boundary', forceOn = false): void {
+    const active = tool === 'wall' ? this.wallEditingEnabled : this.calibrationEditMode === tool;
+    const enable = forceOn || !active;
+    if (this.activeCalibrationWallId === 'wall-rear' && tool !== 'room-boundary' && enable) {
+      // Rendered-wall tools need a rendered wall; fall back to the artwork's wall.
+      this.activeCalibrationWallId = this.activeCalibrationSlot?.placement.wallId ?? this.resolution.walls[0]?.id ?? null;
+      this.calibrationRoomBoundaryVisible = false;
+      if (this.calibrationWallSelect && this.activeCalibrationWallId) this.calibrationWallSelect.value = this.activeCalibrationWallId;
     }
-    if (this.entranceBoundaryQuad) {
-      const option = document.createElement('option');
-      option.value = 'wall-rear';
-      option.textContent = 'ENTRANCE BOUNDARY — room shape only';
-      select.appendChild(option);
-    }
-    if (this.activeCalibrationWallId) select.value = this.activeCalibrationWallId;
-    select.addEventListener('change', () => {
-      this.activeCalibrationWallId = select.value;
-      this.calibrationRoomBoundaryVisible = select.value === 'wall-rear';
-      this.calibrationEditMode = this.calibrationRoomBoundaryVisible ? 'room-boundary' : 'wall';
-      // Selection is deliberately independent from camera framing. The
-      // projected calibration quad is the only authoritative wall surface;
-      // framing is available through the explicit action below.
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction(`Currently editing: ${select.value === 'wall-rear' ? 'entrance boundary' : select.value.toUpperCase()}.`);
-    });
-    selectLabel.appendChild(select);
-
-    const slotLabel = document.createElement('label');
-    slotLabel.className = 'museum-hub__calibration-label';
-    slotLabel.textContent = '2. Select artwork';
-    const slotSelect = document.createElement('select');
-    slotSelect.className = 'museum-hub__calibration-select';
-    for (const { slot } of this.slotViews) {
-      if (!slot.artworkId) continue;
-      const option = document.createElement('option');
-      option.value = slot.id;
-      option.textContent = `${slot.displayLabel} — ${slot.placement.wallId.toUpperCase()}`;
-      slotSelect.appendChild(option);
-    }
-    this.activeCalibrationSlotId = slotSelect.value || null;
-    slotSelect.addEventListener('change', () => this.selectCalibrationSlot(slotSelect.value));
-    slotLabel.appendChild(slotSelect);
-
-    const artworkUpload = document.createElement('label');
-    artworkUpload.className = 'museum-hub__calibration-label';
-    artworkUpload.textContent = 'Replace selected artwork (preview only)';
-    const artworkInput = document.createElement('input');
-    artworkInput.type = 'file';
-    artworkInput.accept = 'image/*';
-    artworkInput.addEventListener('change', () => {
-      const file = artworkInput.files?.[0];
-      if (file) void this.replaceCalibrationArtwork(file);
-      artworkInput.value = '';
-    });
-    artworkUpload.appendChild(artworkInput);
-
-    const artworkInfo = document.createElement('p');
-    artworkInfo.className = 'museum-hub__calibration-artwork-info';
-    artworkInfo.setAttribute('aria-live', 'polite');
-    artworkInfo.textContent = 'Select an artwork to inspect its decoded dimensions and ratio.';
-    this.calibrationArtworkInfo = artworkInfo;
-
-    const numericGrid = document.createElement('div');
-    numericGrid.className = 'museum-hub__calibration-numeric-grid';
-    const numericFields: readonly [string, string, number, number, number][] = [
-      ['horizontalPosition', 'Horizontal position (0–1)', 0, 1, 0.001],
-      ['centerHeight', 'Artwork center height (m)', 0, 8, 0.01],
-      ['physicalHeight', 'Artwork height (m; width follows ratio)', 0.04, 8, 0.01],
-      ['mountingGap', 'Distance from wall (m)', 0.001, 0.03, 0.001],
-    ];
-    for (const [field, labelText, min, max, step] of numericFields) {
-      const label = document.createElement('label');
-      label.className = 'museum-hub__calibration-number';
-      label.textContent = labelText;
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.min = String(min);
-      input.max = String(max);
-      input.step = String(step);
-      input.addEventListener('change', () => this.applyCalibrationNumber(field, input.valueAsNumber));
-      label.appendChild(input);
-      numericGrid.appendChild(label);
-      this.calibrationFields.set(field, input);
-    }
-
-    const actionRow = document.createElement('div');
-    actionRow.className = 'museum-hub__calibration-actions';
-    const makeAction = (
-      text: string,
-      action: () => void,
-      container: HTMLElement = actionRow
-    ): HTMLButtonElement => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'museum-hub__calibration-action';
-      button.textContent = text;
-      button.addEventListener('click', action);
-      container.appendChild(button);
-      return button;
+    this.calibrationEditMode = enable ? tool : 'wall';
+    this.wallEditingEnabled = enable && tool === 'wall';
+    if (tool === 'room-boundary') this.calibrationRoomBoundaryVisible = enable;
+    this.renderCalibrationOverlay();
+    this.renderEditorViewportHandles();
+    this.syncEditorToolState();
+    const wallName = wallLabel(this.activeCalibrationWallId ?? '');
+    const messages: Record<typeof tool, string> = {
+      wall: `Wandecken bearbeiten: ${wallName}. Orange Ecke ziehen formt die Wand, Kante ziehen verschiebt sie.`,
+      'mounting-zone': `Grüne Fläche bearbeiten: ${wallName}. Grüne Punkte ziehen.`,
+      safe: `Sicherheitsbereich bearbeiten: ${wallName}. Blaue Punkte ziehen.`,
+      'room-boundary': 'Eingangsbereich bearbeiten: violette Punkte ziehen.',
     };
-    const editCorners = makeAction('Edit wall corners', () => {
-      this.calibrationEditMode = 'wall';
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction('Currently editing wall corners. Drag an orange point.');
-      this.focusCalibrationWall();
-    });
-    editCorners.title = 'Drag an orange point to reshape the selected wall.';
-    const moveWall = makeAction('Move complete wall', () => {
-      this.calibrationEditMode = 'wall';
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction('Currently moving the complete wall. Drag a striped orange line.');
-      this.focusCalibrationWall();
-    });
-    moveWall.title = 'Drag a striped orange line to move the selected wall.';
-    makeAction('Wall Edit Mode', () => {
-      this.calibrationEditMode = 'wall';
-      this.frameEditorWall(this.activeCalibrationWallId);
-      this.announceCalibrationAction('Wall Edit Mode: all four authoritative 3D corners are visible and selectable.');
-    });
-    makeAction('Frame Wall', () => this.frameEditorWall(this.activeCalibrationWallId));
-    makeAction('Frame Corner', () => this.frameEditorWall(this.activeCalibrationWallId, 0));
-    makeAction('Reset View', () => {
-      if (this.editorViewport) {
-        this.editorViewport.resetView();
-        this.editorViewport.frameAllWalls(
-          this.resolution.walls
-            .filter((wall) => wall.room && wall.id !== 'wall-rear')
-            .map((wall) => wall.room!)
-        );
-      }
-      this.renderEditorViewportHandles();
-      this.announceCalibrationAction('Editor view reset without changing wall geometry.');
-    });
-    makeAction('Edit safe boundary', () => {
-      this.calibrationEditMode = 'safe';
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction('Currently editing the blue safe boundary for the selected wall.');
-    });
-    makeAction('Edit mounting area', () => {
-      this.calibrationEditMode = 'mounting-zone';
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction('Currently editing the green mounting area for the selected wall.');
-    });
-    makeAction('Edit entrance boundary', () => {
-      this.calibrationEditMode = 'room-boundary';
-      this.calibrationRoomBoundaryVisible = true;
-      if (this.calibrationWallSelect) this.calibrationWallSelect.value = 'wall-rear';
-      this.activeCalibrationWallId = 'wall-rear';
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction('Currently editing the entrance boundary. No artwork can be placed here.');
-    });
-    makeAction('Show room boundary', () => {
-      this.calibrationRoomBoundaryVisible = !this.calibrationRoomBoundaryVisible;
-      this.calibrationEditMode = this.calibrationRoomBoundaryVisible ? 'room-boundary' : 'wall';
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction(
-        this.calibrationRoomBoundaryVisible
-          ? 'Room boundary shown for diagnostics. It is not a normal artwork wall.'
-          : 'Room boundary hidden. Select a rendered wall to edit it.'
-      );
-    });
-    makeAction('Reset selected boundary', () => this.resetSelectedCalibrationBoundary());
-    makeAction('Reset all geometry', () => this.resetCalibration());
-    makeAction('Center artwork in green area', () => this.centerActiveSlotInMountingZone());
-    makeAction('Confirm green mounting area', () => this.confirmActiveMountingZone());
-    makeAction('Artwork left', () => this.nudgeActiveArtwork(-0.1, 0));
-    makeAction('Artwork right', () => this.nudgeActiveArtwork(0.1, 0));
-    makeAction('Artwork up', () => this.nudgeActiveArtwork(0, 0.1));
-    makeAction('Artwork down', () => this.nudgeActiveArtwork(0, -0.1));
-    makeAction('Fit selected wall to view', () => {
-      this.recordCalibrationHistory();
+    this.announceCalibrationAction(enable ? messages[tool] : 'Bearbeitung beendet. Bilder können verschoben werden.');
+    if (enable && (tool === 'wall' || tool === 'room-boundary')) this.focusCalibrationWall();
+  }
+
+  private syncEditorToolState(): void {
+    for (const [tool, button] of this.editorToolButtons) {
+      const active = tool === 'wall' ? this.wallEditingEnabled : this.calibrationEditMode === tool;
+      button.setAttribute('aria-pressed', String(active));
+      button.classList.toggle('is-active', active);
+    }
+    const wall = this.activeCalibrationWallId ? this.resolution.wallById.get(this.activeCalibrationWallId) : null;
+    if (this.zoneConfirmedInput) {
+      this.zoneConfirmedInput.checked = wall?.mountingZoneConfirmed === true;
+      this.zoneConfirmedInput.disabled = !wall;
+    }
+    this.element.classList.toggle('is-wall-editing', this.wallEditingEnabled);
+  }
+
+  private setEditorView(mode: 'room' | 'wall'): void {
+    if (mode === 'wall' && this.activeCalibrationWallId && this.activeCalibrationWallId !== 'wall-rear') {
       this.fitCalibrationWallsToView(this.activeCalibrationWallId ?? undefined);
-      this.applyAllSlotGeometry();
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction('Selected wall fitted to the visible calibration stage.');
-    });
-    makeAction('Fit all walls to view', () => {
+    } else {
       this.fitCalibrationWallsToView();
-      this.applyAllSlotGeometry();
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction('All walls fitted to the visible calibration stage.');
-    });
-    makeAction('Reset viewport', () => {
-      this.calibrationViewport = { ...this.initialCalibrationViewport };
-      this.applyCalibrationViewport();
-      this.applyAllSlotGeometry();
-      this.renderCalibrationOverlay();
-      this.announceCalibrationAction('Viewport reset and all wall corners are visible.');
-    });
-    const tiltUnavailable = makeAction('Tilt (not available for this wall model)', () => {});
-    tiltUnavailable.disabled = true;
-    this.calibrationUndoButton = makeAction('Undo', () => this.undoCalibration());
-    this.calibrationRedoButton = makeAction('Redo', () => this.redoCalibration());
-    this.calibrationGuideToggle = makeAction('Hide guides', () => {
-      this.calibrationGuidesVisible = !this.calibrationGuidesVisible;
-      this.calibrationGuideToggle!.textContent = this.calibrationGuidesVisible ? 'Hide guides' : 'Show guides';
-      this.calibrationSvg?.classList.toggle('is-guides-hidden', !this.calibrationGuidesVisible);
-    });
+      mode = 'room';
+    }
+    this.applyAllSlotGeometry();
+    this.renderCalibrationOverlay();
+    this.renderEditorViewportHandles();
+    for (const [key, button] of this.editorViewButtons) {
+      button.setAttribute('aria-pressed', String(key === mode));
+      button.classList.toggle('is-active', key === mode);
+    }
+    this.announceCalibrationAction(mode === 'wall' ? `Ansicht: ${wallLabel(this.activeCalibrationWallId ?? '')}.` : 'Ansicht: ganzer Raum.');
+  }
 
-    const restoreButton = document.createElement('button');
-    restoreButton.type = 'button';
-    restoreButton.className = 'museum-hub__calibration-restore';
-    restoreButton.textContent = 'Letzte gültige Konfiguration wiederherstellen';
-    restoreButton.disabled = true;
-    restoreButton.addEventListener('click', () => this.restoreLastValidCalibrationSnapshot());
+  private static readonly GUIDE_STORAGE_KEY = 'freyraum.placementEditor.guideSeen';
 
-    controls.append(selectLabel, slotLabel, artworkUpload, artworkInfo, numericGrid, actionRow, restoreButton);
+  private showEditorGuide(force: boolean): void {
+    if (!this.editorGuide) return;
+    let seen = false;
+    try {
+      seen = window.localStorage.getItem(MainMuseumHub.GUIDE_STORAGE_KEY) === '1';
+    } catch {
+      seen = false;
+    }
+    if (!force && seen) return;
+    this.editorGuide.hidden = false;
+    if (force) this.editorGuide.querySelector<HTMLButtonElement>('button')?.focus();
+  }
 
-    const warningTitle = document.createElement('p');
-    warningTitle.className = 'museum-hub__calibration-label';
-    warningTitle.textContent = 'Validation';
-    const warningList = document.createElement('ul');
-    warningList.className = 'museum-hub__calibration-warnings';
-
-    const output = document.createElement('textarea');
-    output.className = 'museum-hub__calibration-output';
-    output.readOnly = true;
-    output.rows = 16;
-    output.setAttribute('aria-label', 'Museum-Hub-Konfiguration als JSON');
-
-    const exportRow = document.createElement('div');
-    exportRow.className = 'museum-hub__calibration-actions';
-    this.calibrationCopyButton = makeAction(
-      'JSON kopieren',
-      () => void this.copyCalibrationJson(),
-      exportRow
-    );
-    this.calibrationDownloadButton = makeAction(
-      'Export configuration',
-      () => this.downloadCalibrationJson(),
-      exportRow
-    );
-    makeAction(
-      'Download diagnostics',
-      () => this.downloadArtworkDiagnostics(),
-      exportRow
-    );
-    const actionStatus = document.createElement('p');
-    actionStatus.className = 'museum-hub__calibration-action-status';
-    actionStatus.setAttribute('role', 'status');
-    actionStatus.setAttribute('aria-live', 'polite');
-
-    const importLabel = document.createElement('label');
-    importLabel.className = 'museum-hub__calibration-import';
-    importLabel.textContent = 'Open existing configuration';
-    const importInput = document.createElement('input');
-    importInput.type = 'file';
-    importInput.accept = 'application/json,.json';
-    importInput.addEventListener('change', () => void this.importCalibrationFile(importInput.files?.[0] ?? null));
-    importLabel.appendChild(importInput);
-
-    const advanced = document.createElement('details');
-    advanced.className = 'museum-hub__calibration-advanced';
-    const advancedSummary = document.createElement('summary');
-    advancedSummary.textContent = 'Technical details (JSON and diagnostics)';
-    advanced.append(advancedSummary, output);
-
-    panel.append(
-      heading,
-      intro,
-      steps,
-      instructions,
-      legend,
-      backgroundControls,
-      controls,
-      warningTitle,
-      warningList,
-      exportRow,
-      actionStatus,
-      importLabel,
-      advanced
-    );
-    hub.appendChild(panel);
-    this.calibrationOutput = output;
-    this.calibrationWarnings = warningList;
-    this.calibrationActionStatus = actionStatus;
-    this.calibrationRestoreButton = restoreButton;
-    this.calibrationWallSelect = select;
-    this.calibrationSlotSelect = slotSelect;
-    actionStatus.textContent = 'Currently editing: ' + (this.activeCalibrationWallId ?? 'no wall selected');
-    this.initialCalibrationSnapshot = JSON.stringify(this.buildCurrentCalibrationConfig(), null, 2);
-    if (this.activeCalibrationSlotId) this.selectCalibrationSlot(this.activeCalibrationSlotId);
-    else this.syncCalibrationControls();
+  private hideEditorGuide(): void {
+    if (!this.editorGuide) return;
+    this.editorGuide.hidden = true;
+    try {
+      window.localStorage.setItem(MainMuseumHub.GUIDE_STORAGE_KEY, '1');
+    } catch {
+      // Storage can be unavailable for file:// pages; the guide then shows again next time.
+    }
+    this.calibrationPanel?.querySelector<HTMLButtonElement>('.museum-hub__editor-icon-button')?.focus();
   }
 
   private startSlotCalibrationDrag(
@@ -2717,8 +2895,8 @@ export class MainMuseumHub {
       }
     }
     const parts: string[] = [];
-    if (moved.length) parts.push(`Moved back inside the green zone: ${moved.join(', ')}.`);
-    if (invalid.length) parts.push(`Does not fit the green zone and is marked invalid: ${invalid.join(', ')}.`);
+    if (moved.length) parts.push(`Zurück in die grüne Fläche verschoben: ${moved.join(', ')}.`);
+    if (invalid.length) parts.push(`Passt nicht in die grüne Fläche und ist markiert: ${invalid.join(', ')}.`);
     return parts.length ? parts.join(' ') : null;
   }
 
@@ -2898,26 +3076,14 @@ export class MainMuseumHub {
     this.applyCalibrationViewport();
   }
 
-  private frameEditorWall(wallId: string | null, cornerIndex?: number): void {
-    if (!this.editorViewport || !this.editorViewportSvg || !wallId || wallId === 'wall-rear') return;
-    const wall = this.resolution.wallById.get(wallId);
-    if (!wall?.room) return;
-    const frame = cornerIndex === undefined
-      ? this.editorViewport.frameWall(wall.room)
-      : this.editorViewport.frameCorner(wall.room, cornerIndex);
-    if (!frame) {
-      this.announceCalibrationAction(`Cannot frame ${wallId}: authoritative wall corners are invalid.`);
-      return;
-    }
-    this.renderEditorViewportHandles();
-  }
-
   private renderEditorViewportHandles(): void {
     const svg = this.editorViewportSvg;
     const viewport = this.editorViewport;
     if (!svg) return;
     svg.replaceChildren();
     if (!viewport) return;
+    // Entrance-edge corner handles belong to "Wandecken bearbeiten" only.
+    if (this.calibrating && !this.wallEditingEnabled) return;
     if (viewport.viewMode === 'wall-edit') {
       // The projected calibration SVG remains the sole editable wall surface.
       // Do not draw a second orthographic wall rectangle over it.
@@ -2929,6 +3095,7 @@ export class MainMuseumHub {
     // in this overview layer.
     for (const wall of this.resolution.walls) {
       if (wall.id !== 'wall-left' && wall.id !== 'wall-right') continue;
+      if (this.calibrating && wall.id !== this.activeCalibrationWallId) continue;
       // Existing projected quads are ordered around each wall. The entrance
       // edge is the off-screen pair: left wall 0/3, right wall 1/2.
       const entranceCornerIndices = wall.id === 'wall-left' ? [0, 3] : [1, 2];
@@ -2963,7 +3130,7 @@ export class MainMuseumHub {
     circle.setAttribute('tabindex', '0');
     circle.setAttribute('role', 'button');
     circle.style.pointerEvents = 'all';
-    circle.setAttribute('aria-label', `${wallId} existing projected corner ${cornerIndex + 1}`);
+    circle.setAttribute('aria-label', `${wallLabel(wallId)}: Ecke am Eingang ${cornerIndex + 1}`);
     circle.addEventListener('pointerdown', (event) =>
       this.startWallPointCalibrationDrag(event, wallId, 'quad', cornerIndex)
     );
@@ -3226,27 +3393,24 @@ export class MainMuseumHub {
       wallPolygon.setAttribute('points', this.pointsToSvg(wall.quad));
       wallPolygon.dataset.calibrationWall = wall.id;
       wallPolygon.setAttribute('class', `museum-hub__calibration-wall${active ? ' is-active' : ''}`);
-      const wallLabelText =
-        wall.id === 'wall-front'
-          ? 'FRONT WALL — drag corners or wall'
-          : wall.id === 'wall-left'
-            ? 'LEFT WALL — drag corners or wall'
-            : wall.id === 'wall-right'
-              ? 'RIGHT WALL — drag corners or wall'
-              : `${wall.id.toUpperCase()} WALL — drag corners or wall`;
+      const wallLabelText = wallLabel(wall.id);
       wallPolygon.setAttribute('aria-label', wallLabelText);
       this.calibrationSvg.appendChild(wallPolygon);
-      const wallLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      const wallCenter = wall.quad.reduce((sum, corner) => point(sum.x + corner.x, sum.y + corner.y), point(0, 0));
-      wallCenter.x /= wall.quad.length;
-      wallCenter.y /= wall.quad.length;
-      wallLabel.setAttribute('x', wallCenter.x.toFixed(2));
-      wallLabel.setAttribute('y', wallCenter.y.toFixed(2));
-      wallLabel.setAttribute('class', `museum-hub__calibration-wall-label${active ? ' is-active' : ''}`);
-      wallLabel.dataset.calibrationWallLabel = wall.id;
-      wallLabel.textContent = wallLabelText;
-      this.calibrationSvg.appendChild(wallLabel);
-      if (this.calibrating && active && this.calibrationEditMode === 'wall') {
+      const wallEditing = this.calibrating && active && this.isWallCornerEditing();
+      if (!this.calibrating || wallEditing) {
+        // Labels only for the wall being edited, and only while "Wandecken bearbeiten" is on.
+        const wallLabelElement = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        const wallCenter = wall.quad.reduce((sum, corner) => point(sum.x + corner.x, sum.y + corner.y), point(0, 0));
+        wallCenter.x /= wall.quad.length;
+        wallCenter.y /= wall.quad.length;
+        wallLabelElement.setAttribute('x', wallCenter.x.toFixed(2));
+        wallLabelElement.setAttribute('y', wallCenter.y.toFixed(2));
+        wallLabelElement.setAttribute('class', `museum-hub__calibration-wall-label${active ? ' is-active' : ''}`);
+        wallLabelElement.dataset.calibrationWallLabel = wall.id;
+        wallLabelElement.textContent = wallLabelText;
+        this.calibrationSvg.appendChild(wallLabelElement);
+      }
+      if (wallEditing) {
         wall.quad.forEach((corner, index) => {
           const next = wall.quad[(index + 1) % wall.quad.length]!;
           this.calibrationSvg!.appendChild(this.createCalibrationEdgeHitTarget(wall.id, index, corner, next));
@@ -3259,22 +3423,24 @@ export class MainMuseumHub {
         wallPolygon.setAttribute('tabindex', '0');
         wallPolygon.setAttribute('role', 'button');
         wallPolygon.addEventListener('pointerdown', (event) => {
+          if (!this.wallEditingEnabled) return;
           this.calibrationEditMode = 'wall';
           this.activeCalibrationWallId = wall.id;
           if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
-          this.announceCalibrationAction(`Currently editing: ${wall.id.toUpperCase()}. Drag a striped orange line to move the complete wall.`);
+          this.announceCalibrationAction(`Wandecken bearbeiten: ${wallLabel(wall.id)}.`);
           this.renderCalibrationOverlay();
           this.startWallTranslateDrag(event, wall.id);
         });
         wallPolygon.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            this.calibrationEditMode = 'wall';
             this.activeCalibrationWallId = wall.id;
             if (this.calibrationWallSelect) this.calibrationWallSelect.value = wall.id;
+            this.syncEditorToolState();
             this.renderCalibrationOverlay();
             return;
           }
+          if (!this.wallEditingEnabled) return;
           const distance = event.shiftKey ? 10 : 1;
           if (event.key === 'ArrowLeft') this.translateWall(wall.id, -distance, 0);
           else if (event.key === 'ArrowRight') this.translateWall(wall.id, distance, 0);
@@ -3284,11 +3450,10 @@ export class MainMuseumHub {
           event.preventDefault();
         });
       }
-      if (this.calibrating && active && this.calibrationEditMode === 'wall') {
+      if (wallEditing) {
         wall.quad.forEach((corner, index) => this.calibrationSvg!.appendChild(
           this.createCalibrationHandle(wall.id, 'quad', index, corner, 'museum-hub__calibration-handle museum-hub__calibration-handle--wall')
         ));
-        wallPolygon.setAttribute('aria-label', wallLabelText);
       }
 
       const safePolygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
@@ -3335,11 +3500,11 @@ export class MainMuseumHub {
       envelope.setAttribute('class', 'museum-hub__calibration-envelope');
       envelope.setAttribute('tabindex', '0');
       envelope.setAttribute('role', 'button');
-      envelope.setAttribute('aria-label', 'ENTRANCE BOUNDARY — room shape only; no artwork allowed');
+      envelope.setAttribute('aria-label', 'Eingangsbereich – nur Raumform, keine Bilder');
       envelope.addEventListener('pointerdown', (event) => {
         this.activeCalibrationWallId = 'wall-rear';
         if (this.calibrationWallSelect) this.calibrationWallSelect.value = 'wall-rear';
-        this.announceCalibrationAction('Currently editing: ENTRANCE BOUNDARY. No artwork can be placed here.');
+        this.announceCalibrationAction('Eingangsbereich: nur Raumform, hier hängen keine Bilder.');
         this.renderCalibrationOverlay();
         this.startWallTranslateDrag(event, 'wall-rear');
       });
@@ -3378,6 +3543,7 @@ export class MainMuseumHub {
       this.renderCameraDebugGuides();
       this.renderProjectedSlotDebugOverlay();
     }
+    if (this.calibrating && !this.calibrationDrag) this.renderEditorViewportHandles();
     this.applyCalibrationViewport();
   }
 
@@ -3399,8 +3565,8 @@ export class MainMuseumHub {
     handle.setAttribute(
       'aria-label',
       target === 'quad'
-        ? `${wallId === 'wall-rear' ? 'Entrance boundary' : wallId} wall corner ${index + 1}. Drag to reshape.`
-        : `${target === 'safe' ? 'Safe boundary' : 'Mounting area'} corner ${index + 1}. Drag to adjust.`
+        ? `${wallLabel(wallId)}: Ecke ${index + 1}. Ziehen formt die Wand.`
+        : `${target === 'safe' ? 'Sicherheitsbereich' : 'Grüne Fläche'}: Punkt ${index + 1}. Ziehen passt den Bereich an.`
     );
     handle.addEventListener('pointerdown', (event) => this.startWallPointCalibrationDrag(event, wallId, target, index));
     return handle;
@@ -3423,7 +3589,7 @@ export class MainMuseumHub {
     line.setAttribute('role', 'button');
     line.setAttribute(
       'aria-label',
-      `${wallId === 'wall-rear' ? 'Entrance boundary' : wallId} striped orange edge ${index + 1}. Drag to move the complete wall.`
+      `${wallLabel(wallId)}: Kante ${index + 1}. Ziehen verschiebt die ganze Wand.`
     );
     line.addEventListener('pointerdown', (event) => this.startWallTranslateDrag(event, wallId));
     return line;
@@ -3445,7 +3611,7 @@ export class MainMuseumHub {
     circle.setAttribute('role', 'button');
     circle.setAttribute(
       'aria-label',
-      `${wallId === 'wall-rear' ? 'Entrance boundary' : wallId} orange corner ${index + 1}. Drag to reshape.`
+      `${wallLabel(wallId)}: Ecke ${index + 1}. Ziehen formt die Wand.`
     );
     circle.addEventListener('pointerdown', (event) =>
       this.startWallPointCalibrationDrag(event, wallId, 'quad', index)
@@ -3681,57 +3847,69 @@ export class MainMuseumHub {
     return Math.min(1, Math.max(0, value));
   }
 
-  private collectCalibrationWarnings(): string[] {
-    const warnings: string[] = [];
+  /**
+   * Validation messages for the editor. Errors (broken wall shape, missing
+   * wall, unprojectable placement) block export; layout hints (outside the
+   * green area, doorway, small on screen, overlap, unconfirmed green area,
+   * empty room, unplaced artworks) never block export.
+   */
+  private collectCalibrationIssues(): CalibrationIssue[] {
+    const issues: CalibrationIssue[] = [];
     for (const wall of this.resolution.walls) {
+      const name = wallLabel(wall.id);
       if (quadIsDegenerate(wall.quad) || !quadIsConvex(wall.quad)) {
-        warnings.push(`Wand ${wall.id}: Die Wandfläche ist ungültig.`);
+        issues.push({ level: 'error', wallId: wall.id, text: `${name}: Die Wandfläche ist ungültig.` });
       }
       if (wall.safePolygon.length < 3) {
-        warnings.push(`Wand ${wall.id}: Der Sicherheitsbereich benötigt mindestens drei Punkte.`);
+        issues.push({ level: 'error', wallId: wall.id, text: `${name}: Der Sicherheitsbereich benötigt mindestens drei Punkte.` });
       }
       if (wall.mountingZone.length < 3) {
-        warnings.push(`Wand ${wall.id}: Die grüne Wandfläche benötigt mindestens drei Punkte.`);
+        issues.push({ level: 'error', wallId: wall.id, text: `${name}: Die grüne Wandfläche benötigt mindestens drei Punkte.` });
       } else if (
         wall.mountingZone.length !== 4
         || quadIsDegenerate(wall.mountingZone as unknown as Quad)
         || !quadIsConvex(wall.mountingZone as unknown as Quad)
       ) {
-        warnings.push(`Wand ${wall.id}: Die grüne Wandfläche darf sich nicht überkreuzen.`);
+        issues.push({ level: 'error', wallId: wall.id, text: `${name}: Die grüne Wandfläche darf sich nicht überkreuzen.` });
       }
       if (!wall.mountingZoneConfirmed) {
-        warnings.push(`Wand ${wall.id}: Grüne Wandfläche ausrichten und bestätigen.`);
+        issues.push({ level: 'hint', wallId: wall.id, text: `${name}: Grüne Fläche noch nicht als geprüft markiert.` });
       }
     }
     const visibleByPage = new Map<number, { slot: ResolvedHubSlot; quad: ProjectedArtworkGeometry }[]>();
+    const artworkCountByPage = new Map<number, number>();
     for (const view of this.slotViews) {
       const { slot } = view;
       if (!slot.selectable || !slot.artworkId) continue;
+      artworkCountByPage.set(slot.pageIndex, (artworkCountByPage.get(slot.pageIndex) ?? 0) + 1);
+      const base = { slotId: slot.id, pageIndex: slot.pageIndex, wallId: slot.placement.wallId };
       const wall = this.resolution.wallById.get(slot.placement.wallId);
       if (!wall) {
-        warnings.push(`Bild ${slot.id}: Zugewiesene Wand ${slot.placement.wallId} fehlt.`);
+        issues.push({ ...base, level: 'error', text: `Zugewiesene Wand ${slot.placement.wallId} fehlt.` });
         continue;
       }
       const ownedWallId = this.calibrationWallOwnership.get(slot.id);
       if (ownedWallId && slot.placement.wallId !== ownedWallId) {
-        warnings.push(`Bild ${slot.id}: Wandzuordnung wurde von ${ownedWallId} zu ${slot.placement.wallId} geändert.`);
+        issues.push({ ...base, level: 'error', text: `Wandzuordnung wurde von ${wallLabel(ownedWallId)} zu ${wallLabel(slot.placement.wallId)} geändert.` });
       }
       const evaluation = evaluateDisplayedPlacement(wall, slot.placement, this.displayedAspectForSlot(slot), this.resolution.stage);
       const projection = evaluation.projection;
       if (!projection) {
-        warnings.push(`Bild ${slot.id}: Position kann nicht berechnet werden.`);
+        issues.push({ ...base, level: 'error', text: 'Position kann nicht berechnet werden.' });
         continue;
       }
       if (!evaluation.insideMountingZone) {
-        warnings.push(`Bild ${slot.id}: Das vollständige Bild liegt außerhalb der grünen Wandfläche.`);
+        issues.push({ ...base, level: 'hint', text: 'Das Bild liegt nicht vollständig in der grünen Wandfläche.' });
       }
       if (!evaluation.doorwayClear) {
-        warnings.push(`Bild ${slot.id}: Das Bild überschneidet einen Türbereich.`);
+        issues.push({ ...base, level: 'hint', text: 'Das Bild überschneidet einen Türbereich.' });
       }
       if (projection.shortEdge < HUB_MIN_PROJECTED_SHORT_EDGE_PX) {
-        warnings.push(
-          `Bild ${slot.id}: Die sichtbare Kante (${projection.shortEdge.toFixed(1)} px) ist kleiner als ${HUB_MIN_PROJECTED_SHORT_EDGE_PX} px.`
-        );
+        issues.push({
+          ...base,
+          level: 'hint',
+          text: `Das Bild wirkt klein (${projection.shortEdge.toFixed(0)} px, empfohlen mindestens ${HUB_MIN_PROJECTED_SHORT_EDGE_PX} px).`,
+        });
       }
       const pageList = visibleByPage.get(slot.pageIndex) ?? [];
       pageList.push({ slot, quad: projection });
@@ -3743,12 +3921,39 @@ export class MainMuseumHub {
         for (let nextIndex = index + 1; nextIndex < entries.length; nextIndex += 1) {
           const next = entries[nextIndex]!;
           if (polygonsIntersect(current.quad.projectedQuad, next.quad.projectedQuad)) {
-            warnings.push(`Raum ${pageIndex + 1}: ${current.slot.id} überschneidet ${next.slot.id}.`);
+            issues.push({
+              level: 'hint',
+              slotId: current.slot.id,
+              pageIndex,
+              text: `überschneidet ${placeLabel(next.slot.id, next.slot.placement.wallId)}.`,
+            });
           }
         }
       }
     }
-    return warnings;
+    for (let pageIndex = 0; pageIndex < this.pageCount; pageIndex += 1) {
+      if ((artworkCountByPage.get(pageIndex) ?? 0) === 0) {
+        issues.push({ level: 'hint', pageIndex, text: 'Der Raum ist leer und wird in der Galerie übersprungen.' });
+      }
+    }
+    const unplaced = this.unplacedArtworkIds().length;
+    if (unplaced > 0) {
+      issues.push({
+        level: 'hint',
+        text: this.autoPlaceUnmappedSetting
+          ? `${countLabel(unplaced, 'Bild wird', 'Bilder werden')} in der Galerie automatisch in zusätzliche Räume gehängt.`
+          : `${countLabel(unplaced, 'Bild ist', 'Bilder sind')} nicht platziert und in der Galerie unsichtbar.`,
+      });
+    }
+    return issues;
+  }
+
+  /** "Raum 2 · Frontwand links: " prefix for a message. */
+  private issuePrefix(issue: CalibrationIssue): string {
+    const parts: string[] = [];
+    if (issue.pageIndex !== undefined) parts.push(this.roomLabelFor(issue.pageIndex));
+    if (issue.slotId) parts.push(placeLabel(issue.slotId, issue.wallId));
+    return parts.length > 0 ? `${parts.join(' · ')}: ` : '';
   }
 
   private collectCalibrationProofs(): string[] {
@@ -3855,8 +4060,9 @@ export class MainMuseumHub {
           ...(wall.hangingBand ? { hangingBand: wall.hangingBand } : {}),
         };
       }),
-      fallbacks: this.resolution.fallbacks,
+      fallbacks: { ...this.resolution.fallbacks, autoPlaceUnmapped: this.autoPlaceUnmappedSetting },
       slotsPerPage: this.resolution.slotsPerPage,
+      rooms: this.resolution.rooms.map((room) => (room.name ? { id: room.id, name: room.name } : { id: room.id })),
       slots: this.slotViews.map(({ slot }) => ({
         id: slot.id,
         enabled: slot.disabledReason !== 'explicitly-disabled',
@@ -3874,16 +4080,406 @@ export class MainMuseumHub {
   private selectCalibrationSlot(slotId: string): void {
     const view = this.slotViews.find(({ slot }) => slot.id === slotId);
     if (!view) return;
+    // Selecting a place in another room (list, message, keyboard) opens that room.
+    if (view.slot.pageIndex !== this.currentPageIndex()) this.goToPage(view.slot.pageIndex, view.slot);
     this.activeCalibrationSlotId = slotId;
-    this.activeCalibrationWallId = view.slot.placement.wallId;
-    if (this.calibrationSlotSelect) this.calibrationSlotSelect.value = slotId;
-    if (this.calibrationWallSelect) this.calibrationWallSelect.value = view.slot.placement.wallId;
+    if (this.calibrationEditMode !== 'room-boundary') {
+      this.activeCalibrationWallId = view.slot.placement.wallId;
+      if (this.calibrationWallSelect) this.calibrationWallSelect.value = view.slot.placement.wallId;
+    }
     for (const candidate of this.slotViews) {
       candidate.button.classList.toggle('is-calibration-selected', candidate.slot.id === slotId);
     }
     this.syncCalibrationControls();
     this.updateCalibrationArtworkInfo();
     this.renderCalibrationOverlay();
+    this.syncEditorToolState();
+    this.refreshEditorPanels();
+  }
+
+  // ── Rooms and artwork assignment (v1.35) ──────────────────────────────────
+
+  private roomLabelFor(pageIndex: number): string {
+    return roomLabel(pageIndex, this.resolution.rooms[pageIndex]?.name);
+  }
+
+  private currentRoomLabel(): string {
+    return this.roomLabelFor(this.currentPageIndex());
+  }
+
+  private firstSlotOfPage(pageIndex: number): SlotView | undefined {
+    const views = this.slotViews.filter((view) => view.slot.pageIndex === pageIndex);
+    return views.find((view) => view.slot.artworkId) ?? views[0];
+  }
+
+  private unplacedArtworkIds(): string[] {
+    const placed = new Set(this.slotViews.map((view) => view.slot.artworkId).filter((id): id is string => Boolean(id)));
+    return this.resolution.artworkCatalog.filter((entry) => !placed.has(entry.id)).map((entry) => entry.id);
+  }
+
+  private goToRoom(pageIndex: number, announce = true): void {
+    if (pageIndex < 0 || pageIndex >= this.pageCount) return;
+    this.goToPage(pageIndex);
+    const first = this.firstSlotOfPage(pageIndex);
+    if (first) this.selectCalibrationSlot(first.slot.id);
+    else this.refreshEditorPanels();
+    if (announce) this.announceCalibrationAction(`${this.currentRoomLabel()} von ${this.pageCount} geöffnet.`);
+  }
+
+  private currentEditableConfig(): MuseumHubConfig & HubEditableConfig {
+    return this.buildCurrentCalibrationConfig() as MuseumHubConfig & HubEditableConfig;
+  }
+
+  /**
+   * Applies a room/assignment change as one undo step, rebuilds the affected
+   * places, and opens the requested room.
+   */
+  private applyRoomChange(config: HubEditableConfig, focus: { roomId?: string; slotId?: string }, message: string): void {
+    if (this.calibrationDrag) return;
+    this.recordCalibrationHistory();
+    this.applyCalibrationSnapshot(JSON.stringify(config));
+    const slotView = focus.slotId ? this.slotViews.find((view) => view.slot.id === focus.slotId) : undefined;
+    if (slotView) {
+      this.selectCalibrationSlot(slotView.slot.id);
+    } else if (focus.roomId) {
+      const pageIndex = this.resolution.rooms.findIndex((room) => room.id === focus.roomId);
+      if (pageIndex >= 0) this.goToRoom(pageIndex, false);
+    }
+    this.announceCalibrationAction(message);
+  }
+
+  private addRoom(duplicate: boolean): void {
+    const current = this.resolution.rooms[this.currentPageIndex()];
+    const name = duplicate ? `${current?.name || this.currentRoomLabel()} (Kopie)` : undefined;
+    const result = addRoomToConfig(this.currentEditableConfig(), {
+      afterRoomId: current?.id,
+      templateRoomId: current?.id,
+      ...(name ? { name } : {}),
+    });
+    this.applyRoomChange(result.config, { roomId: result.roomId }, '');
+    this.announceCalibrationAction(
+      `${this.currentRoomLabel()} von ${this.pageCount} ${duplicate ? 'als Kopie' : 'neu'} angelegt. Leere Plätze sind gestrichelt; im Bereich „Bilder“ Kunstwerke zuweisen.`
+    );
+    this.editorTabs?.select('artworks');
+  }
+
+  private deleteCurrentRoom(artworkTarget: 'unplaced' | 'previous'): void {
+    const pageIndex = this.currentPageIndex();
+    const room = this.resolution.rooms[pageIndex];
+    if (!room) return;
+    const label = this.roomLabelFor(pageIndex);
+    const result = deleteRoomFromConfig(this.currentEditableConfig(), room.id, artworkTarget);
+    if (!result) {
+      this.announceCalibrationAction('Der einzige Raum kann nicht gelöscht werden.');
+      return;
+    }
+    const moved = result.movedArtworkIds.length;
+    const unplaced = result.unplacedArtworkIds.length;
+    this.applyRoomChange(
+      result.config,
+      { roomId: result.targetRoomId ?? undefined },
+      `${label} gelöscht.${moved > 0 ? ` ${countLabel(moved, 'Bild', 'Bilder')} verschoben.` : ''}${
+        unplaced > 0 ? ` ${countLabel(unplaced, 'Bild ist', 'Bilder sind')} jetzt nicht platziert.` : ''
+      }`
+    );
+  }
+
+  private renameCurrentRoom(name: string): void {
+    const room = this.resolution.rooms[this.currentPageIndex()];
+    if (!room || room.name === name.trim()) return;
+    this.applyRoomChange(
+      renameRoomInConfig(this.currentEditableConfig(), room.id, name),
+      { roomId: room.id },
+      name.trim() ? `Raum umbenannt in „${name.trim()}“.` : 'Raumname entfernt.'
+    );
+  }
+
+  private moveCurrentRoom(delta: -1 | 1): void {
+    const room = this.resolution.rooms[this.currentPageIndex()];
+    if (!room) return;
+    const next = moveRoomInConfig(this.currentEditableConfig(), room.id, delta);
+    if (!next) return;
+    this.applyRoomChange(next, { roomId: room.id }, '');
+    this.announceCalibrationAction(`Raum ist jetzt ${this.currentRoomLabel()} von ${this.pageCount}.`);
+  }
+
+  /** Puts an artwork into a place (swapping if it hangs elsewhere) or empties the place. */
+  private assignArtwork(slotId: string, artworkId: string | null): void {
+    const target = this.slotViews.find((view) => view.slot.id === slotId);
+    if (!target) return;
+    if (artworkId && target.slot.artworkId === artworkId) return;
+    const result = assignArtworkInConfig(this.currentEditableConfig(), slotId, artworkId);
+    if (!result) return;
+    const place = `${this.roomLabelFor(target.slot.pageIndex)} · ${placeLabel(slotId, target.slot.placement.wallId)}`;
+    const title = (id: string | null): string =>
+      this.resolution.artworkCatalog.find((entry) => entry.id === id)?.title ?? id ?? '';
+    let message: string;
+    if (!artworkId) {
+      message = `„${title(result.replacedArtworkId)}“ von ${place} entfernt; es ist jetzt nicht platziert.`;
+    } else if (result.swappedWithSlotId && result.replacedArtworkId) {
+      message = `„${title(artworkId)}“ und „${title(result.replacedArtworkId)}“ getauscht.`;
+    } else if (result.replacedArtworkId) {
+      message = `„${title(artworkId)}“ hängt jetzt auf ${place}; „${title(result.replacedArtworkId)}“ ist nicht platziert.`;
+    } else {
+      message = `„${title(artworkId)}“ hängt jetzt auf ${place}.`;
+    }
+    this.applyRoomChange(result.config, { slotId }, message);
+  }
+
+  /**
+   * Library click: placed artworks are selected (opening their room); an
+   * unplaced artwork fills the selected empty place, else the first empty
+   * place of this room, else replaces the selected place's artwork.
+   */
+  private handleLibraryArtworkClick(artworkId: string): void {
+    const placed = this.slotViews.find((view) => view.slot.artworkId === artworkId);
+    const active = this.activeCalibrationSlot;
+    if (placed && !(active && !active.artworkId)) {
+      this.selectCalibrationSlot(placed.slot.id);
+      placed.button.focus({ preventScroll: true });
+      return;
+    }
+    const pageIndex = this.currentPageIndex();
+    const target = active && !active.artworkId && active.pageIndex === pageIndex
+      ? active
+      : this.slotViews.find((view) => view.slot.pageIndex === pageIndex && !view.slot.artworkId && !view.slot.disabledReason)?.slot
+        ?? (active?.pageIndex === pageIndex ? active : null);
+    if (!target) {
+      this.announceCalibrationAction('Zuerst einen Platz in diesem Raum wählen.');
+      return;
+    }
+    this.assignArtwork(target.id, artworkId);
+  }
+
+  private autoFillCurrentRoom(): void {
+    const pageIndex = this.currentPageIndex();
+    const empty = this.slotViews.filter(
+      (view) => view.slot.pageIndex === pageIndex && !view.slot.artworkId && !view.slot.disabledReason
+    );
+    const unplaced = this.unplacedArtworkIds();
+    if (empty.length === 0 || unplaced.length === 0) return;
+    let config: HubEditableConfig = this.currentEditableConfig();
+    let filled = 0;
+    for (const view of empty) {
+      const artworkId = unplaced[filled];
+      if (!artworkId) break;
+      const result = assignArtworkInConfig(config, view.slot.id, artworkId);
+      if (!result) continue;
+      config = result.config;
+      filled += 1;
+    }
+    this.applyRoomChange(
+      config,
+      { slotId: empty[0]?.slot.id },
+      `${countLabel(filled, 'leerer Platz', 'leere Plätze')} in ${this.roomLabelFor(pageIndex)} gefüllt.`
+    );
+  }
+
+  private setAutoPlaceUnmapped(enabled: boolean): void {
+    if (this.autoPlaceUnmappedSetting === enabled) return;
+    this.recordCalibrationHistory();
+    this.autoPlaceUnmappedSetting = enabled;
+    this.updateCalibrationOutput(true);
+    this.announceCalibrationAction(
+      enabled
+        ? 'Nicht platzierte Bilder werden in der Galerie automatisch in zusätzliche Räume gehängt.'
+        : 'Nicht platzierte Bilder bleiben in der Galerie unsichtbar.'
+    );
+  }
+
+  private setActiveMountingZoneConfirmed(confirmed: boolean): void {
+    const wall = this.activeCalibrationWallId ? this.resolution.wallById.get(this.activeCalibrationWallId) : null;
+    if (!wall || wall.mountingZoneConfirmed === confirmed) return;
+    this.recordCalibrationHistory();
+    wall.mountingZoneConfirmed = confirmed;
+    this.updateCalibrationOutput(true);
+    this.renderCalibrationOverlay();
+    this.syncCalibrationControls();
+    this.syncEditorToolState();
+    this.announceCalibrationAction(
+      `${wallLabel(wall.id)}: grüne Fläche ${confirmed ? 'als geprüft markiert' : 'nicht mehr als geprüft markiert'}.`
+    );
+  }
+
+  /** Opens the room, place, or wall of a validation message. */
+  private openCalibrationIssue(issue: CalibrationIssue): void {
+    if (issue.slotId && this.slotViews.some((view) => view.slot.id === issue.slotId)) {
+      this.selectCalibrationSlot(issue.slotId);
+      this.editorTabs?.select('artworks');
+      this.slotViews.find((view) => view.slot.id === issue.slotId)?.button.focus({ preventScroll: true });
+    } else if (issue.pageIndex !== undefined) {
+      this.goToRoom(issue.pageIndex, false);
+      this.editorTabs?.select('artworks');
+    } else if (issue.wallId) {
+      this.activeCalibrationWallId = issue.wallId;
+      if (this.calibrationWallSelect) this.calibrationWallSelect.value = issue.wallId;
+      this.renderCalibrationOverlay();
+      this.syncEditorToolState();
+      this.editorTabs?.select('room');
+    } else {
+      this.editorTabs?.select('artworks');
+    }
+    this.announceCalibrationAction(`${this.issuePrefix(issue)}${issue.text}`);
+  }
+
+  /** Refreshes the room bar, place cards, artwork list, and detail heading. */
+  private refreshEditorPanels(): void {
+    if (!this.calibrating || !this.roomBar || !this.artworkLibrary) return;
+    const pageIndex = this.currentPageIndex();
+    const issuesByPage = new Map<number, CalibrationIssue[]>();
+    const issuesBySlot = new Map<string, CalibrationIssue[]>();
+    for (const issue of this.calibrationIssues) {
+      if (issue.pageIndex !== undefined) {
+        const list = issuesByPage.get(issue.pageIndex) ?? [];
+        list.push(issue);
+        issuesByPage.set(issue.pageIndex, list);
+      }
+      if (issue.slotId) {
+        const list = issuesBySlot.get(issue.slotId) ?? [];
+        list.push(issue);
+        issuesBySlot.set(issue.slotId, list);
+      }
+    }
+    this.roomBar.update(
+      this.resolution.rooms.map((room, index) => {
+        const issues = issuesByPage.get(index) ?? [];
+        return {
+          id: room.id,
+          name: room.name,
+          artworkCount: this.slotViews.filter((view) => view.slot.pageIndex === index && view.slot.artworkId).length,
+          status: statusOfIssues(issues),
+          issueCount: issues.length,
+        };
+      }),
+      pageIndex
+    );
+    const thumbnail = (artworkId: string | null): string | null => {
+      if (!artworkId) return null;
+      const plan = resolveArtworkImageSources(this.resolution.artworkSourceById.get(artworkId) ?? null);
+      return (plan.fallback ?? plan.primary)?.resolvedUrl ?? null;
+    };
+    const titleOf = (artworkId: string | null): string | null =>
+      artworkId ? this.resolution.artworkCatalog.find((entry) => entry.id === artworkId)?.title ?? artworkId : null;
+    const places: LibraryPlace[] = this.slotViews
+      .filter((view) => view.slot.pageIndex === pageIndex && !view.slot.disabledReason)
+      .map((view) => ({
+        slotId: view.slot.id,
+        label: placeLabel(view.slot.id, view.slot.placement.wallId),
+        artworkId: view.slot.artworkId,
+        title: titleOf(view.slot.artworkId),
+        thumbnail: thumbnail(view.slot.artworkId),
+        status: statusOfIssues(issuesBySlot.get(view.slot.id) ?? []),
+      }));
+    const slotByArtwork = new Map(
+      this.slotViews.filter((view) => view.slot.artworkId).map((view) => [view.slot.artworkId!, view.slot])
+    );
+    const artworks: LibraryArtwork[] = this.resolution.artworkCatalog.map((entry) => {
+      const slot = slotByArtwork.get(entry.id);
+      return {
+        id: entry.id,
+        title: entry.title,
+        thumbnail: thumbnail(entry.id),
+        location: !slot ? 'unplaced' : slot.pageIndex === pageIndex ? 'here' : 'other',
+        placeText: slot ? `${this.roomLabelFor(slot.pageIndex)} · ${placeLabel(slot.id, slot.placement.wallId)}` : null,
+      };
+    });
+    this.artworkLibrary.update({
+      roomTitle: this.currentRoomLabel(),
+      places,
+      artworks,
+      activeSlotId: this.activeCalibrationSlotId,
+    });
+    const active = this.activeCalibrationSlot;
+    if (this.editorDetailTitle && this.editorDetailBody) {
+      this.editorDetailTitle.textContent = active
+        ? `Gewählt: ${placeLabel(active.id, active.placement.wallId)}`
+        : 'Kein Platz gewählt';
+      this.editorDetailBody.textContent = active
+        ? active.artworkId
+          ? `„${titleOf(active.artworkId)}“ in ${this.roomLabelFor(active.pageIndex)}.`
+          : 'Leerer Platz. Ein Bild aus der Liste unten anklicken oder hierher ziehen.'
+        : 'Einen Platz oder ein Bild wählen.';
+    }
+    if (this.removeArtworkButton) this.removeArtworkButton.disabled = !active?.artworkId;
+    if (this.editorStatusButton) {
+      const status = statusOfIssues(this.calibrationIssues);
+      const errors = this.calibrationIssues.filter((issue) => issue.level === 'error').length;
+      const hints = this.calibrationIssues.length - errors;
+      this.editorStatusButton.className = `museum-hub__editor-status is-${status}`;
+      this.editorStatusButton.textContent = errors > 0
+        ? countLabel(errors, 'Fehler', 'Fehler')
+        : hints > 0 ? countLabel(hints, 'Hinweis', 'Hinweise') : 'Alles bereit';
+      this.editorStatusButton.setAttribute('aria-label', `Status: ${this.editorStatusButton.textContent}. Speichern öffnen.`);
+    }
+  }
+
+  /**
+   * Brings the slot views in line with a snapshot's rooms and assignments:
+   * removes places that no longer exist or changed artwork, adds new ones,
+   * moves places between rooms, and rebuilds the room layers once.
+   */
+  private reconcileSlotInventory(config: MuseumHubConfig): void {
+    const next = resolveMuseumHub(this.artworks, config, undefined, { editor: true, autoPlaceUnmapped: false });
+    const nextSlots = next.pages.flatMap((page) => page.slots);
+    const nextById = new Map(nextSlots.map((slot) => [slot.id, slot]));
+    for (let index = this.slotViews.length - 1; index >= 0; index -= 1) {
+      const view = this.slotViews[index]!;
+      const target = nextById.get(view.slot.id);
+      if (
+        target
+        && target.artworkId === view.slot.artworkId
+        && target.selectable === view.slot.selectable
+        && target.disabledReason === view.slot.disabledReason
+      ) {
+        view.slot.pageIndex = target.pageIndex;
+        continue;
+      }
+      view.imageLoadToken += 1;
+      view.button.remove();
+      this.hubRoomRenderer?.removeSlot(view.slot.id, false);
+      this.projectedSlotGeometry.delete(view.slot.id);
+      const objectUrl = this.editorArtworkObjectUrls.get(view.slot.id);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      this.editorArtworkObjectUrls.delete(view.slot.id);
+      this.slotViews.splice(index, 1);
+    }
+    this.pageCount = Math.max(1, next.rooms.length);
+    this.resolution.rooms = next.rooms;
+    this.resolution.explicitRooms = true;
+    this.syncRoomLayers();
+    const existing = new Map(this.slotViews.map((view) => [view.slot.id, view]));
+    const ordered: SlotView[] = [];
+    for (const slot of nextSlots) {
+      let view = existing.get(slot.id);
+      if (!view) {
+        view = this.buildSlotButton(slot, false);
+        if (!this.calibrationWallOwnership.has(slot.id)) this.calibrationWallOwnership.set(slot.id, slot.placement.wallId);
+      }
+      ordered.push(view);
+      this.roomLayers[view.slot.pageIndex]?.appendChild(view.button);
+    }
+    this.slotViews.splice(0, this.slotViews.length, ...ordered);
+    const pages: ResolvedHubPage[] = [];
+    for (let pageIndex = 0; pageIndex < this.pageCount; pageIndex += 1) {
+      pages.push({ pageIndex, slots: ordered.filter((view) => view.slot.pageIndex === pageIndex).map((view) => view.slot) });
+    }
+    this.resolution.pages = pages;
+    const slotToArtwork = new Map<string, string>();
+    const artworkToSlot = new Map<string, string>();
+    for (const { slot } of ordered) {
+      if (!slot.selectable || !slot.artworkId) continue;
+      slotToArtwork.set(slot.id, slot.artworkId);
+      artworkToSlot.set(slot.artworkId, slot.id);
+    }
+    this.resolution.slotToArtwork = slotToArtwork;
+    this.resolution.artworkToSlot = artworkToSlot;
+    this.resolution.unplacedArtworkIds = this.unplacedArtworkIds();
+    this.applyView();
+    this.decodedPages.clear();
+    for (let pageIndex = 0; pageIndex < this.pageCount; pageIndex += 1) void this.decodePageImages(pageIndex);
+    if (this.activeCalibrationSlotId && !this.slotViews.some((view) => view.slot.id === this.activeCalibrationSlotId)) {
+      this.activeCalibrationSlotId = null;
+    }
   }
 
   private syncCanonicalPlacement(slot: ResolvedHubSlot, wall: ResolvedHubWall): void {
@@ -4039,15 +4635,18 @@ export class MainMuseumHub {
     const slot = this.activeCalibrationSlot;
     const wall = slot ? this.resolution.wallById.get(slot.placement.wallId) : null;
     if (slot && wall) this.syncCanonicalPlacement(slot, wall);
+    // Shown in metres from the wall's left edge and centimetres from the wall.
+    const wallWidth = wall?.room?.width ?? 1;
     const values: Record<string, number> = {
-      horizontalPosition: slot?.placement.horizontalPosition ?? 0,
+      horizontalPosition: (slot?.placement.horizontalPosition ?? 0) * wallWidth,
       centerHeight: slot?.placement.centerHeight ?? 0,
       physicalHeight: slot?.placement.physicalHeight ?? 0,
-      mountingGap: slot?.placement.mountingGap ?? 0.002,
+      mountingGap: (slot?.placement.mountingGap ?? 0.002) * 100,
     };
     for (const [field, input] of this.calibrationFields) {
-      input.value = values[field]?.toFixed(field === 'mountingGap' ? 3 : 2) ?? '';
+      input.value = slot ? values[field]?.toFixed(field === 'mountingGap' ? 1 : 2) ?? '' : '';
       input.disabled = !slot;
+      if (field === 'horizontalPosition') input.max = wallWidth.toFixed(2);
     }
     if (this.calibrationUndoButton) this.calibrationUndoButton.disabled = this.calibrationUndoStack.length === 0;
     if (this.calibrationRedoButton) this.calibrationRedoButton.disabled = this.calibrationRedoStack.length === 0;
@@ -4063,7 +4662,7 @@ export class MainMuseumHub {
       this.setSlotCenterClampedToMountingZone(
         slot,
         wall,
-        point(this.clampLocalX(value), slot.placement.center.y)
+        point(this.clampLocalX(value / wall.room.width), slot.placement.center.y)
       );
     } else if (field === 'centerHeight') {
       this.setSlotCenterClampedToMountingZone(
@@ -4075,7 +4674,7 @@ export class MainMuseumHub {
       slot.placement.physicalHeight = Math.max(0.04, Math.min(wall.room.height, value));
       slot.placement.mountedHeight = slot.placement.physicalHeight;
     } else if (field === 'mountingGap') {
-      slot.placement.mountingGap = Math.max(0.001, Math.min(0.03, value));
+      slot.placement.mountingGap = Math.max(0.001, Math.min(0.03, value / 100));
     }
     this.syncCanonicalPlacement(slot, wall);
     this.applyAllSlotGeometry();
@@ -4143,8 +4742,8 @@ export class MainMuseumHub {
     const valid = wall ? this.isSlotPlacementInsideMountingZone(slot, wall) : false;
     this.announceCalibrationAction(
       fromLeft !== null && centerHeight !== undefined
-        ? `${slot.id}: ${fromLeft.toFixed(2)} m from the left wall edge, centre ${centerHeight.toFixed(2)} m high${valid ? '' : ' (outside the green zone)'}.`
-        : `${slot.id} moved.`
+        ? `${placeLabel(slot.id, slot.placement.wallId)}: ${fromLeft.toFixed(2)} m von links, Mitte ${centerHeight.toFixed(2)} m hoch${valid ? '' : ' (außerhalb der grünen Fläche)'}.`
+        : `${placeLabel(slot.id, slot.placement.wallId)} verschoben.`
     );
   }
 
@@ -4187,18 +4786,6 @@ export class MainMuseumHub {
     }
   }
 
-  private confirmActiveMountingZone(): void {
-    const wall = this.activeCalibrationWallId
-      ? this.resolution.wallById.get(this.activeCalibrationWallId)
-      : null;
-    if (!wall) return;
-    this.recordCalibrationHistory();
-    wall.mountingZoneConfirmed = true;
-    this.updateCalibrationOutput(true);
-    this.renderCalibrationOverlay();
-    this.syncCalibrationControls();
-  }
-
   private recordCalibrationHistory(): void {
     const snapshot = JSON.stringify(this.buildCurrentCalibrationConfig(), null, 2);
     if (this.calibrationUndoStack[this.calibrationUndoStack.length - 1] !== snapshot) {
@@ -4223,12 +4810,16 @@ export class MainMuseumHub {
     this.applyCalibrationSnapshot(snapshot);
   }
 
+  /** Restores the opened wall shapes and green areas; rooms and assignments stay. */
   private resetCalibration(): void {
     if (!this.initialCalibrationSnapshot) return;
+    const initial = JSON.parse(this.initialCalibrationSnapshot) as MuseumHubConfig;
+    const current = this.currentEditableConfig();
     this.recordCalibrationHistory();
     this.editorGeometryDirty = false;
     for (const wall of this.resolution.walls) this.restoreInitialEditorWall(wall.id);
-    this.applyCalibrationSnapshot(this.initialCalibrationSnapshot);
+    this.applyCalibrationSnapshot(JSON.stringify({ ...current, walls: initial.walls, background: initial.background }));
+    this.announceCalibrationAction('Wände und grüne Flächen wurden zurückgesetzt. Räume und Bilder bleiben erhalten.');
   }
 
   private restoreInitialEditorWall(wallId: string): void {
@@ -4266,7 +4857,7 @@ export class MainMuseumHub {
         this.renderCalibrationOverlay();
         this.updateCalibrationOutput(true);
       }
-      this.announceCalibrationAction('Reset WALL-REAR.');
+      this.announceCalibrationAction('Eingangsbereich zurückgesetzt.');
       return;
     }
     if (!initialWall || !currentWall) {
@@ -4278,7 +4869,7 @@ export class MainMuseumHub {
     currentWall.mountingZone = (initialWall.mountingZone ?? []).map((corner) => clonePoint(corner));
     currentWall.mountingZoneConfirmed = initialWall.mountingZoneConfirmed;
     this.applyCalibrationSnapshot(JSON.stringify(current));
-    this.announceCalibrationAction(`Reset ${wallId.toUpperCase()}.`);
+    this.announceCalibrationAction(`${wallLabel(wallId)} zurückgesetzt.`);
   }
 
   private focusCalibrationWall(): void {
@@ -4412,7 +5003,7 @@ export class MainMuseumHub {
       entries,
       validation: {
         exportValid: this.calibrationExportValid,
-        warnings: this.collectCalibrationWarnings(),
+        issues: this.collectCalibrationIssues(),
       },
     };
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
@@ -4422,7 +5013,7 @@ export class MainMuseumHub {
     anchor.download = `freyraum-artwork-diagnostics-${stamp}.json`;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
-    this.announceCalibrationAction('Artwork diagnostics downloaded.');
+    this.announceCalibrationAction('Diagnose-Datei wurde heruntergeladen.');
   }
 
   private async importCalibrationFile(file: File | null): Promise<void> {
@@ -4434,8 +5025,8 @@ export class MainMuseumHub {
       this.announceCalibrationAction('Import blockiert: Datei enthält kein gültiges JSON.');
       return;
     }
-    const sanitized = sanitizeMuseumHubConfig(parsed);
-    if (!sanitized.config || sanitized.warnings.length > 0) {
+    let sanitized = sanitizeMuseumHubConfig(parsed);
+    if (!sanitized.config) {
       this.announceCalibrationAction(
         `Import blockiert: ${sanitized.warnings.join(' ') || 'ungültige Konfiguration'}`
       );
@@ -4444,43 +5035,11 @@ export class MainMuseumHub {
     const baselineConfig = this.initialCalibrationSnapshot
       ? sanitizeMuseumHubConfig(JSON.parse(this.initialCalibrationSnapshot)).config
       : sanitizeMuseumHubConfig(this.buildCurrentCalibrationConfig()).config;
-    if (
-      !baselineConfig
-      || this.fixedCalibrationConfigSignature(sanitized.config)
-        !== this.fixedCalibrationConfigSignature(baselineConfig)
-    ) {
+    // Rooms, room count, and artwork assignment may differ; only the fixed
+    // camera/room/wall model must match the opened editor.
+    if (!baselineConfig || hubFixedFieldsSignature(sanitized.config) !== hubFixedFieldsSignature(baselineConfig)) {
       this.announceCalibrationAction(
-        'Import blockiert: Kamera, Raum, Wandmodell oder andere feste Editor-Einstellungen weichen ab.'
-      );
-      return;
-    }
-    const currentSlots = new Map(this.slotViews.map(({ slot }) => [slot.id, slot]));
-    const slotInventoryMatches =
-      sanitized.config.slots.length === currentSlots.size
-      && sanitized.config.slots.every((slot) => {
-        const current = currentSlots.get(slot.id);
-        return Boolean(
-          current
-          && slot.artworkId === (current.artworkId ?? undefined)
-          && slot.enabled === (current.disabledReason !== 'explicitly-disabled')
-          && slot.selectable === current.selectable
-        );
-      });
-    if (!slotInventoryMatches) {
-      this.announceCalibrationAction(
-        'Import blockiert: Kunstwerk-Liste, Zuordnung oder Aktivierungsstatus weicht vom geöffneten Editor ab.'
-      );
-      return;
-    }
-    const ownershipChange = sanitized.config.slots.find((slot) => {
-      const ownedWall = this.calibrationWallOwnership.get(slot.id);
-      return ownedWall && ownedWall !== slot.placement.wallId;
-    });
-    if (ownershipChange) {
-      this.announceCalibrationAction(
-        `Import blockiert: ${ownershipChange.id} muss auf ${
-          this.calibrationWallOwnership.get(ownershipChange.id)
-        } bleiben.`
+        'Import blockiert: Kamera, Raumform, Wandmodell oder andere feste Editor-Einstellungen weichen ab.'
       );
       return;
     }
@@ -4504,7 +5063,7 @@ export class MainMuseumHub {
     });
     if (changedRenderedWall) {
       this.announceCalibrationAction(
-        `Import blockiert: Geometrie von ${changedRenderedWall.id} weicht von der geöffneten Wandkalibrierung ab.`
+        `Import blockiert: Form von ${wallLabel(changedRenderedWall.id)} weicht von der geöffneten Wandkalibrierung ab.`
       );
       return;
     }
@@ -4517,46 +5076,19 @@ export class MainMuseumHub {
       );
       return;
     }
+    const known = new Set(this.resolution.artworkCatalog.map((entry) => entry.id));
+    const dropped = dropUnknownArtworkAssignments(sanitized.config, known);
+    sanitized = { ...sanitized, config: dropped.config };
     this.recordCalibrationHistory();
     this.applyCalibrationSnapshot(JSON.stringify(sanitized.config), false);
-    this.announceCalibrationAction('Konfiguration wurde importiert und erneut geprüft.');
-  }
-
-  private fixedCalibrationConfigSignature(config: MuseumHubConfig): string {
-    return JSON.stringify({
-      version: config.version,
-      coverage: config.coverage,
-      stage: config.stage,
-      background: config.background,
-      backgroundFallback: config.backgroundFallback,
-      visualTokens: config.visualTokens,
-      camera: config.camera,
-      room: config.room,
-      hangingRules: config.hangingRules,
-      slotsPerPage: config.slotsPerPage,
-      fallbacks: config.fallbacks,
-      walls: config.walls.map((wall) => {
-        const fixedWall = { ...wall };
-        delete fixedWall.safePolygon;
-        delete fixedWall.mountingZone;
-        delete fixedWall.mountingZoneConfirmed;
-        return fixedWall;
-      }),
-      slots: config.slots.map((slot) => ({
-        id: slot.id,
-        enabled: slot.enabled,
-        selectable: slot.selectable,
-        artworkId: slot.artworkId,
-        placement: {
-          wallId: slot.placement.wallId,
-          targetSizePolicy: slot.placement.targetSizePolicy,
-          minScale: slot.placement.minScale,
-          maxScale: slot.placement.maxScale,
-          zOffset: slot.placement.zOffset,
-          provisional: slot.placement.provisional,
-        },
-      })),
-    });
+    this.goToRoom(0, false);
+    this.announceCalibrationAction(
+      `Konfiguration mit ${countLabel(this.pageCount, 'Raum', 'Räumen')} importiert und geprüft.${
+        dropped.droppedArtworkIds.length > 0
+          ? ` Unbekannte Kunstwerke entfernt: ${dropped.droppedArtworkIds.join(', ')}.`
+          : ''
+      }`
+    );
   }
 
   private calibrationRoundTripWarnings(json: string): string[] {
@@ -4585,43 +5117,41 @@ export class MainMuseumHub {
   private updateCalibrationOutput(commitLastValid: boolean): void {
     const config = this.buildCurrentCalibrationConfig();
     const json = JSON.stringify(config, null, 2);
-    const warnings = [...this.collectCalibrationWarnings(), ...this.calibrationRoundTripWarnings(json)];
+    const issues: CalibrationIssue[] = [
+      ...this.collectCalibrationIssues(),
+      ...this.calibrationRoundTripWarnings(json).map((text): CalibrationIssue => ({ level: 'error', text })),
+    ];
     if (this.editorGeometryDirty) {
-      warnings.push('3D wall corner edits are not exportable in v5 until renderer and persistence integration is approved.');
+      issues.push({
+        level: 'error',
+        text: 'Geänderte 3D-Wandecken können in v5 noch nicht gespeichert werden. „Zurücksetzen“ stellt die Wände wieder her.',
+      });
     }
-    this.calibrationExportValid = warnings.length === 0;
+    this.calibrationIssues = issues;
+    // Only real errors block saving; layout hints never do.
+    this.calibrationExportValid = !issues.some((issue) => issue.level === 'error');
     if (this.calibrationOutput) this.calibrationOutput.value = json;
     if (this.calibrationCopyButton) this.calibrationCopyButton.disabled = !this.calibrationExportValid;
     if (this.calibrationDownloadButton) this.calibrationDownloadButton.disabled = !this.calibrationExportValid;
-    if (this.calibrationActionStatus) {
-      this.calibrationActionStatus.textContent = this.calibrationExportValid
-        ? 'Alles gültig. Die Konfiguration kann jetzt heruntergeladen werden.'
-        : 'Speichern ist gesperrt, bis alle Meldungen oben behoben sind.';
-    }
     for (const view of this.slotViews) {
-      const invalid = warnings.some((warning) => warning.includes(`Bild ${view.slot.id}:`));
-      view.button.classList.toggle('is-invalid-calibration', invalid);
-      view.button.setAttribute('aria-invalid', String(invalid));
+      const level = statusOfIssues(issues.filter((issue) => issue.slotId === view.slot.id));
+      view.button.classList.toggle('is-invalid-calibration', level !== 'ok');
+      view.button.classList.toggle('is-calibration-error', level === 'error');
+      view.button.setAttribute('aria-invalid', String(level === 'error'));
     }
-    if (this.calibrationWarnings) {
-      this.calibrationWarnings.replaceChildren();
-      const entries = warnings.length > 0
-        ? warnings
-        : [
-            'Keine Warnungen — Export und Wandzuordnung sind gültig.',
-            ...this.collectCalibrationProofs(),
-          ];
-      for (const entry of entries) {
-        const item = document.createElement('li');
-        item.textContent = entry;
-        this.calibrationWarnings.appendChild(item);
-      }
-    }
+    this.saveTab?.update({
+      issues: issues.map((issue) => ({ ...issue, prefix: this.issuePrefix(issue) })),
+      exportValid: this.calibrationExportValid,
+      autoPlace: this.autoPlaceUnmappedSetting,
+      unplacedCount: this.unplacedArtworkIds().length,
+      proofs: this.calibrationExportValid ? this.collectCalibrationProofs() : [],
+    });
     if (this.calibrationExportValid && commitLastValid) {
       this.lastValidCalibrationSnapshot = json;
-      if (this.calibrationRestoreButton) this.calibrationRestoreButton.disabled = false;
+      this.saveTab?.setRestoreAvailable(true);
     }
-    this.diagnostics.info('hub-calibration', 'Museum hub wall-plane calibration snapshot', { warnings, config });
+    this.refreshEditorPanels();
+    this.diagnostics.info('hub-calibration', 'Museum hub wall-plane calibration snapshot', { issues, config });
   }
 
   private restoreLastValidCalibrationSnapshot(): void {
@@ -4683,6 +5213,10 @@ export class MainMuseumHub {
     }
     this.backgroundImage.style.objectFit = config.background.fit ?? 'contain';
     this.element.style.setProperty('--hub-aspect', String(config.background.aspect));
+    if (this.calibrating) {
+      this.autoPlaceUnmappedSetting = config.fallbacks.autoPlaceUnmapped === true;
+      if (!this.calibrationDrag) this.reconcileSlotInventory(config);
+    }
     for (const slot of config.slots) {
       const currentSlot = this.slotViews.find((view) => view.slot.id === slot.id)?.slot;
       if (!currentSlot) continue;

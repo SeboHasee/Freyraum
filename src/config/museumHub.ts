@@ -155,6 +155,16 @@ export interface HubSlotConfig {
   placement: HubSlotPlacement;
 }
 
+/**
+ * Explicit, user-controlled room list. The order is the visitor walk order
+ * (page order); slot ids keep the `room-NN.<place>` format so a room id is the
+ * slot-id prefix. Every room shares the same walls, camera, and green zones.
+ */
+export interface HubRoomEntry {
+  id: string;
+  name?: string;
+}
+
 export interface MuseumHubConfig {
   version: number;
   coverage: 'all-active-artworks';
@@ -177,6 +187,8 @@ export interface MuseumHubConfig {
   };
   /** Hero-room capacity per overflow page (sanitized 1–8, default 6). */
   slotsPerPage?: number;
+  /** Explicit room list (v1.35). Absent in older files; derived from slot ids. */
+  rooms?: HubRoomEntry[];
   slots: HubSlotConfig[];
 }
 
@@ -257,8 +269,29 @@ export interface ResolvedHubRoom {
   wallIds: readonly string[];
 }
 
+export interface ResolvedHubRoomEntry {
+  id: string;
+  name: string;
+  pageIndex: number;
+}
+
+export interface HubArtworkCatalogEntry {
+  id: string;
+  title: string;
+  index: number;
+  aspect: number;
+}
+
 export interface MuseumHubResolution {
   pages: readonly ResolvedHubPage[];
+  /** Rooms in walk order; in editor mode this includes empty rooms. */
+  rooms: readonly ResolvedHubRoomEntry[];
+  /** True when the source config listed its rooms explicitly. */
+  explicitRooms: boolean;
+  /** Every active artwork, in manifest order (used by the editor library). */
+  artworkCatalog: readonly HubArtworkCatalogEntry[];
+  /** Active artworks without a room when automatic placement is off. */
+  unplacedArtworkIds: readonly string[];
   slotToArtwork: ReadonlyMap<string, string>;
   artworkToSlot: ReadonlyMap<string, string>;
   artworkImageById: ReadonlyMap<string, string>;
@@ -746,9 +779,9 @@ function defaultRoomConfig(walls: readonly HubWallConfig[]): HubRoomConfig {
   };
 }
 
-function baselinePageSlots(pageIndex: number): HubSlotConfig[] {
+function baselinePageSlots(pageIndex: number, roomId?: string): HubSlotConfig[] {
   return BASELINE_SLOTS.map((def) => ({
-    id: `${roomPagePrefix(pageIndex)}.${def.suffix}`,
+    id: `${roomId ?? roomPagePrefix(pageIndex)}.${def.suffix}`,
     enabled: true,
     selectable: true,
     placement: {
@@ -1537,7 +1570,7 @@ interface SanitizedConfig {
   source: MuseumHubSource;
 }
 
-function sanitizeFallbacks(raw: unknown): MuseumHubConfig['fallbacks'] {
+function sanitizeFallbacks(raw: unknown, defaultAutoPlaceUnmapped = true): MuseumHubConfig['fallbacks'] {
   const candidate = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const selectionTimeoutMs =
     typeof candidate['selectionTimeoutMs'] === 'number' && Number.isFinite(candidate['selectionTimeoutMs'])
@@ -1545,7 +1578,12 @@ function sanitizeFallbacks(raw: unknown): MuseumHubConfig['fallbacks'] {
       : HUB_SELECTION_TIMEOUT_MS;
   return {
     requireAllMapped: candidate['requireAllMapped'] !== false,
-    autoPlaceUnmapped: candidate['autoPlaceUnmapped'] !== false,
+    // Files with an explicit room list are editor-authored: artworks without a
+    // room stay hidden unless automatic rooms are requested explicitly.
+    autoPlaceUnmapped:
+      typeof candidate['autoPlaceUnmapped'] === 'boolean'
+        ? (candidate['autoPlaceUnmapped'] as boolean)
+        : defaultAutoPlaceUnmapped,
     overflow: 'paginate',
     invalidMapping: 'disable-slot',
     missingImage: 'placeholder-exact-target',
@@ -1632,7 +1670,6 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
     warnings.push('museum-hub hangingRules are invalid; using built-in doorway/band defaults.');
   }
 
-  const fallbacks = sanitizeFallbacks(cfg['fallbacks']);
   const slotsPerPage =
     typeof cfg['slotsPerPage'] === 'number' && Number.isFinite(cfg['slotsPerPage'])
       ? Math.max(1, Math.min(HUB_SLOTS_PER_PAGE, Math.round(cfg['slotsPerPage'] as number)))
@@ -1718,6 +1755,8 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   if (slots.length === 0) {
     return { config: null, warnings, source: 'built-in-default' };
   }
+  const rooms = sanitizeRoomList(cfg['rooms'], slots, warnings);
+  const fallbacks = sanitizeFallbacks(cfg['fallbacks'], rooms === undefined);
   if (source === 'v1-migrated') {
     warnings.push(
       'Version-1 museum-hub slots were migrated to the wall-plane v2 model. Review calibration output and re-save customer-artworks/museum-hub.json.'
@@ -1738,11 +1777,320 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
       walls: effectiveWalls,
       fallbacks,
       slotsPerPage,
+      ...(rooms ? { rooms } : {}),
       slots,
     },
     warnings,
     source,
   };
+}
+
+function sanitizeRoomList(raw: unknown, slots: readonly HubSlotConfig[], warnings: string[]): HubRoomEntry[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    warnings.push('museum-hub rooms ignored: expected an array.');
+    return undefined;
+  }
+  const rooms: HubRoomEntry[] = [];
+  const seen = new Set<string>();
+  for (const candidate of raw) {
+    const entry = candidate && typeof candidate === 'object' ? (candidate as Record<string, unknown>) : null;
+    const id = entry && typeof entry['id'] === 'string' ? canonicalRoomId(entry['id']) : null;
+    if (!entry || !id) {
+      warnings.push('room ignored: expected an id like "room-01".');
+      continue;
+    }
+    if (seen.has(id)) {
+      warnings.push(`room "${id}" ignored: duplicate room ID.`);
+      continue;
+    }
+    seen.add(id);
+    const name = typeof entry['name'] === 'string' ? sanitizeRoomName(entry['name']) : '';
+    rooms.push(name ? { id, name } : { id });
+  }
+  for (const roomId of deriveRoomIdsFromSlots(slots)) {
+    if (seen.has(roomId)) continue;
+    seen.add(roomId);
+    rooms.push({ id: roomId });
+  }
+  return rooms.length > 0 ? rooms : undefined;
+}
+
+// ── Room management (pure, editor-facing) ───────────────────────────────────
+
+/**
+ * Fields an imported editor file must share with the open editor: camera,
+ * room shape, wall planes, stage, and background. Rooms, slots, artwork
+ * assignments, guide polygons, and the unplaced-artwork setting may differ.
+ */
+export function hubFixedFieldsSignature(config: MuseumHubConfig): string {
+  return JSON.stringify({
+    version: config.version,
+    coverage: config.coverage,
+    stage: config.stage,
+    background: config.background,
+    backgroundFallback: config.backgroundFallback,
+    visualTokens: config.visualTokens,
+    camera: config.camera,
+    room: config.room,
+    hangingRules: config.hangingRules,
+    slotsPerPage: config.slotsPerPage,
+    walls: config.walls.map((wall) => {
+      const fixedWall = { ...wall };
+      delete fixedWall.safePolygon;
+      delete fixedWall.mountingZone;
+      delete fixedWall.mountingZoneConfirmed;
+      return fixedWall;
+    }),
+  });
+}
+
+/** Removes assignments to artworks that are not in the active catalog. */
+export function dropUnknownArtworkAssignments<T extends HubEditableConfig>(
+  config: T,
+  knownArtworkIds: ReadonlySet<string>
+): { config: T; droppedArtworkIds: string[] } {
+  const next = cloneEditable(config);
+  const droppedArtworkIds: string[] = [];
+  for (const slot of next.slots) {
+    if (slot.artworkId && !knownArtworkIds.has(slot.artworkId)) {
+      droppedArtworkIds.push(slot.artworkId);
+      delete slot.artworkId;
+    }
+  }
+  return { config: next, droppedArtworkIds };
+}
+
+/** Standard places of every room, in display order. */
+export const HUB_ROOM_PLACE_SUFFIXES: readonly string[] = BASELINE_SLOTS.map((entry) => entry.suffix);
+export const HUB_ROOM_NAME_MAX_LENGTH = 60;
+
+export function canonicalRoomId(value: string): string | null {
+  const match = /^room-(\d+)$/.exec(value.trim());
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1]!, 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? roomIdForNumber(parsed) : null;
+}
+
+function roomIdForNumber(roomNumber: number): string {
+  return `room-${String(roomNumber).padStart(2, '0')}`;
+}
+
+function sanitizeRoomName(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, HUB_ROOM_NAME_MAX_LENGTH);
+}
+
+/** Room that owns a slot: the `room-NN` id prefix (non-room ids belong to room-01). */
+export function roomIdOfSlot(slotId: string): string {
+  const match = /^(room-\d+)\./.exec(slotId);
+  return (match && canonicalRoomId(match[1]!)) ?? roomIdForNumber(1);
+}
+
+/** Place suffix of a slot id (`wall-front.a` for `room-02.wall-front.a`). */
+export function placeSuffixOfSlot(slotId: string): string {
+  return slotId.replace(/^room-\d+\./, '');
+}
+
+function deriveRoomIdsFromSlots(slots: readonly { id: string }[]): string[] {
+  const ids = [...new Set(slots.map((slot) => roomIdOfSlot(slot.id)))];
+  return ids.sort((a, b) => Number.parseInt(a.slice(5), 10) - Number.parseInt(b.slice(5), 10));
+}
+
+/** Minimal editable shape shared by the editor snapshot and the sanitized config. */
+export interface HubEditableSlot {
+  id: string;
+  enabled?: boolean;
+  selectable?: boolean;
+  artworkId?: string;
+  placement: object;
+}
+
+export interface HubEditableConfig {
+  rooms?: HubRoomEntry[];
+  slots: HubEditableSlot[];
+}
+
+/** Room list in walk order: explicit entries first, then rooms only referenced by slot ids. */
+export function listConfigRooms(config: HubEditableConfig): HubRoomEntry[] {
+  const rooms: HubRoomEntry[] = [];
+  const seen = new Set<string>();
+  for (const entry of config.rooms ?? []) {
+    const id = typeof entry?.id === 'string' ? canonicalRoomId(entry.id) : null;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const name = typeof entry.name === 'string' ? sanitizeRoomName(entry.name) : '';
+    rooms.push(name ? { id, name } : { id });
+  }
+  for (const id of deriveRoomIdsFromSlots(config.slots)) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    rooms.push({ id });
+  }
+  if (rooms.length === 0) rooms.push({ id: roomIdForNumber(1) });
+  return rooms;
+}
+
+function nextFreeRoomId(rooms: readonly HubRoomEntry[], slots: readonly { id: string }[]): string {
+  const used = new Set([...rooms.map((room) => room.id), ...slots.map((slot) => roomIdOfSlot(slot.id))]);
+  let roomNumber = 1;
+  while (used.has(roomIdForNumber(roomNumber))) roomNumber += 1;
+  return roomIdForNumber(roomNumber);
+}
+
+function cloneEditable<T extends HubEditableConfig>(config: T): T {
+  return JSON.parse(JSON.stringify(config)) as T;
+}
+
+/**
+ * Safe default places for a new room when no room layout can be copied. The
+ * front-wall centre height matches the confirmed shipped calibration (1.3 m),
+ * which sits inside the green mounting zone; the legacy overflow baseline
+ * (2.32 m) is kept unchanged for automatic rooms so old files load as before.
+ */
+export const HUB_SAFE_FRONT_CENTERLINE_M = 1.3;
+
+export function defaultRoomPlacements(): Array<{ suffix: string; placement: HubSlotPlacementExport }> {
+  return BASELINE_SLOTS.map((entry) => {
+    const placement = exportHubSlotPlacement(entry.placement);
+    return {
+      suffix: entry.suffix,
+      placement: entry.wallId === 'wall-front' ? { ...placement, centerHeight: HUB_SAFE_FRONT_CENTERLINE_M } : placement,
+    };
+  });
+}
+
+/**
+ * Adds a room after `afterRoomId` (or at the end). Its places copy the layout
+ * of `templateRoomId` (position, height, size, wall) without artworks, or use
+ * the safe defaults. Placements are never adjusted here; the shared
+ * `evaluateDisplayedPlacement` check flags anything that does not fit.
+ */
+export function addRoomToConfig<T extends HubEditableConfig>(
+  config: T,
+  options: { afterRoomId?: string; templateRoomId?: string; name?: string } = {}
+): { config: T; roomId: string } {
+  const next = cloneEditable(config);
+  const rooms = listConfigRooms(next);
+  const roomId = nextFreeRoomId(rooms, next.slots);
+  const templateSlots = options.templateRoomId
+    ? next.slots.filter((slot) => roomIdOfSlot(slot.id) === options.templateRoomId)
+    : [];
+  const newSlots: HubEditableSlot[] = templateSlots.length > 0
+    ? templateSlots.map((slot) => ({
+        id: `${roomId}.${placeSuffixOfSlot(slot.id)}`,
+        enabled: slot.enabled !== false,
+        selectable: slot.selectable !== false,
+        placement: JSON.parse(JSON.stringify(slot.placement)) as object,
+      }))
+    : defaultRoomPlacements().map(({ suffix, placement }) => ({
+        id: `${roomId}.${suffix}`,
+        enabled: true,
+        selectable: true,
+        placement,
+      }));
+  const name = options.name ? sanitizeRoomName(options.name) : '';
+  const entry: HubRoomEntry = name ? { id: roomId, name } : { id: roomId };
+  const afterIndex = options.afterRoomId ? rooms.findIndex((room) => room.id === options.afterRoomId) : -1;
+  rooms.splice(afterIndex >= 0 ? afterIndex + 1 : rooms.length, 0, entry);
+  next.rooms = rooms;
+  next.slots.push(...newSlots);
+  return { config: next, roomId };
+}
+
+/**
+ * Deletes a room. Its artworks either become unplaced or move into the free
+ * places of the previous room (the following room when the first is deleted);
+ * whatever does not fit becomes unplaced. The last remaining room cannot be
+ * deleted.
+ */
+export function deleteRoomFromConfig<T extends HubEditableConfig>(
+  config: T,
+  roomId: string,
+  artworkTarget: 'unplaced' | 'previous'
+): { config: T; movedArtworkIds: string[]; unplacedArtworkIds: string[]; targetRoomId: string | null } | null {
+  const next = cloneEditable(config);
+  const rooms = listConfigRooms(next);
+  const index = rooms.findIndex((room) => room.id === roomId);
+  if (index < 0 || rooms.length <= 1) return null;
+  const removedSlots = next.slots.filter((slot) => roomIdOfSlot(slot.id) === roomId);
+  const artworkIds = removedSlots.map((slot) => slot.artworkId).filter((id): id is string => Boolean(id));
+  next.slots = next.slots.filter((slot) => roomIdOfSlot(slot.id) !== roomId);
+  rooms.splice(index, 1);
+  next.rooms = rooms;
+  const targetRoomId = rooms[Math.max(0, index - 1)]?.id ?? null;
+  const movedArtworkIds: string[] = [];
+  const unplacedArtworkIds: string[] = [];
+  if (artworkTarget === 'previous' && targetRoomId) {
+    const freeSlots = next.slots.filter(
+      (slot) => roomIdOfSlot(slot.id) === targetRoomId && !slot.artworkId && slot.enabled !== false
+    );
+    for (const removed of removedSlots) {
+      if (!removed.artworkId) continue;
+      const suffix = placeSuffixOfSlot(removed.id);
+      const matchIndex = freeSlots.findIndex((slot) => placeSuffixOfSlot(slot.id) === suffix);
+      const target = freeSlots.splice(matchIndex >= 0 ? matchIndex : 0, 1)[0];
+      if (target) {
+        target.artworkId = removed.artworkId;
+        movedArtworkIds.push(removed.artworkId);
+      } else {
+        unplacedArtworkIds.push(removed.artworkId);
+      }
+    }
+  } else {
+    unplacedArtworkIds.push(...artworkIds);
+  }
+  return { config: next, movedArtworkIds, unplacedArtworkIds, targetRoomId };
+}
+
+/**
+ * Puts an artwork into a place (or empties it with `null`). When the artwork
+ * already hangs elsewhere, the two places swap their artworks.
+ */
+export function assignArtworkInConfig<T extends HubEditableConfig>(
+  config: T,
+  slotId: string,
+  artworkId: string | null
+): { config: T; swappedWithSlotId: string | null; replacedArtworkId: string | null } | null {
+  const next = cloneEditable(config);
+  const target = next.slots.find((slot) => slot.id === slotId);
+  if (!target) return null;
+  const replacedArtworkId = target.artworkId ?? null;
+  let swappedWithSlotId: string | null = null;
+  if (artworkId) {
+    const source = next.slots.find((slot) => slot.id !== slotId && slot.artworkId === artworkId);
+    if (source) {
+      swappedWithSlotId = source.id;
+      if (replacedArtworkId) source.artworkId = replacedArtworkId;
+      else delete source.artworkId;
+    }
+    target.artworkId = artworkId;
+  } else {
+    delete target.artworkId;
+  }
+  if (!next.rooms) next.rooms = listConfigRooms(next);
+  return { config: next, swappedWithSlotId, replacedArtworkId };
+}
+
+export function renameRoomInConfig<T extends HubEditableConfig>(config: T, roomId: string, name: string): T {
+  const next = cloneEditable(config);
+  const clean = sanitizeRoomName(name);
+  next.rooms = listConfigRooms(next).map((room) =>
+    room.id === roomId ? (clean ? { id: room.id, name: clean } : { id: room.id }) : room
+  );
+  return next;
+}
+
+/** Moves a room within the visitor walk order (`delta` -1 = earlier, +1 = later). */
+export function moveRoomInConfig<T extends HubEditableConfig>(config: T, roomId: string, delta: number): T | null {
+  const next = cloneEditable(config);
+  const rooms = listConfigRooms(next);
+  const index = rooms.findIndex((room) => room.id === roomId);
+  const target = index + Math.sign(delta);
+  if (index < 0 || target < 0 || target >= rooms.length) return null;
+  const [moved] = rooms.splice(index, 1);
+  rooms.splice(target, 0, moved!);
+  next.rooms = rooms;
+  return next;
 }
 
 /**
@@ -1824,11 +2172,23 @@ export function migrateLegacyHotspots(raw: unknown): SanitizedConfig {
 
 // ── Resolver ─────────────────────────────────────────────────────────────────
 
+export interface ResolveMuseumHubOptions {
+  /**
+   * Placement-editor resolution: keeps empty places and empty rooms, never
+   * reflows or re-paginates authored slots (ids stay tied to their room).
+   */
+  editor?: boolean;
+  /** Overrides `fallbacks.autoPlaceUnmapped` for this resolution only. */
+  autoPlaceUnmapped?: boolean;
+}
+
 export function resolveMuseumHub(
   artworks: readonly Artwork[],
   injectedConfig: unknown,
-  legacyInjected?: unknown
+  legacyInjected?: unknown,
+  options: ResolveMuseumHubOptions = {}
 ): MuseumHubResolution {
+  const editorMode = options.editor === true;
   let sanitized = sanitizeMuseumHubConfig(injectedConfig);
   if (!sanitized.config) {
     const migrated = migrateLegacyHotspots(legacyInjected);
@@ -1871,7 +2231,7 @@ export function resolveMuseumHub(
   const roomConfig = config.room ?? defaultRoomConfig(config.walls);
   const hangingRules = config.hangingRules ?? defaultHangingRules();
   const selectionTimeoutMs = config.fallbacks.selectionTimeoutMs;
-  const autoPlaceUnmapped = config.fallbacks.autoPlaceUnmapped;
+  const autoPlaceUnmapped = options.autoPlaceUnmapped ?? config.fallbacks.autoPlaceUnmapped;
   const slotsPerPage = config.slotsPerPage ?? HUB_SLOTS_PER_PAGE;
 
   const walls: ResolvedHubWall[] = [];
@@ -2017,9 +2377,20 @@ export function resolveMuseumHub(
   const mappedArtworkIds = new Set<string>();
   const resolved: ResolvedHubSlot[] = [];
   const freeSlots: ResolvedHubSlot[] = [];
+  const configRooms = listConfigRooms(config);
+  const roomPageById = new Map(configRooms.map((entry, index) => [entry.id, index]));
+  const roomMetaByPage = new Map<number, HubRoomEntry>(configRooms.map((entry, index) => [index, entry]));
+  const usedRoomIds = new Set<string>([...configRooms.map((entry) => entry.id)]);
+  const claimRoomId = (): string => {
+    let roomNumber = 1;
+    while (usedRoomIds.has(roomIdForNumber(roomNumber))) roomNumber += 1;
+    const id = roomIdForNumber(roomNumber);
+    usedRoomIds.add(id);
+    return id;
+  };
 
   for (const slot of config.slots) {
-    const pageIndex = Math.max(0, parsePageIndex(slot.id));
+    const pageIndex = roomPageById.get(roomIdOfSlot(slot.id)) ?? Math.max(0, parsePageIndex(slot.id));
     const wall = wallById.get(slot.placement.wallId);
     const wallGroup = wall?.group ?? heuristicWallGroup(slot.placement.wallId);
     const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
@@ -2199,14 +2570,18 @@ export function resolveMuseumHub(
     if (free) placeInto(free, artwork);
   }
   for (const slot of freeSlots) {
-    if (slot.artworkId) resolved.push(slot);
+    if (slot.artworkId || editorMode) resolved.push(slot);
   }
 
   let overflow = artworks.filter((artwork) => !mappedArtworkIds.has(artwork.id));
   if (autoPlaceUnmapped && overflow.length > 0) {
-    let pageIndex = resolved.reduce((max, slot) => Math.max(max, slot.pageIndex), 0) + 1;
+    let pageIndex = Math.max(configRooms.length, resolved.reduce((max, slot) => Math.max(max, slot.pageIndex + 1), 0));
     while (overflow.length > 0) {
-      const pageSlots = baselinePageSlots(pageIndex).map<ResolvedHubSlot>((slot) => {
+      // Automatic rooms take unused room numbers so they never collide with
+      // explicitly listed (possibly non-contiguous) rooms.
+      const overflowRoomId = claimRoomId();
+      roomMetaByPage.set(pageIndex, { id: overflowRoomId });
+      const pageSlots = baselinePageSlots(pageIndex, overflowRoomId).map<ResolvedHubSlot>((slot) => {
         const wall = wallById.get(slot.placement.wallId);
         const localScale = wall?.localCalibrationScale ?? { x: 1, y: 1 };
         return {
@@ -2260,7 +2635,7 @@ export function resolveMuseumHub(
         consumed.add(target.id);
         placeInto(target, artwork);
       }
-      resolved.push(...pageSlots.filter((slot) => slot.artworkId));
+      resolved.push(...pageSlots.filter((slot) => slot.artworkId || editorMode));
       overflow = artworks.filter((artwork) => !mappedArtworkIds.has(artwork.id));
       pageIndex += 1;
     }
@@ -2274,10 +2649,11 @@ export function resolveMuseumHub(
     slotsByOriginalPage.set(slot.pageIndex, pageSlots);
   }
   for (const [originalPageIndex, pageSlots] of slotsByOriginalPage) {
-    if (pageSlots.length <= HUB_SLOTS_PER_PAGE) continue;
+    if (editorMode || pageSlots.length <= HUB_SLOTS_PER_PAGE) continue;
     for (let offset = 0; offset < pageSlots.length; offset += HUB_SLOTS_PER_PAGE) {
       const targetPageIndex = offset === 0 ? originalPageIndex : nextReflowPageIndex++;
       const templates = baselinePageSlots(targetPageIndex);
+      if (!roomMetaByPage.has(targetPageIndex)) roomMetaByPage.set(targetPageIndex, { id: claimRoomId() });
       for (const [index, slot] of pageSlots.slice(offset, offset + HUB_SLOTS_PER_PAGE).entries()) {
         const template = templates[index]!;
         slot.pageIndex = targetPageIndex;
@@ -2484,7 +2860,7 @@ export function resolveMuseumHub(
   }
 
   let nextOverflowPageIndex = resolved.reduce((max, slot) => Math.max(max, slot.pageIndex), 0) + 1;
-  let movedConflict = true;
+  let movedConflict = !editorMode;
   while (movedConflict) {
     movedConflict = false;
     const candidateGroups = new Map<string, ResolvedHubSlot[]>();
@@ -2513,6 +2889,7 @@ export function resolveMuseumHub(
               : null;
           if (!overflowSlot) continue;
           overflowSlot.pageIndex = nextOverflowPageIndex;
+          roomMetaByPage.set(nextOverflowPageIndex, { id: claimRoomId() });
           nextOverflowPageIndex += 1;
           movedConflict = true;
           warnings.push(
@@ -2566,10 +2943,28 @@ export function resolveMuseumHub(
     }
   }
 
-  const orderedPageIndices = [...new Set(resolved.map((slot) => slot.pageIndex))].sort((a, b) => a - b);
+  // The gallery skips rooms without visible artworks; the editor keeps every
+  // listed room (including empty ones) so it can be filled or deleted.
+  const visiblePageIndices = resolved
+    .filter((slot) => editorMode || (slot.selectable && slot.artworkId))
+    .map((slot) => slot.pageIndex);
+  if (editorMode) configRooms.forEach((_, index) => visiblePageIndices.push(index));
+  const orderedPageIndices = [...new Set(visiblePageIndices.length > 0 ? visiblePageIndices : resolved.map((slot) => slot.pageIndex))]
+    .sort((a, b) => a - b);
+  const resolvedRooms: ResolvedHubRoomEntry[] = orderedPageIndices.map((originalPageIndex, index) => {
+    const meta = roomMetaByPage.get(originalPageIndex);
+    return { id: meta?.id ?? roomIdForNumber(originalPageIndex + 1), name: meta?.name ?? '', pageIndex: index };
+  });
   const normalizedPageIndex = new Map(orderedPageIndices.map((pageIndex, index) => [pageIndex, index]));
-  for (const slot of resolved) {
-    slot.pageIndex = normalizedPageIndex.get(slot.pageIndex) ?? 0;
+  for (let index = resolved.length - 1; index >= 0; index -= 1) {
+    const slot = resolved[index]!;
+    const normalized = normalizedPageIndex.get(slot.pageIndex);
+    if (normalized === undefined) {
+      // Only reachable outside the editor: a page holding no visible artwork.
+      resolved.splice(index, 1);
+      continue;
+    }
+    slot.pageIndex = normalized;
   }
 
   const pageMap = new Map<number, ResolvedHubSlot[]>();
@@ -2611,6 +3006,19 @@ export function resolveMuseumHub(
   if (unmappedArtworkCount > 0 && autoPlaceUnmapped) {
     warnings.push(`${unmappedArtworkCount} active artwork(s) without a selectable slot.`);
   }
+  const assignedArtworkIds = new Set(resolved.map((slot) => slot.artworkId).filter((id): id is string => Boolean(id)));
+  const unplacedArtworkIds = artworks.filter((artwork) => !assignedArtworkIds.has(artwork.id)).map((artwork) => artwork.id);
+  if (!autoPlaceUnmapped && unplacedArtworkIds.length > 0) {
+    warnings.push(
+      `${unplacedArtworkIds.length} active artwork(s) are not assigned to a room and stay hidden in the gallery: ${unplacedArtworkIds.join(', ')}.`
+    );
+  }
+  const artworkCatalog: HubArtworkCatalogEntry[] = artworks.map((artwork, index) => ({
+    id: artwork.id,
+    title: artwork.title,
+    index,
+    aspect: artworkAspect(artwork),
+  }));
   const artworkImageById = new Map<string, string>();
   const artworkSourceById = new Map<
     string,
@@ -2632,6 +3040,10 @@ export function resolveMuseumHub(
 
   return {
     pages,
+    rooms: resolvedRooms,
+    explicitRooms: config.rooms !== undefined,
+    artworkCatalog,
+    unplacedArtworkIds,
     slotToArtwork,
     artworkToSlot,
     artworkImageById,
