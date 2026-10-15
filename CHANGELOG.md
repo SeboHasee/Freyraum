@@ -1,6 +1,24 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## v1.36 (part 1–2) — Fast artwork press, clear artwork placement (2026-10-15)
+
+- Root cause of the stiff press/release: the editor panel change check
+  stringified multi-megabyte `data:` thumbnail URLs (~240 ms per press and
+  release). It now uses a short thumbnail key: release handler ~2 ms, press
+  handler <1 ms (`npm run test:editor-drag` reports timing and fails above 16 ms).
+- Press only selects; undo is recorded after a real move (3 px threshold),
+  panels refresh in the next frame, and 3D rendering is coalesced while editing.
+- New shared placement controller (`src/hub/editor/placementController.ts`):
+  click an artwork then a place (or the reverse), drag from the list into the
+  scene or onto a place card, drop back on the list to remove, drop onto
+  another place in the scene to swap. Drag preview, green/amber targets,
+  "+ Bild hinzufügen" on empty places with a picker, "Platzieren…" menu, and an
+  undo message. Keyboard: Enter/Space on places.
+- Thumbnails decode once (`src/hub/editor/thumbnails.ts`).
+- Still open from the v1.36 plan: background library, `validate:deploy`/ZIP
+  package, and the online editor with Cloudflare Worker.
+
 ## v1.35 — Rooms you control, simpler German editor panel (2026-10-15)
 
 - `museum-hub.json` can list its rooms (`rooms: [{ id, name? }]`). The editor
