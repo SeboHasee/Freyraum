@@ -1960,4 +1960,121 @@ assert.match(hub, /!event\.repeat/, 'held arrow keys must produce a single undo 
 assert.match(hub, /swipePointerId/, 'swipe navigation must track the starting pointer');
 assert.match(hub, /addEventListener\('pointercancel', this\.handleSwipeCancel/, 'swipe navigation must reset on pointer cancel');
 assert.doesNotMatch(hub, /projectSlotArtwork\(/, 'the editor must use the shared displayed projection from the config layer');
-console.log('PASS: 9×12 m daylit room invariants, mirrored doorways, four-work 2+1+1 rooms, overflow pagination, calibrated projection, selection persistence hooks, token consistency, and 404 fallback are valid.');
+// ── v1.35 user-controlled rooms ─────────────────────────────────────────────
+{
+  const sanitize = (config) => {
+    const result = museumHub.sanitizeMuseumHubConfig(JSON.parse(JSON.stringify(config)));
+    assert.ok(result.config, `room config must sanitize: ${result.warnings.join(' | ')}`);
+    return result.config;
+  };
+  const placedIds = (resolution) =>
+    resolution.pages.flatMap((page) => page.slots).filter((slot) => slot.selectable && slot.artworkId).map((slot) => slot.artworkId);
+
+  // Old files without a room list load unchanged: automatic extra rooms (option A).
+  const legacyFile = JSON.parse(JSON.stringify(shippedConfigFile));
+  delete legacyFile.rooms;
+  delete legacyFile.fallbacks.autoPlaceUnmapped;
+  const legacy = sanitize(legacyFile);
+  assert.equal(legacy.fallbacks.autoPlaceUnmapped, true, 'files without a room list keep automatic extra rooms');
+  const legacyResolution = museumHub.resolveMuseumHub(artworks, legacy, null);
+  assert.equal(legacyResolution.pages.length, 2, 'legacy files still paginate overflow into automatic rooms');
+  assert.equal(new Set(placedIds(legacyResolution)).size, artworks.length, 'legacy files still show every artwork');
+
+  // Editor files (room list) hide unplaced artworks and list them (option B).
+  const shipped = sanitize(shippedConfigFile);
+  assert.equal(shipped.fallbacks.autoPlaceUnmapped, false);
+  const hidden = museumHub.resolveMuseumHub(artworks, shipped, null);
+  assert.equal(hidden.pages.length, 1, 'only Raum 1 exists in the shipped file');
+  assert.deepEqual([...placedIds(hidden)].sort(), ['akt-27', 'fraktal']);
+  assert.equal(hidden.unplacedArtworkIds.length, artworks.length - 2, 'unplaced artworks are listed');
+  assert.ok(hidden.warnings.some((warning) => /not assigned to a room and stay hidden/.test(warning)), 'unplaced artworks are reported in diagnostics');
+  assert.deepEqual(hidden.rooms.map((room) => room.id), ['room-01']);
+
+  // Add a room: copies the current layout without artworks.
+  const added = museumHub.addRoomToConfig(shippedConfigFile, { afterRoomId: 'room-01', templateRoomId: 'room-01' });
+  assert.equal(added.roomId, 'room-02');
+  assert.deepEqual(added.config.rooms.map((room) => room.id), ['room-01', 'room-02']);
+  const room2Slots = added.config.slots.filter((slot) => slot.id.startsWith('room-02.'));
+  assert.equal(room2Slots.length, 4, 'a new room has the four standard places');
+  assert.ok(room2Slots.every((slot) => !slot.artworkId), 'a new room starts without artworks');
+  for (const slot of room2Slots) {
+    const template = shippedConfigFile.slots.find((candidate) => candidate.id === slot.id.replace('room-02.', 'room-01.'));
+    assert.deepEqual(slot.placement, template.placement, `${slot.id} copies the layout of its Raum 1 place`);
+  }
+  // Empty rooms stay editable but are skipped in the gallery.
+  const editorEmpty = museumHub.resolveMuseumHub(artworks, sanitize(added.config), null, { editor: true });
+  assert.equal(editorEmpty.rooms.length, 2, 'the editor keeps empty rooms');
+  assert.equal(editorEmpty.pages.length, 2, 'the editor keeps pages for empty rooms');
+  const galleryEmpty = museumHub.resolveMuseumHub(artworks, sanitize(added.config), null);
+  assert.equal(galleryEmpty.pages.length, 1, 'the gallery skips empty rooms');
+
+  // Assign two artworks to Raum 2; swapping keeps each artwork exactly once.
+  let edited = museumHub.assignArtworkInConfig(added.config, 'room-02.wall-front.a', 'square-fixture').config;
+  edited = museumHub.assignArtworkInConfig(edited, 'room-02.wall-front.b', 'square-fixture-2').config;
+  const swap = museumHub.assignArtworkInConfig(edited, 'room-02.wall-front.a', 'fraktal');
+  assert.equal(swap.swappedWithSlotId, 'room-01.wall-front.a', 'assigning a placed artwork swaps the two places');
+  assert.equal(swap.config.slots.find((slot) => slot.id === 'room-01.wall-front.a').artworkId, 'square-fixture');
+  const removed = museumHub.assignArtworkInConfig(edited, 'room-02.wall-front.b', null);
+  assert.equal(removed.replacedArtworkId, 'square-fixture-2');
+  assert.equal(removed.config.slots.find((slot) => slot.id === 'room-02.wall-front.b').artworkId, undefined);
+
+  // Copied layout stays inside the green area (shared evaluateDisplayedPlacement).
+  const twoRooms = museumHub.resolveMuseumHub(artworks, sanitize(edited), null, { editor: true });
+  for (const slot of twoRooms.pages[1].slots.filter((candidate) => candidate.artworkId)) {
+    const wall = twoRooms.wallById.get(slot.placement.wallId);
+    const evaluation = museumHub.evaluateDisplayedPlacement(wall, slot.placement, slot.artworkAspect, twoRooms.stage);
+    assert.equal(evaluation.valid, true, `${slot.id} copied layout must stay valid (${evaluation.issues.join(', ')})`);
+  }
+  // Without a template, new rooms use safe defaults inside the green area.
+  const fallbackRoom = museumHub.addRoomToConfig(shippedConfigFile);
+  const fallbackFront = fallbackRoom.config.slots.filter((slot) => slot.id.startsWith(`${fallbackRoom.roomId}.wall-front`));
+  assert.ok(fallbackFront.every((slot) => slot.placement.centerHeight === museumHub.HUB_SAFE_FRONT_CENTERLINE_M));
+
+  // Export → reload round trip keeps the room list, order, names, and assignment.
+  const named = museumHub.renameRoomInConfig(edited, 'room-02', '  Grafik   Raum ');
+  assert.equal(named.rooms.find((room) => room.id === 'room-02').name, 'Grafik Raum');
+  const reloaded = sanitize(named);
+  assert.deepEqual(reloaded.rooms, named.rooms, 'room list survives export and reload');
+  const reloadedResolution = museumHub.resolveMuseumHub(artworks, reloaded, null);
+  assert.equal(reloadedResolution.pages.length, 2);
+  assert.deepEqual(
+    reloadedResolution.pages[1].slots.filter((slot) => slot.artworkId).map((slot) => slot.artworkId).sort(),
+    ['square-fixture', 'square-fixture-2']
+  );
+  assert.equal(reloadedResolution.rooms[1].name, 'Grafik Raum');
+
+  // Reordering changes the visitor walk order.
+  const moved = museumHub.moveRoomInConfig(named, 'room-02', -1);
+  assert.deepEqual(moved.rooms.map((room) => room.id), ['room-02', 'room-01']);
+  const movedResolution = museumHub.resolveMuseumHub(artworks, sanitize(moved), null);
+  assert.ok(movedResolution.pages[0].slots.every((slot) => slot.id.startsWith('room-02.')), 'first page is the first listed room');
+  assert.equal(museumHub.moveRoomInConfig(named, 'room-01', -1), null, 'the first room cannot move earlier');
+
+  // Duplicate (layout + name), then delete rooms.
+  const duplicate = museumHub.addRoomToConfig(named, { afterRoomId: 'room-02', templateRoomId: 'room-02', name: 'Grafik Raum (Kopie)' });
+  assert.equal(duplicate.roomId, 'room-03');
+  assert.equal(duplicate.config.slots.filter((slot) => slot.id.startsWith('room-03.') && slot.artworkId).length, 0);
+  const deleteEmpty = museumHub.deleteRoomFromConfig(duplicate.config, 'room-03', 'unplaced');
+  assert.deepEqual(deleteEmpty.config.rooms.map((room) => room.id), ['room-01', 'room-02']);
+  const toPrevious = museumHub.deleteRoomFromConfig(named, 'room-02', 'previous');
+  assert.equal(toPrevious.targetRoomId, 'room-01');
+  assert.deepEqual(toPrevious.movedArtworkIds.sort(), ['square-fixture', 'square-fixture-2'], 'artworks move into free places of the previous room');
+  const toUnplaced = museumHub.deleteRoomFromConfig(named, 'room-02', 'unplaced');
+  assert.deepEqual(toUnplaced.unplacedArtworkIds.sort(), ['square-fixture', 'square-fixture-2']);
+  assert.equal(museumHub.deleteRoomFromConfig(shippedConfigFile, 'room-01', 'unplaced'), null, 'the only room cannot be deleted');
+
+  // Import accepts a different room count and assignment; only fixed fields must match.
+  assert.equal(
+    museumHub.hubFixedFieldsSignature(sanitize(duplicate.config)),
+    museumHub.hubFixedFieldsSignature(shipped),
+    'room count and assignment are not fixed fields'
+  );
+  const changedCamera = sanitize({ ...shippedConfigFile, camera: { ...shippedConfigFile.camera, verticalFovDeg: shippedConfigFile.camera.verticalFovDeg + 5 } });
+  assert.notEqual(museumHub.hubFixedFieldsSignature(changedCamera), museumHub.hubFixedFieldsSignature(shipped));
+  const ghost = museumHub.assignArtworkInConfig(named, 'room-01.wall-left.a', 'ghost-artwork').config;
+  const cleaned = museumHub.dropUnknownArtworkAssignments(ghost, new Set(artworks.map((artwork) => artwork.id)));
+  assert.deepEqual(cleaned.droppedArtworkIds, ['ghost-artwork'], 'unknown artwork ids are reported and dropped');
+  assert.equal(cleaned.config.slots.find((slot) => slot.id === 'room-01.wall-left.a').artworkId, undefined);
+}
+
+console.log('PASS: 9×12 m daylit room invariants, mirrored doorways, four-work 2+1+1 rooms, overflow pagination, calibrated projection, selection persistence hooks, token consistency, user-controlled rooms, and 404 fallback are valid.');
