@@ -212,6 +212,9 @@ export class HubRoomRenderer {
   private preset: QualityPreset;
   private activePageIndex = 0;
   private disposed = false;
+  /** When the canvas is hidden (placement editor), renders are coalesced off the input path. */
+  private deferRendering = false;
+  private deferredRenderTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(container: HTMLElement, resolution: MuseumHubResolution, preset: QualityPreset) {
     this.resolution = resolution;
@@ -592,9 +595,25 @@ export class HubRoomRenderer {
     };
   }
 
+  /**
+   * Coalesces renders into one idle-time render. The placement editor hides
+   * the WebGL canvas, so rendering synchronously on pointer release only
+   * delays the next input.
+   */
+  setDeferredRendering(enabled: boolean): void {
+    this.deferRendering = enabled;
+    if (!enabled && this.deferredRenderTimer !== null) {
+      clearTimeout(this.deferredRenderTimer);
+      this.deferredRenderTimer = null;
+      this.render();
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.deferredRenderTimer !== null) clearTimeout(this.deferredRenderTimer);
+    this.deferredRenderTimer = null;
     for (const state of this.slotMeshes.values()) {
       if (state.textureKind === 'image') {
         state.artworkMesh.material.map?.dispose();
@@ -1663,6 +1682,20 @@ export class HubRoomRenderer {
   }
 
   private render(): void {
+    if (this.disposed) return;
+    if (this.deferRendering) {
+      if (this.deferredRenderTimer === null) {
+        this.deferredRenderTimer = setTimeout(() => {
+          this.deferredRenderTimer = null;
+          this.renderNow();
+        }, 250);
+      }
+      return;
+    }
+    this.renderNow();
+  }
+
+  private renderNow(): void {
     if (this.disposed) return;
     this.renderReflection();
     this.renderer.render(this.scene, this.camera);

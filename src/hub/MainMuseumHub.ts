@@ -37,6 +37,8 @@ import { createEditorTabs, type EditorTabs } from './editor/editorTabs';
 import { EditorRoomBar } from './editor/roomBar';
 import { EditorArtworkLibrary, type LibraryArtwork, type LibraryPlace } from './editor/artworkLibrary';
 import { EditorSaveTab } from './editor/saveTab';
+import { PlacementController, type PlacementArtwork, type PlacementPlace } from './editor/placementController';
+import { EditorToast } from './editor/editorToast';
 import {
   countLabel,
   placeLabel,
@@ -165,6 +167,14 @@ type CalibrationDrag =
       mode: 'move' | 'resize';
       /** Wall-local offset from the grabbed point to the artwork centre. */
       grabOffset: Point2D;
+      /** Client position of the press; below the drag threshold it is a click. */
+      startClient: Point2D;
+      /** True once the pointer passed the drag threshold (undo step recorded). */
+      moved: boolean;
+      pressedAt: number;
+      lastFrameAt: number;
+      frameTimes: number[];
+      firstMoveAt: number | null;
     }
   | {
       kind: 'wall-point';
@@ -238,6 +248,8 @@ export class MainMuseumHub {
   private editorTabs: EditorTabs | null = null;
   private roomBar: EditorRoomBar | null = null;
   private artworkLibrary: EditorArtworkLibrary | null = null;
+  private placementController: PlacementController | null = null;
+  private editorToast: EditorToast | null = null;
   private saveTab: EditorSaveTab | null = null;
   private calibrationIssues: CalibrationIssue[] = [];
   /** Option A (true) hangs unplaced artworks into extra rooms in the gallery. */
@@ -400,6 +412,8 @@ export class MainMuseumHub {
       );
     }
     this.hubRoomRenderer = hubRoomRenderer;
+    // The editor hides the WebGL canvas; keep its renders off the input path.
+    if (this.calibrating) hubRoomRenderer?.setDeferredRendering(true);
 
     const shade = document.createElement('div');
     shade.className = 'museum-hub__shade';
@@ -753,7 +767,16 @@ export class MainMuseumHub {
         // Empty places are dashed placeholders that can be selected and filled.
         button.classList.add('is-empty-slot');
         button.removeAttribute('aria-disabled');
-        button.setAttribute('aria-label', `Leerer Platz ${place}. Auswählen und im Bereich „Bilder“ ein Kunstwerk zuweisen.`);
+        button.setAttribute('aria-label', `Leerer Platz ${place}. Enter öffnet die Bildauswahl.`);
+        const add = document.createElement('span');
+        add.className = 'museum-hub__empty-slot-cta';
+        add.setAttribute('aria-hidden', 'true');
+        const plus = document.createElement('strong');
+        plus.textContent = '+ Bild hinzufügen';
+        const where = document.createElement('span');
+        where.textContent = place;
+        add.append(plus, where);
+        button.appendChild(add);
       } else {
         button.setAttribute('aria-label', `„${slot.displayLabel}“ auf ${place}. Ziehen oder Pfeiltasten verschieben.`);
       }
@@ -762,6 +785,19 @@ export class MainMuseumHub {
       handle.setAttribute('aria-hidden', 'true');
       button.appendChild(handle);
       button.disabled = false;
+      button.dataset['dropSlot'] = slot.id;
+      button.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        if (this.placementController?.chosenArtwork) {
+          this.placementController.choosePlace(slot.id);
+        } else if (!slot.artworkId) {
+          this.selectCalibrationSlot(slot.id);
+          this.placementController?.openPlacePicker(slot.id, button);
+        } else {
+          this.selectCalibrationSlot(slot.id);
+        }
+      });
       button.addEventListener('pointerdown', (event) => {
         const target = event.target as HTMLElement | null;
         this.startSlotCalibrationDrag(event, slot, button, target?.classList.contains('museum-hub__artwork-handle') ? 'resize' : 'move');
@@ -2401,19 +2437,34 @@ export class MainMuseumHub {
 
     // ── Tab "Bilder": places, selected artwork, library ────────────────────
     const artworkTab = document.createElement('div');
-    this.artworkLibrary = new EditorArtworkLibrary({
-      onSelectPlace: (slotId) => {
-        this.selectCalibrationSlot(slotId);
-        this.slotViews.find((view) => view.slot.id === slotId)?.button.focus({ preventScroll: true });
+    this.placementController = new PlacementController({
+      currentPlaces: () => this.currentPlacementPlaces(),
+      artworks: () => this.placementArtworks(),
+      sceneElement: (slotId) => {
+        const view = this.slotViews.find((candidate) => candidate.slot.id === slotId);
+        return view && view.slot.pageIndex === this.currentPageIndex() ? view.button : null;
       },
-      onArtworkClick: (artworkId) => this.handleLibraryArtworkClick(artworkId),
-      onAssign: (slotId, artworkId) => this.assignArtwork(slotId, artworkId),
-      onUnplace: (artworkId) => {
+      assign: (slotId, artworkId) => this.assignArtwork(slotId, artworkId),
+      unplace: (artworkId) => {
         const slotId = this.slotViews.find((view) => view.slot.artworkId === artworkId)?.slot.id;
         if (slotId) this.assignArtwork(slotId, null);
       },
-      onAutoFill: () => this.autoFillCurrentRoom(),
+      selectPlace: (slotId) => this.selectCalibrationSlot(slotId),
+      placeInNewRoom: (artworkId) => this.placeArtworkInNewRoom(artworkId),
+      showArtwork: (artworkId) => {
+        const view = this.slotViews.find((candidate) => candidate.slot.artworkId === artworkId);
+        if (!view) return;
+        this.selectCalibrationSlot(view.slot.id);
+        view.button.focus({ preventScroll: true });
+      },
+      announce: (message) => this.announceCalibrationAction(message),
     });
+    this.placementController.onChange(() => this.artworkLibrary?.syncPlacementState());
+    this.editorToast = new EditorToast();
+    this.element.appendChild(this.editorToast.element);
+    this.artworkLibrary = new EditorArtworkLibrary({
+      onAutoFill: () => this.autoFillCurrentRoom(),
+    }, this.placementController);
 
     const detail = document.createElement('section');
     detail.className = 'museum-hub__editor-section museum-hub__editor-detail';
@@ -2740,13 +2791,19 @@ export class MainMuseumHub {
   ): void {
     if (this.calibrationDrag || !this.isPrimaryPointerDown(event)) return;
     event.preventDefault();
-    this.selectCalibrationSlot(slot.id);
+    const pressedAt = performance.now();
+    // An artwork chosen in the list (or a place drag) is dropped here instead
+    // of starting a move.
+    if (this.placementController?.handleSceneSlotPress(slot.id)) return;
+    // Press stays cheap: mark the selection now and refresh the overlay and
+    // panels after the next frame. The undo step is recorded only once the
+    // pointer actually moves past the drag threshold.
+    this.selectCalibrationSlot(slot.id, { deferred: true });
     button.focus({ preventScroll: true });
-    this.recordCalibrationHistory();
-    // Keep the grabbed point under the pointer instead of snapping the
-    // artwork centre to it, which made the first move jump.
     const wall = this.resolution.wallById.get(slot.placement.wallId);
     const startPoint = this.pointerEventToStage(event);
+    // Keep the grabbed point under the pointer instead of snapping the
+    // artwork centre to it, which made the first move jump.
     const grabLocal = wall && startPoint ? this.applyInverseHomography(wall, startPoint) : null;
     const grabOffset = grabLocal && mode === 'move'
       ? point(slot.placement.center.x - grabLocal.x, slot.placement.center.y - grabLocal.y)
@@ -2759,12 +2816,24 @@ export class MainMuseumHub {
       captureElement: button,
       mode,
       grabOffset,
+      startClient: point(event.clientX, event.clientY),
+      moved: false,
+      pressedAt,
+      lastFrameAt: pressedAt,
+      frameTimes: [],
+      firstMoveAt: null,
     };
-    button.setPointerCapture(event.pointerId);
+    try {
+      button.setPointerCapture(event.pointerId);
+    } catch {
+      // Synthetic or already-released pointers cannot be captured; window
+      // listeners below still end the drag.
+    }
     button.addEventListener('pointermove', this.handleCalibrationMove as EventListener);
     button.addEventListener('pointerup', this.handleCalibrationEnd as EventListener);
     button.addEventListener('pointercancel', this.handleCalibrationEnd as EventListener);
     button.addEventListener('lostpointercapture', this.handleCalibrationEnd as EventListener);
+    this.recordEditorTiming('pressHandlerMs', performance.now() - pressedAt);
   }
 
   private startWallPointCalibrationDrag(
@@ -2917,7 +2986,11 @@ export class MainMuseumHub {
   }
 
   private handleCalibrationMove = (event: PointerEvent): void => {
-    this.pendingCalibrationMove = event;
+    // Use the newest coalesced sample so the frame lands on the latest
+    // pointer position even when the browser batched several moves.
+    const coalesced = typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : [];
+    const latest = coalesced[coalesced.length - 1];
+    this.pendingCalibrationMove = latest && latest.pointerId === event.pointerId ? latest : event;
     if (this.calibrationMoveRaf !== 0) return;
     this.calibrationMoveRaf = requestAnimationFrame(() => {
       this.calibrationMoveRaf = 0;
@@ -2933,6 +3006,22 @@ export class MainMuseumHub {
     const stagePoint = this.pointerEventToStage(event);
     if (!stagePoint) return;
     if (drag.kind === 'slot') {
+      if (!drag.moved) {
+        // Below the threshold the press is a click (select only).
+        const distance = Math.hypot(event.clientX - drag.startClient.x, event.clientY - drag.startClient.y);
+        if (distance < MainMuseumHub.DRAG_THRESHOLD_PX) return;
+        drag.moved = true;
+        this.recordCalibrationHistory();
+        drag.button.classList.add('is-dragging');
+        this.element.classList.add('is-dragging-artwork');
+      }
+      const frameAt = performance.now();
+      if (drag.firstMoveAt === null) {
+        drag.firstMoveAt = frameAt;
+      } else {
+        drag.frameTimes.push(frameAt - drag.lastFrameAt);
+      }
+      drag.lastFrameAt = frameAt;
       const wall = this.resolution.wallById.get(drag.slot.placement.wallId);
       if (!wall) return;
       const local = wall.inverseHomography
@@ -2951,6 +3040,9 @@ export class MainMuseumHub {
       }
       this.applySlotGeometry(drag.button, drag.slot, false);
       this.renderDragLimitHighlight(drag.slot, wall);
+      if (drag.mode === 'move' && drag.slot.artworkId) {
+        this.placementController?.sceneDragHover(event.clientX, event.clientY, drag.slot.id, drag.button);
+      }
     } else {
       const wall = this.resolution.wallById.get(drag.wallId);
       const wallQuad = wall?.quad ?? (drag.wallId === 'wall-rear' ? this.entranceBoundaryQuad : null);
@@ -3334,8 +3426,46 @@ export class MainMuseumHub {
     this.lastSlotDragBlocked = null;
     let refitMessage: string | null = null;
     if (drag.kind === 'slot') {
+      drag.button.classList.remove('is-dragging');
+      this.element.classList.remove('is-dragging-artwork');
+      if (!drag.moved) {
+        // A click: nothing changed, so skip the renderer, validation, and
+        // export rebuild; only finish the deferred selection refresh.
+        this.flushDeferredSelectionRefresh();
+        this.recordEditorTiming('releaseHandlerMs', 0);
+        if (!drag.slot.artworkId && drag.mode === 'move') {
+          this.placementController?.openPlacePicker(drag.slot.id, drag.button);
+        }
+        return;
+      }
+      // Released over another place of this room: swap the two artworks and
+      // keep both places' positions (the move itself is discarded).
+      const swapSlotId = drag.slot.artworkId && drag.mode === 'move'
+        ? this.placementController?.sceneDragHover(event.clientX, event.clientY, drag.slot.id, drag.button) ?? null
+        : null;
+      this.placementController?.sceneDragEnd();
+      if (swapSlotId && drag.slot.artworkId) {
+        const snapshot = this.calibrationUndoStack.pop();
+        if (snapshot) this.applyCalibrationSnapshot(snapshot);
+        this.assignArtwork(swapSlotId, drag.slot.artworkId);
+        return;
+      }
+      const releaseStartedAt = performance.now();
       const view = this.slotViews.find((candidate) => candidate.slot.id === drag.slot.id);
       if (view) this.syncSlotRenderer(view);
+      this.flushDeferredSelectionRefresh(false);
+      this.renderCalibrationOverlay();
+      this.updateCalibrationOutput(true);
+      this.announceSlotPosition(drag.slot);
+      const frames = drag.frameTimes;
+      this.recordEditorTiming('releaseHandlerMs', performance.now() - releaseStartedAt);
+      this.recordEditorTiming('pressToFirstMoveMs', (drag.firstMoveAt ?? drag.pressedAt) - drag.pressedAt);
+      if (frames.length) {
+        this.recordEditorTiming('dragFrameAvgMs', frames.reduce((sum, value) => sum + value, 0) / frames.length);
+        this.recordEditorTiming('dragFrameMaxMs', Math.max(...frames));
+      }
+      this.diagnostics.info('hub-editor-timing', 'Placement editor drag timing', { ...this.editorTimings });
+      return;
     } else {
       // Wall/zone drags deferred 3D updates; re-fit artworks and render once.
       refitMessage = this.refitSlotsOnWall(drag.wallId);
@@ -3343,7 +3473,6 @@ export class MainMuseumHub {
     }
     this.renderCalibrationOverlay();
     this.updateCalibrationOutput(true);
-    if (drag.kind === 'slot') this.announceSlotPosition(drag.slot);
     if (refitMessage) this.announceCalibrationAction(refitMessage);
   };
 
@@ -3376,6 +3505,10 @@ export class MainMuseumHub {
       this.refitSlotsOnWall(drag.wallId);
       this.applyAllSlotGeometry();
     } else {
+      drag.button.classList.remove('is-dragging');
+      this.element.classList.remove('is-dragging-artwork');
+      this.placementController?.sceneDragEnd();
+      this.flushDeferredSelectionRefresh(false);
       const view = this.slotViews.find((candidate) => candidate.slot.id === drag.slot.id);
       if (view) this.syncSlotRenderer(view);
     }
@@ -4077,24 +4210,88 @@ export class MainMuseumHub {
     return this.slotViews.find(({ slot }) => slot.id === this.activeCalibrationSlotId)?.slot ?? null;
   }
 
-  private selectCalibrationSlot(slotId: string): void {
+  private selectCalibrationSlot(slotId: string, options: { deferred?: boolean } = {}): void {
     const view = this.slotViews.find(({ slot }) => slot.id === slotId);
     if (!view) return;
     // Selecting a place in another room (list, message, keyboard) opens that room.
     if (view.slot.pageIndex !== this.currentPageIndex()) this.goToPage(view.slot.pageIndex, view.slot);
+    const previousWallId = this.activeCalibrationWallId;
+    const changed = this.activeCalibrationSlotId !== slotId;
     this.activeCalibrationSlotId = slotId;
     if (this.calibrationEditMode !== 'room-boundary') {
       this.activeCalibrationWallId = view.slot.placement.wallId;
       if (this.calibrationWallSelect) this.calibrationWallSelect.value = view.slot.placement.wallId;
     }
-    for (const candidate of this.slotViews) {
-      candidate.button.classList.toggle('is-calibration-selected', candidate.slot.id === slotId);
+    if (changed) {
+      for (const candidate of this.slotViews) {
+        candidate.button.classList.toggle('is-calibration-selected', candidate.slot.id === slotId);
+      }
     }
+    if (options.deferred) {
+      // Pressing an artwork only marks it; the overlay (when the wall
+      // changed) follows in the next frame and the panels after the drag.
+      if (changed || previousWallId !== this.activeCalibrationWallId) {
+        this.scheduleDeferredSelectionRefresh(previousWallId !== this.activeCalibrationWallId);
+      }
+      return;
+    }
+    this.cancelDeferredSelectionRefresh();
     this.syncCalibrationControls();
     this.updateCalibrationArtworkInfo();
     this.renderCalibrationOverlay();
     this.syncEditorToolState();
     this.refreshEditorPanels();
+  }
+
+  private static readonly DRAG_THRESHOLD_PX = 3;
+
+  private deferredSelectionRaf = 0;
+  private deferredSelectionPending = false;
+  private deferredSelectionWallChanged = false;
+  private readonly editorTimings: Record<string, number> = {};
+
+  private scheduleDeferredSelectionRefresh(wallChanged: boolean): void {
+    this.deferredSelectionPending = true;
+    this.deferredSelectionWallChanged ||= wallChanged;
+    if (this.deferredSelectionRaf !== 0) return;
+    this.deferredSelectionRaf = requestAnimationFrame(() => {
+      this.deferredSelectionRaf = 0;
+      if (!this.deferredSelectionPending) return;
+      if (this.calibrationDrag?.kind === 'slot') {
+        // During a drag only the green zone of a newly selected wall is
+        // needed; controls and panels follow on release.
+        if (this.deferredSelectionWallChanged) {
+          this.deferredSelectionWallChanged = false;
+          this.renderCalibrationOverlay();
+        }
+        return;
+      }
+      this.flushDeferredSelectionRefresh();
+    });
+  }
+
+  private cancelDeferredSelectionRefresh(): void {
+    if (this.deferredSelectionRaf !== 0) cancelAnimationFrame(this.deferredSelectionRaf);
+    this.deferredSelectionRaf = 0;
+    this.deferredSelectionPending = false;
+    this.deferredSelectionWallChanged = false;
+  }
+
+  /** Runs the selection refresh postponed by an artwork press. */
+  private flushDeferredSelectionRefresh(renderOverlay = true): void {
+    if (!this.deferredSelectionPending) return;
+    this.cancelDeferredSelectionRefresh();
+    this.syncCalibrationControls();
+    this.updateCalibrationArtworkInfo();
+    if (renderOverlay) this.renderCalibrationOverlay();
+    this.syncEditorToolState();
+    this.refreshEditorPanels();
+  }
+
+  /** Editor input timings for diagnostics and the browser drag test. */
+  private recordEditorTiming(name: string, value: number): void {
+    this.editorTimings[name] = Math.round(value * 10) / 10;
+    this.element.dataset['editorTiming'] = JSON.stringify(this.editorTimings);
   }
 
   // ── Rooms and artwork assignment (v1.35) ──────────────────────────────────
@@ -4224,31 +4421,61 @@ export class MainMuseumHub {
       message = `„${title(artworkId)}“ hängt jetzt auf ${place}.`;
     }
     this.applyRoomChange(result.config, { slotId }, message);
+    this.editorToast?.show(
+      artworkId
+        ? `${title(artworkId)} → ${place}${result.swappedWithSlotId && result.replacedArtworkId ? ` (getauscht mit ${title(result.replacedArtworkId)})` : ''}`
+        : `${title(result.replacedArtworkId)} → nicht platziert`,
+      () => this.undoCalibration()
+    );
   }
 
-  /**
-   * Library click: placed artworks are selected (opening their room); an
-   * unplaced artwork fills the selected empty place, else the first empty
-   * place of this room, else replaces the selected place's artwork.
-   */
-  private handleLibraryArtworkClick(artworkId: string): void {
-    const placed = this.slotViews.find((view) => view.slot.artworkId === artworkId);
-    const active = this.activeCalibrationSlot;
-    if (placed && !(active && !active.artworkId)) {
-      this.selectCalibrationSlot(placed.slot.id);
-      placed.button.focus({ preventScroll: true });
-      return;
-    }
+  private currentPlacementPlaces(): PlacementPlace[] {
     const pageIndex = this.currentPageIndex();
-    const target = active && !active.artworkId && active.pageIndex === pageIndex
-      ? active
-      : this.slotViews.find((view) => view.slot.pageIndex === pageIndex && !view.slot.artworkId && !view.slot.disabledReason)?.slot
-        ?? (active?.pageIndex === pageIndex ? active : null);
-    if (!target) {
-      this.announceCalibrationAction('Zuerst einen Platz in diesem Raum wählen.');
-      return;
-    }
-    this.assignArtwork(target.id, artworkId);
+    return this.slotViews
+      .filter((view) => view.slot.pageIndex === pageIndex && !view.slot.disabledReason)
+      .map((view) => ({
+        slotId: view.slot.id,
+        label: placeLabel(view.slot.id, view.slot.placement.wallId),
+        artworkId: view.slot.artworkId,
+      }));
+  }
+
+  private placementArtworks(): PlacementArtwork[] {
+    const pageIndex = this.currentPageIndex();
+    const slotByArtwork = new Map(
+      this.slotViews.filter((view) => view.slot.artworkId).map((view) => [view.slot.artworkId!, view.slot])
+    );
+    return this.resolution.artworkCatalog.map((entry) => {
+      const slot = slotByArtwork.get(entry.id);
+      return {
+        id: entry.id,
+        title: entry.title,
+        thumbnail: this.artworkThumbnailUrl(entry.id),
+        slotId: slot?.id ?? null,
+        location: !slot ? 'unplaced' : slot.pageIndex === pageIndex ? 'here' : 'other',
+        placeText: slot ? `${this.roomLabelFor(slot.pageIndex)} · ${placeLabel(slot.id, slot.placement.wallId)}` : null,
+      };
+    });
+  }
+
+  private artworkThumbnailUrl(artworkId: string | null): string | null {
+    if (!artworkId) return null;
+    const plan = resolveArtworkImageSources(this.resolution.artworkSourceById.get(artworkId) ?? null);
+    return (plan.fallback ?? plan.primary)?.resolvedUrl ?? null;
+  }
+
+  /** "+ Neuer Raum" from the artwork menu: adds a room and hangs the artwork in its first place. */
+  private placeArtworkInNewRoom(artworkId: string): void {
+    const current = this.resolution.rooms[this.currentPageIndex()];
+    const added = addRoomToConfig(this.currentEditableConfig(), { afterRoomId: current?.id, templateRoomId: current?.id });
+    const firstSlotId = added.config.slots.find((slot) => slot.id.startsWith(`${added.roomId}.`))?.id;
+    const assigned = firstSlotId ? assignArtworkInConfig(added.config, firstSlotId, artworkId) : null;
+    const config = assigned?.config ?? added.config;
+    const title = this.resolution.artworkCatalog.find((entry) => entry.id === artworkId)?.title ?? artworkId;
+    this.applyRoomChange(config, firstSlotId ? { slotId: firstSlotId } : { roomId: added.roomId }, '');
+    const message = `${title} → ${this.currentRoomLabel()} (neu)`;
+    this.announceCalibrationAction(`Neuer Raum angelegt. ${message}.`);
+    this.editorToast?.show(message, () => this.undoCalibration());
   }
 
   private autoFillCurrentRoom(): void {
@@ -4353,11 +4580,7 @@ export class MainMuseumHub {
       }),
       pageIndex
     );
-    const thumbnail = (artworkId: string | null): string | null => {
-      if (!artworkId) return null;
-      const plan = resolveArtworkImageSources(this.resolution.artworkSourceById.get(artworkId) ?? null);
-      return (plan.fallback ?? plan.primary)?.resolvedUrl ?? null;
-    };
+    const thumbnail = (artworkId: string | null): string | null => this.artworkThumbnailUrl(artworkId);
     const titleOf = (artworkId: string | null): string | null =>
       artworkId ? this.resolution.artworkCatalog.find((entry) => entry.id === artworkId)?.title ?? artworkId : null;
     const places: LibraryPlace[] = this.slotViews
@@ -4379,6 +4602,7 @@ export class MainMuseumHub {
         id: entry.id,
         title: entry.title,
         thumbnail: thumbnail(entry.id),
+        slotId: slot?.id ?? null,
         location: !slot ? 'unplaced' : slot.pageIndex === pageIndex ? 'here' : 'other',
         placeText: slot ? `${this.roomLabelFor(slot.pageIndex)} · ${placeLabel(slot.id, slot.placement.wallId)}` : null,
       };
@@ -4389,6 +4613,7 @@ export class MainMuseumHub {
       artworks,
       activeSlotId: this.activeCalibrationSlotId,
     });
+    this.placementController?.refreshHighlights();
     const active = this.activeCalibrationSlot;
     if (this.editorDetailTitle && this.editorDetailBody) {
       this.editorDetailTitle.textContent = active

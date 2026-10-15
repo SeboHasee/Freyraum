@@ -93,6 +93,12 @@ async function confirmDelete(page) {
   await settle(page);
 }
 
+/** Clicks an editor place in the scene (empty places are dashed buttons). */
+async function scenePlaceClick(page, slotId) {
+  await page.locator(`.museum-hub__room.is-active .museum-hub__artwork[data-slot-id="${slotId}"]`).click();
+  await settle(page);
+}
+
 async function main() {
   requirePreview();
   const { chromium } = await loadPlaywright();
@@ -160,6 +166,46 @@ async function main() {
     check(
       Boolean(box && before && after && (after.horizontalPosition !== before.horizontalPosition || after.centerHeight !== before.centerHeight)),
       'dragging moves an artwork in Raum 2'
+    );
+
+    // 3b. v1.36 placement: click an artwork, then a dashed place in the scene.
+    await openTab(page, 'artworks');
+    await page.locator('.museum-hub__library-group--unplaced .museum-hub__library-item').first().click();
+    await settle(page);
+    const chosenCount = await page.locator('.museum-hub__library-item.is-chosen').count();
+    const highlighted = await page
+      .locator('.museum-hub__room.is-active .museum-hub__artwork.is-drop-candidate.is-drop-free')
+      .count();
+    check(chosenCount === 1 && highlighted >= 2, `choosing an artwork highlights free places (${highlighted})`);
+    await scenePlaceClick(page, 'room-02.wall-left.a');
+    exported = await readExport(page);
+    check(Boolean(assignments(exported)['room-02.wall-left.a']), 'click → click places the chosen artwork in the scene');
+    check(
+      await page.locator('.museum-hub__toast:not([hidden])').isVisible(),
+      'a confirmation message with "Rückgängig" appears after placing'
+    );
+
+    // 3c. Drag an artwork from the list straight onto a dashed place in the scene.
+    const dragSource = page.locator('.museum-hub__library-group--unplaced .museum-hub__library-item').first();
+    const sourceBox = await dragSource.boundingBox();
+    const targetBox = await page
+      .locator('.museum-hub__room.is-active .museum-hub__artwork[data-slot-id="room-02.wall-right.a"]')
+      .boundingBox();
+    let ghostSeen = false;
+    if (sourceBox && targetBox) {
+      await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+      await page.mouse.down();
+      const target = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+      await page.mouse.move(target.x, target.y, { steps: 15 });
+      await settle(page);
+      ghostSeen = await page.locator('.museum-hub__drag-ghost').isVisible().catch(() => false);
+      await page.mouse.up();
+      await settle(page);
+    }
+    exported = await readExport(page);
+    check(
+      ghostSeen && Boolean(assignments(exported)['room-02.wall-right.a']),
+      'dragging from the list onto a dashed scene place assigns the artwork (with drag preview)'
     );
 
     // 4. Switch rooms with the chips.

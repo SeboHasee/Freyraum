@@ -23,6 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(here, '..');
 const EDITOR_PATH = resolve(ROOT, process.argv[2] ?? 'customer-preview/placement-editor.html');
+const PRESS_BUDGET_MS = 16;
 const VIEWPORT = { width: 1600, height: 900 };
 /**
  * A blocked 10 cm Shift+arrow step must move less than this. centerHeight is
@@ -103,6 +104,43 @@ async function dragTowardEdge(page, slotId, direction) {
   await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 }
 
+/** v1.36 input-latency metrics written by the editor (`data-editor-timing`). */
+async function readTiming(page) {
+  const raw = await page.evaluate(() => document.querySelector('.museum-hub')?.getAttribute('data-editor-timing'));
+  try {
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+const stat = (values) =>
+  values.length
+    ? { avg: values.reduce((sum, value) => sum + value, 0) / values.length, max: Math.max(...values) }
+    : null;
+
+function reportTimings(timings, failures) {
+  if (timings.length === 0) {
+    failures.push('editor did not report drag timing (data-editor-timing missing)');
+    return;
+  }
+  const pick = (key) => timings.map((timing) => timing[key]).filter((value) => Number.isFinite(value));
+  const press = stat(pick('pressHandlerMs'));
+  const release = stat(pick('releaseHandlerMs'));
+  const firstMove = stat(pick('pressToFirstMoveMs'));
+  const frameAvg = stat(pick('dragFrameAvgMs'));
+  const frameMax = stat(pick('dragFrameMaxMs'));
+  const fmt = (value) => (value ? `avg ${value.avg.toFixed(1)} ms, max ${value.max.toFixed(1)} ms` : 'n/a');
+  console.log(`timing: press handler ${fmt(press)}; release handler ${fmt(release)}`);
+  console.log(`timing: press → first move ${fmt(firstMove)}; frame time per drag (mean) ${fmt(frameAvg)}; slowest frame per drag ${fmt(frameMax)}`);
+  console.log('timing note: headless swiftshader frame times include software GPU compositing; compare runs, not absolutes.');
+  // The press handler only marks the selection and starts the drag; panel
+  // updates run in the next frame. It must fit one 60 Hz frame budget.
+  if (press && press.max > PRESS_BUDGET_MS) {
+    failures.push(`press handler took ${press.max.toFixed(1)} ms (budget ${PRESS_BUDGET_MS} ms)`);
+  }
+}
+
 async function main() {
   requirePreview();
   const { chromium } = await loadPlaywright();
@@ -113,6 +151,7 @@ async function main() {
     args: ['--allow-file-access-from-files', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
   });
   const failures = [];
+  const timings = [];
   try {
     const page = await browser.newPage({ viewport: VIEWPORT });
     const pageErrors = [];
@@ -140,6 +179,8 @@ async function main() {
         const label = `${slotId} → ${direction.name}`;
         const before = placementOf(await readExport(page), slotId);
         await dragTowardEdge(page, slotId, direction);
+        const timing = await readTiming(page);
+        if (timing) timings.push(timing);
         const afterDrag = await readExport(page);
         const dragged = placementOf(afterDrag, slotId);
         if (!before || !dragged) {
@@ -171,6 +212,7 @@ async function main() {
       }
     }
     if (pageErrors.length) failures.push(...pageErrors.map((message) => `page error: ${message}`));
+    reportTimings(timings, failures);
   } finally {
     await browser.close();
   }
