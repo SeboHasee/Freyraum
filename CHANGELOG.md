@@ -1,6 +1,22 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## v1.37 — Resizing walls never stretches artwork (2026-10-15)
+
+- Cause: the editor drew fixed-height artwork by normalising its metric size
+  by the wall size the room was calibrated to, then mapping that into the
+  *edited* wall corners. Making a wall taller (or wider) therefore stretched
+  every artwork on it (e.g. aspect 1.34 → 1.87 for a 1.4× taller front wall).
+- Fix (`calibratedWallScaleAt` in `src/hub/projectiveGeometry.ts`): position
+  still follows the edited wall proportionally, but size is divided by the
+  local stretch of the edited quad versus the calibration quad, so artwork
+  keeps its real aspect and size for any wall shape.
+- `resolveMuseumHub` now keeps `referenceQuad` separate from the editable
+  `quad` (they were the same object, so in-place corner drags lost the
+  reference).
+- `npm run validate:museum-hub` checks aspect and size after scaling every
+  wall 1×1.4, 1.3×1, 1.25×1.6 and 0.85×1.2.
+
 ## v1.36 (part 1–2) — Fast artwork press, clear artwork placement (2026-10-15)
 
 - Root cause of the stiff press/release: the editor panel change check

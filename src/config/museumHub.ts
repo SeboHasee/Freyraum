@@ -2301,7 +2301,9 @@ export function resolveMuseumHub(
         );
       }
     }
-    const quad = referenceQuad;
+    // The editor mutates `quad` in place; keep `referenceQuad` as the quad the
+    // room model was calibrated to so edited walls never stretch artwork.
+    const quad = cloneQuad(referenceQuad);
     const safePolygon = referenceSafePolygon;
     const homography = computeHomographyFromUnitSquare(quad);
     const inverseHomography = homography ? invertMatrix3x3(homography) : null;

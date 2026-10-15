@@ -2077,4 +2077,50 @@ assert.doesNotMatch(hub, /projectSlotArtwork\(/, 'the editor must use the shared
   assert.equal(cleaned.config.slots.find((slot) => slot.id === 'room-01.wall-left.a').artworkId, undefined);
 }
 
+// v1.37 resizing a wall quad in the editor never stretches artwork: the
+// projected artwork keeps its on-screen aspect (height/width) and size at its
+// centre while the wall gets taller, wider, or both.
+{
+  const projectedAspect = (projection) => {
+    const [a, b, c, d] = projection.projectedQuad;
+    const width = (Math.hypot(b.x - a.x, b.y - a.y) + Math.hypot(c.x - d.x, c.y - d.y)) / 2;
+    const height = (Math.hypot(d.x - a.x, d.y - a.y) + Math.hypot(c.x - b.x, c.y - b.y)) / 2;
+    return { width, height };
+  };
+  const stretchQuad = (quad, sx, sy) => {
+    const cx = quad.reduce((sum, corner) => sum + corner.x, 0) / 4;
+    const bottom = Math.max(...quad.map((corner) => corner.y));
+    return quad.map((corner) => ({ x: cx + (corner.x - cx) * sx, y: bottom + (corner.y - bottom) * sy }));
+  };
+  const resolution = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, shippingConfig);
+  for (const slot of resolution.pages[0].slots) {
+    const wall = resolution.wallById.get(slot.placement.wallId);
+    if (!wall?.room || slot.placement.targetSizePolicy !== 'fixed-height') continue;
+    const before = museumHub.projectDisplayedPlacement(wall, slot.placement, slot.artworkAspect, resolution.stage);
+    assert.ok(before, `${slot.id} must project before the wall edit`);
+    for (const [sx, sy] of [[1, 1.4], [1.3, 1], [1.25, 1.6], [0.85, 1.2]]) {
+      const edited = { ...wall, quad: stretchQuad(wall.quad, sx, sy) };
+      assert.notEqual(edited.quad, wall.referenceQuad);
+      const after = museumHub.projectDisplayedPlacement(edited, slot.placement, slot.artworkAspect, resolution.stage);
+      assert.ok(after, `${slot.id} must project after scaling the wall ${sx}×${sy}`);
+      const original = projectedAspect(before);
+      const scaled = projectedAspect(after);
+      const ratioBefore = original.height / original.width;
+      const ratioAfter = scaled.height / scaled.width;
+      assert.ok(
+        Math.abs(ratioAfter / ratioBefore - 1) < 0.03,
+        `${slot.id} must keep its aspect when the wall is scaled ${sx}×${sy} (${ratioBefore.toFixed(3)} → ${ratioAfter.toFixed(3)})`
+      );
+      assert.ok(
+        Math.abs(scaled.height / original.height - 1) < 0.05,
+        `${slot.id} must keep its size when the wall is scaled ${sx}×${sy} (${original.height.toFixed(1)} → ${scaled.height.toFixed(1)} px)`
+      );
+    }
+  }
+  // Resolving must not alias the editable quad with the calibration reference.
+  for (const wall of resolution.walls) {
+    if (wall.room) assert.notEqual(wall.quad, wall.referenceQuad, `${wall.id} quad must be a copy of referenceQuad`);
+  }
+}
+
 console.log('PASS: 9×12 m daylit room invariants, mirrored doorways, four-work 2+1+1 rooms, overflow pagination, calibrated projection, selection persistence hooks, token consistency, user-controlled rooms, and 404 fallback are valid.');
