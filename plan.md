@@ -1,6 +1,18 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## Implemented — Save directly from the deployed editor (v1.38, 2026-10-16)
+
+- [x] `npm run validate:deploy` (run in the deploy before the build), case-safe import warnings, background library, version stamp `editor-online.json`.
+- [x] Cloudflare Worker save service (`worker/`): login + limits, session token, one-commit publish through a GitHub App, PR (default) or auto-merge, conflict check, status, history, restore, origin allowlist, publish log.
+- [x] Shared publish rules (`src/online/publishRules.ts`) for editor and Worker.
+- [x] Editor: login/read-only preview, background library and upload, "Bild hinzufügen", drafts, pending list, publish progress, history/restore (`src/hub/editor/onlineEditor.ts`, `onlineClient.ts`, `pendingUploads.ts`).
+- [x] Hidden entry (`src/online/hiddenEditorEntry.ts`, `public/bearbeiten/`).
+- [x] Tests: `test:save-service`, `test:validate-deploy`, `test:editor-publish`, `test:deploy-smoke` + `smoke` job.
+- [x] Docs: `docs/ONLINE_EDITOR_SETUP.md`, customer guide "Online bearbeiten".
+- [ ] Owner action: Cloudflare account, GitHub App, secrets, repository variable `FREYRAUM_SAVE_SERVICE_URL` (see setup guide).
+- [ ] Optional later: load `museum-hub.json` at runtime so layout changes appear without the ~2 min rebuild.
+
 ## Implemented — Editor rooms and simpler panel (v1.35, 2026-10-15)
 
 Defaults used because the plan questions were not answered: unplaced artworks

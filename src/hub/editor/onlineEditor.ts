@@ -102,6 +102,8 @@ export class OnlineEditor {
   private stage: PublishStage = 'idle';
   private busy = false;
   private draftTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Bumped by every publish so an older approval wait stops. */
+  private followToken = 0;
   private disposed = false;
 
   private readonly loginForm: HTMLFormElement;
@@ -559,31 +561,47 @@ export class OnlineEditor {
 
   /** Waits for approval (pull-request mode) and the deploy, then reloads. */
   private async follow(result: PublishResult): Promise<void> {
-    const client = this.client!;
+    this.followToken += 1;
     this.pending.clear();
     await clearDraft();
     this.initialConfig = this.host.configJson();
     this.refresh();
-    let liveCommit = result.liveCommit;
     const pullLink = this.link('Änderung auf GitHub ansehen', result.pullRequest.url);
-    if (!liveCommit) {
+    if (!result.liveCommit) {
+      // Waiting for approval must not block further edits: the next publish
+      // is stacked onto the same pull request by the save service.
       this.setStage('review', 'Wartet auf Freigabe. Die Galerie wird nach der Freigabe automatisch aktualisiert.');
       this.resultLinks.replaceChildren(pullLink);
-      while (!liveCommit && !this.disposed) {
-        await new Promise((resolve) => setTimeout(resolve, 20_000));
-        try {
-          const status = await client.status({ pr: result.pullRequest.number });
-          if (status.pullRequest?.merged && status.pullRequest.mergeCommit) liveCommit = status.pullRequest.mergeCommit;
-          else if (status.pullRequest && status.pullRequest.state === 'closed') {
-            this.setStage('error', 'Die Änderung wurde nicht freigegeben.');
-            return;
-          }
-        } catch {
-          // Keep waiting; the service may be briefly unavailable.
-        }
-      }
-      if (!liveCommit) return;
+      void this.waitForApproval(result.pullRequest.number);
+      return;
     }
+    await this.waitForDeploy(result.liveCommit);
+  }
+
+  private async waitForApproval(pullNumber: number): Promise<void> {
+    const client = this.client!;
+    const token = ++this.followToken;
+    while (!this.disposed && token === this.followToken) {
+      await new Promise((resolve) => setTimeout(resolve, 20_000));
+      if (this.disposed || token !== this.followToken) return;
+      try {
+        const status = await client.status({ pr: pullNumber });
+        if (status.pullRequest?.merged && status.pullRequest.mergeCommit) {
+          await this.waitForDeploy(status.pullRequest.mergeCommit);
+          return;
+        }
+        if (status.pullRequest && status.pullRequest.state === 'closed') {
+          this.setStage('error', 'Die Änderung wurde nicht freigegeben.');
+          return;
+        }
+      } catch {
+        // Keep waiting; the service may be briefly unavailable.
+      }
+    }
+  }
+
+  private async waitForDeploy(liveCommit: string): Promise<void> {
+    const client = this.client!;
     this.setStage('deploy', 'Wird veröffentlicht (~2 Min)…', null);
     const live = await waitForLiveCommit(liveCommit, {
       intervalMs: 10_000,

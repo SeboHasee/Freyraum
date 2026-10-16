@@ -205,6 +205,8 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -213,3 +215,28 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # v1.38 — after every deploy, open the live gallery and check rooms,
+  # artworks, background, and that no file is missing (404).
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies and Playwright
+        run: |
+          npm ci
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+
+      - name: Smoke-test the live gallery
+        run: npm run test:deploy-smoke -- "${{ needs.deploy.outputs.page_url }}"

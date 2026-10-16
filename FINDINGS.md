@@ -1,6 +1,37 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## 2026-10-16 — Online saving from the deployed editor (v1.38)
+
+- **Pages cannot save.** GitHub Pages only serves files, so a small service with
+  its own GitHub credentials is required. A GitHub App limited to Contents + Pull
+  requests on this one repository keeps the key off the browser
+  (<https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation>).
+  One commit per publish uses the Git Data API (blobs → tree → commit → ref)
+  (<https://docs.github.com/en/rest/git>).
+- **Token instead of cookie.** The service runs on a different site than Pages;
+  third-party cookies are increasingly blocked, so the editor sends a bearer
+  token kept in `sessionStorage`.
+- **Locked-field deviation.** The editor import's `hubFixedFieldsSignature`
+  includes background and walls, which would block background uploads. The
+  service therefore uses `hubPublishLockedSignature` (version, coverage, stage,
+  visual tokens, camera, room, hanging rules, page size, wall ids/roles).
+  Changed 3D wall corners are still blocked by the editor's own error.
+- **Lesson: unbound `fetch`.** Storing `window.fetch` as a class field and
+  calling `this.fetchImpl()` throws "Illegal invocation" in Chrome; the client
+  wraps it in an arrow function. The browser test caught it.
+- **Lesson: shared CSS hooks.** Reusing `museum-hub__save-primary` /
+  `museum-hub__publish-pending` for new buttons and lists broke strict test
+  selectors; new online elements use their own classes.
+- **Customer content state.** `museum-hub.json` points to
+  `Backgrounds/Museum_ohne_Bilder.png`, which is not in the repository; the
+  runtime falls back to `museum-empty.png`. `validate:deploy` and the smoke test
+  report this as a warning, and publishing allows it only while unchanged.
+  `inbox/Fraktal.png` is 24.8 MB (warning above 20 MB; online uploads are
+  limited to 15 MB after downscaling).
+- **Pages cache.** Pages serves files with a ~10 min cache; after "Online ✓"
+  the editor re-fetches the state files with `cache: 'reload'` before reloading.
+
 ## 2026-10-15 — Editor rooms and panel (v1.35)
 
 - **Lesson: invisible automatic rooms caused unfixable validation failures.**

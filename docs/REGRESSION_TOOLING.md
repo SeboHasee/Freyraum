@@ -136,6 +136,15 @@ Playwright setup) adds Raum 2, assigns two artworks, drags in Raum 2, switches
 rooms, checks one-step undo/redo of a room, deletes Raum 3, checks that saving
 stays enabled with layout hints, opens a validation message in another room,
 and reloads the downloaded file into the same rooms and assignments.
+`npm run test:editor-publish` (v1.38, same Playwright setup, uses the built
+`dist/` over http with a fake save service) checks the read-only preview before
+login, wrong-password refusal, login, background upload (lowercase safe name),
+artwork upload with title/artist and immediate placement, and that the single
+publish package passes the save-service validation. `npm run test:save-service`
+runs the Cloudflare Worker against a fake GitHub (no browser needed);
+`npm run test:validate-deploy` covers the deploy content check; and
+`npm run test:deploy-smoke -- <url>` opens a deployed gallery and checks rooms,
+artworks, background and 404s (run by the `smoke` job after every Pages deploy).
 `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the

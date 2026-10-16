@@ -1,6 +1,35 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## v1.38 — Save directly from the deployed editor (2026-10-16)
+
+- **Save service:** a Cloudflare Worker in `worker/`.
+  - `POST /login` checks the shared password, limited to 5 failures per 15 minutes, and returns an HMAC session token (8 h, in sessionStorage).
+  - `POST /publish` validates the package and writes **one commit** to `content/edits` through a repository-only GitHub App.
+    - It opens a pull request (default) or merges it (`PUBLISH_MODE=auto-merge`).
+    - A changed customer-content version is refused ("Neuere Version vorhanden – bitte neu laden").
+  - `GET /status`, `GET /history` and `POST /restore` cover the last 10 versions.
+  - Requests are accepted only from the gallery origin; secrets live only in Cloudflare.
+- **Shared rules:** `src/online/publishRules.ts` is used by both the editor and the Worker.
+  - Allowed paths, lowercase names, PNG/JPEG/WebP signatures, size limits.
+  - Locked fields stay unchanged; slot artworks must be known.
+  - Upload IDs follow the importer's rule, so placements survive the online build.
+- **Editor (online mode):** active only when `editor-online.json` names a service.
+  - A read-only preview until "Bearbeiten anmelden".
+  - Background library plus upload as a pending file, with a lowercase safe name and an aspect warning.
+  - "Bild hinzufügen" (scaled to 4096 px, title/artist text file, placeable immediately).
+  - IndexedDB drafts with a restore banner; a "Wird veröffentlicht" list.
+  - "Veröffentlichen" with upload progress, then check, approval wait or deploy, then "Online ✓", reload.
+  - "Frühere Version wiederherstellen".
+- **Hidden entry:** type `bearbeiten`, long-press the logo or room title, or open `/bearbeiten/`.
+- **Deploy safety:**
+  - `npm run validate:deploy` runs before the build: unknown artwork IDs, missing or wrong-case images and backgrounds, unsafe paths, size limits.
+  - The importer warns about IDs that only differ in case or spacing and writes the background library.
+  - The build writes `editor-online.json` (commit, build time, service URL).
+  - A post-deploy `smoke` job checks the live gallery.
+- **Tests:** `test:save-service` (15), `test:validate-deploy` (9), `test:editor-publish` (browser, fake service) and `test:deploy-smoke`.
+- **Docs:** `docs/ONLINE_EDITOR_SETUP.md` and "Online bearbeiten" in `docs/CUSTOMER_PICTURE_GUIDE.md`.
+
 ## v1.37 — Resizing walls never stretches artwork (2026-10-15)
 
 - Cause: the editor drew fixed-height artwork by normalising its metric size

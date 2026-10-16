@@ -161,6 +161,38 @@ copies into `customer-artworks/inbox/`.
   preview/deployment and its generated `customer-artworks.js` before rerunning
   Update Gallery. It may not match the current checked-in config.
 
+## Online bearbeiten (v1.38)
+
+Once the site owner has set up the save service (`docs/ONLINE_EDITOR_SETUP.md`), you can edit
+the gallery directly on the website. No GitHub account is needed.
+
+1. **Öffnen.** Open the gallery and use any of these:
+   - type `bearbeiten` on the keyboard;
+   - press and hold the FREYRAUM logo or the room title for 1.5 seconds;
+   - open `…/Freyraum/bearbeiten/`.
+2. **Anmelden.** The editor opens in the **Speichern** tab with "Bearbeiten anmelden".
+   - Enter the password.
+   - Without a login the editor is only a preview.
+   - The login lasts until you close the tab (at most 8 hours).
+3. **Bearbeiten.**
+   - Rooms, walls and placing work as before.
+   - **New picture:** go to **Bilder → Bild hinzufügen**. Enter a title and the artist, then drop a picture or choose one.
+     - Large pictures are scaled down to 4096 px; your original stays on your computer.
+     - The picture appears in the list straight away and can be placed.
+   - **New background:** go to **Raum → Erweitert → Hintergrund**. Choose an existing background or a new one from your computer.
+     - If its format differs, the editor asks you to check the walls.
+   - Your work is kept in the browser. After a crash the editor offers "Entwurf wiederherstellen".
+4. **Veröffentlichen.**
+   - **Speichern** lists everything under "Wird veröffentlicht".
+   - Press **Veröffentlichen**. Errors block publishing; hints do not.
+   - The progress reads "Wird hochgeladen… → Wird geprüft… → Wird veröffentlicht (~2 Min) → Online ✓". With approval mode it shows "Wartet auf Freigabe" until the owner approves.
+   - The editor then reloads with the published state.
+5. **Rückgängig.** **Speichern → Frühere Version wiederherstellen** lists the last 10 published layouts.
+
+If the editor says "Neuere Version vorhanden – bitte neu laden", someone else
+published in the meantime. Reload the page; your draft stays in the browser.
+"Konfiguration herunterladen" stays available as a backup.
+
 ## Troubleshooting
 
 - If Node.js is missing, install Node.js LTS and run again.
@@ -182,6 +214,7 @@ copies into `customer-artworks/inbox/`.
 
 ## Related docs
 
+- Online editing setup (site owner): `docs/ONLINE_EDITOR_SETUP.md`
 - Text sidecars: `docs/CUSTOMER_TEXT_GUIDE.md`
 - Image size limits and operator guidance: `docs/IMAGE_MAINTENANCE_GUIDE.md`
 - Query/config reference: `docs/QUERY_PARAMETERS.md`

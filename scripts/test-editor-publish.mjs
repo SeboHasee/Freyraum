@@ -166,9 +166,10 @@ async function main() {
     const page = await context.newPage();
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
-    if (process.env.DEBUG_PUBLISH) page.on('console', (m) => console.log('console:', m.text()));
-    if (process.env.DEBUG_PUBLISH) page.on('request', (r) => r.url().includes('save.example') && console.log('request:', r.method(), r.url()));
-    if (process.env.DEBUG_PUBLISH) page.on('requestfailed', (r) => console.log('failed:', r.method(), r.url(), r.failure()?.errorText));
+    if (process.env.DEBUG_PUBLISH) {
+      page.on('console', (message) => console.log('console:', message.text()));
+      page.on('requestfailed', (request) => console.log('failed:', request.method(), request.url(), request.failure()?.errorText));
+    }
 
     await page.route('**/Freyraum/editor-online.json*', (route) =>
       route.fulfill({
