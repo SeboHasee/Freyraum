@@ -46,6 +46,7 @@ import {
   WARM_BUDGET,
   type StartupReadinessMode,
 } from './config/startup';
+import { installHiddenEditorEntry } from './online/hiddenEditorEntry';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
@@ -884,6 +885,9 @@ async function main(): Promise<void> {
   // The placement editor keeps empty places and empty rooms so they can be
   // filled, switched to, or deleted; the gallery skips them.
   const museumHubEditorMode = isHubCalibrationRequested();
+  // v1.38: discreet gallery → editor shortcut (typing "bearbeiten" or a
+  // long press on the logo). The save-service password is the real protection.
+  if (!museumHubEditorMode && !isPlacementEditorRequested()) installHiddenEditorEntry();
   const museumHubResolution = resolveMuseumHub(
     museumArtworks,
     injectedMuseumHub,

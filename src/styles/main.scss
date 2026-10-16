@@ -1993,10 +1993,166 @@ body.placement-editor {
   }
 }
 
-.museum-hub__save-primary {
+.museum-hub__save-primary,
+.museum-hub__publish-primary {
   width: 100%;
   min-height: 48px;
   font-size: 0.9rem !important;
+}
+
+// v1.38 online editing: login, pending uploads, publish progress, history.
+.museum-hub__publish,
+.museum-hub__artwork-upload {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(214, 176, 112, 0.35);
+  border-radius: 8px;
+
+  &[hidden] {
+    display: none;
+  }
+
+  form,
+  .museum-hub__publish-body {
+    display: grid;
+    gap: 8px;
+  }
+
+  form[hidden],
+  .museum-hub__publish-body[hidden],
+  [hidden] {
+    display: none;
+  }
+
+  input[type='password'],
+  input[type='text'] {
+    width: 100%;
+    min-height: 40px;
+    padding: 6px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.35);
+    color: inherit;
+    font: inherit;
+  }
+}
+
+.museum-hub__publish-login-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.museum-hub__publish-session {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+
+.museum-hub__publish-error {
+  margin: 0;
+  color: #ffb4aa;
+  font-size: 0.78rem;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.museum-hub__publish-pending,
+.museum-hub__upload-list,
+.museum-hub__publish-history-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.78rem;
+
+  li.is-empty {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  li.is-total {
+    font-weight: 600;
+  }
+}
+
+.museum-hub__publish-pending-item,
+.museum-hub__publish-history-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.museum-hub__publish-progress {
+  width: 100%;
+  height: 8px;
+}
+
+.museum-hub__publish-status {
+  margin: 0;
+  font-size: 0.8rem;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.museum-hub__publish[data-publish-stage='online'] .museum-hub__publish-status {
+  color: #9be29b;
+  font-weight: 600;
+}
+
+.museum-hub__publish[data-publish-stage='error'] .museum-hub__publish-status {
+  color: #ffb4aa;
+}
+
+.museum-hub__publish-links:empty {
+  display: none;
+}
+
+.museum-hub__publish-link {
+  color: #f0d39a;
+}
+
+.museum-hub__publish-draft {
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 213, 154, 0.12);
+  font-size: 0.78rem;
+
+  p {
+    margin: 0 0 6px;
+  }
+}
+
+.museum-hub__upload-drop {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  padding: 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.45);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  text-align: center;
+  cursor: pointer;
+
+  &.is-dragover,
+  &:focus-within {
+    border-color: #f0d39a;
+    background: rgba(240, 211, 154, 0.08);
+  }
+}
+
+.museum-hub.is-editor-readonly .museum-hub__visual {
+  cursor: not-allowed;
+  opacity: 0.92;
 }
 
 .museum-hub__calibration-warnings {

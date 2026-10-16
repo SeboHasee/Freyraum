@@ -84,6 +84,8 @@ import {
 } from '../utils/sourceToPixelOutcome';
 import { releaseWebGLContext } from '../utils/webgl';
 import { EditorViewport } from './editorViewport';
+import { OnlineEditor, type BackgroundOption } from './editor/onlineEditor';
+import type { PendingArtwork } from './editor/pendingUploads';
 import {
   buildArtworkRatioReport,
   createNativeSourceRect,
@@ -243,7 +245,7 @@ export class MainMuseumHub {
   private calibrationEditMode: 'wall' | 'safe' | 'mounting-zone' | 'room-boundary' = 'wall';
   /** "Wandecken bearbeiten": wall corner/edge handles are only shown while on. */
   private wallEditingEnabled = false;
-  private readonly artworks: readonly Artwork[];
+  private artworks: readonly Artwork[];
   private calibrationPanel: HTMLElement | null = null;
   private editorTabs: EditorTabs | null = null;
   private roomBar: EditorRoomBar | null = null;
@@ -301,6 +303,10 @@ export class MainMuseumHub {
   private swipePointerId: number | null = null;
   private resizeRafId = 0;
   private editorBackgroundObjectUrl: string | null = null;
+  /** v1.38 online editing (login, uploads, publish); null outside the editor. */
+  private onlineEditor: OnlineEditor | null = null;
+  private editorReadOnly = false;
+  private editorEditablePanels: HTMLElement[] = [];
   private readonly editorArtworkObjectUrls = new Map<string, string>();
   private readonly defaultBackgroundSrc: string;
   private readonly defaultBackground: MuseumHubResolution['background'];
@@ -2127,6 +2133,7 @@ export class MainMuseumHub {
 
   private handleKeydown = (event: KeyboardEvent): void => {
     if (this.calibrating) {
+      if (this.editorReadOnly) return;
       if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
       // Panel controls (tabs, lists, dialogs) keep their own arrow-key behaviour.
       if (event.target instanceof Node && this.calibrationPanel?.contains(event.target)) return;
@@ -2230,6 +2237,23 @@ export class MainMuseumHub {
     panel.setAttribute('role', 'region');
     panel.setAttribute('aria-labelledby', 'calibration-title');
     this.calibrationPanel = panel;
+    this.onlineEditor = new OnlineEditor({
+      configJson: () => JSON.stringify(this.buildCurrentCalibrationConfig(), null, 2),
+      backgroundSrc: () => this.resolution.background.src,
+      backgroundAspect: () => this.resolution.background.aspect,
+      exportValid: () => this.calibrationExportValid,
+      knownArtworkIds: () => this.artworks.map((artwork) => artwork.id),
+      addArtwork: (entry) => this.addUploadedArtwork(entry),
+      removeArtwork: (id) => this.removeUploadedArtwork(id),
+      useBackground: (option) => this.useEditorBackground(option),
+      applyConfig: (json) => {
+        this.recordCalibrationHistory();
+        this.applyCalibrationSnapshot(json);
+      },
+      setReadOnly: (readOnly) => this.setEditorReadOnly(readOnly),
+      announce: (message) => this.announceCalibrationAction(message),
+      openSaveTab: () => this.editorTabs?.select('save'),
+    });
 
     const makeAction = (
       text: string,
@@ -2536,7 +2560,7 @@ export class MainMuseumHub {
     this.calibrationArtworkInfo = artworkInfo;
     artworkDetails.append(artworkDetailsSummary, artworkInfo);
     detail.append(detailTitle, detailBody, numericGrid, sizeHint, detailActions, artworkDetails);
-    artworkTab.append(this.artworkLibrary.places, detail, this.artworkLibrary.library);
+    artworkTab.append(this.artworkLibrary.places, detail, this.onlineEditor.uploadSection, this.artworkLibrary.library);
 
     // ── Tab "Speichern" ──────────────────────────────────────────────────────
     this.saveTab = new EditorSaveTab({
@@ -2548,6 +2572,7 @@ export class MainMuseumHub {
       onAutoPlaceChange: (enabled) => this.setAutoPlaceUnmapped(enabled),
       onIssueSelect: (issue) => this.openCalibrationIssue(issue),
     });
+    this.saveTab.element.prepend(this.onlineEditor.publishSection);
 
     this.editorTabs = createEditorTabs('museum-hub-editor', 'Editor-Bereiche', [
       { id: 'room', label: 'Raum', panel: roomTab },
@@ -2583,7 +2608,9 @@ export class MainMuseumHub {
     this.calibrationActionStatus = actionStatus;
     this.calibrationCopyButton = this.saveTab.copyButton;
     this.calibrationDownloadButton = this.saveTab.downloadButton;
+    this.editorEditablePanels = [roomTab, artworkTab, bottomActions];
     this.initialCalibrationSnapshot = JSON.stringify(this.buildCurrentCalibrationConfig(), null, 2);
+    void this.onlineEditor.init(this.initialCalibrationSnapshot);
     const first = this.firstSlotOfPage(this.currentPageIndex());
     if (first) this.selectCalibrationSlot(first.slot.id);
     else this.syncCalibrationControls();
@@ -2595,14 +2622,22 @@ export class MainMuseumHub {
   private buildBackgroundControls(): HTMLElement {
     const backgroundControls = document.createElement('div');
     backgroundControls.className = 'museum-hub__calibration-background';
+    const librarySelect = document.createElement('select');
+    librarySelect.className = 'museum-hub__calibration-select museum-hub__background-library';
+    const libraryLabel = document.createElement('label');
+    libraryLabel.className = 'museum-hub__calibration-label';
+    libraryLabel.textContent = 'Hintergrund';
+    libraryLabel.appendChild(librarySelect);
     const backgroundLabel = document.createElement('label');
     backgroundLabel.className = 'museum-hub__calibration-label';
-    backgroundLabel.textContent = 'Referenz-Hintergrund auswählen';
+    backgroundLabel.textContent = 'Neuen Hintergrund vom Computer wählen';
     const backgroundInput = document.createElement('input');
     backgroundInput.type = 'file';
-    backgroundInput.accept = 'image/*';
+    backgroundInput.accept = 'image/png,image/jpeg,image/webp';
+    backgroundInput.className = 'museum-hub__background-input';
     const backgroundInfo = document.createElement('span');
     backgroundInfo.className = 'museum-hub__calibration-background-info';
+    backgroundInfo.setAttribute('role', 'status');
     const fitSelect = document.createElement('select');
     fitSelect.className = 'museum-hub__calibration-select';
     fitSelect.setAttribute('aria-label', 'Einpassung des Referenzbilds');
@@ -2617,57 +2652,54 @@ export class MainMuseumHub {
     resetBackground.type = 'button';
     resetBackground.className = 'museum-hub__calibration-action';
     resetBackground.textContent = 'Hintergrund zurücksetzen';
-    const updateBackgroundInfo = (
-      width = this.resolution.background.width ?? 0,
-      height = this.resolution.background.height ?? 0,
-      name = this.resolution.background.src
-    ): void => {
+    const updateBackgroundInfo = (): void => {
+      const { src, width = 0, height = 0 } = this.resolution.background;
+      const pending = this.onlineEditor?.pendingBackgroundUrl(src) ? ' · Wird mit veröffentlicht' : '';
       backgroundInfo.textContent = width > 0 && height > 0
-        ? `${name} · ${width}×${height}px · ${(width / height).toFixed(3)}`
-        : `${name} · Datei unter diesem Namen nach customer-artworks/Backgrounds kopieren`;
+        ? `${src} · ${width}×${height}px · ${(width / height).toFixed(3)}${pending}`
+        : src;
     };
-    updateBackgroundInfo();
+    const fillLibrary = (): void => {
+      const options = this.onlineEditor?.backgroundOptions() ?? [];
+      const current = this.resolution.background.src;
+      librarySelect.replaceChildren();
+      for (const entry of options) {
+        const option = document.createElement('option');
+        option.value = entry.src;
+        option.textContent = `${entry.src.replace(/^Backgrounds\//, '')}${entry.pending ? ' (neu)' : ''}`;
+        librarySelect.appendChild(option);
+      }
+      if (!options.some((entry) => entry.src === current)) {
+        const option = document.createElement('option');
+        option.value = current;
+        option.textContent = `${current.replace(/^Backgrounds\//, '')} (fehlt im Projekt)`;
+        librarySelect.prepend(option);
+      }
+      librarySelect.value = current;
+      libraryLabel.hidden = options.length === 0;
+      updateBackgroundInfo();
+    };
+    this.refreshBackgroundControls = fillLibrary;
+    fillLibrary();
+    librarySelect.addEventListener('change', () => {
+      const option = this.onlineEditor?.backgroundOptions().find((entry) => entry.src === librarySelect.value);
+      if (option) this.useEditorBackground(option);
+    });
     backgroundInput.addEventListener('change', () => {
       const file = backgroundInput.files?.[0];
-      if (!file) return;
-      const previousBackground = { ...this.resolution.background };
-      const previousBackgroundSrc = this.backgroundImage.src;
-      if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
-      const objectUrl = URL.createObjectURL(file);
-      this.editorBackgroundObjectUrl = objectUrl;
       backgroundInput.value = '';
-      const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '') || 'museum-background.png';
-      const probe = new Image();
-      probe.onload = () => {
-        if (this.editorBackgroundObjectUrl !== objectUrl) return;
-        this.resolution.background = {
-          src: `Backgrounds/${safeFilename}`,
-          aspect: probe.naturalWidth / probe.naturalHeight,
-          fit: fitSelect.value as 'contain' | 'cover',
-          width: probe.naturalWidth,
-          height: probe.naturalHeight,
-        };
-        this.backgroundImage.src = objectUrl;
-        this.backgroundImage.style.objectFit = this.resolution.background.fit ?? 'contain';
-        this.element.style.setProperty('--hub-aspect', String(this.resolution.background.aspect));
-        updateBackgroundInfo(probe.naturalWidth, probe.naturalHeight, file.name);
-        this.updateCalibrationOverlayGeometry();
-        this.updateCalibrationOutput(true);
-      };
-      probe.onerror = () => {
-        if (this.editorBackgroundObjectUrl === objectUrl) {
-          URL.revokeObjectURL(objectUrl);
-          this.editorBackgroundObjectUrl = null;
-          this.resolution.background = previousBackground;
-          this.backgroundImage.src = previousBackgroundSrc;
-          this.backgroundImage.style.objectFit = previousBackground.fit ?? 'contain';
-          this.element.style.setProperty('--hub-aspect', String(previousBackground.aspect));
-          updateBackgroundInfo();
-          this.updateCalibrationOverlayGeometry();
-          this.updateCalibrationOutput(true);
+      if (!file || !this.onlineEditor) return;
+      backgroundInfo.textContent = `${file.name} wird vorbereitet…`;
+      void this.onlineEditor.uploadBackground(file).then(
+        (message) => {
+          fillLibrary();
+          backgroundInfo.textContent = message;
+        },
+        () => {
+          fillLibrary();
+          backgroundInfo.textContent = `${file.name} konnte nicht gelesen werden. Bitte ein JPG-, PNG- oder WebP-Bild wählen.`;
         }
-      };
-      probe.src = objectUrl;
+      );
     });
     fitSelect.addEventListener('change', () => {
       this.resolution.background.fit = fitSelect.value as 'contain' | 'cover';
@@ -2680,17 +2712,107 @@ export class MainMuseumHub {
       this.editorBackgroundObjectUrl = null;
       for (const objectUrl of this.editorArtworkObjectUrls.values()) URL.revokeObjectURL(objectUrl);
       this.editorArtworkObjectUrls.clear();
+      this.recordCalibrationHistory();
       this.resolution.background = { ...this.defaultBackground };
       backgroundInput.value = '';
       this.backgroundImage.src = resolveBackgroundUrl(this.defaultBackgroundSrc);
       this.backgroundImage.style.objectFit = this.resolution.background.fit ?? 'contain';
-      updateBackgroundInfo();
+      this.element.style.setProperty('--hub-aspect', String(this.resolution.background.aspect));
+      fitSelect.value = this.resolution.background.fit ?? 'contain';
+      fillLibrary();
       this.updateCalibrationOverlayGeometry();
       this.updateCalibrationOutput(true);
     });
-    backgroundLabel.append(backgroundInput, fitSelect);
-    backgroundControls.append(backgroundLabel, backgroundInfo, resetBackground);
+    backgroundLabel.appendChild(backgroundInput);
+    const fitLabel = document.createElement('label');
+    fitLabel.className = 'museum-hub__calibration-label';
+    fitLabel.textContent = 'Einpassung';
+    fitLabel.appendChild(fitSelect);
+    backgroundControls.append(libraryLabel, backgroundLabel, fitLabel, backgroundInfo, resetBackground);
     return backgroundControls;
+  }
+
+  private refreshBackgroundControls: (() => void) | null = null;
+
+  /** Switches the editor background (library entry or pending upload). */
+  private useEditorBackground(option: BackgroundOption): void {
+    if (!(option.width > 0 && option.height > 0)) return;
+    this.recordCalibrationHistory();
+    this.resolution.background = {
+      ...this.resolution.background,
+      src: option.src,
+      aspect: option.width / option.height,
+      width: option.width,
+      height: option.height,
+    };
+    setResolvedBackgroundSource(this.backgroundImage, option.url ?? resolveBackgroundUrl(option.src));
+    this.backgroundImage.style.objectFit = this.resolution.background.fit ?? 'contain';
+    this.element.style.setProperty('--hub-aspect', String(this.resolution.background.aspect));
+    this.updateCalibrationOverlayGeometry();
+    this.updateCalibrationOutput(true);
+    this.refreshBackgroundControls?.();
+  }
+
+  /** Adds an uploaded (not yet published) artwork to the editor library. */
+  private addUploadedArtwork(entry: PendingArtwork): void {
+    if (this.artworks.some((artwork) => artwork.id === entry.id)) return;
+    const artwork: Artwork = {
+      id: entry.id,
+      title: entry.title,
+      subtitle: '',
+      description: '',
+      year: new Date().getFullYear(),
+      medium: '',
+      image: entry.objectUrl,
+      dimensions: { width: entry.width, height: entry.height },
+      alt: entry.title,
+      credit: entry.credit,
+      tags: [],
+    };
+    this.artworks = [...this.artworks, artwork];
+    this.syncArtworkCatalog();
+  }
+
+  /** Removes an uploaded artwork again, including any place showing it. */
+  private removeUploadedArtwork(id: string): void {
+    if (!this.artworks.some((artwork) => artwork.id === id)) return;
+    const slotId = this.resolution.artworkToSlot.get(id);
+    if (slotId) this.assignArtwork(slotId, null);
+    this.artworks = this.artworks.filter((artwork) => artwork.id !== id);
+    this.syncArtworkCatalog();
+  }
+
+  private syncArtworkCatalog(): void {
+    const imageById = new Map<string, string>();
+    const sourceById = new Map<string, MuseumHubResolution['artworkSourceById'] extends ReadonlyMap<string, infer V> ? V : never>();
+    for (const artwork of this.artworks) {
+      imageById.set(artwork.id, artwork.image);
+      sourceById.set(artwork.id, {
+        image: artwork.image,
+        webglImage: artwork.webglImage ?? null,
+        dimensions: artwork.dimensions,
+        ...(artwork.imageSourceContext ? { imageSourceContext: artwork.imageSourceContext } : {}),
+      });
+    }
+    this.resolution.artworkCatalog = this.artworks.map((artwork, index) => ({
+      id: artwork.id,
+      title: artwork.title,
+      index,
+      aspect: artwork.dimensions.height > 0 ? artwork.dimensions.width / artwork.dimensions.height : 1,
+    }));
+    this.resolution.artworkImageById = imageById;
+    this.resolution.artworkSourceById = sourceById;
+    this.updateCalibrationOutput(false);
+  }
+
+  /** Without a login the online editor is a read-only preview. */
+  private setEditorReadOnly(readOnly: boolean): void {
+    this.editorReadOnly = readOnly;
+    this.element.classList.toggle('is-editor-readonly', readOnly);
+    for (const element of [this.visual, ...this.editorEditablePanels]) {
+      element.inert = readOnly;
+    }
+    if (readOnly) this.handleCalibrationBlur();
   }
 
   // ── Editor tools, view, and guide ─────────────────────────────────────────
@@ -5376,6 +5498,7 @@ export class MainMuseumHub {
       this.saveTab?.setRestoreAvailable(true);
     }
     this.refreshEditorPanels();
+    this.onlineEditor?.notifyChange();
     this.diagnostics.info('hub-calibration', 'Museum hub wall-plane calibration snapshot', { issues, config });
   }
 
@@ -5428,9 +5551,10 @@ export class MainMuseumHub {
       activeBackgroundObjectUrl?.startsWith('blob:') ? activeBackgroundObjectUrl : null;
     setResolvedBackgroundSource(
       this.backgroundImage,
-      safeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
-        ? safeBackgroundObjectUrl
-        : resolveBackgroundUrl(config.background.src)
+      this.onlineEditor?.pendingBackgroundUrl(config.background.src)
+        ?? (safeBackgroundObjectUrl && config.background.src === activeBackgroundSrc
+          ? safeBackgroundObjectUrl
+          : resolveBackgroundUrl(config.background.src))
     );
     if (shouldRevokeBackgroundObjectUrl && activeBackgroundObjectUrl) {
       URL.revokeObjectURL(activeBackgroundObjectUrl);
@@ -5506,6 +5630,8 @@ export class MainMuseumHub {
     this.selectSlotCallback = null;
     if (this.editorBackgroundObjectUrl) URL.revokeObjectURL(this.editorBackgroundObjectUrl);
     this.editorBackgroundObjectUrl = null;
+    this.onlineEditor?.dispose();
+    this.onlineEditor = null;
     this.hubRoomRenderer?.dispose();
     this.projectedSlotGeometry.clear();
     this.debugProjectionSignatureBySlot.clear();
