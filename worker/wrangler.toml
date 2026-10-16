@@ -1,0 +1,31 @@
+# FREYRAUM save service — Cloudflare Worker configuration (v1.38).
+# Setup guide: docs/ONLINE_EDITOR_SETUP.md
+#
+# NEVER put secrets in this file. Set them with:
+#   npx wrangler secret put EDITOR_PASSWORD
+#   npx wrangler secret put SESSION_SECRET
+#   npx wrangler secret put GITHUB_APP_PRIVATE_KEY
+name = "freyraum-save-service"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+# Exact address of the gallery site (scheme + host, no path). Several
+# addresses may be separated by commas, e.g. for a local test server.
+ALLOWED_ORIGIN = "https://sebohasee.github.io"
+GITHUB_OWNER = "SeboHasee"
+GITHUB_REPO = "Freyraum"
+GITHUB_BRANCH = "main"
+EDITS_BRANCH = "content/edits"
+# Fill in after creating and installing the GitHub App (not secret):
+GITHUB_APP_ID = ""
+GITHUB_INSTALLATION_ID = ""
+# "pull-request" (default): every publish waits for your approval.
+# "auto-merge": publishes go live automatically (still as a reviewable PR).
+PUBLISH_MODE = "pull-request"
+SESSION_HOURS = "8"
+
+# Optional: shared login limits across Worker instances.
+# [[kv_namespaces]]
+# binding = "LOGIN_LIMITS"
+# id = "<id from: npx wrangler kv namespace create LOGIN_LIMITS>"

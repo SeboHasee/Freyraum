@@ -45,6 +45,15 @@ jobs:
 
       - name: Prepare customer assets (CI equivalent of UpdateGalerie.bat)
         run: npm run import:artworks
+        env:
+          # v1.38 — optional online-editor save service (repository variable).
+          FREYRAUM_SAVE_SERVICE_URL: ${{ vars.FREYRAUM_SAVE_SERVICE_URL }}
+
+      # v1.38 — a broken online publish (unknown artwork ID, missing image,
+      # wrong upper/lower case, path outside the project, oversized file)
+      # stops here, so the live gallery stays on the last good version.
+      - name: Validate deployable customer content
+        run: npm run validate:deploy
 
       - name: Validate generated manifest
         run: |

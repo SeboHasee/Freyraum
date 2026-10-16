@@ -576,6 +576,12 @@ imageEntries.forEach((filename, i) => {
   const stemLower = stem.toLowerCase();
   const baseId = normalizeId(stem) || `artwork-${indexLabel}`;
   const id = uniqueId(baseId, usedIds);
+  if (id !== baseId) {
+    // v1.38 — case-safe names: "Bild.png" and "bild.jpg" share one ID base.
+    warnings.push(
+      `${filename} — another picture already uses the name "${baseId}" (names ignore upper/lower case and spaces); this one gets the ID "${id}". Rename one file to keep IDs stable.`
+    );
+  }
   const generatedTitle = generateTitle(stem) || `Artwork ${indexLabel}`;
   const destFilename = `${id}${ext}`;
   const imagePath = `./images/${encodeURIComponent(destFilename)}`;
@@ -801,6 +807,25 @@ if (existsSync(HUB_HOTSPOTS_JSON)) {
   }
 }
 
+// v1.38 — background library for the placement editor: every runtime
+// background in customer-artworks/Backgrounds with its exact (case-sensitive)
+// name and pixel size. Reference-only assets are not offered.
+const BACKGROUNDS_DIR = join(ROOT, 'customer-artworks', 'Backgrounds');
+const backgroundLibrary = [];
+if (existsSync(BACKGROUNDS_DIR)) {
+  for (const entry of readdirSync(BACKGROUNDS_DIR, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.name.startsWith('.') || entry.name === 'museum-target.png') continue;
+    if (!/\.(png|jpe?g|webp)$/i.test(entry.name)) continue;
+    try {
+      const dims = readImageDimensions(join(BACKGROUNDS_DIR, entry.name));
+      backgroundLibrary.push({ src: `Backgrounds/${entry.name}`, width: dims.width, height: dims.height });
+    } catch (err) {
+      warnings.push(`Backgrounds/${entry.name} — could not read dimensions (${err.message}).`);
+    }
+  }
+  backgroundLibrary.sort((a, b) => a.src.localeCompare(b.src, 'en'));
+}
+
 const generatedAt = new Date().toISOString();
 const bundleId = `bundle-${createHash('sha1').update(JSON.stringify(artworks)).digest('hex').slice(0, 12)}`;
 const artworkBundle = JSON.stringify(
@@ -833,6 +858,7 @@ const js =
   (hubHotspots
     ? '  window.__FREYRAUM_HUB_HOTSPOTS = ' + JSON.stringify(hubHotspots, null, 2) + ';\n'
     : '') +
+  '  window.__FREYRAUM_BACKGROUNDS = ' + JSON.stringify(backgroundLibrary) + ';\n' +
   '})();\n';
 writeFileSync(PREVIEW_JS, js, 'utf8');
 
