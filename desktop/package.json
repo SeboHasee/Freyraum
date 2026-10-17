@@ -1,0 +1,98 @@
+{
+  "name": "freyraum-editor",
+  "productName": "FREYRAUM Editor",
+  "version": "1.39.0",
+  "private": true,
+  "description": "FREYRAUM Editor — Bilder platzieren und direkt im Projektordner speichern.",
+  "author": "FREYRAUM",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "electron": "44.9.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  },
+  "build": {
+    "appId": "de.freyraum.editor",
+    "productName": "FREYRAUM Editor",
+    "copyright": "FREYRAUM",
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/importer/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/importer",
+        "to": "importer",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "artifactName": "FREYRAUM-Editor-${version}-${os}-${arch}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "FREYRAUM Editor",
+      "artifactName": "FREYRAUM-Editor-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "FREYRAUM-Editor-${version}-portable.${ext}"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.graphics-design"
+    },
+    "dmg": {
+      "artifactName": "FREYRAUM-Editor-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Graphics"
+    }
+  }
+}

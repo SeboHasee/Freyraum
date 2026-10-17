@@ -4,6 +4,13 @@
  * "Veröffentlichen" flow with progress, approval wait, live check, history,
  * and restore. MainMuseumHub provides the editor state through
  * `OnlineEditorHost`; the save service lives in `worker/`.
+ *
+ * v1.39 — One controller, interchangeable save targets:
+ *   - online: the save service (deployed site with `editor-online.json`);
+ *   - desktop: the FREYRAUM Editor app (`window.freyraumDesktop`), which
+ *     writes into the project folder and runs "Update Gallery";
+ *   - download only: `file://` preview (plus a hint pointing to the app).
+ * Uploads, drafts, the pending list and history/restore are shared.
  */
 import {
   MAX_PACKAGE_BYTES,
@@ -31,6 +38,12 @@ import {
   type EditorDraft,
   type PendingArtwork,
 } from './pendingUploads';
+import {
+  getDesktopBridge,
+  type DesktopBridge,
+  type DesktopResult,
+  type DesktopSaveValue,
+} from '../../online/desktopBridge';
 
 export interface BackgroundOption {
   src: string;
@@ -56,7 +69,19 @@ export interface OnlineEditorHost {
   openSaveTab(): void;
 }
 
-type PublishStage = 'idle' | 'upload' | 'check' | 'review' | 'deploy' | 'online' | 'error';
+type PublishStage =
+  | 'idle'
+  | 'upload'
+  | 'check'
+  | 'review'
+  | 'deploy'
+  | 'online'
+  | 'saving'
+  | 'updating'
+  | 'saved'
+  | 'error';
+
+export type SaveTargetKind = 'online' | 'desktop' | 'download';
 
 function formatBytes(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -98,6 +123,10 @@ export class OnlineEditor {
 
   private settings: OnlineSettings | null = null;
   private client: SaveServiceClient | null = null;
+  private desktop: DesktopBridge | null = null;
+  /** Desktop: fingerprint of museum-hub.json the editor opened. */
+  private projectVersion: string | null = null;
+  private unsavedReported: boolean | null = null;
   private initialConfig = '';
   private stage: PublishStage = 'idle';
   private busy = false;
@@ -111,6 +140,11 @@ export class OnlineEditor {
   private readonly loginError: HTMLElement;
   private readonly sessionRow: HTMLElement;
   private readonly sessionText: HTMLElement;
+  private readonly logoutButton: HTMLButtonElement;
+  private readonly sectionTitle: HTMLElement;
+  private readonly pendingTitle: HTMLElement;
+  private readonly localHint: HTMLElement;
+  private readonly uploadHint: HTMLElement;
   private readonly publishBody: HTMLElement;
   private readonly pendingList: HTMLUListElement;
   private readonly publishButton: HTMLButtonElement;
@@ -133,6 +167,8 @@ export class OnlineEditor {
     section.hidden = true;
     const title = el('h3', undefined, 'Online veröffentlichen');
     title.id = 'editor-publish-title';
+    const localHint = el('p', 'museum-hub__editor-hint museum-hub__local-save-hint');
+    localHint.hidden = true;
 
     const loginForm = el('form', 'museum-hub__publish-login');
     loginForm.setAttribute('aria-labelledby', 'editor-login-title');
@@ -158,7 +194,8 @@ export class OnlineEditor {
 
     const sessionRow = el('div', 'museum-hub__publish-session');
     const sessionText = el('span');
-    sessionRow.append(sessionText, button('Abmelden', 'museum-hub__calibration-action', () => this.logout()));
+    const logoutButton = button('Abmelden', 'museum-hub__calibration-action', () => this.logout());
+    sessionRow.append(sessionText, logoutButton);
 
     const draftBanner = el('div', 'museum-hub__publish-draft');
     draftBanner.hidden = true;
@@ -185,7 +222,7 @@ export class OnlineEditor {
       if (historyDetails.open) void this.loadHistory();
     });
     publishBody.append(pendingTitle, pendingList, publishButton, progress, statusText, errorList, resultLinks, historyDetails);
-    section.append(title, loginForm, sessionRow, draftBanner, publishBody);
+    section.append(title, localHint, loginForm, sessionRow, draftBanner, publishBody);
 
     // ── Bilder tab section ──────────────────────────────────────────────────
     const upload = el('section', 'museum-hub__editor-section museum-hub__artwork-upload');
@@ -246,6 +283,11 @@ export class OnlineEditor {
     this.loginError = loginError;
     this.sessionRow = sessionRow;
     this.sessionText = sessionText;
+    this.logoutButton = logoutButton;
+    this.sectionTitle = title;
+    this.pendingTitle = pendingTitle;
+    this.localHint = localHint;
+    this.uploadHint = uploadHint;
     this.publishBody = publishBody;
     this.pendingList = pendingList;
     this.publishButton = publishButton;
@@ -267,12 +309,43 @@ export class OnlineEditor {
     return Boolean(this.client);
   }
 
+  /** True inside the FREYRAUM Editor desktop app. */
+  get desktopMode(): boolean {
+    return Boolean(this.desktop);
+  }
+
+  get saveTarget(): SaveTargetKind {
+    return this.desktop ? 'desktop' : this.client ? 'online' : 'download';
+  }
+
   get loggedIn(): boolean {
-    return Boolean(this.client?.loggedIn);
+    return Boolean(this.desktop) || Boolean(this.client?.loggedIn);
+  }
+
+  /** Version the drafts and conflict checks refer to (commit online, file fingerprint on the desktop). */
+  private get baseVersion(): string | null {
+    return this.desktop ? this.projectVersion : this.settings?.commit ?? null;
   }
 
   async init(initialConfig: string): Promise<void> {
     this.initialConfig = initialConfig;
+    const desktop = getDesktopBridge();
+    if (desktop) {
+      await this.initDesktop(desktop);
+      return;
+    }
+    if (window.location.protocol === 'file:') {
+      // Download-only preview: point to the desktop app for direct saving.
+      this.sectionTitle.textContent = 'Direkt im Projekt speichern';
+      this.localHint.textContent =
+        'Hier im Browser wird die Konfiguration nur heruntergeladen. Direkt im Projektordner speichern – mit neuen Bildern, Hintergrund und automatischer Galerie-Aktualisierung – geht mit der App „FREYRAUM Editor“ (Anleitung: docs/CUSTOMER_PICTURE_GUIDE.md).';
+      this.localHint.hidden = false;
+      this.loginForm.hidden = true;
+      this.sessionRow.hidden = true;
+      this.publishBody.hidden = true;
+      this.publishSection.hidden = false;
+      return;
+    }
     this.settings = await loadOnlineSettings();
     if (this.disposed || !this.settings?.saveServiceUrl) return;
     this.client = new SaveServiceClient(this.settings.saveServiceUrl);
@@ -283,6 +356,48 @@ export class OnlineEditor {
       this.host.openSaveTab();
       this.loginPassword.focus({ preventScroll: true });
     }
+    const draft = await loadDraft();
+    if (draft && !this.disposed) this.showDraftBanner(draft);
+    this.refresh();
+  }
+
+  private async initDesktop(desktop: DesktopBridge): Promise<void> {
+    const info = await desktop.projectInfo().catch(() => null);
+    if (this.disposed) return;
+    if (!info || !info.ok) {
+      this.sectionTitle.textContent = 'Im Projekt speichern';
+      this.localHint.textContent = info && !info.ok ? info.message : 'Der Projektordner ist nicht erreichbar.';
+      this.localHint.hidden = false;
+      this.loginForm.hidden = true;
+      this.sessionRow.hidden = true;
+      this.publishBody.hidden = true;
+      this.publishSection.hidden = false;
+      return;
+    }
+    this.desktop = desktop;
+    this.projectVersion = info.value.version;
+    this.sectionTitle.textContent = 'Im Projekt speichern';
+    this.pendingTitle.textContent = 'Wird gespeichert';
+    this.pendingList.setAttribute('aria-label', 'Wird gespeichert');
+    this.publishButton.textContent = 'Im Projekt speichern';
+    this.localHint.textContent =
+      'Speichert direkt in den Projektordner und aktualisiert die Galerie. Online geht die Änderung erst mit dem üblichen Veröffentlichen (Git: Commit + Push).';
+    this.localHint.hidden = false;
+    this.uploadHint.textContent =
+      'Große Bilder werden auf höchstens 4096 px verkleinert. Das neue Bild erscheint unten in der Liste und kann sofort platziert werden; es wird mit „Im Projekt speichern“ in customer-artworks/inbox abgelegt.';
+    this.logoutButton.hidden = true;
+    this.sessionText.textContent = `Projekt: ${info.value.name} · ${info.value.root}`;
+    this.sessionText.title = info.value.root;
+    const changeFolder = button('Anderen Projektordner öffnen', 'museum-hub__calibration-action museum-hub__desktop-folder', () => {
+      void desktop.chooseProject();
+    });
+    this.sessionRow.appendChild(changeFolder);
+    this.loginForm.hidden = true;
+    this.sessionRow.hidden = false;
+    this.publishBody.hidden = false;
+    this.publishSection.hidden = false;
+    this.uploadSection.hidden = false;
+    this.host.setReadOnly(false);
     const draft = await loadDraft();
     if (draft && !this.disposed) this.showDraftBanner(draft);
     this.refresh();
@@ -328,7 +443,11 @@ export class OnlineEditor {
     const aspectHint = Math.abs(aspect - previousAspect) / previousAspect > 0.01
       ? ` Das Seitenverhältnis (${aspect.toFixed(3)}) weicht vom bisherigen (${previousAspect.toFixed(3)}) ab – bitte die Wände prüfen.`
       : '';
-    const where = this.online ? 'Wird mit veröffentlicht.' : 'Datei unter diesem Namen nach customer-artworks/Backgrounds kopieren.';
+    const where = this.desktop
+      ? 'Wird mit „Im Projekt speichern“ gespeichert.'
+      : this.online
+        ? 'Wird mit veröffentlicht.'
+        : 'Datei unter diesem Namen nach customer-artworks/Backgrounds kopieren.';
     this.notifyChange();
     return `${name} · ${prepared.width}×${prepared.height}px${prepared.resized ? ' (verkleinert)' : ''}. ${where}${aspectHint}`;
   }
@@ -375,7 +494,7 @@ export class OnlineEditor {
   /** Called by the hub after every editor change. */
   notifyChange(): void {
     this.refresh();
-    if (!this.online || this.disposed) return;
+    if ((!this.online && !this.desktop) || this.disposed) return;
     if (this.draftTimer !== null) clearTimeout(this.draftTimer);
     this.draftTimer = setTimeout(() => {
       this.draftTimer = null;
@@ -384,12 +503,13 @@ export class OnlineEditor {
         void clearDraft();
         return;
       }
-      void saveDraft(draftFromPending(this.pending, this.settings?.commit ?? null, config));
+      void saveDraft(draftFromPending(this.pending, this.baseVersion, config));
     }, 800);
   }
 
   private showDraftBanner(draft: EditorDraft): void {
-    const stale = Boolean(draft.baseCommit && this.settings?.commit && draft.baseCommit !== this.settings.commit);
+    const base = this.baseVersion;
+    const stale = Boolean(draft.baseCommit && base && draft.baseCommit !== base);
     this.draftBanner.replaceChildren();
     const text = el(
       'p',
@@ -423,6 +543,7 @@ export class OnlineEditor {
   }
 
   private syncLoginState(): void {
+    if (this.desktop) return;
     const loggedIn = this.loggedIn;
     this.loginForm.hidden = loggedIn;
     this.sessionRow.hidden = !loggedIn;
@@ -481,15 +602,19 @@ export class OnlineEditor {
     }
     if (items.length === 0) items.push(el('li', 'is-empty', 'Keine Änderungen seit dem Öffnen.'));
     const total = this.pending.totalBytes(backgroundSrc);
-    if (total > 0) items.push(el('li', 'is-total', `Upload gesamt: ${formatBytes(total)}`));
+    if (total > 0) items.push(el('li', 'is-total', `${this.desktop ? 'Neue Dateien gesamt' : 'Upload gesamt'}: ${formatBytes(total)}`));
     this.pendingList.replaceChildren(...items);
     this.uploadList.replaceChildren(...uploadItems);
     const hasChanges = layoutChanged || total > 0;
+    if (this.desktop && this.unsavedReported !== hasChanges) {
+      this.unsavedReported = hasChanges;
+      this.desktop.setUnsavedChanges(hasChanges);
+    }
     this.publishButton.disabled = this.busy || !this.loggedIn || !hasChanges || !this.host.exportValid() || total > MAX_PACKAGE_BYTES;
     this.publishButton.title = !this.host.exportValid()
       ? 'Zuerst die Fehler beheben (siehe oben).'
       : total > MAX_PACKAGE_BYTES
-        ? `Höchstens ${formatBytes(MAX_PACKAGE_BYTES)} pro Veröffentlichung.`
+        ? `Höchstens ${formatBytes(MAX_PACKAGE_BYTES)} pro ${this.desktop ? 'Speichern' : 'Veröffentlichung'}.`
         : '';
   }
 
@@ -520,6 +645,10 @@ export class OnlineEditor {
   }
 
   private async publish(): Promise<void> {
+    if (this.desktop) {
+      await this.saveToProject();
+      return;
+    }
     if (!this.client || this.busy) return;
     if (!this.host.exportValid()) {
       this.setStage('error', 'Veröffentlichen ist gesperrt, bis die Fehler behoben sind.');
@@ -549,6 +678,69 @@ export class OnlineEditor {
       this.busy = false;
       this.refresh();
     }
+  }
+
+  /** Desktop: write into the project folder, then run "Update Gallery" and reload. */
+  private async saveToProject(): Promise<void> {
+    const desktop = this.desktop;
+    if (!desktop || this.busy) return;
+    if (!this.host.exportValid()) {
+      this.setStage('error', 'Speichern ist gesperrt, bis die Fehler behoben sind.');
+      return;
+    }
+    this.busy = true;
+    this.refresh();
+    this.showErrors([]);
+    this.resultLinks.replaceChildren();
+    try {
+      this.setStage('saving', 'Wird gespeichert…', null);
+      const config = JSON.parse(this.host.configJson()) as unknown;
+      const files = await this.pending.toFiles(this.host.backgroundSrc());
+      const result = await desktop.save({ baseVersion: this.projectVersion, config, files });
+      await this.afterDesktopWrite(desktop, result);
+    } catch {
+      this.setStage('error', 'Speichern fehlgeschlagen. Bitte erneut versuchen.');
+    } finally {
+      this.busy = false;
+      this.refresh();
+    }
+  }
+
+  private async afterDesktopWrite(desktop: DesktopBridge, result: DesktopResult<DesktopSaveValue>): Promise<void> {
+    if (!result.ok) {
+      this.setStage(
+        'error',
+        result.code === 'stale'
+          ? 'Neuere Version vorhanden – bitte neu laden. Ihr Entwurf bleibt gespeichert.'
+          : result.message
+      );
+      this.showErrors(result.errors);
+      return;
+    }
+    this.pending.clear();
+    await clearDraft();
+    this.projectVersion = result.value.version;
+    this.initialConfig = this.host.configJson();
+    this.refresh();
+    this.setStage('updating', 'Galerie wird aktualisiert…', null);
+    const update = await desktop.updateGallery().catch(() => null);
+    if (!update || !update.ok || !update.value.ok) {
+      const report = update && update.ok ? update.value.report : update && !update.ok ? update.message : '';
+      this.setStage('error', 'Gespeichert. Die Galerie-Aktualisierung meldet Fehler – bitte den Bericht prüfen.');
+      this.showErrors(
+        report
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith('!') || line.startsWith('✗'))
+          .slice(0, 12)
+      );
+      this.resultLinks.replaceChildren(button('Neu laden', 'museum-hub__calibration-action', () => window.location.reload()));
+      return;
+    }
+    this.setStage('saved', 'Gespeichert ✓ · Lokal gespeichert – noch nicht online', null);
+    setTimeout(() => {
+      if (!this.disposed) window.location.reload();
+    }, 1200);
   }
 
   private publishMessage(): string {
@@ -651,6 +843,10 @@ export class OnlineEditor {
   }
 
   private async loadHistory(): Promise<void> {
+    if (this.desktop) {
+      await this.loadDesktopHistory(this.desktop);
+      return;
+    }
     if (!this.client) return;
     this.historyList.replaceChildren(el('li', undefined, 'Wird geladen…'));
     try {
@@ -669,6 +865,41 @@ export class OnlineEditor {
       if (versions.length === 0) this.historyList.replaceChildren(el('li', undefined, 'Noch keine Versionen.'));
     } catch (error) {
       this.historyList.replaceChildren(el('li', 'is-error', error instanceof ServiceError ? error.message : 'Verlauf nicht verfügbar.'));
+    }
+  }
+
+  private async loadDesktopHistory(desktop: DesktopBridge): Promise<void> {
+    this.historyList.replaceChildren(el('li', undefined, 'Wird geladen…'));
+    const result = await desktop.history().catch(() => null);
+    if (!result || !result.ok) {
+      this.historyList.replaceChildren(el('li', 'is-error', result && !result.ok ? result.message : 'Verlauf nicht verfügbar.'));
+      return;
+    }
+    const items = result.value.map((entry) => {
+      const item = el('li', 'museum-hub__publish-history-item');
+      item.appendChild(el('span', undefined, `${formatDate(entry.savedAt)}${entry.current ? ' (aktuell)' : ' · gesicherte Version'}`));
+      if (!entry.current) {
+        item.appendChild(button('Wiederherstellen', 'museum-hub__calibration-action', () => void this.restoreDesktop(desktop, entry.id, entry.savedAt)));
+      }
+      return item;
+    });
+    this.historyList.replaceChildren(...(items.length > 0 ? items : [el('li', undefined, 'Noch keine Versionen.')]));
+  }
+
+  private async restoreDesktop(desktop: DesktopBridge, id: string, date: string): Promise<void> {
+    if (this.busy) return;
+    if (!window.confirm(`Die Version vom ${formatDate(date)} wiederherstellen? Die aktuelle Anordnung wird vorher gesichert (Bilder bleiben erhalten).`)) return;
+    this.busy = true;
+    this.refresh();
+    this.historyDetails.open = false;
+    try {
+      this.setStage('saving', 'Frühere Version wird wiederhergestellt…', null);
+      await this.afterDesktopWrite(desktop, await desktop.restore(id, this.projectVersion));
+    } catch {
+      this.setStage('error', 'Wiederherstellen fehlgeschlagen. Bitte erneut versuchen.');
+    } finally {
+      this.busy = false;
+      this.refresh();
     }
   }
 

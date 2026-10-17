@@ -4,12 +4,14 @@
  * the FREYRAUM logo / museum title. This is only a shortcut, not protection;
  * the save service password is the real protection.
  */
+import { usesProjectFolderLayout } from './desktopBridge';
+
 const SECRET_WORD = 'bearbeiten';
 const LONG_PRESS_MS = 1500;
 const LONG_PRESS_SELECTOR = '.topbar__brand, #museum-hub-title, [data-editor-entry]';
 
 export function placementEditorUrl(): string {
-  if (window.location.protocol === 'file:') return new URL('placement-editor.html', window.location.href).href;
+  if (usesProjectFolderLayout()) return new URL('placement-editor.html', window.location.href).href;
   return new URL(`${import.meta.env.BASE_URL}placement-editor.html`, window.location.href).href;
 }
 

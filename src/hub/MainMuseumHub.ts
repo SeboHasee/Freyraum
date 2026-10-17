@@ -85,6 +85,7 @@ import {
 import { releaseWebGLContext } from '../utils/webgl';
 import { EditorViewport } from './editorViewport';
 import { OnlineEditor, type BackgroundOption } from './editor/onlineEditor';
+import { usesProjectFolderLayout } from '../online/desktopBridge';
 import type { PendingArtwork } from './editor/pendingUploads';
 import {
   buildArtworkRatioReport,
@@ -94,7 +95,7 @@ import {
 } from './artworkAspect';
 
 const HUB_BACKGROUND_BASE_URL =
-  window.location.protocol === 'file:'
+  usesProjectFolderLayout()
     ? '../customer-artworks/'
     : `${import.meta.env.BASE_URL}`;
 const HUB_IMAGE_TIMEOUT_MS = 5000;
@@ -149,13 +150,13 @@ function resolveBackgroundUrl(src: string): string {
   const safeSrc = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(src) && !src.includes('..')
     ? src
     : 'Backgrounds/museum-empty.png';
-  if (window.location.protocol === 'file:') return `${HUB_BACKGROUND_BASE_URL}${safeSrc}`;
+  if (usesProjectFolderLayout()) return `${HUB_BACKGROUND_BASE_URL}${safeSrc}`;
   return `${HUB_BACKGROUND_BASE_URL}${safeSrc.replace(/^Backgrounds\//, 'backgrounds/')}`;
 }
 
 function setResolvedBackgroundSource(image: HTMLImageElement, src: string): void {
   const resolved = new URL(src, window.location.href);
-  if (!['blob:', 'file:', 'http:', 'https:'].includes(resolved.protocol)) return;
+  if (!['blob:', 'file:', 'freyraum:', 'http:', 'https:'].includes(resolved.protocol)) return;
   Reflect.set(image, 'src', resolved.href);
 }
 
@@ -2654,7 +2655,9 @@ export class MainMuseumHub {
     resetBackground.textContent = 'Hintergrund zurücksetzen';
     const updateBackgroundInfo = (): void => {
       const { src, width = 0, height = 0 } = this.resolution.background;
-      const pending = this.onlineEditor?.pendingBackgroundUrl(src) ? ' · Wird mit veröffentlicht' : '';
+      const pending = this.onlineEditor?.pendingBackgroundUrl(src)
+        ? this.onlineEditor.desktopMode ? ' · Wird mit gespeichert' : ' · Wird mit veröffentlicht'
+        : '';
       backgroundInfo.textContent = width > 0 && height > 0
         ? `${src} · ${width}×${height}px · ${(width / height).toFixed(3)}${pending}`
         : src;

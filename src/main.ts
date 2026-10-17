@@ -299,7 +299,7 @@ function normalizeInjectedArtworkAssetBaseUrl(raw: unknown): string | null {
   const fallbackBase = typeof window !== 'undefined' ? window.location.href : 'http://localhost/';
   try {
     const resolved = new URL(raw.trim(), fallbackBase);
-    if (!['http:', 'https:', 'file:'].includes(resolved.protocol)) return null;
+    if (!['http:', 'https:', 'file:', 'freyraum:'].includes(resolved.protocol)) return null;
     return new URL('./', resolved.href).href;
   } catch {
     return null;
@@ -311,7 +311,7 @@ function isAllowedInjectedArtworkPrimaryUrl(url: string): boolean {
   if (/^data:image\//i.test(url)) return true;
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(url)?.[1]?.toLowerCase() ?? null;
   if (!scheme) return true;
-  return scheme === 'http' || scheme === 'https' || scheme === 'file';
+  return scheme === 'http' || scheme === 'https' || scheme === 'file' || scheme === 'freyraum';
 }
 
 function sanitizeInjectedArtworks(
