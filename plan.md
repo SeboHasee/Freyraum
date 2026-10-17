@@ -1,6 +1,19 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## Implemented — Windows installer builds in CI (v1.40, 2026-10-17)
+
+Defaults used because the plan questions were not answered: unsigned builds;
+Windows only on pull request/branch runs (macOS on tags or manual "macos");
+the manual "publish" input is included (main only, pre-release).
+
+- [x] Windows + Linux Electron test job; Windows installer build, smoke checks and artifact on every PR/branch/manual run.
+- [x] Rename retry for Windows file locks; platform-neutral test paths.
+- [x] `npm run smoke:desktop-package` + silent install/uninstall check in CI.
+- [x] App icon and German NSIS installer.
+- [x] Manual publish option; docs.
+- [ ] Customer acceptance: install the artifact on the customer's Windows PC.
+
 ## Implemented — FREYRAUM Editor desktop app (v1.39, 2026-10-17)
 
 Defaults used because the plan questions were not answered: Windows **and**

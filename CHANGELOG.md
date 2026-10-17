@@ -1,6 +1,14 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## v1.40 — Windows installer builds in CI (2026-10-17)
+
+- **`desktop-release.yml`:** Electron test on Linux **and** Windows; the Windows installer + portable `.exe` are built on every pull request, push to `copilot/**` branches touching the app and manual run, and uploaded as the run artifact `FREYRAUM-Editor-Windows`. macOS only on tags or manual runs ("macos"). Manual "publish" input (main only) creates a pre-release `desktop-v<version>`; tags still publish a Release. Nothing else is published.
+- **Packaged smoke check:** `npm run smoke:desktop-package -- --exe <app>` starts the packaged app on a temporary "FREYRAUM Projekt" folder (bundled importer, editor, save label, layout unchanged). CI runs it on `win-unpacked` and on a silently installed app, then uninstalls silently and checks the project folder survives.
+- **Windows saving:** renames in the local project store retry briefly (EPERM/EACCES/EBUSY, 50–800 ms) when a virus scanner or Explorer holds the file, before rolling back.
+- **Tests:** platform-neutral expected paths in `test:desktop-app`, Windows drive-letter and encoded-backslash/NUL refusal checks; rename-retry checks in `test:local-project`.
+- **Installer polish:** app icon from the FREYRAUM branding (`desktop/scripts/make-icon.mjs`), German NSIS installer, per-user, "FREYRAUM Editor" shortcuts, uninstall keeps project folders.
+
 ## v1.39 — FREYRAUM Editor desktop app (2026-10-17)
 
 - **Desktop app** (`desktop/`, Electron 44.9.0, electron-builder 26.15.3, pinned, own `package.json`):

@@ -1,4 +1,4 @@
-# FREYRAUM Editor — desktop app (v1.39)
+# FREYRAUM Editor — desktop app (v1.39, Windows builds v1.40)
 
 The desktop app is the placement editor as a normal Windows/macOS program. It
 opens the customer's FREYRAUM project folder (the Git checkout), saves new
@@ -40,7 +40,13 @@ Installers (written to `desktop/release/`):
 ```bash
 npm run dist:win   # Windows: NSIS installer + portable .exe (best built on Windows)
 npm run dist:mac   # macOS: .dmg for Intel (x64) and Apple Silicon (arm64), must run on macOS
+npm run icon       # regenerate build-resources/icon.png (pure Node, no dependencies)
 ```
+
+The Windows installer (NSIS) is German by default (English as fallback), asks
+for the folder (per user, no admin rights), creates "FREYRAUM Editor"
+shortcuts on the desktop and in the Start menu, and its uninstaller removes
+only the app — never the project folder.
 
 ## Tests
 
@@ -52,18 +58,42 @@ npm run dist:mac   # macOS: .dmg for Intel (x64) and Apple Silicon (arm64), must
   temporary project copy, checks the lockdown (no Node, no other sites or
   files, no inline scripts, no new windows), uploads a background and an
   artwork, places it, saves, and checks the files and the reloaded editor.
+  CI runs it on Linux **and** Windows (no xvfb on Windows).
+- `npm run smoke:desktop-package -- --exe <app executable>` (root, needs
+  Playwright): starts a **packaged** app on a temporary project in a folder
+  with a space ("FREYRAUM Projekt") and checks that the bundled importer
+  generated the preview, the editor opens at `freyraum://app/` with "Im
+  Projekt speichern", and `museum-hub.json` is unchanged. Example:
+  `npx electron-builder --linux dir --publish never` in `desktop/`, then
+  `xvfb-run -a npm run smoke:desktop-package -- --exe desktop/release/linux-unpacked/freyraum-editor`.
 
 ## Release
 
-1. Raise `"version"` in `desktop/package.json` (for example `1.39.1`).
-2. Push a tag `desktop-v1.39.1`. The tag must match the version or the
-   workflow stops.
-3. `desktop-release.yml` runs the Electron test (Linux), then builds:
-   - Windows: `FREYRAUM-Editor-Setup-<version>.exe` and `FREYRAUM-Editor-<version>-portable.exe`;
-   - macOS: `FREYRAUM-Editor-<version>-arm64.dmg` and `…-x64.dmg`;
-   and publishes them as a GitHub Release.
+`desktop-release.yml` always runs the Electron test on Linux and Windows, then
+builds the Windows installer and portable `.exe`, smoke-tests the unpacked app,
+installs the installer silently (`/S /D=…`), smoke-tests the installed app and
+uninstalls it again (checking a project folder survives).
 
-Pull requests that touch the app run the same test job (no installers).
+| Run | Installers | Where to download |
+| --- | --- | --- |
+| Pull request or push to a `copilot/**` branch touching the app | Windows | Actions → run → **Artifacts** → `FREYRAUM-Editor-Windows` (zip, needs GitHub login, kept 90 days) |
+| **Run workflow** (Actions → "Desktop app (FREYRAUM Editor)") | Windows, + macOS if "macos" is ticked | same, plus `FREYRAUM-Editor-macOS` |
+| **Run workflow** on `main` with "publish" ticked | Windows + macOS | pre-release `desktop-v<desktop/package.json version>` on the Releases page |
+| Tag `desktop-vX.Y.Z` | Windows + macOS | GitHub Release `desktop-vX.Y.Z` |
+
+Files: `FREYRAUM-Editor-Setup-<version>.exe`, `FREYRAUM-Editor-<version>-portable.exe`,
+`FREYRAUM-Editor-<version>-arm64.dmg`, `…-x64.dmg`. Nothing is published
+from pull request, branch or plain manual runs.
+
+To publish:
+
+1. Raise `"version"` in `desktop/package.json` (for example `1.39.1`).
+2. Either push a tag `desktop-v1.39.1` (must match the version or the
+   workflow stops), or after merging click **Run workflow** on `main` with
+   "publish" ticked (creates a pre-release; fails if that tag already exists).
+
+Runs started by the Copilot agent may wait for **Approve and run** by the
+repository owner.
 
 ### Signing (optional)
 

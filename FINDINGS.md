@@ -1,6 +1,16 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## 2026-10-17 — Windows installer builds in CI (v1.40)
+
+- The agent sandbox cannot deliver an installer (no file attachments/releases/tags, ~100 MB files, Linux only), so GitHub Actions Windows runners build it and the run artifact is the delivery channel.
+- The working branch had **no pull request**, so `pull_request` triggers never fired; a `push` trigger on `copilot/**` branches (with the app paths filter) starts the build from agent pushes. Agent-triggered runs may need owner approval.
+- On Windows, `rename` over a file can fail briefly with EPERM/EACCES/EBUSY while antivirus or Explorer holds it; a short synchronous retry (50–800 ms, `Atomics.wait`) is the usual remedy (same idea as graceful-fs) before the existing rollback.
+- Tests must build expected paths with `path.resolve/join` like the app; hard-coded `/` paths fail on Windows.
+- electron-builder NSIS: `installerLanguages` + `language: "1031"` gives a German installer; `/S` installs/uninstalls silently and `/D=` (last argument, unquoted) sets the folder — used for the CI install/uninstall check. Silent installs do not auto-start the app.
+- Playwright `_electron.launch` works on packaged executables (Linux `linux-unpacked`), so the same smoke script covers the packaged Windows app.
+- Sources: https://www.electron.build/nsis, https://www.electron.build/configuration/nsis, https://docs.github.com/actions/using-workflows/storing-workflow-data-as-artifacts, https://playwright.dev/docs/api/class-electron
+
 ## 2026-10-17 — Desktop app for local editing (v1.39)
 
 - **Why Electron.** It ships the same Chromium on every computer (reliable

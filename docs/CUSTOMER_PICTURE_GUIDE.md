@@ -168,7 +168,11 @@ computer. It saves straight into your FREYRAUM project folder and updates the
 gallery for you. **Node.js is not needed.**
 
 1. **Installieren.** Download the newest version from the project's GitHub
-   Releases page (`desktop-v…`):
+   Releases page (`desktop-v…`). Before a release exists, test builds are under
+   **Actions → "Desktop app (FREYRAUM Editor)" → a green run → Artifacts →
+   FREYRAUM-Editor-Windows** (a zip; GitHub login needed). The installer is
+   German, needs no admin rights and creates "FREYRAUM Editor" shortcuts;
+   uninstalling never removes your project folder.
    - **Windows:** `FREYRAUM-Editor-Setup-….exe` (installs the app) or
      `…-portable.exe` (runs without installing).
      The first start may show "Der Computer wurde durch Windows geschützt".
