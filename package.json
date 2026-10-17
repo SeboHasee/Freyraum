@@ -24,6 +24,7 @@
     "test:editor-publish": "node scripts/test-editor-publish.mjs",
     "test:save-service": "node scripts/test-save-service.mjs",
     "test:validate-deploy": "node scripts/test-validate-deploy.mjs",
+    "test:local-project": "node scripts/test-local-project.mjs",
     "test:deploy-smoke": "node scripts/test-deploy-smoke.mjs",
     "validate:deploy": "node scripts/validate-deploy.mjs",
     "validate:museum-hub:visual": "node scripts/visual-regression.mjs compare",

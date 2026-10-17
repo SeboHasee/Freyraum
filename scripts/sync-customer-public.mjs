@@ -22,12 +22,21 @@
  */
 
 import { existsSync, mkdirSync, copyFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
-const ROOT = join(dirname(__filename), '..');
+// v1.39 — optional `--root <folder>` / `--root=<folder>` (see import-artworks.mjs).
+function rootFromArgs(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--root' && argv[index + 1]) return resolve(argv[index + 1]);
+    if (arg.startsWith('--root=') && arg.length > 7) return resolve(arg.slice(7));
+  }
+  return null;
+}
+const ROOT = rootFromArgs(process.argv.slice(2)) ?? join(dirname(__filename), '..');
 const PREVIEW = join(ROOT, 'customer-preview');
 const PUBLIC = join(ROOT, 'public');
 

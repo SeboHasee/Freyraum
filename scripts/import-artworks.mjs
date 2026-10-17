@@ -43,12 +43,28 @@ import {
   rmSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join, extname, basename, dirname } from 'node:path';
+import { join, extname, basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // -------- Paths --------
+// v1.39 — `--root <folder>` (or `--root=<folder>`) runs the importer for a
+// project folder other than the one this script lives in. The FREYRAUM Editor
+// desktop app ships its own copy of this script and points it at the
+// customer's project. Without the option the behaviour is unchanged.
 const __filename = fileURLToPath(import.meta.url);
-const ROOT = join(dirname(__filename), '..');
+function rootFromArgs(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--root' && argv[index + 1]) return resolve(argv[index + 1]);
+    if (arg.startsWith('--root=') && arg.length > 7) return resolve(arg.slice(7));
+  }
+  return null;
+}
+const ROOT = rootFromArgs(process.argv.slice(2)) ?? join(dirname(__filename), '..');
+if (!existsSync(join(ROOT, 'customer-artworks'))) {
+  process.stderr.write(`FREYRAUM project folder not found (customer-artworks/ missing): ${ROOT}\n`);
+  process.exit(1);
+}
 const INBOX = join(ROOT, 'customer-artworks', 'inbox');
 const AUDIO_INBOX = join(ROOT, 'customer-audio', 'inbox');
 const PROCESSED = join(ROOT, 'customer-artworks', 'processed');

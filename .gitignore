@@ -33,3 +33,8 @@ public/backgrounds/
 public/customer-artworks.js
 public/customer-audio.js
 public/editor-online.json
+
+# v1.39: local backups of museum-hub.json written by the FREYRAUM Editor app
+# (scripts/local-project/projectStore.ts) and interrupted temporary saves.
+customer-artworks/history/
+*.freyraum-tmp
