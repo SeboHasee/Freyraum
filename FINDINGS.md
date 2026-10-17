@@ -1,6 +1,47 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## 2026-10-17 — Desktop app for local editing (v1.39)
+
+- **Why Electron.** It ships the same Chromium on every computer (reliable
+  WebGL for the three.js editor) and its own Node, so the existing importer runs
+  unchanged with `ELECTRON_RUN_AS_NODE=1` and customers need no Node.js.
+  Playwright can drive it (`_electron`). Costs: ~100–150 MB installers, unsigned
+  builds show a one-time SmartScreen/Gatekeeper warning.
+  - *Tauri* (~10 MB) uses the system web view (WKWebView/WebKitGTK WebGL
+    differences) and would need a separate Node runtime or a Rust rewrite of the
+    importer plus the Rust toolchain.
+  - *Browser folder access* (File System Access API) works only in
+    Chrome/Edge and cannot run "Update Gallery".
+  Sources: <https://www.electronjs.org/docs/latest/tutorial/security>,
+  <https://www.electronjs.org/docs/latest/api/protocol#protocolhandlescheme-handler>,
+  <https://www.electronjs.org/docs/latest/api/environment-variables#electron_run_as_node>,
+  <https://playwright.dev/docs/api/class-electron>.
+- **Custom protocol instead of `file://`.** `freyraum://app/` (registered as
+  standard + secure) gives the editor a real origin (IndexedDB drafts, fetch,
+  CSP) and lets the main process decide exactly which project files are
+  readable. The generated `customer-preview/*.html` pages use an inline script,
+  so the app build writes its own pages without inline scripts to keep
+  `script-src 'self'`.
+- **Importer location.** The import scripts found the project relative to the
+  script file; inside the packaged app that is the app's resources folder. They
+  now accept `--root <folder>`; the app ships `import-artworks.mjs` outside the
+  asar archive (`extraResources`) so a plain Node process can read it.
+- **Lesson: Playwright and refused navigation.** Calling
+  `location.href = …` on a guarded window leaves Playwright waiting for a
+  navigation that never finishes; later `page.click` calls time out. The test
+  checks the navigation guard last and reads the URL from the main process.
+  Opening `https://` links in the test would also launch the system browser, so
+  the test uses `file://` URLs for the refusal checks.
+- **Audit.** `npm audit` in `desktop/` reports 8 moderate findings, all from
+  `sprintf-js` via `global-agent` → `@electron/get` (electron-builder). Build
+  machine only; no fix without downgrading. electron 44.9.0, electron-builder
+  26.15.3, esbuild 0.28.2, typescript 5.9.3 and @types/node 22.20.5 had no
+  advisories in the GitHub advisory database when pinned.
+- **Packaged smoke check.** `electron-builder --linux dir` built an app whose
+  packaged importer (`resources/importer/`) generated the preview for a fresh
+  project folder and opened the editor at `freyraum://app/`.
+
 ## 2026-10-16 — Online saving from the deployed editor (v1.38)
 
 - **Pages cannot save.** GitHub Pages only serves files, so a small service with

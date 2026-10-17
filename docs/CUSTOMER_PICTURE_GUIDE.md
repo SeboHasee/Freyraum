@@ -161,6 +161,56 @@ copies into `customer-artworks/inbox/`.
   preview/deployment and its generated `customer-artworks.js` before rerunning
   Update Gallery. It may not match the current checked-in config.
 
+## FREYRAUM Editor (App) (v1.39)
+
+The **FREYRAUM Editor** app is the easiest way to place pictures on your own
+computer. It saves straight into your FREYRAUM project folder and updates the
+gallery for you. **Node.js is not needed.**
+
+1. **Installieren.** Download the newest version from the project's GitHub
+   Releases page (`desktop-v…`):
+   - **Windows:** `FREYRAUM-Editor-Setup-….exe` (installs the app) or
+     `…-portable.exe` (runs without installing).
+     The first start may show "Der Computer wurde durch Windows geschützt".
+     Click **Weitere Informationen → Trotzdem ausführen**. This happens once.
+   - **Mac:** `…-arm64.dmg` for Macs with an Apple chip, `…-x64.dmg` for Intel
+     Macs. Drag the app into *Programme*. Open it the first time with
+     **Rechtsklick → Öffnen → Öffnen**. This happens once.
+2. **Projektordner wählen.** On the first start the app asks for your
+   FREYRAUM folder – the one that contains `customer-artworks` and
+   `Update Gallery`. The app remembers it. To switch, use
+   **Datei → Projektordner öffnen…**.
+3. **Bearbeiten.** Everything works like in the browser editor:
+   - **New picture:** **Bilder → Bild hinzufügen** (title, artist, then the picture).
+     It appears in the list straight away and can be placed.
+   - **New background:** **Raum → Erweitert → Hintergrund**.
+   - If the app closes unexpectedly, it offers "Entwurf wiederherstellen" next time.
+4. **Im Projekt speichern.** In the **Speichern** tab, press
+   **Im Projekt speichern**. The status reads
+   "Wird gespeichert… → Galerie wird aktualisiert… → Gespeichert ✓".
+   - New pictures go to `customer-artworks/inbox/` (with a text file for title
+     and artist), backgrounds to `customer-artworks/Backgrounds/`, and the layout
+     to `customer-artworks/museum-hub.json`.
+   - The previous layout is kept; **Frühere Version wiederherstellen** lists the
+     last 10 saved layouts.
+   - Errors block saving; hints do not.
+5. **Online stellen.** The app saves **only on your computer**
+   ("Lokal gespeichert – noch nicht online"). To put the changes online, publish
+   as usual: commit and push the project folder, for example with GitHub Desktop
+   (see "Publish to GitHub Pages" above).
+
+Useful menu items: **Datei → Im Explorer/Finder zeigen**, **Datei →
+Galerie-Vorschau öffnen** (the gallery as visitors see it), **Datei → Galerie
+aktualisieren**, **Hilfe → Neue Version herunterladen…**.
+
+If the app says "Neuere Version vorhanden – bitte neu laden", the layout file
+was changed outside the app (for example by a Git pull). Use **Ansicht → Neu
+laden**; your draft stays and can be restored.
+
+If you open `OPEN_ARTWORK_EDITOR.html` in a browser instead, the editor still
+works, but it can only download `museum-hub.json`; copy it into
+`customer-artworks/` yourself and run Update Gallery.
+
 ## Online bearbeiten (v1.38)
 
 Once the site owner has set up the save service (`docs/ONLINE_EDITOR_SETUP.md`), you can edit
@@ -195,7 +245,7 @@ published in the meantime. Reload the page; your draft stays in the browser.
 
 ## Troubleshooting
 
-- If Node.js is missing, install Node.js LTS and run again.
+- If Node.js is missing, install Node.js LTS and run again – or use the FREYRAUM Editor app, which does not need Node.js.
 - If the report contains warnings, fix the listed files and run update again.
 - If preview content looks stale, rerun update and refresh the page.
 - If you open the preview in a fresh clone or freshly unzipped folder before
@@ -214,6 +264,7 @@ published in the meantime. Reload the page; your draft stays in the browser.
 
 ## Related docs
 
+- Desktop app (site owner: build, release, signing): `docs/DESKTOP_APP.md`
 - Online editing setup (site owner): `docs/ONLINE_EDITOR_SETUP.md`
 - Text sidecars: `docs/CUSTOMER_TEXT_GUIDE.md`
 - Image size limits and operator guidance: `docs/IMAGE_MAINTENANCE_GUIDE.md`

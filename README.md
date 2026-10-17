@@ -18,6 +18,14 @@ remain editable. Imported JSON must match the current artwork inventory and all
 fixed camera/room/wall settings. The generated file preview cache-busts customer
 artwork and audio bundles after every import.
 
+### FREYRAUM Editor app (v1.39)
+
+The same editor is available as a desktop app (Electron, `desktop/`). It opens
+the project folder, saves pictures, backgrounds and `museum-hub.json` directly
+into it ("Im Projekt speichern") and runs Update Gallery with its bundled Node.
+Customer steps: `docs/CUSTOMER_PICTURE_GUIDE.md` → "FREYRAUM Editor (App)";
+build, release, signing and security model: `docs/DESKTOP_APP.md`.
+
 ## Current project state
 
 - Runtime renderer: WebGL (WebGPU is opt-in probe mode only).
@@ -176,6 +184,7 @@ Do not duplicate config tables in other docs.
 - Architecture: [`ARCHITECTURE_MAP.md`](./ARCHITECTURE_MAP.md)
 - Contributor workflow: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - Deployment / Pages: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)
+- Desktop app (build, release, signing, security): [`docs/DESKTOP_APP.md`](./docs/DESKTOP_APP.md)
 - Image maintenance / high-resolution constraints: [`docs/IMAGE_MAINTENANCE_GUIDE.md`](./docs/IMAGE_MAINTENANCE_GUIDE.md)
 - Handoff/support: [`docs/HANDOFF.md`](./docs/HANDOFF.md)
 - Documentation policy: [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md)

@@ -144,7 +144,17 @@ publish package passes the save-service validation. `npm run test:save-service`
 runs the Cloudflare Worker against a fake GitHub (no browser needed);
 `npm run test:validate-deploy` covers the deploy content check; and
 `npm run test:deploy-smoke -- <url>` opens a deployed gallery and checks rooms,
-artworks, background and 404s (run by the `smoke` job after every Pages deploy).
+artworks, background and 404s (run by the `smoke` job after every Pages deploy). `npm run test:local-project` (v1.39, no browser) checks the desktop
+app's project store on a temporary project copy: wrong paths, fake images,
+too-large files, overwrites, symbolic links and stale versions are refused
+without writing anything; valid saves are all-or-nothing, keep a history copy
+(last 10) and can be restored; the importer runs with `--root` and assigns the
+editor's upload IDs. `npm run test:desktop-app` (v1.39; root build,
+`cd desktop && npm ci && npm run build`, `npm i --no-save playwright`, and
+`xvfb-run -a` on Linux) checks the `freyraum://app/` address mapping, then starts
+the Electron app on a temporary project and checks the lockdown (no Node access,
+no other files or sites, CSP blocks inline scripts, no new windows) and a full
+background + artwork upload, placement and "Im Projekt speichern" round trip.
 `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the

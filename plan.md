@@ -1,6 +1,23 @@
 # FREYRAUM Plan
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## Implemented — FREYRAUM Editor desktop app (v1.39, 2026-10-17)
+
+Defaults used because the plan questions were not answered: Windows **and**
+macOS builds; unsigned at first (optional signing secrets prepared); the app
+replaces the planned "Open Artwork Editor" local helper, keeping only the
+shared project store and the `file://` download fallback.
+
+- [x] Local project store `scripts/local-project/projectStore.ts` + `npm run test:local-project`.
+- [x] `--root` for `import-artworks.mjs`, `sync-customer-public.mjs`, `run-import-artworks.cjs`.
+- [x] App shell `desktop/` (folder choice, `freyraum://app/`, lockdown, preload bridge, import with bundled Node, German menu, settings).
+- [x] Editor save target "desktop" in `src/hub/editor/onlineEditor.ts` (+ `src/online/desktopBridge.ts`), `file://` hint.
+- [x] `npm run test:desktop-app` (Playwright Electron), `desktop-release.yml`.
+- [x] Docs: `docs/DESKTOP_APP.md`, customer guide, README, REGRESSION_TOOLING, CHANGELOG, FINDINGS.
+- [ ] Owner decision: buy signing certificates (Apple Developer Program about €99/year; Windows certificate) → then automatic updates via `electron-updater`.
+- [ ] Optional later: "Online veröffentlichen" from the app through the save service (same version check).
+- [ ] Optional hardening: run the importer through `utilityProcess` and disable the `RunAsNode` fuse.
+
 ## Implemented — Save directly from the deployed editor (v1.38, 2026-10-16)
 
 - [x] `npm run validate:deploy` (run in the deploy before the build), case-safe import warnings, background library, version stamp `editor-online.json`.

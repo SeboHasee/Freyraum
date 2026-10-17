@@ -1,6 +1,21 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
 
+## v1.39 — FREYRAUM Editor desktop app (2026-10-17)
+
+- **Desktop app** (`desktop/`, Electron 44.9.0, electron-builder 26.15.3, pinned, own `package.json`):
+  - asks for the FREYRAUM project folder (must contain `customer-artworks/` and `package.json`) and remembers it and the window size;
+  - shows the bundled editor at a private `freyraum://app/` address that reads only the allowed project files;
+  - runs "Update Gallery" with Electron's bundled Node (`ELECTRON_RUN_AS_NODE`), so customers need no Node.js; runs it on open when the preview is missing or older than the content;
+  - German menu (Projektordner öffnen, Im Explorer/Finder zeigen, Galerie-Vorschau öffnen, Galerie aktualisieren), single instance, warning before closing with unsaved changes.
+- **Security:** `contextIsolation` + `sandbox`, no Node in the page, strict Content Security Policy (no inline scripts), navigation and new windows blocked (web links open in the browser), a small checked bridge, IPC only from the editor page.
+- **Editor save target "desktop":** no login; "Im Projekt speichern" with "Wird gespeichert… → Galerie wird aktualisiert… → Gespeichert ✓ · Lokal gespeichert – noch nicht online", then reload. Uploads, background library, drafts and history/restore are reused. Opened from `file://`, the save tab points to the app.
+- **Local project store** (`scripts/local-project/projectStore.ts`): same rules as the save service, stale-version refusal, temporary files + rename with rollback, never overwrites images, stays inside the project, keeps the last 10 `museum-hub.json` versions in `customer-artworks/history/` (git-ignored).
+- **Importer:** `--root <folder>` for `import-artworks.mjs`, `sync-customer-public.mjs` and `run-import-artworks.cjs` (unchanged without it).
+- **Release:** `.github/workflows/desktop-release.yml` on `desktop-v*` tags: Electron test, Windows installer + portable `.exe`, macOS `.dmg` (Intel + Apple Silicon), GitHub Release; optional signing secrets. `deploy-pages.yml` is untouched.
+- **Tests:** `test:local-project` (also in the quality workflow) and `test:desktop-app` (Playwright Electron). Root lint now covers `desktop/src` and `scripts/local-project`.
+- **Docs:** `docs/DESKTOP_APP.md`, customer guide "FREYRAUM Editor (App)".
+
 ## v1.38 — Save directly from the deployed editor (2026-10-16)
 
 - **Save service:** a Cloudflare Worker in `worker/`.
