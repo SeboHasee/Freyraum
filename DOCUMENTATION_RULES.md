@@ -1,5 +1,5 @@
 # Documentation Rules
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 ## Goal
 
@@ -13,6 +13,11 @@ Keep documentation authoritative, minimal, and resistant to drift.
 - `ARCHITECTURE_MAP.md` → current architecture and ownership
 - `CONTRIBUTING.md` → contributor workflow and freshness policy
 - `docs/CUSTOMER_*_GUIDE.md` → customer workflows
+- `docs/REGRESSION_TOOLING.md` → all test commands and which CI workflow runs them
+- `docs/DESKTOP_APP.md` → desktop app build, release, signing, security
+- `docs/ONLINE_EDITOR_SETUP.md` → save-service setup for the site owner
+- `LESSONS_LEARNED.md` → reusable lessons from mistakes and regressions
+- `.github/copilot-instructions.md` → the single current-context summary for agents (prompts link to it)
 - `FINDINGS.md` → reusable technical findings (active)
 - `plan.md` → active engineering work
 - `docs/archive/` → historical rationale and retired long-form context

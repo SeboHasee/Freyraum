@@ -1,5 +1,5 @@
 # Contributing
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 ## Validation baseline
 
@@ -21,11 +21,20 @@ npm run validate:museum-hub
 npm run docs:check-config-authority
 ```
 
+For editor, save-service or desktop-app changes also run the focused tests in
+`docs/REGRESSION_TOOLING.md` → "Automated test commands" (`test:editor-drag`,
+`test:editor-rooms`, `test:editor-publish`, `test:save-service`,
+`test:local-project`, `test:desktop-app`, `smoke:desktop-package`).
+
 For dependency changes also run:
 
 ```bash
 npm audit --audit-level=moderate
 ```
+
+Open the pull request early: CI (`quality-and-doc-drift.yml`) runs only on pull
+requests and `main`, and runs started by bots/agents wait for the owner's
+**Approve and run** in the Actions tab.
 
 ## Documentation freshness policy (required)
 

@@ -1,5 +1,5 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-15 (v1.35 editor rooms and panel sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 ## v1.40 — Windows installer builds in CI (2026-10-17)
 
@@ -7,6 +7,9 @@
 - **Packaged smoke check:** `npm run smoke:desktop-package -- --exe <app>` starts the packaged app on a temporary "FREYRAUM Projekt" folder (bundled importer, editor, save label, layout unchanged). CI runs it on `win-unpacked` and on a silently installed app, then uninstalls silently and checks the project folder survives.
 - **Windows saving:** renames in the local project store retry briefly (EPERM/EACCES/EBUSY, 50–800 ms) when a virus scanner or Explorer holds the file, before rolling back.
 - **Tests:** platform-neutral expected paths in `test:desktop-app`, Windows drive-letter and encoded-backslash/NUL refusal checks; rename-retry checks in `test:local-project`.
+- **Merge-readiness pass:** desktop app version 1.40.0; Node 22 in every workflow (Node 20 is end of life); manual "publish" stops if the release already exists; `desktop/release/` git-ignored.
+- **Fix:** after "Im Projekt speichern" or an online publish that waits for approval, uploaded pictures and a new background kept loading in the still-open editor (object URLs are retired only on reload); regression check in `test:editor-publish`.
+- **Docs:** `plan.md` reduced to active work; finished plans and findings up to v1.18 moved to `docs/archive/*-2026-10-17.md`; repeated status blocks removed from agent/process docs (one current context in `.github/copilot-instructions.md`); one test-command table in `docs/REGRESSION_TOOLING.md`; README "Place artworks" lists the three save paths; architecture map, handoff, deployment, query parameters (editor storage keys) and lessons 111–117 updated.
 - **Installer polish:** app icon from the FREYRAUM branding (`desktop/scripts/make-icon.mjs`), German NSIS installer, per-user, "FREYRAUM Editor" shortcuts, uninstall keeps project folders.
 
 ## v1.39 — FREYRAUM Editor desktop app (2026-10-17)

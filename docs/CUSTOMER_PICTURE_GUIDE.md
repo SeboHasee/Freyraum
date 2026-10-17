@@ -1,11 +1,24 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 This guide documents the current customer workflow only.
 
-## One-time setup
+## Choose your way
 
-1. Install Node.js LTS (18+): https://nodejs.org
+| You want to… | Use | Section |
+|---|---|---|
+| work on your computer without installing Node.js (recommended) | the **FREYRAUM Editor** app | "FREYRAUM Editor (App)" |
+| edit the live gallery in the browser | the online editor | "Online bearbeiten" |
+| work with the folder and scripts only | `Update Gallery` + `OPEN_ARTWORK_EDITOR.html` | the sections below |
+
+The editor itself (rooms, places, dragging) is the same everywhere; see
+"Museum hub placement".
+
+## One-time setup (scripts only)
+
+The FREYRAUM Editor app and the online editor need no setup here.
+
+1. Install Node.js LTS (22 recommended): https://nodejs.org
 2. Keep the FREYRAUM folder locally available.
 
 ## Update your gallery
@@ -161,7 +174,7 @@ copies into `customer-artworks/inbox/`.
   preview/deployment and its generated `customer-artworks.js` before rerunning
   Update Gallery. It may not match the current checked-in config.
 
-## FREYRAUM Editor (App) (v1.39)
+## FREYRAUM Editor (App)
 
 The **FREYRAUM Editor** app is the easiest way to place pictures on your own
 computer. It saves straight into your FREYRAUM project folder and updates the
@@ -215,7 +228,7 @@ If you open `OPEN_ARTWORK_EDITOR.html` in a browser instead, the editor still
 works, but it can only download `museum-hub.json`; copy it into
 `customer-artworks/` yourself and run Update Gallery.
 
-## Online bearbeiten (v1.38)
+## Online bearbeiten
 
 Once the site owner has set up the save service (`docs/ONLINE_EDITOR_SETUP.md`), you can edit
 the gallery directly on the website. No GitHub account is needed.
@@ -264,7 +277,7 @@ published in the meantime. Reload the page; your draft stays in the browser.
   blank plane means both the primary source and the embedded recovery payload
   need inspection. Open the preview with the debug query documented in
   `docs/QUERY_PARAMETERS.md`, then export the route diagnostics before
-  importing again; see `plan.md § v0.93`.
+  importing again; see `docs/archive/plan-history-2026-10-17.md` § v0.93.
 
 ## Related docs
 

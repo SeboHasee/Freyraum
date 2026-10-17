@@ -1,30 +1,24 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
 ## Place artworks
 
-Double-click **`OPEN_ARTWORK_EDITOR.html`**. It opens the dedicated placement
-program from `customer-preview/placement-editor.html`; no URL parameter is
-required. Use the numbered sidebar to select, drag, resize, validate, and
-download the finished `museum-hub.json`.
+The placement editor arranges pictures on the museum walls and in rooms
+(add, fill, switch and delete rooms; drag, resize, keyboard nudge, undo/redo).
+Every artwork can be dragged to every edge of its green mounting zone; editing
+walls never stretches artwork. The same editor runs in three ways:
 
-The editor keeps artwork wall ownership fixed, validates the complete projected
-artwork body against the confirmed green mounting zone, and blocks export until
-all checks pass. Orange wall projections are read-only because their homography
-and room-plane state is build-derived; blue safe zones and green mounting zones
-remain editable. Imported JSON must match the current artwork inventory and all
-fixed camera/room/wall settings. The generated file preview cache-busts customer
-artwork and audio bundles after every import.
+| Way | Opens | Saves to | Guide |
+|---|---|---|---|
+| **FREYRAUM Editor app** (Windows/macOS, v1.39–v1.40) | the project folder | directly into the folder ("Im Projekt speichern"), then updates the gallery with its bundled importer | `docs/CUSTOMER_PICTURE_GUIDE.md` → "FREYRAUM Editor (App)"; build/release: `docs/DESKTOP_APP.md` |
+| **Online editor** (v1.38) | `placement-editor.html` on the gallery site (type "bearbeiten" in the gallery) | the save service (`worker/`) → a commit on `content/edits` → review → deploy | `docs/ONLINE_EDITOR_SETUP.md` (one-time owner setup) |
+| **Local file** | `OPEN_ARTWORK_EDITOR.html` (double-click) | a downloaded `museum-hub.json` to copy into `customer-artworks/` | `docs/CUSTOMER_PICTURE_GUIDE.md` |
 
-### FREYRAUM Editor app (v1.39)
-
-The same editor is available as a desktop app (Electron, `desktop/`). It opens
-the project folder, saves pictures, backgrounds and `museum-hub.json` directly
-into it ("Im Projekt speichern") and runs Update Gallery with its bundled Node.
-Customer steps: `docs/CUSTOMER_PICTURE_GUIDE.md` → "FREYRAUM Editor (App)";
-build, release, signing and security model: `docs/DESKTOP_APP.md`.
+Placement rules (wall ownership, complete-quad mounting zones, valid-only
+save/export, fixed camera/room/wall data) are the same in all three; see
+`ARCHITECTURE_MAP.md` → "Deterministic curator editor".
 
 ## Current project state
 
@@ -54,12 +48,9 @@ build, release, signing and security model: `docs/DESKTOP_APP.md`.
   wall and one safely inset on each side wall—with physical edge-cast contact
   shadows and no oversized backing cards. Larger exhibitions paginate into additional room pages,
   and narrow-portrait viewports split each room into left/right wall focus pages.
-- **Open visual acceptance:** repeated percentage changes did not establish the
-  requested side-wall composition. v1.17 stopped cross-wall fallback and added
-  deterministic mounting-zone validation; v1.18 provides the standalone editor
-  so the customer controls the final positions directly. Acceptance remains open
-  until the customer exports `museum-hub.json` and approves a screenshot from
-  the exact rebuilt preview.
+- **Open visual acceptance:** side-wall composition is approved by customer
+  screenshot of the deployed gallery (tracked in `plan.md`); geometry and
+  editor drag tests are green.
 - Quality presets now also drive the hub room pixel ratio, architectural
   detail resolution, skylight shadowing, and floor reflection strategy
   (`planar`, `ibl`, `off`). The hub uses smooth near-white PBR plaster and a
@@ -111,7 +102,7 @@ build, release, signing and security model: `docs/DESKTOP_APP.md`.
   both apply a shared capability-aware downscale
   (`src/utils/textureUploadCompatibility.ts`) before any decoded image reaches
   the GPU. Do not compensate missing artwork pixels with room lighting or
-  metadata; the implemented local-preview recovery is `plan.md § v0.93`.
+  metadata; the implemented local-preview recovery is `docs/archive/plan-history-2026-10-17.md` § v0.93.
 - CSS and WebGL share one authoritative concrete-grey wall token (`#C7CED4`,
   `--color-gallery-wall`) resolved before renderer construction, so gallery,
   hub, fallback surfaces, and the WebGL clear color can never drift apart.
@@ -134,12 +125,17 @@ npm run validate:museum-hub
 npm run dev
 ```
 
+All test commands, what they prove and which CI workflow runs them:
+[`docs/REGRESSION_TOOLING.md`](./docs/REGRESSION_TOOLING.md) → "Automated test commands".
+Desktop app development: [`docs/DESKTOP_APP.md`](./docs/DESKTOP_APP.md).
+
 ## Customer update workflow
 
 1. Add images to `customer-artworks/inbox/`.
 2. (Optional) Add sidecar text cards (`.txt`) with the same basename.
 3. (Optional) Add audio files to `customer-audio/inbox/`.
-4. Run `Update Gallery.command` / `Update Gallery.bat` (local preview).
+4. Run `Update Gallery.command` / `Update Gallery.bat` (local preview) — the
+   FREYRAUM Editor app does this for you.
 5. Open `customer-preview/app.html`.
 
 To publish to GitHub Pages: commit the inbox files and push to `main` — CI
@@ -170,6 +166,9 @@ Do not duplicate config tables in other docs.
 | Customer workflow | `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/CUSTOMER_TEXT_GUIDE.md` |
 | Image maintenance & size constraints | `docs/IMAGE_MAINTENANCE_GUIDE.md` |
 | GitHub Pages deployment | `docs/DEPLOYMENT.md` |
+| Online editor / save service setup | `docs/ONLINE_EDITOR_SETUP.md` |
+| Desktop app build, release, security | `docs/DESKTOP_APP.md` |
+| Lessons learned | `LESSONS_LEARNED.md` |
 | Contributor workflow & freshness rules | `CONTRIBUTING.md` |
 | Technical findings (active/reusable) | `FINDINGS.md` |
 | Active engineering work | `plan.md` |
@@ -185,6 +184,8 @@ Do not duplicate config tables in other docs.
 - Contributor workflow: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - Deployment / Pages: [`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)
 - Desktop app (build, release, signing, security): [`docs/DESKTOP_APP.md`](./docs/DESKTOP_APP.md)
+- Online editor setup (save service): [`docs/ONLINE_EDITOR_SETUP.md`](./docs/ONLINE_EDITOR_SETUP.md)
+- Lessons learned: [`LESSONS_LEARNED.md`](./LESSONS_LEARNED.md)
 - Image maintenance / high-resolution constraints: [`docs/IMAGE_MAINTENANCE_GUIDE.md`](./docs/IMAGE_MAINTENANCE_GUIDE.md)
 - Handoff/support: [`docs/HANDOFF.md`](./docs/HANDOFF.md)
 - Documentation policy: [`DOCUMENTATION_RULES.md`](./DOCUMENTATION_RULES.md)

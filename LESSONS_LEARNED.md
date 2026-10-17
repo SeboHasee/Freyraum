@@ -1,5 +1,53 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+
+## 2026-10-14…17 — Editor, saving and desktop lessons (v1.33–v1.40)
+
+### Lesson 111 — One placement truth or the drag feels "glitchy"
+
+The side-wall drag stopped early and jumped because the overlay, drag limits,
+warnings and loader used different projections (one even relocated the anchor
+into the hanging band), and blocked drags were pulled toward the zone centre.
+Every placement decision now goes through `evaluateDisplayedPlacement`,
+blocked drags slide along the limit, and a browser test drags every artwork to
+all four zone edges (`npm run test:editor-drag`).
+
+### Lesson 112 — Calibration edits must not resize physical artwork
+
+Editing a wall quad changed the projected artwork size until the projection was
+compensated by `calibratedWallScaleAt` (edited quad vs. `referenceQuad`). Keep
+the calibration quad separate from the edited quad.
+
+### Lesson 113 — Never stringify image data for change detection
+
+`file://` thumbnails are multi-MB `data:` URLs; building signatures or DOM
+attributes from them froze the editor. Use `thumbnailKey()`.
+
+### Lesson 114 — Keep previews alive while the editor stays open
+
+Revoking object URLs right after a successful save broke the uploaded pictures
+and the new background while waiting for approval. Retire them only on reload
+(`PendingUploads.markPublished`); `test:editor-publish` guards it.
+
+### Lesson 115 — No pull request means no CI
+
+`quality-and-doc-drift.yml` runs on pull requests and `main` only; a branch
+without a pull request was never checked. Agent-started runs additionally wait
+for the owner's **Approve and run**. Open the pull request early and say when
+an approval is needed.
+
+### Lesson 116 — Windows locks files and uses other paths
+
+Renaming over `museum-hub.json` can fail briefly (EPERM/EACCES/EBUSY) while a
+virus scanner or Explorer holds it: retry shortly, then roll back. Tests must
+build expected paths with `path.resolve/join`; hard-coded `/` paths fail on
+Windows. Test on a real Windows runner and on the packaged app, not only the
+source build.
+
+### Lesson 117 — The sandbox cannot ship binaries
+
+Installers are ~100 MB, Windows-only and cannot be attached from the agent
+sandbox. Build them in GitHub Actions and deliver the run artifact link.
 
 ## 2026-09-05 — Standalone editor reproducibility lessons
 
@@ -213,7 +261,6 @@ lighting or material settings. A hub title placeholder is a source failure
 signature because hub artwork planes are unlit; it cannot be repaired by
 interactive-gallery PBR tuning.
 
-
 ## 2026-05-23 — v0.58 implementation lessons
 
 ### Lesson 86 — Passthrough layers must explicitly restore pointer-events on interactive children
@@ -260,7 +307,6 @@ In Three.js r166 the tangent-to-view matrix is a local `mat3 tbn` variable (not 
 
 A plan section that says "replace the FBM with aperiodic multi-domain sampling" is not actionable. A plan section that includes the complete GLSL function body with parameter values, cites the source technique, and shows exactly which TypeScript lines to change is actionable. Future rule: v0.N plan sections must include concrete GLSL/TypeScript code, exact parameter values, and verified source citations.
 
-
 ## 2026-05-22 — v0.44 GLSL injection lesson
 
 ### Lesson 75 — DataTexture + RepeatWrapping cannot produce seamless brushed metal
@@ -276,8 +322,6 @@ Any DataTexture with `RepeatWrapping` will show a seam at every tile boundary. I
 ### Lesson 74 — Fast-path geometry shortcuts can create invisible meshes
 
 When a code path skips the standard geometry construction (e.g., using `BoxGeometry` instead of `ExtrudeGeometry` with a hole), the resulting mesh may occlude other scene objects entirely. Future rule: frame geometry must always be a ring with an inner cutout — never a solid rectangle — regardless of quality tier or bevel setting.
-
-
 
 ### Lesson 72 — Premium metal realism needs macro + micro variation
 
@@ -305,8 +349,6 @@ A 4×4 composer prewarm is useful for shader compilation, but it is not evidence
 
 Neutral tone mapping and sRGB textures are necessary but not sufficient. Lighting, material response, bloom, exposure, post-processing, and CSS/canvas opacity can still make paintings appear darker than the source. Future rule: dark-artwork complaints require end-to-end visual QA, not only renderer-setting changes.
 
-
-
 ## 2026-05-22 — v0.28 lessons
 
 ### Lesson 65 — NeutralToneMapping for artwork fidelity
@@ -321,9 +363,6 @@ When a loading overlay fades out with a CSS opacity transition, any canvas below
 
 With RAF running before reveal, the full gallery (all artworks, textures, shaders) renders continuously behind the loading screen. This makes the preload contract verifiable at runtime: if any artwork is not yet GPU-warmed, it shows as a missing frame behind the overlay rather than after user entry. **Future rule:** always ensure the scene is actively rendering during the loading phase — this proves the preload contract rather than trusting it on faith.
 
-
-
-
 ### Lesson 62 — EffectComposer silently bypasses native antialias
 
 `THREE.WebGLRenderer({ antialias: true })` applies MSAA only to direct canvas draws. Once `EffectComposer` is introduced, the pass chain renders to an internal `WebGLRenderTarget` that has no multisample support. The renderer's `antialias` flag becomes a no-op. **Future rule:** whenever `EffectComposer` is used, always add an explicit post-process AA pass (FXAA/SMAA) as the final pass in the chain; never rely on `antialias: true` alone.
@@ -336,8 +375,6 @@ With RAF running before reveal, the full gallery (all artworks, textures, shader
 
 After enabling a previously-disabled button, the browser has not yet resolved applicable `:hover` pseudo-class styles or promoted the element to a compositor layer. First hover triggers style recalculation + layer promotion. **Future rule:** force CSSOM resolution with `void element.offsetHeight; void getComputedStyle(element).propertyName;` and set `will-change` immediately after the button becomes interactive, then remove `will-change` after first click.
 
-
-
 ### Lesson 60 — Loaded is not the same as GPU-ready
 
 `TextureLoader`/`LoadingManager` success means the browser has fetched and decoded enough image data for a `THREE.Texture`; it does not prove that texture has been uploaded to GPU memory. Future performance plans must separately track CPU-loaded, material-bound, shader-compiled, and GPU-warmed states. **Future rule:** never describe a gallery as jank-free only because textures are preloaded; require proof that first navigation does not trigger texture load, procedural generation, shader compile, or GPU upload.
@@ -345,10 +382,6 @@ After enabling a previously-disabled button, the browser has not yet resolved ap
 ### Lesson 61 — Fixed warm limits must be documented as partial coverage
 
 `GPU_WARM_LIMIT = 15` and `PBR_PRELOAD_LIMIT = 15` are valid memory guardrails, but they also define the exact point where large galleries return to best-effort warming. **Future rule:** when a performance fix has a count or memory cap, docs must state what happens beyond the cap and include a follow-up plan for budgeted continuation.
-
-## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
-
-**Status: shipped in runtime code and documentation.**
 
 ## 2026-05-21 — Idle-prefetch-after-reveal does not prevent first-navigation jank
 
@@ -400,11 +433,6 @@ After enabling a previously-disabled button, the browser has not yet resolved ap
 - `renderer.compile(scene, camera)` compiles shader programs but does NOT trigger texture upload. `texture.needsUpdate = true` marks a texture for re-upload but upload still only occurs during the next render that uses the texture. There is no direct WebGL API to upload a texture outside of a draw call.
 - Future rule: **to guarantee a texture is in VRAM before user interaction, it must be bound to the active scene mesh and the scene must be rendered at least once.** This must happen under the loading overlay so users see no visual artifact from the intermediate bind.
 
-## 2026-05-21 — implementation shipped (2026-05-21)
-
-Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
-
-
 ## 2026-05-21 — Always verify plan descriptions against actual source before documenting patches
 
 - The v0.21 K-series pass found two critical factual errors in the existing plan: G-01 claimed prewarm was "never called" when it was called (just at the wrong time and as `void`); H-03 claimed `maxTextureSize` was "stored but never consulted" when it was never stored as a field at all.
@@ -431,8 +459,6 @@ Current status: shipped. The v0.21 plan is implemented in runtime code and docum
 - Default fragment shader precision is `mediump` on mobile GPUs. For a 16K base texture with 128× detail tiling, computed UVs can reach values where `mediump float` loses fractional bits, causing visible seaming. Three.js does not inject `highp` on behalf of `onBeforeCompile` patches.
 - Future rule: **any injected GLSL block that operates on UV coordinates with large multipliers must explicitly declare `precision highp float;`** under a `#ifdef GL_FRAGMENT_PRECISION_HIGH` guard. Never rely on the default fragment precision when UV values may exceed single-digit ranges.
 
-
-
 ## 2026-05-21 — `void` and post-sequence placement defeat optimizations
 
 - **Corrected from v0.21 audit:** `RendererManager.prewarm()` was called in the boot path — but as a fire-and-forget `void` call, approximately 250 lines after the loading overlay already hides. Two separate bugs: (1) wrong placement (post-overlay), and (2) non-awaited (`void`). Both must be fixed.
@@ -442,8 +468,6 @@ Current status: shipped. The v0.21 plan is implemented in runtime code and docum
 
 - The v0.21 audit found the loading screen was a plain white spinner with no FREYRAUM branding, no progress indication, and no user engagement. Users seeing a white screen with a small spinner have no context that the experience will be immersive.
 - Future rule: loading screens must show brand identity (wordmark/logo), real progress feedback (not just a spinner), and at minimum a hint of the visual theme before the gallery reveals.
-
-
 
 ## 2026-05-21 — Close plans in code and docs together
 
@@ -473,10 +497,6 @@ Current status: shipped. The v0.21 plan is implemented in runtime code and docum
 ## v0.20 implementation note — audio reliability shipped (2026-05-20)
 
 Lesson carried forward from this pass: once customer-facing workflows ship, all markdown banners must be flipped from planned to implemented in the same PR to avoid stale guidance.
-
-## v0.18 — Customer sidecar text shipped (2026-05-20)
-
-Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
 
 Use this file for durable lessons that should change future agent behavior.
 

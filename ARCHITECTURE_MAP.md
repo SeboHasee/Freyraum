@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -59,9 +59,8 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 The source-of-truth geometry is the resolved v5 config and its page-scoped U/V/N
 mounting output. A screenshot from a generated or deployed artifact is not
 assumed to match that state unless the matching `customer-artworks.js`,
-`museum-hub.json`, route, and build are preserved. The 2026-09-04 customer
-screenshot currently disagrees with the checked-in four-work page contract, so
-visual acceptance remains open even though deterministic geometry checks pass.
+`museum-hub.json`, route, and build are preserved. Customer screenshot approval
+of the side walls remains an open acceptance item in `plan.md`.
 
 ## Deterministic curator editor
 
@@ -109,6 +108,36 @@ fields survive the round trip. `scripts/import-artworks.mjs` and
     keyboard/screen-reader-friendly 2D artwork collection; unrelated startup
     failures are not described as WebGL absence.
 
+## Editor modules, saving and desktop app (v1.35–v1.40)
+
+- `src/hub/editor/`: editor UI split out of `MainMuseumHub` — tabs
+  (`editorTabs`), texts/labels (`editorText`), toast, room bar (`roomBar`),
+  artwork library and thumbnails (`artworkLibrary`, `thumbnails` →
+  `thumbnailKey()`), placement drag/keyboard (`placementController`), and the
+  save tab with its three targets (`saveTab`, `onlineEditor`: `online` |
+  `desktop` | `download`). Pending uploads and drafts (IndexedDB) live in
+  `pendingUploads`; the save-service HTTP client in `onlineClient`.
+- `src/config/museumHub.ts` → `evaluateDisplayedPlacement` /
+  `projectDisplayedPlacement`: the single placement-validity authority for
+  editor, drags, loader warnings and export. `projectiveGeometry.ts` →
+  `calibratedWallScaleAt` keeps artwork size independent of wall edits.
+- `src/online/`: `publishRules.ts` (allowed paths, names, image signatures,
+  sizes, locked fields — shared by editor, `worker/` and the desktop store),
+  `desktopBridge.ts` (typed access to the desktop preload API), and
+  `hiddenEditorEntry.ts` ("bearbeiten" / long-press into the editor).
+- `worker/` (Cloudflare Worker, built by tests with esbuild, deployed with
+  `wrangler`): login (HMAC session), publish to `content/edits` via a GitHub
+  App, status/history/restore. Setup: `docs/ONLINE_EDITOR_SETUP.md`.
+- `scripts/local-project/projectStore.ts`: all desktop writes — validation via
+  `publishRules`, stale-version refusal, temporary files + rename (with
+  Windows lock retry) and rollback, history of 10 versions, restore.
+- `desktop/` (Electron, own `package.json`): `main.ts` (window, menu, IPC,
+  project folder, runs the bundled importer with `ELECTRON_RUN_AS_NODE`),
+  `appProtocol.ts` (`freyraum://app/` allowlist mapping to the bundled editor
+  and project files), `preload.ts` (narrow bridge), `settings.ts`. Packaging
+  and release: `desktop/package.json` `build` + `.github/workflows/desktop-release.yml`;
+  details in `docs/DESKTOP_APP.md`.
+
 ## Startup sequence ownership
 
 1. `main.ts` resolves startup mode, the museum-hub configuration
@@ -135,7 +164,7 @@ the offline `file://` preview and the declared hub artwork resolves to a local
 `file-url`, the hub may prefer the importer-provided embedded `webglImage`
 immediately because that is the WebGL-stable path proven by the v0.93 fix. Keep
 this recovery separate from interactive-gallery PBR/lighting fidelity work. See
-`plan.md § v0.93` and `FINDINGS.md` for the incident evidence and support
+`docs/archive/plan-history-2026-10-17.md` § v0.93 and `FINDINGS.md` for the incident evidence and support
 workflow.
 
 ## Render-loop behavior

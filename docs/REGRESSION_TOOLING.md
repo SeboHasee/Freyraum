@@ -1,5 +1,5 @@
-# Regression Validation Tooling (v1.18)
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+# Regression Validation Tooling
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -79,7 +79,7 @@ incident.
 returns a non-throwing list of violations plus measured values:
 
 - artwork geometry ownership (single valid buffer with a `position` attribute) —
-  guards the OPT-2 / OPT-9 geometry-ownership coupling (`plan.md § Phase 13`)
+  guards the OPT-2 / OPT-9 geometry-ownership coupling (`docs/archive/plan-history-2026-10-17.md` § Phase 13)
 - artwork triangle-count ceiling (LOD gate, Phase 14.4)
 - material binding (live, non-empty material)
 - shadow-casting light count matches the active preset (guards OPT-5)
@@ -126,35 +126,7 @@ overflow pagination, contiguous migrated page indices, pairwise wall intervals,
 and 0.35 m doorway / 4.00 m front-corner wall-space clearances. Primary-camera
 projection additionally hard-fails if a side artwork comes within 12 px of the
 visible doorway reveal or front-wall corner seam. Threshold breaches hard-fail
-`npm run validate:museum-hub` and CI. `npm run test:editor-drag` (v1.34, Playwright
-installed on demand with `npm i --no-save playwright`, or `FREYRAUM_CHROME_PATH`
-pointing at a local Chrome) drags every artwork of the active room in the
-generated `customer-preview/placement-editor.html` to all four green-zone edges
-and fails if it stops short of a limit, moves the wrong way, or produces a
-zone/doorway/overlap warning; run it after `npm run import:artworks && npm run build`. `npm run test:editor-rooms` (v1.35, same
-Playwright setup) adds Raum 2, assigns two artworks, drags in Raum 2, switches
-rooms, checks one-step undo/redo of a room, deletes Raum 3, checks that saving
-stays enabled with layout hints, opens a validation message in another room,
-and reloads the downloaded file into the same rooms and assignments.
-`npm run test:editor-publish` (v1.38, same Playwright setup, uses the built
-`dist/` over http with a fake save service) checks the read-only preview before
-login, wrong-password refusal, login, background upload (lowercase safe name),
-artwork upload with title/artist and immediate placement, and that the single
-publish package passes the save-service validation. `npm run test:save-service`
-runs the Cloudflare Worker against a fake GitHub (no browser needed);
-`npm run test:validate-deploy` covers the deploy content check; and
-`npm run test:deploy-smoke -- <url>` opens a deployed gallery and checks rooms,
-artworks, background and 404s (run by the `smoke` job after every Pages deploy). `npm run test:local-project` (v1.39, no browser) checks the desktop
-app's project store on a temporary project copy: wrong paths, fake images,
-too-large files, overwrites, symbolic links and stale versions are refused
-without writing anything; valid saves are all-or-nothing, keep a history copy
-(last 10) and can be restored; the importer runs with `--root` and assigns the
-editor's upload IDs. `npm run test:desktop-app` (v1.39; root build,
-`cd desktop && npm ci && npm run build`, `npm i --no-save playwright`, and
-`xvfb-run -a` on Linux) checks the `freyraum://app/` address mapping, then starts
-the Electron app on a temporary project and checks the lockdown (no Node access,
-no other files or sites, CSP blocks inline scripts, no new windows) and a full
-background + artwork upload, placement and "Im Projekt speichern" round trip.
+`npm run validate:museum-hub` and CI. See **Automated test commands** below for the editor, save and desktop tests.
 `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
 and the harness additionally checks that the hub still renders through the
@@ -188,13 +160,42 @@ vanishing point with the calibrated wall's U-edge vanishing point. Side-wall
 residual must be no more than `0.01 px`; this prevents visual angle tuning,
 billboarding, or a twisted quadrilateral from passing geometry validation.
 
-### Open v1.12 artifact mismatch
+### v1.12 artifact mismatch (resolved evidence, acceptance open)
 
-The 2026-09-04 customer screenshot shows five visible works while its counter
-reads `Raum 1 / 2`. This contradicts the tested four-work contract. Geometry
-validation therefore remains green evidence for the checked-in source, but the
-visual incident is open until the exact screenshot-producing preview/deployment,
-generated bundle, config, and page-group visibility are captured together.
+The 2026-09-04 screenshot showed five works in `Raum 1 / 2`; a later customer
+screenshot showed four, so the mismatch is no longer reproduced. Side-wall
+visual acceptance stays open in `plan.md` until a screenshot of the current
+deployed gallery is approved.
+
+## Automated test commands
+
+Browser tests need `npm run import:artworks && npm run build` and Playwright
+(`npm i --no-save playwright`, or `FREYRAUM_CHROME_PATH` pointing at a local
+Chrome). Desktop tests also need `cd desktop && npm ci && npm run build`; on
+Linux run them under `xvfb-run -a`.
+
+| Command | Browser | What it proves | CI |
+|---|---|---|---|
+| `npm run lint`, `npm run build:typecheck`, `npm run build` | – | lint (src, worker, desktop, local store), strict types, all bundles | quality (build also deploy) |
+| `npm run docs:check-config-authority` | – | config tables only in `docs/QUERY_PARAMETERS.md` | quality |
+| `npm run validate:museum-hub` | – | hub geometry, rooms, placement truth, calibration-scale, round trips | quality |
+| `npm run validate:deploy` | – | generated content is complete before a Pages deploy | deploy |
+| `npm run test:frame-budget`, `npm run test:webgl-resilience` | – | Type C frame budget; WebGL fallback | quality |
+| `npm run test:local-project` | – | desktop project store: refusals, all-or-nothing writes, history/restore, rename retry, importer `--root` | quality, desktop |
+| `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
+| `npm run test:validate-deploy` | – | deploy content check | – |
+| `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |
+| `npm run test:editor-rooms` | yes | add/fill/switch/delete rooms, undo/redo, download + reload | – |
+| `npm run test:editor-publish` | yes | login, uploads, placement, publish package, previews still load while waiting for approval | – |
+| `npm run test:desktop-app` | Electron | `freyraum://app/` mapping (incl. Windows paths), lockdown, upload + "Im Projekt speichern" round trip | desktop (Linux + Windows) |
+| `npm run smoke:desktop-package -- --exe <app>` | Electron | the **packaged** app: bundled importer, editor, save label, layout unchanged | desktop (Windows unpacked + installed) |
+| `npm run test:deploy-smoke -- <url>` | yes | a deployed gallery: rooms, artworks, background, no 404s | deploy (`smoke` job) |
+| `npm run validate:visual` / `validate:museum-hub:visual` | yes | Type A screenshots against a local baseline | – |
+
+Workflows: `quality-and-doc-drift.yml` (every pull request and `main`),
+`deploy-pages.yml` (`main` → GitHub Pages, then smoke), `desktop-release.yml`
+(app changes: Linux + Windows tests, Windows installer build/smoke/artifact;
+see `docs/DESKTOP_APP.md`).
 
 ## Acceptance thresholds (Phase 14)
 

@@ -1,4 +1,5 @@
-# FREYRAUM Editor — desktop app (v1.39, Windows builds v1.40)
+# FREYRAUM Editor — desktop app (v1.40)
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 The desktop app is the placement editor as a normal Windows/macOS program. It
 opens the customer's FREYRAUM project folder (the Git checkout), saves new
@@ -87,12 +88,12 @@ from pull request, branch or plain manual runs.
 
 To publish:
 
-1. Raise `"version"` in `desktop/package.json` (for example `1.39.1`).
-2. Either push a tag `desktop-v1.39.1` (must match the version or the
+1. Raise `"version"` in `desktop/package.json` (for example `1.40.1`).
+2. Either push a tag `desktop-v1.40.1` (must match the version or the
    workflow stops), or after merging click **Run workflow** on `main` with
    "publish" ticked (creates a pre-release; fails if that tag already exists).
 
-Runs started by the Copilot agent may wait for **Approve and run** by the
+Runs started by the Copilot agent or other bots wait for **Approve and run** by the
 repository owner.
 
 ### Signing (optional)

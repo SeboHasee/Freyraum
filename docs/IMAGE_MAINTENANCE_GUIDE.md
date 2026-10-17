@@ -1,5 +1,5 @@
 # FREYRAUM — Image Maintenance Guide
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync; image policy unchanged).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 This guide documents the **current** image workflow, the verified GitHub limits
 that affect it, and the planned direction for reliable high-resolution support.
@@ -52,7 +52,7 @@ surface, preserve the generated customer bundle and collect runtime diagnostics
 before replacing the image. The active recovery distinguishes a
 missing/decode/path source failure from a blank local `file://` hub plane and a
 device texture-size limit, and requires a source-to-pixel result:
-`plan.md § v0.93`.
+`docs/archive/plan-history-2026-10-17.md` § v0.93.
 
 ## Reliable target architecture (planned)
 

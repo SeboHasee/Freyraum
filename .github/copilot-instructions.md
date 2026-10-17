@@ -1,53 +1,20 @@
 # FREYRAUM Copilot instructions
-> v0.56 doc-sync: reviewed during UX/readability/accessibility/performance audit on 2026-05-22.
-> Last full markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
-## v1.32 current context
+## Current context (v1.40)
 
-The standalone placement workflow is `OPEN_ARTWORK_EDITOR.html` →
-`customer-preview/placement-editor.html`. Preserve strict wall ownership,
-complete-quad mounting-zone validation, canonical v5 placement, and valid-only
-export. Build-derived wall projections are read-only. Import must reject any
-fixed camera/room/wall/fallback/pagination/inventory/assignment/slot-policy
-difference; export must preserve rendered and bounds-only walls plus all fixed
-fields. Keep customer data cache-busted in both generated `file://` entries.
-Fixed artwork geometry must remain independent of wall dimensions while editor
-projection follows the current edited wall calibration.
-
-## v1.12 current context
-
-The v5 museum hub intends four works per room (2 front + 1 left + 1 right), but
-the latest customer screenshot shows five visible works in `Raum 1 / 2`.
-Visual acceptance is open. Preserve the exact screenshot-producing artifact,
-generated bundle, config, and route before changing placement again; never infer
-account usage from unavailable image/browser tooling.
-
-## v0.29 current context
-
-Latest v0.29 status: metallic frame runtime implementation is shipped (M-01..M-08 complete). Future coding agents should consult `plan.md § v0.29` and `FINDINGS.md § v0.29` for as-built details and validation boundaries.
-
-
-
-## v0.23 — Performance/Preloading Planning Audit
-
-This section is retained as historical planning context from the 2026-05-21 all-docs sync (runtime v0.22 at that time). Current branch runtime baseline is documented in `README.md` and `CHANGELOG.md` (v0.73 sync; active frame baseline v0.69).
-
-## v0.22 — shipped (2026-05-21) — Improved Preloading + Press-to-Start
-
-Current status: shipped. Runtime now preloads albedo plus PBR texture sets for the first 15 artworks under the loading overlay, warms each cached artwork texture set on the GPU before reveal, keeps the branded loader visible for at least 500 ms, and waits for the accessible "Galerie betreten" button before entering the gallery. Validation: `npm run lint` and `npm run build` passed after implementation; `npm audit --audit-level=moderate` still reports the known Vite/esbuild development-server advisory that requires a semver-major upgrade.
-
-## v0.21 — implementation shipped (2026-05-21)
-
-Current status: shipped. The v0.21 plan is implemented in runtime code and documentation: branded progress loading overlay, Three.js LoadingManager progress, pre-reveal GPU warm render + awaited shader prewarm, audio `preload='auto'`, adjacent/idle PBR prefetch, lighting resume clamp, WebGL restore status, max-texture diagnostics, shader precision guard, 16K importer guidance, global pointer tracking, timeline arrows/counter/edge fades/responsive sizing/virtualized large-list rendering, and cleanup for added global listeners. Future-only boundaries remain LOD/tiled streaming for device-limited 16K detail and grouped/page timeline navigation for very large exhibitions.
-
-
-## v0.20.8 — Complete v0.20 implementation shipped (2026-05-21)
-
-Current status: shipped. The v0.20.7 gap-closure plan is now implemented in code and this file was refreshed during the all-markdown sync. Remaining v0.20 audio/control quality gaps are closed: fade targets clamp to the 0.30 effective-gain ceiling, diagnostics include display percent, preference patching updates non-slider controls during volume drags, sliders expose German percent value text, zero-volume recovery logs stored/recovered values, first-interaction recovery also covers pre-play audio, unmute resumes within `BackgroundAudioManager`, slider fill CSS stores percentages, and the ended-loop fallback fade is shortened to 50 ms. F-09 was confirmed correct and required no code change.
-
-## v0.18 — Customer sidecar text shipped (2026-05-20)
-
-Current status: shipped. The importer (`scripts/import-artworks.mjs`) reads same-basename `.txt` sidecars (`.md` accepted as a backup) and merges customer-facing metadata into the generated manifest. Asset fields (`id`, `image`, `webglImage`, `dimensions`) remain importer-owned. Canonical plan: `plan.md § v0.18`. Research log: `FINDINGS.md § 2026-05-20`. Customer guide: `docs/CUSTOMER_TEXT_GUIDE.md`. Template: `customer-artworks/ARTWORK_TEXT_TEMPLATE.txt`.
+- Placement editor: `OPEN_ARTWORK_EDITOR.html` → `customer-preview/placement-editor.html`
+  (deployed: `placement-editor.html`, typing "bearbeiten" in the gallery); UI modules in `src/hub/editor/`. Placement validity
+  everywhere (editor, drag, loader, export) uses `evaluateDisplayedPlacement`
+  in `src/config/museumHub.ts`; canonical placements are flagged, never
+  relocated. Editor artwork size is compensated by `calibratedWallScaleAt`, so
+  wall edits never stretch artwork. Rooms come from `museum-hub.json` `rooms`.
+- Saving: online editor → save service in `worker/` with rules shared in
+  `src/online/publishRules.ts`; FREYRAUM Editor desktop app in `desktop/`
+  writes only through `scripts/local-project/projectStore.ts` and serves only
+  allowlisted files at `freyraum://app/`; `file://` download fallback.
+- Tests and CI: `docs/REGRESSION_TOOLING.md`. Active work: `plan.md`.
+  History: `CHANGELOG.md` and `docs/archive/`.
 
 Use these repository-specific instructions before changing code or docs.
 
@@ -64,7 +31,10 @@ Use these repository-specific instructions before changing code or docs.
 - `src/gallery/` owns artwork state, texture loading, mesh construction, navigation, zoom/pan bounds, and artwork layout.
 - `src/materials/` owns painting surface fidelity and procedural texture generation.
 - `src/ui/`, `src/timeline/`, and `src/interaction/` own DOM controls and user input.
-- `scripts/` owns customer artwork import and local preview generation.
+- `src/hub/` owns the museum hub, projection math, and the placement editor (`src/hub/editor/`).
+- `src/online/` owns save rules shared by the editor, `worker/`, and the desktop store.
+- `worker/` is the Cloudflare save service; `desktop/` is the Electron FREYRAUM Editor (own `package.json`).
+- `scripts/` owns customer artwork import, local preview generation, the local project store (`scripts/local-project/`), and the test scripts.
 - `customer-preview/` is generated preview output; update it only when source changes require rebuilt customer assets.
 
 ## Development workflow
@@ -74,9 +44,9 @@ Use these repository-specific instructions before changing code or docs.
 3. Implement the smallest complete change.
 4. Validate with existing scripts when applicable:
    - `npm install` on a fresh clone before lint/build.
-   - `npm run lint`
-   - `npm run build`
-   - focused script checks such as `node -c scripts/import-artworks.mjs` when touching importer code.
+   - `npm run lint`, `npm run build:typecheck`, `npm run build`
+   - the focused tests for the touched area, listed in `docs/REGRESSION_TOOLING.md`
+     (geometry, editor drag/rooms/publish, save service, local project, desktop app).
 5. Self-review for correctness, edge cases, readability, performance, accessibility, and security.
 6. Update docs when meaningful work changes behavior, architecture, workflow, or known lessons.
 
