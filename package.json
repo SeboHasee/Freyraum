@@ -26,6 +26,7 @@
     "test:validate-deploy": "node scripts/test-validate-deploy.mjs",
     "test:local-project": "node scripts/test-local-project.mjs",
     "test:desktop-app": "node scripts/test-desktop-app.mjs",
+    "smoke:desktop-package": "node scripts/smoke-desktop-package.mjs",
     "test:deploy-smoke": "node scripts/test-deploy-smoke.mjs",
     "validate:deploy": "node scripts/validate-deploy.mjs",
     "validate:museum-hub:visual": "node scripts/visual-regression.mjs compare",

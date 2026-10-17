@@ -285,6 +285,28 @@ test('only the last 10 history copies are kept', () => {
   saved = { ...saved, version };
 });
 
+test('a briefly locked file (Windows) is retried; other errors are not', () => {
+  const lock = (code) => Object.assign(new Error(code), { code });
+  let calls = 0;
+  store.renameWithRetry('a', 'b', () => {
+    calls += 1;
+    if (calls < 3) throw lock('EBUSY');
+  });
+  assert.equal(calls, 3);
+  calls = 0;
+  assert.throws(() => store.renameWithRetry('a', 'b', () => {
+    calls += 1;
+    throw lock('ENOENT');
+  }), /ENOENT/);
+  assert.equal(calls, 1);
+  calls = 0;
+  assert.throws(() => store.renameWithRetry('a', 'b', () => {
+    calls += 1;
+    throw lock('EPERM');
+  }), /EPERM/);
+  assert.equal(calls, 6);
+});
+
 const importResult = await store.runProjectImport(PROJECT, { importerPath: join(ROOT, 'scripts', 'import-artworks.mjs') });
 test('the importer runs with --root and keeps the upload ID', () => {
   assert.equal(importResult.ok, true, importResult.output);

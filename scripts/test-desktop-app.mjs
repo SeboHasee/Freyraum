@@ -17,7 +17,8 @@
  *
  * Needs: npm run import:artworks && npm run build (root),
  *        cd desktop && npm ci && npm run build,
- *        npm i --no-save playwright (root); on Linux CI run under xvfb-run.
+ *        npm i --no-save playwright (root); on Linux run under xvfb-run -a
+ *        (Windows and macOS need no virtual display).
  */
 import assert from 'node:assert/strict';
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -90,13 +91,27 @@ const protocolModule = await import(
 );
 {
   const { resolveAppRequest, isAppPageUrl, isExternalWebUrl, EDITOR_URL } = protocolModule;
-  const folders = { editorDir: '/app/editor', projectRoot: '/work/FREYRAUM' };
+  // Expected paths are built like the app builds them, so the checks hold on
+  // Windows (drive letters, backslashes) and with spaces in folder names.
+  const folders = { editorDir: resolve('/app/editor'), projectRoot: resolve('/work/FREYRAUM Projekt') };
   const at = (path) => resolveAppRequest(`freyraum://app${path}`, folders);
-  assert.equal(at('/customer-preview/placement-editor.html')?.file, '/app/editor/placement-editor.html');
+  const inProject = (...parts) => join(folders.projectRoot, ...parts);
+  assert.equal(at('/customer-preview/placement-editor.html')?.file, join(folders.editorDir, 'placement-editor.html'));
   assert.equal(at('/customer-preview/placement-editor.html')?.source, 'app');
-  assert.equal(at('/customer-preview/customer-artworks.js')?.file, '/work/FREYRAUM/customer-preview/customer-artworks.js');
-  assert.equal(at('/customer-preview/images/a.webp')?.file, '/work/FREYRAUM/customer-preview/images/a.webp');
-  assert.equal(at('/customer-artworks/Backgrounds/Raum%201.png')?.file, '/work/FREYRAUM/customer-artworks/Backgrounds/Raum 1.png');
+  assert.equal(at('/customer-preview/customer-artworks.js')?.file, inProject('customer-preview', 'customer-artworks.js'));
+  assert.equal(at('/customer-preview/images/a.webp')?.file, inProject('customer-preview', 'images', 'a.webp'));
+  assert.equal(
+    at('/customer-artworks/Backgrounds/Raum%201.png')?.file,
+    inProject('customer-artworks', 'Backgrounds', 'Raum 1.png')
+  );
+  if (process.platform === 'win32') {
+    const drive = { editorDir: 'C:\\Program Files\\FREYRAUM Editor\\editor', projectRoot: 'C:\\Users\\Kunde\\FREYRAUM Projekt' };
+    assert.equal(
+      resolveAppRequest('freyraum://app/customer-preview/images/a.webp', drive)?.file,
+      'C:\\Users\\Kunde\\FREYRAUM Projekt\\customer-preview\\images\\a.webp'
+    );
+    assert.equal(resolveAppRequest('freyraum://app/customer-preview/images/C:%5Cwindows%5Cwin.ini', drive), null);
+  }
   for (const refused of [
     '/customer-artworks/museum-hub.json',
     '/package.json',
@@ -108,6 +123,8 @@ const protocolModule = await import(
     '/customer-preview/images/sub/a.webp',
     '/customer-preview/editor-online.json',
     '/customer-preview/',
+    '/customer-preview/images/C:%5Cwindows%5Cwin.ini',
+    '/customer-preview/images/a.webp%00.js',
   ]) {
     assert.equal(at(refused), null, `refuses ${refused}`);
   }

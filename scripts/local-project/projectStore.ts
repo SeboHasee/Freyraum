@@ -233,6 +233,28 @@ interface StagedWrite {
   replace: boolean;
 }
 
+/** Error codes Windows reports while a virus scanner, indexer or Explorer briefly holds a file. */
+const TRANSIENT_RENAME_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+const RENAME_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
+
+/**
+ * `renameSync` with short retries for transient Windows file locks
+ * (about 1.5 s in total). Other errors, and the last failure, are thrown.
+ */
+export function renameWithRetry(from: string, to: string, rename: (from: string, to: string) => void = renameSync): void {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      rename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code ?? '';
+      const delay = RENAME_RETRY_DELAYS_MS[attempt];
+      if (!TRANSIENT_RENAME_CODES.has(code) || delay === undefined) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delay);
+    }
+  }
+}
+
 function removeQuietly(path: string): void {
   try {
     unlinkSync(path);
@@ -309,7 +331,7 @@ export function saveToProject(root: string, request: LocalSaveRequest, now: Date
       if (!entry.replace && existsSync(entry.target)) {
         throw new ProjectStoreError(`Datei existiert bereits: ${entry.projectPath}`, 'conflict');
       }
-      renameSync(entry.temp, entry.target);
+      renameWithRetry(entry.temp, entry.target);
       committed.push(entry.target);
     }
   } catch (error) {

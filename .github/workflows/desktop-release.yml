@@ -1,11 +1,17 @@
 name: Desktop app (FREYRAUM Editor)
 
-# v1.39 — builds the FREYRAUM Editor desktop app. Separate from the Pages
-# deploy: deploy-pages.yml never downloads Electron.
-#   - pull requests touching the app: build + Electron test (Linux)
+# v1.40 — builds and tests the FREYRAUM Editor desktop app. Separate from the
+# Pages deploy: deploy-pages.yml never downloads Electron.
+#   - pull requests and pushes to copilot/** branches touching the app:
+#     Electron test on Linux AND Windows, then the Windows installer +
+#     portable .exe are built, smoke-tested (packaged app + silent
+#     install/uninstall) and uploaded as the run artifact
+#     "FREYRAUM-Editor-Windows". Nothing is published.
+#   - "Run workflow" (workflow_dispatch): same, plus macOS when "macos" is
+#     ticked. "publish" (main only) creates a pre-release
+#     desktop-v<desktop/package.json version>.
 #   - tag `desktop-vX.Y.Z` (must match desktop/package.json "version"):
-#     test, then Windows (installer + portable) and macOS (dmg, Intel + Apple
-#     Silicon) builds, uploaded to a GitHub Release.
+#     Windows + macOS builds, uploaded to a GitHub Release.
 # Signing is optional (see docs/DESKTOP_APP.md); without the secrets the
 # builds are unsigned and the customer confirms a one-time warning.
 
@@ -13,16 +19,37 @@ on:
   push:
     tags:
       - 'desktop-v*'
+    branches:
+      - 'copilot/**'
+    paths:
+      - 'desktop/**'
+      - 'scripts/local-project/**'
+      - 'scripts/import-artworks.mjs'
+      - 'scripts/test-desktop-app.mjs'
+      - 'scripts/smoke-desktop-package.mjs'
+      - 'src/online/**'
+      - 'src/hub/editor/onlineEditor.ts'
+      - '.github/workflows/desktop-release.yml'
   pull_request:
     paths:
       - 'desktop/**'
       - 'scripts/local-project/**'
       - 'scripts/import-artworks.mjs'
       - 'scripts/test-desktop-app.mjs'
+      - 'scripts/smoke-desktop-package.mjs'
       - 'src/online/**'
       - 'src/hub/editor/onlineEditor.ts'
       - '.github/workflows/desktop-release.yml'
   workflow_dispatch:
+    inputs:
+      macos:
+        description: 'Also build the macOS app (slower)'
+        type: boolean
+        default: false
+      publish:
+        description: 'Publish a pre-release desktop-v<version> (main branch only)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,7 +60,11 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,21 +87,21 @@ jobs:
           npm run typecheck
           npm run build
       - name: Electron test
+        shell: bash
         run: |
           npm i --no-save playwright
-          xvfb-run -a npm run test:desktop-app
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a npm run test:desktop-app
+          else
+            npm run test:desktop-app
+          fi
 
   build:
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
     needs: test
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            target: dist:win
-          - os: macos-latest
-            target: dist:mac
+        os: ${{ fromJSON((startsWith(github.ref, 'refs/tags/desktop-v') || inputs.macos || inputs.publish) && '["windows-latest","macos-latest"]' || '["windows-latest"]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +113,7 @@ jobs:
             package-lock.json
             desktop/package-lock.json
       - name: Check tag matches desktop/package.json version
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
         shell: bash
         run: |
           VERSION=$(node -p "require('./desktop/package.json').version")
@@ -122,22 +154,58 @@ jobs:
           fi
       - name: Build installers
         working-directory: desktop
-        run: npm run ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then npm run dist:win; else npm run dist:mac; fi
+      - name: Install Playwright for the smoke checks
+        if: runner.os == 'Windows'
+        run: npm i --no-save playwright
+      - name: Smoke-test the packaged app (win-unpacked)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: npm run smoke:desktop-package -- --exe "desktop/release/win-unpacked/FREYRAUM Editor.exe"
+      # Installs the real installer silently, starts the installed app, then
+      # uninstalls and checks that a project folder next to it survives.
+      - name: Smoke-test the installer (silent install + uninstall)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem desktop/release -Filter 'FREYRAUM-Editor-Setup-*.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'Installer not found' }
+          $dir = Join-Path $env:RUNNER_TEMP 'FREYRAUM Editor Install'
+          $project = Join-Path $env:RUNNER_TEMP 'FREYRAUM Projekt Keep'
+          New-Item -ItemType Directory -Force -Path (Join-Path $project 'customer-artworks') | Out-Null
+          Set-Content -Path (Join-Path $project 'customer-artworks/museum-hub.json') -Value '{}'
+          Start-Process -FilePath $setup.FullName -ArgumentList '/S', "/D=$dir" -Wait
+          $exe = Join-Path $dir 'FREYRAUM Editor.exe'
+          if (-not (Test-Path $exe)) { throw "Installed app not found at $exe" }
+          npm run smoke:desktop-package -- --exe "$exe"
+          if ($LASTEXITCODE -ne 0) { throw 'Smoke check of the installed app failed' }
+          $uninstaller = Join-Path $dir 'Uninstall FREYRAUM Editor.exe'
+          if (-not (Test-Path $uninstaller)) { throw 'Uninstaller not found' }
+          Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait
+          for ($i = 0; $i -lt 30 -and (Test-Path $exe); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path $exe) { throw 'Uninstall left the app behind' }
+          if (-not (Test-Path (Join-Path $project 'customer-artworks/museum-hub.json'))) { throw 'Uninstall touched the project folder' }
+          Write-Host 'Installer: silent install, installed-app smoke check and uninstall passed; project folder untouched.'
       - uses: actions/upload-artifact@v4
         with:
-          name: freyraum-editor-${{ matrix.os }}
+          name: FREYRAUM-Editor-${{ runner.os }}
           path: |
             desktop/release/*.exe
             desktop/release/*.dmg
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    if: >-
+      startsWith(github.ref, 'refs/tags/desktop-v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: release
@@ -147,7 +215,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la release
-          gh release create "$GITHUB_REF_NAME" release/* \
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+            EXTRA=""
+          else
+            TAG="desktop-v$(node -p "require('./desktop/package.json').version")"
+            EXTRA="--prerelease --target $GITHUB_SHA"
+          fi
+          # shellcheck disable=SC2086
+          gh release create "$TAG" release/* $EXTRA \
             --repo "$GITHUB_REPOSITORY" \
-            --title "FREYRAUM Editor ${GITHUB_REF_NAME#desktop-v}" \
-            --notes "FREYRAUM Editor ${GITHUB_REF_NAME#desktop-v}. Windows: FREYRAUM-Editor-Setup-*.exe (Installation) oder *-portable.exe (ohne Installation). macOS: *-arm64.dmg (Apple-Chip) oder *-x64.dmg (Intel). Anleitung: docs/CUSTOMER_PICTURE_GUIDE.md → FREYRAUM Editor (App)."
+            --title "FREYRAUM Editor ${TAG#desktop-v}" \
+            --notes "FREYRAUM Editor ${TAG#desktop-v}. Windows: FREYRAUM-Editor-Setup-*.exe (Installation) oder *-portable.exe (ohne Installation). macOS: *-arm64.dmg (Apple-Chip) oder *-x64.dmg (Intel). Anleitung: docs/CUSTOMER_PICTURE_GUIDE.md → FREYRAUM Editor (App)."
