@@ -412,11 +412,17 @@ export class OnlineEditor {
     if (pending) {
       options.push({ src: pending.src, width: pending.width, height: pending.height, url: pending.objectUrl, pending: true });
     }
+    // A background saved this session stays selectable until the reload.
+    const saved = this.pending.publishedBackground(this.host.backgroundSrc());
+    if (saved && !options.some((option) => option.src === saved.src)) {
+      options.push({ src: saved.src, width: saved.width, height: saved.height, url: saved.objectUrl, pending: false });
+    }
     return options;
   }
 
   pendingBackgroundUrl(src: string): string | null {
-    return this.pending.background?.src === src ? this.pending.background.objectUrl : null;
+    if (this.pending.background?.src === src) return this.pending.background.objectUrl;
+    return this.pending.publishedBackground(src)?.objectUrl ?? null;
   }
 
   /** Background from the computer: lowercase safe name, kept as pending upload. */
@@ -717,7 +723,7 @@ export class OnlineEditor {
       this.showErrors(result.errors);
       return;
     }
-    this.pending.clear();
+    this.pending.markPublished();
     await clearDraft();
     this.projectVersion = result.value.version;
     this.initialConfig = this.host.configJson();
@@ -754,7 +760,7 @@ export class OnlineEditor {
   /** Waits for approval (pull-request mode) and the deploy, then reloads. */
   private async follow(result: PublishResult): Promise<void> {
     this.followToken += 1;
-    this.pending.clear();
+    this.pending.markPublished();
     await clearDraft();
     this.initialConfig = this.host.configJson();
     this.refresh();

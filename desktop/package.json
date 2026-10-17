@@ -1,7 +1,7 @@
 {
   "name": "freyraum-editor",
   "productName": "FREYRAUM Editor",
-  "version": "1.39.0",
+  "version": "1.40.0",
   "private": true,
   "description": "FREYRAUM Editor — Bilder platzieren und direkt im Projektordner speichern.",
   "author": "FREYRAUM",

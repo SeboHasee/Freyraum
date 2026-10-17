@@ -11,7 +11,8 @@
  *   4. add an artwork with title + artist and place it immediately,
  *   5. press "Veröffentlichen" and send one package whose contents pass the
  *      same server-side validation the save service runs,
- *   6. see "Wartet auf Freigabe" (pull-request mode).
+ *   6. see "Wartet auf Freigabe" (pull-request mode) with the uploaded
+ *      previews still loading.
  *
  * Playwright is optional tooling (not a project dependency):
  *   npm i --no-save playwright   and FREYRAUM_CHROME_PATH=/usr/bin/google-chrome
@@ -338,6 +339,17 @@ async function main() {
       existingInbox: readdirSync(resolve(ROOT, 'customer-artworks/inbox')),
     });
     check(verdict.errors.length === 0, `the package passes the save-service validation (${verdict.errors.join(' | ') || 'no errors'})`);
+    // v1.40 regression: waiting for approval keeps editing open, so the
+    // previews of the just-published uploads must stay loadable.
+    const previewsLoad = await page.evaluate(async () => {
+      const urls = [...document.querySelectorAll('img')]
+        .map((image) => image.currentSrc || image.src)
+        .filter((src) => src.startsWith('blob:'));
+      if (urls.length === 0) return false;
+      const results = await Promise.all(urls.map((url) => fetch(url).then((response) => response.ok, () => false)));
+      return results.every(Boolean);
+    });
+    check(previewsLoad, 'uploaded previews still load while waiting for approval');
     check(loginAttempts.length === 2, 'login was attempted twice (wrong, then right)');
     check(pageErrors.length === 0, `no page errors (${pageErrors.join(' | ')})`);
   } finally {

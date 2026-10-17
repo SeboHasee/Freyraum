@@ -38,3 +38,6 @@ public/editor-online.json
 # (scripts/local-project/projectStore.ts) and interrupted temporary saves.
 customer-artworks/history/
 *.freyraum-tmp
+
+# v1.40: desktop installer output (electron-builder) and unpacked apps.
+desktop/release/

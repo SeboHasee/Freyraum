@@ -130,6 +130,11 @@ function textToBase64(text: string): string {
 export class PendingUploads {
   background: PendingBackground | null = null;
   readonly artworks: PendingArtwork[] = [];
+  /**
+   * Saved/published uploads whose object URLs the open editor still shows
+   * (artwork images, background) until the page reloads with the live files.
+   */
+  private readonly published: { background: PendingBackground | null; urls: string[] } = { background: null, urls: [] };
 
   setBackground(next: Omit<PendingBackground, 'objectUrl'> & { objectUrl?: string }): PendingBackground {
     if (this.background) URL.revokeObjectURL(this.background.objectUrl);
@@ -182,7 +187,27 @@ export class PendingUploads {
     return files;
   }
 
+  /** After a successful save: nothing is pending any more, previews stay alive. */
+  markPublished(): void {
+    if (this.background) {
+      if (this.published.background) this.published.urls.push(this.published.background.objectUrl);
+      this.published.background = this.background;
+    }
+    this.published.urls.push(...this.artworks.map((artwork) => artwork.objectUrl));
+    this.background = null;
+    this.artworks.length = 0;
+  }
+
+  /** Preview URL of a saved background that is not live yet. */
+  publishedBackground(src: string): PendingBackground | null {
+    return this.published.background?.src === src ? this.published.background : null;
+  }
+
   clear(): void {
+    if (this.published.background) URL.revokeObjectURL(this.published.background.objectUrl);
+    for (const url of this.published.urls) URL.revokeObjectURL(url);
+    this.published.background = null;
+    this.published.urls.length = 0;
     if (this.background) URL.revokeObjectURL(this.background.objectUrl);
     this.background = null;
     for (const artwork of this.artworks) URL.revokeObjectURL(artwork.objectUrl);

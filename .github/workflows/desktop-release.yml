@@ -26,6 +26,8 @@ on:
       - 'scripts/local-project/**'
       - 'scripts/import-artworks.mjs'
       - 'scripts/test-desktop-app.mjs'
+      - 'scripts/test-local-project.mjs'
+      - 'package-lock.json'
       - 'scripts/smoke-desktop-package.mjs'
       - 'src/online/**'
       - 'src/hub/editor/onlineEditor.ts'
@@ -36,6 +38,8 @@ on:
       - 'scripts/local-project/**'
       - 'scripts/import-artworks.mjs'
       - 'scripts/test-desktop-app.mjs'
+      - 'scripts/test-local-project.mjs'
+      - 'package-lock.json'
       - 'scripts/smoke-desktop-package.mjs'
       - 'src/online/**'
       - 'src/hub/editor/onlineEditor.ts'
@@ -221,6 +225,10 @@ jobs:
           else
             TAG="desktop-v$(node -p "require('./desktop/package.json').version")"
             EXTRA="--prerelease --target $GITHUB_SHA"
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "::error::Release $TAG already exists. Raise \"version\" in desktop/package.json first." >&2
+              exit 1
+            fi
           fi
           # shellcheck disable=SC2086
           gh release create "$TAG" release/* $EXTRA \
