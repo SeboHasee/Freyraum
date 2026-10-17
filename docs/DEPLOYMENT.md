@@ -1,5 +1,5 @@
 # FREYRAUM — GitHub Pages Deployment Guide
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 This document describes the full operator flow for publishing the gallery to
 GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
@@ -87,12 +87,21 @@ Pushing to `main` triggers the `Deploy to GitHub Pages` workflow
 (`.github/workflows/deploy-pages.yml`), which:
 
 1. Runs `npm run import:artworks` — identical to the local desktop step.
-2. Runs `npm run build` — Vite bundles the app with `base: '/Freyraum/'`.
-3. Validates that `dist/index.html`, the generated manifests, and both museum
-   backgrounds exist.
-4. Deploys `dist/` to GitHub Pages.
+2. Runs `npm run validate:deploy` and the manifest checks below.
+3. Runs `npm run build` — Vite bundles the app with `base: '/Freyraum/'`
+   (including `placement-editor.html` and `editor-online.json`).
+4. Validates that `dist/index.html`, the generated manifests, and the museum
+   backgrounds exist, then deploys `dist/` to GitHub Pages (Node 22).
+5. The `smoke` job opens the live gallery and checks rooms, artworks,
+   background and that no file is missing (`npm run test:deploy-smoke`).
 
 The live gallery is updated within ~2 minutes of a successful push.
+
+Edits saved from the online editor arrive the same way: the save service
+commits to `content/edits` and opens a pull request (or merges it with
+`PUBLISH_MODE=auto-merge`); merging it into `main` deploys as above. Setup:
+`docs/ONLINE_EDITOR_SETUP.md`. The desktop app does not deploy — it saves into
+the local project folder; commit and push those files to publish.
 
 ---
 
@@ -151,7 +160,7 @@ After the workflow completes:
 4. Confirm the published image request resolves under `/Freyraum/images/` and
    returns an image with a non-zero decoded size. Do not try to compensate by
    changing lighting, material, or customer metadata.
-5. Follow the source-to-pixel recovery process in `plan.md § v0.93`; it covers
+5. Follow the source-to-pixel recovery process in `docs/archive/plan-history-2026-10-17.md` § v0.93; it covers
    missing/stale bundles, relative-path resolution, fallback payloads, local
    `file://` hub recovery, decode deadlines, GPU binding proof, and
    texture-size limits.

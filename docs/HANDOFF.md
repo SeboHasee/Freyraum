@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -12,6 +12,26 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - Current image-size constraints and the high-resolution publishing roadmap (`docs/IMAGE_MAINTENANCE_GUIDE.md`, `plan.md`).
 - Architecture ownership (`ARCHITECTURE_MAP.md`).
 - Open active work (`plan.md`) and active findings (`FINDINGS.md`).
+- Online editor and save service (`docs/ONLINE_EDITOR_SETUP.md`).
+- FREYRAUM Editor desktop app (`docs/DESKTOP_APP.md`).
+
+## Operations handoff (v1.38–v1.40)
+
+- **Online save service:** the owner keeps the Cloudflare account, the Worker
+  secrets (shared editor password, session key, GitHub App private key) and
+  the repository-only GitHub App. Secrets live only in Cloudflare, never in
+  the repository. Rotate the editor password with `wrangler secret put`; edits
+  arrive as pull requests from `content/edits` unless `PUBLISH_MODE=auto-merge`.
+  Steps: `docs/ONLINE_EDITOR_SETUP.md`.
+- **Desktop releases:** builds run in `.github/workflows/desktop-release.yml`.
+  Runs started by Copilot/bots need **Approve and run** in the Actions tab.
+  Test downloads are the run artifact `FREYRAUM-Editor-Windows`; a release is
+  published by **Run workflow** on `main` with "publish" (pre-release
+  `desktop-v<version>`) or by pushing a matching `desktop-vX.Y.Z` tag. Raise
+  `"version"` in `desktop/package.json` before each release.
+- **Signing (future):** builds are unsigned (one-time SmartScreen/Gatekeeper
+  warning). Adding the signing secrets listed in `docs/DESKTOP_APP.md` signs
+  them without workflow changes; automatic updates require signing first.
 
 ## Support diagnostics workflow
 
@@ -31,7 +51,7 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
    recovery, `candidateMode: "embedded-webgl-fallback"` is now expected when
    the declared image file URL is not WebGL-stable. Preserve the generated
    customer bundle before re-importing, and follow the implemented recovery in
-   `plan.md § v0.93`. Do not treat an importer report or a published asset file
+   `docs/archive/plan-history-2026-10-17.md` § v0.93. Do not treat an importer report or a published asset file
    as proof that a browser uploaded visible artwork pixels.
 7. If behavior differs from docs, treat as drift and update canonical docs in the same fix PR.
 8. For a hub-layout mismatch, preserve the exact route/environment, visible room
@@ -54,17 +74,16 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - [ ] Known risks and deferred upgrades linked from maintenance docs
 - [ ] Screenshot-producing artifact and generated bundles preserved for visual incidents
 
-## 2026-10-14 full Markdown audit matrix
+## 2026-10-17 full Markdown audit matrix
 
 | Class | Reviewed files | Audit outcome |
 |---|---|---|
-| Canonical | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | Current v1.32 wall-following editor, deterministic placement, generated previews, and validation synchronized |
-| Operational | `docs/CUSTOMER_PICTURE_GUIDE.md`, `CUSTOMER_TEXT_GUIDE.md`, `DEPENDENCY_MAINTENANCE_PLAN.md`, `DEPLOYMENT.md`, `HANDOFF.md`, `IMAGE_MAINTENANCE_GUIDE.md`, `QUERY_PARAMETERS.md`, `REGRESSION_TOOLING.md`, `ai-feedback/AI_FEEDBACK_LOOP.md`, `architecture/README.md`, `lessons-learned/README.md`, `standards/CODING_GUIDELINES.md` | Standalone editor workflow, fixed/editable boundary, exact round trip, cache behavior, and validation synchronized; unaffected policies re-reviewed |
-| Agent/template | `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `autonomous-agent.prompt.md`, `refactor.prompt.md`, `review.prompt.md` | Current v1.32 editor safeguards, wall-following invariant, and acceptance boundary synchronized |
-| Historical | `docs/archive/README.md` and its five `*-history-2026-06-21.md` snapshots | Index reviewed on 2026-09-05; snapshots intentionally unchanged |
+| Canonical | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | v1.33–v1.40 (drag, placement truth, rooms, online saving, desktop app, Windows CI) synchronized; `plan.md` reduced to active work, older plan/findings archived |
+| Operational | `docs/CUSTOMER_PICTURE_GUIDE.md`, `CUSTOMER_TEXT_GUIDE.md`, `DEPENDENCY_MAINTENANCE_PLAN.md`, `DEPLOYMENT.md`, `DESKTOP_APP.md`, `HANDOFF.md`, `IMAGE_MAINTENANCE_GUIDE.md`, `ONLINE_EDITOR_SETUP.md`, `QUERY_PARAMETERS.md`, `REGRESSION_TOOLING.md`, `ai-feedback/AI_FEEDBACK_LOOP.md`, `architecture/README.md`, `lessons-learned/README.md`, `standards/CODING_GUIDELINES.md` | Three save paths, test command table, operations handoff synchronized; repeated v0.18–v0.23 status blocks removed |
+| Agent/template | `.github/copilot-instructions.md`, `.github/prompts/*.prompt.md` | One current-context block in copilot-instructions; prompts link to it |
+| Historical | `docs/archive/README.md` and its dated snapshots | Two 2026-10-17 snapshots added (plan, findings); older snapshots unchanged |
 
-All 32 repository Markdown files were reviewed on 2026-10-14. Historical snapshots retain
-their original dates and claims by design.
+Historical snapshots retain their original dates and claims by design.
 
 ## Canonical references
 
@@ -76,3 +95,5 @@ their original dates and claims by design.
 - `docs/DEPENDENCY_MAINTENANCE_PLAN.md`
 - `docs/REGRESSION_TOOLING.md`
 - `docs/IMAGE_MAINTENANCE_GUIDE.md`
+- `docs/ONLINE_EDITOR_SETUP.md`
+- `docs/DESKTOP_APP.md`

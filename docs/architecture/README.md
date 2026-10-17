@@ -1,5 +1,5 @@
 # Architecture Docs
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 Use [`../../ARCHITECTURE_MAP.md`](../../ARCHITECTURE_MAP.md) as the canonical architecture source.
 

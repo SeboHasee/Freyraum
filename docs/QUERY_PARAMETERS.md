@@ -1,5 +1,5 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
@@ -156,7 +156,7 @@ when it forwards into `customer-preview/app.html`. Relevant current records are:
   `candidateMode: "embedded-webgl-fallback"` and
   `resolvedUrlType: "data-uri"` even when the declared image file exists,
   because the shipped v0.93 fix prefers the embedded `webglImage` when a local
-  `file-url` is not WebGL-stable; see `plan.md § v0.93`.
+  `file-url` is not WebGL-stable; see `docs/archive/plan-history-2026-10-17.md` § v0.93.
 - `hub:artwork-source-resolved`
 - `hub:artwork-image-retry`
 - `hub:artwork-image-missing`
@@ -170,7 +170,7 @@ when it forwards into `customer-preview/app.html`. Relevant current records are:
 Capture the browser Network log and console errors with the export. Do not
 include raw `data:image/...` payloads in issue reports; runtime diagnostics
 redact them. The route-aware source-to-pixel recovery procedure is in
-`plan.md § v0.93`.
+`docs/archive/plan-history-2026-10-17.md` § v0.93.
 
 ## localStorage keys
 
@@ -195,6 +195,18 @@ Backend probe persistence (`webgpu` to request probe mode).
 ### `freyraum-nav-hint-seen`
 
 Navigation onboarding hint dismissal flag (`NavigationControls`).
+
+### `freyraum.placementEditor.guideSeen`
+
+`'1'` after the placement editor's first-use guide was shown (`MainMuseumHub`).
+
+## sessionStorage and IndexedDB (editor)
+
+- `sessionStorage['freyraum.editorSession']`: online-editor session token from
+  the save service (8 h, cleared with the tab; `src/hub/editor/onlineClient.ts`).
+- IndexedDB `freyraum-editor` → store `drafts`, key `current`: the unsaved
+  editor draft (layout + pending uploads) offered as "Entwurf
+  wiederherstellen" (`src/hub/editor/pendingUploads.ts`).
 
 ## Debug API
 

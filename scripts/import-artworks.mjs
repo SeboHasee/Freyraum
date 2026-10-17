@@ -43,12 +43,28 @@ import {
   rmSync,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join, extname, basename, dirname } from 'node:path';
+import { join, extname, basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // -------- Paths --------
+// v1.39 — `--root <folder>` (or `--root=<folder>`) runs the importer for a
+// project folder other than the one this script lives in. The FREYRAUM Editor
+// desktop app ships its own copy of this script and points it at the
+// customer's project. Without the option the behaviour is unchanged.
 const __filename = fileURLToPath(import.meta.url);
-const ROOT = join(dirname(__filename), '..');
+function rootFromArgs(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--root' && argv[index + 1]) return resolve(argv[index + 1]);
+    if (arg.startsWith('--root=') && arg.length > 7) return resolve(arg.slice(7));
+  }
+  return null;
+}
+const ROOT = rootFromArgs(process.argv.slice(2)) ?? join(dirname(__filename), '..');
+if (!existsSync(join(ROOT, 'customer-artworks'))) {
+  process.stderr.write(`FREYRAUM project folder not found (customer-artworks/ missing): ${ROOT}\n`);
+  process.exit(1);
+}
 const INBOX = join(ROOT, 'customer-artworks', 'inbox');
 const AUDIO_INBOX = join(ROOT, 'customer-audio', 'inbox');
 const PROCESSED = join(ROOT, 'customer-artworks', 'processed');
@@ -576,6 +592,12 @@ imageEntries.forEach((filename, i) => {
   const stemLower = stem.toLowerCase();
   const baseId = normalizeId(stem) || `artwork-${indexLabel}`;
   const id = uniqueId(baseId, usedIds);
+  if (id !== baseId) {
+    // v1.38 — case-safe names: "Bild.png" and "bild.jpg" share one ID base.
+    warnings.push(
+      `${filename} — another picture already uses the name "${baseId}" (names ignore upper/lower case and spaces); this one gets the ID "${id}". Rename one file to keep IDs stable.`
+    );
+  }
   const generatedTitle = generateTitle(stem) || `Artwork ${indexLabel}`;
   const destFilename = `${id}${ext}`;
   const imagePath = `./images/${encodeURIComponent(destFilename)}`;
@@ -801,6 +823,25 @@ if (existsSync(HUB_HOTSPOTS_JSON)) {
   }
 }
 
+// v1.38 — background library for the placement editor: every runtime
+// background in customer-artworks/Backgrounds with its exact (case-sensitive)
+// name and pixel size. Reference-only assets are not offered.
+const BACKGROUNDS_DIR = join(ROOT, 'customer-artworks', 'Backgrounds');
+const backgroundLibrary = [];
+if (existsSync(BACKGROUNDS_DIR)) {
+  for (const entry of readdirSync(BACKGROUNDS_DIR, { withFileTypes: true })) {
+    if (!entry.isFile() || entry.name.startsWith('.') || entry.name === 'museum-target.png') continue;
+    if (!/\.(png|jpe?g|webp)$/i.test(entry.name)) continue;
+    try {
+      const dims = readImageDimensions(join(BACKGROUNDS_DIR, entry.name));
+      backgroundLibrary.push({ src: `Backgrounds/${entry.name}`, width: dims.width, height: dims.height });
+    } catch (err) {
+      warnings.push(`Backgrounds/${entry.name} — could not read dimensions (${err.message}).`);
+    }
+  }
+  backgroundLibrary.sort((a, b) => a.src.localeCompare(b.src, 'en'));
+}
+
 const generatedAt = new Date().toISOString();
 const bundleId = `bundle-${createHash('sha1').update(JSON.stringify(artworks)).digest('hex').slice(0, 12)}`;
 const artworkBundle = JSON.stringify(
@@ -833,6 +874,7 @@ const js =
   (hubHotspots
     ? '  window.__FREYRAUM_HUB_HOTSPOTS = ' + JSON.stringify(hubHotspots, null, 2) + ';\n'
     : '') +
+  '  window.__FREYRAUM_BACKGROUNDS = ' + JSON.stringify(backgroundLibrary) + ';\n' +
   '})();\n';
 writeFileSync(PREVIEW_JS, js, 'utf8');
 

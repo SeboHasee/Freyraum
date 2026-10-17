@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Text Guide
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync; text workflow unchanged).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
 
 This guide explains how to attach text metadata to artworks.
 

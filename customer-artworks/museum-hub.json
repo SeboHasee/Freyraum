@@ -39,6 +39,15 @@
     }
   },
   "slotsPerPage": 4,
+  "fallbacks": {
+    "autoPlaceUnmapped": false
+  },
+  "rooms": [
+    {
+      "id": "room-01",
+      "name": "Raum 1"
+    }
+  ],
   "walls": [
     {
       "id": "wall-front",
@@ -600,7 +609,7 @@
       "placement": {
         "wallId": "wall-front",
         "horizontalPosition": 0.3,
-        "centerHeight": 2.32,
+        "centerHeight": 1.3,
         "physicalHeight": 1.62,
         "mountingGap": 0.002,
         "targetSizePolicy": "fixed-height",
@@ -618,7 +627,7 @@
       "placement": {
         "wallId": "wall-front",
         "horizontalPosition": 0.7,
-        "centerHeight": 2.32,
+        "centerHeight": 1.3,
         "physicalHeight": 1.48,
         "mountingGap": 0.002,
         "targetSizePolicy": "fixed-height",

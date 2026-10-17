@@ -212,6 +212,9 @@ export class HubRoomRenderer {
   private preset: QualityPreset;
   private activePageIndex = 0;
   private disposed = false;
+  /** When the canvas is hidden (placement editor), renders are coalesced off the input path. */
+  private deferRendering = false;
+  private deferredRenderTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(container: HTMLElement, resolution: MuseumHubResolution, preset: QualityPreset) {
     this.resolution = resolution;
@@ -307,11 +310,34 @@ export class HubRoomRenderer {
     this.render();
   }
 
+  /** Renders one frame after batched `upsertSlot(..., render = false)` updates. */
+  renderFrame(): void {
+    if (this.disposed) return;
+    this.render();
+  }
+
   setSlotHidden(slotId: string): void {
     const state = this.slotMeshes.get(slotId);
     if (!state) return;
     state.group.visible = false;
     this.render();
+  }
+
+  /**
+   * Removes a slot's meshes after its room was deleted or its place removed
+   * in the placement editor. Image textures are owned per slot and disposed;
+   * shared placeholder textures stay cached. Pass `render = false` when
+   * batching several removals and call `renderFrame()` once afterwards.
+   */
+  removeSlot(slotId: string, render = true): void {
+    if (this.disposed) return;
+    const state = this.slotMeshes.get(slotId);
+    if (!state) return;
+    state.group.removeFromParent();
+    if (state.textureKind === 'image') state.artworkMesh.material.map?.dispose();
+    state.artworkMesh.material.dispose();
+    this.slotMeshes.delete(slotId);
+    if (render) this.render();
   }
 
   /** v0.92: live renderer GPU capability used by the shared source-to-pixel outcome contract. */
@@ -569,9 +595,25 @@ export class HubRoomRenderer {
     };
   }
 
+  /**
+   * Coalesces renders into one idle-time render. The placement editor hides
+   * the WebGL canvas, so rendering synchronously on pointer release only
+   * delays the next input.
+   */
+  setDeferredRendering(enabled: boolean): void {
+    this.deferRendering = enabled;
+    if (!enabled && this.deferredRenderTimer !== null) {
+      clearTimeout(this.deferredRenderTimer);
+      this.deferredRenderTimer = null;
+      this.render();
+    }
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.deferredRenderTimer !== null) clearTimeout(this.deferredRenderTimer);
+    this.deferredRenderTimer = null;
     for (const state of this.slotMeshes.values()) {
       if (state.textureKind === 'image') {
         state.artworkMesh.material.map?.dispose();
@@ -1502,7 +1544,15 @@ export class HubRoomRenderer {
 
   private ensureSlotState(slot: ResolvedHubSlot): SlotMeshState {
     const existing = this.slotMeshes.get(slot.id);
-    if (existing) return existing;
+    if (existing) {
+      // Rooms can be reordered, added, or deleted in the editor; keep each
+      // slot inside the page group of its current room.
+      if (existing.pageIndex !== slot.pageIndex) {
+        this.ensurePageGroup(slot.pageIndex).add(existing.group);
+        existing.pageIndex = slot.pageIndex;
+      }
+      return existing;
+    }
     const artworkMaterial = new THREE.MeshBasicMaterial({
       transparent: true,
       toneMapped: false,
@@ -1632,6 +1682,20 @@ export class HubRoomRenderer {
   }
 
   private render(): void {
+    if (this.disposed) return;
+    if (this.deferRendering) {
+      if (this.deferredRenderTimer === null) {
+        this.deferredRenderTimer = setTimeout(() => {
+          this.deferredRenderTimer = null;
+          this.renderNow();
+        }, 250);
+      }
+      return;
+    }
+    this.renderNow();
+  }
+
+  private renderNow(): void {
     if (this.disposed) return;
     this.renderReflection();
     this.renderer.render(this.scene, this.camera);

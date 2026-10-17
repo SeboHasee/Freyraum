@@ -1,5 +1,175 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-14 (v1.32 wall-following artwork placement sync).
+> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+
+## v1.40 — Windows installer builds in CI (2026-10-17)
+
+- **`desktop-release.yml`:** Electron test on Linux **and** Windows; the Windows installer + portable `.exe` are built on every pull request, push to `copilot/**` branches touching the app and manual run, and uploaded as the run artifact `FREYRAUM-Editor-Windows`. macOS only on tags or manual runs ("macos"). Manual "publish" input (main only) creates a pre-release `desktop-v<version>`; tags still publish a Release. Nothing else is published.
+- **Packaged smoke check:** `npm run smoke:desktop-package -- --exe <app>` starts the packaged app on a temporary "FREYRAUM Projekt" folder (bundled importer, editor, save label, layout unchanged). CI runs it on `win-unpacked` and on a silently installed app, then uninstalls silently and checks the project folder survives.
+- **Windows saving:** renames in the local project store retry briefly (EPERM/EACCES/EBUSY, 50–800 ms) when a virus scanner or Explorer holds the file, before rolling back.
+- **Tests:** platform-neutral expected paths in `test:desktop-app`, Windows drive-letter and encoded-backslash/NUL refusal checks; rename-retry checks in `test:local-project`.
+- **Merge-readiness pass:** desktop app version 1.40.0; Node 22 in every workflow (Node 20 is end of life); manual "publish" stops if the release already exists; `desktop/release/` git-ignored.
+- **Fix:** after "Im Projekt speichern" or an online publish that waits for approval, uploaded pictures and a new background kept loading in the still-open editor (object URLs are retired only on reload); regression check in `test:editor-publish`.
+- **Docs:** `plan.md` reduced to active work; finished plans and findings up to v1.18 moved to `docs/archive/*-2026-10-17.md`; repeated status blocks removed from agent/process docs (one current context in `.github/copilot-instructions.md`); one test-command table in `docs/REGRESSION_TOOLING.md`; README "Place artworks" lists the three save paths; architecture map, handoff, deployment, query parameters (editor storage keys) and lessons 111–117 updated.
+- **Installer polish:** app icon from the FREYRAUM branding (`desktop/scripts/make-icon.mjs`), German NSIS installer, per-user, "FREYRAUM Editor" shortcuts, uninstall keeps project folders.
+
+## v1.39 — FREYRAUM Editor desktop app (2026-10-17)
+
+- **Desktop app** (`desktop/`, Electron 44.9.0, electron-builder 26.15.3, pinned, own `package.json`):
+  - asks for the FREYRAUM project folder (must contain `customer-artworks/` and `package.json`) and remembers it and the window size;
+  - shows the bundled editor at a private `freyraum://app/` address that reads only the allowed project files;
+  - runs "Update Gallery" with Electron's bundled Node (`ELECTRON_RUN_AS_NODE`), so customers need no Node.js; runs it on open when the preview is missing or older than the content;
+  - German menu (Projektordner öffnen, Im Explorer/Finder zeigen, Galerie-Vorschau öffnen, Galerie aktualisieren), single instance, warning before closing with unsaved changes.
+- **Security:** `contextIsolation` + `sandbox`, no Node in the page, strict Content Security Policy (no inline scripts), navigation and new windows blocked (web links open in the browser), a small checked bridge, IPC only from the editor page.
+- **Editor save target "desktop":** no login; "Im Projekt speichern" with "Wird gespeichert… → Galerie wird aktualisiert… → Gespeichert ✓ · Lokal gespeichert – noch nicht online", then reload. Uploads, background library, drafts and history/restore are reused. Opened from `file://`, the save tab points to the app.
+- **Local project store** (`scripts/local-project/projectStore.ts`): same rules as the save service, stale-version refusal, temporary files + rename with rollback, never overwrites images, stays inside the project, keeps the last 10 `museum-hub.json` versions in `customer-artworks/history/` (git-ignored).
+- **Importer:** `--root <folder>` for `import-artworks.mjs`, `sync-customer-public.mjs` and `run-import-artworks.cjs` (unchanged without it).
+- **Release:** `.github/workflows/desktop-release.yml` on `desktop-v*` tags: Electron test, Windows installer + portable `.exe`, macOS `.dmg` (Intel + Apple Silicon), GitHub Release; optional signing secrets. `deploy-pages.yml` is untouched.
+- **Tests:** `test:local-project` (also in the quality workflow) and `test:desktop-app` (Playwright Electron). Root lint now covers `desktop/src` and `scripts/local-project`.
+- **Docs:** `docs/DESKTOP_APP.md`, customer guide "FREYRAUM Editor (App)".
+
+## v1.38 — Save directly from the deployed editor (2026-10-16)
+
+- **Save service:** a Cloudflare Worker in `worker/`.
+  - `POST /login` checks the shared password, limited to 5 failures per 15 minutes, and returns an HMAC session token (8 h, in sessionStorage).
+  - `POST /publish` validates the package and writes **one commit** to `content/edits` through a repository-only GitHub App.
+    - It opens a pull request (default) or merges it (`PUBLISH_MODE=auto-merge`).
+    - A changed customer-content version is refused ("Neuere Version vorhanden – bitte neu laden").
+  - `GET /status`, `GET /history` and `POST /restore` cover the last 10 versions.
+  - Requests are accepted only from the gallery origin; secrets live only in Cloudflare.
+- **Shared rules:** `src/online/publishRules.ts` is used by both the editor and the Worker.
+  - Allowed paths, lowercase names, PNG/JPEG/WebP signatures, size limits.
+  - Locked fields stay unchanged; slot artworks must be known.
+  - Upload IDs follow the importer's rule, so placements survive the online build.
+- **Editor (online mode):** active only when `editor-online.json` names a service.
+  - A read-only preview until "Bearbeiten anmelden".
+  - Background library plus upload as a pending file, with a lowercase safe name and an aspect warning.
+  - "Bild hinzufügen" (scaled to 4096 px, title/artist text file, placeable immediately).
+  - IndexedDB drafts with a restore banner; a "Wird veröffentlicht" list.
+  - "Veröffentlichen" with upload progress, then check, approval wait or deploy, then "Online ✓", reload.
+  - "Frühere Version wiederherstellen".
+- **Hidden entry:** type `bearbeiten`, long-press the logo or room title, or open `/bearbeiten/`.
+- **Deploy safety:**
+  - `npm run validate:deploy` runs before the build: unknown artwork IDs, missing or wrong-case images and backgrounds, unsafe paths, size limits.
+  - The importer warns about IDs that only differ in case or spacing and writes the background library.
+  - The build writes `editor-online.json` (commit, build time, service URL).
+  - A post-deploy `smoke` job checks the live gallery.
+- **Tests:** `test:save-service` (15), `test:validate-deploy` (9), `test:editor-publish` (browser, fake service) and `test:deploy-smoke`.
+- **Docs:** `docs/ONLINE_EDITOR_SETUP.md` and "Online bearbeiten" in `docs/CUSTOMER_PICTURE_GUIDE.md`.
+
+## v1.37 — Resizing walls never stretches artwork (2026-10-15)
+
+- Cause: the editor drew fixed-height artwork by normalising its metric size
+  by the wall size the room was calibrated to, then mapping that into the
+  *edited* wall corners. Making a wall taller (or wider) therefore stretched
+  every artwork on it (e.g. aspect 1.34 → 1.87 for a 1.4× taller front wall).
+- Fix (`calibratedWallScaleAt` in `src/hub/projectiveGeometry.ts`): position
+  still follows the edited wall proportionally, but size is divided by the
+  local stretch of the edited quad versus the calibration quad, so artwork
+  keeps its real aspect and size for any wall shape.
+- `resolveMuseumHub` now keeps `referenceQuad` separate from the editable
+  `quad` (they were the same object, so in-place corner drags lost the
+  reference).
+- `npm run validate:museum-hub` checks aspect and size after scaling every
+  wall 1×1.4, 1.3×1, 1.25×1.6 and 0.85×1.2.
+
+## v1.36 (part 1–2) — Fast artwork press, clear artwork placement (2026-10-15)
+
+- Root cause of the stiff press/release: the editor panel change check
+  stringified multi-megabyte `data:` thumbnail URLs (~240 ms per press and
+  release). It now uses a short thumbnail key: release handler ~2 ms, press
+  handler <1 ms (`npm run test:editor-drag` reports timing and fails above 16 ms).
+- Press only selects; undo is recorded after a real move (3 px threshold),
+  panels refresh in the next frame, and 3D rendering is coalesced while editing.
+- New shared placement controller (`src/hub/editor/placementController.ts`):
+  click an artwork then a place (or the reverse), drag from the list into the
+  scene or onto a place card, drop back on the list to remove, drop onto
+  another place in the scene to swap. Drag preview, green/amber targets,
+  "+ Bild hinzufügen" on empty places with a picker, "Platzieren…" menu, and an
+  undo message. Keyboard: Enter/Space on places.
+- Thumbnails decode once (`src/hub/editor/thumbnails.ts`).
+- Still open from the v1.36 plan: background library, `validate:deploy`/ZIP
+  package, and the online editor with Cloudflare Worker.
+
+## v1.35 — Rooms you control, simpler German editor panel (2026-10-15)
+
+- `museum-hub.json` can list its rooms (`rooms: [{ id, name? }]`). The editor
+  adds, duplicates, deletes, renames and reorders rooms; every room shares the
+  same walls, camera and green areas. Room ids stay `room-NN`, so old files load
+  unchanged.
+- New setting `fallbacks.autoPlaceUnmapped`: files with a room list hide
+  artworks without a place (listed in diagnostics and under
+  *Nicht platziert*); files without a room list keep the automatic extra rooms.
+  The shipped file now lists only Raum 1 and hides the other artworks.
+- New rooms copy the current room's layout without artworks; the fallback
+  layout uses a 1.30 m front centre height inside the green area. Copied places
+  are checked with `evaluateDisplayedPlacement`, never moved silently.
+- Import accepts a different room count and assignment; it still rejects
+  unreadable files and changed camera/room/wall fields, and drops (and
+  reports) unknown artwork ids.
+- Editor panel: three German tabs (Raum / Bilder / Speichern), a room bar with
+  status chips, place cards and an artwork list (click or drag to assign, drag
+  to swap, "Bild entfernen"), a sticky bottom bar (undo, redo, guides, status),
+  a one-time guide, and room-aware messages that open their room. Duplicate or
+  English controls (artwork arrow buttons, tilt, frame/fit/reset-view buttons,
+  separate wall-edit modes) were removed or merged. Gallery icons no longer
+  cover the panel.
+- Only real errors block saving; layout hints (outside the green area,
+  doorway, overlap, small on screen, unconfirmed green area, empty room,
+  unplaced artworks) never do. "Grüne Fläche geprüft ✓" is an optional tick.
+- Wall corner handles and wall labels appear only while
+  "Wandecken bearbeiten" is on, and only for the selected wall.
+- Room changes rebuild only the affected places and redraw the 3D view once;
+  each room or assignment change is one undo step.
+- Tests: room add/delete/duplicate/rename/move, legacy loading, hidden
+  unplaced artworks, copied-layout validity and import rules in
+  `npm run validate:museum-hub`; new browser test `npm run test:editor-rooms`.
+
+## v1.34 — One placement truth for editor, loader and 3D (2026-10-14)
+
+- One shared displayed projection (`projectDisplayedPlacement` /
+  `evaluateDisplayedPlacement` in `src/config/museumHub.ts`) now drives the
+  editor overlay, drag limits, editor and load warnings, the debug overlay, and
+  export checks; it matches the WebGL mounting frame.
+- Exported editor positions survive reloading unchanged. Canonical
+  (fixed-height) placements are never moved while loading; invalid ones keep
+  their position, are flagged (`placementIssues`, dashed red outline), and are
+  listed as warnings. Export uses the shared `exportHubSlotPlacement`.
+- Calibrated (measured) wall heights are authoritative and shown in the editor
+  info. The shipped front-wall works now hang at 1.30 m centre height so they
+  sit fully inside the green zone of the ~2.61 m calibrated front wall.
+- Every editor drag (artworks, wall corners, green-zone and safe-area points)
+  stops at its limit and slides along it, including sloped limits; all drags
+  end on release, cancel, and lost pointer capture. Other artworks in the same
+  room block a dragged artwork.
+- Pointer positions past a side wall's vanishing line no longer flip the drag
+  direction (dragging the left-wall artwork to the right edge works).
+- Artworks are re-fitted to the nearest valid spot after wall or green-zone
+  edits, or marked invalid when they no longer fit.
+- Keyboard: arrows work on a focused artwork, 1 cm per step (10 cm with
+  Shift), one undo entry per held key, positions announced to screen readers;
+  move buttons step 10 cm.
+- Wall/zone drags update only the 2D overlay and redraw the 3D scene once on
+  release; slot renderer syncs are batched into one frame.
+- The blocking green-zone edge or doorway is highlighted while dragging.
+- Swipe navigation follows only the primary starting pointer and resets on
+  cancel.
+- New `npm run test:editor-drag` browser test drags every artwork to all four
+  zone edges in `customer-preview/placement-editor.html`.
+
+## v1.33 — Stable artwork drag in the placement editor (2026-10-14)
+
+- Side-wall artwork can now be dragged all the way to the top (and every other
+  edge) of the green mounting zone. The displayed `room-fixed` projection no
+  longer relocates the stored anchor into the hanging band, so the overlay, the
+  WebGL artwork, and the exported placement are always the same position.
+- Drag, keyboard nudge, and numeric edits validate the exact displayed
+  geometry (decoded aspect) instead of a different `room`/fallback projection;
+  editor warnings and proofs use the same geometry.
+- Blocked drags slide along the zone edge per axis instead of being pulled
+  toward the zone centroid; resize stops at the largest valid size.
+- Dragging keeps the grab offset (no jump), only the primary button starts a
+  drag, the release position is committed on `pointerup`, and pointer-to-wall
+  mapping uses the current edited wall quad instead of the load-time inverse.
 
 ## v1.32 — Wall-following artwork placement (2026-10-14)
 

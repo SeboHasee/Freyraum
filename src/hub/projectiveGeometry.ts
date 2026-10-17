@@ -1262,7 +1262,8 @@ export function solveRoomArtworkPlacement(
   requestedAnchor: Point2D,
   requestedHeight: number,
   artworkAspect: number,
-  preserveSize = false
+  preserveSize = false,
+  allowRelocation = true
 ): ArtworkPlacementResult {
   const safeBounds = localBounds(wall.safePolygon);
   const aspect = Math.max(EPSILON, artworkAspect);
@@ -1330,6 +1331,10 @@ export function solveRoomArtworkPlacement(
     point(requestedAnchor.x, requestedAnchor.y),
     baseHeight
   );
+  // Editor/room-fixed display: the stored anchor is authoritative and is what
+  // the 3D renderer mounts, so report its real validity instead of silently
+  // snapping the overlay to a different candidate position.
+  if (!allowRelocation) return bestRequested;
   let fallback = bestRequested;
   let bestValid: ArtworkPlacementResult | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -1425,6 +1430,37 @@ export function solveRoomArtworkPlacement(
   return resolved;
 }
 
+/**
+ * Local stretch of an edited wall quad relative to the quad the room model was
+ * calibrated to, measured at wall-unit point (u, v) along both wall axes.
+ * Returns 1/1 when no reference exists or the quads match.
+ */
+export function calibratedWallScaleAt(
+  calibratedHomography: Matrix3x3,
+  referenceQuad: Quad | null,
+  u: number,
+  v: number
+): { x: number; y: number } {
+  const reference = referenceQuad ? computeHomographyFromUnitSquare(referenceQuad) : null;
+  if (!reference) return { x: 1, y: 1 };
+  const step = 0.01;
+  const length = (matrix: Matrix3x3, du: number, dv: number): number | null => {
+    const a = applyHomography(matrix, u - du, v - dv);
+    const b = applyHomography(matrix, u + du, v + dv);
+    return a && b ? Math.hypot(b.x - a.x, b.y - a.y) : null;
+  };
+  const ratio = (du: number, dv: number): number => {
+    const edited = length(calibratedHomography, du, dv);
+    const original = length(reference, du, dv);
+    if (!edited || !original || original <= EPSILON) return 1;
+    const value = edited / original;
+    if (!Number.isFinite(value) || value <= EPSILON) return 1;
+    // Within rounding noise of the unedited quad: keep the exact original.
+    return Math.abs(value - 1) < 1e-6 ? 1 : value;
+  };
+  return { x: ratio(step, 0), y: ratio(0, step) };
+}
+
 export function projectSlotArtwork(
   wall: WallProjectionModel,
   slot: SlotProjectionModel,
@@ -1460,7 +1496,8 @@ const projectiveFallback = (): ProjectedArtworkGeometry | null => {
       slot.anchor,
       slot.mountedHeight,
       artworkAspect,
-      slot.targetSizePolicy === 'fixed-height'
+      slot.targetSizePolicy === 'fixed-height',
+      !preserveSize
     );
     const roomPlacementValid = preserveSize
       ? placement.validity.finite && placement.validity.orientationConsistent
@@ -1503,11 +1540,26 @@ const projectiveFallback = (): ProjectedArtworkGeometry | null => {
             const calibrated = wall.quad.map((corner) => ({ ...corner })) as unknown as Quad;
             const homography = computeHomographyFromUnitSquare(calibrated);
             if (!homography) return null;
-            const mapped = placement.localQuad.map((corner) =>
+            const roomWidth = Math.max(EPSILON, wall.room!.width);
+            const roomHeight = Math.max(EPSILON, wall.room!.height);
+            const local = placement.localQuad;
+            const centerX = (local[0].x + local[1].x + local[2].x + local[3].x) / 4;
+            const centerY = (local[0].y + local[1].y + local[2].y + local[3].y) / 4;
+            // The artwork position follows the edited wall proportionally, but
+            // its size keeps the physical scale of the wall the room model was
+            // calibrated to. Resizing a wall quad (taller, wider, any shape)
+            // therefore changes the wall, never the artwork's aspect ratio.
+            const scale = calibratedWallScaleAt(
+              homography,
+              wall.referenceQuad ?? null,
+              centerX / roomWidth,
+              1 - centerY / roomHeight
+            );
+            const mapped = local.map((corner) =>
               applyHomography(
                 homography,
-                corner.x / Math.max(EPSILON, wall.room!.width),
-                1 - corner.y / Math.max(EPSILON, wall.room!.height)
+                (centerX + (corner.x - centerX) / scale.x) / roomWidth,
+                1 - (centerY + (corner.y - centerY) / scale.y) / roomHeight
               )
             );
             return mapped.some((corner) => corner === null)

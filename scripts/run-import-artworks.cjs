@@ -15,7 +15,17 @@ const childProcess = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.join(__dirname, '..');
+// v1.39 — optional `--root <folder>` / `--root=<folder>`, passed on to the importer.
+const forwardedArgs = process.argv.slice(2);
+function rootFromArgs(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--root' && argv[index + 1]) return path.resolve(argv[index + 1]);
+    if (arg.indexOf('--root=') === 0 && arg.length > 7) return path.resolve(arg.slice(7));
+  }
+  return null;
+}
+const ROOT = rootFromArgs(forwardedArgs) || path.join(__dirname, '..');
 const REPORT_FILE = path.join(ROOT, 'customer-artworks', 'last-import-report.txt');
 const requiredMajor = 18;
 const nodeVersion = (process.versions && process.versions.node) || '0.0.0';
@@ -58,7 +68,7 @@ if (isNaN(major) || major < requiredMajor) {
 }
 
 const importerPath = path.join(__dirname, 'import-artworks.mjs');
-const result = childProcess.spawnSync(process.execPath, [importerPath], { stdio: 'inherit' });
+const result = childProcess.spawnSync(process.execPath, [importerPath].concat(forwardedArgs), { stdio: 'inherit' });
 
 if (typeof result.status === 'number') {
   process.exit(result.status);

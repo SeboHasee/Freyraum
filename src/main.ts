@@ -46,6 +46,7 @@ import {
   WARM_BUDGET,
   type StartupReadinessMode,
 } from './config/startup';
+import { installHiddenEditorEntry } from './online/hiddenEditorEntry';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
@@ -101,6 +102,14 @@ function parseCssNumeric(value: string): number {
 function isHubDebugEnabled(): boolean {
   try {
     return new URLSearchParams(window.location.search).get('hubDebug') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function isHubCalibrationRequested(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).get('hubCalibrate') === '1';
   } catch {
     return false;
   }
@@ -290,7 +299,7 @@ function normalizeInjectedArtworkAssetBaseUrl(raw: unknown): string | null {
   const fallbackBase = typeof window !== 'undefined' ? window.location.href : 'http://localhost/';
   try {
     const resolved = new URL(raw.trim(), fallbackBase);
-    if (!['http:', 'https:', 'file:'].includes(resolved.protocol)) return null;
+    if (!['http:', 'https:', 'file:', 'freyraum:'].includes(resolved.protocol)) return null;
     return new URL('./', resolved.href).href;
   } catch {
     return null;
@@ -302,7 +311,7 @@ function isAllowedInjectedArtworkPrimaryUrl(url: string): boolean {
   if (/^data:image\//i.test(url)) return true;
   const scheme = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(url)?.[1]?.toLowerCase() ?? null;
   if (!scheme) return true;
-  return scheme === 'http' || scheme === 'https' || scheme === 'file';
+  return scheme === 'http' || scheme === 'https' || scheme === 'file' || scheme === 'freyraum';
 }
 
 function sanitizeInjectedArtworks(
@@ -873,10 +882,23 @@ async function main(): Promise<void> {
     .__FREYRAUM_MUSEUM_HUB;
   const injectedLegacyHotspots = (window as unknown as { __FREYRAUM_HUB_HOTSPOTS?: unknown })
     .__FREYRAUM_HUB_HOTSPOTS;
-  const museumHubResolution = resolveMuseumHub(museumArtworks, injectedMuseumHub, injectedLegacyHotspots);
+  // The placement editor keeps empty places and empty rooms so they can be
+  // filled, switched to, or deleted; the gallery skips them.
+  const museumHubEditorMode = isHubCalibrationRequested();
+  // v1.38: discreet gallery → editor shortcut (typing "bearbeiten" or a
+  // long press on the logo). The save-service password is the real protection.
+  if (!museumHubEditorMode && !isPlacementEditorRequested()) installHiddenEditorEntry();
+  const museumHubResolution = resolveMuseumHub(
+    museumArtworks,
+    injectedMuseumHub,
+    injectedLegacyHotspots,
+    { editor: museumHubEditorMode }
+  );
   diagnostics.info('boot', 'museum-hub-resolved', 'Museum hub configuration resolved', {
     source: museumHubResolution.source,
     pages: museumHubResolution.pages.length,
+    rooms: museumHubResolution.rooms.map((room) => room.id),
+    unplacedArtworkIds: museumHubResolution.unplacedArtworkIds,
     selectableSlots: museumHubResolution.slotToArtwork.size,
     unmappedArtworkCount: museumHubResolution.unmappedArtworkCount,
     disabledSlots: museumHubResolution.pages
@@ -1170,7 +1192,7 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
-  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset);
+  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset, museumArtworks);
   museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
     alignPage: false,
     source: 'boot-gallery-selection',

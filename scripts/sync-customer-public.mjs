@@ -22,11 +22,21 @@
  */
 
 import { existsSync, mkdirSync, copyFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
-const ROOT = join(dirname(__filename), '..');
+// v1.39 — optional `--root <folder>` / `--root=<folder>` (see import-artworks.mjs).
+function rootFromArgs(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--root' && argv[index + 1]) return resolve(argv[index + 1]);
+    if (arg.startsWith('--root=') && arg.length > 7) return resolve(arg.slice(7));
+  }
+  return null;
+}
+const ROOT = rootFromArgs(process.argv.slice(2)) ?? join(dirname(__filename), '..');
 const PREVIEW = join(ROOT, 'customer-preview');
 const PUBLIC = join(ROOT, 'public');
 
@@ -123,6 +133,37 @@ if (!existsSync(join(PUBLIC, 'backgrounds', 'museum-empty.png'))) {
   );
   process.exit(1);
 }
+
+// ── v1.38 — version stamp and online-editor settings ────────────────────────
+// `editor-online.json` tells the deployed editor which commit it was built
+// from (conflict check + "is the new version live?") and where the optional
+// save service runs. FREYRAUM_SAVE_SERVICE_URL comes from a repository
+// variable in the deploy workflow; without it the editor stays offline-only.
+let commit = (process.env.GITHUB_SHA || '').trim();
+if (!/^[0-9a-f]{40}$/.test(commit)) {
+  try {
+    commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    commit = '';
+  }
+}
+let saveServiceUrl = (process.env.FREYRAUM_SAVE_SERVICE_URL || '').trim().replace(/\/+$/, '');
+if (saveServiceUrl && !/^https:\/\/[a-z0-9.-]+(?::\d+)?(?:\/[A-Za-z0-9._~\/-]*)?$/i.test(saveServiceUrl)) {
+  process.stderr.write(`sync-customer-public: ignoring FREYRAUM_SAVE_SERVICE_URL (must be an https:// URL).\n`);
+  saveServiceUrl = '';
+}
+writeFileSync(
+  join(PUBLIC, 'editor-online.json'),
+  JSON.stringify(
+    {
+      commit: /^[0-9a-f]{40}$/.test(commit) ? commit : null,
+      builtAt: new Date().toISOString(),
+      saveServiceUrl: saveServiceUrl || null,
+    },
+    null,
+    2,
+  ) + '\n',
+);
 
 process.stdout.write(
   `sync-customer-public: synced customer-artworks.js, customer-audio.js` +
