@@ -85,7 +85,24 @@ const shippedConfigFile = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'))
 // overflow rooms, so they opt into automatic placement (option A).
 assert.deepEqual(shippedConfigFile.rooms, [{ id: 'room-01', name: 'Raum 1' }], 'shipped file must list exactly Raum 1');
 assert.equal(shippedConfigFile.fallbacks?.autoPlaceUnmapped, false, 'shipped file must hide artworks without a room');
-const shippingConfig = { ...shippedConfigFile, fallbacks: { ...shippedConfigFile.fallbacks, autoPlaceUnmapped: true } };
+const shippingConfig = {
+  ...shippedConfigFile,
+  fallbacks: { ...shippedConfigFile.fallbacks, autoPlaceUnmapped: true },
+  // Keep legacy migration/overflow fixtures independent of the curated exhibition.
+  slots: shippedConfigFile.slots.map((slot, index) => ({
+    ...slot,
+    artworkId: ['fraktal', 'akt-27', 'gartenszene', 'zdigital'][index],
+    placement: {
+      ...slot.placement,
+      ...([
+        {},
+        {},
+        { horizontalPosition: 0.671, centerHeight: 3.041, physicalHeight: 4.261 },
+        { horizontalPosition: 0.319, centerHeight: 3.331, physicalHeight: 2.982 },
+      ][index]),
+    },
+  })),
+};
 
 assert.equal(shippingConfig.version, 5, 'shipping config must use the canonical v5 wall-mounting model');
 const canonicalCorners = geometry.wallCornersFromTransform(
@@ -1420,19 +1437,36 @@ assert.deepEqual(
   'authored sparse room numbers must normalize to contiguous navigable page indices'
 );
 
-// Shipped production reality: only fraktal + akt-27 exist; empty slots suppress.
-const shippedOnly = museumHub.resolveMuseumHub(artworks.slice(0, 2), shippedConfigFile, null);
+const productionArtworks = [
+  ['gatrenszene', 'Gatrenszene.png'],
+  ['akt-27', 'Akt 27.png'],
+  ['fraktal', 'Fraktal.png'],
+  ['wunderbaum', 'Wunderbaum.png'],
+].map(([id, file]) => {
+  const png = readFileSync(resolve(ROOT, 'customer-artworks/inbox', file));
+  return { id, title: id, image: file, dimensions: { width: png.readUInt32BE(16), height: png.readUInt32BE(20) } };
+});
+const shippedOnly = museumHub.resolveMuseumHub(productionArtworks, shippedConfigFile, null);
 assert.equal(
   shippedOnly.warnings.some((warning) => /projected geometry is invalid|active artwork\(s\) without/.test(warning)),
   false,
   `shipped-artwork warnings: ${shippedOnly.warnings.join('; ')}`
 );
 const shippedSlots = shippedOnly.pages.flatMap((page) => page.slots).filter((slot) => slot.selectable && slot.artworkId);
-assert.equal(shippedSlots.length, 2, 'the two shipped artworks must resolve onto the front pair');
-assert.ok(shippedSlots.every((slot) => slot.wallGroup === 'front'), 'shipped artworks land on the front wall pair');
-assert.deepEqual(shippedConfigFile.slots.map((slot) => slot.artworkId), ['fraktal', 'akt-27', 'gartenszene', 'zdigital'], 'authored mappings must remain intact even when source artworks are absent');
-assert.ok(shippedOnly.warnings.some((warning) => warning.includes('gartenszene')), 'missing left artwork must be diagnosed');
-assert.ok(shippedOnly.warnings.some((warning) => warning.includes('zdigital')), 'missing right artwork must be diagnosed');
+assert.equal(shippedSlots.length, 4, 'all four genuine paintings must resolve in the default room');
+assert.deepEqual(shippedConfigFile.slots.map((slot) => slot.artworkId),
+  ['gatrenszene', 'akt-27', 'fraktal', 'wunderbaum'], 'default paintings must match the reference wall order');
+for (const slot of shippedSlots) {
+  const wall = shippedOnly.wallById.get(slot.placement.wallId);
+  const evaluation = museumHub.evaluateDisplayedPlacement(wall, slot.placement, slot.artworkAspect, shippedOnly.stage);
+  assert.equal(evaluation.valid, true, `${slot.artworkId} must fit its mounting zone without doorway overlap`);
+  const authored = shippedConfigFile.slots.find((candidate) => candidate.id === slot.id);
+  assert.equal(slot.placement.physicalHeight, authored.placement.physicalHeight, 'loading must preserve the curated size');
+}
+const missingContent = museumHub.resolveMuseumHub(artworks.slice(0, 2), shippedConfigFile, null);
+assert.equal(missingContent.slotToArtwork.size, 2, 'missing images must not be silently substituted');
+assert.ok(missingContent.warnings.some((warning) => warning.includes('gatrenszene')), 'missing garden painting must be diagnosed');
+assert.ok(missingContent.warnings.some((warning) => warning.includes('wunderbaum')), 'missing tree painting must be diagnosed');
 
 const projectedBySlot = new Map();
 const localPlacementsByWall = new Map();
@@ -1860,8 +1894,7 @@ assert.ok(
 // v1.34 one shared projection: the shipped config must report the same
 // validity in the editor (displayed projection), after loading (resolver), and
 // in the 3D view (renderer mounting frame).
-// Explicit synthetic side assignments exercise all three walls without changing
-// or pretending to satisfy the missing production artwork IDs.
+// Explicit synthetic assignments exercise all three walls independently of content.
 const projectionFixtureArtworks = [
   ['fraktal', 3780, 5046],
   ['akt-27', 3150, 3150],
@@ -1869,8 +1902,8 @@ const projectionFixtureArtworks = [
   ['side-b', 1000, 1300],
 ].map(([id, width, height]) => ({ id, title: id, image: `${id}.png`, dimensions: { width, height } }));
 const projectionFixtureConfig = {
-  ...shippedConfigFile,
-  slots: shippedConfigFile.slots.map((slot) => {
+  ...shippingConfig,
+  slots: shippingConfig.slots.map((slot) => {
     const side = slot.placement.wallId;
     if (side === 'wall-front') return slot;
     return {
@@ -2173,8 +2206,8 @@ assert.doesNotMatch(hub, /projectSlotArtwork\(/, 'the editor must use the shared
   let edited = museumHub.assignArtworkInConfig(added.config, 'room-02.wall-front.a', 'square-fixture').config;
   edited = museumHub.assignArtworkInConfig(edited, 'room-02.wall-front.b', 'square-fixture-2').config;
   const swap = museumHub.assignArtworkInConfig(edited, 'room-02.wall-front.a', 'fraktal');
-  assert.equal(swap.swappedWithSlotId, 'room-01.wall-front.a', 'assigning a placed artwork swaps the two places');
-  assert.equal(swap.config.slots.find((slot) => slot.id === 'room-01.wall-front.a').artworkId, 'square-fixture');
+  assert.equal(swap.swappedWithSlotId, 'room-01.wall-left.a', 'assigning a placed artwork swaps the two places');
+  assert.equal(swap.config.slots.find((slot) => slot.id === 'room-01.wall-left.a').artworkId, 'square-fixture');
   const removed = museumHub.assignArtworkInConfig(edited, 'room-02.wall-front.b', null);
   assert.equal(removed.replacedArtworkId, 'square-fixture-2');
   assert.equal(removed.config.slots.find((slot) => slot.id === 'room-02.wall-front.b').artworkId, undefined);

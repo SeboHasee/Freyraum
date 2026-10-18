@@ -1,6 +1,36 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
+## 2026-10-18 — Reference exhibition with supplied artwork
+
+- The inbox now contains all four genuine paintings. The garden image is named
+  `Gatrenszene.png`, so the importer generates `gatrenszene`, not `gartenszene`.
+  Preserve that source ID and supply the display title through `Gatrenszene.txt`.
+  `Wunderbaum.png` resolves to `wunderbaum`; the old `zdigital` mapping is retired.
+- The reference arrangement is front-left Gartenszene (1.62 m), front-right
+  Akt 27 (unchanged 1.48 m), left Fraktal (3.6 m) and right Wunderbaum (3.1 m).
+  Side-wall perspective requires larger physical heights than the front pair.
+  All four pass the shared mounting-zone and doorway checks; narrow projected
+  side edges remain advisory, not a reason to stretch the sources.
+- Geometry tests initially failed because they pinned the previous exhibition
+  and reused its assignments in migration/swap fixtures. Preserve those synthetic
+  migration cases separately and validate current production content explicitly.
+  Save-service fake repository inventory must also include every newly mapped ID.
+- Built `file://` smoke proves visible screenshot pixel contribution for all four
+  paintings and exact editor/museum homography parity. Save-service (15), local
+  project (12), deploy-validator (10), geometry, front-wall aspect, lint,
+  typecheck/build, docs authority, frame-budget and editor rooms pass.
+- HTTP smoke also passes all four paintings and exact editor parity. Publishing
+  passes after its upload fixture explicitly frees a place in the now-full room
+  rather than assuming missing artwork creates an empty place.
+- Dependency installation reports existing tooling advisories; no dependency
+  upgrades are part of this content change. Fraktal remains a 24.8 MB source;
+  the importer warns about large dimensions and device memory. Vite retains
+  classic-script and large-bundle warnings. These are separate from layout checks.
+- A room screenshot was captured at `/tmp/freyraum-curated-room.png`; image
+  inspection was unavailable in this session, so exact visual/customer approval
+  is not claimed. Automated visibility and geometry checks are not visual approval.
+
 ## 2026-10-18 — Museum presentation divergence and Markdown audit
 
 - **Implemented and checked by the implementation pass:** `MainMuseumHub`

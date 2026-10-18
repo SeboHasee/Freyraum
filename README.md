@@ -5,6 +5,11 @@ FREYRAUM is a Three.js-based immersive digital gallery with a local customer wor
 
 ## Place artworks
 
+The default room follows the supplied reference: **Gartenszene** front-left,
+**Akt 27** front-right, **Fraktal** on the left side wall and **Wunderbaum** on
+the right, over `Museum_ohne_Bilder.png`. The checked-in
+`customer-artworks/museum-hub.json` owns this arrangement and its native-ratio sizes.
+
 The placement editor arranges pictures on the museum walls and in rooms
 (add, fill, switch and delete rooms; drag, resize, keyboard nudge, undo/redo).
 Every artwork can be dragged to every edge of its green mounting zone; editing

@@ -1,6 +1,18 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
+## Unreleased — reference exhibition defaults (2026-10-18)
+
+- Default room: Gartenszene front-left, unchanged Akt 27 front-right, Fraktal
+  left, Wunderbaum right, over `Museum_ohne_Bilder.png`.
+- Side paintings use independently curated heights and positions, preserving
+  native proportions and keeping all corners inside their green mounting zones.
+- Use the supplied `Gatrenszene.png` filename/ID unchanged; its text card supplies
+  the correctly spelled display title “Gartenszene”.
+- Regression coverage checks all four real source images, exact assignment order,
+  valid placement and unchanged physical sizes. Legacy migration fixtures remain
+  independent of the exhibition inventory.
+
 ## Unreleased — photograph-backed museum correction (2026-10-18)
 
 - Align the museum and placement editor on calibrated DOM artwork over the

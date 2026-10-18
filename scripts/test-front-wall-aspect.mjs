@@ -32,7 +32,7 @@ const frontSlots = hub.slots.filter(
 assert.equal(frontSlots.length, 2, 'the front wall must have exactly two enabled artwork slots');
 
 const expectedAssets = new Map([
-  ['fraktal', 'customer-artworks/inbox/Fraktal.png'],
+  ['gatrenszene', 'customer-artworks/inbox/Gatrenszene.png'],
   ['akt-27', 'customer-artworks/inbox/Akt 27.png'],
 ]);
 

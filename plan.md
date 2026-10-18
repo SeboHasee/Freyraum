@@ -5,6 +5,17 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
+## Reference exhibition defaults (2026-10-18)
+
+- [x] Map supplied Gartenszene/front-left, Akt/front-right, Fraktal/left and
+      Wunderbaum/right, retaining Akt's existing placement and the photograph.
+- [x] Curate native-ratio sizes with valid green-zone and doorway clearance.
+- [x] Rebuild and verify all four paintings contribute visible pixels, and
+      museum/editor projections match exactly.
+- [x] Validate geometry, deployment content, save service and local saving.
+- [ ] Customer approves the rebuilt room against the supplied reference image;
+      automated visibility checks do not establish aesthetic acceptance.
+
 ## Active — restore the photograph-backed museum (2026-10-18)
 
 - [x] Audit current Markdown and compare the presentation claims with source;
@@ -37,15 +48,14 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [ ] Resolve/characterize the pre-existing software-Chrome visual-capture
       invariant (`shadow-casting light count 1 != expected 2`); no Type A pass
       is claimed.
-- [ ] Rerun content-blocked deploy/save-service/local-project/editor-publish checks
-      after the owner supplies the missing side images; do not disguise failures.
+- [x] Rerun content-blocked deploy/save-service/local-project checks with all four
+      supplied paintings and the new default assignments.
 - [ ] Obtain customer visual acceptance. The exact artifact behind the reported
       customer image is unavailable; no reproduction or browser pass is claimed
       by this documentation audit.
-- [ ] **Content acceptance blocker:** owner supplies genuine artwork files for
-      `gartenszene` and `zdigital`. Neither customer inventory nor built-ins has
-      these works; preserve JSON IDs and do not substitute other paintings.
-      Do not claim all four genuine paintings are fixed.
+- [x] **Content blocker resolved:** genuine `Gatrenszene.png` and `Wunderbaum.png`
+      are supplied; the requested default uses their exact importer IDs
+      `gatrenszene` and `wunderbaum`. All four images pass visible-pixel checks.
 
 No dependency upgrades or high-resolution importer redesign are part of this fix.
 

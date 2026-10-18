@@ -272,6 +272,10 @@ async function main() {
 
     // 4. Artwork upload with title + artist, then place it.
     await openTab(page, 'artworks');
+    // The default exhibition is full; explicitly free a place for the upload.
+    await page.locator('.museum-hub__room.is-active .museum-hub__artwork[data-artwork-id]').first().click();
+    await page.getByRole('button', { name: 'Bild entfernen', exact: true }).click();
+    await settle(page);
     await page.fill('.museum-hub__upload-title', 'Test Bild');
     await page.fill('.museum-hub__upload-credit', 'Anna Beispiel');
     await page.setInputFiles('.museum-hub__upload-input', {

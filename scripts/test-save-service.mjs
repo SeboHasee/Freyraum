@@ -58,6 +58,8 @@ class FakeGitHub {
       ['customer-artworks/inbox/Akt 27.png', PNG],
       ['customer-artworks/inbox/Akt 27.txt', Buffer.from('Title: Akt 27\n')],
       ['customer-artworks/inbox/Fraktal.png', PNG],
+      ['customer-artworks/inbox/Gatrenszene.png', PNG],
+      ['customer-artworks/inbox/Wunderbaum.png', PNG],
       ['src/main.ts', Buffer.from('// code\n')],
     ]);
     const tree = this.storeTree(files);
