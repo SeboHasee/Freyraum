@@ -835,29 +835,29 @@ async function ensureHubBackgroundFailSafe(page, state) {
     if (!snapshot.imageError || snapshot.stageBackgroundColor !== MUSEUM_GREY_RGB) {
       throw new Error(`${state.name}: fallback-neutral hub state did not degrade to museum-grey`);
     }
-    if (!snapshot.imageError) {
-      const expectedUrl = primaryFailed ? fallbackUrl : primaryUrl;
-      if (snapshot.currentImageSrc !== expectedUrl) {
-        throw new Error(`${state.name}: wrong background filename: ${snapshot.currentImageSrc} (expected ${expectedUrl})`);
+  }
+  if (!snapshot.imageError) {
+    const expectedUrl = primaryFailed ? fallbackUrl : primaryUrl;
+    if (snapshot.currentImageSrc !== expectedUrl) {
+      throw new Error(`${state.name}: wrong background filename: ${snapshot.currentImageSrc} (expected ${expectedUrl})`);
+    }
+    const image = page.locator('.museum-hub__image');
+    await image.evaluate((element) => element.decode());
+    if (await page.locator('.museum-hub').isVisible()) {
+      const stage = page.locator('.museum-hub__stage');
+      const present = await stage.screenshot({ animations: 'disabled' });
+      const previous = await image.evaluate((element) => {
+        const value = element.style.visibility;
+        element.style.visibility = 'hidden';
+        return value;
+      });
+      let absent;
+      try {
+        absent = await stage.screenshot({ animations: 'disabled' });
+      } finally {
+        await image.evaluate((element, value) => { element.style.visibility = value; }, previous);
       }
-      const image = page.locator('.museum-hub__image');
-      await image.evaluate((element) => element.decode());
-      if (await page.locator('.museum-hub').isVisible()) {
-        const stage = page.locator('.museum-hub__stage');
-        const present = await stage.screenshot({ animations: 'disabled' });
-        const previous = await image.evaluate((element) => {
-          const value = element.style.visibility;
-          element.style.visibility = 'hidden';
-          return value;
-        });
-        let absent;
-        try {
-          absent = await stage.screenshot({ animations: 'disabled' });
-        } finally {
-          await image.evaluate((element, value) => { element.style.visibility = value; }, previous);
-        }
-        if (present.equals(absent)) throw new Error(`${state.name}: decoded photograph contributes no visible pixels`);
-      }
+      if (present.equals(absent)) throw new Error(`${state.name}: decoded photograph contributes no visible pixels`);
     }
   }
 

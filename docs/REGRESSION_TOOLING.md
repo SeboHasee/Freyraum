@@ -56,11 +56,19 @@ capture remains blocked under software Chrome by the pre-existing invariant
 Subsequent `file://` smoke, WebGL resilience, 10 deploy-validator fixture cases
 and syntax checks also pass. Ordinary primary/fallback, neutral, phone and
 shape/doorway captures work after fixture repairs, but the transparent-primary
-fixture fails (`fixture-blank-primary did not resolve through embedded fallback`):
-the DOM path accepts invisible decoded artwork without the former GPU visibility
-gate. Track a DOM-compatible pixel/alpha recovery check before claiming parity;
-do not mark the full visual suite green. Shipping missing-content failures and
+fixture originally failed (`fixture-blank-primary did not resolve through embedded
+fallback`). A conservative DOM alpha gate is now implemented: a nonempty 4×4
+sample succeeds; an empty sample checks native alpha in ≤128×128 tiles within
+1,048,576 source pixels. Only proven all-zero alpha triggers fallback; over-budget
+or unavailable/tainted readback remains inconclusive, preserving sparse strokes.
+Method checks (including a sparse final-native-pixel case), lint/typecheck/build
+and front-wall-aspect pass; rebuilt browser recovery confirmation remains pending.
+Do not mark the full visual suite green. Shipping missing-content failures and
 software-Chrome shadow/selection/restore investigations remain separate.
+
+Final parallel validation was attempted after commit but hit its tool time limit
+and was not retried. Earlier CodeQL reported zero findings; automated review was
+unavailable. Focused review found the sparse-alpha issue addressed above.
 
 | Type | Risk | Tool in this repo | How to run |
 |---|---|---|---|

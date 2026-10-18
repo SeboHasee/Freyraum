@@ -881,6 +881,48 @@ assert.equal(
   false,
   'server-backed artwork sources must keep the declared image primary outside explicit debug proof'
 );
+const outcomeRecords = [];
+const outcomeDiagnostics = {
+  info: (event, message, data) => outcomeRecords.push({ level: 'info', event, message, data }),
+  warn: (event, message, data) => outcomeRecords.push({ level: 'warn', event, message, data }),
+};
+const domOutcome = {
+  route: 'hub',
+  presentationPath: 'dom',
+  artworkId: 'fraktal',
+  bundleId: null,
+  runtimeProtocol: 'file:',
+  candidateMode: 'embedded-webgl-fallback',
+  resolvedUrlType: 'data-uri',
+  usedEmbeddedFallback: true,
+  attemptedEmbeddedFallback: true,
+  result: 'success',
+  firstFailedStage: null,
+  failureReason: null,
+  elapsedMs: 1,
+  sourceWidth: 3780,
+  sourceHeight: 5046,
+  uploadWidth: null,
+  uploadHeight: null,
+  downscaleApplied: false,
+  rendererMaxTextureSize: null,
+  visibleProbe: null,
+};
+sourceToPixelOutcome.recordSourceToPixelOutcome(outcomeDiagnostics, domOutcome);
+assert.equal(outcomeRecords[0].level, 'info');
+assert.equal(outcomeRecords[0].event, 'source-to-pixel-outcome');
+assert.match(outcomeRecords[0].message, /decoded.*DOM presentation.*no WebGL upload/);
+assert.doesNotMatch(outcomeRecords[0].message, /proved|GPU|source→decode→GPU→pixels/);
+assert.deepEqual(outcomeRecords[0].data, domOutcome, 'DOM outcomes must preserve native dimensions and null GPU evidence');
+sourceToPixelOutcome.recordSourceToPixelOutcome(outcomeDiagnostics, {
+  ...domOutcome, route: 'gallery', presentationPath: 'webgl',
+});
+assert.match(outcomeRecords[1].message, /Gallery artwork proved source→decode→GPU→pixels/, 'interactive gallery must retain its WebGL outcome wording');
+sourceToPixelOutcome.recordSourceToPixelOutcome(outcomeDiagnostics, {
+  ...domOutcome, result: 'failed', firstFailedStage: 'decode', failureReason: 'decode-error',
+});
+assert.equal(outcomeRecords[2].level, 'warn');
+assert.match(outcomeRecords[2].message, /failed.*decode stage/, 'DOM decode failures must remain explicit warnings');
 assert.ok(
   Math.abs(galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallGap - 0.14) < 1e-9,
   'interactive-gallery inspection wall must stay set back enough to preserve close-view tilt freedom'

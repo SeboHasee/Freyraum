@@ -167,6 +167,10 @@ when it forwards into `customer-preview/app.html`. Relevant current records are:
   native decoded source dimensions and null GPU/probe fields, explicitly
   reporting decode for calibrated DOM presentation with no WebGL upload.
   Source redaction and inspection-gallery diagnostics remain unchanged.
+  Under the existing verbose/local-file probe policy, DOM recovery can also
+  reject a proven all-zero-alpha source (`visible-pixel-probe`,
+  `zero-alpha-source`). This conservative source-alpha check is not GPU proof;
+  unavailable, tainted or over-budget readback is inconclusive rather than failure.
   A healthy local `file://` museum-hub
   recovery can now legitimately end with
   `candidateMode: "embedded-webgl-fallback"` and

@@ -29,9 +29,10 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       pixel contribution and museum/editor homography parity.
 - [x] `file://` smoke, WebGL resilience, 10 deploy-validator fixture cases and
       syntax checks pass; real shipping-content failures remain separate.
-- [ ] Restore transparent-primary visibility recovery in the DOM photo path:
-      the blank-primary fixture currently accepts invisible decoded artwork
-      instead of using embedded fallback. Do not equate decode with visible pixels.
+- [x] Implement bounded transparent-primary alpha recovery with conservative
+      native-alpha scanning; method checks include sparse valid strokes.
+- [ ] Confirm transparent-primary embedded fallback in the rebuilt browser
+      fixture; implementation/method passes are not browser proof.
 - [ ] Resolve/characterize the pre-existing software-Chrome visual-capture
       invariant (`shadow-casting light count 1 != expected 2`); no Type A pass
       is claimed.

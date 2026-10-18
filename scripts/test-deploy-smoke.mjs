@@ -157,6 +157,24 @@ try {
       await page.locator('.museum-hub__pager-arrow--next').click();
     }
   }
+  // Diagnostics coalesces identical messages, so validate retained outcome
+  // samples rather than assuming one retained record per artwork.
+  const domOutcomes = await page.evaluate(() => {
+    const entries = (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+      .filter((entry) => entry.event === 'source-to-pixel-outcome'
+        && entry.data?.route === 'hub' && entry.data?.result === 'success');
+    return entries.length > 0 && entries.every((entry) => {
+      const data = entry.data;
+      const image = [...document.querySelectorAll('.museum-hub__artwork[data-artwork-id]')]
+        .find((element) => element.dataset.artworkId === data.artworkId)?.querySelector('.museum-hub__art');
+      return image && data.presentationPath === 'dom'
+        && data.sourceWidth === image.naturalWidth && data.sourceHeight === image.naturalHeight
+        && data.uploadWidth === null && data.uploadHeight === null
+        && data.rendererMaxTextureSize === null && data.visibleProbe === null
+        && entry.message.includes('DOM presentation (no WebGL upload)');
+    });
+  });
+  check(domOutcomes, 'retained diagnostic outcomes report native-size DOM decoding, not GPU/pixel proof');
 
   const editorUrl = new URL(process.env.FREYRAUM_SMOKE_EDITOR_URL ?? url.href);
   editorUrl.searchParams.set('hubCalibrate', '1');

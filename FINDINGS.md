@@ -28,15 +28,27 @@
   projection parity. Geometry, WebGL resilience, the 10 deploy-validator fixture
   cases and syntax checks pass. These fixture passes do not override the real
   shipping-content validation failures above.
-- **Open coupled visibility regression:** the DOM photo path accepts a decoded
-  fully transparent primary image without recovering through its embedded
-  fallback (`fixture-blank-primary did not resolve through embedded fallback`).
-  Removing the GPU probe removed that visibility gate; decode is insufficient.
-  A bounded DOM-compatible pixel/alpha check needs implementation consideration
-  before claiming equivalent recovery coverage. Ordinary primary/fallback,
+- **Transparent-primary recovery implemented; browser confirmation pending:**
+  the failing blank-primary fixture exposed that DOM decode alone accepted
+  invisible artwork. Recovery now uses a conservative alpha check under the
+  existing verbose/local-file probe policy: a 4×4 sample accepts nonzero alpha
+  immediately; an empty sample triggers native-resolution scanning in tiles of
+  at most 128×128 pixels, within a 1,048,576-source-pixel budget. Only proven
+  all-zero alpha rejects the source (`zero-alpha-source`) and retries fallback.
+  Over-budget or unavailable/tainted readback is inconclusive and accepted, so
+  sparse valid strokes are not rejected. GPU evidence stays null for DOM.
+  Transparent/black/white/faint-alpha, unavailable/tainted readback and sparse
+  final-native-pixel method checks pass, as do lint/typecheck/build and the
+  front-wall-aspect check; post-rebuild browser recovery confirmation is pending.
+  Ordinary primary/fallback,
   neutral, phone and shape/doorway captures work after stale fixture repairs,
   but the full visual suite does not pass. The shadow invariant and software-
   Chrome selection/focus/restore diagnostics remain unresolved investigations.
+- **Final review limits:** final parallel validation was attempted after commit
+  but reached its tool time limit; it was not retried. Earlier CodeQL reported
+  zero findings; the automated reviewer was unavailable. A focused reviewer
+  identified the sparse-alpha false-rejection risk, addressed by the conservative
+  native-alpha refinement above. This is not a full visual-suite pass.
 - **Dependency status:** installation reported 17 initial advisory findings;
   `npm audit --omit=dev` reports zero. No dependency manifests changed.
 - **Diagnostic contract:** the shared source-to-pixel outcome has optional

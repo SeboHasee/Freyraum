@@ -31,6 +31,9 @@
   geometry and HTTP photographic smoke also pass, including pixel contribution
   and editor projection parity. Type A capture remains blocked by a pre-existing
   software-Chrome shadow-light-count invariant; no visual-capture pass is claimed.
+- Added bounded conservative DOM transparent-source fallback, preserving sparse
+  valid strokes through native-alpha confirmation; method checks pass, while
+  rebuilt browser recovery confirmation remains pending.
 
 ## v1.40 — Windows installer builds in CI (2026-10-17)
 
