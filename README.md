@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -16,51 +16,53 @@ walls never stretches artwork. The same editor runs in three ways:
 | **Online editor** (v1.38) | `placement-editor.html` on the gallery site (type "bearbeiten" in the gallery) | the save service (`worker/`) → a commit on `content/edits` → review → deploy | `docs/ONLINE_EDITOR_SETUP.md` (one-time owner setup) |
 | **Local file** | `OPEN_ARTWORK_EDITOR.html` (double-click) | a downloaded `museum-hub.json` to copy into `customer-artworks/` | `docs/CUSTOMER_PICTURE_GUIDE.md` |
 
-Placement rules (wall ownership, complete-quad mounting zones, valid-only
-save/export, fixed camera/room/wall data) are the same in all three; see
+Placement rules (wall ownership, complete-quad mounting checks, error-only
+save/export blocking, editable wall quads and compatible fixed 3D models) are
+the same in all three; see
 `ARCHITECTURE_MAP.md` → "Deterministic curator editor".
 
 ## Current project state
 
-- Runtime renderer: WebGL (WebGPU is opt-in probe mode only).
+- The museum and editor share photograph-backed, calibrated DOM artwork;
+  the inspection gallery uses WebGL (WebGPU is opt-in probe mode only).
 - Resilient startup: the real renderer is attempted directly with preferred,
   compatibility, then battery-safe attributes. Failed partial contexts are
   released; no separate detection context is retained.
 - Support contract: immersive rendering requires working WebGL 2. If it cannot
   initialize, artwork images, titles, metadata, and descriptions remain
   available in an accessible, responsive 2D museum instead of a blocking alert.
-- Startup flows from the loading screen into a manifest-driven Main Museum Hub:
-  the customer room backdrop remains the environmental plate, while a dedicated
-  on-demand WebGL room scene renders calibrated front/left/right walls inside a
-  tall 9 × 12 × 5.2 m architectural hall plus an entry enclosure behind the
-  camera, doorway passage pockets, floor/ceiling shadow gaps, longitudinal
-  perimeter luminaires, a pitched glazed skylight with procedural atmospheric
-  sky, mounted artwork depth, and soft directional contact shadows.
-- Hub interaction DOM is now only the screen-space accessibility bridge. Slots
+- Startup flows from the loading screen into a manifest-driven Main Museum Hub.
+  The customer photograph is the visible room; no opaque WebGL room covers it.
+  Museum and editor artwork pixels use the same calibrated DOM projection.
+  The source photograph `customer-artworks/Backgrounds/Museum_ohne_Bilder.png`
+  exists; the former lowercase/hyphenated JSON reference was incorrect.
+- Hub DOM owns artwork pixels as well as accessible interaction. Slots
   resolve by exact `Artwork.id` from `customer-artworks/museum-hub.json`; the
   shipping v5 hub contract persists camera far/lens-shift, room envelope,
   hanging rules, wall transforms/drawable regions/exclusion polygons, and
   canonical wall-relative artwork placement (`horizontalPosition`,
   `centerHeight`, `physicalHeight`, `mountingGap`). Runtime U/V/N mounting
   frames derive the metric anchor, preserve source aspect ratio, point every
-  artwork into the room, and project the actual mounted front face for the DOM
-  interaction bridge. Each room uses a maximum of four works—two on the front
-  wall and one safely inset on each side wall—with physical edge-cast contact
-  shadows and no oversized backing cards. Larger exhibitions paginate into additional room pages,
+  artwork into the room, and supply calibrated geometry for DOM projection.
+  Each room uses a maximum of four works—two on the front
+  wall and one safely inset on each side wall—with no oversized backing cards.
+  Larger exhibitions paginate into additional room pages,
   and narrow-portrait viewports split each room into left/right wall focus pages.
-- **Open visual acceptance:** side-wall composition is approved by customer
-  screenshot of the deployed gallery (tracked in `plan.md`); geometry and
-  editor drag tests are green.
-- Quality presets now also drive the hub room pixel ratio, architectural
-  detail resolution, skylight shadowing, and floor reflection strategy
-  (`planar`, `ibl`, `off`). The hub uses smooth near-white PBR plaster and a
-  distinct pale satin-mineral floor; physical geometry and local light create
-  their form while the closer gallery retains its tactile mapped plaster profile.
+- **Open visual acceptance:** source review verified museum/editor structural
+  divergence, but the exact original customer artifact is unavailable.
+  Built-preview browser capture confirms the photograph and both available
+  genuine images in museum/editor with no hub canvas. Further regression coverage
+  and complete-room customer approval remain tracked in `plan.md`.
+- **Missing customer content:** the reproduced `file://` baseline imports only
+  `Akt 27.png` and `Fraktal.png`. Side-slot IDs `gartenszene` and `zdigital` have
+  no matching customer or built-in images and remain unresolved/empty. The owner
+  must supply those genuine files; preserve the IDs and do not substitute works.
+  Presentation recovery cannot establish a complete four-painting room.
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
 - The interactive gallery now mounts artworks inside a compact architectural stage
   (front display wall, floor, ceiling, side returns, shadow gap, and ceiling
-  reveal) while keeping the hub on its independent v0.87 room renderer.
+  reveal), separately from the photograph-backed museum.
 - The interactive-gallery wall now keeps visible but restrained matte plaster
   texture, with a calmer ceiling response so the room reads tactile rather than
   flat.
@@ -71,11 +73,6 @@ save/export, fixed camera/room/wall data) are the same in all three; see
 - Lighting still uses one fixed balanced neutral-gallery configuration, but the
   single-artwork view now runs at a softer ambient/direct energy balance and a
   lower matte-sheen baseline so bright artworks no longer wash out as easily.
-- The hub keeps a separate daylight architectural rig: three explicitly
-  downward-facing local area sources connect the coves/skylight to wall and
-  floor illumination, a restrained sky-aligned key casts architectural shadows,
-  and low environment/hemisphere levels supply only soft fill. Battery uses a
-  simple gradient sky and inexpensive directional fallback.
 - Interactive-gallery artworks render as shallow mounted objects with no default
   decorative frame or side-preview mesh.
 - The timeline remains visible across desktop and responsive layouts; only descriptive chrome auto-hides.
@@ -96,12 +93,11 @@ save/export, fixed camera/room/wall data) are the same in all three; see
 - A grey or blank artwork is a source-to-pixel incident, not a lighting issue.
   The gallery's generated fallback, the hub's title-bearing placeholder, and a
   blank local `file://` wall plane are distinct states from a real decoded
-  image; both routes record one shared, redacted `source-to-pixel-outcome`
-  diagnostic per artwork (see `src/utils/sourceToPixelOutcome.ts`) naming the
-  first failed stage or confirming full source→decode→GPU→pixels proof, and
-  both apply a shared capability-aware downscale
-  (`src/utils/textureUploadCompatibility.ts`) before any decoded image reaches
-  the GPU. Do not compensate missing artwork pixels with room lighting or
+  image. Redacted source diagnostics must distinguish DOM image decode/display
+  from the gallery's source→decode→GPU→pixels proof
+  (`src/utils/sourceToPixelOutcome.ts`). Capability-aware downscaling
+  (`src/utils/textureUploadCompatibility.ts`) still protects GPU upload paths.
+  Do not compensate missing artwork pixels with room lighting or
   metadata; the implemented local-preview recovery is `docs/archive/plan-history-2026-10-17.md` § v0.93.
 - CSS and WebGL share one authoritative concrete-grey wall token (`#C7CED4`,
   `--color-gallery-wall`) resolved before renderer construction, so gallery,

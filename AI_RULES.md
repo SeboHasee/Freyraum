@@ -1,5 +1,5 @@
 # FREYRAUM AI rules
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 ## v1.33–v1.40 editor, saving and desktop rules
 
@@ -21,13 +21,15 @@ Current summary: `.github/copilot-instructions.md` § Current context (v1.40).
 
 ## v1.18 artwork-editor rule
 
-Use `OPEN_ARTWORK_EDITOR.html` for customer placement. Keep build-derived wall
-projection geometry read-only unless every dependent homography, room plane, and
-renderer object is rebuilt atomically. Import may apply only editor-owned zones
-and canonical placements after the fixed camera/room/wall/fallback/slot signature
-matches. Export must preserve rendered and bounds-only walls plus all fixed
-configuration fields. Keep customer-data cache busting synchronized across every
-generated `file://` entry.
+Use `OPEN_ARTWORK_EDITOR.html` for customer placement. Editable wall quads must
+update dependent projections together and preserve physical artwork size through
+calibration-scale compensation. Room counts and known-artwork assignments may
+change on import; reject incompatible fixed camera/3D room/wall models, not
+supported editable state. Export preserves rendered and bounds-only walls and
+fixed configuration fields. Layout hints never block save/export; real errors do.
+Keep customer-data cache busting synchronized across every generated `file://`
+entry. Museum and editor share photograph-backed calibrated DOM artwork; never
+cover that photograph with an opaque WebGL architectural room.
 
 ## v1.12 hub visual-acceptance rule
 

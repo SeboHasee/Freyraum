@@ -1,5 +1,66 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+
+## 2026-10-18 — Museum presentation divergence and Markdown audit
+
+- **Implemented and checked by the implementation pass:** `MainMuseumHub`
+  always uses `.is-photographic`, keeps its renderer field null and constructs
+  no `HubRoomRenderer` or hub canvas. The photograph and DOM artworks have
+  opacity 1 in museum and editor; inspection-gallery WebGL is unchanged.
+  `main.ts` uses the checked-in museum JSON when injected/legacy config is absent.
+- **Correction validation:** built-preview capture at `/tmp/freyraum-after`
+  confirms the exact requested photograph and decoded `Fraktal` / `Akt 27` in
+  both routes, with no allocated hub canvas. Lint, typecheck, build,
+  frame-budget and documentation-authority checks pass; `test:editor-rooms`
+  passes all browser cases. These checks do not supply the missing side images.
+- **Content-blocked checks:** real `validate:deploy`, four save-service cases and
+  the local-project test fail on the shipping missing IDs. `test:editor-publish`
+  cannot click the disabled empty side place (`invalid-mapping`). Geometry-test
+  format assumptions and additional pixel-contribution coverage are being
+  updated; no final result for those checks is claimed here.
+- **Dependency status:** installation reported 17 initial advisory findings;
+  `npm audit --omit=dev` reports zero. No dependency manifests changed.
+- **Baseline reproduced in `file://` (implementation pass):** the importer has
+  only `Akt 27.png` and `Fraktal.png`. Side-slot IDs `gartenszene` and `zdigital`
+  exist in neither the customer inventory nor built-ins; resolution reports
+  `invalid-mapping` and suppresses those slots, leaving empty editor places.
+  No genuine matching side images are in the repository. Preserve the authored
+  JSON IDs without substitutes; the owner must supply the missing files.
+  Four genuine paintings cannot be accepted until that content is available.
+- **Baseline renderer failure:** hub renderer initialization throws
+  `Cannot read properties of undefined (reading 'onBeforeCompile')`.
+  `ArchitecturalSurfaceFactory` is a suspected location, not a verified root
+  cause. The approved photo presentation avoids initializing the opaque room
+  renderer rather than repairing unused 3D architecture.
+- Baseline screenshots and JSON evidence were reported at
+  `/tmp/freyraum-before`; that capture does not prove the correction passes.
+  These findings establish a current local baseline, not reproduction of the
+  unavailable original customer artifact.
+- **Verified structural cause, not an artifact reproduction:** the normal hub
+  presented an independent opaque WebGL architectural room, while the editor
+  used calibrated DOM artwork over a photograph. These were different visible
+  authorities; passing wall/placement math did not prove equivalent pixels.
+  The exact customer screenshot-producing bundle/config is unavailable.
+- **Approved correction:** museum and editor use the same photograph-backed
+  calibrated DOM artwork projection. No opaque WebGL room may cover that plate.
+  Keep the Three.js inspection gallery, diagnostics, context-loss recovery and
+  bounded source fallbacks; do not label DOM image success as GPU pixel proof.
+- **Asset diagnosis corrected:** the tracked
+  `customer-artworks/Backgrounds/Museum_ohne_Bilder.png` exists. The audited JSON
+  requested `Backgrounds/museum-ohne-bilder.png`; case and separators both differ.
+  Reference the actual asset and preserve its calibration rather than inventing
+  a replacement background or claiming that it is absent.
+- **Current editor contracts:** wall quads are editable with calibration-scale
+  compensation; only errors block save/export, not layout hints or unconfirmed
+  green zones. Room counts and artwork assignments may change on import;
+  unreadable JSON and incompatible fixed camera/3D room/wall models still fail.
+- Reviewed all repository Markdown outside dependencies and `.github/agents`;
+  archives were reviewed as history and left unchanged. Current architecture,
+  query, customer, support, regression and agent rules supersede older restrictive
+  editor claims. No tests, lint, build or browser validation were run in this
+  documentation portion; the implementation pass separately reproduced the
+  baseline and correction checks above. Remaining validation and customer
+  acceptance are tracked in `plan.md`.
 
 ## 2026-10-17 — Windows installer builds in CI (v1.40)
 
@@ -77,10 +138,10 @@
 - **Lesson: shared CSS hooks.** Reusing `museum-hub__save-primary` /
   `museum-hub__publish-pending` for new buttons and lists broke strict test
   selectors; new online elements use their own classes.
-- **Customer content state.** `museum-hub.json` points to
-  `Backgrounds/Museum_ohne_Bilder.png`, which is not in the repository; the
-  runtime falls back to `museum-empty.png`. `validate:deploy` and the smoke test
-  report this as a warning, and publishing allows it only while unchanged.
+- **Customer content state (corrected 2026-10-18).** The photograph
+  `Backgrounds/Museum_ohne_Bilder.png` is tracked; the JSON requested
+  `Backgrounds/museum-ohne-bilder.png`. This is a filename-reference mismatch,
+  not a missing source asset. See the current presentation finding above.
   `inbox/Fraktal.png` is 24.8 MB (warning above 20 MB; online uploads are
   limited to 15 MB after downscaling).
 - **Pages cache.** Pages serves files with a ~10 min cache; after "Online ✓"

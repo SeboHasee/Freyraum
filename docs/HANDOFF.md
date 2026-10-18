@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -47,7 +47,9 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
    candidate and, on failure, the first failed stage (`candidate-selected`,
    `request`, `decode`, `compatibility-check`, `gpu-upload`, or
    `visible-pixel-probe`). Enable verbose diagnostics mode to also capture the
-   bounded GPU visible-pixel probe result. In a healthy local-preview hub
+   bounded GPU visible-pixel probe result for an active WebGL path. For the
+   photograph-backed museum/editor, inspect the decoded DOM image, visible
+   artwork owner and calibrated transform instead. In a healthy local-preview hub
    recovery, `candidateMode: "embedded-webgl-fallback"` is now expected when
    the declared image file URL is not WebGL-stable. Preserve the generated
    customer bundle before re-importing, and follow the implemented recovery in
@@ -57,13 +59,38 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 8. For a hub-layout mismatch, preserve the exact route/environment, visible room
    counter, commit/build identity, generated `customer-artworks.js`, injected
    `museum-hub.json`, resolved slot/page diagnostics, and screenshot before
-   regenerating output. Confirm that only the active page group is visible.
+   regenerating output. Confirm that only the active page group is visible,
+   and museum/editor show the same photograph-backed DOM artwork projection.
+   The 2026-10-18 source audit verified structural divergence from the former
+   opaque WebGL room, not reproduction of the unavailable customer artifact.
 9. Do not infer account usage or billing state from unavailable image/browser
    tooling; report the tool limitation independently.
 10. For placement support, start from `OPEN_ARTWORK_EDITOR.html`. Preserve the
     exported JSON and exact generated editor. Confirm fixed configuration
-    compatibility, complete canonical round trip, fresh cache-busted customer
-    bundles, and explicit green-zone confirmation before requesting a screenshot.
+    compatibility, complete canonical round trip and fresh cache-busted customer
+    bundles before requesting a screenshot. Room/assignment changes are supported;
+    green-zone confirmation is optional and hints do not block saving.
+
+## 2026-10-18 Markdown follow-up
+
+All repository Markdown outside dependencies and `.github/agents` was reviewed
+for this presentation/editor correction; dated archives remain unchanged.
+Current canonical docs supersede old read-only-wall, warning-blocking and
+fixed-assignment import claims. The photograph exists; the audited JSON
+referenced a different lowercase/hyphenated filename. Tests, builds and browser
+acceptance are owned by the implementation pass, not this documentation audit.
+That pass reproduced the current `file://` baseline (evidence reported at
+`/tmp/freyraum-before`): only two genuine imported works exist; `gartenszene` and
+`zdigital` remain unresolved and must be supplied by the owner. Preserve their
+JSON IDs with no substitutions. The baseline also throws an `onBeforeCompile`
+TypeError during hub renderer initialization; photo presentation avoids that
+unused opaque renderer. Neither observation proves the final correction passes.
+The implementation pass subsequently captured the built preview at
+`/tmp/freyraum-after`: exact photograph and both available paintings visible in
+museum/editor, no hub canvas. Lint/typecheck/build/frame/docs-authority and
+editor-rooms pass; deploy/save-service/local-project/editor-publish remain
+content-blocked. Geometry/pixel-contribution checks and owner acceptance remain
+open in `plan.md`.
 
 ## Handoff checklist
 

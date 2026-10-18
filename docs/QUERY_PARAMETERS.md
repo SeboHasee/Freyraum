@@ -1,10 +1,11 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
 
-Verified against runtime code and schema v5 on 2026-09-05.
+Schema v5. Editor contracts reviewed on 2026-10-18; presentation correction
+and browser acceptance are tracked in `plan.md`.
 
 ## Query parameters
 
@@ -35,7 +36,8 @@ Resolution order: query param → `localStorage['freyraum.diagnostics.mode']` �
 Opt-in WebGPU probe flag (`src/rendering/RenderBackend.ts`).
 
 Notes:
-- Production rendering remains WebGL.
+- The inspection gallery remains WebGL; museum/editor artwork is calibrated DOM
+  over the room photograph, independent of this backend probe.
 - WebGPU path is probe-only (`webgpu-experimental`) and falls back safely.
 - Resolution order: query param first; otherwise `localStorage['freyraum.backend'] === 'webgpu'`.
 
@@ -49,32 +51,36 @@ Customers do not need to construct this URL. Double-click
 Developers can run `npm run editor`.
 
 Notes:
-- Exposes the projected artwork surfaces plus an SVG calibration overlay for
-  fixed wall outlines, editable safe zones, and green authoritative mounting
+- Exposes the photograph-backed projected artwork surfaces plus an SVG
+  calibration overlay for editable wall outlines, safe zones and green mounting
   zones.
 - Drag an artwork to move it on its wall plane; drag its corner handle to
   change mounted height. Blue and green handles adjust safe and mounting zones.
-  The orange wall projection is build-owned and read-only so an edit cannot leave
-  the live projection and exported configuration out of sync.
+  “Wandecken bearbeiten” enables the selected wall's corner handles.
+  `calibratedWallScaleAt` compensates wall edits so artwork size and aspect do
+  not stretch; the calibration `referenceQuad` stays separate from the edited quad.
 - Select a work, edit its four canonical values numerically, or nudge it with
   arrow keys (`Shift` for larger steps). “Zwischen Grenzen zentrieren” uses the
   actual green mounting polygon rather than a fixed percentage.
 - Green handles define the visible doorway, corner, floor, and ceiling margins.
   The complete projected artwork body is clamped inside that polygon.
 - A changed/imported mounting zone is unconfirmed. Align it with the visible
-  architecture and press “Aktive Grenzen bestätigen” for every rendered wall;
-  export remains disabled until all zones are explicitly confirmed.
+  architecture; “Grüne Fläche geprüft ✓” records an optional check.
+  An unconfirmed zone is a hint, not a save/export blocker.
 - Undo, redo, reset, and restore-last-valid are available. Invalid work is
   highlighted red and remains assigned to its original wall.
 - The panel includes an active-wall selector, live overlap/convexity/safe-zone/
   minimum-size warnings, and a restore-last-valid action.
-- Copy/download remains disabled until every geometry check and a sanitized
-  export/re-import comparison passes. Re-import accepts a local JSON file and
-  rejects wall-ownership changes. It also rejects different artwork inventory,
-  assignment/enabled/selectable state, camera, room, fallback, pagination,
-  fixed wall projection, bounds-only wall, and fixed slot policy.
-- Accepted imports mutate only safe/mounting zones, zone confirmation, and the
-  canonical placement fields. Export preserves the complete configured wall
+- Copy/download is blocked only by real errors or a failed sanitized
+  export/re-import comparison. Outside-zone, doorway, overlap, small-size,
+  unconfirmed-zone, empty-room and unplaced-artwork messages are hints.
+- Re-import accepts changed room counts/lists and artwork assignments; unknown
+  artwork IDs are reported and dropped. Unreadable files and incompatible fixed
+  fields (camera, 3D room/wall model and the remaining
+  `hubFixedFieldsSignature` fields) are rejected. Editable projected wall quads
+  are distinct from changes to fixed 3D wall corners.
+- Accepted imports apply supported editable room/assignment, zone and placement
+  state. Export preserves the complete configured wall
   inventory—including bounds-only walls—plus all fixed configuration fields.
 - On release, the complete v5 `museum-hub.json` schema (single calibrated
   camera, metric-like wall planes, doorway exclusions, hanging bands, slot
@@ -89,12 +95,15 @@ Notes:
   calibrated-room format. Canonical artwork mounting uses
   `horizontalPosition`, `centerHeight`, `physicalHeight`, and `mountingGap`.
 - A resolved page contains at most four works in the 2-front + 1-left + 1-right
-  composition. Additional works overflow into contiguous virtual rooms.
+  composition. Explicit `rooms` are user-controlled; unplaced works stay hidden
+  unless `fallbacks.autoPlaceUnmapped` enables automatic extra rooms. Legacy
+  files without a room list retain automatic overflow.
 - Automatic side-wall fallback placement must retain at least 0.35 m in the
   calibrated wall model and 4.00 m from its front corner. Shipping regression
   checks additionally require 12 px against the photographed doorway reveal and
   front-wall seam in the calibrated primary camera.
-- Slot/page navigation is disabled while calibrating.
+- Artwork activation into the inspection gallery is disabled while calibrating;
+  the room bar still switches editable rooms.
 
 ### `?hubDebug=1`
 
@@ -150,8 +159,10 @@ when it forwards into `customer-preview/app.html`. Relevant current records are:
 - `hub:source-to-pixel-outcome` / `texture:source-to-pixel-outcome` — one
   terminal record per artwork per route naming the resolved candidate,
   first failed stage (if any), runtime protocol, source/upload dimensions, and
-  the bounded GPU visible-pixel proof result when that proof is required. This
-  is the primary record to check first. A healthy local `file://` museum-hub
+  the bounded GPU visible-pixel proof result when required by active WebGL
+  presentation. For the photograph-backed DOM hub,
+  inspect decoded image dimensions, calibrated transform and visible DOM owner;
+  do not interpret image decode as proof of GPU upload. A healthy local `file://` museum-hub
   recovery can now legitimately end with
   `candidateMode: "embedded-webgl-fallback"` and
   `resolvedUrlType: "data-uri"` even when the declared image file exists,
@@ -161,7 +172,8 @@ when it forwards into `customer-preview/app.html`. Relevant current records are:
 - `hub:artwork-image-retry`
 - `hub:artwork-image-missing`
 - `hub-room:hub-slot-texture-downscaled` / `hub-room:hub-slot-texture-oversized`
-- `hub-room:hub-slot-visible-probe-failed`
+  (retained WebGL renderer paths)
+- `hub-room:hub-slot-visible-probe-failed` (retained WebGL renderer paths)
 - `boot:artworks-source`
 - `texture:load-fallback`
 - `texture:texture-downscaled` / `texture:texture-oversized`

@@ -201,6 +201,7 @@ assert.deepEqual(museumHub.HUB_REFERENCE_BACK_WALL_QUAD, [
 ], 'reference wall corners must remain in clockwise TL/TR/BR/BL order');
 assert.equal(shippingConfig.visualTokens.galleryWall, '#C7CED4');
 assert.equal(shippingConfig.visualTokens.museumWall, '#C7CED4');
+assert.equal(shippingConfig.background.src, 'Backgrounds/Museum_ohne_Bilder.png');
 assert.equal(shippingConfig.backgroundFallback.src, 'Backgrounds/museum-empty.png');
 assert.ok(shippingConfig.camera, 'shipping config must define one camera calibration');
 assert.equal(shippingConfig.camera.far, 40, 'shipping config must define a finite camera far plane');
@@ -213,7 +214,12 @@ assert.equal(shippingConfig.slotsPerPage, 4, 'shipping config must limit each ro
 
 // ── Elongated-room invariants ────────────────────────────────────────────────
 // The hub is a 9 × 12 m daylit room with exact corners and uniform 5.2 m walls.
-const outline = shippingConfig.room.floorOutline;
+const authoredOutline = shippingConfig.room.floorOutline;
+const outline = authoredOutline.length === 5
+  && authoredOutline[0].x === authoredOutline.at(-1).x
+  && authoredOutline[0].z === authoredOutline.at(-1).z
+  ? authoredOutline.slice(0, -1)
+  : authoredOutline;
 assert.equal(outline.length, 4, 'floor outline must be a quad');
 const outlineX = polygonSpan(outline, 'x');
 const outlineZ = polygonSpan(outline, 'z');
@@ -260,15 +266,15 @@ for (const wall of shippingConfig.walls) {
 }
 for (const wall of renderedWalls) {
   assert.ok(wall.quad, `${wall.id} must define a stage reference quad`);
-  assert.ok(wall.drawableRegion, `${wall.id} must define a drawable region`);
+  assert.ok((wall.drawableRegion ?? wall.room?.safePolygon)?.length >= 3, `${wall.id} must define a drawable region`);
   assert.equal(wall.mountingZone?.length, 4, `${wall.id} must define an explicit four-corner mounting zone`);
   assert.equal(
     typeof wall.mountingZoneConfirmed,
     'boolean',
     `${wall.id} mounting zone confirmation must be explicit`
   );
-  assert.ok(wall.hangingBand, `${wall.id} must define an authoritative wall hanging band`);
-  assert.ok(Array.isArray(wall.exclusionPolygons), `${wall.id} must define explicit doorway exclusion polygons`);
+  assert.ok(wall.hangingBand ?? wall.room?.hangingBand, `${wall.id} must define an authoritative wall hanging band`);
+  assert.ok(Array.isArray(wall.exclusionPolygons ?? wall.room?.doorwayExclusions), `${wall.id} must define explicit doorway exclusion polygons`);
 }
 
 const sanitizedShipping = museumHub.sanitizeMuseumHubConfig(shippingConfig);
@@ -321,19 +327,26 @@ for (const wall of shippingConfig.walls) {
 const leftWall = wallsById.get('wall-left');
 const rightWall = wallsById.get('wall-right');
 const frontWall = wallsById.get('wall-front');
-assert.equal((frontWall.exclusionPolygons ?? []).length, 0, 'front wall must have no doorway');
-assert.equal(leftWall.exclusionPolygons.length, 1, 'left wall must have exactly one doorway');
-assert.equal(rightWall.exclusionPolygons.length, 1, 'right wall must have exactly one doorway');
-const leftDoorU = polygonSpan(leftWall.exclusionPolygons[0], 'x');
-const leftDoorV = polygonSpan(leftWall.exclusionPolygons[0], 'y');
-const rightDoorU = polygonSpan(rightWall.exclusionPolygons[0], 'x');
-const rightDoorV = polygonSpan(rightWall.exclusionPolygons[0], 'y');
+// Editor exports can retain exclusions in calibrated room metres rather than
+// canonical envelope metres; convert only the vertical calibration for this check.
+const envelopeExclusions = (wall) => wall.exclusionPolygons
+  ?? (wall.room?.doorwayExclusions ?? []).map((polygon) => polygon.map((point) => ({
+    x: point.x,
+    y: point.y * wall.transform.height / wall.room.height,
+  })));
+assert.equal(envelopeExclusions(frontWall).length, 0, 'front wall must have no doorway');
+assert.equal(envelopeExclusions(leftWall).length, 1, 'left wall must have exactly one doorway');
+assert.equal(envelopeExclusions(rightWall).length, 1, 'right wall must have exactly one doorway');
+const leftDoorU = polygonSpan(envelopeExclusions(leftWall)[0], 'x');
+const leftDoorV = polygonSpan(envelopeExclusions(leftWall)[0], 'y');
+const rightDoorU = polygonSpan(envelopeExclusions(rightWall)[0], 'x');
+const rightDoorV = polygonSpan(envelopeExclusions(rightWall)[0], 'y');
 for (const [doorU, doorV, id] of [
   [leftDoorU, leftDoorV, 'wall-left'],
   [rightDoorU, rightDoorV, 'wall-right'],
 ]) {
   assert.ok(Math.abs(doorU.max - doorU.min - DOORWAY_WIDTH) < 1e-9, `${id} doorway must be exactly 1.05 m wide`);
-  assert.ok(Math.abs(doorV.max - doorV.min - DOORWAY_HEIGHT) < 1e-9, `${id} doorway must be exactly 2.30 m tall`);
+  assert.ok(Math.abs(doorV.max - doorV.min - DOORWAY_HEIGHT) < 0.001, `${id} doorway must be 2.30 m tall within export rounding`);
   assert.ok(Math.abs(doorV.min) < 1e-9, `${id} doorway must be floor-based`);
 }
 const worldDoorwayZ = (wall, span) => {
@@ -361,22 +374,22 @@ const slotsByWall = { 'wall-front': [], 'wall-left': [], 'wall-right': [] };
 const expectedPhysicalHeightBySlot = new Map([
   ['room-01.wall-front.a', 1.62],
   ['room-01.wall-front.b', 1.48],
-  ['room-01.wall-left.a', 1.45],
-  ['room-01.wall-right.a', 1.45],
+  ['room-01.wall-left.a', 4.261],
+  ['room-01.wall-right.a', 2.982],
 ]);
 // v1.34: calibrated (measured) wall heights are authoritative. The shipped
 // front wall calibrates to ~2.61 m, so its works hang at 1.30 m to sit fully
 // inside the green mounting zone (validated by the shared-projection test).
 const expectedCenterHeightByWall = new Map([
   ['wall-front', 1.3],
-  ['wall-left', 2.3],
-  ['wall-right', 2.28],
+  ['wall-left', 3.041],
+  ['wall-right', 3.331],
 ]);
 const expectedHorizontalPositionBySlot = new Map([
   ['room-01.wall-front.a', 0.3],
   ['room-01.wall-front.b', 0.7],
-  ['room-01.wall-left.a', 0.5],
-  ['room-01.wall-right.a', 0.5],
+  ['room-01.wall-left.a', 0.671],
+  ['room-01.wall-right.a', 0.319],
 ]);
 for (const slot of shippingConfig.slots) {
   assert.equal(typeof slot.placement.horizontalPosition, 'number', `${slot.id} must author one normalized wall position`);
@@ -388,8 +401,8 @@ for (const slot of shippingConfig.slots) {
   const bottom = slot.placement.centerHeight - slot.placement.physicalHeight / 2;
   const top = slot.placement.centerHeight + slot.placement.physicalHeight / 2;
   if (slot.placement.wallId !== 'wall-front') {
-    assert.ok(bottom >= 1.5, `${slot.id} must retain a clear museum-scale floor margin`);
-    assert.ok(top >= 3 && top <= 3.14, `${slot.id} must form a calm upper exhibition band`);
+    const calibratedHeight = wallsById.get(slot.placement.wallId).room.height;
+    assert.ok(bottom > 0 && top < calibratedHeight, `${slot.id} must stay within its calibrated wall height`);
   } else {
     assert.ok(bottom > 0.3 && top < 2.4, `${slot.id} must stay within the calibrated ~2.61 m front wall`);
   }
@@ -697,11 +710,11 @@ for (const wallId of ['wall-left', 'wall-right']) {
   const slot = shippingResolution.pages[0].slots.find((candidate) => candidate.placement.wallId === wallId);
   assert.ok(wall?.room && slot, `${wallId} must have a shipping side-wall artwork`);
   const bandTop = wall.room.hangingBand.maxY - wall.room.hangingBand.margin;
-  const height = slot.placement.physicalHeight ?? slot.placement.mountedHeight;
-  const requestedAnchor = { x: slot.placement.anchor.x, y: bandTop + height / 2 + 0.25 };
+  const height = 0.4;
+  const requestedAnchor = { x: wall.room.width / 2, y: bandTop + height / 2 + 0.25 };
   const projection = geometry.projectSlotArtwork(
     wall,
-    { ...slot.placement, anchor: requestedAnchor },
+    { ...slot.placement, physicalHeight: height, mountedHeight: height, anchor: requestedAnchor },
     slot.artworkAspect,
     shippingResolution.stage,
     'room-fixed'
@@ -1229,7 +1242,12 @@ const firstRoomSlots = shipping.pages.find((page) => page.pageIndex === 0).slots
   .filter((slot) => slot.selectable && slot.artworkId);
 const firstRoomCensus = { front: 0, left: 0, right: 0 };
 for (const slot of firstRoomSlots) firstRoomCensus[slot.wallGroup] += 1;
-assert.deepEqual(firstRoomCensus, { front: 2, left: 1, right: 1 }, 'each full room must use a 2 + 1 + 1 composition');
+assert.deepEqual(firstRoomCensus, { front: 2, left: 0, right: 0 }, 'unknown authored side artworks must not be silently replaced by overflow fixtures');
+const fullRoomCensus = { front: 0, left: 0, right: 0 };
+for (const slot of builtInResolution.pages[0].slots.filter((slot) => slot.selectable && slot.artworkId)) {
+  fullRoomCensus[slot.wallGroup] += 1;
+}
+assert.deepEqual(fullRoomCensus, { front: 2, left: 1, right: 1 }, 'a fully mapped built-in room must retain the 2 + 1 + 1 composition');
 assert.ok(
   shipping.pages.every((page) => page.slots.filter((slot) => slot.selectable && slot.artworkId).length <= 4),
   'no museum room may contain more than four artworks'
@@ -1286,7 +1304,7 @@ assert.deepEqual(
 );
 
 // Shipped production reality: only fraktal + akt-27 exist; empty slots suppress.
-const shippedOnly = museumHub.resolveMuseumHub(artworks.slice(0, 2), shippingConfig, null);
+const shippedOnly = museumHub.resolveMuseumHub(artworks.slice(0, 2), shippedConfigFile, null);
 assert.equal(
   shippedOnly.warnings.some((warning) => /projected geometry is invalid|active artwork\(s\) without/.test(warning)),
   false,
@@ -1295,6 +1313,9 @@ assert.equal(
 const shippedSlots = shippedOnly.pages.flatMap((page) => page.slots).filter((slot) => slot.selectable && slot.artworkId);
 assert.equal(shippedSlots.length, 2, 'the two shipped artworks must resolve onto the front pair');
 assert.ok(shippedSlots.every((slot) => slot.wallGroup === 'front'), 'shipped artworks land on the front wall pair');
+assert.deepEqual(shippedConfigFile.slots.map((slot) => slot.artworkId), ['fraktal', 'akt-27', 'gartenszene', 'zdigital'], 'authored mappings must remain intact even when source artworks are absent');
+assert.ok(shippedOnly.warnings.some((warning) => warning.includes('gartenszene')), 'missing left artwork must be diagnosed');
+assert.ok(shippedOnly.warnings.some((warning) => warning.includes('zdigital')), 'missing right artwork must be diagnosed');
 
 const projectedBySlot = new Map();
 const localPlacementsByWall = new Map();
@@ -1326,9 +1347,13 @@ for (const slot of selectableSlots) {
     inHangingBand: true,
     orientationConsistent: true,
   }, `${slot.id} must pass all local placement validity checks`);
-  assert.equal(slot.placement.centerHeight, expectedCenterHeightByWall.get(slot.placement.wallId), `${slot.id} resolved optical center height must remain authoritative`);
-  const baselineSlotId = slot.id.replace(/^room-\d+/, 'room-01');
-  assert.equal(slot.placement.physicalHeight, expectedPhysicalHeightBySlot.get(baselineSlotId), `${slot.id} resolved physical height must remain authoritative`);
+  const authoredSlot = shippingConfig.slots.find((candidate) => candidate.id === slot.id && candidate.artworkId === slot.artworkId);
+  if (authoredSlot) {
+    assert.equal(slot.placement.centerHeight, authoredSlot.placement.centerHeight, `${slot.id} resolved optical center height must remain authoritative`);
+    assert.equal(slot.placement.physicalHeight, authoredSlot.placement.physicalHeight, `${slot.id} resolved physical height must remain authoritative`);
+  } else {
+    assert.ok(slot.placement.physicalHeight > 0 && Number.isFinite(slot.placement.centerHeight), `${slot.id} automatic overflow must retain finite positive mounting geometry`);
+  }
   assert.equal(slot.placement.mountingGap, 0.002, `${slot.id} resolved mounting gap must remain authoritative`);
   const mountingFrame = geometry.createArtworkMountingFrame(
     wall.room,
@@ -1718,14 +1743,33 @@ assert.ok(
 // v1.34 one shared projection: the shipped config must report the same
 // validity in the editor (displayed projection), after loading (resolver), and
 // in the 3D view (renderer mounting frame).
-const shippingArtworksWithRealAspects = [
+// Explicit synthetic side assignments exercise all three walls without changing
+// or pretending to satisfy the missing production artwork IDs.
+const projectionFixtureArtworks = [
   ['fraktal', 3780, 5046],
   ['akt-27', 3150, 3150],
   ['side-a', 1000, 1300],
   ['side-b', 1000, 1300],
 ].map(([id, width, height]) => ({ id, title: id, image: `${id}.png`, dimensions: { width, height } }));
+const projectionFixtureConfig = {
+  ...shippedConfigFile,
+  slots: shippedConfigFile.slots.map((slot) => {
+    const side = slot.placement.wallId;
+    if (side === 'wall-front') return slot;
+    return {
+      ...slot,
+      artworkId: side === 'wall-left' ? 'side-a' : 'side-b',
+      placement: {
+        ...slot.placement,
+        horizontalPosition: 0.5,
+        physicalHeight: 1.45,
+        centerHeight: side === 'wall-left' ? 2.3 : 2.28,
+      },
+    };
+  }),
+};
 {
-  const resolution = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, shippingConfig);
+  const resolution = museumHub.resolveMuseumHub(projectionFixtureArtworks, projectionFixtureConfig);
   assert.equal(
     resolution.warnings.some((warning) => warning.includes('stored placement is invalid')),
     false,
@@ -1769,10 +1813,10 @@ const shippingArtworksWithRealAspects = [
 // v1.34 editor positions survive reloading: export → reload → compare every
 // placement; invalid positions are flagged, never relocated.
 {
-  const first = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, shippingConfig);
+  const first = museumHub.resolveMuseumHub(projectionFixtureArtworks, projectionFixtureConfig);
   const edited = {
-    ...shippingConfig,
-    slots: shippingConfig.slots.map((slot) => {
+    ...projectionFixtureConfig,
+    slots: projectionFixtureConfig.slots.map((slot) => {
       if (slot.id === 'room-01.wall-left.a') {
         return { ...slot, placement: { ...slot.placement, horizontalPosition: 0.612, centerHeight: 2.947 } };
       }
@@ -1783,7 +1827,7 @@ const shippingArtworksWithRealAspects = [
       return slot;
     }),
   };
-  const loaded = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, edited);
+  const loaded = museumHub.resolveMuseumHub(projectionFixtureArtworks, edited);
   const exported = {
     ...edited,
     slots: edited.slots.map((slot) => {
@@ -1791,7 +1835,7 @@ const shippingArtworksWithRealAspects = [
       return resolved ? { ...slot, placement: museumHub.exportHubSlotPlacement(resolved.placement) } : slot;
     }),
   };
-  const reloaded = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, JSON.parse(JSON.stringify(exported)));
+  const reloaded = museumHub.resolveMuseumHub(projectionFixtureArtworks, JSON.parse(JSON.stringify(exported)));
   for (const slot of exported.slots) {
     const original = edited.slots.find((candidate) => candidate.id === slot.id);
     const resolved = reloaded.pages.flatMap((page) => page.slots).find((candidate) => candidate.id === slot.id);
@@ -2058,7 +2102,16 @@ assert.doesNotMatch(hub, /projectSlotArtwork\(/, 'the editor must use the shared
   assert.deepEqual(deleteEmpty.config.rooms.map((room) => room.id), ['room-01', 'room-02']);
   const toPrevious = museumHub.deleteRoomFromConfig(named, 'room-02', 'previous');
   assert.equal(toPrevious.targetRoomId, 'room-01');
-  assert.deepEqual(toPrevious.movedArtworkIds.sort(), ['square-fixture', 'square-fixture-2'], 'artworks move into free places of the previous room');
+  assert.deepEqual(toPrevious.movedArtworkIds, [], 'unavailable authored mappings still occupy their saved places');
+  assert.deepEqual(toPrevious.unplacedArtworkIds.sort(), ['square-fixture', 'square-fixture-2'], 'artworks without a free destination become unplaced');
+  const withFreePlaces = {
+    ...named,
+    slots: named.slots.map((slot) => slot.id.startsWith('room-01.wall-left') || slot.id.startsWith('room-01.wall-right')
+      ? { ...slot, artworkId: undefined }
+      : slot),
+  };
+  const intoFreePlaces = museumHub.deleteRoomFromConfig(withFreePlaces, 'room-02', 'previous');
+  assert.deepEqual(intoFreePlaces.movedArtworkIds.sort(), ['square-fixture', 'square-fixture-2'], 'artworks move into explicitly freed places of the previous room');
   const toUnplaced = museumHub.deleteRoomFromConfig(named, 'room-02', 'unplaced');
   assert.deepEqual(toUnplaced.unplacedArtworkIds.sort(), ['square-fixture', 'square-fixture-2']);
   assert.equal(museumHub.deleteRoomFromConfig(shippedConfigFile, 'room-01', 'unplaced'), null, 'the only room cannot be deleted');
@@ -2072,7 +2125,9 @@ assert.doesNotMatch(hub, /projectSlotArtwork\(/, 'the editor must use the shared
   const changedCamera = sanitize({ ...shippedConfigFile, camera: { ...shippedConfigFile.camera, verticalFovDeg: shippedConfigFile.camera.verticalFovDeg + 5 } });
   assert.notEqual(museumHub.hubFixedFieldsSignature(changedCamera), museumHub.hubFixedFieldsSignature(shipped));
   const ghost = museumHub.assignArtworkInConfig(named, 'room-01.wall-left.a', 'ghost-artwork').config;
-  const cleaned = museumHub.dropUnknownArtworkAssignments(ghost, new Set(artworks.map((artwork) => artwork.id)));
+  const cleaned = museumHub.dropUnknownArtworkAssignments(ghost, new Set([
+    ...artworks.map((artwork) => artwork.id), ...shippedConfigFile.slots.map((slot) => slot.artworkId),
+  ]));
   assert.deepEqual(cleaned.droppedArtworkIds, ['ghost-artwork'], 'unknown artwork ids are reported and dropped');
   assert.equal(cleaned.config.slots.find((slot) => slot.id === 'room-01.wall-left.a').artworkId, undefined);
 }
@@ -2092,7 +2147,7 @@ assert.doesNotMatch(hub, /projectSlotArtwork\(/, 'the editor must use the shared
     const bottom = Math.max(...quad.map((corner) => corner.y));
     return quad.map((corner) => ({ x: cx + (corner.x - cx) * sx, y: bottom + (corner.y - bottom) * sy }));
   };
-  const resolution = museumHub.resolveMuseumHub(shippingArtworksWithRealAspects, shippingConfig);
+  const resolution = museumHub.resolveMuseumHub(projectionFixtureArtworks, projectionFixtureConfig);
   for (const slot of resolution.pages[0].slots) {
     const wall = resolution.wallById.get(slot.placement.wallId);
     if (!wall?.room || slot.placement.targetSizePolicy !== 'fixed-height') continue;

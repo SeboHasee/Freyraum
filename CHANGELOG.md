@@ -1,5 +1,34 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+
+## Unreleased — photograph-backed museum correction (2026-10-18)
+
+- Align the museum and placement editor on calibrated DOM artwork over the
+  customer photograph instead of an opaque WebGL room covering the background;
+  retain the Three.js inspection gallery and renderer reliability safeguards.
+- Correct the background reference to the existing `Museum_ohne_Bilder.png`;
+  the earlier missing-asset diagnosis confused it with a lowercase/hyphenated
+  JSON filename.
+- Synchronize current documentation for editable wall quads, warning-only save
+  hints, room/assignment imports and presentation-specific diagnostics.
+- Source review verifies structural divergence, not the exact customer artifact
+  (unavailable). Browser/build/test results are not claimed by this documentation
+  audit; acceptance remains open in `plan.md`. Historical archives are unchanged.
+- The implementation pass reproduced the current `file://` baseline: only
+  `Akt 27.png` and `Fraktal.png` import; unresolved `gartenszene` / `zdigital`
+  mappings suppress the side slots. The owner must supply genuine missing images;
+  authored IDs remain unchanged and no four-painting recovery is claimed.
+- Baseline hub initialization also fails with an `onBeforeCompile` TypeError.
+  Photograph presentation avoids the unused opaque room renderer; this is not
+  a claimed repair of its architectural-material implementation.
+- `MainMuseumHub` always uses photograph/DOM presentation without constructing
+  a room renderer or canvas; `main.ts` falls back to the checked-in museum JSON
+  when injected/legacy config is absent. Inspection-gallery WebGL is unchanged.
+- Implementation validation: built-preview capture confirms the exact photograph
+  and both available paintings in museum/editor; lint, typecheck, build,
+  frame-budget, docs-authority and editor-rooms pass. Deploy/save-service/
+  local-project/editor-publish remain blocked by missing side artwork content;
+  geometry/pixel-contribution coverage is still being finalized.
 
 ## v1.40 — Windows installer builds in CI (2026-10-17)
 

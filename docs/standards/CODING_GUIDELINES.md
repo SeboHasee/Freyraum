@@ -1,14 +1,15 @@
 # FREYRAUM coding guidelines
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 ## v1.18 placement-editor guideline
 
-Keep derived wall projection read-only unless the resolution and renderer are
-rebuilt atomically. Apply imported data only after fixed camera/room/wall,
-fallback, pagination, inventory, assignment, and slot-policy state matches.
-Export from the complete configured model, including bounds-only walls. Preserve
-native keyboard behavior in form controls and cache-bust customer bundles in
-every generated file-preview entry.
+Update editable wall quads and dependent projections together, compensating
+calibration scale so artwork size does not change. Import supports room-count
+and artwork-assignment changes, but rejects incompatible fixed camera/3D
+room/wall models. Export from the complete configured model, including bounds-only
+walls; only errors block saving, not layout hints. Museum and editor share the
+photograph-backed DOM artwork owner. Preserve native keyboard behavior in form
+controls and cache-bust customer bundles in every generated file-preview entry.
 
 ## v1.12 hub-layout guideline
 

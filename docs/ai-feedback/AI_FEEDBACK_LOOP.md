@@ -1,13 +1,15 @@
 # AI feedback loop
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 ## v1.18 placement-editor feedback-loop note
 
 When placement feedback shows that numeric iteration is not converging, stop
-guessing and use the standalone editor. Keep wall ownership fixed, distinguish
-build-derived projection from editable zones, reject partial/hybrid imports,
-preserve the complete fixed configuration during export, and require the
-customer's exported JSON plus screenshot for final visual acceptance.
+guessing and use the standalone editor. Distinguish editable wall quads, zones,
+rooms and assignments from the fixed 3D model; reject incompatible hybrid
+imports, preserve the complete configuration during export, and require the
+customer's exported JSON plus screenshot for final visual acceptance. A source
+audit can verify structural museum/editor divergence without reproducing the
+exact customer artifact; label that evidence boundary explicitly.
 
 ## v1.12 feedback-loop note
 

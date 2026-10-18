@@ -33,6 +33,7 @@ export type SourceToPixelResult = 'success' | 'failed';
 
 export interface SourceToPixelOutcome {
   route: SourceToPixelRoute;
+  presentationPath?: 'webgl' | 'dom';
   artworkId: string;
   bundleId: string | null;
   runtimeProtocol: string | null;
@@ -110,7 +111,9 @@ export function recordSourceToPixelOutcome(
   const log = outcome.result === 'success' ? diagnostics.info.bind(diagnostics) : diagnostics.warn.bind(diagnostics);
   const message =
     outcome.result === 'success'
-      ? `${outcome.route === 'hub' ? 'Hub' : 'Gallery'} artwork proved source\u2192decode\u2192GPU\u2192pixels`
+      ? outcome.presentationPath === 'dom'
+        ? 'Hub artwork decoded for calibrated DOM presentation (no WebGL upload)'
+        : `${outcome.route === 'hub' ? 'Hub' : 'Gallery'} artwork proved source\u2192decode\u2192GPU\u2192pixels`
       : `${outcome.route === 'hub' ? 'Hub' : 'Gallery'} artwork failed source-to-pixel proof at ${outcome.firstFailedStage ?? 'unknown'} stage`;
   log('source-to-pixel-outcome', message, outcome);
 }

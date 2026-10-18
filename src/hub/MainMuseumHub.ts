@@ -74,7 +74,7 @@ import {
   type ArtworkImageSourceCandidate,
 } from '../utils/artworkImageSources';
 import { loadHubImageAsset } from './hubAssetLoader';
-import { HubRoomRenderer, type HubArtworkPresentationKind, type SlotUpsertResult } from './HubRoomRenderer';
+import type { HubRoomRenderer, HubArtworkPresentationKind, SlotUpsertResult } from './HubRoomRenderer';
 import type { QualityPreset } from '../config/quality';
 import {
   getRuntimeProtocol,
@@ -82,7 +82,6 @@ import {
   shouldPreferEmbeddedWebglFallback,
   shouldRetryEmbeddedFallbackAfterPostUploadFailure,
 } from '../utils/sourceToPixelOutcome';
-import { releaseWebGLContext } from '../utils/webgl';
 import { EditorViewport } from './editorViewport';
 import { OnlineEditor, type BackgroundOption } from './editor/onlineEditor';
 import { usesProjectFolderLayout } from '../online/desktopBridge';
@@ -316,7 +315,7 @@ export class MainMuseumHub {
   constructor(
     app: HTMLElement,
     resolution: MuseumHubResolution,
-    preset: QualityPreset,
+    _preset: QualityPreset,
     artworks: readonly Artwork[] = []
   ) {
     this.resolution = resolution;
@@ -341,7 +340,7 @@ export class MainMuseumHub {
     this.defaultBackground = { ...resolution.background };
 
     const hub = document.createElement('section');
-    hub.className = 'museum-hub';
+    hub.className = 'museum-hub is-photographic';
     hub.setAttribute('aria-labelledby', 'museum-hub-title');
     hub.style.setProperty('--hub-aspect', String(resolution.background.aspect));
     hub.style.setProperty('--hub-stage-width', `${this.stageWidth}px`);
@@ -400,27 +399,9 @@ export class MainMuseumHub {
       );
     });
     stage.appendChild(image);
-    let hubRoomRenderer: HubRoomRenderer | null = null;
-    try {
-      hubRoomRenderer = new HubRoomRenderer(stage, resolution, preset);
-    } catch (error) {
-      const failedCanvas = stage.querySelector('canvas');
-      releaseWebGLContext(failedCanvas?.getContext('webgl2') ?? null);
-      failedCanvas?.remove();
-      hub.classList.add('is-2d');
-      this.diagnostics.warn(
-        'renderer-fallback',
-        'Hub renderer failed; continuing with the accessible DOM museum',
-        {
-          stage: 'hub-renderer-initialization',
-          message: error instanceof Error ? error.message : String(error),
-          protocol: window.location.protocol,
-        }
-      );
-    }
-    this.hubRoomRenderer = hubRoomRenderer;
-    // The editor hides the WebGL canvas; keep its renders off the input path.
-    if (this.calibrating) hubRoomRenderer?.setDeferredRendering(true);
+    // The photograph and calibrated DOM artworks are the same pixel owners in
+    // the editor and museum. An opaque room scene would hide that saved layout.
+    this.hubRoomRenderer = null;
 
     const shade = document.createElement('div');
     shade.className = 'museum-hub__shade';
@@ -1323,6 +1304,7 @@ export class MainMuseumHub {
       if (view.slot.artworkId) {
         recordSourceToPixelOutcome(this.diagnostics, {
           route: 'hub',
+          presentationPath: this.hubRoomRenderer ? 'webgl' : 'dom',
           artworkId: view.slot.artworkId,
           bundleId: sourcePlan.fallback?.bundleId ?? null,
           runtimeProtocol,
@@ -1663,9 +1645,8 @@ export class MainMuseumHub {
   }
 
   /**
-   * v0.92: folds the most recent GPU-upload/visible-pixel proof recorded by
-   * `HubRoomRenderer.upsertSlot` (via `syncSlotRenderer`) into the shared
-   * source-to-pixel outcome for a successfully resolved hub artwork.
+   * Records DOM decoding separately from any renderer upload/probe evidence;
+   * a decoded photograph-backed artwork must not claim WebGL pixel proof.
    */
   private recordHubSourceToPixelOutcome(
     view: SlotView,
@@ -1693,8 +1674,8 @@ export class MainMuseumHub {
       firstFailedStage: null,
       failureReason: null,
       elapsedMs: Math.round(this.now() - options.startedAt),
-      sourceWidth: upsert?.fit?.sourceWidth ?? null,
-      sourceHeight: upsert?.fit?.sourceHeight ?? null,
+      sourceWidth: upsert?.fit?.sourceWidth ?? view.image?.naturalWidth ?? null,
+      sourceHeight: upsert?.fit?.sourceHeight ?? view.image?.naturalHeight ?? null,
       uploadWidth: upsert?.fit?.targetWidth ?? null,
       uploadHeight: upsert?.fit?.targetHeight ?? null,
       downscaleApplied: upsert?.fit?.needsDownscale ?? false,
@@ -1720,6 +1701,7 @@ export class MainMuseumHub {
     if (!view.slot.artworkId) return;
     recordSourceToPixelOutcome(this.diagnostics, {
       route: 'hub',
+      presentationPath: this.hubRoomRenderer ? 'webgl' : 'dom',
       artworkId: view.slot.artworkId,
       bundleId: options.bundleId,
       runtimeProtocol: getRuntimeProtocol(),

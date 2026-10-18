@@ -1,5 +1,5 @@
 # Contributing
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 ## Validation baseline
 
@@ -75,10 +75,12 @@ acceptance or that the observed artifact was built from the current branch.
 
 When changing the standalone placement editor, verify both
 `placement-editor.html` and generated
-`customer-preview/placement-editor.html`. Preserve fixed camera/room/wall,
-fallback, pagination, inventory, assignment, and slot-policy fields across
-export/import. If importer output changes, confirm both file-preview entries use
-fresh cache-busting query strings.
+`customer-preview/placement-editor.html`. Preserve compatible fixed camera/3D
+room/wall data and the complete configured model across export/import, while
+allowing supported room-count and artwork-assignment changes. Wall quads are
+editable, and layout hints do not block saving. Museum and editor must agree on
+photograph-backed DOM artwork projection. If importer output changes, confirm
+both file-preview entries use fresh cache-busting query strings.
 
 ## Architecture drift audit (required when architecture-affecting changes occur)
 

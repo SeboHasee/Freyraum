@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -40,14 +40,14 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     reconciliation, doorway-safe deterministic placement solving, polygon
     checks, validated U/V/N artwork mounting frames, and mounted-front-face
     projection for hub interaction geometry
-  - `HubRoomRenderer`: on-demand 9 × 12 × 5.2 m WebGL hall, pitched glazed
-    skylight over a raised clerestory, procedural atmospheric sky and matching
-    cached low-energy PMREM, longitudinal perimeter channels, page groups,
-    high-only planar floor reflection, three quality-gated downward area sources,
-    one architectural shadow map, wall-relative 22 mm artwork bodies with exact
-    2 mm back clearance, edge-cast wall contact without a separate shadow card,
-    and preset-driven rendering fidelity
-  - `MainMuseumHub`: DOM/accessibility shell over the backdrop + 3D room scene,
+  - `HubRoomRenderer`: retained source infrastructure, not instantiated by
+    `MainMuseumHub` (its renderer field remains null; no hub canvas is allocated).
+    Museum and editor always use `.is-photographic`; photograph and artwork
+    opacity remain 1. It must not place an opaque
+    architectural scene over the customer photograph. The baseline
+    `onBeforeCompile` initialization failure is not claimed repaired.
+  - `MainMuseumHub`: photograph-backed DOM artwork presentation shared with
+    the placement editor, with calibrated homographies and accessible controls,
     room/wall paging, idle later-page decode, background fallback/calibration
     flow, persistent artwork-ID selection state, declared-image/embedded-fallback
     slot state, offline `file://` hub source preference/decode deadlines for
@@ -56,11 +56,20 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
 
 ## Current hub-layout acceptance boundary
 
-The source-of-truth geometry is the resolved v5 config and its page-scoped U/V/N
-mounting output. A screenshot from a generated or deployed artifact is not
+The visible room is the customer photograph; artwork and editor overlays share
+the resolved v5 calibrated projection and page-scoped placement authority.
+The Three.js inspection gallery remains a separate presentation. A screenshot
+from a generated or deployed artifact is not
 assumed to match that state unless the matching `customer-artworks.js`,
 `museum-hub.json`, route, and build are preserved. Customer screenshot approval
-of the side walls remains an open acceptance item in `plan.md`.
+of the side walls remains an open acceptance item in `plan.md`. Source review
+verified the former photograph/editor versus opaque-room/museum divergence;
+the exact reported customer artifact is unavailable, so that is not a claimed
+browser reproduction.
+The implementation pass separately reproduced the current local `file://`
+baseline: two imported images, with `gartenszene` / `zdigital` absent from both
+inventories and suppressed as `invalid-mapping`. Their JSON IDs stay unchanged;
+complete four-work acceptance needs genuine owner-supplied images.
 
 ## Deterministic curator editor
 
@@ -69,7 +78,9 @@ of the side walls remains an open acceptance item in `plan.md`.
 resolved model. `museumHub.ts` owns schema sanitization, wall ownership,
 mounting-zone containment, and canonical v5 placement. Each rendered wall has an
 explicit stage-space `mountingZone`; every projected artwork corner must remain
-inside it. Export is blocked on any warning and is accepted only after
+inside it for valid placement. Layout warnings do not block export; only errors
+(broken geometry, missing wall, failed projection or round-trip failure) do.
+Export is accepted only after
 sanitize/re-import preserves wall ID plus all four canonical placement fields.
 `placement-editor.html` is the served editor entry,
 `customer-preview/placement-editor.html` is its generated file-safe build, and
@@ -77,11 +88,14 @@ sanitize/re-import preserves wall ID plus all four canonical placement fields.
 reuse the same runtime and schema rather than maintaining a second placement
 implementation.
 
-Editor state is deliberately split into fixed and editable data. Camera,
-global room values, rendered/bounds-only wall inventory, wall projection
-transforms, fallback policy, pagination, slot inventory, assignment, and fixed
-slot policies must match the active build on import. Only safe/mounting zones,
-zone confirmation, and canonical placement values are applied. Export starts
+Editor state is deliberately split into fixed and editable data. Wall quads,
+safe/mounting zones and canonical placements are editable; calibration-scale
+compensation preserves artwork size. Room lists/counts and artwork assignments
+may differ on import; unknown artwork IDs are reported and dropped. Import
+still requires compatible fixed camera, 3D room/wall model and other fields
+covered by `hubFixedFieldsSignature`; it is not an arbitrary scene import.
+The editable 2D quad is not permission to rewrite the fixed 3D wall corners.
+Export starts
 from the complete configured wall inventory so bounds-only walls and fixed
 fields survive the round trip. `scripts/import-artworks.mjs` and
 `scripts/write-local-preview.mjs` cache-bust customer data in both file entries.
@@ -92,8 +106,8 @@ fields survive the round trip. `scripts/import-artworks.mjs` and
 - `src/utils/`
   - `artworkImageSources.ts`: shared declared-image/embedded-fallback source
     plan used by both gallery and hub
-  - `sourceToPixelOutcome.ts`: shared, redacted source→decode→GPU→visible-pixels
-    outcome contract recorded once per artwork per route (gallery and hub)
+  - `sourceToPixelOutcome.ts`: redacted route-aware outcome diagnostics;
+    DOM decode/display evidence must not be reported as GPU visible-pixel proof
   - `textureUploadCompatibility.ts`: shared capability-aware downscale applied
     before any decoded image reaches the GPU in either route
   - `sourceToPixelProbe.ts`: bounded, verbose-mode-only GPU visible-pixel
@@ -141,28 +155,29 @@ fields survive the round trip. `scripts/import-artworks.mjs` and
 ## Startup sequence ownership
 
 1. `main.ts` resolves startup mode, the museum-hub configuration
-   (`resolveMuseumHub`: injected → legacy-migrated → built-in), applies the
+   (injected → legacy-migrated → checked-in museum JSON fallback), applies the
    resolved wall-surface color path (CSS vars + shell + renderer clear color),
    and initializes managers with that authoritative value.
 2. `GalleryManager` applies startup readiness contract and preload/warm strategy.
 3. `RendererManager` prewarms renderer pipeline.
-4. `MainMuseumHub` prepares the hub (background fallback + optional room scene +
+4. `MainMuseumHub` prepares the hub (photograph/background fallback +
    first-page artwork primary/fallback decode) under the loading overlay via
-   the existing DOM artwork controls. If its independent room renderer fails,
-   it switches locally to visible DOM artwork imagery without aborting startup.
+   the calibrated DOM artwork controls. The normal museum and editor must not
+   depend on successful rendering of an opaque architectural room.
    `DestinationRouter.startAt('hub')`.
 5. UI entry flow continues after readiness gates are satisfied.
 
 ## Active artwork-recovery boundary
 
-The v0.93 artwork-recovery contract is current runtime behavior. Gallery and
-hub share the same declared-image versus embedded-fallback source plan, shared
-source-to-pixel diagnostics, visible-pixel proof, and capability-aware texture
-upload path. Served environments keep the declared `image` source primary. The
+Gallery and hub retain the declared-image versus embedded-fallback source plan
+and redacted diagnostics. The photograph-backed hub uses DOM artwork pixels;
+GPU upload limits and visible-pixel probes apply only to active WebGL paths,
+not as a requirement for successful DOM presentation.
+Served environments keep the declared `image` source primary. The
 bounded local-preview exception lives in `MainMuseumHub`: when the runtime is
 the offline `file://` preview and the declared hub artwork resolves to a local
 `file-url`, the hub may prefer the importer-provided embedded `webglImage`
-immediately because that is the WebGL-stable path proven by the v0.93 fix. Keep
+immediately for bounded local-preview recovery inherited from v0.93. Keep
 this recovery separate from interactive-gallery PBR/lighting fidelity work. See
 `docs/archive/plan-history-2026-10-17.md` § v0.93 and `FINDINGS.md` for the incident evidence and support
 workflow.

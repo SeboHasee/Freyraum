@@ -1,5 +1,5 @@
 # FREYRAUM — GitHub Pages Deployment Guide
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 This document describes the full operator flow for publishing the gallery to
 GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
@@ -44,6 +44,10 @@ and additionally syncs the generated output to `public/` so a local
 committed museum backgrounds from `customer-artworks/Backgrounds/` to
 `public/backgrounds/` (`museum-target.png` is excluded — it is a calibration
 reference asset, not a shipped runtime background).
+
+The supplied room photograph is `Museum_ohne_Bilder.png`, not
+`museum-ohne-bilder.png`. Preserve its exact filename through JSON, preview,
+public and deployed paths; it is present in source, not a missing customer asset.
 
 Open `customer-preview/app.html` to verify the local preview looks correct
 before publishing.
@@ -143,6 +147,8 @@ After the workflow completes:
 - [ ] Artwork title/description text (from `.txt` sidecar) is shown.
 - [ ] Background audio plays (if audio files were committed).
 - [ ] Museum hub loads and its artwork hotspots align with the visible works.
+- [ ] Museum and editor show the same photograph-backed calibrated artwork,
+      with no opaque WebGL architectural room hiding the photograph.
 - [ ] Browser console shows no 404 errors for `customer-artworks.js`, artwork
       images, or museum backgrounds.
 
@@ -162,8 +168,9 @@ After the workflow completes:
    changing lighting, material, or customer metadata.
 5. Follow the source-to-pixel recovery process in `docs/archive/plan-history-2026-10-17.md` § v0.93; it covers
    missing/stale bundles, relative-path resolution, fallback payloads, local
-   `file://` hub recovery, decode deadlines, GPU binding proof, and
-   texture-size limits.
+   `file://` hub recovery and decode deadlines. GPU binding proof and
+   texture-size limits apply to active WebGL paths; check DOM image visibility
+   and calibrated transforms for the photograph-backed museum/editor.
 
 ---
 

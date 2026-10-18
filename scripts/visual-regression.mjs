@@ -155,24 +155,10 @@ const POST_UPLOAD_BLANK_FIXTURES = [
 ];
 
 function hubFixture(artworks) {
-  return {
-    artworks,
-    museumHub: {
-      ...SHIPPING_HUB_CONFIG,
-      slots: SHIPPING_HUB_CONFIG.slots.map((slot) => ({
-        ...slot,
-        ...(slot.id === 'room-01.wall-left.outer'
-          ? { artworkId: artworks[0].id }
-          : slot.id === 'room-01.wall-right.inner'
-            ? { artworkId: artworks[1].id }
-            : {}),
-      })),
-    },
-  };
+  return fullMappedHubFixture(artworks);
 }
 
 function fullMappedHubFixture(artworks) {
-  const slotIds = SHIPPING_HUB_CONFIG.slots.map((slot) => slot.id);
   return {
     artworks,
     museumHub: {
@@ -195,23 +181,25 @@ function doorwayEdgeFixture(side) {
   fixture.museumHub = {
     ...fixture.museumHub,
     slots: fixture.museumHub.slots.map((slot) => {
-      if (side === 'left' && slot.id === 'room-01.wall-left.outer') {
+      if (side === 'left' && slot.id === 'room-01.wall-left.a') {
         return {
           ...slot,
           placement: {
             ...slot.placement,
-            anchor: { x: 0.06, y: 0.52 },
-            mountedHeight: 1.38,
+            horizontalPosition: 0.06 / 12,
+            centerHeight: 0.52,
+            physicalHeight: 1.38,
           },
         };
       }
-      if (side === 'right' && slot.id === 'room-01.wall-right.outer') {
+      if (side === 'right' && slot.id === 'room-01.wall-right.a') {
         return {
           ...slot,
           placement: {
             ...slot.placement,
-            anchor: { x: 2.72, y: 0.54 },
-            mountedHeight: 1.08,
+            horizontalPosition: 2.72 / 12,
+            centerHeight: 0.54,
+            physicalHeight: 1.08,
           },
         };
       }
@@ -571,26 +559,34 @@ async function assertSelectedArtworkState(page, stateName, expectedArtworkId) {
 async function assertHubSceneBridge(page, stateName) {
   const snapshot = await page.evaluate(() => {
     const canvas = document.querySelector('.museum-hub__canvas');
-    const slots = [...document.querySelectorAll('.museum-hub__artwork[data-artwork-id]')]
+    const hub = document.querySelector('.museum-hub');
+    const slots = [...document.querySelectorAll('.museum-hub__room.is-active .museum-hub__artwork[data-artwork-id]')]
+      .filter((element) => element.querySelector('.museum-hub__art'))
       .slice(0, 4)
       .map((element) => {
         const style = getComputedStyle(element);
         const rect = element.getBoundingClientRect();
+        const image = element.querySelector('.museum-hub__art');
+        const imageStyle = getComputedStyle(image);
         return {
           artworkId: element.getAttribute('data-artwork-id'),
           transform: style.transform,
           clipPath: style.clipPath,
           width: rect.width,
           height: rect.height,
+          imageOpacity: imageStyle.opacity,
+          imageTransform: imageStyle.transform,
+          imageReady: image.complete && image.naturalWidth > 0,
         };
       });
     return {
       hasCanvas: canvas instanceof HTMLCanvasElement,
+      photographic: hub?.classList.contains('is-photographic'),
       slots,
     };
   });
-  if (!snapshot.hasCanvas) {
-    throw new Error(`${stateName}: hub did not render through the dedicated 3D room canvas`);
+  if (snapshot.hasCanvas || !snapshot.photographic) {
+    throw new Error(`${stateName}: museum must show the saved photograph, without a dedicated WebGL room canvas`);
   }
   if (snapshot.slots.length === 0) {
     throw new Error(`${stateName}: hub did not expose any interactive slot overlays`);
@@ -604,6 +600,9 @@ async function assertHubSceneBridge(page, stateName) {
     }
     if (slot.width < 12 || slot.height < 12) {
       throw new Error(`${stateName}: slot ${slot.artworkId} projected overlay is implausibly small`);
+    }
+    if (!slot.imageReady || slot.imageOpacity !== '1' || !slot.imageTransform.startsWith('matrix3d(')) {
+      throw new Error(`${stateName}: slot ${slot.artworkId} lost its decoded, opaque homographic DOM image`);
     }
   }
 }
@@ -751,13 +750,6 @@ async function readHubBackgroundSnapshot(page) {
   });
 }
 
-async function forceNeutralHubBackground(page) {
-  await page.evaluate(() => {
-    const hub = document.querySelector('.museum-hub');
-    if (hub instanceof HTMLElement) hub.classList.add('has-image-error');
-  });
-}
-
 async function ensureHubBackgroundFailSafe(page, state) {
   const { primarySrc, fallbackSrc } = getStateHubBackgroundConfig(state);
   const primaryUrl = resolveHubBackgroundUrl(page.url(), primarySrc);
@@ -790,20 +782,6 @@ async function ensureHubBackgroundFailSafe(page, state) {
     for (const failure of failed404s) {
       console.warn(`${state.name}: hub/background asset ${failure.url} returned ${failure.status}`);
     }
-    if (shouldUseNeutral) {
-      await forceNeutralHubBackground(page);
-    } else if (primaryFailed && fallbackUrl) {
-      await page.evaluate((expectedFallbackUrl) => {
-        const image = document.querySelector('.museum-hub__image');
-        if (
-          image instanceof HTMLImageElement &&
-          image.currentSrc !== expectedFallbackUrl &&
-          image.src !== expectedFallbackUrl
-        ) {
-          image.src = expectedFallbackUrl;
-        }
-      }, fallbackUrl);
-    }
     await page.waitForFunction(
       ({ expectedFallbackUrl, neutral }) => {
         const hub = document.querySelector('.museum-hub');
@@ -812,10 +790,11 @@ async function ensureHubBackgroundFailSafe(page, state) {
         const stageStyle = stage ? getComputedStyle(stage) : null;
         if (!(hub instanceof HTMLElement)) return false;
         if (neutral) {
-          return hub.classList.contains('has-image-error') && stageStyle?.backgroundColor === 'rgb(216, 221, 219)';
+          return hub.classList.contains('has-image-error') && stageStyle?.backgroundColor === 'rgb(199, 206, 212)';
         }
         return (
           image instanceof HTMLImageElement &&
+          image.complete && image.naturalWidth > 0 &&
           Boolean(expectedFallbackUrl) &&
           (image.currentSrc === expectedFallbackUrl || image.src === expectedFallbackUrl)
         );
@@ -842,6 +821,30 @@ async function ensureHubBackgroundFailSafe(page, state) {
     if (!snapshot.imageError || snapshot.stageBackgroundColor !== MUSEUM_GREY_RGB) {
       throw new Error(`${state.name}: fallback-neutral hub state did not degrade to museum-grey`);
     }
+    if (!snapshot.imageError) {
+      const expectedUrl = primaryFailed ? fallbackUrl : primaryUrl;
+      if (snapshot.currentImageSrc !== expectedUrl) {
+        throw new Error(`${state.name}: wrong background filename: ${snapshot.currentImageSrc} (expected ${expectedUrl})`);
+      }
+      const image = page.locator('.museum-hub__image');
+      await image.evaluate((element) => element.decode());
+      if (await page.locator('.museum-hub').isVisible()) {
+        const stage = page.locator('.museum-hub__stage');
+        const present = await stage.screenshot({ animations: 'disabled' });
+        const previous = await image.evaluate((element) => {
+          const value = element.style.visibility;
+          element.style.visibility = 'hidden';
+          return value;
+        });
+        let absent;
+        try {
+          absent = await stage.screenshot({ animations: 'disabled' });
+        } finally {
+          await image.evaluate((element, value) => { element.style.visibility = value; }, previous);
+        }
+        if (present.equals(absent)) throw new Error(`${state.name}: decoded photograph contributes no visible pixels`);
+      }
+    }
   }
 
   const attemptedUrls = dedupeStrings([
@@ -864,7 +867,10 @@ async function ensureHubBackgroundFailSafe(page, state) {
 async function capture(targetDir) {
   const { chromium } = await loadPlaywright();
   mkdirSync(targetDir, { recursive: true });
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({
+    ...(process.env.FREYRAUM_CHROME_PATH ? { executablePath: process.env.FREYRAUM_CHROME_PATH } : {}),
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  });
   const captureReport = [];
   for (const state of activeStates) {
     const page = await browser.newPage({ viewport: state.viewport, deviceScaleFactor: 1 });

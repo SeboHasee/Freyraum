@@ -216,11 +216,8 @@ canvas {
 // =============================================================================
 // Main Museum Hub (v0.80) — manifest-driven DOM composition
 // =============================================================================
-// The empty museum room (`museum-empty.png`) is the only runtime background;
-// each artwork is a real responsive <img> inside its own framed native
-// <button>, so visible frame bounds and hit bounds are the same element.
-// Frames share static CSS material presets (no per-slot styles) and the
-// composition adds zero WebGL draw calls or continuous renders.
+// The configured room photograph and calibrated native-ratio artwork images
+// share one projection in the museum and placement editor.
 
 .museum-hub {
   position: fixed;
@@ -284,7 +281,7 @@ canvas {
   display: block;
   object-fit: fill;
   user-select: none;
-  opacity: 0.16;
+  opacity: 1;
 }
 
 .museum-hub__canvas {
@@ -295,6 +292,7 @@ canvas {
   display: block;
 }
 
+.museum-hub.is-photographic .museum-hub__canvas,
 .museum-hub.is-calibrating .museum-hub__canvas {
   /*
    * Calibration edits the projected DOM artwork. Keep WebGL available for
@@ -487,6 +485,7 @@ canvas {
    inset 0 -1px 1px rgba(10, 12, 14, 0.2);
 }
 
+.museum-hub.is-photographic .museum-hub__art,
 .museum-hub.is-2d .museum-hub__art {
   opacity: 1;
 }
