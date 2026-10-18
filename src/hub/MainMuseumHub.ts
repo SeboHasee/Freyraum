@@ -81,6 +81,7 @@ import {
   recordSourceToPixelOutcome,
   shouldPreferEmbeddedWebglFallback,
   shouldRetryEmbeddedFallbackAfterPostUploadFailure,
+  shouldRunVisiblePixelProbe,
 } from '../utils/sourceToPixelOutcome';
 import { EditorViewport } from './editorViewport';
 import { OnlineEditor, type BackgroundOption } from './editor/onlineEditor';
@@ -1355,7 +1356,7 @@ export class MainMuseumHub {
         !!fallback
       );
       if (fallback && shouldRetryAfterPrimaryPostUploadFailure) {
-        this.diagnostics.warn('artwork-image-retry', 'Hub artwork source failed after GPU upload; retrying embedded fallback', {
+        this.diagnostics.warn('artwork-image-retry', 'Hub artwork source failed validation; retrying embedded fallback', {
           slotId: view.slot.id,
           artworkId: view.slot.artworkId,
           bundleId: fallback.bundleId,
@@ -1724,6 +1725,45 @@ export class MainMuseumHub {
     });
   }
 
+  private probeSlotSourceAlpha(image: HTMLImageElement): boolean | null {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 4;
+      canvas.height = 4;
+      const context = canvas.getContext('2d');
+      if (!context) return null;
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+      for (let i = 3; i < data.length; i += 4) {
+        if (data[i] > 0) return true;
+      }
+
+      // Downsampling can miss sparse strokes. Only reject after native-resolution
+      // confirmation; larger sources stay inconclusive to bound diagnostic work.
+      const width = image.naturalWidth;
+      const height = image.naturalHeight;
+      if (width <= 0 || height <= 0 || width * height > 1_048_576) return null;
+      canvas.width = Math.min(128, width);
+      canvas.height = Math.min(128, height);
+      for (let y = 0; y < height; y += canvas.height) {
+        for (let x = 0; x < width; x += canvas.width) {
+          const tileWidth = Math.min(canvas.width, width - x);
+          const tileHeight = Math.min(canvas.height, height - y);
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, x, y, tileWidth, tileHeight, 0, 0, tileWidth, tileHeight);
+          const tile = context.getImageData(0, 0, tileWidth, tileHeight).data;
+          for (let i = 3; i < tile.length; i += 4) {
+            if (tile[i] > 0) return true;
+          }
+        }
+      }
+      return false;
+    } catch {
+      // Tainted cross-origin/file canvases cannot prove that a DOM image is empty.
+      return null;
+    }
+  }
+
   private applyResolvedSlotSource(
     view: SlotView,
     source: ArtworkImageSourceCandidate,
@@ -1731,6 +1771,19 @@ export class MainMuseumHub {
     requestStatus: 'loaded' | 'fallback-loaded',
     dimensions: { width: number; height: number }
   ): { status: 'ready' } | { status: 'failed'; stage: 'gpu-upload' | 'visible-pixel-probe'; reason: string } {
+    // Match the existing diagnostic/file-preview policy without claiming GPU proof.
+    if (
+      !this.hubRoomRenderer &&
+      view.image &&
+      shouldRunVisiblePixelProbe({
+        runtimeProtocol: getRuntimeProtocol(),
+        resolvedUrlType: source.resolvedUrlType,
+        debugEnabled: this.diagnostics.isDebugEnabled(),
+      }) &&
+      this.probeSlotSourceAlpha(view.image) === false
+    ) {
+      return { status: 'failed', stage: 'visible-pixel-probe', reason: 'zero-alpha-source' };
+    }
     const nativeAspectRatio = nativeArtworkAspect(dimensions);
     if (!Number.isFinite(nativeAspectRatio) || nativeAspectRatio <= 0) {
       return { status: 'failed', stage: 'visible-pixel-probe', reason: 'invalid-native-aspect-ratio' };

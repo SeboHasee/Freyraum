@@ -132,9 +132,10 @@ try {
   const expectedBackgroundPath = url.protocol === 'file:'
     ? '/Backgrounds/Museum_ohne_Bilder.png'
     : '/backgrounds/Museum_ohne_Bilder.png';
-  check(decodeURIComponent(new URL(backgroundSrc).pathname).endsWith(expectedBackgroundPath),
-    `exact primary photograph selected (${backgroundSrc})`);
-  await assertPixelContribution(page, '.museum-hub__image', 'primary photograph');
+  check(Boolean(backgroundSrc) && decodeURIComponent(new URL(backgroundSrc).pathname).endsWith(expectedBackgroundPath),
+    `exact primary photograph selected (${backgroundSrc || 'no resolved image source'})`);
+  if (backgroundSrc) await assertPixelContribution(page, '.museum-hub__image', 'primary photograph');
+  else check(false, 'primary photograph: no decoded background contributes visible pixels');
 
   const seen = [];
   for (const expectedPage of expected.pages) {
