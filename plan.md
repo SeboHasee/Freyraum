@@ -83,6 +83,23 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 
 No dependency upgrades or high-resolution importer redesign are part of this fix.
 
+## Active — customer-reported timeline and tilted clipping follow-up (2026-10-18)
+
+- [x] Treat the previous timeline and entrance-depth changes as unsuccessful for
+      the user; replace assumptions with visible layout and camera-pose fixes.
+- [x] Use a full-width timeline dock (capped at 1180px), evenly distribute
+      thumbnails when all fit, and retain visible scrolling arrows on overflow.
+- [x] Present artwork title/subtitle, stronger selected state, and collection
+      progress while preserving keyboard selection and reduced-motion handling.
+- [x] Reduce the camera near plane and solve navigation tilt/depth against both
+      wall and camera clearance; preserve full entrance motion at normal zoom and
+      keep the artwork-body shadow caster unchanged.
+- [x] Add responsive fit and tilted-pose regression assertions.
+- [ ] Run production build and browser checks for 1–4 works, larger collections,
+      narrow screens, selection/keyboard controls, and camera/wall clearance.
+- [ ] Confirm the revised timeline and tilted artwork look correct in the user's
+      deployed gallery; automated geometry checks do not replace visual approval.
+
 ## Merge-readiness handoff (2026-10-18)
 
 - [x] Audit current Markdown, retain dated archives, record customer local success

@@ -1,6 +1,22 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
+## 2026-10-18 — User follow-up: timeline and tilted-artwork clipping
+
+- The prior adjustment did not resolve either issue for the user. The timeline
+  remained an intrinsic-width strip with fixed-size thumbnails, so it did not
+  visually use the gallery row. The replacement uses a full-width capped dock,
+  evenly distributes fitting thumbnails, and exposes scroll arrows only when
+  the track overflows; cards now show both title and subtitle with progress.
+- Tilted artwork can cross the camera's near plane during close inspection or
+  navigation while the camera is still zoomed in. Use a tighter near plane and
+  solve the entrance pose against both the front wall and camera; at normal
+  viewing distance the original entrance tilt/depth remain unchanged. The body
+  mesh remains the shadow caster.
+- Regression coverage checks the depth range at close zoom, preserves the normal
+  entrance pose, and exercises both wall and camera clearance throughout the
+  transition. Customer confirmation on the actual display remains necessary.
+
 ## 2026-10-18 — Artwork entrance and timeline sizing
 
 - Gallery navigation seeds the artwork group on the camera side of the negative-z

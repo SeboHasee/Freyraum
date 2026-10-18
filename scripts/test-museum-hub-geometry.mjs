@@ -83,15 +83,16 @@ const timelineLayout = await loadTsModule('src/timeline/timelineLayout.ts');
 const scss = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
 const galleryManagerSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryManager.ts'), 'utf8');
 const artworkMeshSource = readFileSync(resolve(ROOT, 'src/gallery/ArtworkMesh.ts'), 'utf8');
+const sceneManagerSource = readFileSync(resolve(ROOT, 'src/core/SceneManager.ts'), 'utf8');
 const navigationSeedDepth = Number(galleryManagerSource.match(/const NAV_SEED_POSITION_Z = (-?[\d.]+);/)?.[1]);
 assert.ok(
   navigationSeedDepth > galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
   'artwork entrance starts on the camera side of the wall plane'
 );
 assert.equal(
-  (galleryManagerSource.match(/group\.position\.z = NAV_SEED_POSITION_Z/g) ?? []).length,
+  (galleryManagerSource.match(/this\.resolveNavigationSeedPose\(/g) ?? []).length,
   2,
-  'button and timeline navigation both use the front-of-wall entrance depth'
+  'button and timeline navigation resolve a camera- and wall-safe entrance pose'
 );
 assert.equal(
   (galleryManagerSource.match(/if \(!this\.reducedMotion\) \{/g) ?? []).length,
@@ -99,11 +100,14 @@ assert.equal(
   'both navigation paths preserve reduced-motion behavior'
 );
 assert.match(artworkMeshSource, /this\.artworkBodyMesh\.castShadow = true/);
-assert.match(scss, /\.timeline\s*\{[\s\S]*?width:\s*fit-content;[\s\S]*?max-width:\s*min\(1180px/);
-assert.match(scss, /\.timeline__list\s*\{[\s\S]*?flex:\s*0 1 auto;[\s\S]*?width:\s*max-content;[\s\S]*?min-width:\s*0/);
+assert.equal(galleryPresentation.GALLERY_CAMERA_NEAR, 0.01, 'gallery camera near plane avoids cutting tilted work at close inspection distances');
+assert.match(sceneManagerSource, /GALLERY_CAMERA_NEAR/);
+assert.match(scss, /\.timeline\s*\{[\s\S]*?width:\s*min\(1180px,[\s\S]*?--timeline-progress/);
+assert.match(scss, /\.timeline__list\s*\{[\s\S]*?justify-content:\s*space-evenly;[\s\S]*?flex:\s*1 1 0;[\s\S]*?width:\s*0;[\s\S]*?min-width:\s*0/);
+assert.match(scss, /\.timeline\.timeline--scrollable \.timeline__list\s*\{\s*justify-content:\s*flex-start/);
 assert.match(scss, /\.timeline\.timeline--fits \.timeline__arrow\s*\{\s*display:\s*none/);
-assert.match(scss, /\.timeline__item\s*\{[\s\S]*?width:\s*clamp\(90px,\s*15vw,\s*150px\)/);
-assert.match(scss, /@media \(max-width: 599px\)\s*\{[\s\S]*?\.timeline__item\s*\{\s*width:\s*120px/);
+assert.match(scss, /\.timeline__item\s*\{[\s\S]*?flex:\s*0 0 clamp\(120px,\s*13vw,\s*150px\)/);
+assert.match(scss, /@media \(max-width: 599px\)\s*\{[\s\S]*?\.timeline__item\s*\{\s*flex-basis:\s*120px/);
 assert.equal(timelineLayout.timelineContentFits(640, 640, 76, true), true, 'arrow space lets small collections fit');
 assert.equal(timelineLayout.timelineContentFits(640, 640, 76, false), true, 'hidden arrows are not counted twice');
 assert.equal(timelineLayout.timelineContentFits(640, 600, 76, false), false, 'resizing a hidden-arrow timeline reveals overflow');
@@ -1300,6 +1304,80 @@ assert.ok(
 assert.ok(
   constrainedHover.maxBackShift <= constrainedHover.availableClearance + 1e-6,
   'wall-clearance clamping must remain authoritative even after the inspection setback retune'
+);
+const closeNavigationPose = inspectionSafety.resolveArtworkDepthPose({
+  targetRotX: 0,
+  targetRotY: 0.15,
+  artworkWidth: 4.2,
+  artworkHeight: 5.8,
+  bodyBackDepth: 0.032,
+  groupScale: 0.88,
+  desiredPositionZ: 0.6,
+  wallZ: galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+  cameraZ: 0.2,
+  cameraNear: galleryPresentation.GALLERY_CAMERA_NEAR,
+  clearanceMargin: 0.004,
+});
+assert.ok(
+  closeNavigationPose.appliedScale < 1 && closeNavigationPose.positionZ < 0.6,
+  'close-up navigation must adapt both entrance tilt and depth instead of moving the artwork through the camera'
+);
+assert.ok(
+  closeNavigationPose.positionZ - closeNavigationPose.maxBackShift >=
+    galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ + 0.004 - 1e-6,
+  'navigation artwork body must remain in front of the wall during its tilted entrance'
+);
+assert.ok(
+  0.2 - closeNavigationPose.positionZ - closeNavigationPose.frontShift >=
+    galleryPresentation.GALLERY_CAMERA_NEAR + 0.004 - 1e-6,
+  'all tilted artwork vertices must remain beyond the camera near plane'
+);
+let transitionPose = closeNavigationPose;
+for (let frame = 1; frame <= 60; frame += 1) {
+  const progress = frame / 60;
+  const cameraZ = 0.2 + 6.8 * progress;
+  const scale = 0.88 + 0.12 * progress;
+  transitionPose = inspectionSafety.resolveArtworkDepthPose({
+    targetRotX: closeNavigationPose.targetRotX * (1 - progress),
+    targetRotY: closeNavigationPose.targetRotY * (1 - progress),
+    artworkWidth: 4.2,
+    artworkHeight: 5.8,
+    bodyBackDepth: 0.032,
+    groupScale: scale,
+    desiredPositionZ: closeNavigationPose.positionZ * (1 - progress),
+    wallZ: galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+    cameraZ,
+    cameraNear: galleryPresentation.GALLERY_CAMERA_NEAR,
+    clearanceMargin: 0.004,
+  });
+  assert.ok(
+    transitionPose.positionZ - transitionPose.maxBackShift >=
+      galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ + 0.004 - 1e-6,
+    `navigation frame ${frame} must remain clear of the wall`
+  );
+  assert.ok(
+    cameraZ - transitionPose.positionZ - transitionPose.frontShift >=
+      galleryPresentation.GALLERY_CAMERA_NEAR + 0.004 - 1e-6,
+    `navigation frame ${frame} must remain clear of the camera`
+  );
+}
+const normalNavigationPose = inspectionSafety.resolveArtworkDepthPose({
+  targetRotX: 0,
+  targetRotY: 0.15,
+  artworkWidth: 4.2,
+  artworkHeight: 5.8,
+  bodyBackDepth: 0.032,
+  groupScale: 0.88,
+  desiredPositionZ: 0.6,
+  wallZ: galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+  cameraZ: 7,
+  cameraNear: galleryPresentation.GALLERY_CAMERA_NEAR,
+  clearanceMargin: 0.004,
+});
+assert.ok(
+  Math.abs(normalNavigationPose.positionZ - 0.6) < 1e-6 &&
+    Math.abs(normalNavigationPose.targetRotY - 0.15) < 1e-6,
+  'normal-distance navigation must preserve the full entrance depth and tilt'
 );
 const shipping = museumHub.resolveMuseumHub(artworks, shippingConfig, null);
 assert.equal(

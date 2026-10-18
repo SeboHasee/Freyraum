@@ -26,10 +26,12 @@ Required evidence for the implementation pass:
 - local generated `file://` preview and served gallery/editor agree, including
   room navigation, selection and hub→inspection→hub transitions;
 - gallery renderer initialization/context-loss recovery remains intact.
-- artwork navigation stays on the camera side of the inspection-gallery wall;
-  the mounted body continues to cast the wall shadow.
-- timeline layout shrink-wraps small artwork counts, respects its current
-  maximum width on larger collections, and keeps arrow scrolling available.
+- artwork navigation remains between the inspection-gallery wall and camera near
+  plane during close-up tilted entry; normal-distance entrance tilt and the
+  mounted body's wall shadow remain unchanged.
+- the full-width timeline distributes fitting thumbnails, caps its overall width,
+  and keeps visible arrow scrolling for overflow; browser checks cover small and
+  large counts, narrow viewports, selection, keyboard navigation, and reduced motion.
 
 Current results and dated incident evidence are in `FINDINGS.md`; do not treat
 the earlier two-image baseline as current shipping content. All four paintings
