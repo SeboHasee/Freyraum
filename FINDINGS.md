@@ -32,6 +32,9 @@
 - Root-index screenshot captured at `/tmp/freyraum-root-index-room.png`.
   Image inspection remains unavailable in this session; reference-image aesthetic
   approval is not inferred from automated visibility checks.
+- Final secret scan passes and CodeQL reports zero alerts. The automated review
+  service is unavailable (missing model); a separate read-only reviewer finds
+  no significant issues in the root-index follow-up.
 
 ## 2026-10-18 — Reference exhibition with supplied artwork
 
