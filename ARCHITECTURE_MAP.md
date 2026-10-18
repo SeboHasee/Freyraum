@@ -61,15 +61,17 @@ the resolved v5 calibrated projection and page-scoped placement authority.
 The Three.js inspection gallery remains a separate presentation. A screenshot
 from a generated or deployed artifact is not
 assumed to match that state unless the matching `customer-artworks.js`,
-`museum-hub.json`, route, and build are preserved. Customer screenshot approval
-of the side walls remains an open acceptance item in `plan.md`. Source review
-verified the former photograph/editor versus opaque-room/museum divergence;
-the exact reported customer artifact is unavailable, so that is not a claimed
-browser reproduction.
-The implementation pass separately reproduced the current local `file://`
-baseline: two imported images, with `gartenszene` / `zdigital` absent from both
-inventories and suppressed as `invalid-mapping`. Their JSON IDs stay unchanged;
-complete four-work acceptance needs genuine owner-supplied images.
+`museum-hub.json`, route, and build are preserved. The customer confirmed the
+local four-painting room after Update Gallery and supplied a screenshot;
+post-merge live verification remains open in `plan.md`. The initial two-image
+baseline and obsolete IDs are historical findings, not current content blockers.
+Current exact source names/defaults are in `README.md`.
+
+Full builds run the importer/sync through `prebuild`; injected customer JSON
+remains authoritative over the compiled fallback. Local-preview output uses
+relative `./` URLs, production `/Freyraum/`. The Pages workflow imports/builds
+from committed sources and publishes `dist/app.html` as its index, not the
+repository's local-preview launcher.
 
 ## Deterministic curator editor
 
@@ -98,7 +100,8 @@ The editable 2D quad is not permission to rewrite the fixed 3D wall corners.
 Export starts
 from the complete configured wall inventory so bounds-only walls and fixed
 fields survive the round trip. `scripts/import-artworks.mjs` and
-`scripts/write-local-preview.mjs` cache-bust customer data in both file entries.
+`scripts/write-local-preview.mjs` cache-bust customer data, runtime and styles in
+both file entries.
 - `src/navigation/`
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`

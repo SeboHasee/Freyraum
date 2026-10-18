@@ -3,6 +3,22 @@
 
 ## 2026-10-18 — Presentation authority lessons
 
+### Lesson 121 — Test the customer's entry and refresh generated authority
+
+A new compiled default did not guarantee fresh injected customer data: injected
+`museum-hub.json` takes precedence. Test root `index.html`, not only direct app
+entries; full builds must import first and all local runtime/style/data URLs
+must be versioned. The customer confirmed Update Gallery resolved the local
+stale setup. Preserve deliberate customer edits instead of overriding injection.
+
+### Lesson 122 — Separate local, production-build and live deployment evidence
+
+The nested HTTP preview failed because local output used an absolute `/` base;
+use `./` locally and retain `/Freyraum/` for production. Test both artifacts.
+A successful local screenshot is not proof of a deployed commit. Inspect Actions
+logs and require successful post-merge deploy/live smoke before claiming the site
+is updated; local `.bat` execution is not required of website visitors.
+
 ### Lesson 118 — Shared geometry is not shared presentation
 
 The editor projected artwork over the customer photograph while the museum

@@ -59,16 +59,11 @@ the same in all three; see
   wall and one safely inset on each side wall—with no oversized backing cards.
   Larger exhibitions paginate into additional room pages,
   and narrow-portrait viewports split each room into left/right wall focus pages.
-- **Open visual acceptance:** source review verified museum/editor structural
-  divergence, but the exact original customer artifact is unavailable.
-  Built-preview browser capture confirms the photograph and both available
-  genuine images in museum/editor with no hub canvas. Further regression coverage
-  and complete-room customer approval remain tracked in `plan.md`.
-- **Missing customer content:** the reproduced `file://` baseline imports only
-  `Akt 27.png` and `Fraktal.png`. Side-slot IDs `gartenszene` and `zdigital` have
-  no matching customer or built-in images and remain unresolved/empty. The owner
-  must supply those genuine files; preserve the IDs and do not substitute works.
-  Presentation recovery cannot establish a complete four-painting room.
+- **Local confirmation (2026-10-18):** the customer reports the intended setup
+  works after running `Update Gallery.bat` and supplies a four-painting screenshot.
+  Root-index and production-build smoke checks confirm all four images and the
+  photograph are visible, with matching editor geometry. Live acceptance still
+  requires the post-merge Pages deployment and smoke job; see `docs/HANDOFF.md`.
 - Startup readiness modes are active (`full`, `entry-balanced` default, `entry-minimal`).
 - Render loop keeps rAF alive for measurement but suppresses idle composer renders when gallery state is settled.
 - The interactive gallery now mounts artworks inside a compact architectural stage

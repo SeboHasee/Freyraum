@@ -3,6 +3,12 @@
 
 ## Unreleased — reference exhibition defaults (2026-10-18)
 
+- Merge handoff: synchronize all current Markdown with the four-image default,
+  record customer-confirmed local success after Update Gallery and screenshot
+  evidence, remove obsolete content-blocker guidance, and separate local/build
+  checks from owner CI approval and post-merge live deployment verification.
+- Preserve the save-service repository variable during the build's automatic
+  reimport so deployment does not reset online-editor configuration to null.
 - Follow-up to the stale-index report: full builds regenerate customer data before
   bundling; local-preview runtime/styles are cache-versioned, and the root launcher
   refreshes its destination. Customer layouts remain authoritative.
@@ -34,10 +40,10 @@
 - Source review verifies structural divergence, not the exact customer artifact
   (unavailable). Browser/build/test results are not claimed by this documentation
   audit; acceptance remains open in `plan.md`. Historical archives are unchanged.
-- The implementation pass reproduced the current `file://` baseline: only
+- The initial implementation pass reproduced the then-current `file://` baseline: only
   `Akt 27.png` and `Fraktal.png` import; unresolved `gartenszene` / `zdigital`
-  mappings suppress the side slots. The owner must supply genuine missing images;
-  authored IDs remain unchanged and no four-painting recovery is claimed.
+  mappings suppressed the side slots. That baseline needed genuine images;
+  the later reference-default work above supplies them and corrects the IDs.
 - Baseline hub initialization also fails with an `onBeforeCompile` TypeError.
   Photograph presentation avoids the unused opaque room renderer; this is not
   a claimed repair of its architectural-material implementation.

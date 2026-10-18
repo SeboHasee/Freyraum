@@ -21,8 +21,10 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Rebuild and verify all four paintings contribute visible pixels, and
       museum/editor projections match exactly.
 - [x] Validate geometry, deployment content, save service and local saving.
-- [ ] Customer approves the rebuilt room against the supplied reference image;
-      automated visibility checks do not establish aesthetic acceptance.
+- [x] Customer confirms the local setup works after Update Gallery.bat and
+      supplies the four-painting screenshot (2026-10-18; `docs/HANDOFF.md`).
+- [ ] Verify a new post-merge Pages deployment and live smoke; local confirmation
+      is not evidence of deployed branch content.
 
 ## Active — restore the photograph-backed museum (2026-10-18)
 
@@ -58,14 +60,26 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       is claimed.
 - [x] Rerun content-blocked deploy/save-service/local-project checks with all four
       supplied paintings and the new default assignments.
-- [ ] Obtain customer visual acceptance. The exact artifact behind the reported
-      customer image is unavailable; no reproduction or browser pass is claimed
-      by this documentation audit.
+- [x] Record customer's local success and screenshot; original failing artifact
+      identity remains unknown. Post-merge live confirmation remains separate.
 - [x] **Content blocker resolved:** genuine `Gatrenszene.png` and `Wunderbaum.png`
       are supplied; the requested default uses their exact importer IDs
       `gatrenszene` and `wunderbaum`. All four images pass visible-pixel checks.
 
 No dependency upgrades or high-resolution importer redesign are part of this fix.
+
+## Merge-readiness handoff (2026-10-18)
+
+- [x] Audit current Markdown, retain dated archives, record customer local success
+      and link screenshot evidence in `docs/HANDOFF.md`.
+- [x] Recheck lint/typecheck/build, focused non-browser tests, production-base
+      and root-file smoke, editor rooms/publish/drag.
+- [x] Preserve the save-service variable across the build's automatic import;
+      a configured build retains the URL in public/dist/preview settings.
+- [ ] Owner approves outstanding Actions checks and creates/merges the PR;
+      no open PR was returned during the audit.
+- [ ] Confirm new post-merge Pages deploy and live smoke. Older main failure is
+      diagnosed in `FINDINGS.md`; it does not validate this branch.
 
 ## Product baseline (v1.40; presentation correction above)
 
@@ -91,7 +105,7 @@ No dependency upgrades or high-resolution importer redesign are part of this fix
       `desktop-v1.40.0`).
 - [ ] Online saving needs the one-time Cloudflare/GitHub App setup in
       `docs/ONLINE_EDITOR_SETUP.md` before the deployed editor can publish.
-- [ ] Side-wall visual acceptance from a customer screenshot of the deployed
+- [ ] Side-wall confirmation from a customer screenshot of the deployed
       gallery (evidence rules: `docs/HANDOFF.md` step 8).
 
 ## Open — later improvements

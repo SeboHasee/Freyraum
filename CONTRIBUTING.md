@@ -21,6 +21,12 @@ npm run validate:museum-hub
 npm run docs:check-config-authority
 ```
 
+`npm run build` imports/syncs customer content through `prebuild`; direct
+`build:preview` is only a partial build and does not refresh injected layout data.
+For stale-index reports test root `index.html`, not only the direct preview:
+see `docs/REGRESSION_TOOLING.md`. Keep local Vite base `./` and production
+`/Freyraum/` separate.
+
 For editor, save-service or desktop-app changes also run the focused tests in
 `docs/REGRESSION_TOOLING.md` → "Automated test commands" (`test:editor-drag`,
 `test:editor-rooms`, `test:editor-publish`, `test:save-service`,

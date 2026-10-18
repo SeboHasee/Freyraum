@@ -89,10 +89,15 @@ copies into `customer-artworks/inbox/`.
 - The supplied background exists at
   `customer-artworks/Backgrounds/Museum_ohne_Bilder.png`. Preserve that exact
   spelling in the layout; `museum-ohne-bilder.png` is a different filename.
-- The current import contains only `Akt 27.png` and `Fraktal.png`. The authored
-  side-place IDs `gartenszene` and `zdigital` have no matching images in the
-  repository, so those places remain empty. The owner must provide the genuine
-  missing files; keep the saved IDs instead of substituting other paintings.
+- All four default paintings are supplied: `Gatrenszene.png` (front-left),
+  `Akt 27.png` (front-right, unchanged), `Fraktal.png` (left wall) and
+  `Wunderbaum.png` (right wall). Keep the garden file's actual spelling;
+  `Gatrenszene.txt` provides its display title “Gartenszene”.
+- After downloading project updates or replacing `museum-hub.json`, run
+  **Update Gallery.bat** / **Update Gallery.command**, then reopen root
+  **index.html**. This regenerates the local customer data; editing source JSON
+  alone cannot update its generated copy. The customer confirmed this workflow
+  on 2026-10-18. A merged Pages deployment regenerates that data automatically.
 - Double-click **`OPEN_ARTWORK_EDITOR.html`** in the main FREYRAUM folder. This
   opens the separate, file-safe Artwork Placement Editor. You do not need to
   edit a URL or start a development server.

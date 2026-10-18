@@ -27,60 +27,26 @@ Required evidence for the implementation pass:
   room navigation, selection and hub→inspection→hub transitions;
 - gallery renderer initialization/context-loss recovery remains intact.
 
-This documentation pass did not run tests, lint, build or browser capture.
-Source review verifies structural divergence only; the exact customer artifact
-is unavailable. Record implementation results separately and keep customer
-visual acceptance open in `plan.md`.
+Current results and dated incident evidence are in `FINDINGS.md`; do not treat
+the earlier two-image baseline as current shipping content. All four paintings
+now import; geometry, save-service, local-project and deploy-content checks pass.
+The customer confirms the local room after Update Gallery. Live acceptance
+requires a new post-merge deploy and live smoke.
 
-The implementation pass separately reproduced the current `file://` baseline
-(screenshots/JSON reported at `/tmp/freyraum-before`): only `Akt 27.png` and
-`Fraktal.png` import. `gartenszene` and `zdigital` are absent from both inventories,
-produce `invalid-mapping`, and leave the side places empty. Preserve those IDs;
-missing genuine content is an owner-supplied acceptance blocker, not a reason to
-insert substitute images or assert four recovered paintings. Baseline renderer
-initialization also throws an `onBeforeCompile` TypeError; verify the photograph
-path avoids the opaque room renderer, without claiming its unused architecture
-was repaired.
+For stale-index regressions, run the existing smoke command against root
+`file:///absolute/project/path/index.html`, nested HTTP root `index.html`,
+and production output under `/Freyraum/app.html` (the workflow copies that
+production entry to `index.html`). Root smoke additionally checks redirect
+query/fragment preservation and versioned data/runtime/style URLs.
+`test:front-wall-aspect` also compares injected config with source JSON.
+Build via `npm run build` to regenerate data before testing; a partial runtime
+build alone does not refresh injected JSON.
 
-Implementation status: built-preview capture at `/tmp/freyraum-after` confirms
-the exact photograph, decoded `Fraktal` / `Akt 27`, opacity 1 in both routes,
-and no hub canvas. Lint, typecheck, build, frame-budget, docs-authority and all
-editor-rooms browser cases pass. Real deploy validation, four save-service cases,
-the local-project test and editor-publish remain content-blocked by the missing
-side IDs/disabled empty place. Geometry now passes with updated closed-outline/
-legacy-wall expectations and explicit production/fixture mappings. HTTP
-photographic smoke passes exact-photo, artwork pixel-contribution and editor
-homography-parity checks; Google Fonts DNS failures are warnings. Type A visual
-capture remains blocked under software Chrome by the pre-existing invariant
-`shadow-casting light count 1 != expected 2`; investigation is ongoing.
-Subsequent `file://` smoke, WebGL resilience, 10 deploy-validator fixture cases
-and syntax checks also pass. Ordinary primary/fallback, neutral, phone and
-shape/doorway captures work after fixture repairs, but the transparent-primary
-fixture originally failed (`fixture-blank-primary did not resolve through embedded
-fallback`). A conservative DOM alpha gate is now implemented: a nonempty 4×4
-sample succeeds; an empty sample checks native alpha in ≤128×128 tiles within
-4,194,304 source pixels (4 MP). Only proven all-zero alpha triggers fallback; over-budget
-or unavailable/tainted readback remains inconclusive, preserving sparse strokes.
-Method checks (including a sparse final-native-pixel case), lint/typecheck/build
-and front-wall-aspect pass.
-The final 4 MP rebuild passes 1200×1600 blank rejection, same-size sparse
-final-pixel alpha-1 acceptance and over-budget inconclusive acceptance method
-checks; lint/typecheck/build pass again.
-Post-rebuild `file://` and HTTP blank-primary browser captures also pass
-recovery/source assertions and capture screenshots: `zero-alpha-source` recovers
-through embedded fallback with `presentationPath: 'dom'`, 600×800 decoded source
-dimensions and null GPU/probe fields. The `file://` capture command exits 1 solely
-for the pre-existing shadow-light-count invariant, not recovery assertions.
-The final rebuilt case uses a transparent 256×256 primary and opaque 600×800
-fallback, proving rejected-primary aspect does not poison the committed DOM
-ratio. Geometry method tests also pass black/white acceptance, inconclusive
-`SecurityError` handling and different-aspect fallback commit.
-Do not mark the full visual suite green. Shipping missing-content failures and
-software-Chrome shadow/selection/restore investigations remain separate.
-
-Final parallel validation was attempted after commit but hit its tool time limit
-and was not retried. Earlier CodeQL reported zero findings; automated review was
-unavailable. Focused review found the sparse-alpha issue addressed above.
+Do not mark the full visual suite green: the pre-existing software-Chrome
+`shadow-casting light count 1 != expected 2` and selection/restore investigations
+remain open. Earlier bounded-alpha recovery assertions pass independently;
+see `FINDINGS.md` for their limits. File-fetch probe warnings and optional
+Google Fonts DNS failures are distinct from visible-pixel smoke failures.
 
 | Type | Risk | Tool in this repo | How to run |
 |---|---|---|---|

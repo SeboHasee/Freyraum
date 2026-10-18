@@ -1,8 +1,16 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (museum defaults and merge handoff).
 
 ## Current context (v1.40)
 
+- Museum and editor share photograph-backed DOM artwork; `MainMuseumHub` does
+  not construct a `HubRoomRenderer`. Inspection-gallery WebGL remains separate.
+  Current defaults and exact source filenames: `README.md` → "Place artworks".
+- Local data is generated/ignored: after project updates run Update Gallery;
+  full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,
+  production `/Freyraum/`. Root-index and production-base smoke are distinct.
+  Customer confirmed the local four-painting room after Update Gallery;
+  post-merge Pages/live acceptance is still separate. Next steps: `docs/HANDOFF.md`.
 - Placement editor: `OPEN_ARTWORK_EDITOR.html` → `customer-preview/placement-editor.html`
   (deployed: `placement-editor.html`, typing "bearbeiten" in the gallery); UI modules in `src/hub/editor/`. Placement validity
   everywhere (editor, drag, loader, export) uses `evaluateDisplayedPlacement`

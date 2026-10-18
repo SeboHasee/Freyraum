@@ -54,8 +54,15 @@ before publishing.
 
 For museum placement, open `OPEN_ARTWORK_EDITOR.html`. It forwards to the
 generated `customer-preview/placement-editor.html` editor. Both generated file
-entries receive cache-busted artwork/audio script URLs when customer bundles are
-regenerated.
+entries receive cache-busted artwork/audio/runtime script and stylesheet URLs
+when customer bundles are regenerated. Root `index.html` refreshes the preview
+document and preserves query parameters and fragment. The local bundle uses
+relative `./` URLs so nested HTTP previews work; production retains `/Freyraum/`.
+
+Developer `npm run build` automatically runs `prebuild` → `import:artworks`
+before bundling. Customers only need Update Gallery for local data updates,
+not a full runtime build. The customer confirmed the local update works;
+this does not replace post-merge live-site verification.
 
 > **Evidence note:** a fresh clone does not contain the generated
 > `customer-preview/customer-artworks.js` / `customer-preview/customer-audio.js`
@@ -69,7 +76,7 @@ regenerated.
 ### 3 — Commit the inbox files
 
 ```bash
-git add customer-artworks/inbox/ customer-audio/inbox/
+git add customer-artworks/inbox/ customer-audio/inbox/ customer-artworks/museum-hub.json
 git commit -m "chore: update customer artworks"
 git push origin main
 ```
@@ -92,14 +99,20 @@ Pushing to `main` triggers the `Deploy to GitHub Pages` workflow
 
 1. Runs `npm run import:artworks` — identical to the local desktop step.
 2. Runs `npm run validate:deploy` and the manifest checks below.
-3. Runs `npm run build` — Vite bundles the app with `base: '/Freyraum/'`
-   (including `placement-editor.html` and `editor-online.json`).
+3. Runs `npm run build` (including automatic prebuild import) — Vite bundles
+   production with `base: '/Freyraum/'` (including `placement-editor.html` and
+   `editor-online.json`). Copies `dist/app.html` to the deployed `index.html`;
+   the repository's local-preview launcher is not the Pages entry.
+   Both import and build receive `FREYRAUM_SAVE_SERVICE_URL` from the repository
+   variable so the second import preserves online-editor service configuration.
 4. Validates that `dist/index.html`, the generated manifests, and the museum
    backgrounds exist, then deploys `dist/` to GitHub Pages (Node 22).
 5. The `smoke` job opens the live gallery and checks rooms, artworks,
    background and that no file is missing (`npm run test:deploy-smoke`).
 
-The live gallery is updated within ~2 minutes of a successful push.
+Wait for successful build/deploy and the live `smoke` job rather than assuming
+merging alone updates the site. Visitors never run the local `.bat` file.
+If an already-open tab is stale, hard-refresh after deployment.
 
 Edits saved from the online editor arrive the same way: the save service
 commits to `content/edits` and opens a pull request (or merges it with
@@ -141,7 +154,8 @@ After the workflow completes:
 - [ ] Root URL loads: **https://sebohasee.github.io/Freyraum/**
 - [ ] Standalone editor entry loads at
       **https://sebohasee.github.io/Freyraum/placement-editor.html**.
-- [ ] At least one custom artwork image is visible in the gallery.
+- [ ] All four intended default paintings are visible in their configured places
+      (see `README.md` → "Place artworks").
 - [ ] At least one intended customer painting—not a grey generated fallback—is
       visible in both the interactive gallery and museum hub.
 - [ ] Artwork title/description text (from `.txt` sidecar) is shown.

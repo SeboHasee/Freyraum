@@ -1,6 +1,50 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
+## 2026-10-18 — Merge audit and customer-confirmed local room
+
+- Customer: “then I used the update galery .bat and then it worked.” Their
+  [supplied screenshot](https://github.com/user-attachments/assets/42d41643-45ca-4140-ba0c-5773ffc5e1aa)
+  shows all four intended paintings. Record this as local success after import,
+  not as verification of a live deployed commit (no build identity supplied).
+- All 36 tracked Markdown files outside `.github/agents` were inventoried.
+  Current docs and prompts were reviewed; seven dated archive snapshots remain
+  immutable with their index checked. Corrected stale two-image/content-blocker
+  claims in README, architecture map, customer guide, handoff and regression docs.
+  Query authority, desktop/save-service docs and unchanged prompts remain valid.
+- Reinstalled dependencies after the fresh environment's `eslint: not found`.
+  Lint/typecheck/full build, geometry, source/generated-layout equality, WebGL
+  resilience, frame-budget, docs authority, save-service (15), local-project (12),
+  deploy-validator (10), and actual four-image deploy validation pass.
+  `npm audit --omit=dev` reports zero vulnerabilities; initial full install reports
+  17 existing development-tool advisories. No dependency upgrade was made.
+- Production output served at `/Freyraum/app.html` passes exact photograph,
+  all four paintings' visible screenshot contribution and editor projection
+  parity. Root `file://` smoke also passes. Earlier nested HTTP root-index smoke
+  remains recorded below. These are built-artifact tests, not live-site claims.
+- Editor rooms passes. A concurrently running publish check timed out waiting
+  for the initial enabled Start button; after isolating browser runs it passes
+  all login/upload/placement/publish assertions with no page errors. No runtime
+  or test timeout change was needed; concurrency is a suspected contributor,
+  not an established root cause.
+- Isolated editor drag subsequently passes all four edges for each of the four
+  paintings and valid export. Desktop installers and the complete visual harness
+  were not rerun in this pass; they remain separate CI/deferred gates.
+- Actions inspection: desktop run 39156014733 is `action_required`, not passed.
+  Latest observed main Pages run 39115237783 failed before build on unknown
+  `gartenszene`/`zdigital` IDs (logs retrieved); it imported only two paintings.
+  Current branch corrects those inputs and deploy validation passes. A new
+  post-merge deployment/live smoke is required; retrying the old commit would
+  not test this fix. No open PR was returned by the API during the audit.
+- Next-agent entry: `docs/HANDOFF.md`. Deferred work and owner gates: `plan.md`.
+  Earlier two-image failures below are historical evidence, not current blockers.
+- Deployment review caught a coupled regression: `prebuild` repeats sync during
+  the Build step, but the save-service repository variable was scoped only to
+  the earlier import step. Pass `FREYRAUM_SAVE_SERVICE_URL` into Build too so
+  regenerated `editor-online.json` retains online publishing configuration.
+  A build with a non-secret example HTTPS endpoint confirms that public, dist
+  and preview settings all preserve it; test-only generated metadata is discarded.
+
 ## 2026-10-18 — Root-index freshness follow-up
 
 - The customer's stale-index report reopens acceptance; earlier direct-app passes
@@ -70,7 +114,10 @@
   inspection was unavailable in this session, so exact visual/customer approval
   is not claimed. Automated visibility and geometry checks are not visual approval.
 
-## 2026-10-18 — Museum presentation divergence and Markdown audit
+## 2026-10-18 — Earlier museum presentation baseline and recovery history
+
+The following records the initial two-image state and intermediate checks.
+Missing-content blockers were subsequently resolved; see the merge audit above.
 
 - **Implemented and checked by the implementation pass:** `MainMuseumHub`
   always uses `.is-photographic`, keeps its renderer field null and constructs
