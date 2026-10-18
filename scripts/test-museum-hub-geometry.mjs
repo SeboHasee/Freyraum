@@ -2012,12 +2012,31 @@ const scss = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
 const main = readFileSync(resolve(ROOT, 'src/main.ts'), 'utf8');
 const renderer = readFileSync(resolve(ROOT, 'src/core/RendererManager.ts'), 'utf8');
 const hub = readFileSync(resolve(ROOT, 'src/hub/MainMuseumHub.ts'), 'utf8');
+const galleryManagerSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryManager.ts'), 'utf8');
+const artworkMeshSource = readFileSync(resolve(ROOT, 'src/gallery/ArtworkMesh.ts'), 'utf8');
 const shell = readFileSync(resolve(ROOT, 'app.html'), 'utf8');
 const editorShell = readFileSync(resolve(ROOT, 'placement-editor.html'), 'utf8');
 const editorLauncher = readFileSync(resolve(ROOT, 'OPEN_ARTWORK_EDITOR.html'), 'utf8');
 assert.match(scss, /#app\s*\{[\s\S]*?background:\s*var\(--color-gallery-wall\)/);
 assert.match(scss, /\.fallback-screen\s*\{[\s\S]*?background:\s*var\(--color-gallery-wall\)/);
 assert.match(scss, /\.museum-hub\s*\{[\s\S]*?background-color:\s*var\(--color-museum-wall\)/);
+const navigationSeedDepth = Number(galleryManagerSource.match(/const NAV_SEED_POSITION_Z = (-?[\d.]+);/)?.[1]);
+assert.ok(
+  navigationSeedDepth > 0 && navigationSeedDepth > -galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+  'artwork entrance starts on the camera side of the wall plane'
+);
+assert.equal(
+  (galleryManagerSource.match(/group\.position\.z = NAV_SEED_POSITION_Z/g) ?? []).length,
+  2,
+  'button and timeline navigation both use the front-of-wall entrance depth'
+);
+assert.match(galleryManagerSource, /if \(!this\.reducedMotion\) \{\s*this\.artworkMesh\.group\.position\.x/);
+assert.match(artworkMeshSource, /this\.artworkBodyMesh\.castShadow = true/);
+assert.match(scss, /\.timeline\s*\{[\s\S]*?width:\s*fit-content;[\s\S]*?max-width:\s*min\(1180px/);
+assert.match(scss, /\.timeline__list\s*\{[\s\S]*?flex:\s*0 1 auto;[\s\S]*?min-width:\s*0/);
+assert.match(scss, /\.timeline\.timeline--at-start\.timeline--at-end \.timeline__arrow\s*\{\s*display:\s*none/);
+assert.match(scss, /\.timeline__item\s*\{[\s\S]*?width:\s*clamp\(90px,\s*15vw,\s*150px\)/);
+assert.match(scss, /@media \(max-width: 599px\)\s*\{[\s\S]*?\.timeline__item\s*\{\s*width:\s*120px/);
 assert.match(renderer, /wallClearColor\s*=\s*['"]#c7ced4['"]/i);
 assert.match(renderer, /setWallClearColor\(/);
 assert.match(main, /applyResolvedWallSurfaceColor\(/);

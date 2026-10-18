@@ -3196,7 +3196,8 @@ button {
   bottom: calc(28px + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%);
-  width: min(1180px, calc(100vw - 50px - var(--safe-left) - var(--safe-right)));
+  width: fit-content;
+  max-width: min(1180px, calc(100vw - 50px - var(--safe-left) - var(--safe-right)));
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -3236,9 +3237,10 @@ button {
   // horizontal gutters used by native scroll snapping and JS centering.
   scroll-padding-inline: 32px;
   -webkit-overflow-scrolling: touch;
-  // v0.25 U-03: reduced padding; U-01: flex:1 fills space between arrows
+  // Small collections shrink-wrap the timeline; larger ones use the available
+  // row width and scroll between the existing arrows.
   padding: 12px 8px 6px;
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 0;
   mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
   -webkit-mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
@@ -3246,6 +3248,10 @@ button {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+.timeline.timeline--at-start.timeline--at-end .timeline__arrow {
+  display: none;
 }
 
 .timeline__item {

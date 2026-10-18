@@ -28,6 +28,12 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 
 ## Active — restore the photograph-backed museum (2026-10-18)
 
+- [x] Gallery artwork entrance starts camera-side of the front wall; retain
+      lateral/scale/tilt motion, reduced-motion behavior, and body shadows.
+- [x] Artwork timeline shrink-wraps small collections, caps at its existing
+      width, and keeps its arrows for scrollable collections.
+- [x] Add structural regression checks for wall-side entrance depth, reduced
+      motion, shadow casting, responsive item sizing, and overflow arrow state.
 - [ ] Customer reports plain white background in the latest deployment. Pages
       run #21 (`c3b8e246`) built and deployed successfully, but its live smoke
       exited before browser checks because the fresh checkout lacked generated

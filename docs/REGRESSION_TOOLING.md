@@ -26,6 +26,10 @@ Required evidence for the implementation pass:
 - local generated `file://` preview and served gallery/editor agree, including
   room navigation, selection and hub→inspection→hub transitions;
 - gallery renderer initialization/context-loss recovery remains intact.
+- artwork navigation stays on the camera side of the inspection-gallery wall;
+  the mounted body continues to cast the wall shadow.
+- timeline layout shrink-wraps small artwork counts, respects its current
+  maximum width on larger collections, and keeps arrow scrolling available.
 
 Current results and dated incident evidence are in `FINDINGS.md`; do not treat
 the earlier two-image baseline as current shipping content. All four paintings

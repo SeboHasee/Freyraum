@@ -3,6 +3,10 @@
 
 ## Unreleased — reference exhibition defaults (2026-10-18)
 
+- Artwork navigation now starts toward the camera and settles to the mount,
+  avoiding the front wall while retaining the fly-in, scale, tilt, and shadow.
+- The artwork timeline shrink-wraps small collections, stays capped at its
+  existing maximum width, and exposes arrows when a larger collection scrolls.
 - Pages artifact verification and live smoke now use the backgrounds selected
   by `museum-hub.json`, rather than pinning checks to a particular filename.
   The live smoke job imports customer assets first so its generated expected

@@ -116,16 +116,15 @@ const LAMBDA_CAMERA_PAN = 5.0;
  *
  * - position.x: larger horizontal travel (3.2 → 4.5) is now witnessable
  *   thanks to the slower λ=2.5 settle (~1200 ms).
- * - position.z: new — painting recedes slightly behind the rest pose,
- *   giving a soft 3D approach feeling. Frame plane sits at z=0 and the
- *   artwork plane at z≈0.095, so a target of -0.6 does not cause z-fight.
+ * - position.z: painting starts toward the camera and settles back to its
+ *   mounted position, preserving depth motion without passing through the wall.
  * - rotation.y: reduced 0.32 rad (~18°) → 0.15 rad (~9°) — a museum
  *   yaw rather than a theatrical pivot.
  * - scale: 0.84 → 0.88 — slightly less collapsed so the slower settle
  *   does not look like a shrunken thumbnail growing into place.
  */
 const NAV_SEED_POSITION_X = 4.5;
-const NAV_SEED_POSITION_Z = -0.6;
+const NAV_SEED_POSITION_Z = 0.6;
 const NAV_SEED_ROTATION_Y = 0.15;
 const NAV_SEED_SCALE = 0.88;
 
