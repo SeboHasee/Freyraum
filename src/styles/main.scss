@@ -3241,6 +3241,7 @@ button {
   // row width and scroll between the existing arrows.
   padding: 12px 8px 6px;
   flex: 0 1 auto;
+  width: max-content;
   min-width: 0;
   mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
   -webkit-mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
@@ -3250,7 +3251,7 @@ button {
   }
 }
 
-.timeline.timeline--at-start.timeline--at-end .timeline__arrow {
+.timeline.timeline--fits .timeline__arrow {
   display: none;
 }
 

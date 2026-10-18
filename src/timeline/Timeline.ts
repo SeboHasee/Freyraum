@@ -305,6 +305,12 @@ export class Timeline {
 
   private updateScrollState(): void {
     this.updateCounter();
+    const arrowGap = Number.parseFloat(getComputedStyle(this.el).columnGap) || 0;
+    const arrowsWidth = this.prevButton.offsetWidth + this.nextButton.offsetWidth + arrowGap * 2;
+    this.el.classList.toggle(
+      'timeline--fits',
+      this.listEl.scrollWidth <= this.listEl.clientWidth + arrowsWidth + 1
+    );
     const maxLeft = Math.max(0, this.listEl.scrollWidth - this.listEl.clientWidth - 1);
     const atStart = this.listEl.scrollLeft <= 1;
     const atEnd = this.listEl.scrollLeft >= maxLeft;
