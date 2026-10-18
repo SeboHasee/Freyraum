@@ -31,8 +31,9 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       syntax checks pass; real shipping-content failures remain separate.
 - [x] Implement bounded transparent-primary alpha recovery with conservative
       native-alpha scanning; method checks include sparse valid strokes.
-- [ ] Confirm transparent-primary embedded fallback in the rebuilt browser
-      fixture; implementation/method passes are not browser proof.
+- [x] Rebuilt `file://` and HTTP blank-primary recovery/source assertions pass;
+      screenshots captured. The visual command still exits 1 on the separate
+      pre-existing shadow-light-count invariant, so no full-suite pass is claimed.
 - [ ] Resolve/characterize the pre-existing software-Chrome visual-capture
       invariant (`shadow-casting light count 1 != expected 2`); no Type A pass
       is claimed.

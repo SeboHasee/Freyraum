@@ -8,7 +8,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(here, '..');
 const SHIPPING_CONFIG_PATH = resolve(ROOT, 'customer-artworks/museum-hub.json');
 
-async function loadTsModule(relativePath) {
+async function loadTsModule(relativePath, define = {}) {
   const result = buildSync({
     entryPoints: [resolve(ROOT, relativePath)],
     bundle: true,
@@ -16,6 +16,7 @@ async function loadTsModule(relativePath) {
     platform: 'browser',
     write: false,
     target: ['es2020'],
+    define,
   });
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
 }
@@ -923,6 +924,80 @@ sourceToPixelOutcome.recordSourceToPixelOutcome(outcomeDiagnostics, {
 });
 assert.equal(outcomeRecords[2].level, 'warn');
 assert.match(outcomeRecords[2].message, /failed.*decode stage/, 'DOM decode failures must remain explicit warnings');
+{
+  const { MainMuseumHub } = await loadTsModule('src/hub/MainMuseumHub.ts', {
+    'import.meta.env.BASE_URL': JSON.stringify('/'),
+  });
+  const prototype = MainMuseumHub.prototype;
+  const previousDocument = globalThis.document;
+  let rgba = [0, 0, 0, 255];
+  let unavailable = false;
+  globalThis.document = {
+    createElement: () => ({
+      getContext: () => ({
+        drawImage() {},
+        clearRect() {},
+        getImageData() {
+          if (unavailable) throw new DOMException('Tainted canvas', 'SecurityError');
+          return { data: new Uint8ClampedArray(rgba) };
+        },
+      }),
+    }),
+  };
+  try {
+    const image = { naturalWidth: 2, naturalHeight: 2 };
+    assert.equal(prototype.probeSlotSourceAlpha(image), true, 'opaque black is valid artwork, not a blank source');
+    rgba = [255, 255, 255, 255];
+    assert.equal(prototype.probeSlotSourceAlpha(image), true, 'opaque white is valid artwork, not a blank source');
+    rgba = [0, 0, 0, 0];
+    assert.equal(prototype.probeSlotSourceAlpha(image), false, 'confirmed fully transparent sources must fail the DOM alpha gate');
+    unavailable = true;
+    assert.equal(prototype.probeSlotSourceAlpha(image), null, 'SecurityError readback is inconclusive, not proof of transparency');
+
+    const harness = {
+      hubRoomRenderer: null,
+      diagnostics: { isDebugEnabled: () => true, info() {}, warn() {} },
+      probeSlotSourceAlpha: prototype.probeSlotSourceAlpha,
+      setSlotImageState() {},
+      getSlotRenderFailure: () => null,
+      applySlotGeometry() {},
+      inspectArtworkRuntime() {},
+    };
+    const makeView = () => ({
+      image, nativeAspectRatio: null, nativeWidth: null, nativeHeight: null,
+      slot: { id: 'alpha-fixture', artworkId: 'alpha-fixture', artworkAspect: 1 },
+      button: { dataset: {} },
+    });
+    const source = {
+      mode: 'declared-image', bundleId: null,
+      declaredUrl: 'data:image/png;base64,AAAA', resolvedUrl: 'data:image/png;base64,AAAA',
+      declaredUrlType: 'data-uri', resolvedUrlType: 'data-uri',
+    };
+    const inconclusiveView = makeView();
+    assert.deepEqual(
+      prototype.applyResolvedSlotSource.call(harness, inconclusiveView, source, null, 'loaded', { width: 2, height: 2 }),
+      { status: 'ready' },
+      'unavailable alpha readback must keep a decoded DOM source usable'
+    );
+    unavailable = false;
+    const transparentView = makeView();
+    assert.deepEqual(
+      prototype.applyResolvedSlotSource.call(harness, transparentView, source, null, 'loaded', { width: 2, height: 2 }),
+      { status: 'failed', stage: 'visible-pixel-probe', reason: 'zero-alpha-source' }
+    );
+    assert.equal(transparentView.nativeAspectRatio, null, 'transparent primary must not commit an immutable ratio before retry');
+    rgba = [0, 0, 0, 255];
+    assert.deepEqual(
+      prototype.applyResolvedSlotSource.call(harness, transparentView, { ...source, mode: 'embedded-webgl-fallback' }, 'zero-alpha-source', 'fallback-loaded', { width: 3, height: 4 }),
+      { status: 'ready' },
+      'an opaque embedded fallback must remain eligible after transparent primary rejection'
+    );
+    assert.equal(transparentView.nativeAspectRatio, 0.75, 'fallback native ratio must become authoritative only after acceptance');
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
+}
 assert.ok(
   Math.abs(galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallGap - 0.14) < 1e-9,
   'interactive-gallery inspection wall must stay set back enough to preserve close-view tilt freedom'

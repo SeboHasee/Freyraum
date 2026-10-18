@@ -62,10 +62,19 @@ sample succeeds; an empty sample checks native alpha in ≤128×128 tiles within
 4,194,304 source pixels (4 MP). Only proven all-zero alpha triggers fallback; over-budget
 or unavailable/tainted readback remains inconclusive, preserving sparse strokes.
 Method checks (including a sparse final-native-pixel case), lint/typecheck/build
-and front-wall-aspect pass; rebuilt browser recovery confirmation remains pending.
+and front-wall-aspect pass.
 The final 4 MP rebuild passes 1200×1600 blank rejection, same-size sparse
 final-pixel alpha-1 acceptance and over-budget inconclusive acceptance method
-checks; lint/typecheck/build pass again. These are not browser fixture results.
+checks; lint/typecheck/build pass again.
+Post-rebuild `file://` and HTTP blank-primary browser captures also pass
+recovery/source assertions and capture screenshots: `zero-alpha-source` recovers
+through embedded fallback with `presentationPath: 'dom'`, 600×800 decoded source
+dimensions and null GPU/probe fields. The `file://` capture command exits 1 solely
+for the pre-existing shadow-light-count invariant, not recovery assertions.
+The final rebuilt case uses a transparent 256×256 primary and opaque 600×800
+fallback, proving rejected-primary aspect does not poison the committed DOM
+ratio. Geometry method tests also pass black/white acceptance, inconclusive
+`SecurityError` handling and different-aspect fallback commit.
 Do not mark the full visual suite green. Shipping missing-content failures and
 software-Chrome shadow/selection/restore investigations remain separate.
 

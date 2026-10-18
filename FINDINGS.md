@@ -28,7 +28,7 @@
   projection parity. Geometry, WebGL resilience, the 10 deploy-validator fixture
   cases and syntax checks pass. These fixture passes do not override the real
   shipping-content validation failures above.
-- **Transparent-primary recovery implemented; browser confirmation pending:**
+- **Transparent-primary recovery implemented; browser assertions verified:**
   the failing blank-primary fixture exposed that DOM decode alone accepted
   invisible artwork. Recovery now uses a conservative alpha check under the
   existing verbose/local-file probe policy: a 4×4 sample accepts nonzero alpha
@@ -39,11 +39,20 @@
   sparse valid strokes are not rejected. GPU evidence stays null for DOM.
   Transparent/black/white/faint-alpha, unavailable/tainted readback and sparse
   final-native-pixel method checks pass, as do lint/typecheck/build and the
-  front-wall-aspect check; post-rebuild browser recovery confirmation is pending.
+  front-wall-aspect check.
   The final 4 MP rebuild also passes actual 1200×1600 blank rejection,
   same-size sparse final-pixel alpha-1 acceptance and over-4-MP inconclusive
-  acceptance method checks; lint/typecheck/build pass again. Browser proof
-  remains separate and pending.
+  acceptance method checks; lint/typecheck/build pass again.
+  Post-rebuild `file://` and HTTP blank-primary captures pass the recovery/source
+  assertions and produce screenshots: `zero-alpha-source` leads to embedded
+  fallback, `presentationPath` is `dom`, decoded fallback dimensions are 600×800,
+  and upload dimensions/render maximum/visible probe remain null. The file
+  capture command still exits 1 solely for the pre-existing shadow-light-count
+  invariant; this is browser recovery proof, not a full visual-suite pass.
+  The final rebuilt fixture rejects a transparent 256×256 square before committing
+  its ratio, then displays the opaque 600×800 portrait fallback with correct DOM
+  dimensions. Geometry method tests also pass black/white acceptance,
+  `SecurityError` inconclusive acceptance and different-aspect fallback commit.
   Ordinary primary/fallback,
   neutral, phone and shape/doorway captures work after stale fixture repairs,
   but the full visual suite does not pass. The shadow invariant and software-

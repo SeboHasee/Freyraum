@@ -97,6 +97,9 @@ content-blocked. Geometry and HTTP photographic smoke (including pixel
 contribution and editor homography parity) now pass. Type A capture remains
 blocked by the pre-existing software-Chrome shadow-light-count invariant;
 owner acceptance remains open in `plan.md`.
+Rebuilt HTTP and `file://` transparent-primary recovery/source assertions pass
+and screenshots are captured; the capture command still exits 1 solely for that
+shadow invariant. Do not report this as a complete visual-suite pass.
 
 ## Handoff checklist
 

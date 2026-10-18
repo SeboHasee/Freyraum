@@ -722,7 +722,11 @@ function buildFixtureScript(fixture) {
     ...fixture,
     artworks: fixture.artworks.map((artwork) => ({
       ...artwork,
-      image: withNativeDimensions(artwork.image, artwork.dimensions),
+      // Transparent primary is square; its portrait fallback must commit its
+      // own native ratio rather than inheriting the rejected source's ratio.
+      image: withNativeDimensions(artwork.image, artwork.image === BLANK_FIXTURE_IMAGE
+        ? { width: 256, height: 256 }
+        : artwork.dimensions),
       ...(artwork.webglImage ? { webglImage: withNativeDimensions(artwork.webglImage, artwork.dimensions) } : {}),
     })),
   };
@@ -851,10 +855,11 @@ async function ensureHubBackgroundFailSafe(page, state) {
       throw new Error(`${state.name}: fallback-neutral hub state did not degrade to museum-grey`);
     }
   }
-  if (!state.expectNeutralBackgroundFallback) {
-    if (snapshot.imageError) {
-      throw new Error(`${state.name}: expected a decoded photograph, but the hub entered the neutral image-error state`);
-    }
+  if (snapshot.imageError && !state.expectNeutralBackgroundFallback) {
+    throw new Error(`${state.name}: expected a decoded photograph, but the hub entered the neutral image-error state`);
+  }
+
+  if (!snapshot.imageError) {
     const expectedUrl = primaryFailed ? fallbackUrl : primaryUrl;
     if (snapshot.currentImageSrc !== expectedUrl) {
       throw new Error(`${state.name}: wrong background filename: ${snapshot.currentImageSrc} (expected ${expectedUrl})`);
