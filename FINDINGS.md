@@ -23,6 +23,10 @@
 - HTTP smoke also passes all four paintings and exact editor parity. Publishing
   passes after its upload fixture explicitly frees a place in the now-full room
   rather than assuming missing artwork creates an empty place.
+- Editor drag passes every edge for all four paintings and exports valid
+  placements. Secret scanning passes. The automated review service was unavailable;
+  an independent read-only reviewer found no significant issues. CodeQL skipped
+  these content/test-only changes as trivial.
 - Dependency installation reports existing tooling advisories; no dependency
   upgrades are part of this content change. Fraktal remains a 24.8 MB source;
   the importer warns about large dimensions and device memory. Vite retains
