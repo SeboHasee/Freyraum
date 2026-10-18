@@ -28,6 +28,10 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 
 ## Active — restore the photograph-backed museum (2026-10-18)
 
+- [ ] Customer reports plain white background in the latest deployment; exact
+      deployment URL/commit is not yet identified. Require the configured
+      `Museum_ohne_Bilder.png` as well as the fallback in the Pages artifact;
+      verify the next deployed build with the live photographic smoke test.
 - [x] Audit current Markdown and compare the presentation claims with source;
       review archives as historical evidence without rewriting them.
 - [x] Identify structural divergence: the normal museum used an opaque WebGL

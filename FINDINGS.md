@@ -1,6 +1,18 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
+## 2026-10-18 — Deployed museum photograph regression report
+
+- Customer reports that the latest deployment shows a plain white museum
+  background. The deployment URL/build identity was not supplied, so the exact
+  artifact and root cause remain unverified.
+- Current source config selects `Backgrounds/Museum_ohne_Bilder.png`, and
+  `sync-customer-public.mjs` copies it. The Pages artifact gate previously
+  required only `museum-empty.png`, allowing a build that omitted the configured
+  photograph to pass that step. Require both files; the existing post-deploy
+  smoke checks the live primary image decodes and contributes visible pixels.
+- Track the next deployment and live smoke as open acceptance in `plan.md`.
+
 ## 2026-10-18 — Merge audit and customer-confirmed local room
 
 - Customer: “then I used the update galery .bat and then it worked.” Their

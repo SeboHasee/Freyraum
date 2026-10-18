@@ -3,6 +3,9 @@
 
 ## Unreleased — reference exhibition defaults (2026-10-18)
 
+- Pages artifact verification now requires both the configured
+  `Museum_ohne_Bilder.png` photograph and its fallback; post-deploy smoke
+  continues to verify the live photograph contributes visible pixels.
 - Merge handoff: synchronize all current Markdown with the four-image default,
   record customer-confirmed local success after Update Gallery and screenshot
   evidence, remove obsolete content-blocker guidance, and separate local/build
