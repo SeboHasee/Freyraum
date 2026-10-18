@@ -23,6 +23,20 @@
   failures are warnings. Visual capture is still blocked under software Chrome
   by the pre-existing invariant `shadow-casting light count 1 != expected 2`;
   investigation is ongoing, so no successful Type A capture is claimed.
+- **Latest targeted results:** HTTP and `file://` deployment smoke pass exact
+  background, real artwork pixel deltas, both front images and editor/museum
+  projection parity. Geometry, WebGL resilience, the 10 deploy-validator fixture
+  cases and syntax checks pass. These fixture passes do not override the real
+  shipping-content validation failures above.
+- **Open coupled visibility regression:** the DOM photo path accepts a decoded
+  fully transparent primary image without recovering through its embedded
+  fallback (`fixture-blank-primary did not resolve through embedded fallback`).
+  Removing the GPU probe removed that visibility gate; decode is insufficient.
+  A bounded DOM-compatible pixel/alpha check needs implementation consideration
+  before claiming equivalent recovery coverage. Ordinary primary/fallback,
+  neutral, phone and shape/doorway captures work after stale fixture repairs,
+  but the full visual suite does not pass. The shadow invariant and software-
+  Chrome selection/focus/restore diagnostics remain unresolved investigations.
 - **Dependency status:** installation reported 17 initial advisory findings;
   `npm audit --omit=dev` reports zero. No dependency manifests changed.
 - **Diagnostic contract:** the shared source-to-pixel outcome has optional

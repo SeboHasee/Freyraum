@@ -53,6 +53,14 @@ photographic smoke passes exact-photo, artwork pixel-contribution and editor
 homography-parity checks; Google Fonts DNS failures are warnings. Type A visual
 capture remains blocked under software Chrome by the pre-existing invariant
 `shadow-casting light count 1 != expected 2`; investigation is ongoing.
+Subsequent `file://` smoke, WebGL resilience, 10 deploy-validator fixture cases
+and syntax checks also pass. Ordinary primary/fallback, neutral, phone and
+shape/doorway captures work after fixture repairs, but the transparent-primary
+fixture fails (`fixture-blank-primary did not resolve through embedded fallback`):
+the DOM path accepts invisible decoded artwork without the former GPU visibility
+gate. Track a DOM-compatible pixel/alpha recovery check before claiming parity;
+do not mark the full visual suite green. Shipping missing-content failures and
+software-Chrome shadow/selection/restore investigations remain separate.
 
 | Type | Risk | Tool in this repo | How to run |
 |---|---|---|---|

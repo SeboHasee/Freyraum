@@ -31,13 +31,13 @@ const INCLUDE_HUB_DEBUG_CAPTURE = process.env.FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG 
 const SHIPPING_HUB_CONFIG = JSON.parse(
   readFileSync(resolve(ROOT, 'customer-artworks/museum-hub.json'), 'utf8')
 );
-const FIXTURE_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+const FIXTURE_IMAGE = `data:image/svg+xml;base64,${Buffer.from(
   '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#7089a3\"/><stop offset=\"1\" stop-color=\"#d8dddb\"/></linearGradient></defs><rect width=\"512\" height=\"512\" fill=\"url(#g)\"/><circle cx=\"256\" cy=\"256\" r=\"140\" fill=\"rgba(255,255,255,0.35)\"/></svg>'
-)}`;
+).toString('base64')}`;
 const MISSING_FIXTURE_IMAGE = './images/missing-fixture.png';
-const BLANK_FIXTURE_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+const BLANK_FIXTURE_IMAGE = `data:image/svg+xml;base64,${Buffer.from(
   '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><rect width=\"512\" height=\"512\" fill=\"rgba(255,255,255,0)\"/></svg>'
-)}`;
+).toString('base64')}`;
 
 const ARTWORK_STEPS = [0, 1, 2];
 const ZOOM_STATES = ['overview', 'reset', 'inspection'];
@@ -602,7 +602,7 @@ async function assertHubSceneBridge(page, stateName) {
       throw new Error(`${stateName}: slot ${slot.artworkId} projected overlay is implausibly small`);
     }
     if (!slot.imageReady || slot.imageOpacity !== '1' || !slot.imageTransform.startsWith('matrix3d(')) {
-      throw new Error(`${stateName}: slot ${slot.artworkId} lost its decoded, opaque homographic DOM image`);
+      throw new Error(`${stateName}: slot ${slot.artworkId} lost its decoded, opaque homographic DOM image: ${JSON.stringify(slot)}`);
     }
   }
 }
@@ -697,6 +697,20 @@ function dedupeFailures(failures) {
 }
 
 function buildFixtureScript(fixture) {
+  const withNativeDimensions = (image, dimensions) => {
+    if (image !== FIXTURE_IMAGE && image !== BLANK_FIXTURE_IMAGE) return image;
+    const svg = Buffer.from(image.split(',')[1], 'base64').toString('utf8')
+      .replace('width="512" height="512"', `width="${dimensions.width}" height="${dimensions.height}"`);
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  };
+  const sizedFixture = {
+    ...fixture,
+    artworks: fixture.artworks.map((artwork) => ({
+      ...artwork,
+      image: withNativeDimensions(artwork.image, artwork.dimensions),
+      ...(artwork.webglImage ? { webglImage: withNativeDimensions(artwork.webglImage, artwork.dimensions) } : {}),
+    })),
+  };
   return `(() => {
     const script = document.currentScript instanceof HTMLScriptElement ? document.currentScript : null;
     const fallbackHref = typeof window !== 'undefined' && window.location ? window.location.href : '';
@@ -704,7 +718,7 @@ function buildFixtureScript(fixture) {
     try {
       assetBaseUrl = new URL('./', (script && script.src) || fallbackHref).href;
     } catch {}
-    const fixture = ${JSON.stringify(fixture)};
+    const fixture = ${JSON.stringify(sizedFixture)};
     window.__FREYRAUM_ARTWORK_BUNDLE__ = {
       schemaVersion: 1,
       bundleId: 'visual-regression-fixture',
@@ -883,6 +897,11 @@ async function capture(targetDir) {
           contentType: 'application/javascript',
           body: buildFixtureScript(state.fixture),
         });
+        if (state.expectHubWarning) {
+          await page.route('**/backgrounds/missing-*.png', (route) => route.fulfill({
+            status: 404, contentType: 'text/plain', body: 'Missing background regression fixture',
+          }));
+        }
       });
     }
     await page.addInitScript(() => {
@@ -900,7 +919,10 @@ async function capture(targetDir) {
         })
       );
     });
-    await page.goto(`${APP_URL}${state.query}`, { waitUntil: 'networkidle' });
+    const captureUrl = new URL(APP_URL);
+    for (const [key, value] of new URLSearchParams(state.query)) captureUrl.searchParams.set(key, value);
+    if (!captureUrl.searchParams.has('debug')) captureUrl.searchParams.set('debug', '1');
+    await page.goto(captureUrl.href, { waitUntil: 'networkidle' });
     await page.waitForSelector('.loading-start-btn:not([disabled])', { timeout: 45_000 });
     await page.click('.loading-start-btn');
     await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 10_000 });
@@ -1020,6 +1042,7 @@ async function capture(targetDir) {
       failed: assetCheck.failed,
       fallbackUsed: assetCheck.fallbackUsed,
       screenshotPath: file,
+      invariantViolations: invariant.violations,
     });
     console.log(
       `asset-check ${state.name}: attempted=${assetCheck.attemptedUrls.length} failed=${assetCheck.failed.length} fallback=${assetCheck.fallbackUsed ?? 'none'}`

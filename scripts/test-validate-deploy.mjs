@@ -1,15 +1,14 @@
 #!/usr/bin/env node
 /**
  * FREYRAUM — v1.38 tests for `scripts/validate-deploy.mjs`
- * (`npm run test:validate-deploy`). Builds small fixture projects in a temp
+ * (`npm run test:validate-deploy`). Builds disposable fixture projects in a repository-local
  * folder: a valid one, a background with wrong upper/lower case, a missing
  * artwork image, an unknown artwork ID, and a path outside the project.
  */
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
 import { isSafeRelativePath, validateDeploy } from './validate-deploy.mjs';
 
 const created = [];
