@@ -311,9 +311,10 @@ export class Timeline {
 
   private updateScrollState(): void {
     this.updateCounter();
+    const arrowsVisible = !this.el.classList.contains('timeline--fits');
     this.el.classList.toggle(
       'timeline--fits',
-      this.listEl.scrollWidth <= this.listEl.clientWidth + this.arrowSpace + 1
+      this.listEl.scrollWidth <= this.listEl.clientWidth + (arrowsVisible ? this.arrowSpace : 0) + 1
     );
     const maxLeft = Math.max(0, this.listEl.scrollWidth - this.listEl.clientWidth - 1);
     const atStart = this.listEl.scrollLeft <= 1;
