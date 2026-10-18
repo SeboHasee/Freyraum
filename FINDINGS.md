@@ -7,10 +7,11 @@
   background. The deployment URL/build identity was not supplied, so the exact
   artifact and root cause remain unverified.
 - Current source config selects `Backgrounds/Museum_ohne_Bilder.png`, and
-  `sync-customer-public.mjs` copies it. The Pages artifact gate previously
-  required only `museum-empty.png`, allowing a build that omitted the configured
-  photograph to pass that step. Require both files; the existing post-deploy
-  smoke checks the live primary image decodes and contributes visible pixels.
+  `sync-customer-public.mjs` copies all allowed backgrounds. The earlier Pages
+  check's omission of that filename did not itself remove the image and does not
+  establish why it was not visible. The artifact gate and live smoke now derive
+  expected background paths from `museum-hub.json`, so a future configured
+  background is checked without pinning deployment to this filename.
 - Track the next deployment and live smoke as open acceptance in `plan.md`.
 
 ## 2026-10-18 — Merge audit and customer-confirmed local room

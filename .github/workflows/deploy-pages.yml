@@ -146,15 +146,23 @@ jobs:
             echo "Error: dist/index.html is missing." >&2
             exit 1
           fi
-          # Require both the configured museum photograph and its fallback.
+          # Require the backgrounds selected by the current customer config.
           # museum-target.png is a calibration reference and is intentionally
           # excluded from public/ and dist/.
-          for background in Museum_ohne_Bilder.png museum-empty.png; do
-            if [ ! -f "dist/backgrounds/${background}" ]; then
-              echo "Error: dist/backgrounds/${background} is missing." >&2
-              exit 1
-            fi
-          done
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync } from 'node:fs';
+          import { join } from 'node:path';
+
+          const config = JSON.parse(readFileSync('customer-artworks/museum-hub.json', 'utf8'));
+          for (const key of ['background', 'backgroundFallback']) {
+            const src = config[key]?.src;
+            if (typeof src !== 'string' || !/^Backgrounds\/[^/]+$/.test(src)) {
+              throw new Error(`museum-hub.json ${key}.src is not a valid Backgrounds/<file> path`);
+            }
+            const output = join('dist', 'backgrounds', src.slice('Backgrounds/'.length));
+            if (!existsSync(output)) throw new Error(`Configured ${key} is missing from dist: ${output}`);
+          }
+          NODE
           if [ -f dist/backgrounds/museum-target.png ]; then
             echo "Error: dist/backgrounds/museum-target.png must not be shipped (reference asset only)." >&2
             exit 1
