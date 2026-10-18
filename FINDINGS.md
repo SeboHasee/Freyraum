@@ -44,6 +44,10 @@
   regenerated `editor-online.json` retains online publishing configuration.
   A build with a non-secret example HTTPS endpoint confirms that public, dist
   and preview settings all preserve it; test-only generated metadata is discarded.
+- Merge-audit final validation: secret scan passes; CodeQL reports zero Actions
+  and JavaScript alerts. Automated code review is unavailable (missing model);
+  a separate read-only review finds no significant issues. This does not waive
+  pending owner approval, new Pages deployment/live smoke or deferred visual work.
 
 ## 2026-10-18 — Root-index freshness follow-up
 
