@@ -7,6 +7,14 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 
 ## Reference exhibition defaults (2026-10-18)
 
+- [x] Reopen the index-entry incident: prior direct-app checks did not establish
+      that the customer's root-index artifact was fresh.
+- [x] Make full builds import current artwork/layout data before bundling; version
+      all local-preview scripts/styles and refresh the root launcher destination.
+- [x] Reproduce and fix nested HTTP preview URLs: the local bundle's absolute `/`
+      base requested backgrounds and editor settings outside `customer-preview/`.
+- [x] Recheck root-index `file://` and HTTP paths after the relative-base rebuild:
+      exact four mappings, visible painting/background pixels and editor parity pass.
 - [x] Map supplied Gartenszene/front-left, Akt/front-right, Fraktal/left and
       Wunderbaum/right, retaining Akt's existing placement and the photograph.
 - [x] Curate native-ratio sizes with valid green-zone and doorway clearance.

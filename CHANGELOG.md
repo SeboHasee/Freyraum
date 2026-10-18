@@ -3,6 +3,14 @@
 
 ## Unreleased — reference exhibition defaults (2026-10-18)
 
+- Follow-up to the stale-index report: full builds regenerate customer data before
+  bundling; local-preview runtime/styles are cache-versioned, and the root launcher
+  refreshes its destination. Customer layouts remain authoritative.
+- Local-preview assets now resolve relative to the preview directory when served
+  over HTTP, rather than looking for backgrounds/settings at the server root.
+- Root-index smoke covers redirects, query/fragment preservation, cache-versioned
+  resources, four visible paintings and editor parity; generated-layout tests
+  compare the injected configuration with the source JSON.
 - Default room: Gartenszene front-left, unchanged Akt 27 front-right, Fraktal
   left, Wunderbaum right, over `Museum_ohne_Bilder.png`.
 - Side paintings use independently curated heights and positions, preserving

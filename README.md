@@ -9,6 +9,12 @@ The default room follows the supplied reference: **Gartenszene** front-left,
 **Akt 27** front-right, **Fraktal** on the left side wall and **Wunderbaum** on
 the right, over `Museum_ohne_Bilder.png`. The checked-in
 `customer-artworks/museum-hub.json` owns this arrangement and its native-ratio sizes.
+The source filenames are `Gatrenszene.png`, `Akt 27.png`, `Fraktal.png` and
+`Wunderbaum.png` in `customer-artworks/inbox/` (the garden filename is misspelled).
+After downloading a project update, run `Update Gallery.bat` / `Update Gallery.command`
+before opening the root `index.html`: generated customer data is local, not tracked
+in Git. Developer `npm run build` now imports current artwork/config first;
+the local preview versions its scripts and stylesheet to avoid old cached output.
 
 The placement editor arranges pictures on the museum walls and in rooms
 (add, fill, switch and delete rooms; drag, resize, keyboard nudge, undo/redo).

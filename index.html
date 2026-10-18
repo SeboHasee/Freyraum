@@ -108,6 +108,9 @@
     <p>
       Hinweis: Diese Datei öffnet <code>customer-preview/app.html</code>, eine statisch gebaute Version,
       die ohne lokalen Entwicklungsserver per Doppelklick funktioniert.
+      Nach dem Herunterladen oder Ändern der Bilder bzw. <code>museum-hub.json</code>
+      bitte zuerst <code>Update Gallery.bat</code> (Windows) oder
+      <code>Update Gallery.command</code> (macOS) ausführen.
     </p>
     <a href="./customer-preview/app.html" id="preview-link">FREYRAUM Vorschau öffnen →</a>
     <p id="redirect-status" aria-live="polite">Automatische Weiterleitung in Kürze …</p>
@@ -119,6 +122,7 @@
     const previewLink = document.getElementById('preview-link');
     const previewUrl = new URL('./customer-preview/app.html', window.location.href);
     previewUrl.search = window.location.search;
+    previewUrl.searchParams.set('previewRefresh', Date.now().toString());
     previewUrl.hash = window.location.hash;
     const previewHref = previewUrl.toString();
     if (previewLink) previewLink.href = previewHref;

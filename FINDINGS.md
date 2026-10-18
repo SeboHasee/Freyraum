@@ -1,6 +1,38 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
+## 2026-10-18 — Root-index freshness follow-up
+
+- The customer's stale-index report reopens acceptance; earlier direct-app passes
+  did not identify their actual artifact. No claim is made about their browser cache.
+- Verified build-input risk: `npm run build` previously omitted the importer,
+  while injected `__FREYRAUM_MUSEUM_HUB` overrides the compiled JSON fallback.
+  A stale generated file therefore wins even after rebuilding the runtime.
+  The build now imports and syncs current customer data first, without overriding
+  deliberately edited customer layouts.
+- Root-index HTTP smoke reproduced another concrete failure: the local bundle's
+  default absolute `/` base requested backgrounds and `editor-online.json` at
+  the server root instead of under `customer-preview/`. Local Vite output now
+  uses `./`; the production `/Freyraum/` base is unchanged.
+- Preview runtime/style URLs were unversioned. Both the importer and HTML writer
+  now stamp them along with customer data; the root launcher refreshes the preview
+  document while preserving query parameters and fragment.
+- Generated artwork data is ignored by Git. A fresh checkout/download still needs
+  Update Gallery before a double-click preview; the launcher and missing-asset
+  message now explain that requirement instead of silently implying source edits
+  update generated assets. Exact inputs: `Gatrenszene.png`, `Akt 27.png`,
+  `Fraktal.png`, `Wunderbaum.png`.
+- Final rebuild passes lint/typecheck, source/generated-layout equality,
+  root-index HTTP and `file://` smoke (all four decoded images contribute pixels,
+  exact photograph, editor geometry parity). Geometry, save-service (15),
+  local-project (12), deploy-validator (10), deploy content, docs authority and
+  frame-budget checks also pass. File-fetch probes still warn on `file://`,
+  where embedded artwork is verified visible. Existing dependency advisories,
+  large artwork/bundle and classic-script warnings are unchanged.
+- Root-index screenshot captured at `/tmp/freyraum-root-index-room.png`.
+  Image inspection remains unavailable in this session; reference-image aesthetic
+  approval is not inferred from automated visibility checks.
+
 ## 2026-10-18 — Reference exhibition with supplied artwork
 
 - The inbox now contains all four genuine paintings. The garden image is named

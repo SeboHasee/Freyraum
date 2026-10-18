@@ -70,6 +70,26 @@ async function openMuseum(url) {
   await page.goto(url, { waitUntil: 'load', timeout: 60_000 });
   const start = page.locator('.loading-start-btn:not([disabled])');
   await start.waitFor({ state: 'visible', timeout: 90_000 });
+  if (new URL(url).pathname.endsWith('/index.html') && new URL(page.url()).pathname.endsWith('/customer-preview/app.html')) {
+    const requested = new URL(url);
+    const loaded = new URL(page.url());
+    check(/^\d+$/.test(loaded.searchParams.get('previewRefresh') ?? ''),
+      'root index refreshes the preview document');
+    for (const [key, value] of requested.searchParams) {
+      if (key !== 'previewRefresh') check(loaded.searchParams.getAll(key).includes(value),
+        `root index preserves query parameter ${key}`);
+    }
+    check(loaded.hash === requested.hash, 'root index preserves the URL fragment');
+    const assetUrls = await page.evaluate(() => [
+      ...[...document.querySelectorAll('script[src]')].map((script) => script.src),
+      ...[...document.querySelectorAll('link[rel="stylesheet"]')].map((link) => link.href),
+    ]);
+    for (const filename of ['customer-artworks.js', 'customer-audio.js', 'freyraum-gallery.js', 'style.css']) {
+      check(assetUrls.some((src) => new URL(src).pathname.endsWith(`/${filename}`)
+        && /^\d+$/.test(new URL(src).searchParams.get('t') ?? '')),
+      `root preview versions ${filename} against stale browser caches`);
+    }
+  }
   await start.click();
   await page.waitForSelector('.museum-hub:not([hidden])', { timeout: 60_000 });
   await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 15_000 });
