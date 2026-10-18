@@ -147,7 +147,10 @@ try {
   check(await page.locator('.museum-hub__canvas').count() === 0, 'museum does not construct a WebGL room canvas');
   check(await page.locator('.museum-hub__room').count() === Math.max(1, expected.pages.length), 'resolved room/page count matches the published content');
   const backgroundSrc = await page.locator('.museum-hub__image').evaluate((image) => image.currentSrc || image.src);
-  const expectedBackgroundPath = `/${config.background.src.replace(/^Backgrounds\//, url.protocol === 'file:' ? 'Backgrounds/' : 'backgrounds/')}`;
+  assert.match(config.background.src, /^Backgrounds\/[^/]+$/, 'configured background must be in Backgrounds/');
+  const backgroundFilename = config.background.src.slice('Backgrounds/'.length);
+  const backgroundDirectory = url.protocol === 'file:' ? 'Backgrounds' : 'backgrounds';
+  const expectedBackgroundPath = `/${backgroundDirectory}/${backgroundFilename}`;
   check(Boolean(backgroundSrc) && decodeURIComponent(new URL(backgroundSrc).pathname).endsWith(expectedBackgroundPath),
     `configured primary background selected (${backgroundSrc || 'no resolved image source'})`);
   if (backgroundSrc) await assertPixelContribution(page, '.museum-hub__image', 'primary photograph');

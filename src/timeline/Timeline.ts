@@ -21,6 +21,7 @@ export class Timeline {
   private readonly prevButton: HTMLButtonElement;
   private readonly nextButton: HTMLButtonElement;
   private readonly artworks: readonly Artwork[];
+  private readonly arrowSpace: number;
   private readonly items: HTMLLIElement[] = [];
   private readonly thumbs: Array<HTMLButtonElement | null> = [];
   private readonly virtualized: boolean;
@@ -77,6 +78,11 @@ export class Timeline {
     window.addEventListener('resize', this.onResize, { passive: true });
 
     container.appendChild(this.el);
+    const arrowGap = Number.parseFloat(getComputedStyle(this.el).columnGap) || 0;
+    this.arrowSpace =
+      this.prevButton.getBoundingClientRect().width
+      + this.nextButton.getBoundingClientRect().width
+      + arrowGap * 2;
     this.setActive(0);
     this.updateScrollState();
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => this.centerThumb(0, 'auto')));
@@ -305,11 +311,9 @@ export class Timeline {
 
   private updateScrollState(): void {
     this.updateCounter();
-    const arrowGap = Number.parseFloat(getComputedStyle(this.el).columnGap) || 0;
-    const arrowsWidth = this.prevButton.offsetWidth + this.nextButton.offsetWidth + arrowGap * 2;
     this.el.classList.toggle(
       'timeline--fits',
-      this.listEl.scrollWidth <= this.listEl.clientWidth + arrowsWidth + 1
+      this.listEl.scrollWidth <= this.listEl.clientWidth + this.arrowSpace + 1
     );
     const maxLeft = Math.max(0, this.listEl.scrollWidth - this.listEl.clientWidth - 1);
     const atStart = this.listEl.scrollLeft <= 1;

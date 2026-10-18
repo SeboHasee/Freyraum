@@ -85,7 +85,7 @@ const artworkMeshSource = readFileSync(resolve(ROOT, 'src/gallery/ArtworkMesh.ts
 const timelineSource = readFileSync(resolve(ROOT, 'src/timeline/Timeline.ts'), 'utf8');
 const navigationSeedDepth = Number(galleryManagerSource.match(/const NAV_SEED_POSITION_Z = (-?[\d.]+);/)?.[1]);
 assert.ok(
-  navigationSeedDepth > 0 && navigationSeedDepth > -galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+  navigationSeedDepth > galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
   'artwork entrance starts on the camera side of the wall plane'
 );
 assert.equal(
@@ -104,7 +104,7 @@ assert.match(scss, /\.timeline__list\s*\{[\s\S]*?flex:\s*0 1 auto;[\s\S]*?width:
 assert.match(scss, /\.timeline\.timeline--fits \.timeline__arrow\s*\{\s*display:\s*none/);
 assert.match(scss, /\.timeline__item\s*\{[\s\S]*?width:\s*clamp\(90px,\s*15vw,\s*150px\)/);
 assert.match(scss, /@media \(max-width: 599px\)\s*\{[\s\S]*?\.timeline__item\s*\{\s*width:\s*120px/);
-assert.match(timelineSource, /this\.listEl\.scrollWidth <= this\.listEl\.clientWidth \+ arrowsWidth \+ 1/);
+assert.match(timelineSource, /this\.listEl\.scrollWidth <= this\.listEl\.clientWidth \+ this\.arrowSpace \+ 1/);
 assert.match(timelineSource, /case 'ArrowRight':[\s\S]*?this\.focusThumb\(\(index \+ 1\) % this\.artworks\.length\)/);
 assert.match(timelineSource, /case 'ArrowLeft':[\s\S]*?this\.focusThumb\(\(index - 1 \+ this\.artworks\.length\) % this\.artworks\.length\)/);
 assert.match(timelineSource, /document\.documentElement\.dataset\.motion === 'reduced'/);
