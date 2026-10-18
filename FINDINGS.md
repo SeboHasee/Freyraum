@@ -16,6 +16,11 @@
 - Regression coverage checks the depth range at close zoom, preserves the normal
   entrance pose, and exercises both wall and camera clearance throughout the
   transition. Customer confirmation on the actual display remains necessary.
+- Production/local builds, lint and typecheck pass. Chromium verified fit states
+  for 1–4 artworks at 320/390/500/900/1600px, 12-item overflow arrows, arrow
+  scrolling, keyboard focus, selection/progress and reduced-motion transitions.
+  The geometry suite reaches its previously recorded unrelated 2.30m doorway
+  assertion only after these new pose checks pass.
 
 ## 2026-10-18 — Artwork entrance and timeline sizing
 

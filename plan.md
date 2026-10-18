@@ -95,8 +95,13 @@ No dependency upgrades or high-resolution importer redesign are part of this fix
       wall and camera clearance; preserve full entrance motion at normal zoom and
       keep the artwork-body shadow caster unchanged.
 - [x] Add responsive fit and tilted-pose regression assertions.
-- [ ] Run production build and browser checks for 1–4 works, larger collections,
+- [x] Run production build and browser checks for 1–4 works, larger collections,
       narrow screens, selection/keyboard controls, and camera/wall clearance.
+- [x] Chromium verifies 1–4 works across 320, 390, 500, 900 and 1600px widths,
+      12-item arrow scrolling, keyboard focus, selection/progress, and reduced motion.
+- [ ] `npm run validate:museum-hub` reaches the previously documented doorway
+      height assertion (expected 2.30m vs calibrated values); pose assertions pass
+      before that unrelated failure.
 - [ ] Confirm the revised timeline and tilted artwork look correct in the user's
       deployed gallery; automated geometry checks do not replace visual approval.
 
