@@ -295,9 +295,8 @@ canvas {
 .museum-hub.is-photographic .museum-hub__canvas,
 .museum-hub.is-calibrating .museum-hub__canvas {
   /*
-   * Calibration edits the projected DOM artwork. Keep WebGL available for
-   * renderer validation, but never let its pixels compete with the editor
-   * preview or make a native-ratio image look stretched.
+   * A room canvas must never compete with the shared photographic presentation
+   * or make its native-ratio projected artwork look stretched.
    */
   visibility: hidden;
   pointer-events: none;

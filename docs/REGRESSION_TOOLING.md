@@ -47,8 +47,12 @@ the exact photograph, decoded `Fraktal` / `Akt 27`, opacity 1 in both routes,
 and no hub canvas. Lint, typecheck, build, frame-budget, docs-authority and all
 editor-rooms browser cases pass. Real deploy validation, four save-service cases,
 the local-project test and editor-publish remain content-blocked by the missing
-side IDs/disabled empty place. Geometry-format and pixel-contribution coverage
-are still being updated; their final results are not yet claimed.
+side IDs/disabled empty place. Geometry now passes with updated closed-outline/
+legacy-wall expectations and explicit production/fixture mappings. HTTP
+photographic smoke passes exact-photo, artwork pixel-contribution and editor
+homography-parity checks; Google Fonts DNS failures are warnings. Type A visual
+capture remains blocked under software Chrome by the pre-existing invariant
+`shadow-casting light count 1 != expected 2`; investigation is ongoing.
 
 | Type | Risk | Tool in this repo | How to run |
 |---|---|---|---|

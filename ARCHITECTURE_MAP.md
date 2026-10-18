@@ -107,7 +107,10 @@ fields survive the round trip. `scripts/import-artworks.mjs` and
   - `artworkImageSources.ts`: shared declared-image/embedded-fallback source
     plan used by both gallery and hub
   - `sourceToPixelOutcome.ts`: redacted route-aware outcome diagnostics;
-    DOM decode/display evidence must not be reported as GPU visible-pixel proof
+    optional `presentationPath` distinguishes `'dom'` from `'webgl'`. Hub DOM
+    outcomes retain native decoded dimensions with null GPU/probe fields and
+    explicitly report no WebGL upload; this is not GPU visible-pixel proof.
+    Source redaction and interactive-gallery behavior are preserved.
   - `textureUploadCompatibility.ts`: shared capability-aware downscale applied
     before any decoded image reaches the GPU in either route
   - `sourceToPixelProbe.ts`: bounded, verbose-mode-only GPU visible-pixel

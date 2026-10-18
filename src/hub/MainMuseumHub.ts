@@ -1663,6 +1663,7 @@ export class MainMuseumHub {
     const upsert = view.lastUpsertResult;
     recordSourceToPixelOutcome(this.diagnostics, {
       route: 'hub',
+      presentationPath: this.hubRoomRenderer ? 'webgl' : 'dom',
       artworkId: view.slot.artworkId,
       bundleId: options.bundleId,
       runtimeProtocol: getRuntimeProtocol(),

@@ -28,7 +28,9 @@
   and both available paintings in museum/editor; lint, typecheck, build,
   frame-budget, docs-authority and editor-rooms pass. Deploy/save-service/
   local-project/editor-publish remain blocked by missing side artwork content;
-  geometry/pixel-contribution coverage is still being finalized.
+  geometry and HTTP photographic smoke also pass, including pixel contribution
+  and editor projection parity. Type A capture remains blocked by a pre-existing
+  software-Chrome shadow-light-count invariant; no visual-capture pass is claimed.
 
 ## v1.40 — Windows installer builds in CI (2026-10-17)
 

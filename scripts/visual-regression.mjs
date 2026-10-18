@@ -872,8 +872,10 @@ async function capture(targetDir) {
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
   });
   const captureReport = [];
+  const captureErrors = [];
   for (const state of activeStates) {
     const page = await browser.newPage({ viewport: state.viewport, deviceScaleFactor: 1 });
+    try {
     if (state.fixture) {
       await page.route('**/customer-artworks.js', async (route) => {
         await route.fulfill({
@@ -1008,7 +1010,7 @@ async function capture(targetDir) {
       throw new Error(`${state.name}: performance/invariant tooling was not installed`);
     }
     if (invariant.violations.length > 0) {
-      throw new Error(`${state.name}: invariant gate failed: ${invariant.violations.join('; ')}`);
+      captureErrors.push(`${state.name}: invariant gate failed: ${invariant.violations.join('; ')}`);
     }
     const file = resolve(targetDir, `${state.name}.png`);
     await page.screenshot({ path: file });
@@ -1023,12 +1025,20 @@ async function capture(targetDir) {
       `asset-check ${state.name}: attempted=${assetCheck.attemptedUrls.length} failed=${assetCheck.failed.length} fallback=${assetCheck.fallbackUsed ?? 'none'}`
     );
     console.log(`captured ${state.name} → ${file}`);
-    await page.close();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      captureErrors.push(`${state.name}: ${message}`);
+      captureReport.push({ state: state.name, error: message });
+      console.error(message);
+    } finally {
+      await page.close();
+    }
   }
   await browser.close();
   const reportPath = resolve(targetDir, CAPTURE_REPORT_FILENAME);
   writeFileSync(reportPath, JSON.stringify(captureReport, null, 2));
   console.log(`capture report → ${reportPath}`);
+  if (captureErrors.length > 0) throw new Error(captureErrors.join('\n'));
   return captureReport;
 }
 

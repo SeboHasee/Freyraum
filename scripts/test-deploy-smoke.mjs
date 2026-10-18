@@ -59,7 +59,9 @@ async function openMuseum(url) {
   });
   page.on('requestfailed', (request) => {
     if (request.method() !== 'HEAD' && request.failure()?.errorText !== 'net::ERR_ABORTED') {
-      failures.push(`failed request: ${request.url()} (${request.failure()?.errorText})`);
+      const message = `failed request: ${request.url()} (${request.failure()?.errorText})`;
+      if (new URL(request.url()).origin === new URL(url).origin) failures.push(message);
+      else warnings.push(`optional external resource: ${message}`);
     }
   });
   await page.goto(url, { waitUntil: 'load', timeout: 60_000 });

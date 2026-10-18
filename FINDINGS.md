@@ -15,11 +15,21 @@
   passes all browser cases. These checks do not supply the missing side images.
 - **Content-blocked checks:** real `validate:deploy`, four save-service cases and
   the local-project test fail on the shipping missing IDs. `test:editor-publish`
-  cannot click the disabled empty side place (`invalid-mapping`). Geometry-test
-  format assumptions and additional pixel-contribution coverage are being
-  updated; no final result for those checks is claimed here.
+  cannot click the disabled empty side place (`invalid-mapping`).
+- **Regression follow-up:** geometry passes after adapting closed-outline/
+  legacy-wall expectations and separating production missing mappings from
+  complete fixtures. HTTP photographic smoke passes exact-photo, artwork pixel
+  contribution and editor-homography parity checks; external Google Fonts DNS
+  failures are warnings. Visual capture is still blocked under software Chrome
+  by the pre-existing invariant `shadow-casting light count 1 != expected 2`;
+  investigation is ongoing, so no successful Type A capture is claimed.
 - **Dependency status:** installation reported 17 initial advisory findings;
   `npm audit --omit=dev` reports zero. No dependency manifests changed.
+- **Diagnostic contract:** the shared source-to-pixel outcome has optional
+  `presentationPath: 'dom' | 'webgl'`. The hub records `'dom'`, native decoded
+  source dimensions and null GPU/probe fields, explicitly describing decode for
+  calibrated DOM presentation without WebGL upload. This is not GPU pixel proof;
+  source redaction and interactive-gallery diagnostics remain unchanged.
 - **Baseline reproduced in `file://` (implementation pass):** the importer has
   only `Akt 27.png` and `Fraktal.png`. Side-slot IDs `gartenszene` and `zdigital`
   exist in neither the customer inventory nor built-ins; resolution reports

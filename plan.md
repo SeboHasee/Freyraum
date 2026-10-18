@@ -25,7 +25,11 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       editor-rooms browser checks pass (implementation pass).
 - [ ] Validate matching generated preview and served artifacts, editable walls,
       warning-only saving, room/assignment import, navigation and renderer recovery.
-- [ ] Finish geometry-format and pixel-contribution regression coverage.
+- [x] Geometry suite and HTTP photographic smoke pass, including actual artwork
+      pixel contribution and museum/editor homography parity.
+- [ ] Resolve/characterize the pre-existing software-Chrome visual-capture
+      invariant (`shadow-casting light count 1 != expected 2`); no Type A pass
+      is claimed.
 - [ ] Rerun content-blocked deploy/save-service/local-project/editor-publish checks
       after the owner supplies the missing side images; do not disguise failures.
 - [ ] Obtain customer visual acceptance. The exact artifact behind the reported

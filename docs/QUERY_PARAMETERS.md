@@ -162,7 +162,12 @@ when it forwards into `customer-preview/app.html`. Relevant current records are:
   the bounded GPU visible-pixel proof result when required by active WebGL
   presentation. For the photograph-backed DOM hub,
   inspect decoded image dimensions, calibrated transform and visible DOM owner;
-  do not interpret image decode as proof of GPU upload. A healthy local `file://` museum-hub
+  do not interpret image decode as proof of GPU upload. The shared outcome's
+  optional `presentationPath` is `'dom'` or `'webgl'`. The hub records `'dom'`,
+  native decoded source dimensions and null GPU/probe fields, explicitly
+  reporting decode for calibrated DOM presentation with no WebGL upload.
+  Source redaction and inspection-gallery diagnostics remain unchanged.
+  A healthy local `file://` museum-hub
   recovery can now legitimately end with
   `candidateMode: "embedded-webgl-fallback"` and
   `resolvedUrlType: "data-uri"` even when the declared image file exists,

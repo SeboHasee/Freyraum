@@ -49,7 +49,11 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
    `visible-pixel-probe`). Enable verbose diagnostics mode to also capture the
    bounded GPU visible-pixel probe result for an active WebGL path. For the
    photograph-backed museum/editor, inspect the decoded DOM image, visible
-   artwork owner and calibrated transform instead. In a healthy local-preview hub
+   artwork owner and calibrated transform instead. Its source-to-pixel outcome
+   has `presentationPath: 'dom'`, native decoded source dimensions and null
+   GPU/probe fields: this proves decode, not GPU upload or visible pixels.
+   Keep source URLs redacted; inspection-gallery behavior is unchanged.
+   In a healthy local-preview hub
    recovery, `candidateMode: "embedded-webgl-fallback"` is now expected when
    the declared image file URL is not WebGL-stable. Preserve the generated
    customer bundle before re-importing, and follow the implemented recovery in
@@ -89,8 +93,10 @@ The implementation pass subsequently captured the built preview at
 `/tmp/freyraum-after`: exact photograph and both available paintings visible in
 museum/editor, no hub canvas. Lint/typecheck/build/frame/docs-authority and
 editor-rooms pass; deploy/save-service/local-project/editor-publish remain
-content-blocked. Geometry/pixel-contribution checks and owner acceptance remain
-open in `plan.md`.
+content-blocked. Geometry and HTTP photographic smoke (including pixel
+contribution and editor homography parity) now pass. Type A capture remains
+blocked by the pre-existing software-Chrome shadow-light-count invariant;
+owner acceptance remains open in `plan.md`.
 
 ## Handoff checklist
 
