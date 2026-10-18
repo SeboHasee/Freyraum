@@ -1742,7 +1742,7 @@ export class MainMuseumHub {
       // confirmation; larger sources stay inconclusive to bound diagnostic work.
       const width = image.naturalWidth;
       const height = image.naturalHeight;
-      if (width <= 0 || height <= 0 || width * height > 1_048_576) return null;
+      if (width <= 0 || height <= 0 || width * height > 4_194_304) return null;
       canvas.width = Math.min(128, width);
       canvas.height = Math.min(128, height);
       for (let y = 0; y < height; y += canvas.height) {

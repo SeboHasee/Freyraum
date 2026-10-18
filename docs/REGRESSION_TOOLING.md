@@ -59,10 +59,13 @@ shape/doorway captures work after fixture repairs, but the transparent-primary
 fixture originally failed (`fixture-blank-primary did not resolve through embedded
 fallback`). A conservative DOM alpha gate is now implemented: a nonempty 4×4
 sample succeeds; an empty sample checks native alpha in ≤128×128 tiles within
-1,048,576 source pixels. Only proven all-zero alpha triggers fallback; over-budget
+4,194,304 source pixels (4 MP). Only proven all-zero alpha triggers fallback; over-budget
 or unavailable/tainted readback remains inconclusive, preserving sparse strokes.
 Method checks (including a sparse final-native-pixel case), lint/typecheck/build
 and front-wall-aspect pass; rebuilt browser recovery confirmation remains pending.
+The final 4 MP rebuild passes 1200×1600 blank rejection, same-size sparse
+final-pixel alpha-1 acceptance and over-budget inconclusive acceptance method
+checks; lint/typecheck/build pass again. These are not browser fixture results.
 Do not mark the full visual suite green. Shipping missing-content failures and
 software-Chrome shadow/selection/restore investigations remain separate.
 

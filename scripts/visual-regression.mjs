@@ -132,7 +132,7 @@ const POST_UPLOAD_BLANK_FIXTURES = [
     title: 'Fixture Blank Primary',
     image: BLANK_FIXTURE_IMAGE,
     webglImage: FIXTURE_IMAGE,
-    dimensions: { width: 1200, height: 1600 },
+    dimensions: { width: 600, height: 800 },
   },
   {
     id: 'fixture-visible-companion',
@@ -165,7 +165,7 @@ function fullMappedHubFixture(artworks) {
       ...SHIPPING_HUB_CONFIG,
       slots: SHIPPING_HUB_CONFIG.slots.map((slot, index) => ({
         ...slot,
-        ...(artworks[index] ? { artworkId: artworks[index].id } : {}),
+        artworkId: artworks[index]?.id ?? null,
       })),
       fallbacks: {
         ...SHIPPING_HUB_CONFIG.fallbacks,
@@ -358,21 +358,30 @@ const states = [
     expectHubArtworkFallback: 'fixture-square-a',
   },
   {
-    name: 'hub__fixture__blank-primary-post-upload-fallback',
+    name: 'hub__fixture__blank-primary-dom-alpha-fallback',
     query: '?startup=entry-minimal&debug=verbose',
     mode: 'hub',
     viewport: DESKTOP_VIEWPORT,
     hubSteps: [],
-    fixture: hubFixture(POST_UPLOAD_BLANK_FIXTURES),
+    // A lone candidate keeps diagnostics coalescing from hiding its recovery outcome.
+    fixture: hubFixture(POST_UPLOAD_BLANK_FIXTURES.slice(0, 1)),
     expectHubArtworkFallback: 'fixture-blank-primary',
-    expectHubArtworkFallbackReasonIncludes: 'visible-pixel-probe',
+    expectHubArtworkFallbackReasonIncludes: 'zero-alpha-source',
     expectSourceToPixelOutcome: {
       scope: 'hub',
       artworkId: 'fixture-blank-primary',
       result: 'success',
+      presentationPath: 'dom',
       candidateMode: 'embedded-webgl-fallback',
       attemptedEmbeddedFallback: true,
       resolvedUrlType: 'data-uri',
+      sourceWidth: 600,
+      sourceHeight: 800,
+      uploadWidth: null,
+      uploadHeight: null,
+      rendererMaxTextureSize: null,
+      visibleProbe: null,
+      messageIncludes: 'DOM presentation (no WebGL upload)',
     },
   },
   ...(INCLUDE_HUB_DEBUG_CAPTURE
@@ -645,7 +654,7 @@ async function assertSourceToPixelOutcome(page, stateName, expectation) {
   const entries = await page.evaluate((artworkId) => {
     return (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
       .filter((entry) => entry.event === 'source-to-pixel-outcome' && entry.data?.artworkId === artworkId)
-      .map((entry) => ({ scope: entry.scope, data: entry.data }));
+      .map((entry) => ({ scope: entry.scope, message: entry.message, data: entry.data }));
   }, expectation.artworkId);
   const match = entries.find((entry) =>
     entry.scope === expectation.scope
@@ -654,6 +663,9 @@ async function assertSourceToPixelOutcome(page, stateName, expectation) {
     && (!('attemptedEmbeddedFallback' in expectation)
       || entry.data?.attemptedEmbeddedFallback === expectation.attemptedEmbeddedFallback)
     && (!('resolvedUrlType' in expectation) || entry.data?.resolvedUrlType === expectation.resolvedUrlType)
+    && ['presentationPath', 'sourceWidth', 'sourceHeight', 'uploadWidth', 'uploadHeight', 'rendererMaxTextureSize', 'visibleProbe']
+      .every((key) => !(key in expectation) || entry.data?.[key] === expectation[key])
+    && (!expectation.messageIncludes || entry.message.includes(expectation.messageIncludes))
     && (!expectation.failureReasonIncludes || String(entry.data?.failureReason ?? '').includes(expectation.failureReasonIncludes))
   );
   if (!match) {
@@ -678,6 +690,9 @@ function getStateHubBackgroundConfig(state) {
 function resolveHubBackgroundUrl(pageUrl, src) {
   if (!src) return null;
   if (/^https?:\/\//i.test(src)) return src;
+  if (new URL(pageUrl).protocol === 'file:') {
+    return new URL(`../customer-artworks/${src.replace(/^backgrounds\//, 'Backgrounds/')}`, pageUrl).href;
+  }
   const normalized = src.replace(/^Backgrounds\//, 'backgrounds/');
   return new URL(normalized, pageUrl).href;
 }
@@ -836,7 +851,10 @@ async function ensureHubBackgroundFailSafe(page, state) {
       throw new Error(`${state.name}: fallback-neutral hub state did not degrade to museum-grey`);
     }
   }
-  if (!snapshot.imageError) {
+  if (!state.expectNeutralBackgroundFallback) {
+    if (snapshot.imageError) {
+      throw new Error(`${state.name}: expected a decoded photograph, but the hub entered the neutral image-error state`);
+    }
     const expectedUrl = primaryFailed ? fallbackUrl : primaryUrl;
     if (snapshot.currentImageSrc !== expectedUrl) {
       throw new Error(`${state.name}: wrong background filename: ${snapshot.currentImageSrc} (expected ${expectedUrl})`);
@@ -891,7 +909,7 @@ async function capture(targetDir) {
     const page = await browser.newPage({ viewport: state.viewport, deviceScaleFactor: 1 });
     try {
     if (state.fixture) {
-      await page.route('**/customer-artworks.js', async (route) => {
+      await page.route(/\/customer-artworks\.js(?:\?.*)?$/, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/javascript',

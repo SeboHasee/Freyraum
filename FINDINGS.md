@@ -33,13 +33,17 @@
   invisible artwork. Recovery now uses a conservative alpha check under the
   existing verbose/local-file probe policy: a 4×4 sample accepts nonzero alpha
   immediately; an empty sample triggers native-resolution scanning in tiles of
-  at most 128×128 pixels, within a 1,048,576-source-pixel budget. Only proven
+  at most 128×128 pixels, within a 4,194,304-source-pixel budget (4 MP). Only proven
   all-zero alpha rejects the source (`zero-alpha-source`) and retries fallback.
   Over-budget or unavailable/tainted readback is inconclusive and accepted, so
   sparse valid strokes are not rejected. GPU evidence stays null for DOM.
   Transparent/black/white/faint-alpha, unavailable/tainted readback and sparse
   final-native-pixel method checks pass, as do lint/typecheck/build and the
   front-wall-aspect check; post-rebuild browser recovery confirmation is pending.
+  The final 4 MP rebuild also passes actual 1200×1600 blank rejection,
+  same-size sparse final-pixel alpha-1 acceptance and over-4-MP inconclusive
+  acceptance method checks; lint/typecheck/build pass again. Browser proof
+  remains separate and pending.
   Ordinary primary/fallback,
   neutral, phone and shape/doorway captures work after stale fixture repairs,
   but the full visual suite does not pass. The shadow invariant and software-
