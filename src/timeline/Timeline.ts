@@ -1,5 +1,6 @@
 import type { Artwork } from '../config/artworks';
 import { getDiagnostics } from '../utils/Diagnostics';
+import { timelineContentFits } from './timelineLayout';
 
 /**
  * Timeline navigation strip.
@@ -21,7 +22,6 @@ export class Timeline {
   private readonly prevButton: HTMLButtonElement;
   private readonly nextButton: HTMLButtonElement;
   private readonly artworks: readonly Artwork[];
-  private readonly arrowSpace: number;
   private readonly items: HTMLLIElement[] = [];
   private readonly thumbs: Array<HTMLButtonElement | null> = [];
   private readonly virtualized: boolean;
@@ -78,11 +78,6 @@ export class Timeline {
     window.addEventListener('resize', this.onResize, { passive: true });
 
     container.appendChild(this.el);
-    const arrowGap = Number.parseFloat(getComputedStyle(this.el).columnGap) || 0;
-    this.arrowSpace =
-      this.prevButton.getBoundingClientRect().width
-      + this.nextButton.getBoundingClientRect().width
-      + arrowGap * 2;
     this.setActive(0);
     this.updateScrollState();
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => this.centerThumb(0, 'auto')));
@@ -314,7 +309,12 @@ export class Timeline {
     const arrowsVisible = !this.el.classList.contains('timeline--fits');
     this.el.classList.toggle(
       'timeline--fits',
-      this.listEl.scrollWidth <= this.listEl.clientWidth + (arrowsVisible ? this.arrowSpace : 0) + 1
+      timelineContentFits(
+        this.listEl.scrollWidth,
+        this.listEl.clientWidth,
+        this.measureArrowSpace(),
+        arrowsVisible
+      )
     );
     const maxLeft = Math.max(0, this.listEl.scrollWidth - this.listEl.clientWidth - 1);
     const atStart = this.listEl.scrollLeft <= 1;
@@ -323,6 +323,15 @@ export class Timeline {
     this.nextButton.disabled = atEnd;
     this.el.classList.toggle('timeline--at-start', atStart);
     this.el.classList.toggle('timeline--at-end', atEnd);
+  }
+
+  private measureArrowSpace(): number {
+    const width = (button: HTMLButtonElement): number => {
+      const declaredWidth = Number.parseFloat(getComputedStyle(button).width);
+      return Number.isFinite(declaredWidth) ? declaredWidth : button.getBoundingClientRect().width;
+    };
+    const gap = Number.parseFloat(getComputedStyle(this.el).columnGap) || 0;
+    return width(this.prevButton) + width(this.nextButton) + gap * 2;
   }
 
   private preferredScrollBehavior(): ScrollBehavior {

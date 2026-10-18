@@ -79,10 +79,10 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
   loadTsModule('src/hub/editorViewport.ts'),
 ]);
 const constrainedDrag = await loadTsModule('src/hub/constrainedDrag.ts');
+const timelineLayout = await loadTsModule('src/timeline/timelineLayout.ts');
 const scss = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
 const galleryManagerSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryManager.ts'), 'utf8');
 const artworkMeshSource = readFileSync(resolve(ROOT, 'src/gallery/ArtworkMesh.ts'), 'utf8');
-const timelineSource = readFileSync(resolve(ROOT, 'src/timeline/Timeline.ts'), 'utf8');
 const navigationSeedDepth = Number(galleryManagerSource.match(/const NAV_SEED_POSITION_Z = (-?[\d.]+);/)?.[1]);
 assert.ok(
   navigationSeedDepth > galleryPresentation.GALLERY_PRESENTATION_CONFIG.artworkWallZ,
@@ -104,11 +104,10 @@ assert.match(scss, /\.timeline__list\s*\{[\s\S]*?flex:\s*0 1 auto;[\s\S]*?width:
 assert.match(scss, /\.timeline\.timeline--fits \.timeline__arrow\s*\{\s*display:\s*none/);
 assert.match(scss, /\.timeline__item\s*\{[\s\S]*?width:\s*clamp\(90px,\s*15vw,\s*150px\)/);
 assert.match(scss, /@media \(max-width: 599px\)\s*\{[\s\S]*?\.timeline__item\s*\{\s*width:\s*120px/);
-assert.match(timelineSource, /const arrowsVisible = !this\.el\.classList\.contains\('timeline--fits'\)/);
-assert.match(timelineSource, /this\.listEl\.clientWidth \+ \(arrowsVisible \? this\.arrowSpace : 0\) \+ 1/);
-assert.match(timelineSource, /case 'ArrowRight':[\s\S]*?this\.focusThumb\(\(index \+ 1\) % this\.artworks\.length\)/);
-assert.match(timelineSource, /case 'ArrowLeft':[\s\S]*?this\.focusThumb\(\(index - 1 \+ this\.artworks\.length\) % this\.artworks\.length\)/);
-assert.match(timelineSource, /document\.documentElement\.dataset\.motion === 'reduced'/);
+assert.equal(timelineLayout.timelineContentFits(640, 640, 76, true), true, 'arrow space lets small collections fit');
+assert.equal(timelineLayout.timelineContentFits(640, 640, 76, false), true, 'hidden arrows are not counted twice');
+assert.equal(timelineLayout.timelineContentFits(640, 600, 76, false), false, 'resizing a hidden-arrow timeline reveals overflow');
+assert.equal(timelineLayout.timelineContentFits(640, 560, 76, true), false, 'larger collections retain scrolling controls');
 const shippedConfigFile = JSON.parse(readFileSync(SHIPPING_CONFIG_PATH, 'utf8'));
 // v1.35: the shipped editor file lists its rooms explicitly and hides artworks
 // without a room (option B). The geometry fixtures below exercise automatic
