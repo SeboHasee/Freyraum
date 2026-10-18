@@ -9,7 +9,7 @@ const html = `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="FREYRAUM — Immersive Digital Exhibition Platform" />
   <title>freyraum — immersive gallery</title>
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?t=${assetVersion}" />
 </head>
 <body>
   <div id="app"></div>
@@ -24,7 +24,7 @@ const html = `<!DOCTYPE html>
       const title = document.createElement('h1');
       title.textContent = 'Lokale Vorschau ist unvollständig';
       const body = document.createElement('p');
-      body.textContent = 'Die erforderliche Datei ' + file + ' fehlt. Bitte führen Sie den FREYRAUM-Build erneut aus.';
+      body.textContent = 'Die erforderliche Datei ' + file + ' fehlt. Bitte führen Sie Update Gallery.bat (Windows) oder Update Gallery.command (macOS) im Projektordner aus und öffnen Sie index.html erneut.';
       section.append(title, body);
       app.appendChild(section);
     };
@@ -33,7 +33,7 @@ const html = `<!DOCTYPE html>
        Loads as a global window injection so the file:// preview works without a server. -->
   <script src="./customer-artworks.js?t=${assetVersion}" onerror="window.__FREYRAUM_PREVIEW_ASSET_FAILURE__('customer-artworks.js')"></script>
   <script src="./customer-audio.js?t=${assetVersion}" onerror="window.__FREYRAUM_PREVIEW_ASSET_FAILURE__('customer-audio.js')"></script>
-  <script src="./freyraum-gallery.js" onerror="window.__FREYRAUM_PREVIEW_ASSET_FAILURE__('freyraum-gallery.js')"></script>
+  <script src="./freyraum-gallery.js?t=${assetVersion}" onerror="window.__FREYRAUM_PREVIEW_ASSET_FAILURE__('freyraum-gallery.js')"></script>
 </body>
 </html>
 `;
@@ -45,7 +45,7 @@ const editorHtml = `<!DOCTYPE html>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="FREYRAUM Artwork Placement Editor" />
   <title>FREYRAUM — Artwork Placement Editor</title>
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?t=${assetVersion}" />
   <script>
     const editorUrl = new URL(window.location.href);
     editorUrl.searchParams.set('hubCalibrate', '1');
@@ -57,7 +57,7 @@ const editorHtml = `<!DOCTYPE html>
   <div id="app"></div>
   <script src="./customer-artworks.js?t=${assetVersion}"></script>
   <script src="./customer-audio.js?t=${assetVersion}"></script>
-  <script src="./freyraum-gallery.js"></script>
+  <script src="./freyraum-gallery.js?t=${assetVersion}"></script>
 </body>
 </html>
 `;

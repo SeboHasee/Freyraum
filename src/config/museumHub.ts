@@ -339,7 +339,8 @@ export const HUB_REFERENCE_BACK_WALL_QUAD: Quad = [
   point(487, 819),
 ];
 export const HUB_BACKGROUND_ASPECT = HUB_STAGE.width / HUB_STAGE.height;
-export const HUB_BACKGROUND_SRC = 'Backgrounds/museum-empty.png';
+export const HUB_BACKGROUND_SRC = 'Backgrounds/Museum_ohne_Bilder.png';
+export const HUB_BACKGROUND_FALLBACK_SRC = 'Backgrounds/museum-empty.png';
 export const DEFAULT_GALLERY_WALL = '#C7CED4';
 export const HUB_SELECTION_TIMEOUT_MS = 1500;
 export const HUB_MIN_PROJECTED_SHORT_EDGE_PX = 72;
@@ -1623,7 +1624,7 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
   let backgroundFit: 'contain' | 'cover' = 'contain';
   let backgroundWidth: number | undefined;
   let backgroundHeight: number | undefined;
-  let backgroundFallbackSrc = HUB_BACKGROUND_SRC;
+  let backgroundFallbackSrc = HUB_BACKGROUND_FALLBACK_SRC;
   if (cfg['background'] && typeof cfg['background'] === 'object') {
     const background = cfg['background'] as Record<string, unknown>;
     if (
@@ -2155,7 +2156,7 @@ export function migrateLegacyHotspots(raw: unknown): SanitizedConfig {
       coverage: 'all-active-artworks',
       stage: { ...HUB_STAGE },
       background: { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT },
-      backgroundFallback: { src: HUB_BACKGROUND_SRC },
+      backgroundFallback: { src: HUB_BACKGROUND_FALLBACK_SRC },
       visualTokens: defaultVisualTokens(),
       camera: cloneCamera(HUB_CAMERA),
       room: defaultRoomConfig(walls),
@@ -2206,7 +2207,7 @@ export function resolveMuseumHub(
       coverage: 'all-active-artworks',
       stage: { ...HUB_STAGE },
       background: { src: HUB_BACKGROUND_SRC, aspect: HUB_BACKGROUND_ASPECT },
-      backgroundFallback: { src: HUB_BACKGROUND_SRC },
+      backgroundFallback: { src: HUB_BACKGROUND_FALLBACK_SRC },
       visualTokens: defaultVisualTokens(),
       camera: cloneCamera(HUB_CAMERA),
       room: defaultRoomConfig(defaultWalls()),

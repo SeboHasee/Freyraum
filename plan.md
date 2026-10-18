@@ -1,14 +1,90 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
-## Current state (v1.40)
+## Reference exhibition defaults (2026-10-18)
 
-- Gallery and main museum hub (three.js) with rooms of 2 front + 1 left + 1
-  right works, built from `customer-artworks/museum-hub.json`.
+- [x] Reopen the index-entry incident: prior direct-app checks did not establish
+      that the customer's root-index artifact was fresh.
+- [x] Make full builds import current artwork/layout data before bundling; version
+      all local-preview scripts/styles and refresh the root launcher destination.
+- [x] Reproduce and fix nested HTTP preview URLs: the local bundle's absolute `/`
+      base requested backgrounds and editor settings outside `customer-preview/`.
+- [x] Recheck root-index `file://` and HTTP paths after the relative-base rebuild:
+      exact four mappings, visible painting/background pixels and editor parity pass.
+- [x] Map supplied Gartenszene/front-left, Akt/front-right, Fraktal/left and
+      Wunderbaum/right, retaining Akt's existing placement and the photograph.
+- [x] Curate native-ratio sizes with valid green-zone and doorway clearance.
+- [x] Rebuild and verify all four paintings contribute visible pixels, and
+      museum/editor projections match exactly.
+- [x] Validate geometry, deployment content, save service and local saving.
+- [x] Customer confirms the local setup works after Update Gallery.bat and
+      supplies the four-painting screenshot (2026-10-18; `docs/HANDOFF.md`).
+- [ ] Verify a new post-merge Pages deployment and live smoke; local confirmation
+      is not evidence of deployed branch content.
+
+## Active — restore the photograph-backed museum (2026-10-18)
+
+- [x] Audit current Markdown and compare the presentation claims with source;
+      review archives as historical evidence without rewriting them.
+- [x] Identify structural divergence: the normal museum used an opaque WebGL
+      room while the editor projected artwork over a photograph. Geometry tests
+      alone could not establish agreement between those presentations.
+- [x] Correct the missing-background diagnosis: `Museum_ohne_Bilder.png` exists;
+      the JSON's lowercase/hyphenated filename did not match it.
+- [x] Reproduce the current `file://` baseline (implementation pass): two imported
+      works, missing side-slot mappings and hub renderer initialization failure;
+      evidence reported at `/tmp/freyraum-before`.
+- [x] Complete the shared photograph-backed, calibrated DOM artwork presentation
+      for museum and editor; do not cover the photograph with an opaque room.
+- [x] Built-preview capture confirms the exact photograph and both available
+      genuine images in museum/editor, opacity 1, and no allocated hub canvas.
+- [x] Lint, typecheck, build, frame-budget, documentation-authority and
+      editor-rooms browser checks pass (implementation pass).
+- [ ] Validate matching generated preview and served artifacts, editable walls,
+      warning-only saving, room/assignment import, navigation and renderer recovery.
+- [x] Geometry suite and HTTP photographic smoke pass, including actual artwork
+      pixel contribution and museum/editor homography parity.
+- [x] `file://` smoke, WebGL resilience, 10 deploy-validator fixture cases and
+      syntax checks pass; real shipping-content failures remain separate.
+- [x] Implement bounded transparent-primary alpha recovery with conservative
+      native-alpha scanning; method checks include sparse valid strokes.
+- [x] Rebuilt `file://` and HTTP blank-primary recovery/source assertions pass;
+      screenshots captured. The visual command still exits 1 on the separate
+      pre-existing shadow-light-count invariant, so no full-suite pass is claimed.
+- [ ] Resolve/characterize the pre-existing software-Chrome visual-capture
+      invariant (`shadow-casting light count 1 != expected 2`); no Type A pass
+      is claimed.
+- [x] Rerun content-blocked deploy/save-service/local-project checks with all four
+      supplied paintings and the new default assignments.
+- [x] Record customer's local success and screenshot; original failing artifact
+      identity remains unknown. Post-merge live confirmation remains separate.
+- [x] **Content blocker resolved:** genuine `Gatrenszene.png` and `Wunderbaum.png`
+      are supplied; the requested default uses their exact importer IDs
+      `gatrenszene` and `wunderbaum`. All four images pass visible-pixel checks.
+
+No dependency upgrades or high-resolution importer redesign are part of this fix.
+
+## Merge-readiness handoff (2026-10-18)
+
+- [x] Audit current Markdown, retain dated archives, record customer local success
+      and link screenshot evidence in `docs/HANDOFF.md`.
+- [x] Recheck lint/typecheck/build, focused non-browser tests, production-base
+      and root-file smoke, editor rooms/publish/drag.
+- [x] Preserve the save-service variable across the build's automatic import;
+      a configured build retains the URL in public/dist/preview settings.
+- [ ] Owner approves outstanding Actions checks and creates/merges the PR;
+      no open PR was returned during the audit.
+- [ ] Confirm new post-merge Pages deploy and live smoke. Older main failure is
+      diagnosed in `FINDINGS.md`; it does not validate this branch.
+
+## Product baseline (v1.40; presentation correction above)
+
+- Three.js inspection gallery and photograph-backed museum/editor with rooms of
+  2 front + 1 left + 1 right works, built from `customer-artworks/museum-hub.json`.
 - Placement editor (`OPEN_ARTWORK_EDITOR.html` → `customer-preview/placement-editor.html`,
   deployed `placement-editor.html`): stable drag on all walls (v1.33), one placement truth
   for editor/loader/3D (v1.34), user-controlled rooms (v1.35), wall resizing
@@ -29,7 +105,7 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       `desktop-v1.40.0`).
 - [ ] Online saving needs the one-time Cloudflare/GitHub App setup in
       `docs/ONLINE_EDITOR_SETUP.md` before the deployed editor can publish.
-- [ ] Side-wall visual acceptance from a customer screenshot of the deployed
+- [ ] Side-wall confirmation from a customer screenshot of the deployed
       gallery (evidence rules: `docs/HANDOFF.md` step 8).
 
 ## Open — later improvements

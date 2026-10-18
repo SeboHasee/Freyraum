@@ -1,5 +1,5 @@
 # Architecture Docs
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 Use [`../../ARCHITECTURE_MAP.md`](../../ARCHITECTURE_MAP.md) as the canonical architecture source.
 
@@ -14,3 +14,6 @@ Historical architecture rationale belongs in `../archive/`.
 
 The current standalone editor entry points and fixed/editable configuration
 boundary are documented in `../../ARCHITECTURE_MAP.md`.
+Museum and editor share photograph-backed calibrated DOM artwork; the inspection
+gallery remains Three.js. Structural source findings and pending artifact/browser
+acceptance are tracked separately in `../../FINDINGS.md` and `../../plan.md`.

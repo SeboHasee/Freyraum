@@ -894,9 +894,8 @@ writeFileSync(PREVIEW_AUDIO_JS, audioJs, 'utf8');
 // that forces a fresh read — with zero risk of misloading because browsers
 // always ignore the query string when resolving file:// paths to disk.
 //
-// customer-artworks.js and customer-audio.js are stamped because their content
-// changes on every import. freyraum-gallery.js is left unversioned because it
-// changes only on developer-issued gallery updates, not customer data imports.
+// Stamp the runtime and stylesheet too: a project update can replace them
+// while the browser still has the previous presentation cached.
 try {
   const ts = Date.now();
   for (const previewEntry of [PREVIEW_HTML, PREVIEW_EDITOR_HTML]) {
@@ -905,7 +904,9 @@ try {
     const updatedHtml = originalHtml
       // Match only inside src="..." attributes to avoid touching comments or other text.
       .replace(/(src=["'][^"']*?)customer-artworks\.js(\?t=\d+)?/g, `$1customer-artworks.js?t=${ts}`)
-      .replace(/(src=["'][^"']*?)customer-audio\.js(\?t=\d+)?/g, `$1customer-audio.js?t=${ts}`);
+      .replace(/(src=["'][^"']*?)customer-audio\.js(\?t=\d+)?/g, `$1customer-audio.js?t=${ts}`)
+      .replace(/(src=["'][^"']*?)freyraum-gallery\.js(\?t=\d+)?/g, `$1freyraum-gallery.js?t=${ts}`)
+      .replace(/(href=["'][^"']*?)style\.css(\?t=\d+)?/g, `$1style.css?t=${ts}`);
     if (updatedHtml !== originalHtml) {
       writeFileSync(previewEntry, updatedHtml, 'utf8');
     }

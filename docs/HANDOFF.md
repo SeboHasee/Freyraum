@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -47,7 +47,13 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
    candidate and, on failure, the first failed stage (`candidate-selected`,
    `request`, `decode`, `compatibility-check`, `gpu-upload`, or
    `visible-pixel-probe`). Enable verbose diagnostics mode to also capture the
-   bounded GPU visible-pixel probe result. In a healthy local-preview hub
+   bounded GPU visible-pixel probe result for an active WebGL path. For the
+   photograph-backed museum/editor, inspect the decoded DOM image, visible
+   artwork owner and calibrated transform instead. Its source-to-pixel outcome
+   has `presentationPath: 'dom'`, native decoded source dimensions and null
+   GPU/probe fields: this proves decode, not GPU upload or visible pixels.
+   Keep source URLs redacted; inspection-gallery behavior is unchanged.
+   In a healthy local-preview hub
    recovery, `candidateMode: "embedded-webgl-fallback"` is now expected when
    the declared image file URL is not WebGL-stable. Preserve the generated
    customer bundle before re-importing, and follow the implemented recovery in
@@ -57,22 +63,62 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 8. For a hub-layout mismatch, preserve the exact route/environment, visible room
    counter, commit/build identity, generated `customer-artworks.js`, injected
    `museum-hub.json`, resolved slot/page diagnostics, and screenshot before
-   regenerating output. Confirm that only the active page group is visible.
+   regenerating output. Confirm that only the active page group is visible,
+   and museum/editor show the same photograph-backed DOM artwork projection.
+   The 2026-10-18 source audit verified structural divergence from the former
+   opaque WebGL room, not reproduction of the unavailable customer artifact.
 9. Do not infer account usage or billing state from unavailable image/browser
    tooling; report the tool limitation independently.
 10. For placement support, start from `OPEN_ARTWORK_EDITOR.html`. Preserve the
     exported JSON and exact generated editor. Confirm fixed configuration
-    compatibility, complete canonical round trip, fresh cache-busted customer
-    bundles, and explicit green-zone confirmation before requesting a screenshot.
+    compatibility, complete canonical round trip and fresh cache-busted customer
+    bundles before requesting a screenshot. Room/assignment changes are supported;
+    green-zone confirmation is optional and hints do not block saving.
+
+## Next-agent starting point (2026-10-18)
+
+1. Read `README.md` → "Place artworks", active `plan.md`, and the latest
+   `FINDINGS.md` before changing geometry or mappings. All four genuine source
+   images now exist; the old `gartenszene`/`zdigital` content blockers are resolved.
+   Do not restore those obsolete IDs or rename the actual `Gatrenszene.png`.
+2. The customer confirmed the local setup works after **Update Gallery.bat** and
+   provided [this screenshot](https://github.com/user-attachments/assets/42d41643-45ca-4140-ba0c-5773ffc5e1aa)
+   on 2026-10-18. It shows the requested arrangement. It is local evidence,
+   not evidence that the branch has deployed; its build identity was not supplied.
+3. Generated customer globals are ignored by Git. After a fresh download or JSON
+   change run Update Gallery; developers use full `npm run build` (imports first).
+   Injected config intentionally wins over the compiled fallback. Preserve that
+   customer authority. Local output uses relative URLs; production uses `/Freyraum/`.
+4. Merge checks and known limitations live in `docs/REGRESSION_TOOLING.md` and
+   `FINDINGS.md`. Root `file://` and production-base HTTP smoke verify decoded
+   images, visible screenshot contribution and editor projection parity.
+   Do not conflate those checks with a complete Type A visual-suite pass.
+5. Before merging, inspect/approve outstanding Actions checks. The observed desktop
+   run [39156014733](https://github.com/SeboHasee/Freyraum/actions/runs/39156014733)
+   requires owner approval. No open PR was returned by the API during this audit;
+   this task does not create or merge one.
+6. The latest observed main Pages run
+   [39115237783](https://github.com/SeboHasee/Freyraum/actions/runs/39115237783)
+   failed on the obsolete `gartenszene`/`zdigital` IDs. Those inputs are corrected
+   here and current deploy validation passes. Do not rerun that old commit and
+   expect new content; merge and verify the new deploy plus live smoke instead.
+   See `docs/DEPLOYMENT.md` for the operator checklist.
+7. Deferred, not silently fixed: software-Chrome shadow/selection/restore visual
+   harness investigations, dev-tool advisories, large Fraktal source/bundle,
+   missing optional text/alt metadata, desktop signing and online-service setup.
+   Do not redesign high-resolution delivery or upgrade dependencies incidentally.
+
+Temporary `/tmp` captures from earlier sessions may not survive a fresh agent.
+Regenerate evidence from the matching bundle and record the commit/environment.
 
 ## Handoff checklist
 
-- [ ] Current behavior validated against runtime code
-- [ ] Canonical docs linked (not duplicated)
-- [ ] Customer-facing instructions verified end-to-end
-- [ ] Asset-size constraints and publish-path assumptions explicitly handed off
-- [ ] Known risks and deferred upgrades linked from maintenance docs
-- [ ] Screenshot-producing artifact and generated bundles preserved for visual incidents
+- [x] Current behavior validated against runtime code and focused regressions
+- [x] Canonical docs linked (not duplicated)
+- [x] Local update confirmed by customer; production-build smoke verified
+- [x] Asset-size constraints and publish-path assumptions explicitly handed off
+- [x] Known risks and deferred upgrades linked from maintenance docs
+- [ ] Owner completes CI approval, merge, and new live Pages smoke verification
 
 ## 2026-10-17 full Markdown audit matrix
 

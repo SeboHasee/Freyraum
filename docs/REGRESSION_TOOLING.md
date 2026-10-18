@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,46 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Photograph-backed museum acceptance (2026-10-18)
+
+The current correction restores one visible authority: the room photograph plus
+calibrated DOM artwork in both museum and editor. An opaque WebGL room or a test
+that requires a room canvas as the visible owner contradicts that contract.
+Retained WebGL infrastructure and inspection-gallery recovery still need their
+existing coverage; DOM decode/display is not GPU visible-pixel proof.
+
+Required evidence for the implementation pass:
+
+- exact background filename survives import/sync/build (`Museum_ohne_Bilder.png`);
+- museum/editor use matching projected quads and native artwork aspect without
+  an opaque room occluding the photograph;
+- editable wall outlines preserve artwork size, rooms/assignments round-trip,
+  and warning-only layouts remain saveable;
+- local generated `file://` preview and served gallery/editor agree, including
+  room navigation, selection and hub→inspection→hub transitions;
+- gallery renderer initialization/context-loss recovery remains intact.
+
+Current results and dated incident evidence are in `FINDINGS.md`; do not treat
+the earlier two-image baseline as current shipping content. All four paintings
+now import; geometry, save-service, local-project and deploy-content checks pass.
+The customer confirms the local room after Update Gallery. Live acceptance
+requires a new post-merge deploy and live smoke.
+
+For stale-index regressions, run the existing smoke command against root
+`file:///absolute/project/path/index.html`, nested HTTP root `index.html`,
+and production output under `/Freyraum/app.html` (the workflow copies that
+production entry to `index.html`). Root smoke additionally checks redirect
+query/fragment preservation and versioned data/runtime/style URLs.
+`test:front-wall-aspect` also compares injected config with source JSON.
+Build via `npm run build` to regenerate data before testing; a partial runtime
+build alone does not refresh injected JSON.
+
+Do not mark the full visual suite green: the pre-existing software-Chrome
+`shadow-casting light count 1 != expected 2` and selection/restore investigations
+remain open. Earlier bounded-alpha recovery assertions pass independently;
+see `FINDINGS.md` for their limits. File-fetch probe warnings and optional
+Google Fonts DNS failures are distinct from visible-pixel smoke failures.
 
 | Type | Risk | Tool in this repo | How to run |
 |---|---|---|---|
@@ -129,9 +169,8 @@ visible doorway reveal or front-wall corner seam. Threshold breaches hard-fail
 `npm run validate:museum-hub` and CI. See **Automated test commands** below for the editor, save and desktop tests.
 `npm run validate:museum-hub:visual`
 runs the optional Type A screenshot comparison with an existing local baseline,
-and the harness additionally checks that the hub still renders through the
-dedicated `.museum-hub__canvas` scene bridge rather than per-slot DOM
-projection transforms. It also carries the lightweight shared regression
+and the harness must check the photograph-backed DOM artwork owner rather than
+require the former `.museum-hub__canvas` room bridge. It also carries the lightweight shared regression
 assertions for inspection safety in the interactive gallery: close-inspection
 pan may use only the bounded reveal margin, close hover tilt must retain its
 full requested range after the wall setback, and larger hover motion must still
@@ -145,13 +184,14 @@ response that prevents close-view washout.
 The v1.17 contract additionally requires explicit four-corner mounting zones,
 immutable explicit wall ownership, complete-quad zone containment, and exact
 v5 canonical placement preservation through sanitize/re-import. Invalid
-placements are suppressed instead of falling back to another wall.
+canonical placements are flagged rather than relocated to another wall.
 
-The v1.18 editor contract additionally requires a discoverable file-safe entry,
-read-only build-derived wall projection, native keyboard behavior inside form
-controls, rejection of incompatible fixed configuration on import, preservation
-of rendered and bounds-only walls plus fixed settings on export, and cache-busted
-customer artwork/audio scripts in both generated file entries.
+The current editor contract requires a discoverable file-safe entry, editable
+wall quads with calibration-independent artwork size, native keyboard behavior
+inside form controls, rejection of incompatible fixed 3D models on import,
+preservation of rendered and bounds-only walls plus fixed settings on export,
+and cache-busted customer artwork/audio scripts in both generated file entries.
+Room counts and artwork assignments may change; warning-only layouts save.
 
 The v1.15 orientation gate additionally proves that every artwork is a rigid
 wall-parallel plane. It requires wall-normal alignment and zero relative corner

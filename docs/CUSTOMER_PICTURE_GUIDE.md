@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
 This guide documents the current customer workflow only.
 
@@ -84,6 +84,20 @@ copies into `customer-artworks/inbox/`.
 
 ## Museum hub placement
 
+- Museum and editor use the same room photograph and calibrated artwork
+  projection. The photograph is not replaced by an opaque 3D hall.
+- The supplied background exists at
+  `customer-artworks/Backgrounds/Museum_ohne_Bilder.png`. Preserve that exact
+  spelling in the layout; `museum-ohne-bilder.png` is a different filename.
+- All four default paintings are supplied: `Gatrenszene.png` (front-left),
+  `Akt 27.png` (front-right, unchanged), `Fraktal.png` (left wall) and
+  `Wunderbaum.png` (right wall). Keep the garden file's actual spelling;
+  `Gatrenszene.txt` provides its display title “Gartenszene”.
+- After downloading project updates or replacing `museum-hub.json`, run
+  **Update Gallery.bat** / **Update Gallery.command**, then reopen root
+  **index.html**. This regenerates the local customer data; editing source JSON
+  alone cannot update its generated copy. The customer confirmed this workflow
+  on 2026-10-18. A merged Pages deployment regenerates that data automatically.
 - Double-click **`OPEN_ARTWORK_EDITOR.html`** in the main FREYRAUM folder. This
   opens the separate, file-safe Artwork Placement Editor. You do not need to
   edit a URL or start a development server.
@@ -159,8 +173,9 @@ copies into `customer-artworks/inbox/`.
 - Wall corner handles appear only while **Wandecken bearbeiten** is on. Blue
   safe-zone and green mounting-zone handles are editable. **Datei öffnen**
   accepts files with a different number of rooms or a different artwork
-  assignment; it rejects unreadable files and files whose camera, room shape or
-  walls differ. Artwork IDs that are not in the current artwork list are
+  assignment; it rejects unreadable files and incompatible fixed camera, 3D
+  room shape or wall-model data. Editable wall outlines are not the same as
+  changing fixed 3D wall corners. Artwork IDs not in the current artwork list are
   reported and dropped; the rest is imported.
 - Older hotspot arrays and v1/v2 slot boxes still load through migration, but
   they should be re-saved from the current calibration flow.
@@ -271,13 +286,11 @@ published in the meantime. Reload the page; your draft stays in the browser.
   `Update Gallery.command` / `Update Gallery.bat` once, then reopen the preview.
 - If a painting appears as a grey FREYRAUM-style fallback or a hub title
   placeholder, keep the generated `customer-artworks.js` and `images/` output,
-  then capture the diagnostics described in `docs/QUERY_PARAMETERS.md`. Local
-  `file://` preview now prefers the importer-provided embedded `webglImage`
-  whenever a hub wall would otherwise rely on a local file URL, so a persistent
-  blank plane means both the primary source and the embedded recovery payload
-  need inspection. Open the preview with the debug query documented in
-  `docs/QUERY_PARAMETERS.md`, then export the route diagnostics before
-  importing again; see `docs/archive/plan-history-2026-10-17.md` § v0.93.
+  then capture the diagnostics described in `docs/QUERY_PARAMETERS.md`.
+  Distinguish museum/editor DOM images from the WebGL inspection gallery:
+  decoded DOM images need a visible calibrated surface, while gallery textures
+  also require GPU upload and pixel evidence. Preserve the exact route, room,
+  background, config and screenshot before importing again.
 
 ## Related docs
 

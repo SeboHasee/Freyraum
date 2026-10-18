@@ -6,6 +6,12 @@ import { resolve } from 'node:path';
 const root = resolve(new URL('..', import.meta.url).pathname);
 const hub = JSON.parse(readFileSync(resolve(root, 'customer-artworks/museum-hub.json'), 'utf8'));
 const bundle = readFileSync(resolve(root, 'customer-preview/customer-artworks.js'), 'utf8');
+const hubMarker = 'window.__FREYRAUM_MUSEUM_HUB = ';
+const hubStart = bundle.indexOf(hubMarker);
+assert.ok(hubStart >= 0, 'generated customer bundle must inject the current museum layout');
+const hubJsonStart = hubStart + hubMarker.length;
+const injectedHub = JSON.parse(bundle.slice(hubJsonStart, bundle.indexOf(';\n', hubJsonStart)));
+assert.deepEqual(injectedHub, hub, 'generated layout must match museum-hub.json, not override it with stale defaults');
 
 const pngDimensions = (relativePath) => {
   const bytes = readFileSync(resolve(root, relativePath));
@@ -32,7 +38,7 @@ const frontSlots = hub.slots.filter(
 assert.equal(frontSlots.length, 2, 'the front wall must have exactly two enabled artwork slots');
 
 const expectedAssets = new Map([
-  ['fraktal', 'customer-artworks/inbox/Fraktal.png'],
+  ['gatrenszene', 'customer-artworks/inbox/Gatrenszene.png'],
   ['akt-27', 'customer-artworks/inbox/Akt 27.png'],
 ]);
 

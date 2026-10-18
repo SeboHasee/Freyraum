@@ -1,17 +1,16 @@
 /**
- * v0.92 — shared, redacted source→decode→GPU→visible-pixels outcome contract.
+ * v0.92 — shared, redacted, presentation-specific artwork source outcomes.
  *
- * Both runtime routes (interactive gallery `TextureManager` and museum hub
- * `HubRoomRenderer`/`MainMuseumHub`) resolve an artwork image through the
- * same declared-image → embedded-fallback contract
- * (`resolveArtworkImageSources`), then must prove — not merely assume — that
- * the selected candidate reached decoded pixels, was uploaded to the GPU
- * within device capability, and (optionally, when a visible-pixel probe ran)
- * produced non-empty rendered output.
+ * Gallery `TextureManager` and museum `MainMuseumHub` share the declared-image
+ * → embedded-fallback contract (`resolveArtworkImageSources`). Gallery WebGL
+ * outcomes track decode, capability-aware GPU upload and optional rendered-pixel
+ * proof. Photographic DOM hub outcomes track decode and an optional source-alpha
+ * gate; unavailable alpha checks remain inconclusive, and GPU evidence stays null.
  *
  * This module defines that shared record shape plus a single diagnostics
  * entry point so a support engineer can find one terminal line per artwork
- * per route naming the first failed stage, or confirming full pixel proof.
+ * per route naming the first failed stage, or success for its presentation path.
+ * DOM success is not GPU proof; WebGL pixel proof requires a successful probe.
  * The record intentionally carries only redacted URL types, ids, timings,
  * and dimensions — never raw URLs, data URIs, or image bytes.
  */
@@ -33,6 +32,7 @@ export type SourceToPixelResult = 'success' | 'failed';
 
 export interface SourceToPixelOutcome {
   route: SourceToPixelRoute;
+  presentationPath?: 'webgl' | 'dom';
   artworkId: string;
   bundleId: string | null;
   runtimeProtocol: string | null;
@@ -110,7 +110,9 @@ export function recordSourceToPixelOutcome(
   const log = outcome.result === 'success' ? diagnostics.info.bind(diagnostics) : diagnostics.warn.bind(diagnostics);
   const message =
     outcome.result === 'success'
-      ? `${outcome.route === 'hub' ? 'Hub' : 'Gallery'} artwork proved source\u2192decode\u2192GPU\u2192pixels`
+      ? outcome.presentationPath === 'dom'
+        ? 'Hub artwork decoded for calibrated DOM presentation (no WebGL upload)'
+        : `${outcome.route === 'hub' ? 'Hub' : 'Gallery'} artwork proved source\u2192decode\u2192GPU\u2192pixels`
       : `${outcome.route === 'hub' ? 'Hub' : 'Gallery'} artwork failed source-to-pixel proof at ${outcome.firstFailedStage ?? 'unknown'} stage`;
   log('source-to-pixel-outcome', message, outcome);
 }

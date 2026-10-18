@@ -28,6 +28,7 @@ import { KeyboardHelp } from './ui/KeyboardHelp';
 import { CanvasInteraction } from './interaction/CanvasInteraction';
 import { MainMuseumHub } from './hub/MainMuseumHub';
 import { resolveMuseumHub } from './config/museumHub';
+import defaultMuseumHub from '../customer-artworks/museum-hub.json';
 import { normalizeArtworkPresentation } from './config/presentation';
 import { DestinationRouter } from './navigation/DestinationRouter';
 import { BackgroundAudioManager, type BackgroundAudioPayload } from './audio/BackgroundAudioManager';
@@ -890,7 +891,7 @@ async function main(): Promise<void> {
   if (!museumHubEditorMode && !isPlacementEditorRequested()) installHiddenEditorEntry();
   const museumHubResolution = resolveMuseumHub(
     museumArtworks,
-    injectedMuseumHub,
+    injectedMuseumHub ?? (injectedLegacyHotspots ? undefined : defaultMuseumHub),
     injectedLegacyHotspots,
     { editor: museumHubEditorMode }
   );

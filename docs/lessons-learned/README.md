@@ -1,5 +1,13 @@
 # Lessons learned docs
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+
+## 2026-10-18 presentation-authority lessons
+
+See `../../LESSONS_LEARNED.md` Lessons 118–120: shared geometry does not prove
+shared visible presentation, a mismatched filename is not a missing asset, and
+presentation recovery cannot supply genuinely absent artwork files.
+Browser acceptance must use the generated/served artifact; an unavailable
+customer bundle cannot be claimed as reproduced.
 
 ## v1.40 lesson index update
 

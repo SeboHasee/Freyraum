@@ -31,13 +31,13 @@ const INCLUDE_HUB_DEBUG_CAPTURE = process.env.FREYRAUM_VISUAL_INCLUDE_HUB_DEBUG 
 const SHIPPING_HUB_CONFIG = JSON.parse(
   readFileSync(resolve(ROOT, 'customer-artworks/museum-hub.json'), 'utf8')
 );
-const FIXTURE_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+const FIXTURE_IMAGE = `data:image/svg+xml;base64,${Buffer.from(
   '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"g\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#7089a3\"/><stop offset=\"1\" stop-color=\"#d8dddb\"/></linearGradient></defs><rect width=\"512\" height=\"512\" fill=\"url(#g)\"/><circle cx=\"256\" cy=\"256\" r=\"140\" fill=\"rgba(255,255,255,0.35)\"/></svg>'
-)}`;
+).toString('base64')}`;
 const MISSING_FIXTURE_IMAGE = './images/missing-fixture.png';
-const BLANK_FIXTURE_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(
+const BLANK_FIXTURE_IMAGE = `data:image/svg+xml;base64,${Buffer.from(
   '<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><rect width=\"512\" height=\"512\" fill=\"rgba(255,255,255,0)\"/></svg>'
-)}`;
+).toString('base64')}`;
 
 const ARTWORK_STEPS = [0, 1, 2];
 const ZOOM_STATES = ['overview', 'reset', 'inspection'];
@@ -132,7 +132,7 @@ const POST_UPLOAD_BLANK_FIXTURES = [
     title: 'Fixture Blank Primary',
     image: BLANK_FIXTURE_IMAGE,
     webglImage: FIXTURE_IMAGE,
-    dimensions: { width: 1200, height: 1600 },
+    dimensions: { width: 600, height: 800 },
   },
   {
     id: 'fixture-visible-companion',
@@ -155,31 +155,17 @@ const POST_UPLOAD_BLANK_FIXTURES = [
 ];
 
 function hubFixture(artworks) {
-  return {
-    artworks,
-    museumHub: {
-      ...SHIPPING_HUB_CONFIG,
-      slots: SHIPPING_HUB_CONFIG.slots.map((slot) => ({
-        ...slot,
-        ...(slot.id === 'room-01.wall-left.outer'
-          ? { artworkId: artworks[0].id }
-          : slot.id === 'room-01.wall-right.inner'
-            ? { artworkId: artworks[1].id }
-            : {}),
-      })),
-    },
-  };
+  return fullMappedHubFixture(artworks);
 }
 
 function fullMappedHubFixture(artworks) {
-  const slotIds = SHIPPING_HUB_CONFIG.slots.map((slot) => slot.id);
   return {
     artworks,
     museumHub: {
       ...SHIPPING_HUB_CONFIG,
       slots: SHIPPING_HUB_CONFIG.slots.map((slot, index) => ({
         ...slot,
-        ...(artworks[index] ? { artworkId: artworks[index].id } : {}),
+        artworkId: artworks[index]?.id ?? null,
       })),
       fallbacks: {
         ...SHIPPING_HUB_CONFIG.fallbacks,
@@ -195,23 +181,25 @@ function doorwayEdgeFixture(side) {
   fixture.museumHub = {
     ...fixture.museumHub,
     slots: fixture.museumHub.slots.map((slot) => {
-      if (side === 'left' && slot.id === 'room-01.wall-left.outer') {
+      if (side === 'left' && slot.id === 'room-01.wall-left.a') {
         return {
           ...slot,
           placement: {
             ...slot.placement,
-            anchor: { x: 0.06, y: 0.52 },
-            mountedHeight: 1.38,
+            horizontalPosition: 0.06 / 12,
+            centerHeight: 0.52,
+            physicalHeight: 1.38,
           },
         };
       }
-      if (side === 'right' && slot.id === 'room-01.wall-right.outer') {
+      if (side === 'right' && slot.id === 'room-01.wall-right.a') {
         return {
           ...slot,
           placement: {
             ...slot.placement,
-            anchor: { x: 2.72, y: 0.54 },
-            mountedHeight: 1.08,
+            horizontalPosition: 2.72 / 12,
+            centerHeight: 0.54,
+            physicalHeight: 1.08,
           },
         };
       }
@@ -370,21 +358,30 @@ const states = [
     expectHubArtworkFallback: 'fixture-square-a',
   },
   {
-    name: 'hub__fixture__blank-primary-post-upload-fallback',
+    name: 'hub__fixture__blank-primary-dom-alpha-fallback',
     query: '?startup=entry-minimal&debug=verbose',
     mode: 'hub',
     viewport: DESKTOP_VIEWPORT,
     hubSteps: [],
-    fixture: hubFixture(POST_UPLOAD_BLANK_FIXTURES),
+    // A lone candidate keeps diagnostics coalescing from hiding its recovery outcome.
+    fixture: hubFixture(POST_UPLOAD_BLANK_FIXTURES.slice(0, 1)),
     expectHubArtworkFallback: 'fixture-blank-primary',
-    expectHubArtworkFallbackReasonIncludes: 'visible-pixel-probe',
+    expectHubArtworkFallbackReasonIncludes: 'zero-alpha-source',
     expectSourceToPixelOutcome: {
       scope: 'hub',
       artworkId: 'fixture-blank-primary',
       result: 'success',
+      presentationPath: 'dom',
       candidateMode: 'embedded-webgl-fallback',
       attemptedEmbeddedFallback: true,
       resolvedUrlType: 'data-uri',
+      sourceWidth: 600,
+      sourceHeight: 800,
+      uploadWidth: null,
+      uploadHeight: null,
+      rendererMaxTextureSize: null,
+      visibleProbe: null,
+      messageIncludes: 'DOM presentation (no WebGL upload)',
     },
   },
   ...(INCLUDE_HUB_DEBUG_CAPTURE
@@ -571,26 +568,34 @@ async function assertSelectedArtworkState(page, stateName, expectedArtworkId) {
 async function assertHubSceneBridge(page, stateName) {
   const snapshot = await page.evaluate(() => {
     const canvas = document.querySelector('.museum-hub__canvas');
-    const slots = [...document.querySelectorAll('.museum-hub__artwork[data-artwork-id]')]
+    const hub = document.querySelector('.museum-hub');
+    const slots = [...document.querySelectorAll('.museum-hub__room.is-active .museum-hub__artwork[data-artwork-id]')]
+      .filter((element) => element.querySelector('.museum-hub__art'))
       .slice(0, 4)
       .map((element) => {
         const style = getComputedStyle(element);
         const rect = element.getBoundingClientRect();
+        const image = element.querySelector('.museum-hub__art');
+        const imageStyle = getComputedStyle(image);
         return {
           artworkId: element.getAttribute('data-artwork-id'),
           transform: style.transform,
           clipPath: style.clipPath,
           width: rect.width,
           height: rect.height,
+          imageOpacity: imageStyle.opacity,
+          imageTransform: imageStyle.transform,
+          imageReady: image.complete && image.naturalWidth > 0,
         };
       });
     return {
       hasCanvas: canvas instanceof HTMLCanvasElement,
+      photographic: hub?.classList.contains('is-photographic'),
       slots,
     };
   });
-  if (!snapshot.hasCanvas) {
-    throw new Error(`${stateName}: hub did not render through the dedicated 3D room canvas`);
+  if (snapshot.hasCanvas || !snapshot.photographic) {
+    throw new Error(`${stateName}: museum must show the saved photograph, without a dedicated WebGL room canvas`);
   }
   if (snapshot.slots.length === 0) {
     throw new Error(`${stateName}: hub did not expose any interactive slot overlays`);
@@ -604,6 +609,9 @@ async function assertHubSceneBridge(page, stateName) {
     }
     if (slot.width < 12 || slot.height < 12) {
       throw new Error(`${stateName}: slot ${slot.artworkId} projected overlay is implausibly small`);
+    }
+    if (!slot.imageReady || slot.imageOpacity !== '1' || !slot.imageTransform.startsWith('matrix3d(')) {
+      throw new Error(`${stateName}: slot ${slot.artworkId} lost its decoded, opaque homographic DOM image: ${JSON.stringify(slot)}`);
     }
   }
 }
@@ -646,7 +654,7 @@ async function assertSourceToPixelOutcome(page, stateName, expectation) {
   const entries = await page.evaluate((artworkId) => {
     return (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
       .filter((entry) => entry.event === 'source-to-pixel-outcome' && entry.data?.artworkId === artworkId)
-      .map((entry) => ({ scope: entry.scope, data: entry.data }));
+      .map((entry) => ({ scope: entry.scope, message: entry.message, data: entry.data }));
   }, expectation.artworkId);
   const match = entries.find((entry) =>
     entry.scope === expectation.scope
@@ -655,6 +663,9 @@ async function assertSourceToPixelOutcome(page, stateName, expectation) {
     && (!('attemptedEmbeddedFallback' in expectation)
       || entry.data?.attemptedEmbeddedFallback === expectation.attemptedEmbeddedFallback)
     && (!('resolvedUrlType' in expectation) || entry.data?.resolvedUrlType === expectation.resolvedUrlType)
+    && ['presentationPath', 'sourceWidth', 'sourceHeight', 'uploadWidth', 'uploadHeight', 'rendererMaxTextureSize', 'visibleProbe']
+      .every((key) => !(key in expectation) || entry.data?.[key] === expectation[key])
+    && (!expectation.messageIncludes || entry.message.includes(expectation.messageIncludes))
     && (!expectation.failureReasonIncludes || String(entry.data?.failureReason ?? '').includes(expectation.failureReasonIncludes))
   );
   if (!match) {
@@ -679,6 +690,9 @@ function getStateHubBackgroundConfig(state) {
 function resolveHubBackgroundUrl(pageUrl, src) {
   if (!src) return null;
   if (/^https?:\/\//i.test(src)) return src;
+  if (new URL(pageUrl).protocol === 'file:') {
+    return new URL(`../customer-artworks/${src.replace(/^backgrounds\//, 'Backgrounds/')}`, pageUrl).href;
+  }
   const normalized = src.replace(/^Backgrounds\//, 'backgrounds/');
   return new URL(normalized, pageUrl).href;
 }
@@ -698,6 +712,24 @@ function dedupeFailures(failures) {
 }
 
 function buildFixtureScript(fixture) {
+  const withNativeDimensions = (image, dimensions) => {
+    if (image !== FIXTURE_IMAGE && image !== BLANK_FIXTURE_IMAGE) return image;
+    const svg = Buffer.from(image.split(',')[1], 'base64').toString('utf8')
+      .replace('width="512" height="512"', `width="${dimensions.width}" height="${dimensions.height}"`);
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  };
+  const sizedFixture = {
+    ...fixture,
+    artworks: fixture.artworks.map((artwork) => ({
+      ...artwork,
+      // Transparent primary is square; its portrait fallback must commit its
+      // own native ratio rather than inheriting the rejected source's ratio.
+      image: withNativeDimensions(artwork.image, artwork.image === BLANK_FIXTURE_IMAGE
+        ? { width: 256, height: 256 }
+        : artwork.dimensions),
+      ...(artwork.webglImage ? { webglImage: withNativeDimensions(artwork.webglImage, artwork.dimensions) } : {}),
+    })),
+  };
   return `(() => {
     const script = document.currentScript instanceof HTMLScriptElement ? document.currentScript : null;
     const fallbackHref = typeof window !== 'undefined' && window.location ? window.location.href : '';
@@ -705,7 +737,7 @@ function buildFixtureScript(fixture) {
     try {
       assetBaseUrl = new URL('./', (script && script.src) || fallbackHref).href;
     } catch {}
-    const fixture = ${JSON.stringify(fixture)};
+    const fixture = ${JSON.stringify(sizedFixture)};
     window.__FREYRAUM_ARTWORK_BUNDLE__ = {
       schemaVersion: 1,
       bundleId: 'visual-regression-fixture',
@@ -751,13 +783,6 @@ async function readHubBackgroundSnapshot(page) {
   });
 }
 
-async function forceNeutralHubBackground(page) {
-  await page.evaluate(() => {
-    const hub = document.querySelector('.museum-hub');
-    if (hub instanceof HTMLElement) hub.classList.add('has-image-error');
-  });
-}
-
 async function ensureHubBackgroundFailSafe(page, state) {
   const { primarySrc, fallbackSrc } = getStateHubBackgroundConfig(state);
   const primaryUrl = resolveHubBackgroundUrl(page.url(), primarySrc);
@@ -790,20 +815,6 @@ async function ensureHubBackgroundFailSafe(page, state) {
     for (const failure of failed404s) {
       console.warn(`${state.name}: hub/background asset ${failure.url} returned ${failure.status}`);
     }
-    if (shouldUseNeutral) {
-      await forceNeutralHubBackground(page);
-    } else if (primaryFailed && fallbackUrl) {
-      await page.evaluate((expectedFallbackUrl) => {
-        const image = document.querySelector('.museum-hub__image');
-        if (
-          image instanceof HTMLImageElement &&
-          image.currentSrc !== expectedFallbackUrl &&
-          image.src !== expectedFallbackUrl
-        ) {
-          image.src = expectedFallbackUrl;
-        }
-      }, fallbackUrl);
-    }
     await page.waitForFunction(
       ({ expectedFallbackUrl, neutral }) => {
         const hub = document.querySelector('.museum-hub');
@@ -812,10 +823,11 @@ async function ensureHubBackgroundFailSafe(page, state) {
         const stageStyle = stage ? getComputedStyle(stage) : null;
         if (!(hub instanceof HTMLElement)) return false;
         if (neutral) {
-          return hub.classList.contains('has-image-error') && stageStyle?.backgroundColor === 'rgb(216, 221, 219)';
+          return hub.classList.contains('has-image-error') && stageStyle?.backgroundColor === 'rgb(199, 206, 212)';
         }
         return (
           image instanceof HTMLImageElement &&
+          image.complete && image.naturalWidth > 0 &&
           Boolean(expectedFallbackUrl) &&
           (image.currentSrc === expectedFallbackUrl || image.src === expectedFallbackUrl)
         );
@@ -843,6 +855,34 @@ async function ensureHubBackgroundFailSafe(page, state) {
       throw new Error(`${state.name}: fallback-neutral hub state did not degrade to museum-grey`);
     }
   }
+  if (snapshot.imageError && !state.expectNeutralBackgroundFallback) {
+    throw new Error(`${state.name}: expected a decoded photograph, but the hub entered the neutral image-error state`);
+  }
+
+  if (!snapshot.imageError) {
+    const expectedUrl = primaryFailed ? fallbackUrl : primaryUrl;
+    if (snapshot.currentImageSrc !== expectedUrl) {
+      throw new Error(`${state.name}: wrong background filename: ${snapshot.currentImageSrc} (expected ${expectedUrl})`);
+    }
+    const image = page.locator('.museum-hub__image');
+    await image.evaluate((element) => element.decode());
+    if (await page.locator('.museum-hub').isVisible()) {
+      const stage = page.locator('.museum-hub__stage');
+      const present = await stage.screenshot({ animations: 'disabled' });
+      const previous = await image.evaluate((element) => {
+        const value = element.style.visibility;
+        element.style.visibility = 'hidden';
+        return value;
+      });
+      let absent;
+      try {
+        absent = await stage.screenshot({ animations: 'disabled' });
+      } finally {
+        await image.evaluate((element, value) => { element.style.visibility = value; }, previous);
+      }
+      if (present.equals(absent)) throw new Error(`${state.name}: decoded photograph contributes no visible pixels`);
+    }
+  }
 
   const attemptedUrls = dedupeStrings([
     primaryUrl,
@@ -864,17 +904,27 @@ async function ensureHubBackgroundFailSafe(page, state) {
 async function capture(targetDir) {
   const { chromium } = await loadPlaywright();
   mkdirSync(targetDir, { recursive: true });
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({
+    ...(process.env.FREYRAUM_CHROME_PATH ? { executablePath: process.env.FREYRAUM_CHROME_PATH } : {}),
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+  });
   const captureReport = [];
+  const captureErrors = [];
   for (const state of activeStates) {
     const page = await browser.newPage({ viewport: state.viewport, deviceScaleFactor: 1 });
+    try {
     if (state.fixture) {
-      await page.route('**/customer-artworks.js', async (route) => {
+      await page.route(/\/customer-artworks\.js(?:\?.*)?$/, async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/javascript',
           body: buildFixtureScript(state.fixture),
         });
+        if (state.expectHubWarning) {
+          await page.route('**/backgrounds/missing-*.png', (route) => route.fulfill({
+            status: 404, contentType: 'text/plain', body: 'Missing background regression fixture',
+          }));
+        }
       });
     }
     await page.addInitScript(() => {
@@ -892,7 +942,10 @@ async function capture(targetDir) {
         })
       );
     });
-    await page.goto(`${APP_URL}${state.query}`, { waitUntil: 'networkidle' });
+    const captureUrl = new URL(APP_URL);
+    for (const [key, value] of new URLSearchParams(state.query)) captureUrl.searchParams.set(key, value);
+    if (!captureUrl.searchParams.has('debug')) captureUrl.searchParams.set('debug', '1');
+    await page.goto(captureUrl.href, { waitUntil: 'networkidle' });
     await page.waitForSelector('.loading-start-btn:not([disabled])', { timeout: 45_000 });
     await page.click('.loading-start-btn');
     await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 10_000 });
@@ -1002,7 +1055,7 @@ async function capture(targetDir) {
       throw new Error(`${state.name}: performance/invariant tooling was not installed`);
     }
     if (invariant.violations.length > 0) {
-      throw new Error(`${state.name}: invariant gate failed: ${invariant.violations.join('; ')}`);
+      captureErrors.push(`${state.name}: invariant gate failed: ${invariant.violations.join('; ')}`);
     }
     const file = resolve(targetDir, `${state.name}.png`);
     await page.screenshot({ path: file });
@@ -1012,17 +1065,26 @@ async function capture(targetDir) {
       failed: assetCheck.failed,
       fallbackUsed: assetCheck.fallbackUsed,
       screenshotPath: file,
+      invariantViolations: invariant.violations,
     });
     console.log(
       `asset-check ${state.name}: attempted=${assetCheck.attemptedUrls.length} failed=${assetCheck.failed.length} fallback=${assetCheck.fallbackUsed ?? 'none'}`
     );
     console.log(`captured ${state.name} → ${file}`);
-    await page.close();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      captureErrors.push(`${state.name}: ${message}`);
+      captureReport.push({ state: state.name, error: message });
+      console.error(message);
+    } finally {
+      await page.close();
+    }
   }
   await browser.close();
   const reportPath = resolve(targetDir, CAPTURE_REPORT_FILENAME);
   writeFileSync(reportPath, JSON.stringify(captureReport, null, 2));
   console.log(`capture report → ${reportPath}`);
+  if (captureErrors.length > 0) throw new Error(captureErrors.join('\n'));
   return captureReport;
 }
 

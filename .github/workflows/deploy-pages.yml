@@ -128,6 +128,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          FREYRAUM_SAVE_SERVICE_URL: ${{ vars.FREYRAUM_SAVE_SERVICE_URL }}
 
       - name: Prepare Pages entry point
         run: |

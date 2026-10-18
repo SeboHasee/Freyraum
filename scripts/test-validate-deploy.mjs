@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
  * FREYRAUM — v1.38 tests for `scripts/validate-deploy.mjs`
- * (`npm run test:validate-deploy`). Builds small fixture projects in a temp
+ * (`npm run test:validate-deploy`). Builds disposable fixture projects in a repository-local
  * folder: a valid one, a background with wrong upper/lower case, a missing
  * artwork image, an unknown artwork ID, and a path outside the project.
  */
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { isSafeRelativePath, validateDeploy } from './validate-deploy.mjs';
 
 const created = [];
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108020000009077053e', 'hex');
 
-function fixture({ backgrounds = ['museum-empty.png'], hub, manifest, previewImages = ['akt-27.png'], inbox = ['Akt 27.png'] }) {
-  const root = mkdtempSync(join(tmpdir(), 'freyraum-validate-'));
+function fixture({ backgrounds = ['Museum_ohne_Bilder.png', 'museum-empty.png'], hub, manifest, previewImages = ['akt-27.png'], inbox = ['Akt 27.png'] }) {
+  const root = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '.freyraum-validate-'));
   created.push(root);
   const customer = join(root, 'customer-artworks');
   mkdirSync(join(customer, 'Backgrounds'), { recursive: true });
@@ -32,7 +32,7 @@ function fixture({ backgrounds = ['museum-empty.png'], hub, manifest, previewIma
     join(customer, 'museum-hub.json'),
     JSON.stringify(
       hub ?? {
-        background: { src: 'Backgrounds/museum-empty.png' },
+        background: { src: 'Backgrounds/Museum_ohne_Bilder.png' },
         backgroundFallback: { src: 'Backgrounds/museum-empty.png' },
         slots: [{ id: 'room-1.front-left', artworkId: 'akt-27' }],
       }
@@ -50,6 +50,11 @@ test('valid project passes', () => {
   const result = validateDeploy(fixture({}));
   assert.deepEqual(result.errors, []);
   assert.equal(result.checked.slots, 1);
+});
+
+test('primary photograph filename is case-sensitive even with a valid fallback', () => {
+  const result = validateDeploy(fixture({ backgrounds: ['museum_ohne_bilder.png', 'museum-empty.png'] }));
+  assert.ok(result.errors.some((error) => error.includes('upper/lower case')), result.errors.join('\n'));
 });
 
 test('background with wrong upper/lower case fails', () => {

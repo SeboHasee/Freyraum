@@ -63,6 +63,7 @@ assert.throws(
 
 const mainSource = readFileSync(resolve(root, 'src/main.ts'), 'utf8');
 const hubSource = readFileSync(resolve(root, 'src/hub/MainMuseumHub.ts'), 'utf8');
+const rendererSource = readFileSync(resolve(root, 'src/core/RendererManager.ts'), 'utf8');
 const fallbackSource = readFileSync(resolve(root, 'src/ui/FallbackScreen.ts'), 'utf8');
 const previewWriter = readFileSync(resolve(root, 'scripts/write-local-preview.mjs'), 'utf8');
 
@@ -70,7 +71,20 @@ assert.doesNotMatch(mainSource, /isWebGLAvailable/);
 assert.match(mainSource, /category: 'startup'/);
 assert.match(mainSource, /rendererMode !== 'preferred'/);
 assert.match(hubSource, /hubRoomRenderer: HubRoomRenderer \| null/);
-assert.match(hubSource, /classList\.add\('is-2d'\)/);
+assert.match(hubSource, /museum-hub is-photographic/);
+assert.match(hubSource, /this\.hubRoomRenderer = null/);
+assert.doesNotMatch(hubSource, /new HubRoomRenderer\s*\(/, 'museum must not create an opaque WebGL room over the saved photograph');
+assert.match(rendererSource, /createResilientWebGLRenderer/, 'interactive gallery must retain resilient WebGL initialization');
+assert.match(
+  mainSource,
+  /import\s+defaultMuseumHub\s+from\s+['"]\.\.\/customer-artworks\/museum-hub\.json['"]/,
+  'standalone gallery must import the current checked-in layout, not a generic built-in layout'
+);
+assert.match(
+  mainSource,
+  /resolveMuseumHub\(\s*museumArtworks,\s*injectedMuseumHub\s*\?\?\s*\(injectedLegacyHotspots\s*\?\s*undefined\s*:\s*defaultMuseumHub\),\s*injectedLegacyHotspots\s*,/,
+  'injected config must take priority, legacy hotspots must retain migration priority, and only missing injection plus legacy must select the checked-in JSON'
+);
 assert.match(fallbackSource, /In 2D fortfahren/);
 assert.match(fallbackSource, /\{ once: true \}/);
 assert.doesNotMatch(previewWriter, /fonts\.googleapis\.com/);

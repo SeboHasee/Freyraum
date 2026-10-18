@@ -1,5 +1,48 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+
+## 2026-10-18 — Presentation authority lessons
+
+### Lesson 121 — Test the customer's entry and refresh generated authority
+
+A new compiled default did not guarantee fresh injected customer data: injected
+`museum-hub.json` takes precedence. Test root `index.html`, not only direct app
+entries; full builds must import first and all local runtime/style/data URLs
+must be versioned. The customer confirmed Update Gallery resolved the local
+stale setup. Preserve deliberate customer edits instead of overriding injection.
+
+### Lesson 122 — Separate local, production-build and live deployment evidence
+
+The nested HTTP preview failed because local output used an absolute `/` base;
+use `./` locally and retain `/Freyraum/` for production. Test both artifacts.
+A successful local screenshot is not proof of a deployed commit. Inspect Actions
+logs and require successful post-merge deploy/live smoke before claiming the site
+is updated; local `.bat` execution is not required of website visitors.
+
+### Lesson 118 — Shared geometry is not shared presentation
+
+The editor projected artwork over the customer photograph while the museum
+covered it with an independent opaque WebGL room. Passing geometry tests could
+not prove those two visible results agreed. Use one photograph-backed artwork
+projection for both; keep WebGL inspection and its recovery separate. Record
+structural source evidence without claiming reproduction of an unavailable
+customer artifact, then validate the actual generated and served presentations.
+
+### Lesson 119 — Verify the filename before declaring an asset missing
+
+`Museum_ohne_Bilder.png` existed while JSON requested `museum-ohne-bilder.png`.
+Check exact case and separators through source, importer and deployed paths;
+do not replace a calibrated photograph or repeat a missing-asset claim based
+only on a failed URL.
+
+### Lesson 120 — Presentation recovery cannot create missing customer content
+
+The local baseline imported only two works; authored side-slot IDs were absent
+from both customer and built-in inventories and were suppressed as
+`invalid-mapping`. Check exact inventory membership before attributing an empty
+place to projection or image decoding. Preserve the authored IDs, request the
+genuine missing files from the owner, and keep complete-room acceptance blocked;
+never insert unrelated paintings to manufacture a four-work success.
 
 ## 2026-10-14…17 — Editor, saving and desktop lessons (v1.33–v1.40)
 
@@ -53,10 +96,12 @@ sandbox. Build them in GitHub Actions and deliver the run artifact link.
 
 ### Lesson 110 — Import only editor-owned state
 
-An in-place editor cannot safely accept camera, room, wall-transform, inventory,
-assignment, or fixed-policy changes without rebuilding the complete resolution
-and renderer. Reject those differences and apply only explicitly editable safe
-zones, mounting zones, confirmations, and canonical placement values.
+An in-place editor cannot safely accept arbitrary fixed-model changes without
+rebuilding dependent state. The original v1.18 restriction was superseded by
+user-controlled rooms: room counts and known-artwork assignments now import,
+while incompatible fixed camera/3D room/wall models still fail. Keep editable
+wall quads/zones/placements distinct from fixed 3D corners and validate the
+complete exported model, not a partial hybrid.
 
 ### Lesson 109 — Export from the complete configured model
 

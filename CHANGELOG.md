@@ -1,5 +1,66 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+
+## Unreleased — reference exhibition defaults (2026-10-18)
+
+- Merge handoff: synchronize all current Markdown with the four-image default,
+  record customer-confirmed local success after Update Gallery and screenshot
+  evidence, remove obsolete content-blocker guidance, and separate local/build
+  checks from owner CI approval and post-merge live deployment verification.
+- Preserve the save-service repository variable during the build's automatic
+  reimport so deployment does not reset online-editor configuration to null.
+- Follow-up to the stale-index report: full builds regenerate customer data before
+  bundling; local-preview runtime/styles are cache-versioned, and the root launcher
+  refreshes its destination. Customer layouts remain authoritative.
+- Local-preview assets now resolve relative to the preview directory when served
+  over HTTP, rather than looking for backgrounds/settings at the server root.
+- Root-index smoke covers redirects, query/fragment preservation, cache-versioned
+  resources, four visible paintings and editor parity; generated-layout tests
+  compare the injected configuration with the source JSON.
+- Default room: Gartenszene front-left, unchanged Akt 27 front-right, Fraktal
+  left, Wunderbaum right, over `Museum_ohne_Bilder.png`.
+- Side paintings use independently curated heights and positions, preserving
+  native proportions and keeping all corners inside their green mounting zones.
+- Use the supplied `Gatrenszene.png` filename/ID unchanged; its text card supplies
+  the correctly spelled display title “Gartenszene”.
+- Regression coverage checks all four real source images, exact assignment order,
+  valid placement and unchanged physical sizes. Legacy migration fixtures remain
+  independent of the exhibition inventory.
+
+## Unreleased — photograph-backed museum correction (2026-10-18)
+
+- Align the museum and placement editor on calibrated DOM artwork over the
+  customer photograph instead of an opaque WebGL room covering the background;
+  retain the Three.js inspection gallery and renderer reliability safeguards.
+- Correct the background reference to the existing `Museum_ohne_Bilder.png`;
+  the earlier missing-asset diagnosis confused it with a lowercase/hyphenated
+  JSON filename.
+- Synchronize current documentation for editable wall quads, warning-only save
+  hints, room/assignment imports and presentation-specific diagnostics.
+- Source review verifies structural divergence, not the exact customer artifact
+  (unavailable). Browser/build/test results are not claimed by this documentation
+  audit; acceptance remains open in `plan.md`. Historical archives are unchanged.
+- The initial implementation pass reproduced the then-current `file://` baseline: only
+  `Akt 27.png` and `Fraktal.png` import; unresolved `gartenszene` / `zdigital`
+  mappings suppressed the side slots. That baseline needed genuine images;
+  the later reference-default work above supplies them and corrects the IDs.
+- Baseline hub initialization also fails with an `onBeforeCompile` TypeError.
+  Photograph presentation avoids the unused opaque room renderer; this is not
+  a claimed repair of its architectural-material implementation.
+- `MainMuseumHub` always uses photograph/DOM presentation without constructing
+  a room renderer or canvas; `main.ts` falls back to the checked-in museum JSON
+  when injected/legacy config is absent. Inspection-gallery WebGL is unchanged.
+- Implementation validation: built-preview capture confirms the exact photograph
+  and both available paintings in museum/editor; lint, typecheck, build,
+  frame-budget, docs-authority and editor-rooms pass. Deploy/save-service/
+  local-project/editor-publish remain blocked by missing side artwork content;
+  geometry and HTTP photographic smoke also pass, including pixel contribution
+  and editor projection parity. Type A capture remains blocked by a pre-existing
+  software-Chrome shadow-light-count invariant; no visual-capture pass is claimed.
+- Added bounded conservative DOM transparent-source fallback, preserving sparse
+  valid strokes through native-alpha confirmation; method checks and rebuilt
+  HTTP/`file://` recovery assertions pass. Screenshots capture successfully;
+  the visual command still fails the separate pre-existing shadow invariant.
 
 ## v1.40 — Windows installer builds in CI (2026-10-17)
 

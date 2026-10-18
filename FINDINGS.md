@@ -1,5 +1,235 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-17 (v1.40 merge-readiness audit).
+> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+
+## 2026-10-18 — Merge audit and customer-confirmed local room
+
+- Customer: “then I used the update galery .bat and then it worked.” Their
+  [supplied screenshot](https://github.com/user-attachments/assets/42d41643-45ca-4140-ba0c-5773ffc5e1aa)
+  shows all four intended paintings. Record this as local success after import,
+  not as verification of a live deployed commit (no build identity supplied).
+- All 36 tracked Markdown files outside `.github/agents` were inventoried.
+  Current docs and prompts were reviewed; seven dated archive snapshots remain
+  immutable with their index checked. Corrected stale two-image/content-blocker
+  claims in README, architecture map, customer guide, handoff and regression docs.
+  Query authority, desktop/save-service docs and unchanged prompts remain valid.
+- Reinstalled dependencies after the fresh environment's `eslint: not found`.
+  Lint/typecheck/full build, geometry, source/generated-layout equality, WebGL
+  resilience, frame-budget, docs authority, save-service (15), local-project (12),
+  deploy-validator (10), and actual four-image deploy validation pass.
+  `npm audit --omit=dev` reports zero vulnerabilities; initial full install reports
+  17 existing development-tool advisories. No dependency upgrade was made.
+- Production output served at `/Freyraum/app.html` passes exact photograph,
+  all four paintings' visible screenshot contribution and editor projection
+  parity. Root `file://` smoke also passes. Earlier nested HTTP root-index smoke
+  remains recorded below. These are built-artifact tests, not live-site claims.
+- Editor rooms passes. A concurrently running publish check timed out waiting
+  for the initial enabled Start button; after isolating browser runs it passes
+  all login/upload/placement/publish assertions with no page errors. No runtime
+  or test timeout change was needed; concurrency is a suspected contributor,
+  not an established root cause.
+- Isolated editor drag subsequently passes all four edges for each of the four
+  paintings and valid export. Desktop installers and the complete visual harness
+  were not rerun in this pass; they remain separate CI/deferred gates.
+- Actions inspection: desktop run 39156014733 is `action_required`, not passed.
+  Latest observed main Pages run 39115237783 failed before build on unknown
+  `gartenszene`/`zdigital` IDs (logs retrieved); it imported only two paintings.
+  Current branch corrects those inputs and deploy validation passes. A new
+  post-merge deployment/live smoke is required; retrying the old commit would
+  not test this fix. No open PR was returned by the API during the audit.
+- Next-agent entry: `docs/HANDOFF.md`. Deferred work and owner gates: `plan.md`.
+  Earlier two-image failures below are historical evidence, not current blockers.
+- Deployment review caught a coupled regression: `prebuild` repeats sync during
+  the Build step, but the save-service repository variable was scoped only to
+  the earlier import step. Pass `FREYRAUM_SAVE_SERVICE_URL` into Build too so
+  regenerated `editor-online.json` retains online publishing configuration.
+  A build with a non-secret example HTTPS endpoint confirms that public, dist
+  and preview settings all preserve it; test-only generated metadata is discarded.
+- Merge-audit final validation: secret scan passes; CodeQL reports zero Actions
+  and JavaScript alerts. Automated code review is unavailable (missing model);
+  a separate read-only review finds no significant issues. This does not waive
+  pending owner approval, new Pages deployment/live smoke or deferred visual work.
+
+## 2026-10-18 — Root-index freshness follow-up
+
+- The customer's stale-index report reopens acceptance; earlier direct-app passes
+  did not identify their actual artifact. No claim is made about their browser cache.
+- Verified build-input risk: `npm run build` previously omitted the importer,
+  while injected `__FREYRAUM_MUSEUM_HUB` overrides the compiled JSON fallback.
+  A stale generated file therefore wins even after rebuilding the runtime.
+  The build now imports and syncs current customer data first, without overriding
+  deliberately edited customer layouts.
+- Root-index HTTP smoke reproduced another concrete failure: the local bundle's
+  default absolute `/` base requested backgrounds and `editor-online.json` at
+  the server root instead of under `customer-preview/`. Local Vite output now
+  uses `./`; the production `/Freyraum/` base is unchanged.
+- Preview runtime/style URLs were unversioned. Both the importer and HTML writer
+  now stamp them along with customer data; the root launcher refreshes the preview
+  document while preserving query parameters and fragment.
+- Generated artwork data is ignored by Git. A fresh checkout/download still needs
+  Update Gallery before a double-click preview; the launcher and missing-asset
+  message now explain that requirement instead of silently implying source edits
+  update generated assets. Exact inputs: `Gatrenszene.png`, `Akt 27.png`,
+  `Fraktal.png`, `Wunderbaum.png`.
+- Final rebuild passes lint/typecheck, source/generated-layout equality,
+  root-index HTTP and `file://` smoke (all four decoded images contribute pixels,
+  exact photograph, editor geometry parity). Geometry, save-service (15),
+  local-project (12), deploy-validator (10), deploy content, docs authority and
+  frame-budget checks also pass. File-fetch probes still warn on `file://`,
+  where embedded artwork is verified visible. Existing dependency advisories,
+  large artwork/bundle and classic-script warnings are unchanged.
+- Root-index screenshot captured at `/tmp/freyraum-root-index-room.png`.
+  Image inspection remains unavailable in this session; reference-image aesthetic
+  approval is not inferred from automated visibility checks.
+- Final secret scan passes and CodeQL reports zero alerts. The automated review
+  service is unavailable (missing model); a separate read-only reviewer finds
+  no significant issues in the root-index follow-up.
+
+## 2026-10-18 — Reference exhibition with supplied artwork
+
+- The inbox now contains all four genuine paintings. The garden image is named
+  `Gatrenszene.png`, so the importer generates `gatrenszene`, not `gartenszene`.
+  Preserve that source ID and supply the display title through `Gatrenszene.txt`.
+  `Wunderbaum.png` resolves to `wunderbaum`; the old `zdigital` mapping is retired.
+- The reference arrangement is front-left Gartenszene (1.62 m), front-right
+  Akt 27 (unchanged 1.48 m), left Fraktal (3.6 m) and right Wunderbaum (3.1 m).
+  Side-wall perspective requires larger physical heights than the front pair.
+  All four pass the shared mounting-zone and doorway checks; narrow projected
+  side edges remain advisory, not a reason to stretch the sources.
+- Geometry tests initially failed because they pinned the previous exhibition
+  and reused its assignments in migration/swap fixtures. Preserve those synthetic
+  migration cases separately and validate current production content explicitly.
+  Save-service fake repository inventory must also include every newly mapped ID.
+- Built `file://` smoke proves visible screenshot pixel contribution for all four
+  paintings and exact editor/museum homography parity. Save-service (15), local
+  project (12), deploy-validator (10), geometry, front-wall aspect, lint,
+  typecheck/build, docs authority, frame-budget and editor rooms pass.
+- HTTP smoke also passes all four paintings and exact editor parity. Publishing
+  passes after its upload fixture explicitly frees a place in the now-full room
+  rather than assuming missing artwork creates an empty place.
+- Editor drag passes every edge for all four paintings and exports valid
+  placements. Secret scanning passes. The automated review service was unavailable;
+  an independent read-only reviewer found no significant issues. CodeQL skipped
+  these content/test-only changes as trivial.
+- Dependency installation reports existing tooling advisories; no dependency
+  upgrades are part of this content change. Fraktal remains a 24.8 MB source;
+  the importer warns about large dimensions and device memory. Vite retains
+  classic-script and large-bundle warnings. These are separate from layout checks.
+- A room screenshot was captured at `/tmp/freyraum-curated-room.png`; image
+  inspection was unavailable in this session, so exact visual/customer approval
+  is not claimed. Automated visibility and geometry checks are not visual approval.
+
+## 2026-10-18 — Earlier museum presentation baseline and recovery history
+
+The following records the initial two-image state and intermediate checks.
+Missing-content blockers were subsequently resolved; see the merge audit above.
+
+- **Implemented and checked by the implementation pass:** `MainMuseumHub`
+  always uses `.is-photographic`, keeps its renderer field null and constructs
+  no `HubRoomRenderer` or hub canvas. The photograph and DOM artworks have
+  opacity 1 in museum and editor; inspection-gallery WebGL is unchanged.
+  `main.ts` uses the checked-in museum JSON when injected/legacy config is absent.
+- **Correction validation:** built-preview capture at `/tmp/freyraum-after`
+  confirms the exact requested photograph and decoded `Fraktal` / `Akt 27` in
+  both routes, with no allocated hub canvas. Lint, typecheck, build,
+  frame-budget and documentation-authority checks pass; `test:editor-rooms`
+  passes all browser cases. These checks do not supply the missing side images.
+- **Content-blocked checks:** real `validate:deploy`, four save-service cases and
+  the local-project test fail on the shipping missing IDs. `test:editor-publish`
+  cannot click the disabled empty side place (`invalid-mapping`).
+- **Regression follow-up:** geometry passes after adapting closed-outline/
+  legacy-wall expectations and separating production missing mappings from
+  complete fixtures. HTTP photographic smoke passes exact-photo, artwork pixel
+  contribution and editor-homography parity checks; external Google Fonts DNS
+  failures are warnings. Visual capture is still blocked under software Chrome
+  by the pre-existing invariant `shadow-casting light count 1 != expected 2`;
+  investigation is ongoing, so no successful Type A capture is claimed.
+- **Latest targeted results:** HTTP and `file://` deployment smoke pass exact
+  background, real artwork pixel deltas, both front images and editor/museum
+  projection parity. Geometry, WebGL resilience, the 10 deploy-validator fixture
+  cases and syntax checks pass. These fixture passes do not override the real
+  shipping-content validation failures above.
+- **Transparent-primary recovery implemented; browser assertions verified:**
+  the failing blank-primary fixture exposed that DOM decode alone accepted
+  invisible artwork. Recovery now uses a conservative alpha check under the
+  existing verbose/local-file probe policy: a 4×4 sample accepts nonzero alpha
+  immediately; an empty sample triggers native-resolution scanning in tiles of
+  at most 128×128 pixels, within a 4,194,304-source-pixel budget (4 MP). Only proven
+  all-zero alpha rejects the source (`zero-alpha-source`) and retries fallback.
+  Over-budget or unavailable/tainted readback is inconclusive and accepted, so
+  sparse valid strokes are not rejected. GPU evidence stays null for DOM.
+  Transparent/black/white/faint-alpha, unavailable/tainted readback and sparse
+  final-native-pixel method checks pass, as do lint/typecheck/build and the
+  front-wall-aspect check.
+  The final 4 MP rebuild also passes actual 1200×1600 blank rejection,
+  same-size sparse final-pixel alpha-1 acceptance and over-4-MP inconclusive
+  acceptance method checks; lint/typecheck/build pass again.
+  Post-rebuild `file://` and HTTP blank-primary captures pass the recovery/source
+  assertions and produce screenshots: `zero-alpha-source` leads to embedded
+  fallback, `presentationPath` is `dom`, decoded fallback dimensions are 600×800,
+  and upload dimensions/render maximum/visible probe remain null. The file
+  capture command still exits 1 solely for the pre-existing shadow-light-count
+  invariant; this is browser recovery proof, not a full visual-suite pass.
+  The final rebuilt fixture rejects a transparent 256×256 square before committing
+  its ratio, then displays the opaque 600×800 portrait fallback with correct DOM
+  dimensions. Geometry method tests also pass black/white acceptance,
+  `SecurityError` inconclusive acceptance and different-aspect fallback commit.
+  Ordinary primary/fallback,
+  neutral, phone and shape/doorway captures work after stale fixture repairs,
+  but the full visual suite does not pass. The shadow invariant and software-
+  Chrome selection/focus/restore diagnostics remain unresolved investigations.
+- **Final review limits:** final parallel validation was attempted after commit
+  but reached its tool time limit; it was not retried. Earlier CodeQL reported
+  zero findings; the automated reviewer was unavailable. A focused reviewer
+  identified the sparse-alpha false-rejection risk, addressed by the conservative
+  native-alpha refinement above. This is not a full visual-suite pass.
+- **Dependency status:** installation reported 17 initial advisory findings;
+  `npm audit --omit=dev` reports zero. No dependency manifests changed.
+- **Diagnostic contract:** the shared source-to-pixel outcome has optional
+  `presentationPath: 'dom' | 'webgl'`. The hub records `'dom'`, native decoded
+  source dimensions and null GPU/probe fields, explicitly describing decode for
+  calibrated DOM presentation without WebGL upload. This is not GPU pixel proof;
+  source redaction and interactive-gallery diagnostics remain unchanged.
+- **Baseline reproduced in `file://` (implementation pass):** the importer has
+  only `Akt 27.png` and `Fraktal.png`. Side-slot IDs `gartenszene` and `zdigital`
+  exist in neither the customer inventory nor built-ins; resolution reports
+  `invalid-mapping` and suppresses those slots, leaving empty editor places.
+  No genuine matching side images are in the repository. Preserve the authored
+  JSON IDs without substitutes; the owner must supply the missing files.
+  Four genuine paintings cannot be accepted until that content is available.
+- **Baseline renderer failure:** hub renderer initialization throws
+  `Cannot read properties of undefined (reading 'onBeforeCompile')`.
+  `ArchitecturalSurfaceFactory` is a suspected location, not a verified root
+  cause. The approved photo presentation avoids initializing the opaque room
+  renderer rather than repairing unused 3D architecture.
+- Baseline screenshots and JSON evidence were reported at
+  `/tmp/freyraum-before`; that capture does not prove the correction passes.
+  These findings establish a current local baseline, not reproduction of the
+  unavailable original customer artifact.
+- **Verified structural cause, not an artifact reproduction:** the normal hub
+  presented an independent opaque WebGL architectural room, while the editor
+  used calibrated DOM artwork over a photograph. These were different visible
+  authorities; passing wall/placement math did not prove equivalent pixels.
+  The exact customer screenshot-producing bundle/config is unavailable.
+- **Approved correction:** museum and editor use the same photograph-backed
+  calibrated DOM artwork projection. No opaque WebGL room may cover that plate.
+  Keep the Three.js inspection gallery, diagnostics, context-loss recovery and
+  bounded source fallbacks; do not label DOM image success as GPU pixel proof.
+- **Asset diagnosis corrected:** the tracked
+  `customer-artworks/Backgrounds/Museum_ohne_Bilder.png` exists. The audited JSON
+  requested `Backgrounds/museum-ohne-bilder.png`; case and separators both differ.
+  Reference the actual asset and preserve its calibration rather than inventing
+  a replacement background or claiming that it is absent.
+- **Current editor contracts:** wall quads are editable with calibration-scale
+  compensation; only errors block save/export, not layout hints or unconfirmed
+  green zones. Room counts and artwork assignments may change on import;
+  unreadable JSON and incompatible fixed camera/3D room/wall models still fail.
+- Reviewed all repository Markdown outside dependencies and `.github/agents`;
+  archives were reviewed as history and left unchanged. Current architecture,
+  query, customer, support, regression and agent rules supersede older restrictive
+  editor claims. No tests, lint, build or browser validation were run in this
+  documentation portion; the implementation pass separately reproduced the
+  baseline and correction checks above. Remaining validation and customer
+  acceptance are tracked in `plan.md`.
 
 ## 2026-10-17 — Windows installer builds in CI (v1.40)
 
@@ -77,10 +307,10 @@
 - **Lesson: shared CSS hooks.** Reusing `museum-hub__save-primary` /
   `museum-hub__publish-pending` for new buttons and lists broke strict test
   selectors; new online elements use their own classes.
-- **Customer content state.** `museum-hub.json` points to
-  `Backgrounds/Museum_ohne_Bilder.png`, which is not in the repository; the
-  runtime falls back to `museum-empty.png`. `validate:deploy` and the smoke test
-  report this as a warning, and publishing allows it only while unchanged.
+- **Customer content state (corrected 2026-10-18).** The photograph
+  `Backgrounds/Museum_ohne_Bilder.png` is tracked; the JSON requested
+  `Backgrounds/museum-ohne-bilder.png`. This is a filename-reference mismatch,
+  not a missing source asset. See the current presentation finding above.
   `inbox/Fraktal.png` is 24.8 MB (warning above 20 MB; online uploads are
   limited to 15 MB after downscaling).
 - **Pages cache.** Pages serves files with a ~10 min cache; after "Online ✓"
