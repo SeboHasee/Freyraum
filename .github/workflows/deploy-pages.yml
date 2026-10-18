@@ -248,5 +248,8 @@ jobs:
           npm i --no-save playwright
           npx playwright install --with-deps chromium
 
+      - name: Prepare customer assets for smoke test
+        run: npm run import:artworks
+
       - name: Smoke-test the live gallery
         run: npm run test:deploy-smoke -- "${{ needs.deploy.outputs.page_url }}"

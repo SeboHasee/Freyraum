@@ -28,11 +28,12 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 
 ## Active — restore the photograph-backed museum (2026-10-18)
 
-- [ ] Customer reports plain white background in the latest deployment; exact
-      deployment URL/commit is not yet identified. Require the configured
-      background and fallback from `museum-hub.json` in the Pages artifact;
-      current background is `Museum_ohne_Bilder.png`. Verify the next deployed
-      build with the live photographic smoke test.
+- [ ] Customer reports plain white background in the latest deployment. Pages
+      run #21 (`c3b8e246`) built and deployed successfully, but its live smoke
+      exited before browser checks because the fresh checkout lacked generated
+      `artworks.json`; this does not establish the visible result. Background
+      artifact and live smoke checks now follow `museum-hub.json` (currently
+      `Museum_ohne_Bilder.png`). Verify the next deployment's live smoke.
 - [x] Audit current Markdown and compare the presentation claims with source;
       review archives as historical evidence without rewriting them.
 - [x] Identify structural divergence: the normal museum used an opaque WebGL

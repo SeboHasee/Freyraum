@@ -5,6 +5,8 @@
 
 - Pages artifact verification and live smoke now use the backgrounds selected
   by `museum-hub.json`, rather than pinning checks to a particular filename.
+  The live smoke job imports customer assets first so its generated expected
+  manifest exists in the fresh checkout.
 - Merge handoff: synchronize all current Markdown with the four-image default,
   record customer-confirmed local success after Update Gallery and screenshot
   evidence, remove obsolete content-blocker guidance, and separate local/build

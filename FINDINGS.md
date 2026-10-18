@@ -4,14 +4,18 @@
 ## 2026-10-18 — Deployed museum photograph regression report
 
 - Customer reports that the latest deployment shows a plain white museum
-  background. The deployment URL/build identity was not supplied, so the exact
-  artifact and root cause remain unverified.
+  background. The customer's specific browser artifact is unknown, so the exact
+  visual root cause remains unverified. Latest Pages run #21
+  (`c3b8e2468e0849b1bfe72f87c880ac46f2794483`) deployed successfully, but its
+  live smoke job exited before opening a browser because the fresh smoke-job
+  checkout lacked generated/ignored `artworks.json`.
 - Current source config selects `Backgrounds/Museum_ohne_Bilder.png`, and
   `sync-customer-public.mjs` copies all allowed backgrounds. The earlier Pages
   check's omission of that filename did not itself remove the image and does not
   establish why it was not visible. The artifact gate and live smoke now derive
   expected background paths from `museum-hub.json`, so a future configured
-  background is checked without pinning deployment to this filename.
+  background is checked without pinning deployment to this filename. The smoke
+  job now runs the importer before using its generated manifest.
 - Track the next deployment and live smoke as open acceptance in `plan.md`.
 
 ## 2026-10-18 — Merge audit and customer-confirmed local room
