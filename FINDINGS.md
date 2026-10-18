@@ -1,6 +1,21 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
 
+## 2026-10-18 — Artwork entrance and timeline sizing
+
+- Gallery navigation seeds the artwork group on the camera side of the negative-z
+  front wall, then eases its depth back to the mounted origin. Keep this depth
+  independent from the body mesh that casts the wall shadow; the photograph-backed
+  museum hub is a separate presentation.
+- The timeline can shrink-wrap smaller collections by using intrinsic list width;
+  once the whole list cannot fit after reclaiming arrow space, its existing
+  scrolling and arrow controls remain active. Chromium measurements cover desktop
+  counts 1–4 and 12, plus a 320px emulated phone viewport.
+- Validation note: `npm run validate:museum-hub` still reaches an existing
+  doorway-height invariant that expects 2.30m, while current calibrated config
+  converts the left/right doorway spans to approximately 2.692m / 2.486m. This is
+  unrelated to the gallery entrance/timeline change and remains unmodified.
+
 ## 2026-10-18 — Deployed museum photograph regression report
 
 - Customer reports that the latest deployment shows a plain white museum

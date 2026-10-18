@@ -34,6 +34,9 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       width, and keeps its arrows for scrollable collections.
 - [x] Add structural regression checks for wall-side entrance depth, reduced
       motion, shadow casting, responsive item sizing, and overflow arrow state.
+- [ ] Existing `validate:museum-hub` doorway-height invariant expects 2.30m but
+      current calibrated exclusions measure about 2.692m / 2.486m; keep separate
+      from this gallery-view change and resolve with the geometry owner.
 - [ ] Customer reports plain white background in the latest deployment. Pages
       run #21 (`c3b8e246`) built and deployed successfully, but its live smoke
       exited before browser checks because the fresh checkout lacked generated
