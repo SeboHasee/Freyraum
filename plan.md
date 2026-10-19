@@ -23,6 +23,14 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 
 ## Photographic inspection rooms (2026-10-19)
 
+- [x] Add configured Wohnbereich and Büro photo views, bringing the selector to
+      four rooms, and stage all four cleaned derivatives in Update Gallery.
+- [x] Rebuild the previous bedroom and Wohnraum cleanups from the untouched
+      originals; remove the new photos' paintings and extend artwork-removal,
+      cleanup-boundary, import, and responsive browser checks.
+- [ ] Customer review of all four cleaned photos and artwork placements after
+      Update Gallery; pixel and automated browser checks do not replace visual
+      acceptance.
 - [x] Add a full-screen room-photo mode with a room selector and one selected
       gallery artwork at a time.
 - [x] Use the shared gallery timeline for artwork selection, synchronized with
@@ -56,7 +64,7 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       developer build; document the customer workflow and photo-camera limitation.
 - [x] Apply the photo camera only to the shared room scene; keep the artwork's
       projection in scene-local coordinates and test corner registration across
-      both rooms, four viewport sizes, maximum zoom and varied pans.
+      all configured rooms, four viewport sizes, maximum zoom and varied pans.
 - [x] Add a labeled photo-room editor with room selection, normalized wall-corner
       and artwork placement/size inputs, shared-projection preview, validity
       checks, editor history, and config export/save round-trip.

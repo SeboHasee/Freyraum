@@ -9,9 +9,11 @@
 - Inspection-gallery photo room uses configured background photos and projects
   the current gallery artwork. It reparents the single gallery timeline and
   shared help/audio/settings/fullscreen controls while open, then restores them;
-  room selection stays separate from artwork selection. Preserve the room camera
-  and projective registration when adjusting UI. See `README.md` → "Inspect in
-  a photo room" and `ARCHITECTURE_MAP.md`.
+  room selection stays separate from artwork selection. It has four configured
+  views: Schlafzimmer, Wohnraum, Wohnbereich, and Büro. Their cleaned derivatives
+  preserve the original source photos. Preserve the room camera and projective
+  registration when adjusting UI. See `README.md` → "Inspect in a photo room"
+  and `ARCHITECTURE_MAP.md`.
 - Local data is generated/ignored: after project updates run Update Gallery;
   full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,
   production `/Freyraum/`. Root-index and production-base smoke are distinct.

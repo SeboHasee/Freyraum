@@ -35,6 +35,12 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 
 ## Photo-room controls and current validation (2026-10-19)
 
+- Four configured photo rooms are available: Schlafzimmer, Wohnraum, Wohnbereich,
+  and Büro. Cleaned `gallery-*.png` derivatives are displayed while the originals
+  remain preserved; the structural pixel regression checks cleanup seams and
+  painting removal for each source.
+- Run Update Gallery after pulling these changes so all four configured photos are
+  staged for the local `file://` preview.
 - The photo room reuses the gallery's single artwork timeline and selected-work
   state. It also uses the gallery-style return and zoom/reset controls and the
   shared help, audio, settings, and fullscreen widgets. The room selector is

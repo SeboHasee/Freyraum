@@ -1,6 +1,22 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
+## 2026-10-19 — Four inspection photo rooms and cleanup follow-up
+
+- The uploaded `Wohnbereich.png` and `Büro.png` are now additional photo-room
+  sources; visitor/editor configuration remains in `museum-hub.json`, with the
+  room names and photo asset paths kept together there.
+- Preserve source images and display edited derivatives only. The new derivatives
+  remove the colorful center-wall paintings; the existing Schlafzimmer and
+  Wohnraum derivatives were regenerated from their untouched source photos after
+  the earlier cleanup left visible patching.
+- Keep cleanup safeguards image-based: verify artwork pixels are removed and
+  compare cleanup-boundary gradients against the unchanged source photo. Passing
+  these checks does not replace visual customer review at normal display size.
+- Room import/staging, config sanitization, source-ratio projection and the
+  responsive file-preview browser check must enumerate all four configured views;
+  do not pin future checks to only the original two.
+
 ## 2026-10-19 — Shared gallery controls in the photo room
 
 - Move the existing timeline DOM node into the photo-room overlay while it is

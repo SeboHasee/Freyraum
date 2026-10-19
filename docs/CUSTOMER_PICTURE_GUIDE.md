@@ -87,8 +87,8 @@ copies into `customer-artworks/inbox/`.
 
 ## Inspect in a photo room
 
-In the gallery, choose **Fotoraum** to show the selected artwork in the configured
-bedroom or living-room photo. The room view reuses the gallery's thumbnail
+In the gallery, choose **Fotoraum** to show the selected artwork in one of four
+photos: **Schlafzimmer**, **Wohnraum**, **Wohnbereich**, or **Büro**. The room view reuses the gallery's thumbnail
 timeline, active-work indicator, scrolling, and count; selecting artwork here or
 in the gallery changes the same shared selection. Use the separate room selector
 to switch photographs and **Zurück zur Galerie** to leave the photo view.
@@ -106,7 +106,8 @@ This is a bounded 2D camera over a still photograph—not orbiting or walking
 through a 3D room. Run **Update Gallery** after downloading project changes; it
 copies the configured source photos from `customer-artworks/Backgrounds/` into
 the local preview. If a photo is missing, check the import report and restore
-the exact configured source filename.
+the exact configured source filename. The original room photos are preserved;
+the configured `gallery-*.png` derivatives remove their pre-existing paintings.
 
 In the placement editor's **Raum** tab, **Foto-Raum gestalten** lets you select
 a configured photo room, adjust its four normalized wall corners, and edit the

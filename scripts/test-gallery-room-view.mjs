@@ -154,10 +154,15 @@ const sanitized = museumHub.sanitizeMuseumHubConfig(sourceConfig);
 assert.ok(sanitized.config, 'the shipped museum config sanitizes');
 
 const roomViews = sanitized.config.galleryRoomViews ?? [];
-assert.deepEqual(roomViews.map(({ id }) => id), ['bedroom', 'wohnraum']);
+assert.deepEqual(roomViews.map(({ id }) => id), ['bedroom', 'wohnraum', 'wohn-bereich', 'buero']);
 assert.deepEqual(
   roomViews.map(({ background }) => background.src),
-  ['Backgrounds/gallery-bedroom.png', 'Backgrounds/gallery-wohnraum.png']
+  [
+    'Backgrounds/gallery-bedroom.png',
+    'Backgrounds/gallery-wohnraum.png',
+    'Backgrounds/gallery-wohn-bereich.png',
+    'Backgrounds/gallery-buero.png',
+  ]
 );
 const editedRoomConfig = structuredClone(sourceConfig);
 editedRoomConfig.galleryRoomViews[0].placement = { u: 0.46, v: 0.52, height: 0.31 };
@@ -193,6 +198,34 @@ assert.ok(
 assert.ok(
   countSaturatedArtworkPixels(livingRoom, [810, 300, 1090, 790]) < 100,
   'the dominant living-room artwork is removed'
+);
+
+const livingArea = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/gallery-wohn-bereich.png'));
+assert.deepEqual([livingArea.width, livingArea.height], [2000, 2000]);
+const originalLivingArea = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/Wohnbereich.png'));
+const livingAreaCleanupBounds = changedPixelBounds(originalLivingArea, livingArea);
+const livingAreaSeamDelta = maxCleanupSeamDelta(livingArea, livingAreaCleanupBounds, originalLivingArea);
+assert.ok(
+  livingAreaSeamDelta <= 20,
+  `Wohnbereich photo cleanup blends into the surrounding wall without a sharp edge (max delta ${livingAreaSeamDelta})`
+);
+assert.ok(
+  countSaturatedArtworkPixels(livingArea, [923, 200, 1365, 787]) < 100,
+  'the dominant Wohnbereich artwork is removed'
+);
+
+const office = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/gallery-buero.png'));
+assert.deepEqual([office.width, office.height], [2000, 1125]);
+const originalOffice = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/Büro.png'));
+const officeCleanupBounds = changedPixelBounds(originalOffice, office);
+const officeSeamDelta = maxCleanupSeamDelta(office, officeCleanupBounds, originalOffice);
+assert.ok(
+  officeSeamDelta <= 20,
+  `Büro photo cleanup blends into the surrounding wall without a sharp edge (max delta ${officeSeamDelta})`
+);
+assert.ok(
+  countSaturatedArtworkPixels(office, [918, 325, 1122, 527]) < 100,
+  'the dominant Büro artwork is removed'
 );
 
 const projectiveGeometry = await loadTsModule('src/hub/projectiveGeometry.ts');
@@ -291,6 +324,8 @@ mkdirSync(localInbox, { recursive: true });
 mkdirSync(join(localProject, 'customer-audio', 'inbox'), { recursive: true });
 writeFileSync(join(localBackgrounds, 'gallery-bedroom.png'), imageBytes);
 writeFileSync(join(localBackgrounds, 'gallery-wohnraum.png'), imageBytes);
+writeFileSync(join(localBackgrounds, 'gallery-wohn-bereich.png'), imageBytes);
+writeFileSync(join(localBackgrounds, 'gallery-buero.png'), imageBytes);
 writeFileSync(join(localArtworks, 'museum-hub.json'), JSON.stringify({
   galleryRoomViews: roomViews.map(({ id, background }) => ({ id, background })),
 }));
@@ -300,7 +335,12 @@ try {
     encoding: 'utf8',
   });
   const localPreviewBackgrounds = join(localProject, 'customer-preview', 'backgrounds');
-  for (const filename of ['gallery-bedroom.png', 'gallery-wohnraum.png']) {
+  for (const filename of [
+    'gallery-bedroom.png',
+    'gallery-wohnraum.png',
+    'gallery-wohn-bereich.png',
+    'gallery-buero.png',
+  ]) {
     assert.deepEqual(
       readFileSync(join(localPreviewBackgrounds, filename)),
       imageBytes,
@@ -326,7 +366,11 @@ try {
 const unsafeConfig = structuredClone(sourceConfig);
 unsafeConfig.galleryRoomViews[0].background.src = 'Backgrounds/../private.png';
 const safeViews = museumHub.sanitizeMuseumHubConfig(unsafeConfig).config?.galleryRoomViews ?? [];
-assert.deepEqual(safeViews.map(({ id }) => id), ['wohnraum'], 'unsafe background paths are ignored');
+assert.deepEqual(
+  safeViews.map(({ id }) => id),
+  ['wohnraum', 'wohn-bereich', 'buero'],
+  'unsafe background paths are ignored'
+);
 
 const editorSource = readFileSync(resolve(ROOT, 'src/hub/MainMuseumHub.ts'), 'utf8');
 assert.match(
@@ -373,6 +417,10 @@ const saveContext = {
     'museum-empty.png',
     'gallery-bedroom.png',
     'gallery-wohnraum.png',
+    'gallery-wohn-bereich.png',
+    'gallery-buero.png',
+    'gallery-wohn-bereich.png',
+    'gallery-buero.png',
   ],
   existingInbox: readdirSync(resolve(ROOT, 'customer-artworks/inbox')).filter((name) => !name.startsWith('.')),
 };

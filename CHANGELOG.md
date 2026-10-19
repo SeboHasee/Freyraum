@@ -1,6 +1,15 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
+## Unreleased — four cleaned photo-room views (2026-10-19)
+
+- Add Wohnbereich and Büro to the inspection gallery's configured photo-room
+  choices, bringing the set to four views.
+- Create cleaned derivatives for both uploaded photos and improve the bedroom and
+  Wohnraum cleanup from their unchanged originals to remove visible patch edges.
+- Extend import, pixel-cleanup, projective geometry, and responsive browser
+  regression coverage to all four photo rooms.
+
 ## Unreleased — photo-room control consistency (2026-10-19)
 
 - Replace the photo-room's separate artwork arrows and title with the shared

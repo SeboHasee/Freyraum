@@ -356,7 +356,12 @@ try {
     'room-control icons are centered within their touch targets'
   );
 
-  for (const [roomId, filename] of [['bedroom', 'gallery-bedroom.png'], ['wohnraum', 'gallery-wohnraum.png']]) {
+  for (const [roomId, filename] of [
+    ['bedroom', 'gallery-bedroom.png'],
+    ['wohnraum', 'gallery-wohnraum.png'],
+    ['wohn-bereich', 'gallery-wohn-bereich.png'],
+    ['buero', 'gallery-buero.png'],
+  ]) {
     await evaluate(`(() => {
       const select = document.querySelector('.gallery-room-view__select');
       select.value = '${roomId}';
@@ -395,9 +400,13 @@ try {
 
   for (const [roomId, width, height] of [
     ['bedroom', 1440, 900], ['wohnraum', 1440, 900],
+    ['wohn-bereich', 1440, 900], ['buero', 1440, 900],
     ['bedroom', 768, 1024], ['wohnraum', 768, 1024],
+    ['wohn-bereich', 768, 1024], ['buero', 768, 1024],
     ['bedroom', 390, 844], ['wohnraum', 390, 844],
+    ['wohn-bereich', 390, 844], ['buero', 390, 844],
     ['bedroom', 844, 390], ['wohnraum', 844, 390],
+    ['wohn-bereich', 844, 390], ['buero', 844, 390],
   ]) {
     await command('Emulation.setDeviceMetricsOverride', {
       width,
@@ -410,7 +419,12 @@ try {
       select.value = '${roomId}';
       select.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
-    const filename = roomId === 'bedroom' ? 'gallery-bedroom.png' : 'gallery-wohnraum.png';
+    const filename = {
+      bedroom: 'gallery-bedroom.png',
+      wohnraum: 'gallery-wohnraum.png',
+      'wohn-bereich': 'gallery-wohn-bereich.png',
+      buero: 'gallery-buero.png',
+    }[roomId];
     await waitFor(
       `(() => {
         const background = document.querySelector('.gallery-room-view__background');

@@ -57,6 +57,48 @@
         "v": 0.5,
         "height": 0.88
       }
+    },
+    {
+      "id": "wohn-bereich",
+      "name": "Wohnbereich",
+      "background": {
+        "src": "Backgrounds/gallery-wohn-bereich.png",
+        "width": 2000,
+        "height": 2000
+      },
+      "wallQuad": [
+        { "x": 0.44, "y": 0.075 },
+        { "x": 0.705, "y": 0.075 },
+        { "x": 0.705, "y": 0.42 },
+        { "x": 0.44, "y": 0.42 }
+      ],
+      "wallAspect": 0.77,
+      "placement": {
+        "u": 0.5,
+        "v": 0.5,
+        "height": 0.88
+      }
+    },
+    {
+      "id": "buero",
+      "name": "Büro",
+      "background": {
+        "src": "Backgrounds/gallery-buero.png",
+        "width": 2000,
+        "height": 1125
+      },
+      "wallQuad": [
+        { "x": 0.44, "y": 0.253 },
+        { "x": 0.58, "y": 0.253 },
+        { "x": 0.58, "y": 0.504 },
+        { "x": 0.44, "y": 0.504 }
+      ],
+      "wallAspect": 0.99,
+      "placement": {
+        "u": 0.5,
+        "v": 0.5,
+        "height": 0.88
+      }
     }
   ],
   "visualTokens": {

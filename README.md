@@ -34,8 +34,8 @@ the same in all three; see
 
 ## Inspect in a photo room
 
-In the inspection gallery, choose **Fotoraum** to open the bedroom or living-room
-photograph. The room view uses the gallery timeline to select the artwork, so
+In the inspection gallery, choose **Fotoraum** to open one of four photographs:
+**Schlafzimmer**, **Wohnraum**, **Wohnbereich**, or **Büro**. The room view uses the gallery timeline to select the artwork, so
 selection stays synchronized when switching between gallery and room. Use the
 room selector for a different photograph and **Zurück zur Galerie** to leave.
 Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
@@ -49,8 +49,9 @@ photo camera, not true 3D orbit or movement.
 in the placement editor's **Raum** tab, **Foto-Raum gestalten** selects a room
 and edits its normalized wall corners and artwork position/height with the same
 projection preview used by visitors. Save/export preserves those values.
-Update Gallery stages configured photos for the local preview, and the original
-customer photos remain unchanged.
+Update Gallery stages configured photos for the local preview. Cleaned room-view
+photos remove the pre-existing wall paintings; the original customer photos remain
+unchanged.
 
 ## Current project state
 
