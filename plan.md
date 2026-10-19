@@ -17,8 +17,19 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       placement at both wide and portrait viewport sizes.
 - [x] Preserve room-view configuration through editor export/save and validate
       referenced background files in shared publish rules.
-- [x] Add focused regression checks for sanitized config, both cleaned photos,
-      projection, save validation and editor export.
+- [x] Stage configured room photos during Update Gallery and report missing
+      sources so the local file preview works without a developer build.
+- [x] Keep the room overlay and fixed controls above the gallery; place controls
+      outside the artwork and verify clearance at desktop, tablet, phone and
+      short-landscape sizes.
+- [x] Add bounded photo pan, wheel/pinch zoom, reset and keyboard controls while
+      keeping the projected artwork anchored to the photographed wall. True 3D
+      movement remains out of scope for single-photo assets.
+- [x] Add structural and browser regressions for config/save/export, importer
+      staging and missing-photo warnings, file-preview image decode, room and
+      artwork switching, responsive layout, camera gestures and focus return.
+- [x] Run local root-index browser checks after Update Gallery and after the
+      developer build; document the customer workflow and photo-camera limitation.
 - [ ] Customer acceptance of the cleaned photo appearance and placements after
       updating the local preview; deployment acceptance remains separate.
 

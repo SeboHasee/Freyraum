@@ -3,6 +3,19 @@
 
 ## 2026-10-19 — Photographic inspection room view
 
+- Update Gallery is the customer-facing local import path; a production build's
+  public-background sync is not part of that workflow. Stage each configured
+  room photo into `customer-preview/backgrounds/`, the URL base used by the
+  nested local preview, and report missing source files instead of leaving a
+  silent blank scene.
+- The fixed photograph and projected artwork must receive the same bounded
+  camera transform. Keep the toolbar in screen space and prevent gestures on
+  controls from panning the image. A single still photo supports pan/zoom, not
+  real perspective changes; orbit/walking requires room geometry or additional
+  viewpoints.
+- Browser regression opens root `index.html` as `file://`, verifies both staged
+  photos decode, and checks toolbar clearance at desktop, tablet, phone, and
+  short-landscape sizes, plus drag, zoom, pinch, reset, keyboard, and focus return.
 - The room photos contain their own dominant paintings. Initial guessed masks
   missed them, especially in `Wohnraum.png`; locate the actual central picture
   region from the source pixels before producing derivatives. Keep the supplied

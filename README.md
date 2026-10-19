@@ -37,8 +37,11 @@ the same in all three; see
 In the inspection gallery, choose **Raumansicht** to display the selected
 artwork in the bedroom or living-room photograph. The photo fills the screen;
 room controls switch scenes, and previous/next controls change the single
-displayed artwork. `customer-artworks/museum-hub.json` owns the room photo and
-placement data; the original customer photos remain unchanged.
+displayed artwork. Drag to pan, zoom with the wheel/pinch/buttons, and reset the
+view with the on-screen control. This is a bounded 2D photo camera, not true 3D
+orbit or movement. `customer-artworks/museum-hub.json` owns the room photo and
+placement data; Update Gallery stages configured photos for the local preview,
+and the original customer photos remain unchanged.
 
 ## Current project state
 

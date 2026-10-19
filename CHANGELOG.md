@@ -12,6 +12,12 @@
   focused PNG-pixel regression.
 - Preserve room-view configuration through placement-editor exports and reject
   saves that refer to missing room-photo backgrounds.
+- Stage configured room photos during Update Gallery, with actionable missing-file
+  reporting, so the local `file://` preview does not depend on a developer build.
+- Add bounded photo pan/zoom, pinch, reset, keyboard controls, and a fixed
+  accessible toolbar; keep projected artwork aligned with the camera.
+- Cover local photo loading, responsive toolbar/artwork clearance, and camera
+  interactions with focused structural and browser regression tests.
 
 ## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
 

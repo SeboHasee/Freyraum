@@ -10,12 +10,19 @@ is accepted unless the measurement hook for its type exists and passes.
 
 ## Photographic inspection-room regression (2026-10-19)
 
-Run `npm run test:gallery-room-view` to verify the two configured room photos,
+Run `npm run test:gallery-room-view` to verify configured room-photo staging,
 artwork-free target regions, safe config sanitization, source-aspect-preserving
 projection at wide and portrait viewport sizes, room-background save validation,
-and room-view preservation by placement-editor export. Run `npm run build` to
-regenerate the imported and served customer assets; use the browser room selector
-and artwork arrows to confirm the full-screen experience after updating a preview.
+and room-view preservation by placement-editor export. The test verifies Update
+Gallery stages the photos and reports missing sources.
+
+For browser coverage, run `npm run import:artworks && npm run build`, then
+`FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
+This opens the generated root `index.html` over `file://` and verifies both
+photos decode, the room controls clear the artwork across desktop/tablet/phone/
+short-landscape sizes, and photo pan, zoom, pinch, reset, keyboard zoom, close,
+and focus restoration work. The camera operates on a still photo; it does not
+provide genuine 3D orbit or walking.
 
 ## Photograph-backed museum acceptance (2026-10-18)
 
@@ -255,6 +262,8 @@ Linux run them under `xvfb-run -a`.
 | `npm run test:frame-budget`, `npm run test:webgl-resilience` | – | Type C frame budget; WebGL fallback | quality |
 | `npm run test:local-project` | – | desktop project store: refusals, all-or-nothing writes, history/restore, rename retry, importer `--root` | quality, desktop |
 | `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
+| `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
+| `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, keyboard, close/focus | – |
 | `npm run test:validate-deploy` | – | deploy content check | – |
 | `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |
 | `npm run test:editor-rooms` | yes | add/fill/switch/delete rooms, undo/redo, download + reload | – |
