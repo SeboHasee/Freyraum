@@ -14,6 +14,8 @@ export class GalleryRoomView {
   private readonly artworkImage: HTMLImageElement;
   private readonly status: HTMLElement;
   private readonly viewSelect: HTMLSelectElement;
+  private readonly previousArtworkButton: HTMLButtonElement;
+  private readonly nextArtworkButton: HTMLButtonElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly resizeObserver: ResizeObserver | null;
   private views: readonly GalleryRoomViewConfig[];
@@ -29,7 +31,8 @@ export class GalleryRoomView {
     container: HTMLElement,
     views: readonly GalleryRoomViewConfig[],
     private readonly onClose: () => void,
-    private readonly onVisibilityChange: (visible: boolean) => void
+    private readonly onVisibilityChange: (visible: boolean) => void,
+    private readonly onNavigateArtwork: (direction: -1 | 1) => void
   ) {
     this.views = views;
     const root = document.createElement('section');
@@ -79,12 +82,30 @@ export class GalleryRoomView {
     label.appendChild(select);
     controls.append(label, close);
 
+    const artworkControls = document.createElement('div');
+    artworkControls.className = 'gallery-room-view__artwork-controls';
+    const previousArtwork = document.createElement('button');
+    previousArtwork.type = 'button';
+    previousArtwork.className = 'gallery-room-view__artwork-nav';
+    previousArtwork.textContent = '‹';
+    previousArtwork.setAttribute('aria-label', 'Vorheriges Kunstwerk anzeigen');
+    previousArtwork.addEventListener('click', () => this.onNavigateArtwork(-1));
+    this.previousArtworkButton = previousArtwork;
+    const nextArtwork = document.createElement('button');
+    nextArtwork.type = 'button';
+    nextArtwork.className = 'gallery-room-view__artwork-nav';
+    nextArtwork.textContent = '›';
+    nextArtwork.setAttribute('aria-label', 'Nächstes Kunstwerk anzeigen');
+    nextArtwork.addEventListener('click', () => this.onNavigateArtwork(1));
+    this.nextArtworkButton = nextArtwork;
+    artworkControls.append(previousArtwork, nextArtwork);
+
     const status = document.createElement('p');
     status.className = 'gallery-room-view__status';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     this.status = status;
-    root.append(background, artworkImage, controls, status);
+    root.append(background, artworkImage, controls, artworkControls, status);
     container.appendChild(root);
 
     this.resizeObserver = typeof ResizeObserver === 'undefined'
@@ -126,8 +147,10 @@ export class GalleryRoomView {
     this.setVisible(!this.visible);
   }
 
-  setArtwork(artwork: Artwork | null): void {
+  setArtwork(artwork: Artwork | null, hasMultipleArtworks = true): void {
     this.activeArtwork = artwork;
+    this.previousArtworkButton.hidden = !hasMultipleArtworks;
+    this.nextArtworkButton.hidden = !hasMultipleArtworks;
     this.useFallback = false;
     this.fallbackUrl = null;
     if (!artwork) {
@@ -182,6 +205,7 @@ export class GalleryRoomView {
     const height = this.artworkImage.naturalHeight;
     if (!(width > 0 && height > 0)) return;
     const rect = this.element.getBoundingClientRect();
+    if (!(rect.width > 0 && rect.height > 0)) return;
     const transform = projectGalleryRoomArtwork(
       this.activeView,
       width / height,

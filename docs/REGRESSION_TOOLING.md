@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,15 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Photographic inspection-room regression (2026-10-19)
+
+Run `npm run test:gallery-room-view` to verify the two configured room photos,
+artwork-free target regions, safe config sanitization, source-aspect-preserving
+projection at wide and portrait viewport sizes, room-background save validation,
+and room-view preservation by placement-editor export. Run `npm run build` to
+regenerate the imported and served customer assets; use the browser room selector
+and artwork arrows to confirm the full-screen experience after updating a preview.
 
 ## Photograph-backed museum acceptance (2026-10-18)
 

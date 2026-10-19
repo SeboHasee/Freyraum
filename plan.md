@@ -1,9 +1,26 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-19 (selected timeline marker and rotating highlights).
+> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Photographic inspection rooms (2026-10-19)
+
+- [x] Add a full-screen room-photo mode with a room selector and one selected
+      gallery artwork at a time.
+- [x] Add previous/next artwork controls that stay synchronized with normal
+      gallery navigation and preserve the artwork's source aspect ratio.
+- [x] Remove the dominant existing paintings from derived room backgrounds;
+      preserve the supplied originals and correct the initial missed masks.
+- [x] Use centered `cover` geometry for the photograph and its projective artwork
+      placement at both wide and portrait viewport sizes.
+- [x] Preserve room-view configuration through editor export/save and validate
+      referenced background files in shared publish rules.
+- [x] Add focused regression checks for sanitized config, both cleaned photos,
+      projection, save validation and editor export.
+- [ ] Customer acceptance of the cleaned photo appearance and placements after
+      updating the local preview; deployment acceptance remains separate.
 
 ## Selected timeline marker and tilted-image flicker (2026-10-19)
 

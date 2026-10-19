@@ -1,11 +1,11 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
 
-Schema v5. Editor contracts reviewed on 2026-10-18; presentation correction
-and browser acceptance are tracked in `plan.md`.
+Schema v5. Editor contracts reviewed on 2026-10-19; presentation acceptance
+is tracked in `plan.md`.
 
 ## Query parameters
 
@@ -98,6 +98,13 @@ Notes:
   composition. Explicit `rooms` are user-controlled; unplaced works stay hidden
   unless `fallbacks.autoPlaceUnmapped` enables automatic extra rooms. Legacy
   files without a room list retain automatic overflow.
+- Optional `galleryRoomViews` entries provide full-screen photo scenes in the
+  inspection gallery. Each entry stores an ID/name, a `Backgrounds/` image path
+  with its source dimensions, a normalized four-corner `wallQuad`, `wallAspect`,
+  and normalized artwork placement (`u`, `v`, `height`). The gallery shows the
+  currently selected artwork and lets visitors switch works and room photos.
+  Room-view settings are preserved by editor export/save; unlike museum wall
+  geometry, they are currently configured in `museum-hub.json`.
 - Automatic side-wall fallback placement must retain at least 0.35 m in the
   calibrated wall model and 4.00 m from its front corner. Shipping regression
   checks additionally require 12 px against the photographed doorway reveal and

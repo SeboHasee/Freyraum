@@ -1,5 +1,20 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-19 (selected timeline marker and rotating highlights).
+> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
+
+## 2026-10-19 — Photographic inspection room view
+
+- The room photos contain their own dominant paintings. Initial guessed masks
+  missed them, especially in `Wohnraum.png`; locate the actual central picture
+  region from the source pixels before producing derivatives. Keep the supplied
+  originals unchanged and assert the cleaned region remains free of saturated
+  painting pixels.
+- The two room images have different source aspect ratios, so `object-fit: cover`
+  must be paired with identical centered-cover math when projecting artwork.
+  Use the configured normalized `wallQuad` and wall aspect to preserve artwork's
+  natural ratio at desktop and portrait viewport sizes.
+- Keep the inspection-room display separate from `MainMuseumHub`: its overlay
+  follows the gallery's selected artwork, while editor export and shared save
+  validation must preserve and validate the room-photo configuration.
 
 ## 2026-10-19 — Follow-up: tilted-artwork flicker persists
 

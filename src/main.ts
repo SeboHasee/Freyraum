@@ -1198,10 +1198,14 @@ async function main(): Promise<void> {
   galleryRoomView = new GalleryRoomView(
     app,
     museumHubResolution.galleryRoomViews,
-    () => galleryRoomView?.setVisible(false),
-    (visible) => topbar.setRoomViewActive(visible)
+    () => {
+      galleryRoomView?.setVisible(false);
+      topbar.roomViewBtn.focus({ preventScroll: true });
+    },
+    (visible) => topbar.setRoomViewActive(visible),
+    (direction) => galleryManager.navigate(direction)
   );
-  galleryRoomView.setArtwork(artworks[galleryManager.index] ?? null);
+  galleryRoomView.setArtwork(artworks[galleryManager.index] ?? null, artworks.length > 1);
   topbar.setRoomViewAvailable(museumHubResolution.galleryRoomViews.length > 0);
   topbar.onRoomViewClick = () => galleryRoomView?.toggle();
   museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset, museumArtworks);
@@ -2052,7 +2056,7 @@ async function main(): Promise<void> {
       alignPage: false,
       source: 'gallery-navigate',
     });
-    galleryRoomView?.setArtwork(artworks[index] ?? null);
+    galleryRoomView?.setArtwork(artworks[index] ?? null, artworks.length > 1);
     diagnostics.info('gallery', 'navigate', 'Artwork changed', {
       index,
       artworkId: artworks[index]?.id,

@@ -4356,6 +4356,9 @@ export class MainMuseumHub {
       }),
       fallbacks: { ...this.resolution.fallbacks, autoPlaceUnmapped: this.autoPlaceUnmappedSetting },
       slotsPerPage: this.resolution.slotsPerPage,
+      ...(this.resolution.galleryRoomViews.length > 0
+        ? { galleryRoomViews: this.resolution.galleryRoomViews }
+        : {}),
       rooms: this.resolution.rooms.map((room) => (room.name ? { id: room.id, name: room.name } : { id: room.id })),
       slots: this.slotViews.map(({ slot }) => ({
         id: slot.id,

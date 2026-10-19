@@ -1,5 +1,17 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-19 (selected timeline marker and rotating highlights).
+> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
+
+## Unreleased — photographic inspection rooms (2026-10-19)
+
+- Add a full-screen bedroom/living-room photo view in the inspection gallery.
+  It displays one selected artwork at a time, supports room and artwork
+  navigation, and preserves native artwork aspect while projecting into the
+  photographed painting area.
+- Remove the dominant existing paintings from derived room-photo assets without
+  changing the original customer photos; verify the cleaned regions with a
+  focused PNG-pixel regression.
+- Preserve room-view configuration through placement-editor exports and reject
+  saves that refer to missing room-photo backgrounds.
 
 ## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
 

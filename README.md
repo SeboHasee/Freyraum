@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -32,10 +32,19 @@ save/export blocking, editable wall quads and compatible fixed 3D models) are
 the same in all three; see
 `ARCHITECTURE_MAP.md` → "Deterministic curator editor".
 
+## Inspect in a photo room
+
+In the inspection gallery, choose **Raumansicht** to display the selected
+artwork in the bedroom or living-room photograph. The photo fills the screen;
+room controls switch scenes, and previous/next controls change the single
+displayed artwork. `customer-artworks/museum-hub.json` owns the room photo and
+placement data; the original customer photos remain unchanged.
+
 ## Current project state
 
 - The museum and editor share photograph-backed, calibrated DOM artwork;
-  the inspection gallery uses WebGL (WebGPU is opt-in probe mode only).
+  the inspection gallery uses WebGL, with an optional full-screen photographic
+  room view for one selected artwork (WebGPU is opt-in probe mode only).
 - Resilient startup: the real renderer is attempted directly with preferred,
   compatibility, then battery-safe attributes. Failed partial contexts are
   released; no separate detection context is retained.

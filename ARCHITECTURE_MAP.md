@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -53,6 +53,10 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     slot state, offline `file://` hub source preference/decode deadlines for
     local customer preview reliability, and read-only geometry/source
     diagnostics overlay
+  - `GalleryRoomView`: optional inspection-gallery overlay that covers the
+    viewport with a configured room photograph and projects one selected artwork
+    into its normalized wall quad; its room and artwork controls follow gallery
+    selection without changing the museum's separate photo-backed presentation.
 
 ## Current hub-layout acceptance boundary
 

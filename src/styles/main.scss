@@ -303,8 +303,39 @@ canvas {
   cursor: pointer;
 }
 
+.gallery-room-view__artwork-controls {
+  position: absolute;
+  inset: auto 0 calc(var(--safe-bottom) + 24px);
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.gallery-room-view__artwork-nav {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 32%);
+  border-radius: 50%;
+  background: rgb(18 23 27 / 82%);
+  color: #fff;
+  box-shadow: var(--shadow-medium);
+  font: inherit;
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.gallery-room-view__artwork-nav[hidden] {
+  display: none;
+}
+
 .gallery-room-view__select:focus-visible,
-.gallery-room-view__close:focus-visible {
+.gallery-room-view__close:focus-visible,
+.gallery-room-view__artwork-nav:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
