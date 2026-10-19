@@ -205,21 +205,48 @@ try {
   await waitFor("document.querySelector('#app').dataset.experience === 'gallery'", 30_000);
   const roomEntry = await evaluate(`(() => {
     const button = document.querySelector('.topbar__room-view-btn');
-    return { label: button.textContent.trim(), pressed: button.getAttribute('aria-pressed'),
-      background: getComputedStyle(button).backgroundColor };
+    const label = [...button.querySelectorAll('span')].find((span) => getComputedStyle(span).display !== 'none')?.textContent.trim();
+    return { label, pressed: button.getAttribute('aria-pressed'),
+      emphasis: getComputedStyle(button).borderColor };
   })()`);
   assert.equal(roomEntry.pressed, 'false', 'room-view entry exposes its inactive state');
   assert.ok(roomEntry.label.includes('Fotoraum'), 'room-view entry has a recognizable visible label');
+  const entryModes = await evaluate(`(() => {
+    const button = document.querySelector('.topbar__room-view-btn');
+    const root = document.documentElement;
+    const oldChrome = root.dataset.chromeMode;
+    const oldPresentation = root.dataset.presentation;
+    root.dataset.chromeMode = 'clean';
+    const cleanDisplay = getComputedStyle(button).display;
+    root.dataset.chromeMode = 'visible';
+    const visibleDisplay = getComputedStyle(button).display;
+    root.dataset.presentation = 'on';
+    const presentationDisplay = getComputedStyle(button).display;
+    root.dataset.presentation = oldPresentation ?? '';
+    root.dataset.chromeMode = oldChrome ?? '';
+    root.dataset.layoutTier = 'phone-portrait';
+    const shortLabelVisible = getComputedStyle(button.querySelector('.topbar__back-btn-label--short')).display !== 'none';
+    root.dataset.layoutTier = '';
+    const rect = button.getBoundingClientRect();
+    return { cleanDisplay, visibleDisplay, presentationDisplay, shortLabelVisible, width: rect.width };
+  })()`);
+  assert.ok(
+    [entryModes.cleanDisplay, entryModes.visibleDisplay, entryModes.presentationDisplay].every((display) => display !== 'none'),
+    'primary room-view entry remains discoverable in clean, visible-chrome, and presentation modes'
+  );
+  assert.equal(entryModes.shortLabelVisible, true, 'room-view entry keeps a visible label on compact phones');
+  assert.ok(entryModes.width > 0, 'primary room-view entry has a visible touch target');
   await evaluate("document.querySelector('.topbar__room-view-btn').click()");
   await waitFor("!document.querySelector('.gallery-room-view').hidden", 5000);
   const activeRoomEntry = await evaluate(`(() => {
     const button = document.querySelector('.topbar__room-view-btn');
-    return { label: button.textContent.trim(), pressed: button.getAttribute('aria-pressed'),
-      background: getComputedStyle(button).backgroundColor };
+    const label = [...button.querySelectorAll('span')].find((span) => getComputedStyle(span).display !== 'none')?.textContent.trim();
+    return { label, pressed: button.getAttribute('aria-pressed'),
+      emphasis: getComputedStyle(button).borderColor };
   })()`);
   assert.equal(activeRoomEntry.pressed, 'true', 'room-view toggle exposes its active state');
   assert.equal(activeRoomEntry.label, 'Fotoraum aktiv', 'active toggle exposes the active room-view state');
-  assert.notEqual(activeRoomEntry.background, roomEntry.background, 'active room-view control has a distinct visual state');
+  assert.notEqual(activeRoomEntry.emphasis, roomEntry.emphasis, 'active room-view control has a distinct visual state');
   const controls = await evaluate(`(() => {
     const root = document.querySelector('.gallery-room-view');
     return {
@@ -259,6 +286,15 @@ try {
     utilityBounds.left >= 0 && utilityBounds.top >= 0
       && utilityBounds.right <= utilityBounds.viewport[0] && utilityBounds.bottom <= utilityBounds.viewport[1],
     `room utility controls remain within the viewport (${JSON.stringify(utilityBounds)})`
+  );
+  assert.ok(
+    await evaluate(`(() => {
+      const bounds = (selector) => document.querySelector(selector).getBoundingClientRect();
+      const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+      return !overlaps(bounds('.gallery-room-view__header'), bounds('.gallery-room-view__utilities'))
+        && !overlaps(bounds('.timeline'), bounds('.gallery-room-view__zoom-controls'));
+    })()`),
+    'room header/utilities and timeline/zoom groups do not collide'
   );
   assert.ok(
     await evaluate(`(() => {
@@ -363,6 +399,7 @@ try {
       const timeline = root.querySelector('.timeline').getBoundingClientRect();
       const zoom = root.querySelector('.gallery-room-view__zoom-controls').getBoundingClientRect();
       const utilities = root.querySelector('.gallery-room-view__utilities').getBoundingClientRect();
+      const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
       return {
         viewport: [innerWidth, innerHeight],
         art: { x: art.x, y: art.y, width: art.width, height: art.height },
@@ -370,9 +407,10 @@ try {
         timeline: { x: timeline.x, y: timeline.y, width: timeline.width, height: timeline.height },
         zoom: { x: zoom.x, y: zoom.y, width: zoom.width, height: zoom.height },
         utilities: { x: utilities.x, y: utilities.y, width: utilities.width, height: utilities.height },
+        headerUtilitiesOverlap: overlaps(controls, utilities),
+        timelineZoomOverlap: overlaps(timeline, zoom),
       };
     })()`);
-    const art = layout.art;
     const controls = layout.controls;
     const utilities = layout.utilities;
     for (const [name, bounds] of Object.entries({ controls, timeline: layout.timeline, zoom: layout.zoom })) {
@@ -383,6 +421,10 @@ try {
     assert.ok(utilities.x >= 0 && utilities.y >= 0
       && utilities.x + utilities.width <= width && utilities.y + utilities.height <= height,
     `${roomId} utility controls remain on screen at ${width}x${height}`);
+    assert.equal(layout.headerUtilitiesOverlap, false,
+      `${roomId} header and utility groups do not collide at ${width}x${height}`);
+    assert.equal(layout.timelineZoomOverlap, false,
+      `${roomId} timeline and zoom groups do not collide at ${width}x${height}`);
     await capture(`room-${roomId}-${width}x${height}.png`);
     console.log(`✓ ${roomId} controls clear at ${width}x${height}`);
     if (width <= 420 || height <= 420) {
@@ -460,7 +502,7 @@ try {
     artworkDimensions,
     'camera zoom does not change the artwork dimensions in its wall coordinate space'
   );
-  const wheelFocus = { x: 32, y: 64 };
+  const wheelFocus = await evaluate(`({ x: Math.round(innerWidth / 2), y: Math.round(innerHeight / 2) })`);
   const beforeWheel = await readArtworkScreenCenter();
   const wheelDeltaY = -100;
   const expectedWheelScale = beforeWheel.scale * Math.exp(-wheelDeltaY * 0.001);
@@ -727,6 +769,14 @@ try {
     await evaluate("document.querySelector('.gallery-room-view').hidden && document.activeElement === document.querySelector('.topbar__room-view-btn')"),
     true,
     'close returns to the gallery and restores focus to the room-view toggle'
+  );
+  assert.equal(
+    await evaluate(`(() => {
+      const timeline = document.querySelector('#app > .timeline');
+      return Boolean(timeline) && timeline.querySelector('.timeline__thumb[data-index="0"]')?.getAttribute('aria-current') === 'true';
+    })()`),
+    true,
+    'closing the room view restores the same selected timeline to its gallery parent'
   );
   assert.equal(
     await evaluate("document.querySelector('#app > .prefs') !== null && document.querySelector('#app > .fullscreen-btn') !== null"),

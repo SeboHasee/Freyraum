@@ -1,6 +1,18 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
+## Unreleased — photo-room control consistency (2026-10-19)
+
+- Replace the photo-room's separate artwork arrows and title with the shared
+  gallery timeline, preserving one active artwork selection across both views.
+- Match the room return action, grouped zoom/reset controls, and contextual help
+  trigger to the gallery; make the room-view entry a prominent, labeled action.
+- Keep room selection separate from artwork selection and reuse shared audio,
+  settings, and fullscreen controls in the photo-room utility group.
+- Extend responsive browser coverage for shared timeline state, focus order,
+  control bounds, help context, and return-to-gallery focus restoration without
+  changing photo projection or camera behavior.
+
 ## Unreleased — photographic inspection rooms (2026-10-19)
 
 - Add a full-screen bedroom/living-room photo view in the inspection gallery.

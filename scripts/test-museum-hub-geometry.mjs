@@ -108,7 +108,12 @@ assert.match(museumHubSource, /appendChild\(view\.shadowPath\)/, 'shadow paths f
 assert.match(museumHubSource, /view\.shadowPath\.remove\(\)/, 'removed editor slots dispose of their shadow path');
 assert.match(scss, /\.museum-hub__shadow-path\s*\{[^}]*drop-shadow\([^}]*drop-shadow\([^}]*drop-shadow/s);
 assert.doesNotMatch(scss, /\.museum-hub__artwork\s*\{[^}]*filter\s*:/s, 'the clipped artwork hit area does not own the shadow');
-assert.match(scss, /\.timeline\s*\{[\s\S]*?width:\s*min\(1180px,[\s\S]*?--timeline-progress/);
+assert.match(scss, /\.timeline\s*\{[\s\S]*?width:\s*min\(1180px,/);
+assert.match(
+  scss,
+  /\.timeline__thumb\s*\{[\s\S]*?&\.is-active\s*\{[\s\S]*?opacity:\s*1;/,
+  'timeline selected artwork has a distinct active state'
+);
 assert.match(scss, /\.timeline__list\s*\{[\s\S]*?justify-content:\s*space-evenly;[\s\S]*?flex:\s*1 1 0;[\s\S]*?width:\s*0;[\s\S]*?min-width:\s*0/);
 assert.match(scss, /\.timeline\.timeline--scrollable \.timeline__list\s*\{\s*justify-content:\s*flex-start/);
 assert.match(scss, /\.timeline\.timeline--fits \.timeline__arrow\s*\{\s*display:\s*none/);

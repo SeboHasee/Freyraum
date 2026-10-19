@@ -393,6 +393,16 @@ canvas {
   z-index: 1002;
 }
 
+.gallery-room-view .zoom-controls__btn:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.gallery-room-view .zoom-controls__btn:disabled:hover {
+  background: rgba(255, 255, 255, 0.55);
+  transform: none;
+}
+
 .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork,
 .gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
   transform:
@@ -404,15 +414,6 @@ canvas {
     drop-shadow(1px 2px 3px rgb(15 20 24 / 48%))
     drop-shadow(5px 8px 12px rgb(15 20 24 / 30%))
     drop-shadow(10px 15px 22px rgb(15 20 24 / 19%));
-}
-
-.gallery-room-view__icon {
-  display: grid;
-  width: 1em;
-  height: 1em;
-  place-items: center;
-  font-family: Arial, sans-serif;
-  line-height: 1;
 }
 
 .gallery-room-view__status {

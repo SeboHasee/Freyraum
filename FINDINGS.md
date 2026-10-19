@@ -1,6 +1,20 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-19 (photographic inspection rooms).
 
+## 2026-10-19 — Shared gallery controls in the photo room
+
+- Move the existing timeline DOM node into the photo-room overlay while it is
+  visible, then restore it to its original parent. This keeps one selection
+  model and allows gallery navigation and room artwork to stay synchronized.
+- Reparent the existing help trigger and shared utility controls rather than
+  creating parallel controls; select help instructions from the active view.
+- Fixed-position timeline and zoom elements retain their shared gallery CSS.
+  Verify the combined header, utilities, timeline, and zoom bounds at short
+  landscape as well as portrait and desktop sizes.
+- The room photograph and projected artwork continue to share only the
+  established room-scene camera transform; moving controls does not alter
+  projective registration.
+
 ## 2026-10-19 — Photographic inspection room view
 
 - Keep the inspection room's audio, settings, and fullscreen widgets as the same
@@ -20,9 +34,10 @@
   while preserving the low tilt bound, reduced-motion behavior, and eased return.
 - Help content must follow the active view: room-view guidance covers its own
   zoom, pan, reset, exit, and touch gestures rather than claiming gallery shortcuts.
-- Short-landscape photo controls should select a viewport corner clear of both
-  the current projected artwork and the shared utilities; fixed bottom placement
-  overlaps paintings whose authored wall position is near the lower edge.
+- The previous short-landscape toolbar corner-placement logic was specific to
+  the old standalone toolbar. The gallery-aligned header/timeline/zoom layout
+  replaces that path, so regression checks should validate each new control
+  group's viewport bounds and collisions.
 - `npm run validate:museum-hub` currently stops at
   `scripts/test-museum-hub-geometry.mjs:105`: its timeline assertion requires
   `--timeline-progress`, which is absent from the current stylesheet. The new hub

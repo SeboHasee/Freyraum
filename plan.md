@@ -5,12 +5,28 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
+## Photo-room control consistency (2026-10-19)
+
+- [x] Use the gallery timeline as the photo-room artwork selector, preserving one
+      shared active artwork state and selection indicators.
+- [x] Add a prominent gallery-style return action and keep the room selector
+      visually distinct from artwork selection.
+- [x] Match gallery zoom/reset controls and reuse its contextual help trigger and
+      shared audio, settings, and fullscreen controls.
+- [x] Make the photo-room entry a primary action with a meaningful compact-phone
+      label and a clear active state.
+- [x] Reassess desktop, tablet, portrait phone, and short-landscape placement;
+      ensure timeline and zoom controls remain within the viewport.
+- [x] Extend browser checks for timeline synchronization, focus order, responsive
+      bounds, contextual help, and shared control reparenting.
+- [x] Preserve the existing photo camera, artwork projection, and room switching.
+
 ## Photographic inspection rooms (2026-10-19)
 
 - [x] Add a full-screen room-photo mode with a room selector and one selected
       gallery artwork at a time.
-- [x] Add previous/next artwork controls that stay synchronized with normal
-      gallery navigation and preserve the artwork's source aspect ratio.
+- [x] Use the shared gallery timeline for artwork selection, synchronized with
+      normal gallery navigation and preserving the artwork's source aspect ratio.
 - [x] Remove the dominant existing paintings from derived room backgrounds;
       preserve the supplied originals and correct the initial missed masks.
 - [x] Use centered `cover` geometry for the photograph and its projective artwork
@@ -19,9 +35,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       referenced background files in shared publish rules.
 - [x] Stage configured room photos during Update Gallery and report missing
       sources so the local file preview works without a developer build.
-- [x] Keep the room overlay and fixed controls above the gallery; place controls
-      outside the artwork and verify clearance at desktop, tablet, phone and
-      short-landscape sizes.
+- [x] Keep the room overlay and fixed controls above the gallery; verify room
+      controls remain on-screen at desktop, tablet, phone and short-landscape sizes.
 - [x] Add bounded photo pan, wheel/pinch zoom, reset and keyboard controls while
       keeping the projected artwork anchored to the photographed wall. True 3D
       movement remains out of scope for single-photo assets.

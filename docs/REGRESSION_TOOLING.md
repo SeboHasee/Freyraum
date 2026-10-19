@@ -26,14 +26,14 @@ in the actual generated placement editor.
 For browser coverage, run `npm run import:artworks && npm run build`, then
 `FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
 This opens the generated root `index.html` over `file://` and verifies both
-photos decode, the room controls clear the artwork across desktop/tablet/phone/
-short-landscape sizes, and photo pan, zoom, pinch, reset, keyboard zoom, close,
-and focus restoration work. It checks artwork-centered button and wheel zoom in
-both rooms, pan and camera limits, expanded mouse-proximity reach with eased
-return, reduced-motion behavior, the distinct room-view control state, and
-context-specific keyboard help. Short-landscape controls are tested against both
-projected artwork positions, with the toolbar moved to an available corner when
-its default position would cover a painting. At the initial museum hub, it checks that the
+photos decode, the shared gallery timeline moves into the room overlay and
+selection stays synchronized, and the return action restores the timeline and
+focus. It checks room selection, gallery-style zoom/reset controls, help context,
+shared utility reparenting, and header/timeline/zoom bounds at desktop, tablet,
+portrait phone, and short-landscape sizes. Photo pan, zoom, pinch, reset,
+keyboard zoom, camera limits, artwork-centered button and wheel zoom, expanded
+mouse-proximity reach, eased return, and reduced-motion behavior remain covered.
+At the initial museum hub, it checks that the
 non-interactive SVG shadow layer follows the projected artwork without changing
 the clipped button hit area. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub and
 room-view browser captures for manual review at the responsive breakpoints. The
