@@ -1205,18 +1205,23 @@ async function main(): Promise<void> {
     },
     (visible) => {
       topbar.setRoomViewActive(visible);
-      const roomUtilities = [audioControls.element, preferencesPanel.element, fullscreenButton.element];
+      const roomUtilities = [
+        audioControls.element,
+        preferencesPanel.element,
+        fullscreenButton.element,
+        topbar.helpBtn,
+      ];
       if (visible) {
         galleryRoomView?.setUtilityControls(roomUtilities);
         preferencesPanel.setEmbedded(true);
       } else {
         app.append(fullscreenButton.element, preferencesPanel.element, audioControls.element);
+        topbar.restoreHelpButton();
         preferencesPanel.setEmbedded(false);
       }
-    },
-    (direction) => galleryManager.navigate(direction),
-    (opener, context) => keyboardHelp.open(opener, context)
+    }
   );
+  galleryRoomView.setTimelineElement(timeline.element);
   galleryRoomView.setArtwork(
     artworks[galleryManager.index] ?? null,
     artworks.length > 1,
@@ -1336,7 +1341,10 @@ async function main(): Promise<void> {
   const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
   canvasInteraction.setEnabled(false);
   keyboardNav.setEnabled(false);
-  topbar.onHelpClick = () => keyboardHelp.open(topbar.helpBtn);
+  topbar.onHelpClick = () => keyboardHelp.open(
+    topbar.helpBtn,
+    galleryRoomView?.isVisible ? 'room' : 'gallery'
+  );
   // The topbar info button is a secondary discovery path for the auto-hidden
   // information panel, so users are not dependent on edge affordances.
   topbar.onInfoClick = () => chromeVisibility.forceReveal('info-panel');

@@ -45,18 +45,14 @@ export class GalleryRoomView {
   private readonly background: HTMLImageElement;
   private readonly artworkFrame: HTMLDivElement;
   private readonly artworkImage: HTMLImageElement;
-  private readonly controls: HTMLDivElement;
-  private readonly artworkLabel: HTMLElement;
   private readonly status: HTMLElement;
   private readonly viewSelect: HTMLSelectElement;
   private readonly zoomOutButton: HTMLButtonElement;
   private readonly zoomInButton: HTMLButtonElement;
   private readonly resetButton: HTMLButtonElement;
-  private readonly previousArtworkButton: HTMLButtonElement;
-  private readonly nextArtworkButton: HTMLButtonElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly utilityControls: HTMLDivElement;
-  private readonly helpButton: HTMLButtonElement;
+  private readonly timelineHost: HTMLDivElement;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly pointers = new Map<number, PhotoPointer>();
   private readonly motionPreference: MediaQueryList;
@@ -72,6 +68,10 @@ export class GalleryRoomView {
   private cameraAnimationFrame = 0;
   private cameraAnimationTargetScale: number | null = null;
   private gesture: CameraGesture | null = null;
+  private timelineElement: HTMLElement | null = null;
+  private timelineOriginalParent: HTMLElement | null = null;
+  private timelineOriginalNextSibling: Node | null = null;
+  private timelineOriginalLabel: string | null = null;
   private enabled = false;
   private visible = false;
   private disposed = false;
@@ -80,9 +80,7 @@ export class GalleryRoomView {
     container: HTMLElement,
     views: readonly GalleryRoomViewConfig[],
     private readonly onClose: () => void,
-    private readonly onVisibilityChange: (visible: boolean) => void,
-    private readonly onNavigateArtwork: (direction: -1 | 1) => void,
-    private readonly onHelp: (opener: HTMLElement, context: 'room') => void
+    private readonly onVisibilityChange: (visible: boolean) => void
   ) {
     this.views = views;
     this.motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -135,17 +133,25 @@ export class GalleryRoomView {
     artworkFrame.appendChild(artworkImage);
     scene.append(background, artworkFrame);
 
-    const controls = document.createElement('div');
-    controls.className = 'gallery-room-view__controls';
-    controls.setAttribute('role', 'group');
-    controls.setAttribute('aria-label', 'Raumansicht-Steuerung');
-    this.controls = controls;
+    const header = document.createElement('header');
+    header.className = 'gallery-room-view__header';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'topbar__back-btn gallery-room-view__back';
+    close.setAttribute('aria-label', 'Zurück zur Galerie');
+    close.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+      <span class="topbar__back-btn-label--full">Zurück zur Galerie</span>
+      <span class="topbar__back-btn-label--short">Galerie</span>
+    `;
+    close.addEventListener('click', this.onClose);
+    this.closeButton = close;
 
-    const roomControls = document.createElement('div');
+    const roomControls = document.createElement('label');
     roomControls.className = 'gallery-room-view__room-controls';
-    const label = document.createElement('label');
-    label.className = 'gallery-room-view__label';
-    label.textContent = 'Raum';
+    const roomLabel = document.createElement('span');
+    roomLabel.className = 'gallery-room-view__room-label';
+    roomLabel.textContent = 'Raum';
     const select = document.createElement('select');
     select.className = 'gallery-room-view__select';
     select.setAttribute('aria-label', 'Raumansicht auswählen');
@@ -154,78 +160,40 @@ export class GalleryRoomView {
       if (selected) this.setView(selected.id);
     });
     this.viewSelect = select;
-    roomControls.append(label, select);
-
-    const artworkControls = document.createElement('div');
-    artworkControls.className = 'gallery-room-view__artwork-controls';
-    artworkControls.setAttribute('role', 'group');
-    artworkControls.setAttribute('aria-label', 'Kunstwerk auswählen');
-    const artworkInfo = document.createElement('div');
-    artworkInfo.className = 'gallery-room-view__artwork-info';
-    const artworkHeading = document.createElement('span');
-    artworkHeading.className = 'gallery-room-view__group-label';
-    artworkHeading.textContent = 'Kunstwerk';
-    const artworkLabel = document.createElement('span');
-    artworkLabel.className = 'gallery-room-view__artwork-label';
-    artworkLabel.textContent = 'Kein Kunstwerk ausgewählt';
-    this.artworkLabel = artworkLabel;
-    artworkInfo.append(artworkHeading, artworkLabel);
-    const previousArtwork = this.createControlButton('gallery-room-view__artwork-nav', 'Vorheriges Kunstwerk anzeigen', '‹');
-    previousArtwork.addEventListener('click', () => this.onNavigateArtwork(-1));
-    this.previousArtworkButton = previousArtwork;
-    const nextArtwork = this.createControlButton('gallery-room-view__artwork-nav', 'Nächstes Kunstwerk anzeigen', '›');
-    nextArtwork.addEventListener('click', () => this.onNavigateArtwork(1));
-    this.nextArtworkButton = nextArtwork;
-    artworkControls.append(previousArtwork, artworkInfo, nextArtwork);
-
-    const cameraControls = document.createElement('div');
-    cameraControls.className = 'gallery-room-view__camera-controls';
-    cameraControls.setAttribute('role', 'group');
-    cameraControls.setAttribute('aria-label', 'Fotoansicht einstellen');
-    const cameraHeading = document.createElement('span');
-    cameraHeading.className = 'gallery-room-view__group-label';
-    cameraHeading.textContent = 'Ansicht';
-    const zoomControls = document.createElement('div');
-    zoomControls.className = 'gallery-room-view__zoom-controls';
-    this.zoomOutButton = this.createControlButton('gallery-room-view__zoom-btn', 'Verkleinern', '−');
-    this.zoomOutButton.addEventListener('click', () => this.zoomBy(1 / 1.25));
-    this.resetButton = this.createControlButton('gallery-room-view__zoom-btn', 'Ansicht zurücksetzen', '⟲');
-    this.resetButton.addEventListener('click', () => this.resetCamera(true));
-    this.zoomInButton = this.createControlButton('gallery-room-view__zoom-btn', 'Vergrößern', '+');
-    this.zoomInButton.addEventListener('click', () => this.zoomBy(1.25));
-    zoomControls.append(this.zoomOutButton, this.resetButton, this.zoomInButton);
-    cameraControls.append(cameraHeading, zoomControls);
-
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'gallery-room-view__close';
-    close.textContent = 'Zurück zur Galerie';
-    close.setAttribute('aria-label', 'Fotografische Raumansicht schließen und zur Galerie zurückkehren');
-    close.addEventListener('click', this.onClose);
-    this.closeButton = close;
-
-    controls.append(roomControls, artworkControls, cameraControls, close);
+    roomControls.append(roomLabel, select);
+    header.append(close, roomControls);
 
     const utilityControls = document.createElement('div');
     utilityControls.className = 'gallery-room-view__utilities';
     utilityControls.setAttribute('role', 'group');
     utilityControls.setAttribute('aria-label', 'Weitere Galerieeinstellungen');
     this.utilityControls = utilityControls;
-    const helpButton = document.createElement('button');
-    helpButton.type = 'button';
-    helpButton.className = 'gallery-room-view__help';
-    helpButton.setAttribute('aria-label', 'Bedienung im Fotoraum anzeigen');
-    helpButton.innerHTML = '<span class="gallery-room-view__help-icon" aria-hidden="true">?</span><span>Hilfe</span>';
-    helpButton.addEventListener('click', () => this.onHelp(helpButton, 'room'));
-    this.helpButton = helpButton;
-    utilityControls.appendChild(helpButton);
+    const zoomControls = document.createElement('div');
+    zoomControls.className = 'zoom-controls gallery-room-view__zoom-controls';
+    zoomControls.setAttribute('role', 'group');
+    zoomControls.setAttribute('aria-label', 'Zoom-Steuerung für den Fotoraum');
+    this.zoomInButton = this.createControlButton('zoom-controls__btn', 'Vergrößern', '＋');
+    this.zoomInButton.addEventListener('click', () => this.zoomBy(1.25));
+    this.zoomOutButton = this.createControlButton('zoom-controls__btn', 'Verkleinern', '−');
+    this.zoomOutButton.addEventListener('click', () => this.zoomBy(1 / 1.25));
+    this.resetButton = this.createControlButton(
+      'zoom-controls__btn zoom-controls__btn--reset',
+      'Fotoansicht zurücksetzen',
+      '⟲'
+    );
+    this.resetButton.addEventListener('click', () => this.resetCamera(true));
+    zoomControls.append(this.zoomInButton, this.zoomOutButton, this.resetButton);
+
+    const timelineHost = document.createElement('div');
+    timelineHost.className = 'gallery-room-view__timeline-host';
+    this.timelineHost = timelineHost;
 
     const status = document.createElement('p');
     status.className = 'gallery-room-view__status';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     this.status = status;
-    root.append(scene, utilityControls, controls, status);
+    root.append(scene, header, utilityControls, timelineHost, zoomControls, status);
     container.appendChild(root);
 
     this.resizeObserver = typeof ResizeObserver === 'undefined'
@@ -264,7 +232,19 @@ export class GalleryRoomView {
   }
 
   setUtilityControls(controls: readonly HTMLElement[]): void {
-    this.utilityControls.replaceChildren(...controls, this.helpButton);
+    this.utilityControls.replaceChildren(...controls);
+  }
+
+  setTimelineElement(timeline: HTMLElement): void {
+    this.timelineElement = timeline;
+    this.timelineOriginalParent = timeline.parentElement;
+    this.timelineOriginalNextSibling = timeline.nextSibling;
+    this.timelineOriginalLabel = timeline.getAttribute('aria-label');
+    this.updateTimelinePlacement();
+  }
+
+  get isVisible(): boolean {
+    return this.visible;
   }
 
   toggle(): void {
@@ -281,21 +261,15 @@ export class GalleryRoomView {
     this.resetArtworkInteraction();
     this.artworkCenter = null;
     this.activeArtwork = artwork;
-    this.previousArtworkButton.hidden = !hasMultipleArtworks;
-    this.nextArtworkButton.hidden = !hasMultipleArtworks;
     this.useFallback = false;
     this.fallbackUrl = null;
     if (!artwork) {
       this.artworkFrame.hidden = true;
-      this.artworkLabel.textContent = 'Kein Kunstwerk ausgewählt';
       this.artworkImage.removeAttribute('src');
       return;
     }
     this.artworkFrame.hidden = false;
     const title = artwork.title || artwork.id;
-    this.artworkLabel.textContent = hasMultipleArtworks
-      ? `${artworkIndex + 1} / ${artworkCount} · ${title}`
-      : title;
     this.artworkFrame.setAttribute(
       'aria-label',
       `${artwork.alt || title}${hasMultipleArtworks ? `, ${artworkIndex + 1} von ${artworkCount}` : ''}`
@@ -312,11 +286,11 @@ export class GalleryRoomView {
     this.visible = visible && this.enabled && this.activeView !== null;
     this.element.hidden = !this.visible;
     this.element.setAttribute('aria-hidden', String(!this.visible));
+    this.updateTimelinePlacement();
     this.onVisibilityChange(this.visible);
     if (this.visible) {
       this.status.textContent = '';
       this.resetCamera();
-      this.positionShortLandscapeControls();
       this.closeButton.focus({ preventScroll: true });
     } else {
       this.pointers.clear();
@@ -371,7 +345,28 @@ export class GalleryRoomView {
     this.background.src = resolveBackgroundUrl(view.background.src);
     this.resetCamera(true);
     this.updateArtworkTransform();
-    this.positionShortLandscapeControls();
+  }
+
+  private updateTimelinePlacement(): void {
+    const timeline = this.timelineElement;
+    if (!timeline) return;
+    if (this.visible) {
+      timeline.classList.add('gallery-room-view__timeline');
+      timeline.setAttribute('aria-label', 'Kunstwerke im Fotoraum auswählen');
+      this.timelineHost.appendChild(timeline);
+      return;
+    }
+    timeline.classList.remove('gallery-room-view__timeline');
+    if (this.timelineOriginalLabel === null) timeline.removeAttribute('aria-label');
+    else timeline.setAttribute('aria-label', this.timelineOriginalLabel);
+    const parent = this.timelineOriginalParent;
+    if (parent) {
+      const nextSibling = this.timelineOriginalNextSibling;
+      parent.insertBefore(
+        timeline,
+        nextSibling?.parentNode === parent ? nextSibling : null
+      );
+    }
   }
 
   private applyCamera(): void {
@@ -428,7 +423,6 @@ export class GalleryRoomView {
     if (this.motionPreference.matches || document.documentElement.dataset['motion'] === 'reduced') {
       this.cameraAnimationTargetScale = null;
       this.setCamera(scale, offsetX, offsetY);
-      this.positionShortLandscapeControls();
       return;
     }
     const from = { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY };
@@ -446,7 +440,6 @@ export class GalleryRoomView {
       } else {
         this.cameraAnimationFrame = 0;
         this.cameraAnimationTargetScale = null;
-        this.positionShortLandscapeControls();
       }
     };
     this.cameraAnimationFrame = window.requestAnimationFrame(tick);
@@ -467,7 +460,6 @@ export class GalleryRoomView {
   private handleResize = (): void => {
     if (this.cameraAnimationTargetScale !== null && this.artworkCenter) {
       this.updateArtworkTransform();
-      this.positionShortLandscapeControls();
       const rect = this.element.getBoundingClientRect();
       const scale = this.cameraAnimationTargetScale;
       this.animateCamera(
@@ -478,60 +470,7 @@ export class GalleryRoomView {
       return;
     }
     this.applyCamera();
-    this.positionShortLandscapeControls();
   };
-
-  private positionShortLandscapeControls(): void {
-    const viewport = this.element.getBoundingClientRect();
-    if (!(viewport.width >= 600 && viewport.height <= 500)) {
-      for (const property of ['left', 'top', 'bottom', 'transform']) {
-        this.controls.style.removeProperty(property);
-      }
-      return;
-    }
-
-    const controls = this.controls.getBoundingClientRect();
-    const artwork = this.artworkFrame.hidden ? null : this.artworkFrame.getBoundingClientRect();
-    const utilities = this.utilityControls.getBoundingClientRect();
-    const safe = getComputedStyle(this.element);
-    const inset = (name: string): number => Number.parseFloat(safe.getPropertyValue(name)) || 0;
-    const margin = 12;
-    const left = inset('--safe-left') + margin;
-    const top = inset('--safe-top') + margin;
-    const right = viewport.width - inset('--safe-right') - margin - controls.width;
-    const bottom = viewport.height - inset('--safe-bottom') - margin - controls.height;
-    const candidates = [
-      { x: left, y: top },
-      { x: left, y: bottom },
-      { x: right, y: top },
-      { x: right, y: bottom },
-    ].filter(({ x, y }) =>
-      x >= 0 && y >= 0 && x + controls.width <= viewport.width && y + controls.height <= viewport.height
-    );
-    const overlaps = (x: number, y: number, obstacle: DOMRect): number => {
-      const horizontal = Math.max(
-        0,
-        Math.min(x + controls.width, obstacle.right + 8) - Math.max(x, obstacle.left - 8)
-      );
-      const vertical = Math.max(
-        0,
-        Math.min(y + controls.height, obstacle.bottom + 8) - Math.max(y, obstacle.top - 8)
-      );
-      return horizontal * vertical;
-    };
-    const placed = candidates
-      .map((candidate) => ({
-        ...candidate,
-        cost: (artwork ? overlaps(candidate.x, candidate.y, artwork) : 0)
-          + overlaps(candidate.x, candidate.y, utilities),
-      }))
-      .sort((first, second) => first.cost - second.cost)[0];
-    if (!placed) return;
-    this.controls.style.left = `${placed.x}px`;
-    this.controls.style.top = `${placed.y}px`;
-    this.controls.style.bottom = 'auto';
-    this.controls.style.transform = 'none';
-  }
 
   private updateArtworkTransform = (): void => {
     if (!this.activeView || !this.activeArtwork || !this.artworkImage.complete) return;
@@ -600,7 +539,6 @@ export class GalleryRoomView {
     if (!this.pointers.delete(event.pointerId)) return;
     if (this.scene.hasPointerCapture(event.pointerId)) this.scene.releasePointerCapture(event.pointerId);
     this.beginGesture();
-    if (this.pointers.size === 0) this.positionShortLandscapeControls();
   };
 
   private beginGesture(): void {
