@@ -621,9 +621,9 @@ export class GalleryRoomView {
 
   private onKeyDown = (event: KeyboardEvent): void => {
     if (!this.visible) return;
+    if (event.key === 'Escape' && this.element.querySelector('.prefs__panel:not([hidden])')) return;
     event.stopPropagation();
     if (event.key === 'Escape') {
-      if (this.element.querySelector('.prefs__panel:not([hidden])')) return;
       event.preventDefault();
       this.onClose();
       return;

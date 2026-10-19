@@ -172,11 +172,17 @@ try {
   assert.ok(controls.title.length > 0, 'menu identifies the selected artwork');
   const utilityBounds = await evaluate(`(() => {
     const rect = document.querySelector('.gallery-room-view__utilities').getBoundingClientRect();
-    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+    return {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      viewport: [innerWidth, innerHeight],
+    };
   })()`);
   assert.ok(
     utilityBounds.left >= 0 && utilityBounds.top >= 0
-      && utilityBounds.right <= innerWidth && utilityBounds.bottom <= innerHeight,
+      && utilityBounds.right <= utilityBounds.viewport[0] && utilityBounds.bottom <= utilityBounds.viewport[1],
     `room utility controls remain within the viewport (${JSON.stringify(utilityBounds)})`
   );
   await evaluate("document.querySelector('.gallery-room-view .prefs__trigger').click()");
