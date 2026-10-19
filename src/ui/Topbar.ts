@@ -68,11 +68,11 @@ export class Topbar {
     this.roomViewBtn = document.createElement('button');
     this.roomViewBtn.type = 'button';
     this.roomViewBtn.className = 'topbar__chrome-btn topbar__room-view-btn';
-    this.roomViewBtn.setAttribute('aria-label', 'Fotografische Raumansicht anzeigen');
+    this.roomViewBtn.setAttribute('aria-label', 'Fotoraum mit Wandbildern öffnen');
     this.roomViewBtn.setAttribute('aria-pressed', 'false');
     this.roomViewBtn.innerHTML = `
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9 21v-6h6v6"/></svg>
-      <span class="topbar__chrome-btn-label">Raumansicht</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+      <span class="topbar__chrome-btn-label">Fotoraum</span>
     `;
     this.roomViewBtn.hidden = true;
     this.roomViewBtn.addEventListener('click', () => this.onRoomViewClick?.());
@@ -108,10 +108,10 @@ export class Topbar {
     this.roomViewBtn.setAttribute('aria-pressed', String(active));
     this.roomViewBtn.setAttribute(
       'aria-label',
-      active ? 'Zurück zur normalen Galerieansicht' : 'Fotografische Raumansicht anzeigen'
+      active ? 'Zurück zur Galerieansicht' : 'Fotoraum mit Wandbildern öffnen'
     );
     this.roomViewBtn.querySelector('.topbar__chrome-btn-label')!.textContent =
-      active ? 'Galerieansicht' : 'Raumansicht';
+      active ? 'Galerie' : 'Fotoraum';
   }
 
   dispose(): void {

@@ -2,14 +2,38 @@ import { createScopedDiagnostics } from '../utils/Diagnostics';
 
 const log = createScopedDiagnostics('KeyboardHelp');
 
-const SHORTCUTS: Array<[string, string]> = [
-  ['←  →', 'Nächstes / vorheriges Bild'],
-  ['+  −', 'Heran-/Herauszoomen'],
-  ['R', 'Ansicht zurücksetzen'],
-  ['F', 'Vollbild ein-/ausschalten'],
-  ['Esc', 'Dialog schließen'],
-  ['?', 'Diese Hilfe anzeigen'],
-];
+type HelpContext = 'gallery' | 'room';
+
+const SHORTCUTS: Record<HelpContext, { title: string; entries: Array<[string[], string]>; hint: string }> = {
+  gallery: {
+    title: 'Tastaturkürzel',
+    entries: [
+      [['←', '→'], 'Vorheriges / nächstes Bild'],
+      [['+', '='], 'Heranzoomen'],
+      [['-', '_'], 'Herauszoomen'],
+      [['0', 'R'], 'Ansicht zurücksetzen'],
+      [['F'], 'Vollbild ein-/ausschalten'],
+      [['Esc'], 'Dialog schließen oder zum Museum zurückkehren'],
+      [['?'], 'Diese Hilfe anzeigen'],
+    ],
+    hint: 'Mausbewegung zum unteren oder linken Bildschirmrand enthüllt Zeitleiste, Navigation und Bildinformationen.',
+  },
+  room: {
+    title: 'Bedienung im Fotoraum',
+    entries: [
+      [['+', '='], 'Heranzoomen, auf das Kunstwerk zentriert'],
+      [['-'], 'Herauszoomen'],
+      [['0', 'Home'], 'Fotoansicht zurücksetzen'],
+      [['Esc'], 'Zur Galerie zurückkehren'],
+      [['🖱 Ziehen'], 'Foto verschieben'],
+      [['🖱 ↕'], 'Mit dem Mausrad auf das Kunstwerk zoomen'],
+      [['Doppelklick'], 'Fotoansicht zurücksetzen'],
+      [['Zwei Finger'], 'Auf Touchscreens zoomen und verschieben'],
+      [['Tab'], 'Zwischen den Raumansicht-Steuerelementen wechseln'],
+    ],
+    hint: 'Im Einstellungsdialog schließt Escape zuerst den Dialog.',
+  },
+};
 
 export class KeyboardHelp {
   private readonly dialog: HTMLElement;
@@ -44,14 +68,9 @@ export class KeyboardHelp {
       <div class="keyboard-help__panel">
         <h2 id="keyboard-help-title" class="keyboard-help__title">Tastaturkürzel</h2>
         <table class="keyboard-help__table">
-          <tbody>
-            ${SHORTCUTS.map(
-              ([key, desc]) =>
-                `<tr><td><kbd class="keyboard-help__key">${key}</kbd></td><td>${desc}</td></tr>`
-            ).join('')}
-          </tbody>
+          <tbody></tbody>
         </table>
-        <p class="keyboard-help__hint">Mausbewegung zum unteren oder linken Bildschirmrand enthüllt Zeitleiste, Navigation und Bildinformationen.</p>
+        <p class="keyboard-help__hint"></p>
         <button class="keyboard-help__close nav-btn" aria-label="Hilfe schließen">✕</button>
       </div>`;
     el.querySelector('.keyboard-help__close')!.addEventListener('click', () => this.close());
@@ -61,8 +80,27 @@ export class KeyboardHelp {
     return el;
   }
 
-  open(opener?: HTMLElement): void {
+  open(opener?: HTMLElement, context: HelpContext = 'gallery'): void {
     this.opener = opener ?? null;
+    const content = SHORTCUTS[context];
+    this.dialog.querySelector('.keyboard-help__title')!.textContent = content.title;
+    const rows = content.entries.map(([keys, description]) => {
+      const row = document.createElement('tr');
+      const keyCell = document.createElement('td');
+      for (const [index, key] of keys.entries()) {
+        if (index > 0) keyCell.append(document.createTextNode(' '));
+        const keycap = document.createElement('kbd');
+        keycap.className = 'keyboard-help__key';
+        keycap.textContent = key;
+        keyCell.appendChild(keycap);
+      }
+      const descriptionCell = document.createElement('td');
+      descriptionCell.textContent = description;
+      row.append(keyCell, descriptionCell);
+      return row;
+    });
+    this.dialog.querySelector('tbody')!.replaceChildren(...rows);
+    this.dialog.querySelector('.keyboard-help__hint')!.textContent = content.hint;
     this.dialog.hidden = false;
     document.addEventListener('keydown', this.onKeyDown);
     (this.dialog.querySelector('.keyboard-help__close') as HTMLElement)?.focus();

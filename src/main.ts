@@ -1180,6 +1180,7 @@ async function main(): Promise<void> {
 
   // UI
   const topbar = new Topbar(app);
+  const keyboardHelp = new KeyboardHelp();
   const infoPanel = new InfoPanel(app, artworks[0]);
   // v0.11 — compact mode toggled by layout tier (re-evaluated on resize).
   const applyCompactInfo = (tier: string): void => {
@@ -1213,7 +1214,8 @@ async function main(): Promise<void> {
         preferencesPanel.setEmbedded(false);
       }
     },
-    (direction) => galleryManager.navigate(direction)
+    (direction) => galleryManager.navigate(direction),
+    (opener, context) => keyboardHelp.open(opener, context)
   );
   galleryRoomView.setArtwork(
     artworks[galleryManager.index] ?? null,
@@ -1331,7 +1333,6 @@ async function main(): Promise<void> {
   // Fixed Bug 2 (passive pinch) and Bug 3 (duplicate synthetic mouse
   // events after touch).
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
-  const keyboardHelp = new KeyboardHelp();
   const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
   canvasInteraction.setEnabled(false);
   keyboardNav.setEnabled(false);

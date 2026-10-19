@@ -5048,7 +5048,7 @@ button {
 .keyboard-help {
   position: fixed;
   inset: 0;
-  z-index: 600;
+  z-index: 1100;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5084,6 +5084,22 @@ button {
       padding: 0.3rem 0.5rem;
       color: rgba(255 255 255 / 0.82);
       font-size: 0.85rem;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .keyboard-help__panel {
+      width: calc(100vw - 32px);
+      min-width: 0;
+      max-width: none;
+      max-height: calc(100dvh - 32px);
+      overflow-y: auto;
+      padding: 1.25rem 1rem;
+    }
+
+    .keyboard-help__table td {
+      padding: 0.3rem 0.25rem;
+      font-size: 0.78rem;
     }
   }
 

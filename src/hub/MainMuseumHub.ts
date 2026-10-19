@@ -732,6 +732,7 @@ export class MainMuseumHub {
     if (slot.artworkId) button.dataset['artworkId'] = slot.artworkId;
     const shadowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     shadowPath.classList.add('museum-hub__shadow-path');
+    shadowPath.dataset['slotId'] = slot.id;
     this.roomLayers[slot.pageIndex]
       ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
       ?.appendChild(shadowPath);

@@ -5,9 +5,9 @@ import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
 
 const MIN_CAMERA_SCALE = 1;
 const MAX_CAMERA_SCALE = 6;
-const CAMERA_ZOOM_DURATION_MS = 420;
+const CAMERA_ZOOM_DURATION_MS = 560;
 const HOVER_TILT_MAX_DEG = 0.14;
-const HOVER_INFLUENCE_RADIUS_PX = 360;
+const HOVER_INFLUENCE_RADIUS_PX = 900;
 
 interface PhotoPointer {
   x: number;
@@ -55,6 +55,7 @@ export class GalleryRoomView {
   private readonly nextArtworkButton: HTMLButtonElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly utilityControls: HTMLDivElement;
+  private readonly helpButton: HTMLButtonElement;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly pointers = new Map<number, PhotoPointer>();
   private readonly motionPreference: MediaQueryList;
@@ -79,7 +80,8 @@ export class GalleryRoomView {
     views: readonly GalleryRoomViewConfig[],
     private readonly onClose: () => void,
     private readonly onVisibilityChange: (visible: boolean) => void,
-    private readonly onNavigateArtwork: (direction: -1 | 1) => void
+    private readonly onNavigateArtwork: (direction: -1 | 1) => void,
+    private readonly onHelp: (opener: HTMLElement, context: 'room') => void
   ) {
     this.views = views;
     this.motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -186,7 +188,7 @@ export class GalleryRoomView {
     this.zoomOutButton = this.createControlButton('gallery-room-view__zoom-btn', 'Verkleinern', '−');
     this.zoomOutButton.addEventListener('click', () => this.zoomBy(1 / 1.25));
     this.resetButton = this.createControlButton('gallery-room-view__zoom-btn', 'Ansicht zurücksetzen', '⟲');
-    this.resetButton.addEventListener('click', () => this.resetCamera());
+    this.resetButton.addEventListener('click', () => this.resetCamera(true));
     this.zoomInButton = this.createControlButton('gallery-room-view__zoom-btn', 'Vergrößern', '+');
     this.zoomInButton.addEventListener('click', () => this.zoomBy(1.25));
     zoomControls.append(this.zoomOutButton, this.resetButton, this.zoomInButton);
@@ -207,6 +209,14 @@ export class GalleryRoomView {
     utilityControls.setAttribute('role', 'group');
     utilityControls.setAttribute('aria-label', 'Weitere Galerieeinstellungen');
     this.utilityControls = utilityControls;
+    const helpButton = document.createElement('button');
+    helpButton.type = 'button';
+    helpButton.className = 'gallery-room-view__help';
+    helpButton.setAttribute('aria-label', 'Bedienung im Fotoraum anzeigen');
+    helpButton.innerHTML = '<span class="gallery-room-view__help-icon" aria-hidden="true">?</span><span>Hilfe</span>';
+    helpButton.addEventListener('click', () => this.onHelp(helpButton, 'room'));
+    this.helpButton = helpButton;
+    utilityControls.appendChild(helpButton);
 
     const status = document.createElement('p');
     status.className = 'gallery-room-view__status';
@@ -252,7 +262,7 @@ export class GalleryRoomView {
   }
 
   setUtilityControls(controls: readonly HTMLElement[]): void {
-    this.utilityControls.replaceChildren(...controls);
+    this.utilityControls.replaceChildren(...controls, this.helpButton);
   }
 
   toggle(): void {
@@ -356,7 +366,7 @@ export class GalleryRoomView {
     this.status.textContent = '';
     this.element.classList.remove('has-error');
     this.background.src = resolveBackgroundUrl(view.background.src);
-    this.resetCamera();
+    this.resetCamera(true);
   }
 
   private applyCamera(): void {
@@ -435,9 +445,10 @@ export class GalleryRoomView {
     this.cameraAnimationFrame = window.requestAnimationFrame(tick);
   }
 
-  private resetCamera(): void {
+  private resetCamera(animate = false): void {
     this.stopCameraAnimation();
-    this.setCamera(MIN_CAMERA_SCALE, 0, 0);
+    if (animate) this.animateCamera(MIN_CAMERA_SCALE, 0, 0);
+    else this.setCamera(MIN_CAMERA_SCALE, 0, 0);
   }
 
   private stopCameraAnimation(): void {
@@ -581,9 +592,9 @@ export class GalleryRoomView {
     const nearestX = Math.max(rect.left, Math.min(rect.right, event.clientX));
     const nearestY = Math.max(rect.top, Math.min(rect.bottom, event.clientY));
     const distance = Math.hypot(event.clientX - nearestX, event.clientY - nearestY);
-    const influenceRadius = Math.min(
-      HOVER_INFLUENCE_RADIUS_PX,
-      Math.max(150, Math.min(this.element.clientWidth, this.element.clientHeight) * 0.45)
+    const influenceRadius = Math.max(
+      300,
+      Math.min(HOVER_INFLUENCE_RADIUS_PX, Math.min(this.element.clientWidth, this.element.clientHeight) * 0.8)
     );
     const influence = Math.max(0, 1 - distance / influenceRadius);
     const smoothInfluence = influence * influence * (3 - 2 * influence);
@@ -607,16 +618,11 @@ export class GalleryRoomView {
 
   private onWheel = (event: WheelEvent): void => {
     event.preventDefault();
-    const rect = this.element.getBoundingClientRect();
-    this.zoomAt(
-      this.cameraScale * Math.exp(-event.deltaY * 0.001),
-      event.clientX - rect.left,
-      event.clientY - rect.top
-    );
+    this.zoomBy(Math.exp(-event.deltaY * 0.001));
   };
 
   private onDoubleClick = (): void => {
-    this.resetCamera();
+    this.resetCamera(true);
   };
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -636,7 +642,7 @@ export class GalleryRoomView {
       this.zoomBy(1 / 1.25);
     } else if (event.key === '0' || event.key === 'Home') {
       event.preventDefault();
-      this.resetCamera();
+      this.resetCamera(true);
     } else if (event.key === 'Tab') {
       this.trapFocus(event);
     }
