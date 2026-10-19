@@ -13,14 +13,16 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       near-coplanar image/backing surfaces as the tilt-sensitive depth-test pair.
 - [x] Add a small polygon offset to the image plane while retaining its albedo,
       tilt, and the backing body's wall shadow.
-- [ ] Follow-up: stop the backing body from writing depth so its near-coplanar
-      front face cannot compete with the image plane as the artwork rotates.
+- [x] Stop the backing body from writing depth so its near-coplanar front face
+      cannot compete with the image plane; preserve its wall-shadow casting and
+      assert both invariants in `test:webgl-resilience`.
 - [x] Verify timeline fit/overflow at narrow and wide viewports and validate the
-      prior correction at multiple tilt angles and quality presets.
+      correction at multiple tilt angles and quality presets.
 - [x] Run lint, typecheck, production/local builds, and the focused WebGL depth
       regression; Chromium loaded the rebuilt gallery and processed hover tilts
       without losing its WebGL context.
-- [ ] Confirm the visual artifact is gone on the customer's target display.
+- [x] Customer confirms the depth-write correction resolves the visual artifact
+      (2026-10-19); retain the regression assertion to prevent reintroducing it.
 
 ## Reference exhibition defaults (2026-10-18)
 

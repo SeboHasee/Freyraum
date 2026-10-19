@@ -39,6 +39,23 @@ now import; geometry, save-service, local-project and deploy-content checks pass
 The customer confirms the local room after Update Gallery. Live acceptance
 requires a new post-merge deploy and live smoke.
 
+## Tilted artwork depth-buffer regression (2026-10-19)
+
+The inspection-gallery image plane sits only 0.002 units ahead of its backing
+body. Preserve the combined depth/shadow contract in
+`scripts/test-webgl-resilience.mjs`:
+
+- the image material keeps its negative polygon offset;
+- the backing material does not write depth, so its nearly coplanar front face
+  cannot compete with the moving image plane;
+- the backing mesh continues casting the intended wall shadow.
+
+Run `npm run test:webgl-resilience` after changes to `ArtworkMesh` or artwork
+materials. For rendering changes, also rotate/hover the artwork at more than one
+tilt and quality preset, verify the image pixels remain stable, and confirm the
+WebGL context remains live. Do not treat polygon offset alone as proof that the
+backing-body depth conflict is fixed.
+
 For stale-index regressions, run the existing smoke command against root
 `file:///absolute/project/path/index.html`, nested HTTP root `index.html`,
 and production output under `/Freyraum/app.html` (the workflow copies that

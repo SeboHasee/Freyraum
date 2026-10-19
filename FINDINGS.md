@@ -14,8 +14,13 @@
 - The imported default is `matte-print`, with no procedural normal/height/
   specular maps, so this correction targets the remaining geometry depth overlap,
   not canvas shading or the artwork's source pixels.
+- `scripts/test-webgl-resilience.mjs` now guards the image-plane polygon offset,
+  the backing material's `depthWrite: false`, and the body's `castShadow: true`.
+  Keep all three checks together: removing depth writes fixes the competing
+  fragments, while preserving the shadow flag protects the intentional wall shadow.
 - The rebuilt gallery loaded in Chromium, processed hover tilts, and retained its
-  WebGL context. The customer's target display still needs visual confirmation.
+  WebGL context. The customer confirmed the visual artifact is resolved on the
+  target display (2026-10-19).
 
 ## 2026-10-19 — Selected timeline marker and tilted-image flicker
 
