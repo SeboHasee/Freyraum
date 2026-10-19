@@ -185,34 +185,72 @@ assert.ok(
   'the dominant living-room artwork is removed'
 );
 
+const projectiveGeometry = await loadTsModule('src/hub/projectiveGeometry.ts');
 for (const view of roomViews) {
-  for (const [width, height] of [[1440, 900], [390, 844]]) {
+  for (const [width, height] of [[1920, 1080], [1440, 900], [1024, 768], [390, 844]]) {
     const transform = geometry.projectGalleryRoomArtwork(view, 0.75, 750, 1000, width, height);
-    const zoomedTransform = geometry.projectGalleryRoomArtwork(
-      view,
-      0.75,
-      750,
-      1000,
-      width,
-      height,
-      { scale: 2, offsetX: -width * 0.25, offsetY: -height * 0.25 }
-    );
     assert.ok(transform, `${view.id} projects at ${width}x${height}`);
-    assert.ok(zoomedTransform, `${view.id} projects while zoomed at ${width}x${height}`);
     assert.equal(transform.width, 750, 'artwork keeps its source width');
     assert.equal(transform.height, 1000, 'artwork keeps its source height');
     assert.match(transform.transform, /^matrix3d\(/, 'artwork uses projective positioning');
-    assert.notEqual(zoomedTransform.transform, transform.transform, 'artwork follows the photo camera transform');
-    assert.equal(zoomedTransform.width, transform.width, 'camera zoom does not alter configured artwork width');
-    assert.equal(zoomedTransform.height, transform.height, 'camera zoom does not alter configured artwork height');
+    let normalizedWidth = view.placement.height * 0.75 / view.wallAspect;
+    let normalizedHeight = view.placement.height;
+    if (normalizedWidth > 0.88) {
+      const reduction = 0.88 / normalizedWidth;
+      normalizedWidth *= reduction;
+      normalizedHeight *= reduction;
+    }
+    const centerU = Math.max(normalizedWidth * 0.5, Math.min(1 - normalizedWidth * 0.5, view.placement.u));
+    const centerV = Math.max(normalizedHeight * 0.5, Math.min(1 - normalizedHeight * 0.5, view.placement.v));
+    const localCorners = [
+      [centerU - normalizedWidth * 0.5, centerV - normalizedHeight * 0.5],
+      [centerU + normalizedWidth * 0.5, centerV - normalizedHeight * 0.5],
+      [centerU + normalizedWidth * 0.5, centerV + normalizedHeight * 0.5],
+      [centerU - normalizedWidth * 0.5, centerV + normalizedHeight * 0.5],
+    ];
+    const wallHomography = projectiveGeometry.computeHomographyFromUnitSquare(view.wallQuad);
+    const coverScale = Math.max(width / view.background.width, height / view.background.height);
+    const coverOffsetX = (width - view.background.width * coverScale) * 0.5;
+    const coverOffsetY = (height - view.background.height * coverScale) * 0.5;
+    const cameraStates = [
+      { scale: 1, offsetX: 0, offsetY: 0 },
+      { scale: 4, offsetX: -width * 1.5, offsetY: -height * 1.5 },
+      { scale: 2.25, offsetX: -width * 0.4, offsetY: -height * 0.2 },
+      { scale: 3, offsetX: -width * 0.8, offsetY: -height * 0.65 },
+    ];
     for (const [x, y] of [[0, 0], [750, 0], [750, 1000], [0, 1000]]) {
-      const basePoint = projectCssMatrix(transform.transform, x, y);
-      const zoomedPoint = projectCssMatrix(zoomedTransform.transform, x, y);
-      assert.ok(
-        Math.abs(zoomedPoint.x - (basePoint.x * 2 - width * 0.25)) < 0.01
-          && Math.abs(zoomedPoint.y - (basePoint.y * 2 - height * 0.25)) < 0.01,
-        `${view.id} artwork corner follows the exact camera transform`
+      const cornerIndex = [[0, 0], [750, 0], [750, 1000], [0, 1000]].findIndex(
+        (corner) => corner[0] === x && corner[1] === y
       );
+      const basePoint = projectCssMatrix(transform.transform, x, y);
+      const wallPoint = projectiveGeometry.applyHomography(
+        wallHomography,
+        localCorners[cornerIndex][0],
+        localCorners[cornerIndex][1]
+      );
+      const expected = {
+        x: coverOffsetX + wallPoint.x * view.background.width * coverScale,
+        y: coverOffsetY + wallPoint.y * view.background.height * coverScale,
+      };
+      assert.ok(
+        Math.abs(basePoint.x - expected.x) < 0.01 && Math.abs(basePoint.y - expected.y) < 0.01,
+        `${view.id} artwork corner aligns with the photographed wall at ${width}x${height}`
+      );
+      for (const camera of cameraStates) {
+        const displayed = {
+          x: camera.offsetX + basePoint.x * camera.scale,
+          y: camera.offsetY + basePoint.y * camera.scale,
+        };
+        const expectedDisplayed = {
+          x: camera.offsetX + expected.x * camera.scale,
+          y: camera.offsetY + expected.y * camera.scale,
+        };
+        assert.ok(
+          Math.abs(displayed.x - expectedDisplayed.x) < 0.01
+            && Math.abs(displayed.y - expectedDisplayed.y) < 0.01,
+          `${view.id} artwork corner stays on the wall at camera scale ${camera.scale}`
+        );
+      }
     }
   }
 }

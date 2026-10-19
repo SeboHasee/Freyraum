@@ -14,25 +14,18 @@ export interface GalleryRoomArtworkTransform {
   transform: string;
 }
 
-export interface GalleryPhotoCamera {
-  scale: number;
-  offsetX: number;
-  offsetY: number;
-}
-
 function screenPoint(
   point: Point2D,
   view: GalleryRoomView,
   viewportWidth: number,
-  viewportHeight: number,
-  camera: GalleryPhotoCamera
+  viewportHeight: number
 ): Point2D {
   const scale = Math.max(viewportWidth / view.background.width, viewportHeight / view.background.height);
   const offsetX = (viewportWidth - view.background.width * scale) * 0.5;
   const offsetY = (viewportHeight - view.background.height * scale) * 0.5;
   return {
-    x: camera.offsetX + (offsetX + point.x * view.background.width * scale) * camera.scale,
-    y: camera.offsetY + (offsetY + point.y * view.background.height * scale) * camera.scale,
+    x: offsetX + point.x * view.background.width * scale,
+    y: offsetY + point.y * view.background.height * scale,
   };
 }
 
@@ -42,8 +35,7 @@ export function projectGalleryRoomArtwork(
   artworkWidth: number,
   artworkHeight: number,
   viewportWidth: number,
-  viewportHeight: number,
-  camera: GalleryPhotoCamera = { scale: 1, offsetX: 0, offsetY: 0 }
+  viewportHeight: number
 ): GalleryRoomArtworkTransform | null {
   if (
     !Number.isFinite(artworkAspect) || artworkAspect <= 0
@@ -72,7 +64,7 @@ export function projectGalleryRoomArtwork(
   const sourceQuad = localQuad.map((corner) => applyHomography(wallHomography, corner.x, corner.y));
   if (sourceQuad.some((corner) => corner === null)) return null;
   const projectedQuad = sourceQuad.map((corner) =>
-    screenPoint(corner!, view, viewportWidth, viewportHeight, camera)
+    screenPoint(corner!, view, viewportWidth, viewportHeight)
   ) as unknown as Quad;
   const artworkHomography = computeHomographyFromUnitSquare(projectedQuad);
   if (!artworkHomography) return null;

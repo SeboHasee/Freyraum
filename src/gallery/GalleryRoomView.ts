@@ -387,8 +387,7 @@ export class GalleryRoomView {
       width,
       height,
       rect.width,
-      rect.height,
-      { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY }
+      rect.height
     );
     if (!transform) {
       this.showError('Die Bildplatzierung in diesem Raum ist ungültig.');
@@ -488,8 +487,8 @@ export class GalleryRoomView {
     if (!(rect.width > 0 && rect.height > 0)) return;
     const x = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2));
     const y = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2));
-    this.artworkImage.style.setProperty('--artwork-tilt-x', `${-y * 1.25}deg`);
-    this.artworkImage.style.setProperty('--artwork-tilt-y', `${x * 1.25}deg`);
+    this.artworkImage.style.setProperty('--artwork-tilt-x', `${-y * 0.2}deg`);
+    this.artworkImage.style.setProperty('--artwork-tilt-y', `${x * 0.2}deg`);
   };
 
   private onArtworkFocus = (): void => {

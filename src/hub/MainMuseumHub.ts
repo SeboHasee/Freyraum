@@ -37,6 +37,7 @@ import { createEditorTabs, type EditorTabs } from './editor/editorTabs';
 import { EditorRoomBar } from './editor/roomBar';
 import { EditorArtworkLibrary, type LibraryArtwork, type LibraryPlace } from './editor/artworkLibrary';
 import { EditorSaveTab } from './editor/saveTab';
+import { EditorGalleryRoomViews } from './editor/galleryRoomViews';
 import { PlacementController, type PlacementArtwork, type PlacementPlace } from './editor/placementController';
 import { EditorToast } from './editor/editorToast';
 import {
@@ -254,6 +255,7 @@ export class MainMuseumHub {
   private placementController: PlacementController | null = null;
   private editorToast: EditorToast | null = null;
   private saveTab: EditorSaveTab | null = null;
+  private galleryRoomEditor: EditorGalleryRoomViews | null = null;
   private calibrationIssues: CalibrationIssue[] = [];
   /** Option A (true) hangs unplaced artworks into extra rooms in the gallery. */
   private autoPlaceUnmappedSetting = false;
@@ -2495,6 +2497,17 @@ export class MainMuseumHub {
     }
     roomAdvanced.append(legend, this.buildBackgroundControls());
     roomTab.append(wallSection, roomAdvanced);
+    this.galleryRoomEditor = new EditorGalleryRoomViews({
+      views: this.resolution.galleryRoomViews,
+      artwork: this.artworks[0] ?? null,
+      resolveBackground: resolveBackgroundUrl,
+      onHistory: () => this.recordCalibrationHistory(),
+      onChange: (views) => {
+        this.resolution.galleryRoomViews = views;
+        this.updateCalibrationOutput(true);
+      },
+    });
+    roomTab.appendChild(this.galleryRoomEditor.element);
 
     // ── Tab "Bilder": places, selected artwork, library ────────────────────
     const artworkTab = document.createElement('div');
@@ -5589,6 +5602,8 @@ export class MainMuseumHub {
       currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
     }
     this.resolution.background = { ...config.background };
+    this.resolution.galleryRoomViews = config.galleryRoomViews ?? [];
+    this.galleryRoomEditor?.refresh(this.resolution.galleryRoomViews);
     const safeBackgroundObjectUrl =
       activeBackgroundObjectUrl?.startsWith('blob:') ? activeBackgroundObjectUrl : null;
     setResolvedBackgroundSource(
