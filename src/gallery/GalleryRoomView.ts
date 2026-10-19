@@ -4,7 +4,7 @@ import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
 
 const MIN_CAMERA_SCALE = 1;
-const MAX_CAMERA_SCALE = 4;
+const MAX_CAMERA_SCALE = 6;
 const CAMERA_ZOOM_DURATION_MS = 420;
 const HOVER_TILT_MAX_DEG = 0.14;
 const HOVER_INFLUENCE_RADIUS_PX = 360;
@@ -54,6 +54,7 @@ export class GalleryRoomView {
   private readonly previousArtworkButton: HTMLButtonElement;
   private readonly nextArtworkButton: HTMLButtonElement;
   private readonly closeButton: HTMLButtonElement;
+  private readonly utilityControls: HTMLDivElement;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly pointers = new Map<number, PhotoPointer>();
   private readonly motionPreference: MediaQueryList;
@@ -201,12 +202,18 @@ export class GalleryRoomView {
 
     controls.append(roomControls, artworkControls, cameraControls, close);
 
+    const utilityControls = document.createElement('div');
+    utilityControls.className = 'gallery-room-view__utilities';
+    utilityControls.setAttribute('role', 'group');
+    utilityControls.setAttribute('aria-label', 'Weitere Galerieeinstellungen');
+    this.utilityControls = utilityControls;
+
     const status = document.createElement('p');
     status.className = 'gallery-room-view__status';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     this.status = status;
-    root.append(scene, controls, status);
+    root.append(scene, utilityControls, controls, status);
     container.appendChild(root);
 
     this.resizeObserver = typeof ResizeObserver === 'undefined'
@@ -242,6 +249,10 @@ export class GalleryRoomView {
   setEnabled(enabled: boolean): void {
     this.enabled = enabled && this.views.length > 0;
     if (!this.enabled) this.setVisible(false);
+  }
+
+  setUtilityControls(controls: readonly HTMLElement[]): void {
+    this.utilityControls.replaceChildren(...controls);
   }
 
   toggle(): void {
@@ -612,6 +623,7 @@ export class GalleryRoomView {
     if (!this.visible) return;
     event.stopPropagation();
     if (event.key === 'Escape') {
+      if (this.element.querySelector('.prefs__panel:not([hidden])')) return;
       event.preventDefault();
       this.onClose();
       return;
@@ -632,8 +644,9 @@ export class GalleryRoomView {
 
   private trapFocus(event: KeyboardEvent): void {
     const focusable = [...this.element.querySelectorAll<HTMLElement>(
-      'button:not([hidden]):not(:disabled), select:not(:disabled), .gallery-room-view__artwork-frame[tabindex="0"]:not([hidden])'
-    )];
+      'button:not(:disabled), select:not(:disabled), input:not(:disabled), textarea:not(:disabled), ' +
+        '.gallery-room-view__artwork-frame[tabindex="0"]'
+    )].filter((element) => !element.closest('[hidden]'));
     if (focusable.length === 0) return;
     const first = focusable[0]!;
     const last = focusable[focusable.length - 1]!;

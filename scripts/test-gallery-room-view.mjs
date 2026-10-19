@@ -224,7 +224,7 @@ for (const view of roomViews) {
     const coverOffsetY = (height - view.background.height * coverScale) * 0.5;
     const cameraStates = [
       { scale: 1, offsetX: 0, offsetY: 0 },
-      { scale: 4, offsetX: -width * 1.5, offsetY: -height * 1.5 },
+      { scale: 6, offsetX: -width * 2.5, offsetY: -height * 2.5 },
       { scale: 2.25, offsetX: -width * 0.4, offsetY: -height * 0.2 },
       { scale: 3, offsetX: -width * 0.8, offsetY: -height * 0.65 },
     ];
@@ -342,11 +342,19 @@ assert.match(roomEditorSource, /quadIsConvex/, 'the editor rejects invalid wall 
 const roomViewSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryRoomView.ts'), 'utf8');
 assert.match(roomViewSource, /setPointerCapture/);
 assert.match(roomViewSource, /pointercancel/);
+assert.match(roomViewSource, /MAX_CAMERA_SCALE = 6/, 'photo-room zoom supports expanded pan travel');
 assert.match(roomViewSource, /CAMERA_ZOOM_DURATION_MS = 420/);
 assert.match(roomViewSource, /requestAnimationFrame\(tick\)/);
 assert.match(roomViewSource, /this\.zoomAt\(/);
 assert.match(roomViewSource, /this\.trapFocus\(event\)/);
 assert.match(roomViewSource, /this\.resetCamera\(\)/);
+assert.match(roomViewSource, /input:not\(:disabled\)/, 'room dialog focus order includes utility form controls');
+const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
+assert.match(
+  hubStyles,
+  /\.museum-hub__artwork\s*\{[^}]*drop-shadow\([^}]*drop-shadow\([^}]*drop-shadow/s,
+  'museum-hub artwork receives contact, directional, and ambient wall shadows'
+);
 
 const saveConfig = structuredClone(sourceConfig);
 const saveContext = {

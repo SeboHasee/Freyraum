@@ -1202,7 +1202,17 @@ async function main(): Promise<void> {
       galleryRoomView?.setVisible(false);
       topbar.roomViewBtn.focus({ preventScroll: true });
     },
-    (visible) => topbar.setRoomViewActive(visible),
+    (visible) => {
+      topbar.setRoomViewActive(visible);
+      const roomUtilities = [audioControls.element, preferencesPanel.element, fullscreenButton.element];
+      if (visible) {
+        galleryRoomView?.setUtilityControls(roomUtilities);
+        preferencesPanel.setEmbedded(true);
+      } else {
+        app.append(fullscreenButton.element, preferencesPanel.element, audioControls.element);
+        preferencesPanel.setEmbedded(false);
+      }
+    },
     (direction) => galleryManager.navigate(direction)
   );
   galleryRoomView.setArtwork(

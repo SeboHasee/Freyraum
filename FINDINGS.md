@@ -3,6 +3,16 @@
 
 ## 2026-10-19 — Photographic inspection room view
 
+- Keep the inspection room's audio, settings, and fullscreen widgets as the same
+  shared controls used by the gallery; reparent them into the room overlay while
+  visible so preferences and audio state are not duplicated.
+- Photo pan range is bounded by camera scale and viewport coverage. Raising the
+  maximum scale expands useful pan travel while retaining the rule that the photo
+  fills the viewport; test both maximum scale and edge clamping.
+- Museum-hub artwork buttons carry wall-vector shadow variables. Use a tight
+  contact component plus restrained directional/ambient layers so projected art
+  reads as attached to its wall rather than floating.
+
 - Update Gallery is the customer-facing local import path; a production build's
   public-background sync is not part of that workflow. Stage each configured
   room photo into `customer-preview/backgrounds/`, the URL base used by the

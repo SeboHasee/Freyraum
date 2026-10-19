@@ -152,6 +152,9 @@ try {
       frameFocusable: root.querySelector('.gallery-room-view__artwork-frame').tabIndex === 0,
       title: root.querySelector('.gallery-room-view__artwork-label').textContent,
       returnLabel: root.querySelector('.gallery-room-view__close').textContent,
+      audioControlInsideOverlay: Boolean(root.querySelector('.gallery-room-view__utilities .audio-controls')),
+      settingsLabel: root.querySelector('.gallery-room-view__utilities .prefs__trigger')?.getAttribute('aria-label'),
+      fullscreenLabel: root.querySelector('.gallery-room-view__utilities .fullscreen-btn')?.getAttribute('aria-label'),
     };
   })()`);
   assert.deepEqual(controls, {
@@ -162,8 +165,29 @@ try {
     frameFocusable: true,
     title: controls.title,
     returnLabel: 'Zurück zur Galerie',
+    audioControlInsideOverlay: true,
+    settingsLabel: 'Einstellungen öffnen',
+    fullscreenLabel: 'Vollbild umschalten',
   });
   assert.ok(controls.title.length > 0, 'menu identifies the selected artwork');
+  const utilityBounds = await evaluate(`(() => {
+    const rect = document.querySelector('.gallery-room-view__utilities').getBoundingClientRect();
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+  })()`);
+  assert.ok(
+    utilityBounds.left >= 0 && utilityBounds.top >= 0
+      && utilityBounds.right <= innerWidth && utilityBounds.bottom <= innerHeight,
+    `room utility controls remain within the viewport (${JSON.stringify(utilityBounds)})`
+  );
+  await evaluate("document.querySelector('.gallery-room-view .prefs__trigger').click()");
+  await waitFor("!document.querySelector('.gallery-room-view .prefs__panel').hidden");
+  await evaluate("document.querySelector('.gallery-room-view .prefs__panel input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+  await waitFor("document.querySelector('.gallery-room-view .prefs__panel').hidden");
+  assert.equal(
+    await evaluate("!document.querySelector('.gallery-room-view').hidden"),
+    true,
+    'Escape closes settings without leaving the photo room'
+  );
   assert.equal(
     await evaluate(`(() => [...document.querySelectorAll('.gallery-room-view__zoom-btn, .gallery-room-view__artwork-nav')]
       .every((button) => {
@@ -224,20 +248,26 @@ try {
       const root = document.querySelector('.gallery-room-view');
       const art = root.querySelector('.gallery-room-view__artwork-frame').getBoundingClientRect();
       const controls = root.querySelector('.gallery-room-view__controls').getBoundingClientRect();
+      const utilities = root.querySelector('.gallery-room-view__utilities').getBoundingClientRect();
       return {
         viewport: [innerWidth, innerHeight],
         art: { x: art.x, y: art.y, width: art.width, height: art.height },
         controls: { x: controls.x, y: controls.y, width: controls.width, height: controls.height },
+        utilities: { x: utilities.x, y: utilities.y, width: utilities.width, height: utilities.height },
       };
     })()`);
     const art = layout.art;
     const controls = layout.controls;
+    const utilities = layout.utilities;
     const overlap = controls.x < art.x + art.width && controls.x + controls.width > art.x
       && controls.y < art.y + art.height && controls.y + controls.height > art.y;
     assert.equal(overlap, false, `${roomId} controls do not cover the artwork at ${width}x${height}`);
     assert.ok(controls.x >= 0 && controls.y >= 0
       && controls.x + controls.width <= width && controls.y + controls.height <= height,
     `${roomId} controls remain on screen at ${width}x${height}`);
+    assert.ok(utilities.x >= 0 && utilities.y >= 0
+      && utilities.x + utilities.width <= width && utilities.y + utilities.height <= height,
+    `${roomId} utility controls remain on screen at ${width}x${height}`);
     console.log(`✓ ${roomId} controls clear at ${width}x${height}`);
   }
 
@@ -374,12 +404,12 @@ try {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     for (let index = 0; index < 12; index += 1) zoom.click();
   })()`);
-  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(4)')");
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(6)')");
   const transformAtMaximumZoom = await evaluate(
     "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
   );
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
-  assert.match(camera, /scale\(4\)/, 'camera reaches the configured maximum zoom');
+  assert.match(camera, /scale\(6\)/, 'camera reaches the expanded maximum zoom');
   assert.equal(
     transformAtMaximumZoom,
     bedroomProjectionTransform,
@@ -513,6 +543,11 @@ try {
     await evaluate("document.querySelector('.gallery-room-view').hidden && document.activeElement === document.querySelector('.topbar__room-view-btn')"),
     true,
     'close returns to the gallery and restores focus to the room-view toggle'
+  );
+  assert.equal(
+    await evaluate("document.querySelector('#app > .prefs') !== null && document.querySelector('#app > .fullscreen-btn') !== null"),
+    true,
+    'shared utility controls return to gallery chrome when the room view closes'
   );
   console.log('✓ touch pinch and accessible close/focus restoration');
 } finally {

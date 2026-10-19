@@ -295,6 +295,33 @@ canvas {
   --artwork-zoom: 1;
 }
 
+.gallery-room-view__utilities {
+  position: absolute;
+  top: calc(var(--safe-top) + 16px);
+  right: calc(var(--safe-right) + 16px);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gallery-room-view__utilities .audio-controls,
+.gallery-room-view__utilities .fullscreen-btn,
+.gallery-room-view__utilities .prefs--embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+}
+
+.gallery-room-view__utilities .fullscreen-btn {
+  flex: 0 0 44px;
+}
+
+.gallery-room-view__utilities .prefs__panel {
+  top: calc(100% + 8px);
+  right: 0;
+}
+
 .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork,
 .gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
   transform:
@@ -842,7 +869,10 @@ canvas {
   color: var(--text-inverse);
   cursor: pointer;
   clip-path: var(--hub-clip-path, none);
-  filter: drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 18px rgba(10, 13, 15, 0.24));
+  filter:
+    drop-shadow(var(--hub-shadow-x, 0px) 2px 3px rgba(10, 13, 15, 0.38))
+    drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 14px rgba(10, 13, 15, 0.30))
+    drop-shadow(0 8px 24px rgba(10, 13, 15, 0.14));
   transition: filter var(--dur-control) var(--ease-out);
 }
 

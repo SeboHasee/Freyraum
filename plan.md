@@ -61,6 +61,11 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       visual approval remains a separate customer acceptance step.
 - [ ] Verify live deployment after merge and retain the photo-view limitation:
       true orbit/walking needs 3D room assets or additional viewpoints.
+- [x] Expand the photo-room camera zoom/pan reach and move the shared volume,
+      settings, and fullscreen controls into the room overlay.
+- [x] Strengthen layered, wall-directed shadows on projected museum-hub artwork.
+- [ ] Review expanded room movement, hub shadows, and utility controls visually
+      at desktop, tablet, portrait-phone, and short-landscape sizes.
 
 ## Selected timeline marker and tilted-image flicker (2026-10-19)
 

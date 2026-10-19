@@ -7,6 +7,10 @@ export class FullscreenButton {
   private readonly btn: HTMLButtonElement;
   private readonly target: HTMLElement;
 
+  get element(): HTMLButtonElement {
+    return this.btn;
+  }
+
   constructor(container: HTMLElement, target: HTMLElement = document.documentElement) {
     this.target = target;
     this.btn = document.createElement('button');

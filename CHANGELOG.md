@@ -39,6 +39,10 @@
   glyphs within consistent touch targets.
 - Sample every cleanup boundary pixel and compare its gradient with the unchanged
   source photo, alongside the existing artwork-removal checks.
+- Expand the photographic room's maximum zoom and photo-pan travel, and bring
+  shared volume, settings, and fullscreen controls into the room overlay.
+- Add stronger layered wall-contact shadows to projectively positioned museum-hub
+  artworks.
 
 ## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
 
