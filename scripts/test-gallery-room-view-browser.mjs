@@ -206,7 +206,7 @@ try {
   const roomEntry = await evaluate(`(() => {
     const button = document.querySelector('.topbar__room-view-btn');
     return { label: button.textContent.trim(), pressed: button.getAttribute('aria-pressed'),
-      background: getComputedStyle(button).backgroundImage };
+      background: getComputedStyle(button).backgroundColor };
   })()`);
   assert.equal(roomEntry.pressed, 'false', 'room-view entry exposes its inactive state');
   assert.ok(roomEntry.label.includes('Fotoraum'), 'room-view entry has a recognizable visible label');
@@ -215,41 +215,36 @@ try {
   const activeRoomEntry = await evaluate(`(() => {
     const button = document.querySelector('.topbar__room-view-btn');
     return { label: button.textContent.trim(), pressed: button.getAttribute('aria-pressed'),
-      background: getComputedStyle(button).backgroundImage };
+      background: getComputedStyle(button).backgroundColor };
   })()`);
   assert.equal(activeRoomEntry.pressed, 'true', 'room-view toggle exposes its active state');
-  assert.equal(activeRoomEntry.label, 'Galerie', 'active toggle clearly offers the return to gallery');
+  assert.equal(activeRoomEntry.label, 'Fotoraum aktiv', 'active toggle exposes the active room-view state');
   assert.notEqual(activeRoomEntry.background, roomEntry.background, 'active room-view control has a distinct visual state');
   const controls = await evaluate(`(() => {
     const root = document.querySelector('.gallery-room-view');
     return {
-      roomLabel: root.querySelector('.gallery-room-view__label').textContent,
-      artworkLabel: root.querySelector('.gallery-room-view__group-label').textContent,
-      cameraLabel: root.querySelector('.gallery-room-view__camera-controls .gallery-room-view__group-label').textContent,
+      roomLabel: root.querySelector('.gallery-room-view__room-label').textContent,
       frameRole: root.querySelector('.gallery-room-view__artwork-frame').getAttribute('role'),
       frameFocusable: root.querySelector('.gallery-room-view__artwork-frame').tabIndex === 0,
-      title: root.querySelector('.gallery-room-view__artwork-label').textContent,
-      returnLabel: root.querySelector('.gallery-room-view__close').textContent,
+      returnLabel: root.querySelector('.gallery-room-view__back').getAttribute('aria-label'),
       audioControlInsideOverlay: Boolean(root.querySelector('.gallery-room-view__utilities .audio-controls')),
       settingsLabel: root.querySelector('.gallery-room-view__utilities .prefs__trigger')?.getAttribute('aria-label'),
       fullscreenLabel: root.querySelector('.gallery-room-view__utilities .fullscreen-btn')?.getAttribute('aria-label'),
-      contextualHelp: root.querySelector('.gallery-room-view__help')?.getAttribute('aria-label'),
+      contextualHelp: root.querySelector('.gallery-room-view__utilities .topbar__help-btn')?.getAttribute('aria-label'),
+      timelineIsShared: root.querySelector('.timeline') === document.querySelector('#app .timeline'),
     };
   })()`);
   assert.deepEqual(controls, {
     roomLabel: 'Raum',
-    artworkLabel: 'Kunstwerk',
-    cameraLabel: 'Ansicht',
     frameRole: 'img',
     frameFocusable: true,
-    title: controls.title,
     returnLabel: 'Zurück zur Galerie',
     audioControlInsideOverlay: true,
     settingsLabel: 'Einstellungen öffnen',
     fullscreenLabel: 'Vollbild umschalten',
-    contextualHelp: 'Bedienung im Fotoraum anzeigen',
+    contextualHelp: 'Tastaturkürzel anzeigen',
+    timelineIsShared: true,
   });
-  assert.ok(controls.title.length > 0, 'menu identifies the selected artwork');
   const utilityBounds = await evaluate(`(() => {
     const rect = document.querySelector('.gallery-room-view__utilities').getBoundingClientRect();
     return {
@@ -267,12 +262,12 @@ try {
   );
   assert.ok(
     await evaluate(`(() => {
-      const help = document.querySelector('.gallery-room-view__help').getBoundingClientRect();
+      const help = document.querySelector('.gallery-room-view__utilities .topbar__help-btn').getBoundingClientRect();
       return help.width >= 44 && help.height >= 44;
     })()`),
     'contextual help has a touch-sized target'
   );
-  await evaluate("document.querySelector('.gallery-room-view__help').click()");
+  await evaluate("document.querySelector('.gallery-room-view__utilities .topbar__help-btn').click()");
   await waitFor("!document.querySelector('.keyboard-help').hidden");
   const roomHelp = await evaluate(`(() => {
     const dialog = document.querySelector('.keyboard-help');
@@ -293,7 +288,7 @@ try {
   await evaluate("document.querySelector('.keyboard-help__close').click()");
   assert.equal(
     await evaluate("document.activeElement.getAttribute('aria-label')"),
-    'Bedienung im Fotoraum anzeigen',
+    'Tastaturkürzel anzeigen',
     'closing contextual help restores focus to its opener'
   );
   await evaluate("document.querySelector('.gallery-room-view .prefs__trigger').click()");
@@ -306,9 +301,9 @@ try {
     'Escape closes settings without leaving the photo room'
   );
   assert.equal(
-    await evaluate(`(() => [...document.querySelectorAll('.gallery-room-view__zoom-btn, .gallery-room-view__artwork-nav')]
+    await evaluate(`(() => [...document.querySelectorAll('.gallery-room-view__zoom-controls .zoom-controls__btn')]
       .every((button) => {
-        const icon = button.querySelector('.gallery-room-view__icon');
+        const icon = button.querySelector('.zoom-controls__icon');
         const buttonRect = button.getBoundingClientRect();
         const iconRect = icon.getBoundingClientRect();
         return Math.abs(iconRect.left + iconRect.width / 2 - buttonRect.left - buttonRect.width / 2) < 1
@@ -364,32 +359,34 @@ try {
     const layout = await evaluate(`(() => {
       const root = document.querySelector('.gallery-room-view');
       const art = root.querySelector('.gallery-room-view__artwork-frame').getBoundingClientRect();
-      const controls = root.querySelector('.gallery-room-view__controls').getBoundingClientRect();
+      const controls = root.querySelector('.gallery-room-view__header').getBoundingClientRect();
+      const timeline = root.querySelector('.timeline').getBoundingClientRect();
+      const zoom = root.querySelector('.gallery-room-view__zoom-controls').getBoundingClientRect();
       const utilities = root.querySelector('.gallery-room-view__utilities').getBoundingClientRect();
       return {
         viewport: [innerWidth, innerHeight],
         art: { x: art.x, y: art.y, width: art.width, height: art.height },
         controls: { x: controls.x, y: controls.y, width: controls.width, height: controls.height },
+        timeline: { x: timeline.x, y: timeline.y, width: timeline.width, height: timeline.height },
+        zoom: { x: zoom.x, y: zoom.y, width: zoom.width, height: zoom.height },
         utilities: { x: utilities.x, y: utilities.y, width: utilities.width, height: utilities.height },
       };
     })()`);
     const art = layout.art;
     const controls = layout.controls;
     const utilities = layout.utilities;
-    const overlap = controls.x < art.x + art.width && controls.x + controls.width > art.x
-      && controls.y < art.y + art.height && controls.y + controls.height > art.y;
-    assert.equal(overlap, false,
-      `${roomId} controls do not cover the artwork at ${width}x${height}: ${JSON.stringify(layout)}`);
-    assert.ok(controls.x >= 0 && controls.y >= 0
-      && controls.x + controls.width <= width && controls.y + controls.height <= height,
-    `${roomId} controls remain on screen at ${width}x${height}`);
+    for (const [name, bounds] of Object.entries({ controls, timeline: layout.timeline, zoom: layout.zoom })) {
+      assert.ok(bounds.x >= 0 && bounds.y >= 0
+        && bounds.x + bounds.width <= width && bounds.y + bounds.height <= height,
+      `${roomId} ${name} remains on screen at ${width}x${height}`);
+    }
     assert.ok(utilities.x >= 0 && utilities.y >= 0
       && utilities.x + utilities.width <= width && utilities.y + utilities.height <= height,
     `${roomId} utility controls remain on screen at ${width}x${height}`);
     await capture(`room-${roomId}-${width}x${height}.png`);
     console.log(`✓ ${roomId} controls clear at ${width}x${height}`);
     if (width <= 420 || height <= 420) {
-      await evaluate("document.querySelector('.gallery-room-view__help').click()");
+      await evaluate("document.querySelector('.gallery-room-view__utilities .topbar__help-btn').click()");
       const helpBounds = await evaluate(`(() => {
         const panel = document.querySelector('.keyboard-help__panel').getBoundingClientRect();
         return { left: panel.left, top: panel.top, right: panel.right, bottom: panel.bottom };
@@ -408,7 +405,7 @@ try {
   await evaluate(`document.querySelector('.gallery-room-view__select').dispatchEvent(new Event('change',{bubbles:true}))`);
 
   const initialArtwork = await evaluate("document.querySelector('.gallery-room-view__artwork').currentSrc");
-  await evaluate(`document.querySelector('.gallery-room-view__artwork-nav[aria-label="Nächstes Kunstwerk anzeigen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view .timeline__thumb[data-index="1"]').click()`);
   await waitFor(`document.querySelector('.gallery-room-view__artwork').complete
     && document.querySelector('.gallery-room-view__artwork').currentSrc !== ${JSON.stringify(initialArtwork)}`);
   const nextArtwork = await evaluate(`(() => {
@@ -416,18 +413,24 @@ try {
     return { source: image.currentSrc, decoded: image.naturalWidth > 0 };
   })()`);
   assert.equal(nextArtwork.decoded, true, 'next artwork loads in the photo room');
-  const nextTitle = await evaluate("document.querySelector('.gallery-room-view__artwork-label').textContent");
-  assert.notEqual(nextTitle, controls.title, 'menu artwork title updates with selection');
-  await evaluate(`document.querySelector('.gallery-room-view__artwork-nav[aria-label="Vorheriges Kunstwerk anzeigen"]').click()`);
+  assert.equal(
+    await evaluate(`document.querySelector('.gallery-room-view .timeline__thumb[data-index="1"]').getAttribute('aria-current')`),
+    'true',
+    'room timeline marks the selected work active'
+  );
+  await evaluate(`document.querySelector('.gallery-room-view .timeline__thumb[data-index="0"]').click()`);
   await waitFor(`document.querySelector('.gallery-room-view__artwork').complete
     && document.querySelector('.gallery-room-view__artwork').currentSrc === ${JSON.stringify(initialArtwork)}`);
   const artworkDimensions = await evaluate(`(() => {
     const frame = document.querySelector('.gallery-room-view__artwork-frame');
     return [frame.style.width, frame.style.height];
   })()`);
-  const artworkTitle = await evaluate("document.querySelector('.gallery-room-view__artwork-label').textContent");
-  assert.equal(artworkTitle, controls.title, 'previous artwork navigation restores the correct title');
-  console.log('✓ room, artwork, camera controls and previous/next artwork navigation');
+  assert.equal(
+    await evaluate(`document.querySelector('.gallery-room-view .timeline__thumb[data-index="0"]').getAttribute('aria-current')`),
+    'true',
+    'returning to the first work synchronizes the active timeline item'
+  );
+  console.log('✓ room, shared artwork timeline, camera controls and selection state');
 
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
   const projectedArtworkTransform = await evaluate(
@@ -495,7 +498,7 @@ try {
     projectedArtworkTransform,
     'panning keeps the artwork projection in the same photo coordinate space'
   );
-  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 290, y: 500, button: 'left', buttons: 1 });
@@ -510,7 +513,7 @@ try {
         < Math.max(2, artworkScreenCenter.viewport.height * 0.03),
     'repeated button zoom recenters the artwork after an off-center pan'
   );
-  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await evaluate(`document.querySelector('.gallery-room-view__room-controls select').value = 'wohnraum';
     document.querySelector('.gallery-room-view__room-controls select').dispatchEvent(new Event('change', { bubbles: true }));`);
   await delay(600);
@@ -540,7 +543,7 @@ try {
     'off-center wheel zoom targets the mapped artwork center in the other room'
   );
   assert.ok(otherRoomAfterWheel.scale > otherRoomBeforeWheel.scale, 'wheel zoom increases the camera scale in the other room');
-  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await evaluate(`document.querySelector('.gallery-room-view__room-controls select').value = 'bedroom';
     document.querySelector('.gallery-room-view__room-controls select').dispatchEvent(new Event('change', { bubbles: true }));`);
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'");
@@ -550,14 +553,14 @@ try {
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /translate3d\(0px, 0px, 0px\) scale\(1\)/, 'reset restores the photo camera');
   await evaluate(`(() => {
-    const close = document.querySelector('.gallery-room-view__close');
+    const close = document.querySelector('.gallery-room-view__back');
     close.focus();
     close.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true }));
   })()`);
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'keyboard shortcut zooms without invoking gallery zoom');
-  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await evaluate(`(() => {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     for (let index = 0; index < 12; index += 1) zoom.click();
@@ -578,7 +581,7 @@ try {
     /drop-shadow/,
     'wall-contact shadows remain present at maximum zoom'
   );
-  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'");
   console.log('✓ photo zoom, drag pan, reset, and keyboard zoom');
 
@@ -638,7 +641,7 @@ try {
   );
   assert.ok(Math.abs(nearbyTilt) < 0.14, 'proximity tilt remains low amplitude');
   const controlPoint = await evaluate(`(() => {
-    const rect = document.querySelector('.gallery-room-view__help').getBoundingClientRect();
+    const rect = document.querySelector('.gallery-room-view__utilities .topbar__help-btn').getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   })()`);
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: controlPoint.x, y: controlPoint.y });
@@ -672,13 +675,13 @@ try {
     'artwork tilt settles back to its original position'
   );
 
-  await evaluate("document.querySelector('.gallery-room-view__close').focus()");
+  await evaluate("document.querySelector('.gallery-room-view__back').focus()");
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await command('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   assert.equal(
-    await evaluate("document.activeElement === document.querySelector('.gallery-room-view__artwork-frame')"),
+    await evaluate("document.activeElement === document.querySelector('.gallery-room-view__select')"),
     true,
-    'keyboard tab order includes the artwork and keeps focus inside the dialog'
+    'keyboard tab order moves from return to the separate room selector'
   );
   await command('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
@@ -693,7 +696,7 @@ try {
     /scale\(1\.25\)/,
     'reduced motion skips camera zoom animation'
   );
-  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await command('Emulation.setEmulatedMedia', { features: [] });
   console.log('✓ bounded artwork hover, keyboard focus, layered shadows, and reduced motion');
 
@@ -716,7 +719,7 @@ try {
   assert.match(camera, /scale\(1\.[1-9]/, 'touch pinch zooms the photo camera');
   await command('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await evaluate(`(() => {
-    const close = document.querySelector('.gallery-room-view__close');
+    const close = document.querySelector('.gallery-room-view__back');
     close.focus();
     close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   })()`);

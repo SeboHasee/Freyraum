@@ -327,7 +327,7 @@ export class GalleryRoomView {
     button.type = 'button';
     button.className = className;
     const icon = document.createElement('span');
-    icon.className = 'gallery-room-view__icon';
+    icon.className = 'zoom-controls__icon';
     icon.setAttribute('aria-hidden', 'true');
     icon.textContent = text;
     button.appendChild(icon);
