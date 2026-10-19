@@ -196,6 +196,7 @@ type CalibrationDrag =
 interface SlotView {
   slot: ResolvedHubSlot;
   button: HTMLButtonElement;
+  shadowPath: SVGPathElement;
   image: HTMLImageElement | null;
   imageLoadToken: number;
   /** Immutable ratio captured from the decoded source image. */
@@ -711,6 +712,12 @@ export class MainMuseumHub {
       const room = document.createElement('div');
       room.className = 'museum-hub__room';
       room.dataset['page'] = String(this.roomLayers.length);
+      const shadows = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      shadows.classList.add('museum-hub__shadows');
+      shadows.setAttribute('viewBox', `0 0 ${this.stageWidth} ${this.stageHeight}`);
+      shadows.setAttribute('preserveAspectRatio', 'none');
+      shadows.setAttribute('aria-hidden', 'true');
+      room.appendChild(shadows);
       container.appendChild(room);
       this.roomLayers.push(room);
     }
@@ -723,6 +730,11 @@ export class MainMuseumHub {
     button.className = 'museum-hub__artwork';
     button.dataset['slotId'] = slot.id;
     if (slot.artworkId) button.dataset['artworkId'] = slot.artworkId;
+    const shadowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    shadowPath.classList.add('museum-hub__shadow-path');
+    this.roomLayers[slot.pageIndex]
+      ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
+      ?.appendChild(shadowPath);
 
     let image: HTMLImageElement | null = null;
     if (slot.selectable && slot.artworkId) {
@@ -800,6 +812,7 @@ export class MainMuseumHub {
     const view: SlotView = {
       slot,
       button,
+      shadowPath,
       image,
       imageLoadToken: 0,
       nativeAspectRatio: null,
@@ -811,7 +824,7 @@ export class MainMuseumHub {
       fallbackReason: null,
       lastUpsertResult: null,
     };
-    this.applySlotGeometry(button, slot, false, 1);
+    this.applySlotGeometry(button, slot, false, 1, shadowPath);
     this.syncSlotRenderer(view, render);
     return view;
   }
@@ -820,7 +833,8 @@ export class MainMuseumHub {
     button: HTMLButtonElement,
     slot: ResolvedHubSlot,
     syncRenderer = true,
-    aspectOverride?: number
+    aspectOverride?: number,
+    shadowPath?: SVGPathElement
   ): void {
     const wall = this.resolution.wallById.get(slot.placement.wallId);
     if (!wall) {
@@ -831,6 +845,8 @@ export class MainMuseumHub {
       button.style.height = '0px';
       button.style.clipPath = 'none';
       button.style.removeProperty('--hub-clip-path');
+      (shadowPath ?? this.slotViews.find((candidate) => candidate.slot.id === slot.id)?.shadowPath)
+        ?.removeAttribute('d');
       this.diagnostics.warn('hub-slot-missing-wall', 'Hub slot geometry skipped because the wall is missing', {
         slotId: slot.id,
         wallId: slot.placement.wallId,
@@ -838,6 +854,7 @@ export class MainMuseumHub {
       return;
     }
     const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
+    const projectedShadow = shadowPath ?? view?.shadowPath;
     const projection = this.projectDisplayedSlot(slot, wall, aspectOverride);
     if (!projection) {
       button.classList.add('is-invalid-geometry');
@@ -847,6 +864,7 @@ export class MainMuseumHub {
       button.style.height = '0px';
       button.style.clipPath = 'none';
       button.style.removeProperty('--hub-clip-path');
+      projectedShadow?.removeAttribute('d');
       this.diagnostics.warn('hub-slot-projection-invalid', 'Hub slot projection is invalid and will not render interactively', {
         slotId: slot.id,
         artworkId: slot.artworkId,
@@ -856,6 +874,10 @@ export class MainMuseumHub {
       return;
     }
     this.projectedSlotGeometry.set(slot.id, projection);
+    projectedShadow?.setAttribute(
+      'd',
+      `M${projection.projectedQuad.map(({ x, y }) => `${x.toFixed(3)},${y.toFixed(3)}`).join(' L')} Z`
+    );
     button.classList.remove('is-invalid-geometry');
     // Same rule as evaluateDisplayedPlacement: flag (never move) invalid placements.
     button.classList.toggle(
@@ -886,6 +908,8 @@ export class MainMuseumHub {
     const shadow = wall.shadowVector ?? point(wall.group === 'left' ? -10 : 10, 16);
     button.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
+    projectedShadow?.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
+    projectedShadow?.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
     if (view && syncRenderer) this.syncSlotRenderer(view);
     if (this.debugGeometry) this.logSlotProjection(slot, wall, projection);
   }

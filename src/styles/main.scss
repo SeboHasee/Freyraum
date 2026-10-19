@@ -215,6 +215,18 @@ canvas {
 
 .topbar__room-view-btn {
   display: flex;
+  min-height: 44px;
+  border-color: rgba(255, 231, 164, 0.56);
+  background: linear-gradient(135deg, rgba(34, 43, 49, 0.94), rgba(18, 24, 29, 0.94));
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
+.topbar__room-view-btn[aria-pressed='true'] {
+  border-color: rgba(255, 231, 164, 0.95);
+  background: linear-gradient(135deg, rgba(124, 93, 37, 0.96), rgba(54, 42, 24, 0.96));
+  box-shadow: 0 0 0 2px rgba(255, 231, 164, 0.2), var(--shadow-medium);
 }
 
 .topbar__room-view-btn[hidden] {
@@ -288,8 +300,8 @@ canvas {
     drop-shadow(4px 7px 10px rgb(15 20 24 / 26%))
     drop-shadow(9px 14px 20px rgb(15 20 24 / 17%));
   transition:
-    transform 480ms cubic-bezier(0.2, 0.75, 0.25, 1),
-    filter 360ms var(--ease-gallery-out);
+    transform 1100ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
   --artwork-tilt-x: 0deg;
   --artwork-tilt-y: 0deg;
   --artwork-zoom: 1;
@@ -303,6 +315,32 @@ canvas {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.gallery-room-view__help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+}
+
+.gallery-room-view__help:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.gallery-room-view__help-icon {
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .gallery-room-view__utilities .audio-controls,
@@ -858,6 +896,25 @@ canvas {
   pointer-events: auto;
 }
 
+.museum-hub__shadows {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.museum-hub__shadow-path {
+  fill: rgba(10, 13, 15, 0.24);
+  filter:
+    drop-shadow(var(--hub-shadow-x, 0px) 2px 3px rgba(10, 13, 15, 0.48))
+    drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 14px rgba(10, 13, 15, 0.36))
+    drop-shadow(0 8px 24px rgba(10, 13, 15, 0.2));
+  pointer-events: none;
+}
+
 // ── Projected artwork buttons ────────────────────────────────────────────────
 
 .museum-hub__artwork {
@@ -869,11 +926,7 @@ canvas {
   color: var(--text-inverse);
   cursor: pointer;
   clip-path: var(--hub-clip-path, none);
-  filter:
-    drop-shadow(var(--hub-shadow-x, 0px) 2px 3px rgba(10, 13, 15, 0.38))
-    drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 14px rgba(10, 13, 15, 0.30))
-    drop-shadow(0 8px 24px rgba(10, 13, 15, 0.14));
-  transition: filter var(--dur-control) var(--ease-out);
+  transition: none;
 }
 
 .museum-hub__artwork::before {
