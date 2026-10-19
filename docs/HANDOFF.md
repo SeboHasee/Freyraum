@@ -52,6 +52,11 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - Passing: `npm run build`, `npm run lint`, `npm run build:typecheck`,
   `npm run test:gallery-room-view`, and
   `FREYRAUM_CHROME_PATH=/usr/bin/google-chrome npm run test:gallery-room-view:browser`.
+- The four-room browser run decoded each background and checked control bounds
+  at desktop, tablet, portrait phone, and short landscape. Deploy validation,
+  front-wall aspect, WebGL resilience, frame-budget, and config-authority checks
+  also passed. Build output retains existing classic-script and large-chunk
+  warnings; deploy validation reports the existing large Fraktal inbox warning.
 - `npm run validate:museum-hub` now passes the former stale timeline assertion
   after its test was corrected to check the active timeline thumbnail. It still
   fails at `scripts/test-museum-hub-geometry.mjs:411` on the wall-left doorway

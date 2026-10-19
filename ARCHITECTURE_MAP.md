@@ -55,8 +55,8 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     diagnostics overlay
   - `GalleryRoomView`: optional inspection-gallery overlay that covers the
     viewport with one of four configured room photographs and projects one
-    selected artwork into its normalized wall quad; it temporarily reparents the gallery's
-    authoritative timeline and shared help/audio/settings/fullscreen controls,
+    selected artwork into its normalized wall quad; it temporarily reparents the
+    gallery's authoritative timeline and shared help/audio/settings/fullscreen controls,
     restoring them when closed. Room choice remains separate from artwork
     selection. Its photo camera and overlay controls do not change the calibrated
     artwork projection or the museum's separate photo-backed presentation.

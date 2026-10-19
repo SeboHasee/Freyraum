@@ -35,9 +35,10 @@ the same in all three; see
 ## Inspect in a photo room
 
 In the inspection gallery, choose **Fotoraum** to open one of four photographs:
-**Schlafzimmer**, **Wohnraum**, **Wohnbereich**, or **Büro**. The room view uses the gallery timeline to select the artwork, so
-selection stays synchronized when switching between gallery and room. Use the
-room selector for a different photograph and **Zurück zur Galerie** to leave.
+**Schlafzimmer**, **Wohnraum**, **Wohnbereich**, or **Büro**. The room view uses
+the gallery timeline to select the artwork, so selection stays synchronized
+when switching between gallery and room. Use the room selector for a different
+photograph and **Zurück zur Galerie** to leave.
 Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
 on-screen control. Zoom buttons bring the projected artwork center toward the
 viewport center; wheel and pinch stay anchored to the pointer/gesture. The artwork

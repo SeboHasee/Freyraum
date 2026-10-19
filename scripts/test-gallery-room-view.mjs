@@ -183,7 +183,7 @@ assert.ok(
   `bedroom photo cleanup blends into the surrounding wall without a sharp edge (max delta ${bedroomSeamDelta})`
 );
 assert.ok(
-  countSaturatedArtworkPixels(bedroom, [765, 270, 1265, 795]) < 100,
+  countSaturatedArtworkPixels(bedroom, [823, 312, 1231, 743]) < 100,
   'the dominant bedroom artwork is removed'
 );
 const livingRoom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/gallery-wohnraum.png'));

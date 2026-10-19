@@ -88,10 +88,11 @@ copies into `customer-artworks/inbox/`.
 ## Inspect in a photo room
 
 In the gallery, choose **Fotoraum** to show the selected artwork in one of four
-photos: **Schlafzimmer**, **Wohnraum**, **Wohnbereich**, or **Büro**. The room view reuses the gallery's thumbnail
-timeline, active-work indicator, scrolling, and count; selecting artwork here or
-in the gallery changes the same shared selection. Use the separate room selector
-to switch photographs and **Zurück zur Galerie** to leave the photo view.
+photos: **Schlafzimmer**, **Wohnraum**, **Wohnbereich**, or **Büro**. The room
+view reuses the gallery's thumbnail timeline, active-work indicator, scrolling,
+and count; selecting artwork here or in the gallery changes the same shared
+selection. Use the separate room selector to switch photographs and
+**Zurück zur Galerie** to leave the photo view.
 
 Drag the photo to pan; use the mouse wheel, pinch, or the grouped zoom buttons to
 zoom, and **Fotoansicht zurücksetzen** to restore it. The artwork stays the same

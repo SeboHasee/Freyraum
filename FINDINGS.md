@@ -16,6 +16,11 @@
 - Room import/staging, config sanitization, source-ratio projection and the
   responsive file-preview browser check must enumerate all four configured views;
   do not pin future checks to only the original two.
+- Validation passed for the four-room config/cleanup/staging test, the root
+  `file://` browser test at desktop/tablet/phone/short-landscape sizes, lint,
+  typecheck, build, deploy-content validation, front-wall aspect, WebGL resilience,
+  frame budget, and config-authority docs check. The separate museum-hub geometry
+  test still fails at the known wall-left doorway-height expectation.
 
 ## 2026-10-19 — Shared gallery controls in the photo room
 
@@ -71,7 +76,7 @@
   controls from panning the image. A single still photo supports pan/zoom, not
   real perspective changes; orbit/walking requires room geometry or additional
   viewpoints.
-- Browser regression opens root `index.html` as `file://`, verifies both staged
+- Browser regression opens root `index.html` as `file://`, verifies all four staged
   photos render, and checks the photo-room header, shared timeline, zoom, and
   utilities stay in viewport at desktop, tablet, phone, and short-landscape sizes,
   plus drag, zoom, pinch, reset, keyboard, and focus return.
@@ -103,7 +108,7 @@
   region from the source pixels before producing derivatives. Keep the supplied
   originals unchanged and assert the cleaned region remains free of saturated
   painting pixels.
-- The two room images have different source aspect ratios, so `object-fit: cover`
+- The room images have different source aspect ratios, so `object-fit: cover`
   must be paired with identical centered-cover math when projecting artwork.
   Use the configured normalized `wallQuad` and wall aspect to preserve artwork's
   natural ratio at desktop and portrait viewport sizes.
