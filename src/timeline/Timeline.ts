@@ -317,7 +317,6 @@ export class Timeline {
     const current = this.currentIndex + 1;
     this.counterEl.textContent = `${String(current).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
     this.counterEl.setAttribute('aria-label', `Werk ${current} von ${total}`);
-    this.el.style.setProperty('--timeline-progress', `${(current / Math.max(1, total)) * 100}%`);
   }
 
   private updateScrollState(): void {

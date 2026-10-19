@@ -1,11 +1,13 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (selected timeline marker and rotating highlights).
 
-## Unreleased — timeline and tilted-artwork correction (2026-10-18)
+## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
 
 - Replace the compact thumbnail strip with a full-width, capped glass timeline:
   small collections spread evenly across the row; larger collections keep visible
-  scroll arrows, artwork titles, selection feedback and a collection progress line.
+  scroll arrows, artwork titles, and a clear marker on only the selected artwork.
+- Depth-bias the painted plane ahead of its backing body to prevent tilt-dependent
+  z-fighting while retaining the body's intentional wall shadow.
 - Reduce the inspection camera near plane and resolve navigation tilt/depth against
   both the wall and camera, preventing close-up tilted artwork from crossing the
   near clipping plane while retaining the full entrance pose at normal distances.

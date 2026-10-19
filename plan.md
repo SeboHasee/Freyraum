@@ -1,9 +1,19 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (selected timeline marker and rotating highlights).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Selected timeline marker and tilted-image flicker (2026-10-19)
+
+- [x] Remove the collection-wide progress line and make only the active artwork
+      visibly marked, preserving the accessible selection state and counter.
+- [x] Inspect the imported artwork's presentation and material maps; identify the
+      near-coplanar image/backing surfaces as the tilt-sensitive depth-test pair.
+- [x] Depth-bias the artwork plane without changing its albedo, tilt, or body shadow.
+- [x] Verify timeline fit/overflow at narrow and wide viewports and validate
+      gallery rendering at multiple tilt angles and quality presets.
 
 ## Reference exhibition defaults (2026-10-18)
 

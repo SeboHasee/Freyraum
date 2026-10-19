@@ -1,5 +1,27 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (selected timeline marker and rotating highlights).
+
+## 2026-10-19 — Selected timeline marker and tilted-image flicker
+
+- The thin line across the timeline was a collection-progress indicator, not the
+  artwork selection state. The current artwork already receives `is-active` and
+  accessible `aria-current`/`aria-pressed` state; remove the global line and use
+  that per-card state for a single underline while retaining the spoken counter.
+- The imported tree artwork has no interactive presentation override, so it uses
+  the `matte-print` profile: no procedural normal, detail, height, or specular maps.
+  The earlier normal-map/specular hypothesis therefore did not explain this report.
+- The image plane is drawn only 0.002 units ahead of its backing body. With depth
+  testing enabled on both surfaces, limited depth precision can let their fragments
+  alternate as a tilted plane moves. Apply a small negative polygon offset to the
+  artwork material so it consistently wins depth testing; keep the body as the
+  wall-shadow caster. This preserves the original albedo and tilt behavior.
+- Chromium verification: only the selected card has an underline and accessible
+  current/pressed state; the counter remains intact. At 320/390px the track scrolls
+  with arrows, at 1280px four works fit and arrows hide, and a simulated 16-item
+  track overflows with arrows. The marker transition is 1µs in reduced-motion mode.
+- Captured the imported tree artwork at two tilts in high quality and in balanced
+  quality after the change; no page exceptions or WebGL errors occurred. The browser
+  reported an unresolved-host warning and a favicon 404 in this environment.
 
 ## 2026-10-18 — User follow-up: timeline and tilted-artwork clipping
 
