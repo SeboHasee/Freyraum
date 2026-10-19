@@ -224,14 +224,27 @@ canvas {
 .gallery-room-view {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 1000;
   overflow: hidden;
   background: #c7ced4;
-  touch-action: pan-y;
 }
 
 .gallery-room-view[hidden] {
   display: none;
+}
+
+.gallery-room-view__scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.gallery-room-view__scene.is-dragging {
+  cursor: grabbing;
 }
 
 .gallery-room-view__background {
@@ -256,33 +269,47 @@ canvas {
 
 .gallery-room-view__controls {
   position: absolute;
-  top: calc(var(--safe-top) + 82px);
+  bottom: calc(var(--safe-bottom) + 16px);
   left: 50%;
-  display: flex;
+  z-index: 1;
+  display: grid;
+  grid-template-areas:
+    "room close"
+    "zoom zoom";
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px 12px;
+  width: max-content;
   max-width: calc(100vw - 24px);
-  padding: 8px;
+  padding: 10px 12px;
   border: 1px solid rgb(255 255 255 / 28%);
-  border-radius: var(--radius-pill);
+  border-radius: 20px;
   background: rgb(18 23 27 / 82%);
   color: #fff;
   box-shadow: var(--shadow-medium);
   transform: translateX(-50%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
-.gallery-room-view__label {
+.gallery-room-view__room-controls {
+  grid-area: room;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 8px;
+}
+
+.gallery-room-view__label {
+  padding-left: 4px;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .gallery-room-view__select,
-.gallery-room-view__close {
+.gallery-room-view__close,
+.gallery-room-view__zoom-btn,
+.gallery-room-view__artwork-nav {
   min-height: 44px;
   border: 1px solid rgb(255 255 255 / 28%);
   border-radius: var(--radius-pill);
@@ -292,60 +319,70 @@ canvas {
 }
 
 .gallery-room-view__select {
-  max-width: min(42vw, 220px);
-  padding: 0 28px 0 12px;
+  max-width: min(52vw, 220px);
+  padding: 0 28px 0 10px;
 }
 
 .gallery-room-view__close {
+  grid-area: close;
   padding: 0 15px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
 
-.gallery-room-view__artwork-controls {
-  position: absolute;
-  inset: auto 0 calc(var(--safe-bottom) + 24px);
+.gallery-room-view__zoom-controls {
+  grid-area: zoom;
   display: flex;
-  justify-content: center;
-  gap: 12px;
-  pointer-events: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
 }
 
 .gallery-room-view__artwork-nav {
   display: grid;
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   place-items: center;
-  border: 1px solid rgb(255 255 255 / 32%);
-  border-radius: 50%;
-  background: rgb(18 23 27 / 82%);
-  color: #fff;
-  box-shadow: var(--shadow-medium);
-  font: inherit;
-  font-size: 34px;
-  line-height: 1;
+  font-size: 30px;
   cursor: pointer;
-  pointer-events: auto;
 }
 
-.gallery-room-view__artwork-nav[hidden] {
+.gallery-room-view__zoom-btn {
+  display: grid;
+  width: 44px;
+  place-items: center;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.gallery-room-view__zoom-btn:disabled,
+.gallery-room-view__artwork-nav:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.gallery-room-view__artwork-nav[hidden],
+.gallery-room-view__zoom-controls[hidden] {
   display: none;
 }
 
 .gallery-room-view__select:focus-visible,
 .gallery-room-view__close:focus-visible,
-.gallery-room-view__artwork-nav:focus-visible {
+.gallery-room-view__artwork-nav:focus-visible,
+.gallery-room-view__zoom-btn:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 .gallery-room-view__status {
   position: absolute;
-  inset: auto 16px 24px;
+  top: calc(var(--safe-top) + 16px);
+  left: 16px;
+  z-index: 1;
   width: fit-content;
   max-width: min(520px, calc(100vw - 32px));
-  margin: auto;
   padding: 12px 16px;
   border-radius: var(--radius-pill);
   background: #12171b;
@@ -360,20 +397,34 @@ canvas {
 
 @media (max-width: 420px) {
   .gallery-room-view__controls {
-    top: calc(var(--safe-top) + 72px);
-    gap: 5px;
-    padding: 5px;
+    bottom: calc(var(--safe-bottom) + 10px);
+    width: calc(100vw - 20px);
+    gap: 6px 8px;
+    padding: 8px;
   }
 
-  .gallery-room-view__label {
-    gap: 4px;
-    padding-left: 4px;
-    font-size: 11px;
+  .gallery-room-view__room-controls {
+    gap: 5px;
   }
 
   .gallery-room-view__close {
-    padding: 0 10px;
-    font-size: 11px;
+    padding: 0 9px;
+    font-size: 10px;
+  }
+
+  .gallery-room-view__zoom-controls {
+    gap: 4px;
+  }
+
+  .gallery-room-view__artwork-nav,
+  .gallery-room-view__zoom-btn {
+    width: 40px;
+    min-height: 40px;
+    height: 40px;
+  }
+
+  .gallery-room-view__select {
+    max-width: min(47vw, 180px);
   }
 }
 

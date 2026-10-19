@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { inflateSync } from 'node:zlib';
 import { buildSync } from 'esbuild';
@@ -120,11 +122,67 @@ assert.ok(
 for (const view of roomViews) {
   for (const [width, height] of [[1440, 900], [390, 844]]) {
     const transform = geometry.projectGalleryRoomArtwork(view, 0.75, 750, 1000, width, height);
+    const zoomedTransform = geometry.projectGalleryRoomArtwork(
+      view,
+      0.75,
+      750,
+      1000,
+      width,
+      height,
+      { scale: 2, offsetX: -width * 0.25, offsetY: -height * 0.25 }
+    );
     assert.ok(transform, `${view.id} projects at ${width}x${height}`);
+    assert.ok(zoomedTransform, `${view.id} projects while zoomed at ${width}x${height}`);
     assert.equal(transform.width, 750, 'artwork keeps its source width');
     assert.equal(transform.height, 1000, 'artwork keeps its source height');
     assert.match(transform.transform, /^matrix3d\(/, 'artwork uses projective positioning');
+    assert.notEqual(zoomedTransform.transform, transform.transform, 'artwork follows the photo camera transform');
   }
+}
+
+const localProject = mkdtempSync(join(tmpdir(), 'freyraum-room-view-import-'));
+const localArtworks = join(localProject, 'customer-artworks');
+const localBackgrounds = join(localArtworks, 'Backgrounds');
+const localInbox = join(localArtworks, 'inbox');
+const imageBytes = Buffer.from(
+  '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082',
+  'hex'
+);
+mkdirSync(localBackgrounds, { recursive: true });
+mkdirSync(localInbox, { recursive: true });
+mkdirSync(join(localProject, 'customer-audio', 'inbox'), { recursive: true });
+writeFileSync(join(localBackgrounds, 'gallery-bedroom.png'), imageBytes);
+writeFileSync(join(localBackgrounds, 'gallery-wohnraum.png'), imageBytes);
+writeFileSync(join(localArtworks, 'museum-hub.json'), JSON.stringify({
+  galleryRoomViews: roomViews.map(({ id, background }) => ({ id, background })),
+}));
+try {
+  execFileSync(process.execPath, [resolve(ROOT, 'scripts/import-artworks.mjs'), '--root', localProject], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  const localPreviewBackgrounds = join(localProject, 'customer-preview', 'backgrounds');
+  for (const filename of ['gallery-bedroom.png', 'gallery-wohnraum.png']) {
+    assert.deepEqual(
+      readFileSync(join(localPreviewBackgrounds, filename)),
+      imageBytes,
+      `Update Gallery stages ${filename} beside the local preview`
+    );
+  }
+  rmSync(join(localBackgrounds, 'gallery-wohnraum.png'));
+  const missingReport = execFileSync(
+    process.execPath,
+    [resolve(ROOT, 'scripts/import-artworks.mjs'), '--root', localProject],
+    { cwd: ROOT, encoding: 'utf8' }
+  );
+  assert.match(missingReport, /gallery room view "wohnraum".*background is missing/);
+  assert.equal(
+    readdirSync(localPreviewBackgrounds).includes('gallery-wohnraum.png'),
+    false,
+    'Update Gallery removes a stale staged photo if its configured source disappears'
+  );
+} finally {
+  rmSync(localProject, { recursive: true, force: true });
 }
 
 const unsafeConfig = structuredClone(sourceConfig);
@@ -138,6 +196,12 @@ assert.match(
   /galleryRoomViews:\s*this\.resolution\.galleryRoomViews/,
   'the placement editor preserves room views when it exports configuration'
 );
+const roomViewSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryRoomView.ts'), 'utf8');
+assert.match(roomViewSource, /setPointerCapture/);
+assert.match(roomViewSource, /pointercancel/);
+assert.match(roomViewSource, /this\.zoomAt\(/);
+assert.match(roomViewSource, /this\.trapFocus\(event\)/);
+assert.match(roomViewSource, /this\.resetCamera\(\)/);
 
 const saveConfig = structuredClone(sourceConfig);
 const saveContext = {

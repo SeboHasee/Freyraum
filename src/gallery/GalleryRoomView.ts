@@ -3,26 +3,63 @@ import type { GalleryRoomView as GalleryRoomViewConfig } from '../config/museumH
 import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
 
+const MIN_CAMERA_SCALE = 1;
+const MAX_CAMERA_SCALE = 4;
+
+interface PhotoPointer {
+  x: number;
+  y: number;
+}
+
+type CameraGesture =
+  | { kind: 'pan'; pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number }
+  | {
+      kind: 'pinch';
+      distance: number;
+      centerX: number;
+      centerY: number;
+      scale: number;
+      offsetX: number;
+      offsetY: number;
+    };
+
 function resolveBackgroundUrl(src: string): string {
-  const path = src.replace(/^Backgrounds\//, 'backgrounds/');
-  return new URL(`${import.meta.env.BASE_URL}${path}`, window.location.href).href;
+  const filename = src.replace(/^Backgrounds\//, '');
+  return new URL(`${import.meta.env.BASE_URL}backgrounds/${filename}`, window.location.href).href;
+}
+
+function pointerDistance(first: PhotoPointer, second: PhotoPointer): number {
+  return Math.hypot(second.x - first.x, second.y - first.y);
+}
+
+function pointerCenter(first: PhotoPointer, second: PhotoPointer): PhotoPointer {
+  return { x: (first.x + second.x) * 0.5, y: (first.y + second.y) * 0.5 };
 }
 
 export class GalleryRoomView {
   readonly element: HTMLElement;
+  private readonly scene: HTMLElement;
   private readonly background: HTMLImageElement;
   private readonly artworkImage: HTMLImageElement;
   private readonly status: HTMLElement;
   private readonly viewSelect: HTMLSelectElement;
+  private readonly zoomOutButton: HTMLButtonElement;
+  private readonly zoomInButton: HTMLButtonElement;
+  private readonly resetButton: HTMLButtonElement;
   private readonly previousArtworkButton: HTMLButtonElement;
   private readonly nextArtworkButton: HTMLButtonElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly resizeObserver: ResizeObserver | null;
+  private readonly pointers = new Map<number, PhotoPointer>();
   private views: readonly GalleryRoomViewConfig[];
   private activeView: GalleryRoomViewConfig | null = null;
   private activeArtwork: Artwork | null = null;
   private fallbackUrl: string | null = null;
   private useFallback = false;
+  private cameraScale = 1;
+  private cameraOffsetX = 0;
+  private cameraOffsetY = 0;
+  private gesture: CameraGesture | null = null;
   private enabled = false;
   private visible = false;
   private disposed = false;
@@ -38,8 +75,22 @@ export class GalleryRoomView {
     const root = document.createElement('section');
     root.className = 'gallery-room-view';
     root.hidden = true;
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-modal', 'true');
     root.setAttribute('aria-label', 'Fotografische Raumansicht');
+    root.setAttribute('aria-hidden', 'true');
     this.element = root;
+
+    const scene = document.createElement('div');
+    scene.className = 'gallery-room-view__scene';
+    scene.addEventListener('pointerdown', this.onPointerDown);
+    scene.addEventListener('pointermove', this.onPointerMove);
+    scene.addEventListener('pointerup', this.onPointerEnd);
+    scene.addEventListener('pointercancel', this.onPointerEnd);
+    scene.addEventListener('lostpointercapture', this.onPointerEnd);
+    scene.addEventListener('wheel', this.onWheel, { passive: false });
+    scene.addEventListener('dblclick', this.onDoubleClick);
+    this.scene = scene;
 
     const background = document.createElement('img');
     background.className = 'gallery-room-view__background';
@@ -57,9 +108,15 @@ export class GalleryRoomView {
     artworkImage.addEventListener('load', this.updateArtworkTransform);
     artworkImage.addEventListener('error', this.onArtworkError);
     this.artworkImage = artworkImage;
+    scene.append(background, artworkImage);
 
     const controls = document.createElement('div');
     controls.className = 'gallery-room-view__controls';
+    controls.setAttribute('role', 'group');
+    controls.setAttribute('aria-label', 'Raumansicht-Steuerung');
+
+    const roomControls = document.createElement('div');
+    roomControls.className = 'gallery-room-view__room-controls';
     const label = document.createElement('label');
     label.className = 'gallery-room-view__label';
     label.textContent = 'Raum';
@@ -71,6 +128,26 @@ export class GalleryRoomView {
       if (selected) this.setView(selected.id);
     });
     this.viewSelect = select;
+    roomControls.append(label, select);
+
+    const artworkControls = document.createElement('div');
+    artworkControls.className = 'gallery-room-view__artwork-controls';
+    const previousArtwork = this.createControlButton('gallery-room-view__artwork-nav', 'Vorheriges Kunstwerk anzeigen', '‹');
+    previousArtwork.addEventListener('click', () => this.onNavigateArtwork(-1));
+    this.previousArtworkButton = previousArtwork;
+    const nextArtwork = this.createControlButton('gallery-room-view__artwork-nav', 'Nächstes Kunstwerk anzeigen', '›');
+    nextArtwork.addEventListener('click', () => this.onNavigateArtwork(1));
+    this.nextArtworkButton = nextArtwork;
+
+    const zoomControls = document.createElement('div');
+    zoomControls.className = 'gallery-room-view__zoom-controls';
+    this.zoomOutButton = this.createControlButton('gallery-room-view__zoom-btn', 'Verkleinern', '−');
+    this.zoomOutButton.addEventListener('click', () => this.zoomBy(1 / 1.25));
+    this.resetButton = this.createControlButton('gallery-room-view__zoom-btn', 'Ansicht zurücksetzen', '⟲');
+    this.resetButton.addEventListener('click', () => this.resetCamera());
+    this.zoomInButton = this.createControlButton('gallery-room-view__zoom-btn', 'Vergrößern', '+');
+    this.zoomInButton.addEventListener('click', () => this.zoomBy(1.25));
+    zoomControls.append(previousArtwork, this.zoomOutButton, this.resetButton, this.zoomInButton, nextArtwork);
 
     const close = document.createElement('button');
     close.type = 'button';
@@ -79,40 +156,23 @@ export class GalleryRoomView {
     close.setAttribute('aria-label', 'Fotografische Raumansicht schließen und zur Galerie zurückkehren');
     close.addEventListener('click', this.onClose);
     this.closeButton = close;
-    label.appendChild(select);
-    controls.append(label, close);
 
-    const artworkControls = document.createElement('div');
-    artworkControls.className = 'gallery-room-view__artwork-controls';
-    const previousArtwork = document.createElement('button');
-    previousArtwork.type = 'button';
-    previousArtwork.className = 'gallery-room-view__artwork-nav';
-    previousArtwork.textContent = '‹';
-    previousArtwork.setAttribute('aria-label', 'Vorheriges Kunstwerk anzeigen');
-    previousArtwork.addEventListener('click', () => this.onNavigateArtwork(-1));
-    this.previousArtworkButton = previousArtwork;
-    const nextArtwork = document.createElement('button');
-    nextArtwork.type = 'button';
-    nextArtwork.className = 'gallery-room-view__artwork-nav';
-    nextArtwork.textContent = '›';
-    nextArtwork.setAttribute('aria-label', 'Nächstes Kunstwerk anzeigen');
-    nextArtwork.addEventListener('click', () => this.onNavigateArtwork(1));
-    this.nextArtworkButton = nextArtwork;
-    artworkControls.append(previousArtwork, nextArtwork);
+    controls.append(roomControls, zoomControls, close);
 
     const status = document.createElement('p');
     status.className = 'gallery-room-view__status';
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     this.status = status;
-    root.append(background, artworkImage, controls, artworkControls, status);
+    root.append(scene, controls, status);
     container.appendChild(root);
 
     this.resizeObserver = typeof ResizeObserver === 'undefined'
       ? null
-      : new ResizeObserver(this.updateArtworkTransform);
+      : new ResizeObserver(this.handleResize);
     this.resizeObserver?.observe(root);
-    window.addEventListener('resize', this.updateArtworkTransform, { passive: true });
+    window.addEventListener('resize', this.handleResize, { passive: true });
+    root.addEventListener('keydown', this.onKeyDown);
     this.setViews(views);
   }
 
@@ -173,8 +233,11 @@ export class GalleryRoomView {
     this.onVisibilityChange(this.visible);
     if (this.visible) {
       this.status.textContent = '';
+      this.resetCamera();
       this.closeButton.focus({ preventScroll: true });
-      this.updateArtworkTransform();
+    } else {
+      this.pointers.clear();
+      this.gesture = null;
     }
   }
 
@@ -182,11 +245,28 @@ export class GalleryRoomView {
     if (this.disposed) return;
     this.disposed = true;
     this.resizeObserver?.disconnect();
-    window.removeEventListener('resize', this.updateArtworkTransform);
+    window.removeEventListener('resize', this.handleResize);
+    this.element.removeEventListener('keydown', this.onKeyDown);
+    this.scene.removeEventListener('pointerdown', this.onPointerDown);
+    this.scene.removeEventListener('pointermove', this.onPointerMove);
+    this.scene.removeEventListener('pointerup', this.onPointerEnd);
+    this.scene.removeEventListener('pointercancel', this.onPointerEnd);
+    this.scene.removeEventListener('lostpointercapture', this.onPointerEnd);
+    this.scene.removeEventListener('wheel', this.onWheel);
+    this.scene.removeEventListener('dblclick', this.onDoubleClick);
     this.background.removeEventListener('error', this.onBackgroundError);
     this.artworkImage.removeEventListener('load', this.updateArtworkTransform);
     this.artworkImage.removeEventListener('error', this.onArtworkError);
     this.element.remove();
+  }
+
+  private createControlButton(className: string, label: string, text: string): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.textContent = text;
+    button.setAttribute('aria-label', label);
+    return button;
   }
 
   private setView(id: string): void {
@@ -195,9 +275,51 @@ export class GalleryRoomView {
     this.activeView = view;
     this.viewSelect.value = view.id;
     this.status.textContent = '';
+    this.element.classList.remove('has-error');
     this.background.src = resolveBackgroundUrl(view.background.src);
+    this.resetCamera();
+  }
+
+  private applyCamera(): void {
+    const rect = this.element.getBoundingClientRect();
+    const maxOffsetX = Math.max(0, rect.width * (this.cameraScale - 1));
+    const maxOffsetY = Math.max(0, rect.height * (this.cameraScale - 1));
+    this.cameraOffsetX = Math.min(0, Math.max(-maxOffsetX, this.cameraOffsetX));
+    this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
+    this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
+    this.zoomOutButton.disabled = this.cameraScale <= MIN_CAMERA_SCALE;
+    this.zoomInButton.disabled = this.cameraScale >= MAX_CAMERA_SCALE;
+    this.resetButton.disabled = this.cameraScale === MIN_CAMERA_SCALE
+      && this.cameraOffsetX === 0 && this.cameraOffsetY === 0;
     this.updateArtworkTransform();
   }
+
+  private setCamera(scale: number, offsetX: number, offsetY: number): void {
+    this.cameraScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
+    this.cameraOffsetX = offsetX;
+    this.cameraOffsetY = offsetY;
+    this.applyCamera();
+  }
+
+  private zoomAt(scale: number, focusX: number, focusY: number): void {
+    const nextScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
+    const contentX = (focusX - this.cameraOffsetX) / this.cameraScale;
+    const contentY = (focusY - this.cameraOffsetY) / this.cameraScale;
+    this.setCamera(nextScale, focusX - contentX * nextScale, focusY - contentY * nextScale);
+  }
+
+  private zoomBy(factor: number): void {
+    const rect = this.element.getBoundingClientRect();
+    this.zoomAt(this.cameraScale * factor, rect.width * 0.5, rect.height * 0.5);
+  }
+
+  private resetCamera(): void {
+    this.setCamera(MIN_CAMERA_SCALE, 0, 0);
+  }
+
+  private handleResize = (): void => {
+    this.applyCamera();
+  };
 
   private updateArtworkTransform = (): void => {
     if (!this.activeView || !this.activeArtwork || !this.artworkImage.complete) return;
@@ -212,7 +334,8 @@ export class GalleryRoomView {
       width,
       height,
       rect.width,
-      rect.height
+      rect.height,
+      { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY }
     );
     if (!transform) {
       this.showError('Die Bildplatzierung in diesem Raum ist ungültig.');
@@ -225,8 +348,136 @@ export class GalleryRoomView {
     this.artworkImage.style.transform = transform.transform;
   };
 
+  private onPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0 && event.pointerType === 'mouse') return;
+    const point = this.pointerPosition(event);
+    this.pointers.set(event.pointerId, point);
+    this.scene.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    this.beginGesture();
+  };
+
+  private onPointerMove = (event: PointerEvent): void => {
+    if (!this.pointers.has(event.pointerId)) return;
+    this.pointers.set(event.pointerId, this.pointerPosition(event));
+    const points = [...this.pointers.entries()];
+    if (this.gesture?.kind === 'pan' && points.length === 1 && points[0]![0] === this.gesture.pointerId) {
+      const point = points[0]![1];
+      this.setCamera(
+        this.cameraScale,
+        this.gesture.offsetX + point.x - this.gesture.startX,
+        this.gesture.offsetY + point.y - this.gesture.startY
+      );
+      return;
+    }
+    if (this.gesture?.kind === 'pinch' && points.length >= 2) {
+      const first = points[0]![1];
+      const second = points[1]![1];
+      const center = pointerCenter(first, second);
+      const distance = Math.max(1, pointerDistance(first, second));
+      const scale = this.gesture.scale * distance / this.gesture.distance;
+      const contentX = (this.gesture.centerX - this.gesture.offsetX) / this.gesture.scale;
+      const contentY = (this.gesture.centerY - this.gesture.offsetY) / this.gesture.scale;
+      this.setCamera(scale, center.x - contentX * scale, center.y - contentY * scale);
+    }
+  };
+
+  private onPointerEnd = (event: PointerEvent): void => {
+    if (!this.pointers.delete(event.pointerId)) return;
+    if (this.scene.hasPointerCapture(event.pointerId)) this.scene.releasePointerCapture(event.pointerId);
+    this.beginGesture();
+  };
+
+  private beginGesture(): void {
+    const entries = [...this.pointers.entries()];
+    if (entries.length >= 2) {
+      const first = entries[0]![1];
+      const second = entries[1]![1];
+      const center = pointerCenter(first, second);
+      this.gesture = {
+        kind: 'pinch',
+        distance: Math.max(1, pointerDistance(first, second)),
+        centerX: center.x,
+        centerY: center.y,
+        scale: this.cameraScale,
+        offsetX: this.cameraOffsetX,
+        offsetY: this.cameraOffsetY,
+      };
+    } else if (entries.length === 1) {
+      const [pointerId, point] = entries[0]!;
+      this.gesture = {
+        kind: 'pan',
+        pointerId,
+        startX: point.x,
+        startY: point.y,
+        offsetX: this.cameraOffsetX,
+        offsetY: this.cameraOffsetY,
+      };
+    } else {
+      this.gesture = null;
+    }
+    this.scene.classList.toggle('is-dragging', entries.length > 0);
+  }
+
+  private pointerPosition(event: PointerEvent): PhotoPointer {
+    const rect = this.element.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  private onWheel = (event: WheelEvent): void => {
+    event.preventDefault();
+    const rect = this.element.getBoundingClientRect();
+    this.zoomAt(
+      this.cameraScale * Math.exp(-event.deltaY * 0.001),
+      event.clientX - rect.left,
+      event.clientY - rect.top
+    );
+  };
+
+  private onDoubleClick = (): void => {
+    this.resetCamera();
+  };
+
+  private onKeyDown = (event: KeyboardEvent): void => {
+    if (!this.visible) return;
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.onClose();
+      return;
+    }
+    if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      this.zoomBy(1.25);
+    } else if (event.key === '-') {
+      event.preventDefault();
+      this.zoomBy(1 / 1.25);
+    } else if (event.key === '0' || event.key === 'Home') {
+      event.preventDefault();
+      this.resetCamera();
+    } else if (event.key === 'Tab') {
+      this.trapFocus(event);
+    }
+  };
+
+  private trapFocus(event: KeyboardEvent): void {
+    const focusable = [...this.element.querySelectorAll<HTMLElement>(
+      'button:not([hidden]):not(:disabled), select:not(:disabled)'
+    )];
+    if (focusable.length === 0) return;
+    const first = focusable[0]!;
+    const last = focusable[focusable.length - 1]!;
+    if (event.shiftKey && (document.activeElement === first || !this.element.contains(document.activeElement))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (document.activeElement === last || !this.element.contains(document.activeElement))) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   private onBackgroundError = (): void => {
-    this.showError(`Der Raum „${this.activeView?.name ?? ''}“ konnte nicht geladen werden.`);
+    this.showError(`Der Raum „${this.activeView?.name ?? ''}“ konnte nicht geladen werden. Bitte führen Sie „Update Gallery“ erneut aus.`);
   };
 
   private onArtworkError = (): void => {
