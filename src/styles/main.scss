@@ -442,6 +442,10 @@ canvas {
     gap: 8px;
   }
 
+  .gallery-room-view__utilities {
+    top: calc(var(--safe-top) + 124px);
+  }
+
   .gallery-room-view__room-controls {
     min-height: 44px;
   }
@@ -452,6 +456,12 @@ canvas {
 
   .gallery-room-view .zoom-controls.gallery-room-view__zoom-controls {
     right: calc(16px + var(--safe-right));
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899px) {
+  .gallery-room-view__utilities {
+    top: calc(var(--safe-top) + 72px);
   }
 }
 
@@ -471,7 +481,11 @@ canvas {
   }
 
   .gallery-room-view .zoom-controls.gallery-room-view__zoom-controls {
-    bottom: calc(var(--safe-bottom) + 18px);
+    right: calc(var(--safe-right) + 16px);
+    bottom: calc(var(--safe-bottom) + 164px);
+    flex-direction: row;
+    gap: 4px;
+    padding: 6px;
   }
 }
 

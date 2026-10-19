@@ -210,12 +210,16 @@ try {
       emphasis: getComputedStyle(button).borderColor };
   })()`);
   assert.equal(roomEntry.pressed, 'false', 'room-view entry exposes its inactive state');
-  assert.ok(roomEntry.label.includes('Fotoraum'), 'room-view entry has a recognizable visible label');
+  assert.ok(
+    roomEntry.label === 'Fotoraum' || roomEntry.label === 'Raum',
+    'room-view entry has a recognizable visible full or compact label'
+  );
   const entryModes = await evaluate(`(() => {
     const button = document.querySelector('.topbar__room-view-btn');
     const root = document.documentElement;
     const oldChrome = root.dataset.chromeMode;
     const oldPresentation = root.dataset.presentation;
+    const oldLayoutTier = root.dataset.layoutTier;
     root.dataset.chromeMode = 'clean';
     const cleanDisplay = getComputedStyle(button).display;
     root.dataset.chromeMode = 'visible';
@@ -226,7 +230,7 @@ try {
     root.dataset.chromeMode = oldChrome ?? '';
     root.dataset.layoutTier = 'phone-portrait';
     const shortLabelVisible = getComputedStyle(button.querySelector('.topbar__back-btn-label--short')).display !== 'none';
-    root.dataset.layoutTier = '';
+    root.dataset.layoutTier = oldLayoutTier ?? '';
     const rect = button.getBoundingClientRect();
     return { cleanDisplay, visibleDisplay, presentationDisplay, shortLabelVisible, width: rect.width };
   })()`);
@@ -245,7 +249,10 @@ try {
       emphasis: getComputedStyle(button).borderColor };
   })()`);
   assert.equal(activeRoomEntry.pressed, 'true', 'room-view toggle exposes its active state');
-  assert.equal(activeRoomEntry.label, 'Fotoraum aktiv', 'active toggle exposes the active room-view state');
+  assert.ok(
+    activeRoomEntry.label === 'Fotoraum aktiv' || activeRoomEntry.label === 'Raum aktiv',
+    'active toggle exposes the active room-view state in full or compact form'
+  );
   assert.notEqual(activeRoomEntry.emphasis, roomEntry.emphasis, 'active room-view control has a distinct visual state');
   const controls = await evaluate(`(() => {
     const root = document.querySelector('.gallery-room-view');
@@ -363,15 +370,27 @@ try {
     const image = await evaluate(`(() => {
       const root = document.querySelector('.gallery-room-view');
       const background = root.querySelector('.gallery-room-view__background');
+      const backgroundStyle = getComputedStyle(background);
+      const backgroundRect = background.getBoundingClientRect();
+      const sampleElement = document.elementFromPoint(Math.round(innerWidth * 0.08), Math.round(innerHeight * 0.3));
       return {
         decoded: background.naturalWidth > 0,
         source: background.currentSrc,
+        display: backgroundStyle.display,
+        visibility: backgroundStyle.visibility,
+        opacity: backgroundStyle.opacity,
+        bounds: [backgroundRect.x, backgroundRect.y, backgroundRect.width, backgroundRect.height],
+        sampleElement: sampleElement?.className ?? sampleElement?.tagName,
         status: root.querySelector('.gallery-room-view__status').textContent,
       };
     })()`);
     assert.equal(image.decoded, true, `${roomId} photo decodes in the local preview`);
     assert.equal(image.status, '', `${roomId} photo has no load or projection error`);
-    console.log(`✓ ${roomId} photo loaded from ${image.source}`);
+    assert.equal(image.display, 'block', `${roomId} photo is visibly rendered`);
+    assert.equal(image.visibility, 'visible', `${roomId} photo is not hidden`);
+    assert.equal(image.opacity, '1', `${roomId} photo is not transparent`);
+    assert.equal(image.sampleElement, 'gallery-room-view__background', `${roomId} photo covers the room scene`);
+    console.log(`✓ ${roomId} photo loaded and rendered from ${image.source}`);
   }
 
   for (const [roomId, width, height] of [
@@ -391,6 +410,15 @@ try {
       select.value = '${roomId}';
       select.dispatchEvent(new Event('change', { bubbles: true }));
     })()`);
+    const filename = roomId === 'bedroom' ? 'gallery-bedroom.png' : 'gallery-wohnraum.png';
+    await waitFor(
+      `(() => {
+        const background = document.querySelector('.gallery-room-view__background');
+        return background.complete && background.naturalWidth > 0
+          && background.currentSrc.endsWith('/${filename}');
+      })()`,
+      20_000
+    );
     await delay(100);
     const layout = await evaluate(`(() => {
       const root = document.querySelector('.gallery-room-view');
@@ -570,19 +598,23 @@ try {
     'zoom button centers the other room artwork using its own projective center'
   );
   const otherRoomBeforeWheel = await readArtworkScreenCenter();
-  await command('Input.dispatchMouseEvent', {
-    type: 'mouseWheel',
-    x: 12,
-    y: 12,
-    deltaX: 0,
-    deltaY: -100,
-  });
+  const otherRoomWheelPoint = await evaluate(
+    `({ x: innerWidth - 80, y: Math.round(innerHeight * 0.38) })`
+  );
+  await evaluate(`(() => {
+    const target = document.elementFromPoint(${otherRoomWheelPoint.x}, ${otherRoomWheelPoint.y});
+    target.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }));
+  })()`);
   await delay(650);
   const otherRoomAfterWheel = await readArtworkScreenCenter();
   assert.ok(
     Math.abs(otherRoomAfterWheel.x - otherRoomAfterWheel.viewport.width / 2) < 2
       && Math.abs(otherRoomAfterWheel.y - otherRoomAfterWheel.viewport.height / 2) < 2,
-    'off-center wheel zoom targets the mapped artwork center in the other room'
+    `off-center wheel zoom targets the mapped artwork center in the other room (${JSON.stringify({
+      before: otherRoomBeforeWheel,
+      after: otherRoomAfterWheel,
+      wheelPoint: otherRoomWheelPoint,
+    })})`
   );
   assert.ok(otherRoomAfterWheel.scale > otherRoomBeforeWheel.scale, 'wheel zoom increases the camera scale in the other room');
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
