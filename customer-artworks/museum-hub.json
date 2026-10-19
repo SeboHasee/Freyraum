@@ -15,6 +15,50 @@
   "backgroundFallback": {
     "src": "Backgrounds/museum-empty.png"
   },
+  "galleryRoomViews": [
+    {
+      "id": "bedroom",
+      "name": "Schlafzimmer",
+      "background": {
+        "src": "Backgrounds/gallery-bedroom.png",
+        "width": 2000,
+        "height": 1540
+      },
+      "wallQuad": [
+        { "x": 0.227, "y": 0.103 },
+        { "x": 0.396, "y": 0.103 },
+        { "x": 0.396, "y": 0.326 },
+        { "x": 0.227, "y": 0.326 }
+      ],
+      "wallAspect": 0.98,
+      "placement": {
+        "u": 0.5,
+        "v": 0.5,
+        "height": 0.88
+      }
+    },
+    {
+      "id": "wohnraum",
+      "name": "Wohnraum",
+      "background": {
+        "src": "Backgrounds/gallery-wohnraum.png",
+        "width": 1896,
+        "height": 1424
+      },
+      "wallQuad": [
+        { "x": 0.281, "y": 0.14 },
+        { "x": 0.389, "y": 0.14 },
+        { "x": 0.389, "y": 0.373 },
+        { "x": 0.281, "y": 0.373 }
+      ],
+      "wallAspect": 0.61,
+      "placement": {
+        "u": 0.5,
+        "v": 0.5,
+        "height": 0.88
+      }
+    }
+  ],
   "visualTokens": {
     "galleryWall": "#C7CED4",
     "museumWall": "#C7CED4"

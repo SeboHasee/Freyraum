@@ -12,6 +12,7 @@ import { LightingSetup } from './lighting/LightingSetup';
 import { TextureManager } from './gallery/TextureManager';
 import { ArtworkMesh } from './gallery/ArtworkMesh';
 import { GalleryManager, type ArtworkViewportMetrics, type FullGalleryReadinessResult } from './gallery/GalleryManager';
+import { GalleryRoomView } from './gallery/GalleryRoomView';
 import { Topbar } from './ui/Topbar';
 import { InfoPanel } from './ui/InfoPanel';
 import { NavigationControls } from './ui/NavigationControls';
@@ -963,6 +964,7 @@ async function main(): Promise<void> {
   applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
   rendererManager.renderer.domElement.classList.add('gallery-canvas', 'gallery-canvas--loading');
   let museumHub: MainMuseumHub | null = null;
+  let galleryRoomView: GalleryRoomView | null = null;
   const restoreStatus = document.createElement('div');
   restoreStatus.className = 'webgl-restore-status';
   restoreStatus.setAttribute('role', 'status');
@@ -1193,6 +1195,15 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
+  galleryRoomView = new GalleryRoomView(
+    app,
+    museumHubResolution.galleryRoomViews,
+    () => galleryRoomView?.setVisible(false),
+    (visible) => topbar.setRoomViewActive(visible)
+  );
+  galleryRoomView.setArtwork(artworks[galleryManager.index] ?? null);
+  topbar.setRoomViewAvailable(museumHubResolution.galleryRoomViews.length > 0);
+  topbar.onRoomViewClick = () => galleryRoomView?.toggle();
   museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset, museumArtworks);
   museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
     alignPage: false,
@@ -2041,6 +2052,7 @@ async function main(): Promise<void> {
       alignPage: false,
       source: 'gallery-navigate',
     });
+    galleryRoomView?.setArtwork(artworks[index] ?? null);
     diagnostics.info('gallery', 'navigate', 'Artwork changed', {
       index,
       artworkId: artworks[index]?.id,
@@ -2060,6 +2072,7 @@ async function main(): Promise<void> {
   const destinationRouter = new DestinationRouter({
     onStateChange: (state) => {
       app.dataset['experience'] = state === 'destination' ? 'gallery' : state;
+      galleryRoomView?.setEnabled(state === 'destination');
       applyResolvedWallSurfaceColor(app, resolvedWallTokens, rendererManager);
       verifyMuseumWallColorConsistency(
         diagnostics,
@@ -2367,6 +2380,7 @@ async function main(): Promise<void> {
     audioControls.dispose();
     hintText.dispose();
     timeline.dispose();
+    galleryRoomView?.dispose();
     restoreStatus.remove();
     backgroundAudio.dispose();
     galleryManager.dispose();

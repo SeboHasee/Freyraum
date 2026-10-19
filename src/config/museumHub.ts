@@ -165,6 +165,26 @@ export interface HubRoomEntry {
   name?: string;
 }
 
+export interface GalleryRoomView {
+  id: string;
+  name: string;
+  background: {
+    src: string;
+    width: number;
+    height: number;
+  };
+  /** Normalized top-left, top-right, bottom-right, bottom-left wall boundary. */
+  wallQuad: Quad;
+  /** Approximate physical wall width/height used to preserve artwork aspect. */
+  wallAspect: number;
+  /** Normalized wall-plane center and artwork height. */
+  placement: {
+    u: number;
+    v: number;
+    height: number;
+  };
+}
+
 export interface MuseumHubConfig {
   version: number;
   coverage: 'all-active-artworks';
@@ -189,6 +209,8 @@ export interface MuseumHubConfig {
   slotsPerPage?: number;
   /** Explicit room list (v1.35). Absent in older files; derived from slot ids. */
   rooms?: HubRoomEntry[];
+  /** Optional photographic room scenes for the inspection-gallery view. */
+  galleryRoomViews?: GalleryRoomView[];
   slots: HubSlotConfig[];
 }
 
@@ -315,6 +337,7 @@ export interface MuseumHubResolution {
   walls: readonly ResolvedHubWall[];
   wallById: ReadonlyMap<string, ResolvedHubWall>;
   slotsPerPage: number;
+  galleryRoomViews: readonly GalleryRoomView[];
   fallbacks: MuseumHubConfig['fallbacks'];
   selectionTimeoutMs: number;
   source: MuseumHubSource;
@@ -1680,6 +1703,7 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
       `museum-hub slotsPerPage was clamped to ${slotsPerPage} (this room supports at most ${HUB_SLOTS_PER_PAGE} artworks).`
     );
   }
+  const galleryRoomViews = sanitizeGalleryRoomViews(cfg['galleryRoomViews'], warnings);
   const rawSlots = Array.isArray(cfg['slots']) ? (cfg['slots'] as unknown[]) : [];
   if (rawSlots.length === 0) {
     warnings.push('museum-hub config ignored: expected a non-empty slots array.');
@@ -1779,11 +1803,90 @@ export function sanitizeMuseumHubConfig(raw: unknown): SanitizedConfig {
       fallbacks,
       slotsPerPage,
       ...(rooms ? { rooms } : {}),
+      ...(galleryRoomViews ? { galleryRoomViews } : {}),
       slots,
     },
     warnings,
     source,
   };
+}
+
+function sanitizeGalleryRoomViews(raw: unknown, warnings: string[]): GalleryRoomView[] | undefined {
+  if (raw === undefined) return undefined;
+  if (!Array.isArray(raw)) {
+    warnings.push('museum-hub galleryRoomViews ignored: expected an array.');
+    return undefined;
+  }
+  const views: GalleryRoomView[] = [];
+  const seen = new Set<string>();
+  for (const candidate of raw) {
+    const entry = candidate && typeof candidate === 'object' ? candidate as Record<string, unknown> : null;
+    const id = entry && typeof entry['id'] === 'string' ? entry['id'].trim().toLowerCase() : '';
+    const name = entry && typeof entry['name'] === 'string' ? entry['name'].trim().slice(0, 80) : '';
+    const background = entry?.['background'] && typeof entry['background'] === 'object'
+      ? entry['background'] as Record<string, unknown>
+      : null;
+    const src = typeof background?.['src'] === 'string' ? background['src'].trim() : '';
+    const width = background?.['width'];
+    const height = background?.['height'];
+    const wallQuad = Array.isArray(entry?.['wallQuad']) && entry['wallQuad'].length === 4
+      ? entry['wallQuad'].map((rawPoint) => {
+          const pointValue = rawPoint && typeof rawPoint === 'object'
+            ? rawPoint as Record<string, unknown>
+            : null;
+          return pointValue
+            && typeof pointValue['x'] === 'number'
+            && Number.isFinite(pointValue['x'])
+            && typeof pointValue['y'] === 'number'
+            && Number.isFinite(pointValue['y'])
+            ? point(pointValue['x'], pointValue['y'])
+            : null;
+        })
+      : null;
+    const wallAspect = entry?.['wallAspect'];
+    const placementValue = entry?.['placement'] && typeof entry['placement'] === 'object'
+      ? entry['placement'] as Record<string, unknown>
+      : null;
+    const u = placementValue?.['u'];
+    const v = placementValue?.['v'];
+    const artworkHeight = placementValue?.['height'];
+    const validQuad = wallQuad?.every((corner): corner is Point2D => corner !== null) === true
+      && quadIsConvex(wallQuad as unknown as Quad)
+      && wallQuad!.every((corner) => corner.x >= 0 && corner.x <= 1 && corner.y >= 0 && corner.y <= 1)
+      && Math.abs(polygonSignedArea(wallQuad as unknown as Quad)) >= 0.001;
+    const validBackground =
+      /^Backgrounds\/[^/\\]+\.(?:png|jpe?g|webp)$/i.test(src)
+      && !src.includes('..')
+      && typeof width === 'number' && Number.isInteger(width) && width > 0 && width <= 12000
+      && typeof height === 'number' && Number.isInteger(height) && height > 0 && height <= 12000;
+    const validPlacement =
+      typeof wallAspect === 'number' && Number.isFinite(wallAspect) && wallAspect >= 0.25 && wallAspect <= 4
+      && typeof u === 'number' && Number.isFinite(u) && u >= 0 && u <= 1
+      && typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1
+      && typeof artworkHeight === 'number' && Number.isFinite(artworkHeight) && artworkHeight >= 0.05 && artworkHeight <= 0.9;
+    if (
+      !entry
+      || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(id)
+      || !name
+      || seen.has(id)
+      || !validBackground
+      || !validQuad
+      || !validPlacement
+    ) {
+      warnings.push(`gallery room view "${id || '?'}" ignored: invalid or unsafe configuration.`);
+      continue;
+    }
+    seen.add(id);
+    views.push({
+      id,
+      name,
+      background: { src, width: width as number, height: height as number },
+      wallQuad: wallQuad as unknown as Quad,
+      wallAspect: wallAspect as number,
+      placement: { u: u as number, v: v as number, height: artworkHeight as number },
+    });
+  }
+  return views;
 }
 
 function sanitizeRoomList(raw: unknown, slots: readonly HubSlotConfig[], warnings: string[]): HubRoomEntry[] | undefined {
@@ -1836,6 +1939,7 @@ export function hubFixedFieldsSignature(config: MuseumHubConfig): string {
     room: config.room,
     hangingRules: config.hangingRules,
     slotsPerPage: config.slotsPerPage,
+    galleryRoomViews: config.galleryRoomViews ?? [],
     walls: config.walls.map((wall) => {
       const fixedWall = { ...wall };
       delete fixedWall.safePolygon;
@@ -3062,6 +3166,7 @@ export function resolveMuseumHub(
     walls,
     wallById,
     slotsPerPage,
+    galleryRoomViews: config.galleryRoomViews ?? [],
     fallbacks: config.fallbacks,
     selectionTimeoutMs,
     source,
