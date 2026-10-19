@@ -257,53 +257,90 @@ canvas {
   user-select: none;
 }
 
-.gallery-room-view__artwork {
+.gallery-room-view__artwork-frame {
   position: absolute;
   inset: 0 auto auto 0;
   max-width: none;
-  object-fit: fill;
   transform-origin: 0 0;
+  perspective: 1200px;
+  pointer-events: auto;
+}
+
+.gallery-room-view__artwork-frame[hidden] {
+  display: none;
+}
+
+.gallery-room-view__artwork-frame:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+
+.gallery-room-view__artwork {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  transform-origin: center;
+  transform-style: preserve-3d;
   pointer-events: none;
-  filter: drop-shadow(0 8px 9px rgb(15 20 24 / 34%));
+  filter:
+    drop-shadow(1px 2px 2px rgb(15 20 24 / 22%))
+    drop-shadow(4px 8px 10px rgb(15 20 24 / 19%))
+    drop-shadow(10px 15px 20px rgb(15 20 24 / 12%));
+  transition:
+    transform var(--dur-control) var(--ease-gallery-out),
+    filter var(--dur-control) var(--ease-gallery-out);
+  --artwork-tilt-x: 0deg;
+  --artwork-tilt-y: 0deg;
+}
+
+.gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork {
+  transform:
+    perspective(1200px)
+    rotateX(var(--artwork-tilt-x))
+    rotateY(var(--artwork-tilt-y))
+    scale3d(1.012, 1.012, 1);
+  filter:
+    drop-shadow(1px 2px 2px rgb(15 20 24 / 25%))
+    drop-shadow(5px 10px 12px rgb(15 20 24 / 22%))
+    drop-shadow(12px 18px 23px rgb(15 20 24 / 15%));
 }
 
 .gallery-room-view__controls {
   position: absolute;
-  bottom: calc(var(--safe-bottom) + 16px);
+  bottom: calc(var(--safe-bottom) + 20px);
   left: 50%;
   z-index: 1;
-  display: grid;
-  grid-template-areas:
-    "room close"
-    "zoom zoom";
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  gap: 6px 12px;
+  gap: 14px;
   width: max-content;
-  max-width: calc(100vw - 24px);
+  max-width: calc(100vw - var(--safe-left) - var(--safe-right) - 32px);
   padding: 10px 12px;
-  border: 1px solid rgb(255 255 255 / 28%);
-  border-radius: 20px;
-  background: rgb(18 23 27 / 82%);
-  color: #fff;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg-strong);
+  color: var(--text);
   box-shadow: var(--shadow-medium);
   transform: translateX(-50%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .gallery-room-view__room-controls {
-  grid-area: room;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 140px;
 }
 
-.gallery-room-view__label {
-  padding-left: 4px;
-  font-size: 12px;
+.gallery-room-view__label,
+.gallery-room-view__group-label {
+  color: var(--text-muted);
+  font-size: 10px;
   font-weight: 600;
-  white-space: nowrap;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  text-transform: uppercase;
 }
 
 .gallery-room-view__select,
@@ -311,33 +348,64 @@ canvas {
 .gallery-room-view__zoom-btn,
 .gallery-room-view__artwork-nav {
   min-height: 44px;
-  border: 1px solid rgb(255 255 255 / 28%);
-  border-radius: var(--radius-pill);
-  background: #fff;
-  color: #12171b;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg-strong);
+  color: var(--text-strong);
   font: inherit;
 }
 
 .gallery-room-view__select {
-  max-width: min(52vw, 220px);
-  padding: 0 28px 0 10px;
+  width: 100%;
+  max-width: 220px;
+  padding: 0 32px 0 12px;
+  cursor: pointer;
 }
 
 .gallery-room-view__close {
-  grid-area: close;
-  padding: 0 15px;
-  font-size: 12px;
+  flex: 0 0 auto;
+  padding: 0 14px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
 }
 
+.gallery-room-view__artwork-controls {
+  display: grid;
+  grid-template-columns: 44px minmax(110px, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  min-width: 190px;
+  max-width: 300px;
+}
+
+.gallery-room-view__artwork-info {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gallery-room-view__artwork-label {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-room-view__camera-controls {
+  display: grid;
+  gap: 4px;
+}
+
 .gallery-room-view__zoom-controls {
-  grid-area: zoom;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
+  gap: 6px;
 }
 
 .gallery-room-view__artwork-nav {
@@ -345,7 +413,9 @@ canvas {
   width: 44px;
   height: 44px;
   place-items: center;
-  font-size: 30px;
+  border-radius: var(--radius-pill);
+  font-size: 26px;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -353,19 +423,33 @@ canvas {
   display: grid;
   width: 44px;
   place-items: center;
+  border-radius: var(--radius-pill);
   font-size: 24px;
   cursor: pointer;
 }
 
 .gallery-room-view__zoom-btn:disabled,
 .gallery-room-view__artwork-nav:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: default;
 }
 
-.gallery-room-view__artwork-nav[hidden],
-.gallery-room-view__zoom-controls[hidden] {
+.gallery-room-view__artwork-nav[hidden] {
   display: none;
+}
+
+.gallery-room-view__select:hover,
+.gallery-room-view__close:hover,
+.gallery-room-view__artwork-nav:not(:disabled):hover,
+.gallery-room-view__zoom-btn:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.gallery-room-view__select:active,
+.gallery-room-view__close:active,
+.gallery-room-view__artwork-nav:not(:disabled):active,
+.gallery-room-view__zoom-btn:not(:disabled):active {
+  transform: translateY(1px);
 }
 
 .gallery-room-view__select:focus-visible,
@@ -395,36 +479,102 @@ canvas {
   display: none;
 }
 
+@media (max-width: 900px) {
+  .gallery-room-view__controls {
+    display: grid;
+    grid-template-areas:
+      "room close"
+      "artwork artwork"
+      "camera camera";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    width: min(460px, calc(100vw - var(--safe-left) - var(--safe-right) - 24px));
+    max-width: none;
+    bottom: calc(var(--safe-bottom) + 12px);
+    padding: 10px;
+    border-radius: var(--radius-sm);
+  }
+
+  .gallery-room-view__room-controls {
+    grid-area: room;
+  }
+
+  .gallery-room-view__artwork-controls {
+    grid-area: artwork;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    max-width: none;
+  }
+
+  .gallery-room-view__camera-controls {
+    grid-area: camera;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .gallery-room-view__close {
+    grid-area: close;
+  }
+
+  .gallery-room-view__zoom-controls {
+    justify-content: flex-end;
+    gap: 8px;
+  }
+}
+
 @media (max-width: 420px) {
   .gallery-room-view__controls {
-    bottom: calc(var(--safe-bottom) + 10px);
-    width: calc(100vw - 20px);
+    bottom: calc(var(--safe-bottom) + 8px);
+    width: calc(100vw - var(--safe-left) - var(--safe-right) - 16px);
     gap: 6px 8px;
     padding: 8px;
   }
 
-  .gallery-room-view__room-controls {
-    gap: 5px;
-  }
-
-  .gallery-room-view__close {
-    padding: 0 9px;
-    font-size: 10px;
-  }
-
-  .gallery-room-view__zoom-controls {
-    gap: 4px;
-  }
-
   .gallery-room-view__artwork-nav,
   .gallery-room-view__zoom-btn {
-    width: 40px;
-    min-height: 40px;
-    height: 40px;
+    width: 44px;
+    min-height: 44px;
+    height: 44px;
   }
 
   .gallery-room-view__select {
-    max-width: min(47vw, 180px);
+    max-width: none;
+  }
+
+  .gallery-room-view__artwork-controls {
+    min-width: 0;
+  }
+
+  .gallery-room-view__close {
+    padding: 0 10px;
+    font-size: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-room-view__artwork,
+  .gallery-room-view__select,
+  .gallery-room-view__close,
+  .gallery-room-view__zoom-btn,
+  .gallery-room-view__artwork-nav {
+    transition: none;
+  }
+
+  .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork {
+    transform: none;
+  }
+}
+
+:root[data-motion='reduced'] {
+  .gallery-room-view__artwork,
+  .gallery-room-view__select,
+  .gallery-room-view__close,
+  .gallery-room-view__zoom-btn,
+  .gallery-room-view__artwork-nav {
+    transition: none;
+  }
+
+  .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork {
+    transform: none;
   }
 }
 

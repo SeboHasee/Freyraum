@@ -21,7 +21,10 @@ For browser coverage, run `npm run import:artworks && npm run build`, then
 This opens the generated root `index.html` over `file://` and verifies both
 photos decode, the room controls clear the artwork across desktop/tablet/phone/
 short-landscape sizes, and photo pan, zoom, pinch, reset, keyboard zoom, close,
-and focus restoration work. The camera operates on a still photo; it does not
+and focus restoration work. It also guards blended cleanup edges against abrupt
+pixel seams, fixed artwork dimensions and projective corner registration through
+camera zoom, interactive accessible artwork hover/focus, layered shadows and
+reduced-motion behavior. The camera operates on a still photo; it does not
 provide genuine 3D orbit or walking.
 
 ## Photograph-backed museum acceptance (2026-10-18)

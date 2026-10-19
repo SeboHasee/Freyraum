@@ -40,7 +40,9 @@ export class GalleryRoomView {
   readonly element: HTMLElement;
   private readonly scene: HTMLElement;
   private readonly background: HTMLImageElement;
+  private readonly artworkFrame: HTMLDivElement;
   private readonly artworkImage: HTMLImageElement;
+  private readonly artworkLabel: HTMLElement;
   private readonly status: HTMLElement;
   private readonly viewSelect: HTMLSelectElement;
   private readonly zoomOutButton: HTMLButtonElement;
@@ -92,6 +94,16 @@ export class GalleryRoomView {
     scene.addEventListener('dblclick', this.onDoubleClick);
     this.scene = scene;
 
+    const artworkFrame = document.createElement('div');
+    artworkFrame.className = 'gallery-room-view__artwork-frame';
+    artworkFrame.setAttribute('role', 'img');
+    artworkFrame.tabIndex = 0;
+    artworkFrame.addEventListener('pointermove', this.onArtworkPointerMove);
+    artworkFrame.addEventListener('pointerleave', this.resetArtworkInteraction);
+    artworkFrame.addEventListener('focus', this.onArtworkFocus);
+    artworkFrame.addEventListener('blur', this.resetArtworkInteraction);
+    this.artworkFrame = artworkFrame;
+
     const background = document.createElement('img');
     background.className = 'gallery-room-view__background';
     background.alt = '';
@@ -108,7 +120,8 @@ export class GalleryRoomView {
     artworkImage.addEventListener('load', this.updateArtworkTransform);
     artworkImage.addEventListener('error', this.onArtworkError);
     this.artworkImage = artworkImage;
-    scene.append(background, artworkImage);
+    artworkFrame.appendChild(artworkImage);
+    scene.append(background, artworkFrame);
 
     const controls = document.createElement('div');
     controls.className = 'gallery-room-view__controls';
@@ -132,13 +145,33 @@ export class GalleryRoomView {
 
     const artworkControls = document.createElement('div');
     artworkControls.className = 'gallery-room-view__artwork-controls';
+    artworkControls.setAttribute('role', 'group');
+    artworkControls.setAttribute('aria-label', 'Kunstwerk auswählen');
+    const artworkInfo = document.createElement('div');
+    artworkInfo.className = 'gallery-room-view__artwork-info';
+    const artworkHeading = document.createElement('span');
+    artworkHeading.className = 'gallery-room-view__group-label';
+    artworkHeading.textContent = 'Kunstwerk';
+    const artworkLabel = document.createElement('span');
+    artworkLabel.className = 'gallery-room-view__artwork-label';
+    artworkLabel.textContent = 'Kein Kunstwerk ausgewählt';
+    this.artworkLabel = artworkLabel;
+    artworkInfo.append(artworkHeading, artworkLabel);
     const previousArtwork = this.createControlButton('gallery-room-view__artwork-nav', 'Vorheriges Kunstwerk anzeigen', '‹');
     previousArtwork.addEventListener('click', () => this.onNavigateArtwork(-1));
     this.previousArtworkButton = previousArtwork;
     const nextArtwork = this.createControlButton('gallery-room-view__artwork-nav', 'Nächstes Kunstwerk anzeigen', '›');
     nextArtwork.addEventListener('click', () => this.onNavigateArtwork(1));
     this.nextArtworkButton = nextArtwork;
+    artworkControls.append(previousArtwork, artworkInfo, nextArtwork);
 
+    const cameraControls = document.createElement('div');
+    cameraControls.className = 'gallery-room-view__camera-controls';
+    cameraControls.setAttribute('role', 'group');
+    cameraControls.setAttribute('aria-label', 'Fotoansicht einstellen');
+    const cameraHeading = document.createElement('span');
+    cameraHeading.className = 'gallery-room-view__group-label';
+    cameraHeading.textContent = 'Ansicht';
     const zoomControls = document.createElement('div');
     zoomControls.className = 'gallery-room-view__zoom-controls';
     this.zoomOutButton = this.createControlButton('gallery-room-view__zoom-btn', 'Verkleinern', '−');
@@ -147,7 +180,8 @@ export class GalleryRoomView {
     this.resetButton.addEventListener('click', () => this.resetCamera());
     this.zoomInButton = this.createControlButton('gallery-room-view__zoom-btn', 'Vergrößern', '+');
     this.zoomInButton.addEventListener('click', () => this.zoomBy(1.25));
-    zoomControls.append(previousArtwork, this.zoomOutButton, this.resetButton, this.zoomInButton, nextArtwork);
+    zoomControls.append(this.zoomOutButton, this.resetButton, this.zoomInButton);
+    cameraControls.append(cameraHeading, zoomControls);
 
     const close = document.createElement('button');
     close.type = 'button';
@@ -157,7 +191,7 @@ export class GalleryRoomView {
     close.addEventListener('click', this.onClose);
     this.closeButton = close;
 
-    controls.append(roomControls, zoomControls, close);
+    controls.append(roomControls, artworkControls, cameraControls, close);
 
     const status = document.createElement('p');
     status.className = 'gallery-room-view__status';
@@ -207,17 +241,32 @@ export class GalleryRoomView {
     this.setVisible(!this.visible);
   }
 
-  setArtwork(artwork: Artwork | null, hasMultipleArtworks = true): void {
+  setArtwork(
+    artwork: Artwork | null,
+    hasMultipleArtworks = true,
+    artworkIndex = 0,
+    artworkCount = hasMultipleArtworks ? 2 : 1
+  ): void {
     this.activeArtwork = artwork;
     this.previousArtworkButton.hidden = !hasMultipleArtworks;
     this.nextArtworkButton.hidden = !hasMultipleArtworks;
     this.useFallback = false;
     this.fallbackUrl = null;
     if (!artwork) {
+      this.artworkFrame.hidden = true;
+      this.artworkLabel.textContent = 'Kein Kunstwerk ausgewählt';
       this.artworkImage.removeAttribute('src');
       return;
     }
-    this.artworkImage.alt = artwork.title ? `Ausgewähltes Kunstwerk: ${artwork.title}` : 'Ausgewähltes Kunstwerk';
+    this.artworkFrame.hidden = false;
+    const title = artwork.title || artwork.id;
+    this.artworkLabel.textContent = hasMultipleArtworks
+      ? `${artworkIndex + 1} / ${artworkCount} · ${title}`
+      : title;
+    this.artworkFrame.setAttribute(
+      'aria-label',
+      `${artwork.alt || title}${hasMultipleArtworks ? `, ${artworkIndex + 1} von ${artworkCount}` : ''}`
+    );
     const sources = resolveArtworkImageSources(artwork);
     this.fallbackUrl = sources.fallback?.resolvedUrl ?? null;
     const nextUrl = sources.primary?.resolvedUrl ?? this.fallbackUrl;
@@ -254,6 +303,10 @@ export class GalleryRoomView {
     this.scene.removeEventListener('lostpointercapture', this.onPointerEnd);
     this.scene.removeEventListener('wheel', this.onWheel);
     this.scene.removeEventListener('dblclick', this.onDoubleClick);
+    this.artworkFrame.removeEventListener('pointermove', this.onArtworkPointerMove);
+    this.artworkFrame.removeEventListener('pointerleave', this.resetArtworkInteraction);
+    this.artworkFrame.removeEventListener('focus', this.onArtworkFocus);
+    this.artworkFrame.removeEventListener('blur', this.resetArtworkInteraction);
     this.background.removeEventListener('error', this.onBackgroundError);
     this.artworkImage.removeEventListener('load', this.updateArtworkTransform);
     this.artworkImage.removeEventListener('error', this.onArtworkError);
@@ -343,9 +396,9 @@ export class GalleryRoomView {
     }
     this.element.classList.remove('has-error');
     this.status.textContent = '';
-    this.artworkImage.style.width = `${transform.width}px`;
-    this.artworkImage.style.height = `${transform.height}px`;
-    this.artworkImage.style.transform = transform.transform;
+    this.artworkFrame.style.width = `${transform.width}px`;
+    this.artworkFrame.style.height = `${transform.height}px`;
+    this.artworkFrame.style.transform = transform.transform;
   };
 
   private onPointerDown = (event: PointerEvent): void => {
@@ -424,6 +477,31 @@ export class GalleryRoomView {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
+  private onArtworkPointerMove = (event: PointerEvent): void => {
+    if (
+      event.pointerType !== 'mouse'
+      || this.pointers.size > 0
+      || document.documentElement.dataset['motion'] === 'reduced'
+      || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) return;
+    const rect = this.artworkFrame.getBoundingClientRect();
+    if (!(rect.width > 0 && rect.height > 0)) return;
+    const x = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2));
+    const y = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2));
+    this.artworkImage.style.setProperty('--artwork-tilt-x', `${-y * 1.25}deg`);
+    this.artworkImage.style.setProperty('--artwork-tilt-y', `${x * 1.25}deg`);
+  };
+
+  private onArtworkFocus = (): void => {
+    this.artworkImage.style.setProperty('--artwork-tilt-x', '0deg');
+    this.artworkImage.style.setProperty('--artwork-tilt-y', '0deg');
+  };
+
+  private resetArtworkInteraction = (): void => {
+    this.artworkImage.style.setProperty('--artwork-tilt-x', '0deg');
+    this.artworkImage.style.setProperty('--artwork-tilt-y', '0deg');
+  };
+
   private onWheel = (event: WheelEvent): void => {
     event.preventDefault();
     const rect = this.element.getBoundingClientRect();
@@ -462,7 +540,7 @@ export class GalleryRoomView {
 
   private trapFocus(event: KeyboardEvent): void {
     const focusable = [...this.element.querySelectorAll<HTMLElement>(
-      'button:not([hidden]):not(:disabled), select:not(:disabled)'
+      'button:not([hidden]):not(:disabled), select:not(:disabled), .gallery-room-view__artwork-frame[tabindex="0"]:not([hidden])'
     )];
     if (focusable.length === 0) return;
     const first = focusable[0]!;

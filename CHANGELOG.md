@@ -18,6 +18,12 @@
   accessible toolbar; keep projected artwork aligned with the camera.
 - Cover local photo loading, responsive toolbar/artwork clearance, and camera
   interactions with focused structural and browser regression tests.
+- Soften the cleanup boundaries in both derived room photos while preserving the
+  original source photographs, and guard the edge transitions with pixel tests.
+- Keep artwork dimensions fixed in wall space while camera zoom changes its screen
+  size; add bounded keyboard-focusable hover tilt and soft layered wall shadows.
+- Rework room controls into accessible room/artwork/camera groups using FREYRAUM
+  glass and focus tokens, with a clear return-to-gallery action.
 
 ## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
 

@@ -28,6 +28,15 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Add structural and browser regressions for config/save/export, importer
       staging and missing-photo warnings, file-preview image decode, room and
       artwork switching, responsive layout, camera gestures and focus return.
+- [x] Soften the cleaned-photo patch boundaries without modifying the source
+      photographs; guard artwork removal and edge gradients in pixel regressions.
+- [x] Preserve the artwork's fixed wall-space dimensions and exact projective
+      camera transform, with bounded keyboard-focusable hover response and
+      layered contact/directional shadows that respect reduced motion.
+- [x] Rebuild the room controls around clear room/artwork/camera groups using
+      project glass/focus tokens and responsive touch-sized actions.
+- [x] Extend the local `file://` browser regression for artwork size, registration,
+      hover/focus, shadow, reduced-motion, menu labels and layout breakpoints.
 - [x] Run local root-index browser checks after Update Gallery and after the
       developer build; document the customer workflow and photo-camera limitation.
 - [ ] Customer acceptance of the cleaned photo appearance and placements after

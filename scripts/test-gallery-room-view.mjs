@@ -90,6 +90,58 @@ function countSaturatedArtworkPixels(image, [left, top, right, bottom]) {
   return count;
 }
 
+function changedPixelBounds(source, edited) {
+  const bounds = {
+    left: source.width,
+    top: source.height,
+    right: -1,
+    bottom: -1,
+  };
+  for (let y = 0; y < source.height; y += 1) {
+    for (let x = 0; x < source.width; x += 1) {
+      const offset = (y * source.width + x) * source.channels;
+      if ([0, 1, 2].some((channel) => Math.abs(source.pixels[offset + channel] - edited.pixels[offset + channel]) > 8)) {
+        bounds.left = Math.min(bounds.left, x);
+        bounds.top = Math.min(bounds.top, y);
+        bounds.right = Math.max(bounds.right, x);
+        bounds.bottom = Math.max(bounds.bottom, y);
+      }
+    }
+  }
+  return bounds;
+}
+
+function maxCleanupSeamDelta(image, bounds, sampleStep = 8) {
+  let maximum = 0;
+  const compare = (x1, y1, x2, y2) => {
+    const first = (y1 * image.width + x1) * image.channels;
+    const second = (y2 * image.width + x2) * image.channels;
+    for (let channel = 0; channel < 3; channel += 1) {
+      maximum = Math.max(maximum, Math.abs(image.pixels[first + channel] - image.pixels[second + channel]));
+    }
+  };
+  const inset = Math.min(bounds.right - bounds.left, bounds.bottom - bounds.top) > 100 ? 50 : 8;
+  for (let x = bounds.left + inset; x < bounds.right - inset; x += sampleStep) {
+    compare(x, bounds.top, x, bounds.top - 1);
+    compare(x, bounds.bottom, x, bounds.bottom + 1);
+  }
+  for (let y = bounds.top + inset; y < bounds.bottom - inset; y += sampleStep) {
+    compare(bounds.left, y, bounds.left - 1, y);
+    compare(bounds.right, y, bounds.right + 1, y);
+  }
+  return maximum;
+}
+
+function projectCssMatrix(transform, x, y) {
+  const matrix = transform.replace(/^matrix3d\(|\)$/g, '').split(',').map(Number);
+  assert.equal(matrix.length, 16, 'projected artwork exposes a CSS 3D homography');
+  const denominator = matrix[3] * x + matrix[7] * y + matrix[15];
+  return {
+    x: (matrix[0] * x + matrix[4] * y + matrix[12]) / denominator,
+    y: (matrix[1] * x + matrix[5] * y + matrix[13]) / denominator,
+  };
+}
+
 const [museumHub, geometry, publishRules] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/gallery/galleryRoomViewGeometry.ts'),
@@ -108,12 +160,26 @@ assert.deepEqual(
 
 const bedroom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/gallery-bedroom.png'));
 assert.deepEqual([bedroom.width, bedroom.height], [2000, 1540]);
+const originalBedroom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/bedroom.png'));
+const bedroomCleanupBounds = changedPixelBounds(originalBedroom, bedroom);
+const bedroomSeamDelta = maxCleanupSeamDelta(bedroom, bedroomCleanupBounds);
+assert.ok(
+  bedroomSeamDelta <= 20,
+  `bedroom photo cleanup blends into the surrounding wall without a sharp edge (max delta ${bedroomSeamDelta})`
+);
 assert.ok(
   countSaturatedArtworkPixels(bedroom, [765, 270, 1265, 795]) < 100,
   'the dominant bedroom artwork is removed'
 );
 const livingRoom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/gallery-wohnraum.png'));
 assert.deepEqual([livingRoom.width, livingRoom.height], [1896, 1424]);
+const originalLivingRoom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/Wohnraum.png'));
+const livingRoomCleanupBounds = changedPixelBounds(originalLivingRoom, livingRoom);
+const livingRoomSeamDelta = maxCleanupSeamDelta(livingRoom, livingRoomCleanupBounds);
+assert.ok(
+  livingRoomSeamDelta <= 20,
+  `living-room photo cleanup blends into the surrounding wall without a sharp edge (max delta ${livingRoomSeamDelta})`
+);
 assert.ok(
   countSaturatedArtworkPixels(livingRoom, [810, 300, 1090, 790]) < 100,
   'the dominant living-room artwork is removed'
@@ -137,6 +203,17 @@ for (const view of roomViews) {
     assert.equal(transform.height, 1000, 'artwork keeps its source height');
     assert.match(transform.transform, /^matrix3d\(/, 'artwork uses projective positioning');
     assert.notEqual(zoomedTransform.transform, transform.transform, 'artwork follows the photo camera transform');
+    assert.equal(zoomedTransform.width, transform.width, 'camera zoom does not alter configured artwork width');
+    assert.equal(zoomedTransform.height, transform.height, 'camera zoom does not alter configured artwork height');
+    for (const [x, y] of [[0, 0], [750, 0], [750, 1000], [0, 1000]]) {
+      const basePoint = projectCssMatrix(transform.transform, x, y);
+      const zoomedPoint = projectCssMatrix(zoomedTransform.transform, x, y);
+      assert.ok(
+        Math.abs(zoomedPoint.x - (basePoint.x * 2 - width * 0.25)) < 0.01
+          && Math.abs(zoomedPoint.y - (basePoint.y * 2 - height * 0.25)) < 0.01,
+        `${view.id} artwork corner follows the exact camera transform`
+      );
+    }
   }
 }
 

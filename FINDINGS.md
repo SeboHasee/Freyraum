@@ -16,6 +16,16 @@
 - Browser regression opens root `index.html` as `file://`, verifies both staged
   photos decode, and checks toolbar clearance at desktop, tablet, phone, and
   short-landscape sizes, plus drag, zoom, pinch, reset, keyboard, and focus return.
+- The first living-room removal was a hard rectangle exactly along the artwork
+  bounds. Avoid feather-blending from the source *inside* that bounds: it
+  reintroduced colored artwork. Fade only in an outer band, interpolating from
+  the cleaned edge to unmodified wall pixels beyond it; preserve originals and
+  check the seam gradient plus the original-artwork removal mask.
+- Camera zoom changes projected screen dimensions but not the artwork's authored
+  image dimensions or wall placement. Keep the source image in a fixed-size frame
+  whose projective transform composes the same pan/zoom as the photo. Hover
+  parallax is deliberately bounded and presentation-only; its shadows remain
+  layered and reduced-motion settings disable the tilt.
 - The room photos contain their own dominant paintings. Initial guessed masks
   missed them, especially in `Wohnraum.png`; locate the actual central picture
   region from the source pixels before producing derivatives. Keep the supplied

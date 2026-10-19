@@ -38,10 +38,14 @@ In the inspection gallery, choose **Raumansicht** to display the selected
 artwork in the bedroom or living-room photograph. The photo fills the screen;
 room controls switch scenes, and previous/next controls change the single
 displayed artwork. Drag to pan, zoom with the wheel/pinch/buttons, and reset the
-view with the on-screen control. This is a bounded 2D photo camera, not true 3D
-orbit or movement. `customer-artworks/museum-hub.json` owns the room photo and
-placement data; Update Gallery stages configured photos for the local preview,
-and the original customer photos remain unchanged.
+view with the on-screen control. The artwork remains the same configured size on
+the photographed wall as the camera moves; it naturally takes up more screen
+space as the photo zooms. Subtle hover/focus tilt and soft directional/contact
+shadows make the mounted print feel tangible without detaching it from the wall.
+This is a bounded 2D photo camera, not true 3D orbit or movement.
+`customer-artworks/museum-hub.json` owns the room photo and placement data;
+Update Gallery stages configured photos for the local preview, and the original
+customer photos remain unchanged.
 
 ## Current project state
 
