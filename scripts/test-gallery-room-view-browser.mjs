@@ -9,6 +9,7 @@
  */
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -137,7 +138,8 @@ try {
     cameraLabel: 'Ansicht',
     frameRole: 'img',
     frameFocusable: true,
-    returnLabel: 'Galerie',
+    title: controls.title,
+    returnLabel: 'Zurück zur Galerie',
   });
   assert.ok(controls.title.length > 0, 'menu identifies the selected artwork');
 
@@ -331,6 +333,9 @@ try {
   console.log('✓ touch pinch and accessible close/focus restoration');
 } finally {
   socket?.close();
-  chrome?.kill('SIGTERM');
-  rmSync(tempProfile, { recursive: true, force: true });
+  if (chrome && chrome.exitCode === null && chrome.signalCode === null) {
+    chrome.kill('SIGTERM');
+    await Promise.race([once(chrome, 'exit'), delay(5000)]);
+  }
+  rmSync(tempProfile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
