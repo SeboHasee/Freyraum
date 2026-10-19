@@ -11,9 +11,14 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       visibly marked, preserving the accessible selection state and counter.
 - [x] Inspect the imported artwork's presentation and material maps; identify the
       near-coplanar image/backing surfaces as the tilt-sensitive depth-test pair.
-- [x] Depth-bias the artwork plane without changing its albedo, tilt, or body shadow.
-- [x] Verify timeline fit/overflow at narrow and wide viewports and validate
-      gallery rendering at multiple tilt angles and quality presets.
+- [x] Add a small polygon offset to the image plane while retaining its albedo,
+      tilt, and the backing body's wall shadow.
+- [ ] Follow-up: stop the backing body from writing depth so its near-coplanar
+      front face cannot compete with the image plane as the artwork rotates.
+- [x] Verify timeline fit/overflow at narrow and wide viewports and validate the
+      prior correction at multiple tilt angles and quality presets.
+- [ ] Recheck the backing-body change in the focused rendering checks and run
+      lint, typecheck, build, and relevant regression tests.
 
 ## Reference exhibition defaults (2026-10-18)
 

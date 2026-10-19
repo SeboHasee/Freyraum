@@ -80,6 +80,12 @@ assert.match(artworkMeshSource, /this\.material\.polygonOffset = true/, 'the ima
 assert.match(artworkMeshSource, /this\.material\.polygonOffsetFactor = -1/);
 assert.match(artworkMeshSource, /this\.material\.polygonOffsetUnits = -1/);
 assert.match(
+  artworkMeshSource,
+  /metalness: 0,\s*depthWrite: false/,
+  'the backing body must not compete with the image plane in the depth buffer'
+);
+assert.match(artworkMeshSource, /this\.artworkBodyMesh\.castShadow = true/, 'the backing body must keep casting its wall shadow');
+assert.match(
   mainSource,
   /import\s+defaultMuseumHub\s+from\s+['"]\.\.\/customer-artworks\/museum-hub\.json['"]/,
   'standalone gallery must import the current checked-in layout, not a generic built-in layout'

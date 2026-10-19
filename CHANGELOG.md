@@ -6,8 +6,8 @@
 - Replace the compact thumbnail strip with a full-width, capped glass timeline:
   small collections spread evenly across the row; larger collections keep visible
   scroll arrows, artwork titles, and a clear marker on only the selected artwork.
-- Depth-bias the painted plane ahead of its backing body to prevent tilt-dependent
-  z-fighting while retaining the body's intentional wall shadow.
+- Prevent the near-coplanar backing body from writing depth over the painted plane,
+  while retaining its intentional wall shadow and the existing plane depth bias.
 - Reduce the inspection camera near plane and resolve navigation tilt/depth against
   both the wall and camera, preventing close-up tilted artwork from crossing the
   near clipping plane while retaining the full entrance pose at normal distances.

@@ -70,6 +70,7 @@ export class ArtworkMesh {
       color: new THREE.Color(ARTWORK_PRESENTATION_PROFILES[this.activePresentation].backerColor),
       roughness: 0.9,
       metalness: 0,
+      depthWrite: false,
     });
     this.artworkBodyMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.artworkBodyMaterial);
     this.artworkBodyMesh.castShadow = true;

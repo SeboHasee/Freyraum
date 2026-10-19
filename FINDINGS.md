@@ -1,6 +1,20 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-19 (selected timeline marker and rotating highlights).
 
+## 2026-10-19 — Follow-up: tilted-artwork flicker persists
+
+- The earlier polygon-offset change was incomplete: it biases the painted plane,
+  but the backing body's opaque material still writes depth only 0.002 units
+  behind it. As the mounted artwork rotates, that nearly coplanar depth pair can
+  still contend on limited-precision depth buffers.
+- Disable depth writes on the backing material while keeping depth testing and
+  `castShadow` enabled. The image plane remains the visible depth-writing surface;
+  the backing body still renders its sides and continues to cast the intended
+  wall shadow.
+- The imported default is `matte-print`, with no procedural normal/height/
+  specular maps, so this correction targets the remaining geometry depth overlap,
+  not canvas shading or the artwork's source pixels.
+
 ## 2026-10-19 — Selected timeline marker and tilted-image flicker
 
 - The thin line across the timeline was a collection-progress indicator, not the
