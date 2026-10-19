@@ -32,6 +32,10 @@ export class Timeline {
   private onSelectCallback: ((index: number) => void) | null = null;
   private onPreviewCallback: ((index: number) => void) | null = null;
 
+  get element(): HTMLElement {
+    return this.el;
+  }
+
   constructor(container: HTMLElement, artworks: readonly Artwork[]) {
     this.artworks = artworks;
     this.virtualized = artworks.length > VIRTUAL_THRESHOLD;
