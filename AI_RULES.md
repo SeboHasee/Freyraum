@@ -1,5 +1,5 @@
 # FREYRAUM AI rules
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (repository-wide documentation review).
 
 ## v1.33–v1.40 editor, saving and desktop rules
 

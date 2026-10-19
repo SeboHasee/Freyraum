@@ -1,11 +1,17 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-18 (museum defaults and merge handoff).
+> Latest markdown audit: 2026-10-19 (repository-wide documentation review).
 
 ## Current context (v1.40)
 
 - Museum and editor share photograph-backed DOM artwork; `MainMuseumHub` does
   not construct a `HubRoomRenderer`. Inspection-gallery WebGL remains separate.
   Current defaults and exact source filenames: `README.md` → "Place artworks".
+- Inspection-gallery photo room uses configured background photos and projects
+  the current gallery artwork. It reparents the single gallery timeline and
+  shared help/audio/settings/fullscreen controls while open, then restores them;
+  room selection stays separate from artwork selection. Preserve the room camera
+  and projective registration when adjusting UI. See `README.md` → "Inspect in
+  a photo room" and `ARCHITECTURE_MAP.md`.
 - Local data is generated/ignored: after project updates run Update Gallery;
   full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,
   production `/Freyraum/`. Root-index and production-base smoke are distinct.
@@ -22,7 +28,13 @@
   writes only through `scripts/local-project/projectStore.ts` and serves only
   allowlisted files at `freyraum://app/`; `file://` download fallback.
 - Tests and CI: `docs/REGRESSION_TOOLING.md`. Active work: `plan.md`.
-  History: `CHANGELOG.md` and `docs/archive/`.
+  Photo-room checks: `npm run test:gallery-room-view` and
+  `npm run test:gallery-room-view:browser`. The latter checks file-photo display,
+  shared selection, focus and control bounds across desktop/tablet/phone/short
+  landscape. Current geometry-suite issue: `npm run validate:museum-hub` still
+  fails at the wall-left doorway-height assertion in
+  `scripts/test-museum-hub-geometry.mjs:411`; the old timeline assertion was
+  corrected. History: `CHANGELOG.md` and `docs/archive/`.
 
 Use these repository-specific instructions before changing code or docs.
 

@@ -39,10 +39,11 @@
   replaces that path, so regression checks should validate each new control
   group's viewport bounds and collisions.
 - `npm run validate:museum-hub` currently stops at
-  `scripts/test-museum-hub-geometry.mjs:105`: its timeline assertion requires
-  `--timeline-progress`, which is absent from the current stylesheet. The new hub
-  shadow assertions run before that failure; leave the unrelated stale timeline
-  check for a separate test-maintenance change.
+  `scripts/test-museum-hub-geometry.mjs:411`: the left doorway-height invariant
+  expects 2.30 m, but the current calibrated config does not satisfy that span.
+  The obsolete timeline assertion at line 111 was corrected to check the actual
+  selected-thumbnail active state; the remaining doorway failure is unrelated to
+  photo-room presentation and needs geometry-owner review.
 
 - Update Gallery is the customer-facing local import path; a production build's
   public-background sync is not part of that workflow. Stage each configured
@@ -55,8 +56,9 @@
   real perspective changes; orbit/walking requires room geometry or additional
   viewpoints.
 - Browser regression opens root `index.html` as `file://`, verifies both staged
-  photos decode, and checks toolbar clearance at desktop, tablet, phone, and
-  short-landscape sizes, plus drag, zoom, pinch, reset, keyboard, and focus return.
+  photos render, and checks the photo-room header, shared timeline, zoom, and
+  utilities stay in viewport at desktop, tablet, phone, and short-landscape sizes,
+  plus drag, zoom, pinch, reset, keyboard, and focus return.
 - The first living-room removal was a hard rectangle exactly along the artwork
   bounds. Avoid feather-blending from the source *inside* that bounds: it
   reintroduced colored artwork. Fade only in an outer band, interpolating from
@@ -92,6 +94,28 @@
 - Keep the inspection-room display separate from `MainMuseumHub`: its overlay
   follows the gallery's selected artwork, while editor export and shared save
   validation must preserve and validate the room-photo configuration.
+
+## 2026-10-19 — Photo-room control consistency follow-up
+
+- The room view now reparents the existing gallery timeline rather than
+  maintaining previous/next controls and a second artwork selector. Returning to
+  the gallery restores that same DOM node, its scroll/active state, and shared
+  selection model.
+- Use the same prominent back-action style for **Zurück zur Galerie** and the
+  **Fotoraum** entry. The room selector is grouped with navigation, not with
+  artwork selection; compact phones retain a visible short label.
+- Reuse gallery zoom button classes/order and the existing shared help, audio,
+  settings, and fullscreen widgets. Help content is selected from the active
+  view; escape/focus regression covers modal return and room exit.
+- Header/utilities and timeline/zoom collision checks now cover desktop, tablet,
+  portrait phone, and short landscape. The zoom group moves above the timeline in
+  short landscape; utility groups move below the stacked phone header.
+- The UI-only restructuring leaves projective placement and the single
+  photo-scene pan/zoom transform unchanged. Browser regression verifies shared
+  selection, photo decode/display, room switching, projection registration,
+  keyboard/focus behavior and camera gestures.
+- Validation after fixing the stale timeline assertion still reports the
+  independent doorway-height failure at `scripts/test-museum-hub-geometry.mjs:411`.
 
 ## 2026-10-19 — Follow-up: tilted-artwork flicker persists
 

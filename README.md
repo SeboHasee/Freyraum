@@ -34,16 +34,17 @@ the same in all three; see
 
 ## Inspect in a photo room
 
-In the inspection gallery, choose **Raumansicht** to display the selected
-artwork in the bedroom or living-room photograph. The photo fills the screen;
-room controls switch scenes, and previous/next controls change the single
-displayed artwork. Drag to pan, zoom with the wheel/pinch/buttons, and reset the
-view with the on-screen control. Zoom buttons smoothly bring the projected
-artwork center toward the viewport center; wheel and pinch stay anchored to the
-pointer/gesture. The artwork keeps its configured size on the photographed wall.
-Nearby mouse movement produces a very subtle, smoothly returning tilt, with
-stronger contact and directional shadows to keep the print attached to the wall.
-This is a bounded 2D photo camera, not true 3D orbit or movement.
+In the inspection gallery, choose **Fotoraum** to open the bedroom or living-room
+photograph. The room view uses the gallery timeline to select the artwork, so
+selection stays synchronized when switching between gallery and room. Use the
+room selector for a different photograph and **Zurück zur Galerie** to leave.
+Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
+on-screen control. Zoom buttons bring the projected artwork center toward the
+viewport center; wheel and pinch stay anchored to the pointer/gesture. The artwork
+keeps its configured size on the photographed wall. Nearby mouse movement
+produces a very subtle, smoothly returning tilt, with stronger contact and
+directional shadows to keep the print attached to the wall. This is a bounded 2D
+photo camera, not true 3D orbit or movement.
 `customer-artworks/museum-hub.json` owns the room photo and placement data;
 in the placement editor's **Raum** tab, **Foto-Raum gestalten** selects a room
 and edits its normalized wall corners and artwork position/height with the same

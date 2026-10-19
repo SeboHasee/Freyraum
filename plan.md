@@ -85,8 +85,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       and ease artwork/camera returns without changing room registration.
 - [x] Emphasize the photo-room toggle and add view-specific help with accurate
       keyboard, mouse, wheel, and touch guidance.
-- [x] Position short-landscape controls in a clear viewport corner when the
-      projected artwork or the shared utility controls occupy the default corner.
+- [x] Previously position the standalone toolbar in a clear short-landscape
+      corner; this path was superseded by the gallery-aligned controls above.
 - [x] Extend browser coverage and optional captures for hub shadow visibility,
       control states, contextual help, camera behavior, and responsive layouts.
 - [ ] Review saved browser captures and approve hub shadows and controls visually
@@ -140,9 +140,11 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       width, and keeps its arrows for scrollable collections.
 - [x] Add structural regression checks for wall-side entrance depth, reduced
       motion, shadow casting, responsive item sizing, and overflow arrow state.
-- [ ] Existing `validate:museum-hub` doorway-height invariant expects 2.30m but
-      current calibrated exclusions measure about 2.692m / 2.486m; keep separate
-      from this gallery-view change and resolve with the geometry owner.
+- [ ] `validate:museum-hub` fails at
+      `scripts/test-museum-hub-geometry.mjs:411`: wall-left doorway-height
+      expects 2.30 m, which the calibrated config does not satisfy. The stale
+      timeline assertion is corrected; resolve the remaining geometry invariant
+      separately with its owner.
 - [ ] Customer reports plain white background in the latest deployment. Pages
       run #21 (`c3b8e246`) built and deployed successfully, but its live smoke
       exited before browser checks because the fresh checkout lacked generated
@@ -205,9 +207,10 @@ No dependency upgrades or high-resolution importer redesign are part of this fix
       narrow screens, selection/keyboard controls, and camera/wall clearance.
 - [x] Chromium verifies 1–4 works across 320, 390, 500, 900 and 1600px widths,
       12-item arrow scrolling, keyboard focus, selection/progress, and reduced motion.
-- [ ] `npm run validate:museum-hub` reaches the previously documented doorway
-      height assertion (expected 2.30m vs calibrated values); pose assertions pass
-      before that unrelated failure.
+- [ ] `npm run validate:museum-hub` now passes the corrected timeline-state
+      assertion but fails at `scripts/test-museum-hub-geometry.mjs:411` on the
+      existing wall-left doorway-height expectation (2.30 m vs calibrated config).
+      Photo-room browser/structural regressions pass independently.
 - [ ] Confirm the revised timeline and tilted artwork look correct in the user's
       deployed gallery; automated geometry checks do not replace visual approval.
 

@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-19 (photo-room workflow and repository-wide review).
 
 This guide documents the current customer workflow only.
 
@@ -87,16 +87,20 @@ copies into `customer-artworks/inbox/`.
 
 ## Inspect in a photo room
 
-In the gallery, choose **Raumansicht** to show the selected artwork in the
-configured bedroom or living-room photo. Use the room selector and previous/next
-buttons to switch rooms and artworks. The selected title appears in the controls.
-Drag the photo to pan; use the mouse wheel, pinch, or the zoom buttons to zoom,
-and **Ansicht zurücksetzen** to restore it. The artwork stays the same configured
-size on the wall and grows on screen together with the photo as you zoom. Zoom
-buttons smoothly bring the artwork center toward the screen center, while wheel
-and pinch zoom remain anchored to the pointer or gesture. A nearby mouse gives a
-very subtle tilt that eases back to neutral; stronger contact/directional shadows
-keep the print attached to the wall.
+In the gallery, choose **Fotoraum** to show the selected artwork in the configured
+bedroom or living-room photo. The room view reuses the gallery's thumbnail
+timeline, active-work indicator, scrolling, and count; selecting artwork here or
+in the gallery changes the same shared selection. Use the separate room selector
+to switch photographs and **Zurück zur Galerie** to leave the photo view.
+
+Drag the photo to pan; use the mouse wheel, pinch, or the grouped zoom buttons to
+zoom, and **Fotoansicht zurücksetzen** to restore it. The artwork stays the same
+configured size on the wall and grows on screen together with the photo as you
+zoom. Zoom buttons smoothly bring the artwork center toward the screen center,
+while wheel and pinch zoom remain anchored to the pointer or gesture. A nearby
+mouse gives a very subtle tilt that eases back to neutral; stronger
+contact/directional shadows keep the print attached to the wall. Shared audio,
+settings, fullscreen, and contextual help remain available in the room view.
 
 This is a bounded 2D camera over a still photograph—not orbiting or walking
 through a 3D room. Run **Update Gallery** after downloading project changes; it

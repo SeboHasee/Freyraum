@@ -1,5 +1,5 @@
 # Documentation Archive
-> Archive index reviewed: 2026-10-17 (v1.40 merge-readiness audit).
+> Archive index reviewed: 2026-10-19 (repository-wide documentation review).
 
 This folder preserves historical rationale and long-form engineering context that is no longer suitable for operational docs.
 The 2026-06-21 snapshots were reviewed for discoverability during the v1.18
@@ -15,6 +15,10 @@ for operational navigation.
 - Avoid relying on Git history as the only knowledge source.
 
 ## Current archived snapshots
+
+No new snapshot was added during the 2026-10-19 documentation audit: the
+photo-room controls and validation notes remain active in `plan.md` and
+`FINDINGS.md`, not retired history.
 
 - `plan-history-2026-10-17.md` — finished plans v0.74–v1.40 (moved out of `plan.md`)
 - `findings-history-2026-10-17.md` — findings up to v1.18 (moved out of `FINDINGS.md`)
