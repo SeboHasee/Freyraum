@@ -284,9 +284,9 @@ canvas {
   transform-style: preserve-3d;
   pointer-events: none;
   filter:
-    drop-shadow(1px 2px 2px rgb(15 20 24 / 22%))
-    drop-shadow(4px 8px 10px rgb(15 20 24 / 19%))
-    drop-shadow(10px 15px 20px rgb(15 20 24 / 12%));
+    drop-shadow(1px 1px 2px rgb(15 20 24 / 24%))
+    drop-shadow(3px 5px 7px rgb(15 20 24 / 16%))
+    drop-shadow(7px 10px 13px rgb(15 20 24 / 9%));
   transition:
     transform var(--dur-control) var(--ease-gallery-out),
     filter var(--dur-control) var(--ease-gallery-out);
@@ -299,11 +299,11 @@ canvas {
     perspective(1200px)
     rotateX(var(--artwork-tilt-x))
     rotateY(var(--artwork-tilt-y))
-    scale3d(1.012, 1.012, 1);
+    scale3d(1.003, 1.003, 1);
   filter:
-    drop-shadow(1px 2px 2px rgb(15 20 24 / 25%))
-    drop-shadow(5px 10px 12px rgb(15 20 24 / 22%))
-    drop-shadow(12px 18px 23px rgb(15 20 24 / 15%));
+    drop-shadow(1px 1px 2px rgb(15 20 24 / 27%))
+    drop-shadow(4px 6px 8px rgb(15 20 24 / 18%))
+    drop-shadow(8px 11px 14px rgb(15 20 24 / 10%));
 }
 
 .gallery-room-view__controls {

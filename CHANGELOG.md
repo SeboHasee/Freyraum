@@ -24,6 +24,13 @@
   size; add bounded keyboard-focusable hover tilt and soft layered wall shadows.
 - Rework room controls into accessible room/artwork/camera groups using FREYRAUM
   glass and focus tokens, with a clear return-to-gallery action.
+- Correct photo-room zoom by applying the camera once to the shared photo/artwork
+  scene; test wall registration at reset, maximum zoom, varied pans and responsive
+  viewport sizes.
+- Add validated room-photo selection, wall-boundary and artwork placement/size
+  editing with a visitor-projection preview and history/save/export round-trip.
+- Reduce hover tilt/scale sensitivity and refine directional shadows to make
+  artwork feel mounted to the photographed wall.
 
 ## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
 

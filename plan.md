@@ -39,8 +39,20 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       hover/focus, shadow, reduced-motion, menu labels and layout breakpoints.
 - [x] Run local root-index browser checks after Update Gallery and after the
       developer build; document the customer workflow and photo-camera limitation.
+- [x] Apply the photo camera only to the shared room scene; keep the artwork's
+      projection in scene-local coordinates and test corner registration across
+      both rooms, four viewport sizes, maximum zoom and varied pans.
+- [x] Add a labeled photo-room editor with room selection, normalized wall-corner
+      and artwork placement/size inputs, shared-projection preview, validity
+      checks, editor history, and config export/save round-trip.
+- [x] Reduce hover tilt and scale response; soften directional shadows so the
+      artwork reads as wall-mounted, including reduced-motion behavior.
 - [ ] Customer acceptance of the cleaned photo appearance and placements after
       updating the local preview; deployment acceptance remains separate.
+- [ ] Review the retouched photos at full resolution and normal display size;
+      visual approval remains a separate customer acceptance step.
+- [ ] Verify live deployment after merge and retain the photo-view limitation:
+      true orbit/walking needs 3D room assets or additional viewpoints.
 
 ## Selected timeline marker and tilted-image flicker (2026-10-19)
 

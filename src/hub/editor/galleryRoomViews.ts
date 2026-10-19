@@ -6,6 +6,7 @@ import { quadIsConvex } from '../projectiveGeometry';
 interface GalleryRoomViewsOptions {
   views: readonly GalleryRoomView[];
   artwork: Artwork | null;
+  artworkSrc: string;
   resolveBackground: (src: string) => string;
   onHistory: () => void;
   onChange: (views: GalleryRoomView[]) => void;
@@ -77,6 +78,9 @@ export class EditorGalleryRoomViews {
     const placement = document.createElement('fieldset');
     const placementLegend = document.createElement('legend');
     placementLegend.textContent = 'Kunstwerk auf der Wand';
+    const placementHint = document.createElement('p');
+    placementHint.className = 'museum-hub__editor-hint';
+    placementHint.textContent = 'Positionen sind relativ zur Wand (0–1); die Bildhöhe ist ein Wandanteil.';
     const placementGrid = document.createElement('div');
     placementGrid.className = 'museum-hub__gallery-room-placement';
     placementGrid.append(
@@ -84,7 +88,7 @@ export class EditorGalleryRoomViews {
       this.createNumberField('placement-v', 'Vertikalposition', 0, 1, 0.01),
       this.createNumberField('placement-height', 'Bildhöhe', 0.05, 0.88, 0.01)
     );
-    placement.append(placementLegend, placementGrid);
+    placement.append(placementLegend, placementHint, placementGrid);
 
     this.status = document.createElement('p');
     this.status.className = 'museum-hub__editor-hint museum-hub__gallery-room-status';
@@ -148,7 +152,7 @@ export class EditorGalleryRoomViews {
     const view = this.views.find((candidate) => candidate.id === id);
     if (!view) return;
     this.background.src = this.options.resolveBackground(view.background.src);
-    if (this.options.artwork) this.artworkImage.src = this.options.artwork.image;
+    if (this.options.artworkSrc) this.artworkImage.src = this.options.artworkSrc;
     this.status.textContent = '';
     this.syncFields(view);
     this.updatePreview(view);

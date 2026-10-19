@@ -234,8 +234,16 @@ try {
   console.log('✓ room, artwork, camera controls and previous/next artwork navigation');
 
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
+  const projectedArtworkTransform = await evaluate(
+    "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
+  );
   let camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'zoom control zooms the photo camera');
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__artwork-frame').style.transform"),
+    projectedArtworkTransform,
+    'zoom changes the shared photo scene without adding a second transform to artwork'
+  );
   assert.deepEqual(
     await evaluate(`(() => {
       const frame = document.querySelector('.gallery-room-view__artwork-frame');
@@ -249,6 +257,11 @@ try {
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 230, y: 440, button: 'left', buttons: 0 });
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.doesNotMatch(camera, /translate3d\(0px, 0px/, 'drag pans the photo');
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__artwork-frame').style.transform"),
+    projectedArtworkTransform,
+    'panning keeps the artwork projection in the same photo coordinate space'
+  );
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /translate3d\(0px, 0px, 0px\) scale\(1\)/, 'reset restores the photo camera');
@@ -259,6 +272,23 @@ try {
   })()`);
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'keyboard shortcut zooms without invoking gallery zoom');
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`(() => {
+    const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
+    for (let index = 0; index < 12; index += 1) zoom.click();
+  })()`);
+  camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
+  assert.match(camera, /scale\(4\)/, 'camera reaches the configured maximum zoom');
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__artwork-frame').style.transform"),
+    projectedArtworkTransform,
+    'maximum zoom keeps wall projection scene-local'
+  );
+  assert.match(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__artwork')).filter"),
+    /drop-shadow/,
+    'wall-contact shadows remain present at maximum zoom'
+  );
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
   console.log('✓ photo zoom, drag pan, reset, and keyboard zoom');
 
@@ -284,7 +314,7 @@ try {
     };
   })()`);
   assert.notEqual(hover.tilt, '0deg', 'hover tilts the artwork within the bounded interactive range');
-  assert.ok(Math.abs(Number.parseFloat(hover.tilt)) <= 1.25, 'artwork hover tilt stays within its configured bound');
+  assert.ok(Math.abs(Number.parseFloat(hover.tilt)) <= 0.2, 'artwork hover tilt stays barely noticeable');
   assert.match(hover.filter, /drop-shadow/, 'artwork has layered wall and contact shadows');
   assert.ok(hover.label.length > 0, 'interactive artwork has an accessible label');
 
@@ -337,5 +367,6 @@ try {
     chrome.kill('SIGTERM');
     await Promise.race([once(chrome, 'exit'), delay(5000)]);
   }
-  rmSync(tempProfile, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  await delay(500);
+  rmSync(tempProfile, { recursive: true, force: true, maxRetries: 30, retryDelay: 200 });
 }

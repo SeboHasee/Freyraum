@@ -44,6 +44,9 @@ space as the photo zooms. Subtle hover/focus tilt and soft directional/contact
 shadows make the mounted print feel tangible without detaching it from the wall.
 This is a bounded 2D photo camera, not true 3D orbit or movement.
 `customer-artworks/museum-hub.json` owns the room photo and placement data;
+in the placement editor's **Raum** tab, **Foto-Raum gestalten** selects a room
+and edits its normalized wall corners and artwork position/height with the same
+projection preview used by visitors. Save/export preserves those values.
 Update Gallery stages configured photos for the local preview, and the original
 customer photos remain unchanged.
 

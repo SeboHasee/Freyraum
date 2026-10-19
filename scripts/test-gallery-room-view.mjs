@@ -157,6 +157,14 @@ assert.deepEqual(
   roomViews.map(({ background }) => background.src),
   ['Backgrounds/gallery-bedroom.png', 'Backgrounds/gallery-wohnraum.png']
 );
+const editedRoomConfig = structuredClone(sourceConfig);
+editedRoomConfig.galleryRoomViews[0].placement = { u: 0.46, v: 0.52, height: 0.31 };
+const roundTrippedRooms = museumHub.sanitizeMuseumHubConfig(editedRoomConfig).config?.galleryRoomViews ?? [];
+assert.deepEqual(
+  roundTrippedRooms[0].placement,
+  editedRoomConfig.galleryRoomViews[0].placement,
+  'edited photo-room position and size survive config sanitization and export round-trip'
+);
 
 const bedroom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/gallery-bedroom.png'));
 assert.deepEqual([bedroom.width, bedroom.height], [2000, 1540]);
@@ -311,6 +319,11 @@ assert.match(
   /galleryRoomViews:\s*this\.resolution\.galleryRoomViews/,
   'the placement editor preserves room views when it exports configuration'
 );
+assert.match(editorSource, /new EditorGalleryRoomViews/, 'the room tab exposes the photo-room editor');
+assert.match(editorSource, /this\.galleryRoomEditor\?\.refresh/, 'room-view edits restore through editor snapshots');
+const roomEditorSource = readFileSync(resolve(ROOT, 'src/hub/editor/galleryRoomViews.ts'), 'utf8');
+assert.match(roomEditorSource, /projectGalleryRoomArtwork/, 'the editor preview uses visitor-view projection math');
+assert.match(roomEditorSource, /quadIsConvex/, 'the editor rejects invalid wall boundaries');
 const roomViewSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryRoomView.ts'), 'utf8');
 assert.match(roomViewSource, /setPointerCapture/);
 assert.match(roomViewSource, /pointercancel/);

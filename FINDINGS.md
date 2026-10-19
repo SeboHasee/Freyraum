@@ -22,10 +22,14 @@
   the cleaned edge to unmodified wall pixels beyond it; preserve originals and
   check the seam gradient plus the original-artwork removal mask.
 - Camera zoom changes projected screen dimensions but not the artwork's authored
-  image dimensions or wall placement. Keep the source image in a fixed-size frame
-  whose projective transform composes the same pan/zoom as the photo. Hover
-  parallax is deliberately bounded and presentation-only; its shadows remain
-  layered and reduced-motion settings disable the tilt.
+  image dimensions or wall placement. Apply pan/zoom once to the shared scene;
+  calculating the artwork projection with that camera as well causes a double
+  transform and visible parallax. Hover tilt and scale are deliberately minimal
+  and presentation-only; reduced-motion settings disable the effect.
+- The placement editor's photo-room preview calls the same geometry projection
+  as the visitor view. Keep wall corners normalized and convex, constrain the
+  artwork's normalized position/height, and serialize changes through the same
+  calibration snapshots so undo/redo and save/export preserve the settings.
 - The room photos contain their own dominant paintings. Initial guessed masks
   missed them, especially in `Wohnraum.png`; locate the actual central picture
   region from the source pixels before producing derivatives. Keep the supplied

@@ -220,10 +220,17 @@ async function main() {
       return reply(404, { error: 'Unbekannt.' });
     });
 
-    await page.goto(`${origin}/Freyraum/placement-editor.html`);
+    await page.goto(`${origin}/Freyraum/placement-editor.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
     const start = page.locator('.loading-start-btn');
     await start.waitFor({ state: 'visible', timeout: 60_000 });
-    await page.waitForFunction(() => !document.querySelector('.loading-start-btn')?.hasAttribute('disabled'));
+    await page.waitForFunction(
+      () => !document.querySelector('.loading-start-btn')?.hasAttribute('disabled'),
+      null,
+      { timeout: 60_000 }
+    );
     await start.click();
     await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 30_000 });
     await page.waitForSelector('.museum-hub__publish:not([hidden])', { timeout: 15_000 });

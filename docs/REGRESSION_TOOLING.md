@@ -12,9 +12,16 @@ is accepted unless the measurement hook for its type exists and passes.
 
 Run `npm run test:gallery-room-view` to verify configured room-photo staging,
 artwork-free target regions, safe config sanitization, source-aspect-preserving
-projection at wide and portrait viewport sizes, room-background save validation,
-and room-view preservation by placement-editor export. The test verifies Update
-Gallery stages the photos and reports missing sources.
+projection and wall-corner registration in both rooms across wide, tablet, and
+phone viewport sizes, room-background save validation, and room-view preservation
+by placement-editor export. It also checks photo-room edits survive config
+sanitization and that the editor uses the shared visitor projection and rejects
+invalid wall boundaries. The test verifies Update Gallery stages the photos and
+reports missing sources.
+
+After installing the optional Playwright browser tooling, `npm run test:editor-rooms`
+also checks room selection, projected artwork preview, placement export, and undo
+in the actual generated placement editor.
 
 For browser coverage, run `npm run import:artworks && npm run build`, then
 `FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
@@ -23,9 +30,9 @@ photos decode, the room controls clear the artwork across desktop/tablet/phone/
 short-landscape sizes, and photo pan, zoom, pinch, reset, keyboard zoom, close,
 and focus restoration work. It also guards blended cleanup edges against abrupt
 pixel seams, fixed artwork dimensions and projective corner registration through
-camera zoom, interactive accessible artwork hover/focus, layered shadows and
-reduced-motion behavior. The camera operates on a still photo; it does not
-provide genuine 3D orbit or walking.
+camera zoom/pan without a second artwork transform, interactive accessible
+artwork hover/focus, layered shadows and reduced-motion behavior. The camera
+operates on a still photo; it does not provide genuine 3D orbit or walking.
 
 ## Photograph-backed museum acceptance (2026-10-18)
 

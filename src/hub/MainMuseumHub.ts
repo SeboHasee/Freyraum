@@ -2497,9 +2497,14 @@ export class MainMuseumHub {
     }
     roomAdvanced.append(legend, this.buildBackgroundControls());
     roomTab.append(wallSection, roomAdvanced);
+    const previewArtwork = this.artworks[0] ?? null;
+    const previewArtworkSource = previewArtwork
+      ? resolveArtworkImageSources(this.resolution.artworkSourceById.get(previewArtwork.id) ?? null).primary?.resolvedUrl ?? ''
+      : '';
     this.galleryRoomEditor = new EditorGalleryRoomViews({
       views: this.resolution.galleryRoomViews,
-      artwork: this.artworks[0] ?? null,
+      artwork: previewArtwork,
+      artworkSrc: previewArtworkSource,
       resolveBackground: resolveBackgroundUrl,
       onHistory: () => this.recordCalibrationHistory(),
       onChange: (views) => {

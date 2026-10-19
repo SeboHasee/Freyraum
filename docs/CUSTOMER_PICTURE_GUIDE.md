@@ -101,6 +101,12 @@ copies the configured source photos from `customer-artworks/Backgrounds/` into
 the local preview. If a photo is missing, check the import report and restore
 the exact configured source filename.
 
+In the placement editor's **Raum** tab, **Foto-Raum gestalten** lets you select
+a configured photo room, adjust its four normalized wall corners, and edit the
+artwork's wall-relative position and height. The preview uses the visitor
+projection, and accepted changes remain part of undo/redo and the normal
+save/export configuration.
+
 ## Museum hub placement
 
 - Museum and editor use the same room photograph and calibrated artwork
