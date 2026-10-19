@@ -45,6 +45,7 @@ export class GalleryRoomView {
   private readonly background: HTMLImageElement;
   private readonly artworkFrame: HTMLDivElement;
   private readonly artworkImage: HTMLImageElement;
+  private readonly controls: HTMLDivElement;
   private readonly artworkLabel: HTMLElement;
   private readonly status: HTMLElement;
   private readonly viewSelect: HTMLSelectElement;
@@ -138,6 +139,7 @@ export class GalleryRoomView {
     controls.className = 'gallery-room-view__controls';
     controls.setAttribute('role', 'group');
     controls.setAttribute('aria-label', 'Raumansicht-Steuerung');
+    this.controls = controls;
 
     const roomControls = document.createElement('div');
     roomControls.className = 'gallery-room-view__room-controls';
@@ -314,6 +316,7 @@ export class GalleryRoomView {
     if (this.visible) {
       this.status.textContent = '';
       this.resetCamera();
+      this.positionShortLandscapeControls();
       this.closeButton.focus({ preventScroll: true });
     } else {
       this.pointers.clear();
@@ -367,6 +370,8 @@ export class GalleryRoomView {
     this.element.classList.remove('has-error');
     this.background.src = resolveBackgroundUrl(view.background.src);
     this.resetCamera(true);
+    this.updateArtworkTransform();
+    this.positionShortLandscapeControls();
   }
 
   private applyCamera(): void {
@@ -423,6 +428,7 @@ export class GalleryRoomView {
     if (this.motionPreference.matches || document.documentElement.dataset['motion'] === 'reduced') {
       this.cameraAnimationTargetScale = null;
       this.setCamera(scale, offsetX, offsetY);
+      this.positionShortLandscapeControls();
       return;
     }
     const from = { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY };
@@ -440,6 +446,7 @@ export class GalleryRoomView {
       } else {
         this.cameraAnimationFrame = 0;
         this.cameraAnimationTargetScale = null;
+        this.positionShortLandscapeControls();
       }
     };
     this.cameraAnimationFrame = window.requestAnimationFrame(tick);
@@ -460,6 +467,7 @@ export class GalleryRoomView {
   private handleResize = (): void => {
     if (this.cameraAnimationTargetScale !== null && this.artworkCenter) {
       this.updateArtworkTransform();
+      this.positionShortLandscapeControls();
       const rect = this.element.getBoundingClientRect();
       const scale = this.cameraAnimationTargetScale;
       this.animateCamera(
@@ -470,7 +478,60 @@ export class GalleryRoomView {
       return;
     }
     this.applyCamera();
+    this.positionShortLandscapeControls();
   };
+
+  private positionShortLandscapeControls(): void {
+    const viewport = this.element.getBoundingClientRect();
+    if (!(viewport.width >= 600 && viewport.height <= 500)) {
+      for (const property of ['left', 'top', 'bottom', 'transform']) {
+        this.controls.style.removeProperty(property);
+      }
+      return;
+    }
+
+    const controls = this.controls.getBoundingClientRect();
+    const artwork = this.artworkFrame.hidden ? null : this.artworkFrame.getBoundingClientRect();
+    const utilities = this.utilityControls.getBoundingClientRect();
+    const safe = getComputedStyle(this.element);
+    const inset = (name: string): number => Number.parseFloat(safe.getPropertyValue(name)) || 0;
+    const margin = 12;
+    const left = inset('--safe-left') + margin;
+    const top = inset('--safe-top') + margin;
+    const right = viewport.width - inset('--safe-right') - margin - controls.width;
+    const bottom = viewport.height - inset('--safe-bottom') - margin - controls.height;
+    const candidates = [
+      { x: left, y: top },
+      { x: left, y: bottom },
+      { x: right, y: top },
+      { x: right, y: bottom },
+    ].filter(({ x, y }) =>
+      x >= 0 && y >= 0 && x + controls.width <= viewport.width && y + controls.height <= viewport.height
+    );
+    const overlaps = (x: number, y: number, obstacle: DOMRect): number => {
+      const horizontal = Math.max(
+        0,
+        Math.min(x + controls.width, obstacle.right + 8) - Math.max(x, obstacle.left - 8)
+      );
+      const vertical = Math.max(
+        0,
+        Math.min(y + controls.height, obstacle.bottom + 8) - Math.max(y, obstacle.top - 8)
+      );
+      return horizontal * vertical;
+    };
+    const placed = candidates
+      .map((candidate) => ({
+        ...candidate,
+        cost: (artwork ? overlaps(candidate.x, candidate.y, artwork) : 0)
+          + overlaps(candidate.x, candidate.y, utilities),
+      }))
+      .sort((first, second) => first.cost - second.cost)[0];
+    if (!placed) return;
+    this.controls.style.left = `${placed.x}px`;
+    this.controls.style.top = `${placed.y}px`;
+    this.controls.style.bottom = 'auto';
+    this.controls.style.transform = 'none';
+  }
 
   private updateArtworkTransform = (): void => {
     if (!this.activeView || !this.activeArtwork || !this.artworkImage.complete) return;
@@ -539,6 +600,7 @@ export class GalleryRoomView {
     if (!this.pointers.delete(event.pointerId)) return;
     if (this.scene.hasPointerCapture(event.pointerId)) this.scene.releasePointerCapture(event.pointerId);
     this.beginGesture();
+    if (this.pointers.size === 0) this.positionShortLandscapeControls();
   };
 
   private beginGesture(): void {
@@ -594,7 +656,7 @@ export class GalleryRoomView {
     const distance = Math.hypot(event.clientX - nearestX, event.clientY - nearestY);
     const influenceRadius = Math.max(
       300,
-      Math.min(HOVER_INFLUENCE_RADIUS_PX, Math.min(this.element.clientWidth, this.element.clientHeight) * 0.8)
+      Math.min(HOVER_INFLUENCE_RADIUS_PX, Math.min(this.element.clientWidth, this.element.clientHeight) * 0.6)
     );
     const influence = Math.max(0, 1 - distance / influenceRadius);
     const smoothInfluence = influence * influence * (3 - 2 * influence);

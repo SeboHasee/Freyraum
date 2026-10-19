@@ -732,6 +732,7 @@ export class MainMuseumHub {
     if (slot.artworkId) button.dataset['artworkId'] = slot.artworkId;
     const shadowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     shadowPath.classList.add('museum-hub__shadow-path');
+    if (!slot.artworkId) shadowPath.classList.add('is-empty');
     shadowPath.dataset['slotId'] = slot.id;
     this.roomLayers[slot.pageIndex]
       ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
@@ -4868,6 +4869,7 @@ export class MainMuseumHub {
       }
       view.imageLoadToken += 1;
       view.button.remove();
+      view.shadowPath.remove();
       this.hubRoomRenderer?.removeSlot(view.slot.id, false);
       this.projectedSlotGeometry.delete(view.slot.id);
       const objectUrl = this.editorArtworkObjectUrls.get(view.slot.id);
@@ -4888,6 +4890,9 @@ export class MainMuseumHub {
         if (!this.calibrationWallOwnership.has(slot.id)) this.calibrationWallOwnership.set(slot.id, slot.placement.wallId);
       }
       ordered.push(view);
+      this.roomLayers[view.slot.pageIndex]
+        ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
+        ?.appendChild(view.shadowPath);
       this.roomLayers[view.slot.pageIndex]?.appendChild(view.button);
     }
     this.slotViews.splice(0, this.slotViews.length, ...ordered);

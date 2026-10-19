@@ -28,12 +28,18 @@ For browser coverage, run `npm run import:artworks && npm run build`, then
 This opens the generated root `index.html` over `file://` and verifies both
 photos decode, the room controls clear the artwork across desktop/tablet/phone/
 short-landscape sizes, and photo pan, zoom, pinch, reset, keyboard zoom, close,
-and focus restoration work. It checks projective artwork-center zoom after pan
-and room changes, wheel-pointer anchoring, max zoom, icon centering, proximity
-hover and smooth reset, and reduced-motion behavior. The photo pixel test samples
-cleanup boundaries at full resolution against the unchanged source gradients and
-also checks old-artwork removal. The camera operates on a still photo; it does
-not provide genuine 3D orbit or walking.
+and focus restoration work. It checks artwork-centered button and wheel zoom in
+both rooms, pan and camera limits, expanded mouse-proximity reach with eased
+return, reduced-motion behavior, the distinct room-view control state, and
+context-specific keyboard help. Short-landscape controls are tested against both
+projected artwork positions, with the toolbar moved to an available corner when
+its default position would cover a painting. At the initial museum hub, it checks that the
+non-interactive SVG shadow layer follows the projected artwork without changing
+the clipped button hit area. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub and
+room-view browser captures for manual review at the responsive breakpoints. The
+photo pixel test samples cleanup boundaries at full resolution against the
+unchanged source gradients and also checks old-artwork removal. The camera
+operates on a still photo; it does not provide genuine 3D orbit or walking.
 
 ## Photograph-backed museum acceptance (2026-10-18)
 

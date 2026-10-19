@@ -81,6 +81,7 @@ const [museumHub, geometry, backgroundFallback, artworkImageSources, sourceToPix
 const constrainedDrag = await loadTsModule('src/hub/constrainedDrag.ts');
 const timelineLayout = await loadTsModule('src/timeline/timelineLayout.ts');
 const scss = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
+const museumHubSource = readFileSync(resolve(ROOT, 'src/hub/MainMuseumHub.ts'), 'utf8');
 const galleryManagerSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryManager.ts'), 'utf8');
 const artworkMeshSource = readFileSync(resolve(ROOT, 'src/gallery/ArtworkMesh.ts'), 'utf8');
 const sceneManagerSource = readFileSync(resolve(ROOT, 'src/core/SceneManager.ts'), 'utf8');
@@ -102,6 +103,11 @@ assert.equal(
 assert.match(artworkMeshSource, /this\.artworkBodyMesh\.castShadow = true/);
 assert.equal(galleryPresentation.GALLERY_CAMERA_NEAR, 0.01, 'gallery camera near plane avoids cutting tilted work at close inspection distances');
 assert.match(sceneManagerSource, /GALLERY_CAMERA_NEAR/);
+assert.match(museumHubSource, /projectedQuad\.map\(\(\{ x, y \}\)/, 'museum shadow is derived from the displayed projective quad');
+assert.match(museumHubSource, /appendChild\(view\.shadowPath\)/, 'shadow paths follow slots when the editor changes rooms');
+assert.match(museumHubSource, /view\.shadowPath\.remove\(\)/, 'removed editor slots dispose of their shadow path');
+assert.match(scss, /\.museum-hub__shadow-path\s*\{[^}]*drop-shadow\([^}]*drop-shadow\([^}]*drop-shadow/s);
+assert.doesNotMatch(scss, /\.museum-hub__artwork\s*\{[^}]*filter\s*:/s, 'the clipped artwork hit area does not own the shadow');
 assert.match(scss, /\.timeline\s*\{[\s\S]*?width:\s*min\(1180px,[\s\S]*?--timeline-progress/);
 assert.match(scss, /\.timeline__list\s*\{[\s\S]*?justify-content:\s*space-evenly;[\s\S]*?flex:\s*1 1 0;[\s\S]*?width:\s*0;[\s\S]*?min-width:\s*0/);
 assert.match(scss, /\.timeline\.timeline--scrollable \.timeline__list\s*\{\s*justify-content:\s*flex-start/);

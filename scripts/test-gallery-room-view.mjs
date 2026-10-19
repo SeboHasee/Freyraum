@@ -343,18 +343,27 @@ const roomViewSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryRoomView.t
 assert.match(roomViewSource, /setPointerCapture/);
 assert.match(roomViewSource, /pointercancel/);
 assert.match(roomViewSource, /MAX_CAMERA_SCALE = 6/, 'photo-room zoom supports expanded pan travel');
-assert.match(roomViewSource, /CAMERA_ZOOM_DURATION_MS = 420/);
+assert.match(roomViewSource, /CAMERA_ZOOM_DURATION_MS = 560/);
 assert.match(roomViewSource, /requestAnimationFrame\(tick\)/);
 assert.match(roomViewSource, /this\.zoomAt\(/);
+assert.match(roomViewSource, /this\.zoomBy\(Math\.exp\(-event\.deltaY \* 0\.001\)\)/, 'wheel zoom targets the artwork like the zoom buttons');
+assert.match(roomViewSource, /HOVER_INFLUENCE_RADIUS_PX = 900/);
+assert.match(roomViewSource, /this\.resetCamera\(true\)/, 'room changes ease the camera back to neutral');
 assert.match(roomViewSource, /this\.trapFocus\(event\)/);
 assert.match(roomViewSource, /this\.resetCamera\(\)/);
 assert.match(roomViewSource, /input:not\(:disabled\)/, 'room dialog focus order includes utility form controls');
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
 assert.match(
   hubStyles,
-  /\.museum-hub__artwork\s*\{[^}]*drop-shadow\([^}]*drop-shadow\([^}]*drop-shadow/s,
-  'museum-hub artwork receives contact, directional, and ambient wall shadows'
+  /\.museum-hub__shadow-path\s*\{[^}]*drop-shadow\([^}]*drop-shadow\([^}]*drop-shadow/s,
+  'museum-hub shadow SVG receives contact, directional, and ambient wall shadows'
 );
+assert.doesNotMatch(
+  hubStyles,
+  /\.museum-hub__artwork\s*\{[^}]*filter\s*:/s,
+  'the clipped artwork hit target does not own the expanded shadow filter'
+);
+assert.match(editorSource, /projectedQuad\.map\(\(\{ x, y \}\)/, 'the SVG shadow follows the exact projected artwork quad');
 
 const saveConfig = structuredClone(sourceConfig);
 const saveContext = {

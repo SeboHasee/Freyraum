@@ -12,6 +12,22 @@
 - Museum-hub artwork buttons carry wall-vector shadow variables. Use a tight
   contact component plus restrained directional/ambient layers so projected art
   reads as attached to its wall rather than floating.
+- A clipped museum-hub artwork button is not a reliable owner for an expanded
+  drop-shadow. Render the shadow from the same projected quad in a pointer-inert
+  SVG layer behind the button, preserving the button's registration and hit shape.
+- Room-view wheel and button zoom should share the projectively mapped artwork
+  center; pinch remains gesture-centered. Pointer reach can widen responsively
+  while preserving the low tilt bound, reduced-motion behavior, and eased return.
+- Help content must follow the active view: room-view guidance covers its own
+  zoom, pan, reset, exit, and touch gestures rather than claiming gallery shortcuts.
+- Short-landscape photo controls should select a viewport corner clear of both
+  the current projected artwork and the shared utilities; fixed bottom placement
+  overlaps paintings whose authored wall position is near the lower edge.
+- `npm run validate:museum-hub` currently stops at
+  `scripts/test-museum-hub-geometry.mjs:105`: its timeline assertion requires
+  `--timeline-progress`, which is absent from the current stylesheet. The new hub
+  shadow assertions run before that failure; leave the unrelated stale timeline
+  check for a separate test-maintenance change.
 
 - Update Gallery is the customer-facing local import path; a production build's
   public-background sync is not part of that workflow. Stage each configured

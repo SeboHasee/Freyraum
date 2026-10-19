@@ -64,7 +64,17 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Expand the photo-room camera zoom/pan reach and move the shared volume,
       settings, and fullscreen controls into the room overlay.
 - [x] Strengthen layered, wall-directed shadows on projected museum-hub artwork.
-- [ ] Review expanded room movement, hub shadows, and utility controls visually
+- [x] Render hub wall shadows in a non-interactive SVG sibling derived from the
+      exact projected quad, keeping the clipped artwork and its hit target intact.
+- [x] Center wheel zoom on the projected artwork, widen responsive pointer reach,
+      and ease artwork/camera returns without changing room registration.
+- [x] Emphasize the photo-room toggle and add view-specific help with accurate
+      keyboard, mouse, wheel, and touch guidance.
+- [x] Position short-landscape controls in a clear viewport corner when the
+      projected artwork or the shared utility controls occupy the default corner.
+- [x] Extend browser coverage and optional captures for hub shadow visibility,
+      control states, contextual help, camera behavior, and responsive layouts.
+- [ ] Review saved browser captures and approve hub shadows and controls visually
       at desktop, tablet, portrait-phone, and short-landscape sizes.
 
 ## Selected timeline marker and tilted-image flicker (2026-10-19)

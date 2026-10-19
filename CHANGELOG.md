@@ -43,6 +43,12 @@
   shared volume, settings, and fullscreen controls into the room overlay.
 - Add stronger layered wall-contact shadows to projectively positioned museum-hub
   artworks.
+- Render museum-hub shadows independently of the clipped artwork hit targets;
+  center photo-room wheel zoom on the projective artwork, ease room returns, and
+  broaden the subtle pointer response.
+- Give the photo-room toggle a clear active state and provide contextual keyboard,
+  mouse, wheel, and touch guidance with responsive modal layout; position controls
+  away from the projected artwork in short landscape.
 
 ## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
 
