@@ -17,8 +17,10 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       front face cannot compete with the image plane as the artwork rotates.
 - [x] Verify timeline fit/overflow at narrow and wide viewports and validate the
       prior correction at multiple tilt angles and quality presets.
-- [ ] Recheck the backing-body change in the focused rendering checks and run
-      lint, typecheck, build, and relevant regression tests.
+- [x] Run lint, typecheck, production/local builds, and the focused WebGL depth
+      regression; Chromium loaded the rebuilt gallery and processed hover tilts
+      without losing its WebGL context.
+- [ ] Confirm the visual artifact is gone on the customer's target display.
 
 ## Reference exhibition defaults (2026-10-18)
 
