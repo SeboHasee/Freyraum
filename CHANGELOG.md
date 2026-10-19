@@ -31,6 +31,14 @@
   editing with a visitor-projection preview and history/save/export round-trip.
 - Reduce hover tilt/scale sensitivity and refine directional shadows to make
   artwork feel mounted to the photographed wall.
+- Make zoom buttons ease toward the artwork's projective center while keeping
+  wheel and pinch zoom anchored to their pointer/gesture; ease camera motion out
+  under reduced-motion preferences.
+- Extend the restrained mouse proximity effect beyond artwork bounds, with a
+  smooth return to neutral, strengthen contact shadows, and center navigation
+  glyphs within consistent touch targets.
+- Sample every cleanup boundary pixel and compare its gradient with the unchanged
+  source photo, alongside the existing artwork-removal checks.
 
 ## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
 

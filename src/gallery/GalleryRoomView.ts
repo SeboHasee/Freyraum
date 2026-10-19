@@ -5,6 +5,9 @@ import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
 
 const MIN_CAMERA_SCALE = 1;
 const MAX_CAMERA_SCALE = 4;
+const CAMERA_ZOOM_DURATION_MS = 420;
+const HOVER_TILT_MAX_DEG = 0.14;
+const HOVER_INFLUENCE_RADIUS_PX = 360;
 
 interface PhotoPointer {
   x: number;
@@ -53,6 +56,7 @@ export class GalleryRoomView {
   private readonly closeButton: HTMLButtonElement;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly pointers = new Map<number, PhotoPointer>();
+  private readonly motionPreference: MediaQueryList;
   private views: readonly GalleryRoomViewConfig[];
   private activeView: GalleryRoomViewConfig | null = null;
   private activeArtwork: Artwork | null = null;
@@ -61,6 +65,9 @@ export class GalleryRoomView {
   private cameraScale = 1;
   private cameraOffsetX = 0;
   private cameraOffsetY = 0;
+  private artworkCenter: PhotoPointer | null = null;
+  private cameraAnimationFrame = 0;
+  private cameraAnimationTargetScale: number | null = null;
   private gesture: CameraGesture | null = null;
   private enabled = false;
   private visible = false;
@@ -74,6 +81,7 @@ export class GalleryRoomView {
     private readonly onNavigateArtwork: (direction: -1 | 1) => void
   ) {
     this.views = views;
+    this.motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
     const root = document.createElement('section');
     root.className = 'gallery-room-view';
     root.hidden = true;
@@ -87,6 +95,8 @@ export class GalleryRoomView {
     scene.className = 'gallery-room-view__scene';
     scene.addEventListener('pointerdown', this.onPointerDown);
     scene.addEventListener('pointermove', this.onPointerMove);
+    scene.addEventListener('pointermove', this.onRoomPointerMove);
+    scene.addEventListener('pointerleave', this.resetArtworkInteraction);
     scene.addEventListener('pointerup', this.onPointerEnd);
     scene.addEventListener('pointercancel', this.onPointerEnd);
     scene.addEventListener('lostpointercapture', this.onPointerEnd);
@@ -98,8 +108,6 @@ export class GalleryRoomView {
     artworkFrame.className = 'gallery-room-view__artwork-frame';
     artworkFrame.setAttribute('role', 'img');
     artworkFrame.tabIndex = 0;
-    artworkFrame.addEventListener('pointermove', this.onArtworkPointerMove);
-    artworkFrame.addEventListener('pointerleave', this.resetArtworkInteraction);
     artworkFrame.addEventListener('focus', this.onArtworkFocus);
     artworkFrame.addEventListener('blur', this.resetArtworkInteraction);
     this.artworkFrame = artworkFrame;
@@ -247,6 +255,8 @@ export class GalleryRoomView {
     artworkIndex = 0,
     artworkCount = hasMultipleArtworks ? 2 : 1
   ): void {
+    this.resetArtworkInteraction();
+    this.artworkCenter = null;
     this.activeArtwork = artwork;
     this.previousArtworkButton.hidden = !hasMultipleArtworks;
     this.nextArtworkButton.hidden = !hasMultipleArtworks;
@@ -293,18 +303,19 @@ export class GalleryRoomView {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
     this.resizeObserver?.disconnect();
     window.removeEventListener('resize', this.handleResize);
     this.element.removeEventListener('keydown', this.onKeyDown);
     this.scene.removeEventListener('pointerdown', this.onPointerDown);
     this.scene.removeEventListener('pointermove', this.onPointerMove);
+    this.scene.removeEventListener('pointermove', this.onRoomPointerMove);
+    this.scene.removeEventListener('pointerleave', this.resetArtworkInteraction);
     this.scene.removeEventListener('pointerup', this.onPointerEnd);
     this.scene.removeEventListener('pointercancel', this.onPointerEnd);
     this.scene.removeEventListener('lostpointercapture', this.onPointerEnd);
     this.scene.removeEventListener('wheel', this.onWheel);
     this.scene.removeEventListener('dblclick', this.onDoubleClick);
-    this.artworkFrame.removeEventListener('pointermove', this.onArtworkPointerMove);
-    this.artworkFrame.removeEventListener('pointerleave', this.resetArtworkInteraction);
     this.artworkFrame.removeEventListener('focus', this.onArtworkFocus);
     this.artworkFrame.removeEventListener('blur', this.resetArtworkInteraction);
     this.background.removeEventListener('error', this.onBackgroundError);
@@ -317,7 +328,11 @@ export class GalleryRoomView {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = className;
-    button.textContent = text;
+    const icon = document.createElement('span');
+    icon.className = 'gallery-room-view__icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = text;
+    button.appendChild(icon);
     button.setAttribute('aria-label', label);
     return button;
   }
@@ -340,6 +355,7 @@ export class GalleryRoomView {
     this.cameraOffsetX = Math.min(0, Math.max(-maxOffsetX, this.cameraOffsetX));
     this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
     this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
+    this.artworkImage.style.setProperty('--artwork-zoom', String(this.cameraScale));
     this.zoomOutButton.disabled = this.cameraScale <= MIN_CAMERA_SCALE;
     this.zoomInButton.disabled = this.cameraScale >= MAX_CAMERA_SCALE;
     this.resetButton.disabled = this.cameraScale === MIN_CAMERA_SCALE
@@ -355,6 +371,7 @@ export class GalleryRoomView {
   }
 
   private zoomAt(scale: number, focusX: number, focusY: number): void {
+    this.stopCameraAnimation();
     const nextScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
     const contentX = (focusX - this.cameraOffsetX) / this.cameraScale;
     const contentY = (focusY - this.cameraOffsetY) / this.cameraScale;
@@ -363,14 +380,73 @@ export class GalleryRoomView {
 
   private zoomBy(factor: number): void {
     const rect = this.element.getBoundingClientRect();
-    this.zoomAt(this.cameraScale * factor, rect.width * 0.5, rect.height * 0.5);
+    const targetScale = Math.max(
+      MIN_CAMERA_SCALE,
+      Math.min(MAX_CAMERA_SCALE, (this.cameraAnimationTargetScale ?? this.cameraScale) * factor)
+    );
+    const center = this.artworkCenter;
+    if (!center || !(rect.width > 0 && rect.height > 0)) {
+      this.zoomAt(targetScale, rect.width * 0.5, rect.height * 0.5);
+      return;
+    }
+    this.animateCamera(
+      targetScale,
+      rect.width * 0.5 - center.x * targetScale,
+      rect.height * 0.5 - center.y * targetScale
+    );
+  }
+
+  private animateCamera(scale: number, offsetX: number, offsetY: number): void {
+    this.stopCameraAnimation();
+    this.cameraAnimationTargetScale = scale;
+    if (this.motionPreference.matches || document.documentElement.dataset['motion'] === 'reduced') {
+      this.cameraAnimationTargetScale = null;
+      this.setCamera(scale, offsetX, offsetY);
+      return;
+    }
+    const from = { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY };
+    const startedAt = performance.now();
+    const tick = (now: number): void => {
+      const progress = Math.min(1, (now - startedAt) / CAMERA_ZOOM_DURATION_MS);
+      const eased = 1 - (1 - progress) ** 3;
+      this.setCamera(
+        from.scale + (scale - from.scale) * eased,
+        from.offsetX + (offsetX - from.offsetX) * eased,
+        from.offsetY + (offsetY - from.offsetY) * eased
+      );
+      if (progress < 1) {
+        this.cameraAnimationFrame = window.requestAnimationFrame(tick);
+      } else {
+        this.cameraAnimationFrame = 0;
+        this.cameraAnimationTargetScale = null;
+      }
+    };
+    this.cameraAnimationFrame = window.requestAnimationFrame(tick);
   }
 
   private resetCamera(): void {
+    this.stopCameraAnimation();
     this.setCamera(MIN_CAMERA_SCALE, 0, 0);
   }
 
+  private stopCameraAnimation(): void {
+    if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
+    this.cameraAnimationFrame = 0;
+    this.cameraAnimationTargetScale = null;
+  }
+
   private handleResize = (): void => {
+    if (this.cameraAnimationTargetScale !== null && this.artworkCenter) {
+      this.updateArtworkTransform();
+      const rect = this.element.getBoundingClientRect();
+      const scale = this.cameraAnimationTargetScale;
+      this.animateCamera(
+        scale,
+        rect.width * 0.5 - this.artworkCenter.x * scale,
+        rect.height * 0.5 - this.artworkCenter.y * scale
+      );
+      return;
+    }
     this.applyCamera();
   };
 
@@ -398,10 +474,13 @@ export class GalleryRoomView {
     this.artworkFrame.style.width = `${transform.width}px`;
     this.artworkFrame.style.height = `${transform.height}px`;
     this.artworkFrame.style.transform = transform.transform;
+    this.artworkCenter = transform.center;
   };
 
   private onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
+    this.stopCameraAnimation();
+    this.resetArtworkInteraction();
     const point = this.pointerPosition(event);
     this.pointers.set(event.pointerId, point);
     this.scene.setPointerCapture(event.pointerId);
@@ -476,19 +555,32 @@ export class GalleryRoomView {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
-  private onArtworkPointerMove = (event: PointerEvent): void => {
-    if (
-      event.pointerType !== 'mouse'
-      || this.pointers.size > 0
-      || document.documentElement.dataset['motion'] === 'reduced'
-      || window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ) return;
+  private onRoomPointerMove = (event: PointerEvent): void => {
+    if (event.pointerType !== 'mouse' || this.pointers.size > 0) return;
+    if (document.documentElement.dataset['motion'] === 'reduced' || this.motionPreference.matches) {
+      this.resetArtworkInteraction();
+      return;
+    }
     const rect = this.artworkFrame.getBoundingClientRect();
     if (!(rect.width > 0 && rect.height > 0)) return;
-    const x = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width - 0.5) * 2));
-    const y = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height - 0.5) * 2));
-    this.artworkImage.style.setProperty('--artwork-tilt-x', `${-y * 0.2}deg`);
-    this.artworkImage.style.setProperty('--artwork-tilt-y', `${x * 0.2}deg`);
+    const centerX = rect.left + rect.width * 0.5;
+    const centerY = rect.top + rect.height * 0.5;
+    const dx = event.clientX - centerX;
+    const dy = event.clientY - centerY;
+    const nearestX = Math.max(rect.left, Math.min(rect.right, event.clientX));
+    const nearestY = Math.max(rect.top, Math.min(rect.bottom, event.clientY));
+    const distance = Math.hypot(event.clientX - nearestX, event.clientY - nearestY);
+    const influenceRadius = Math.min(
+      HOVER_INFLUENCE_RADIUS_PX,
+      Math.max(150, Math.min(this.element.clientWidth, this.element.clientHeight) * 0.45)
+    );
+    const influence = Math.max(0, 1 - distance / influenceRadius);
+    const smoothInfluence = influence * influence * (3 - 2 * influence);
+    this.scene.classList.toggle('has-artwork-proximity', smoothInfluence > 0);
+    const x = Math.max(-1, Math.min(1, dx / Math.max(rect.width * 0.5, 1)));
+    const y = Math.max(-1, Math.min(1, dy / Math.max(rect.height * 0.5, 1)));
+    this.artworkImage.style.setProperty('--artwork-tilt-x', `${-y * HOVER_TILT_MAX_DEG * smoothInfluence}deg`);
+    this.artworkImage.style.setProperty('--artwork-tilt-y', `${x * HOVER_TILT_MAX_DEG * smoothInfluence}deg`);
   };
 
   private onArtworkFocus = (): void => {
@@ -497,6 +589,7 @@ export class GalleryRoomView {
   };
 
   private resetArtworkInteraction = (): void => {
+    this.scene.classList.remove('has-artwork-proximity');
     this.artworkImage.style.setProperty('--artwork-tilt-x', '0deg');
     this.artworkImage.style.setProperty('--artwork-tilt-y', '0deg');
   };

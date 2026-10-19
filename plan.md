@@ -47,6 +47,14 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       checks, editor history, and config export/save round-trip.
 - [x] Reduce hover tilt and scale response; soften directional shadows so the
       artwork reads as wall-mounted, including reduced-motion behavior.
+- [x] Make zoom buttons ease toward the projectively mapped artwork center, retain
+      pointer/gesture-centered wheel and pinch zoom, and skip camera animation for
+      reduced-motion users.
+- [x] Extend mouse proximity beyond the image with responsive reach, barely
+      perceptible tilt, and a smooth return to neutral; increase wall-contact and
+      directional shadows and normalize icon centering.
+- [x] Compare every cleanup-boundary pixel gradient against its unchanged source
+      neighbor and retain artwork-removal pixel checks.
 - [ ] Customer acceptance of the cleaned photo appearance and placements after
       updating the local preview; deployment acceptance remains separate.
 - [ ] Review the retouched photos at full resolution and normal display size;

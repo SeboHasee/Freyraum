@@ -100,6 +100,28 @@ try {
     if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
     return response.result?.value;
   };
+  const readArtworkScreenCenter = () => evaluate(`(() => {
+    const frame = document.querySelector('.gallery-room-view__artwork-frame');
+    const scene = document.querySelector('.gallery-room-view__scene');
+    const image = frame.querySelector('img');
+    const matrix = frame.style.transform.slice(9, -1).split(',').map(Number);
+    const x = image.naturalWidth / 2;
+    const y = image.naturalHeight / 2;
+    const denominator = matrix[3] * x + matrix[7] * y + matrix[15];
+    const localX = (matrix[0] * x + matrix[4] * y + matrix[12]) / denominator;
+    const localY = (matrix[1] * x + matrix[5] * y + matrix[13]) / denominator;
+    const [translation, scaleText] = scene.style.transform.split(' scale(');
+    const [offsetX, offsetY] = translation.slice('translate3d('.length, -1).split(', ').map(Number.parseFloat);
+    const scale = Number.parseFloat(scaleText);
+    return {
+      x: offsetX + localX * scale,
+      y: offsetY + localY * scale,
+      scale,
+      offsetX,
+      offsetY,
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  })()`);
   const waitFor = async (expression, timeoutMs = 20_000) => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -142,6 +164,18 @@ try {
     returnLabel: 'Zurück zur Galerie',
   });
   assert.ok(controls.title.length > 0, 'menu identifies the selected artwork');
+  assert.equal(
+    await evaluate(`(() => [...document.querySelectorAll('.gallery-room-view__zoom-btn, .gallery-room-view__artwork-nav')]
+      .every((button) => {
+        const icon = button.querySelector('.gallery-room-view__icon');
+        const buttonRect = button.getBoundingClientRect();
+        const iconRect = icon.getBoundingClientRect();
+        return Math.abs(iconRect.left + iconRect.width / 2 - buttonRect.left - buttonRect.width / 2) < 1
+          && Math.abs(iconRect.top + iconRect.height / 2 - buttonRect.top - buttonRect.height / 2) < 1;
+      }))()`),
+    true,
+    'room-control icons are centered within their touch targets'
+  );
 
   for (const [roomId, filename] of [['bedroom', 'gallery-bedroom.png'], ['wohnraum', 'gallery-wohnraum.png']]) {
     await evaluate(`(() => {
@@ -237,8 +271,16 @@ try {
   const projectedArtworkTransform = await evaluate(
     "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
   );
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
   let camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'zoom control zooms the photo camera');
+  let artworkScreenCenter = await readArtworkScreenCenter();
+  assert.ok(
+    Math.abs(artworkScreenCenter.x - artworkScreenCenter.viewport.width / 2) < 2
+      && Math.abs(artworkScreenCenter.y - artworkScreenCenter.viewport.height / 2)
+        < Math.max(2, artworkScreenCenter.viewport.height * 0.03),
+    `zoom button centers the projective artwork center in the viewport (${JSON.stringify(artworkScreenCenter)})`
+  );
   assert.equal(
     await evaluate("document.querySelector('.gallery-room-view__artwork-frame').style.transform"),
     projectedArtworkTransform,
@@ -252,6 +294,28 @@ try {
     artworkDimensions,
     'camera zoom does not change the artwork dimensions in its wall coordinate space'
   );
+  const wheelFocus = { x: 32, y: 64 };
+  const beforeWheel = await readArtworkScreenCenter();
+  const wheelDeltaY = -100;
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseWheel',
+    x: wheelFocus.x,
+    y: wheelFocus.y,
+    deltaX: 0,
+    deltaY: wheelDeltaY,
+  });
+  const afterWheel = await readArtworkScreenCenter();
+  const expectedWheelScale = beforeWheel.scale * Math.exp(-wheelDeltaY * 0.001);
+  const expectedWheelOffsetX = wheelFocus.x
+    - (wheelFocus.x - beforeWheel.offsetX) * expectedWheelScale / beforeWheel.scale;
+  const expectedWheelOffsetY = wheelFocus.y
+    - (wheelFocus.y - beforeWheel.offsetY) * expectedWheelScale / beforeWheel.scale;
+  assert.ok(
+    Math.abs(afterWheel.scale - expectedWheelScale) < 0.001
+      && Math.abs(afterWheel.offsetX - expectedWheelOffsetX) < 1
+      && Math.abs(afterWheel.offsetY - expectedWheelOffsetY) < 1,
+    'wheel zoom continues to preserve its pointer focus'
+  );
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 290, y: 500, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 230, y: 440, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 230, y: 440, button: 'left', buttons: 0 });
@@ -263,6 +327,38 @@ try {
     'panning keeps the artwork projection in the same photo coordinate space'
   );
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
+  await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 290, y: 500, button: 'left', buttons: 1 });
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 230, y: 440, button: 'left', buttons: 1 });
+  await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 230, y: 440, button: 'left', buttons: 0 });
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.5625)')");
+  artworkScreenCenter = await readArtworkScreenCenter();
+  assert.ok(
+    Math.abs(artworkScreenCenter.x - artworkScreenCenter.viewport.width / 2) < 2
+      && Math.abs(artworkScreenCenter.y - artworkScreenCenter.viewport.height / 2)
+        < Math.max(2, artworkScreenCenter.viewport.height * 0.03),
+    'repeated button zoom recenters the artwork after an off-center pan'
+  );
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view__room-controls select').value = 'wohnraum';
+    document.querySelector('.gallery-room-view__room-controls select').dispatchEvent(new Event('change', { bubbles: true }));`);
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
+  artworkScreenCenter = await readArtworkScreenCenter();
+  assert.ok(
+    Math.abs(artworkScreenCenter.x - artworkScreenCenter.viewport.width / 2) < 2
+      && Math.abs(artworkScreenCenter.y - artworkScreenCenter.viewport.height / 2)
+        < Math.max(2, artworkScreenCenter.viewport.height * 0.03),
+    'zoom button centers the other room artwork using its own projective center'
+  );
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
+  await evaluate(`document.querySelector('.gallery-room-view__room-controls select').value = 'bedroom';
+    document.querySelector('.gallery-room-view__room-controls select').dispatchEvent(new Event('change', { bubbles: true }));`);
+  const bedroomProjectionTransform = await evaluate(
+    "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
+  );
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /translate3d\(0px, 0px, 0px\) scale\(1\)/, 'reset restores the photo camera');
   await evaluate(`(() => {
@@ -270,6 +366,7 @@ try {
     close.focus();
     close.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true }));
   })()`);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'keyboard shortcut zooms without invoking gallery zoom');
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
@@ -277,11 +374,15 @@ try {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     for (let index = 0; index < 12; index += 1) zoom.click();
   })()`);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(4)')");
+  const transformAtMaximumZoom = await evaluate(
+    "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
+  );
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(4\)/, 'camera reaches the configured maximum zoom');
   assert.equal(
-    await evaluate("document.querySelector('.gallery-room-view__artwork-frame').style.transform"),
-    projectedArtworkTransform,
+    transformAtMaximumZoom,
+    bedroomProjectionTransform,
     'maximum zoom keeps wall projection scene-local'
   );
   assert.match(
@@ -317,6 +418,52 @@ try {
   assert.ok(Math.abs(Number.parseFloat(hover.tilt)) <= 0.2, 'artwork hover tilt stays barely noticeable');
   assert.match(hover.filter, /drop-shadow/, 'artwork has layered wall and contact shadows');
   assert.ok(hover.label.length > 0, 'interactive artwork has an accessible label');
+  const nearbyHover = await evaluate(`(() => {
+    const frame = document.querySelector('.gallery-room-view__artwork-frame');
+    const rect = frame.getBoundingClientRect();
+    return { x: Math.min(rect.right + 40, innerWidth - 4), y: rect.top + rect.height / 2 };
+  })()`);
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: nearbyHover.x, y: nearbyHover.y });
+  const nearbyState = await evaluate(`(() => ({
+    point: ${JSON.stringify(nearbyHover)},
+    bounds: (() => { const r = document.querySelector('.gallery-room-view__artwork-frame').getBoundingClientRect();
+      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; })(),
+    inScene: document.querySelector('.gallery-room-view__scene').classList.contains('has-artwork-proximity'),
+    tilt: document.querySelector('.gallery-room-view__artwork').style.getPropertyValue('--artwork-tilt-y'),
+  }))()`);
+  assert.equal(
+    nearbyState.inScene,
+    true,
+    `artwork hover response begins outside its visible bounds (${JSON.stringify(nearbyState)})`
+  );
+  const nearbyTilt = await evaluate(
+    "Number.parseFloat(document.querySelector('.gallery-room-view__artwork').style.getPropertyValue('--artwork-tilt-y'))"
+  );
+  assert.ok(Math.abs(nearbyTilt) < 0.14, 'proximity tilt remains low amplitude');
+  const farPointer = await evaluate(`(() => {
+    const rect = document.querySelector('.gallery-room-view__artwork-frame').getBoundingClientRect();
+    return { x: 8, y: 8 };
+  })()`);
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: farPointer.x, y: farPointer.y });
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__scene').classList.contains('has-artwork-proximity')"),
+    false,
+    'hover response returns to neutral outside the influence radius'
+  );
+  assert.match(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__artwork')).transitionDuration"),
+    /0\.48s/,
+    'artwork tilt returns with a smooth transition'
+  );
+  await waitFor(
+    "getComputedStyle(document.querySelector('.gallery-room-view__artwork')).transform === 'none'",
+    5000
+  );
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__artwork')).transform"),
+    'none',
+    'artwork tilt settles back to its original position'
+  );
 
   await evaluate("document.querySelector('.gallery-room-view__close').focus()");
   await command('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
@@ -333,6 +480,13 @@ try {
     "getComputedStyle(document.querySelector('.gallery-room-view__artwork')).transform"
   );
   assert.equal(reducedMotionTransform, 'none', 'reduced motion disables the hover tilt');
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
+  assert.match(
+    await evaluate("document.querySelector('.gallery-room-view__scene').style.transform"),
+    /scale\(1\.25\)/,
+    'reduced motion skips camera zoom animation'
+  );
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Ansicht zurücksetzen"]').click()`);
   await command('Emulation.setEmulatedMedia', { features: [] });
   console.log('✓ bounded artwork hover, keyboard focus, layered shadows, and reduced motion');
 

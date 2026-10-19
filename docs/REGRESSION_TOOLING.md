@@ -28,11 +28,12 @@ For browser coverage, run `npm run import:artworks && npm run build`, then
 This opens the generated root `index.html` over `file://` and verifies both
 photos decode, the room controls clear the artwork across desktop/tablet/phone/
 short-landscape sizes, and photo pan, zoom, pinch, reset, keyboard zoom, close,
-and focus restoration work. It also guards blended cleanup edges against abrupt
-pixel seams, fixed artwork dimensions and projective corner registration through
-camera zoom/pan without a second artwork transform, interactive accessible
-artwork hover/focus, layered shadows and reduced-motion behavior. The camera
-operates on a still photo; it does not provide genuine 3D orbit or walking.
+and focus restoration work. It checks projective artwork-center zoom after pan
+and room changes, wheel-pointer anchoring, max zoom, icon centering, proximity
+hover and smooth reset, and reduced-motion behavior. The photo pixel test samples
+cleanup boundaries at full resolution against the unchanged source gradients and
+also checks old-artwork removal. The camera operates on a still photo; it does
+not provide genuine 3D orbit or walking.
 
 ## Photograph-backed museum acceptance (2026-10-18)
 

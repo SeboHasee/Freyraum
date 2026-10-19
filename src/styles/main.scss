@@ -284,26 +284,28 @@ canvas {
   transform-style: preserve-3d;
   pointer-events: none;
   filter:
-    drop-shadow(1px 1px 2px rgb(15 20 24 / 24%))
-    drop-shadow(3px 5px 7px rgb(15 20 24 / 16%))
-    drop-shadow(7px 10px 13px rgb(15 20 24 / 9%));
+    drop-shadow(1px 2px 3px rgb(15 20 24 / 42%))
+    drop-shadow(4px 7px 10px rgb(15 20 24 / 26%))
+    drop-shadow(9px 14px 20px rgb(15 20 24 / 17%));
   transition:
-    transform var(--dur-control) var(--ease-gallery-out),
-    filter var(--dur-control) var(--ease-gallery-out);
+    transform 480ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    filter 360ms var(--ease-gallery-out);
   --artwork-tilt-x: 0deg;
   --artwork-tilt-y: 0deg;
+  --artwork-zoom: 1;
 }
 
-.gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork {
+.gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork,
+.gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
   transform:
     perspective(1200px)
     rotateX(var(--artwork-tilt-x))
     rotateY(var(--artwork-tilt-y))
-    scale3d(1.003, 1.003, 1);
+    scale3d(1.002, 1.002, 1);
   filter:
-    drop-shadow(1px 1px 2px rgb(15 20 24 / 27%))
-    drop-shadow(4px 6px 8px rgb(15 20 24 / 18%))
-    drop-shadow(8px 11px 14px rgb(15 20 24 / 10%));
+    drop-shadow(1px 2px 3px rgb(15 20 24 / 48%))
+    drop-shadow(5px 8px 12px rgb(15 20 24 / 30%))
+    drop-shadow(10px 15px 22px rgb(15 20 24 / 19%));
 }
 
 .gallery-room-view__controls {
@@ -409,10 +411,13 @@ canvas {
 }
 
 .gallery-room-view__artwork-nav {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   width: 44px;
   height: 44px;
-  place-items: center;
+  padding: 0;
   border-radius: var(--radius-pill);
   font-size: 26px;
   line-height: 1;
@@ -420,12 +425,26 @@ canvas {
 }
 
 .gallery-room-view__zoom-btn {
-  display: grid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   width: 44px;
-  place-items: center;
+  height: 44px;
+  padding: 0;
   border-radius: var(--radius-pill);
   font-size: 24px;
+  line-height: 1;
   cursor: pointer;
+}
+
+.gallery-room-view__icon {
+  display: grid;
+  width: 1em;
+  height: 1em;
+  place-items: center;
+  font-family: Arial, sans-serif;
+  line-height: 1;
 }
 
 .gallery-room-view__zoom-btn:disabled,
@@ -562,6 +581,10 @@ canvas {
   .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork {
     transform: none;
   }
+
+  .gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
+    transform: none;
+  }
 }
 
 :root[data-motion='reduced'] {
@@ -574,6 +597,10 @@ canvas {
   }
 
   .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork {
+    transform: none;
+  }
+
+  .gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
     transform: none;
   }
 }

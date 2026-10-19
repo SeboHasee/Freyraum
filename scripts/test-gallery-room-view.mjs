@@ -111,13 +111,15 @@ function changedPixelBounds(source, edited) {
   return bounds;
 }
 
-function maxCleanupSeamDelta(image, bounds, sampleStep = 8) {
+function maxCleanupSeamDelta(image, bounds, source = image, sampleStep = 1) {
   let maximum = 0;
   const compare = (x1, y1, x2, y2) => {
     const first = (y1 * image.width + x1) * image.channels;
     const second = (y2 * image.width + x2) * image.channels;
     for (let channel = 0; channel < 3; channel += 1) {
-      maximum = Math.max(maximum, Math.abs(image.pixels[first + channel] - image.pixels[second + channel]));
+      const editedDelta = Math.abs(image.pixels[first + channel] - image.pixels[second + channel]);
+      const sourceDelta = Math.abs(source.pixels[first + channel] - source.pixels[second + channel]);
+      maximum = Math.max(maximum, editedDelta - sourceDelta);
     }
   };
   const inset = Math.min(bounds.right - bounds.left, bounds.bottom - bounds.top) > 100 ? 50 : 8;
@@ -170,7 +172,7 @@ const bedroom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/gallery-b
 assert.deepEqual([bedroom.width, bedroom.height], [2000, 1540]);
 const originalBedroom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/bedroom.png'));
 const bedroomCleanupBounds = changedPixelBounds(originalBedroom, bedroom);
-const bedroomSeamDelta = maxCleanupSeamDelta(bedroom, bedroomCleanupBounds);
+const bedroomSeamDelta = maxCleanupSeamDelta(bedroom, bedroomCleanupBounds, originalBedroom);
 assert.ok(
   bedroomSeamDelta <= 20,
   `bedroom photo cleanup blends into the surrounding wall without a sharp edge (max delta ${bedroomSeamDelta})`
@@ -183,7 +185,7 @@ const livingRoom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/galler
 assert.deepEqual([livingRoom.width, livingRoom.height], [1896, 1424]);
 const originalLivingRoom = decodePng(resolve(ROOT, 'customer-artworks/Backgrounds/Wohnraum.png'));
 const livingRoomCleanupBounds = changedPixelBounds(originalLivingRoom, livingRoom);
-const livingRoomSeamDelta = maxCleanupSeamDelta(livingRoom, livingRoomCleanupBounds);
+const livingRoomSeamDelta = maxCleanupSeamDelta(livingRoom, livingRoomCleanupBounds, originalLivingRoom);
 assert.ok(
   livingRoomSeamDelta <= 20,
   `living-room photo cleanup blends into the surrounding wall without a sharp edge (max delta ${livingRoomSeamDelta})`
@@ -231,6 +233,7 @@ for (const view of roomViews) {
         (corner) => corner[0] === x && corner[1] === y
       );
       const basePoint = projectCssMatrix(transform.transform, x, y);
+      const artworkCenter = projectCssMatrix(transform.transform, 375, 500);
       const wallPoint = projectiveGeometry.applyHomography(
         wallHomography,
         localCorners[cornerIndex][0],
@@ -243,6 +246,18 @@ for (const view of roomViews) {
       assert.ok(
         Math.abs(basePoint.x - expected.x) < 0.01 && Math.abs(basePoint.y - expected.y) < 0.01,
         `${view.id} artwork corner aligns with the photographed wall at ${width}x${height}`
+      );
+      const expectedCenterWallPoint = projectiveGeometry.applyHomography(wallHomography, centerU, centerV);
+      const expectedCenter = {
+        x: coverOffsetX + expectedCenterWallPoint.x * view.background.width * coverScale,
+        y: coverOffsetY + expectedCenterWallPoint.y * view.background.height * coverScale,
+      };
+      assert.ok(
+        Math.abs(transform.center.x - expectedCenter.x) < 0.01
+          && Math.abs(transform.center.y - expectedCenter.y) < 0.01
+          && Math.abs(artworkCenter.x - expectedCenter.x) < 0.01
+          && Math.abs(artworkCenter.y - expectedCenter.y) < 0.01,
+        `${view.id} computes the projective artwork center from the same wall homography`
       );
       for (const camera of cameraStates) {
         const displayed = {
@@ -327,6 +342,8 @@ assert.match(roomEditorSource, /quadIsConvex/, 'the editor rejects invalid wall 
 const roomViewSource = readFileSync(resolve(ROOT, 'src/gallery/GalleryRoomView.ts'), 'utf8');
 assert.match(roomViewSource, /setPointerCapture/);
 assert.match(roomViewSource, /pointercancel/);
+assert.match(roomViewSource, /CAMERA_ZOOM_DURATION_MS = 420/);
+assert.match(roomViewSource, /requestAnimationFrame\(tick\)/);
 assert.match(roomViewSource, /this\.zoomAt\(/);
 assert.match(roomViewSource, /this\.trapFocus\(event\)/);
 assert.match(roomViewSource, /this\.resetCamera\(\)/);

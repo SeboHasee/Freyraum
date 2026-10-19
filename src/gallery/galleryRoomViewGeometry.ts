@@ -12,6 +12,7 @@ export interface GalleryRoomArtworkTransform {
   width: number;
   height: number;
   transform: string;
+  center: Point2D;
 }
 
 function screenPoint(
@@ -63,15 +64,19 @@ export function projectGalleryRoomArtwork(
   ];
   const sourceQuad = localQuad.map((corner) => applyHomography(wallHomography, corner.x, corner.y));
   if (sourceQuad.some((corner) => corner === null)) return null;
+  const sourceCenter = applyHomography(wallHomography, centerU, centerV);
+  if (!sourceCenter) return null;
   const projectedQuad = sourceQuad.map((corner) =>
     screenPoint(corner!, view, viewportWidth, viewportHeight)
   ) as unknown as Quad;
+  const projectedCenter = screenPoint(sourceCenter, view, viewportWidth, viewportHeight);
   const artworkHomography = computeHomographyFromUnitSquare(projectedQuad);
   if (!artworkHomography) return null;
 
   return {
     width: artworkWidth,
     height: artworkHeight,
+    center: projectedCenter,
     transform: homographyToCssMatrix3d(
       scaleHomographyForSourceRect(artworkHomography, artworkWidth, artworkHeight)
     ),

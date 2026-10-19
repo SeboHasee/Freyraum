@@ -26,6 +26,15 @@
   calculating the artwork projection with that camera as well causes a double
   transform and visible parallax. Hover tilt and scale are deliberately minimal
   and presentation-only; reduced-motion settings disable the effect.
+- Zoom buttons use the artwork center mapped through the wall homography as their
+  anchor, animating scale and offset together; pointer wheel/pinch retain their
+  own focus point. Camera bounds still prevent exposing blank edges, so centering
+  is clamped to the valid photograph viewport. Mouse tilt uses a responsive
+  proximity radius, low amplitude, and a CSS eased return.
+- For cleanup boundaries, compare each dense adjacent-pixel gradient in the
+  edited photo to the same source-photo gradient. This separates newly introduced
+  cleanup discontinuities from naturally textured wall edges; retain separate
+  masks that prove the old painting pixels are removed.
 - The placement editor's photo-room preview calls the same geometry projection
   as the visitor view. Keep wall corners normalized and convex, constrain the
   artwork's normalized position/height, and serialize changes through the same
