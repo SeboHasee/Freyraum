@@ -17,9 +17,10 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Add structural and generated-preview browser assertions for both help
       contexts, non-pannable overview, pannable zoom, active drag, reset, and
       touch-pointer cursor behavior.
-- [ ] Complete final build, full browser validation, secret scan, and parallel
-      validation; preserve known independent museum geometry and photo-room visual
-      acceptance issues.
+- [x] Complete the production/customer-preview build, full generated-preview
+      browser suite, focused structural checks, lint, typecheck, secret scan, and
+      parallel validation; retain the independent geometry and photo-room visual
+      acceptance issues as separate follow-ups.
 
 ## Museum artwork spotlight and action feedback (2026-10-20)
 
