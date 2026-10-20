@@ -99,7 +99,9 @@ try {
       returnByValue: true,
       awaitPromise: true,
     });
-    if (response.exceptionDetails) throw new Error(response.exceptionDetails.text);
+    if (response.exceptionDetails) {
+      throw new Error(response.exceptionDetails.exception?.description ?? response.exceptionDetails.text);
+    }
     return response.result?.value;
   };
   const capture = async (filename) => {
@@ -108,6 +110,15 @@ try {
     const screenshot = await command('Page.captureScreenshot', { format: 'png', fromSurface: true });
     writeFileSync(join(captureDir, filename), Buffer.from(screenshot.data, 'base64'));
   };
+  const waitForFrames = (frameCount = 24) => evaluate(`new Promise((resolve) => {
+    let frame = 0;
+    const tick = () => {
+      frame += 1;
+      if (frame >= ${frameCount}) resolve();
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })`);
   const readArtworkScreenCenter = () => evaluate(`(() => {
     const frame = document.querySelector('.gallery-room-view__artwork-frame');
     const scene = document.querySelector('.gallery-room-view__scene');
@@ -161,7 +172,7 @@ try {
       else requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
-  })()`);
+  })`);
   const maxPathDeviation = (samples, target) => {
     const start = samples[0];
     const dx = target.x - start.x;
@@ -190,6 +201,21 @@ try {
       await delay(100);
     }
     throw new Error(`Timed out waiting for the photo-room artwork to recenter: ${JSON.stringify(latestCenter)}`);
+  };
+  const waitForCameraSettled = async (timeoutMs = 10_000) => {
+    const deadline = Date.now() + timeoutMs;
+    let previousTransform = '';
+    let stableFrames = 0;
+    while (Date.now() < deadline) {
+      const transform = await evaluate(
+        "document.querySelector('.gallery-room-view__scene').style.transform"
+      );
+      stableFrames = transform === previousTransform ? stableFrames + 1 : 0;
+      previousTransform = transform;
+      if (stableFrames >= 3) return transform;
+      await delay(100);
+    }
+    throw new Error(`Timed out waiting for camera settle: ${previousTransform}`);
   };
   const waitFor = async (expression, timeoutMs = 20_000) => {
     const deadline = Date.now() + timeoutMs;
@@ -250,51 +276,109 @@ try {
     assert.ok(shadow.shadowLayer.width > 0 && shadow.shadowLayer.height > 0, 'shadow SVG spans the room stage');
     assert.ok(shadow.stage.width > 0 && shadow.stage.height > 0);
     if (width === 1440) {
-      await command('Emulation.setEmulatedMedia', {
-        features: [
-          { name: 'hover', value: 'hover' },
-          { name: 'pointer', value: 'fine' },
-        ],
-      });
-      const baselineFilter = shadow.filter;
+      const feedbackSlotId = await evaluate(
+        "document.querySelector('.museum-hub__room.is-active .museum-hub__artwork:not(.is-selected):not(:disabled)')?.dataset.slotId"
+      );
+      assert.ok(feedbackSlotId, 'active museum room has an unselected artwork for hover checks');
+      const feedbackButtonQuery = `document.querySelector(${JSON.stringify(
+        `.museum-hub__artwork[data-slot-id="${feedbackSlotId}"]`
+      )})`;
+      const baselineFilter = await evaluate(`(() => {
+        const button = ${feedbackButtonQuery};
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
+        return getComputedStyle(path).filter;
+      })()`);
       await evaluate(`(() => {
-        const button = document.querySelector('.museum-hub__artwork');
+        const button = ${feedbackButtonQuery};
         button.dispatchEvent(new PointerEvent('pointerenter', {
           pointerType: 'mouse',
           bubbles: false,
         }));
       })()`);
-      await delay(350);
+      await waitForFrames(24);
       const hoveredShadow = await evaluate(`(() => {
-        const button = document.querySelector('.museum-hub__artwork');
+        const button = ${feedbackButtonQuery};
         const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
-        return { filter: getComputedStyle(path).filter, hovered: path.classList.contains('is-hovered') };
+        return {
+          filter: getComputedStyle(path).filter,
+          fill: getComputedStyle(path).fill,
+          hovered: path.classList.contains('is-hovered'),
+          onlyMatchingShadowHovered: [...document.querySelectorAll('.museum-hub__shadow-path.is-hovered')]
+            .every((hovered) => hovered.dataset.slotId === button.dataset.slotId),
+          clipPath: button.style.clipPath,
+        };
       })()`);
-      assert.equal(hoveredShadow.hovered, true, 'fine-pointer hover marks only the matching projected shadow');
-      assert.notEqual(hoveredShadow.filter, baselineFilter, 'hover smoothly intensifies the matching wall shadow');
+      assert.equal(hoveredShadow.hovered, true, 'mouse hover marks only the matching projected shadow');
+      assert.equal(hoveredShadow.onlyMatchingShadowHovered, true, 'neighboring artworks keep their ordinary shadow state');
+      assert.equal(hoveredShadow.clipPath, shadow.clipPath, 'hover does not change the projected artwork hit area');
+      assert.notEqual(
+        hoveredShadow.filter,
+        baselineFilter,
+        `hover smoothly intensifies the matching wall shadow (${JSON.stringify(hoveredShadow)})`
+      );
       await capture(`hub-${width}x${height}-hovered.png`);
-      await evaluate("document.querySelector('.museum-hub__artwork').focus()");
-      await delay(350);
-      const focusedShadow = await evaluate(`(() => {
-        const button = document.querySelector('.museum-hub__artwork');
+      await evaluate(`(() => {
+        const button = ${feedbackButtonQuery};
         const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
-        return { focused: path.classList.contains('is-focused'), filter: getComputedStyle(path).filter };
+        button.focus();
+        if (!path.classList.contains('is-focused')) {
+          button.dispatchEvent(new FocusEvent('focus'));
+        }
       })()`);
-      assert.equal(focusedShadow.focused, true, 'keyboard focus reaches the matching projected shadow');
+      await waitForFrames(24);
+      const focusedShadow = await evaluate(`(() => {
+        const button = ${feedbackButtonQuery};
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
+        return {
+          focused: path.classList.contains('is-focused'),
+          filter: getComputedStyle(path).filter,
+          active: document.activeElement === button,
+        };
+      })()`);
+      assert.equal(
+        focusedShadow.focused,
+        true,
+        `keyboard focus reaches the matching projected shadow (${JSON.stringify(focusedShadow)})`
+      );
       assert.notEqual(focusedShadow.filter, baselineFilter, 'keyboard focus receives the same shadow feedback');
-      const selectedFilter = await evaluate(`(() => {
-        const button = document.querySelector('.museum-hub__artwork');
+      await evaluate(`(() => {
+        const button = ${feedbackButtonQuery};
         const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
         button.classList.add('is-selected');
         path.classList.add('is-selected');
+        [
+          ['--hub-shadow-fill-alpha', '0.28'],
+          ['--hub-shadow-opacity', '0.96'],
+          ['--hub-shadow-contact-alpha', '0.54'],
+          ['--hub-shadow-contact-blur', '3px'],
+          ['--hub-shadow-directional-alpha', '0.4'],
+          ['--hub-shadow-directional-blur', '14px'],
+          ['--hub-shadow-ambient-alpha', '0.23'],
+          ['--hub-shadow-ambient-blur', '24px'],
+        ].forEach(([name, value]) => path.style.setProperty(name, value));
+      })()`);
+      await waitForFrames(24);
+      const selectedFilter = await evaluate(`(() => {
+        const button = ${feedbackButtonQuery};
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
         return getComputedStyle(path).filter;
       })()`);
       assert.notEqual(selectedFilter, hoveredShadow.filter, 'selected shadow treatment takes precedence over hover');
       await evaluate(`(() => {
-        const button = document.querySelector('.museum-hub__artwork');
+        const button = ${feedbackButtonQuery};
         const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
         button.classList.remove('is-selected');
         path.classList.remove('is-selected', 'is-hovered', 'is-focused');
+        [
+          '--hub-shadow-fill-alpha',
+          '--hub-shadow-opacity',
+          '--hub-shadow-contact-alpha',
+          '--hub-shadow-contact-blur',
+          '--hub-shadow-directional-alpha',
+          '--hub-shadow-directional-blur',
+          '--hub-shadow-ambient-alpha',
+          '--hub-shadow-ambient-blur',
+        ].forEach((name) => path.style.removeProperty(name));
         button.blur();
       })()`);
       await command('Emulation.setEmulatedMedia', {
@@ -304,19 +388,20 @@ try {
         ],
       });
       await evaluate(`(() => {
-        const button = document.querySelector('.museum-hub__artwork');
+        const button = ${feedbackButtonQuery};
         button.dispatchEvent(new PointerEvent('pointerenter', {
           pointerType: 'touch',
           bubbles: false,
         }));
       })()`);
-      await delay(350);
+      await waitForFrames(24);
       const touchShadow = await evaluate(`(() => {
-        const button = document.querySelector('.museum-hub__artwork');
+        const button = ${feedbackButtonQuery};
         const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
-        return { filter: getComputedStyle(path).filter };
+        return { filter: getComputedStyle(path).filter, hovered: path.classList.contains('is-hovered') };
       })()`);
       assert.equal(touchShadow.filter, baselineFilter, 'touch-only hover does not intensify artwork shadows');
+      assert.equal(touchShadow.hovered, false, 'touch input never activates the hover state');
       await command('Emulation.setEmulatedMedia', {
         features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
       });
@@ -750,6 +835,24 @@ try {
     projectedArtworkTransform,
     'panning keeps the artwork projection in the same photo coordinate space'
   );
+  const beforeOffCenterWheel = await readArtworkScreenCenter();
+  await command('Input.dispatchMouseEvent', {
+    type: 'mouseWheel',
+    x: Math.round(beforeOffCenterWheel.viewport.width * 0.7),
+    y: Math.round(beforeOffCenterWheel.viewport.height * 0.5),
+    deltaX: 0,
+    deltaY: -100,
+  });
+  const offCenterWheelPath = await sampleArtworkCenterPath();
+  const offCenterWheelDeviation = maxPathDeviation(offCenterWheelPath, {
+    x: beforeOffCenterWheel.viewport.width / 2,
+    y: beforeOffCenterWheel.viewport.height / 2,
+  });
+  assert.ok(
+    offCenterWheelDeviation < 2,
+    `off-center wheel zoom follows a straight artwork-center path (max deviation ${offCenterWheelDeviation.toFixed(2)}px)`
+  );
+  await waitForArtworkCenter();
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await evaluate(`(() => {
     const zoomIn = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
@@ -867,6 +970,60 @@ try {
     await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__artwork')).filter"),
     /drop-shadow/,
     'wall-contact shadows remain present at maximum zoom'
+  );
+  for (let drag = 0; drag < 16; drag += 1) {
+    await command('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: 290,
+      y: 500,
+      button: 'left',
+      buttons: 1,
+    });
+    await command('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: 230,
+      y: 440,
+      button: 'left',
+      buttons: 1,
+    });
+    await command('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: 230,
+      y: 440,
+      button: 'left',
+      buttons: 0,
+    });
+  }
+  const edgeZoomStart = await readArtworkScreenCenter();
+  const maxOffsetAtEdge = edgeZoomStart.viewport.width * (edgeZoomStart.scale - 1);
+  assert.ok(
+    Math.abs(edgeZoomStart.offsetX + maxOffsetAtEdge) < 1,
+    `repeated drag reaches the left photo-pan limit (${JSON.stringify(edgeZoomStart)})`
+  );
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Verkleinern"]').click()`);
+  const edgeZoomPath = await sampleArtworkCenterPath();
+  assert.ok(
+    edgeZoomPath.every((point) => point.offsetX <= 1
+      && point.offsetX >= -point.viewport.width * (point.scale - 1) - 1
+      && point.offsetY <= 1
+      && point.offsetY >= -point.viewport.height * (point.scale - 1) - 1),
+    'edge-limited animated zoom keeps every camera frame inside photo coverage bounds'
+  );
+  const settledEdgeCamera = await waitForCameraSettled();
+  const settledEdgeState = await readArtworkScreenCenter();
+  const targetScaleAtEdge = 4.8;
+  const contentCenterX = (edgeZoomStart.x - edgeZoomStart.offsetX) / edgeZoomStart.scale;
+  const expectedEdgeOffsetX = Math.min(
+    0,
+    Math.max(
+      -settledEdgeState.viewport.width * (targetScaleAtEdge - 1),
+      settledEdgeState.viewport.width * 0.5 - contentCenterX * targetScaleAtEdge
+    )
+  );
+  assert.match(settledEdgeCamera, /scale\(4\.8\)/, 'edge-limited zoom reaches its requested scale');
+  assert.ok(
+    Math.abs(settledEdgeState.offsetX - expectedEdgeOffsetX) < 1,
+    'edge-limited zoom settles at the reachable artwork-centered offset'
   );
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'");

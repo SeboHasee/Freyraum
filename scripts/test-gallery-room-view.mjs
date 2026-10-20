@@ -716,15 +716,21 @@ assert.match(
 );
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
 assert.match(editorSource, /shadowPath\.classList\.toggle\('is-selected', selected\)/);
+assert.match(editorSource, /event\.pointerType === 'mouse'/);
+assert.match(editorSource, /event\.pointerType === 'pen'/);
 assert.match(editorSource, /shadowPath\.classList\.add\('is-hovered'\)/);
 assert.match(editorSource, /shadowPath\.classList\.add\('is-focused'\)/);
+assert.match(editorSource, /this\.syncShadowFeedback\(view\.shadowPath\)/);
+assert.match(editorSource, /private syncShadowFeedback\(shadowPath: SVGPathElement\)/);
+assert.match(editorSource, /SHADOW_FEEDBACK_PROFILES\.selected/);
+assert.match(editorSource, /this\.calibrating \|\| this\.debugGeometry/);
 assert.match(
   hubStyles,
   /\.museum-hub__shadow-path\s*\{[^}]*drop-shadow\([^}]*drop-shadow\([^}]*drop-shadow/s,
   'museum-hub shadow SVG receives contact, directional, and ambient wall shadows'
 );
-assert.match(hubStyles, /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.museum-hub__shadow-path\.is-hovered/);
-assert.match(hubStyles, /\.museum-hub__shadow-path\.is-focused/);
+assert.match(hubStyles, /--hub-shadow-fill-alpha/);
+assert.match(hubStyles, /--hub-shadow-directional-alpha/);
 assert.match(
   hubStyles,
   /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.museum-hub__shadow-path\s*\{\s*transition:\s*none;/,

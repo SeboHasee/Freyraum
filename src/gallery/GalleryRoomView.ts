@@ -531,11 +531,9 @@ export class GalleryRoomView {
       let nextOffsetX: number;
       let nextOffsetY: number;
       const anchor = this.cameraAnimationAnchor;
-      if (anchor) {
-        const scaleRange = anchor.targetScale - anchor.startScale;
-        const progress = Math.abs(scaleRange) < 1e-6
-          ? 1
-          : Math.max(0, Math.min(1, (nextScale - anchor.startScale) / scaleRange));
+      const scaleRange = anchor ? anchor.targetScale - anchor.startScale : 0;
+      if (anchor && Math.abs(scaleRange) >= 1e-6) {
+        const progress = Math.max(0, Math.min(1, (nextScale - anchor.startScale) / scaleRange));
         const anchorScreenX = anchor.startScreenX
           + (anchor.targetScreenX - anchor.startScreenX) * progress;
         const anchorScreenY = anchor.startScreenY

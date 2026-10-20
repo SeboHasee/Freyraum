@@ -102,6 +102,20 @@ const HUB_BACKGROUND_BASE_URL =
 const HUB_IMAGE_TIMEOUT_MS = 5000;
 const HUB_INLINE_IMAGE_TIMEOUT_MS = 20000;
 const NARROW_PORTRAIT_QUERY = '(max-aspect-ratio: 4/5)';
+const SHADOW_FEEDBACK_VARIABLES = [
+  '--hub-shadow-fill-alpha',
+  '--hub-shadow-opacity',
+  '--hub-shadow-contact-alpha',
+  '--hub-shadow-contact-blur',
+  '--hub-shadow-directional-alpha',
+  '--hub-shadow-directional-blur',
+  '--hub-shadow-ambient-alpha',
+  '--hub-shadow-ambient-blur',
+] as const;
+const SHADOW_FEEDBACK_PROFILES = {
+  emphasis: ['0.32', '1', '0.6', '4px', '0.46', '17px', '0.27', '26px'],
+  selected: ['0.28', '0.96', '0.54', '3px', '0.4', '14px', '0.23', '24px'],
+} as const;
 
 type SlotImageAttemptFailureReason =
   | 'no-source'
@@ -634,6 +648,7 @@ export class MainMuseumHub {
       const selected = !!this.selectedArtworkId && view.slot.artworkId === this.selectedArtworkId;
       view.button.classList.toggle('is-selected', selected);
       view.shadowPath.classList.toggle('is-selected', selected);
+      this.syncShadowFeedback(view.shadowPath);
       if (selected) {
         view.button.setAttribute('aria-current', 'true');
         selectedView = view;
@@ -739,13 +754,23 @@ export class MainMuseumHub {
       ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
       ?.appendChild(shadowPath);
     button.addEventListener('pointerenter', (event) => {
-      if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
+      if ((event.pointerType === 'mouse' || event.pointerType === 'pen') && event.buttons === 0) {
         shadowPath.classList.add('is-hovered');
+        this.syncShadowFeedback(shadowPath);
       }
     });
-    button.addEventListener('pointerleave', () => shadowPath.classList.remove('is-hovered'));
-    button.addEventListener('focusin', () => shadowPath.classList.add('is-focused'));
-    button.addEventListener('focusout', () => shadowPath.classList.remove('is-focused'));
+    button.addEventListener('pointerleave', () => {
+      shadowPath.classList.remove('is-hovered');
+      this.syncShadowFeedback(shadowPath);
+    });
+    button.addEventListener('focus', () => {
+      shadowPath.classList.add('is-focused');
+      this.syncShadowFeedback(shadowPath);
+    });
+    button.addEventListener('blur', () => {
+      shadowPath.classList.remove('is-focused');
+      this.syncShadowFeedback(shadowPath);
+    });
 
     let image: HTMLImageElement | null = null;
     if (slot.selectable && slot.artworkId) {
@@ -838,6 +863,23 @@ export class MainMuseumHub {
     this.applySlotGeometry(button, slot, false, 1, shadowPath);
     this.syncSlotRenderer(view, render);
     return view;
+  }
+
+  private syncShadowFeedback(shadowPath: SVGPathElement): void {
+    const selected = shadowPath.classList.contains('is-selected');
+    const emphasized = selected
+      || shadowPath.classList.contains('is-hovered')
+      || shadowPath.classList.contains('is-focused');
+    if (!emphasized || this.calibrating || this.debugGeometry) {
+      for (const variable of SHADOW_FEEDBACK_VARIABLES) shadowPath.style.removeProperty(variable);
+      return;
+    }
+    const profile = selected
+      ? SHADOW_FEEDBACK_PROFILES.selected
+      : SHADOW_FEEDBACK_PROFILES.emphasis;
+    SHADOW_FEEDBACK_VARIABLES.forEach((variable, index) => {
+      shadowPath.style.setProperty(variable, profile[index]);
+    });
   }
 
   private applySlotGeometry(
