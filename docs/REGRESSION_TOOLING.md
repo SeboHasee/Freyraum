@@ -38,8 +38,9 @@ Coarse-pointer browser checks cover the optional motion toggle, permission grant
 and denial, unavailable sensors, subtle clamped orientation response, reduced
 motion, and page-hidden listener suspension/resume. The structural test also
 checks secure-context gating, screen-angle normalization, and smoothing.
-Coarse-pointer button/wheel zoom uses the gallery's frame-independent easing;
-desktop retains its existing easing and pinch/pan remain direct.
+Button/wheel zoom follows the gallery's two-stage frame-independent camera
+easing and can retarget while a previous zoom is still moving. Pinch and pan
+remain direct.
 The browser matrix also includes Wohnbereich at 2000×1080. Screenshot capture
 waits for two animation frames after a viewport or room-state change so the photo
 and artwork have been painted before manual visual review.

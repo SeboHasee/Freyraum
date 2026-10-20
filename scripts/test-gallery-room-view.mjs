@@ -680,7 +680,11 @@ assert.match(
   'photo-room zoom supports expanded pan travel'
 );
 assert.match(roomViewSource, /CAMERA_ZOOM_LAMBDA = 4/);
-assert.match(roomViewSource, /smoothDamp\(this\.cameraScale, scale/);
+assert.match(roomViewSource, /CAMERA_PAN_LAMBDA = 5/);
+assert.match(roomViewSource, /smoothDamp\(this\.cameraZoom, nextTargetScale, CAMERA_ZOOM_LAMBDA/);
+assert.match(roomViewSource, /smoothDamp\(this\.cameraScale, this\.cameraZoom, CAMERA_ZOOM_LAMBDA/);
+assert.match(roomViewSource, /cameraAnimationTargetOffsetX/);
+assert.doesNotMatch(roomViewSource, /CAMERA_ZOOM_DURATION_MS/);
 assert.match(roomViewSource, /requestAnimationFrame\(tick\)/);
 assert.match(roomViewSource, /requestDeviceOrientationAccess/);
 assert.match(roomViewSource, /deviceorientation/);

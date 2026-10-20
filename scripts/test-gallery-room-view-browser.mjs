@@ -132,13 +132,22 @@ try {
   })()`);
   const waitForArtworkCenter = async (timeoutMs = 10_000) => {
     const deadline = Date.now() + timeoutMs;
+    let latestCenter;
+    let previousTransform = '';
+    let stableFrames = 0;
     while (Date.now() < deadline) {
       const center = await readArtworkScreenCenter();
-      if (Math.abs(center.x - center.viewport.width / 2) < 2
-        && Math.abs(center.y - center.viewport.height / 2) < 2) return center;
+      latestCenter = center;
+      const transform = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
+      stableFrames = transform === previousTransform ? stableFrames + 1 : 0;
+      previousTransform = transform;
+      if (stableFrames >= 3
+        && Math.abs(center.x - center.viewport.width / 2) < 2
+        && Math.abs(center.y - center.viewport.height / 2)
+          < Math.max(2, center.viewport.height * 0.03)) return center;
       await delay(100);
     }
-    throw new Error('Timed out waiting for the photo-room artwork to recenter');
+    throw new Error(`Timed out waiting for the photo-room artwork to recenter: ${JSON.stringify(latestCenter)}`);
   };
   const waitFor = async (expression, timeoutMs = 20_000) => {
     const deadline = Date.now() + timeoutMs;
@@ -146,7 +155,10 @@ try {
       if (await evaluate(expression)) return;
       await delay(200);
     }
-    throw new Error(`Timed out waiting for ${expression}`);
+    const camera = await evaluate(
+      "document.querySelector('.gallery-room-view__scene')?.style.transform ?? null"
+    );
+    throw new Error(`Timed out waiting for ${expression}; camera=${camera}`);
   };
 
   await command('Page.enable');
@@ -555,7 +567,7 @@ try {
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
   let camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'zoom control zooms the photo camera');
-  await delay(600);
+  await waitForArtworkCenter();
   let artworkScreenCenter = await readArtworkScreenCenter();
   assert.ok(
     Math.abs(artworkScreenCenter.x - artworkScreenCenter.viewport.width / 2) < 2
@@ -616,14 +628,26 @@ try {
     'panning keeps the artwork projection in the same photo coordinate space'
   );
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
+  await evaluate(`(() => {
+    const zoomIn = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
+    zoomIn.click();
+    zoomIn.click();
+  })()`);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.5625)')");
+  await waitForArtworkCenter();
+  console.log('✓ interrupted button zoom smoothly retargets without restarting from stale camera state');
+  await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
+  await waitForArtworkCenter();
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 290, y: 500, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 230, y: 440, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 230, y: 440, button: 'left', buttons: 0 });
+  const scaleBeforeRepeatedZoom = (await readArtworkScreenCenter()).scale;
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
-  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.5625)')");
-  artworkScreenCenter = await readArtworkScreenCenter();
+  await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
+    .split(' scale(')[1]?.slice(0, -1)) - ${scaleBeforeRepeatedZoom * 1.25}) < 0.001`);
+  artworkScreenCenter = await waitForArtworkCenter();
   assert.ok(
     Math.abs(artworkScreenCenter.x - artworkScreenCenter.viewport.width / 2) < 2
       && Math.abs(artworkScreenCenter.y - artworkScreenCenter.viewport.height / 2)
@@ -633,10 +657,10 @@ try {
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
   await evaluate(`document.querySelector('.gallery-room-view__room-controls select').value = 'wohnraum';
     document.querySelector('.gallery-room-view__room-controls select').dispatchEvent(new Event('change', { bubbles: true }));`);
-  await delay(600);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'");
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
-  await delay(600);
+  await waitForArtworkCenter();
   artworkScreenCenter = await readArtworkScreenCenter();
   assert.ok(
     Math.abs(artworkScreenCenter.x - artworkScreenCenter.viewport.width / 2) < 2
@@ -645,6 +669,7 @@ try {
     'zoom button centers the other room artwork using its own projective center'
   );
   const otherRoomBeforeWheel = await readArtworkScreenCenter();
+  const otherRoomWheelScale = otherRoomBeforeWheel.scale * Math.exp(0.1);
   const otherRoomWheelPoint = await evaluate(
     `({ x: innerWidth - 80, y: Math.round(innerHeight * 0.38) })`
   );
@@ -652,6 +677,8 @@ try {
     const target = document.elementFromPoint(${otherRoomWheelPoint.x}, ${otherRoomWheelPoint.y});
     target.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }));
   })()`);
+  await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
+    .split(' scale(')[1]?.slice(0, -1)) - ${otherRoomWheelScale}) < 0.001`);
   const otherRoomAfterWheel = await waitForArtworkCenter();
   assert.ok(
     Math.abs(otherRoomAfterWheel.x - otherRoomAfterWheel.viewport.width / 2) < 2
@@ -685,7 +712,14 @@ try {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     for (let index = 0; index < 12; index += 1) zoom.click();
   })()`);
-  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(6)')");
+  await waitFor(`Number(document.querySelector('.gallery-room-view__scene').style.transform
+    .split(' scale(')[1]?.slice(0, -1)) > 5.9`);
+  await evaluate(`(() => {
+    const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
+    if (!zoom.disabled) zoom.click();
+  })()`);
+  await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
+    .split(' scale(')[1]?.slice(0, -1)) - 6) < 0.001`);
   const transformAtMaximumZoom = await evaluate(
     "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
   );

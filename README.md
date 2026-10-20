@@ -42,9 +42,10 @@ photograph and **Zurück zur Galerie** to leave.
 Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
 on-screen control. Zoom buttons bring the projected artwork center toward the
 viewport center; wheel and pinch stay anchored to the pointer/gesture. The artwork
-keeps its configured size on the photographed wall. On touch devices, zoom-button
-and wheel motion use the gallery's frame-rate-independent easing, while active
-drag and pinch remain direct. Nearby desktop mouse movement produces a very subtle,
+keeps its configured size on the photographed wall. Zoom buttons and wheel motion
+use the gallery's two-stage, frame-rate-independent camera easing on desktop and
+touch devices, with smooth target retargeting during repeated input; active drag
+and pinch remain direct. Nearby desktop mouse movement produces a very subtle,
 smoothly returning tilt. On touch devices, the **↗** control optionally enables
 subtle artwork tilt from phone movement; sensor access is requested only after
 that action, and the feature can be disabled again. Unsupported or denied sensors

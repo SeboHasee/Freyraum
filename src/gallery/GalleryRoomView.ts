@@ -12,8 +12,8 @@ import {
 
 const MIN_CAMERA_SCALE = 1;
 const MAX_CAMERA_SCALE = 6;
-const CAMERA_ZOOM_DURATION_MS = 560;
 const CAMERA_ZOOM_LAMBDA = 4;
+const CAMERA_PAN_LAMBDA = 5;
 const HOVER_TILT_MAX_DEG = 0.14;
 const HOVER_INFLUENCE_RADIUS_PX = 900;
 
@@ -73,9 +73,14 @@ export class GalleryRoomView {
   private cameraScale = 1;
   private cameraOffsetX = 0;
   private cameraOffsetY = 0;
+  private cameraZoom = 1;
+  private cameraPanX = 0;
+  private cameraPanY = 0;
   private artworkCenter: PhotoPointer | null = null;
   private cameraAnimationFrame = 0;
   private cameraAnimationTargetScale: number | null = null;
+  private cameraAnimationTargetOffsetX: number | null = null;
+  private cameraAnimationTargetOffsetY: number | null = null;
   private motionTiltEnabled = false;
   private motionPermissionPending = false;
   private motionListenersAttached = false;
@@ -419,10 +424,20 @@ export class GalleryRoomView {
     this.updateArtworkTransform();
   }
 
-  private setCamera(scale: number, offsetX: number, offsetY: number): void {
+  private setCamera(
+    scale: number,
+    offsetX: number,
+    offsetY: number,
+    syncAnimationState = true
+  ): void {
     this.cameraScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
     this.cameraOffsetX = offsetX;
     this.cameraOffsetY = offsetY;
+    if (syncAnimationState) {
+      this.cameraZoom = this.cameraScale;
+      this.cameraPanX = this.cameraOffsetX;
+      this.cameraPanY = this.cameraOffsetY;
+    }
     this.applyCamera();
   }
 
@@ -453,49 +468,57 @@ export class GalleryRoomView {
   }
 
   private animateCamera(scale: number, offsetX: number, offsetY: number): void {
-    this.stopCameraAnimation();
-    this.cameraAnimationTargetScale = scale;
+    const targetScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
+    const rect = this.element.getBoundingClientRect();
+    const maxOffsetX = Math.max(0, rect.width * (targetScale - 1));
+    const maxOffsetY = Math.max(0, rect.height * (targetScale - 1));
+    const targetOffsetX = Math.min(0, Math.max(-maxOffsetX, offsetX));
+    const targetOffsetY = Math.min(0, Math.max(-maxOffsetY, offsetY));
+    this.cameraAnimationTargetScale = targetScale;
+    this.cameraAnimationTargetOffsetX = targetOffsetX;
+    this.cameraAnimationTargetOffsetY = targetOffsetY;
     if (this.motionPreference.matches || document.documentElement.dataset['motion'] === 'reduced') {
-      this.cameraAnimationTargetScale = null;
-      this.setCamera(scale, offsetX, offsetY);
+      this.stopCameraAnimation();
+      this.cameraZoom = targetScale;
+      this.cameraPanX = targetOffsetX;
+      this.cameraPanY = targetOffsetY;
+      this.setCamera(targetScale, targetOffsetX, targetOffsetY);
       return;
     }
-    const from = { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY };
-    const useGallerySmoothing = window.matchMedia('(pointer: coarse)').matches;
-    const startedAt = performance.now();
+    if (this.cameraAnimationFrame) return;
     let previousAt = performance.now();
     const tick = (now: number): void => {
-      let nextScale: number;
-      let nextOffsetX: number;
-      let nextOffsetY: number;
-      let settled: boolean;
-      if (useGallerySmoothing) {
-        const deltaSeconds = Math.max(0, Math.min(0.1, (now - previousAt) / 1000));
-        previousAt = now;
-        nextScale = smoothDamp(this.cameraScale, scale, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-        nextOffsetX = smoothDamp(this.cameraOffsetX, offsetX, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-        nextOffsetY = smoothDamp(this.cameraOffsetY, offsetY, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-        settled = Math.abs(scale - nextScale) < 0.001
-          && Math.abs(offsetX - nextOffsetX) < 0.5
-          && Math.abs(offsetY - nextOffsetY) < 0.5;
-      } else {
-        const progress = Math.min(1, (now - startedAt) / CAMERA_ZOOM_DURATION_MS);
-        const eased = 1 - (1 - progress) ** 3;
-        nextScale = from.scale + (scale - from.scale) * eased;
-        nextOffsetX = from.offsetX + (offsetX - from.offsetX) * eased;
-        nextOffsetY = from.offsetY + (offsetY - from.offsetY) * eased;
-        settled = progress >= 1;
-      }
+      const deltaSeconds = Math.max(0, Math.min(0.1, (now - previousAt) / 1000));
+      previousAt = now;
+
+      const nextTargetScale = this.cameraAnimationTargetScale ?? targetScale;
+      const nextTargetOffsetX = this.cameraAnimationTargetOffsetX ?? targetOffsetX;
+      const nextTargetOffsetY = this.cameraAnimationTargetOffsetY ?? targetOffsetY;
+      this.cameraZoom = smoothDamp(this.cameraZoom, nextTargetScale, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+      this.cameraPanX = smoothDamp(this.cameraPanX, nextTargetOffsetX, CAMERA_PAN_LAMBDA, deltaSeconds);
+      this.cameraPanY = smoothDamp(this.cameraPanY, nextTargetOffsetY, CAMERA_PAN_LAMBDA, deltaSeconds);
+      const nextScale = smoothDamp(this.cameraScale, this.cameraZoom, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+      const nextOffsetX = smoothDamp(this.cameraOffsetX, this.cameraPanX, CAMERA_PAN_LAMBDA, deltaSeconds);
+      const nextOffsetY = smoothDamp(this.cameraOffsetY, this.cameraPanY, CAMERA_PAN_LAMBDA, deltaSeconds);
+      const settled = Math.abs(nextTargetScale - this.cameraScale) < 0.005
+        && Math.abs(nextTargetOffsetX - this.cameraOffsetX) < 0.75
+        && Math.abs(nextTargetOffsetY - this.cameraOffsetY) < 0.75;
       this.setCamera(
-        settled ? scale : nextScale,
-        settled ? offsetX : nextOffsetX,
-        settled ? offsetY : nextOffsetY
+        settled ? nextTargetScale : nextScale,
+        settled ? nextTargetOffsetX : nextOffsetX,
+        settled ? nextTargetOffsetY : nextOffsetY,
+        false
       );
       if (!settled) {
         this.cameraAnimationFrame = window.requestAnimationFrame(tick);
       } else {
         this.cameraAnimationFrame = 0;
         this.cameraAnimationTargetScale = null;
+        this.cameraAnimationTargetOffsetX = null;
+        this.cameraAnimationTargetOffsetY = null;
+        this.cameraZoom = nextTargetScale;
+        this.cameraPanX = nextTargetOffsetX;
+        this.cameraPanY = nextTargetOffsetY;
       }
     };
     this.cameraAnimationFrame = window.requestAnimationFrame(tick);
@@ -511,6 +534,11 @@ export class GalleryRoomView {
     if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
     this.cameraAnimationFrame = 0;
     this.cameraAnimationTargetScale = null;
+    this.cameraAnimationTargetOffsetX = null;
+    this.cameraAnimationTargetOffsetY = null;
+    this.cameraZoom = this.cameraScale;
+    this.cameraPanX = this.cameraOffsetX;
+    this.cameraPanY = this.cameraOffsetY;
   }
 
   private handleResize = (): void => {

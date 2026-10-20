@@ -8,9 +8,23 @@
   portrait (320×568 and 390×844), narrow short landscape (390×320), and
   landscape (844×390) for all four configured rooms. It checks artwork bounds,
   control bounds, and collisions.
-- Coarse-pointer phone zoom uses the gallery's λ=4 frame-independent smoothing;
-  desktop photo-room zoom keeps its prior 560 ms cubic easing. Pointer pan and
-  pinch continue to update directly, and the artwork projection remains scene-local.
+- The first pass only enabled gallery-style zoom smoothing for coarse pointers and
+  left desktop on a fixed 560 ms cubic curve. The user reported that room zoom
+  still felt less smooth than gallery zoom. Comparison against
+  `GalleryManager.update()` showed gallery zoom actually uses two cascaded λ=4
+  smoothers (target-to-zoom, then zoom-to-camera) and two λ=5 pan smoothers.
+- The follow-up photo-room animation mirrors that cascade on all pointer types and
+  retargets active zoom/pan targets instead of cancelling and restarting the
+  animation. Direct gesture pan/pinch continue to synchronize the smoothing state
+  to the finger position; the shared photo/artwork projection remains unchanged.
+- Browser tests now wait for the camera to settle and check consecutive button
+  inputs retarget one live animation. The generated-preview matrix passes on
+  desktop, tablet, portrait, and landscape fixtures.
+- Constrain the computed pan target to the final scale's covered-photo bounds.
+  Without that, edge-clamped target offsets could prevent the camera from reaching
+  its terminal scale and leave zoom buttons short of the max. The rebuilt preview
+  passes the complete photo-room matrix, including button retargeting, artwork-
+  centered wheel zoom, pan/pinch directness, reset, and exact min/max camera bounds.
 - The touch-only motion toggle is user-enabled. Synthetic browser coverage checks
   unavailable sensors, denied/granted permission, subtle clamped tilt, page-hide
   suspension/resume, and reduced-motion shutdown; pure helper tests cover secure

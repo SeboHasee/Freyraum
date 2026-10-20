@@ -8,8 +8,9 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 ## Mobile and tablet photo-room experience (2026-10-20)
 
 - [x] Keep desktop zoom easing and pointer hover tilt unchanged.
-- [x] Match gallery zoom smoothing on coarse-pointer button/wheel input without
-      adding lag to pinch or pan gestures.
+- [x] Match the gallery's two-stage frame-independent zoom and pan smoothing for
+      button/wheel inputs on all pointer types; retarget active motion smoothly
+      without adding lag to direct pinch or pan gestures.
 - [x] Add an opt-in touch-device orientation tilt with explicit permission action,
       neutral calibration, screen rotation handling, reduced-motion shutdown, and
       room/page lifecycle cleanup.

@@ -3,9 +3,12 @@
 
 ## Unreleased — responsive photo-room controls and touch motion (2026-10-20)
 
-- Keep desktop photo-room zoom easing unchanged; coarse-pointer zoom buttons and
-  wheel input now use the gallery's frame-rate-independent smoothing, while pinch
-  and pan remain immediate.
+- Match photo-room button and wheel zoom to the gallery's two-stage,
+  frame-independent camera easing on desktop and touch devices; retarget repeated
+  zoom input without restarting from stale camera state.
+- Clamp animated pan targets to the scaled photo bounds so edge-limited zooms
+  still settle cleanly at the configured minimum and maximum.
+- Keep pinch and drag direct while keeping the artwork registered to its wall.
 - Add a touch-only, opt-in phone-orientation tilt control with permission handling,
   neutral calibration, screen-orientation normalization, smoothing, and cleanup on
   room close, page hiding, or reduced-motion changes.
