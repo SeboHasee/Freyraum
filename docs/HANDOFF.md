@@ -161,18 +161,19 @@ Regenerate evidence from the matching bundle and record the commit/environment.
 - [x] Known risks and deferred upgrades linked from maintenance docs
 - [ ] Owner completes CI approval, merge, and new live Pages smoke verification
 
-## 2026-10-19 full Markdown audit matrix
+## 2026-10-20 full Markdown audit matrix
 
 | Class | Reviewed files | Audit outcome |
 |---|---|---|
-| Canonical (9) | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | Photo-room controls and customer background workflow documented; obsolete timeline-test failure corrected; remaining doorway-height failure recorded |
-| Operational (14) | `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/CUSTOMER_TEXT_GUIDE.md`, `docs/DEPENDENCY_MAINTENANCE_PLAN.md`, `docs/DEPLOYMENT.md`, `docs/DESKTOP_APP.md`, `docs/HANDOFF.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `docs/ONLINE_EDITOR_SETUP.md`, `docs/QUERY_PARAMETERS.md`, `docs/REGRESSION_TOOLING.md`, `docs/ai-feedback/AI_FEEDBACK_LOOP.md`, `docs/architecture/README.md`, `docs/lessons-learned/README.md`, `docs/standards/CODING_GUIDELINES.md` | Customer instructions now describe shared timeline selection, room switching, navigation, zoom/reset, and preserved camera behavior; test instructions match current browser coverage |
-| Agent/template (5) | `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `.github/prompts/autonomous-agent.prompt.md`, `.github/prompts/refactor.prompt.md`, `.github/prompts/review.prompt.md` | Current context now includes photo-room DOM ownership, shared timeline/utility behavior, focused tests, and the open geometry-suite failure |
+| Canonical (9) | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | Current photo-room framing caveat and screenshot follow-up are recorded; existing background workflow and geometry-suite status remain documented |
+| Operational (14) | `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/CUSTOMER_TEXT_GUIDE.md`, `docs/DEPENDENCY_MAINTENANCE_PLAN.md`, `docs/DEPLOYMENT.md`, `docs/DESKTOP_APP.md`, `docs/HANDOFF.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `docs/ONLINE_EDITOR_SETUP.md`, `docs/QUERY_PARAMETERS.md`, `docs/REGRESSION_TOOLING.md`, `docs/ai-feedback/AI_FEEDBACK_LOOP.md`, `docs/architecture/README.md`, `docs/lessons-learned/README.md`, `docs/standards/CODING_GUIDELINES.md` | Reviewed current operational guidance; handoff and regression tooling clarify that fixture success does not replace reproducing the reported screenshot |
+| Agent/template (5) | `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `.github/prompts/autonomous-agent.prompt.md`, `.github/prompts/refactor.prompt.md`, `.github/prompts/review.prompt.md` | Current repository context and prompts refreshed; Copilot guidance records the open screenshot uncertainty |
 | Historical/index (8) | `docs/archive/README.md`, `docs/archive/architecture-map-history-2026-06-21.md`, `docs/archive/findings-history-2026-06-21.md`, `docs/archive/findings-history-2026-10-17.md`, `docs/archive/handoff-history-2026-06-21.md`, `docs/archive/plan-history-2026-06-21.md`, `docs/archive/plan-history-2026-10-17.md`, `docs/archive/readme-history-2026-06-21.md` | Index reviewed and dated; seven historical snapshots remain unchanged under the archive immutability rule; no active work was moved to history |
 
 All 36 tracked Markdown files outside the prohibited agent-instruction directory
-were inventoried. The 28 current documents were checked and their audit markers
-updated; archived snapshots retain their original dates and claims by design.
+were inventoried. The 29 current documents (including the archive index) were
+checked and their audit markers updated; archived snapshots retain their original
+dates and claims by design.
 
 ## Canonical references
 
