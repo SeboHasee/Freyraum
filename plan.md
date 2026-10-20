@@ -25,8 +25,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Complete the production/customer-preview build, focused structural checks,
       lint, typecheck, and documentation-authority checks; full browser-suite
       success remains open pending the maximum-zoom check.
-- [ ] Complete the final secret scan and parallel validation after the remaining
-      browser-suite issue is resolved.
+- [x] Complete the final secret scan and parallel validation; no secrets or
+      CodeQL alerts were found. The automated review executable was unavailable.
 
 ## Museum artwork spotlight and action feedback (2026-10-20)
 
