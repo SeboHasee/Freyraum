@@ -455,6 +455,12 @@ try {
     })()`);
     const controls = layout.controls;
     const utilities = layout.utilities;
+    assert.ok(
+      layout.art.x >= -1 && layout.art.y >= -1
+        && layout.art.x + layout.art.width <= width + 1
+        && layout.art.y + layout.art.height <= height + 1,
+      `${roomId} complete artwork remains visible at ${width}x${height}`
+    );
     for (const [name, bounds] of Object.entries({ controls, timeline: layout.timeline, zoom: layout.zoom })) {
       assert.ok(bounds.x >= 0 && bounds.y >= 0
         && bounds.x + bounds.width <= width && bounds.y + bounds.height <= height,

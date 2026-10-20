@@ -230,7 +230,14 @@ assert.ok(
 
 const projectiveGeometry = await loadTsModule('src/hub/projectiveGeometry.ts');
 for (const view of roomViews) {
-  for (const [width, height] of [[1920, 1080], [1440, 900], [1024, 768], [390, 844]]) {
+  for (const [width, height] of [
+    [2000, 1080],
+    [1920, 1080],
+    [1440, 900],
+    [1024, 768],
+    [844, 390],
+    [390, 844],
+  ]) {
     const transform = geometry.projectGalleryRoomArtwork(view, 0.75, 750, 1000, width, height);
     assert.ok(transform, `${view.id} projects at ${width}x${height}`);
     assert.equal(transform.width, 750, 'artwork keeps its source width');
@@ -266,6 +273,11 @@ for (const view of roomViews) {
         (corner) => corner[0] === x && corner[1] === y
       );
       const basePoint = projectCssMatrix(transform.transform, x, y);
+      assert.ok(
+        basePoint.x >= -1 && basePoint.x <= width + 1
+          && basePoint.y >= -1 && basePoint.y <= height + 1,
+        `${view.id} complete artwork remains inside the ${width}x${height} viewport`
+      );
       const artworkCenter = projectCssMatrix(transform.transform, 375, 500);
       const wallPoint = projectiveGeometry.applyHomography(
         wallHomography,
