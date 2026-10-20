@@ -7,6 +7,8 @@
   `grabbing` only during an active movable fine-pointer drag; touch-only input
   receives no mouse cursor cue.
 - Clear the photo-room pan affordance when a camera animation finishes at fit.
+- Let the photo camera settle within subpixel/0.01-scale tolerance, then snap to
+  the exact target so bounded zoom reaches its configured limits.
 - Update gallery and room help to explain mouse-wheel zoom and conditional
   drag-to-pan. Gallery help distinguishes swipe navigation at overview and notes
   touch pinch/pan.

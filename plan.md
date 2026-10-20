@@ -20,6 +20,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Clear photo-room pan cursor state after zoom/reset animation targets are
       removed, and make browser checks assert a meaningfully zoomed camera rather
       than an exact serialized transform string.
+- [x] Ensure bounded photo-camera easing snaps to its exact min/max targets once
+      it is within a visually negligible settling tolerance.
 - [x] Complete the production/customer-preview build, full generated-preview
       browser suite, focused structural checks, lint, typecheck, secret scan, and
       parallel validation; retain the independent geometry and photo-room visual
