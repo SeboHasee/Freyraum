@@ -7,10 +7,13 @@
   camera scale eases, deriving each frame's pan from that anchor. Direct pan and
   pinch remain gesture-controlled, and photo bounds still constrain the camera.
 - Add a responsive, restrained shadow lift to museum artworks on fine-pointer
-  hover and keyboard focus. Selection remains visually distinct; touch-only
-  devices do not receive hover treatment, and reduced motion removes transitions.
-- Extend browser checks to follow artwork position during zoom and verify hub
-  shadow feedback without changing projective artwork hit areas.
+  hover and keyboard focus, with a soft artwork-clipped radial light that follows
+  fine pointers. Selection stays centered and visually distinct; touch does not
+  activate hover, reduced motion removes easing, and calibration/debug stays clear.
+- Restore an explicit artwork outline and compact label during visitor hover,
+  keyboard focus, and selection, without changing the projective clip or transform.
+- Add exact front-right (`room-01.wall-front.b`, Akt 27) hit-testing, pointer-follow,
+  own-shadow/light, focus, selection, touch, reduced-motion, and responsive checks.
 
 ## Unreleased — responsive photo-room controls and touch motion (2026-10-20)
 

@@ -927,7 +927,7 @@ export class MainMuseumHub {
       button.classList.remove('is-illuminated');
       return;
     }
-    if (selected || focused) {
+    if (selected) {
       spotlight.style.setProperty('--hub-light-x', '50%');
       spotlight.style.setProperty('--hub-light-y', '42%');
     } else if (pointer && hovered) {
@@ -936,6 +936,9 @@ export class MainMuseumHub {
       const y = Math.max(0, Math.min(100, ((pointer.clientY - bounds.top) / bounds.height) * 100));
       spotlight.style.setProperty('--hub-light-x', `${x.toFixed(2)}%`);
       spotlight.style.setProperty('--hub-light-y', `${y.toFixed(2)}%`);
+    } else if (focused) {
+      spotlight.style.setProperty('--hub-light-x', '50%');
+      spotlight.style.setProperty('--hub-light-y', '42%');
     }
     button.classList.add('is-illuminated');
   }

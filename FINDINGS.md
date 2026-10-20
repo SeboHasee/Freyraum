@@ -1,6 +1,32 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
+## 2026-10-20 — Museum artwork spotlight and interaction audit
+
+- The visitor-only museum CSS hid both the artwork outline pseudo-element and its
+  label for every artwork, including the front-right `room-01.wall-front.b`
+  (`Akt 27`). Shadow state still existed, but the expected label/focus cue was
+  suppressed. The browser regression now uses this exact slot and physical
+  pointer movement to distinguish a hit-area/stacking fault from a feedback
+  visibility gap; keep its result separate from source-level diagnosis.
+- Render the light as a pointer-inert child of the artwork button. The button's
+  existing projective clip therefore constrains the light to the same quad while
+  the image transform, bounds, button target, and matching SVG shadow path remain
+  unchanged. The separate shadow path remains the only owner of wall-shadow filters.
+- Fine-pointer hover positions the light in button-local coordinates; keyboard
+  focus and selected state center it, with selection taking priority. Reduced
+  motion removes both light and shadow easing; touch does not set hover state;
+  calibration/debug prevents the visitor light from appearing.
+- Existing action acknowledgements remain in place rather than gaining competing
+  animation: artwork open disables repeat activation and updates selection/status;
+  room view uses `aria-pressed` and its active control style; timeline selection
+  updates its current marker/counter; audio exposes muted/playing/autoplay-blocked
+  state and disables volume when muted; fullscreen tracks `aria-pressed` and marks
+  unsupported state. Preferences expose expanded/dialog and native form state;
+  transition/loading controls disable repeat activation, while fallback screens
+  explain startup/asset/WebGL outcomes and offer a retry or 2D continuation when
+  available. Preserve these state signals when refining presentation.
+
 ## 2026-10-20 — Room zoom anchoring and museum hover
 
 - The generated customer-preview browser baseline loaded all four rooms and

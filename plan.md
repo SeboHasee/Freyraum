@@ -5,6 +5,21 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
+## Museum artwork spotlight and action feedback (2026-10-20)
+
+- [x] Diagnose the visitor CSS feedback gap: the normal museum view hid artwork
+      focus/hover outlines and labels, leaving only the shadow emphasis.
+- [x] Add a warm, soft radial light clipped inside the existing projected artwork
+      button; follow fine-pointer movement and center on focus/selection.
+- [x] Keep selected feedback stable, touch hover inactive, reduced motion honored,
+      and calibration/debug views free of the visitor spotlight.
+- [x] Add exact front-right (`room-01.wall-front.b`, Akt 27) pointer-target and
+      same-slot shadow checks, plus front/side neighbor and responsive coverage.
+- [x] Inventory existing acknowledgement for artwork open, room toggle, timeline,
+      audio, fullscreen, disabled and loading/error states; avoid redundant motion.
+- [ ] Run browser hit testing and visual captures at desktop/tablet/phone, then
+      complete focused tests/build and record any environment or presentation gate.
+
 ## Room zoom anchoring and museum hover (2026-10-20)
 
 - [x] Rebuild the generated preview and verify the existing room zoom baseline;

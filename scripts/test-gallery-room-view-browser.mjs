@@ -273,20 +273,21 @@ try {
       const responsiveRightFront = await evaluate(`(() => {
         const button = document.querySelector('.museum-hub__artwork[data-slot-id="room-01.wall-front.b"]');
         const rect = button.getBoundingClientRect();
-        const points = button.style.clipPath.match(/polygon\\((.*)\\)/)[1]
-          .split(',')
-          .map((point) => point.trim().split(/\\s+/).map((part) => Number.parseFloat(part) / 100));
-        const center = points.reduce((sum, [x, y]) => [sum[0] + x / points.length, sum[1] + y / points.length], [0, 0]);
-        return {
-          x: rect.left + center[0] * rect.width,
-          y: rect.top + center[1] * rect.height,
-          hitSlotId: document.elementFromPoint(
-            rect.left + center[0] * rect.width,
-            rect.top + center[1] * rect.height
-          )?.closest('.museum-hub__artwork')?.dataset.slotId ?? null,
-        };
+        for (let yRatio = 0.02; yRatio < 1; yRatio += 0.04) {
+          for (let xRatio = 0.02; xRatio < 1; xRatio += 0.04) {
+            const x = rect.left + xRatio * rect.width;
+            const y = rect.top + yRatio * rect.height;
+            const hitSlotId = document.elementFromPoint(x, y)?.closest('.museum-hub__artwork')?.dataset.slotId ?? null;
+            if (hitSlotId === button.dataset.slotId) return { x, y, hitSlotId };
+          }
+        }
+        return { hitSlotId: null, bounds: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
       })()`);
-      assert.equal(responsiveRightFront.hitSlotId, 'room-01.wall-front.b', `front-right art is hittable at ${width}x${height}`);
+      assert.equal(
+        responsiveRightFront.hitSlotId,
+        'room-01.wall-front.b',
+        `a visible part of front-right art is hittable at ${width}x${height} (${JSON.stringify(responsiveRightFront)})`
+      );
       await command('Input.dispatchMouseEvent', {
         type: 'mouseMoved',
         x: responsiveRightFront.x,
@@ -318,19 +319,19 @@ try {
     assert.ok(shadow.shadowLayer.width > 0 && shadow.shadowLayer.height > 0, 'shadow SVG spans the room stage');
     assert.ok(shadow.stage.width > 0 && shadow.stage.height > 0);
     if (width === 1440) {
-      const feedbackSlotId = 'room-01.wall-front.b';
+      const rightFrontSlotId = 'room-01.wall-front.b';
       assert.equal(
         await evaluate(
-          `document.querySelector(${JSON.stringify(`.museum-hub__artwork[data-slot-id="${feedbackSlotId}"]`)})?.dataset.slotId`
+          `document.querySelector(${JSON.stringify(`.museum-hub__artwork[data-slot-id="${rightFrontSlotId}"]`)})?.dataset.slotId`
         ),
-        feedbackSlotId,
+        rightFrontSlotId,
         'the configured front-right Akt 27 artwork is present for direct pointer checks'
       );
-      const feedbackButtonQuery = `document.querySelector(${JSON.stringify(
-        `.museum-hub__artwork[data-slot-id="${feedbackSlotId}"]`
+      const rightFrontButtonQuery = `document.querySelector(${JSON.stringify(
+        `.museum-hub__artwork[data-slot-id="${rightFrontSlotId}"]`
       )})`;
       const directPointerTarget = await evaluate(`(() => {
-        const button = ${feedbackButtonQuery};
+        const button = ${rightFrontButtonQuery};
         const rect = button.getBoundingClientRect();
         const points = button.style.clipPath.match(/polygon\\((.*)\\)/)?.[1]
           .split(',')
@@ -342,6 +343,8 @@ try {
         const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
         return {
           x, y,
+          expectedX: ((center[0]) * 100).toFixed(2) + '%',
+          expectedY: ((center[1]) * 100).toFixed(2) + '%',
           hitSlotId: hit?.dataset.slotId ?? null,
           clipPath: button.style.clipPath,
           transform: button.style.getPropertyValue('--hub-artwork-transform'),
@@ -352,10 +355,10 @@ try {
       })()`);
       assert.equal(
         directPointerTarget.hitSlotId,
-        feedbackSlotId,
+        rightFrontSlotId,
         `the visible front-right artwork's projected center receives the real pointer hit (${JSON.stringify(directPointerTarget)})`
       );
-      assert.equal(directPointerTarget.shadowSlotId, feedbackSlotId, 'front-right artwork owns its matching shadow path');
+      assert.equal(directPointerTarget.shadowSlotId, rightFrontSlotId, 'front-right artwork owns its matching shadow path');
       assert.equal(directPointerTarget.shadowPointerEvents, 'none', 'the shadow cannot cover the front-right hit target');
       await command('Input.dispatchMouseEvent', {
         type: 'mouseMoved',
@@ -364,17 +367,18 @@ try {
       });
       await waitForFrames(4);
       const rightFrontHover = await evaluate(`(() => {
-        const button = ${feedbackButtonQuery};
+        const button = ${rightFrontButtonQuery};
         const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
         const light = button.querySelector('.museum-hub__artwork-light');
         return {
+          selected: button.classList.contains('is-selected'),
           hovered: button.classList.contains('is-hovered'),
           lightVisible: Number.parseFloat(getComputedStyle(light).opacity) > 0,
           lightX: light.style.getPropertyValue('--hub-light-x'),
           lightY: light.style.getPropertyValue('--hub-light-y'),
           onlyMatchingShadowHovered: [...document.querySelectorAll('.museum-hub__shadow-path.is-hovered')]
             .every((hovered) => hovered.dataset.slotId === button.dataset.slotId),
-          onlyMatchingLightIlluminated: [...document.querySelectorAll('.museum-hub__artwork.is-illuminated')]
+          onlyMatchingLightIlluminated: [...document.querySelectorAll('.museum-hub__artwork.is-illuminated:not(.is-selected)')]
             .every((illuminated) => illuminated.dataset.slotId === button.dataset.slotId),
           clipPath: button.style.clipPath,
           transform: button.style.getPropertyValue('--hub-artwork-transform'),
@@ -388,8 +392,58 @@ try {
       assert.equal(rightFrontHover.onlyMatchingLightIlluminated, true, 'front-right hover illuminates only its own artwork');
       assert.equal(rightFrontHover.clipPath, directPointerTarget.clipPath, 'hover preserves the projected clip hit area');
       assert.equal(rightFrontHover.transform, directPointerTarget.transform, 'hover preserves the projected artwork transform');
-      assert.match(rightFrontHover.lightX, /^\d+(?:\.\d+)?%$/, 'mouse position is mapped into artwork-local spotlight coordinates');
+      assert.equal(
+        rightFrontHover.lightX,
+        rightFrontHover.selected ? '50%' : directPointerTarget.expectedX,
+        'front-right hover follows the pointer unless its selected treatment holds the light centered'
+      );
+      assert.equal(
+        rightFrontHover.lightY,
+        rightFrontHover.selected ? '42%' : directPointerTarget.expectedY,
+        'front-right hover preserves selected spotlight priority'
+      );
       await capture(`hub-${width}x${height}-front-right-hovered.png`);
+      await evaluate(`(() => {
+        const button = ${rightFrontButtonQuery};
+        button.focus();
+      })()`);
+      await waitForFrames(4);
+      const rightFrontFocus = await evaluate(`(() => {
+        const button = ${rightFrontButtonQuery};
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
+        const light = button.querySelector('.museum-hub__artwork-light');
+        return {
+          active: document.activeElement === button,
+          focused: button.classList.contains('is-focused') && path.classList.contains('is-focused'),
+          lightX: light.style.getPropertyValue('--hub-light-x'),
+          lightY: light.style.getPropertyValue('--hub-light-y'),
+          clipPath: button.style.clipPath,
+          transform: button.style.getPropertyValue('--hub-artwork-transform'),
+          focusCueOpacity: getComputedStyle(button, '::before').opacity,
+          labelDisplay: getComputedStyle(button.querySelector('.museum-hub__artwork-label')).display,
+        };
+      })()`);
+      assert.equal(rightFrontFocus.active, true, 'front-right Akt 27 can receive keyboard focus');
+      assert.equal(rightFrontFocus.focused, true, 'front-right focus updates its paired shadow');
+      assert.equal(rightFrontFocus.lightX, '50%', 'front-right focus centers the spotlight');
+      assert.equal(rightFrontFocus.lightY, '42%', 'front-right focus centers the spotlight vertically');
+      assert.equal(rightFrontFocus.focusCueOpacity, '1', 'front-right keyboard focus has a visible outline');
+      assert.notEqual(rightFrontFocus.labelDisplay, 'none', 'front-right focus reveals its artwork label');
+      assert.equal(rightFrontFocus.clipPath, directPointerTarget.clipPath, 'front-right focus leaves its hit area unchanged');
+      assert.equal(rightFrontFocus.transform, directPointerTarget.transform, 'front-right focus leaves its projective transform unchanged');
+      await capture(`hub-${width}x${height}-front-right-focused.png`);
+      if (rightFrontHover.selected) {
+        await capture(`hub-${width}x${height}-feedback-selected.png`);
+      }
+      await evaluate(`(() => ${rightFrontButtonQuery}.blur())()`);
+      await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 });
+      const feedbackSlotId = await evaluate(
+        "document.querySelector('.museum-hub__room.is-active .museum-hub__artwork:not(.is-selected):not([aria-current=\"true\"]):not(:disabled)')?.dataset.slotId"
+      );
+      assert.ok(feedbackSlotId, 'an unselected artwork remains available for independent pointer-follow checks');
+      const feedbackButtonQuery = `document.querySelector(${JSON.stringify(
+        `.museum-hub__artwork[data-slot-id="${feedbackSlotId}"]`
+      )})`;
       const followPoint = await evaluate(`(() => {
         const button = ${feedbackButtonQuery};
         const rect = button.getBoundingClientRect();
@@ -465,6 +519,7 @@ try {
         assert.equal(targetFeedback.onlyMatchingShadowHovered, true, `${target.slotId} does not update another shadow`);
         assert.equal(targetFeedback.clipPath, target.clipPath, `${target.slotId} retains its projected hit area`);
         assert.equal(targetFeedback.transform, target.transform, `${target.slotId} retains its projected transform`);
+        await capture(`hub-${width}x${height}-${target.slotId}-hovered.png`);
       }
       await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 });
       const baselineFilter = await evaluate(`(() => {
@@ -615,6 +670,34 @@ try {
           'touch pointer events do not activate hover effects'
         );
       });
+      await evaluate(`(() => {
+        const hub = document.querySelector('.museum-hub');
+        const button = ${feedbackButtonQuery};
+        button.classList.add('is-illuminated');
+        hub.classList.add('is-debug-geometry');
+      })()`);
+      await waitForFrames(30);
+      const debugSpotlightOpacity = await evaluate(
+        `getComputedStyle(${feedbackButtonQuery}.querySelector('.museum-hub__artwork-light')).opacity`
+      );
+      await evaluate(`(() => {
+        const hub = document.querySelector('.museum-hub');
+        hub.classList.remove('is-debug-geometry');
+        hub.classList.add('is-calibrating');
+      })()`);
+      await waitForFrames(30);
+      const editorSpotlightOpacity = await evaluate(
+        `getComputedStyle(${feedbackButtonQuery}.querySelector('.museum-hub__artwork-light')).opacity`
+      );
+      await evaluate(`(() => {
+        document.querySelector('.museum-hub').classList.remove('is-calibrating');
+        ${feedbackButtonQuery}.classList.remove('is-illuminated');
+      })()`);
+      assert.deepEqual(
+        { debugOpacity: debugSpotlightOpacity, editorOpacity: editorSpotlightOpacity },
+        { debugOpacity: '0', editorOpacity: '0' },
+        'debug and calibration presentation suppresses visitor spotlight effects'
+      );
       await command('Emulation.setEmulatedMedia', {
         features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
       });
