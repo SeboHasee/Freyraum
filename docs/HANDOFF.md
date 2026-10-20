@@ -33,7 +33,7 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   warning). Adding the signing secrets listed in `docs/DESKTOP_APP.md` signs
   them without workflow changes; automatic updates require signing first.
 
-## Photo-room controls and current validation (2026-10-19)
+## Photo-room controls and current validation (2026-10-20)
 
 - Four configured photo rooms are available: Schlafzimmer, Wohnraum, Wohnbereich,
   and Büro. Cleaned `gallery-*.png` derivatives are displayed while the originals
@@ -51,18 +51,20 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   state. It also uses the gallery-style return and zoom/reset controls and the
   shared help, audio, settings, and fullscreen widgets. The room selector is
   distinct from artwork selection.
-- The control layout was checked at desktop, tablet, portrait-phone, and
-  short-landscape sizes. Its UI changes do not alter the photo camera or
-  projective artwork registration. Customer visual acceptance remains separate
-  from automated browser checks.
+- The control layout and complete artwork bounds were checked at desktop, tablet,
+  portrait-phone, and short-landscape sizes. Normal-size browser captures of all
+  four rooms were reviewed; no remaining painting/frame or hard cleanup seam was
+  identified, though Bedroom's inpainted wall is smoother than adjacent texture.
+  Customer acceptance of the retouches remains open.
 - Passing: `npm run build`, `npm run lint`, `npm run build:typecheck`,
   `npm run test:gallery-room-view`, and
   `FREYRAUM_CHROME_PATH=/usr/bin/google-chrome npm run test:gallery-room-view:browser`.
-- The four-room browser run decoded each background and checked control bounds
-  at desktop, tablet, portrait phone, and short landscape. Deploy validation,
-  front-wall aspect, WebGL resilience, frame-budget, and config-authority checks
-  also passed. Build output retains existing classic-script and large-chunk
-  warnings; deploy validation reports the existing large Fraktal inbox warning.
+- The four-room browser run decoded each background and checked full artwork and
+  control bounds at desktop, tablet, portrait phone, and short landscape. Deploy
+  validation, deploy-content tests, front-wall aspect, WebGL resilience,
+  frame-budget, photo-room, and config-authority checks passed. Build output retains
+  existing classic-script and large-chunk warnings; deploy validation reports the
+  existing large Fraktal inbox warning.
 - `npm run validate:museum-hub` now passes the former stale timeline assertion
   after its test was corrected to check the active timeline thumbnail. It still
   fails at `scripts/test-museum-hub-geometry.mjs:411` on the wall-left doorway
@@ -115,7 +117,7 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
-## Next-agent starting point (2026-10-19)
+## Next-agent starting point (2026-10-20)
 
 1. Read `README.md`, active `plan.md`, latest `FINDINGS.md`, and
    `docs/REGRESSION_TOOLING.md` before changing the photo room or hub. The current

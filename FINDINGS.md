@@ -25,9 +25,11 @@
   square) at wide desktop, tablet, portrait-phone, and short-landscape sizes;
   browser coverage asserts the complete artwork bounds remain onscreen for every
   configured room. These checks establish geometry, not customer visual approval.
-- Customer visual review of the four retouched photos, especially the Büro wall
-  after frame removal, remains open. Pixel tests cannot establish that an
-  inpainted wall is visually indistinguishable at normal display size.
+- Normal-size browser captures of all four rooms were reviewed. No remaining
+  painting/frame or hard cleanup seam was identified, but the Bedroom's inpainted
+  center wall is smoother than nearby texture. Customer review is still needed to
+  accept that retouch and confirm fine-scale photo quality; pixel/browser tests
+  cannot establish an indistinguishable wall repair.
 
 ## 2026-10-19 — Four inspection photo rooms and cleanup follow-up
 

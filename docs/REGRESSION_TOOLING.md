@@ -26,8 +26,8 @@ For browser coverage, run `npm run import:artworks && npm run build`, then
 `FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
 This opens the generated root `index.html` over `file://` and verifies all four
 photos decode, projected artwork remains onscreen, the shared gallery timeline
-moves into the room overlay and selection stays synchronized, and the return action restores the timeline and
-focus. It checks room selection, gallery-style zoom/reset controls, help context,
+moves into the room overlay and selection stays synchronized, and the return
+action restores the timeline and focus. It checks room selection, gallery-style zoom/reset controls, help context,
 shared utility reparenting, and header/timeline/zoom bounds at desktop, tablet,
 portrait phone, and short-landscape sizes. Photo pan, zoom, pinch, reset,
 keyboard zoom, camera limits, artwork-centered button and wheel zoom, expanded
