@@ -72,6 +72,7 @@ const MANIFEST_JSON = join(ROOT, 'customer-artworks', 'artworks.json');
 const MANIFEST_BACKUP = join(ROOT, 'customer-artworks', 'artworks.json.bak');
 const PREVIEW_IMAGES = join(ROOT, 'customer-preview', 'images');
 const PREVIEW_AUDIO = join(ROOT, 'customer-preview', 'audio');
+const PREVIEW_BACKGROUNDS = join(ROOT, 'customer-preview', 'backgrounds');
 const PREVIEW_JS = join(ROOT, 'customer-preview', 'customer-artworks.js');
 const PREVIEW_AUDIO_JS = join(ROOT, 'customer-preview', 'customer-audio.js');
 const PREVIEW_HTML = join(ROOT, 'customer-preview', 'app.html');
@@ -465,6 +466,7 @@ mkdirSync(AUDIO_INBOX, { recursive: true });
 mkdirSync(PROCESSED, { recursive: true });
 mkdirSync(PREVIEW_IMAGES, { recursive: true });
 mkdirSync(PREVIEW_AUDIO, { recursive: true });
+mkdirSync(PREVIEW_BACKGROUNDS, { recursive: true });
 mkdirSync(dirname(MANIFEST_JSON), { recursive: true });
 
 const inboxEntries = readdirSync(INBOX, { withFileTypes: true })
@@ -801,6 +803,30 @@ if (existsSync(MUSEUM_HUB_JSON)) {
   }
 }
 
+const galleryRoomBackgroundsCopied = [];
+for (const view of Array.isArray(museumHub?.galleryRoomViews) ? museumHub.galleryRoomViews : []) {
+  const src = view?.background?.src;
+  const match = typeof src === 'string' ? /^Backgrounds\/([a-zA-Z0-9][a-zA-Z0-9._-]*\.(?:png|jpe?g|webp))$/i.exec(src) : null;
+  if (!match || src.includes('..')) {
+    warnings.push(`gallery room view "${view?.id ?? '?'}" — invalid background path; expected a file directly under customer-artworks/Backgrounds.`);
+    continue;
+  }
+  const filename = match[1];
+  const sourcePath = join(ROOT, 'customer-artworks', 'Backgrounds', filename);
+  const previewPath = join(PREVIEW_BACKGROUNDS, filename);
+  if (!existsSync(sourcePath)) {
+    rmSync(previewPath, { force: true });
+    warnings.push(`gallery room view "${view?.id ?? '?'}" — background is missing: customer-artworks/Backgrounds/${filename}.`);
+    continue;
+  }
+  try {
+    cpSync(sourcePath, previewPath);
+    galleryRoomBackgroundsCopied.push(filename);
+  } catch (err) {
+    warnings.push(`gallery room view "${view?.id ?? '?'}" — could not copy ${filename} to the local preview: ${err.message}`);
+  }
+}
+
 // v0.79 legacy hotspot array — still injected when present so existing
 // customer setups keep working, but the runtime migrates it with a
 // deprecation warning. Prefer museum-hub.json going forward.
@@ -978,6 +1004,11 @@ if (audioSelected.length > 0) {
   if (lines[lines.length - 1] !== '') lines.push('');
   lines.push('Audio selected (0):');
   lines.push('  ⚠ No supported background audio files found in customer-audio/inbox.');
+}
+if (galleryRoomBackgroundsCopied.length > 0) {
+  if (lines[lines.length - 1] !== '') lines.push('');
+  lines.push(`Gallery room photos staged (${galleryRoomBackgroundsCopied.length}):`);
+  galleryRoomBackgroundsCopied.forEach((filename) => lines.push(`  ✓ ${filename}`));
 }
 if (audioIgnored.length > 0) {
   if (lines[lines.length - 1] !== '') lines.push('');

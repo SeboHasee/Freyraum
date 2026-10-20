@@ -56,6 +56,11 @@ export class ArtworkMesh {
 
     const artGeo = this.makeArtworkGeometry(this.currentSegments);
     this.material = new PaintingMaterial(preset);
+    // Keep the painted plane ahead of its nearly coplanar backing body on
+    // devices whose depth buffer cannot reliably resolve the small clearance.
+    this.material.polygonOffset = true;
+    this.material.polygonOffsetFactor = -1;
+    this.material.polygonOffsetUnits = -1;
     this.artworkMesh = new THREE.Mesh(artGeo, this.material);
     this.artworkMesh.castShadow = false;
     this.artworkMesh.receiveShadow = false;
@@ -65,6 +70,7 @@ export class ArtworkMesh {
       color: new THREE.Color(ARTWORK_PRESENTATION_PROFILES[this.activePresentation].backerColor),
       roughness: 0.9,
       metalness: 0,
+      depthWrite: false,
     });
     this.artworkBodyMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.artworkBodyMaterial);
     this.artworkBodyMesh.castShadow = true;

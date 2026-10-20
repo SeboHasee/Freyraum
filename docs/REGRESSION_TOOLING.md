@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,42 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Photographic inspection-room regression (updated 2026-10-20)
+
+Run `npm run test:gallery-room-view` to verify all four configured room-photo
+assets and importer staging, artwork-free target regions, cleanup-edge gradients,
+safe config sanitization, source-aspect-preserving projection and wall-corner
+registration across wide, tablet, phone, and short-landscape viewport sizes.
+It checks portrait, 3:4, and square artwork bounds remain fully visible after
+centered `cover` cropping, validates room-background saves and editor export, and
+verifies Update Gallery stages all photos and reports missing sources.
+
+After installing the optional Playwright browser tooling, `npm run test:editor-rooms`
+also checks room selection, projected artwork preview, placement export, and undo
+in the actual generated placement editor.
+
+For browser coverage, run `npm run import:artworks && npm run build`, then
+`FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
+This opens the generated root `index.html` over `file://` and verifies all four
+photos decode, projected artwork remains onscreen, the shared gallery timeline
+moves into the room overlay and selection stays synchronized, and the return
+action restores the timeline and focus. It checks room selection, gallery-style zoom/reset controls, help context,
+shared utility reparenting, and header/timeline/zoom bounds at desktop, tablet,
+portrait phone, and short-landscape sizes. Photo pan, zoom, pinch, reset,
+keyboard zoom, camera limits, artwork-centered button and wheel zoom, expanded
+mouse-proximity reach, eased return, and reduced-motion behavior remain covered.
+At the initial museum hub, it checks that the
+non-interactive SVG shadow layer follows the projected artwork without changing
+the clipped button hit area. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub and
+room-view browser captures for manual review at the responsive breakpoints. The
+photo pixel test samples cleanup boundaries at full resolution against the
+unchanged source gradients, checks old-artwork removal, and bounds repaired
+bedroom-wall texture against an untouched wall sample. Treat passing fixtures as
+geometry evidence, not visual acceptance: a 2026-10-20 user screenshot still shows
+the artwork clipped in Wohnbereich. Reproduce with its exact generated
+bundle/config/camera at 2000×1080 before calling that report resolved. The camera
+operates on a still photo; it does not provide genuine 3D orbit or walking.
 
 ## Photograph-backed museum acceptance (2026-10-18)
 
@@ -26,12 +62,35 @@ Required evidence for the implementation pass:
 - local generated `file://` preview and served gallery/editor agree, including
   room navigation, selection and hub→inspection→hub transitions;
 - gallery renderer initialization/context-loss recovery remains intact.
+- artwork navigation remains between the inspection-gallery wall and camera near
+  plane during close-up tilted entry; normal-distance entrance tilt and the
+  mounted body's wall shadow remain unchanged.
+- the full-width timeline distributes fitting thumbnails, caps its overall width,
+  and keeps visible arrow scrolling for overflow; browser checks cover small and
+  large counts, narrow viewports, selection, keyboard navigation, and reduced motion.
 
 Current results and dated incident evidence are in `FINDINGS.md`; do not treat
 the earlier two-image baseline as current shipping content. All four paintings
 now import; geometry, save-service, local-project and deploy-content checks pass.
 The customer confirms the local room after Update Gallery. Live acceptance
 requires a new post-merge deploy and live smoke.
+
+## Tilted artwork depth-buffer regression (2026-10-19)
+
+The inspection-gallery image plane sits only 0.002 units ahead of its backing
+body. Preserve the combined depth/shadow contract in
+`scripts/test-webgl-resilience.mjs`:
+
+- the image material keeps its negative polygon offset;
+- the backing material does not write depth, so its nearly coplanar front face
+  cannot compete with the moving image plane;
+- the backing mesh continues casting the intended wall shadow.
+
+Run `npm run test:webgl-resilience` after changes to `ArtworkMesh` or artwork
+materials. For rendering changes, also rotate/hover the artwork at more than one
+tilt and quality preset, verify the image pixels remain stable, and confirm the
+WebGL context remains live. Do not treat polygon offset alone as proof that the
+backing-body depth conflict is fixed.
 
 For stale-index regressions, run the existing smoke command against root
 `file:///absolute/project/path/index.html`, nested HTTP root `index.html`,
@@ -223,6 +282,8 @@ Linux run them under `xvfb-run -a`.
 | `npm run test:frame-budget`, `npm run test:webgl-resilience` | – | Type C frame budget; WebGL fallback | quality |
 | `npm run test:local-project` | – | desktop project store: refusals, all-or-nothing writes, history/restore, rename retry, importer `--root` | quality, desktop |
 | `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
+| `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
+| `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, keyboard, close/focus | – |
 | `npm run test:validate-deploy` | – | deploy content check | – |
 | `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |
 | `npm run test:editor-rooms` | yes | add/fill/switch/delete rooms, undo/redo, download + reload | – |

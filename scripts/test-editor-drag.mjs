@@ -156,12 +156,19 @@ async function main() {
     const page = await browser.newPage({ viewport: VIEWPORT });
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
-    await page.goto(pathToFileURL(EDITOR_PATH).href);
+    await page.goto(pathToFileURL(EDITOR_PATH).href, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
     await page.waitForSelector('.museum-hub__calibration-output', { state: 'attached', timeout: 30_000 });
     // Enter the editor through the branded loader like a customer would.
     const start = page.locator('.loading-start-btn');
     await start.waitFor({ state: 'visible', timeout: 60_000 });
-    await page.waitForFunction(() => !document.querySelector('.loading-start-btn')?.hasAttribute('disabled'));
+    await page.waitForFunction(
+      () => !document.querySelector('.loading-start-btn')?.hasAttribute('disabled'),
+      null,
+      { timeout: 60_000 }
+    );
     await start.click();
     await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 30_000 });
     const activeArtworks =

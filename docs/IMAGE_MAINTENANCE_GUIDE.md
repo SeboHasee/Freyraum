@@ -1,5 +1,5 @@
 # FREYRAUM — Image Maintenance Guide
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This guide documents the **current** image workflow, the verified GitHub limits
 that affect it, and the planned direction for reliable high-resolution support.

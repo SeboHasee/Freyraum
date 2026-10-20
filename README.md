@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -32,10 +32,40 @@ save/export blocking, editable wall quads and compatible fixed 3D models) are
 the same in all three; see
 `ARCHITECTURE_MAP.md` → "Deterministic curator editor".
 
+## Inspect in a photo room
+
+In the inspection gallery, choose **Fotoraum** to open one of four photographs:
+**Schlafzimmer**, **Wohnraum**, **Wohnbereich**, or **Büro**. The room view uses
+the gallery timeline to select the artwork, so selection stays synchronized
+when switching between gallery and room. Use the room selector for a different
+photograph and **Zurück zur Galerie** to leave.
+Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
+on-screen control. Zoom buttons bring the projected artwork center toward the
+viewport center; wheel and pinch stay anchored to the pointer/gesture. The artwork
+keeps its configured size on the photographed wall. Nearby mouse movement
+produces a very subtle, smoothly returning tilt, with stronger contact and
+directional shadows to keep the print attached to the wall. This is a bounded 2D
+photo camera, not true 3D orbit or movement.
+`customer-artworks/museum-hub.json` owns the room photo and placement data;
+in the placement editor's **Raum** tab, **Foto-Raum gestalten** selects a room
+and edits its normalized wall corners and artwork position/height with the same
+projection preview used by visitors. Save/export preserves those values.
+Update Gallery stages configured photos for the local preview. Cleaned room-view
+photos remove the pre-existing wall paintings; the original customer photos remain
+unchanged. The four source photos are about 2K wide and no higher-resolution
+originals are available. Cleaned derivatives receive restrained sharpening at
+source resolution; synthetic 2× upscales were rejected because they added no
+source detail and increased loading/memory costs.
+A user screenshot received 2026-10-20 again appears to crop the top of artwork
+in Wohnbereich. The screenshot build/config identity is unknown; see
+`FINDINGS.md` and `docs/HANDOFF.md`. Do not treat viewport-fixture passes as
+customer visual acceptance.
+
 ## Current project state
 
 - The museum and editor share photograph-backed, calibrated DOM artwork;
-  the inspection gallery uses WebGL (WebGPU is opt-in probe mode only).
+  the inspection gallery uses WebGL, with an optional full-screen photographic
+  room view for one selected artwork (WebGPU is opt-in probe mode only).
 - Resilient startup: the real renderer is attempted directly with preferred,
   compatibility, then battery-safe attributes. Failed partial contexts are
   released; no separate detection context is retained.

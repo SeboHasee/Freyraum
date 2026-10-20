@@ -213,6 +213,312 @@ canvas {
   transform: scale(1);
 }
 
+.topbar__room-view-btn {
+  border-color: rgba(255, 231, 164, 0.5);
+}
+
+.topbar__room-view-btn[aria-pressed='true'] {
+  border-color: rgba(255, 231, 164, 0.95);
+  background: #3a3323;
+  box-shadow: 0 0 0 2px rgba(255, 231, 164, 0.3), var(--shadow-medium);
+}
+
+.topbar__room-view-btn[hidden] {
+  display: none;
+}
+
+.gallery-room-view {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  background: #c7ced4;
+}
+
+.gallery-room-view[hidden] {
+  display: none;
+}
+
+.gallery-room-view__scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  transform-origin: 0 0;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.gallery-room-view__scene.is-dragging {
+  cursor: grabbing;
+}
+
+.gallery-room-view__background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+}
+
+.gallery-room-view__artwork-frame {
+  position: absolute;
+  inset: 0 auto auto 0;
+  max-width: none;
+  transform-origin: 0 0;
+  perspective: 1200px;
+  pointer-events: auto;
+}
+
+.gallery-room-view__artwork-frame[hidden] {
+  display: none;
+}
+
+.gallery-room-view__artwork-frame:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+
+.gallery-room-view__artwork {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  transform-origin: center;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  filter:
+    drop-shadow(1px 2px 3px rgb(15 20 24 / 42%))
+    drop-shadow(4px 7px 10px rgb(15 20 24 / 26%))
+    drop-shadow(9px 14px 20px rgb(15 20 24 / 17%));
+  transition:
+    transform 1100ms cubic-bezier(0.22, 1, 0.36, 1),
+    filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  --artwork-tilt-x: 0deg;
+  --artwork-tilt-y: 0deg;
+  --artwork-zoom: 1;
+}
+
+.gallery-room-view__utilities {
+  position: absolute;
+  top: calc(var(--safe-top) + 16px);
+  right: calc(var(--safe-right) + 16px);
+  z-index: 1002;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gallery-room-view__utilities .audio-controls,
+.gallery-room-view__utilities .fullscreen-btn,
+.gallery-room-view__utilities .prefs--embedded {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+}
+
+.gallery-room-view__utilities .fullscreen-btn {
+  flex: 0 0 44px;
+}
+
+.gallery-room-view__utilities .prefs__panel {
+  top: calc(100% + 8px);
+  right: 0;
+}
+
+.gallery-room-view__header {
+  position: absolute;
+  top: calc(var(--safe-top) + 16px);
+  left: calc(var(--safe-left) + 16px);
+  z-index: 1002;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gallery-room-view__back {
+  flex: 0 0 auto;
+}
+
+.gallery-room-view__room-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 4px 8px 4px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.gallery-room-view__room-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gallery-room-view__select {
+  max-width: 220px;
+  min-height: 38px;
+  padding: 0 30px 0 10px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-strong);
+  color: var(--text-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.gallery-room-view__select:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.gallery-room-view__timeline-host {
+  display: contents;
+}
+
+.gallery-room-view__timeline {
+  z-index: 1001;
+}
+
+.gallery-room-view .zoom-controls.gallery-room-view__zoom-controls {
+  z-index: 1002;
+}
+
+.gallery-room-view .zoom-controls__btn:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.gallery-room-view .zoom-controls__btn:disabled:hover {
+  background: rgba(255, 255, 255, 0.55);
+  transform: none;
+}
+
+.gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork,
+.gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
+  transform:
+    perspective(1200px)
+    rotateX(var(--artwork-tilt-x))
+    rotateY(var(--artwork-tilt-y))
+    scale3d(1.002, 1.002, 1);
+  filter:
+    drop-shadow(1px 2px 3px rgb(15 20 24 / 48%))
+    drop-shadow(5px 8px 12px rgb(15 20 24 / 30%))
+    drop-shadow(10px 15px 22px rgb(15 20 24 / 19%));
+}
+
+.gallery-room-view__status {
+  position: absolute;
+  top: calc(var(--safe-top) + 16px);
+  left: 16px;
+  z-index: 1;
+  width: fit-content;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: var(--radius-pill);
+  background: #12171b;
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+}
+
+.gallery-room-view__status:empty {
+  display: none;
+}
+
+@media (max-width: 599px) {
+  .gallery-room-view__header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .gallery-room-view__utilities {
+    top: calc(var(--safe-top) + 124px);
+  }
+
+  .gallery-room-view__room-controls {
+    min-height: 44px;
+  }
+
+  .gallery-room-view__select {
+    max-width: min(190px, calc(100vw - 90px));
+  }
+
+  .gallery-room-view .zoom-controls.gallery-room-view__zoom-controls {
+    right: calc(16px + var(--safe-right));
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899px) {
+  .gallery-room-view__utilities {
+    top: calc(var(--safe-top) + 72px);
+  }
+}
+
+@media (min-width: 600px) and (max-height: 500px) {
+  .gallery-room-view__header,
+  .gallery-room-view__utilities {
+    top: calc(var(--safe-top) + 8px);
+  }
+
+  .gallery-room-view__room-controls {
+    min-height: 40px;
+  }
+
+  .gallery-room-view__back {
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .gallery-room-view .zoom-controls.gallery-room-view__zoom-controls {
+    right: calc(var(--safe-right) + 16px);
+    bottom: calc(var(--safe-bottom) + 164px);
+    flex-direction: row;
+    gap: 4px;
+    padding: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-room-view__artwork,
+  .gallery-room-view__select {
+    transition: none;
+  }
+
+  .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork {
+    transform: none;
+  }
+
+  .gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
+    transform: none;
+  }
+}
+
+:root[data-motion='reduced'] {
+  .gallery-room-view__artwork,
+  .gallery-room-view__select {
+    transition: none;
+  }
+
+  .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork {
+    transform: none;
+  }
+
+  .gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
+    transform: none;
+  }
+}
+
 // =============================================================================
 // Main Museum Hub (v0.80) — manifest-driven DOM composition
 // =============================================================================
@@ -439,6 +745,29 @@ canvas {
   pointer-events: auto;
 }
 
+.museum-hub__shadows {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.museum-hub__shadow-path {
+  fill: rgba(10, 13, 15, 0.24);
+  filter:
+    drop-shadow(var(--hub-shadow-x, 0px) 2px 3px rgba(10, 13, 15, 0.48))
+    drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 14px rgba(10, 13, 15, 0.36))
+    drop-shadow(0 8px 24px rgba(10, 13, 15, 0.2));
+  pointer-events: none;
+}
+
+.museum-hub__shadow-path.is-empty {
+  display: none;
+}
+
 // ── Projected artwork buttons ────────────────────────────────────────────────
 
 .museum-hub__artwork {
@@ -450,8 +779,7 @@ canvas {
   color: var(--text-inverse);
   cursor: pointer;
   clip-path: var(--hub-clip-path, none);
-  filter: drop-shadow(var(--hub-shadow-x, 0px) var(--hub-shadow-y, 16px) 18px rgba(10, 13, 15, 0.24));
-  transition: filter var(--dur-control) var(--ease-out);
+  transition: none;
 }
 
 .museum-hub__artwork::before {
@@ -1547,6 +1875,97 @@ body.placement-editor {
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.72rem;
   line-height: 1.4;
+}
+
+.museum-hub__gallery-room-editor {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+
+  h3 {
+    margin: 0;
+    color: var(--text-strong);
+    font-size: 0.9rem;
+  }
+
+  fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+  }
+
+  legend,
+  .museum-hub__gallery-room-field {
+    color: var(--text-strong);
+    font-size: 0.68rem;
+  }
+}
+
+.museum-hub__gallery-room-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-sm);
+  background: #242424;
+
+  > img:first-child {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  > img:last-child {
+    position: absolute;
+    top: 0;
+    left: 0;
+    max-width: none;
+    transform-origin: 0 0;
+    object-fit: fill;
+    box-shadow: 0 3px 8px rgb(0 0 0 / 35%);
+  }
+}
+
+.museum-hub__gallery-room-quad,
+.museum-hub__gallery-room-placement {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.museum-hub__gallery-room-placement {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.museum-hub__gallery-room-field {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+
+  input {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 36px;
+    padding: 5px;
+    border: 1px solid var(--glass-border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-strong);
+    background: var(--glass-bg-strong);
+    font: inherit;
+  }
+}
+
+.museum-hub__gallery-room-status.is-error {
+  color: var(--danger, #ff9a9a);
 }
 
 .museum-hub__editor-check {
@@ -3193,94 +3612,130 @@ button {
 // =============================================================================
 .timeline {
   position: fixed;
-  bottom: calc(28px + var(--safe-bottom));
+  bottom: calc(22px + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%);
-  width: min(1180px, calc(100vw - 50px - var(--safe-left) - var(--safe-right)));
+  width: min(1180px, calc(100vw - 32px - var(--safe-left) - var(--safe-right)));
   background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  // v0.25 U-03: tighter vertical padding reduces excess height
-  padding: 10px 14px;
+  border-radius: 22px;
+  padding: 13px 14px 10px;
   z-index: 100;
-  box-shadow: var(--shadow-soft);
-  // v0.25 U-01: flex row so arrows and counter are natural siblings of the list
+  box-shadow: 0 16px 48px rgba(17, 24, 29, 0.18), 0 2px 8px rgba(17, 24, 29, 0.08);
   display: flex;
   align-items: center;
-  gap: 6px;
-  --timeline-mask-left: transparent 0, #000 0;
-  --timeline-mask-right: #000 100%, transparent 100%;
+  gap: 12px;
+  isolation: isolate;
+
+  > * {
+    position: relative;
+    z-index: 2;
+  }
 
   &.timeline--at-start {
-    --timeline-mask-left: #000 0;
+    .timeline__list {
+      scroll-padding-left: 12px;
+    }
   }
 
   &.timeline--at-end {
-    --timeline-mask-right: #000 100%;
+    .timeline__list {
+      scroll-padding-right: 12px;
+    }
   }
 }
 
 .timeline__list {
   list-style: none;
   display: flex;
-  gap: 12px;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: clamp(10px, 1.5vw, 20px);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  // v0.11 — proximity snap on phones gives a satisfying scroll-to-item feel
-  // without fighting the existing `scrollIntoView({behavior:'smooth'})` calls.
   scroll-snap-type: x proximity;
-  // v0.12 — reserve visual headroom for the lifted active thumb and define
-  // horizontal gutters used by native scroll snapping and JS centering.
-  scroll-padding-inline: 32px;
+  scroll-padding-inline: 12px;
   -webkit-overflow-scrolling: touch;
-  // v0.25 U-03: reduced padding; U-01: flex:1 fills space between arrows
-  padding: 12px 8px 6px;
+  padding: 10px 8px 8px;
   flex: 1 1 0;
+  width: 0;
   min-width: 0;
-  mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
-  -webkit-mask-image: linear-gradient(to right, var(--timeline-mask-left), #000 40px, #000 calc(100% - 40px), var(--timeline-mask-right));
 
   &::-webkit-scrollbar {
     display: none;
   }
 }
 
+.timeline.timeline--scrollable .timeline__list {
+  justify-content: flex-start;
+}
+
+.timeline.timeline--fits .timeline__arrow {
+  display: none;
+}
+
 .timeline__item {
-  flex-shrink: 0;
+  flex: 0 0 clamp(120px, 13vw, 150px);
   scroll-snap-align: center;
-  scroll-margin-inline: 32px;
-  width: clamp(90px, 15vw, 150px);
-  height: clamp(57px, 9.5vw, 95px);
+  scroll-margin-inline: 12px;
+  height: clamp(68px, 8vw, 84px);
 }
 
 .timeline__thumb {
   display: block;
   position: relative;
   padding: 0;
-  border-radius: var(--radius-md);
+  border-radius: 14px;
   overflow: hidden;
   cursor: pointer;
   width: 100%;
   height: 100%;
   transition: transform var(--dur-timeline) var(--ease-gallery-out),
     box-shadow var(--dur-timeline) var(--ease-gallery-out),
-    border-color var(--dur-control) var(--ease-out);
-  border: 2px solid transparent;
-  background: rgba(255, 255, 255, 0.5);
-  scroll-margin-inline: 32px;
+    border-color var(--dur-control) var(--ease-out),
+    opacity var(--dur-control) var(--ease-out);
+  border: 2px solid rgba(17, 24, 29, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  scroll-margin-inline: 12px;
+  opacity: 0.78;
 
   &.is-active {
-    transform: translateY(-10px) scale(1.04);
-    border-color: rgba(18, 23, 27, 0.4);
-    box-shadow: var(--shadow-medium);
+    transform: translateY(-3px) scale(1.045);
+    border-color: rgba(17, 24, 29, 0.82);
+    box-shadow: 0 8px 22px rgba(17, 24, 29, 0.26);
+    opacity: 1;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: 2px;
+    width: 30px;
+    height: 3px;
+    border-radius: 999px;
+    background: #11181d;
+    box-shadow: 0 1px 5px rgba(255, 255, 255, 0.55);
+    opacity: 0;
+    transform: translateX(-50%) scaleX(0.72);
+    transition: opacity var(--dur-control) var(--ease-out),
+      transform var(--dur-control) var(--ease-out);
+    pointer-events: none;
+  }
+
+  &.is-active::after {
+    opacity: 1;
+    transform: translateX(-50%) scaleX(1);
   }
 
   &:hover:not(.is-active) {
-    transform: translateY(-4px);
+    transform: translateY(-2px);
     box-shadow: var(--shadow-soft);
+    opacity: 1;
   }
 
   &:focus-visible {
@@ -3290,31 +3745,32 @@ button {
 }
 
 .timeline__arrow {
-  // v0.25 U-01: natural flex sibling — no longer absolutely positioned
   flex-shrink: 0;
-  // v0.25 U-02: 32×32 px circle replacing 34×58 px pill
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--glass-border);
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(17, 24, 29, 0.14);
   border-radius: 50%;
   background: var(--glass-bg-strong);
   color: var(--text-strong);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 4px 14px rgba(17, 24, 29, 0.12);
   cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
-  // Center the arrow glyph
+  opacity: 0.72;
+  font-size: 25px;
+  line-height: 1;
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
   display: flex;
   align-items: center;
   justify-content: center;
 
-  .timeline:hover &,
-  .timeline:focus-within & {
+  &:hover:not(:disabled) {
     opacity: 1;
+    transform: scale(1.06);
+    background: #fff;
   }
 
   &:disabled {
-    opacity: 0;
+    opacity: 0.24;
     pointer-events: none;
   }
 
@@ -3324,28 +3780,21 @@ button {
     opacity: 1;
   }
 
-  // v0.25 U-05: always show arrows on touch devices (no hover available)
-  @media (pointer: coarse) {
-    opacity: 0.65;
-
-    &:disabled {
-      opacity: 0;
-    }
-  }
 }
 
-// v0.25 U-04: counter is the last flex child in the timeline row — no longer
-// absolutely positioned, sits naturally at the tail of the flex container.
 .timeline__counter {
   flex-shrink: 0;
-  padding: 4px 9px;
+  min-width: 68px;
+  padding: 8px 10px;
   border-radius: 999px;
-  background: rgba(17, 24, 29, 0.72);
+  background: rgba(17, 24, 29, 0.88);
   color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
   pointer-events: none;
+  text-align: center;
 }
 
 .timeline__frame {
@@ -3408,15 +3857,37 @@ button {
 
 .timeline__thumb-label {
   position: absolute;
-  bottom: 0;
+  bottom: 7px;
   left: 0;
   right: 0;
-  padding: 6px 10px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, transparent 100%);
-  font-size: 10px;
-  font-weight: 500;
+  overflow: hidden;
+  padding: 14px 9px 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.84), rgba(0, 0, 0, 0.28) 75%, transparent);
+  font-size: 11px;
+  font-weight: 650;
   color: #fff;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.timeline__thumb-subtitle {
+  position: absolute;
+  z-index: 1;
+  left: 9px;
+  right: 9px;
+  bottom: 27px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 8px;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -3864,7 +4335,8 @@ button {
   .audio-controls__btn,
   .fullscreen-btn,
   .prefs__trigger,
-  .timeline__thumb {
+  .timeline__thumb,
+  .timeline__thumb::after {
     transition-duration: 0.001ms;
   }
 
@@ -4284,7 +4756,7 @@ button {
   }
 
   .timeline__item {
-    width: 120px;
+    flex-basis: 120px;
     height: 76px;
   }
 }
@@ -4429,7 +4901,7 @@ button {
 .keyboard-help {
   position: fixed;
   inset: 0;
-  z-index: 600;
+  z-index: 1100;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4465,6 +4937,22 @@ button {
       padding: 0.3rem 0.5rem;
       color: rgba(255 255 255 / 0.82);
       font-size: 0.85rem;
+    }
+  }
+
+  @media (max-width: 420px), (max-height: 420px) {
+    .keyboard-help__panel {
+      width: min(90vw, calc(100vw - 32px));
+      min-width: 0;
+      max-width: none;
+      max-height: calc(100dvh - 32px);
+      overflow-y: auto;
+      padding: 1.25rem 1rem;
+    }
+
+    .keyboard-help__table td {
+      padding: 0.3rem 0.25rem;
+      font-size: 0.78rem;
     }
   }
 

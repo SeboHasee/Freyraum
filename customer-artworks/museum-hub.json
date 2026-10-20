@@ -15,6 +15,92 @@
   "backgroundFallback": {
     "src": "Backgrounds/museum-empty.png"
   },
+  "galleryRoomViews": [
+    {
+      "id": "bedroom",
+      "name": "Schlafzimmer",
+      "background": {
+        "src": "Backgrounds/gallery-bedroom.png",
+        "width": 2000,
+        "height": 1540
+      },
+      "wallQuad": [
+        { "x": 0.38, "y": 0.18 },
+        { "x": 0.635, "y": 0.18 },
+        { "x": 0.635, "y": 0.51 },
+        { "x": 0.38, "y": 0.51 }
+      ],
+      "wallAspect": 1,
+      "placement": {
+        "u": 0.5,
+        "v": 0.5,
+        "height": 0.88
+      }
+    },
+    {
+      "id": "wohnraum",
+      "name": "Wohnraum",
+      "background": {
+        "src": "Backgrounds/gallery-wohnraum.png",
+        "width": 1896,
+        "height": 1424
+      },
+      "wallQuad": [
+        { "x": 0.42, "y": 0.2 },
+        { "x": 0.58, "y": 0.2 },
+        { "x": 0.58, "y": 0.56 },
+        { "x": 0.42, "y": 0.56 }
+      ],
+      "wallAspect": 0.59,
+      "placement": {
+        "u": 0.5,
+        "v": 0.5,
+        "height": 0.88
+      }
+    },
+    {
+      "id": "wohn-bereich",
+      "name": "Wohnbereich",
+      "background": {
+        "src": "Backgrounds/gallery-wohn-bereich.png",
+        "width": 2000,
+        "height": 2000
+      },
+      "wallQuad": [
+        { "x": 0.465, "y": 0.23 },
+        { "x": 0.725, "y": 0.23 },
+        { "x": 0.725, "y": 0.62 },
+        { "x": 0.465, "y": 0.62 }
+      ],
+      "wallAspect": 0.6666666666666666,
+      "placement": {
+        "u": 0.5,
+        "v": 0.5,
+        "height": 0.72
+      }
+    },
+    {
+      "id": "buero",
+      "name": "Büro",
+      "background": {
+        "src": "Backgrounds/gallery-buero.png",
+        "width": 2000,
+        "height": 1125
+      },
+      "wallQuad": [
+        { "x": 0.44, "y": 0.253 },
+        { "x": 0.58, "y": 0.253 },
+        { "x": 0.58, "y": 0.504 },
+        { "x": 0.44, "y": 0.504 }
+      ],
+      "wallAspect": 0.99,
+      "placement": {
+        "u": 0.5,
+        "v": 0.5,
+        "height": 0.88
+      }
+    }
+  ],
   "visualTokens": {
     "galleryWall": "#C7CED4",
     "museumWall": "#C7CED4"

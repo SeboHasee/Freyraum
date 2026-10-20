@@ -21,6 +21,7 @@ import {
   DEFAULT_INSPECTION_OVERSCROLL_X,
   DEFAULT_INSPECTION_OVERSCROLL_Y,
   getInspectionPanLimits,
+  resolveArtworkDepthPose,
 } from './inspectionSafety';
 
 export type NavigationCallback = (index: number) => void;
@@ -116,16 +117,15 @@ const LAMBDA_CAMERA_PAN = 5.0;
  *
  * - position.x: larger horizontal travel (3.2 → 4.5) is now witnessable
  *   thanks to the slower λ=2.5 settle (~1200 ms).
- * - position.z: new — painting recedes slightly behind the rest pose,
- *   giving a soft 3D approach feeling. Frame plane sits at z=0 and the
- *   artwork plane at z≈0.095, so a target of -0.6 does not cause z-fight.
+ * - position.z: the painting uses as much camera-facing depth as the current
+ *   camera, artwork dimensions, tilt, and wall clearance safely allow.
  * - rotation.y: reduced 0.32 rad (~18°) → 0.15 rad (~9°) — a museum
  *   yaw rather than a theatrical pivot.
  * - scale: 0.84 → 0.88 — slightly less collapsed so the slower settle
  *   does not look like a shrunken thumbnail growing into place.
  */
 const NAV_SEED_POSITION_X = 4.5;
-const NAV_SEED_POSITION_Z = -0.6;
+const NAV_SEED_POSITION_Z = 0.6;
 const NAV_SEED_ROTATION_Y = 0.15;
 const NAV_SEED_SCALE = 0.88;
 
@@ -788,6 +788,7 @@ export class GalleryManager {
     const constrainedHover = this.clampHoverTargetToStageClearance(this.targetX, this.targetY);
     this.targetX = constrainedHover.targetRotX;
     this.targetY = constrainedHover.targetRotY;
+    this.clampArtworkDepthPose();
     this.markReadiness(index, 'materialApplied', 'show-artwork');
     this.markRenderDirty(8);
 
@@ -1390,6 +1391,9 @@ export class GalleryManager {
       0,
       this.artworks.length - 1
     );
+    const seedPose = this.reducedMotion
+      ? null
+      : this.resolveNavigationSeedPose(direction * NAV_SEED_ROTATION_Y);
 
     this.diagnostics.info('navigate', `Navigate ${direction > 0 ? 'forward' : 'back'}`, {
       fromIndex,
@@ -1400,7 +1404,8 @@ export class GalleryManager {
       // v0.15 — motion mode and intended settle timing for QA / diagnostics.
       motionMode: this.reducedMotion ? 'reduced' : 'full',
       seedPositionX: this.reducedMotion ? 0 : direction * NAV_SEED_POSITION_X,
-      seedPositionZ: this.reducedMotion ? 0 : NAV_SEED_POSITION_Z,
+      seedPositionZ: seedPose?.positionZ ?? 0,
+      seedRotationY: seedPose?.targetRotY ?? 0,
       settleTargetMs: this.reducedMotion
         ? 0
         : Math.round(1000 * (-Math.log(0.05) / LAMBDA_NAV_POSITION)),
@@ -1408,9 +1413,9 @@ export class GalleryManager {
 
     if (!this.reducedMotion) {
       this.artworkMesh.group.position.x = direction * NAV_SEED_POSITION_X;
-      this.artworkMesh.group.position.z = NAV_SEED_POSITION_Z;
-      this.artworkMesh.group.rotation.y = direction * NAV_SEED_ROTATION_Y;
       this.artworkMesh.group.scale.set(NAV_SEED_SCALE, NAV_SEED_SCALE, NAV_SEED_SCALE);
+      this.artworkMesh.group.position.z = seedPose!.positionZ;
+      this.artworkMesh.group.rotation.y = seedPose!.targetRotY;
     }
 
     this.currentIndex = newIndex;
@@ -1434,6 +1439,9 @@ export class GalleryManager {
     const fromIndex = this.currentIndex;
     const direction = index > this.currentIndex ? 1 : -1;
     const diff = index - this.currentIndex;
+    const seedPose = this.reducedMotion
+      ? null
+      : this.resolveNavigationSeedPose(direction * NAV_SEED_ROTATION_Y);
 
     this.diagnostics.info('navigate', 'goTo direct navigation', {
       fromIndex: this.currentIndex,
@@ -1444,7 +1452,8 @@ export class GalleryManager {
       // v0.15 — motion diagnostics parity with navigate().
       motionMode: this.reducedMotion ? 'reduced' : 'full',
       seedPositionX: this.reducedMotion ? 0 : (diff > 0 ? 1 : -1) * NAV_SEED_POSITION_X,
-      seedPositionZ: this.reducedMotion ? 0 : NAV_SEED_POSITION_Z,
+      seedPositionZ: seedPose?.positionZ ?? 0,
+      seedRotationY: seedPose?.targetRotY ?? 0,
       settleTargetMs: this.reducedMotion
         ? 0
         : Math.round(1000 * (-Math.log(0.05) / LAMBDA_NAV_POSITION)),
@@ -1462,9 +1471,9 @@ export class GalleryManager {
 
     if (!this.reducedMotion) {
       this.artworkMesh.group.position.x = (diff > 0 ? 1 : -1) * NAV_SEED_POSITION_X;
-      this.artworkMesh.group.position.z = NAV_SEED_POSITION_Z;
-      this.artworkMesh.group.rotation.y = direction * NAV_SEED_ROTATION_Y;
       this.artworkMesh.group.scale.set(NAV_SEED_SCALE, NAV_SEED_SCALE, NAV_SEED_SCALE);
+      this.artworkMesh.group.position.z = seedPose!.positionZ;
+      this.artworkMesh.group.rotation.y = seedPose!.targetRotY;
     }
 
     void this.showArtwork(index);
@@ -1595,7 +1604,10 @@ export class GalleryManager {
     this.targetX = constrainedHover.targetRotX;
     this.targetY = constrainedHover.targetRotY;
 
-    if (dt <= 0) return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
+    if (dt <= 0) {
+      this.clampArtworkDepthPose();
+      return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
+    }
 
     // Hover rotation — λ=12 → ~250 ms settle (immediate feel).
     group.rotation.x = smoothDamp(group.rotation.x, this.targetX, LAMBDA_HOVER_ROTATION, dt);
@@ -1626,6 +1638,7 @@ export class GalleryManager {
     this.panY = smoothDamp(this.panY, this.targetPanY, LAMBDA_CAMERA_PAN, dt);
     this.camera.position.x = smoothDamp(this.camera.position.x, this.panX, LAMBDA_CAMERA_PAN, dt);
     this.camera.position.y = smoothDamp(this.camera.position.y, this.panY, LAMBDA_CAMERA_PAN, dt);
+    this.clampArtworkDepthPose();
     return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
   }
 
@@ -1744,6 +1757,42 @@ export class GalleryManager {
       wallZ: GALLERY_PRESENTATION_CONFIG.artworkWallZ,
       clearanceMargin: INSPECTION_WALL_CLEARANCE_MARGIN,
     });
+  }
+
+  private resolveNavigationSeedPose(rotationY: number): ReturnType<typeof resolveArtworkDepthPose> {
+    return resolveArtworkDepthPose({
+      targetRotX: 0,
+      targetRotY: rotationY,
+      artworkWidth: this.artworkMesh.artworkWidth,
+      artworkHeight: this.artworkMesh.artworkHeight,
+      bodyBackDepth: this.artworkMesh.bodyBackExtent,
+      groupScale: NAV_SEED_SCALE,
+      desiredPositionZ: NAV_SEED_POSITION_Z,
+      wallZ: GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+      cameraZ: this.camera.position.z,
+      cameraNear: this.camera.near,
+      clearanceMargin: INSPECTION_WALL_CLEARANCE_MARGIN,
+    });
+  }
+
+  private clampArtworkDepthPose(): void {
+    const group = this.artworkMesh.group;
+    const pose = resolveArtworkDepthPose({
+      targetRotX: group.rotation.x,
+      targetRotY: group.rotation.y,
+      artworkWidth: this.artworkMesh.artworkWidth,
+      artworkHeight: this.artworkMesh.artworkHeight,
+      bodyBackDepth: this.artworkMesh.bodyBackExtent,
+      groupScale: group.scale.x,
+      desiredPositionZ: group.position.z,
+      wallZ: GALLERY_PRESENTATION_CONFIG.artworkWallZ,
+      cameraZ: this.camera.position.z,
+      cameraNear: this.camera.near,
+      clearanceMargin: INSPECTION_WALL_CLEARANCE_MARGIN,
+    });
+    group.rotation.x = pose.targetRotX;
+    group.rotation.y = pose.targetRotY;
+    group.position.z = pose.positionZ;
   }
 
   private getZoomBounds(metrics = this.getViewportMetrics()): ZoomBounds {

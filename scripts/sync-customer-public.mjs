@@ -110,9 +110,8 @@ if (!audioJs) {
 
 const imagesCopied = syncDir(join(PREVIEW, 'images'), join(PUBLIC, 'images'));
 const audioCopied  = syncDir(join(PREVIEW, 'audio'),  join(PUBLIC, 'audio'));
-// v0.81 — museum-target.png stays in the repo as a calibration/reference
-// asset only; the runtime hub composes artworks over museum-empty.png, so the
-// baked-target PNG (~5.5 MB) is no longer shipped to public/ or dist/.
+// museum-target.png stays in the repo as a calibration/reference asset only.
+// Ship the configured museum photograph and its fallback to the runtime.
 const backgroundsCopied = syncDir(
   join(ROOT, 'customer-artworks', 'Backgrounds'),
   join(PUBLIC, 'backgrounds'),

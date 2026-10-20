@@ -3,6 +3,8 @@ const ARTWORK_WALL_GAP = 0.14;
 const ARTWORK_BODY_FRONT_CLEARANCE = 0.002;
 const FRONT_WALL_Z = -(ARTWORK_BODY_DEPTH + ARTWORK_WALL_GAP + ARTWORK_BODY_FRONT_CLEARANCE);
 
+export const GALLERY_CAMERA_NEAR = 0.01;
+
 export interface GalleryPresentationConfig {
   artworkBodyDepth: number;
   artworkWallGap: number;

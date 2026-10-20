@@ -34,8 +34,6 @@ const bundled = buildSync({
 });
 const { resolveMuseumHub } = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`);
 const expected = resolveMuseumHub(artworks, config);
-assert.equal(config.background.src, 'Backgrounds/Museum_ohne_Bilder.png');
-assert.equal(config.backgroundFallback.src, 'Backgrounds/museum-empty.png');
 
 const browser = await playwright.chromium.launch({
   headless: true,
@@ -149,11 +147,12 @@ try {
   check(await page.locator('.museum-hub__canvas').count() === 0, 'museum does not construct a WebGL room canvas');
   check(await page.locator('.museum-hub__room').count() === Math.max(1, expected.pages.length), 'resolved room/page count matches the published content');
   const backgroundSrc = await page.locator('.museum-hub__image').evaluate((image) => image.currentSrc || image.src);
-  const expectedBackgroundPath = url.protocol === 'file:'
-    ? '/Backgrounds/Museum_ohne_Bilder.png'
-    : '/backgrounds/Museum_ohne_Bilder.png';
+  assert.match(config.background.src, /^Backgrounds\/[^/]+$/, 'configured background must be in Backgrounds/');
+  const backgroundFilename = config.background.src.slice('Backgrounds/'.length);
+  const backgroundDirectory = url.protocol === 'file:' ? 'Backgrounds' : 'backgrounds';
+  const expectedBackgroundPath = `/${backgroundDirectory}/${backgroundFilename}`;
   check(Boolean(backgroundSrc) && decodeURIComponent(new URL(backgroundSrc).pathname).endsWith(expectedBackgroundPath),
-    `exact primary photograph selected (${backgroundSrc || 'no resolved image source'})`);
+    `configured primary background selected (${backgroundSrc || 'no resolved image source'})`);
   if (backgroundSrc) await assertPixelContribution(page, '.museum-hub__image', 'primary photograph');
   else check(false, 'primary photograph: no decoded background contributes visible pixels');
 

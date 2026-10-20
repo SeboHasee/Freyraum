@@ -1,5 +1,285 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+
+## 2026-10-20 — Wohnbereich clipping reported again
+
+- The user supplied a room-view screenshot at
+  [this attachment](https://github.com/user-attachments/assets/a811e3d7-b277-4619-8e17-8815b01046fe).
+  It visibly shows the upper part of the selected artwork cut off at the top of the
+  viewport while the room selector is on Wohnbereich.
+- The screenshot is one rendered artifact; it does not identify its commit, source
+  JSON, generated bundle, browser zoom, or camera state. Do not assume it disproves
+  or validates the current source calibration until those are matched.
+- Reopen visual acceptance despite the passing geometry/browser bounds fixtures.
+  Reproduce at the screenshot's 2000×1080 viewport with the matching room config,
+  selected artwork, generated runtime, and camera state; then verify the entire
+  projected frame and image remain within visible bounds.
+
+## 2026-10-20 — Photo-room framing, cleanup, and image-quality follow-up
+
+- An earlier 2000×1080 Wohnbereich screenshot showed the artwork's top clipped
+  because its wall quad began at source y=0.075, above the visible area after
+  centered `cover` cropping. On that viewport the current transform placed the
+  artwork top about 269 px offscreen. Calibrate the wall quad to the visible wall
+  at normalized y=0.23–0.62 and use a 0.72 wall-relative artwork height; keep the
+  source aspect ratio and project through the shared visitor/editor geometry.
+- Rebuild all four display derivatives from their unchanged source photos with
+  expanded masks that include painting frames and their shadows. Blend only in
+  an outer feather band; do not blend original painting pixels back into the
+  removed region. Structural tests now measure full-color residue and cleanup
+  boundary gradients for all four photos.
+- Apply a restrained 10% native-size unsharp mask (0.65 px Gaussian radius) to
+  the cleaned derivatives. The untouched source photos are 1896–2000 px wide;
+  no higher-resolution originals exist in the repository. A tested 2× Lanczos +
+  unsharp candidate had nearly identical desktop/phone display pixels (MAE
+  0.08–0.48) while expanding each PNG from roughly 1.9–2.9 MB to 8.1–12.6 MB.
+  It adds interpolated pixels, not real detail, so retain native dimensions to
+  avoid extra download and decode/GPU cost.
+- The bedroom's repaired center was smoother than a nearby untouched wall area.
+  Add subtle, wall-matched microtexture and bound its measured Laplacian variance
+  against the source wall sample, preventing both an overly smooth patch and
+  excessive synthetic grain.
+- Projection regressions check three artwork aspect ratios (portrait, 3:4, and
+  square) at wide desktop, tablet, portrait-phone, and short-landscape sizes;
+  browser coverage asserts the complete artwork bounds remain onscreen for every
+  configured room. These checks establish geometry, not customer visual approval.
+- Normal-size browser captures of all four rooms were reviewed, and the bedroom
+  wall's fine texture was refined after that review. Fresh captures were generated
+  after rebuilding; customer confirmation remains open because automated tests
+  and local screenshots cannot establish an indistinguishable wall repair.
+
+## 2026-10-19 — Four inspection photo rooms and cleanup follow-up
+
+- The uploaded `Wohnbereich.png` and `Büro.png` are now additional photo-room
+  sources; visitor/editor configuration remains in `museum-hub.json`, with the
+  room names and photo asset paths kept together there.
+- Preserve source images and display edited derivatives only. The new derivatives
+  remove the colorful center-wall paintings; the existing Schlafzimmer and
+  Wohnraum derivatives were regenerated from their untouched source photos after
+  the earlier cleanup left visible patching.
+- Keep cleanup safeguards image-based: verify artwork pixels are removed and
+  compare cleanup-boundary gradients against the unchanged source photo. Passing
+  these checks does not replace visual customer review at normal display size.
+- Room import/staging, config sanitization, source-ratio projection and the
+  responsive file-preview browser check must enumerate all four configured views;
+  do not pin future checks to only the original two.
+- Validation passed for the four-room config/cleanup/staging test, the root
+  `file://` browser test at desktop/tablet/phone/short-landscape sizes, lint,
+  typecheck, build, deploy-content validation, front-wall aspect, WebGL resilience,
+  frame budget, and config-authority docs check. The separate museum-hub geometry
+  test still fails at the known wall-left doorway-height expectation.
+
+## 2026-10-19 — Shared gallery controls in the photo room
+
+- Move the existing timeline DOM node into the photo-room overlay while it is
+  visible, then restore it to its original parent. This keeps one selection
+  model and allows gallery navigation and room artwork to stay synchronized.
+- Reparent the existing help trigger and shared utility controls rather than
+  creating parallel controls; select help instructions from the active view.
+- Fixed-position timeline and zoom elements retain their shared gallery CSS.
+  Verify the combined header, utilities, timeline, and zoom bounds at short
+  landscape as well as portrait and desktop sizes.
+- The room photograph and projected artwork continue to share only the
+  established room-scene camera transform; moving controls does not alter
+  projective registration.
+
+## 2026-10-19 — Photographic inspection room view
+
+- Keep the inspection room's audio, settings, and fullscreen widgets as the same
+  shared controls used by the gallery; reparent them into the room overlay while
+  visible so preferences and audio state are not duplicated.
+- Photo pan range is bounded by camera scale and viewport coverage. Raising the
+  maximum scale expands useful pan travel while retaining the rule that the photo
+  fills the viewport; test both maximum scale and edge clamping.
+- Museum-hub artwork buttons carry wall-vector shadow variables. Use a tight
+  contact component plus restrained directional/ambient layers so projected art
+  reads as attached to its wall rather than floating.
+- A clipped museum-hub artwork button is not a reliable owner for an expanded
+  drop-shadow. Render the shadow from the same projected quad in a pointer-inert
+  SVG layer behind the button, preserving the button's registration and hit shape.
+- Room-view wheel and button zoom should share the projectively mapped artwork
+  center; pinch remains gesture-centered. Pointer reach can widen responsively
+  while preserving the low tilt bound, reduced-motion behavior, and eased return.
+- Help content must follow the active view: room-view guidance covers its own
+  zoom, pan, reset, exit, and touch gestures rather than claiming gallery shortcuts.
+- The previous short-landscape toolbar corner-placement logic was specific to
+  the old standalone toolbar. The gallery-aligned header/timeline/zoom layout
+  replaces that path, so regression checks should validate each new control
+  group's viewport bounds and collisions.
+- `npm run validate:museum-hub` currently stops at
+  `scripts/test-museum-hub-geometry.mjs:411`: the left doorway-height invariant
+  expects 2.30 m, but the current calibrated config does not satisfy that span.
+  The obsolete timeline assertion at line 111 was corrected to check the actual
+  selected-thumbnail active state; the remaining doorway failure is unrelated to
+  photo-room presentation and needs geometry-owner review.
+
+- Update Gallery is the customer-facing local import path; a production build's
+  public-background sync is not part of that workflow. Stage each configured
+  room photo into `customer-preview/backgrounds/`, the URL base used by the
+  nested local preview, and report missing source files instead of leaving a
+  silent blank scene.
+- The fixed photograph and projected artwork must receive the same bounded
+  camera transform. Keep the toolbar in screen space and prevent gestures on
+  controls from panning the image. A single still photo supports pan/zoom, not
+  real perspective changes; orbit/walking requires room geometry or additional
+  viewpoints.
+- Browser regression opens root `index.html` as `file://`, verifies all four staged
+  photos render, and checks the photo-room header, shared timeline, zoom, and
+  utilities stay in viewport at desktop, tablet, phone, and short-landscape sizes,
+  plus drag, zoom, pinch, reset, keyboard, and focus return.
+- The first living-room removal was a hard rectangle exactly along the artwork
+  bounds. Avoid feather-blending from the source *inside* that bounds: it
+  reintroduced colored artwork. Fade only in an outer band, interpolating from
+  the cleaned edge to unmodified wall pixels beyond it; preserve originals and
+  check the seam gradient plus the original-artwork removal mask.
+- Camera zoom changes projected screen dimensions but not the artwork's authored
+  image dimensions or wall placement. Apply pan/zoom once to the shared scene;
+  calculating the artwork projection with that camera as well causes a double
+  transform and visible parallax. Hover tilt and scale are deliberately minimal
+  and presentation-only; reduced-motion settings disable the effect.
+- Zoom buttons use the artwork center mapped through the wall homography as their
+  anchor, animating scale and offset together; pointer wheel/pinch retain their
+  own focus point. Camera bounds still prevent exposing blank edges, so centering
+  is clamped to the valid photograph viewport. Mouse tilt uses a responsive
+  proximity radius, low amplitude, and a CSS eased return.
+- For cleanup boundaries, compare each dense adjacent-pixel gradient in the
+  edited photo to the same source-photo gradient. This separates newly introduced
+  cleanup discontinuities from naturally textured wall edges; retain separate
+  masks that prove the old painting pixels are removed.
+- The placement editor's photo-room preview calls the same geometry projection
+  as the visitor view. Keep wall corners normalized and convex, constrain the
+  artwork's normalized position/height, and serialize changes through the same
+  calibration snapshots so undo/redo and save/export preserve the settings.
+- The room photos contain their own dominant paintings. Initial guessed masks
+  missed them, especially in `Wohnraum.png`; locate the actual central picture
+  region from the source pixels before producing derivatives. Keep the supplied
+  originals unchanged and assert the cleaned region remains free of saturated
+  painting pixels.
+- The room images have different source aspect ratios, so `object-fit: cover`
+  must be paired with identical centered-cover math when projecting artwork.
+  Use the configured normalized `wallQuad` and wall aspect to preserve artwork's
+  natural ratio at desktop and portrait viewport sizes.
+- Keep the inspection-room display separate from `MainMuseumHub`: its overlay
+  follows the gallery's selected artwork, while editor export and shared save
+  validation must preserve and validate the room-photo configuration.
+
+## 2026-10-19 — Photo-room control consistency follow-up
+
+- The room view now reparents the existing gallery timeline rather than
+  maintaining previous/next controls and a second artwork selector. Returning to
+  the gallery restores that same DOM node, its scroll/active state, and shared
+  selection model.
+- Use the same prominent back-action style for **Zurück zur Galerie** and the
+  **Fotoraum** entry. The room selector is grouped with navigation, not with
+  artwork selection; compact phones retain a visible short label.
+- Reuse gallery zoom button classes/order and the existing shared help, audio,
+  settings, and fullscreen widgets. Help content is selected from the active
+  view; escape/focus regression covers modal return and room exit.
+- Header/utilities and timeline/zoom collision checks now cover desktop, tablet,
+  portrait phone, and short landscape. The zoom group moves above the timeline in
+  short landscape; utility groups move below the stacked phone header.
+- The UI-only restructuring leaves projective placement and the single
+  photo-scene pan/zoom transform unchanged. Browser regression verifies shared
+  selection, photo decode/display, room switching, projection registration,
+  keyboard/focus behavior and camera gestures.
+- Validation after fixing the stale timeline assertion still reports the
+  independent doorway-height failure at `scripts/test-museum-hub-geometry.mjs:411`.
+
+## 2026-10-19 — Follow-up: tilted-artwork flicker persists
+
+- The earlier polygon-offset change was incomplete: it biases the painted plane,
+  but the backing body's opaque material still writes depth only 0.002 units
+  behind it. As the mounted artwork rotates, that nearly coplanar depth pair can
+  still contend on limited-precision depth buffers.
+- Disable depth writes on the backing material while keeping depth testing and
+  `castShadow` enabled. The image plane remains the visible depth-writing surface;
+  the backing body still renders its sides and continues to cast the intended
+  wall shadow.
+- The imported default is `matte-print`, with no procedural normal/height/
+  specular maps, so this correction targets the remaining geometry depth overlap,
+  not canvas shading or the artwork's source pixels.
+- `scripts/test-webgl-resilience.mjs` now guards the image-plane polygon offset,
+  the backing material's `depthWrite: false`, and the body's `castShadow: true`.
+  Keep all three checks together: removing depth writes fixes the competing
+  fragments, while preserving the shadow flag protects the intentional wall shadow.
+- The rebuilt gallery loaded in Chromium, processed hover tilts, and retained its
+  WebGL context. The customer confirmed the visual artifact is resolved on the
+  target display (2026-10-19).
+
+## 2026-10-19 — Selected timeline marker and tilted-image flicker
+
+- The thin line across the timeline was a collection-progress indicator, not the
+  artwork selection state. The current artwork already receives `is-active` and
+  accessible `aria-current`/`aria-pressed` state; remove the global line and use
+  that per-card state for a single underline while retaining the spoken counter.
+- The imported tree artwork has no interactive presentation override, so it uses
+  the `matte-print` profile: no procedural normal, detail, height, or specular maps.
+  The earlier normal-map/specular hypothesis therefore did not explain this report.
+- The image plane is drawn only 0.002 units ahead of its backing body. With depth
+  testing enabled on both surfaces, limited depth precision can let their fragments
+  alternate as a tilted plane moves. Apply a small negative polygon offset to the
+  artwork material so it consistently wins depth testing; keep the body as the
+  wall-shadow caster. This preserves the original albedo and tilt behavior.
+- Chromium verification: only the selected card has an underline and accessible
+  current/pressed state; the counter remains intact. At 320/390px the track scrolls
+  with arrows, at 1280px four works fit and arrows hide, and a simulated 16-item
+  track overflows with arrows. The marker transition is 1µs in reduced-motion mode.
+- Captured the imported tree artwork at two tilts in high quality and in balanced
+  quality after the change; no page exceptions or WebGL errors occurred. The browser
+  reported an unresolved-host warning and a favicon 404 in this environment.
+
+## 2026-10-18 — User follow-up: timeline and tilted-artwork clipping
+
+- The prior adjustment did not resolve either issue for the user. The timeline
+  remained an intrinsic-width strip with fixed-size thumbnails, so it did not
+  visually use the gallery row. The replacement uses a full-width capped dock,
+  evenly distributes fitting thumbnails, and exposes scroll arrows only when
+  the track overflows; cards now show both title and subtitle with progress.
+- Tilted artwork can cross the camera's near plane during close inspection or
+  navigation while the camera is still zoomed in. Use a tighter near plane and
+  solve the entrance pose against both the front wall and camera; at normal
+  viewing distance the original entrance tilt/depth remain unchanged. The body
+  mesh remains the shadow caster.
+- Regression coverage checks the depth range at close zoom, preserves the normal
+  entrance pose, and exercises both wall and camera clearance throughout the
+  transition. Customer confirmation on the actual display remains necessary.
+- Production/local builds, lint and typecheck pass. Chromium verified fit states
+  for 1–4 artworks at 320/390/500/900/1600px, 12-item overflow arrows, arrow
+  scrolling, keyboard focus, selection/progress and reduced-motion transitions.
+  The geometry suite reaches its previously recorded unrelated 2.30m doorway
+  assertion only after these new pose checks pass.
+
+## 2026-10-18 — Artwork entrance and timeline sizing
+
+- Gallery navigation seeds the artwork group on the camera side of the negative-z
+  front wall, then eases its depth back to the mounted origin. Keep this depth
+  independent from the body mesh that casts the wall shadow; the photograph-backed
+  museum hub is a separate presentation.
+- The timeline can shrink-wrap smaller collections by using intrinsic list width;
+  once the whole list cannot fit after reclaiming arrow space, its existing
+  scrolling and arrow controls remain active. Chromium measurements cover desktop
+  counts 1–4 and 12, plus a 320px emulated phone viewport.
+- Validation note: `npm run validate:museum-hub` still reaches an existing
+  doorway-height invariant that expects 2.30m, while current calibrated config
+  converts the left/right doorway spans to approximately 2.692m / 2.486m. This is
+  unrelated to the gallery entrance/timeline change and remains unmodified.
+
+## 2026-10-18 — Deployed museum photograph regression report
+
+- Customer reports that the latest deployment shows a plain white museum
+  background. The customer's specific browser artifact is unknown, so the exact
+  visual root cause remains unverified. Latest Pages run #21
+  (`c3b8e2468e0849b1bfe72f87c880ac46f2794483`) deployed successfully, but its
+  live smoke job exited before opening a browser because the fresh smoke-job
+  checkout lacked generated/ignored `artworks.json`.
+- Current source config selects `Backgrounds/Museum_ohne_Bilder.png`, and
+  `sync-customer-public.mjs` copies all allowed backgrounds. The earlier Pages
+  check's omission of that filename did not itself remove the image and does not
+  establish why it was not visible. The artifact gate and live smoke now derive
+  expected background paths from `museum-hub.json`, so a future configured
+  background is checked without pinning deployment to this filename. The smoke
+  job now runs the importer before using its generated manifest.
+- Track the next deployment and live smoke as open acceptance in `plan.md`.
 
 ## 2026-10-18 — Merge audit and customer-confirmed local room
 

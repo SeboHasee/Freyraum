@@ -40,6 +40,10 @@ export class PreferencesPanel {
   // the control node is never replaced mid-drag.
   private isVolumeDragging = false;
 
+  get element(): HTMLElement {
+    return this.root;
+  }
+
   constructor(container: HTMLElement, private readonly prefs: PreferencesStore) {
     this.root = document.createElement('div');
     this.root.className = 'prefs';
@@ -296,6 +300,11 @@ export class PreferencesPanel {
         this.audioStatusEl.setAttribute('hidden', '');
       }
     }
+  }
+
+  setEmbedded(embedded: boolean): void {
+    this.root.classList.toggle('prefs--embedded', embedded);
+    this.panel.setAttribute('aria-modal', embedded ? 'false' : 'true');
   }
 
   private handleToggle = (): void => {

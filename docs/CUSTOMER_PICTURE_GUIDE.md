@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This guide documents the current customer workflow only.
 
@@ -74,6 +74,9 @@ copies into `customer-artworks/inbox/`.
 - Imports and validates customer artworks.
 - Copies usable assets into `customer-preview/images/`.
 - Imports optional audio into `customer-preview/audio/`.
+- Copies configured inspection-room photos into `customer-preview/backgrounds/`
+  so the local gallery can open them after Update Gallery alone. Missing source
+  photos are listed as warnings in the import report.
 - Injects the current museum-hub wall-plane config (`customer-artworks/museum-hub.json`)
   into the preview build.
 - Updates:
@@ -81,6 +84,39 @@ copies into `customer-artworks/inbox/`.
   - `customer-preview/customer-artworks.js`
   - `customer-preview/customer-audio.js`
   - `customer-artworks/last-import-report.txt`
+
+## Inspect in a photo room
+
+In the gallery, choose **Fotoraum** to show the selected artwork in one of four
+photos: **Schlafzimmer**, **Wohnraum**, **Wohnbereich**, or **Büro**. The room
+view reuses the gallery's thumbnail timeline, active-work indicator, scrolling,
+and count; selecting artwork here or in the gallery changes the same shared
+selection. Use the separate room selector to switch photographs and
+**Zurück zur Galerie** to leave the photo view.
+
+Drag the photo to pan; use the mouse wheel, pinch, or the grouped zoom buttons to
+zoom, and **Fotoansicht zurücksetzen** to restore it. The artwork stays the same
+configured size on the wall and grows on screen together with the photo as you
+zoom. Zoom buttons smoothly bring the artwork center toward the screen center,
+while wheel and pinch zoom remain anchored to the pointer or gesture. A nearby
+mouse gives a very subtle tilt that eases back to neutral; stronger
+contact/directional shadows keep the print attached to the wall. Shared audio,
+settings, fullscreen, and contextual help remain available in the room view.
+
+This is a bounded 2D camera over a still photograph—not orbiting or walking
+through a 3D room. Run **Update Gallery** after downloading project changes; it
+copies the configured source photos from `customer-artworks/Backgrounds/` into
+the local preview. If a photo is missing, check the import report and restore
+the exact configured source filename. The original room photos are preserved;
+the configured `gallery-*.png` derivatives remove their pre-existing paintings
+and frames. They retain the available source resolution with gentle sharpening;
+upscaled copies would not recover detail absent from the originals.
+
+In the placement editor's **Raum** tab, **Foto-Raum gestalten** lets you select
+a configured photo room, adjust its four normalized wall corners, and edit the
+artwork's wall-relative position and height. The preview uses the visitor
+projection, and accepted changes remain part of undo/redo and the normal
+save/export configuration.
 
 ## Museum hub placement
 

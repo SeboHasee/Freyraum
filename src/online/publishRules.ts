@@ -346,6 +346,24 @@ export function validatePublishPackage(pkg: unknown, context: PublishValidationC
       if (!uploaded && existing === undefined && src !== currentSrc) errors.push(`Hintergrund nicht gefunden: ${name}`);
       else if (!uploaded && existing !== undefined && existing !== name) errors.push(`Hintergrund-Schreibweise stimmt nicht (Groß/Klein): ${name}`);
     }
+    const currentRoomViews = (context.currentConfig as { galleryRoomViews?: { id?: unknown; background?: { src?: unknown } }[] } | null)
+      ?.galleryRoomViews ?? [];
+    for (const view of sanitized.config.galleryRoomViews ?? []) {
+      const sourceMatch = /^Backgrounds\/([^/\\]+)$/.exec(view.background.src);
+      if (!sourceMatch) {
+        errors.push(`Raumansicht-Hintergrundpfad ist ungültig: ${view.background.src}`);
+        continue;
+      }
+      const name = sourceMatch[1]!;
+      const existing = context.existingBackgrounds.find((entry) => entry.toLowerCase() === name.toLowerCase());
+      const uploaded = uploadedBackgrounds.has(name);
+      const currentSrc = currentRoomViews.find((entry) => entry.id === view.id)?.background?.src;
+      if (!uploaded && existing === undefined && view.background.src !== currentSrc) {
+        errors.push(`Raumansicht-Hintergrund nicht gefunden: ${name}`);
+      } else if (!uploaded && existing !== undefined && existing !== name) {
+        errors.push(`Raumansicht-Hintergrund-Schreibweise stimmt nicht (Groß/Klein): ${name}`);
+      }
+    }
     const before = importerArtworkIdMap(context.existingInbox);
     const after = importerArtworkIdMap([...context.existingInbox, ...uploadedImageNames]);
     for (const [name, id] of before) {

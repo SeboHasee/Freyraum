@@ -118,16 +118,55 @@ async function main() {
     const page = await context.newPage();
     const pageErrors = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
-    await page.goto(pathToFileURL(EDITOR_PATH).href);
+    await page.goto(pathToFileURL(EDITOR_PATH).href, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60_000,
+    });
     await page.waitForSelector('.museum-hub__calibration-output', { state: 'attached', timeout: 30_000 });
     const start = page.locator('.loading-start-btn');
     await start.waitFor({ state: 'visible', timeout: 60_000 });
-    await page.waitForFunction(() => !document.querySelector('.loading-start-btn')?.hasAttribute('disabled'));
+    await page.waitForFunction(
+      () => !document.querySelector('.loading-start-btn')?.hasAttribute('disabled'),
+      null,
+      { timeout: 60_000 }
+    );
     await start.click();
     await page.waitForSelector('.loading-overlay', { state: 'detached', timeout: 30_000 });
     await page.waitForSelector('.museum-hub__room-counter', { timeout: 30_000 });
 
     check((await counterText(page)).startsWith('Raum 1 von 1'), 'editor opens with "Raum 1 von 1"');
+    await openTab(page, 'room');
+    const photoRoomEditor = page.locator('.museum-hub__gallery-room-editor');
+    const photoRoomSelector = photoRoomEditor.locator('select');
+    check(
+      await photoRoomEditor.isVisible() && await photoRoomSelector.locator('option').count() === 2,
+      'Raum tab exposes both configured photo rooms'
+    );
+    check(
+      await photoRoomEditor.locator('.museum-hub__gallery-room-preview img').count() === 2,
+      'photo-room editor shows the background and projected artwork preview'
+    );
+    const roomBefore = await readExport(page);
+    const placementU = photoRoomEditor.getByLabel('Horizontalposition');
+    const originalU = roomBefore.galleryRoomViews[0].placement.u;
+    const editedU = originalU > 0.55 ? 0.45 : 0.55;
+    await placementU.fill(editedU.toFixed(3));
+    const roomAfter = await readExport(page);
+    check(
+      roomAfter.galleryRoomViews[0].placement.u === editedU,
+      'photo-room placement edits update the exported configuration'
+    );
+    await page.getByRole('button', { name: /Rückgängig/ }).click();
+    await settle(page);
+    check(
+      (await readExport(page)).galleryRoomViews[0].placement.u === originalU,
+      'photo-room edits participate in editor undo history'
+    );
+    const firstPhotoBackground = await photoRoomEditor.locator('.museum-hub__gallery-room-preview img').first().getAttribute('src');
+    await photoRoomSelector.selectOption({ index: 1 });
+    const secondPhotoBackground = await photoRoomEditor.locator('.museum-hub__gallery-room-preview img').first().getAttribute('src');
+    check(firstPhotoBackground !== secondPhotoBackground, 'photo-room selector switches the preview background');
+    await photoRoomSelector.selectOption({ index: 0 });
 
     // 1. Add Raum 2: empty dashed places.
     await clickRoomButton(page, '+ Neuer Raum');

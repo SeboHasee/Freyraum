@@ -37,6 +37,7 @@ import { createEditorTabs, type EditorTabs } from './editor/editorTabs';
 import { EditorRoomBar } from './editor/roomBar';
 import { EditorArtworkLibrary, type LibraryArtwork, type LibraryPlace } from './editor/artworkLibrary';
 import { EditorSaveTab } from './editor/saveTab';
+import { EditorGalleryRoomViews } from './editor/galleryRoomViews';
 import { PlacementController, type PlacementArtwork, type PlacementPlace } from './editor/placementController';
 import { EditorToast } from './editor/editorToast';
 import {
@@ -195,6 +196,7 @@ type CalibrationDrag =
 interface SlotView {
   slot: ResolvedHubSlot;
   button: HTMLButtonElement;
+  shadowPath: SVGPathElement;
   image: HTMLImageElement | null;
   imageLoadToken: number;
   /** Immutable ratio captured from the decoded source image. */
@@ -254,6 +256,7 @@ export class MainMuseumHub {
   private placementController: PlacementController | null = null;
   private editorToast: EditorToast | null = null;
   private saveTab: EditorSaveTab | null = null;
+  private galleryRoomEditor: EditorGalleryRoomViews | null = null;
   private calibrationIssues: CalibrationIssue[] = [];
   /** Option A (true) hangs unplaced artworks into extra rooms in the gallery. */
   private autoPlaceUnmappedSetting = false;
@@ -709,6 +712,12 @@ export class MainMuseumHub {
       const room = document.createElement('div');
       room.className = 'museum-hub__room';
       room.dataset['page'] = String(this.roomLayers.length);
+      const shadows = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      shadows.classList.add('museum-hub__shadows');
+      shadows.setAttribute('viewBox', `0 0 ${this.stageWidth} ${this.stageHeight}`);
+      shadows.setAttribute('preserveAspectRatio', 'none');
+      shadows.setAttribute('aria-hidden', 'true');
+      room.appendChild(shadows);
       container.appendChild(room);
       this.roomLayers.push(room);
     }
@@ -721,6 +730,13 @@ export class MainMuseumHub {
     button.className = 'museum-hub__artwork';
     button.dataset['slotId'] = slot.id;
     if (slot.artworkId) button.dataset['artworkId'] = slot.artworkId;
+    const shadowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    shadowPath.classList.add('museum-hub__shadow-path');
+    if (!slot.artworkId) shadowPath.classList.add('is-empty');
+    shadowPath.dataset['slotId'] = slot.id;
+    this.roomLayers[slot.pageIndex]
+      ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
+      ?.appendChild(shadowPath);
 
     let image: HTMLImageElement | null = null;
     if (slot.selectable && slot.artworkId) {
@@ -798,6 +814,7 @@ export class MainMuseumHub {
     const view: SlotView = {
       slot,
       button,
+      shadowPath,
       image,
       imageLoadToken: 0,
       nativeAspectRatio: null,
@@ -809,7 +826,7 @@ export class MainMuseumHub {
       fallbackReason: null,
       lastUpsertResult: null,
     };
-    this.applySlotGeometry(button, slot, false, 1);
+    this.applySlotGeometry(button, slot, false, 1, shadowPath);
     this.syncSlotRenderer(view, render);
     return view;
   }
@@ -818,7 +835,8 @@ export class MainMuseumHub {
     button: HTMLButtonElement,
     slot: ResolvedHubSlot,
     syncRenderer = true,
-    aspectOverride?: number
+    aspectOverride?: number,
+    shadowPath?: SVGPathElement
   ): void {
     const wall = this.resolution.wallById.get(slot.placement.wallId);
     if (!wall) {
@@ -829,6 +847,8 @@ export class MainMuseumHub {
       button.style.height = '0px';
       button.style.clipPath = 'none';
       button.style.removeProperty('--hub-clip-path');
+      (shadowPath ?? this.slotViews.find((candidate) => candidate.slot.id === slot.id)?.shadowPath)
+        ?.removeAttribute('d');
       this.diagnostics.warn('hub-slot-missing-wall', 'Hub slot geometry skipped because the wall is missing', {
         slotId: slot.id,
         wallId: slot.placement.wallId,
@@ -836,6 +856,7 @@ export class MainMuseumHub {
       return;
     }
     const view = this.slotViews.find((candidate) => candidate.slot.id === slot.id);
+    const projectedShadow = shadowPath ?? view?.shadowPath;
     const projection = this.projectDisplayedSlot(slot, wall, aspectOverride);
     if (!projection) {
       button.classList.add('is-invalid-geometry');
@@ -845,6 +866,7 @@ export class MainMuseumHub {
       button.style.height = '0px';
       button.style.clipPath = 'none';
       button.style.removeProperty('--hub-clip-path');
+      projectedShadow?.removeAttribute('d');
       this.diagnostics.warn('hub-slot-projection-invalid', 'Hub slot projection is invalid and will not render interactively', {
         slotId: slot.id,
         artworkId: slot.artworkId,
@@ -854,6 +876,10 @@ export class MainMuseumHub {
       return;
     }
     this.projectedSlotGeometry.set(slot.id, projection);
+    projectedShadow?.setAttribute(
+      'd',
+      `M${projection.projectedQuad.map(({ x, y }) => `${x.toFixed(3)},${y.toFixed(3)}`).join(' L')} Z`
+    );
     button.classList.remove('is-invalid-geometry');
     // Same rule as evaluateDisplayedPlacement: flag (never move) invalid placements.
     button.classList.toggle(
@@ -884,6 +910,8 @@ export class MainMuseumHub {
     const shadow = wall.shadowVector ?? point(wall.group === 'left' ? -10 : 10, 16);
     button.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
     button.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
+    projectedShadow?.style.setProperty('--hub-shadow-x', `${shadow.x}px`);
+    projectedShadow?.style.setProperty('--hub-shadow-y', `${shadow.y}px`);
     if (view && syncRenderer) this.syncSlotRenderer(view);
     if (this.debugGeometry) this.logSlotProjection(slot, wall, projection);
   }
@@ -2495,6 +2523,22 @@ export class MainMuseumHub {
     }
     roomAdvanced.append(legend, this.buildBackgroundControls());
     roomTab.append(wallSection, roomAdvanced);
+    const previewArtwork = this.artworks[0] ?? null;
+    const previewArtworkSource = previewArtwork
+      ? resolveArtworkImageSources(this.resolution.artworkSourceById.get(previewArtwork.id) ?? null).primary?.resolvedUrl ?? ''
+      : '';
+    this.galleryRoomEditor = new EditorGalleryRoomViews({
+      views: this.resolution.galleryRoomViews,
+      artwork: previewArtwork,
+      artworkSrc: previewArtworkSource,
+      resolveBackground: resolveBackgroundUrl,
+      onHistory: () => this.recordCalibrationHistory(),
+      onChange: (views) => {
+        this.resolution.galleryRoomViews = views;
+        this.updateCalibrationOutput(true);
+      },
+    });
+    roomTab.appendChild(this.galleryRoomEditor.element);
 
     // ── Tab "Bilder": places, selected artwork, library ────────────────────
     const artworkTab = document.createElement('div');
@@ -4356,6 +4400,9 @@ export class MainMuseumHub {
       }),
       fallbacks: { ...this.resolution.fallbacks, autoPlaceUnmapped: this.autoPlaceUnmappedSetting },
       slotsPerPage: this.resolution.slotsPerPage,
+      ...(this.resolution.galleryRoomViews.length > 0
+        ? { galleryRoomViews: this.resolution.galleryRoomViews }
+        : {}),
       rooms: this.resolution.rooms.map((room) => (room.name ? { id: room.id, name: room.name } : { id: room.id })),
       slots: this.slotViews.map(({ slot }) => ({
         id: slot.id,
@@ -4822,6 +4869,7 @@ export class MainMuseumHub {
       }
       view.imageLoadToken += 1;
       view.button.remove();
+      view.shadowPath.remove();
       this.hubRoomRenderer?.removeSlot(view.slot.id, false);
       this.projectedSlotGeometry.delete(view.slot.id);
       const objectUrl = this.editorArtworkObjectUrls.get(view.slot.id);
@@ -4842,6 +4890,9 @@ export class MainMuseumHub {
         if (!this.calibrationWallOwnership.has(slot.id)) this.calibrationWallOwnership.set(slot.id, slot.placement.wallId);
       }
       ordered.push(view);
+      this.roomLayers[view.slot.pageIndex]
+        ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
+        ?.appendChild(view.shadowPath);
       this.roomLayers[view.slot.pageIndex]?.appendChild(view.button);
     }
     this.slotViews.splice(0, this.slotViews.length, ...ordered);
@@ -5586,6 +5637,8 @@ export class MainMuseumHub {
       currentWall.mountingZoneConfirmed = wall.mountingZoneConfirmed === true;
     }
     this.resolution.background = { ...config.background };
+    this.resolution.galleryRoomViews = config.galleryRoomViews ?? [];
+    this.galleryRoomEditor?.refresh(this.resolution.galleryRoomViews);
     const safeBackgroundObjectUrl =
       activeBackgroundObjectUrl?.startsWith('blob:') ? activeBackgroundObjectUrl : null;
     setResolvedBackgroundSource(

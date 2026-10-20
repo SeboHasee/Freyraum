@@ -1,8 +1,114 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+
+## Unreleased — room-photo framing and cleanup follow-up (2026-10-20)
+
+- Recalibrate Wohnbereich's wall region and artwork size so the complete print
+  remains visible after centered photo cropping at desktop, tablet, and phone
+  aspect ratios.
+- Expand and feather the wall-painting/frame cleanup in all four room-photo
+  derivatives, then apply subtle native-resolution sharpening and wall-matched
+  bedroom texture.
+- Keep source photo dimensions after comparing 2× Lanczos upscales at display
+  sizes; upscaling did not add detail and increased file/decode cost substantially.
+- Add full-artwork viewport bounds and all-color frame-removal checks to the
+  projective and browser regressions. Customer visual acceptance remains open.
+- A new user screenshot again appears to clip the artwork at the top in
+  Wohnbereich. The screenshot's build/config identity is unknown, so reopen visual
+  acceptance and reproduce against the matching generated artifact before attributing
+  the discrepancy to current calibration.
+
+## Unreleased — four cleaned photo-room views (2026-10-19)
+
+- Add Wohnbereich and Büro to the inspection gallery's configured photo-room
+  choices, bringing the set to four views.
+- Create cleaned derivatives for both uploaded photos and improve the bedroom and
+  Wohnraum cleanup from their unchanged originals to remove visible patch edges.
+- Extend import, pixel-cleanup, projective geometry, and responsive browser
+  regression coverage to all four photo rooms.
+
+## Unreleased — photo-room control consistency (2026-10-19)
+
+- Replace the photo-room's separate artwork arrows and title with the shared
+  gallery timeline, preserving one active artwork selection across both views.
+- Match the room return action, grouped zoom/reset controls, and contextual help
+  trigger to the gallery; make the room-view entry a prominent, labeled action.
+- Keep room selection separate from artwork selection and reuse shared audio,
+  settings, and fullscreen controls in the photo-room utility group.
+- Extend responsive browser coverage for shared timeline state, focus order,
+  control bounds, help context, and return-to-gallery focus restoration without
+  changing photo projection or camera behavior.
+
+## Unreleased — photographic inspection rooms (2026-10-19)
+
+- Add a full-screen bedroom/living-room photo view in the inspection gallery.
+  It displays one selected artwork at a time, supports room and artwork
+  navigation, and preserves native artwork aspect while projecting into the
+  photographed painting area.
+- Remove the dominant existing paintings from derived room-photo assets without
+  changing the original customer photos; verify the cleaned regions with a
+  focused PNG-pixel regression.
+- Preserve room-view configuration through placement-editor exports and reject
+  saves that refer to missing room-photo backgrounds.
+- Stage configured room photos during Update Gallery, with actionable missing-file
+  reporting, so the local `file://` preview does not depend on a developer build.
+- Add bounded photo pan/zoom, pinch, reset, keyboard controls, and a fixed
+  accessible toolbar; keep projected artwork aligned with the camera.
+- Cover local photo loading, responsive toolbar/artwork clearance, and camera
+  interactions with focused structural and browser regression tests.
+- Soften the cleanup boundaries in both derived room photos while preserving the
+  original source photographs, and guard the edge transitions with pixel tests.
+- Keep artwork dimensions fixed in wall space while camera zoom changes its screen
+  size; add bounded keyboard-focusable hover tilt and soft layered wall shadows.
+- Rework room controls into accessible room/artwork/camera groups using FREYRAUM
+  glass and focus tokens, with a clear return-to-gallery action.
+- Correct photo-room zoom by applying the camera once to the shared photo/artwork
+  scene; test wall registration at reset, maximum zoom, varied pans and responsive
+  viewport sizes.
+- Add validated room-photo selection, wall-boundary and artwork placement/size
+  editing with a visitor-projection preview and history/save/export round-trip.
+- Reduce hover tilt/scale sensitivity and refine directional shadows to make
+  artwork feel mounted to the photographed wall.
+- Make zoom buttons ease toward the artwork's projective center while keeping
+  wheel and pinch zoom anchored to their pointer/gesture; ease camera motion out
+  under reduced-motion preferences.
+- Extend the restrained mouse proximity effect beyond artwork bounds, with a
+  smooth return to neutral, strengthen contact shadows, and center navigation
+  glyphs within consistent touch targets.
+- Sample every cleanup boundary pixel and compare its gradient with the unchanged
+  source photo, alongside the existing artwork-removal checks.
+- Expand the photographic room's maximum zoom and photo-pan travel, and bring
+  shared volume, settings, and fullscreen controls into the room overlay.
+- Add stronger layered wall-contact shadows to projectively positioned museum-hub
+  artworks.
+- Render museum-hub shadows independently of the clipped artwork hit targets;
+  center photo-room wheel zoom on the projective artwork, ease room returns, and
+  broaden the subtle pointer response.
+- Give the photo-room toggle a clear active state and provide contextual keyboard,
+  mouse, wheel, and touch guidance with responsive modal layout; position controls
+  away from the projected artwork in short landscape.
+
+## Unreleased — timeline selection and tilted-artwork correction (2026-10-19)
+
+- Replace the compact thumbnail strip with a full-width, capped glass timeline:
+  small collections spread evenly across the row; larger collections keep visible
+  scroll arrows, artwork titles, and a clear marker on only the selected artwork.
+- Prevent the near-coplanar backing body from writing depth over the painted plane,
+  while retaining its intentional wall shadow and the existing plane depth bias.
+- Reduce the inspection camera near plane and resolve navigation tilt/depth against
+  both the wall and camera, preventing close-up tilted artwork from crossing the
+  near clipping plane while retaining the full entrance pose at normal distances.
 
 ## Unreleased — reference exhibition defaults (2026-10-18)
 
+- Artwork navigation now starts toward the camera and settles to the mount,
+  avoiding the front wall while retaining the fly-in, scale, tilt, and shadow.
+- The artwork timeline shrink-wraps small collections, stays capped at its
+  existing maximum width, and exposes arrows when a larger collection scrolls.
+- Pages artifact verification and live smoke now use the backgrounds selected
+  by `museum-hub.json`, rather than pinning checks to a particular filename.
+  The live smoke job imports customer assets first so its generated expected
+  manifest exists in the fresh checkout.
 - Merge handoff: synchronize all current Markdown with the four-image default,
   record customer-confirmed local success after Update Gallery and screenshot
   evidence, remove obsolete content-blocker guidance, and separate local/build

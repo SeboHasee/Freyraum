@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-18 (photograph-backed museum follow-up).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -32,6 +32,55 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - **Signing (future):** builds are unsigned (one-time SmartScreen/Gatekeeper
   warning). Adding the signing secrets listed in `docs/DESKTOP_APP.md` signs
   them without workflow changes; automatic updates require signing first.
+
+## Photo-room controls and current validation (2026-10-20)
+
+- **Reopened screenshot issue:** the user-supplied
+  [Wohnbereich capture](https://github.com/user-attachments/assets/a811e3d7-b277-4619-8e17-8815b01046fe)
+  shows the selected artwork clipped at the viewport top. The reported image does
+  not identify its build/config/camera state; match those before attributing cause.
+  Although the configured geometry/browser fixtures pass whole-artwork bounds,
+  do not claim customer-visible framing is fixed until this capture is reproduced
+  or superseded by a verified current-build screenshot.
+- Four configured photo rooms are available: Schlafzimmer, Wohnraum, Wohnbereich,
+  and Büro. Cleaned `gallery-*.png` derivatives are displayed while the originals
+  remain preserved; structural pixel regressions check cleanup seams and
+  painting/frame removal for each source. Wohnbereich's wall quad was recalibrated
+  to the visible wall after centered `cover` cropping, and projection/browser tests
+  check whole-artwork bounds across portrait, 3:4, and square artwork ratios.
+- Upscaling was evaluated and rejected: the available sources are 1896–2000 px
+  wide, and a 2× Lanczos candidate increased PNG/download and decoded image costs
+  without adding source detail. The cleaned derivatives retain source dimensions
+  with gentle native-size sharpening.
+- Run Update Gallery after pulling these changes so all four configured photos are
+  staged for the local `file://` preview.
+- The photo room reuses the gallery's single artwork timeline and selected-work
+  state. It also uses the gallery-style return and zoom/reset controls and the
+  shared help, audio, settings, and fullscreen widgets. The room selector is
+  distinct from artwork selection.
+- The control layout and complete artwork bounds were checked at desktop, tablet,
+  portrait-phone, and short-landscape sizes. Normal-size browser captures of all
+  four rooms were reviewed; the bedroom repair received subtle wall-matched
+  microtexture after its center appeared smoother than the nearby wall. Fresh
+  captures were generated after rebuilding; customer acceptance remains open.
+- Passing: `npm run build`, `npm run lint`, `npm run build:typecheck`,
+  `npm run test:gallery-room-view`, and
+  `FREYRAUM_CHROME_PATH=/usr/bin/google-chrome npm run test:gallery-room-view:browser`.
+- The four-room browser run decoded each background and checked full artwork and
+  control bounds at desktop, tablet, portrait phone, and short landscape. Deploy
+  validation, deploy-content tests, front-wall aspect, WebGL resilience,
+  frame-budget, photo-room, and config-authority checks passed. Build output retains
+  existing classic-script and large-chunk warnings; deploy validation reports the
+  existing large Fraktal inbox warning.
+- `npm run validate:museum-hub` now passes the former stale timeline assertion
+  after its test was corrected to check the active timeline thumbnail. It still
+  fails at `scripts/test-museum-hub-geometry.mjs:411` on the wall-left doorway
+  height expectation. This separate calibrated-geometry issue remains open; do
+  not report the complete museum-hub suite as passing.
+- Documentation scope for this update: all 36 repository Markdown files were
+  inventoried and checked. Current operational docs and agent prompts were
+  refreshed where relevant; the seven dated archive snapshots remain unchanged
+  under `DOCUMENTATION_RULES.md`, and the archive index was reviewed.
 
 ## Support diagnostics workflow
 
@@ -75,38 +124,30 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
-## Next-agent starting point (2026-10-18)
+## Next-agent starting point (2026-10-20)
 
-1. Read `README.md` → "Place artworks", active `plan.md`, and the latest
-   `FINDINGS.md` before changing geometry or mappings. All four genuine source
-   images now exist; the old `gartenszene`/`zdigital` content blockers are resolved.
-   Do not restore those obsolete IDs or rename the actual `Gatrenszene.png`.
-2. The customer confirmed the local setup works after **Update Gallery.bat** and
-   provided [this screenshot](https://github.com/user-attachments/assets/42d41643-45ca-4140-ba0c-5773ffc5e1aa)
-   on 2026-10-18. It shows the requested arrangement. It is local evidence,
-   not evidence that the branch has deployed; its build identity was not supplied.
+1. Read `README.md`, active `plan.md`, latest `FINDINGS.md`, and
+   `docs/REGRESSION_TOOLING.md` before changing the photo room or hub. The current
+   photo-room view shares the gallery's selected artwork and timeline; it is a
+   bounded 2D camera and must not change the artwork's projective registration.
+2. The customer confirmed the local four-artwork museum after **Update
+   Gallery.bat** on 2026-10-18 and supplied
+   [a screenshot](https://github.com/user-attachments/assets/42d41643-45ca-4140-ba0c-5773ffc5e1aa).
+   This is local evidence, not proof of a live deployed build.
 3. Generated customer globals are ignored by Git. After a fresh download or JSON
    change run Update Gallery; developers use full `npm run build` (imports first).
-   Injected config intentionally wins over the compiled fallback. Preserve that
-   customer authority. Local output uses relative URLs; production uses `/Freyraum/`.
-4. Merge checks and known limitations live in `docs/REGRESSION_TOOLING.md` and
-   `FINDINGS.md`. Root `file://` and production-base HTTP smoke verify decoded
-   images, visible screenshot contribution and editor projection parity.
-   Do not conflate those checks with a complete Type A visual-suite pass.
-5. Before merging, inspect/approve outstanding Actions checks. The observed desktop
-   run [39156014733](https://github.com/SeboHasee/Freyraum/actions/runs/39156014733)
-   requires owner approval. No open PR was returned by the API during this audit;
-   this task does not create or merge one.
-6. The latest observed main Pages run
-   [39115237783](https://github.com/SeboHasee/Freyraum/actions/runs/39115237783)
-   failed on the obsolete `gartenszene`/`zdigital` IDs. Those inputs are corrected
-   here and current deploy validation passes. Do not rerun that old commit and
-   expect new content; merge and verify the new deploy plus live smoke instead.
-   See `docs/DEPLOYMENT.md` for the operator checklist.
-7. Deferred, not silently fixed: software-Chrome shadow/selection/restore visual
-   harness investigations, dev-tool advisories, large Fraktal source/bundle,
-   missing optional text/alt metadata, desktop signing and online-service setup.
-   Do not redesign high-resolution delivery or upgrade dependencies incidentally.
+   Injected config intentionally wins over the compiled fallback. Local output
+   uses relative URLs; production uses `/Freyraum/`.
+4. Focused photo-room structural and browser tests, lint, typecheck, and build
+   pass. The geometry suite remains blocked at the wall-left doorway-height
+   expectation (`scripts/test-museum-hub-geometry.mjs:411`), after the stale
+   timeline assertion was corrected. Do not claim a complete geometry-suite pass.
+5. Post-merge live Pages verification and customer visual acceptance remain
+   separate from local/browser checks. See `docs/DEPLOYMENT.md`; avoid relying on
+   stale workflow-run IDs from earlier handoffs.
+6. Deferred items include software-Chrome visual-harness investigations, existing
+   dependency advisories, the large Fraktal source/bundle, missing optional
+   text/alt metadata, desktop signing, and online-service setup.
 
 Temporary `/tmp` captures from earlier sessions may not survive a fresh agent.
 Regenerate evidence from the matching bundle and record the commit/environment.
@@ -120,16 +161,19 @@ Regenerate evidence from the matching bundle and record the commit/environment.
 - [x] Known risks and deferred upgrades linked from maintenance docs
 - [ ] Owner completes CI approval, merge, and new live Pages smoke verification
 
-## 2026-10-17 full Markdown audit matrix
+## 2026-10-20 full Markdown audit matrix
 
 | Class | Reviewed files | Audit outcome |
 |---|---|---|
-| Canonical | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | v1.33–v1.40 (drag, placement truth, rooms, online saving, desktop app, Windows CI) synchronized; `plan.md` reduced to active work, older plan/findings archived |
-| Operational | `docs/CUSTOMER_PICTURE_GUIDE.md`, `CUSTOMER_TEXT_GUIDE.md`, `DEPENDENCY_MAINTENANCE_PLAN.md`, `DEPLOYMENT.md`, `DESKTOP_APP.md`, `HANDOFF.md`, `IMAGE_MAINTENANCE_GUIDE.md`, `ONLINE_EDITOR_SETUP.md`, `QUERY_PARAMETERS.md`, `REGRESSION_TOOLING.md`, `ai-feedback/AI_FEEDBACK_LOOP.md`, `architecture/README.md`, `lessons-learned/README.md`, `standards/CODING_GUIDELINES.md` | Three save paths, test command table, operations handoff synchronized; repeated v0.18–v0.23 status blocks removed |
-| Agent/template | `.github/copilot-instructions.md`, `.github/prompts/*.prompt.md` | One current-context block in copilot-instructions; prompts link to it |
-| Historical | `docs/archive/README.md` and its dated snapshots | Two 2026-10-17 snapshots added (plan, findings); older snapshots unchanged |
+| Canonical (9) | `README.md`, `CHANGELOG.md`, `ARCHITECTURE_MAP.md`, `FINDINGS.md`, `plan.md`, `LESSONS_LEARNED.md`, `AI_RULES.md`, `DOCUMENTATION_RULES.md`, `CONTRIBUTING.md` | Current photo-room framing caveat and screenshot follow-up are recorded; existing background workflow and geometry-suite status remain documented |
+| Operational (14) | `docs/CUSTOMER_PICTURE_GUIDE.md`, `docs/CUSTOMER_TEXT_GUIDE.md`, `docs/DEPENDENCY_MAINTENANCE_PLAN.md`, `docs/DEPLOYMENT.md`, `docs/DESKTOP_APP.md`, `docs/HANDOFF.md`, `docs/IMAGE_MAINTENANCE_GUIDE.md`, `docs/ONLINE_EDITOR_SETUP.md`, `docs/QUERY_PARAMETERS.md`, `docs/REGRESSION_TOOLING.md`, `docs/ai-feedback/AI_FEEDBACK_LOOP.md`, `docs/architecture/README.md`, `docs/lessons-learned/README.md`, `docs/standards/CODING_GUIDELINES.md` | Reviewed current operational guidance; handoff and regression tooling clarify that fixture success does not replace reproducing the reported screenshot |
+| Agent/template (5) | `.github/copilot-instructions.md`, `.github/prompts/architecture.prompt.md`, `.github/prompts/autonomous-agent.prompt.md`, `.github/prompts/refactor.prompt.md`, `.github/prompts/review.prompt.md` | Current repository context and prompts refreshed; Copilot guidance records the open screenshot uncertainty |
+| Historical/index (8) | `docs/archive/README.md`, `docs/archive/architecture-map-history-2026-06-21.md`, `docs/archive/findings-history-2026-06-21.md`, `docs/archive/findings-history-2026-10-17.md`, `docs/archive/handoff-history-2026-06-21.md`, `docs/archive/plan-history-2026-06-21.md`, `docs/archive/plan-history-2026-10-17.md`, `docs/archive/readme-history-2026-06-21.md` | Index reviewed and dated; seven historical snapshots remain unchanged under the archive immutability rule; no active work was moved to history |
 
-Historical snapshots retain their original dates and claims by design.
+All 36 tracked Markdown files outside the prohibited agent-instruction directory
+were inventoried. The 29 current documents (including the archive index) were
+checked and their audit markers updated; archived snapshots retain their original
+dates and claims by design.
 
 ## Canonical references
 

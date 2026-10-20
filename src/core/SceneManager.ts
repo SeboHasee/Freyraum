@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { GALLERY_CAMERA_NEAR } from '../config/galleryPresentation';
 
 export class SceneManager {
   readonly scene: THREE.Scene;
@@ -12,7 +13,7 @@ export class SceneManager {
     this.camera = new THREE.PerspectiveCamera(
       40,
       window.innerWidth / window.innerHeight,
-      0.1,
+      GALLERY_CAMERA_NEAR,
       100
     );
     this.camera.position.z = 7;

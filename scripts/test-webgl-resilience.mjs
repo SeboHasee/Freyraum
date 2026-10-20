@@ -66,6 +66,7 @@ const hubSource = readFileSync(resolve(root, 'src/hub/MainMuseumHub.ts'), 'utf8'
 const rendererSource = readFileSync(resolve(root, 'src/core/RendererManager.ts'), 'utf8');
 const fallbackSource = readFileSync(resolve(root, 'src/ui/FallbackScreen.ts'), 'utf8');
 const previewWriter = readFileSync(resolve(root, 'scripts/write-local-preview.mjs'), 'utf8');
+const artworkMeshSource = readFileSync(resolve(root, 'src/gallery/ArtworkMesh.ts'), 'utf8');
 
 assert.doesNotMatch(mainSource, /isWebGLAvailable/);
 assert.match(mainSource, /category: 'startup'/);
@@ -75,6 +76,15 @@ assert.match(hubSource, /museum-hub is-photographic/);
 assert.match(hubSource, /this\.hubRoomRenderer = null/);
 assert.doesNotMatch(hubSource, /new HubRoomRenderer\s*\(/, 'museum must not create an opaque WebGL room over the saved photograph');
 assert.match(rendererSource, /createResilientWebGLRenderer/, 'interactive gallery must retain resilient WebGL initialization');
+assert.match(artworkMeshSource, /this\.material\.polygonOffset = true/, 'the image plane must stay in front of its near-coplanar backing body');
+assert.match(artworkMeshSource, /this\.material\.polygonOffsetFactor = -1/);
+assert.match(artworkMeshSource, /this\.material\.polygonOffsetUnits = -1/);
+assert.match(
+  artworkMeshSource,
+  /metalness: 0,\s*depthWrite: false/,
+  'the backing body must not compete with the image plane in the depth buffer'
+);
+assert.match(artworkMeshSource, /this\.artworkBodyMesh\.castShadow = true/, 'the backing body must keep casting its wall shadow');
 assert.match(
   mainSource,
   /import\s+defaultMuseumHub\s+from\s+['"]\.\.\/customer-artworks\/museum-hub\.json['"]/,

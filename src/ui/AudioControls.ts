@@ -29,6 +29,10 @@ export class AudioControls {
   private readonly unsubscribe: () => void;
   private currentState: BackgroundAudioState;
 
+  get element(): HTMLElement {
+    return this.el;
+  }
+
   constructor(
     container: HTMLElement,
     private readonly prefs: PreferencesStore,

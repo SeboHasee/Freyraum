@@ -146,15 +146,23 @@ jobs:
             echo "Error: dist/index.html is missing." >&2
             exit 1
           fi
-          # v0.81: museum-empty.png is the only shipped runtime room image;
-          # museum-target.png stays in the repo as a calibration reference and
-          # is intentionally excluded from public/ and dist/.
-          for background in museum-empty.png; do
-            if [ ! -f "dist/backgrounds/${background}" ]; then
-              echo "Error: dist/backgrounds/${background} is missing." >&2
-              exit 1
-            fi
-          done
+          # Require the backgrounds selected by the current customer config.
+          # museum-target.png is a calibration reference and is intentionally
+          # excluded from public/ and dist/.
+          node --input-type=module <<'NODE'
+          import { existsSync, readFileSync } from 'node:fs';
+          import { join } from 'node:path';
+
+          const config = JSON.parse(readFileSync('customer-artworks/museum-hub.json', 'utf8'));
+          for (const key of ['background', 'backgroundFallback']) {
+            const src = config[key]?.src;
+            if (typeof src !== 'string' || !/^Backgrounds\/[^/]+$/.test(src)) {
+              throw new Error(`museum-hub.json ${key}.src is not a valid Backgrounds/<file> path`);
+            }
+            const output = join('dist', 'backgrounds', src.slice('Backgrounds/'.length));
+            if (!existsSync(output)) throw new Error(`Configured ${key} is missing from dist: ${output}`);
+          }
+          NODE
           if [ -f dist/backgrounds/museum-target.png ]; then
             echo "Error: dist/backgrounds/museum-target.png must not be shipped (reference asset only)." >&2
             exit 1
@@ -239,6 +247,9 @@ jobs:
           npm ci
           npm i --no-save playwright
           npx playwright install --with-deps chromium
+
+      - name: Prepare customer assets for smoke test
+        run: npm run import:artworks
 
       - name: Smoke-test the live gallery
         run: npm run test:deploy-smoke -- "${{ needs.deploy.outputs.page_url }}"

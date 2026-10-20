@@ -1,5 +1,6 @@
 import type { Artwork } from '../config/artworks';
 import { getDiagnostics } from '../utils/Diagnostics';
+import { timelineContentFits } from './timelineLayout';
 
 /**
  * Timeline navigation strip.
@@ -24,11 +25,16 @@ export class Timeline {
   private readonly items: HTMLLIElement[] = [];
   private readonly thumbs: Array<HTMLButtonElement | null> = [];
   private readonly virtualized: boolean;
+  private readonly resizeObserver: ResizeObserver | null;
   private currentIndex = 0;
   private renderedStart = -1;
   private renderedEnd = -1;
   private onSelectCallback: ((index: number) => void) | null = null;
   private onPreviewCallback: ((index: number) => void) | null = null;
+
+  get element(): HTMLElement {
+    return this.el;
+  }
 
   constructor(container: HTMLElement, artworks: readonly Artwork[]) {
     this.artworks = artworks;
@@ -43,6 +49,7 @@ export class Timeline {
     this.counterEl = document.createElement('div');
     this.counterEl.className = 'timeline__counter';
     this.counterEl.setAttribute('aria-live', 'polite');
+    this.counterEl.setAttribute('role', 'status');
 
     const list = document.createElement('ul');
     list.className = 'timeline__list';
@@ -75,8 +82,13 @@ export class Timeline {
     this.nextButton.addEventListener('click', this.onNextPage);
     this.listEl.addEventListener('scroll', this.onScroll, { passive: true });
     window.addEventListener('resize', this.onResize, { passive: true });
+    this.resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(this.onResize);
 
     container.appendChild(this.el);
+    this.resizeObserver?.observe(this.el);
+    this.resizeObserver?.observe(this.listEl);
     this.setActive(0);
     this.updateScrollState();
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => this.centerThumb(0, 'auto')));
@@ -129,9 +141,13 @@ export class Timeline {
 
     const label = document.createElement('span');
     label.className = 'timeline__thumb-label';
-    label.textContent = artwork.subtitle;
+    label.textContent = artwork.title;
+    label.title = artwork.title;
+    const subtitle = document.createElement('span');
+    subtitle.className = 'timeline__thumb-subtitle';
+    subtitle.textContent = artwork.subtitle;
 
-    thumb.append(frame, label);
+    thumb.append(frame, subtitle, label);
     thumb.addEventListener('click', () => this.select(index));
     thumb.addEventListener('pointerenter', () => this.preview(index));
     thumb.addEventListener('focus', () => this.preview(index));
@@ -253,7 +269,8 @@ export class Timeline {
   private approxThumbPitch(): number {
     const sample = this.thumbs.find(Boolean);
     if (!sample) return 162;
-    return sample.getBoundingClientRect().width + 12;
+    const gap = Number.parseFloat(getComputedStyle(this.listEl).columnGap) || 12;
+    return sample.getBoundingClientRect().width + gap;
   }
 
   private centerThumb(index: number, behavior: ScrollBehavior): void {
@@ -300,11 +317,23 @@ export class Timeline {
   };
 
   private updateCounter(): void {
-    this.counterEl.textContent = `${this.currentIndex + 1} / ${this.artworks.length}`;
+    const total = this.artworks.length;
+    const current = this.currentIndex + 1;
+    this.counterEl.textContent = `${String(current).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
+    this.counterEl.setAttribute('aria-label', `Werk ${current} von ${total}`);
   }
 
   private updateScrollState(): void {
     this.updateCounter();
+    const arrowsVisible = !this.el.classList.contains('timeline--fits');
+    const fits = timelineContentFits(
+      this.listEl.scrollWidth,
+      this.listEl.clientWidth,
+      this.measureArrowSpace(),
+      arrowsVisible
+    );
+    this.el.classList.toggle('timeline--fits', fits);
+    this.el.classList.toggle('timeline--scrollable', !fits);
     const maxLeft = Math.max(0, this.listEl.scrollWidth - this.listEl.clientWidth - 1);
     const atStart = this.listEl.scrollLeft <= 1;
     const atEnd = this.listEl.scrollLeft >= maxLeft;
@@ -312,6 +341,15 @@ export class Timeline {
     this.nextButton.disabled = atEnd;
     this.el.classList.toggle('timeline--at-start', atStart);
     this.el.classList.toggle('timeline--at-end', atEnd);
+  }
+
+  private measureArrowSpace(): number {
+    const width = (button: HTMLButtonElement): number => {
+      const declaredWidth = Number.parseFloat(getComputedStyle(button).width);
+      return Number.isFinite(declaredWidth) ? declaredWidth : button.getBoundingClientRect().width;
+    };
+    const gap = Number.parseFloat(getComputedStyle(this.el).columnGap) || 0;
+    return width(this.prevButton) + width(this.nextButton) + gap * 2;
   }
 
   private preferredScrollBehavior(): ScrollBehavior {
@@ -374,6 +412,7 @@ export class Timeline {
     this.nextButton.removeEventListener('click', this.onNextPage);
     this.listEl.removeEventListener('scroll', this.onScroll);
     window.removeEventListener('resize', this.onResize);
+    this.resizeObserver?.disconnect();
     this.thumbs.forEach((thumb) => thumb?.removeEventListener('keydown', this.handleThumbKey));
     this.thumbs.length = 0;
     this.items.length = 0;
