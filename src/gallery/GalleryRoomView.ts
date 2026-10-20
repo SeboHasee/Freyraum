@@ -578,6 +578,7 @@ export class GalleryRoomView {
         this.cameraZoom = nextTargetScale;
         this.cameraPanX = nextTargetOffsetX;
         this.cameraPanY = nextTargetOffsetY;
+        this.syncPanCursor();
       }
     };
     this.cameraAnimationFrame = window.requestAnimationFrame(tick);
