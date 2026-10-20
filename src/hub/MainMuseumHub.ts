@@ -211,6 +211,7 @@ interface SlotView {
   slot: ResolvedHubSlot;
   button: HTMLButtonElement;
   shadowPath: SVGPathElement;
+  spotlight: HTMLSpanElement | null;
   image: HTMLImageElement | null;
   imageLoadToken: number;
   /** Immutable ratio captured from the decoded source image. */
@@ -648,6 +649,7 @@ export class MainMuseumHub {
       const selected = !!this.selectedArtworkId && view.slot.artworkId === this.selectedArtworkId;
       view.button.classList.toggle('is-selected', selected);
       view.shadowPath.classList.toggle('is-selected', selected);
+      if (view.spotlight) this.syncArtworkSpotlight(view.button, view.spotlight);
       this.syncShadowFeedback(view.shadowPath);
       if (selected) {
         view.button.setAttribute('aria-current', 'true');
@@ -753,22 +755,48 @@ export class MainMuseumHub {
     this.roomLayers[slot.pageIndex]
       ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
       ?.appendChild(shadowPath);
+    const spotlight = slot.selectable && slot.artworkId
+      ? document.createElement('span')
+      : null;
+    spotlight?.classList.add('museum-hub__artwork-light');
+    if (spotlight) {
+      spotlight.setAttribute('aria-hidden', 'true');
+      button.appendChild(spotlight);
+    }
     button.addEventListener('pointerenter', (event) => {
       if ((event.pointerType === 'mouse' || event.pointerType === 'pen') && event.buttons === 0) {
+        button.classList.add('is-hovered');
         shadowPath.classList.add('is-hovered');
+        if (spotlight) this.syncArtworkSpotlight(button, spotlight, event);
         this.syncShadowFeedback(shadowPath);
       }
     });
+    button.addEventListener('pointermove', (event) => {
+      if (
+        spotlight
+        && button.classList.contains('is-hovered')
+        && (event.pointerType === 'mouse' || event.pointerType === 'pen')
+        && event.buttons === 0
+      ) {
+        this.syncArtworkSpotlight(button, spotlight, event);
+      }
+    });
     button.addEventListener('pointerleave', () => {
+      button.classList.remove('is-hovered');
       shadowPath.classList.remove('is-hovered');
+      if (spotlight) this.syncArtworkSpotlight(button, spotlight);
       this.syncShadowFeedback(shadowPath);
     });
     button.addEventListener('focus', () => {
+      button.classList.add('is-focused');
       shadowPath.classList.add('is-focused');
+      if (spotlight) this.syncArtworkSpotlight(button, spotlight);
       this.syncShadowFeedback(shadowPath);
     });
     button.addEventListener('blur', () => {
+      button.classList.remove('is-focused');
       shadowPath.classList.remove('is-focused');
+      if (spotlight) this.syncArtworkSpotlight(button, spotlight);
       this.syncShadowFeedback(shadowPath);
     });
 
@@ -849,6 +877,7 @@ export class MainMuseumHub {
       slot,
       button,
       shadowPath,
+      spotlight,
       image,
       imageLoadToken: 0,
       nativeAspectRatio: null,
@@ -880,6 +909,35 @@ export class MainMuseumHub {
     SHADOW_FEEDBACK_VARIABLES.forEach((variable, index) => {
       shadowPath.style.setProperty(variable, profile[index]);
     });
+  }
+
+  private syncArtworkSpotlight(
+    button: HTMLButtonElement,
+    spotlight: HTMLSpanElement,
+    pointer?: PointerEvent
+  ): void {
+    if (this.calibrating || this.debugGeometry) {
+      button.classList.remove('is-illuminated');
+      return;
+    }
+    const selected = button.classList.contains('is-selected');
+    const focused = button.classList.contains('is-focused');
+    const hovered = button.classList.contains('is-hovered');
+    if (!selected && !focused && !hovered) {
+      button.classList.remove('is-illuminated');
+      return;
+    }
+    if (selected || focused) {
+      spotlight.style.setProperty('--hub-light-x', '50%');
+      spotlight.style.setProperty('--hub-light-y', '42%');
+    } else if (pointer && hovered) {
+      const bounds = button.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((pointer.clientX - bounds.left) / bounds.width) * 100));
+      const y = Math.max(0, Math.min(100, ((pointer.clientY - bounds.top) / bounds.height) * 100));
+      spotlight.style.setProperty('--hub-light-x', `${x.toFixed(2)}%`);
+      spotlight.style.setProperty('--hub-light-y', `${y.toFixed(2)}%`);
+    }
+    button.classList.add('is-illuminated');
   }
 
   private applySlotGeometry(

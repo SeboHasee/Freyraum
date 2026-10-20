@@ -832,6 +832,28 @@ canvas {
   display: none;
 }
 
+.museum-hub__artwork-light {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at var(--hub-light-x, 50%) var(--hub-light-y, 42%),
+    rgba(255, 249, 232, 0.2) 0%,
+    rgba(255, 249, 232, 0.1) 19%,
+    rgba(255, 249, 232, 0.035) 38%,
+    transparent 66%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 320ms var(--ease-out);
+}
+
+.museum-hub:not(.is-calibrating):not(.is-debug-geometry)
+  .museum-hub__artwork.is-illuminated
+  .museum-hub__artwork-light {
+  opacity: 1;
+}
+
 // ── Projected artwork buttons ────────────────────────────────────────────────
 
 .museum-hub__artwork {
@@ -856,7 +878,6 @@ canvas {
   transition: opacity var(--dur-control) var(--ease-out);
 }
 
-.museum-hub:not(.is-calibrating):not(.is-debug-geometry) .museum-hub__artwork::before,
 .museum-hub:not(.is-calibrating):not(.is-debug-geometry) .museum-hub__artwork-label {
   display: none;
 }
@@ -946,8 +967,8 @@ canvas {
     transform var(--dur-control) var(--ease-out);
 }
 
-.museum-hub__artwork:hover::before,
-.museum-hub__artwork:focus-visible::before,
+.museum-hub__artwork.is-hovered::before,
+.museum-hub__artwork.is-focused::before,
 .museum-hub__artwork.is-selected::before,
 .museum-hub__artwork[aria-current='true']::before {
   opacity: 1;
@@ -963,12 +984,20 @@ canvas {
     0 0 28px rgba(255, 231, 164, 0.34);
 }
 
-.museum-hub__artwork:hover .museum-hub__artwork-label,
-.museum-hub__artwork:focus-visible .museum-hub__artwork-label,
+.museum-hub__artwork.is-hovered .museum-hub__artwork-label,
+.museum-hub__artwork.is-focused .museum-hub__artwork-label,
 .museum-hub__artwork.is-selected .museum-hub__artwork-label,
 .museum-hub__artwork[aria-current='true'] .museum-hub__artwork-label {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+.museum-hub:not(.is-calibrating):not(.is-debug-geometry)
+  .museum-hub__artwork:is(.is-hovered, .is-focused, .is-selected, [aria-current='true'])
+  .museum-hub__artwork-label {
+  display: block;
+  top: auto;
+  bottom: 8px;
 }
 
 .museum-hub__artwork:focus-visible {
@@ -2771,7 +2800,8 @@ body.placement-editor {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .museum-hub__shadow-path {
+  .museum-hub__shadow-path,
+  .museum-hub__artwork-light {
     transition: none;
   }
   .museum-hub,
@@ -2785,7 +2815,8 @@ body.placement-editor {
 }
 
 :root[data-motion='reduced'] {
-  .museum-hub__shadow-path {
+  .museum-hub__shadow-path,
+  .museum-hub__artwork-light {
     transition: none;
   }
   .museum-hub,

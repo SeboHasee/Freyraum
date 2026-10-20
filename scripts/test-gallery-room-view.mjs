@@ -719,7 +719,12 @@ assert.match(editorSource, /shadowPath\.classList\.toggle\('is-selected', select
 assert.match(editorSource, /event\.pointerType === 'mouse'/);
 assert.match(editorSource, /event\.pointerType === 'pen'/);
 assert.match(editorSource, /shadowPath\.classList\.add\('is-hovered'\)/);
+assert.match(editorSource, /button\.classList\.add\('is-hovered'\)/);
 assert.match(editorSource, /shadowPath\.classList\.add\('is-focused'\)/);
+assert.match(editorSource, /this\.syncArtworkSpotlight\(button, spotlight, event\)/);
+assert.match(editorSource, /button\.classList\.contains\('is-selected'\)/);
+assert.match(editorSource, /private syncArtworkSpotlight\(/);
+assert.match(editorSource, /spotlight\.style\.setProperty\('--hub-light-x', '50%'\)/);
 assert.match(editorSource, /this\.syncShadowFeedback\(view\.shadowPath\)/);
 assert.match(editorSource, /private syncShadowFeedback\(shadowPath: SVGPathElement\)/);
 assert.match(editorSource, /SHADOW_FEEDBACK_PROFILES\.selected/);
@@ -731,10 +736,17 @@ assert.match(
 );
 assert.match(hubStyles, /--hub-shadow-fill-alpha/);
 assert.match(hubStyles, /--hub-shadow-directional-alpha/);
+assert.match(hubStyles, /\.museum-hub__artwork-light\s*\{[^}]*radial-gradient/s);
+assert.match(hubStyles, /pointer-events:\s*none/);
 assert.match(
   hubStyles,
-  /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.museum-hub__shadow-path\s*\{\s*transition:\s*none;/,
-  'museum shadow transitions respect reduced motion'
+  /\.museum-hub:not\(\.is-calibrating\):not\(\.is-debug-geometry\)[\s\S]*?\.museum-hub__artwork\.is-illuminated/,
+  'spotlight remains visitor-only'
+);
+assert.match(
+  hubStyles,
+  /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.museum-hub__shadow-path,\s*\.museum-hub__artwork-light\s*\{\s*transition:\s*none;/,
+  'museum shadow and spotlight transitions respect reduced motion'
 );
 assert.doesNotMatch(
   hubStyles,
