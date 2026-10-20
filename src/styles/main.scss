@@ -525,6 +525,18 @@ canvas {
     min-height: 40px;
     padding: 0 10px;
   }
+
+  .gallery-room-view__status {
+    top: calc(var(--safe-top) + 112px);
+  }
+
+  .gallery-room-view .zoom-controls.gallery-room-view__zoom-controls {
+    right: calc(var(--safe-right) + 16px);
+    bottom: calc(var(--safe-bottom) + 164px);
+    flex-direction: row;
+    gap: 4px;
+    padding: 6px;
+  }
 }
 
 @media (any-pointer: coarse) {

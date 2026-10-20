@@ -544,6 +544,11 @@ try {
   console.log('✓ room, shared artwork timeline, camera controls and selection state');
 
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
+  await waitFor(`(() => {
+    const scale = Number.parseFloat(document.querySelector('.gallery-room-view__scene').style.transform
+      .split(' scale(')[1]?.slice(0, -1));
+    return scale > 1.001 && scale < 1.25;
+  })()`);
   const projectedArtworkTransform = await evaluate(
     "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
   );

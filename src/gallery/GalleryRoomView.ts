@@ -12,6 +12,7 @@ import {
 
 const MIN_CAMERA_SCALE = 1;
 const MAX_CAMERA_SCALE = 6;
+const CAMERA_ZOOM_DURATION_MS = 560;
 const CAMERA_ZOOM_LAMBDA = 4;
 const HOVER_TILT_MAX_DEG = 0.14;
 const HOVER_INFLUENCE_RADIUS_PX = 900;
@@ -459,16 +460,32 @@ export class GalleryRoomView {
       this.setCamera(scale, offsetX, offsetY);
       return;
     }
+    const from = { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY };
+    const useGallerySmoothing = window.matchMedia('(pointer: coarse)').matches;
+    const startedAt = performance.now();
     let previousAt = performance.now();
     const tick = (now: number): void => {
-      const deltaSeconds = Math.max(0, Math.min(0.1, (now - previousAt) / 1000));
-      previousAt = now;
-      const nextScale = smoothDamp(this.cameraScale, scale, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-      const nextOffsetX = smoothDamp(this.cameraOffsetX, offsetX, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-      const nextOffsetY = smoothDamp(this.cameraOffsetY, offsetY, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-      const settled = Math.abs(scale - nextScale) < 0.001
-        && Math.abs(offsetX - nextOffsetX) < 0.5
-        && Math.abs(offsetY - nextOffsetY) < 0.5;
+      let nextScale: number;
+      let nextOffsetX: number;
+      let nextOffsetY: number;
+      let settled: boolean;
+      if (useGallerySmoothing) {
+        const deltaSeconds = Math.max(0, Math.min(0.1, (now - previousAt) / 1000));
+        previousAt = now;
+        nextScale = smoothDamp(this.cameraScale, scale, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+        nextOffsetX = smoothDamp(this.cameraOffsetX, offsetX, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+        nextOffsetY = smoothDamp(this.cameraOffsetY, offsetY, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+        settled = Math.abs(scale - nextScale) < 0.001
+          && Math.abs(offsetX - nextOffsetX) < 0.5
+          && Math.abs(offsetY - nextOffsetY) < 0.5;
+      } else {
+        const progress = Math.min(1, (now - startedAt) / CAMERA_ZOOM_DURATION_MS);
+        const eased = 1 - (1 - progress) ** 3;
+        nextScale = from.scale + (scale - from.scale) * eased;
+        nextOffsetX = from.offsetX + (offsetX - from.offsetX) * eased;
+        nextOffsetY = from.offsetY + (offsetY - from.offsetY) * eased;
+        settled = progress >= 1;
+      }
       this.setCamera(
         settled ? scale : nextScale,
         settled ? offsetX : nextOffsetX,
