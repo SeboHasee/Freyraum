@@ -559,8 +559,8 @@ export class GalleryRoomView {
         nextOffsetY = smoothDamp(this.cameraOffsetY, this.cameraPanY, CAMERA_PAN_LAMBDA, deltaSeconds);
       }
       const settled = Math.abs(nextTargetScale - this.cameraScale) < 0.01
-        && Math.abs(nextTargetOffsetX - this.cameraOffsetX) < 1
-        && Math.abs(nextTargetOffsetY - this.cameraOffsetY) < 1;
+        && Math.abs(nextTargetOffsetX - this.cameraOffsetX) < 2
+        && Math.abs(nextTargetOffsetY - this.cameraOffsetY) < 2;
       this.setCamera(
         settled ? nextTargetScale : nextScale,
         settled ? nextTargetOffsetX : nextOffsetX,
