@@ -104,6 +104,7 @@ try {
   };
   const capture = async (filename) => {
     if (!captureDir) return;
+    await evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     const screenshot = await command('Page.captureScreenshot', { format: 'png', fromSurface: true });
     writeFileSync(join(captureDir, filename), Buffer.from(screenshot.data, 'base64'));
   };
@@ -409,6 +410,7 @@ try {
   }
 
   for (const [roomId, width, height] of [
+    ['wohn-bereich', 2000, 1080],
     ['bedroom', 1440, 900], ['wohnraum', 1440, 900],
     ['wohn-bereich', 1440, 900], ['buero', 1440, 900],
     ['bedroom', 768, 1024], ['wohnraum', 768, 1024],
