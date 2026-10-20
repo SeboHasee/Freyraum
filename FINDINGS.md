@@ -15,6 +15,29 @@
   selected artwork, generated runtime, and camera state; then verify the entire
   projected frame and image remain within visible bounds.
 
+## 2026-10-20 — Current-build Wohnbereich 2000×1080 replay
+
+- Added the reported 2000×1080 viewport to the real-browser room-view regression.
+  The current generated local preview passes complete-artwork and control bounds
+  with Wohnbereich selected and the room camera reset.
+- Captures now wait for two animation frames after state/viewport changes. The
+  first immediate capture was only the neutral wall surface; after synchronizing
+  paint, the capture contains the photo and sampled pixels match the expected
+  centered-cover source crop (mean absolute RGB error 10.12).
+- The local build used shipping `museum-hub.json` v5 and artwork bundle
+  `bundle-d98e87c7c0f0` at source revision `8d0c4a5`. This establishes current
+  local artifact behavior only; it does not identify or resolve the supplied
+  screenshot's unknown build, browser zoom, or camera state.
+
+## 2026-10-20 — Museum doorway-height gate remains unresolved
+
+- The current `npm run validate:museum-hub` run still fails at
+  `scripts/test-museum-hub-geometry.mjs:411`, which expects a 2.30 m doorway.
+  The serialized calibrated left/right doorway spans normalize to 2.6918 m and
+  2.4856 m respectively (`room` span × 5.2 m transform height ÷ calibrated room
+  height). Do not edit the shipping geometry or weaken the assertion until the
+  owner determines which coordinate model defines the intended doorway.
+
 ## 2026-10-20 — Photo-room framing, cleanup, and image-quality follow-up
 
 - An earlier 2000×1080 Wohnbereich screenshot showed the artwork's top clipped

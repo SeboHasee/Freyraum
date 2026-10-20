@@ -13,6 +13,8 @@
   sizes; upscaling did not add detail and increased file/decode cost substantially.
 - Add full-artwork viewport bounds and all-color frame-removal checks to the
   projective and browser regressions. Customer visual acceptance remains open.
+- Exercise Wohnbereich in the real browser at 2000×1080; wait for compositor
+  frames before screenshot capture so the photo and artwork are actually painted.
 - A new user screenshot again appears to clip the artwork at the top in
   Wohnbereich. The screenshot's build/config identity is unknown, so reopen visual
   acceptance and reproduce against the matching generated artifact before attributing

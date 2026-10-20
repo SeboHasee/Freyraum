@@ -34,6 +34,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       it because it adds no source detail while multiplying image and decode size.
 - [x] Cover portrait, 3:4, and square artwork at wide-desktop, tablet, portrait
       phone, and short-landscape aspect ratios in projection/browser regressions.
+- [x] Add an actual-browser Wohnbereich check at 2000×1080, assert complete
+      artwork bounds, and wait for two paint frames before capturing screenshots.
 - [ ] Reproduce the 2026-10-20 Wohnbereich screenshot at 2000×1080 with its exact
       generated bundle, room config, selected artwork, and camera state; verify the
       full frame stays onscreen and correct calibration if the current artifact also

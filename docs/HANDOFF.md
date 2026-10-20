@@ -42,6 +42,16 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   Although the configured geometry/browser fixtures pass whole-artwork bounds,
   do not claim customer-visible framing is fixed until this capture is reproduced
   or superseded by a verified current-build screenshot.
+- **Current-build replay:** on 2026-10-20, `npm run build` generated the local
+  preview with bundle `bundle-d98e87c7c0f0` from source revision `8d0c4a5`.
+  The file-preview browser test passed at 2000×1080 with Wohnbereich selected and
+  the camera reset; the entire artwork and controls remain within the viewport.
+  Captures now wait two animation frames: an immediate capture had only the
+  neutral wall color, while the synchronized capture contains photo pixels
+  (sampled mean absolute RGB difference 10.12 from the centered-cover source crop).
+  The screenshot is `/tmp/freyraum-presentation-sync-20261020/room-wohn-bereich-2000x1080.png`.
+  This is a current local artifact, not a reproduction of the customer's unknown
+  bundle/browser zoom/camera state, so the reported screenshot remains open.
 - Four configured photo rooms are available: Schlafzimmer, Wohnraum, Wohnbereich,
   and Büro. Cleaned `gallery-*.png` derivatives are displayed while the originals
   remain preserved; structural pixel regressions check cleanup seams and
@@ -67,20 +77,43 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   `npm run test:gallery-room-view`, and
   `FREYRAUM_CHROME_PATH=/usr/bin/google-chrome npm run test:gallery-room-view:browser`.
 - The four-room browser run decoded each background and checked full artwork and
-  control bounds at desktop, tablet, portrait phone, and short landscape. Deploy
-  validation, deploy-content tests, front-wall aspect, WebGL resilience,
-  frame-budget, photo-room, and config-authority checks passed. Build output retains
-  existing classic-script and large-chunk warnings; deploy validation reports the
-  existing large Fraktal inbox warning.
+  control bounds at desktop, tablet, portrait phone, short landscape, and the
+  reported 2000×1080 viewport. Deploy validation, deploy-content tests, front-wall
+  aspect, WebGL resilience, frame-budget, photo-room, and config-authority checks
+  passed. `npm audit --omit=dev --audit-level=moderate` reports no production
+  vulnerabilities; the full dependency audit reports 17 existing development-tool
+  advisories (1 moderate, 16 high), with no dependency changes made.
+- Build output retains classic-script and large-chunk warnings. Import reports the
+  existing large Fraktal asset (about 97 MB decoded on GPU), missing optional
+  Wunderbaum text, and empty alt fields for Akt 27 and Fraktal. The full Type A
+  visual harness could not run because optional Playwright tooling is not installed.
+- Static deployment validation passed, but the production-base browser smoke and
+  post-merge live Pages smoke were not run. The branch is not deployed; static
+  content checks and the tested root `file://` preview do not establish live status.
 - `npm run validate:museum-hub` now passes the former stale timeline assertion
   after its test was corrected to check the active timeline thumbnail. It still
   fails at `scripts/test-museum-hub-geometry.mjs:411` on the wall-left doorway
-  height expectation. This separate calibrated-geometry issue remains open; do
-  not report the complete museum-hub suite as passing.
-- Documentation scope for this update: all 36 repository Markdown files were
-  inventoried and checked. Current operational docs and agent prompts were
-  refreshed where relevant; the seven dated archive snapshots remain unchanged
-  under `DOCUMENTATION_RULES.md`, and the archive index was reviewed.
+  height expectation. Current normalized spans are about 2.692 m (left) and
+  2.486 m (right), while the test expects 2.30 m. This coordinate-model discrepancy
+  remains unresolved; do not report the complete museum-hub suite as passing.
+- The earlier full Markdown audit covered 36 current documents and left seven dated
+  archive snapshots unchanged. This targeted follow-up updates the relevant active
+  handoff, tooling, plan, findings, and changelog documents only.
+
+## Customer presentation run-through
+
+- **Use the tested local preview as the fallback:** after customer data is current
+  via **Update Gallery**, open the project-root `index.html`. Use the live Pages
+  URL only after a new post-merge deployment and live smoke succeed.
+- Show the museum's four default artworks, enter the interactive gallery for
+  selection/navigation, then open **Fotoraum** and demonstrate room selection,
+  shared artwork selection, pan, zoom, and reset.
+- If placement editing is in scope, open `OPEN_ARTWORK_EDITOR.html` and explain
+  which save target is configured. Do not promise online saving or a signed
+  desktop installer unless the owner has separately verified those services.
+- Explain that the photo-room camera moves over a still image; it is not a 3D
+  orbit/walk-through. Keep the Wohnbereich screenshot identity, customer review
+  of all four cleaned room photos, and live deployment acceptance as open gates.
 
 ## Support diagnostics workflow
 

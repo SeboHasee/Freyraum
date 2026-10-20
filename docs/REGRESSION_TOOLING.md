@@ -32,6 +32,9 @@ shared utility reparenting, and header/timeline/zoom bounds at desktop, tablet,
 portrait phone, and short-landscape sizes. Photo pan, zoom, pinch, reset,
 keyboard zoom, camera limits, artwork-centered button and wheel zoom, expanded
 mouse-proximity reach, eased return, and reduced-motion behavior remain covered.
+The browser matrix also includes Wohnbereich at 2000×1080. Screenshot capture
+waits for two animation frames after a viewport or room-state change so the photo
+and artwork have been painted before manual visual review.
 At the initial museum hub, it checks that the
 non-interactive SVG shadow layer follows the projected artwork without changing
 the clipped button hit area. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub and
