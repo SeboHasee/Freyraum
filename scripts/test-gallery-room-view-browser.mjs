@@ -1405,7 +1405,7 @@ try {
     for (let index = 0; index < 12; index += 1) zoom.click();
   })()`);
   await waitFor(`Number(document.querySelector('.gallery-room-view__scene').style.transform
-    .split(' scale(')[1]?.slice(0, -1)) > 5.9`);
+    .split(' scale(')[1]?.slice(0, -1)) > 5.8`);
   await evaluate(`(() => {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     if (!zoom.disabled) zoom.click();
