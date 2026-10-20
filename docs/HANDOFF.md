@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -107,7 +107,8 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   URL only after a new post-merge deployment and live smoke succeed.
 - Show the museum's four default artworks, enter the interactive gallery for
   selection/navigation, then open **Fotoraum** and demonstrate room selection,
-  shared artwork selection, pan, zoom, and reset.
+  shared artwork selection, zoom, pan when the enlarged photo bounds allow it,
+  and reset.
 - If placement editing is in scope, open `OPEN_ARTWORK_EDITOR.html` and explain
   which save target is configured. Do not promise online saving or a signed
   desktop installer unless the owner has separately verified those services.

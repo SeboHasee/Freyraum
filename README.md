@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -42,10 +42,11 @@ In the inspection gallery, choose **Fotoraum** to open one of four photographs:
 the gallery timeline to select the artwork, so selection stays synchronized
 when switching between gallery and room. Use the room selector for a different
 photograph and **Zurück zur Galerie** to leave.
-Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
-on-screen control. Zoom buttons bring the projected artwork center toward the
-viewport center; wheel also recenters on the artwork, while pinch stays anchored
-to the gesture. The artwork remains registered to its configured wall placement.
+When zoomed in and the photo bounds allow movement, drag to pan; zoom with the
+wheel, pinch, or buttons, and reset with the on-screen control. Zoom buttons bring
+the projected artwork center toward the viewport center; wheel also recenters on
+the artwork, while pinch stays anchored to the gesture. The artwork remains
+registered to its configured wall placement.
 Zoom buttons and wheel motion
 use the gallery's two-stage, frame-rate-independent camera easing on desktop and
 touch devices, with smooth target retargeting during repeated input; active drag

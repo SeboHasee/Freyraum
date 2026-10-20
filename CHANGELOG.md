@@ -3,9 +3,9 @@
 
 ## Unreleased — pan-aware cursors and consistent interaction help (2026-10-20)
 
-- Show `grab`/`grabbing` in the gallery and photo room only when the current view
-  can pan and a fine-pointer drag is active; touch-only input receives no mouse
-  cursor cue.
+- Show `grab` when the gallery or photo room can pan under a fine pointer, and
+  `grabbing` only during an active movable fine-pointer drag; touch-only input
+  receives no mouse cursor cue.
 - Update gallery and room help to explain mouse-wheel zoom and conditional
   drag-to-pan. Gallery help distinguishes swipe navigation at overview and notes
   touch pinch/pan.

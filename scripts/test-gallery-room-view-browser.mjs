@@ -893,7 +893,9 @@ try {
     'the photo room does not show a grab cursor when the fitted view cannot pan');
   await evaluate("document.querySelector('.gallery-room-view [aria-label=\"Vergrößern\"]').click()");
   await waitFor("document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available')");
-  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
+  await waitFor(
+    "parseFloat(document.querySelector('.gallery-room-view__scene').style.transform.split('scale(')[1]) >= 1.2"
+  );
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
     'grab',

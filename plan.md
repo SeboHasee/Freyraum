@@ -8,8 +8,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 ## Pan-aware cursor and control help (2026-10-20)
 
 - [x] Follow gallery pan capability from `GalleryManager.canPan()` through zoom,
-      navigation, and viewport changes; show grab/grabbing only when the current
-      view can move and a fine pointer has actually started a drag.
+      navigation, and viewport changes; show `grab` while panning is available and
+      `grabbing` only after a fine-pointer drag can move the view.
 - [x] Show room-view cursor feedback only above fit scale when photo bounds allow
       pan; leave touch-only devices without mouse cursor cues.
 - [x] Align gallery and room help with implemented wheel zoom, conditional
@@ -42,8 +42,9 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Run structural regression, lint, typecheck, production/customer-preview build,
       front-wall aspect test, and full generated-preview browser suite; keep the
       known doorway geometry failure tracked separately.
-- [ ] Complete final secret scan and parallel validation; preserve the existing
-      zoom and geometry gates for their own follow-up.
+- [x] Complete secret scanning and CodeQL validation; the separate read-only
+      review found no significant issues, while automated review was unavailable.
+      Preserve the existing zoom and geometry gates for their own follow-up.
 
 ## Museum spotlight presentation refinement (2026-10-20)
 
@@ -60,8 +61,9 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       capture desktop/tablet/phone states and front/side hover.
 - [x] Run structural regression, lint, typecheck, production/customer-preview
       build, and the complete generated-preview browser suite.
-- [ ] Run secret scan and parallel validation; keep the known museum doorway
-      geometry failure tracked separately.
+- [x] Complete secret scanning and CodeQL validation; the separate read-only
+      review found no significant issues, while automated review was unavailable.
+      Keep the known museum doorway geometry failure tracked separately.
 
 ## Room zoom anchoring and museum hover (2026-10-20)
 

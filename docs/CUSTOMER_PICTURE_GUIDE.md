@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
 
 This guide documents the current customer workflow only.
 
@@ -94,14 +94,15 @@ and count; selecting artwork here or in the gallery changes the same shared
 selection. Use the separate room selector to switch photographs and
 **Zurück zur Galerie** to leave the photo view.
 
-Drag the photo to pan; use the mouse wheel, pinch, or the grouped zoom buttons to
-zoom, and **Fotoansicht zurücksetzen** to restore it. The artwork stays the same
-configured size on the wall and grows on screen together with the photo as you
-zoom. Zoom buttons smoothly bring the artwork center toward the screen center,
-while wheel and pinch zoom remain anchored to the pointer or gesture. A nearby
-mouse gives a very subtle tilt that eases back to neutral; stronger
-contact/directional shadows keep the print attached to the wall. Shared audio,
-settings, fullscreen, and contextual help remain available in the room view.
+When zoomed in and the photo bounds allow movement, drag the photo to pan. Use the
+mouse wheel, pinch, or grouped zoom buttons to zoom, and **Fotoansicht
+zurücksetzen** to restore it. The artwork stays the same configured size on the
+wall and grows on screen together with the photo as you zoom. Zoom buttons smoothly
+bring the artwork center toward the screen center, while wheel and pinch zoom
+remain anchored to the pointer or gesture. A nearby mouse gives a very subtle tilt
+that eases back to neutral; stronger contact/directional shadows keep the print
+attached to the wall. Shared audio, settings, fullscreen, and contextual help
+remain available in the room view.
 
 This is a bounded 2D camera over a still photograph—not orbiting or walking
 through a 3D room. Run **Update Gallery** after downloading project changes; it
