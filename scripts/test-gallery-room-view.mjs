@@ -715,6 +715,19 @@ assert.match(
   'room dialog focus order includes utility form controls'
 );
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
+const helpSource = readFileSync(resolve(ROOT, 'src/ui/KeyboardHelp.ts'), 'utf8');
+assert.match(helpSource, /Mit dem Mausrad zoomen/);
+assert.match(helpSource, /Bei vergrößerter Ansicht verschieben; in der Übersicht horizontal zum nächsten Bild wechseln/);
+assert.match(helpSource, /Bei vergrößerter Ansicht das Foto verschieben/);
+assert.match(helpSource, /Mit dem Mausrad auf das Kunstwerk zoomen/);
+assert.match(
+  hubStyles,
+  /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.gallery-room-view__scene\.is-pan-available\s*\{\s*cursor:\s*grab/,
+  'grab cursors are restricted to fine pointers and an available pan range'
+);
+assert.match(hubStyles, /canvas\.gallery-canvas\.is-panning,[\s\S]*?cursor:\s*grabbing/);
+assert.match(roomViewSource, /classList\.toggle\('is-pan-available', canPan\)/);
+assert.match(roomViewSource, /classList\.toggle\('is-dragging', canPan && this\.pointerDragStarted\)/);
 assert.match(editorSource, /shadowPath\.classList\.toggle\('is-selected', selected\)/);
 assert.match(editorSource, /explicitlySelectedArtworkId/);
 assert.match(editorSource, /options\.source === 'slot-click'/);

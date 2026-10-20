@@ -104,6 +104,7 @@ export class GalleryRoomView {
   private motionTiltLastFrameAt = 0;
   private motionModeObserver: MutationObserver | null = null;
   private gesture: CameraGesture | null = null;
+  private pointerDragStarted = false;
   private timelineElement: HTMLElement | null = null;
   private timelineOriginalParent: HTMLElement | null = null;
   private timelineOriginalNextSibling: Node | null = null;
@@ -428,6 +429,7 @@ export class GalleryRoomView {
     this.cameraOffsetX = Math.min(0, Math.max(-maxOffsetX, this.cameraOffsetX));
     this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
     this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
+    this.syncPanCursor();
     this.artworkImage.style.setProperty('--artwork-zoom', String(this.cameraScale));
     this.zoomOutButton.disabled = this.cameraScale <= MIN_CAMERA_SCALE;
     this.zoomInButton.disabled = this.cameraScale >= MAX_CAMERA_SCALE;
@@ -495,6 +497,7 @@ export class GalleryRoomView {
     this.cameraAnimationTargetScale = targetScale;
     this.cameraAnimationTargetOffsetX = targetOffsetX;
     this.cameraAnimationTargetOffsetY = targetOffsetY;
+    this.syncPanCursor();
     this.cameraAnimationAnchor = anchorContent
       ? {
           contentX: anchorContent.x,
@@ -643,6 +646,7 @@ export class GalleryRoomView {
     this.resetArtworkInteraction();
     const point = this.pointerPosition(event);
     this.pointers.set(event.pointerId, point);
+    this.pointerDragStarted = false;
     this.scene.setPointerCapture(event.pointerId);
     event.preventDefault();
     this.beginGesture();
@@ -654,6 +658,7 @@ export class GalleryRoomView {
     const points = [...this.pointers.entries()];
     if (this.gesture?.kind === 'pan' && points.length === 1 && points[0]![0] === this.gesture.pointerId) {
       const point = points[0]![1];
+      this.pointerDragStarted ||= point.x !== this.gesture.startX || point.y !== this.gesture.startY;
       this.setCamera(
         this.cameraScale,
         this.gesture.offsetX + point.x - this.gesture.startX,
@@ -676,11 +681,13 @@ export class GalleryRoomView {
   private onPointerEnd = (event: PointerEvent): void => {
     if (!this.pointers.delete(event.pointerId)) return;
     if (this.scene.hasPointerCapture(event.pointerId)) this.scene.releasePointerCapture(event.pointerId);
+    this.pointerDragStarted = false;
     this.beginGesture();
   };
 
   private beginGesture(): void {
     const entries = [...this.pointers.entries()];
+    this.pointerDragStarted = false;
     if (entries.length >= 2) {
       const first = entries[0]![1];
       const second = entries[1]![1];
@@ -707,7 +714,14 @@ export class GalleryRoomView {
     } else {
       this.gesture = null;
     }
-    this.scene.classList.toggle('is-dragging', entries.length > 0);
+    this.syncPanCursor();
+  }
+
+  private syncPanCursor(): void {
+    const scale = Math.max(this.cameraScale, this.cameraAnimationTargetScale ?? MIN_CAMERA_SCALE);
+    const canPan = scale > MIN_CAMERA_SCALE + 0.001;
+    this.scene.classList.toggle('is-pan-available', canPan);
+    this.scene.classList.toggle('is-dragging', canPan && this.pointerDragStarted);
   }
 
   private pointerPosition(event: PointerEvent): PhotoPointer {

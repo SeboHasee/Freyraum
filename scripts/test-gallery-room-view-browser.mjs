@@ -881,6 +881,49 @@ try {
     'active toggle exposes the active room-view state in full or compact form'
   );
   assert.notEqual(activeRoomEntry.emphasis, roomEntry.emphasis, 'active room-view control has a distinct visual state');
+  const roomCursorAtFit = await evaluate(`(() => {
+    const scene = document.querySelector('.gallery-room-view__scene');
+    return { available: scene.classList.contains('is-pan-available'), cursor: getComputedStyle(scene).cursor };
+  })()`);
+  assert.deepEqual(roomCursorAtFit, { available: false, cursor: 'auto' },
+    'the photo room does not show a grab cursor when the fitted view cannot pan');
+  await evaluate("document.querySelector('.gallery-room-view [aria-label=\"Vergrößern\"]').click()");
+  await waitFor("document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available')");
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
+    'grab',
+    'the photo room shows a grab cursor once zoom makes panning possible'
+  );
+  await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 720, y: 450, button: 'left', buttons: 1 });
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 690, y: 420, button: 'left', buttons: 1 });
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
+    'grabbing',
+    'the photo room shows grabbing only after a pannable drag starts'
+  );
+  await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 690, y: 420, button: 'left', buttons: 0 });
+  await evaluate("document.querySelector('.gallery-room-view [aria-label=\"Fotoansicht zurücksetzen\"]').click()");
+  await waitFor("!document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available')");
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
+    'auto',
+    'resetting the photo room removes the grab cursor when panning is no longer available'
+  );
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
+  });
+  await command('Emulation.setEmulatedMedia', {
+    features: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }],
+  });
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
+    'auto',
+    'coarse-pointer photo-room devices do not receive a mouse cursor affordance'
+  );
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 1440, height: 900, deviceScaleFactor: 1, mobile: false,
+  });
+  await command('Emulation.setEmulatedMedia', { features: [] });
   const controls = await evaluate(`(() => {
     const root = document.querySelector('.gallery-room-view');
     return {
@@ -950,7 +993,7 @@ try {
   })()`);
   assert.equal(roomHelp.title, 'Bedienung im Fotoraum');
   assert.ok(roomHelp.rows.some((row) => row.includes('Mausrad') && row.includes('Kunstwerk')));
-  assert.ok(roomHelp.rows.some((row) => row.includes('verschieben') && row.includes('Ziehen')));
+  assert.ok(roomHelp.rows.some((row) => row.includes('vergrößerter Ansicht') && row.includes('Ziehen')));
   assert.ok(roomHelp.rows.some((row) => row.includes('zurücksetzen') && row.includes('Doppelklick')));
   assert.ok(!roomHelp.rows.some((row) => row.includes('Vorheriges / nächstes Bild') || row.includes('Vollbild')));
   assert.ok(roomHelp.keycaps >= roomHelp.rows.length, 'help presents controls in semantic keycaps');
@@ -1698,8 +1741,55 @@ try {
   assert.equal(galleryHelp.title, 'Tastaturkürzel', 'gallery help restores the global shortcut context');
   assert.ok(galleryHelp.rows.some((row) => row.includes('Vorheriges / nächstes Bild')));
   assert.ok(galleryHelp.rows.some((row) => row.includes('Vollbild')));
-  assert.ok(!galleryHelp.rows.some((row) => row.includes('Mausrad')));
+  assert.ok(galleryHelp.rows.some((row) => row.includes('Mausrad') && row.includes('zoomen')));
+  assert.ok(galleryHelp.rows.some((row) => row.includes('vergrößerter Ansicht') && row.includes('Ziehen')));
+  assert.ok(galleryHelp.rows.some((row) => row.includes('Übersicht') && row.includes('wechseln')));
+  assert.ok(galleryHelp.rows.some((row) => row.includes('Zwei Finger') && row.includes('Touchscreens')));
   await evaluate("document.querySelector('.keyboard-help__close').click()");
+  await evaluate("document.querySelector('.zoom-controls [aria-label=\"Ansicht zurücksetzen\"]').click()");
+  await waitFor("!document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-canvas')).cursor"),
+    'auto',
+    'the gallery overview does not show a grab cursor when panning is unavailable'
+  );
+  await evaluate("document.querySelector('.zoom-controls [aria-label=\"Vergrößern\"]').click()");
+  await waitFor("document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-canvas')).cursor"),
+    'grab',
+    'the gallery shows a grab cursor once zoom makes panning possible'
+  );
+  await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 720, y: 450, button: 'left', buttons: 1 });
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 690, y: 420, button: 'left', buttons: 1 });
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-canvas')).cursor"),
+    'grabbing',
+    'the gallery shows grabbing only after a pannable drag starts'
+  );
+  await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 690, y: 420, button: 'left', buttons: 0 });
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-canvas').classList.contains('is-panning')"),
+    false,
+    'the gallery clears its active drag cursor after release'
+  );
+  await evaluate("document.querySelector('.zoom-controls [aria-label=\"Ansicht zurücksetzen\"]').click()");
+  await waitFor("!document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
+  });
+  await command('Emulation.setEmulatedMedia', {
+    features: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }],
+  });
+  assert.equal(
+    await evaluate("getComputedStyle(document.querySelector('.gallery-canvas')).cursor"),
+    'auto',
+    'coarse-pointer gallery devices do not receive a mouse cursor affordance'
+  );
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 1440, height: 900, deviceScaleFactor: 1, mobile: false,
+  });
+  await command('Emulation.setEmulatedMedia', { features: [] });
   console.log('✓ touch pinch and accessible close/focus restoration');
 } finally {
   socket?.close();

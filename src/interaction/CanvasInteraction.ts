@@ -61,6 +61,7 @@ export class CanvasInteraction {
   private state: GestureState = 'idle';
   private readonly active = new Map<number, PointerSlot>();
   private lastPinchDist = 0;
+  private pointerDragStarted = false;
   /** Tracks whether the most recent gesture started as touch; used to
    *  suppress hover rotation immediately after a tap on touch laptops. */
 
@@ -68,6 +69,10 @@ export class CanvasInteraction {
     this.canvas = canvas;
     this.galleryManager = galleryManager;
     this.usePointerEvents = typeof window.PointerEvent === 'function';
+    this.galleryManager.setPanAvailabilityListener((canPan) => {
+      this.canvas.classList.toggle('is-pan-available', canPan);
+      this.syncPanCursor();
+    });
 
     if (this.usePointerEvents) {
       // Pointer Events path — single unified stream for mouse/touch/pen.
@@ -130,6 +135,7 @@ export class CanvasInteraction {
       lastX: e.clientX,
       lastY: e.clientY,
     });
+    this.pointerDragStarted = false;
 
     if (this.active.size === 1) {
       this.state = this.galleryManager.canPan() ? 'panning' : 'swipe-candidate';
@@ -143,6 +149,7 @@ export class CanvasInteraction {
       this.state = 'pinching';
       this.diagnostics.debug('gesture-start', 'Pinch gesture started', {});
     }
+    this.syncPanCursor();
   };
 
   private onPointerMove = (e: PointerEvent): void => {
@@ -184,10 +191,12 @@ export class CanvasInteraction {
     if (this.active.size === 1) {
       if (this.galleryManager.canPan()) {
         this.state = 'panning';
+        this.pointerDragStarted ||= dx !== 0 || dy !== 0;
         this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
       }
       // swipe-candidate: do nothing during move; resolved on pointerup.
     }
+    this.syncPanCursor();
   }
 
   private onPointerUp = (e: PointerEvent): void => {
@@ -203,6 +212,8 @@ export class CanvasInteraction {
     if (this.state === 'pinching' && this.active.size < 2) {
       // One finger left after pinch ends — fall back to panning state.
       this.state = this.galleryManager.canPan() ? 'panning' : 'swipe-candidate';
+      this.pointerDragStarted = false;
+      this.syncPanCursor();
       return;
     }
 
@@ -212,7 +223,9 @@ export class CanvasInteraction {
 
     if (this.active.size === 0) {
       this.state = 'idle';
+      this.pointerDragStarted = false;
     }
+    this.syncPanCursor();
   };
 
   private onGlobalPointerUp = (e: PointerEvent): void => {
@@ -225,8 +238,10 @@ export class CanvasInteraction {
     this.active.delete(e.pointerId);
     if (this.active.size === 0) {
       this.state = 'idle';
+      this.pointerDragStarted = false;
       this.diagnostics.debug('gesture-cancel', 'Pointer gesture cancelled', {});
     }
+    this.syncPanCursor();
   };
 
   private onGlobalPointerCancel = (e: PointerEvent): void => {
@@ -299,6 +314,7 @@ export class CanvasInteraction {
     if (e.touches.length === 0) {
       this.active.clear();
       this.state = 'idle';
+      this.pointerDragStarted = false;
     }
   };
 
@@ -355,6 +371,15 @@ export class CanvasInteraction {
       this.state = 'idle';
       this.galleryManager.setHoverTarget(0, 0);
     }
+    this.syncPanCursor();
+  }
+
+  private syncPanCursor(): void {
+    this.canvas.classList.toggle(
+      'is-panning',
+      this.enabled && this.state === 'panning' && this.galleryManager.canPan()
+        && this.pointerDragStarted
+    );
   }
 
   dispose(): void {
@@ -380,6 +405,8 @@ export class CanvasInteraction {
     }
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.active.clear();
+    this.canvas.classList.remove('is-pan-available', 'is-panning');
+    this.galleryManager.setPanAvailabilityListener(null);
   }
 }
 

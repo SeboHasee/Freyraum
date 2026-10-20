@@ -245,12 +245,19 @@ canvas {
   overflow: hidden;
   transform-origin: 0 0;
   touch-action: none;
-  cursor: grab;
   user-select: none;
 }
 
-.gallery-room-view__scene.is-dragging {
-  cursor: grabbing;
+@media (hover: hover) and (pointer: fine) {
+  canvas.gallery-canvas.is-pan-available,
+  .gallery-room-view__scene.is-pan-available {
+    cursor: grab;
+  }
+
+  canvas.gallery-canvas.is-panning,
+  .gallery-room-view__scene.is-dragging {
+    cursor: grabbing;
+  }
 }
 
 .gallery-room-view__background {

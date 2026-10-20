@@ -389,6 +389,8 @@ export class GalleryManager {
   private lastUpdateTime = 0;
 
   private onNavigateCallback: NavigationCallback | null = null;
+  private onPanAvailabilityChange: ((canPan: boolean) => void) | null = null;
+  private lastReportedPanAvailability: boolean | null = null;
 
   constructor(
     artworks: readonly Artwork[],
@@ -661,6 +663,7 @@ export class GalleryManager {
     const bounds = this.getZoomBounds(metrics);
     this.targetZoom = this.clampZoom(this.targetZoom + delta, bounds);
     this.clampPanTargets(metrics, bounds);
+    this.reportPanAvailability();
     this.markRenderDirty(4);
   }
 
@@ -676,6 +679,20 @@ export class GalleryManager {
   canPan(): boolean {
     const { x, y } = this.getPanLimits(this.targetZoom);
     return x > 0.01 || y > 0.01;
+  }
+
+  setPanAvailabilityListener(listener: ((canPan: boolean) => void) | null): void {
+    this.onPanAvailabilityChange = listener;
+    this.lastReportedPanAvailability = null;
+    this.reportPanAvailability();
+  }
+
+  private reportPanAvailability(): void {
+    if (!this.onPanAvailabilityChange) return;
+    const canPan = this.canPan();
+    if (canPan === this.lastReportedPanAvailability) return;
+    this.lastReportedPanAvailability = canPan;
+    this.onPanAvailabilityChange(canPan);
   }
 
   getHoverRotationScale(): { x: number; y: number } {
@@ -880,6 +897,7 @@ export class GalleryManager {
       this.zoom = this.clampZoom(this.zoom, zoomBounds);
     }
     this.clampPanTargets(viewportMetrics, zoomBounds);
+    this.reportPanAvailability();
     this.prefetchAdjacentArtworks(index);
     this.queueProceduralWindow(index, this.readinessRadius, 'show-artwork-adjacent');
     this.logNavigationReadinessVerdict(index);
@@ -1499,6 +1517,7 @@ export class GalleryManager {
     this.zoom = clamp(this.zoom, bounds.minInspectionZoom, bounds.maxOverviewZoom);
     this.lastResetFitZoom = bounds.resetFitZoom;
     this.clampPanTargets(viewportMetrics, bounds);
+    this.reportPanAvailability();
     this.markRenderDirty(4);
 
     this.diagnostics.info('viewport-refit', 'Artwork viewport metrics changed', {
@@ -1600,6 +1619,7 @@ export class GalleryManager {
     const bounds = this.getZoomBounds(metrics);
     this.targetZoom = this.clampZoom(this.targetZoom, bounds);
     this.clampPanTargets(metrics, bounds);
+    this.reportPanAvailability();
     const constrainedHover = this.clampHoverTargetToStageClearance(this.targetX, this.targetY);
     this.targetX = constrainedHover.targetRotX;
     this.targetY = constrainedHover.targetRotY;
@@ -1650,6 +1670,7 @@ export class GalleryManager {
     this.lastResetFitZoom = bounds.resetFitZoom;
     this.targetX = 0;
     this.targetY = 0;
+    this.reportPanAvailability();
     this.markRenderDirty(4);
   }
 
