@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-20 (photo-room framing and cleanup).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -35,6 +35,13 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 
 ## Photo-room controls and current validation (2026-10-20)
 
+- **Reopened screenshot issue:** the user-supplied
+  [Wohnbereich capture](https://github.com/user-attachments/assets/a811e3d7-b277-4619-8e17-8815b01046fe)
+  shows the selected artwork clipped at the viewport top. The reported image does
+  not identify its build/config/camera state; match those before attributing cause.
+  Although the configured geometry/browser fixtures pass whole-artwork bounds,
+  do not claim customer-visible framing is fixed until this capture is reproduced
+  or superseded by a verified current-build screenshot.
 - Four configured photo rooms are available: Schlafzimmer, Wohnraum, Wohnbereich,
   and Büro. Cleaned `gallery-*.png` derivatives are displayed while the originals
   remain preserved; structural pixel regressions check cleanup seams and

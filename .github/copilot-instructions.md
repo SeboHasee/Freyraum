@@ -1,5 +1,5 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-20 (photo-room framing and cleanup).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 ## Current context (v1.40)
 
@@ -13,7 +13,10 @@
   views: Schlafzimmer, Wohnraum, Wohnbereich, and Büro. Their cleaned derivatives
   preserve the original source photos. Keep photo-room artwork inside the viewport
   across aspect ratios; preserve the room camera and projective registration when
-  adjusting UI. See `README.md` → "Inspect in a photo room" and
+  adjusting UI. A 2026-10-20 user screenshot again shows apparent top clipping in
+  Wohnbereich; its build/config identity is unknown, so treat visual acceptance as
+  open and compare the matching generated artifact before assigning cause. See
+  `README.md` → "Inspect in a photo room" and
   `ARCHITECTURE_MAP.md`.
 - Local data is generated/ignored: after project updates run Update Gallery;
   full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,

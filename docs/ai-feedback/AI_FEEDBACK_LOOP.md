@@ -1,5 +1,5 @@
 # AI feedback loop
-> Latest markdown audit: 2026-10-19 (repository-wide documentation review).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 ## v1.18 placement-editor feedback-loop note
 

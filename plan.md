@@ -1,5 +1,5 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-20 (room-photo calibration and cleanup).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
@@ -23,8 +23,9 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 
 ## Photo-room framing and photo quality (2026-10-20)
 
-- [x] Recalibrate Wohnbereich's visible wall quad and reduce artwork height so
-      the entire projected print fits after `cover` cropping.
+- [x] Recalibrate Wohnbereich's visible wall quad and reduce artwork height; the
+      configured projection fixtures confirm full-print bounds for tested
+      `cover`-cropped viewport cases.
 - [x] Retouch all four derivatives from preserved originals, extending cleanup
       to include old frames and shadows and blending only the outside edge.
 - [x] Restore subtle wall-matched bedroom texture and add a regression bound
@@ -33,6 +34,10 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       it because it adds no source detail while multiplying image and decode size.
 - [x] Cover portrait, 3:4, and square artwork at wide-desktop, tablet, portrait
       phone, and short-landscape aspect ratios in projection/browser regressions.
+- [ ] Reproduce the 2026-10-20 Wohnbereich screenshot at 2000×1080 with its exact
+      generated bundle, room config, selected artwork, and camera state; verify the
+      full frame stays onscreen and correct calibration if the current artifact also
+      clips.
 - [ ] Customer review of all four room photos at normal display size, including
       confirmation that the Büro frame and all cleanup patches are imperceptible.
 

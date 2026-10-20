@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Text Guide
-> Latest markdown audit: 2026-10-19 (repository-wide documentation review).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This guide explains how to attach text metadata to artworks.
 

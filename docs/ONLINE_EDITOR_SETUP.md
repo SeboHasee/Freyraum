@@ -1,5 +1,5 @@
 # Online editor setup (v1.38) — for the site owner
-> Latest markdown audit: 2026-10-19 (repository-wide documentation review).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 With this one-time setup the customer can edit the gallery on the deployed site
 and press **„Veröffentlichen“**. A small save service (a Cloudflare Worker)

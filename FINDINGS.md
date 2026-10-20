@@ -1,9 +1,23 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-20 (room-photo calibration and cleanup).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+
+## 2026-10-20 — Wohnbereich clipping reported again
+
+- The user supplied a room-view screenshot at
+  [this attachment](https://github.com/user-attachments/assets/a811e3d7-b277-4619-8e17-8815b01046fe).
+  It visibly shows the upper part of the selected artwork cut off at the top of the
+  viewport while the room selector is on Wohnbereich.
+- The screenshot is one rendered artifact; it does not identify its commit, source
+  JSON, generated bundle, browser zoom, or camera state. Do not assume it disproves
+  or validates the current source calibration until those are matched.
+- Reopen visual acceptance despite the passing geometry/browser bounds fixtures.
+  Reproduce at the screenshot's 2000×1080 viewport with the matching room config,
+  selected artwork, generated runtime, and camera state; then verify the entire
+  projected frame and image remain within visible bounds.
 
 ## 2026-10-20 — Photo-room framing, cleanup, and image-quality follow-up
 
-- The supplied 2000×1080 Wohnbereich screenshot showed the artwork's top clipped
+- An earlier 2000×1080 Wohnbereich screenshot showed the artwork's top clipped
   because its wall quad began at source y=0.075, above the visible area after
   centered `cover` cropping. On that viewport the current transform placed the
   artwork top about 269 px offscreen. Calibrate the wall quad to the visible wall

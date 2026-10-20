@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-20 (room-photo calibration and cleanup).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -56,6 +56,10 @@ unchanged. The four source photos are about 2K wide and no higher-resolution
 originals are available. Cleaned derivatives receive restrained sharpening at
 source resolution; synthetic 2× upscales were rejected because they added no
 source detail and increased loading/memory costs.
+A user screenshot received 2026-10-20 again appears to crop the top of artwork
+in Wohnbereich. The screenshot build/config identity is unknown; see
+`FINDINGS.md` and `docs/HANDOFF.md`. Do not treat viewport-fixture passes as
+customer visual acceptance.
 
 ## Current project state
 

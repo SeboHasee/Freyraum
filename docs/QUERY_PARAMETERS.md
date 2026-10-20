@@ -1,5 +1,5 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.

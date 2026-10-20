@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-20 (photo-room framing and cleanup).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -8,7 +8,7 @@ diffs, structural invariants, and GC metrics to concrete tools.
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
 
-## Photographic inspection-room regression (2026-10-19)
+## Photographic inspection-room regression (updated 2026-10-20)
 
 Run `npm run test:gallery-room-view` to verify all four configured room-photo
 assets and importer staging, artwork-free target regions, cleanup-edge gradients,
@@ -38,7 +38,10 @@ the clipped button hit area. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub an
 room-view browser captures for manual review at the responsive breakpoints. The
 photo pixel test samples cleanup boundaries at full resolution against the
 unchanged source gradients, checks old-artwork removal, and bounds repaired
-bedroom-wall texture against an untouched wall sample. The camera
+bedroom-wall texture against an untouched wall sample. Treat passing fixtures as
+geometry evidence, not visual acceptance: a 2026-10-20 user screenshot still shows
+the artwork clipped in Wohnbereich. Reproduce with its exact generated
+bundle/config/camera at 2000×1080 before calling that report resolved. The camera
 operates on a still photo; it does not provide genuine 3D orbit or walking.
 
 ## Photograph-backed museum acceptance (2026-10-18)

@@ -1,5 +1,5 @@
 # FREYRAUM — GitHub Pages Deployment Guide
-> Latest markdown audit: 2026-10-19 (repository-wide documentation review).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 This document describes the full operator flow for publishing the gallery to
 GitHub Pages at **https://sebohasee.github.io/Freyraum/**.

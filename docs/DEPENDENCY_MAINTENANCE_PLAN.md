@@ -1,5 +1,5 @@
 # Dependency & Tooling Maintenance Plan
-> Latest markdown audit: 2026-10-19 (repository-wide documentation review).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 ## Current dependency risk matrix
 

@@ -1,5 +1,5 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-20 (room-photo calibration and cleanup).
+> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
 ## Unreleased — room-photo framing and cleanup follow-up (2026-10-20)
 
@@ -13,6 +13,10 @@
   sizes; upscaling did not add detail and increased file/decode cost substantially.
 - Add full-artwork viewport bounds and all-color frame-removal checks to the
   projective and browser regressions. Customer visual acceptance remains open.
+- A new user screenshot again appears to clip the artwork at the top in
+  Wohnbereich. The screenshot's build/config identity is unknown, so reopen visual
+  acceptance and reproduce against the matching generated artifact before attributing
+  the discrepancy to current calibration.
 
 ## Unreleased — four cleaned photo-room views (2026-10-19)
 
