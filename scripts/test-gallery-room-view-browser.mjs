@@ -129,6 +129,16 @@ try {
       viewport: { width: innerWidth, height: innerHeight },
     };
   })()`);
+  const waitForArtworkCenter = async (timeoutMs = 10_000) => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const center = await readArtworkScreenCenter();
+      if (Math.abs(center.x - center.viewport.width / 2) < 2
+        && Math.abs(center.y - center.viewport.height / 2) < 2) return center;
+      await delay(100);
+    }
+    throw new Error('Timed out waiting for the photo-room artwork to recenter');
+  };
   const waitFor = async (expression, timeoutMs = 20_000) => {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
@@ -568,6 +578,7 @@ try {
   });
   await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
     .split(' scale(')[1]?.slice(0, -1)) - ${expectedWheelScale}) < 0.001`);
+  await waitForArtworkCenter();
   const afterWheel = await readArtworkScreenCenter();
   const expectedWheelOffsetX = beforeWheel.viewport.width * 0.5
     - (beforeWheel.x - beforeWheel.offsetX) * expectedWheelScale / beforeWheel.scale;
@@ -630,8 +641,7 @@ try {
     const target = document.elementFromPoint(${otherRoomWheelPoint.x}, ${otherRoomWheelPoint.y});
     target.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true }));
   })()`);
-  await delay(650);
-  const otherRoomAfterWheel = await readArtworkScreenCenter();
+  const otherRoomAfterWheel = await waitForArtworkCenter();
   assert.ok(
     Math.abs(otherRoomAfterWheel.x - otherRoomAfterWheel.viewport.width / 2) < 2
       && Math.abs(otherRoomAfterWheel.y - otherRoomAfterWheel.viewport.height / 2) < 2,
