@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-19 (photo-room workflow and repository-wide review).
+> Latest markdown audit: 2026-10-20 (photo-room workflow and image quality).
 
 This guide documents the current customer workflow only.
 
@@ -108,7 +108,9 @@ through a 3D room. Run **Update Gallery** after downloading project changes; it
 copies the configured source photos from `customer-artworks/Backgrounds/` into
 the local preview. If a photo is missing, check the import report and restore
 the exact configured source filename. The original room photos are preserved;
-the configured `gallery-*.png` derivatives remove their pre-existing paintings.
+the configured `gallery-*.png` derivatives remove their pre-existing paintings
+and frames. They retain the available source resolution with gentle sharpening;
+upscaled copies would not recover detail absent from the originals.
 
 In the placement editor's **Raum** tab, **Foto-Raum gestalten** lets you select
 a configured photo room, adjust its four normalized wall corners, and edit the

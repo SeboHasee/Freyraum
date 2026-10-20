@@ -1,5 +1,17 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
+> Latest markdown audit: 2026-10-20 (room-photo calibration and cleanup).
+
+## Unreleased — room-photo framing and cleanup follow-up (2026-10-20)
+
+- Recalibrate Wohnbereich's wall region and artwork size so the complete print
+  remains visible after centered photo cropping at desktop, tablet, and phone
+  aspect ratios.
+- Expand and feather the wall-painting/frame cleanup in all four room-photo
+  derivatives, then apply subtle native-resolution sharpening.
+- Keep source photo dimensions after comparing 2× Lanczos upscales at display
+  sizes; upscaling did not add detail and increased file/decode cost substantially.
+- Add full-artwork viewport bounds and all-color frame-removal checks to the
+  projective and browser regressions. Customer visual acceptance remains open.
 
 ## Unreleased — four cleaned photo-room views (2026-10-19)
 

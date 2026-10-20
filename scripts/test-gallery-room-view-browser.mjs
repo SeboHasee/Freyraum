@@ -433,6 +433,11 @@ try {
       })()`,
       20_000
     );
+    await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
+    await waitFor(
+      "document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'",
+      10_000
+    );
     await delay(100);
     const layout = await evaluate(`(() => {
       const root = document.querySelector('.gallery-room-view');

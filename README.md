@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
+> Latest markdown audit: 2026-10-20 (room-photo calibration and cleanup).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -52,7 +52,10 @@ and edits its normalized wall corners and artwork position/height with the same
 projection preview used by visitors. Save/export preserves those values.
 Update Gallery stages configured photos for the local preview. Cleaned room-view
 photos remove the pre-existing wall paintings; the original customer photos remain
-unchanged.
+unchanged. The four source photos are about 2K wide and no higher-resolution
+originals are available. Cleaned derivatives receive restrained sharpening at
+source resolution; synthetic 2× upscales were rejected because they added no
+source detail and increased loading/memory costs.
 
 ## Current project state
 

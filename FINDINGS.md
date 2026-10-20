@@ -1,5 +1,33 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
+> Latest markdown audit: 2026-10-20 (room-photo calibration and cleanup).
+
+## 2026-10-20 — Photo-room framing, cleanup, and image-quality follow-up
+
+- The supplied 2000×1080 Wohnbereich screenshot showed the artwork's top clipped
+  because its wall quad began at source y=0.075, above the visible area after
+  centered `cover` cropping. On that viewport the current transform placed the
+  artwork top about 269 px offscreen. Calibrate the wall quad to the visible wall
+  at normalized y=0.23–0.62 and use a 0.72 wall-relative artwork height; keep the
+  source aspect ratio and project through the shared visitor/editor geometry.
+- Rebuild all four display derivatives from their unchanged source photos with
+  expanded masks that include painting frames and their shadows. Blend only in
+  an outer feather band; do not blend original painting pixels back into the
+  removed region. Structural tests now measure full-color residue and cleanup
+  boundary gradients for all four photos.
+- Apply a restrained 10% native-size unsharp mask (0.65 px Gaussian radius) to
+  the cleaned derivatives. The untouched source photos are 1896–2000 px wide;
+  no higher-resolution originals exist in the repository. A tested 2× Lanczos +
+  unsharp candidate had nearly identical desktop/phone display pixels (MAE
+  0.08–0.48) while expanding each PNG from roughly 1.9–2.9 MB to 8.1–12.6 MB.
+  It adds interpolated pixels, not real detail, so retain native dimensions to
+  avoid extra download and decode/GPU cost.
+- Projection regressions check three artwork aspect ratios (portrait, 3:4, and
+  square) at wide desktop, tablet, portrait-phone, and short-landscape sizes;
+  browser coverage asserts the complete artwork bounds remain onscreen for every
+  configured room. These checks establish geometry, not customer visual approval.
+- Customer visual review of the four retouched photos, especially the Büro wall
+  after frame removal, remains open. Pixel tests cannot establish that an
+  inpainted wall is visually indistinguishable at normal display size.
 
 ## 2026-10-19 — Four inspection photo rooms and cleanup follow-up
 

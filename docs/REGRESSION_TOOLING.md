@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-19 (photographic inspection rooms).
+> Latest markdown audit: 2026-10-20 (photo-room framing and cleanup).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -13,11 +13,10 @@ is accepted unless the measurement hook for its type exists and passes.
 Run `npm run test:gallery-room-view` to verify all four configured room-photo
 assets and importer staging, artwork-free target regions, cleanup-edge gradients,
 safe config sanitization, source-aspect-preserving projection and wall-corner
-registration across wide, tablet, and phone viewport sizes, room-background save validation, and room-view preservation
-by placement-editor export. It also checks photo-room edits survive config
-sanitization and that the editor uses the shared visitor projection and rejects
-invalid wall boundaries. The test verifies Update Gallery stages the photos and
-reports missing sources.
+registration across wide, tablet, phone, and short-landscape viewport sizes.
+It checks portrait, 3:4, and square artwork bounds remain fully visible after
+centered `cover` cropping, validates room-background saves and editor export, and
+verifies Update Gallery stages all photos and reports missing sources.
 
 After installing the optional Playwright browser tooling, `npm run test:editor-rooms`
 also checks room selection, projected artwork preview, placement export, and undo
@@ -26,8 +25,8 @@ in the actual generated placement editor.
 For browser coverage, run `npm run import:artworks && npm run build`, then
 `FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
 This opens the generated root `index.html` over `file://` and verifies all four
-photos decode, the shared gallery timeline moves into the room overlay and
-selection stays synchronized, and the return action restores the timeline and
+photos decode, projected artwork remains onscreen, the shared gallery timeline
+moves into the room overlay and selection stays synchronized, and the return action restores the timeline and
 focus. It checks room selection, gallery-style zoom/reset controls, help context,
 shared utility reparenting, and header/timeline/zoom bounds at desktop, tablet,
 portrait phone, and short-landscape sizes. Photo pan, zoom, pinch, reset,

@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-19 (repository-wide documentation review).
+> Latest markdown audit: 2026-10-20 (photo-room framing and cleanup).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -37,8 +37,14 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 
 - Four configured photo rooms are available: Schlafzimmer, Wohnraum, Wohnbereich,
   and Büro. Cleaned `gallery-*.png` derivatives are displayed while the originals
-  remain preserved; the structural pixel regression checks cleanup seams and
-  painting removal for each source.
+  remain preserved; structural pixel regressions check cleanup seams and
+  painting/frame removal for each source. Wohnbereich's wall quad was recalibrated
+  to the visible wall after centered `cover` cropping, and projection/browser tests
+  check whole-artwork bounds across portrait, 3:4, and square artwork ratios.
+- Upscaling was evaluated and rejected: the available sources are 1896–2000 px
+  wide, and a 2× Lanczos candidate increased PNG/download and decoded image costs
+  without adding source detail. The cleaned derivatives retain source dimensions
+  with gentle native-size sharpening.
 - Run Update Gallery after pulling these changes so all four configured photos are
   staged for the local `file://` preview.
 - The photo room reuses the gallery's single artwork timeline and selected-work
