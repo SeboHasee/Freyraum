@@ -1619,7 +1619,6 @@ export class GalleryManager {
     const bounds = this.getZoomBounds(metrics);
     this.targetZoom = this.clampZoom(this.targetZoom, bounds);
     this.clampPanTargets(metrics, bounds);
-    this.reportPanAvailability();
     const constrainedHover = this.clampHoverTargetToStageClearance(this.targetX, this.targetY);
     this.targetX = constrainedHover.targetRotX;
     this.targetY = constrainedHover.targetRotY;

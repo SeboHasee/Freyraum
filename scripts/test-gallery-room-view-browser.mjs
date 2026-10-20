@@ -1761,6 +1761,9 @@ try {
   assert.ok(galleryHelp.rows.some((row) => row.includes('Übersicht') && row.includes('wechseln')));
   assert.ok(galleryHelp.rows.some((row) => row.includes('Zwei Finger') && row.includes('Touchscreens')));
   await evaluate("document.querySelector('.keyboard-help__close').click()");
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 1440, height: 900, deviceScaleFactor: 1, mobile: false,
+  });
   await evaluate("document.querySelector('.zoom-controls [aria-label=\"Ansicht zurücksetzen\"]').click()");
   await evaluate(`(() => {
     const zoomOut = document.querySelector('.zoom-controls [aria-label="Verkleinern"]');
@@ -1775,7 +1778,7 @@ try {
   );
   await evaluate(`(() => {
     const zoomIn = document.querySelector('.zoom-controls [aria-label="Vergrößern"]');
-    for (let step = 0; step < 8; step += 1) zoomIn.click();
+    for (let step = 0; step < 14; step += 1) zoomIn.click();
   })()`);
   await waitFor("document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
   await waitForFrames(60);
