@@ -107,6 +107,32 @@ function countSaturatedArtworkPixels(image, [left, top, right, bottom]) {
   return count;
 }
 
+function laplacianVariance(image, bounds) {
+  let sum = 0;
+  let sumSquares = 0;
+  let count = 0;
+  const luminanceAt = (x, y) => {
+    const offset = (y * image.width + x) * image.channels;
+    return image.pixels[offset] * 0.299
+      + image.pixels[offset + 1] * 0.587
+      + image.pixels[offset + 2] * 0.114;
+  };
+  for (let y = bounds.top + 1; y < bounds.bottom - 1; y += 1) {
+    for (let x = bounds.left + 1; x < bounds.right - 1; x += 1) {
+      const laplacian = 4 * luminanceAt(x, y)
+        - luminanceAt(x - 1, y)
+        - luminanceAt(x + 1, y)
+        - luminanceAt(x, y - 1)
+        - luminanceAt(x, y + 1);
+      sum += laplacian;
+      sumSquares += laplacian * laplacian;
+      count += 1;
+    }
+  }
+  const mean = sum / count;
+  return sumSquares / count - mean * mean;
+}
+
 function maxCleanupSeamDelta(image, bounds, source = image, sampleStep = 1) {
   let maximum = 0;
   const compare = (x1, y1, x2, y2) => {
@@ -214,6 +240,23 @@ assert.ok(
 assert.ok(
   countSaturatedArtworkPixels(bedroom, [790, 285, 1260, 770]) < 100,
   'the bedroom painting and surrounding frame are removed'
+);
+const bedroomWallTexture = laplacianVariance(bedroom, {
+  left: 820,
+  top: 320,
+  right: 1235,
+  bottom: 740,
+});
+const bedroomTextureReference = laplacianVariance(originalBedroom, {
+  left: 576,
+  top: 264,
+  right: 704,
+  bottom: 392,
+});
+assert.ok(
+  bedroomWallTexture >= bedroomTextureReference * 0.55
+    && bedroomWallTexture <= bedroomTextureReference * 1.8,
+  `the bedroom repair retains subtle wall texture without excessive sharpening or grain (repair ${bedroomWallTexture.toFixed(1)}, wall ${bedroomTextureReference.toFixed(1)})`
 );
 const livingRoom = decodePng(
   resolve(ROOT, 'customer-artworks/Backgrounds/gallery-wohnraum.png')

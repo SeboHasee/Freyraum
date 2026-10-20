@@ -37,7 +37,8 @@ non-interactive SVG shadow layer follows the projected artwork without changing
 the clipped button hit area. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub and
 room-view browser captures for manual review at the responsive breakpoints. The
 photo pixel test samples cleanup boundaries at full resolution against the
-unchanged source gradients and also checks old-artwork removal. The camera
+unchanged source gradients, checks old-artwork removal, and bounds repaired
+bedroom-wall texture against an untouched wall sample. The camera
 operates on a still photo; it does not provide genuine 3D orbit or walking.
 
 ## Photograph-backed museum acceptance (2026-10-18)

@@ -7,7 +7,8 @@
   remains visible after centered photo cropping at desktop, tablet, and phone
   aspect ratios.
 - Expand and feather the wall-painting/frame cleanup in all four room-photo
-  derivatives, then apply subtle native-resolution sharpening.
+  derivatives, then apply subtle native-resolution sharpening and wall-matched
+  bedroom texture.
 - Keep source photo dimensions after comparing 2× Lanczos upscales at display
   sizes; upscaling did not add detail and increased file/decode cost substantially.
 - Add full-artwork viewport bounds and all-color frame-removal checks to the

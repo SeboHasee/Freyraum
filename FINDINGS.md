@@ -21,15 +21,18 @@
   0.08–0.48) while expanding each PNG from roughly 1.9–2.9 MB to 8.1–12.6 MB.
   It adds interpolated pixels, not real detail, so retain native dimensions to
   avoid extra download and decode/GPU cost.
+- The bedroom's repaired center was smoother than a nearby untouched wall area.
+  Add subtle, wall-matched microtexture and bound its measured Laplacian variance
+  against the source wall sample, preventing both an overly smooth patch and
+  excessive synthetic grain.
 - Projection regressions check three artwork aspect ratios (portrait, 3:4, and
   square) at wide desktop, tablet, portrait-phone, and short-landscape sizes;
   browser coverage asserts the complete artwork bounds remain onscreen for every
   configured room. These checks establish geometry, not customer visual approval.
-- Normal-size browser captures of all four rooms were reviewed. No remaining
-  painting/frame or hard cleanup seam was identified, but the Bedroom's inpainted
-  center wall is smoother than nearby texture. Customer review is still needed to
-  accept that retouch and confirm fine-scale photo quality; pixel/browser tests
-  cannot establish an indistinguishable wall repair.
+- Normal-size browser captures of all four rooms were reviewed, and the bedroom
+  wall's fine texture was refined after that review. Fresh captures were generated
+  after rebuilding; customer confirmation remains open because automated tests
+  and local screenshots cannot establish an indistinguishable wall repair.
 
 ## 2026-10-19 — Four inspection photo rooms and cleanup follow-up
 

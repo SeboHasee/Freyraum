@@ -27,6 +27,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       the entire projected print fits after `cover` cropping.
 - [x] Retouch all four derivatives from preserved originals, extending cleanup
       to include old frames and shadows and blending only the outside edge.
+- [x] Restore subtle wall-matched bedroom texture and add a regression bound
+      against an untouched wall sample.
 - [x] Apply restrained native-resolution sharpening; test 2× upscaling and reject
       it because it adds no source detail while multiplying image and decode size.
 - [x] Cover portrait, 3:4, and square artwork at wide-desktop, tablet, portrait

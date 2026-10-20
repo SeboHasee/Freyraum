@@ -53,9 +53,9 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   distinct from artwork selection.
 - The control layout and complete artwork bounds were checked at desktop, tablet,
   portrait-phone, and short-landscape sizes. Normal-size browser captures of all
-  four rooms were reviewed; no remaining painting/frame or hard cleanup seam was
-  identified, though Bedroom's inpainted wall is smoother than adjacent texture.
-  Customer acceptance of the retouches remains open.
+  four rooms were reviewed; the bedroom repair received subtle wall-matched
+  microtexture after its center appeared smoother than the nearby wall. Fresh
+  captures were generated after rebuilding; customer acceptance remains open.
 - Passing: `npm run build`, `npm run lint`, `npm run build:typecheck`,
   `npm run test:gallery-room-view`, and
   `FREYRAUM_CHROME_PATH=/usr/bin/google-chrome npm run test:gallery-room-view:browser`.
