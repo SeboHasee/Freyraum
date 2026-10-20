@@ -74,8 +74,12 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   microtexture after its center appeared smoother than the nearby wall. Fresh
   captures were generated after rebuilding; customer acceptance remains open.
 - Passing: `npm run build`, `npm run lint`, `npm run build:typecheck`,
-  `npm run test:gallery-room-view`, and
-  `FREYRAUM_CHROME_PATH=/usr/bin/google-chrome npm run test:gallery-room-view:browser`.
+  `npm run test:gallery-room-view`, and the browser suite's cursor, four-photo
+  decode, and responsive control/bounds checks.
+- **Current browser-suite limitation:** the latest complete run times out at the
+  exact maximum-zoom assertion in `scripts/test-gallery-room-view-browser.mjs`
+  (`scale(5.99409)` vs. `6`). Do not report that full browser suite as passing;
+  the remaining terminal-zoom discrepancy is tracked in `plan.md` and `FINDINGS.md`.
 - The four-room browser run decoded each background and checked full artwork and
   control bounds at desktop, tablet, portrait phone, short landscape, and the
   reported 2000×1080 viewport. Deploy validation, deploy-content tests, front-wall

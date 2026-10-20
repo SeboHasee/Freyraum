@@ -20,12 +20,13 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Clear photo-room pan cursor state after zoom/reset animation targets are
       removed, and make browser checks assert a meaningfully zoomed camera rather
       than an exact serialized transform string.
-- [x] Ensure bounded photo-camera easing snaps to its exact min/max targets once
-      it is within a 0.01-scale / 2 px visual settling tolerance.
-- [x] Complete the production/customer-preview build, full generated-preview
-      browser suite, focused structural checks, lint, typecheck, secret scan, and
-      parallel validation; retain the independent geometry and photo-room visual
-      acceptance issues as separate follow-ups.
+- [ ] Resolve the generated-preview browser timeout at the configured maximum
+      photo-camera scale; the latest run reached 5.99409 rather than exactly 6.
+- [x] Complete the production/customer-preview build, focused structural checks,
+      lint, typecheck, and documentation-authority checks; full browser-suite
+      success remains open pending the maximum-zoom check.
+- [ ] Complete the final secret scan and parallel validation after the remaining
+      browser-suite issue is resolved.
 
 ## Museum artwork spotlight and action feedback (2026-10-20)
 

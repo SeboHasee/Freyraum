@@ -29,10 +29,10 @@
   the exact `scale(1.25)` serialization, and samples the photo background outside
   the projected artwork frame. This keeps cursor checks independent of transform
   formatting and hit-testing the artwork itself.
-- The full browser pass also exercised the configured maximum camera scale. The
-  prior subpixel settling thresholds could leave animation just below its target
-  with no useful visible difference; when scale is within 0.01 and each pan offset
-  within 2 px, the camera now snaps to the exact target and refreshes cursor state.
+- The latest full browser run passes cursor states, all four photo decodes, and
+  responsive room/control bounds, but times out at the later exact maximum-zoom
+  check: the camera is at scale 5.99409 instead of 6. Do not claim the complete
+  browser suite passes until this terminal-zoom check is understood and verified.
 
 ## 2026-10-20 — Museum spotlight presentation refinement
 
