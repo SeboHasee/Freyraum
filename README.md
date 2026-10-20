@@ -9,6 +9,9 @@ The default room follows the supplied reference: **Gartenszene** front-left,
 **Akt 27** front-right, **Fraktal** on the left side wall and **Wunderbaum** on
 the right, over `Museum_ohne_Bilder.png`. The checked-in
 `customer-artworks/museum-hub.json` owns this arrangement and its native-ratio sizes.
+In the museum hub, hovering a painting with a mouse or focusing it by keyboard
+gently deepens its wall shadow; the touch experience and artwork placement stay
+unchanged, and the selected painting keeps its separate highlight.
 The source filenames are `Gatrenszene.png`, `Akt 27.png`, `Fraktal.png` and
 `Wunderbaum.png` in `customer-artworks/inbox/` (the garden filename is misspelled).
 After downloading a project update, run `Update Gallery.bat` / `Update Gallery.command`
@@ -41,8 +44,9 @@ when switching between gallery and room. Use the room selector for a different
 photograph and **Zurück zur Galerie** to leave.
 Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
 on-screen control. Zoom buttons bring the projected artwork center toward the
-viewport center; wheel and pinch stay anchored to the pointer/gesture. The artwork
-keeps its configured size on the photographed wall. Zoom buttons and wheel motion
+viewport center; wheel also recenters on the artwork, while pinch stays anchored
+to the gesture. The artwork remains registered to its configured wall placement.
+Zoom buttons and wheel motion
 use the gallery's two-stage, frame-rate-independent camera easing on desktop and
 touch devices, with smooth target retargeting during repeated input; active drag
 and pinch remain direct. Nearby desktop mouse movement produces a very subtle,

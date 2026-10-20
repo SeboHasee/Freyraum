@@ -1,6 +1,26 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
+## 2026-10-20 — Room zoom anchoring and museum hover
+
+- The generated customer-preview browser baseline loaded all four rooms and
+  passed the existing camera endpoint checks. Those checks did not sample the
+  artwork's path while zooming, so they could not establish whether a user-visible
+  lateral drift was occurring.
+- `GalleryRoomView.animateCamera()` independently smoothed scale and X/Y offsets.
+  The offsets target a centered artwork but photo-coverage clamps can engage
+  differently on each axis. For artwork-centered button/wheel zoom, derive each
+  frame's offsets from the artwork's scene-space center and its eased screen-space
+  path; keep all offsets constrained to the zoomed-photo bounds. Direct drag and
+  pinch continue to set camera state from the user's gesture.
+- Museum-hub artwork buttons and their shadow SVG paths are separate elements.
+  Keep feedback on the matching pointer-inert shadow path, never on the clipped
+  artwork button, so the projective quad, hit area, and wall registration remain
+  unchanged. Limit hover feedback to fine pointers; keyboard focus can use the
+  same subtle emphasis, while selection styling remains higher priority.
+- Browser regressions now sample the artwork center during off-center zoom and
+  cover hover/focus, selection precedence, touch-only input, and reduced motion.
+
 ## 2026-10-20 — Mobile and tablet photo-room pass
 
 - The generated customer-preview browser regression passes at desktop

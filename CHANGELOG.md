@@ -1,6 +1,17 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
+## Unreleased — anchored room zoom and museum artwork feedback (2026-10-20)
+
+- Keep button and wheel zoom centered on one scene-space artwork point while the
+  camera scale eases, deriving each frame's pan from that anchor. Direct pan and
+  pinch remain gesture-controlled, and photo bounds still constrain the camera.
+- Add a responsive, restrained shadow lift to museum artworks on fine-pointer
+  hover and keyboard focus. Selection remains visually distinct; touch-only
+  devices do not receive hover treatment, and reduced motion removes transitions.
+- Extend browser checks to follow artwork position during zoom and verify hub
+  shadow feedback without changing projective artwork hit areas.
+
 ## Unreleased — responsive photo-room controls and touch motion (2026-10-20)
 
 - Match photo-room button and wheel zoom to the gallery's two-stage,

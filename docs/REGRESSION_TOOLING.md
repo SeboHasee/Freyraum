@@ -39,14 +39,20 @@ and denial, unavailable sensors, subtle clamped orientation response, reduced
 motion, and page-hidden listener suspension/resume. The structural test also
 checks secure-context gating, screen-angle normalization, and smoothing.
 Button/wheel zoom follows the gallery's two-stage frame-independent camera
-easing and can retarget while a previous zoom is still moving. Pinch and pan
-remain direct.
+easing and can retarget while a previous zoom is still moving. The in-flight
+artwork center is sampled during off-center zoom to ensure it follows a straight
+path toward the reachable viewport center; each frame derives pan from the same
+scene-space anchor, subject to the zoomed-photo bounds. Pinch and pan remain
+direct, including during edge-limited zoom, and responsive resize and reduced
+motion remain covered.
 The browser matrix also includes Wohnbereich at 2000×1080. Screenshot capture
 waits for two animation frames after a viewport or room-state change so the photo
 and artwork have been painted before manual visual review.
-At the initial museum hub, it checks that the
-non-interactive SVG shadow layer follows the projected artwork without changing
-the clipped button hit area. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub and
+At the initial museum hub, it checks that the non-interactive SVG shadow layer
+follows the projected artwork without changing the clipped button hit area.
+Fine-pointer hover and keyboard focus intensify only the matching shadow, selected
+state takes precedence, touch-only input adds no hover effect, and reduced motion
+removes the transition. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub and
 room-view browser captures for manual review at the responsive breakpoints. The
 photo pixel test samples cleanup boundaries at full resolution against the
 unchanged source gradients, checks old-artwork removal, and bounds repaired

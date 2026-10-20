@@ -22,6 +22,17 @@ interface PhotoPointer {
   y: number;
 }
 
+interface CameraZoomAnchor {
+  contentX: number;
+  contentY: number;
+  startScale: number;
+  startScreenX: number;
+  startScreenY: number;
+  targetScreenX: number;
+  targetScreenY: number;
+  targetScale: number;
+}
+
 type CameraGesture =
   | { kind: 'pan'; pointerId: number; startX: number; startY: number; offsetX: number; offsetY: number }
   | {
@@ -81,6 +92,7 @@ export class GalleryRoomView {
   private cameraAnimationTargetScale: number | null = null;
   private cameraAnimationTargetOffsetX: number | null = null;
   private cameraAnimationTargetOffsetY: number | null = null;
+  private cameraAnimationAnchor: CameraZoomAnchor | null = null;
   private motionTiltEnabled = false;
   private motionPermissionPending = false;
   private motionListenersAttached = false;
@@ -463,11 +475,17 @@ export class GalleryRoomView {
     this.animateCamera(
       targetScale,
       rect.width * 0.5 - center.x * targetScale,
-      rect.height * 0.5 - center.y * targetScale
+      rect.height * 0.5 - center.y * targetScale,
+      center
     );
   }
 
-  private animateCamera(scale: number, offsetX: number, offsetY: number): void {
+  private animateCamera(
+    scale: number,
+    offsetX: number,
+    offsetY: number,
+    anchorContent?: PhotoPointer
+  ): void {
     const targetScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
     const rect = this.element.getBoundingClientRect();
     const maxOffsetX = Math.max(0, rect.width * (targetScale - 1));
@@ -477,6 +495,18 @@ export class GalleryRoomView {
     this.cameraAnimationTargetScale = targetScale;
     this.cameraAnimationTargetOffsetX = targetOffsetX;
     this.cameraAnimationTargetOffsetY = targetOffsetY;
+    this.cameraAnimationAnchor = anchorContent
+      ? {
+          contentX: anchorContent.x,
+          contentY: anchorContent.y,
+          startScale: this.cameraScale,
+          startScreenX: this.cameraOffsetX + anchorContent.x * this.cameraScale,
+          startScreenY: this.cameraOffsetY + anchorContent.y * this.cameraScale,
+          targetScreenX: targetOffsetX + anchorContent.x * targetScale,
+          targetScreenY: targetOffsetY + anchorContent.y * targetScale,
+          targetScale,
+        }
+      : null;
     if (this.motionPreference.matches || document.documentElement.dataset['motion'] === 'reduced') {
       this.stopCameraAnimation();
       this.cameraZoom = targetScale;
@@ -498,8 +528,33 @@ export class GalleryRoomView {
       this.cameraPanX = smoothDamp(this.cameraPanX, nextTargetOffsetX, CAMERA_PAN_LAMBDA, deltaSeconds);
       this.cameraPanY = smoothDamp(this.cameraPanY, nextTargetOffsetY, CAMERA_PAN_LAMBDA, deltaSeconds);
       const nextScale = smoothDamp(this.cameraScale, this.cameraZoom, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-      const nextOffsetX = smoothDamp(this.cameraOffsetX, this.cameraPanX, CAMERA_PAN_LAMBDA, deltaSeconds);
-      const nextOffsetY = smoothDamp(this.cameraOffsetY, this.cameraPanY, CAMERA_PAN_LAMBDA, deltaSeconds);
+      let nextOffsetX: number;
+      let nextOffsetY: number;
+      const anchor = this.cameraAnimationAnchor;
+      if (anchor) {
+        const scaleRange = anchor.targetScale - anchor.startScale;
+        const progress = Math.abs(scaleRange) < 1e-6
+          ? 1
+          : Math.max(0, Math.min(1, (nextScale - anchor.startScale) / scaleRange));
+        const anchorScreenX = anchor.startScreenX
+          + (anchor.targetScreenX - anchor.startScreenX) * progress;
+        const anchorScreenY = anchor.startScreenY
+          + (anchor.targetScreenY - anchor.startScreenY) * progress;
+        const currentRect = this.element.getBoundingClientRect();
+        const currentMaxOffsetX = Math.max(0, currentRect.width * (nextScale - 1));
+        const currentMaxOffsetY = Math.max(0, currentRect.height * (nextScale - 1));
+        nextOffsetX = Math.min(0, Math.max(
+          -currentMaxOffsetX,
+          anchorScreenX - anchor.contentX * nextScale
+        ));
+        nextOffsetY = Math.min(0, Math.max(
+          -currentMaxOffsetY,
+          anchorScreenY - anchor.contentY * nextScale
+        ));
+      } else {
+        nextOffsetX = smoothDamp(this.cameraOffsetX, this.cameraPanX, CAMERA_PAN_LAMBDA, deltaSeconds);
+        nextOffsetY = smoothDamp(this.cameraOffsetY, this.cameraPanY, CAMERA_PAN_LAMBDA, deltaSeconds);
+      }
       const settled = Math.abs(nextTargetScale - this.cameraScale) < 0.005
         && Math.abs(nextTargetOffsetX - this.cameraOffsetX) < 0.75
         && Math.abs(nextTargetOffsetY - this.cameraOffsetY) < 0.75;
@@ -516,6 +571,7 @@ export class GalleryRoomView {
         this.cameraAnimationTargetScale = null;
         this.cameraAnimationTargetOffsetX = null;
         this.cameraAnimationTargetOffsetY = null;
+        this.cameraAnimationAnchor = null;
         this.cameraZoom = nextTargetScale;
         this.cameraPanX = nextTargetOffsetX;
         this.cameraPanY = nextTargetOffsetY;
@@ -536,24 +592,24 @@ export class GalleryRoomView {
     this.cameraAnimationTargetScale = null;
     this.cameraAnimationTargetOffsetX = null;
     this.cameraAnimationTargetOffsetY = null;
+    this.cameraAnimationAnchor = null;
     this.cameraZoom = this.cameraScale;
     this.cameraPanX = this.cameraOffsetX;
     this.cameraPanY = this.cameraOffsetY;
   }
 
   private handleResize = (): void => {
+    this.applyCamera();
     if (this.cameraAnimationTargetScale !== null && this.artworkCenter) {
-      this.updateArtworkTransform();
       const rect = this.element.getBoundingClientRect();
       const scale = this.cameraAnimationTargetScale;
       this.animateCamera(
         scale,
         rect.width * 0.5 - this.artworkCenter.x * scale,
-        rect.height * 0.5 - this.artworkCenter.y * scale
+        rect.height * 0.5 - this.artworkCenter.y * scale,
+        this.artworkCenter
       );
-      return;
     }
-    this.applyCamera();
   };
 
   private updateArtworkTransform = (): void => {

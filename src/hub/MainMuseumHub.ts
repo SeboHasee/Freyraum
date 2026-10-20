@@ -633,6 +633,7 @@ export class MainMuseumHub {
     for (const view of this.slotViews) {
       const selected = !!this.selectedArtworkId && view.slot.artworkId === this.selectedArtworkId;
       view.button.classList.toggle('is-selected', selected);
+      view.shadowPath.classList.toggle('is-selected', selected);
       if (selected) {
         view.button.setAttribute('aria-current', 'true');
         selectedView = view;
@@ -737,6 +738,14 @@ export class MainMuseumHub {
     this.roomLayers[slot.pageIndex]
       ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
       ?.appendChild(shadowPath);
+    button.addEventListener('pointerenter', (event) => {
+      if (event.pointerType === 'mouse' || event.pointerType === 'pen') {
+        shadowPath.classList.add('is-hovered');
+      }
+    });
+    button.addEventListener('pointerleave', () => shadowPath.classList.remove('is-hovered'));
+    button.addEventListener('focusin', () => shadowPath.classList.add('is-focused'));
+    button.addEventListener('focusout', () => shadowPath.classList.remove('is-focused'));
 
     let image: HTMLImageElement | null = null;
     if (slot.selectable && slot.artworkId) {

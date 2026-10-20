@@ -130,6 +130,48 @@ try {
       viewport: { width: innerWidth, height: innerHeight },
     };
   })()`);
+  const sampleArtworkCenterPath = (frameCount = 36) => evaluate(`new Promise((resolve) => {
+    const samples = [];
+    let frameNumber = 0;
+    const tick = () => {
+      if (frameNumber % 2 === 0) {
+        const frame = document.querySelector('.gallery-room-view__artwork-frame');
+        const scene = document.querySelector('.gallery-room-view__scene');
+        const image = frame.querySelector('img');
+        const matrix = frame.style.transform.slice(9, -1).split(',').map(Number);
+        const x = image.naturalWidth / 2;
+        const y = image.naturalHeight / 2;
+        const denominator = matrix[3] * x + matrix[7] * y + matrix[15];
+        const localX = (matrix[0] * x + matrix[4] * y + matrix[12]) / denominator;
+        const localY = (matrix[1] * x + matrix[5] * y + matrix[13]) / denominator;
+        const [translation, scaleText] = scene.style.transform.split(' scale(');
+        const [offsetX, offsetY] = translation.slice('translate3d('.length, -1).split(', ').map(Number.parseFloat);
+        const scale = Number.parseFloat(scaleText);
+        samples.push({
+          x: offsetX + localX * scale,
+          y: offsetY + localY * scale,
+          scale,
+          offsetX,
+          offsetY,
+          viewport: { width: innerWidth, height: innerHeight },
+        });
+      }
+      frameNumber += 1;
+      if (frameNumber >= ${frameCount}) resolve(samples);
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })()`);
+  const maxPathDeviation = (samples, target) => {
+    const start = samples[0];
+    const dx = target.x - start.x;
+    const dy = target.y - start.y;
+    const length = Math.hypot(dx, dy);
+    if (length < 1) return 0;
+    return Math.max(...samples.map((point) => Math.abs(
+      dx * (point.y - start.y) - dy * (point.x - start.x)
+    ) / length));
+  };
   const waitForArtworkCenter = async (timeoutMs = 10_000) => {
     const deadline = Date.now() + timeoutMs;
     let latestCenter;
@@ -207,6 +249,87 @@ try {
     assert.ok(shadow.clipPath.startsWith('polygon('), 'artwork keeps its exact projective hit-area clip');
     assert.ok(shadow.shadowLayer.width > 0 && shadow.shadowLayer.height > 0, 'shadow SVG spans the room stage');
     assert.ok(shadow.stage.width > 0 && shadow.stage.height > 0);
+    if (width === 1440) {
+      await command('Emulation.setEmulatedMedia', {
+        features: [
+          { name: 'hover', value: 'hover' },
+          { name: 'pointer', value: 'fine' },
+        ],
+      });
+      const baselineFilter = shadow.filter;
+      await evaluate(`(() => {
+        const button = document.querySelector('.museum-hub__artwork');
+        button.dispatchEvent(new PointerEvent('pointerenter', {
+          pointerType: 'mouse',
+          bubbles: false,
+        }));
+      })()`);
+      await delay(350);
+      const hoveredShadow = await evaluate(`(() => {
+        const button = document.querySelector('.museum-hub__artwork');
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
+        return { filter: getComputedStyle(path).filter, hovered: path.classList.contains('is-hovered') };
+      })()`);
+      assert.equal(hoveredShadow.hovered, true, 'fine-pointer hover marks only the matching projected shadow');
+      assert.notEqual(hoveredShadow.filter, baselineFilter, 'hover smoothly intensifies the matching wall shadow');
+      await capture(`hub-${width}x${height}-hovered.png`);
+      await evaluate("document.querySelector('.museum-hub__artwork').focus()");
+      await delay(350);
+      const focusedShadow = await evaluate(`(() => {
+        const button = document.querySelector('.museum-hub__artwork');
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
+        return { focused: path.classList.contains('is-focused'), filter: getComputedStyle(path).filter };
+      })()`);
+      assert.equal(focusedShadow.focused, true, 'keyboard focus reaches the matching projected shadow');
+      assert.notEqual(focusedShadow.filter, baselineFilter, 'keyboard focus receives the same shadow feedback');
+      const selectedFilter = await evaluate(`(() => {
+        const button = document.querySelector('.museum-hub__artwork');
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
+        button.classList.add('is-selected');
+        path.classList.add('is-selected');
+        return getComputedStyle(path).filter;
+      })()`);
+      assert.notEqual(selectedFilter, hoveredShadow.filter, 'selected shadow treatment takes precedence over hover');
+      await evaluate(`(() => {
+        const button = document.querySelector('.museum-hub__artwork');
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
+        button.classList.remove('is-selected');
+        path.classList.remove('is-selected', 'is-hovered', 'is-focused');
+        button.blur();
+      })()`);
+      await command('Emulation.setEmulatedMedia', {
+        features: [
+          { name: 'hover', value: 'none' },
+          { name: 'pointer', value: 'coarse' },
+        ],
+      });
+      await evaluate(`(() => {
+        const button = document.querySelector('.museum-hub__artwork');
+        button.dispatchEvent(new PointerEvent('pointerenter', {
+          pointerType: 'touch',
+          bubbles: false,
+        }));
+      })()`);
+      await delay(350);
+      const touchShadow = await evaluate(`(() => {
+        const button = document.querySelector('.museum-hub__artwork');
+        const path = document.querySelector(\`.museum-hub__shadow-path[data-slot-id="\${button.dataset.slotId}"]\`);
+        return { filter: getComputedStyle(path).filter };
+      })()`);
+      assert.equal(touchShadow.filter, baselineFilter, 'touch-only hover does not intensify artwork shadows');
+      await command('Emulation.setEmulatedMedia', {
+        features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+      });
+      const reducedMotion = await evaluate(
+        "getComputedStyle(document.querySelector('.museum-hub__shadow-path')).transitionDuration"
+      );
+      assert.ok(
+        reducedMotion.split(',').every((duration) => Number.parseFloat(duration) === 0),
+        'reduced motion removes the shadow transition'
+      );
+      await command('Emulation.setEmulatedMedia', { features: [] });
+      console.log('✓ hub artwork hover, keyboard focus, selected precedence, touch, and reduced motion');
+    }
     await capture(`hub-${width}x${height}-ordinary.png`);
     await evaluate(`(() => {
       const button = document.querySelector('.museum-hub__artwork');
@@ -643,8 +766,18 @@ try {
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 290, y: 500, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 230, y: 440, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 230, y: 440, button: 'left', buttons: 0 });
-  const scaleBeforeRepeatedZoom = (await readArtworkScreenCenter()).scale;
+  const beforeRepeatedZoom = await readArtworkScreenCenter();
+  const scaleBeforeRepeatedZoom = beforeRepeatedZoom.scale;
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Vergrößern"]').click()`);
+  const repeatedZoomPath = await sampleArtworkCenterPath();
+  const zoomPathDeviation = maxPathDeviation(repeatedZoomPath, {
+    x: beforeRepeatedZoom.viewport.width / 2,
+    y: beforeRepeatedZoom.viewport.height / 2,
+  });
+  assert.ok(
+    zoomPathDeviation < 2,
+    `artwork center follows a straight path during off-center zoom (max deviation ${zoomPathDeviation.toFixed(2)}px)`
+  );
   await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
     .split(' scale(')[1]?.slice(0, -1)) - ${scaleBeforeRepeatedZoom * 1.25}) < 0.001`);
   artworkScreenCenter = await waitForArtworkCenter();

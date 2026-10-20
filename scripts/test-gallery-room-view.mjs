@@ -683,6 +683,12 @@ assert.match(roomViewSource, /CAMERA_ZOOM_LAMBDA = 4/);
 assert.match(roomViewSource, /CAMERA_PAN_LAMBDA = 5/);
 assert.match(roomViewSource, /smoothDamp\(this\.cameraZoom, nextTargetScale, CAMERA_ZOOM_LAMBDA/);
 assert.match(roomViewSource, /smoothDamp\(this\.cameraScale, this\.cameraZoom, CAMERA_ZOOM_LAMBDA/);
+assert.match(roomViewSource, /interface CameraZoomAnchor/);
+assert.match(
+  roomViewSource,
+  /anchorScreenX - anchor\.contentX \* nextScale/,
+  'animated artwork-centered zoom derives offsets from one scene-space anchor'
+);
 assert.match(roomViewSource, /cameraAnimationTargetOffsetX/);
 assert.doesNotMatch(roomViewSource, /CAMERA_ZOOM_DURATION_MS/);
 assert.match(roomViewSource, /requestAnimationFrame\(tick\)/);
@@ -709,10 +715,20 @@ assert.match(
   'room dialog focus order includes utility form controls'
 );
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
+assert.match(editorSource, /shadowPath\.classList\.toggle\('is-selected', selected\)/);
+assert.match(editorSource, /shadowPath\.classList\.add\('is-hovered'\)/);
+assert.match(editorSource, /shadowPath\.classList\.add\('is-focused'\)/);
 assert.match(
   hubStyles,
   /\.museum-hub__shadow-path\s*\{[^}]*drop-shadow\([^}]*drop-shadow\([^}]*drop-shadow/s,
   'museum-hub shadow SVG receives contact, directional, and ambient wall shadows'
+);
+assert.match(hubStyles, /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.museum-hub__shadow-path\.is-hovered/);
+assert.match(hubStyles, /\.museum-hub__shadow-path\.is-focused/);
+assert.match(
+  hubStyles,
+  /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.museum-hub__shadow-path\s*\{\s*transition:\s*none;/,
+  'museum shadow transitions respect reduced motion'
 );
 assert.doesNotMatch(
   hubStyles,

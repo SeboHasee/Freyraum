@@ -5,6 +5,22 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
+## Room zoom anchoring and museum hover (2026-10-20)
+
+- [x] Rebuild the generated preview and verify the existing room zoom baseline;
+      confirm the old browser coverage checked settled positions, not the in-flight
+      artwork path.
+- [x] Anchor animated button/wheel zoom to one scene-space artwork center, deriving
+      per-frame offsets from the eased scale and constraining them to photo bounds.
+- [x] Keep pan/pinch direct, and retarget zoom smoothly after input or viewport
+      changes; reduced motion still applies camera targets immediately.
+- [x] Add fine-pointer hover and keyboard-focus emphasis to each matching hub SVG
+      shadow; keep selection distinct, and preserve the artwork's exact hit target.
+- [x] Add browser and structural regression coverage for motion path, shadow state,
+      touch-only behavior, and reduced-motion transitions.
+- [ ] Complete generated-preview visual review and full validation; record any
+      remaining findings before presentation acceptance.
+
 ## Mobile and tablet photo-room experience (2026-10-20)
 
 - [x] Keep desktop zoom easing and pointer hover tilt unchanged.
