@@ -311,6 +311,7 @@ export class MainMuseumHub {
   private narrowMode = false;
   private lastActivatedSlotId: string | null = null;
   private selectedArtworkId: string | null = null;
+  private explicitlySelectedArtworkId: string | null = null;
   private lastSelectionSignature: string | null = null;
   private decodedPages = new Set<number>();
   private idleDecodeHandle: number | null = null;
@@ -569,6 +570,14 @@ export class MainMuseumHub {
     const nextArtworkId =
       artworkId && this.resolution.artworkToSlot.has(artworkId) ? artworkId : null;
     this.selectedArtworkId = nextArtworkId;
+    if (options.source === 'slot-click') {
+      this.explicitlySelectedArtworkId = nextArtworkId;
+    } else if (
+      options.source !== 'gallery-navigate'
+      || this.explicitlySelectedArtworkId !== nextArtworkId
+    ) {
+      this.explicitlySelectedArtworkId = null;
+    }
     const selectedView = nextArtworkId
       ? this.slotViews.find((view) => view.slot.artworkId === nextArtworkId && !view.button.disabled)
       : undefined;
@@ -646,14 +655,16 @@ export class MainMuseumHub {
   ): void {
     let selectedView: SlotView | undefined;
     for (const view of this.slotViews) {
-      const selected = !!this.selectedArtworkId && view.slot.artworkId === this.selectedArtworkId;
+      const current = !!this.selectedArtworkId && view.slot.artworkId === this.selectedArtworkId;
+      const selected = !!this.explicitlySelectedArtworkId
+        && view.slot.artworkId === this.explicitlySelectedArtworkId;
       view.button.classList.toggle('is-selected', selected);
       view.shadowPath.classList.toggle('is-selected', selected);
       if (view.spotlight) this.syncArtworkSpotlight(view.button, view.spotlight);
       this.syncShadowFeedback(view.shadowPath);
+      if (current) selectedView = view;
       if (selected) {
         view.button.setAttribute('aria-current', 'true');
-        selectedView = view;
       } else {
         view.button.removeAttribute('aria-current');
       }
@@ -788,8 +799,9 @@ export class MainMuseumHub {
       this.syncShadowFeedback(shadowPath);
     });
     button.addEventListener('focus', () => {
-      button.classList.add('is-focused');
-      shadowPath.classList.add('is-focused');
+      const keyboardFocus = button.matches(':focus-visible');
+      button.classList.toggle('is-focused', keyboardFocus);
+      shadowPath.classList.toggle('is-focused', keyboardFocus);
       if (spotlight) this.syncArtworkSpotlight(button, spotlight);
       this.syncShadowFeedback(shadowPath);
     });

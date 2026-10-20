@@ -716,11 +716,14 @@ assert.match(
 );
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
 assert.match(editorSource, /shadowPath\.classList\.toggle\('is-selected', selected\)/);
+assert.match(editorSource, /explicitlySelectedArtworkId/);
+assert.match(editorSource, /options\.source === 'slot-click' \? nextArtworkId : null/);
+assert.match(editorSource, /button\.matches\(':focus-visible'\)/);
 assert.match(editorSource, /event\.pointerType === 'mouse'/);
 assert.match(editorSource, /event\.pointerType === 'pen'/);
 assert.match(editorSource, /shadowPath\.classList\.add\('is-hovered'\)/);
 assert.match(editorSource, /button\.classList\.add\('is-hovered'\)/);
-assert.match(editorSource, /shadowPath\.classList\.add\('is-focused'\)/);
+assert.match(editorSource, /shadowPath\.classList\.toggle\('is-focused', keyboardFocus\)/);
 assert.match(editorSource, /this\.syncArtworkSpotlight\(button, spotlight, event\)/);
 assert.match(editorSource, /button\.classList\.contains\('is-selected'\)/);
 assert.match(editorSource, /private syncArtworkSpotlight\(/);
@@ -738,6 +741,17 @@ assert.match(hubStyles, /--hub-shadow-fill-alpha/);
 assert.match(hubStyles, /--hub-shadow-directional-alpha/);
 assert.match(hubStyles, /\.museum-hub__artwork-light\s*\{[^}]*radial-gradient/s);
 assert.match(hubStyles, /pointer-events:\s*none/);
+assert.match(hubStyles, /\.museum-hub__artwork::before\s*\{[^}]*border-radius:\s*50%/s);
+assert.doesNotMatch(
+  hubStyles,
+  /\.museum-hub__artwork\.is-hovered \.museum-hub__artwork-label/,
+  'visitor hover does not reveal a floating artwork-name badge'
+);
+assert.doesNotMatch(
+  hubStyles,
+  /\.museum-hub__artwork\.is-hovered::before/,
+  'pointer hover does not draw an artwork frame or marker'
+);
 assert.match(
   hubStyles,
   /\.museum-hub:not\(\.is-calibrating\):not\(\.is-debug-geometry\)[\s\S]*?\.museum-hub__artwork\.is-illuminated/,

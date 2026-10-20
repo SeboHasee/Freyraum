@@ -241,6 +241,27 @@ try {
     const image = document.querySelector('.museum-hub__art');
     return Boolean(image && image.complete && image.naturalWidth > 0);
   })()`, 30_000);
+  const initialRightFrontState = await evaluate(`(() => {
+    const button = document.querySelector('.museum-hub__artwork[data-slot-id="room-01.wall-front.b"]');
+    return {
+      selected: button.classList.contains('is-selected'),
+      current: button.getAttribute('aria-current'),
+      illuminated: button.classList.contains('is-illuminated'),
+      accessibleName: button.getAttribute('aria-label'),
+      visibleLabel: getComputedStyle(button.querySelector('.museum-hub__artwork-label')).display !== 'none',
+    };
+  })()`);
+  assert.deepEqual(
+    initialRightFrontState,
+    {
+      selected: false,
+      current: null,
+      illuminated: false,
+      accessibleName: 'Kunstwerk „Akt 27“ in der Ausstellung öffnen',
+      visibleLabel: false,
+    },
+    'the gallery-synchronized Akt 27 is not visually selected at initial hub entry, but remains accessibly named'
+  );
   const hubButtonLabel = await evaluate(
     "document.querySelector('.topbar__room-view-btn').getAttribute('aria-label')"
   );
@@ -435,8 +456,8 @@ try {
       assert.equal(rightFrontFocus.focused, true, 'front-right focus updates its paired shadow');
       assert.equal(rightFrontFocus.lightX, '50%', 'front-right focus centers the spotlight');
       assert.equal(rightFrontFocus.lightY, '42%', 'front-right focus centers the spotlight vertically');
-      assert.equal(rightFrontFocus.focusCueOpacity, '1', 'front-right keyboard focus has a visible outline');
-      assert.notEqual(rightFrontFocus.labelDisplay, 'none', 'front-right focus reveals its artwork label');
+      assert.equal(rightFrontFocus.focusCueOpacity, '1', 'front-right keyboard focus has a visible non-frame marker');
+      assert.equal(rightFrontFocus.labelDisplay, 'none', 'visitor focus does not show an artwork-name badge');
       assert.equal(rightFrontFocus.clipPath, directPointerTarget.clipPath, 'front-right focus leaves its hit area unchanged');
       assert.equal(rightFrontFocus.transform, directPointerTarget.transform, 'front-right focus leaves its projective transform unchanged');
       await capture(`hub-${width}x${height}-front-right-focused.png`);
@@ -445,13 +466,8 @@ try {
       }
       await evaluate(`(() => ${rightFrontButtonQuery}.blur())()`);
       await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 });
-      const feedbackSlotId = await evaluate(
-        "document.querySelector('.museum-hub__room.is-active .museum-hub__artwork:not(.is-selected):not([aria-current=\"true\"]):not(:disabled)')?.dataset.slotId"
-      );
-      assert.ok(feedbackSlotId, 'an unselected artwork remains available for independent pointer-follow checks');
-      const feedbackButtonQuery = `document.querySelector(${JSON.stringify(
-        `.museum-hub__artwork[data-slot-id="${feedbackSlotId}"]`
-      )})`;
+      const feedbackSlotId = 'room-01.wall-front.a';
+      const feedbackButtonQuery = `document.querySelector('.museum-hub__artwork[data-slot-id="${feedbackSlotId}"]')`;
       const followPoint = await evaluate(`(() => {
         const button = ${feedbackButtonQuery};
         const rect = button.getBoundingClientRect();
@@ -767,6 +783,32 @@ try {
     deviceScaleFactor: 1,
     mobile: false,
   });
+  await evaluate(`document.querySelector('.museum-hub__artwork[data-slot-id="room-01.wall-front.b"]').click()`);
+  await waitFor("document.querySelector('#app').dataset.experience === 'gallery'", 30_000);
+  const explicitSlotSelection = await evaluate(`(() => {
+    const button = document.querySelector('.museum-hub__artwork[data-slot-id="room-01.wall-front.b"]');
+    return { selected: button.classList.contains('is-selected'), current: button.getAttribute('aria-current') };
+  })()`);
+  assert.deepEqual(
+    explicitSlotSelection,
+    { selected: true, current: 'true' },
+    'an explicit Akt 27 activation receives selected acknowledgement before gallery entry'
+  );
+  await evaluate("document.querySelector('.topbar__back-btn').click()");
+  await waitFor("document.querySelector('#app').dataset.experience === 'hub'", 30_000);
+  const returnedRightFrontState = await evaluate(`(() => {
+    const button = document.querySelector('.museum-hub__artwork[data-slot-id="room-01.wall-front.b"]');
+    return {
+      selected: button.classList.contains('is-selected'),
+      current: button.getAttribute('aria-current'),
+      illuminated: button.classList.contains('is-illuminated'),
+    };
+  })()`);
+  assert.deepEqual(
+    returnedRightFrontState,
+    { selected: false, current: null, illuminated: false },
+    'returning to the hub synchronizes gallery artwork without leaving Akt 27 selected'
+  );
   await evaluate("document.querySelector('.museum-hub__destination:not([disabled])')?.click()");
   await waitFor("document.querySelector('#app').dataset.experience === 'gallery'", 30_000);
   const roomEntry = await evaluate(`(() => {
