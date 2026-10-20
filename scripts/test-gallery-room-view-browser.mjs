@@ -419,6 +419,7 @@ try {
       assert.equal(rightFrontHover.shadowHovered, true, 'front-right hover updates its matching shadow');
       assert.equal(rightFrontHover.onlyMatchingShadowHovered, true, 'front-right hover does not affect neighboring shadows');
       assert.equal(rightFrontHover.onlyMatchingLightIlluminated, true, 'front-right hover illuminates only its own artwork');
+      assert.equal(rightFrontHover.selected, false, 'gallery synchronization does not mark Akt 27 selected while idle');
       assert.equal(rightFrontHover.clipPath, directPointerTarget.clipPath, 'hover preserves the projected clip hit area');
       assert.equal(rightFrontHover.transform, directPointerTarget.transform, 'hover preserves the projected artwork transform');
       assert.equal(
@@ -432,6 +433,18 @@ try {
         'front-right hover preserves selected spotlight priority'
       );
       await capture(`hub-${width}x${height}-front-right-hovered.png`);
+      await command('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: 'Tab',
+        code: 'Tab',
+        windowsVirtualKeyCode: 9,
+      });
+      await command('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Tab',
+        code: 'Tab',
+        windowsVirtualKeyCode: 9,
+      });
       await evaluate(`(() => {
         const button = ${rightFrontButtonQuery};
         button.focus();

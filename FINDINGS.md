@@ -1,5 +1,30 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
+> Latest markdown audit: 2026-10-20 (spotlight presentation follow-up).
+
+## 2026-10-20 — Museum spotlight presentation refinement
+
+- Hub setup and `router-enter-hub` both synchronize the hub with the gallery's
+  current artwork ID. Treat that as navigation/focus state, not a visitor-visible
+  selected state: only an explicit slot activation should receive the selected cue.
+  Keep the explicit cue through the matching synchronous gallery-navigation update,
+  then clear it when the hub is entered again.
+- Artwork titles remain available in the gallery timeline, info panel, and each
+  hub button's accessible name. The visitor hub should not repeat them as floating
+  badges over the artwork.
+- Avoid a border/frame treatment around artwork. Use the soft projected spotlight
+  as the pointer cue and a small, high-contrast point for keyboard focus; keep the
+  focus cue restricted to `:focus-visible`.
+- The spotlight remains a clipped, pointer-inert child overlay. Do not change the
+  button's projective clip, artwork homography, or separate SVG shadow path.
+- The generated-preview browser suite now confirms the initial Akt 27 slot is not
+  selected despite gallery synchronization, explicit activation receives a brief
+  selected acknowledgement, and returning to the hub clears it. Keyboard focus
+  uses the small marker without revealing a title badge. Mouse/pen hover, touch,
+  reduced motion, desktop/tablet/phone hit geometry, and side-wall association
+  checks pass; the full photo-room/browser suite also completes.
+- The known independent `npm run validate:museum-hub` doorway-height assertion
+  remains tracked in the previous finding; this interaction update changes no
+  wall geometry or artwork placement.
 
 ## 2026-10-20 — Museum artwork spotlight and interaction audit
 
@@ -34,9 +59,10 @@
   available. Preserve these state signals when refining presentation.
 - Generated-preview museum checks pass at 1440×900, 768×1024, and 390×844,
   including exact front-right center hit, side-wall hit targets, focus, selected
-  precedence, touch, reduced motion, and debug/editor suppression. The full browser
-  script later times out in the unchanged photo-room maximum-zoom assertion (camera
-  stalls below 5.9); leave room-view zoom untouched and track that separately.
+  precedence, touch, reduced motion, and debug/editor suppression. An earlier
+  run timed out at the unchanged photo-room maximum-zoom assertion; the later full
+  generated-preview browser run completed all hub and room-view checks without
+  changing zoom behavior.
 - `npm run validate:museum-hub` still fails at the known wall-left doorway-height
   assertion (`scripts/test-museum-hub-geometry.mjs:411`); do not weaken or modify
   that unrelated geometry gate for this feedback change.

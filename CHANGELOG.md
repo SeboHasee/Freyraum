@@ -1,6 +1,16 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
 
+## Unreleased — refined museum spotlight presentation (2026-10-20)
+
+- Remove visitor-facing artwork frames and floating title badges; retain
+  descriptive accessible names and a small non-frame keyboard-focus marker.
+- Keep gallery-current artwork synchronized for navigation without marking it
+  selected merely on hub entry/return; selected feedback is reserved for explicit
+  hub activation and clears on return.
+- Soften the projectively clipped spotlight while preserving hover/focus, touch,
+  reduced-motion, and geometry behavior.
+
 ## Unreleased — anchored room zoom and museum artwork feedback (2026-10-20)
 
 - Keep button and wheel zoom centered on one scene-space artwork point while the

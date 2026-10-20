@@ -1,5 +1,5 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
+> Latest markdown audit: 2026-10-20 (spotlight presentation follow-up).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
@@ -23,10 +23,28 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Run generated-preview hub checks and capture desktop/tablet/phone normal and
       hover states plus desktop focus, selection, and angled side-wall hover.
 - [x] Run structural regression, lint, typecheck, production/customer-preview build,
-      and front-wall aspect test; record the doorway geometry failure and the
-      unrelated photo-room max-zoom browser timeout separately.
+      front-wall aspect test, and full generated-preview browser suite; keep the
+      known doorway geometry failure tracked separately.
 - [ ] Complete final secret scan and parallel validation; preserve the existing
       zoom and geometry gates for their own follow-up.
+
+## Museum spotlight presentation refinement (2026-10-20)
+
+- [x] Trace initial boot and return-to-hub synchronization: gallery artwork ID is
+      synchronized for navigation/focus, but its presentation is not user-selected.
+- [x] Keep persistent hub selection styling only for explicit slot activation;
+      clear that state on hub return while retaining the gallery's current artwork.
+- [x] Remove visitor artwork frames and floating title badges; keep accessible
+      button names and replace the keyboard frame with a small focus marker.
+- [x] Soften the spotlight and keep its projected clipping, hover/focus behavior,
+      touch guard, reduced-motion support, and existing shadow geometry.
+- [x] Add browser verification for idle/explicit/return states, focus marker,
+      no visitor title badges, matching shadow/light, and unchanged geometry;
+      capture desktop/tablet/phone states and front/side hover.
+- [x] Run structural regression, lint, typecheck, production/customer-preview
+      build, and the complete generated-preview browser suite.
+- [ ] Run secret scan and parallel validation; keep the known museum doorway
+      geometry failure tracked separately.
 
 ## Room zoom anchoring and museum hover (2026-10-20)
 

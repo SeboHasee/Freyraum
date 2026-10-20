@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
+> Latest markdown audit: 2026-10-20 (spotlight presentation follow-up).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -62,7 +62,11 @@ the light; selected feedback stays centered and overrides hover. Touch pointer
 events do not activate hover, calibration/debug remains free of the visitor light,
 and reduced motion removes light/shadow easing. Responsive captures cover museum
 normal state and front-right hover at desktop/tablet/phone; desktop additionally
-captures pointer-follow, focus, selection, and front/side-wall hover. Set
+captures pointer-follow, focus, selection, and front/side-wall hover. The initial
+Akt 27 hub state must have no selected styling or artwork-name badge, while its
+accessible name stays present. Explicit Akt 27 activation gets a transient
+selected acknowledgement, and returning from the gallery clears it while keeping
+gallery synchronization. Keyboard focus is a small non-frame marker. Set
 `FREYRAUM_ROOM_VIEW_CAPTURE_DIR`
 to save hub and room-view browser captures for manual review at the responsive
 breakpoints. The photo pixel test samples cleanup boundaries at full resolution against the

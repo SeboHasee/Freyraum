@@ -717,7 +717,8 @@ assert.match(
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
 assert.match(editorSource, /shadowPath\.classList\.toggle\('is-selected', selected\)/);
 assert.match(editorSource, /explicitlySelectedArtworkId/);
-assert.match(editorSource, /options\.source === 'slot-click' \? nextArtworkId : null/);
+assert.match(editorSource, /options\.source === 'slot-click'/);
+assert.match(editorSource, /options\.source !== 'gallery-navigate'/);
 assert.match(editorSource, /button\.matches\(':focus-visible'\)/);
 assert.match(editorSource, /event\.pointerType === 'mouse'/);
 assert.match(editorSource, /event\.pointerType === 'pen'/);
