@@ -21,6 +21,14 @@
 - Generated-preview browser checks exercise cursor states for fit/overview,
   zoomed drag, reset, and coarse-pointer input, plus rendered help entries. The
   existing gallery navigation and photo-room camera gesture behavior is unchanged.
+- A fresh merge-readiness browser run exposed a stale photo-room cursor class at
+  reset-to-fit: camera styles were applied before the completed animation cleared
+  its target scale, so the final pan-availability refresh still saw the old
+  zoomed camera. Recompute cursor state after clearing the completed target.
+- The cursor regression now waits for a clearly zoomed camera instead of matching
+  the exact `scale(1.25)` serialization, and samples the photo background outside
+  the projected artwork frame. This keeps cursor checks independent of transform
+  formatting and hit-testing the artwork itself.
 
 ## 2026-10-20 — Museum spotlight presentation refinement
 

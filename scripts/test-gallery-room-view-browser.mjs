@@ -1064,7 +1064,7 @@ try {
       const background = root.querySelector('.gallery-room-view__background');
       const backgroundStyle = getComputedStyle(background);
       const backgroundRect = background.getBoundingClientRect();
-      const sampleElement = document.elementFromPoint(Math.round(innerWidth * 0.08), Math.round(innerHeight * 0.3));
+      const sampleElement = document.elementFromPoint(Math.round(innerWidth * 0.01), Math.round(innerHeight * 0.3));
       return {
         decoded: background.naturalWidth > 0,
         source: background.currentSrc,

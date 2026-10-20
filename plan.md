@@ -17,6 +17,9 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Add structural and generated-preview browser assertions for both help
       contexts, non-pannable overview, pannable zoom, active drag, reset, and
       touch-pointer cursor behavior.
+- [x] Clear photo-room pan cursor state after zoom/reset animation targets are
+      removed, and make browser checks assert a meaningfully zoomed camera rather
+      than an exact serialized transform string.
 - [x] Complete the production/customer-preview build, full generated-preview
       browser suite, focused structural checks, lint, typecheck, secret scan, and
       parallel validation; retain the independent geometry and photo-room visual

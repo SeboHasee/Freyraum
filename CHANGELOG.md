@@ -6,6 +6,7 @@
 - Show `grab` when the gallery or photo room can pan under a fine pointer, and
   `grabbing` only during an active movable fine-pointer drag; touch-only input
   receives no mouse cursor cue.
+- Clear the photo-room pan affordance when a camera animation finishes at fit.
 - Update gallery and room help to explain mouse-wheel zoom and conditional
   drag-to-pan. Gallery help distinguishes swipe navigation at overview and notes
   touch pinch/pan.
