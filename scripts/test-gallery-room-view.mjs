@@ -180,11 +180,83 @@ function projectCssMatrix(transform, x, y) {
   };
 }
 
-const [museumHub, geometry, publishRules] = await Promise.all([
+const [museumHub, geometry, publishRules, deviceOrientation] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/gallery/galleryRoomViewGeometry.ts'),
   loadTsModule('src/online/publishRules.ts'),
+  loadTsModule('src/gallery/deviceOrientation.ts'),
 ]);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: true,
+    supported: true,
+  }),
+  'granted',
+  'orientation access works without a separate browser permission API'
+);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: false,
+    supported: true,
+  }),
+  'unavailable',
+  'orientation access requires a secure context'
+);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: true,
+    supported: false,
+  }),
+  'unavailable',
+  'orientation access degrades when sensors are unavailable'
+);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: true,
+    supported: true,
+    requestPermission: async () => 'denied',
+  }),
+  'denied',
+  'explicitly denied sensor permission is reported'
+);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: true,
+    supported: true,
+    requestPermission: async () => {
+      throw new Error('permission unavailable');
+    },
+  }),
+  'denied',
+  'permission API failures are handled as denial'
+);
+assert.deepEqual(
+  deviceOrientation.normalizeDeviceArtworkTilt(18, 18, 0, 0, 0),
+  { tiltX: 1.2, tiltY: 1.2 },
+  'device tilt is clamped to a subtle maximum'
+);
+const rotatedTilt = deviceOrientation.normalizeDeviceArtworkTilt(18, 0, 90, 0, 0);
+assert.ok(
+  Math.abs(rotatedTilt.tiltX) < 1e-10
+    && Math.abs(rotatedTilt.tiltY - 1.2) < 1e-10,
+  'device tilt follows the screen axes after rotation'
+);
+assert.deepEqual(
+  deviceOrientation.smoothDeviceArtworkTilt(
+    { tiltX: 0, tiltY: 0 },
+    { tiltX: 1, tiltY: -1 },
+    0
+  ),
+  { tiltX: 0, tiltY: 0 },
+  'orientation smoothing does not jump on a zero-duration frame'
+);
+const smoothedTilt = deviceOrientation.smoothDeviceArtworkTilt(
+  { tiltX: 0, tiltY: 0 },
+  { tiltX: 1, tiltY: -1 },
+  1 / 60
+);
+assert.ok(smoothedTilt.tiltX > 0 && smoothedTilt.tiltX < 1);
+assert.ok(smoothedTilt.tiltY < 0 && smoothedTilt.tiltY > -1);
 const sourceConfig = JSON.parse(
   readFileSync(resolve(ROOT, 'customer-artworks/museum-hub.json'), 'utf8')
 );
@@ -607,8 +679,12 @@ assert.match(
   /MAX_CAMERA_SCALE = 6/,
   'photo-room zoom supports expanded pan travel'
 );
-assert.match(roomViewSource, /CAMERA_ZOOM_DURATION_MS = 560/);
+assert.match(roomViewSource, /CAMERA_ZOOM_LAMBDA = 4/);
+assert.match(roomViewSource, /smoothDamp\(this\.cameraScale, scale/);
 assert.match(roomViewSource, /requestAnimationFrame\(tick\)/);
+assert.match(roomViewSource, /requestDeviceOrientationAccess/);
+assert.match(roomViewSource, /deviceorientation/);
+assert.match(roomViewSource, /this\.disableDeviceMotionTilt\(\)/);
 assert.match(roomViewSource, /this\.zoomAt\(/);
 assert.match(
   roomViewSource,

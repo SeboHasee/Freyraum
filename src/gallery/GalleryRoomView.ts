@@ -78,6 +78,7 @@ export class GalleryRoomView {
   private motionTiltEnabled = false;
   private motionPermissionPending = false;
   private motionListenersAttached = false;
+  private motionVisibilityListenerAttached = false;
   private motionNeutral: PhotoPointer | null = null;
   private motionTiltCurrent: DeviceArtworkTilt = { tiltX: 0, tiltY: 0 };
   private motionTiltTarget: DeviceArtworkTilt = { tiltX: 0, tiltY: 0 };
@@ -208,7 +209,10 @@ export class GalleryRoomView {
     this.motionToggleButton.addEventListener('click', () => {
       void this.toggleDeviceMotionTilt();
     });
-    zoomControls.append(this.zoomInButton, this.zoomOutButton, this.resetButton, this.motionToggleButton);
+    zoomControls.append(this.zoomInButton, this.zoomOutButton, this.resetButton);
+    zoomControls.appendChild(this.motionToggleButton);
+    this.motionToggleButton.title =
+      'Gerät bewegen, um das Kunstwerk sanft zu neigen. Antippen, um die Bewegungssteuerung zu aktivieren.';
 
     const timelineHost = document.createElement('div');
     timelineHost.className = 'gallery-room-view__timeline-host';
@@ -455,14 +459,13 @@ export class GalleryRoomView {
       this.setCamera(scale, offsetX, offsetY);
       return;
     }
-    const from = { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY };
     let previousAt = performance.now();
     const tick = (now: number): void => {
       const deltaSeconds = Math.max(0, Math.min(0.1, (now - previousAt) / 1000));
       previousAt = now;
-      const nextScale = smoothDamp(from.scale, scale, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-      const nextOffsetX = smoothDamp(from.offsetX, offsetX, CAMERA_ZOOM_LAMBDA, deltaSeconds);
-      const nextOffsetY = smoothDamp(from.offsetY, offsetY, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+      const nextScale = smoothDamp(this.cameraScale, scale, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+      const nextOffsetX = smoothDamp(this.cameraOffsetX, offsetX, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+      const nextOffsetY = smoothDamp(this.cameraOffsetY, offsetY, CAMERA_ZOOM_LAMBDA, deltaSeconds);
       const settled = Math.abs(scale - nextScale) < 0.001
         && Math.abs(offsetX - nextOffsetX) < 0.5
         && Math.abs(offsetY - nextOffsetY) < 0.5;
@@ -614,7 +617,7 @@ export class GalleryRoomView {
   }
 
   private onRoomPointerMove = (event: PointerEvent): void => {
-    if (event.pointerType !== 'mouse' || this.pointers.size > 0) return;
+    if (event.pointerType !== 'mouse' || this.pointers.size > 0 || this.motionTiltEnabled) return;
     if (document.documentElement.dataset['motion'] === 'reduced' || this.motionPreference.matches) {
       this.resetArtworkInteraction();
       return;
@@ -677,6 +680,8 @@ export class GalleryRoomView {
       this.motionTiltEnabled = true;
       this.motionToggleButton.setAttribute('aria-pressed', 'true');
       this.motionToggleButton.setAttribute('aria-label', 'Bewegungssteuerung deaktivieren');
+      document.addEventListener('visibilitychange', this.onMotionVisibilityChange);
+      this.motionVisibilityListenerAttached = true;
       this.attachDeviceMotionListeners();
       this.observeMotionPreference();
     } finally {
@@ -690,7 +695,6 @@ export class GalleryRoomView {
     this.motionNeutral = null;
     window.addEventListener('deviceorientation', this.onDeviceOrientation);
     window.addEventListener('orientationchange', this.onDeviceScreenOrientationChange);
-    document.addEventListener('visibilitychange', this.onMotionVisibilityChange);
     window.screen.orientation?.addEventListener('change', this.onDeviceScreenOrientationChange);
     this.motionListenersAttached = true;
   }
@@ -699,7 +703,6 @@ export class GalleryRoomView {
     if (!this.motionListenersAttached) return;
     window.removeEventListener('deviceorientation', this.onDeviceOrientation);
     window.removeEventListener('orientationchange', this.onDeviceScreenOrientationChange);
-    document.removeEventListener('visibilitychange', this.onMotionVisibilityChange);
     window.screen.orientation?.removeEventListener('change', this.onDeviceScreenOrientationChange);
     this.motionListenersAttached = false;
   }
@@ -707,6 +710,10 @@ export class GalleryRoomView {
   private disableDeviceMotionTilt(): void {
     this.motionTiltEnabled = false;
     this.detachDeviceMotionListeners();
+    if (this.motionVisibilityListenerAttached) {
+      document.removeEventListener('visibilitychange', this.onMotionVisibilityChange);
+      this.motionVisibilityListenerAttached = false;
+    }
     this.motionModeObserver?.disconnect();
     this.motionModeObserver = null;
     if (this.motionTiltFrame) window.cancelAnimationFrame(this.motionTiltFrame);

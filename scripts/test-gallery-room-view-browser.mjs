@@ -415,8 +415,12 @@ try {
     ['wohn-bereich', 1440, 900], ['buero', 1440, 900],
     ['bedroom', 768, 1024], ['wohnraum', 768, 1024],
     ['wohn-bereich', 768, 1024], ['buero', 768, 1024],
+    ['bedroom', 320, 568], ['wohnraum', 320, 568],
+    ['wohn-bereich', 320, 568], ['buero', 320, 568],
     ['bedroom', 390, 844], ['wohnraum', 390, 844],
     ['wohn-bereich', 390, 844], ['buero', 390, 844],
+    ['bedroom', 390, 320], ['wohnraum', 390, 320],
+    ['wohn-bereich', 390, 320], ['buero', 390, 320],
     ['bedroom', 844, 390], ['wohnraum', 844, 390],
     ['wohn-bereich', 844, 390], ['buero', 844, 390],
   ]) {
@@ -811,7 +815,114 @@ try {
   await command('Emulation.setEmulatedMedia', { features: [] });
   console.log('✓ bounded artwork hover, keyboard focus, layered shadows, and reduced motion');
 
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true,
+  });
   await command('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+  const motionBounds = await evaluate(`(() => {
+    const button = document.querySelector('.gallery-room-view__motion-toggle');
+    const rect = button.getBoundingClientRect();
+    return {
+      display: getComputedStyle(button).display,
+      width: rect.width,
+      height: rect.height,
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+    };
+  })()`);
+  assert.equal(motionBounds.display, 'flex', 'motion tilt is opt-in and visible for coarse-pointer devices');
+  assert.ok(motionBounds.width >= 44 && motionBounds.height >= 44,
+    'motion tilt has a comfortable touch target');
+  assert.ok(motionBounds.left >= 0 && motionBounds.top >= 0
+    && motionBounds.right <= 390 && motionBounds.bottom <= 844,
+  `motion toggle remains within the phone viewport (${JSON.stringify(motionBounds)})`);
+  await evaluate(`(() => {
+    const toggle = document.querySelector('.gallery-room-view__motion-toggle');
+    Object.defineProperty(window, 'DeviceOrientationEvent', {
+      configurable: true,
+      value: undefined,
+    });
+    toggle.click();
+  })()`);
+  await waitFor("document.querySelector('.gallery-room-view__status').textContent.includes('nicht verfügbar')");
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__motion-toggle').getAttribute('aria-pressed')"),
+    'false',
+    'unavailable orientation sensors leave motion tilt disabled'
+  );
+  await evaluate(`(() => {
+    function MockDeviceOrientationEvent() {}
+    MockDeviceOrientationEvent.requestPermission = () => Promise.resolve('denied');
+    Object.defineProperty(window, 'DeviceOrientationEvent', {
+      configurable: true,
+      value: MockDeviceOrientationEvent,
+    });
+    document.querySelector('.gallery-room-view__motion-toggle').click();
+  })()`);
+  await waitFor("document.querySelector('.gallery-room-view__status').textContent.includes('nicht erlaubt')");
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__motion-toggle').getAttribute('aria-pressed')"),
+    'false',
+    'denied orientation permission does not enable motion tilt'
+  );
+  await evaluate(`(() => {
+    window.DeviceOrientationEvent.requestPermission = () => Promise.resolve('granted');
+    document.querySelector('.gallery-room-view__motion-toggle').click();
+  })()`);
+  await waitFor("document.querySelector('.gallery-room-view__motion-toggle').getAttribute('aria-pressed') === 'true'");
+  await evaluate(`(() => {
+    const dispatch = (beta, gamma) => {
+      const event = new Event('deviceorientation');
+      Object.defineProperties(event, { beta: { value: beta }, gamma: { value: gamma } });
+      window.dispatchEvent(event);
+    };
+    dispatch(0, 0);
+    dispatch(12, -7);
+  })()`);
+  await waitFor(`(() => {
+    const image = document.querySelector('.gallery-room-view__artwork');
+    return Number.parseFloat(image.style.getPropertyValue('--artwork-tilt-x')) !== 0;
+  })()`);
+  const motionTilt = await evaluate(`(() => {
+    const image = document.querySelector('.gallery-room-view__artwork');
+    return [
+      Number.parseFloat(image.style.getPropertyValue('--artwork-tilt-x')),
+      Number.parseFloat(image.style.getPropertyValue('--artwork-tilt-y')),
+    ];
+  })()`);
+  assert.ok(motionTilt.every((tilt) => Number.isFinite(tilt) && Math.abs(tilt) <= 1.2),
+    `sensor tilt stays inside the subtle angle range (${motionTilt})`);
+  await evaluate(`(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  })()`);
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__artwork').style.getPropertyValue('--artwork-tilt-x')"),
+    '0deg',
+    'hiding the page immediately clears sensor-driven tilt'
+  );
+  await evaluate(`(() => {
+    delete document.hidden;
+    document.dispatchEvent(new Event('visibilitychange'));
+    const dispatch = (beta, gamma) => {
+      const event = new Event('deviceorientation');
+      Object.defineProperties(event, { beta: { value: beta }, gamma: { value: gamma } });
+      window.dispatchEvent(event);
+    };
+    dispatch(0, 0);
+    dispatch(8, 0);
+  })()`);
+  await waitFor(`Number.parseFloat(document.querySelector('.gallery-room-view__artwork')
+    .style.getPropertyValue('--artwork-tilt-x')) !== 0`);
+  await evaluate("document.documentElement.dataset.motion = 'reduced'");
+  await waitFor("document.querySelector('.gallery-room-view__motion-toggle').getAttribute('aria-pressed') === 'false'");
+  await evaluate("delete document.documentElement.dataset.motion");
+  console.log('✓ opt-in motion tilt handles unavailable, denied, granted, and reduced-motion states');
   await command('Input.dispatchTouchEvent', {
     type: 'touchStart',
     touchPoints: [
