@@ -85,6 +85,7 @@ export class CanvasInteraction {
       this.canvas.addEventListener('pointerup', this.onPointerUp);
       this.canvas.addEventListener('pointercancel', this.onPointerCancel);
       this.canvas.addEventListener('lostpointercapture', this.onPointerCancel);
+      this.canvas.addEventListener('pointerleave', this.onPointerLeave);
       window.addEventListener('pointermove', this.onGlobalPointerMove, { passive: true });
       window.addEventListener('pointerup', this.onGlobalPointerUp, { passive: true });
       window.addEventListener('pointercancel', this.onGlobalPointerCancel, { passive: true });
@@ -163,6 +164,10 @@ export class CanvasInteraction {
 
   private handlePointerMove(e: PointerEvent): void {
     if (!this.enabled) return;
+    this.canvas.classList.toggle(
+      'is-fine-pointer',
+      e.pointerType === 'mouse' || e.pointerType === 'pen'
+    );
     const slot = this.active.get(e.pointerId);
 
     // Hover rotation (fine pointer only, no buttons held).
@@ -170,6 +175,7 @@ export class CanvasInteraction {
       if (e.pointerType === 'mouse' && this.state === 'idle') {
         this.updateHoverRotation(e.clientX, e.clientY);
       }
+
       return;
     }
 
@@ -198,6 +204,10 @@ export class CanvasInteraction {
     }
     this.syncPanCursor();
   }
+
+  private onPointerLeave = (): void => {
+    if (this.active.size === 0) this.canvas.classList.remove('is-fine-pointer');
+  };
 
   private onPointerUp = (e: PointerEvent): void => {
     if (!this.enabled) return;
@@ -255,6 +265,7 @@ export class CanvasInteraction {
 
   private onTouchStart = (e: TouchEvent): void => {
     if (!this.enabled) return;
+    this.canvas.classList.remove('is-fine-pointer');
     // Suppress synthetic mouse/click events that the browser would emit
     // after this touch sequence finishes (Bug 3).
     if (e.cancelable) e.preventDefault();
@@ -335,6 +346,7 @@ export class CanvasInteraction {
 
   private onLegacyMouseMove = (e: MouseEvent): void => {
     if (!this.enabled) return;
+    this.canvas.classList.add('is-fine-pointer');
     // Used only in the Touch Events fallback path on browsers without
     // Pointer Events. Updates hover rotation on fine-pointer desktops.
     if (this.state !== 'idle') return;
@@ -392,6 +404,7 @@ export class CanvasInteraction {
       this.canvas.removeEventListener('pointerup', this.onPointerUp);
       this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
       this.canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
+      this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
       window.removeEventListener('pointermove', this.onGlobalPointerMove);
       window.removeEventListener('pointerup', this.onGlobalPointerUp);
       window.removeEventListener('pointercancel', this.onGlobalPointerCancel);
@@ -405,7 +418,7 @@ export class CanvasInteraction {
     }
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.active.clear();
-    this.canvas.classList.remove('is-pan-available', 'is-panning');
+    this.canvas.classList.remove('is-fine-pointer', 'is-pan-available', 'is-panning');
     this.galleryManager.setPanAvailabilityListener(null);
   }
 }

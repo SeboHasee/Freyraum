@@ -722,10 +722,11 @@ assert.match(helpSource, /Bei vergrößerter Ansicht das Foto verschieben/);
 assert.match(helpSource, /Mit dem Mausrad auf das Kunstwerk zoomen/);
 assert.match(
   hubStyles,
-  /@media \(hover: hover\) and \(pointer: fine\)[\s\S]*?\.gallery-room-view__scene\.is-pan-available\s*\{\s*cursor:\s*grab/,
-  'grab cursors are restricted to fine pointers and an available pan range'
+  /\.gallery-room-view__scene\.is-fine-pointer\.is-pan-available\s*\{\s*cursor:\s*grab/,
+  'photo-room grab cursor requires an actual fine-pointer event and available pan range'
 );
-assert.match(hubStyles, /canvas\.gallery-canvas\.is-panning,[\s\S]*?cursor:\s*grabbing/);
+assert.match(hubStyles, /\.gallery-room-view__scene\.is-fine-pointer\.is-dragging\s*\{\s*cursor:\s*grabbing/);
+assert.match(roomViewSource, /event\.pointerType === 'mouse' \|\| event\.pointerType === 'pen'/);
 assert.match(roomViewSource, /classList\.toggle\('is-pan-available', canPan\)/);
 assert.match(roomViewSource, /classList\.toggle\('is-dragging', canPan && this\.pointerDragStarted\)/);
 assert.match(editorSource, /shadowPath\.classList\.toggle\('is-selected', selected\)/);

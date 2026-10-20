@@ -1,5 +1,26 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-20 (spotlight presentation follow-up).
+> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+
+## 2026-10-20 — Pan-aware cursors and accurate interaction help
+
+- Gallery dragging is context-sensitive: when `GalleryManager.canPan()` is false,
+  the one-pointer horizontal gesture remains a navigation swipe; when true, it
+  pans within the bounded inspection range. Do not show `grab` solely because the
+  canvas is interactive or zoom controls are available.
+- The gallery now reports pan-capability changes after zoom, artwork changes,
+  viewport refits, and reset. The room view derives the same affordance from its
+  current/target camera scale. `grabbing` appears only after a fine pointer moves
+  during a pan-capable gesture; touch pointer events clear the mouse-cursor cue.
+- Reset-fit is not universally non-pannable: artwork size and its deliberately
+  bounded reveal margin can leave a small valid pan range. Cursor tests therefore
+  distinguish an actually non-pannable overview from reset-fit, where grab is
+  correct only when pan limits remain available.
+- Both help contexts list mouse-wheel zoom. Drag descriptions are conditional on
+  the view being enlarged; gallery help additionally distinguishes overview swipe
+  navigation and includes the implemented two-finger zoom/pan gesture.
+- Generated-preview browser checks exercise cursor states for fit/overview,
+  zoomed drag, reset, and coarse-pointer input, plus rendered help entries. The
+  existing gallery navigation and photo-room camera gesture behavior is unchanged.
 
 ## 2026-10-20 — Museum spotlight presentation refinement
 

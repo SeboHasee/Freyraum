@@ -132,6 +132,7 @@ export class GalleryRoomView {
 
     const scene = document.createElement('div');
     scene.className = 'gallery-room-view__scene';
+    scene.addEventListener('pointermove', this.onPanPointerMove);
     scene.addEventListener('pointerdown', this.onPointerDown);
     scene.addEventListener('pointermove', this.onPointerMove);
     scene.addEventListener('pointermove', this.onRoomPointerMove);
@@ -359,6 +360,7 @@ export class GalleryRoomView {
     this.motionPreference.removeEventListener('change', this.onMotionPreferenceChange);
     this.element.removeEventListener('keydown', this.onKeyDown);
     this.scene.removeEventListener('pointerdown', this.onPointerDown);
+    this.scene.removeEventListener('pointermove', this.onPanPointerMove);
     this.scene.removeEventListener('pointermove', this.onPointerMove);
     this.scene.removeEventListener('pointermove', this.onRoomPointerMove);
     this.scene.removeEventListener('pointerleave', this.resetArtworkInteraction);
@@ -652,6 +654,13 @@ export class GalleryRoomView {
     this.beginGesture();
   };
 
+  private onPanPointerMove = (event: PointerEvent): void => {
+    this.scene.classList.toggle(
+      'is-fine-pointer',
+      event.pointerType === 'mouse' || event.pointerType === 'pen'
+    );
+  };
+
   private onPointerMove = (event: PointerEvent): void => {
     if (!this.pointers.has(event.pointerId)) return;
     this.pointers.set(event.pointerId, this.pointerPosition(event));
@@ -926,6 +935,7 @@ export class GalleryRoomView {
   };
 
   private resetArtworkInteraction = (): void => {
+    this.scene.classList.remove('is-fine-pointer');
     this.scene.classList.remove('has-artwork-proximity');
     this.artworkImage.style.setProperty('--artwork-tilt-x', '0deg');
     this.artworkImage.style.setProperty('--artwork-tilt-y', '0deg');

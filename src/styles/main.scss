@@ -248,16 +248,14 @@ canvas {
   user-select: none;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  canvas.gallery-canvas.is-pan-available,
-  .gallery-room-view__scene.is-pan-available {
-    cursor: grab;
-  }
+canvas.gallery-canvas.is-fine-pointer.is-pan-available,
+.gallery-room-view__scene.is-fine-pointer.is-pan-available {
+  cursor: grab;
+}
 
-  canvas.gallery-canvas.is-panning,
-  .gallery-room-view__scene.is-dragging {
-    cursor: grabbing;
-  }
+canvas.gallery-canvas.is-fine-pointer.is-panning,
+.gallery-room-view__scene.is-fine-pointer.is-dragging {
+  cursor: grabbing;
 }
 
 .gallery-room-view__background {

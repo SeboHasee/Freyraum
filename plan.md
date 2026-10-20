@@ -1,9 +1,25 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-20 (spotlight presentation follow-up).
+> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Pan-aware cursor and control help (2026-10-20)
+
+- [x] Follow gallery pan capability from `GalleryManager.canPan()` through zoom,
+      navigation, and viewport changes; show grab/grabbing only when the current
+      view can move and a fine pointer has actually started a drag.
+- [x] Show room-view cursor feedback only above fit scale when photo bounds allow
+      pan; leave touch-only devices without mouse cursor cues.
+- [x] Align gallery and room help with implemented wheel zoom, conditional
+      drag-to-pan, gallery swipe navigation at overview, and touch gestures.
+- [x] Add structural and generated-preview browser assertions for both help
+      contexts, non-pannable overview, pannable zoom, active drag, reset, and
+      touch-pointer cursor behavior.
+- [ ] Complete final build, full browser validation, secret scan, and parallel
+      validation; preserve known independent museum geometry and photo-room visual
+      acceptance issues.
 
 ## Museum artwork spotlight and action feedback (2026-10-20)
 

@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-20 (spotlight presentation follow-up).
+> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,19 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Pan-aware cursors and interaction help (updated 2026-10-20)
+
+`npm run test:gallery-room-view` checks both contextual help descriptions and
+that grab cursors require actual pan availability plus fine-pointer input. The
+generated-preview browser suite exercises the photo room at fit, zoomed and
+dragging states, verifies reset returns its cursor state to the camera bounds,
+and checks coarse-pointer input clears the mouse affordance. In the gallery it
+uses a non-pannable overview, zooms until pan is available, verifies active
+dragging, and checks reset-fit reflects the actual bounded pan range (which can
+remain available for some artwork/viewport combinations). Both help contexts
+must describe wheel zoom; gallery help must distinguish overview swipes from
+zoomed panning, and room help must describe drag pan only while zoomed.
 
 ## Photographic inspection-room regression (updated 2026-10-20)
 

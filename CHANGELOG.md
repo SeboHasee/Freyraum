@@ -1,5 +1,14 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
+> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+
+## Unreleased — pan-aware cursors and consistent interaction help (2026-10-20)
+
+- Show `grab`/`grabbing` in the gallery and photo room only when the current view
+  can pan and a fine-pointer drag is active; touch-only input receives no mouse
+  cursor cue.
+- Update gallery and room help to explain mouse-wheel zoom and conditional
+  drag-to-pan. Gallery help distinguishes swipe navigation at overview and notes
+  touch pinch/pan.
 
 ## Unreleased — refined museum spotlight presentation (2026-10-20)
 

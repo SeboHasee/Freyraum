@@ -881,6 +881,10 @@ try {
     'active toggle exposes the active room-view state in full or compact form'
   );
   assert.notEqual(activeRoomEntry.emphasis, roomEntry.emphasis, 'active room-view control has a distinct visual state');
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 1440, height: 900, deviceScaleFactor: 1, mobile: false,
+  });
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 720, y: 450 });
   const roomCursorAtFit = await evaluate(`(() => {
     const scene = document.querySelector('.gallery-room-view__scene');
     return { available: scene.classList.contains('is-pan-available'), cursor: getComputedStyle(scene).cursor };
@@ -889,17 +893,25 @@ try {
     'the photo room does not show a grab cursor when the fitted view cannot pan');
   await evaluate("document.querySelector('.gallery-room-view [aria-label=\"Vergrößern\"]').click()");
   await waitFor("document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available')");
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
     'grab',
-    'the photo room shows a grab cursor once zoom makes panning possible'
+    `the photo room shows a grab cursor once zoom makes panning possible (${JSON.stringify(await evaluate(`(() => ({
+      available: document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available'),
+      media: matchMedia('(hover: hover) and (pointer: fine)').matches,
+      cursor: getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor,
+    }))()`))})`
   );
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 720, y: 450, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 690, y: 420, button: 'left', buttons: 1 });
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
     'grabbing',
-    'the photo room shows grabbing only after a pannable drag starts'
+    `the photo room shows grabbing only after a pannable drag starts (${JSON.stringify(await evaluate(`(() => {
+      const scene = document.querySelector('.gallery-room-view__scene');
+      return { classes: scene.className, cursor: getComputedStyle(scene).cursor };
+    })()`))})`
   );
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 690, y: 420, button: 'left', buttons: 0 });
   await evaluate("document.querySelector('.gallery-room-view [aria-label=\"Fotoansicht zurücksetzen\"]').click()");
@@ -915,6 +927,9 @@ try {
   await command('Emulation.setEmulatedMedia', {
     features: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }],
   });
+  await evaluate(`document.querySelector('.gallery-room-view__scene').dispatchEvent(
+    new PointerEvent('pointermove', { pointerType: 'touch', bubbles: true })
+  )`);
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
     'auto',
@@ -1747,14 +1762,24 @@ try {
   assert.ok(galleryHelp.rows.some((row) => row.includes('Zwei Finger') && row.includes('Touchscreens')));
   await evaluate("document.querySelector('.keyboard-help__close').click()");
   await evaluate("document.querySelector('.zoom-controls [aria-label=\"Ansicht zurücksetzen\"]').click()");
+  await evaluate(`(() => {
+    const zoomOut = document.querySelector('.zoom-controls [aria-label="Verkleinern"]');
+    for (let step = 0; step < 8; step += 1) zoomOut.click();
+  })()`);
   await waitFor("!document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 720, y: 450 });
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-canvas')).cursor"),
     'auto',
     'the gallery overview does not show a grab cursor when panning is unavailable'
   );
-  await evaluate("document.querySelector('.zoom-controls [aria-label=\"Vergrößern\"]').click()");
+  await evaluate(`(() => {
+    const zoomIn = document.querySelector('.zoom-controls [aria-label="Vergrößern"]');
+    for (let step = 0; step < 8; step += 1) zoomIn.click();
+  })()`);
   await waitFor("document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
+  await waitForFrames(60);
+  await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 720, y: 450 });
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-canvas')).cursor"),
     'grab',
@@ -1774,13 +1799,28 @@ try {
     'the gallery clears its active drag cursor after release'
   );
   await evaluate("document.querySelector('.zoom-controls [aria-label=\"Ansicht zurücksetzen\"]').click()");
-  await waitFor("!document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
+  await waitForFrames(60);
+  const galleryResetCursor = await evaluate(`(() => {
+    const canvas = document.querySelector('.gallery-canvas');
+    return {
+      available: canvas.classList.contains('is-pan-available'),
+      cursor: getComputedStyle(canvas).cursor,
+    };
+  })()`);
+  assert.equal(
+    galleryResetCursor.cursor,
+    galleryResetCursor.available ? 'grab' : 'auto',
+    'the gallery reset view shows grab only when its bounded pan range remains available'
+  );
   await command('Emulation.setDeviceMetricsOverride', {
     width: 390, height: 844, deviceScaleFactor: 1, mobile: true,
   });
   await command('Emulation.setEmulatedMedia', {
     features: [{ name: 'hover', value: 'none' }, { name: 'pointer', value: 'coarse' }],
   });
+  await evaluate(`document.querySelector('.gallery-canvas').dispatchEvent(
+    new PointerEvent('pointermove', { pointerType: 'touch', bubbles: true })
+  )`);
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-canvas')).cursor"),
     'auto',
