@@ -1,14 +1,14 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
 
 ## 2026-10-20 — Museum artwork spotlight and interaction audit
 
 - The visitor-only museum CSS hid both the artwork outline pseudo-element and its
   label for every artwork, including the front-right `room-01.wall-front.b`
-  (`Akt 27`). Shadow state still existed, but the expected label/focus cue was
-  suppressed. The browser regression now uses this exact slot and physical
-  pointer movement to distinguish a hit-area/stacking fault from a feedback
-  visibility gap; keep its result separate from source-level diagnosis.
+  (`Akt 27`). The generated-preview test confirms real pointer movement reaches
+  that slot and its paired shadow at desktop, tablet, and phone sizes; this is
+  not a shadow overlap or slot-association fault. Restoring the visitor outline,
+  label, and aligned light fixes the feedback visibility gap.
 - Render the light as a pointer-inert child of the artwork button. The button's
   existing projective clip therefore constrains the light to the same quad while
   the image transform, bounds, button target, and matching SVG shadow path remain
@@ -17,6 +17,12 @@
   focus and selected state center it, with selection taking priority. Reduced
   motion removes both light and shadow easing; touch does not set hover state;
   calibration/debug prevents the visitor light from appearing.
+- At 390×844, the previous 1.45 narrow front-wall focus zoom pushed the right
+  artwork center beyond the viewport even though a visible edge remained hittable.
+  Reducing only the shared narrow-view focus scale to 1.1 brings the complete
+  projected button bounds back onscreen; placement, local clip path, and projective
+  image matrix remain unchanged. The browser test asserts center hit-testing and
+  full viewport bounds at phone and tablet sizes.
 - Existing action acknowledgements remain in place rather than gaining competing
   animation: artwork open disables repeat activation and updates selection/status;
   room view uses `aria-pressed` and its active control style; timeline selection
@@ -26,6 +32,14 @@
   transition/loading controls disable repeat activation, while fallback screens
   explain startup/asset/WebGL outcomes and offer a retry or 2D continuation when
   available. Preserve these state signals when refining presentation.
+- Generated-preview museum checks pass at 1440×900, 768×1024, and 390×844,
+  including exact front-right center hit, side-wall hit targets, focus, selected
+  precedence, touch, reduced motion, and debug/editor suppression. The full browser
+  script later times out in the unchanged photo-room maximum-zoom assertion (camera
+  stalls below 5.9); leave room-view zoom untouched and track that separately.
+- `npm run validate:museum-hub` still fails at the known wall-left doorway-height
+  assertion (`scripts/test-museum-hub-geometry.mjs:411`); do not weaken or modify
+  that unrelated geometry gate for this feedback change.
 
 ## 2026-10-20 — Room zoom anchoring and museum hover
 

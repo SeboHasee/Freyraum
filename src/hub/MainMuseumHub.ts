@@ -2248,7 +2248,7 @@ export class MainMuseumHub {
       this.visual.style.setProperty('--hub-focus-scale', '1');
       this.visual.style.setProperty('--hub-focus-x', '0%');
     } else if (wallFocus === 'front') {
-      this.visual.style.setProperty('--hub-focus-scale', '1.45');
+      this.visual.style.setProperty('--hub-focus-scale', '1.1');
       this.visual.style.setProperty('--hub-focus-x', '0%');
     } else {
       this.visual.style.setProperty('--hub-focus-scale', '1.9');

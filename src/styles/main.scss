@@ -845,7 +845,7 @@ canvas {
   );
   opacity: 0;
   pointer-events: none;
-  transition: opacity 320ms var(--ease-out);
+  transition: opacity 280ms var(--ease-out);
 }
 
 .museum-hub:not(.is-calibrating):not(.is-debug-geometry)
@@ -871,6 +871,7 @@ canvas {
 .museum-hub__artwork::before {
   content: '';
   position: absolute;
+  z-index: 3;
   inset: 0;
   border: 3px solid transparent;
   clip-path: var(--hub-clip-path, none);

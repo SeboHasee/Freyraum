@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -54,12 +54,16 @@ front-right `room-01.wall-front.b` (Akt 27) is targeted explicitly: real mouse
 movement must reach its projected quad, update only its paired shadow and light,
 and preserve its clip and projective image transform. The front-left and both side
 walls are checked for reachable, unchanged geometry and one-to-one feedback.
+At tablet and phone sizes, the front-right quad center and complete projected
+button bounds must remain in the viewport; narrow front-wall focus therefore uses
+a modest view scale without modifying wall registration or the button clip path.
 Fine-pointer hover follows the pointer within the artwork; keyboard focus centers
 the light; selected feedback stays centered and overrides hover. Touch pointer
 events do not activate hover, calibration/debug remains free of the visitor light,
 and reduced motion removes light/shadow easing. Responsive captures cover museum
-normal state at desktop/tablet/phone and front-right hover; desktop additionally
-captures pointer-follow, focus, and selection. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR`
+normal state and front-right hover at desktop/tablet/phone; desktop additionally
+captures pointer-follow, focus, selection, and front/side-wall hover. Set
+`FREYRAUM_ROOM_VIEW_CAPTURE_DIR`
 to save hub and room-view browser captures for manual review at the responsive
 breakpoints. The photo pixel test samples cleanup boundaries at full resolution against the
 unchanged source gradients, checks old-artwork removal, and bounds repaired

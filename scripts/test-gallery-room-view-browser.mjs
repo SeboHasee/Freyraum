@@ -273,20 +273,28 @@ try {
       const responsiveRightFront = await evaluate(`(() => {
         const button = document.querySelector('.museum-hub__artwork[data-slot-id="room-01.wall-front.b"]');
         const rect = button.getBoundingClientRect();
-        for (let yRatio = 0.02; yRatio < 1; yRatio += 0.04) {
-          for (let xRatio = 0.02; xRatio < 1; xRatio += 0.04) {
-            const x = rect.left + xRatio * rect.width;
-            const y = rect.top + yRatio * rect.height;
-            const hitSlotId = document.elementFromPoint(x, y)?.closest('.museum-hub__artwork')?.dataset.slotId ?? null;
-            if (hitSlotId === button.dataset.slotId) return { x, y, hitSlotId };
-          }
-        }
-        return { hitSlotId: null, bounds: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } };
+        const points = button.style.clipPath.match(/polygon\\((.*)\\)/)[1]
+          .split(',')
+          .map((point) => point.trim().split(/\\s+/).map((part) => Number.parseFloat(part) / 100));
+        const center = points.reduce((sum, [x, y]) => [sum[0] + x / points.length, sum[1] + y / points.length], [0, 0]);
+        const x = rect.left + center[0] * rect.width;
+        const y = rect.top + center[1] * rect.height;
+        return {
+          x, y,
+          hitSlotId: document.elementFromPoint(x, y)?.closest('.museum-hub__artwork')?.dataset.slotId ?? null,
+          boundsInViewport: rect.left >= 0 && rect.top >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
+          bounds: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        };
       })()`);
       assert.equal(
         responsiveRightFront.hitSlotId,
         'room-01.wall-front.b',
-        `a visible part of front-right art is hittable at ${width}x${height} (${JSON.stringify(responsiveRightFront)})`
+        `front-right artwork center is hittable at ${width}x${height} (${JSON.stringify(responsiveRightFront)})`
+      );
+      assert.equal(
+        responsiveRightFront.boundsInViewport,
+        true,
+        `front-right artwork bounds fit the viewport at ${width}x${height} (${JSON.stringify(responsiveRightFront)})`
       );
       await command('Input.dispatchMouseEvent', {
         type: 'mouseMoved',

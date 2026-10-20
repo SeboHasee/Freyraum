@@ -1,5 +1,5 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
@@ -15,10 +15,18 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       and calibration/debug views free of the visitor spotlight.
 - [x] Add exact front-right (`room-01.wall-front.b`, Akt 27) pointer-target and
       same-slot shadow checks, plus front/side neighbor and responsive coverage.
+- [x] Reduce the narrow front-wall view scale so the right-front projected center
+      and complete hit bounds remain reachable at phone/tablet sizes; artwork
+      placement, projective transform, and clip path are unchanged.
 - [x] Inventory existing acknowledgement for artwork open, room toggle, timeline,
       audio, fullscreen, disabled and loading/error states; avoid redundant motion.
-- [ ] Run browser hit testing and visual captures at desktop/tablet/phone, then
-      complete focused tests/build and record any environment or presentation gate.
+- [x] Run generated-preview hub checks and capture desktop/tablet/phone normal and
+      hover states plus desktop focus, selection, and angled side-wall hover.
+- [x] Run structural regression, lint, typecheck, production/customer-preview build,
+      and front-wall aspect test; record the doorway geometry failure and the
+      unrelated photo-room max-zoom browser timeout separately.
+- [ ] Complete final secret scan and parallel validation; preserve the existing
+      zoom and geometry gates for their own follow-up.
 
 ## Room zoom anchoring and museum hover (2026-10-20)
 

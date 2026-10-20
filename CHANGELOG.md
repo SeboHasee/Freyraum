@@ -1,5 +1,5 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (museum spotlight follow-up).
 
 ## Unreleased — anchored room zoom and museum artwork feedback (2026-10-20)
 
@@ -12,6 +12,9 @@
   activate hover, reduced motion removes easing, and calibration/debug stays clear.
 - Restore an explicit artwork outline and compact label during visitor hover,
   keyboard focus, and selection, without changing the projective clip or transform.
+- Reduce narrow-portrait front-wall viewing scale so the right-front artwork remains
+  fully within the phone/tablet viewport; the authored placement and hit geometry
+  stay unchanged.
 - Add exact front-right (`room-01.wall-front.b`, Akt 27) hit-testing, pointer-follow,
   own-shadow/light, focus, selection, touch, reduced-motion, and responsive checks.
 
