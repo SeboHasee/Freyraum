@@ -5,6 +5,23 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
+## Mobile and tablet photo-room experience (2026-10-20)
+
+- [x] Keep desktop zoom easing and pointer hover tilt unchanged.
+- [x] Match gallery zoom smoothing on coarse-pointer button/wheel input without
+      adding lag to pinch or pan gestures.
+- [x] Add an opt-in touch-device orientation tilt with explicit permission action,
+      neutral calibration, screen rotation handling, reduced-motion shutdown, and
+      room/page lifecycle cleanup.
+- [x] Keep the room controls and complete artwork within portrait, landscape,
+      tablet, narrow portrait, and short narrow-landscape browser fixtures.
+- [x] Test permission grant, denial, unsupported/insecure access, subtle angle
+      bounds, and page-hide suspension/resume without physical sensor hardware.
+- [x] Run room-view helper and generated-preview browser regressions, lint,
+      typecheck, and production/customer-preview build.
+- [ ] Verify the opt-in sensor feel on a physical customer phone; automated
+      orientation events cannot prove device-specific sensor calibration or comfort.
+
 ## Photo-room control consistency (2026-10-19)
 
 - [x] Use the gallery timeline as the photo-room artwork selector, preserving one

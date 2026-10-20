@@ -1,6 +1,26 @@
 # FINDINGS
 > Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
+## 2026-10-20 — Mobile and tablet photo-room pass
+
+- The generated customer-preview browser regression passes at desktop
+  (1440×900, plus Wohnbereich at 2000×1080), tablet (768×1024), phone
+  portrait (320×568 and 390×844), narrow short landscape (390×320), and
+  landscape (844×390) for all four configured rooms. It checks artwork bounds,
+  control bounds, and collisions.
+- Coarse-pointer phone zoom uses the gallery's λ=4 frame-independent smoothing;
+  desktop photo-room zoom keeps its prior 560 ms cubic easing. Pointer pan and
+  pinch continue to update directly, and the artwork projection remains scene-local.
+- The touch-only motion toggle is user-enabled. Synthetic browser coverage checks
+  unavailable sensors, denied/granted permission, subtle clamped tilt, page-hide
+  suspension/resume, and reduced-motion shutdown; pure helper tests cover secure
+  context and screen-angle normalization. Physical-device sensor behavior still
+  merits a final customer-phone check.
+- Root `index.html` was not a valid entry point for this browser harness in this
+  environment; it timed out before `.museum-hub__artwork` appeared. Running against
+  the generated `customer-preview/app.html` passed, so use the latter for the
+  current local preview browser regression.
+
 ## 2026-10-20 — Wohnbereich clipping reported again
 
 - The user supplied a room-view screenshot at

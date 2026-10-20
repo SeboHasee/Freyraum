@@ -1,6 +1,19 @@
 # CHANGELOG
 > Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
 
+## Unreleased — responsive photo-room controls and touch motion (2026-10-20)
+
+- Keep desktop photo-room zoom easing unchanged; coarse-pointer zoom buttons and
+  wheel input now use the gallery's frame-rate-independent smoothing, while pinch
+  and pan remain immediate.
+- Add a touch-only, opt-in phone-orientation tilt control with permission handling,
+  neutral calibration, screen-orientation normalization, smoothing, and cleanup on
+  room close, page hiding, or reduced-motion changes.
+- Keep short/narrow landscape room controls in view and add phone portrait,
+  tablet, narrow portrait, and narrow short-landscape browser cases.
+- Exercise sensor grant/denial/unavailability, reduced motion, zoom easing, and
+  hidden-page listener suspension with helper and browser regressions.
+
 ## Unreleased — room-photo framing and cleanup follow-up (2026-10-20)
 
 - Recalibrate Wohnbereich's wall region and artwork size so the complete print

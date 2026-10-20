@@ -22,9 +22,9 @@ After installing the optional Playwright browser tooling, `npm run test:editor-r
 also checks room selection, projected artwork preview, placement export, and undo
 in the actual generated placement editor.
 
-For browser coverage, run `npm run import:artworks && npm run build`, then
-`FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
-This opens the generated root `index.html` over `file://` and verifies all four
+For browser coverage, run `npm run import:artworks && npm run build`, then run
+`FREYRAUM_ROOM_VIEW_URL=file:///absolute/project/path/customer-preview/app.html FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
+This opens the generated customer preview over `file://` and verifies all four
 photos decode, projected artwork remains onscreen, the shared gallery timeline
 moves into the room overlay and selection stays synchronized, and the return
 action restores the timeline and focus. It checks room selection, gallery-style zoom/reset controls, help context,
@@ -32,6 +32,14 @@ shared utility reparenting, and header/timeline/zoom bounds at desktop, tablet,
 portrait phone, and short-landscape sizes. Photo pan, zoom, pinch, reset,
 keyboard zoom, camera limits, artwork-centered button and wheel zoom, expanded
 mouse-proximity reach, eased return, and reduced-motion behavior remain covered.
+Responsive fixtures include 320×568 and 390×844 portrait phones, 390×320
+narrow short landscape, 768×1024 tablet portrait, 844×390 landscape, and desktop.
+Coarse-pointer browser checks cover the optional motion toggle, permission grant
+and denial, unavailable sensors, subtle clamped orientation response, reduced
+motion, and page-hidden listener suspension/resume. The structural test also
+checks secure-context gating, screen-angle normalization, and smoothing.
+Coarse-pointer button/wheel zoom uses the gallery's frame-independent easing;
+desktop retains its existing easing and pinch/pan remain direct.
 The browser matrix also includes Wohnbereich at 2000×1080. Screenshot capture
 waits for two animation frames after a viewport or room-state change so the photo
 and artwork have been painted before manual visual review.

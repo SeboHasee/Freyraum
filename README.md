@@ -42,10 +42,15 @@ photograph and **Zurück zur Galerie** to leave.
 Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
 on-screen control. Zoom buttons bring the projected artwork center toward the
 viewport center; wheel and pinch stay anchored to the pointer/gesture. The artwork
-keeps its configured size on the photographed wall. Nearby mouse movement
-produces a very subtle, smoothly returning tilt, with stronger contact and
-directional shadows to keep the print attached to the wall. This is a bounded 2D
-photo camera, not true 3D orbit or movement.
+keeps its configured size on the photographed wall. On touch devices, zoom-button
+and wheel motion use the gallery's frame-rate-independent easing, while active
+drag and pinch remain direct. Nearby desktop mouse movement produces a very subtle,
+smoothly returning tilt. On touch devices, the **↗** control optionally enables
+subtle artwork tilt from phone movement; sensor access is requested only after
+that action, and the feature can be disabled again. Unsupported or denied sensors
+leave touch controls available. Reduced motion disables sensor tilt. Stronger
+contact and directional shadows keep the print attached to the wall. This is a
+bounded 2D photo camera, not true 3D orbit or movement.
 `customer-artworks/museum-hub.json` owns the room photo and placement data;
 in the placement editor's **Raum** tab, **Foto-Raum gestalten** selects a room
 and edits its normalized wall corners and artwork position/height with the same
