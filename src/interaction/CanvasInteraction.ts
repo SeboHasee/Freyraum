@@ -61,6 +61,7 @@ export class CanvasInteraction {
   private state: GestureState = 'idle';
   private readonly active = new Map<number, PointerSlot>();
   private lastPinchDist = 0;
+  private pointerDragStarted = false;
   /** Tracks whether the most recent gesture started as touch; used to
    *  suppress hover rotation immediately after a tap on touch laptops. */
 
@@ -68,6 +69,10 @@ export class CanvasInteraction {
     this.canvas = canvas;
     this.galleryManager = galleryManager;
     this.usePointerEvents = typeof window.PointerEvent === 'function';
+    this.galleryManager.setPanAvailabilityListener((canPan) => {
+      this.canvas.classList.toggle('is-pan-available', canPan);
+      this.syncPanCursor();
+    });
 
     if (this.usePointerEvents) {
       // Pointer Events path — single unified stream for mouse/touch/pen.
@@ -80,6 +85,7 @@ export class CanvasInteraction {
       this.canvas.addEventListener('pointerup', this.onPointerUp);
       this.canvas.addEventListener('pointercancel', this.onPointerCancel);
       this.canvas.addEventListener('lostpointercapture', this.onPointerCancel);
+      this.canvas.addEventListener('pointerleave', this.onPointerLeave);
       window.addEventListener('pointermove', this.onGlobalPointerMove, { passive: true });
       window.addEventListener('pointerup', this.onGlobalPointerUp, { passive: true });
       window.addEventListener('pointercancel', this.onGlobalPointerCancel, { passive: true });
@@ -130,6 +136,7 @@ export class CanvasInteraction {
       lastX: e.clientX,
       lastY: e.clientY,
     });
+    this.pointerDragStarted = false;
 
     if (this.active.size === 1) {
       this.state = this.galleryManager.canPan() ? 'panning' : 'swipe-candidate';
@@ -143,6 +150,7 @@ export class CanvasInteraction {
       this.state = 'pinching';
       this.diagnostics.debug('gesture-start', 'Pinch gesture started', {});
     }
+    this.syncPanCursor();
   };
 
   private onPointerMove = (e: PointerEvent): void => {
@@ -156,6 +164,10 @@ export class CanvasInteraction {
 
   private handlePointerMove(e: PointerEvent): void {
     if (!this.enabled) return;
+    this.canvas.classList.toggle(
+      'is-fine-pointer',
+      e.pointerType === 'mouse' || e.pointerType === 'pen'
+    );
     const slot = this.active.get(e.pointerId);
 
     // Hover rotation (fine pointer only, no buttons held).
@@ -163,6 +175,7 @@ export class CanvasInteraction {
       if (e.pointerType === 'mouse' && this.state === 'idle') {
         this.updateHoverRotation(e.clientX, e.clientY);
       }
+
       return;
     }
 
@@ -184,11 +197,17 @@ export class CanvasInteraction {
     if (this.active.size === 1) {
       if (this.galleryManager.canPan()) {
         this.state = 'panning';
+        this.pointerDragStarted ||= dx !== 0 || dy !== 0;
         this.galleryManager.setPanOffset(dx * 0.004, -dy * 0.004);
       }
       // swipe-candidate: do nothing during move; resolved on pointerup.
     }
+    this.syncPanCursor();
   }
+
+  private onPointerLeave = (): void => {
+    if (this.active.size === 0) this.canvas.classList.remove('is-fine-pointer');
+  };
 
   private onPointerUp = (e: PointerEvent): void => {
     if (!this.enabled) return;
@@ -203,6 +222,8 @@ export class CanvasInteraction {
     if (this.state === 'pinching' && this.active.size < 2) {
       // One finger left after pinch ends — fall back to panning state.
       this.state = this.galleryManager.canPan() ? 'panning' : 'swipe-candidate';
+      this.pointerDragStarted = false;
+      this.syncPanCursor();
       return;
     }
 
@@ -212,7 +233,9 @@ export class CanvasInteraction {
 
     if (this.active.size === 0) {
       this.state = 'idle';
+      this.pointerDragStarted = false;
     }
+    this.syncPanCursor();
   };
 
   private onGlobalPointerUp = (e: PointerEvent): void => {
@@ -225,8 +248,10 @@ export class CanvasInteraction {
     this.active.delete(e.pointerId);
     if (this.active.size === 0) {
       this.state = 'idle';
+      this.pointerDragStarted = false;
       this.diagnostics.debug('gesture-cancel', 'Pointer gesture cancelled', {});
     }
+    this.syncPanCursor();
   };
 
   private onGlobalPointerCancel = (e: PointerEvent): void => {
@@ -240,6 +265,7 @@ export class CanvasInteraction {
 
   private onTouchStart = (e: TouchEvent): void => {
     if (!this.enabled) return;
+    this.canvas.classList.remove('is-fine-pointer');
     // Suppress synthetic mouse/click events that the browser would emit
     // after this touch sequence finishes (Bug 3).
     if (e.cancelable) e.preventDefault();
@@ -299,6 +325,7 @@ export class CanvasInteraction {
     if (e.touches.length === 0) {
       this.active.clear();
       this.state = 'idle';
+      this.pointerDragStarted = false;
     }
   };
 
@@ -319,6 +346,7 @@ export class CanvasInteraction {
 
   private onLegacyMouseMove = (e: MouseEvent): void => {
     if (!this.enabled) return;
+    this.canvas.classList.add('is-fine-pointer');
     // Used only in the Touch Events fallback path on browsers without
     // Pointer Events. Updates hover rotation on fine-pointer desktops.
     if (this.state !== 'idle') return;
@@ -355,6 +383,15 @@ export class CanvasInteraction {
       this.state = 'idle';
       this.galleryManager.setHoverTarget(0, 0);
     }
+    this.syncPanCursor();
+  }
+
+  private syncPanCursor(): void {
+    this.canvas.classList.toggle(
+      'is-panning',
+      this.enabled && this.state === 'panning' && this.galleryManager.canPan()
+        && this.pointerDragStarted
+    );
   }
 
   dispose(): void {
@@ -367,6 +404,7 @@ export class CanvasInteraction {
       this.canvas.removeEventListener('pointerup', this.onPointerUp);
       this.canvas.removeEventListener('pointercancel', this.onPointerCancel);
       this.canvas.removeEventListener('lostpointercapture', this.onPointerCancel);
+      this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
       window.removeEventListener('pointermove', this.onGlobalPointerMove);
       window.removeEventListener('pointerup', this.onGlobalPointerUp);
       window.removeEventListener('pointercancel', this.onGlobalPointerCancel);
@@ -380,6 +418,8 @@ export class CanvasInteraction {
     }
     this.canvas.removeEventListener('wheel', this.onWheel);
     this.active.clear();
+    this.canvas.classList.remove('is-fine-pointer', 'is-pan-available', 'is-panning');
+    this.galleryManager.setPanAvailabilityListener(null);
   }
 }
 

@@ -102,6 +102,20 @@ const HUB_BACKGROUND_BASE_URL =
 const HUB_IMAGE_TIMEOUT_MS = 5000;
 const HUB_INLINE_IMAGE_TIMEOUT_MS = 20000;
 const NARROW_PORTRAIT_QUERY = '(max-aspect-ratio: 4/5)';
+const SHADOW_FEEDBACK_VARIABLES = [
+  '--hub-shadow-fill-alpha',
+  '--hub-shadow-opacity',
+  '--hub-shadow-contact-alpha',
+  '--hub-shadow-contact-blur',
+  '--hub-shadow-directional-alpha',
+  '--hub-shadow-directional-blur',
+  '--hub-shadow-ambient-alpha',
+  '--hub-shadow-ambient-blur',
+] as const;
+const SHADOW_FEEDBACK_PROFILES = {
+  emphasis: ['0.32', '1', '0.6', '4px', '0.46', '17px', '0.27', '26px'],
+  selected: ['0.28', '0.96', '0.54', '3px', '0.4', '14px', '0.23', '24px'],
+} as const;
 
 type SlotImageAttemptFailureReason =
   | 'no-source'
@@ -197,6 +211,7 @@ interface SlotView {
   slot: ResolvedHubSlot;
   button: HTMLButtonElement;
   shadowPath: SVGPathElement;
+  spotlight: HTMLSpanElement | null;
   image: HTMLImageElement | null;
   imageLoadToken: number;
   /** Immutable ratio captured from the decoded source image. */
@@ -296,6 +311,7 @@ export class MainMuseumHub {
   private narrowMode = false;
   private lastActivatedSlotId: string | null = null;
   private selectedArtworkId: string | null = null;
+  private explicitlySelectedArtworkId: string | null = null;
   private lastSelectionSignature: string | null = null;
   private decodedPages = new Set<number>();
   private idleDecodeHandle: number | null = null;
@@ -554,6 +570,14 @@ export class MainMuseumHub {
     const nextArtworkId =
       artworkId && this.resolution.artworkToSlot.has(artworkId) ? artworkId : null;
     this.selectedArtworkId = nextArtworkId;
+    if (options.source === 'slot-click') {
+      this.explicitlySelectedArtworkId = nextArtworkId;
+    } else if (
+      options.source !== 'gallery-navigate'
+      || this.explicitlySelectedArtworkId !== nextArtworkId
+    ) {
+      this.explicitlySelectedArtworkId = null;
+    }
     const selectedView = nextArtworkId
       ? this.slotViews.find((view) => view.slot.artworkId === nextArtworkId && !view.button.disabled)
       : undefined;
@@ -631,11 +655,16 @@ export class MainMuseumHub {
   ): void {
     let selectedView: SlotView | undefined;
     for (const view of this.slotViews) {
-      const selected = !!this.selectedArtworkId && view.slot.artworkId === this.selectedArtworkId;
+      const current = !!this.selectedArtworkId && view.slot.artworkId === this.selectedArtworkId;
+      const selected = !!this.explicitlySelectedArtworkId
+        && view.slot.artworkId === this.explicitlySelectedArtworkId;
       view.button.classList.toggle('is-selected', selected);
+      view.shadowPath.classList.toggle('is-selected', selected);
+      if (view.spotlight) this.syncArtworkSpotlight(view.button, view.spotlight);
+      this.syncShadowFeedback(view.shadowPath);
+      if (current) selectedView = view;
       if (selected) {
         view.button.setAttribute('aria-current', 'true');
-        selectedView = view;
       } else {
         view.button.removeAttribute('aria-current');
       }
@@ -737,6 +766,51 @@ export class MainMuseumHub {
     this.roomLayers[slot.pageIndex]
       ?.querySelector<SVGSVGElement>('.museum-hub__shadows')
       ?.appendChild(shadowPath);
+    const spotlight = slot.selectable && slot.artworkId
+      ? document.createElement('span')
+      : null;
+    spotlight?.classList.add('museum-hub__artwork-light');
+    if (spotlight) {
+      spotlight.setAttribute('aria-hidden', 'true');
+      button.appendChild(spotlight);
+    }
+    button.addEventListener('pointerenter', (event) => {
+      if ((event.pointerType === 'mouse' || event.pointerType === 'pen') && event.buttons === 0) {
+        button.classList.add('is-hovered');
+        shadowPath.classList.add('is-hovered');
+        if (spotlight) this.syncArtworkSpotlight(button, spotlight, event);
+        this.syncShadowFeedback(shadowPath);
+      }
+    });
+    button.addEventListener('pointermove', (event) => {
+      if (
+        spotlight
+        && button.classList.contains('is-hovered')
+        && (event.pointerType === 'mouse' || event.pointerType === 'pen')
+        && event.buttons === 0
+      ) {
+        this.syncArtworkSpotlight(button, spotlight, event);
+      }
+    });
+    button.addEventListener('pointerleave', () => {
+      button.classList.remove('is-hovered');
+      shadowPath.classList.remove('is-hovered');
+      if (spotlight) this.syncArtworkSpotlight(button, spotlight);
+      this.syncShadowFeedback(shadowPath);
+    });
+    button.addEventListener('focus', () => {
+      const keyboardFocus = button.matches(':focus-visible');
+      button.classList.toggle('is-focused', keyboardFocus);
+      shadowPath.classList.toggle('is-focused', keyboardFocus);
+      if (spotlight) this.syncArtworkSpotlight(button, spotlight);
+      this.syncShadowFeedback(shadowPath);
+    });
+    button.addEventListener('blur', () => {
+      button.classList.remove('is-focused');
+      shadowPath.classList.remove('is-focused');
+      if (spotlight) this.syncArtworkSpotlight(button, spotlight);
+      this.syncShadowFeedback(shadowPath);
+    });
 
     let image: HTMLImageElement | null = null;
     if (slot.selectable && slot.artworkId) {
@@ -815,6 +889,7 @@ export class MainMuseumHub {
       slot,
       button,
       shadowPath,
+      spotlight,
       image,
       imageLoadToken: 0,
       nativeAspectRatio: null,
@@ -829,6 +904,55 @@ export class MainMuseumHub {
     this.applySlotGeometry(button, slot, false, 1, shadowPath);
     this.syncSlotRenderer(view, render);
     return view;
+  }
+
+  private syncShadowFeedback(shadowPath: SVGPathElement): void {
+    const selected = shadowPath.classList.contains('is-selected');
+    const emphasized = selected
+      || shadowPath.classList.contains('is-hovered')
+      || shadowPath.classList.contains('is-focused');
+    if (!emphasized || this.calibrating || this.debugGeometry) {
+      for (const variable of SHADOW_FEEDBACK_VARIABLES) shadowPath.style.removeProperty(variable);
+      return;
+    }
+    const profile = selected
+      ? SHADOW_FEEDBACK_PROFILES.selected
+      : SHADOW_FEEDBACK_PROFILES.emphasis;
+    SHADOW_FEEDBACK_VARIABLES.forEach((variable, index) => {
+      shadowPath.style.setProperty(variable, profile[index]);
+    });
+  }
+
+  private syncArtworkSpotlight(
+    button: HTMLButtonElement,
+    spotlight: HTMLSpanElement,
+    pointer?: PointerEvent
+  ): void {
+    if (this.calibrating || this.debugGeometry) {
+      button.classList.remove('is-illuminated');
+      return;
+    }
+    const selected = button.classList.contains('is-selected');
+    const focused = button.classList.contains('is-focused');
+    const hovered = button.classList.contains('is-hovered');
+    if (!selected && !focused && !hovered) {
+      button.classList.remove('is-illuminated');
+      return;
+    }
+    if (selected) {
+      spotlight.style.setProperty('--hub-light-x', '50%');
+      spotlight.style.setProperty('--hub-light-y', '42%');
+    } else if (pointer && hovered) {
+      const bounds = button.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((pointer.clientX - bounds.left) / bounds.width) * 100));
+      const y = Math.max(0, Math.min(100, ((pointer.clientY - bounds.top) / bounds.height) * 100));
+      spotlight.style.setProperty('--hub-light-x', `${x.toFixed(2)}%`);
+      spotlight.style.setProperty('--hub-light-y', `${y.toFixed(2)}%`);
+    } else if (focused) {
+      spotlight.style.setProperty('--hub-light-x', '50%');
+      spotlight.style.setProperty('--hub-light-y', '42%');
+    }
+    button.classList.add('is-illuminated');
   }
 
   private applySlotGeometry(
@@ -2136,7 +2260,7 @@ export class MainMuseumHub {
       this.visual.style.setProperty('--hub-focus-scale', '1');
       this.visual.style.setProperty('--hub-focus-x', '0%');
     } else if (wallFocus === 'front') {
-      this.visual.style.setProperty('--hub-focus-scale', '1.45');
+      this.visual.style.setProperty('--hub-focus-scale', '1.1');
       this.visual.style.setProperty('--hub-focus-x', '0%');
     } else {
       this.visual.style.setProperty('--hub-focus-scale', '1.9');

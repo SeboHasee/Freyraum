@@ -1,9 +1,109 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Pan-aware cursor and control help (2026-10-20)
+
+- [x] Follow gallery pan capability from `GalleryManager.canPan()` through zoom,
+      navigation, and viewport changes; show `grab` while panning is available and
+      `grabbing` only after a fine-pointer drag can move the view.
+- [x] Show room-view cursor feedback only above fit scale when photo bounds allow
+      pan; leave touch-only devices without mouse cursor cues.
+- [x] Align gallery and room help with implemented wheel zoom, conditional
+      drag-to-pan, gallery swipe navigation at overview, and touch gestures.
+- [x] Add structural and generated-preview browser assertions for both help
+      contexts, non-pannable overview, pannable zoom, active drag, reset, and
+      touch-pointer cursor behavior.
+- [x] Clear photo-room pan cursor state after zoom/reset animation targets are
+      removed, and make browser checks assert a meaningfully zoomed camera rather
+      than an exact serialized transform string.
+- [ ] Resolve the generated-preview browser timeout at the configured maximum
+      photo-camera scale; the latest run reached 5.99409 rather than exactly 6.
+- [x] Complete the production/customer-preview build, focused structural checks,
+      lint, typecheck, and documentation-authority checks; full browser-suite
+      success remains open pending the maximum-zoom check.
+- [x] Complete the final secret scan and parallel validation; no secrets or
+      CodeQL alerts were found. The automated review executable was unavailable.
+
+## Museum artwork spotlight and action feedback (2026-10-20)
+
+- [x] Diagnose the visitor CSS feedback gap: the normal museum view hid artwork
+      focus/hover outlines and labels, leaving only the shadow emphasis.
+- [x] Add a warm, soft radial light clipped inside the existing projected artwork
+      button; follow fine-pointer movement and center on focus/selection.
+- [x] Keep selected feedback stable, touch hover inactive, reduced motion honored,
+      and calibration/debug views free of the visitor spotlight.
+- [x] Add exact front-right (`room-01.wall-front.b`, Akt 27) pointer-target and
+      same-slot shadow checks, plus front/side neighbor and responsive coverage.
+- [x] Reduce the narrow front-wall view scale so the right-front projected center
+      and complete hit bounds remain reachable at phone/tablet sizes; artwork
+      placement, projective transform, and clip path are unchanged.
+- [x] Inventory existing acknowledgement for artwork open, room toggle, timeline,
+      audio, fullscreen, disabled and loading/error states; avoid redundant motion.
+- [x] Run generated-preview hub checks and capture desktop/tablet/phone normal and
+      hover states plus desktop focus, selection, and angled side-wall hover.
+- [x] Run structural regression, lint, typecheck, production/customer-preview build,
+      front-wall aspect test, and full generated-preview browser suite; keep the
+      known doorway geometry failure tracked separately.
+- [x] Complete secret scanning and CodeQL validation; the separate read-only
+      review found no significant issues, while automated review was unavailable.
+      Preserve the existing zoom and geometry gates for their own follow-up.
+
+## Museum spotlight presentation refinement (2026-10-20)
+
+- [x] Trace initial boot and return-to-hub synchronization: gallery artwork ID is
+      synchronized for navigation/focus, but its presentation is not user-selected.
+- [x] Keep persistent hub selection styling only for explicit slot activation;
+      clear that state on hub return while retaining the gallery's current artwork.
+- [x] Remove visitor artwork frames and floating title badges; keep accessible
+      button names and replace the keyboard frame with a small focus marker.
+- [x] Soften the spotlight and keep its projected clipping, hover/focus behavior,
+      touch guard, reduced-motion support, and existing shadow geometry.
+- [x] Add browser verification for idle/explicit/return states, focus marker,
+      no visitor title badges, matching shadow/light, and unchanged geometry;
+      capture desktop/tablet/phone states and front/side hover.
+- [x] Run structural regression, lint, typecheck, production/customer-preview
+      build, and the complete generated-preview browser suite.
+- [x] Complete secret scanning and CodeQL validation; the separate read-only
+      review found no significant issues, while automated review was unavailable.
+      Keep the known museum doorway geometry failure tracked separately.
+
+## Room zoom anchoring and museum hover (2026-10-20)
+
+- [x] Rebuild the generated preview and verify the existing room zoom baseline;
+      confirm the old browser coverage checked settled positions, not the in-flight
+      artwork path.
+- [x] Anchor animated button/wheel zoom to one scene-space artwork center, deriving
+      per-frame offsets from the eased scale and constraining them to photo bounds.
+- [x] Keep pan/pinch direct, and retarget zoom smoothly after input or viewport
+      changes; reduced motion still applies camera targets immediately.
+- [x] Add fine-pointer hover and keyboard-focus emphasis to each matching hub SVG
+      shadow; keep selection distinct, and preserve the artwork's exact hit target.
+- [x] Add browser and structural regression coverage for motion path, shadow state,
+      touch-only behavior, and reduced-motion transitions.
+- [ ] Complete generated-preview visual review and full validation; record any
+      remaining findings before presentation acceptance.
+
+## Mobile and tablet photo-room experience (2026-10-20)
+
+- [x] Keep desktop zoom easing and pointer hover tilt unchanged.
+- [x] Match the gallery's two-stage frame-independent zoom and pan smoothing for
+      button/wheel inputs on all pointer types; retarget active motion smoothly
+      without adding lag to direct pinch or pan gestures.
+- [x] Add an opt-in touch-device orientation tilt with explicit permission action,
+      neutral calibration, screen rotation handling, reduced-motion shutdown, and
+      room/page lifecycle cleanup.
+- [x] Keep the room controls and complete artwork within portrait, landscape,
+      tablet, narrow portrait, and short narrow-landscape browser fixtures.
+- [x] Test permission grant, denial, unsupported/insecure access, subtle angle
+      bounds, and page-hide suspension/resume without physical sensor hardware.
+- [x] Run room-view helper and generated-preview browser regressions, lint,
+      typecheck, and production/customer-preview build.
+- [ ] Verify the opt-in sensor feel on a physical customer phone; automated
+      orientation events cannot prove device-specific sensor calibration or comfort.
 
 ## Photo-room control consistency (2026-10-19)
 
@@ -34,6 +134,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       it because it adds no source detail while multiplying image and decode size.
 - [x] Cover portrait, 3:4, and square artwork at wide-desktop, tablet, portrait
       phone, and short-landscape aspect ratios in projection/browser regressions.
+- [x] Add an actual-browser Wohnbereich check at 2000×1080, assert complete
+      artwork bounds, and wait for two paint frames before capturing screenshots.
 - [ ] Reproduce the 2026-10-20 Wohnbereich screenshot at 2000×1080 with its exact
       generated bundle, room config, selected artwork, and camera state; verify the
       full frame stays onscreen and correct calibration if the current artifact also

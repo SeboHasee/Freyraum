@@ -1,17 +1,36 @@
 import type { Artwork } from '../config/artworks';
 import type { GalleryRoomView as GalleryRoomViewConfig } from '../config/museumHub';
 import { resolveArtworkImageSources } from '../utils/artworkImageSources';
+import { smoothDamp } from '../utils/math';
 import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
+import {
+  normalizeDeviceArtworkTilt,
+  requestDeviceOrientationAccess,
+  smoothDeviceArtworkTilt,
+  type DeviceArtworkTilt,
+} from './deviceOrientation';
 
 const MIN_CAMERA_SCALE = 1;
 const MAX_CAMERA_SCALE = 6;
-const CAMERA_ZOOM_DURATION_MS = 560;
+const CAMERA_ZOOM_LAMBDA = 4;
+const CAMERA_PAN_LAMBDA = 5;
 const HOVER_TILT_MAX_DEG = 0.14;
 const HOVER_INFLUENCE_RADIUS_PX = 900;
 
 interface PhotoPointer {
   x: number;
   y: number;
+}
+
+interface CameraZoomAnchor {
+  contentX: number;
+  contentY: number;
+  startScale: number;
+  startScreenX: number;
+  startScreenY: number;
+  targetScreenX: number;
+  targetScreenY: number;
+  targetScale: number;
 }
 
 type CameraGesture =
@@ -50,6 +69,7 @@ export class GalleryRoomView {
   private readonly zoomOutButton: HTMLButtonElement;
   private readonly zoomInButton: HTMLButtonElement;
   private readonly resetButton: HTMLButtonElement;
+  private readonly motionToggleButton: HTMLButtonElement;
   private readonly closeButton: HTMLButtonElement;
   private readonly utilityControls: HTMLDivElement;
   private readonly timelineHost: HTMLDivElement;
@@ -64,10 +84,27 @@ export class GalleryRoomView {
   private cameraScale = 1;
   private cameraOffsetX = 0;
   private cameraOffsetY = 0;
+  private cameraZoom = 1;
+  private cameraPanX = 0;
+  private cameraPanY = 0;
   private artworkCenter: PhotoPointer | null = null;
   private cameraAnimationFrame = 0;
   private cameraAnimationTargetScale: number | null = null;
+  private cameraAnimationTargetOffsetX: number | null = null;
+  private cameraAnimationTargetOffsetY: number | null = null;
+  private cameraAnimationAnchor: CameraZoomAnchor | null = null;
+  private motionTiltEnabled = false;
+  private motionPermissionPending = false;
+  private motionListenersAttached = false;
+  private motionVisibilityListenerAttached = false;
+  private motionNeutral: PhotoPointer | null = null;
+  private motionTiltCurrent: DeviceArtworkTilt = { tiltX: 0, tiltY: 0 };
+  private motionTiltTarget: DeviceArtworkTilt = { tiltX: 0, tiltY: 0 };
+  private motionTiltFrame = 0;
+  private motionTiltLastFrameAt = 0;
+  private motionModeObserver: MutationObserver | null = null;
   private gesture: CameraGesture | null = null;
+  private pointerDragStarted = false;
   private timelineElement: HTMLElement | null = null;
   private timelineOriginalParent: HTMLElement | null = null;
   private timelineOriginalNextSibling: Node | null = null;
@@ -95,6 +132,7 @@ export class GalleryRoomView {
 
     const scene = document.createElement('div');
     scene.className = 'gallery-room-view__scene';
+    scene.addEventListener('pointermove', this.onPanPointerMove);
     scene.addEventListener('pointerdown', this.onPointerDown);
     scene.addEventListener('pointermove', this.onPointerMove);
     scene.addEventListener('pointermove', this.onRoomPointerMove);
@@ -182,7 +220,19 @@ export class GalleryRoomView {
       '⟲'
     );
     this.resetButton.addEventListener('click', () => this.resetCamera(true));
+    this.motionToggleButton = this.createControlButton(
+      'zoom-controls__btn gallery-room-view__motion-toggle',
+      'Bewegungssteuerung aktivieren',
+      '↗'
+    );
+    this.motionToggleButton.setAttribute('aria-pressed', 'false');
+    this.motionToggleButton.addEventListener('click', () => {
+      void this.toggleDeviceMotionTilt();
+    });
     zoomControls.append(this.zoomInButton, this.zoomOutButton, this.resetButton);
+    zoomControls.appendChild(this.motionToggleButton);
+    this.motionToggleButton.title =
+      'Gerät bewegen, um das Kunstwerk sanft zu neigen. Antippen, um die Bewegungssteuerung zu aktivieren.';
 
     const timelineHost = document.createElement('div');
     timelineHost.className = 'gallery-room-view__timeline-host';
@@ -201,6 +251,7 @@ export class GalleryRoomView {
       : new ResizeObserver(this.handleResize);
     this.resizeObserver?.observe(root);
     window.addEventListener('resize', this.handleResize, { passive: true });
+    this.motionPreference.addEventListener('change', this.onMotionPreferenceChange);
     root.addEventListener('keydown', this.onKeyDown);
     this.setViews(views);
   }
@@ -286,6 +337,7 @@ export class GalleryRoomView {
     this.visible = visible && this.enabled && this.activeView !== null;
     this.element.hidden = !this.visible;
     this.element.setAttribute('aria-hidden', String(!this.visible));
+    if (!this.visible) this.disableDeviceMotionTilt();
     this.updateTimelinePlacement();
     this.onVisibilityChange(this.visible);
     if (this.visible) {
@@ -302,10 +354,13 @@ export class GalleryRoomView {
     if (this.disposed) return;
     this.disposed = true;
     if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
+    this.disableDeviceMotionTilt();
     this.resizeObserver?.disconnect();
     window.removeEventListener('resize', this.handleResize);
+    this.motionPreference.removeEventListener('change', this.onMotionPreferenceChange);
     this.element.removeEventListener('keydown', this.onKeyDown);
     this.scene.removeEventListener('pointerdown', this.onPointerDown);
+    this.scene.removeEventListener('pointermove', this.onPanPointerMove);
     this.scene.removeEventListener('pointermove', this.onPointerMove);
     this.scene.removeEventListener('pointermove', this.onRoomPointerMove);
     this.scene.removeEventListener('pointerleave', this.resetArtworkInteraction);
@@ -376,6 +431,7 @@ export class GalleryRoomView {
     this.cameraOffsetX = Math.min(0, Math.max(-maxOffsetX, this.cameraOffsetX));
     this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
     this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
+    this.syncPanCursor();
     this.artworkImage.style.setProperty('--artwork-zoom', String(this.cameraScale));
     this.zoomOutButton.disabled = this.cameraScale <= MIN_CAMERA_SCALE;
     this.zoomInButton.disabled = this.cameraScale >= MAX_CAMERA_SCALE;
@@ -384,10 +440,20 @@ export class GalleryRoomView {
     this.updateArtworkTransform();
   }
 
-  private setCamera(scale: number, offsetX: number, offsetY: number): void {
+  private setCamera(
+    scale: number,
+    offsetX: number,
+    offsetY: number,
+    syncAnimationState = true
+  ): void {
     this.cameraScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
     this.cameraOffsetX = offsetX;
     this.cameraOffsetY = offsetY;
+    if (syncAnimationState) {
+      this.cameraZoom = this.cameraScale;
+      this.cameraPanX = this.cameraOffsetX;
+      this.cameraPanY = this.cameraOffsetY;
+    }
     this.applyCamera();
   }
 
@@ -413,33 +479,106 @@ export class GalleryRoomView {
     this.animateCamera(
       targetScale,
       rect.width * 0.5 - center.x * targetScale,
-      rect.height * 0.5 - center.y * targetScale
+      rect.height * 0.5 - center.y * targetScale,
+      center
     );
   }
 
-  private animateCamera(scale: number, offsetX: number, offsetY: number): void {
-    this.stopCameraAnimation();
-    this.cameraAnimationTargetScale = scale;
+  private animateCamera(
+    scale: number,
+    offsetX: number,
+    offsetY: number,
+    anchorContent?: PhotoPointer
+  ): void {
+    const targetScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
+    const rect = this.element.getBoundingClientRect();
+    const maxOffsetX = Math.max(0, rect.width * (targetScale - 1));
+    const maxOffsetY = Math.max(0, rect.height * (targetScale - 1));
+    const targetOffsetX = Math.min(0, Math.max(-maxOffsetX, offsetX));
+    const targetOffsetY = Math.min(0, Math.max(-maxOffsetY, offsetY));
+    this.cameraAnimationTargetScale = targetScale;
+    this.cameraAnimationTargetOffsetX = targetOffsetX;
+    this.cameraAnimationTargetOffsetY = targetOffsetY;
+    this.syncPanCursor();
+    this.cameraAnimationAnchor = anchorContent
+      ? {
+          contentX: anchorContent.x,
+          contentY: anchorContent.y,
+          startScale: this.cameraScale,
+          startScreenX: this.cameraOffsetX + anchorContent.x * this.cameraScale,
+          startScreenY: this.cameraOffsetY + anchorContent.y * this.cameraScale,
+          targetScreenX: targetOffsetX + anchorContent.x * targetScale,
+          targetScreenY: targetOffsetY + anchorContent.y * targetScale,
+          targetScale,
+        }
+      : null;
     if (this.motionPreference.matches || document.documentElement.dataset['motion'] === 'reduced') {
-      this.cameraAnimationTargetScale = null;
-      this.setCamera(scale, offsetX, offsetY);
+      this.stopCameraAnimation();
+      this.cameraZoom = targetScale;
+      this.cameraPanX = targetOffsetX;
+      this.cameraPanY = targetOffsetY;
+      this.setCamera(targetScale, targetOffsetX, targetOffsetY);
       return;
     }
-    const from = { scale: this.cameraScale, offsetX: this.cameraOffsetX, offsetY: this.cameraOffsetY };
-    const startedAt = performance.now();
+    if (this.cameraAnimationFrame) return;
+    let previousAt = performance.now();
     const tick = (now: number): void => {
-      const progress = Math.min(1, (now - startedAt) / CAMERA_ZOOM_DURATION_MS);
-      const eased = 1 - (1 - progress) ** 3;
+      const deltaSeconds = Math.max(0, Math.min(0.1, (now - previousAt) / 1000));
+      previousAt = now;
+
+      const nextTargetScale = this.cameraAnimationTargetScale ?? targetScale;
+      const nextTargetOffsetX = this.cameraAnimationTargetOffsetX ?? targetOffsetX;
+      const nextTargetOffsetY = this.cameraAnimationTargetOffsetY ?? targetOffsetY;
+      this.cameraZoom = smoothDamp(this.cameraZoom, nextTargetScale, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+      this.cameraPanX = smoothDamp(this.cameraPanX, nextTargetOffsetX, CAMERA_PAN_LAMBDA, deltaSeconds);
+      this.cameraPanY = smoothDamp(this.cameraPanY, nextTargetOffsetY, CAMERA_PAN_LAMBDA, deltaSeconds);
+      const nextScale = smoothDamp(this.cameraScale, this.cameraZoom, CAMERA_ZOOM_LAMBDA, deltaSeconds);
+      let nextOffsetX: number;
+      let nextOffsetY: number;
+      const anchor = this.cameraAnimationAnchor;
+      const scaleRange = anchor ? anchor.targetScale - anchor.startScale : 0;
+      if (anchor && Math.abs(scaleRange) >= 1e-6) {
+        const progress = Math.max(0, Math.min(1, (nextScale - anchor.startScale) / scaleRange));
+        const anchorScreenX = anchor.startScreenX
+          + (anchor.targetScreenX - anchor.startScreenX) * progress;
+        const anchorScreenY = anchor.startScreenY
+          + (anchor.targetScreenY - anchor.startScreenY) * progress;
+        const currentRect = this.element.getBoundingClientRect();
+        const currentMaxOffsetX = Math.max(0, currentRect.width * (nextScale - 1));
+        const currentMaxOffsetY = Math.max(0, currentRect.height * (nextScale - 1));
+        nextOffsetX = Math.min(0, Math.max(
+          -currentMaxOffsetX,
+          anchorScreenX - anchor.contentX * nextScale
+        ));
+        nextOffsetY = Math.min(0, Math.max(
+          -currentMaxOffsetY,
+          anchorScreenY - anchor.contentY * nextScale
+        ));
+      } else {
+        nextOffsetX = smoothDamp(this.cameraOffsetX, this.cameraPanX, CAMERA_PAN_LAMBDA, deltaSeconds);
+        nextOffsetY = smoothDamp(this.cameraOffsetY, this.cameraPanY, CAMERA_PAN_LAMBDA, deltaSeconds);
+      }
+      const settled = Math.abs(nextTargetScale - this.cameraScale) < 0.005
+        && Math.abs(nextTargetOffsetX - this.cameraOffsetX) < 0.75
+        && Math.abs(nextTargetOffsetY - this.cameraOffsetY) < 0.75;
       this.setCamera(
-        from.scale + (scale - from.scale) * eased,
-        from.offsetX + (offsetX - from.offsetX) * eased,
-        from.offsetY + (offsetY - from.offsetY) * eased
+        settled ? nextTargetScale : nextScale,
+        settled ? nextTargetOffsetX : nextOffsetX,
+        settled ? nextTargetOffsetY : nextOffsetY,
+        false
       );
-      if (progress < 1) {
+      if (!settled) {
         this.cameraAnimationFrame = window.requestAnimationFrame(tick);
       } else {
         this.cameraAnimationFrame = 0;
         this.cameraAnimationTargetScale = null;
+        this.cameraAnimationTargetOffsetX = null;
+        this.cameraAnimationTargetOffsetY = null;
+        this.cameraAnimationAnchor = null;
+        this.cameraZoom = nextTargetScale;
+        this.cameraPanX = nextTargetOffsetX;
+        this.cameraPanY = nextTargetOffsetY;
+        this.syncPanCursor();
       }
     };
     this.cameraAnimationFrame = window.requestAnimationFrame(tick);
@@ -455,21 +594,26 @@ export class GalleryRoomView {
     if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
     this.cameraAnimationFrame = 0;
     this.cameraAnimationTargetScale = null;
+    this.cameraAnimationTargetOffsetX = null;
+    this.cameraAnimationTargetOffsetY = null;
+    this.cameraAnimationAnchor = null;
+    this.cameraZoom = this.cameraScale;
+    this.cameraPanX = this.cameraOffsetX;
+    this.cameraPanY = this.cameraOffsetY;
   }
 
   private handleResize = (): void => {
+    this.applyCamera();
     if (this.cameraAnimationTargetScale !== null && this.artworkCenter) {
-      this.updateArtworkTransform();
       const rect = this.element.getBoundingClientRect();
       const scale = this.cameraAnimationTargetScale;
       this.animateCamera(
         scale,
         rect.width * 0.5 - this.artworkCenter.x * scale,
-        rect.height * 0.5 - this.artworkCenter.y * scale
+        rect.height * 0.5 - this.artworkCenter.y * scale,
+        this.artworkCenter
       );
-      return;
     }
-    this.applyCamera();
   };
 
   private updateArtworkTransform = (): void => {
@@ -505,9 +649,17 @@ export class GalleryRoomView {
     this.resetArtworkInteraction();
     const point = this.pointerPosition(event);
     this.pointers.set(event.pointerId, point);
+    this.pointerDragStarted = false;
     this.scene.setPointerCapture(event.pointerId);
     event.preventDefault();
     this.beginGesture();
+  };
+
+  private onPanPointerMove = (event: PointerEvent): void => {
+    this.scene.classList.toggle(
+      'is-fine-pointer',
+      event.pointerType === 'mouse' || event.pointerType === 'pen'
+    );
   };
 
   private onPointerMove = (event: PointerEvent): void => {
@@ -516,6 +668,7 @@ export class GalleryRoomView {
     const points = [...this.pointers.entries()];
     if (this.gesture?.kind === 'pan' && points.length === 1 && points[0]![0] === this.gesture.pointerId) {
       const point = points[0]![1];
+      this.pointerDragStarted ||= point.x !== this.gesture.startX || point.y !== this.gesture.startY;
       this.setCamera(
         this.cameraScale,
         this.gesture.offsetX + point.x - this.gesture.startX,
@@ -538,11 +691,13 @@ export class GalleryRoomView {
   private onPointerEnd = (event: PointerEvent): void => {
     if (!this.pointers.delete(event.pointerId)) return;
     if (this.scene.hasPointerCapture(event.pointerId)) this.scene.releasePointerCapture(event.pointerId);
+    this.pointerDragStarted = false;
     this.beginGesture();
   };
 
   private beginGesture(): void {
     const entries = [...this.pointers.entries()];
+    this.pointerDragStarted = false;
     if (entries.length >= 2) {
       const first = entries[0]![1];
       const second = entries[1]![1];
@@ -569,7 +724,14 @@ export class GalleryRoomView {
     } else {
       this.gesture = null;
     }
-    this.scene.classList.toggle('is-dragging', entries.length > 0);
+    this.syncPanCursor();
+  }
+
+  private syncPanCursor(): void {
+    const scale = Math.max(this.cameraScale, this.cameraAnimationTargetScale ?? MIN_CAMERA_SCALE);
+    const canPan = scale > MIN_CAMERA_SCALE + 0.001;
+    this.scene.classList.toggle('is-pan-available', canPan);
+    this.scene.classList.toggle('is-dragging', canPan && this.pointerDragStarted);
   }
 
   private pointerPosition(event: PointerEvent): PhotoPointer {
@@ -578,7 +740,7 @@ export class GalleryRoomView {
   }
 
   private onRoomPointerMove = (event: PointerEvent): void => {
-    if (event.pointerType !== 'mouse' || this.pointers.size > 0) return;
+    if (event.pointerType !== 'mouse' || this.pointers.size > 0 || this.motionTiltEnabled) return;
     if (document.documentElement.dataset['motion'] === 'reduced' || this.motionPreference.matches) {
       this.resetArtworkInteraction();
       return;
@@ -605,12 +767,176 @@ export class GalleryRoomView {
     this.artworkImage.style.setProperty('--artwork-tilt-y', `${x * HOVER_TILT_MAX_DEG * smoothInfluence}deg`);
   };
 
+  private toggleDeviceMotionTilt = async (): Promise<void> => {
+    if (this.motionTiltEnabled) {
+      this.disableDeviceMotionTilt();
+      return;
+    }
+    if (this.motionPermissionPending) return;
+    if (this.isReducedMotion()) {
+      this.showError('Die Bewegungssteuerung ist bei reduzierter Bewegung deaktiviert.');
+      return;
+    }
+    const orientation = window.DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+      requestPermission?: () => Promise<'granted' | 'denied'>;
+    };
+    this.motionPermissionPending = true;
+    this.motionToggleButton.disabled = true;
+    try {
+      const access = await requestDeviceOrientationAccess({
+        secureContext: window.isSecureContext,
+        supported: typeof orientation === 'function',
+        requestPermission: orientation?.requestPermission
+          ? () => orientation.requestPermission!()
+          : undefined,
+      });
+      if (!this.visible) return;
+      if (access !== 'granted') {
+        this.showError(
+          access === 'denied'
+            ? 'Bewegungszugriff wurde nicht erlaubt. Du kannst das Kunstwerk weiterhin berühren.'
+            : 'Bewegungssteuerung ist auf diesem Gerät nicht verfügbar.'
+        );
+        return;
+      }
+      this.status.textContent = '';
+      this.motionTiltEnabled = true;
+      this.motionToggleButton.setAttribute('aria-pressed', 'true');
+      this.motionToggleButton.setAttribute('aria-label', 'Bewegungssteuerung deaktivieren');
+      document.addEventListener('visibilitychange', this.onMotionVisibilityChange);
+      this.motionVisibilityListenerAttached = true;
+      this.attachDeviceMotionListeners();
+      this.observeMotionPreference();
+    } finally {
+      this.motionPermissionPending = false;
+      this.motionToggleButton.disabled = false;
+    }
+  };
+
+  private attachDeviceMotionListeners(): void {
+    if (!this.motionTiltEnabled || !this.visible || document.hidden || this.motionListenersAttached) return;
+    this.motionNeutral = null;
+    window.addEventListener('deviceorientation', this.onDeviceOrientation);
+    window.addEventListener('orientationchange', this.onDeviceScreenOrientationChange);
+    window.screen.orientation?.addEventListener('change', this.onDeviceScreenOrientationChange);
+    this.motionListenersAttached = true;
+  }
+
+  private detachDeviceMotionListeners(): void {
+    if (!this.motionListenersAttached) return;
+    window.removeEventListener('deviceorientation', this.onDeviceOrientation);
+    window.removeEventListener('orientationchange', this.onDeviceScreenOrientationChange);
+    window.screen.orientation?.removeEventListener('change', this.onDeviceScreenOrientationChange);
+    this.motionListenersAttached = false;
+  }
+
+  private disableDeviceMotionTilt(): void {
+    this.motionTiltEnabled = false;
+    this.detachDeviceMotionListeners();
+    if (this.motionVisibilityListenerAttached) {
+      document.removeEventListener('visibilitychange', this.onMotionVisibilityChange);
+      this.motionVisibilityListenerAttached = false;
+    }
+    this.motionModeObserver?.disconnect();
+    this.motionModeObserver = null;
+    if (this.motionTiltFrame) window.cancelAnimationFrame(this.motionTiltFrame);
+    this.motionTiltFrame = 0;
+    this.motionTiltLastFrameAt = 0;
+    this.motionNeutral = null;
+    this.motionTiltCurrent = { tiltX: 0, tiltY: 0 };
+    this.motionTiltTarget = { tiltX: 0, tiltY: 0 };
+    this.motionToggleButton.setAttribute('aria-pressed', 'false');
+    this.motionToggleButton.setAttribute('aria-label', 'Bewegungssteuerung aktivieren');
+    this.resetArtworkInteraction();
+  }
+
+  private observeMotionPreference(): void {
+    if (typeof MutationObserver === 'undefined') return;
+    this.motionModeObserver = new MutationObserver(() => {
+      if (this.isReducedMotion()) this.disableDeviceMotionTilt();
+    });
+    this.motionModeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-motion'],
+    });
+  }
+
+  private isReducedMotion(): boolean {
+    return this.motionPreference.matches || document.documentElement.dataset['motion'] === 'reduced';
+  }
+
+  private onDeviceOrientation = (event: DeviceOrientationEvent): void => {
+    if (!this.motionTiltEnabled || this.pointers.size > 0) return;
+    if (this.isReducedMotion()) {
+      this.disableDeviceMotionTilt();
+      return;
+    }
+    if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+    if (!this.motionNeutral) {
+      this.motionNeutral = { x: event.beta!, y: event.gamma! };
+      return;
+    }
+    const screenAngle = window.screen.orientation?.angle ?? 0;
+    this.motionTiltTarget = normalizeDeviceArtworkTilt(
+      event.beta!,
+      event.gamma!,
+      screenAngle,
+      this.motionNeutral.x,
+      this.motionNeutral.y
+    );
+    if (!this.motionTiltFrame) {
+      this.motionTiltLastFrameAt = performance.now();
+      this.motionTiltFrame = window.requestAnimationFrame(this.animateDeviceTilt);
+    }
+  };
+
+  private animateDeviceTilt = (now: number): void => {
+    this.motionTiltFrame = 0;
+    if (!this.motionTiltEnabled || !this.visible) return;
+    const deltaSeconds = Math.min(0.1, Math.max(0, (now - this.motionTiltLastFrameAt) / 1000));
+    this.motionTiltLastFrameAt = now;
+    this.motionTiltCurrent = smoothDeviceArtworkTilt(
+      this.motionTiltCurrent,
+      this.motionTiltTarget,
+      deltaSeconds
+    );
+    const active = Math.abs(this.motionTiltCurrent.tiltX) + Math.abs(this.motionTiltCurrent.tiltY) > 0.01;
+    this.scene.classList.toggle('has-artwork-proximity', active);
+    this.artworkImage.style.setProperty('--artwork-tilt-x', `${this.motionTiltCurrent.tiltX}deg`);
+    this.artworkImage.style.setProperty('--artwork-tilt-y', `${this.motionTiltCurrent.tiltY}deg`);
+    const settled = Math.abs(this.motionTiltTarget.tiltX - this.motionTiltCurrent.tiltX) < 0.005
+      && Math.abs(this.motionTiltTarget.tiltY - this.motionTiltCurrent.tiltY) < 0.005;
+    if (!settled) this.motionTiltFrame = window.requestAnimationFrame(this.animateDeviceTilt);
+  };
+
+  private onDeviceScreenOrientationChange = (): void => {
+    this.motionNeutral = null;
+    this.motionTiltTarget = { tiltX: 0, tiltY: 0 };
+  };
+
+  private onMotionVisibilityChange = (): void => {
+    if (document.hidden) {
+      this.detachDeviceMotionListeners();
+      if (this.motionTiltFrame) window.cancelAnimationFrame(this.motionTiltFrame);
+      this.motionTiltFrame = 0;
+      this.motionTiltCurrent = { tiltX: 0, tiltY: 0 };
+      this.resetArtworkInteraction();
+      return;
+    }
+    this.attachDeviceMotionListeners();
+  };
+
+  private onMotionPreferenceChange = (): void => {
+    if (this.isReducedMotion()) this.disableDeviceMotionTilt();
+  };
+
   private onArtworkFocus = (): void => {
     this.artworkImage.style.setProperty('--artwork-tilt-x', '0deg');
     this.artworkImage.style.setProperty('--artwork-tilt-y', '0deg');
   };
 
   private resetArtworkInteraction = (): void => {
+    this.scene.classList.remove('is-fine-pointer');
     this.scene.classList.remove('has-artwork-proximity');
     this.artworkImage.style.setProperty('--artwork-tilt-x', '0deg');
     this.artworkImage.style.setProperty('--artwork-tilt-y', '0deg');

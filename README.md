@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -9,6 +9,9 @@ The default room follows the supplied reference: **Gartenszene** front-left,
 **Akt 27** front-right, **Fraktal** on the left side wall and **Wunderbaum** on
 the right, over `Museum_ohne_Bilder.png`. The checked-in
 `customer-artworks/museum-hub.json` owns this arrangement and its native-ratio sizes.
+In the museum hub, hovering a painting with a mouse or focusing it by keyboard
+gently deepens its wall shadow; the touch experience and artwork placement stay
+unchanged, and the selected painting keeps its separate highlight.
 The source filenames are `Gatrenszene.png`, `Akt 27.png`, `Fraktal.png` and
 `Wunderbaum.png` in `customer-artworks/inbox/` (the garden filename is misspelled).
 After downloading a project update, run `Update Gallery.bat` / `Update Gallery.command`
@@ -39,13 +42,21 @@ In the inspection gallery, choose **Fotoraum** to open one of four photographs:
 the gallery timeline to select the artwork, so selection stays synchronized
 when switching between gallery and room. Use the room selector for a different
 photograph and **Zurück zur Galerie** to leave.
-Drag to pan, zoom with the wheel/pinch/buttons, and reset the view with the
-on-screen control. Zoom buttons bring the projected artwork center toward the
-viewport center; wheel and pinch stay anchored to the pointer/gesture. The artwork
-keeps its configured size on the photographed wall. Nearby mouse movement
-produces a very subtle, smoothly returning tilt, with stronger contact and
-directional shadows to keep the print attached to the wall. This is a bounded 2D
-photo camera, not true 3D orbit or movement.
+When zoomed in and the photo bounds allow movement, drag to pan; zoom with the
+wheel, pinch, or buttons, and reset with the on-screen control. Zoom buttons bring
+the projected artwork center toward the viewport center; wheel also recenters on
+the artwork, while pinch stays anchored to the gesture. The artwork remains
+registered to its configured wall placement.
+Zoom buttons and wheel motion
+use the gallery's two-stage, frame-rate-independent camera easing on desktop and
+touch devices, with smooth target retargeting during repeated input; active drag
+and pinch remain direct. Nearby desktop mouse movement produces a very subtle,
+smoothly returning tilt. On touch devices, the **↗** control optionally enables
+subtle artwork tilt from phone movement; sensor access is requested only after
+that action, and the feature can be disabled again. Unsupported or denied sensors
+leave touch controls available. Reduced motion disables sensor tilt. Stronger
+contact and directional shadows keep the print attached to the wall. This is a
+bounded 2D photo camera, not true 3D orbit or movement.
 `customer-artworks/museum-hub.json` owns the room photo and placement data;
 in the placement editor's **Raum** tab, **Foto-Raum gestalten** selects a room
 and edits its normalized wall corners and artwork position/height with the same

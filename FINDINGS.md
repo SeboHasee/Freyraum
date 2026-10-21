@@ -1,5 +1,158 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+
+## 2026-10-20 — Pan-aware cursors and accurate interaction help
+
+- Gallery dragging is context-sensitive: when `GalleryManager.canPan()` is false,
+  the one-pointer horizontal gesture remains a navigation swipe; when true, it
+  pans within the bounded inspection range. Do not show `grab` solely because the
+  canvas is interactive or zoom controls are available.
+- The gallery now reports pan-capability changes after zoom, artwork changes,
+  viewport refits, and reset. The room view derives the same affordance from its
+  current/target camera scale. `grabbing` appears only after a fine pointer moves
+  during a pan-capable gesture; touch pointer events clear the mouse-cursor cue.
+- Reset-fit is not universally non-pannable: artwork size and its deliberately
+  bounded reveal margin can leave a small valid pan range. Cursor tests therefore
+  distinguish an actually non-pannable overview from reset-fit, where grab is
+  correct only when pan limits remain available.
+- Both help contexts list mouse-wheel zoom. Drag descriptions are conditional on
+  the view being enlarged; gallery help additionally distinguishes overview swipe
+  navigation and includes the implemented two-finger zoom/pan gesture.
+- Generated-preview browser checks exercise cursor states for fit/overview,
+  zoomed drag, reset, and coarse-pointer input, plus rendered help entries. The
+  existing gallery navigation and photo-room camera gesture behavior is unchanged.
+- A fresh merge-readiness browser run exposed a stale photo-room cursor class at
+  reset-to-fit: camera styles were applied before the completed animation cleared
+  its target scale, so the final pan-availability refresh still saw the old
+  zoomed camera. Recompute cursor state after clearing the completed target.
+- The cursor regression now waits for a clearly zoomed camera instead of matching
+  the exact `scale(1.25)` serialization, and samples the photo background outside
+  the projected artwork frame. This keeps cursor checks independent of transform
+  formatting and hit-testing the artwork itself.
+- The latest full browser run passes cursor states, all four photo decodes, and
+  responsive room/control bounds, but times out at the later exact maximum-zoom
+  check: the camera is at scale 5.99409 instead of 6. Do not claim the complete
+  browser suite passes until this terminal-zoom check is understood and verified.
+
+## 2026-10-20 — Museum spotlight presentation refinement
+
+- Hub setup and `router-enter-hub` both synchronize the hub with the gallery's
+  current artwork ID. Treat that as navigation/focus state, not a visitor-visible
+  selected state: only an explicit slot activation should receive the selected cue.
+  Keep the explicit cue through the matching synchronous gallery-navigation update,
+  then clear it when the hub is entered again.
+- Artwork titles remain available in the gallery timeline, info panel, and each
+  hub button's accessible name. The visitor hub should not repeat them as floating
+  badges over the artwork.
+- Avoid a border/frame treatment around artwork. Use the soft projected spotlight
+  as the pointer cue and a small, high-contrast point for keyboard focus; keep the
+  focus cue restricted to `:focus-visible`.
+- The spotlight remains a clipped, pointer-inert child overlay. Do not change the
+  button's projective clip, artwork homography, or separate SVG shadow path.
+- The generated-preview browser suite now confirms the initial Akt 27 slot is not
+  selected despite gallery synchronization, explicit activation receives a brief
+  selected acknowledgement, and returning to the hub clears it. Keyboard focus
+  uses the small marker without revealing a title badge. Mouse/pen hover, touch,
+  reduced motion, desktop/tablet/phone hit geometry, and side-wall association
+  checks pass; the full photo-room/browser suite also completes.
+- The known independent `npm run validate:museum-hub` doorway-height assertion
+  remains tracked in the previous finding; this interaction update changes no
+  wall geometry or artwork placement.
+
+## 2026-10-20 — Museum artwork spotlight and interaction audit
+
+- The visitor-only museum CSS hid both the artwork outline pseudo-element and its
+  label for every artwork, including the front-right `room-01.wall-front.b`
+  (`Akt 27`). The generated-preview test confirms real pointer movement reaches
+  that slot and its paired shadow at desktop, tablet, and phone sizes; this is
+  not a shadow overlap or slot-association fault. Restoring the visitor outline,
+  label, and aligned light fixes the feedback visibility gap.
+- Render the light as a pointer-inert child of the artwork button. The button's
+  existing projective clip therefore constrains the light to the same quad while
+  the image transform, bounds, button target, and matching SVG shadow path remain
+  unchanged. The separate shadow path remains the only owner of wall-shadow filters.
+- Fine-pointer hover positions the light in button-local coordinates; keyboard
+  focus and selected state center it, with selection taking priority. Reduced
+  motion removes both light and shadow easing; touch does not set hover state;
+  calibration/debug prevents the visitor light from appearing.
+- At 390×844, the previous 1.45 narrow front-wall focus zoom pushed the right
+  artwork center beyond the viewport even though a visible edge remained hittable.
+  Reducing only the shared narrow-view focus scale to 1.1 brings the complete
+  projected button bounds back onscreen; placement, local clip path, and projective
+  image matrix remain unchanged. The browser test asserts center hit-testing and
+  full viewport bounds at phone and tablet sizes.
+- Existing action acknowledgements remain in place rather than gaining competing
+  animation: artwork open disables repeat activation and updates selection/status;
+  room view uses `aria-pressed` and its active control style; timeline selection
+  updates its current marker/counter; audio exposes muted/playing/autoplay-blocked
+  state and disables volume when muted; fullscreen tracks `aria-pressed` and marks
+  unsupported state. Preferences expose expanded/dialog and native form state;
+  transition/loading controls disable repeat activation, while fallback screens
+  explain startup/asset/WebGL outcomes and offer a retry or 2D continuation when
+  available. Preserve these state signals when refining presentation.
+- Generated-preview museum checks pass at 1440×900, 768×1024, and 390×844,
+  including exact front-right center hit, side-wall hit targets, focus, selected
+  precedence, touch, reduced motion, and debug/editor suppression. An earlier
+  run timed out at the unchanged photo-room maximum-zoom assertion; the later full
+  generated-preview browser run completed all hub and room-view checks without
+  changing zoom behavior.
+- `npm run validate:museum-hub` still fails at the known wall-left doorway-height
+  assertion (`scripts/test-museum-hub-geometry.mjs:411`); do not weaken or modify
+  that unrelated geometry gate for this feedback change.
+
+## 2026-10-20 — Room zoom anchoring and museum hover
+
+- The generated customer-preview browser baseline loaded all four rooms and
+  passed the existing camera endpoint checks. Those checks did not sample the
+  artwork's path while zooming, so they could not establish whether a user-visible
+  lateral drift was occurring.
+- `GalleryRoomView.animateCamera()` independently smoothed scale and X/Y offsets.
+  The offsets target a centered artwork but photo-coverage clamps can engage
+  differently on each axis. For artwork-centered button/wheel zoom, derive each
+  frame's offsets from the artwork's scene-space center and its eased screen-space
+  path; keep all offsets constrained to the zoomed-photo bounds. Direct drag and
+  pinch continue to set camera state from the user's gesture.
+- Museum-hub artwork buttons and their shadow SVG paths are separate elements.
+  Keep feedback on the matching pointer-inert shadow path, never on the clipped
+  artwork button, so the projective quad, hit area, and wall registration remain
+  unchanged. Limit hover feedback to fine pointers; keyboard focus can use the
+  same subtle emphasis, while selection styling remains higher priority.
+- Browser regressions now sample the artwork center during off-center zoom and
+  cover hover/focus, selection precedence, touch-only input, and reduced motion.
+
+## 2026-10-20 — Mobile and tablet photo-room pass
+
+- The generated customer-preview browser regression passes at desktop
+  (1440×900, plus Wohnbereich at 2000×1080), tablet (768×1024), phone
+  portrait (320×568 and 390×844), narrow short landscape (390×320), and
+  landscape (844×390) for all four configured rooms. It checks artwork bounds,
+  control bounds, and collisions.
+- The first pass only enabled gallery-style zoom smoothing for coarse pointers and
+  left desktop on a fixed 560 ms cubic curve. The user reported that room zoom
+  still felt less smooth than gallery zoom. Comparison against
+  `GalleryManager.update()` showed gallery zoom actually uses two cascaded λ=4
+  smoothers (target-to-zoom, then zoom-to-camera) and two λ=5 pan smoothers.
+- The follow-up photo-room animation mirrors that cascade on all pointer types and
+  retargets active zoom/pan targets instead of cancelling and restarting the
+  animation. Direct gesture pan/pinch continue to synchronize the smoothing state
+  to the finger position; the shared photo/artwork projection remains unchanged.
+- Browser tests now wait for the camera to settle and check consecutive button
+  inputs retarget one live animation. The generated-preview matrix passes on
+  desktop, tablet, portrait, and landscape fixtures.
+- Constrain the computed pan target to the final scale's covered-photo bounds.
+  Without that, edge-clamped target offsets could prevent the camera from reaching
+  its terminal scale and leave zoom buttons short of the max. The rebuilt preview
+  passes the complete photo-room matrix, including button retargeting, artwork-
+  centered wheel zoom, pan/pinch directness, reset, and exact min/max camera bounds.
+- The touch-only motion toggle is user-enabled. Synthetic browser coverage checks
+  unavailable sensors, denied/granted permission, subtle clamped tilt, page-hide
+  suspension/resume, and reduced-motion shutdown; pure helper tests cover secure
+  context and screen-angle normalization. Physical-device sensor behavior still
+  merits a final customer-phone check.
+- Root `index.html` was not a valid entry point for this browser harness in this
+  environment; it timed out before `.museum-hub__artwork` appeared. Running against
+  the generated `customer-preview/app.html` passed, so use the latter for the
+  current local preview browser regression.
 
 ## 2026-10-20 — Wohnbereich clipping reported again
 
@@ -14,6 +167,29 @@
   Reproduce at the screenshot's 2000×1080 viewport with the matching room config,
   selected artwork, generated runtime, and camera state; then verify the entire
   projected frame and image remain within visible bounds.
+
+## 2026-10-20 — Current-build Wohnbereich 2000×1080 replay
+
+- Added the reported 2000×1080 viewport to the real-browser room-view regression.
+  The current generated local preview passes complete-artwork and control bounds
+  with Wohnbereich selected and the room camera reset.
+- Captures now wait for two animation frames after state/viewport changes. The
+  first immediate capture was only the neutral wall surface; after synchronizing
+  paint, the capture contains the photo and sampled pixels match the expected
+  centered-cover source crop (mean absolute RGB error 10.12).
+- The local build used shipping `museum-hub.json` v5 and artwork bundle
+  `bundle-d98e87c7c0f0` at source revision `8d0c4a5`. This establishes current
+  local artifact behavior only; it does not identify or resolve the supplied
+  screenshot's unknown build, browser zoom, or camera state.
+
+## 2026-10-20 — Museum doorway-height gate remains unresolved
+
+- The current `npm run validate:museum-hub` run still fails at
+  `scripts/test-museum-hub-geometry.mjs:411`, which expects a 2.30 m doorway.
+  The serialized calibrated left/right doorway spans normalize to 2.6918 m and
+  2.4856 m respectively (`room` span × 5.2 m transform height ÷ calibrated room
+  height). Do not edit the shipping geometry or weaken the assertion until the
+  owner determines which coordinate model defines the intended doorway.
 
 ## 2026-10-20 — Photo-room framing, cleanup, and image-quality follow-up
 

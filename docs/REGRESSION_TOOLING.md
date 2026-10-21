@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,19 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Pan-aware cursors and interaction help (updated 2026-10-20)
+
+`npm run test:gallery-room-view` checks both contextual help descriptions and
+that grab cursors require actual pan availability plus fine-pointer input. The
+generated-preview browser suite exercises the photo room at fit, zoomed and
+dragging states, verifies reset returns its cursor state to the camera bounds,
+and checks coarse-pointer input clears the mouse affordance. In the gallery it
+uses a non-pannable overview, zooms until pan is available, verifies active
+dragging, and checks reset-fit reflects the actual bounded pan range (which can
+remain available for some artwork/viewport combinations). Both help contexts
+must describe wheel zoom; gallery help must distinguish overview swipes from
+zoomed panning, and room help must describe drag pan only while zoomed.
 
 ## Photographic inspection-room regression (updated 2026-10-20)
 
@@ -22,9 +35,9 @@ After installing the optional Playwright browser tooling, `npm run test:editor-r
 also checks room selection, projected artwork preview, placement export, and undo
 in the actual generated placement editor.
 
-For browser coverage, run `npm run import:artworks && npm run build`, then
-`FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
-This opens the generated root `index.html` over `file://` and verifies all four
+For browser coverage, run `npm run import:artworks && npm run build`, then run
+`FREYRAUM_ROOM_VIEW_URL=file:///absolute/project/path/customer-preview/app.html FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:gallery-room-view:browser`.
+This opens the generated customer preview over `file://` and verifies all four
 photos decode, projected artwork remains onscreen, the shared gallery timeline
 moves into the room overlay and selection stays synchronized, and the return
 action restores the timeline and focus. It checks room selection, gallery-style zoom/reset controls, help context,
@@ -32,11 +45,44 @@ shared utility reparenting, and header/timeline/zoom bounds at desktop, tablet,
 portrait phone, and short-landscape sizes. Photo pan, zoom, pinch, reset,
 keyboard zoom, camera limits, artwork-centered button and wheel zoom, expanded
 mouse-proximity reach, eased return, and reduced-motion behavior remain covered.
-At the initial museum hub, it checks that the
-non-interactive SVG shadow layer follows the projected artwork without changing
-the clipped button hit area. Set `FREYRAUM_ROOM_VIEW_CAPTURE_DIR` to save hub and
-room-view browser captures for manual review at the responsive breakpoints. The
-photo pixel test samples cleanup boundaries at full resolution against the
+Responsive fixtures include 320×568 and 390×844 portrait phones, 390×320
+narrow short landscape, 768×1024 tablet portrait, 844×390 landscape, and desktop.
+Coarse-pointer browser checks cover the optional motion toggle, permission grant
+and denial, unavailable sensors, subtle clamped orientation response, reduced
+motion, and page-hidden listener suspension/resume. The structural test also
+checks secure-context gating, screen-angle normalization, and smoothing.
+Button/wheel zoom follows the gallery's two-stage frame-independent camera
+easing and can retarget while a previous zoom is still moving. The in-flight
+artwork center is sampled during off-center zoom to ensure it follows a straight
+path toward the reachable viewport center; each frame derives pan from the same
+scene-space anchor, subject to the zoomed-photo bounds. Pinch and pan remain
+direct, including during edge-limited zoom, and responsive resize and reduced
+motion remain covered.
+The browser matrix also includes Wohnbereich at 2000×1080. Screenshot capture
+waits for two animation frames after a viewport or room-state change so the photo
+and artwork have been painted before manual visual review.
+At the initial museum hub, it checks that the non-interactive SVG shadow layer
+follows the projected artwork without changing the clipped button hit area. The
+front-right `room-01.wall-front.b` (Akt 27) is targeted explicitly: real mouse
+movement must reach its projected quad, update only its paired shadow and light,
+and preserve its clip and projective image transform. The front-left and both side
+walls are checked for reachable, unchanged geometry and one-to-one feedback.
+At tablet and phone sizes, the front-right quad center and complete projected
+button bounds must remain in the viewport; narrow front-wall focus therefore uses
+a modest view scale without modifying wall registration or the button clip path.
+Fine-pointer hover follows the pointer within the artwork; keyboard focus centers
+the light; selected feedback stays centered and overrides hover. Touch pointer
+events do not activate hover, calibration/debug remains free of the visitor light,
+and reduced motion removes light/shadow easing. Responsive captures cover museum
+normal state and front-right hover at desktop/tablet/phone; desktop additionally
+captures pointer-follow, focus, selection, and front/side-wall hover. The initial
+Akt 27 hub state must have no selected styling or artwork-name badge, while its
+accessible name stays present. Explicit Akt 27 activation gets a transient
+selected acknowledgement, and returning from the gallery clears it while keeping
+gallery synchronization. Keyboard focus is a small non-frame marker. Set
+`FREYRAUM_ROOM_VIEW_CAPTURE_DIR`
+to save hub and room-view browser captures for manual review at the responsive
+breakpoints. The photo pixel test samples cleanup boundaries at full resolution against the
 unchanged source gradients, checks old-artwork removal, and bounds repaired
 bedroom-wall texture against an untouched wall sample. Treat passing fixtures as
 geometry evidence, not visual acceptance: a 2026-10-20 user screenshot still shows

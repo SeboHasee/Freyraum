@@ -180,11 +180,83 @@ function projectCssMatrix(transform, x, y) {
   };
 }
 
-const [museumHub, geometry, publishRules] = await Promise.all([
+const [museumHub, geometry, publishRules, deviceOrientation] = await Promise.all([
   loadTsModule('src/config/museumHub.ts'),
   loadTsModule('src/gallery/galleryRoomViewGeometry.ts'),
   loadTsModule('src/online/publishRules.ts'),
+  loadTsModule('src/gallery/deviceOrientation.ts'),
 ]);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: true,
+    supported: true,
+  }),
+  'granted',
+  'orientation access works without a separate browser permission API'
+);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: false,
+    supported: true,
+  }),
+  'unavailable',
+  'orientation access requires a secure context'
+);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: true,
+    supported: false,
+  }),
+  'unavailable',
+  'orientation access degrades when sensors are unavailable'
+);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: true,
+    supported: true,
+    requestPermission: async () => 'denied',
+  }),
+  'denied',
+  'explicitly denied sensor permission is reported'
+);
+assert.equal(
+  await deviceOrientation.requestDeviceOrientationAccess({
+    secureContext: true,
+    supported: true,
+    requestPermission: async () => {
+      throw new Error('permission unavailable');
+    },
+  }),
+  'denied',
+  'permission API failures are handled as denial'
+);
+assert.deepEqual(
+  deviceOrientation.normalizeDeviceArtworkTilt(18, 18, 0, 0, 0),
+  { tiltX: 1.2, tiltY: 1.2 },
+  'device tilt is clamped to a subtle maximum'
+);
+const rotatedTilt = deviceOrientation.normalizeDeviceArtworkTilt(18, 0, 90, 0, 0);
+assert.ok(
+  Math.abs(rotatedTilt.tiltX) < 1e-10
+    && Math.abs(rotatedTilt.tiltY - 1.2) < 1e-10,
+  'device tilt follows the screen axes after rotation'
+);
+assert.deepEqual(
+  deviceOrientation.smoothDeviceArtworkTilt(
+    { tiltX: 0, tiltY: 0 },
+    { tiltX: 1, tiltY: -1 },
+    0
+  ),
+  { tiltX: 0, tiltY: 0 },
+  'orientation smoothing does not jump on a zero-duration frame'
+);
+const smoothedTilt = deviceOrientation.smoothDeviceArtworkTilt(
+  { tiltX: 0, tiltY: 0 },
+  { tiltX: 1, tiltY: -1 },
+  1 / 60
+);
+assert.ok(smoothedTilt.tiltX > 0 && smoothedTilt.tiltX < 1);
+assert.ok(smoothedTilt.tiltY < 0 && smoothedTilt.tiltY > -1);
 const sourceConfig = JSON.parse(
   readFileSync(resolve(ROOT, 'customer-artworks/museum-hub.json'), 'utf8')
 );
@@ -607,8 +679,22 @@ assert.match(
   /MAX_CAMERA_SCALE = 6/,
   'photo-room zoom supports expanded pan travel'
 );
-assert.match(roomViewSource, /CAMERA_ZOOM_DURATION_MS = 560/);
+assert.match(roomViewSource, /CAMERA_ZOOM_LAMBDA = 4/);
+assert.match(roomViewSource, /CAMERA_PAN_LAMBDA = 5/);
+assert.match(roomViewSource, /smoothDamp\(this\.cameraZoom, nextTargetScale, CAMERA_ZOOM_LAMBDA/);
+assert.match(roomViewSource, /smoothDamp\(this\.cameraScale, this\.cameraZoom, CAMERA_ZOOM_LAMBDA/);
+assert.match(roomViewSource, /interface CameraZoomAnchor/);
+assert.match(
+  roomViewSource,
+  /anchorScreenX - anchor\.contentX \* nextScale/,
+  'animated artwork-centered zoom derives offsets from one scene-space anchor'
+);
+assert.match(roomViewSource, /cameraAnimationTargetOffsetX/);
+assert.doesNotMatch(roomViewSource, /CAMERA_ZOOM_DURATION_MS/);
 assert.match(roomViewSource, /requestAnimationFrame\(tick\)/);
+assert.match(roomViewSource, /requestDeviceOrientationAccess/);
+assert.match(roomViewSource, /deviceorientation/);
+assert.match(roomViewSource, /this\.disableDeviceMotionTilt\(\)/);
 assert.match(roomViewSource, /this\.zoomAt\(/);
 assert.match(
   roomViewSource,
@@ -629,10 +715,67 @@ assert.match(
   'room dialog focus order includes utility form controls'
 );
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
+const helpSource = readFileSync(resolve(ROOT, 'src/ui/KeyboardHelp.ts'), 'utf8');
+assert.match(helpSource, /Mit dem Mausrad zoomen/);
+assert.match(helpSource, /Bei vergrößerter Ansicht verschieben; in der Übersicht horizontal zum nächsten Bild wechseln/);
+assert.match(helpSource, /Bei vergrößerter Ansicht das Foto verschieben/);
+assert.match(helpSource, /Mit dem Mausrad auf das Kunstwerk zoomen/);
+assert.match(
+  hubStyles,
+  /\.gallery-room-view__scene\.is-fine-pointer\.is-pan-available\s*\{\s*cursor:\s*grab/,
+  'photo-room grab cursor requires an actual fine-pointer event and available pan range'
+);
+assert.match(hubStyles, /\.gallery-room-view__scene\.is-fine-pointer\.is-dragging\s*\{\s*cursor:\s*grabbing/);
+assert.match(roomViewSource, /event\.pointerType === 'mouse' \|\| event\.pointerType === 'pen'/);
+assert.match(roomViewSource, /classList\.toggle\('is-pan-available', canPan\)/);
+assert.match(roomViewSource, /classList\.toggle\('is-dragging', canPan && this\.pointerDragStarted\)/);
+assert.match(editorSource, /shadowPath\.classList\.toggle\('is-selected', selected\)/);
+assert.match(editorSource, /explicitlySelectedArtworkId/);
+assert.match(editorSource, /options\.source === 'slot-click'/);
+assert.match(editorSource, /options\.source !== 'gallery-navigate'/);
+assert.match(editorSource, /button\.matches\(':focus-visible'\)/);
+assert.match(editorSource, /event\.pointerType === 'mouse'/);
+assert.match(editorSource, /event\.pointerType === 'pen'/);
+assert.match(editorSource, /shadowPath\.classList\.add\('is-hovered'\)/);
+assert.match(editorSource, /button\.classList\.add\('is-hovered'\)/);
+assert.match(editorSource, /shadowPath\.classList\.toggle\('is-focused', keyboardFocus\)/);
+assert.match(editorSource, /this\.syncArtworkSpotlight\(button, spotlight, event\)/);
+assert.match(editorSource, /button\.classList\.contains\('is-selected'\)/);
+assert.match(editorSource, /private syncArtworkSpotlight\(/);
+assert.match(editorSource, /spotlight\.style\.setProperty\('--hub-light-x', '50%'\)/);
+assert.match(editorSource, /this\.syncShadowFeedback\(view\.shadowPath\)/);
+assert.match(editorSource, /private syncShadowFeedback\(shadowPath: SVGPathElement\)/);
+assert.match(editorSource, /SHADOW_FEEDBACK_PROFILES\.selected/);
+assert.match(editorSource, /this\.calibrating \|\| this\.debugGeometry/);
 assert.match(
   hubStyles,
   /\.museum-hub__shadow-path\s*\{[^}]*drop-shadow\([^}]*drop-shadow\([^}]*drop-shadow/s,
   'museum-hub shadow SVG receives contact, directional, and ambient wall shadows'
+);
+assert.match(hubStyles, /--hub-shadow-fill-alpha/);
+assert.match(hubStyles, /--hub-shadow-directional-alpha/);
+assert.match(hubStyles, /\.museum-hub__artwork-light\s*\{[^}]*radial-gradient/s);
+assert.match(hubStyles, /pointer-events:\s*none/);
+assert.match(hubStyles, /\.museum-hub__artwork::before\s*\{[^}]*border-radius:\s*50%/s);
+assert.doesNotMatch(
+  hubStyles,
+  /\.museum-hub__artwork\.is-hovered \.museum-hub__artwork-label/,
+  'visitor hover does not reveal a floating artwork-name badge'
+);
+assert.doesNotMatch(
+  hubStyles,
+  /\.museum-hub__artwork\.is-hovered::before/,
+  'pointer hover does not draw an artwork frame or marker'
+);
+assert.match(
+  hubStyles,
+  /\.museum-hub:not\(\.is-calibrating\):not\(\.is-debug-geometry\)[\s\S]*?\.museum-hub__artwork\.is-illuminated/,
+  'spotlight remains visitor-only'
+);
+assert.match(
+  hubStyles,
+  /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.museum-hub__shadow-path,\s*\.museum-hub__artwork-light\s*\{\s*transition:\s*none;/,
+  'museum shadow and spotlight transitions respect reduced motion'
 );
 assert.doesNotMatch(
   hubStyles,

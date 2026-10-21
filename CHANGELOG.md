@@ -1,5 +1,58 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+
+## Unreleased — pan-aware cursors and consistent interaction help (2026-10-20)
+
+- Show `grab` when the gallery or photo room can pan under a fine pointer, and
+  `grabbing` only during an active movable fine-pointer drag; touch-only input
+  receives no mouse cursor cue.
+- Clear the photo-room pan affordance when a camera animation finishes at fit.
+- Update gallery and room help to explain mouse-wheel zoom and conditional
+  drag-to-pan. Gallery help distinguishes swipe navigation at overview and notes
+  touch pinch/pan.
+
+## Unreleased — refined museum spotlight presentation (2026-10-20)
+
+- Remove visitor-facing artwork frames and floating title badges; retain
+  descriptive accessible names and a small non-frame keyboard-focus marker.
+- Keep gallery-current artwork synchronized for navigation without marking it
+  selected merely on hub entry/return; selected feedback is reserved for explicit
+  hub activation and clears on return.
+- Soften the projectively clipped spotlight while preserving hover/focus, touch,
+  reduced-motion, and geometry behavior.
+
+## Unreleased — anchored room zoom and museum artwork feedback (2026-10-20)
+
+- Keep button and wheel zoom centered on one scene-space artwork point while the
+  camera scale eases, deriving each frame's pan from that anchor. Direct pan and
+  pinch remain gesture-controlled, and photo bounds still constrain the camera.
+- Add a responsive, restrained shadow lift to museum artworks on fine-pointer
+  hover and keyboard focus, with a soft artwork-clipped radial light that follows
+  fine pointers. Selection stays centered and visually distinct; touch does not
+  activate hover, reduced motion removes easing, and calibration/debug stays clear.
+- Restore an explicit artwork outline and compact label during visitor hover,
+  keyboard focus, and selection, without changing the projective clip or transform.
+- Reduce narrow-portrait front-wall viewing scale so the right-front artwork remains
+  fully within the phone/tablet viewport; the authored placement and hit geometry
+  stay unchanged.
+- Add exact front-right (`room-01.wall-front.b`, Akt 27) hit-testing, pointer-follow,
+  own-shadow/light, focus, selection, touch, reduced-motion, and responsive checks.
+
+## Unreleased — responsive photo-room controls and touch motion (2026-10-20)
+
+- Match photo-room button and wheel zoom to the gallery's two-stage,
+  frame-independent camera easing on desktop and touch devices; retarget repeated
+  zoom input without restarting from stale camera state.
+- Clamp animated pan targets to the scaled photo bounds so edge-limited zooms
+  still settle cleanly at the configured minimum and maximum.
+- Keep pinch and drag direct while keeping the artwork registered to its wall.
+- Add a touch-only, opt-in phone-orientation tilt control with permission handling,
+  neutral calibration, screen-orientation normalization, smoothing, and cleanup on
+  room close, page hiding, or reduced-motion changes.
+- Keep short/narrow landscape room controls in view and add phone portrait,
+  tablet, narrow portrait, and narrow short-landscape browser cases.
+- Exercise sensor grant/denial/unavailability, reduced motion, zoom easing, and
+  hidden-page listener suspension with helper and browser regressions.
 
 ## Unreleased — room-photo framing and cleanup follow-up (2026-10-20)
 
@@ -13,6 +66,8 @@
   sizes; upscaling did not add detail and increased file/decode cost substantially.
 - Add full-artwork viewport bounds and all-color frame-removal checks to the
   projective and browser regressions. Customer visual acceptance remains open.
+- Exercise Wohnbereich in the real browser at 2000×1080; wait for compositor
+  frames before screenshot capture so the photo and artwork are actually painted.
 - A new user screenshot again appears to clip the artwork at the top in
   Wohnbereich. The screenshot's build/config identity is unknown, so reopen visual
   acceptance and reproduce against the matching generated artifact before attributing
