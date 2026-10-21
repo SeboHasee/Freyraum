@@ -1,5 +1,5 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
@@ -204,7 +204,7 @@ redact them. The route-aware source-to-pixel recovery procedure is in
 
 ### `freyraum.preferences.v1`
 
-Stored user preferences (`src/utils/preferences.ts`): quality, motion/contrast settings, audio volume, and chrome visibility mode. Lighting is fixed internally to the dramatic configuration and is not user-configurable.
+Stored user preferences (`src/utils/preferences.ts`): quality, motion/contrast settings, audio volume, chrome visibility mode, and `deviceTilt` (`auto` | `on` | `off`, default `auto`; v1.41 motion-sensor artwork tilt in the gallery — `auto` enables it on touch devices that need no permission). Lighting is fixed internally to the dramatic configuration and is not user-configurable.
 
 Invariant: persisted writes force `audioMuted: false`, so each new session starts unmuted.
 

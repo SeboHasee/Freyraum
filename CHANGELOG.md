@@ -1,5 +1,48 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+
+## Unreleased — v1.41 mobile experience overhaul (2026-10-21)
+
+- **Shared touch physics** (`src/interaction/touchGestures.ts`): velocity
+  tracking, frame-rate-independent momentum, rubber-band edges, soft snapping,
+  tap slop, double tap and an optional Android vibration tick. Gallery, photo
+  room and museum hub now use the same feel; reduced motion removes glide and
+  springs but keeps direct finger control.
+- **Gallery touch:** one-finger pan follows the finger 1:1 at every zoom
+  (world-per-pixel from the camera), pinch is multiplicative and anchored
+  between the fingers, release glides with momentum, double-tap zooms in at
+  the tapped point and back to fit, and overview swipes preview the drag and
+  accept fast flicks.
+- **Gyro tilt in the gallery:** a new `DeviceTiltController` feeds phone
+  orientation into the existing clamped hover tilt of the 3D artwork. Android
+  enables it automatically on touch devices; iOS asks once after a tap when the
+  new **Kunstwerk mit dem Handy neigen** setting is on. Dead zone, slow neutral drift and
+  screen-angle handling keep it calm. Persisted as `deviceTilt` in the
+  preferences key documented in `docs/QUERY_PARAMETERS.md`.
+- **Photo room:** pan momentum and rubber band, pinch overscroll spring-back,
+  touch double-tap zoom (×2.5 at the tapped point / reset) and a visible sensor
+  tilt (up to 3.5°) without the 1.1 s CSS transition lag. Wheel and buttons keep
+  the existing artwork-centred easing.
+- **Museum hub on phones:** artworks are never hidden by wall group any more
+  (`is-off-wall` removed), so every visible artwork is tappable. Narrow portrait
+  shows one continuous, height-fitted panorama: drag 1:1, flick, soft snap to
+  artworks, rubber band at the photo edges, edge pull to change room, no
+  accidental opening after a drag, and fully off-screen artworks leave the tab
+  order. A synced artwork strip (tap = glide and select, second tap = open)
+  replaces the three fixed wall views; the pager is a compact room indicator.
+- **Phone layout:** slimmer timeline (84×54 px items), zoom buttons hidden on
+  coarse-pointer phones (pinch/double-tap replace them), a one-row photo-room
+  header that fits 320 px screens, and `dvh`/safe-area sizing in the panorama.
+- **Loading colour:** one `--loading-accent` token (museum wall grey) replaces
+  the gold→blue gradient; every page declares `theme-color`, which is dark while
+  the loading overlay is visible and returns to the wall grey afterwards.
+- **Fix:** wheel/button zoom in the photo room stops a running pan glide so
+  the eased zoom keeps its straight path toward the artwork.
+- **Tests:** new `npm run test:touch-gestures`; the photo-room browser suite
+  now passes end to end (headless-tolerant waits for terminal zoom and edge
+  spring-back); photo-room browser checks cover
+  the sensor-tilt class/bound and the narrow header; the museum-hub suite checks
+  the slim phone timeline.
 
 ## Unreleased — pan-aware cursors and consistent interaction help (2026-10-20)
 

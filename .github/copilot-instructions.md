@@ -1,7 +1,7 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
 
-## Current context (v1.40)
+## Current context (v1.41)
 
 - Museum and editor share photograph-backed DOM artwork; `MainMuseumHub` does
   not construct a `HubRoomRenderer`. Inspection-gallery WebGL remains separate.
@@ -18,6 +18,12 @@
   open and compare the matching generated artifact before assigning cause. See
   `README.md` → "Inspect in a photo room" and
   `ARCHITECTURE_MAP.md`.
+- Mobile (v1.41): all touch surfaces share `src/interaction/touchGestures.ts`
+  (momentum, rubber band, snapping, tap slop, double tap). Gallery gyro tilt runs
+  through `src/gallery/DeviceTiltController.ts` → `GalleryManager.setHoverTarget`.
+  Narrow-portrait hub is a continuous panorama with an artwork strip
+  (`src/hub/hubPanorama.ts`); never hide hub artworks by wall group. Pure tests:
+  `npm run test:touch-gestures`. Real-device acceptance is open (`docs/HANDOFF.md`).
 - Local data is generated/ignored: after project updates run Update Gallery;
   full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,
   production `/Freyraum/`. Root-index and production-base smoke are distinct.
@@ -39,8 +45,8 @@
   shared selection, focus and control bounds across desktop/tablet/phone/short
   landscape. Current geometry-suite issue: `npm run validate:museum-hub` still
   fails at the wall-left doorway-height assertion in
-  `scripts/test-museum-hub-geometry.mjs:411`; the old timeline assertion was
-  corrected. History: `CHANGELOG.md` and `docs/archive/`.
+  `scripts/test-museum-hub-geometry.mjs:411`, and a further pre-existing
+  curated front-wall position assertion (~:459) fails behind it. History: `CHANGELOG.md` and `docs/archive/`.
 
 Use these repository-specific instructions before changing code or docs.
 

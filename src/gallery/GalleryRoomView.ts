@@ -580,6 +580,8 @@ export class GalleryRoomView {
     offsetY: number,
     anchorContent?: PhotoPointer
   ): void {
+    // A release glide must not keep moving the camera under an eased zoom.
+    this.stopPanMomentum();
     const targetScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
     const rect = this.element.getBoundingClientRect();
     const maxOffsetX = Math.max(0, rect.width * (targetScale - 1));

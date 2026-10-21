@@ -118,7 +118,7 @@ assert.match(scss, /\.timeline__list\s*\{[\s\S]*?justify-content:\s*space-evenly
 assert.match(scss, /\.timeline\.timeline--scrollable \.timeline__list\s*\{\s*justify-content:\s*flex-start/);
 assert.match(scss, /\.timeline\.timeline--fits \.timeline__arrow\s*\{\s*display:\s*none/);
 assert.match(scss, /\.timeline__item\s*\{[\s\S]*?flex:\s*0 0 clamp\(120px,\s*13vw,\s*150px\)/);
-assert.match(scss, /@media \(max-width: 599px\)\s*\{[\s\S]*?\.timeline__item\s*\{\s*flex-basis:\s*120px/);
+assert.match(scss, /@media \(max-width: 599px\)\s*\{[\s\S]*?\.timeline__item\s*\{\s*flex-basis:\s*84px;\s*height:\s*54px/, 'v1.41 slim phone timeline keeps 54 px touch targets');
 assert.equal(timelineLayout.timelineContentFits(640, 640, 76, true), true, 'arrow space lets small collections fit');
 assert.equal(timelineLayout.timelineContentFits(640, 640, 76, false), true, 'hidden arrows are not counted twice');
 assert.equal(timelineLayout.timelineContentFits(640, 600, 76, false), false, 'resizing a hidden-arrow timeline reveals overflow');

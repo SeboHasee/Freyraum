@@ -1405,13 +1405,13 @@ try {
     for (let index = 0; index < 12; index += 1) zoom.click();
   })()`);
   await waitFor(`Number(document.querySelector('.gallery-room-view__scene').style.transform
-    .split(' scale(')[1]?.slice(0, -1)) > 5.8`);
+    .split(' scale(')[1]?.slice(0, -1)) > 5.8`, 60_000);
   await evaluate(`(() => {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     if (!zoom.disabled) zoom.click();
   })()`);
   await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
-    .split(' scale(')[1]?.slice(0, -1)) - 6) < 0.001`);
+    .split(' scale(')[1]?.slice(0, -1)) - 6) < 0.001`, 90_000);
   const transformAtMaximumZoom = await evaluate(
     "document.querySelector('.gallery-room-view__artwork-frame').style.transform"
   );
@@ -1450,6 +1450,15 @@ try {
       buttons: 0,
     });
   }
+  // v1.41: release momentum rubber-bands past the edge, then springs back.
+  // Headless SwiftShader can starve rAF for seconds, so wait for the value.
+  await waitFor(`(() => {
+    const match = /translate3d\\(([-\\d.]+)px, [-\\d.]+px, 0px\\) scale\\(([\\d.]+)\\)/
+      .exec(document.querySelector('.gallery-room-view__scene').style.transform);
+    if (!match) return false;
+    const width = document.querySelector('.gallery-room-view').getBoundingClientRect().width;
+    return Math.abs(Number(match[1]) + width * (Number(match[2]) - 1)) < 1;
+  })()`, 60_000);
   const edgeZoomStart = await readArtworkScreenCenter();
   const maxOffsetAtEdge = edgeZoomStart.viewport.width * (edgeZoomStart.scale - 1);
   assert.ok(

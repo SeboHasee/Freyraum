@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -76,10 +76,10 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - Passing: `npm run build`, `npm run lint`, `npm run build:typecheck`,
   `npm run test:gallery-room-view`, and the browser suite's cursor, four-photo
   decode, and responsive control/bounds checks.
-- **Current browser-suite limitation:** the latest complete run times out at the
-  exact maximum-zoom assertion in `scripts/test-gallery-room-view-browser.mjs`
-  (`scale(5.99409)` vs. `6`). Do not report that full browser suite as passing;
-  the remaining terminal-zoom discrepancy is tracked in `plan.md` and `FINDINGS.md`.
+- **Browser-suite terminal zoom (resolved 2026-10-21):** the former timeout at
+  `scale(5.99…)` vs. `6` was headless SwiftShader starving `requestAnimationFrame`,
+  not a camera bug; the wait now allows 90 s. The complete suite passed on
+  2026-10-21 (39 checks). See `FINDINGS.md` 2026-10-21.
 - The four-room browser run decoded each background and checked full artwork and
   control bounds at desktop, tablet, portrait phone, short landscape, and the
   reported 2000×1080 viewport. Deploy validation, deploy-content tests, front-wall
@@ -162,7 +162,55 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
-## Next-agent starting point (2026-10-20)
+## Next-agent starting point (2026-10-21, v1.41 mobile)
+
+1. Read `CHANGELOG.md` → "v1.41 mobile experience overhaul", `FINDINGS.md`
+   2026-10-21 and `ARCHITECTURE_MAP.md` (touch gestures, device tilt, hub
+   panorama). New touch surfaces must use `src/interaction/touchGestures.ts`.
+2. Checks for this area: `npm run test:touch-gestures`,
+   `npm run test:gallery-room-view`, and after `npm run build` the photo-room
+   browser suite (`docs/REGRESSION_TOOLING.md`). `npm run validate:museum-hub`
+   is still blocked by pre-existing failures (:411 and ~:459), unrelated to v1.41.
+3. Open customer decisions (defaults in place): loading colour (wall grey
+   `#c7ced4`), gyro default (auto on Android, opt-in on iOS), hub snapping (soft).
+4. Real-device acceptance is the main open gate: iOS Safari + Android Chrome,
+   portrait/landscape, deployed `/Freyraum/` build.
+
+### Ready-to-pick follow-ups (small, scoped)
+
+- Phone "more" menu / bottom sheet for audio, settings, fullscreen and help
+  (they still float top-right on phones), and a collapsible info bottom sheet.
+- Make `GalleryManager` occlusion follow `ChromeVisibilityManager` so the
+  fitted artwork grows when chrome auto-hides on phones.
+- Cap the photo-room maximum zoom by the background's natural resolution
+  instead of a fixed 6× (sources are about 2K wide).
+- Optional background parallax in the photo room driven by the same tilt.
+- Short-landscape phone side rail instead of top/bottom bars.
+- A dedicated phone browser test (390×844, 844×390, 360×780 with touch
+  emulation) for hub panorama visibility/tappability, strip sync, no click
+  after drag, and chrome coverage; a prototype probe was used during v1.41.
+- Investigate whether reduced motion should also suppress an explicit `on`
+  tilt choice (today `on` wins; `auto` respects reduced motion).
+- Repair the pre-existing museum-hub geometry expectations (doorway height and
+  curated front-wall position) so the full suite runs again.
+
+### Ideas for further development (brainstorm)
+
+- Hub panorama: pinch-to-zoom with the shared model; room transitions that
+  slide the next photo in during an edge pull; deep links to an artwork.
+- Gallery: optional gyro "peek" parallax of the stage; long-press for artwork
+  details; share sheet (`navigator.share`) for the current artwork.
+- PWA: manifest + offline cache of the published artworks for exhibitions with
+  poor connectivity; installable icon using the wall/accent palette.
+- Performance on phones: responsive artwork sources (AVIF/WebP derivatives per
+  device pixel ratio), lazy decode for off-screen hub artworks, and splitting
+  the editor out of the visitor bundle.
+- Accessibility: announce strip position changes, larger-text layout checks,
+  and a "reduce chrome" toggle for screen-magnifier users.
+- Content: audio guide per artwork, multiple exhibitions/rooms chosen by the
+  curator, and visitor-facing artwork metadata sheets.
+
+## Previous next-agent starting point (2026-10-20)
 
 1. Read `README.md`, active `plan.md`, latest `FINDINGS.md`, and
    `docs/REGRESSION_TOOLING.md` before changing the photo room or hub. The current

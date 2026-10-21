@@ -1,5 +1,33 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+
+## 2026-10-21 — Mobile interaction lessons
+
+### Lesson 123 — Never hide projected artworks by wall group
+
+The narrow hub hid every artwork outside a "focused" wall although the photo
+still showed those walls, so visitors saw empty walls and could not tap them.
+Decide visibility and focusability from measured on-screen bounds; keep
+shadows and lights paired with their artwork.
+
+### Lesson 124 — No CSS transition on a property updated every frame
+
+A `transition: transform 1100ms` on the sensor-driven artwork restarted on each
+orientation event, turning live input into a lagging, nearly invisible motion.
+Drive continuous input in JS (frame-rate-independent smoothing) and remove the
+CSS transition while it is active.
+
+### Lesson 125 — One gesture model for every touch surface
+
+Two views with different pinch models, smoothing and no momentum felt like two
+products. Share velocity, momentum, rubber-band, tap-slop and double-tap logic
+in one pure, tested module, and keep reduced motion to motion only.
+
+### Lesson 126 — A headless timeout is not always a logic bug
+
+SwiftShader starves `requestAnimationFrame` while WebGL renders behind an
+overlay. Sample the value over time before changing camera code; extend the
+test wait when the value still converges.
 
 ## 2026-10-18 — Presentation authority lessons
 

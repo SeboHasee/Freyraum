@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -10,8 +10,11 @@ The default room follows the supplied reference: **Gartenszene** front-left,
 the right, over `Museum_ohne_Bilder.png`. The checked-in
 `customer-artworks/museum-hub.json` owns this arrangement and its native-ratio sizes.
 In the museum hub, hovering a painting with a mouse or focusing it by keyboard
-gently deepens its wall shadow; the touch experience and artwork placement stay
-unchanged, and the selected painting keeps its separate highlight.
+gently deepens its wall shadow; the selected painting keeps its separate highlight.
+On portrait phones the museum is one continuous panorama: drag or flick
+sideways, the view glides and softly settles on artworks, and the artwork strip
+at the bottom follows along (tap once to glide there, tap again to open).
+Every artwork visible in the photo can be tapped; dragging never opens one.
 The source filenames are `Gatrenszene.png`, `Akt 27.png`, `Fraktal.png` and
 `Wunderbaum.png` in `customer-artworks/inbox/` (the garden filename is misspelled).
 After downloading a project update, run `Update Gallery.bat` / `Update Gallery.command`
@@ -51,10 +54,13 @@ Zoom buttons and wheel motion
 use the gallery's two-stage, frame-rate-independent camera easing on desktop and
 touch devices, with smooth target retargeting during repeated input; active drag
 and pinch remain direct. Nearby desktop mouse movement produces a very subtle,
-smoothly returning tilt. On touch devices, the **↗** control optionally enables
-subtle artwork tilt from phone movement; sensor access is requested only after
-that action, and the feature can be disabled again. Unsupported or denied sensors
-leave touch controls available. Reduced motion disables sensor tilt. Stronger
+smoothly returning tilt. On touch devices, the **↗** control enables visible
+artwork tilt (up to 3.5°) from phone movement; sensor access is requested only
+after that action, and the feature can be disabled again. Unsupported or denied
+sensors leave touch controls available. Reduced motion disables sensor tilt.
+Touch panning glides on after release and springs back at the photo edges;
+double-tap zooms in at the tapped point or back to the full photo, matching the
+interactive gallery. Stronger
 contact and directional shadows keep the print attached to the wall. This is a
 bounded 2D photo camera, not true 3D orbit or movement.
 `customer-artworks/museum-hub.json` owns the room photo and placement data;
@@ -99,7 +105,16 @@ customer visual acceptance.
   Each room uses a maximum of four works—two on the front
   wall and one safely inset on each side wall—with no oversized backing cards.
   Larger exhibitions paginate into additional room pages,
-  and narrow-portrait viewports split each room into left/right wall focus pages.
+  and narrow-portrait phones show each room as one draggable panorama with a
+  synced artwork strip (`src/hub/hubPanorama.ts`); artworks are never hidden by
+  wall group.
+- Touch interaction (v1.41) shares one gesture engine
+  (`src/interaction/touchGestures.ts`) across gallery, photo room and hub:
+  1:1 pan, anchored pinch, momentum, rubber-band edges, double-tap zoom and
+  flick navigation. On phones the interactive gallery also tilts the 3D artwork
+  with the motion sensor (automatic on Android; on iOS enable **Kunstwerk mit
+  dem Handy neigen** in the settings). Phone chrome is slimmer and the loading
+  bar and mobile browser bar use the museum wall colour.
 - **Local confirmation (2026-10-18):** the customer reports the intended setup
   works after running `Update Gallery.bat` and supplies a four-painting screenshot.
   Root-index and production-build smoke checks confirm all four images and the

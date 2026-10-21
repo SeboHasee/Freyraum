@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -113,6 +113,22 @@ both file entries.
   - `DestinationRouter`: hub↔gallery transition ownership and cancellation
 - `src/ui/`, `src/timeline/`, `src/interaction/`
   - UI controls, timeline, interaction handling
+  - `interaction/touchGestures.ts` (v1.41): pure, shared touch physics —
+    velocity tracking, momentum, rubber band, snapping, tap slop, double tap,
+    reduced-motion check and haptic tick. Used by `CanvasInteraction`,
+    `GalleryRoomView` and `MainMuseumHub`; keep new touch surfaces on it.
+  - `CanvasInteraction` drives the gallery through `GalleryManager`'s direct
+    gesture API (`beginDirectGesture`, `panByPixels`, `zoomByFactorAt`,
+    `endDirectGesture`, `toggleZoomAt`, swipe preview); buttons and wheel keep
+    the smoothed zoom cascade.
+- `src/gallery/DeviceTiltController.ts` + `deviceOrientation.ts` (v1.41):
+  orientation permission, dead zone, neutral drift and screen-angle mapping;
+  `main.ts` feeds the unit tilt into `GalleryManager.setHoverTarget` only while
+  the gallery is active and the photo room is closed.
+- `src/hub/hubPanorama.ts` (v1.41): pure phone-panorama camera math (pan
+  limits, artwork-centring pans, strip ↔ pan mapping, edge room step).
+  `MainMuseumHub` owns the DOM (`is-panorama`, `--hub-pan-x`, artwork strip);
+  projection and placement math are unchanged.
 - `src/utils/`
   - `artworkImageSources.ts`: shared declared-image/embedded-fallback source
     plan used by both gallery and hub

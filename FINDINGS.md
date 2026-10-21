@@ -1,5 +1,46 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+
+## 2026-10-21 — Mobile experience root causes (v1.41)
+
+- **Hidden hub artworks:** narrow portrait `applyView` added `is-off-wall`
+  (`visibility:hidden; pointer-events:none`) to every artwork outside the
+  focused wall group, although those walls were still visible in the photo.
+  Visibility must come from measured on-screen bounds, never from wall groups.
+- **Hub navigation:** three fixed wall views changed with a 0.45 s transition
+  only after a 56 px swipe; passive listeners without `touch-action` let the
+  browser steal the gesture; a drag ending on an artwork also clicked it.
+- **Tiny hub on phones:** contain-fitting a 16:9 photo into a portrait phone
+  left a ~219 px strip under full-size title/intro chrome. The panorama sizes
+  the visual by available height (`dvh` + safe areas) instead.
+- **Gyro:** only the photo room listened, behind an opt-in button; the 1.2° cap
+  and `perspective(1200px)` produced sub-pixel motion, and the per-update CSS
+  `transition: transform 1100ms` restarted on every sensor event (lag). Tilt
+  also paused while a finger touched the screen.
+- **Different zoom feel:** gallery pinch added a fixed camera-Z step and was
+  smoothed twice (λ=4), pan used a fixed `dx*0.004` world step; the photo room
+  multiplied scale and followed the finger directly. Neither had momentum or
+  rubber band. Both now share `touchGestures.ts`.
+- **Loading line:** a gold→blue gradient unrelated to the wall/accent palette,
+  and no `theme-color`, so the mobile browser bar used its default colour.
+- **Headless browser suite:** under SwiftShader the WebGL gallery behind the
+  photo room starves `requestAnimationFrame` (about one frame every 1–2 s, each
+  capped to 0.1 s of easing), so the terminal 6× zoom took longer than the
+  20 s wait (`scale(5.998…)`). The camera logic converges; the test now waits
+  up to 90 s for that step. This also explains the earlier `5.99409` report.
+- **Glide vs. eased zoom (fixed):** after a quick mouse/touch drag the new pan
+  momentum kept moving the photo-room camera while a wheel/button zoom eased
+  toward the artwork, bending its path (140 px deviation in the browser suite).
+  `animateCamera` now stops the pan glide first; the gallery already did.
+- **Spring-back under starvation:** `waitForCameraSettled` treats ~300 ms
+  without a frame as settled, so it can sample mid-spring-back. The edge test
+  now waits for the actual photo-edge offset. Kill stray headless Chrome
+  processes between runs; one left at ~250 % CPU made earlier steps time out.
+- **Museum-hub geometry suite:** besides the known doorway-height failure at
+  `scripts/test-museum-hub-geometry.mjs:411`, temporarily skipping that line on
+  the unmodified base commit `182d819` shows a further pre-existing failure
+  (`room-01.wall-front.a must use its curated wall position`, ~line 459). Later
+  assertions are therefore not exercised; treat the suite as blocked, not green.
 
 ## 2026-10-20 — Pan-aware cursors and accurate interaction help
 

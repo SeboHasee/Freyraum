@@ -1,9 +1,32 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Mobile experience overhaul (v1.41, 2026-10-21)
+
+- [x] Root-cause the reported phone issues (see `FINDINGS.md` 2026-10-21).
+- [x] Shared gesture engine `src/interaction/touchGestures.ts` + pure tests.
+- [x] Gallery: 1:1 pan, anchored multiplicative pinch, momentum, double-tap,
+      swipe preview and flick navigation.
+- [x] Gallery gyro tilt (`DeviceTiltController`, `deviceTilt` preference,
+      settings toggle, iOS permission after a tap).
+- [x] Photo room: momentum, rubber band, double-tap, visible sensor tilt.
+- [x] Hub: remove wall-group hiding; phone panorama with synced artwork strip.
+- [x] Phone layout: slim timeline, hidden touch zoom buttons, one-row room header.
+- [x] Loading accent token and `theme-color` on every page.
+- [x] Photo-room browser suite passes end to end for the first time (39 checks):
+      terminal-zoom and edge spring-back waits tolerate headless rAF starvation,
+      and wheel/button zoom now stops a running pan glide (`FINDINGS.md`).
+- [ ] Real-device acceptance on iOS Safari and Android Chrome (portrait and
+      landscape) on the deployed `/Freyraum/` build: gyro feel, flick feel,
+      panorama strip, loading and browser-bar colours.
+- [ ] Customer confirmation of the loading colour, gyro default and snap style
+      (defaults chosen: wall grey; auto on Android / opt-in on iOS; soft snap).
+- [ ] Follow-ups handed to the next agent: `docs/HANDOFF.md` → "Next-agent
+      starting point (2026-10-21)".
 
 ## Pan-aware cursor and control help (2026-10-20)
 
@@ -20,8 +43,8 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 - [x] Clear photo-room pan cursor state after zoom/reset animation targets are
       removed, and make browser checks assert a meaningfully zoomed camera rather
       than an exact serialized transform string.
-- [ ] Resolve the generated-preview browser timeout at the configured maximum
-      photo-camera scale; the latest run reached 5.99409 rather than exactly 6.
+- [x] Resolve the generated-preview browser timeout at the configured maximum
+      photo-camera scale (headless rAF starvation; resolved 2026-10-21, v1.41).
 - [x] Complete the production/customer-preview build, focused structural checks,
       lint, typecheck, and documentation-authority checks; full browser-suite
       success remains open pending the maximum-zoom check.

@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-20 (pan-aware cursor and control-help update).
+> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,21 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Mobile touch, gyro and hub panorama (added 2026-10-21)
+
+`npm run test:touch-gestures` (no browser) checks the shared gesture physics
+(velocity window, rubber band, frame-rate-independent momentum, soft snapping,
+tap slop, swipe resolution, double tap, anchored zoom), the hub panorama math
+(pan limits, strip ↔ pan round trip, edge room step) and device-orientation
+helpers (dead zone, saturation, screen rotation, neutral drift across ±180°).
+The photo-room browser suite asserts the sensor-tilt bound (≤ 3.5°) and the
+`is-sensor-tilt` class, and checks the one-row phone header stays on screen at
+320×568. Under headless SwiftShader the terminal 6× zoom step may need tens of
+seconds because rAF is starved; its wait allows 90 s, and the edge test waits
+for the spring-back to reach the photo edge. Stop stray headless Chrome
+processes between runs. The full suite passed on 2026-10-21. Real-device feel (iOS
+Safari, Android Chrome) is not covered by automation.
 
 ## Pan-aware cursors and interaction help (updated 2026-10-20)
 
@@ -330,6 +345,7 @@ Linux run them under `xvfb-run -a`.
 | `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
 | `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
 | `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, keyboard, close/focus | – |
+| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math, device-tilt normalisation | – |
 | `npm run test:validate-deploy` | – | deploy content check | – |
 | `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |
 | `npm run test:editor-rooms` | yes | add/fill/switch/delete rooms, undo/redo, download + reload | – |
