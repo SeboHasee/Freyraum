@@ -1284,7 +1284,17 @@ try {
   );
   await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: 290, y: 500, button: 'left', buttons: 1 });
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 230, y: 440, button: 'left', buttons: 1 });
+  // Hold still past the 100 ms velocity window: CDP delivers press/move/release
+  // within milliseconds, which the v1.41 release physics reads as a fling whose
+  // glide would push the camera to the photo edge and clamp the next zoom path.
+  await delay(250);
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 230, y: 440, button: 'left', buttons: 0 });
+  await waitFor(`(() => {
+    const transform = document.querySelector('.gallery-room-view__scene').style.transform;
+    const settled = window.__freyraumDragSettle === transform;
+    window.__freyraumDragSettle = transform;
+    return settled;
+  })()`);
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.doesNotMatch(camera, /translate3d\(0px, 0px/, 'drag pans the photo');
   assert.equal(

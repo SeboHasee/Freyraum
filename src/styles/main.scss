@@ -4676,7 +4676,8 @@ button {
     transition-duration: 0.001ms;
   }
 
-  .prefs__panel {
+  .prefs__panel,
+  .phone-menu__panel {
     animation: none;
   }
 
