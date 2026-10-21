@@ -1,8 +1,18 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 ## 2026-10-21 — v1.42 mobile follow-up findings
 
+- **Photo-room suite wheel-zoom path (merge readiness):** "off-center wheel
+  zoom follows a straight artwork-center path" failed with 124–127 px deviation,
+  also when run alone. Cause: the test's CDP drag delivered press/move/release
+  within milliseconds, the v1.41 `VelocityTracker` reported a fling, and the
+  release glide moved the camera toward the photo edge so the following zoom
+  was clamped. App behaviour is intended (wheel zoom still stops a running
+  glide); the test now holds 250 ms before release and waits for a settled
+  camera. Lesson 129. The suite's later "shared utility controls return to
+  gallery chrome" check still expected `#app` at 390×844 with touch; since
+  v1.42 the controls correctly return to the topbar phone menu there.
 - **Invisible info panel on touch:** `:root[data-hover='false'][data-chrome-mode='clean'] .info-panel`
   (opacity 0, no pointer events) had the same specificity as the reveal rules
   and came later, so revealed panels stayed invisible on phones. Scoped to
@@ -57,7 +67,7 @@
   without a frame as settled, so it can sample mid-spring-back. The edge test
   now waits for the actual photo-edge offset. Kill stray headless Chrome
   processes between runs; one left at ~250 % CPU made earlier steps time out.
-- **Museum-hub geometry suite:** besides the known doorway-height failure at
+- **Museum-hub geometry suite (resolved in v1.42, see above):** besides the known doorway-height failure at
   `scripts/test-museum-hub-geometry.mjs:411`, temporarily skipping that line on
   the unmodified base commit `182d819` shows a further pre-existing failure
   (`room-01.wall-front.a must use its curated wall position`, ~line 459). Later

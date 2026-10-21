@@ -1,5 +1,5 @@
 # Documentation Rules
-> Latest markdown audit: 2026-10-20 (photo-room screenshot follow-up).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 ## Goal
 

@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.

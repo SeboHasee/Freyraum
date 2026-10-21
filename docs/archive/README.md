@@ -1,5 +1,5 @@
 # Documentation Archive
-> Archive index reviewed: 2026-10-20 (photo-room screenshot follow-up).
+> Archive index reviewed: 2026-10-21 (v1.42 merge readiness).
 
 This folder preserves historical rationale and long-form engineering context that is no longer suitable for operational docs.
 The 2026-06-21 snapshots were reviewed for discoverability during the v1.18

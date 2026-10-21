@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -162,18 +162,29 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
-## Next-agent starting point (2026-10-21, v1.41 mobile)
+## Next-agent starting point (2026-10-21, v1.42 merge readiness)
 
-1. Read `CHANGELOG.md` → "v1.41 mobile experience overhaul", `FINDINGS.md`
-   2026-10-21 and `ARCHITECTURE_MAP.md` (touch gestures, device tilt, hub
-   panorama). New touch surfaces must use `src/interaction/touchGestures.ts`.
-2. Checks for this area: `npm run test:touch-gestures`,
-   `npm run test:gallery-room-view`, and after `npm run build` the photo-room
-   browser suite and `npm run test:mobile-browser` (`docs/REGRESSION_TOOLING.md`).
-   `npm run validate:museum-hub` passes again (v1.42).
-3. Open customer decisions (defaults in place): loading colour (wall grey
+1. Branch state: v1.41 mobile overhaul + v1.42 follow-ups are complete and
+   validated locally; PR #27 is ready for the owner to approve the Actions
+   runs (**Approve and run**) and merge (`main` already holds v1.33–v1.40).
+   After merge, check the live `/Freyraum/` Pages build on a phone
+   (`docs/DEPLOYMENT.md`).
+2. Read `CHANGELOG.md` → v1.42 and v1.41, `FINDINGS.md` 2026-10-21 and
+   `ARCHITECTURE_MAP.md` (touch gestures, device tilt, hub panorama, phone
+   menu, info sheet). New touch surfaces must use
+   `src/interaction/touchGestures.ts`; utility-control placement belongs only
+   to `placeUtilityControls()` in `src/main.ts`.
+3. Checks for this area: `npm run test:touch-gestures`,
+   `npm run test:gallery-room-view`, `npm run validate:museum-hub`, and after
+   `npm run build` the photo-room browser suite and `npm run test:mobile-browser`
+   (`docs/REGRESSION_TOOLING.md`). Run the browser suites one at a time and kill
+   stray headless Chrome between runs; both passed on 2026-10-21.
+4. Browser tests drive real release physics: CDP press/move/release arrive
+   within milliseconds and read as a fling. Hold past the 100 ms velocity window
+   before releasing when a test needs a plain drag (`LESSONS_LEARNED.md` 129).
+5. Open customer decisions (defaults in place): loading colour (wall grey
    `#c7ced4`), gyro default (auto on Android, opt-in on iOS), hub snapping (soft).
-4. Real-device acceptance is the main open gate: iOS Safari + Android Chrome,
+6. Real-device acceptance is the main open gate: iOS Safari + Android Chrome,
    portrait/landscape, deployed `/Freyraum/` build.
 
 ### Ready-to-pick follow-ups (small, scoped)
@@ -189,6 +200,15 @@ decision (it magnifies the full-resolution artwork, not the 2K background).
   if it ever does, refit via `galleryManager.handleViewportMetricsChanged()`.
 - Optional background parallax in the photo room driven by the same tilt.
 - Short-landscape phone side rail instead of top/bottom bars.
+- Accessibility: an `aria-live` announcement of the hub strip position
+  ("Bild 3 von 8") when the panorama settles on an artwork; the strip buttons
+  already carry labels.
+- Bottom-sheet snap points (peek / half / full) via `pickSnapTarget` instead
+  of the current two states.
+- A flick assertion in the photo-room browser suite (fast drag → glide →
+  spring-back inside the photo), now that plain drags are deterministic.
+- Desktop browser suites take 10–20 min under SwiftShader; split the
+  photo-room suite per viewport so CI could run it in parallel jobs.
 
 ### Ideas for further development (brainstorm)
 
@@ -205,6 +225,13 @@ decision (it magnifies the full-resolution artwork, not the 2K background).
   and a "reduce chrome" toggle for screen-magnifier users.
 - Content: audio guide per artwork, multiple exhibitions/rooms chosen by the
   curator, and visitor-facing artwork metadata sheets.
+- Quality/tooling: a real-device smoke overlay (e.g. extend the diagnostics mode with
+  gyro permission state, DPR, safe-area insets, frame time) to speed up
+  customer screenshots; Lighthouse mobile budget in CI once runs are approved
+  automatically; visual baselines per phone viewport from the mobile suite's
+  `FREYRAUM_MOBILE_CAPTURE_DIR` captures.
+- Photo room on phones: swipe between the four rooms with the shared snapping
+  model (like the hub strip) instead of the room select.
 
 ## Previous next-agent starting point (2026-10-20)
 
@@ -221,9 +248,8 @@ decision (it magnifies the full-resolution artwork, not the 2K background).
    Injected config intentionally wins over the compiled fallback. Local output
    uses relative URLs; production uses `/Freyraum/`.
 4. Focused photo-room structural and browser tests, lint, typecheck, and build
-   pass. The geometry suite remains blocked at the wall-left doorway-height
-   expectation (`scripts/test-museum-hub-geometry.mjs:411`), after the stale
-   timeline assertion was corrected. Do not claim a complete geometry-suite pass.
+   pass. (Superseded 2026-10-21: the geometry suite was blocked at the
+   doorway-height expectation then; since v1.42 `validate:museum-hub` passes.)
 5. Post-merge live Pages verification and customer visual acceptance remain
    separate from local/browser checks. See `docs/DEPLOYMENT.md`; avoid relying on
    stale workflow-run IDs from earlier handoffs.
@@ -242,6 +268,14 @@ Regenerate evidence from the matching bundle and record the commit/environment.
 - [x] Asset-size constraints and publish-path assumptions explicitly handed off
 - [x] Known risks and deferred upgrades linked from maintenance docs
 - [ ] Owner completes CI approval, merge, and new live Pages smoke verification
+
+## 2026-10-21 merge-readiness audit
+
+All current Markdown files (28 plus the archive index) were rechecked for the
+v1.41–v1.42 mobile state and their audit markers set to "v1.42 merge
+readiness"; archived snapshots stay unchanged. Stale claims fixed: the
+geometry-suite "blocked" notes (now passing), the merge gate (PR #27; `main`
+holds v1.33–v1.40) and the photo-room suite status (green again, lesson 129).
 
 ## 2026-10-20 full Markdown audit matrix
 

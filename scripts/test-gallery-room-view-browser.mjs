@@ -1768,7 +1768,13 @@ try {
     'closing the room view restores the same selected timeline to its gallery parent'
   );
   assert.equal(
-    await evaluate("document.querySelector('#app > .prefs') !== null && document.querySelector('#app > .fullscreen-btn') !== null"),
+    await evaluate(`(() => {
+      // v1.42: on touch phones the shared controls return to the topbar "more" menu.
+      const phone = matchMedia('(max-width: 599px) and (pointer: coarse)').matches;
+      const host = phone ? '.topbar .phone-menu__panel' : '#app';
+      return document.querySelector(host + ' > .prefs') !== null
+        && document.querySelector(host + ' > .fullscreen-btn') !== null;
+    })()`),
     true,
     'shared utility controls return to gallery chrome when the room view closes'
   );

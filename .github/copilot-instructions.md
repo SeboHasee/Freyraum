@@ -1,5 +1,5 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 ## Current context (v1.42)
 

@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -87,6 +87,9 @@ path toward the reachable viewport center; each frame derives pan from the same
 scene-space anchor, subject to the zoomed-photo bounds. Pinch and pan remain
 direct, including during edge-limited zoom, and responsive resize and reduced
 motion remain covered.
+Synthetic mouse drags hold still for 250 ms before release: CDP delivers
+press/move/release within milliseconds, which the release physics would read
+as a fling and glide to the photo edge (lesson 129). Run this suite alone.
 The browser matrix also includes Wohnbereich at 2000×1080. Screenshot capture
 waits for two animation frames after a viewport or room-state change so the photo
 and artwork have been painted before manual visual review.

@@ -1,5 +1,5 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
@@ -29,6 +29,9 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       visibility fix), reduced motion over manual tilt, nav-occlusion keyed to
       chrome mode, `test:mobile-browser`, museum-hub geometry suite repaired,
       photo-room zoom cap decided (keep 6×).
+- [x] v1.42 merge readiness: photo-room browser suite green again (synthetic
+      drag no longer read as a fling), in-app reduced motion covers the phone
+      menu, docs and handoff refreshed.
 - [ ] Remaining follow-ups: `docs/HANDOFF.md` → "Ready-to-pick follow-ups".
 
 ## Pan-aware cursor and control help (2026-10-20)
@@ -398,7 +401,9 @@ No dependency upgrades or high-resolution importer redesign are part of this fix
 
 ## Open — acceptance (needs the customer/owner)
 
-- [ ] Approve the agent-started Actions runs and merge the v1.33–v1.40 pull request.
+- [ ] Approve the agent-started Actions runs and merge PR #27 (v1.41–v1.42
+      mobile, branch `copilot/mobile-view-optimizations`; `main` already holds
+      v1.33–v1.40), then check the live Pages build on a phone.
 - [ ] Install the Windows artifact (`FREYRAUM-Editor-Windows`) on the customer PC:
       choose the project folder, add a picture, "Im Projekt speichern", check the
       gallery preview.

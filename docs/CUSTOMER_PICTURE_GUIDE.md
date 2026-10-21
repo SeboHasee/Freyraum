@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-20 (merge-readiness and interaction-help follow-up).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 This guide documents the current customer workflow only.
 

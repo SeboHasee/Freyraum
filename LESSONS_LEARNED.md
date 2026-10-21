@@ -1,7 +1,16 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 ## 2026-10-21 — Mobile interaction lessons
+
+### Lesson 129 — Synthetic input meets real release physics
+
+After v1.41 added release momentum, the photo-room suite's CDP drag (press,
+move and release within milliseconds) read as a fling; the glide pushed the
+camera to the photo edge and a later wheel-zoom path check failed with a
+~125 px deviation. It reproduced when run alone, so it was not concurrency.
+When a test needs a plain drag, hold past the 100 ms velocity window before
+releasing and wait for the camera to settle; test flicks deliberately.
 
 ### Lesson 127 — Assert visibility, not only state classes
 

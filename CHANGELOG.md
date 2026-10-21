@@ -1,5 +1,5 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
 
 ## Unreleased — v1.42 mobile follow-ups (2026-10-21)
 
@@ -28,6 +28,13 @@
 - **Tests:** new `npm run test:mobile-browser` (phone panorama, strip, drag
   safety, theme-color, chrome coverage, menu, info sheet); the museum-hub
   geometry suite passes again (curated customer values checked as tolerances).
+- **Merge readiness:** the in-app reduced-motion setting also stops the phone
+  menu's pop-in animation (previously only the system setting did). The
+  photo-room browser suite's pan drag now holds still before release so the
+  release physics do not read the synthetic drag as a fling (the off-centre
+  wheel-zoom path check had failed reproducibly with ~125 px deviation), and
+  its utility-return check accepts the v1.42 phone menu as the gallery home
+  of the shared controls on touch phones.
 
 ## v1.41 mobile experience overhaul (2026-10-21)
 
