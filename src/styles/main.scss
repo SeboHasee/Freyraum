@@ -248,6 +248,12 @@ canvas {
   user-select: none;
 }
 
+// v1.43 — composite-only camera frames while zooming/panning; removed after
+// the camera settles so the final scale re-rasters sharply (GalleryRoomView).
+.gallery-room-view__scene.is-camera-moving {
+  will-change: transform;
+}
+
 canvas.gallery-canvas.is-fine-pointer.is-pan-available,
 .gallery-room-view__scene.is-fine-pointer.is-pan-available {
   cursor: grab;
@@ -303,7 +309,6 @@ canvas.gallery-canvas.is-fine-pointer.is-panning,
     filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
   --artwork-tilt-x: 0deg;
   --artwork-tilt-y: 0deg;
-  --artwork-zoom: 1;
 }
 
 .gallery-room-view__utilities {

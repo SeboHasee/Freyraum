@@ -288,6 +288,20 @@ export function anchoredZoomOffset(
   return { x: anchor.x - contentX * nextScale, y: anchor.y - contentY * nextScale };
 }
 
+/** Pixels per wheel "line" (`deltaMode` 1, e.g. Firefox with line scrolling). */
+export const WHEEL_LINE_PX = 16;
+
+/**
+ * v1.43 — wheel delta in pixels whatever the browser reports: line mode
+ * (`deltaMode` 1) and page mode (`deltaMode` 2) otherwise make one notch
+ * zoom 16–800× less than in pixel mode. Huge single events (page mode,
+ * some mice) are capped so one notch never jumps the camera.
+ */
+export function normalizeWheelDelta(deltaY: number, deltaMode: number, pageHeight = 800): number {
+  const pixels = deltaMode === 1 ? deltaY * WHEEL_LINE_PX : deltaMode === 2 ? deltaY * pageHeight : deltaY;
+  return Math.max(-240, Math.min(240, pixels));
+}
+
 export function isMotionReduced(): boolean {
   if (typeof document === 'undefined') return false;
   const preference = document.documentElement.dataset['motion'];

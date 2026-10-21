@@ -8,6 +8,7 @@ import {
   exceedsTapSlop,
   isMotionReduced,
   MIN_FLING_VELOCITY,
+  normalizeWheelDelta,
   rubberBandClamp,
   stepMomentum,
   VelocityTracker,
@@ -32,6 +33,8 @@ const SENSOR_TILT_RANGE_DEG = 16;
 const SENSOR_TILT_DEAD_ZONE_DEG = 1.2;
 /** Double-tap zoom level shared in spirit with the gallery (×2.5). */
 const DOUBLE_TAP_SCALE = 2.5;
+/** Idle time after the last camera frame before the scene re-rasters sharply. */
+const CAMERA_SETTLE_RASTER_MS = 160;
 
 interface PhotoPointer {
   x: number;
@@ -124,6 +127,7 @@ export class GalleryRoomView {
   private readonly velocity = new VelocityTracker();
   private readonly doubleTap = new DoubleTapDetector();
   private momentumFrame = 0;
+  private cameraSettleTimer = 0;
   private lastPointerType = '';
   private motionNeutralAt = 0;
   private timelineElement: HTMLElement | null = null;
@@ -364,6 +368,7 @@ export class GalleryRoomView {
     if (this.visible) {
       this.status.textContent = '';
       this.resetCamera();
+      this.updateArtworkTransform();
       this.closeButton.focus({ preventScroll: true });
     } else {
       this.pointers.clear();
@@ -375,6 +380,7 @@ export class GalleryRoomView {
     if (this.disposed) return;
     this.disposed = true;
     if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
+    if (this.cameraSettleTimer) window.clearTimeout(this.cameraSettleTimer);
     this.disableDeviceMotionTilt();
     this.resizeObserver?.disconnect();
     window.removeEventListener('resize', this.handleResize);
@@ -454,13 +460,28 @@ export class GalleryRoomView {
       this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
     }
     this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
+    this.markCameraMoving();
     this.syncPanCursor();
-    this.artworkImage.style.setProperty('--artwork-zoom', String(this.cameraScale));
     this.zoomOutButton.disabled = this.cameraScale <= MIN_CAMERA_SCALE;
     this.zoomInButton.disabled = this.cameraScale >= MAX_CAMERA_SCALE;
     this.resetButton.disabled = this.cameraScale === MIN_CAMERA_SCALE
       && this.cameraOffsetX === 0 && this.cameraOffsetY === 0;
-    this.updateArtworkTransform();
+  }
+
+  /**
+   * v1.43 — while the camera moves the scene is its own compositor layer
+   * (`will-change: transform`), so each frame only re-composites instead of
+   * re-rastering and re-decoding the photo and the full-resolution artwork at
+   * every intermediate scale. Shortly after the last camera frame the hint is
+   * dropped and Chrome re-rasters once at the final, sharp scale.
+   */
+  private markCameraMoving(): void {
+    if (this.cameraSettleTimer) window.clearTimeout(this.cameraSettleTimer);
+    else this.scene.classList.add('is-camera-moving');
+    this.cameraSettleTimer = window.setTimeout(() => {
+      this.cameraSettleTimer = 0;
+      this.scene.classList.remove('is-camera-moving');
+    }, CAMERA_SETTLE_RASTER_MS);
   }
 
   private setCamera(
@@ -533,7 +554,8 @@ export class GalleryRoomView {
 
   /** Double-tap: zoom in at the tapped point, or back to the fitted photo. */
   private toggleZoomAt(point: PhotoPointer): void {
-    if (this.cameraScale > MIN_CAMERA_SCALE + 0.05) {
+    // The target decides, so a second double-click during the zoom-in returns.
+    if ((this.cameraAnimationTargetScale ?? this.cameraScale) > MIN_CAMERA_SCALE + 0.05) {
       this.resetCamera(true);
       return;
     }
@@ -697,6 +719,7 @@ export class GalleryRoomView {
 
   private handleResize = (): void => {
     this.applyCamera();
+    this.updateArtworkTransform();
     if (this.cameraAnimationTargetScale !== null && this.artworkCenter) {
       const rect = this.element.getBoundingClientRect();
       const scale = this.cameraAnimationTargetScale;
@@ -872,7 +895,7 @@ export class GalleryRoomView {
     this.scene.classList.toggle('is-dragging', canPan && this.pointerDragStarted);
   }
 
-  private pointerPosition(event: PointerEvent): PhotoPointer {
+  private pointerPosition(event: MouseEvent): PhotoPointer {
     const rect = this.element.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
@@ -1098,13 +1121,15 @@ export class GalleryRoomView {
 
   private onWheel = (event: WheelEvent): void => {
     event.preventDefault();
-    this.zoomBy(Math.exp(-event.deltaY * 0.001));
+    this.zoomBy(Math.exp(-normalizeWheelDelta(event.deltaY, event.deltaMode, window.innerHeight) * 0.001));
   };
 
-  private onDoubleClick = (): void => {
+  private onDoubleClick = (event: MouseEvent): void => {
     // Touch double-taps are handled in onPointerEnd (zoom at the point).
     if (this.lastPointerType === 'touch' || this.lastPointerType === 'pen') return;
-    this.resetCamera(true);
+    // v1.43 — like the gallery: zoom in at the pointer, again to return.
+    event.preventDefault();
+    this.toggleZoomAt(this.pointerPosition(event));
   };
 
   private onKeyDown = (event: KeyboardEvent): void => {

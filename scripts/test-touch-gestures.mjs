@@ -173,4 +173,12 @@ const close = (actual, expected, epsilon, message) =>
   assert.equal(gestures.resolveSheetRelease(20, -900, false), 'stay', 'a flick against the drag direction does nothing');
 }
 
-console.log('Touch gesture, hub panorama, device-tilt, and info-sheet checks passed.');
+// v1.43: wheel deltas in line/page mode zoom like pixel mode; huge events are capped.
+{
+  assert.equal(gestures.normalizeWheelDelta(-100, 0), -100, 'pixel mode passes through');
+  assert.equal(gestures.normalizeWheelDelta(-3, 1), -3 * gestures.WHEEL_LINE_PX, 'line mode converts to pixels');
+  assert.equal(gestures.normalizeWheelDelta(1, 2, 900), 240, 'page mode is capped to one large notch');
+  assert.equal(gestures.normalizeWheelDelta(-5000, 0), -240, 'an extreme pixel delta is capped');
+}
+
+console.log('Touch gesture, hub panorama, device-tilt, info-sheet, and wheel checks passed.');

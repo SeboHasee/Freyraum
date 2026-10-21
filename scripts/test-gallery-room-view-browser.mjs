@@ -1012,7 +1012,7 @@ try {
   assert.equal(roomHelp.title, 'Bedienung im Fotoraum');
   assert.ok(roomHelp.rows.some((row) => row.includes('Mausrad') && row.includes('Kunstwerk')));
   assert.ok(roomHelp.rows.some((row) => row.includes('vergrößerter Ansicht') && row.includes('Ziehen')));
-  assert.ok(roomHelp.rows.some((row) => row.includes('zurücksetzen') && row.includes('Doppelklick')));
+  assert.ok(roomHelp.rows.some((row) => row.includes('heranzoomen') && row.includes('Doppelklick')));
   assert.ok(!roomHelp.rows.some((row) => row.includes('Vorheriges / nächstes Bild') || row.includes('Vollbild')));
   assert.ok(roomHelp.keycaps >= roomHelp.rows.length, 'help presents controls in semantic keycaps');
   assert.equal(roomHelp.focusedControl, 'Hilfe schließen', 'room help initially focuses its close control');
@@ -1411,6 +1411,41 @@ try {
   camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'keyboard shortcut zooms without invoking gallery zoom');
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'");
+  // v1.43: mouse double-click zooms in at the pointer and back, like the gallery.
+  const doubleClickAt = async (x, y) => {
+    for (const clickCount of [1, 2]) {
+      await command('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount });
+      await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount });
+    }
+  };
+  const doubleClickPoint = await evaluate(`(() => {
+    const rect = document.querySelector('.gallery-room-view').getBoundingClientRect();
+    return { x: Math.round(rect.left + rect.width * 0.6), y: Math.round(rect.top + rect.height * 0.55) };
+  })()`);
+  await doubleClickAt(doubleClickPoint.x, doubleClickPoint.y);
+  // The camera is its own compositor layer (will-change) while the zoom animates.
+  await waitFor(`document.querySelector('.gallery-room-view__scene').classList.contains('is-camera-moving')
+    && getComputedStyle(document.querySelector('.gallery-room-view__scene')).willChange === 'transform'`);
+  await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
+    .split(' scale(')[1]?.slice(0, -1)) - 2.5) < 0.001`, 60_000);
+  const doubleClickCamera = await evaluate(`(() => {
+    const rect = document.querySelector('.gallery-room-view').getBoundingClientRect();
+    const match = /translate3d\\(([-\\d.]+)px, ([-\\d.]+)px, 0px\\) scale\\(([\\d.]+)\\)/
+      .exec(document.querySelector('.gallery-room-view__scene').style.transform);
+    return { left: rect.left, top: rect.top, offsetX: Number(match[1]), offsetY: Number(match[2]), scale: Number(match[3]) };
+  })()`);
+  const anchoredX = (doubleClickPoint.x - doubleClickCamera.left - doubleClickCamera.offsetX) / doubleClickCamera.scale;
+  const anchoredY = (doubleClickPoint.y - doubleClickCamera.top - doubleClickCamera.offsetY) / doubleClickCamera.scale;
+  assert.ok(
+    Math.abs(anchoredX - (doubleClickPoint.x - doubleClickCamera.left)) < 2
+      && Math.abs(anchoredY - (doubleClickPoint.y - doubleClickCamera.top)) < 2,
+    `double-click zoom keeps the clicked photo point under the pointer: ${JSON.stringify({ doubleClickPoint, doubleClickCamera })}`
+  );
+  await waitFor("!document.querySelector('.gallery-room-view__scene').classList.contains('is-camera-moving')");
+  await doubleClickAt(doubleClickPoint.x, doubleClickPoint.y);
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'", 60_000);
+  console.log('✓ double-click zooms in at the pointer and back; camera layer only while moving');
   await evaluate(`(() => {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     for (let index = 0; index < 12; index += 1) zoom.click();

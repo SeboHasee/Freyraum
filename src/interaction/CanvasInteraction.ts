@@ -4,6 +4,7 @@ import {
   DoubleTapDetector,
   exceedsTapSlop,
   hapticTick,
+  normalizeWheelDelta,
   resolveSwipeDirection,
   VelocityTracker,
 } from './touchGestures';
@@ -445,7 +446,7 @@ export class CanvasInteraction {
 
   private onWheel = (e: WheelEvent): void => {
     if (!this.enabled) return;
-    this.galleryManager.addZoomDelta(e.deltaY * 0.0045);
+    this.galleryManager.addZoomDelta(normalizeWheelDelta(e.deltaY, e.deltaMode, window.innerHeight) * 0.0045);
   };
 
   private onLegacyMouseMove = (e: MouseEvent): void => {
