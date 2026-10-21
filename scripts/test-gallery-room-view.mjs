@@ -698,7 +698,7 @@ assert.match(roomViewSource, /this\.disableDeviceMotionTilt\(\)/);
 assert.match(roomViewSource, /this\.zoomAt\(/);
 assert.match(
   roomViewSource,
-  /this\.zoomBy\(Math\.exp\(-event\.deltaY \* 0\.001\)\)/,
+  /this\.zoomBy\(Math\.exp\(-normalizeWheelDelta\(event\.deltaY, event\.deltaMode, window\.innerHeight\) \* 0\.001\)\)/,
   'wheel zoom targets the artwork like the zoom buttons'
 );
 assert.match(roomViewSource, /HOVER_INFLUENCE_RADIUS_PX = 900/);

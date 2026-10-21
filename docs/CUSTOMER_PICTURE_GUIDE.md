@@ -1,5 +1,5 @@
 # FREYRAUM — Customer Picture Guide
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
 
 This guide documents the current customer workflow only.
 

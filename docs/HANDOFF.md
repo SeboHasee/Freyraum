@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -233,7 +233,15 @@ decision (it magnifies the full-resolution artwork, not the 2K background).
   and a "reduce chrome" toggle for screen-magnifier users.
 - Content: audio guide per artwork, multiple exhibitions/rooms chosen by the
   curator, and visitor-facing artwork metadata sheets.
-- Desktop zoom follow-ups (found in v1.43):
+- Desktop zoom follow-ups (found in v1.43/v1.44):
+  - v1.44 fixed the zoom-out drift (fixed-point anchoring) and per-frame
+    layout reads. If zoom still feels less smooth than the gallery on a real
+    GPU, check softness of the `will-change` layer first; the split-layer
+    raster idea is in `FINDINGS.md` v1.44.
+  - Shift+double-click (or right double-click) could zoom out one step from
+    deep zoom instead of always returning to the whole photo.
+  - Zoom level indicator / slider in the room zoom controls, shared with the
+    gallery, so mouse-only visitors see where they are between 1× and 6×.
   - If the brief softness before the final sharp re-raster shows at big zoom
     steps, pre-promote the scene at the target scale or serve a second, larger
     artwork derivative only while zoomed.

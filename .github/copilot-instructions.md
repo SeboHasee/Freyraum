@@ -1,5 +1,5 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
 
 ## Current context (v1.42)
 
@@ -15,7 +15,7 @@
   across aspect ratios; preserve the room camera and projective registration when
   adjusting UI. Room camera frames must stay composite-only (scene transform +
   motion-only `.is-camera-moving`); never re-project or read layout per frame
-  (v1.43, lesson 130). A 2026-10-20 user screenshot again shows apparent top clipping in
+  (v1.43, lesson 130); un-anchored zoom-outs scale about their fixed point (v1.44, lesson 131). A 2026-10-20 user screenshot again shows apparent top clipping in
   Wohnbereich; its build/config identity is unknown, so treat visual acceptance as
   open and compare the matching generated artifact before assigning cause. See
   `README.md` → "Inspect in a photo room" and

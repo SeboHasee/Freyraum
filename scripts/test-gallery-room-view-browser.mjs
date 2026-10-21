@@ -1443,8 +1443,37 @@ try {
     `double-click zoom keeps the clicked photo point under the pointer: ${JSON.stringify({ doubleClickPoint, doubleClickCamera })}`
   );
   await waitFor("!document.querySelector('.gallery-room-view__scene').classList.contains('is-camera-moving')");
+  // v1.44: the zoom-out scales about its fixed point instead of easing pan and
+  // scale separately (which slid the view to the left edge while still zoomed).
+  const zoomOutPath = evaluate(`new Promise((resolve) => {
+    const scene = document.querySelector('.gallery-room-view__scene');
+    const parse = () => {
+      const match = /translate3d\\(([-\\d.]+)px, ([-\\d.]+)px, 0px\\) scale\\(([\\d.]+)\\)/.exec(scene.style.transform);
+      return match ? { x: Number(match[1]), y: Number(match[2]), scale: Number(match[3]) } : null;
+    };
+    const frames = [];
+    const startedAt = performance.now();
+    const tick = () => {
+      const camera = parse();
+      if (camera) frames.push(camera);
+      if ((camera && camera.scale === 1 && camera.x === 0 && camera.y === 0) || performance.now() - startedAt > 55000) resolve(frames);
+      else requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })`);
   await doubleClickAt(doubleClickPoint.x, doubleClickPoint.y);
+  const zoomOutFrames = await zoomOutPath;
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'", 60_000);
+  const fixedContentX = -doubleClickCamera.offsetX / (doubleClickCamera.scale - 1);
+  const fixedContentY = -doubleClickCamera.offsetY / (doubleClickCamera.scale - 1);
+  const zoomOutDrift = Math.max(...zoomOutFrames.map((frame) => Math.max(
+    Math.abs(frame.x + fixedContentX * frame.scale - fixedContentX),
+    Math.abs(frame.y + fixedContentY * frame.scale - fixedContentY)
+  )));
+  assert.ok(
+    zoomOutFrames.length > 1 && zoomOutDrift < 2,
+    `double-click zoom-out keeps its fixed photo point still (max drift ${zoomOutDrift.toFixed(2)}px over ${zoomOutFrames.length} frames)`
+  );
   console.log('✓ double-click zooms in at the pointer and back; camera layer only while moving');
   await evaluate(`(() => {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
@@ -1537,7 +1566,7 @@ try {
     'edge-limited zoom settles at the reachable artwork-centered offset'
   );
   await evaluate(`document.querySelector('.gallery-room-view [aria-label="Fotoansicht zurücksetzen"]').click()`);
-  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'");
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'", 60_000);
   console.log('✓ photo zoom, drag pan, reset, and keyboard zoom');
 
   await command('Emulation.setDeviceMetricsOverride', {

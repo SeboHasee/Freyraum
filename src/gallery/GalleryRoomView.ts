@@ -128,6 +128,9 @@ export class GalleryRoomView {
   private readonly doubleTap = new DoubleTapDetector();
   private momentumFrame = 0;
   private cameraSettleTimer = 0;
+  /** v1.44 — viewport size cached between resizes; camera frames never read layout. */
+  private cachedViewport: { width: number; height: number } | null = null;
+  private cameraControlState = '';
   private lastPointerType = '';
   private motionNeutralAt = 0;
   private timelineElement: HTMLElement | null = null;
@@ -366,6 +369,7 @@ export class GalleryRoomView {
     this.updateTimelinePlacement();
     this.onVisibilityChange(this.visible);
     if (this.visible) {
+      this.cachedViewport = null;
       this.status.textContent = '';
       this.resetCamera();
       this.updateArtworkTransform();
@@ -451,8 +455,21 @@ export class GalleryRoomView {
     }
   }
 
-  private applyCamera(allowOverscroll = false): void {
+  /**
+   * v1.44 — camera frames write a transform every rAF; reading
+   * `getBoundingClientRect()` right after that write forced a synchronous
+   * style/layout pass per frame. The size only changes on resize/visibility.
+   */
+  private viewportSize(): { width: number; height: number } {
+    if (this.cachedViewport) return this.cachedViewport;
     const rect = this.element.getBoundingClientRect();
+    const size = { width: rect.width, height: rect.height };
+    if (size.width > 0 && size.height > 0) this.cachedViewport = size;
+    return size;
+  }
+
+  private applyCamera(allowOverscroll = false): void {
+    const rect = this.viewportSize();
     const maxOffsetX = Math.max(0, rect.width * (this.cameraScale - 1));
     const maxOffsetY = Math.max(0, rect.height * (this.cameraScale - 1));
     if (!allowOverscroll) {
@@ -462,10 +479,18 @@ export class GalleryRoomView {
     this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
     this.markCameraMoving();
     this.syncPanCursor();
-    this.zoomOutButton.disabled = this.cameraScale <= MIN_CAMERA_SCALE;
-    this.zoomInButton.disabled = this.cameraScale >= MAX_CAMERA_SCALE;
-    this.resetButton.disabled = this.cameraScale === MIN_CAMERA_SCALE
+    const atMinimum = this.cameraScale <= MIN_CAMERA_SCALE;
+    const atMaximum = this.cameraScale >= MAX_CAMERA_SCALE;
+    const atRest = this.cameraScale === MIN_CAMERA_SCALE
       && this.cameraOffsetX === 0 && this.cameraOffsetY === 0;
+    // Only touch the buttons when their state flips, not on every camera frame.
+    const controlState = `${atMinimum}|${atMaximum}|${atRest}`;
+    if (controlState !== this.cameraControlState) {
+      this.cameraControlState = controlState;
+      this.zoomOutButton.disabled = atMinimum;
+      this.zoomInButton.disabled = atMaximum;
+      this.resetButton.disabled = atRest;
+    }
   }
 
   /**
@@ -506,7 +531,7 @@ export class GalleryRoomView {
 
   /** Pan limits for the current scale: offsets live in `[-max, 0]`. */
   private panLimits(scale = this.cameraScale): { maxX: number; maxY: number } {
-    const rect = this.element.getBoundingClientRect();
+    const rect = this.viewportSize();
     return {
       maxX: Math.max(0, rect.width * (scale - 1)),
       maxY: Math.max(0, rect.height * (scale - 1)),
@@ -578,7 +603,7 @@ export class GalleryRoomView {
   }
 
   private zoomBy(factor: number): void {
-    const rect = this.element.getBoundingClientRect();
+    const rect = this.viewportSize();
     const targetScale = Math.max(
       MIN_CAMERA_SCALE,
       Math.min(MAX_CAMERA_SCALE, (this.cameraAnimationTargetScale ?? this.cameraScale) * factor)
@@ -605,7 +630,7 @@ export class GalleryRoomView {
     // A release glide must not keep moving the camera under an eased zoom.
     this.stopPanMomentum();
     const targetScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
-    const rect = this.element.getBoundingClientRect();
+    const rect = this.viewportSize();
     const maxOffsetX = Math.max(0, rect.width * (targetScale - 1));
     const maxOffsetY = Math.max(0, rect.height * (targetScale - 1));
     const targetOffsetX = Math.min(0, Math.max(-maxOffsetX, offsetX));
@@ -614,6 +639,19 @@ export class GalleryRoomView {
     this.cameraAnimationTargetOffsetX = targetOffsetX;
     this.cameraAnimationTargetOffsetY = targetOffsetY;
     this.syncPanCursor();
+    // v1.44 — without an explicit anchor (reset, double-click zoom-out) pan and
+    // scale used to ease independently: the faster pan reached offset 0 (the
+    // photo's left/top edge) while still zoomed in, so the zoom-out visibly
+    // drifted left. Zoom about the transform's fixed point instead — the photo
+    // point whose screen position is identical at start and target scale.
+    if (!anchorContent && Math.abs(this.cameraScale - targetScale) > 1e-3) {
+      const scaleDelta = this.cameraScale - targetScale;
+      const fixedX = (targetOffsetX - this.cameraOffsetX) / scaleDelta;
+      const fixedY = (targetOffsetY - this.cameraOffsetY) / scaleDelta;
+      if (Number.isFinite(fixedX) && Number.isFinite(fixedY)) {
+        anchorContent = { x: fixedX, y: fixedY };
+      }
+    }
     this.cameraAnimationAnchor = anchorContent
       ? {
           contentX: anchorContent.x,
@@ -657,7 +695,7 @@ export class GalleryRoomView {
           + (anchor.targetScreenX - anchor.startScreenX) * progress;
         const anchorScreenY = anchor.startScreenY
           + (anchor.targetScreenY - anchor.startScreenY) * progress;
-        const currentRect = this.element.getBoundingClientRect();
+        const currentRect = this.viewportSize();
         const currentMaxOffsetX = Math.max(0, currentRect.width * (nextScale - 1));
         const currentMaxOffsetY = Math.max(0, currentRect.height * (nextScale - 1));
         nextOffsetX = Math.min(0, Math.max(
@@ -718,6 +756,7 @@ export class GalleryRoomView {
   }
 
   private handleResize = (): void => {
+    this.cachedViewport = null;
     this.applyCamera();
     this.updateArtworkTransform();
     if (this.cameraAnimationTargetScale !== null && this.artworkCenter) {

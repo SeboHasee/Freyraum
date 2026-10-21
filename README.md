@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 

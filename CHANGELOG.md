@@ -1,5 +1,23 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+
+## Unreleased — v1.44 photo-room zoom-out drift (2026-10-21)
+
+- **Zoom-out no longer drifts left:** a second double-click (and the reset
+  button/key) zoomed out with pan and scale eased separately; the faster pan
+  reached the photo's left/top edge while still zoomed in, so the view slid
+  sideways before shrinking. Every un-anchored camera animation now scales
+  about its fixed point (the photo point whose screen position is the same at
+  start and target), so zoom-out is a straight, centred shrink.
+- **Fewer forced layouts per camera frame:** the photo-room viewport size is
+  cached between resizes; camera frames no longer call
+  `getBoundingClientRect()` two to three times right after writing the
+  transform (each read forced a synchronous style/layout pass).
+- **No per-frame button writes:** zoom/reset `disabled` states are written only
+  when they change.
+- **Browser suite:** asserts the double-click zoom-out keeps its fixed photo
+  point still on every frame (< 2 px); the slow headless reset after the
+  edge-zoom check now has the same 60 s budget as other camera waits.
 
 ## Unreleased — v1.43 desktop photo-room zoom (2026-10-21)
 

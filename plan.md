@@ -1,9 +1,19 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Photo-room zoom-out drift (v1.44, 2026-10-21)
+
+- [x] Un-anchored camera animations (reset, double-click zoom-out) scale about
+      their fixed point; no left/top drift.
+- [x] Cached viewport size; no layout reads or redundant button writes per frame.
+- [x] Browser assertion for a drift-free double-click zoom-out.
+- [ ] Owner check on a real desktop GPU: zoom smoothness and whether the
+      motion layer looks soft during zoom-in (see `FINDINGS.md` v1.44 for the
+      split-layer option if it does).
 
 ## Desktop photo-room zoom (v1.43, 2026-10-21)
 

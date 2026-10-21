@@ -1,7 +1,15 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
 
 ## 2026-10-21 — Mobile interaction lessons
+
+### Lesson 131 — Ease a camera as one transform, not per component
+
+Easing pan and scale independently toward a reset target made the faster
+component (pan) arrive first: the zoomed view slid to the photo edge, then
+shrank — read by the user as a sideways drift. Derive pan from scale progress
+around an anchor (for zoom-out: the transform's fixed point), and assert the
+anchor's screen path frame by frame in the browser suite.
 
 ### Lesson 130 — Same easing is not the same smoothness
 

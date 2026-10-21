@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -89,7 +89,8 @@ direct, including during edge-limited zoom, and responsive resize and reduced
 motion remain covered.
 Since v1.43 it also checks the mouse double-click toggle (zoom in at the
 pointer with the clicked photo point kept under it, then back to the whole
-photo) and that `.is-camera-moving` (`will-change: transform`) is present
+photo) — since v1.44 every zoom-out frame must keep the transform's fixed
+photo point within 2 px (no sideways drift) — and that `.is-camera-moving` (`will-change: transform`) is present
 while the camera animates and removed after it settles.
 Synthetic mouse drags hold still for 250 ms before release: CDP delivers
 press/move/release within milliseconds, which the release physics would read

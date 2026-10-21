@@ -1,5 +1,33 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+> Latest markdown audit: 2026-10-21 (v1.44 photo-room zoom-out drift).
+
+## 2026-10-21 — v1.44 photo-room zoom-out drift findings
+
+- **Root cause of the left drift:** `resetCamera(true)` (second double-click,
+  reset button, `0` key) called `animateCamera(1, 0, 0)` without an anchor.
+  Offsets eased toward 0 with one smoothDamp stage (λ 5) while scale eased
+  through two stages (λ 4 → λ 4), so the offset reached 0 — the photo's
+  left/top edge — while the scale was still well above 1. On screen the
+  zoomed view slid to the left/top edge first and shrank afterwards. Fix: zoom
+  about the fixed point `c = (oTarget − oStart) / (sStart − sTarget)` per axis,
+  which stays inside the photo for reset and keeps every frame in bounds.
+- **Forced layout per frame:** `applyCamera`, `panLimits` and the anchored
+  animation tick each read `getBoundingClientRect()` right after a transform
+  write. The size only changes on resize/visibility, so it is now cached.
+- **Button state writes per frame:** three `disabled` writes per camera frame
+  are now change-only.
+- **Raster scale of the motion layer (open):** a `will-change: transform` layer
+  keeps the raster scale it had when promoted. Zoom-in can therefore look soft
+  until the 160 ms settle re-raster, and zoom-out from a large scale rasters
+  newly visible tiles at the old, high scale. Headless screenshots force a
+  fresh raster, so this cannot be judged headlessly (probe tried in v1.44);
+  needs a real-GPU desktop check. Options if visible: split the camera into
+  a layer `scale(s / k)` plus an inner painted `scale(k)` with `k` = target
+  scale (one repaint at animation start, then composite-only and sharp), or a
+  WebGL room renderer sharing the gallery's mipmapped textures.
+- **Remaining feel difference:** the gallery is a perspective camera, so equal
+  wheel notches accelerate as it approaches the artwork; the room uses a
+  constant ~10.5 % per notch. Both use the same two-stage easing.
 
 ## 2026-10-21 — v1.43 desktop photo-room zoom findings
 
