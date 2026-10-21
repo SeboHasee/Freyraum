@@ -11,6 +11,10 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       their fixed point; no left/top drift.
 - [x] Cached viewport size; no layout reads or redundant button writes per frame.
 - [x] Browser assertion for a drift-free double-click zoom-out.
+- [ ] `test:mobile-browser` failed in the v1.44 session at "phone-390x844:
+      room-01.wall-left.a is fully on screen after its strip tap" (hub
+      panorama; v1.44 changed only `GalleryRoomView.ts`). Diagnose before
+      merge: headless rAF starvation of the strip snap vs. a real regression.
 - [ ] Owner check on a real desktop GPU: zoom smoothness and whether the
       motion layer looks soft during zoom-in (see `FINDINGS.md` v1.44 for the
       split-layer option if it does).
