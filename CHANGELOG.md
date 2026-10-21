@@ -1,7 +1,35 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
 
-## Unreleased — v1.41 mobile experience overhaul (2026-10-21)
+## Unreleased — v1.42 mobile follow-ups (2026-10-21)
+
+- **Phone "more" menu** (`src/ui/PhoneUtilityMenu.ts`): on touch phones
+  (≤599 px, coarse pointer) audio, settings, fullscreen and help collapse
+  behind one topbar **⋯** button (in the photo room inside its utility group).
+  One placement function in `main.ts` owns where the shared controls live.
+  Gallery chrome at 390×844 drops from 27.5 % to 19 % of the screen height.
+- **Info bottom sheet:** the compact phone info panel rises from below with a
+  grab handle; tap or pull up to expand (it stays pinned open), pull down to
+  collapse and again to dismiss. Release decisions use `resolveSheetRelease`
+  in the shared gesture engine; `ChromeVisibilityManager` gained
+  `setPinned`/`dismiss`.
+- **Fix:** on touch devices the info panel stayed invisible even when revealed
+  (a later `[data-hover='false']` rule with equal specificity forced
+  `opacity: 0`), so **Info** and the edge tap showed nothing on phones.
+- **Reduced motion wins over gyro tilt:** a manual "on" no longer overrides
+  reduced motion (setting or system); the toggle shows as unavailable and the
+  stored choice resumes when reduced motion is turned off.
+- **Artwork space:** phone nav arrows no longer reserve artwork space while
+  auto-hidden, keyed to the chrome mode instead of the momentary opacity; the
+  artwork refits when **Bedienleiste immer einblenden** changes.
+- **Photo-room zoom cap kept at 6×:** zoom inspects the separately loaded
+  full-resolution artwork image, not the ~2K background, so a background-
+  resolution cap (~1.4× on desktop) would remove useful detail.
+- **Tests:** new `npm run test:mobile-browser` (phone panorama, strip, drag
+  safety, theme-color, chrome coverage, menu, info sheet); the museum-hub
+  geometry suite passes again (curated customer values checked as tolerances).
+
+## v1.41 mobile experience overhaul (2026-10-21)
 
 - **Shared touch physics** (`src/interaction/touchGestures.ts`): velocity
   tracking, frame-rate-independent momentum, rubber-band edges, soft snapping,

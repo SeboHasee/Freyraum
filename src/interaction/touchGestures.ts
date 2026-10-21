@@ -224,6 +224,29 @@ export function resolveSwipeDirection(
   return dx < 0 ? 1 : -1;
 }
 
+export type SheetRelease = 'toggle' | 'expand' | 'collapse' | 'dismiss' | 'stay';
+
+/**
+ * v1.42 — phone bottom sheet (info panel) release decision from the vertical
+ * drag `dy` (down positive, px) and release velocity `velocityY` (px/s).
+ * A tap toggles; a pull or flick up expands; down collapses an expanded
+ * sheet, or dismisses a collapsed one. Short, slow drags spring back.
+ */
+export function resolveSheetRelease(
+  dy: number,
+  velocityY: number,
+  expanded: boolean,
+  distanceThreshold = 44,
+  flickVelocity = FLICK_VELOCITY
+): SheetRelease {
+  if (!exceedsTapSlop(0, dy)) return 'toggle';
+  const flickUp = velocityY < -flickVelocity && dy < 0;
+  const flickDown = velocityY > flickVelocity && dy > 0;
+  if (dy < -distanceThreshold || flickUp) return expanded ? 'stay' : 'expand';
+  if (dy > distanceThreshold || flickDown) return expanded ? 'collapse' : 'dismiss';
+  return 'stay';
+}
+
 /** Detects two taps close in time and space. */
 export class DoubleTapDetector {
   private last: PointSample | null = null;

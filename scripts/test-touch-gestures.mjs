@@ -160,4 +160,17 @@ const close = (actual, expected, epsilon, message) =>
   assert.ok(wrapped.beta > 179, 'drift follows the short way across ±180°');
 }
 
-console.log('Touch gesture, hub panorama, and device-tilt checks passed.');
+// Phone info sheet: tap toggles, pull/flick up expands, down collapses then dismisses.
+{
+  assert.equal(gestures.resolveSheetRelease(3, 0, false), 'toggle', 'a tap on the handle toggles');
+  assert.equal(gestures.resolveSheetRelease(-60, 0, false), 'expand', 'pulling up expands');
+  assert.equal(gestures.resolveSheetRelease(-20, -900, false), 'expand', 'a short upward flick expands');
+  assert.equal(gestures.resolveSheetRelease(-60, 0, true), 'stay', 'pulling up an expanded sheet keeps it');
+  assert.equal(gestures.resolveSheetRelease(60, 0, true), 'collapse', 'pulling down collapses an expanded sheet');
+  assert.equal(gestures.resolveSheetRelease(60, 0, false), 'dismiss', 'pulling down a collapsed sheet dismisses it');
+  assert.equal(gestures.resolveSheetRelease(20, 900, false), 'dismiss', 'a short downward flick dismisses');
+  assert.equal(gestures.resolveSheetRelease(20, 100, false), 'stay', 'a short slow drag springs back');
+  assert.equal(gestures.resolveSheetRelease(20, -900, false), 'stay', 'a flick against the drag direction does nothing');
+}
+
+console.log('Touch gesture, hub panorama, device-tilt, and info-sheet checks passed.');

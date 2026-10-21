@@ -1,5 +1,5 @@
 # Regression Validation Tooling
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
 
 This document is the explicit **regression model → tooling** mapping for the
 current rendering baseline and active recovery work in `plan.md`. It maps pixel
@@ -7,6 +7,20 @@ diffs, structural invariants, and GC metrics to concrete tools.
 
 Every optimization carries a regression **type** (Phase 12.1). No optimization
 is accepted unless the measurement hook for its type exists and passes.
+
+## Phone browser suite (added 2026-10-21, v1.42)
+
+After `npm run import:artworks && npm run build`:
+`FREYRAUM_CHROME_PATH=/path/to/chrome npm run test:mobile-browser`
+(optional `FREYRAUM_MOBILE_URL`, `FREYRAUM_MOBILE_CAPTURE_DIR`). With Chrome
+mobile + touch emulation at 390×844, 360×780 and 844×390 it checks the
+`theme-color` meta, panorama only on narrow portrait, every strip entry
+gliding its artwork fully on screen and tappable at its centre, finger drags
+panning without opening, gallery chrome ≤ 24 % of the height with
+non-overlapping controls, the phone "more" menu (44 px targets, settings on
+screen, outside-tap close) and the info sheet (visible on touch, expand,
+pinned past auto-hide, collapse, swipe away). About 5–10 min headless; run
+it alone. Real-device feel is still manual.
 
 ## Mobile touch, gyro and hub panorama (added 2026-10-21)
 
@@ -345,7 +359,8 @@ Linux run them under `xvfb-run -a`.
 | `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
 | `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
 | `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, keyboard, close/focus | – |
-| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math, device-tilt normalisation | – |
+| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math, device-tilt normalisation, info-sheet release | – |
+| `npm run test:mobile-browser` | yes | phone panorama/strip/drag safety, theme-color, chrome coverage, phone menu, info sheet | – |
 | `npm run test:validate-deploy` | – | deploy content check | – |
 | `npm run test:editor-drag` | yes | every artwork reaches all four green-zone edges and stops exactly there | – |
 | `npm run test:editor-rooms` | yes | add/fill/switch/delete rooms, undo/redo, download + reload | – |

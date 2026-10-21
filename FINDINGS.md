@@ -1,5 +1,26 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
+
+## 2026-10-21 — v1.42 mobile follow-up findings
+
+- **Invisible info panel on touch:** `:root[data-hover='false'][data-chrome-mode='clean'] .info-panel`
+  (opacity 0, no pointer events) had the same specificity as the reveal rules
+  and came later, so revealed panels stayed invisible on phones. Scoped to
+  `:not(.is-revealed)`; `test:mobile-browser` asserts opacity and pointer events.
+- **Settings from the phone menu** started ~140 px down and overflowed the
+  viewport by 12 px with the desktop `100dvh − 120px` cap; the menu variant
+  uses `− 168px`. The menu panel needed `contain: layout` (not `paint`) on the
+  topbar so the popover is not clipped.
+- **Geometry suite:** the shipped `museum-hub.json` holds customer-curated
+  slot values and rescaled doorways (~2.5–2.7 m); exact fixtures were stale.
+  The checks are now ranges, and the above-band fixture stays inside the
+  calibrated safe-area top (the customer calibration leaves < 0.25 m there).
+- **Zoom cap:** photo-room zoom magnifies the separately loaded artwork image;
+  capping by the ~2K background (≈1.4× at 1440 px) would cut useful zoom, so
+  6× stays.
+- **Nav occlusion:** excluding the arrows by measured opacity meant a resize
+  during a forced reveal shrank the artwork until the next resize; the
+  exclusion now follows the chrome mode.
 
 ## 2026-10-21 — Mobile experience root causes (v1.41)
 

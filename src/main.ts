@@ -1379,9 +1379,19 @@ async function main(): Promise<void> {
   const chromeVisibility = new ChromeVisibilityManager(
     chromeRefs.infoPanel!,
     preferences,
-    app
+    app,
+    {
+      // v1.42 — a hidden phone info sheet always comes back collapsed.
+      onRevealChange: (panelId, revealed) => {
+        if (panelId === 'info-panel' && !revealed) infoPanel.setExpanded(false, false);
+      },
+    }
   );
   chromeVisibility.init();
+  infoPanel.onSheetChange = (state) => {
+    if (state === 'dismissed') chromeVisibility.dismiss('info-panel');
+    else chromeVisibility.setPinned('info-panel', state === 'expanded');
+  };
   // v0.62 — register nav controls as a third managed chrome surface.
   // Nav is now auto-hidden in clean mode and participates in the same
   // proximity/focus/keyboard reveal lifecycle as the timeline and info panel.

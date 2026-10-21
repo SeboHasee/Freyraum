@@ -3162,6 +3162,57 @@ button {
     // information remains accessible (WCAG SC 1.4.10 Reflow).
     margin-bottom: 8px;
   }
+
+  // v1.42 — bottom sheet: pull the handle up to read more, down to close.
+  transition: opacity var(--dur-content) var(--ease-gallery-out),
+    transform var(--dur-content) var(--ease-gallery-out),
+    max-height var(--dur-content) var(--ease-gallery-out);
+
+  &.is-expanded {
+    max-height: min(68vh, calc(100dvh - var(--chrome-bottom) - 80px - var(--safe-top) - 88px));
+  }
+
+  &.is-dragging {
+    transform: translateY(var(--sheet-drag, 0px)) !important; // finger wins over reveal transforms
+    transition: none !important;
+  }
+}
+
+.info-panel__handle {
+  display: none;
+}
+
+.info-panel--compact .info-panel__handle {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% + 36px);
+  height: 30px;
+  margin: -14px -18px 2px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  touch-action: none;
+
+  &::before {
+    content: '';
+    width: 40px;
+    height: 5px;
+    border-radius: 3px;
+    background: currentColor;
+    opacity: 0.55;
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 3px var(--focus-ring);
+  }
 }
 
 .info-panel.is-transitioning {
@@ -4708,6 +4759,15 @@ button {
     pointer-events: auto;
   }
 
+  // v1.42 — the phone info sheet rises from below instead of the left edge.
+  .info-panel.info-panel--compact {
+    transform: translateY(32px);
+  }
+
+  .info-panel.info-panel--compact.is-revealed:not(.is-transitioning) {
+    transform: translateY(0);
+  }
+
   // Preserve the navigation content-swap fade (`.is-transitioning`, added by
   // InfoPanel.update) even while the panel is force-revealed. Without this
   // higher-specificity rule the `.is-revealed` opacity:1 would defeat the fade.
@@ -4902,8 +4962,10 @@ button {
 }
 
 // Touch users reveal the info panel by tapping its left-edge peek strip.
+// v1.42 — only the unrevealed panel: this rule shares the reveal rules'
+// specificity and comes later, so it used to keep the Info sheet invisible.
 :root[data-hover='false'][data-chrome-mode='clean'] {
-  .info-panel {
+  .info-panel:not(.is-revealed) {
     opacity: 0;
     pointer-events: none;
   }

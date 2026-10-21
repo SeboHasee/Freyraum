@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -169,8 +169,8 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
    panorama). New touch surfaces must use `src/interaction/touchGestures.ts`.
 2. Checks for this area: `npm run test:touch-gestures`,
    `npm run test:gallery-room-view`, and after `npm run build` the photo-room
-   browser suite (`docs/REGRESSION_TOOLING.md`). `npm run validate:museum-hub`
-   is still blocked by pre-existing failures (:411 and ~:459), unrelated to v1.41.
+   browser suite and `npm run test:mobile-browser` (`docs/REGRESSION_TOOLING.md`).
+   `npm run validate:museum-hub` passes again (v1.42).
 3. Open customer decisions (defaults in place): loading colour (wall grey
    `#c7ced4`), gyro default (auto on Android, opt-in on iOS), hub snapping (soft).
 4. Real-device acceptance is the main open gate: iOS Safari + Android Chrome,
@@ -178,21 +178,17 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 
 ### Ready-to-pick follow-ups (small, scoped)
 
-- Phone "more" menu / bottom sheet for audio, settings, fullscreen and help
-  (they still float top-right on phones), and a collapsible info bottom sheet.
-- Make `GalleryManager` occlusion follow `ChromeVisibilityManager` so the
-  fitted artwork grows when chrome auto-hides on phones.
-- Cap the photo-room maximum zoom by the background's natural resolution
-  instead of a fixed 6× (sources are about 2K wide).
+Done in v1.42 (see `CHANGELOG.md`): phone "more" menu, info bottom sheet,
+reduced motion over manual tilt, nav occlusion keyed to chrome mode, the phone
+browser suite, and the geometry-suite repair. Photo-room zoom stays 6× by
+decision (it magnifies the full-resolution artwork, not the 2K background).
+
+- Real-device check of the v1.42 menu and info sheet (pull feel, iOS
+  rubber-band scrolling inside the expanded sheet).
+- The timeline is the only remaining phone chrome that never auto-hides;
+  if it ever does, refit via `galleryManager.handleViewportMetricsChanged()`.
 - Optional background parallax in the photo room driven by the same tilt.
 - Short-landscape phone side rail instead of top/bottom bars.
-- A dedicated phone browser test (390×844, 844×390, 360×780 with touch
-  emulation) for hub panorama visibility/tappability, strip sync, no click
-  after drag, and chrome coverage; a prototype probe was used during v1.41.
-- Investigate whether reduced motion should also suppress an explicit `on`
-  tilt choice (today `on` wins; `auto` respects reduced motion).
-- Repair the pre-existing museum-hub geometry expectations (doorway height and
-  curated front-wall position) so the full suite runs again.
 
 ### Ideas for further development (brainstorm)
 

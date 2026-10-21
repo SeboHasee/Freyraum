@@ -917,7 +917,8 @@ try {
   );
   await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 690, y: 420, button: 'left', buttons: 0 });
   await evaluate("document.querySelector('.gallery-room-view [aria-label=\"Fotoansicht zurücksetzen\"]').click()");
-  await waitFor("!document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available')");
+  // Terminal wait: the reset glide can be rAF-starved headless (Lesson 125).
+  await waitFor("!document.querySelector('.gallery-room-view__scene').classList.contains('is-pan-available')", 60_000);
   assert.equal(
     await evaluate("getComputedStyle(document.querySelector('.gallery-room-view__scene')).cursor"),
     'auto',

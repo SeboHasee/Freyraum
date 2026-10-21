@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -121,6 +121,11 @@ both file entries.
     gesture API (`beginDirectGesture`, `panByPixels`, `zoomByFactorAt`,
     `endDirectGesture`, `toggleZoomAt`, swipe preview); buttons and wheel keep
     the smoothed zoom cascade.
+  - `PhoneUtilityMenu` (v1.42): phone "more" popover. `placeUtilityControls`
+    in `main.ts` is the single owner of where audio/settings/fullscreen/help
+    live (desktop cluster, photo-room utilities, or the menu).
+  - `InfoPanel` compact mode (v1.42) is a bottom sheet; its handle uses
+    `resolveSheetRelease` and pins the panel via `ChromeVisibilityManager.setPinned`.
 - `src/gallery/DeviceTiltController.ts` + `deviceOrientation.ts` (v1.41):
   orientation permission, dead zone, neutral drift and screen-angle mapping;
   `main.ts` feeds the unit tilt into `GalleryManager.setHoverTarget` only while

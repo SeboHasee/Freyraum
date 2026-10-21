@@ -394,8 +394,73 @@ try {
       `${viewport.name}: an outside tap also closes settings opened from the menu`
     );
     console.log(`✓ ${viewport.name}: phone menu opens with ${menuOpen.items.length} controls and closes on an outside tap`);
+
+    // Info bottom sheet: Info reveals it, pulling the handle up pins it open,
+    // pulling down collapses and then dismisses it.
+    const infoButton = await evaluate(`(() => {
+      const rect = document.querySelector('.topbar__chrome-btn').getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`);
+    await tap(infoButton.x, infoButton.y);
+    await waitFor("document.querySelector('.info-panel').classList.contains('is-revealed')", 5_000);
+    await settleAnimations('.info-panel');
+    const handleAt = () => evaluate(`(() => {
+      const rect = document.querySelector('.info-panel__handle').getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, width: rect.width, height: rect.height };
+    })()`);
+    const dragY = async (x, fromY, toY, steps = 8) => {
+      await touch('touchStart', x, fromY);
+      for (let step = 1; step <= steps; step += 1) {
+        await delay(16);
+        await touch('touchMove', x, fromY + ((toY - fromY) * step) / steps);
+      }
+      await touch('touchEnd', x, toY);
+    };
+    let handle = await handleAt();
+    assert.ok(handle.width >= 44 && handle.height >= 24, `${viewport.name}: the sheet handle is a usable touch target`);
+    await dragY(handle.x, handle.y, handle.y - 90);
+    await waitFor("document.querySelector('.info-panel').classList.contains('is-expanded')", 5_000);
+    await delay(5_000);
+    const expandedSheet = await evaluate(`(() => {
+      const panel = document.querySelector('.info-panel');
+      const rect = panel.getBoundingClientRect();
+      return {
+        revealed: panel.classList.contains('is-revealed'),
+        opacity: Number.parseFloat(getComputedStyle(panel).opacity),
+        pointerEvents: getComputedStyle(panel).pointerEvents,
+        ariaExpanded: panel.querySelector('.info-panel__handle').getAttribute('aria-expanded'),
+        top: rect.top,
+        bottom: rect.bottom,
+        timelineTop: document.querySelector('.timeline').getBoundingClientRect().top,
+        topbarBottom: document.querySelector('.topbar').getBoundingClientRect().bottom,
+      };
+    })()`);
+    assert.equal(expandedSheet.revealed, true, `${viewport.name}: an expanded sheet stays open past the auto-hide delay`);
+    assert.ok(
+      expandedSheet.opacity > 0.9 && expandedSheet.pointerEvents !== 'none',
+      `${viewport.name}: the revealed sheet is visible and interactive on touch (${JSON.stringify(expandedSheet)})`
+    );
+    assert.equal(expandedSheet.ariaExpanded, 'true', `${viewport.name}: the handle reports the expanded state`);
+    assert.ok(
+      expandedSheet.top >= expandedSheet.topbarBottom && expandedSheet.bottom <= expandedSheet.timelineTop,
+      `${viewport.name}: the expanded sheet sits between topbar and timeline (${JSON.stringify(expandedSheet)})`
+    );
+    await capture(`${viewport.name}-info-sheet.png`);
+    handle = await handleAt();
+    await dragY(handle.x, handle.y, handle.y + 90);
+    await waitFor("!document.querySelector('.info-panel').classList.contains('is-expanded')", 5_000);
+    assert.equal(
+      await evaluate("document.querySelector('.info-panel').classList.contains('is-revealed')"),
+      true,
+      `${viewport.name}: pulling an expanded sheet down collapses it first`
+    );
+    await settleAnimations('.info-panel');
+    handle = await handleAt();
+    await dragY(handle.x, handle.y, handle.y + 90);
+    await waitFor("!document.querySelector('.info-panel').classList.contains('is-revealed')", 5_000);
+    console.log(`✓ ${viewport.name}: info sheet expands, stays pinned, collapses and swipes away`);
   }
-  console.log('PASS: mobile hub panorama, strip, drag safety, theme-color, phone chrome coverage and phone menu.');
+  console.log('PASS: mobile hub panorama, strip, drag safety, theme-color, phone chrome coverage, phone menu and info sheet.');
 } finally {
   socket?.close();
   if (chrome && chrome.exitCode === null && chrome.signalCode === null) {

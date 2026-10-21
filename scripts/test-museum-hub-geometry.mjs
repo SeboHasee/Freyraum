@@ -2260,7 +2260,7 @@ for (const english of ['Wall Edit Mode', 'Edit wall corners', 'Move complete wal
 assert.match(hub, /createEditorTabs\('museum-hub-editor'/, 'editor panel uses the three-tab pattern');
 assert.match(editorUi, /'Raum'[\s\S]*'Bilder'[\s\S]*'Speichern'/);
 assert.match(readFileSync(resolve(ROOT, 'src/hub/editor/editorTabs.ts'), 'utf8'), /ArrowRight[\s\S]*ArrowLeft[\s\S]*Home[\s\S]*End/, 'tabs switch with arrow keys');
-assert.match(scss, /body\.placement-editor \{[\s\S]*?\.audio-controls,\s*\.prefs,\s*\.fullscreen-btn \{\s*display: none !important/, 'overlapping gallery icons are hidden in the editor');
+assert.match(scss, /body\.placement-editor \{[\s\S]*?\.audio-controls,\s*\.prefs,\s*\.fullscreen-btn,\s*\.phone-menu \{\s*display: none !important/, 'overlapping gallery icons and the phone menu are hidden in the editor');
 assert.match(scss, /\.museum-hub__room-switcher/);
 assert.match(scss, /\.museum-hub__editor-tab \{/);
 assert.match(scss, /\.museum-hub__artwork\.is-empty-slot/);

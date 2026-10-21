@@ -1,7 +1,7 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
 
-## Current context (v1.41)
+## Current context (v1.42)
 
 - Museum and editor share photograph-backed DOM artwork; `MainMuseumHub` does
   not construct a `HubRoomRenderer`. Inspection-gallery WebGL remains separate.
@@ -22,7 +22,9 @@
   (momentum, rubber band, snapping, tap slop, double tap). Gallery gyro tilt runs
   through `src/gallery/DeviceTiltController.ts` → `GalleryManager.setHoverTarget`.
   Narrow-portrait hub is a continuous panorama with an artwork strip
-  (`src/hub/hubPanorama.ts`); never hide hub artworks by wall group. Pure tests:
+  (`src/hub/hubPanorama.ts`); never hide hub artworks by wall group. Phones
+  (v1.42): utilities sit in `src/ui/PhoneUtilityMenu.ts` (placed by
+  `placeUtilityControls` in `main.ts`); the compact info panel is a bottom sheet. Pure tests:
   `npm run test:touch-gestures`. Real-device acceptance is open (`docs/HANDOFF.md`).
 - Local data is generated/ignored: after project updates run Update Gallery;
   full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,
@@ -43,10 +45,9 @@
   Photo-room checks: `npm run test:gallery-room-view` and
   `npm run test:gallery-room-view:browser`. The latter checks file-photo display,
   shared selection, focus and control bounds across desktop/tablet/phone/short
-  landscape. Current geometry-suite issue: `npm run validate:museum-hub` still
-  fails at the wall-left doorway-height assertion in
-  `scripts/test-museum-hub-geometry.mjs:411`, and a further pre-existing
-  curated front-wall position assertion (~:459) fails behind it. History: `CHANGELOG.md` and `docs/archive/`.
+  landscape. Phone suite: `npm run test:mobile-browser` (panorama, chrome
+  coverage, phone menu, info sheet). `npm run validate:museum-hub` passes; it
+  checks curated customer values as ranges. History: `CHANGELOG.md` and `docs/archive/`.
 
 Use these repository-specific instructions before changing code or docs.
 

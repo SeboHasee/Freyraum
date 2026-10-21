@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -113,8 +113,13 @@ customer visual acceptance.
   1:1 pan, anchored pinch, momentum, rubber-band edges, double-tap zoom and
   flick navigation. On phones the interactive gallery also tilts the 3D artwork
   with the motion sensor (automatic on Android; on iOS enable **Kunstwerk mit
-  dem Handy neigen** in the settings). Phone chrome is slimmer and the loading
-  bar and mobile browser bar use the museum wall colour.
+  dem Handy neigen** in the settings; reduced motion always switches it off).
+  Phone chrome is slimmer and the loading bar and mobile browser bar use the
+  museum wall colour.
+- Phones (v1.42): sound, settings, fullscreen and help sit behind one **⋯**
+  button in the top bar (also in the photo room), and the artwork information
+  is a bottom sheet — tap **Info**, pull the handle up to read more (it then
+  stays open), pull it down to close.
 - **Local confirmation (2026-10-18):** the customer reports the intended setup
   works after running `Update Gallery.bat` and supplies a four-painting screenshot.
   Root-index and production-build smoke checks confirm all four images and the

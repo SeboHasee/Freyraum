@@ -1,7 +1,19 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
 
 ## 2026-10-21 — Mobile interaction lessons
+
+### Lesson 127 — Assert visibility, not only state classes
+
+The info panel had `is-revealed` on phones but a later touch rule with equal
+specificity kept it at `opacity: 0` for a whole release. Browser tests must
+check computed opacity and pointer events on touch emulation, not just classes.
+
+### Lesson 128 — Curated customer data is not a test fixture
+
+Exact geometry expectations broke once the customer curated slots in the
+editor. Test invariants and plausible ranges against shipped data; keep exact
+values for synthetic fixtures only.
 
 ### Lesson 123 — Never hide projected artworks by wall group
 

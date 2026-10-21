@@ -1,5 +1,5 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-21 (v1.41 mobile experience overhaul).
+> Latest markdown audit: 2026-10-21 (v1.42 mobile follow-ups).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
@@ -25,8 +25,11 @@ Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
       panorama strip, loading and browser-bar colours.
 - [ ] Customer confirmation of the loading colour, gyro default and snap style
       (defaults chosen: wall grey; auto on Android / opt-in on iOS; soft snap).
-- [ ] Follow-ups handed to the next agent: `docs/HANDOFF.md` → "Next-agent
-      starting point (2026-10-21)".
+- [x] v1.42 follow-ups: phone "more" menu, info bottom sheet (and the touch
+      visibility fix), reduced motion over manual tilt, nav-occlusion keyed to
+      chrome mode, `test:mobile-browser`, museum-hub geometry suite repaired,
+      photo-room zoom cap decided (keep 6×).
+- [ ] Remaining follow-ups: `docs/HANDOFF.md` → "Ready-to-pick follow-ups".
 
 ## Pan-aware cursor and control help (2026-10-20)
 
