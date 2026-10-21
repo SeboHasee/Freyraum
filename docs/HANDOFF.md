@@ -1,5 +1,5 @@
 # FREYRAUM Handoff Guide
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
 
 This guide covers current handoff and support operations.
 Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
@@ -162,6 +162,14 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
+## Next-agent starting point (2026-10-21, v1.43 desktop zoom)
+
+v1.43 (on the same branch/PR #27) adds the photo-room double-click toggle,
+motion-only compositing for the room camera (`.is-camera-moving`), shared
+wheel-delta normalisation and gallery ctrl+wheel handling; see `CHANGELOG.md`
+and `FINDINGS.md`. Measure DOM-camera smoothness with raster tasks in a Chrome
+trace, not headless frame counts (lesson 130). The items below still apply.
+
 ## Next-agent starting point (2026-10-21, v1.42 merge readiness)
 
 1. Branch state: v1.41 mobile overhaul + v1.42 follow-ups are complete and
@@ -225,6 +233,19 @@ decision (it magnifies the full-resolution artwork, not the 2K background).
   and a "reduce chrome" toggle for screen-magnifier users.
 - Content: audio guide per artwork, multiple exhibitions/rooms chosen by the
   curator, and visitor-facing artwork metadata sheets.
+- Desktop zoom follow-ups (found in v1.43):
+  - If the brief softness before the final sharp re-raster shows at big zoom
+    steps, pre-promote the scene at the target scale or serve a second, larger
+    artwork derivative only while zoomed.
+  - Room wheel steps are a constant 10.5 % per notch, while the gallery's
+    perspective camera accelerates as it nears the artwork; consider a shared
+    "zoom feel" curve so both views zoom the same per notch.
+  - Trackpad pinch delivers small ctrl+wheel deltas; a dedicated gain for
+    `ctrlKey` wheels would make pinch feel as direct as on touch.
+  - The room wheel always recentres on the artwork; a setting or modifier for
+    pointer-anchored wheel zoom would help exploring the room photo itself.
+  - Keyboard panning (e.g. Shift+arrows) in the zoomed photo room; today only
+    mouse/touch can pan there.
 - Quality/tooling: a real-device smoke overlay (e.g. extend the diagnostics mode with
   gyro permission state, DPR, safe-area insets, frame time) to speed up
   customer screenshots; Lighthouse mobile budget in CI once runs are approved

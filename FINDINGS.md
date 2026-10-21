@@ -1,5 +1,29 @@
 # FINDINGS
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+
+## 2026-10-21 — v1.43 desktop photo-room zoom findings
+
+- **Same easing, different renderer:** the photo room already used the
+  gallery's two-stage camera easing (zoom λ 4, pan λ 5). The difference was
+  rendering: the gallery is WebGL (mipmapped texture, only a draw per frame),
+  while the room is a DOM scene whose `scale()` changed every frame. Without a
+  compositing hint Chrome re-rastered the scene and re-decoded the 2K photo and
+  full-resolution artwork (with three `drop-shadow` filters) at each scale.
+  Chrome trace, 1440×900, six wheel notches: 515/538 raster tasks without vs.
+  80/82 with motion-only `will-change: transform`; layout stayed ~2 per zoom.
+  Permanent `will-change` would freeze the raster scale (soft artwork when
+  zoomed), so it is applied only while moving.
+- **Headless frame counts cannot show this:** SwiftShader produced ~37 frames
+  per zoom in every variant (rAF starvation), so judge by raster/decode work
+  in a trace, not by frame rate.
+- **Per-frame homography:** `applyCamera` called `updateArtworkTransform`,
+  re-projecting the camera-independent artwork and reading layout after style
+  writes on every frame.
+- **Double-click** only reset the photo view, unlike the gallery's toggle.
+- **Wheel units:** both views assumed pixel-mode `deltaY`; line/page mode
+  wheels zoomed almost nothing.
+- **Trackpad pinch:** browsers deliver it as ctrl+wheel; the gallery's passive
+  listener could not prevent it, so the page zoomed together with the artwork.
 
 ## 2026-10-21 — v1.42 mobile follow-up findings
 

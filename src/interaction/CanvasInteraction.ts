@@ -117,9 +117,10 @@ export class CanvasInteraction {
       window.addEventListener('touchmove', this.onGlobalTouchMove, { passive: false });
     }
 
-    // Wheel zoom remains passive — no preventDefault needed; the canvas
-    // is fixed and there is no page scroll to fight.
-    this.canvas.addEventListener('wheel', this.onWheel, { passive: true });
+    // v1.43: non-passive only so a trackpad pinch (ctrl+wheel) zooms the
+    // artwork instead of the browser page; plain wheels have no page scroll
+    // to fight and are not prevented.
+    this.canvas.addEventListener('wheel', this.onWheel, { passive: false });
 
     this.diagnostics.info('init', 'Canvas interaction initialised', {
       backend: this.usePointerEvents ? 'pointer-events' : 'touch-events-fallback',
@@ -446,6 +447,7 @@ export class CanvasInteraction {
 
   private onWheel = (e: WheelEvent): void => {
     if (!this.enabled) return;
+    if (e.ctrlKey) e.preventDefault();
     this.galleryManager.addZoomDelta(normalizeWheelDelta(e.deltaY, e.deltaMode, window.innerHeight) * 0.0045);
   };
 

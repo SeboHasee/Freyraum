@@ -1,5 +1,5 @@
 # FREYRAUM Architecture Map
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
 
 This file documents the current architecture and ownership boundaries only.
 Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`.
@@ -60,6 +60,10 @@ Historical implementation narratives belong in `CHANGELOG.md` or `docs/archive/`
     restoring them when closed. Room choice remains separate from artwork
     selection. Its photo camera and overlay controls do not change the calibrated
     artwork projection or the museum's separate photo-backed presentation.
+    Camera frames only write the scene transform; the camera-independent
+    artwork projection refreshes on open/resize/room/artwork changes, and
+    `.is-camera-moving` (`will-change: transform`) is set only while the
+    camera moves so the final scale re-rasters sharply (v1.43).
 
 ## Current hub-layout acceptance boundary
 

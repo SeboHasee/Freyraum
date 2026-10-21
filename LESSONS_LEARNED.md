@@ -1,7 +1,14 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
 
 ## 2026-10-21 — Mobile interaction lessons
+
+### Lesson 130 — Same easing is not the same smoothness
+
+Matching the gallery's easing constants did not make the DOM photo room feel
+the same: its cost was raster and image decode at every intermediate CSS
+scale, invisible in headless frame counts. Measure raster tasks in a trace and
+give animated DOM cameras a compositing hint only while they move.
 
 ### Lesson 129 — Synthetic input meets real release physics
 

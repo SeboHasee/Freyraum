@@ -1,5 +1,5 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
 
 ## Current context (v1.42)
 
@@ -13,7 +13,9 @@
   views: Schlafzimmer, Wohnraum, Wohnbereich, and Büro. Their cleaned derivatives
   preserve the original source photos. Keep photo-room artwork inside the viewport
   across aspect ratios; preserve the room camera and projective registration when
-  adjusting UI. A 2026-10-20 user screenshot again shows apparent top clipping in
+  adjusting UI. Room camera frames must stay composite-only (scene transform +
+  motion-only `.is-camera-moving`); never re-project or read layout per frame
+  (v1.43, lesson 130). A 2026-10-20 user screenshot again shows apparent top clipping in
   Wohnbereich; its build/config identity is unknown, so treat visual acceptance as
   open and compare the matching generated artifact before assigning cause. See
   `README.md` → "Inspect in a photo room" and

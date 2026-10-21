@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -59,8 +59,10 @@ artwork tilt (up to 3.5°) from phone movement; sensor access is requested only
 after that action, and the feature can be disabled again. Unsupported or denied
 sensors leave touch controls available. Reduced motion disables sensor tilt.
 Touch panning glides on after release and springs back at the photo edges;
-double-tap zooms in at the tapped point or back to the full photo, matching the
-interactive gallery. Stronger
+double-tap (or a mouse double-click) zooms in at that point or back to the full
+photo, matching the interactive gallery. While the camera moves, the photo scene
+is a composited layer, so desktop zoom no longer re-rasters the photo and artwork
+every frame; it re-renders sharply once the camera settles. Stronger
 contact and directional shadows keep the print attached to the wall. This is a
 bounded 2D photo camera, not true 3D orbit or movement.
 `customer-artworks/museum-hub.json` owns the room photo and placement data;

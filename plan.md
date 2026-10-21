@@ -1,9 +1,20 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
+
+## Desktop photo-room zoom (v1.43, 2026-10-21)
+
+- [x] Double-click toggles zoom at the pointer, like the gallery; help updated.
+- [x] Motion-only compositing for the room camera (raster tasks ~515 → ~80).
+- [x] Camera frames no longer re-project the artwork or read layout.
+- [x] Shared wheel-delta normalisation for gallery and room.
+- [x] Gallery trackpad pinch (ctrl+wheel) no longer zooms the browser page.
+- [ ] Owner check on a real desktop (Chrome/Edge/Firefox, mouse and trackpad):
+      zoom smoothness, and whether the brief softness before the final sharp
+      re-raster is acceptable at large zoom steps.
 
 ## Mobile experience overhaul (v1.41, 2026-10-21)
 

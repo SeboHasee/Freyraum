@@ -1,5 +1,30 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-21 (v1.43 desktop photo-room zoom).
+
+## Unreleased — v1.43 desktop photo-room zoom (2026-10-21)
+
+- **Double-click in the photo room** zooms in at the pointer (2.5×) and a second
+  double-click returns to the whole photo, like the gallery (previously it only
+  reset). The decision uses the zoom target, so double-clicking during the
+  zoom-in returns. Help in both views now lists double-click.
+- **Smoother desktop zoom:** while the camera moves the photo scene gets
+  `will-change: transform` (`.is-camera-moving`), so frames are composited
+  instead of re-rastering/re-decoding the photo and full-resolution artwork at
+  every intermediate scale (headless trace of a 6-notch wheel zoom: ~515–538 →
+  ~80 raster tasks). 160 ms after the last camera frame the hint is dropped and
+  the final scale re-rasters sharply once.
+- **Less work per camera frame:** the artwork homography (camera-independent)
+  and its layout read no longer run on every frame, and an unused
+  `--artwork-zoom` style write was removed; projection now refreshes on
+  open, resize, room and artwork changes.
+- **Wheel deltas normalised** (`normalizeWheelDelta`, shared by gallery and
+  photo room): line- and page-mode wheels (e.g. Firefox line scrolling) zoom
+  like pixel-mode wheels instead of 16–800× slower; extreme events are capped.
+- **Trackpad pinch in the gallery** (ctrl+wheel) no longer also zooms the
+  browser page: the canvas wheel listener is non-passive and prevents only
+  ctrl+wheel (the photo room already did).
+- **Docs fix:** the customer guide said wheel zoom follows the pointer; it
+  recentres on the artwork (README and tests already said so).
 
 ## Unreleased — v1.42 mobile follow-ups (2026-10-21)
 
