@@ -15,6 +15,7 @@ import { GalleryManager, type ArtworkViewportMetrics, type FullGalleryReadinessR
 import { GalleryRoomView } from './gallery/GalleryRoomView';
 import { DeviceTiltController } from './gallery/DeviceTiltController';
 import { Topbar } from './ui/Topbar';
+import { PhoneUtilityMenu } from './ui/PhoneUtilityMenu';
 import { InfoPanel } from './ui/InfoPanel';
 import { NavigationControls } from './ui/NavigationControls';
 import { HintText } from './ui/HintText';
@@ -1118,8 +1119,10 @@ async function main(): Promise<void> {
     const topbarOcclusion = topbarRect ? Math.max(0, Math.min(viewportH, topbarRect.bottom)) : 0;
     // v1.41: on touch phones the auto-hidden nav arrows overlay the artwork
     // only briefly; reserving their band would shrink the artwork for good.
-    const navOcclusionRect = phoneTouchQuery?.matches && chromeRefs.navControls
-      && Number.parseFloat(window.getComputedStyle(chromeRefs.navControls).opacity) < 0.05
+    // Keyed to the chrome mode, not the current opacity, so a resize during a
+    // forced reveal cannot leave the artwork shrunk until the next resize.
+    const navOcclusionRect = phoneTouchQuery?.matches
+      && document.documentElement.dataset['chromeMode'] !== 'visible'
       ? undefined
       : navRect;
     const bottomOcclusion = [timelineRect, navOcclusionRect]
@@ -1235,10 +1238,12 @@ async function main(): Promise<void> {
   const deviceTiltSupported =
     DeviceTiltController.isSupported() && initialCaps.pointerPrimary === 'coarse';
   const deviceTiltWanted = (): boolean => {
+    // Reduced motion (setting or system) always wins, matching the photo
+    // room; a stored "on" choice resumes once reduced motion is turned off.
     const { deviceTilt: mode, reducedMotion } = preferences.current;
+    if (reducedMotion || mode === 'off') return false;
     if (mode === 'on') return true;
-    if (mode === 'off') return false;
-    return !DeviceTiltController.needsPermission() && !reducedMotion;
+    return !DeviceTiltController.needsPermission();
   };
   const syncDeviceTiltActive = (): void => {
     deviceTilt.setActive(galleryInteractive && !galleryRoomView?.isVisible);
@@ -1254,22 +1259,28 @@ async function main(): Promise<void> {
   if (deviceTiltSupported) {
     preferencesPanel.configureDeviceTilt((enabled) => {
       preferences.setDeviceTilt(enabled ? 'on' : 'off');
-      if (enabled) enableDeviceTilt();
+      if (enabled && deviceTiltWanted()) enableDeviceTilt();
       else deviceTilt.disable();
       preferencesPanel.refreshDeviceTilt();
-    }, () => deviceTilt.isEnabled);
-    if (deviceTiltWanted() && !DeviceTiltController.needsPermission()) enableDeviceTilt();
-    if (DeviceTiltController.needsPermission()) {
-      // A stored "on" choice on iOS still needs a fresh user activation.
-      const onFirstTiltGesture = (): void => {
-        if (!deviceTiltWanted() || deviceTilt.isEnabled) return;
-        window.removeEventListener('touchend', onFirstTiltGesture);
+    }, () => deviceTilt.isEnabled, () => preferences.current.reducedMotion);
+    // A stored "on" choice on iOS still needs a fresh user activation.
+    const onFirstTiltGesture = (): void => {
+      if (!deviceTiltWanted() || deviceTilt.isEnabled) return;
+      window.removeEventListener('touchend', onFirstTiltGesture);
+      enableDeviceTilt();
+    };
+    const resumeDeviceTilt = (): void => {
+      if (!deviceTiltWanted() || deviceTilt.isEnabled) return;
+      if (DeviceTiltController.needsPermission()) {
+        window.addEventListener('touchend', onFirstTiltGesture, { passive: true });
+      } else {
         enableDeviceTilt();
-      };
-      window.addEventListener('touchend', onFirstTiltGesture, { passive: true });
-    }
+      }
+    };
+    resumeDeviceTilt();
     preferences.subscribe(() => {
       if (!deviceTiltWanted() && deviceTilt.isEnabled) deviceTilt.disable();
+      else resumeDeviceTilt();
       preferencesPanel.refreshDeviceTilt();
     });
   }
@@ -1278,6 +1289,37 @@ async function main(): Promise<void> {
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
   const hintText = new HintText(app);
   const timeline = new Timeline(app, artworks);
+  // v1.42 — audio, settings, fullscreen and help are shared by the gallery,
+  // the photo room and (on touch phones) the "more" menu; one function owns
+  // where they live so the three placements can never disagree.
+  const phoneUtilityMenu = new PhoneUtilityMenu();
+  let roomUtilitiesVisible = false;
+  const placeUtilityControls = (): void => {
+    const utilities = [
+      audioControls.element,
+      preferencesPanel.element,
+      fullscreenButton.element,
+      topbar.helpBtn,
+    ];
+    const phone = !!phoneTouchQuery?.matches;
+    if (phone) {
+      phoneUtilityMenu.setControls(utilities);
+    } else {
+      phoneUtilityMenu.setOpen(false);
+      phoneUtilityMenu.element.remove();
+    }
+    if (roomUtilitiesVisible) {
+      galleryRoomView?.setUtilityControls(phone ? [phoneUtilityMenu.element] : utilities);
+      preferencesPanel.setEmbedded(true);
+    } else if (phone) {
+      topbar.setUtilityMenu(phoneUtilityMenu.element);
+      preferencesPanel.setEmbedded(true);
+    } else {
+      app.append(fullscreenButton.element, preferencesPanel.element, audioControls.element);
+      topbar.restoreHelpButton();
+      preferencesPanel.setEmbedded(false);
+    }
+  };
   galleryRoomView = new GalleryRoomView(
     app,
     museumHubResolution.galleryRoomViews,
@@ -1288,23 +1330,13 @@ async function main(): Promise<void> {
     (visible) => {
       topbar.setRoomViewActive(visible);
       syncDeviceTiltActive();
-      const roomUtilities = [
-        audioControls.element,
-        preferencesPanel.element,
-        fullscreenButton.element,
-        topbar.helpBtn,
-      ];
-      if (visible) {
-        galleryRoomView?.setUtilityControls(roomUtilities);
-        preferencesPanel.setEmbedded(true);
-      } else {
-        app.append(fullscreenButton.element, preferencesPanel.element, audioControls.element);
-        topbar.restoreHelpButton();
-        preferencesPanel.setEmbedded(false);
-      }
+      roomUtilitiesVisible = visible;
+      placeUtilityControls();
     }
   );
   galleryRoomView.setTimelineElement(timeline.element);
+  placeUtilityControls();
+  phoneTouchQuery?.addEventListener?.('change', placeUtilityControls);
   galleryRoomView.setArtwork(
     artworks[galleryManager.index] ?? null,
     artworks.length > 1,
@@ -2126,6 +2158,11 @@ async function main(): Promise<void> {
     // v0.67 — quality lock: automatic runtime quality changes are disabled, so
     // every quality change in the preference store is user-initiated (manual).
     const manual = nextPrefs.quality !== previousPrefs.quality;
+    // Phone nav arrows only reserve artwork space while chrome is pinned
+    // visible, so refit once the new chrome mode has been applied.
+    if (nextPrefs.alwaysShowChrome !== previousPrefs.alwaysShowChrome && phoneTouchQuery?.matches) {
+      requestAnimationFrame(() => galleryManager.handleViewportMetricsChanged());
+    }
     const audioChanged =
       nextPrefs.audioMuted !== previousPrefs.audioMuted ||
       Math.abs(nextPrefs.audioVolume - previousPrefs.audioVolume) > VOLUME_CHANGE_EPSILON;
@@ -2491,6 +2528,8 @@ async function main(): Promise<void> {
     artworkAnnouncerEl = null;
     navControls.dispose();
     zoomControls.dispose();
+    phoneTouchQuery?.removeEventListener?.('change', placeUtilityControls);
+    phoneUtilityMenu.dispose();
     fullscreenButton.dispose();
     preferencesPanel.dispose();
     audioControls.dispose();

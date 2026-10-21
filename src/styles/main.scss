@@ -1939,7 +1939,8 @@ body.placement-editor {
   // Volume, settings, and fullscreen icons would cover the editor fields.
   .audio-controls,
   .prefs,
-  .fullscreen-btn {
+  .fullscreen-btn,
+  .phone-menu {
     display: none !important;
   }
 
@@ -3697,6 +3698,11 @@ button {
   }
 }
 
+.prefs__toggle.is-disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .prefs__toggle[hidden] {
   display: none;
 }
@@ -5210,6 +5216,12 @@ button {
   contain: layout paint;
 }
 
+// v1.42 — the phone "more" popover hangs below the topbar; paint
+// containment would clip it.
+.topbar.topbar--has-menu {
+  contain: layout;
+}
+
 // Keep nav and prefs containers out of paint containment:
 // - `.nav-controls` hosts hover-scaled circular buttons that intentionally
 //   paint outside their static bounds.
@@ -5341,7 +5353,8 @@ button {
 // to visually "pop" above the topbar line. 2026 best practice: use background
 // + shadow elevation for hover (environmental affordance); reserve scale-down
 // (0.94) for active/press to give tactile feedback only.
-.topbar__help-btn {
+.topbar__help-btn,
+.phone-menu__toggle {
   position: relative;
   width: 44px;
   height: 44px;
@@ -5384,6 +5397,82 @@ button {
   &:focus-visible {
     outline: none;
     box-shadow: var(--shadow-soft), 0 0 0 3px var(--focus-ring);
+  }
+}
+
+// =============================================================================
+// v1.42 — phone "more" menu: audio, settings, fullscreen and help collapse
+// behind one topbar button on touch phones (placed by main.ts) instead of a
+// second floating row over the artwork. The popover reuses the controls'
+// own glass styles; the settings panel anchors to the popover's right edge.
+// =============================================================================
+.phone-menu {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.phone-menu__toggle {
+  .phone-menu.is-open & {
+    background: var(--glass-bg-strong);
+    border-color: var(--glass-border-strong);
+  }
+}
+
+.phone-menu__panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--shadow-medium);
+  transform-origin: top right;
+  animation: prefs-in var(--dur-panel) var(--ease-gallery-out);
+
+  &[hidden] {
+    display: none;
+  }
+
+  .audio-controls,
+  .fullscreen-btn {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    box-shadow: none;
+  }
+
+  .fullscreen-btn {
+    flex: 0 0 44px;
+  }
+
+  // Static so the settings panel positions against the popover, never
+  // past the left screen edge.
+  .prefs--embedded {
+    position: static;
+    inset: auto;
+    z-index: auto;
+  }
+
+  // Opens below topbar + popover row (~140 px), so it needs more headroom
+  // than the desktop panel's 120 px.
+  .prefs__panel {
+    top: calc(100% + 8px);
+    right: 0;
+    max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 168px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phone-menu__panel {
+    animation: none;
   }
 }
 
