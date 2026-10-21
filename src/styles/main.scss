@@ -412,6 +412,12 @@ canvas.gallery-canvas.is-fine-pointer.is-panning,
   transform: none;
 }
 
+// v1.41: sensor tilt is smoothed in JS every frame; a CSS transform
+// transition on top restarts on each update and lags ~1 s behind the phone.
+.gallery-room-view__scene.is-sensor-tilt .gallery-room-view__artwork {
+  transition: filter 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .gallery-room-view__artwork-frame:is(:hover, :focus-visible) .gallery-room-view__artwork,
 .gallery-room-view__scene.has-artwork-proximity .gallery-room-view__artwork-frame .gallery-room-view__artwork {
   transform:
@@ -444,23 +450,49 @@ canvas.gallery-canvas.is-fine-pointer.is-panning,
   display: none;
 }
 
+// v1.41 — phone portrait: back button and room selector share one compact
+// row; the utilities sit right below it instead of a 124 px stacked header.
 @media (max-width: 599px) {
   .gallery-room-view__header {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 8px;
+    align-items: center;
+    flex-direction: row;
+    gap: 6px;
+    top: calc(var(--safe-top) + 10px);
+    left: calc(var(--safe-left) + 10px);
+    max-width: calc(100vw - var(--safe-left) - var(--safe-right) - 20px);
+    min-width: 0;
+  }
+
+  .gallery-room-view__room-controls {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .gallery-room-view__select {
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .gallery-room-view__utilities {
-    top: calc(var(--safe-top) + 124px);
+    top: calc(var(--safe-top) + 62px);
   }
 
   .gallery-room-view__room-controls {
     min-height: 44px;
+    gap: 4px;
+    padding: 2px 5px 2px 8px;
+  }
+
+  .gallery-room-view__room-label {
+    display: none;
+  }
+
+  .gallery-room-view__back {
+    padding: 0 10px;
   }
 
   .gallery-room-view__select {
-    max-width: min(190px, calc(100vw - 90px));
+    max-width: 100%;
   }
 
   .gallery-room-view .zoom-controls.gallery-room-view__zoom-controls {
@@ -1014,12 +1046,153 @@ canvas.gallery-canvas.is-fine-pointer.is-panning,
   display: none;
 }
 
-.museum-hub__artwork.is-off-wall {
-  visibility: hidden;
-  pointer-events: none;
+// v1.41: the artwork centred by the phone-panorama strip shows the same
+// marker as keyboard focus. Artworks are never hidden by wall group.
+.museum-hub__artwork.is-strip-focus::before {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
-// ── Pager (room pages + narrow wall-focus views) ────────────────────────────
+// ── Phone panorama (narrow portrait visitor mode, v1.41) ─────────────────────
+// The photograph is sized by the available height so artworks are large
+// enough to see and tap; one JS-driven horizontal camera (--hub-pan-x) moves
+// it under the finger. dvh follows the mobile browser bars.
+
+.museum-hub.is-panorama {
+  --hub-pano-top: calc(var(--safe-top) + 84px);
+  --hub-pano-bottom: calc(var(--safe-bottom) + 96px);
+  --hub-strip-bottom: calc(var(--safe-bottom) + 12px);
+  touch-action: none;
+
+  &.has-pager {
+    --hub-pano-bottom: calc(var(--safe-bottom) + 150px);
+    --hub-strip-bottom: calc(var(--safe-bottom) + 64px);
+  }
+  overscroll-behavior: contain;
+
+  .museum-hub__visual {
+    top: var(--hub-pano-top);
+    width: calc((100vh - var(--hub-pano-top) - var(--hub-pano-bottom)) * var(--hub-aspect));
+    width: calc((100dvh - var(--hub-pano-top) - var(--hub-pano-bottom)) * var(--hub-aspect));
+    height: calc(100vh - var(--hub-pano-top) - var(--hub-pano-bottom));
+    height: calc(100dvh - var(--hub-pano-top) - var(--hub-pano-bottom));
+    transform: translateX(-50%) translate3d(var(--hub-pan-x, 0px), 0, 0);
+    transition: none;
+    will-change: transform;
+  }
+
+  .museum-hub__header {
+    top: calc(var(--safe-top) + 12px);
+    left: calc(var(--safe-left) + 16px);
+    right: calc(var(--safe-right) + 16px);
+  }
+
+  .museum-hub__eyebrow {
+    margin-bottom: 2px;
+    font-size: 0.62rem;
+  }
+
+  .museum-hub__title {
+    font-size: 1.55rem;
+  }
+
+  .museum-hub__introduction {
+    margin-top: 6px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+    transition: opacity var(--dur-control) var(--ease-out);
+  }
+
+  &.has-panned .museum-hub__introduction {
+    opacity: 0;
+  }
+
+  .museum-hub__pager {
+    bottom: calc(var(--safe-bottom) + 10px);
+    gap: 4px;
+    padding: 2px 6px;
+  }
+
+  .museum-hub__artwork {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  &.is-panning .museum-hub__artwork {
+    cursor: grabbing;
+  }
+}
+
+.museum-hub__strip {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  bottom: var(--hub-strip-bottom, calc(var(--safe-bottom) + 64px));
+  height: 76px;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+}
+
+.museum-hub__strip[hidden] {
+  display: none;
+}
+
+.museum-hub__strip-track {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+
+.museum-hub__strip-item {
+  display: flex;
+  flex: 0 0 76px;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  &:focus-visible {
+    outline: none;
+
+    .museum-hub__strip-thumb {
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95), 0 0 0 6px rgba(15, 20, 24, 0.6);
+    }
+  }
+}
+
+.museum-hub__strip-thumb {
+  display: block;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background-color: rgba(10, 14, 17, 0.5);
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  opacity: 0.72;
+  transform: scale(0.88);
+  transition:
+    transform var(--dur-control) var(--ease-out),
+    opacity var(--dur-control) var(--ease-out),
+    box-shadow var(--dur-control) var(--ease-out);
+}
+
+.museum-hub__strip-item.is-centered .museum-hub__strip-thumb {
+  opacity: 1;
+  transform: scale(1.06);
+  box-shadow: 0 0 0 2px #ffe7a4, 0 4px 16px rgba(0, 0, 0, 0.36);
+}
+
+// ── Pager (rooms) ────────────────────────────────────────────────────────────
 
 .museum-hub__pager {
   position: absolute;
@@ -2804,7 +2977,8 @@ body.placement-editor {
   .museum-hub__destination-frame,
   .museum-hub__destination-label,
   .museum-hub__artwork,
-  .museum-hub__artwork-label {
+  .museum-hub__artwork-label,
+  .museum-hub__strip-thumb {
     transition: none;
   }
 }
@@ -2819,7 +2993,8 @@ body.placement-editor {
   .museum-hub__destination-frame,
   .museum-hub__destination-label,
   .museum-hub__artwork,
-  .museum-hub__artwork-label {
+  .museum-hub__artwork-label,
+  .museum-hub__strip-thumb {
     transition: none;
   }
 }
@@ -3522,6 +3697,10 @@ button {
   }
 }
 
+.prefs__toggle[hidden] {
+  display: none;
+}
+
 .prefs__toggle {
   display: flex;
   align-items: center;
@@ -4010,6 +4189,10 @@ button {
 // Loading overlay
 // =============================================================================
 .loading-overlay {
+  // v1.41: one loading accent derived from the museum wall colour (the colour
+  // the visitor sees right after loading) instead of a gold→blue gradient.
+  --loading-accent: var(--color-gallery-wall, #c7ced4);
+  --loading-accent-soft: rgba(199, 206, 212, 0.14);
   position: fixed;
   inset: 0;
   background: #0d0d0e;
@@ -4082,7 +4265,7 @@ button {
   width: 0%;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #b59a6a, #c8d6e5);
+  background: var(--loading-accent);
   transition: width 260ms var(--ease-out);
 }
 
@@ -4103,7 +4286,7 @@ button {
 .loading-start-btn {
   margin-top: 2rem;
   padding: 0.9rem 2.4rem;
-  border: 1.5px solid #b59a6a;
+  border: 1.5px solid var(--loading-accent);
   border-radius: 4px;
   background: transparent;
   color: #f0eae0;
@@ -4131,11 +4314,11 @@ button {
   }
 
   &:not(:disabled):hover {
-    background: rgba(181, 154, 106, 0.12);
+    background: var(--loading-accent-soft);
   }
 
   &:focus-visible {
-    outline: 2px solid #b59a6a;
+    outline: 2px solid var(--loading-accent);
     outline-offset: 3px;
   }
 
@@ -4851,9 +5034,65 @@ button {
     --audio-ctrl-right: calc(126px + var(--safe-right));
   }
 
+  // v1.41 — slim phone timeline (≈80 px instead of ≈120 px) so the artwork
+  // gets the screen; thumbnails stay ≥44 px tall touch targets.
+  :root {
+    --chrome-bottom: max(112px, calc(100px + var(--safe-bottom)));
+  }
+
+  .timeline {
+    bottom: calc(10px + var(--safe-bottom));
+    width: calc(100vw - 20px - var(--safe-left) - var(--safe-right));
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 18px;
+  }
+
+  .timeline__list {
+    gap: 8px;
+    padding: 6px 4px 4px;
+  }
+
   .timeline__item {
-    flex-basis: 120px;
-    height: 76px;
+    flex-basis: 84px;
+    height: 54px;
+  }
+
+  .timeline__thumb {
+    border-radius: 10px;
+  }
+
+  .timeline__thumb-subtitle {
+    display: none;
+  }
+
+  .timeline__thumb-label {
+    bottom: 4px;
+    padding: 10px 6px 0;
+    font-size: 10px;
+  }
+
+  .timeline__arrow {
+    width: 32px;
+    height: 44px;
+    font-size: 22px;
+  }
+
+  .timeline__counter {
+    display: none;
+  }
+
+  .nav-controls {
+    bottom: calc(112px + var(--safe-bottom));
+  }
+}
+
+// v1.41 — touch phones: pinch, double-tap and swipe replace the floating
+// zoom buttons. "Bedienleiste immer einblenden" brings them back for
+// users who prefer buttons.
+@media (max-width: 599px) and (pointer: coarse) {
+  :root:not([data-chrome-mode='visible']) .zoom-controls:not(.gallery-room-view__zoom-controls) {
+    display: none;
   }
 }
 

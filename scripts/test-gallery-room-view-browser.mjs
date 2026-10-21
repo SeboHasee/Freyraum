@@ -1680,8 +1680,12 @@ try {
       Number.parseFloat(image.style.getPropertyValue('--artwork-tilt-y')),
     ];
   })()`);
-  assert.ok(motionTilt.every((tilt) => Number.isFinite(tilt) && Math.abs(tilt) <= 1.2),
-    `sensor tilt stays inside the subtle angle range (${motionTilt})`);
+  assert.ok(motionTilt.every((tilt) => Number.isFinite(tilt) && Math.abs(tilt) <= 3.5),
+    `sensor tilt stays inside the bounded visible angle range (${motionTilt})`);
+  assert.ok(
+    await evaluate("document.querySelector('.gallery-room-view__scene').classList.contains('is-sensor-tilt')"),
+    'sensor-driven tilt bypasses the CSS transform transition'
+  );
   await evaluate(`(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true });
     document.dispatchEvent(new Event('visibilitychange'));

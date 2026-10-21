@@ -4,6 +4,16 @@ import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import { smoothDamp } from '../utils/math';
 import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
 import {
+  DoubleTapDetector,
+  exceedsTapSlop,
+  isMotionReduced,
+  MIN_FLING_VELOCITY,
+  rubberBandClamp,
+  stepMomentum,
+  VelocityTracker,
+} from '../interaction/touchGestures';
+import {
+  driftDeviceNeutral,
   normalizeDeviceArtworkTilt,
   requestDeviceOrientationAccess,
   smoothDeviceArtworkTilt,
@@ -16,6 +26,12 @@ const CAMERA_ZOOM_LAMBDA = 4;
 const CAMERA_PAN_LAMBDA = 5;
 const HOVER_TILT_MAX_DEG = 0.14;
 const HOVER_INFLUENCE_RADIUS_PX = 900;
+/** v1.41: sensor tilt is visible on a phone (was 1.2°, under one pixel). */
+const SENSOR_TILT_MAX_DEG = 3.5;
+const SENSOR_TILT_RANGE_DEG = 16;
+const SENSOR_TILT_DEAD_ZONE_DEG = 1.2;
+/** Double-tap zoom level shared in spirit with the gallery (×2.5). */
+const DOUBLE_TAP_SCALE = 2.5;
 
 interface PhotoPointer {
   x: number;
@@ -105,6 +121,11 @@ export class GalleryRoomView {
   private motionModeObserver: MutationObserver | null = null;
   private gesture: CameraGesture | null = null;
   private pointerDragStarted = false;
+  private readonly velocity = new VelocityTracker();
+  private readonly doubleTap = new DoubleTapDetector();
+  private momentumFrame = 0;
+  private lastPointerType = '';
+  private motionNeutralAt = 0;
   private timelineElement: HTMLElement | null = null;
   private timelineOriginalParent: HTMLElement | null = null;
   private timelineOriginalNextSibling: Node | null = null;
@@ -424,12 +445,14 @@ export class GalleryRoomView {
     }
   }
 
-  private applyCamera(): void {
+  private applyCamera(allowOverscroll = false): void {
     const rect = this.element.getBoundingClientRect();
     const maxOffsetX = Math.max(0, rect.width * (this.cameraScale - 1));
     const maxOffsetY = Math.max(0, rect.height * (this.cameraScale - 1));
-    this.cameraOffsetX = Math.min(0, Math.max(-maxOffsetX, this.cameraOffsetX));
-    this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
+    if (!allowOverscroll) {
+      this.cameraOffsetX = Math.min(0, Math.max(-maxOffsetX, this.cameraOffsetX));
+      this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
+    }
     this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
     this.syncPanCursor();
     this.artworkImage.style.setProperty('--artwork-zoom', String(this.cameraScale));
@@ -444,9 +467,12 @@ export class GalleryRoomView {
     scale: number,
     offsetX: number,
     offsetY: number,
-    syncAnimationState = true
+    syncAnimationState = true,
+    allowOverscroll = false
   ): void {
-    this.cameraScale = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
+    this.cameraScale = allowOverscroll
+      ? Math.max(0.5, scale)
+      : Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, scale));
     this.cameraOffsetX = offsetX;
     this.cameraOffsetY = offsetY;
     if (syncAnimationState) {
@@ -454,7 +480,71 @@ export class GalleryRoomView {
       this.cameraPanX = this.cameraOffsetX;
       this.cameraPanY = this.cameraOffsetY;
     }
-    this.applyCamera();
+    this.applyCamera(allowOverscroll);
+  }
+
+  /** Pan limits for the current scale: offsets live in `[-max, 0]`. */
+  private panLimits(scale = this.cameraScale): { maxX: number; maxY: number } {
+    const rect = this.element.getBoundingClientRect();
+    return {
+      maxX: Math.max(0, rect.width * (scale - 1)),
+      maxY: Math.max(0, rect.height * (scale - 1)),
+    };
+  }
+
+  /**
+   * v1.41 — release physics shared with the interactive gallery: a flick
+   * keeps gliding and decays; a rubber-banded overscroll springs back.
+   * Reduced motion jumps straight to the clamped camera.
+   */
+  private startPanMomentum(velocityX: number, velocityY: number): void {
+    this.stopPanMomentum();
+    const { maxX, maxY } = this.panLimits();
+    const outOfBounds = this.cameraOffsetX > 0 || this.cameraOffsetX < -maxX
+      || this.cameraOffsetY > 0 || this.cameraOffsetY < -maxY;
+    const fast = Math.hypot(velocityX, velocityY) >= MIN_FLING_VELOCITY;
+    if (!outOfBounds && !fast) return;
+    if (isMotionReduced()) {
+      this.setCamera(this.cameraScale, this.cameraOffsetX, this.cameraOffsetY);
+      return;
+    }
+    let vx = fast ? velocityX : 0;
+    let vy = fast ? velocityY : 0;
+    let previousAt = performance.now();
+    const tick = (now: number): void => {
+      const dt = Math.max(0, Math.min(0.05, (now - previousAt) / 1000));
+      previousAt = now;
+      const limits = this.panLimits();
+      const stepX = stepMomentum({ position: this.cameraOffsetX, velocity: vx }, dt, -limits.maxX, 0);
+      const stepY = stepMomentum({ position: this.cameraOffsetY, velocity: vy }, dt, -limits.maxY, 0);
+      vx = stepX.velocity;
+      vy = stepY.velocity;
+      const settled = stepX.settled && stepY.settled;
+      this.setCamera(this.cameraScale, stepX.position, stepY.position, true, !settled);
+      this.momentumFrame = settled ? 0 : window.requestAnimationFrame(tick);
+    };
+    this.momentumFrame = window.requestAnimationFrame(tick);
+  }
+
+  private stopPanMomentum(): void {
+    if (this.momentumFrame) window.cancelAnimationFrame(this.momentumFrame);
+    this.momentumFrame = 0;
+  }
+
+  /** Double-tap: zoom in at the tapped point, or back to the fitted photo. */
+  private toggleZoomAt(point: PhotoPointer): void {
+    if (this.cameraScale > MIN_CAMERA_SCALE + 0.05) {
+      this.resetCamera(true);
+      return;
+    }
+    const contentX = (point.x - this.cameraOffsetX) / this.cameraScale;
+    const contentY = (point.y - this.cameraOffsetY) / this.cameraScale;
+    this.animateCamera(
+      DOUBLE_TAP_SCALE,
+      point.x - contentX * DOUBLE_TAP_SCALE,
+      point.y - contentY * DOUBLE_TAP_SCALE,
+      { x: contentX, y: contentY }
+    );
   }
 
   private zoomAt(scale: number, focusX: number, focusY: number): void {
@@ -591,6 +681,7 @@ export class GalleryRoomView {
   }
 
   private stopCameraAnimation(): void {
+    this.stopPanMomentum();
     if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
     this.cameraAnimationFrame = 0;
     this.cameraAnimationTargetScale = null;
@@ -646,9 +737,12 @@ export class GalleryRoomView {
   private onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.pointerType === 'mouse') return;
     this.stopCameraAnimation();
-    this.resetArtworkInteraction();
+    this.lastPointerType = event.pointerType;
+    if (!this.motionTiltEnabled) this.resetArtworkInteraction();
     const point = this.pointerPosition(event);
     this.pointers.set(event.pointerId, point);
+    this.velocity.reset();
+    this.velocity.add(event.timeStamp, point.x, point.y);
     this.pointerDragStarted = false;
     this.scene.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -668,11 +762,18 @@ export class GalleryRoomView {
     const points = [...this.pointers.entries()];
     if (this.gesture?.kind === 'pan' && points.length === 1 && points[0]![0] === this.gesture.pointerId) {
       const point = points[0]![1];
-      this.pointerDragStarted ||= point.x !== this.gesture.startX || point.y !== this.gesture.startY;
+      this.velocity.add(event.timeStamp, point.x, point.y);
+      const slop = event.pointerType === 'mouse' ? 0 : undefined;
+      this.pointerDragStarted ||= exceedsTapSlop(point.x - this.gesture.startX, point.y - this.gesture.startY, slop);
+      if (!this.pointerDragStarted) return;
+      // Content follows the finger 1:1; past the photo edge it rubber-bands.
+      const { maxX, maxY } = this.panLimits();
       this.setCamera(
         this.cameraScale,
-        this.gesture.offsetX + point.x - this.gesture.startX,
-        this.gesture.offsetY + point.y - this.gesture.startY
+        rubberBandClamp(this.gesture.offsetX + point.x - this.gesture.startX, -maxX, 0, this.element.clientWidth),
+        rubberBandClamp(this.gesture.offsetY + point.y - this.gesture.startY, -maxY, 0, this.element.clientHeight),
+        true,
+        true
       );
       return;
     }
@@ -681,17 +782,52 @@ export class GalleryRoomView {
       const second = points[1]![1];
       const center = pointerCenter(first, second);
       const distance = Math.max(1, pointerDistance(first, second));
-      const scale = this.gesture.scale * distance / this.gesture.distance;
+      const rawScale = this.gesture.scale * distance / this.gesture.distance;
+      // Soft resistance past the zoom limits; springs back on release.
+      const scale = rawScale < MIN_CAMERA_SCALE
+        ? MIN_CAMERA_SCALE * Math.pow(rawScale / MIN_CAMERA_SCALE, 0.35)
+        : rawScale > MAX_CAMERA_SCALE
+          ? MAX_CAMERA_SCALE * Math.pow(rawScale / MAX_CAMERA_SCALE, 0.35)
+          : rawScale;
       const contentX = (this.gesture.centerX - this.gesture.offsetX) / this.gesture.scale;
       const contentY = (this.gesture.centerY - this.gesture.offsetY) / this.gesture.scale;
-      this.setCamera(scale, center.x - contentX * scale, center.y - contentY * scale);
+      this.pointerDragStarted = true;
+      this.setCamera(scale, center.x - contentX * scale, center.y - contentY * scale, true, true);
     }
   };
 
   private onPointerEnd = (event: PointerEvent): void => {
-    if (!this.pointers.delete(event.pointerId)) return;
+    const endPoint = this.pointers.get(event.pointerId);
+    if (!endPoint || !this.pointers.delete(event.pointerId)) return;
     if (this.scene.hasPointerCapture(event.pointerId)) this.scene.releasePointerCapture(event.pointerId);
+    const gesture = this.gesture;
+    const dragged = this.pointerDragStarted;
     this.pointerDragStarted = false;
+    if (gesture?.kind === 'pinch') {
+      // Settle any zoom overscroll around the pinch centre, then keep the
+      // remaining finger from jumping the camera.
+      const clamped = Math.max(MIN_CAMERA_SCALE, Math.min(MAX_CAMERA_SCALE, this.cameraScale));
+      const center = this.pointers.size > 0 ? [...this.pointers.values()][0]! : endPoint;
+      const contentX = (center.x - this.cameraOffsetX) / this.cameraScale;
+      const contentY = (center.y - this.cameraOffsetY) / this.cameraScale;
+      if (clamped !== this.cameraScale) {
+        this.animateCamera(clamped, center.x - contentX * clamped, center.y - contentY * clamped, {
+          x: contentX,
+          y: contentY,
+        });
+      } else {
+        this.startPanMomentum(0, 0);
+      }
+    } else if (gesture?.kind === 'pan' && event.type === 'pointerup') {
+      if (dragged) {
+        const velocity = this.velocity.velocity(event.timeStamp);
+        this.startPanMomentum(velocity.x, velocity.y);
+      } else if (event.pointerType !== 'mouse' && this.doubleTap.tap(event.timeStamp, endPoint.x, endPoint.y)) {
+        this.toggleZoomAt(endPoint);
+      }
+    } else if (gesture?.kind === 'pan') {
+      this.startPanMomentum(0, 0);
+    }
     this.beginGesture();
   };
 
@@ -845,6 +981,7 @@ export class GalleryRoomView {
     this.motionNeutral = null;
     this.motionTiltCurrent = { tiltX: 0, tiltY: 0 };
     this.motionTiltTarget = { tiltX: 0, tiltY: 0 };
+    this.scene.classList.remove('is-sensor-tilt');
     this.motionToggleButton.setAttribute('aria-pressed', 'false');
     this.motionToggleButton.setAttribute('aria-label', 'Bewegungssteuerung aktivieren');
     this.resetArtworkInteraction();
@@ -866,23 +1003,37 @@ export class GalleryRoomView {
   }
 
   private onDeviceOrientation = (event: DeviceOrientationEvent): void => {
-    if (!this.motionTiltEnabled || this.pointers.size > 0) return;
+    if (!this.motionTiltEnabled) return;
     if (this.isReducedMotion()) {
       this.disableDeviceMotionTilt();
       return;
     }
     if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
+    const now = performance.now();
     if (!this.motionNeutral) {
       this.motionNeutral = { x: event.beta!, y: event.gamma! };
+      this.motionNeutralAt = now;
+      this.scene.classList.add('is-sensor-tilt');
       return;
     }
+    // Slowly re-centre so a phone held at a new angle drifts back to neutral.
+    const drifted = driftDeviceNeutral(
+      { beta: this.motionNeutral.x, gamma: this.motionNeutral.y },
+      { beta: event.beta!, gamma: event.gamma! },
+      (now - this.motionNeutralAt) / 1000
+    );
+    this.motionNeutral = { x: drifted.beta, y: drifted.gamma };
+    this.motionNeutralAt = now;
     const screenAngle = window.screen.orientation?.angle ?? 0;
     this.motionTiltTarget = normalizeDeviceArtworkTilt(
       event.beta!,
       event.gamma!,
       screenAngle,
       this.motionNeutral.x,
-      this.motionNeutral.y
+      this.motionNeutral.y,
+      SENSOR_TILT_RANGE_DEG,
+      SENSOR_TILT_MAX_DEG,
+      SENSOR_TILT_DEAD_ZONE_DEG
     );
     if (!this.motionTiltFrame) {
       this.motionTiltLastFrameAt = performance.now();
@@ -920,6 +1071,7 @@ export class GalleryRoomView {
       if (this.motionTiltFrame) window.cancelAnimationFrame(this.motionTiltFrame);
       this.motionTiltFrame = 0;
       this.motionTiltCurrent = { tiltX: 0, tiltY: 0 };
+      this.scene.classList.remove('is-sensor-tilt');
       this.resetArtworkInteraction();
       return;
     }
@@ -948,6 +1100,8 @@ export class GalleryRoomView {
   };
 
   private onDoubleClick = (): void => {
+    // Touch double-taps are handled in onPointerEnd (zoom at the point).
+    if (this.lastPointerType === 'touch' || this.lastPointerType === 'pen') return;
     this.resetCamera(true);
   };
 

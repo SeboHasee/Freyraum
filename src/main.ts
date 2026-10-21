@@ -13,6 +13,7 @@ import { TextureManager } from './gallery/TextureManager';
 import { ArtworkMesh } from './gallery/ArtworkMesh';
 import { GalleryManager, type ArtworkViewportMetrics, type FullGalleryReadinessResult } from './gallery/GalleryManager';
 import { GalleryRoomView } from './gallery/GalleryRoomView';
+import { DeviceTiltController } from './gallery/DeviceTiltController';
 import { Topbar } from './ui/Topbar';
 import { InfoPanel } from './ui/InfoPanel';
 import { NavigationControls } from './ui/NavigationControls';
@@ -599,6 +600,25 @@ function verifyMuseumWallColorConsistency(
   }
 }
 
+/**
+ * v1.41 — mobile browser UI (address bar, Android page-load line) follows the
+ * dark loading overlay, then the museum wall once the overlay leaves.
+ */
+function setBrowserThemeColor(color: string): void {
+  let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+  }
+  meta.content = color;
+}
+
+function restoreWallThemeColor(): void {
+  const wall = getComputedStyle(document.documentElement).getPropertyValue('--color-gallery-wall').trim();
+  setBrowserThemeColor(wall || '#c7ced4');
+}
+
 function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   const placementEditor = isPlacementEditorRequested();
   const hints = [
@@ -610,6 +630,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
   ];
   const overlay = document.createElement('div');
   overlay.className = 'loading-overlay';
+  setBrowserThemeColor('#0d0d0e');
   overlay.setAttribute('role', 'status');
   overlay.setAttribute('aria-live', 'polite');
   overlay.setAttribute('aria-label', 'Museum wird geladen');
@@ -744,6 +765,7 @@ function createLoadingOverlay(app: HTMLElement): LoadingOverlayControls {
           startButton.removeEventListener('click', go);
           document.removeEventListener('keydown', onKey);
           overlay.classList.add('is-hidden');
+          restoreWallThemeColor();
           window.setTimeout(() => {
             overlay.remove();
             resolve();
@@ -952,6 +974,7 @@ async function main(): Promise<void> {
     diagnostics.error('renderer', 'init-failed', 'RendererManager initialization failed', err);
     loadingOverlay.dispose();
     loadingOverlay.overlay.remove();
+    restoreWallThemeColor();
     showFallbackScreen(app, {
       category: 'renderer-initialization',
       reason: err instanceof Error ? err.message : 'WebGL-Renderer konnte nicht initialisiert werden.',
@@ -1075,6 +1098,7 @@ async function main(): Promise<void> {
     infoPanel: null,
   };
 
+  const phoneTouchQuery = window.matchMedia?.('(max-width: 599px) and (pointer: coarse)');
   const measureArtworkViewport = (): ArtworkViewportMetrics => {
     const visualViewport = window.visualViewport;
     const viewportW = Math.max(1, Math.round(visualViewport?.width ?? window.innerWidth));
@@ -1092,7 +1116,13 @@ async function main(): Promise<void> {
     // Clamp to the visible viewport so a stale/transitioning fixed header rect
     // cannot make the usable-artwork area negative during mobile chrome changes.
     const topbarOcclusion = topbarRect ? Math.max(0, Math.min(viewportH, topbarRect.bottom)) : 0;
-    const bottomOcclusion = [timelineRect, navRect]
+    // v1.41: on touch phones the auto-hidden nav arrows overlay the artwork
+    // only briefly; reserving their band would shrink the artwork for good.
+    const navOcclusionRect = phoneTouchQuery?.matches && chromeRefs.navControls
+      && Number.parseFloat(window.getComputedStyle(chromeRefs.navControls).opacity) < 0.05
+      ? undefined
+      : navRect;
+    const bottomOcclusion = [timelineRect, navOcclusionRect]
       .filter((rect): rect is DOMRect => !!rect)
       .reduce((max, rect) => Math.max(max, viewportH - Math.max(0, rect.top)), 0);
 
@@ -1191,6 +1221,58 @@ async function main(): Promise<void> {
   const zoomControls = new ZoomControls(app, galleryManager);
   const fullscreenButton = new FullscreenButton(app, document.documentElement);
   const preferencesPanel = new PreferencesPanel(app, preferences);
+  // v1.41 — motion-sensor tilt for the interactive gallery. The unit tilt is
+  // mapped through the existing hover-rotation scale (which grows with zoom)
+  // and GalleryManager's stage-clearance clamp, so the artwork never clips the
+  // wall. Android enables it automatically on touch devices; iOS needs the
+  // settings toggle (or a stored "on" choice) to request permission from a tap.
+  const DEVICE_TILT_GAIN = 2.4;
+  let galleryInteractive = false;
+  const deviceTilt = new DeviceTiltController((x, y) => {
+    const scale = galleryManager.getHoverRotationScale();
+    galleryManager.setHoverTarget(x * scale.x * DEVICE_TILT_GAIN, y * scale.y * DEVICE_TILT_GAIN);
+  });
+  const deviceTiltSupported =
+    DeviceTiltController.isSupported() && initialCaps.pointerPrimary === 'coarse';
+  const deviceTiltWanted = (): boolean => {
+    const { deviceTilt: mode, reducedMotion } = preferences.current;
+    if (mode === 'on') return true;
+    if (mode === 'off') return false;
+    return !DeviceTiltController.needsPermission() && !reducedMotion;
+  };
+  const syncDeviceTiltActive = (): void => {
+    deviceTilt.setActive(galleryInteractive && !galleryRoomView?.isVisible);
+  };
+  const enableDeviceTilt = (): void => {
+    void deviceTilt.enable().then((access) => {
+      preferencesPanel.refreshDeviceTilt();
+      if (access !== 'granted') {
+        diagnostics.info('interaction', 'device-tilt-unavailable', 'Motion-sensor tilt not available', { access });
+      }
+    });
+  };
+  if (deviceTiltSupported) {
+    preferencesPanel.configureDeviceTilt((enabled) => {
+      preferences.setDeviceTilt(enabled ? 'on' : 'off');
+      if (enabled) enableDeviceTilt();
+      else deviceTilt.disable();
+      preferencesPanel.refreshDeviceTilt();
+    }, () => deviceTilt.isEnabled);
+    if (deviceTiltWanted() && !DeviceTiltController.needsPermission()) enableDeviceTilt();
+    if (DeviceTiltController.needsPermission()) {
+      // A stored "on" choice on iOS still needs a fresh user activation.
+      const onFirstTiltGesture = (): void => {
+        if (!deviceTiltWanted() || deviceTilt.isEnabled) return;
+        window.removeEventListener('touchend', onFirstTiltGesture);
+        enableDeviceTilt();
+      };
+      window.addEventListener('touchend', onFirstTiltGesture, { passive: true });
+    }
+    preferences.subscribe(() => {
+      if (!deviceTiltWanted() && deviceTilt.isEnabled) deviceTilt.disable();
+      preferencesPanel.refreshDeviceTilt();
+    });
+  }
   // v0.20.5 — subtle main-page audio controls (mute/volume, top-right cluster).
   // Hidden when no audio source exists.
   const audioControls = new AudioControls(app, preferences, backgroundAudio);
@@ -1205,6 +1287,7 @@ async function main(): Promise<void> {
     },
     (visible) => {
       topbar.setRoomViewActive(visible);
+      syncDeviceTiltActive();
       const roomUtilities = [
         audioControls.element,
         preferencesPanel.element,
@@ -2152,6 +2235,8 @@ async function main(): Promise<void> {
     enter: () => {
       canvasInteraction.setEnabled(true);
       keyboardNav.setEnabled(true);
+      galleryInteractive = true;
+      syncDeviceTiltActive();
       canvas.focus({ preventScroll: true });
       diagnostics.info('navigation', 'gallery-entered', 'Existing interactive gallery entered from museum hub', {
         artworkId: artworks[galleryManager.index]?.id,
@@ -2160,6 +2245,8 @@ async function main(): Promise<void> {
     exit: () => {
       canvasInteraction.setEnabled(false);
       keyboardNav.setEnabled(false);
+      galleryInteractive = false;
+      syncDeviceTiltActive();
     },
   });
   museumHub.onActivate(() => {
@@ -2393,6 +2480,7 @@ async function main(): Promise<void> {
     destinationRouter.dispose();
     preferences.dispose();
     canvasInteraction.dispose();
+    deviceTilt.dispose();
     chromeVisibility.dispose();
     keyboardNav.dispose();
     keyboardHelp.dispose();

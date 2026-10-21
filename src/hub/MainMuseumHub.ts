@@ -33,6 +33,24 @@ import {
   sanitizeMuseumHubConfig,
 } from '../config/museumHub';
 import type { Artwork } from '../config/artworks';
+import {
+  exceedsTapSlop,
+  hapticTick,
+  isMotionReduced,
+  pickSnapTarget,
+  rubberBandClamp,
+  stepMomentum,
+  velocityToReach,
+  VelocityTracker,
+} from '../interaction/touchGestures';
+import {
+  nearestPanoramaTarget,
+  panForStripFraction,
+  panoramaEdgeRoomStep,
+  panoramaPanForFraction,
+  panoramaPanLimit,
+  stripFractionForPan,
+} from './hubPanorama';
 import { createEditorTabs, type EditorTabs } from './editor/editorTabs';
 import { EditorRoomBar } from './editor/roomBar';
 import { EditorArtworkLibrary, type LibraryArtwork, type LibraryPlace } from './editor/artworkLibrary';
@@ -102,6 +120,8 @@ const HUB_BACKGROUND_BASE_URL =
 const HUB_IMAGE_TIMEOUT_MS = 5000;
 const HUB_INLINE_IMAGE_TIMEOUT_MS = 20000;
 const NARROW_PORTRAIT_QUERY = '(max-aspect-ratio: 4/5)';
+/** v1.41: width of one thumbnail slot in the phone panorama strip. */
+const STRIP_ITEM_PX = 76;
 const SHADOW_FEEDBACK_VARIABLES = [
   '--hub-shadow-fill-alpha',
   '--hub-shadow-opacity',
@@ -321,6 +341,30 @@ export class MainMuseumHub {
   private swipeStartX: number | null = null;
   private swipeStartY: number | null = null;
   private swipePointerId: number | null = null;
+  // v1.41 phone panorama (narrow portrait, visitor mode): one continuous
+  // horizontal camera driven by drag, momentum, rubber-band edges and the
+  // artwork strip. Replaces the three wall-focus views that hid artworks.
+  private panorama = false;
+  private panX = 0;
+  private panFrame = 0;
+  private panDrag: {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startPan: number;
+    startFraction: number;
+    source: 'photo' | 'strip';
+    dragging: boolean;
+  } | null = null;
+  private readonly panTracker = new VelocityTracker();
+  private suppressClickUntil = 0;
+  private strip!: HTMLElement;
+  private stripTrack!: HTMLElement;
+  private stripViews: SlotView[] = [];
+  private stripButtons: HTMLButtonElement[] = [];
+  private stripTargets: number[] = [];
+  private stripPageIndex = -1;
+  private stripActiveIndex = -1;
   private resizeRafId = 0;
   private editorBackgroundObjectUrl: string | null = null;
   /** v1.38 online editing (login, uploads, publish); null outside the editor. */
@@ -470,7 +514,7 @@ export class MainMuseumHub {
     const pagerPrev = document.createElement('button');
     pagerPrev.type = 'button';
     pagerPrev.className = 'museum-hub__pager-arrow museum-hub__pager-arrow--prev';
-    pagerPrev.setAttribute('aria-label', 'Vorherige Wand');
+    pagerPrev.setAttribute('aria-label', 'Vorheriger Raum');
     pagerPrev.textContent = '‹';
     const pagerCounter = document.createElement('span');
     pagerCounter.className = 'museum-hub__pager-counter';
@@ -478,14 +522,24 @@ export class MainMuseumHub {
     const pagerNext = document.createElement('button');
     pagerNext.type = 'button';
     pagerNext.className = 'museum-hub__pager-arrow museum-hub__pager-arrow--next';
-    pagerNext.setAttribute('aria-label', 'Nächste Wand');
+    pagerNext.setAttribute('aria-label', 'Nächster Raum');
     pagerNext.textContent = '›';
     pager.append(pagerPrev, pagerCounter, pagerNext);
 
     stage.appendChild(entryButton);
     visual.appendChild(stage);
-    hub.append(visual, shade, header, description, pager, status);
+    const strip = document.createElement('div');
+    strip.className = 'museum-hub__strip';
+    strip.hidden = true;
+    const stripTrack = document.createElement('div');
+    stripTrack.className = 'museum-hub__strip-track';
+    stripTrack.setAttribute('role', 'group');
+    stripTrack.setAttribute('aria-label', 'Werke in diesem Raum');
+    strip.appendChild(stripTrack);
+    hub.append(visual, shade, header, description, strip, pager, status);
     app.appendChild(hub);
+    this.strip = strip;
+    this.stripTrack = stripTrack;
 
     this.element = hub;
     this.visual = visual;
@@ -509,6 +563,7 @@ export class MainMuseumHub {
 
     this.narrowQuery = window.matchMedia(NARROW_PORTRAIT_QUERY);
     this.narrowMode = this.narrowQuery.matches;
+    this.syncPanoramaMode();
     this.narrowQuery.addEventListener('change', this.handleNarrowChange);
 
     this.resizeObserver =
@@ -522,6 +577,11 @@ export class MainMuseumHub {
     hub.addEventListener('pointerdown', this.handleSwipeStart, { passive: true });
     hub.addEventListener('pointerup', this.handleSwipeEnd, { passive: true });
     hub.addEventListener('pointercancel', this.handleSwipeCancel, { passive: true });
+    hub.addEventListener('pointerdown', this.handlePanPointerDown);
+    hub.addEventListener('pointermove', this.handlePanPointerMove);
+    hub.addEventListener('pointerup', this.handlePanPointerUp);
+    hub.addEventListener('pointercancel', this.handlePanPointerCancel);
+    hub.addEventListener('click', this.handleClickCapture, true);
     hub.addEventListener('keydown', this.handleKeydown);
 
     if (this.calibrating || this.debugGeometry) {
@@ -689,7 +749,7 @@ export class MainMuseumHub {
       selectedSlotId: selectedView?.slot.id ?? null,
       selectedPageIndex: selectedView?.slot.pageIndex ?? null,
       currentViewIndex: this.viewIndex,
-      currentWallFocus: this.element.dataset['wallFocus'] ?? 'full',
+      currentWallFocus: this.panorama ? 'panorama' : 'full',
       lastActivatedSlotId: this.lastActivatedSlotId,
       renderedSlots: this.slotViews.length,
     });
@@ -2204,14 +2264,12 @@ export class MainMuseumHub {
   }
 
   // ── View navigation ───────────────────────────────────────────────────────
-  // Narrow portrait mode splits every page into three wall-focus views:
-  // front (0) → left (1) → right (2).
-
-  private static readonly NARROW_VIEWS_PER_PAGE = 3;
-  private static readonly NARROW_WALL_ORDER: readonly ('front' | 'left' | 'right')[] = ['front', 'left', 'right'];
+  // One view per room (page). In narrow portrait visitor mode the room is a
+  // continuous horizontal panorama instead of separate wall-focus views
+  // (v1.41): every artwork stays visible and tappable wherever it appears.
 
   private get viewCount(): number {
-    return this.narrowMode ? this.pageCount * MainMuseumHub.NARROW_VIEWS_PER_PAGE : this.pageCount;
+    return this.pageCount;
   }
 
   private stepView(direction: -1 | 1): void {
@@ -2219,66 +2277,53 @@ export class MainMuseumHub {
     if (next < 0 || next >= this.viewCount) return;
     this.viewIndex = next;
     this.applyView();
+    if (this.panorama) this.setPan(0);
   }
 
   private goToPage(pageIndex: number, slot?: ResolvedHubSlot): void {
-    if (this.narrowMode) {
-      const wall = Math.max(0, MainMuseumHub.NARROW_WALL_ORDER.indexOf(
-        (slot?.wallGroup ?? 'front') as 'front' | 'left' | 'right'
-      ));
-      this.viewIndex = pageIndex * MainMuseumHub.NARROW_VIEWS_PER_PAGE + wall;
-    } else {
-      this.viewIndex = pageIndex;
-    }
+    const changed = this.viewIndex !== pageIndex;
+    this.viewIndex = pageIndex;
     this.applyView();
+    if (!this.panorama) return;
+    const index = slot ? this.stripViews.findIndex((view) => view.slot.id === slot.id) : -1;
+    if (index >= 0) {
+      this.stripActiveIndex = index;
+      const target = this.stripTargets[index] ?? 0;
+      if (changed || this.element.hidden) this.setPan(target);
+      else this.glidePanTo(target);
+      this.syncStripState();
+    } else if (changed) {
+      this.setPan(0);
+    }
   }
 
-  /** Room (page) currently shown, also in the narrow three-views-per-room mode. */
+  /** Room (page) currently shown. */
   private currentPageIndex(): number {
-    return this.narrowMode
-      ? Math.floor(this.viewIndex / MainMuseumHub.NARROW_VIEWS_PER_PAGE)
-      : this.viewIndex;
+    return this.viewIndex;
   }
 
   private applyView(initial = false): void {
     if (this.disposed) return;
     this.viewIndex = Math.max(0, Math.min(this.viewCount - 1, this.viewIndex));
-    const pageIndex = this.narrowMode
-      ? Math.floor(this.viewIndex / MainMuseumHub.NARROW_VIEWS_PER_PAGE)
-      : this.viewIndex;
-    const wallFocus = this.narrowMode
-      ? MainMuseumHub.NARROW_WALL_ORDER[this.viewIndex % MainMuseumHub.NARROW_VIEWS_PER_PAGE]!
-      : 'full';
+    const pageIndex = this.viewIndex;
     this.hubRoomRenderer?.setActivePage(pageIndex);
 
     for (const room of this.roomLayers) {
       const roomPage = Number.parseInt(room.dataset['page'] ?? '0', 10);
       room.classList.toggle('is-active', roomPage === pageIndex);
     }
-    this.element.dataset['wallFocus'] = wallFocus;
-    if (wallFocus === 'full') {
-      this.visual.style.setProperty('--hub-focus-scale', '1');
-      this.visual.style.setProperty('--hub-focus-x', '0%');
-    } else if (wallFocus === 'front') {
-      this.visual.style.setProperty('--hub-focus-scale', '1.1');
-      this.visual.style.setProperty('--hub-focus-x', '0%');
-    } else {
-      this.visual.style.setProperty('--hub-focus-scale', '1.9');
-      this.visual.style.setProperty('--hub-focus-x', wallFocus === 'left' ? '24%' : '-24%');
-    }
-    for (const view of this.slotViews) {
-      view.button.classList.toggle('is-off-wall', wallFocus !== 'full' && view.slot.wallGroup !== wallFocus);
-    }
 
     const showPager = this.viewCount > 1;
     this.pager.hidden = !showPager;
+    this.element.classList.toggle('has-pager', showPager);
     if (showPager) {
       this.pagerPrev.disabled = this.viewIndex === 0;
       this.pagerNext.disabled = this.viewIndex === this.viewCount - 1;
-      const wallLabel = wallFocus === 'front' ? 'Frontwand' : wallFocus === 'left' ? 'Linke Wand' : 'Rechte Wand';
-      this.pagerCounter.textContent = this.narrowMode
-        ? `Raum ${pageIndex + 1}/${this.pageCount} · ${wallLabel}`
-        : `Raum ${pageIndex + 1} / ${this.pageCount}`;
+      this.pagerCounter.textContent = `Raum ${pageIndex + 1} / ${this.pageCount}`;
+    }
+    if (this.panorama) {
+      this.rebuildStrip(pageIndex);
+      this.setPan(this.panX);
     }
     this.applySelectionState(initial ? 'initial-view' : 'view-change');
     if (!initial) void this.decodePageImages(pageIndex);
@@ -2286,15 +2331,311 @@ export class MainMuseumHub {
   }
 
   private handleNarrowChange = (): void => {
-    const wasNarrow = this.narrowMode;
+    const wasPanorama = this.panorama;
     this.narrowMode = this.narrowQuery.matches;
-    if (wasNarrow !== this.narrowMode) {
-      const pageIndex = wasNarrow
-        ? Math.floor(this.viewIndex / MainMuseumHub.NARROW_VIEWS_PER_PAGE)
-        : this.viewIndex;
-      this.viewIndex = this.narrowMode ? pageIndex * MainMuseumHub.NARROW_VIEWS_PER_PAGE : pageIndex;
+    this.syncPanoramaMode();
+    if (wasPanorama !== this.panorama) {
+      this.panX = 0;
       this.applyView();
     }
+  };
+
+  private syncPanoramaMode(): void {
+    this.panorama = this.narrowMode && !this.calibrating;
+    this.element.classList.toggle('is-panorama', this.panorama);
+    this.strip.hidden = !this.panorama;
+    if (!this.panorama) {
+      this.stopPanAnimation();
+      this.panDrag = null;
+      this.panX = 0;
+      this.visual.style.removeProperty('--hub-pan-x');
+      this.stripPageIndex = -1;
+      this.updateOffscreenAccessibility();
+    }
+  }
+
+  // ── Phone panorama camera ────────────────────────────────────────────────
+
+  private panLimit(): number {
+    return panoramaPanLimit(this.visual.offsetWidth, this.element.clientWidth);
+  }
+
+  private setPan(pan: number, allowOverscroll = false): void {
+    if (!this.panorama) return;
+    const limit = this.panLimit();
+    this.panX = allowOverscroll ? pan : Math.max(-limit, Math.min(limit, pan));
+    this.visual.style.setProperty('--hub-pan-x', `${this.panX.toFixed(2)}px`);
+    this.syncStripState();
+  }
+
+  private stopPanAnimation(): void {
+    if (this.panFrame) cancelAnimationFrame(this.panFrame);
+    this.panFrame = 0;
+  }
+
+  /** Momentum (and spring-back) from `velocity` px/s; settles inside the limits. */
+  private runPanMomentum(velocity: number): void {
+    this.stopPanAnimation();
+    if (isMotionReduced()) {
+      this.setPan(this.panX + velocity / 4.2);
+      this.updateOffscreenAccessibility();
+      return;
+    }
+    let currentVelocity = velocity;
+    let previousAt = performance.now();
+    const tick = (now: number): void => {
+      const dt = Math.max(0, Math.min(0.05, (now - previousAt) / 1000));
+      previousAt = now;
+      const limit = this.panLimit();
+      const step = stepMomentum({ position: this.panX, velocity: currentVelocity }, dt, -limit, limit);
+      currentVelocity = step.velocity;
+      this.setPan(step.position, !step.settled);
+      if (step.settled) {
+        this.panFrame = 0;
+        this.updateOffscreenAccessibility();
+        return;
+      }
+      this.panFrame = requestAnimationFrame(tick);
+    };
+    this.panFrame = requestAnimationFrame(tick);
+  }
+
+  private glidePanTo(target: number): void {
+    const limit = this.panLimit();
+    const clamped = Math.max(-limit, Math.min(limit, target));
+    if (isMotionReduced()) {
+      this.stopPanAnimation();
+      this.setPan(clamped);
+      this.updateOffscreenAccessibility();
+      return;
+    }
+    this.runPanMomentum(velocityToReach(this.panX, clamped));
+  }
+
+  /** Photo x fraction (0 = left edge) of the slot's projected centre. */
+  private slotCenterFraction(view: SlotView): number | null {
+    const quad = this.projectedSlotGeometry.get(view.slot.id)?.projectedQuad;
+    if (!quad || !(this.stageWidth > 0)) return null;
+    const x = quad.reduce((sum, corner) => sum + corner.x, 0) / quad.length;
+    return x / this.stageWidth;
+  }
+
+  private rebuildStrip(pageIndex: number): void {
+    const width = this.visual.offsetWidth;
+    const limit = this.panLimit();
+    const entries = this.slotViews
+      .filter((view) => view.slot.pageIndex === pageIndex && view.slot.artworkId && view.slot.selectable)
+      .map((view) => ({ view, fraction: this.slotCenterFraction(view) }))
+      .filter((entry): entry is { view: SlotView; fraction: number } => entry.fraction !== null)
+      .sort((a, b) => a.fraction - b.fraction);
+    this.stripTargets = entries.map((entry) => panoramaPanForFraction(entry.fraction, width, limit));
+    const views = entries.map((entry) => entry.view);
+    const sameViews = pageIndex === this.stripPageIndex
+      && views.length === this.stripViews.length
+      && views.every((view, index) => view === this.stripViews[index]);
+    if (!sameViews) {
+      this.stripViews = views;
+      this.stripPageIndex = pageIndex;
+      this.stripActiveIndex = -1;
+      this.stripButtons = views.map((view, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'museum-hub__strip-item';
+        button.setAttribute('aria-label', view.button.getAttribute('aria-label') ?? `Kunstwerk ${index + 1}`);
+        const thumb = document.createElement('span');
+        thumb.className = 'museum-hub__strip-thumb';
+        thumb.setAttribute('aria-hidden', 'true');
+        button.appendChild(thumb);
+        button.addEventListener('click', () => this.handleStripClick(index));
+        return button;
+      });
+      this.stripTrack.replaceChildren(...this.stripButtons);
+    }
+    this.stripButtons.forEach((button, index) => {
+      const source = this.stripViews[index]?.image?.currentSrc || this.stripViews[index]?.image?.src || '';
+      const thumb = button.firstElementChild as HTMLElement | null;
+      if (thumb && source && thumb.dataset['src'] !== source) {
+        thumb.dataset['src'] = source;
+        thumb.style.backgroundImage = `url("${source.replace(/"/g, '%22')}")`;
+      }
+    });
+    this.strip.hidden = !this.panorama || views.length === 0;
+  }
+
+  private syncStripState(): void {
+    if (!this.panorama || this.stripButtons.length === 0) return;
+    const fraction = stripFractionForPan(this.panX, this.stripTargets);
+    this.stripTrack.style.transform = `translate3d(${(-(fraction + 0.5) * STRIP_ITEM_PX).toFixed(2)}px, 0, 0)`;
+    const focused = this.stripActiveIndex >= 0
+      ? this.stripActiveIndex
+      : nearestPanoramaTarget(this.panX, this.stripTargets);
+    this.stripButtons.forEach((button, index) => {
+      const active = index === focused;
+      button.classList.toggle('is-centered', active);
+      if (active) button.setAttribute('aria-current', 'true');
+      else button.removeAttribute('aria-current');
+      this.stripViews[index]?.button.classList.toggle('is-strip-focus', active);
+    });
+  }
+
+  /** First tap glides to and selects the artwork; a second tap opens it. */
+  private handleStripClick(index: number): void {
+    const view = this.stripViews[index];
+    if (!view || view.button.disabled) return;
+    if (this.stripActiveIndex === index) {
+      this.handleSlotClick(view.slot);
+      return;
+    }
+    this.stripActiveIndex = index;
+    this.setSelectedArtworkId(view.slot.artworkId, { alignPage: false, source: 'hub-strip' });
+    this.glidePanTo(this.stripTargets[index] ?? this.panX);
+    this.syncStripState();
+    hapticTick();
+  }
+
+  /** Keyboard arrows in the panorama move artwork by artwork, then room by room. */
+  private stepPanoramaArtwork(direction: -1 | 1): void {
+    const current = this.stripActiveIndex >= 0
+      ? this.stripActiveIndex
+      : nearestPanoramaTarget(this.panX, this.stripTargets);
+    const next = current + direction;
+    if (next >= 0 && next < this.stripTargets.length) {
+      this.stripActiveIndex = next;
+      this.glidePanTo(this.stripTargets[next]!);
+      this.syncStripState();
+      return;
+    }
+    this.stepRoomFromEdge(direction);
+  }
+
+  /** Enters the neighbouring room at the matching edge (spatial continuity). */
+  private stepRoomFromEdge(direction: -1 | 1): boolean {
+    const next = this.viewIndex + direction;
+    if (next < 0 || next >= this.viewCount) return false;
+    this.stopPanAnimation();
+    this.viewIndex = next;
+    this.applyView();
+    this.stripActiveIndex = -1;
+    const limit = this.panLimit();
+    this.setPan(direction > 0 ? limit : -limit);
+    this.updateOffscreenAccessibility();
+    hapticTick();
+    return true;
+  }
+
+  /**
+   * Artworks completely outside the viewport leave the tab order and the
+   * accessibility tree; visibility is measured, never derived from walls.
+   */
+  private updateOffscreenAccessibility(): void {
+    const viewportWidth = this.element.clientWidth;
+    for (const view of this.slotViews) {
+      let offscreen = false;
+      if (this.panorama && view.slot.pageIndex === this.viewIndex) {
+        const rect = view.button.getBoundingClientRect();
+        const hubRect = this.element.getBoundingClientRect();
+        offscreen = rect.width > 0 && (rect.right <= hubRect.left || rect.left >= hubRect.left + viewportWidth);
+      }
+      if (offscreen) {
+        view.button.tabIndex = -1;
+        view.button.setAttribute('aria-hidden', 'true');
+      } else if (view.button.getAttribute('aria-hidden') === 'true') {
+        view.button.removeAttribute('tabindex');
+        view.button.removeAttribute('aria-hidden');
+      }
+    }
+  }
+
+  private handlePanPointerDown = (event: PointerEvent): void => {
+    if (!this.panorama || this.calibrating) return;
+    if (!event.isPrimary) {
+      this.handlePanPointerCancel();
+      return;
+    }
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('.museum-hub__pager')) return;
+    this.stopPanAnimation();
+    this.panTracker.reset();
+    this.panTracker.add(event.timeStamp, event.clientX, event.clientY);
+    this.panDrag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startPan: this.panX,
+      startFraction: stripFractionForPan(this.panX, this.stripTargets),
+      source: target?.closest('.museum-hub__strip') ? 'strip' : 'photo',
+      dragging: false,
+    };
+  };
+
+  private handlePanPointerMove = (event: PointerEvent): void => {
+    const drag = this.panDrag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    this.panTracker.add(event.timeStamp, event.clientX, event.clientY);
+    if (!drag.dragging) {
+      if (!exceedsTapSlop(dx, dy)) return;
+      if (Math.abs(dy) > Math.abs(dx) * 1.2) {
+        this.panDrag = null;
+        return;
+      }
+      drag.dragging = true;
+      this.stripActiveIndex = -1;
+      this.element.classList.add('is-panning', 'has-panned');
+      try {
+        this.element.setPointerCapture(event.pointerId);
+      } catch {
+        // Synthetic or already-released pointers cannot be captured.
+      }
+    }
+    if (drag.source === 'strip' && this.stripTargets.length > 1) {
+      this.setPan(panForStripFraction(drag.startFraction - dx / STRIP_ITEM_PX, this.stripTargets));
+      return;
+    }
+    const limit = this.panLimit();
+    this.setPan(rubberBandClamp(drag.startPan + dx, -limit, limit, this.element.clientWidth), true);
+  };
+
+  private handlePanPointerUp = (event: PointerEvent): void => {
+    const drag = this.panDrag;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    this.panDrag = null;
+    this.element.classList.remove('is-panning');
+    if (!drag.dragging) return;
+    this.suppressClickUntil = performance.now() + 400;
+    const velocity = this.panTracker.velocity(event.timeStamp).x;
+    const limit = this.panLimit();
+    if (drag.source === 'strip') {
+      const fraction = stripFractionForPan(this.panX, this.stripTargets) - (velocity * 0.18) / STRIP_ITEM_PX;
+      const index = Math.max(0, Math.min(this.stripTargets.length - 1, Math.round(fraction)));
+      this.glidePanTo(this.stripTargets[index] ?? this.panX);
+      return;
+    }
+    const edgeStep = panoramaEdgeRoomStep(this.panX, limit, Math.min(72, this.element.clientWidth * 0.16));
+    if (edgeStep !== 0 && this.stepRoomFromEdge(edgeStep === 1 ? 1 : -1)) return;
+    const snap = pickSnapTarget(this.panX, velocity, this.stripTargets, {
+      softRadius: this.element.clientWidth * 0.16,
+      min: -limit,
+      max: limit,
+    });
+    this.runPanMomentum(snap === null ? velocity : velocityToReach(this.panX, snap));
+  };
+
+  private handlePanPointerCancel = (): void => {
+    const drag = this.panDrag;
+    this.panDrag = null;
+    this.element.classList.remove('is-panning');
+    if (drag?.dragging) this.runPanMomentum(0);
+  };
+
+  /** A drag that ends over an artwork must never open it. */
+  private handleClickCapture = (event: MouseEvent): void => {
+    if (performance.now() >= this.suppressClickUntil) return;
+    this.suppressClickUntil = 0;
+    event.preventDefault();
+    event.stopPropagation();
   };
 
   private handleResize = (): void => {
@@ -2352,10 +2693,12 @@ export class MainMuseumHub {
       return;
     }
     if (event.key === 'ArrowLeft') {
-      this.stepView(-1);
+      if (this.panorama) this.stepPanoramaArtwork(-1);
+      else this.stepView(-1);
       event.preventDefault();
     } else if (event.key === 'ArrowRight') {
-      this.stepView(1);
+      if (this.panorama) this.stepPanoramaArtwork(1);
+      else this.stepView(1);
       event.preventDefault();
     }
   };
@@ -2366,6 +2709,7 @@ export class MainMuseumHub {
    * cancelled gesture can never trigger a room change.
    */
   private handleSwipeStart = (event: PointerEvent): void => {
+    if (this.panorama) return;
     if (!event.isPrimary) {
       this.handleSwipeCancel();
       return;
@@ -5840,6 +6184,12 @@ export class MainMuseumHub {
     this.element.removeEventListener('pointerdown', this.handleSwipeStart);
     this.element.removeEventListener('pointerup', this.handleSwipeEnd);
     this.element.removeEventListener('pointercancel', this.handleSwipeCancel);
+    this.element.removeEventListener('pointerdown', this.handlePanPointerDown);
+    this.element.removeEventListener('pointermove', this.handlePanPointerMove);
+    this.element.removeEventListener('pointerup', this.handlePanPointerUp);
+    this.element.removeEventListener('pointercancel', this.handlePanPointerCancel);
+    this.element.removeEventListener('click', this.handleClickCapture, true);
+    this.stopPanAnimation();
     this.element.removeEventListener('keydown', this.handleKeydown);
     this.entryButton.removeEventListener('click', this.handleActivate);
     this.activateCallback = null;
