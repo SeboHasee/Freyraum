@@ -715,6 +715,15 @@ assert.match(
   'room dialog focus order includes utility form controls'
 );
 const hubStyles = readFileSync(resolve(ROOT, 'src/styles/main.scss'), 'utf8');
+{
+  const wheelRate = (path) =>
+    readFileSync(resolve(ROOT, path), 'utf8').match(/const WHEEL_ZOOM_PER_PX = ([0-9.]+);/)?.[1];
+  assert.equal(
+    wheelRate('scripts/test-gallery-room-view-browser.mjs'),
+    wheelRate('src/interaction/touchGestures.ts'),
+    'browser suite mirrors the shared WHEEL_ZOOM_PER_PX wheel curve'
+  );
+}
 const helpSource = readFileSync(resolve(ROOT, 'src/ui/KeyboardHelp.ts'), 'utf8');
 assert.match(helpSource, /Mit dem Mausrad zoomen/);
 assert.match(helpSource, /Bei vergrößerter Ansicht verschieben; in der Übersicht horizontal zum nächsten Bild wechseln/);

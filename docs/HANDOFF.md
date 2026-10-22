@@ -171,6 +171,29 @@ Current status lives in "Next-agent starting point (v1.43–v1.45)" below.
 - The validation record for the current head is under "v1.45 validation" below.
 - The v1.42 items below still apply.
 
+### v1.45 validation (2026-10-22)
+
+- **Source and bundle:** branch head after commit `f27f013`, plus the browser
+  suite constant fix (lesson 133). Local preview bundle `bundle-d98e87c7c0f0`.
+- **Passed (run one at a time):** `npm run lint`, `npm run build:typecheck`,
+  `npm run build`, `npm run test:touch-gestures`, `npm run test:gallery-room-view`,
+  `npm run validate:museum-hub`, `npm run docs:check-config-authority`,
+  `npm run test:mobile-browser` (strip-reach check now polls; announcement
+  check passes), and the photo-room browser suite (41 checks, including drift,
+  Shift+arrow and Shift+double-click).
+- **First suite run failed and was diagnosed:** the photo-room suite expected
+  the old wheel rate 0.001 while the code uses the shared 0.0012 (lesson 133).
+- **Owner gates (only the owner can do these):**
+  1. Click "Approve and run" for the CI checks on PR #27, then merge.
+  2. Run the live `/Freyraum/` check from `docs/DEPLOYMENT.md`.
+  3. Try it on real phones (iOS Safari, Android Chrome): strip, gyro tilt, info
+     sheet, room pinch.
+  4. On a real desktop GPU, check the zoom feel: wheel and trackpad pinch in
+     both views, double-click, Shift+double-click.
+- **Still open from the plan:** 1.2 split-layer sharpness, gallery reset drift
+  check, pointer-anchored wheel modifier, shared zoom indicator, phases
+  2.1–2.5 and 2.7, 3, 4 and 5 (tracked in `plan.md`).
+
 ## Next-agent starting point (2026-10-21, v1.42 merge readiness)
 
 1. Branch state: v1.41 mobile overhaul + v1.42 follow-ups are complete and

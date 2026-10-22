@@ -17,6 +17,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createServer } from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+// Mirrors WHEEL_ZOOM_PER_PX in src/interaction/touchGestures.ts (shared gallery/room curve).
+const WHEEL_ZOOM_PER_PX = 0.0012;
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const chromePath = process.env.FREYRAUM_CHROME_PATH || '/usr/bin/google-chrome';
 const previewUrl = process.env.FREYRAUM_ROOM_VIEW_URL
@@ -1256,7 +1259,7 @@ try {
   const wheelFocus = await evaluate(`({ x: Math.round(innerWidth / 2), y: Math.round(innerHeight / 2) })`);
   const beforeWheel = await readArtworkScreenCenter();
   const wheelDeltaY = -100;
-  const expectedWheelScale = beforeWheel.scale * Math.exp(-wheelDeltaY * 0.001);
+  const expectedWheelScale = beforeWheel.scale * Math.exp(-wheelDeltaY * WHEEL_ZOOM_PER_PX);
   await command('Input.dispatchMouseEvent', {
     type: 'mouseWheel',
     x: wheelFocus.x,
@@ -1372,7 +1375,7 @@ try {
     'zoom button centers the other room artwork using its own projective center'
   );
   const otherRoomBeforeWheel = await readArtworkScreenCenter();
-  const otherRoomWheelScale = otherRoomBeforeWheel.scale * Math.exp(0.1);
+  const otherRoomWheelScale = otherRoomBeforeWheel.scale * Math.exp(100 * WHEEL_ZOOM_PER_PX);
   const otherRoomWheelPoint = await evaluate(
     `({ x: innerWidth - 80, y: Math.round(innerHeight * 0.38) })`
   );

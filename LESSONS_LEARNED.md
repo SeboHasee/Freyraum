@@ -3,6 +3,14 @@
 
 ## 2026-10-21 — Mobile interaction lessons
 
+### Lesson 133 — A browser test that restates a tuning constant drifts with it
+
+v1.45 changed the shared wheel curve from 0.001 to 0.0012 per pixel. The pure
+and static tests were updated, but the photo-room browser suite had the old
+rate written out twice, and it timed out at a scale that was exactly the new
+curve. Name the constant in the test, and have a fast static check confirm it
+matches the source, so the slow suite cannot silently fall out of date.
+
 ### Lesson 132 — "Stopped moving" is not "arrived" under a starved renderer
 
 A browser test treated four equal pan reads over ~1 s as settled; headless

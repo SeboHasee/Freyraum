@@ -26,6 +26,8 @@
   `test:touch-gestures` sweeps artwork spans at five phone sizes to prove
   every side-wall artwork can be fully framed; new zoom-curve, Shift+arrow,
   Shift+double-click and announcement checks.
+  The photo-room browser suite now uses the shared `WHEEL_ZOOM_PER_PX` rate
+  (it still expected the old 0.001), guarded by a static check (lesson 133).
 - **Docs:** stale `validate:museum-hub` failure note in `docs/HANDOFF.md`
   marked superseded; v1.43–v1.45 starting points merged.
 
