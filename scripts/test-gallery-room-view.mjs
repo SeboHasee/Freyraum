@@ -720,6 +720,10 @@ assert.match(helpSource, /Mit dem Mausrad zoomen/);
 assert.match(helpSource, /Bei vergrößerter Ansicht verschieben; in der Übersicht horizontal zum nächsten Bild wechseln/);
 assert.match(helpSource, /Bei vergrößerter Ansicht das Foto verschieben/);
 assert.match(helpSource, /Mit dem Mausrad auf das Kunstwerk zoomen/);
+assert.match(helpSource, /An der Stelle eine Stufe herauszoomen/, 'help lists Shift+double-click step-out');
+assert.match(helpSource, /Vergrößertes Foto verschieben/, 'help lists Shift+arrow panning');
+assert.match(roomViewSource, /if \(event\.shiftKey\) this\.zoomOutStepAt\(/, 'Shift+double-click zooms out one step');
+assert.match(roomViewSource, /event\.shiftKey && event\.key\.startsWith\('Arrow'\)/, 'Shift+arrows pan the zoomed photo');
 assert.match(
   hubStyles,
   /\.gallery-room-view__scene\.is-fine-pointer\.is-pan-available\s*\{\s*cursor:\s*grab/,

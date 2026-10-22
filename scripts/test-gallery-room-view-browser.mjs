@@ -1475,6 +1475,26 @@ try {
     `double-click zoom-out keeps its fixed photo point still (max drift ${zoomOutDrift.toFixed(2)}px over ${zoomOutFrames.length} frames)`
   );
   console.log('✓ double-click zooms in at the pointer and back; camera layer only while moving');
+  // v1.45: Shift+arrows pan the zoomed photo; Shift+double-click steps out.
+  await doubleClickAt(doubleClickPoint.x, doubleClickPoint.y);
+  await waitFor(`Math.abs(Number(document.querySelector('.gallery-room-view__scene').style.transform
+    .split(' scale(')[1]?.slice(0, -1)) - 2.5) < 0.001`, 60_000);
+  const readOffsetX = () => evaluate(`Number(/translate3d\\(([-\\d.]+)px/
+    .exec(document.querySelector('.gallery-room-view__scene').style.transform)[1])`);
+  const offsetBeforeKeyPan = await readOffsetX();
+  await evaluate(`(() => {
+    const close = document.querySelector('.gallery-room-view__back');
+    close.focus();
+    close.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
+  })()`);
+  await waitFor(`Number(/translate3d\\(([-\\d.]+)px/
+    .exec(document.querySelector('.gallery-room-view__scene').style.transform)[1]) < ${offsetBeforeKeyPan} - 20`, 60_000);
+  for (const clickCount of [1, 2]) {
+    await command('Input.dispatchMouseEvent', { type: 'mousePressed', x: doubleClickPoint.x, y: doubleClickPoint.y, button: 'left', buttons: 1, clickCount, modifiers: 8 });
+    await command('Input.dispatchMouseEvent', { type: 'mouseReleased', x: doubleClickPoint.x, y: doubleClickPoint.y, button: 'left', buttons: 0, clickCount, modifiers: 8 });
+  }
+  await waitFor("document.querySelector('.gallery-room-view__scene').style.transform === 'translate3d(0px, 0px, 0px) scale(1)'", 60_000);
+  console.log('✓ Shift+arrow pans the zoomed photo; Shift+double-click steps back out');
   await evaluate(`(() => {
     const zoom = document.querySelector('.gallery-room-view [aria-label="Vergrößern"]');
     for (let index = 0; index < 12; index += 1) zoom.click();

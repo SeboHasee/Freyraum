@@ -251,6 +251,8 @@ try {
       assert.ok(reach.inside, `${viewport.name}: ${reach.id} is fully on screen after its strip tap ${JSON.stringify(reach)}`);
       assert.equal(reach.hit, reach.id, `${viewport.name}: ${reach.id} is tappable at its centre`);
     }
+    // v1.45: the settled strip position is announced for screen readers.
+    await waitFor(`/^Bild ${hub.stripItems} von ${hub.stripItems}/.test(document.querySelector('.museum-hub__strip-announcement')?.textContent ?? '')`, 20_000);
     console.log(`✓ ${viewport.name}: ${hub.stripItems} strip entries glide their artwork on screen and stay tappable`);
 
     // A finger drag pans the panorama and never opens an artwork.

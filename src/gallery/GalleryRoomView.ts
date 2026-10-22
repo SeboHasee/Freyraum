@@ -35,6 +35,8 @@ const SENSOR_TILT_RANGE_DEG = 16;
 const SENSOR_TILT_DEAD_ZONE_DEG = 1.2;
 /** Double-tap zoom level shared in spirit with the gallery (×2.5). */
 const DOUBLE_TAP_SCALE = 2.5;
+/** v1.45 — Shift+arrow pans this share of the viewport per press. */
+const KEYBOARD_PAN_SHARE = 0.15;
 /** Idle time after the last camera frame before the scene re-rasters sharply. */
 const CAMERA_SETTLE_RASTER_MS = 160;
 
@@ -593,6 +595,34 @@ export class GalleryRoomView {
       point.x - contentX * DOUBLE_TAP_SCALE,
       point.y - contentY * DOUBLE_TAP_SCALE,
       { x: contentX, y: contentY }
+    );
+  }
+
+  /** v1.45 — Shift+double-click: zoom out one double-click step at the pointer. */
+  private zoomOutStepAt(point: PhotoPointer): void {
+    const nextScale = (this.cameraAnimationTargetScale ?? this.cameraScale) / DOUBLE_TAP_SCALE;
+    if (nextScale <= MIN_CAMERA_SCALE + 0.05) {
+      this.resetCamera(true);
+      return;
+    }
+    const contentX = (point.x - this.cameraOffsetX) / this.cameraScale;
+    const contentY = (point.y - this.cameraOffsetY) / this.cameraScale;
+    this.animateCamera(
+      nextScale,
+      point.x - contentX * nextScale,
+      point.y - contentY * nextScale,
+      { x: contentX, y: contentY }
+    );
+  }
+
+  /** v1.45 — keyboard pan (Shift+arrows) of the zoomed photo; eased like other camera moves. */
+  private panBy(dx: number, dy: number): void {
+    const scale = this.cameraAnimationTargetScale ?? this.cameraScale;
+    if (scale <= MIN_CAMERA_SCALE + 0.001) return;
+    this.animateCamera(
+      scale,
+      (this.cameraAnimationTargetOffsetX ?? this.cameraOffsetX) + dx,
+      (this.cameraAnimationTargetOffsetY ?? this.cameraOffsetY) + dy
     );
   }
 
@@ -1170,7 +1200,8 @@ export class GalleryRoomView {
     if (this.lastPointerType === 'touch' || this.lastPointerType === 'pen') return;
     // v1.43 — like the gallery: zoom in at the pointer, again to return.
     event.preventDefault();
-    this.toggleZoomAt(this.pointerPosition(event));
+    if (event.shiftKey) this.zoomOutStepAt(this.pointerPosition(event));
+    else this.toggleZoomAt(this.pointerPosition(event));
   };
 
   private onKeyDown = (event: KeyboardEvent): void => {
@@ -1191,10 +1222,25 @@ export class GalleryRoomView {
     } else if (event.key === '0' || event.key === 'Home') {
       event.preventDefault();
       this.resetCamera(true);
+    } else if (event.shiftKey && event.key.startsWith('Arrow') && !this.isFormControl(event.target)) {
+      event.preventDefault();
+      const { width, height } = this.viewportSize();
+      const stepX = width * KEYBOARD_PAN_SHARE;
+      const stepY = height * KEYBOARD_PAN_SHARE;
+      // The arrow names the direction the view moves, so the photo shifts the other way.
+      if (event.key === 'ArrowLeft') this.panBy(stepX, 0);
+      else if (event.key === 'ArrowRight') this.panBy(-stepX, 0);
+      else if (event.key === 'ArrowUp') this.panBy(0, stepY);
+      else if (event.key === 'ArrowDown') this.panBy(0, -stepY);
     } else if (event.key === 'Tab') {
       this.trapFocus(event);
     }
   };
+
+  private isFormControl(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement
+      && (target.tagName === 'INPUT' || target.tagName === 'SELECT' || target.tagName === 'TEXTAREA');
+  }
 
   private trapFocus(event: KeyboardEvent): void {
     const focusable = [...this.element.querySelectorAll<HTMLElement>(

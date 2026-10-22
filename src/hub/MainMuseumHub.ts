@@ -360,6 +360,8 @@ export class MainMuseumHub {
   private suppressClickUntil = 0;
   private strip!: HTMLElement;
   private stripTrack!: HTMLElement;
+  private stripAnnouncement!: HTMLElement;
+  private stripAnnouncedKey = '';
   private stripViews: SlotView[] = [];
   private stripButtons: HTMLButtonElement[] = [];
   private stripTargets: number[] = [];
@@ -535,11 +537,17 @@ export class MainMuseumHub {
     stripTrack.className = 'museum-hub__strip-track';
     stripTrack.setAttribute('role', 'group');
     stripTrack.setAttribute('aria-label', 'Werke in diesem Raum');
-    strip.appendChild(stripTrack);
+    // v1.45 — screen readers hear "Bild 3 von 8" when the panorama settles.
+    const stripAnnouncement = document.createElement('p');
+    stripAnnouncement.className = 'museum-hub__strip-announcement sr-only';
+    stripAnnouncement.setAttribute('aria-live', 'polite');
+    stripAnnouncement.setAttribute('aria-atomic', 'true');
+    strip.append(stripTrack, stripAnnouncement);
     hub.append(visual, shade, header, description, strip, pager, status);
     app.appendChild(hub);
     this.strip = strip;
     this.stripTrack = stripTrack;
+    this.stripAnnouncement = stripAnnouncement;
 
     this.element = hub;
     this.visual = visual;
@@ -2478,6 +2486,21 @@ export class MainMuseumHub {
     });
   }
 
+  /** Announces the settled strip position once per change (not every frame). */
+  private announceStripPosition(): void {
+    if (!this.panorama || this.stripButtons.length === 0) return;
+    const index = this.stripActiveIndex >= 0
+      ? this.stripActiveIndex
+      : nearestPanoramaTarget(this.panX, this.stripTargets);
+    if (index < 0) return;
+    const key = `${this.stripPageIndex}:${index}`;
+    if (key === this.stripAnnouncedKey) return;
+    this.stripAnnouncedKey = key;
+    const label = this.stripButtons[index]?.getAttribute('aria-label') ?? '';
+    this.stripAnnouncement.textContent =
+      `Bild ${index + 1} von ${this.stripButtons.length}${label ? `: ${label}` : ''}`;
+  }
+
   /** First tap glides to and selects the artwork; a second tap opens it. */
   private handleStripClick(index: number): void {
     const view = this.stripViews[index];
@@ -2528,6 +2551,7 @@ export class MainMuseumHub {
    * accessibility tree; visibility is measured, never derived from walls.
    */
   private updateOffscreenAccessibility(): void {
+    this.announceStripPosition();
     const viewportWidth = this.element.clientWidth;
     for (const view of this.slotViews) {
       let offscreen = false;
