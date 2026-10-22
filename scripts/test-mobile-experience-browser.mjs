@@ -510,8 +510,18 @@ try {
     };
     let handle = await handleAt();
     assert.ok(handle.width >= 44 && handle.height >= 24, `${viewport.name}: the sheet handle is a usable touch target`);
+    const sheetState = () => evaluate(`(() => {
+      const panel = document.querySelector('.info-panel');
+      const handleRect = document.querySelector('.info-panel__handle').getBoundingClientRect();
+      const hit = document.elementFromPoint(handleRect.left + handleRect.width / 2, handleRect.top + handleRect.height / 2);
+      return { stop: panel.dataset.sheetStop, className: panel.className, handleTop: handleRect.top, hit: hit?.className ?? null };
+    })()`);
+    const beforeDrag = await sheetState();
     await dragY(handle.x, handle.y, handle.y - 90);
-    await waitFor("document.querySelector('.info-panel').classList.contains('is-expanded')", 5_000);
+    await waitFor("document.querySelector('.info-panel').classList.contains('is-expanded')", 5_000)
+      .catch(async (error) => {
+        throw new Error(`${error.message}; before=${JSON.stringify(beforeDrag)} after=${JSON.stringify(await sheetState())}`);
+      });
     await delay(5_000);
     const expandedSheet = await evaluate(`(() => {
       const panel = document.querySelector('.info-panel');

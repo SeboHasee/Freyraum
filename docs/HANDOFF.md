@@ -110,6 +110,11 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   saving is small and the hub readiness gate would need rework); G needs the
   customer. Checklist: `plan.md` →
   "Next development round".
+- Known intermittent: the mobile suite's sheet step half → full (90 px
+  handle drag) timed out in two v1.46 runs; reruns passed. The check now
+  prints the sheet stop, classes and the element under the handle before and
+  after the drag, so the next failure shows whether the drag missed the
+  handle or the stop logic declined it.
 - Deploy note: CI's `npm ci` installs sharp, so `import:artworks` builds the
   WebP variants; without sharp the site falls back to the originals with a
   `validate:deploy` warning. The customer's "Update Gallery" does not run it.
