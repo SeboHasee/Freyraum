@@ -34,6 +34,11 @@
   loading screen, not bytes; on a real network the byte drop is what
   visitors feel. B4a then replaced the ~15 MB of hub/room background PNGs
   with same-size WebP copies (`window.__FREYRAUM_WEB_BACKGROUNDS`).
+- **Phones in landscape had a 118 px artwork:** an 844×390 touch phone is
+  wider than the 599 px phone breakpoint, so it got the desktop
+  `--chrome-bottom` (200 px) plus a 111 px timeline and floating arrows over
+  the artwork. C3 gives touch short-landscape its own chrome (right rail,
+  phone menu, swipe/pinch only): 744×334 px usable.
 - **Editor split:** the visitor entry chunk went from 1,141,602 to
   1,068,800 bytes; the editor UI is a 74 KB chunk. three.js keeps the entry
   above Vite's 500 KB warning, so the warning stays; the budget is 1.15 MB.

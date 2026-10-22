@@ -22,6 +22,7 @@
     "test:mobile-browser": "node scripts/test-mobile-experience-browser.mjs",
     "measure:room-zoom": "node scripts/measure-room-zoom.mjs",
     "test:touch-gestures": "node scripts/test-touch-gestures.mjs",
+    "test:deep-links": "node scripts/test-deep-links.mjs",
     "diagnose:artwork-aspect": "node scripts/diagnose-artwork-aspect.mjs",
     "test:webgl-resilience": "node scripts/test-webgl-resilience.mjs",
     "validate:museum-hub": "node scripts/test-museum-hub-geometry.mjs",

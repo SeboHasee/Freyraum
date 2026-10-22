@@ -5226,6 +5226,68 @@ button {
   }
 }
 
+// v1.46 (C3) — touch phones in landscape: the timeline becomes a vertical rail
+// on the right so the artwork keeps the full height; the swipe replaces the
+// floating arrows. `Timeline.ts` follows the list's flex direction.
+@media (max-height: 499px) and (pointer: coarse) and (orientation: landscape) {
+  :root {
+    --chrome-top: calc(48px + var(--safe-top));
+    --chrome-bottom: calc(8px + var(--safe-bottom));
+  }
+
+  :root:not([data-chrome-mode='visible']) .zoom-controls:not(.gallery-room-view__zoom-controls) {
+    display: none;
+  }
+
+  .timeline:not(.gallery-room-view__timeline) {
+    top: calc(56px + var(--safe-top));
+    bottom: calc(8px + var(--safe-bottom));
+    left: auto;
+    right: calc(8px + var(--safe-right));
+    transform: none;
+    width: 92px;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 18px;
+
+    .timeline__list {
+      flex-direction: column;
+      justify-content: flex-start;
+      width: 100%;
+      height: 0;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scroll-snap-type: y proximity;
+      scroll-padding-block: 8px;
+      padding: 4px 2px;
+      gap: 8px;
+    }
+
+    .timeline__item {
+      flex: 0 0 56px;
+      width: 100%;
+      height: 56px;
+      scroll-margin-block: 8px;
+    }
+
+    .timeline__thumb-label,
+    .timeline__arrow,
+    .timeline__counter {
+      display: none;
+    }
+  }
+
+  :root[data-phone-immersive='true'] .timeline:not(.gallery-room-view__timeline) {
+    translate: 12px 0;
+  }
+
+  :root:not([data-chrome-mode='visible']) .nav-controls {
+    display: none;
+  }
+}
+
 // --- Phase 2: short-height landscape (phone landscape, foldable) ------------
 @media (max-height: 499px) {
   .topbar {

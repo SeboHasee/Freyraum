@@ -28,8 +28,11 @@ Order: A → B1–B3 → C1–C2 → D1 → C3–C6 → B4, D2–D5 → E → F 
 - [x] C4 Phone immersive view: a single tap on the artwork hides topbar,
       timeline, nav and info sheet together; the gallery refits through
       `handleViewportMetricsChanged()` (usable height 660 → 844 px at 390×844).
-- [ ] C3 landscape side rail; C5 hub pinch + edge preview; C6 remaining flick
-      test in the photo-room suite.
+- [x] C3 Touch phones in landscape: right-hand timeline rail, utilities in
+      the phone menu, immersive tap; artwork area 744×118 → 744×334 px at
+      844×390 (the desktop `--chrome-bottom` of 200 px no longer applies).
+- [ ] C5 hub pinch + edge preview; C6 remaining flick test in the photo-room
+      suite.
 - [x] B4a Background photos as same-size WebP copies (hub 11.2 MB → 176 KB;
       visit 19.9 → 6.0 MB desktop, 18.6 → 4.8 MB phone).
 - [ ] B4b Lazy hub artwork loading for off-screen phone panorama artworks.

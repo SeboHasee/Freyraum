@@ -209,6 +209,43 @@ try {
         .filter(({ rect }) => rect.width > 0 && (rect.right < 0 || rect.left > innerWidth))`);
       assert.deepEqual(offscreen, [], `${viewport.name}: no visible artwork lies outside the landscape viewport`);
       console.log(`✓ ${viewport.name}: full room view, theme-color ${themeColor}`);
+
+      // v1.46 (C3): in the landscape gallery the timeline is a right-hand rail,
+      // utilities sit in the phone menu, and the artwork keeps most of the height.
+      await evaluate("document.querySelector('.museum-hub:not([hidden]) .museum-hub__artwork:not([disabled])').click()");
+      await waitFor("!!document.querySelector('.timeline') && document.querySelector('.museum-hub')?.hidden !== false", 90_000);
+      await delay(2_500);
+      await capture(`${viewport.name}-gallery.png`);
+      const rail = await evaluate(`(() => {
+        const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect().toJSON() ?? null;
+        const refit = (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+          .filter((entry) => entry.event === 'viewport-refit').at(-1)?.data?.viewport ?? null;
+        return {
+          timeline: rect('.timeline'),
+          topbar: rect('.topbar'),
+          item: rect('.timeline__item'),
+          menuToggle: !!document.querySelector('.topbar .phone-menu__toggle'),
+          navShown: getComputedStyle(document.querySelector('.nav-controls')).display !== 'none',
+          refit,
+          width: innerWidth,
+          height: innerHeight,
+        };
+      })()`);
+      assert.ok(
+        rail.timeline.height > rail.timeline.width && rail.timeline.right <= rail.width && rail.timeline.left > rail.width * 0.8,
+        `${viewport.name}: the timeline is a right-hand rail (${JSON.stringify(rail.timeline)})`
+      );
+      assert.ok(rail.timeline.top >= rail.topbar.bottom, `${viewport.name}: the rail starts below the topbar`);
+      assert.ok(rail.item.width >= 44 && rail.item.height >= 44, `${viewport.name}: rail thumbnails keep 44 px touch targets`);
+      assert.equal(rail.menuToggle, true, `${viewport.name}: utilities collapse into the phone menu`);
+      assert.equal(rail.navShown, false, `${viewport.name}: the floating arrows give way to the swipe`);
+      if (rail.refit) {
+        assert.ok(
+          rail.refit.usableH >= rail.height * 0.8,
+          `${viewport.name}: the artwork keeps at least 80 % of the height (${JSON.stringify(rail.refit)})`
+        );
+      }
+      console.log(`✓ ${viewport.name}: landscape gallery rail; artwork area ${rail.refit?.usableW}×${rail.refit?.usableH} px`);
       continue;
     }
 

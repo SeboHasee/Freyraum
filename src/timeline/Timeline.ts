@@ -241,7 +241,7 @@ export class Timeline {
   }
 
   private renderWindowAround(index: number): void {
-    const visible = Math.max(4, Math.ceil(this.listEl.clientWidth / this.approxThumbPitch()) || 4);
+    const visible = Math.max(4, Math.ceil(this.listClientSize() / this.approxThumbPitch()) || 4);
     const start = Math.max(0, index - RENDER_BUFFER);
     const end = Math.min(this.artworks.length - 1, index + visible + RENDER_BUFFER);
     this.renderWindow(start, end);
@@ -250,8 +250,8 @@ export class Timeline {
   private renderWindowFromScroll(): void {
     if (!this.virtualized) return;
     const pitch = this.approxThumbPitch();
-    const visible = Math.max(4, Math.ceil(this.listEl.clientWidth / pitch) || 4);
-    const first = Math.max(0, Math.floor(this.listEl.scrollLeft / pitch) - RENDER_BUFFER);
+    const visible = Math.max(4, Math.ceil(this.listClientSize() / pitch) || 4);
+    const first = Math.max(0, Math.floor(this.listScrollStart() / pitch) - RENDER_BUFFER);
     const last = Math.min(this.artworks.length - 1, first + visible + RENDER_BUFFER * 2);
     this.renderWindow(first, last);
   }
@@ -269,8 +269,28 @@ export class Timeline {
   private approxThumbPitch(): number {
     const sample = this.thumbs.find(Boolean);
     if (!sample) return 162;
-    const gap = Number.parseFloat(getComputedStyle(this.listEl).columnGap) || 12;
-    return sample.getBoundingClientRect().width + gap;
+    const vertical = this.isVertical();
+    const style = getComputedStyle(this.listEl);
+    const gap = Number.parseFloat(vertical ? style.rowGap : style.columnGap) || 12;
+    const rect = sample.getBoundingClientRect();
+    return (vertical ? rect.height : rect.width) + gap;
+  }
+
+  /** v1.46 — the touch short-landscape side rail stacks thumbnails vertically. */
+  private isVertical(): boolean {
+    return getComputedStyle(this.listEl).flexDirection.startsWith('column');
+  }
+
+  private listClientSize(): number {
+    return this.isVertical() ? this.listEl.clientHeight : this.listEl.clientWidth;
+  }
+
+  private listScrollStart(): number {
+    return this.isVertical() ? this.listEl.scrollTop : this.listEl.scrollLeft;
+  }
+
+  private scrollListBy(delta: number, behavior: ScrollBehavior): void {
+    this.listEl.scrollBy(this.isVertical() ? { top: delta, behavior } : { left: delta, behavior });
   }
 
   private centerThumb(index: number, behavior: ScrollBehavior): void {
@@ -282,11 +302,14 @@ export class Timeline {
     const thumbRect = thumb.getBoundingClientRect();
     if (listRect.width <= 0 || thumbRect.width <= 0) return;
 
-    const delta = (thumbRect.left + thumbRect.width * 0.5) - (listRect.left + listRect.width * 0.5);
+    const vertical = this.isVertical();
+    const delta = vertical
+      ? (thumbRect.top + thumbRect.height * 0.5) - (listRect.top + listRect.height * 0.5)
+      : (thumbRect.left + thumbRect.width * 0.5) - (listRect.left + listRect.width * 0.5);
     if (Math.abs(delta) < 1) return;
 
-    const targetLeft = this.listEl.scrollLeft + delta;
-    this.listEl.scrollTo({ left: targetLeft, behavior });
+    const targetLeft = this.listScrollStart() + delta;
+    this.listEl.scrollTo(vertical ? { top: targetLeft, behavior } : { left: targetLeft, behavior });
 
     if (this.diagnostics.getMode() !== 'default') {
       this.diagnostics.debug('timeline', 'center-active', 'Centered active timeline thumbnail', {
@@ -299,11 +322,11 @@ export class Timeline {
   }
 
   private onPrevPage = (): void => {
-    this.listEl.scrollBy({ left: -this.listEl.clientWidth * 0.8, behavior: this.preferredScrollBehavior() });
+    this.scrollListBy(-this.listClientSize() * 0.8, this.preferredScrollBehavior());
   };
 
   private onNextPage = (): void => {
-    this.listEl.scrollBy({ left: this.listEl.clientWidth * 0.8, behavior: this.preferredScrollBehavior() });
+    this.scrollListBy(this.listClientSize() * 0.8, this.preferredScrollBehavior());
   };
 
   private onScroll = (): void => {
@@ -326,17 +349,19 @@ export class Timeline {
   private updateScrollState(): void {
     this.updateCounter();
     const arrowsVisible = !this.el.classList.contains('timeline--fits');
+    const vertical = this.isVertical();
+    const scrollSize = vertical ? this.listEl.scrollHeight : this.listEl.scrollWidth;
     const fits = timelineContentFits(
-      this.listEl.scrollWidth,
-      this.listEl.clientWidth,
-      this.measureArrowSpace(),
-      arrowsVisible
+      scrollSize,
+      this.listClientSize(),
+      vertical ? 0 : this.measureArrowSpace(),
+      arrowsVisible && !vertical
     );
     this.el.classList.toggle('timeline--fits', fits);
     this.el.classList.toggle('timeline--scrollable', !fits);
-    const maxLeft = Math.max(0, this.listEl.scrollWidth - this.listEl.clientWidth - 1);
-    const atStart = this.listEl.scrollLeft <= 1;
-    const atEnd = this.listEl.scrollLeft >= maxLeft;
+    const maxLeft = Math.max(0, scrollSize - this.listClientSize() - 1);
+    const atStart = this.listScrollStart() <= 1;
+    const atEnd = this.listScrollStart() >= maxLeft;
     this.prevButton.disabled = atStart;
     this.nextButton.disabled = atEnd;
     this.el.classList.toggle('timeline--at-start', atStart);

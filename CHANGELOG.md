@@ -22,6 +22,10 @@
   keyboard focus on the controls, opening the photo room or leaving the
   gallery brings them back. Double tap still zooms; a tap that only closes
   the phone menu or settings does not hide anything.
+- **Phones in landscape:** the timeline becomes a slim rail on the right,
+  the utilities move into the phone menu, the floating arrows and zoom
+  buttons give way to swipe and pinch, and the tap-to-hide view works here
+  too. The artwork area on an 844×390 phone grows from 118 px to 334 px tall.
 - **Background photos as WebP:** the museum hub photo and the four room
   photos are served as same-size WebP copies (hub 11.2 MB → 176 KB, no
   visible difference; calibration unchanged). Per visit now about 6.0 MB

@@ -57,6 +57,7 @@ import {
   type StartupReadinessMode,
 } from './config/startup';
 import { installHiddenEditorEntry } from './online/hiddenEditorEntry';
+import { buildArtworkDeepLinkSearch, readArtworkDeepLink } from './navigation/deepLink';
 
 const KEY_LIGHT_WORLD = new THREE.Vector3();
 const KEY_LIGHT_VIEW = new THREE.Vector3();
@@ -1130,7 +1131,11 @@ async function main(): Promise<void> {
     infoPanel: null,
   };
 
-  const phoneTouchQuery = window.matchMedia?.('(max-width: 599px) and (pointer: coarse)');
+  // v1.46 (C3) — touch phones in landscape share the phone chrome (utility
+  // menu, immersive tap, tap-revealed arrows) with portrait phones.
+  const phoneTouchQuery = window.matchMedia?.(
+    '(max-width: 599px) and (pointer: coarse), (max-height: 499px) and (pointer: coarse) and (orientation: landscape)'
+  );
   const measureArtworkViewport = (): ArtworkViewportMetrics => {
     const visualViewport = window.visualViewport;
     const viewportW = Math.max(1, Math.round(visualViewport?.width ?? window.innerWidth));
@@ -1159,7 +1164,12 @@ async function main(): Promise<void> {
       && document.documentElement.dataset['chromeMode'] !== 'visible'
       ? undefined
       : navRect;
-    const bottomOcclusion = [timelineRect, navOcclusionRect]
+    // v1.46 (C3) — the landscape side rail occludes the right edge instead.
+    const timelineIsRail = !!timelineRect && timelineRect.height > timelineRect.width;
+    const railOcclusion = timelineIsRail && timelineRect
+      ? Math.max(0, Math.min(viewportW, viewportW - timelineRect.left))
+      : 0;
+    const bottomOcclusion = [timelineIsRail ? undefined : timelineRect, navOcclusionRect]
       .filter((rect): rect is DOMRect => !!rect)
       .reduce((max, rect) => Math.max(max, viewportH - Math.max(0, rect.top)), 0);
 
@@ -1170,7 +1180,7 @@ async function main(): Promise<void> {
       ? Math.max(parseCssNumeric(rootStyle.getPropertyValue('--safe-bottom')), bottomOcclusion)
       : Math.max(chromeBottom, bottomOcclusion);
     const occlusionLeft = safeLeft;
-    const occlusionRight = safeRight;
+    const occlusionRight = Math.max(safeRight, railOcclusion);
     const usableW = Math.max(1, viewportW - occlusionLeft - occlusionRight);
     const usableH = Math.max(1, viewportH - occlusionTop - occlusionBottom);
 
@@ -2292,6 +2302,24 @@ async function main(): Promise<void> {
   });
 
   // Navigation callbacks
+  // v1.46 (E3) — keep the address bar on the current artwork so it can be
+  // shared (`?artwork=` + `view=gallery` in the gallery). Editors keep their URL.
+  const deepLinksEnabled = !museumHubEditorMode && !isPlacementEditorRequested();
+  const syncDeepLinkUrl = (): void => {
+    if (!deepLinksEnabled) return;
+    const search = buildArtworkDeepLinkSearch(
+      window.location.search,
+      artworks[galleryManager.index]?.id ?? null,
+      galleryInteractive
+    );
+    if (search === window.location.search) return;
+    try {
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`);
+    } catch {
+      // Some file:// contexts refuse URL updates; the link is optional.
+    }
+  };
+
   const handleNavigate = (index: number): void => {
     infoPanel.update(artworks[index], true);
     timeline.setActive(index);
@@ -2301,6 +2329,7 @@ async function main(): Promise<void> {
       source: 'gallery-navigate',
     });
     galleryRoomView?.setArtwork(artworks[index] ?? null, artworks.length > 1, index, artworks.length);
+    if (galleryInteractive) syncDeepLinkUrl();
     diagnostics.info('gallery', 'navigate', 'Artwork changed', {
       index,
       artworkId: artworks[index]?.id,
@@ -2374,6 +2403,7 @@ async function main(): Promise<void> {
       keyboardNav.setEnabled(true);
       galleryInteractive = true;
       syncDeviceTiltActive();
+      syncDeepLinkUrl();
       canvas.focus({ preventScroll: true });
       diagnostics.info('navigation', 'gallery-entered', 'Existing interactive gallery entered from museum hub', {
         artworkId: artworks[galleryManager.index]?.id,
@@ -2385,6 +2415,7 @@ async function main(): Promise<void> {
       keyboardNav.setEnabled(false);
       galleryInteractive = false;
       syncDeviceTiltActive();
+      syncDeepLinkUrl();
     },
   });
   museumHub.onActivate(() => {
@@ -2576,12 +2607,36 @@ async function main(): Promise<void> {
   // v0.81 — hub base fetch + first-page artwork decode + slot layout complete
   // under the overlay (the last weighted progress step), so the first hub
   // paint has zero image pop-in and zero layout shift after reveal.
+  // v1.46 (E3) — `?artwork=` preselects a published artwork in the hub.
+  const deepLink = deepLinksEnabled
+    ? readArtworkDeepLink(window.location.search, new Set(artworkIndexById.keys()))
+    : { artworkId: null, openGallery: false };
+  const deepLinkIndex = deepLink.artworkId !== null ? artworkIndexById.get(deepLink.artworkId) : undefined;
+  if (deepLinkIndex !== undefined) {
+    galleryManager.goTo(deepLinkIndex);
+    galleryManager.promotePrefetchWindow(deepLinkIndex, 'deep-link');
+    diagnostics.info('navigation', 'deep-link', 'Artwork deep link applied', {
+      artworkId: deepLink.artworkId,
+      openGallery: deepLink.openGallery,
+    });
+  }
   loadingOverlay.setStatus('Museum wird vorbereitet');
   await destinationRouter.startAt('hub');
   loadingOverlay.setProgress(100);
   await loadingOverlay.reveal();
   loadingOverlay.dispose();
   museumHub.focusInitialTarget();
+  if (deepLinkIndex !== undefined && deepLink.openGallery) {
+    // A hub choice made while the artwork loads wins over the link.
+    const generationAtLink = hubSelectionGeneration;
+    void galleryManager
+      .whenArtworkInteractive(deepLinkIndex, museumHubResolution.selectionTimeoutMs)
+      .then(() => {
+        if (hubSelectionGeneration !== generationAtLink) return;
+        if (galleryManager.index !== deepLinkIndex) galleryManager.goTo(deepLinkIndex);
+        void destinationRouter.navigate('gallery');
+      });
+  }
 
   // Cleanup on unload
   window.addEventListener('beforeunload', () => {

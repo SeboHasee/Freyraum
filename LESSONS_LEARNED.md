@@ -3,6 +3,13 @@
 
 ## 2026-10-22 — Download size lessons
 
+### Lesson 139 — A width breakpoint does not describe a phone in landscape
+
+"Phone" rules keyed to `max-width: 599px` never reached an 844×390 phone,
+which fell through to desktop chrome sizes and kept 118 px for the artwork.
+Phone layouts need a landscape condition too (`max-height` + `pointer:
+coarse` + `orientation: landscape`), checked by a landscape browser pass.
+
 ### Lesson 138 — Wait for transitions to finish, not for a fixed delay
 
 The first immersive-view check read `visibility: visible` 700 ms after the

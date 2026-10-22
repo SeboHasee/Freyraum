@@ -1,5 +1,5 @@
 # FREYRAUM Query Parameters & Stored Configuration
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-22 (v1.46 next development round).
 
 This is the **authoritative configuration reference** for runtime query parameters and `localStorage` keys.
 No other document should duplicate configuration tables from this file.
@@ -111,6 +111,21 @@ Notes:
   front-wall seam in the calibrated primary camera.
 - Artwork activation into the inspection gallery is disabled while calibrating;
   the room bar still switches editable rooms.
+
+### `?artwork=<id>` and `&view=gallery`
+
+Shareable artwork deep link (`src/navigation/deepLink.ts`, v1.46).
+
+- `?artwork=<id>` preselects that published artwork in the museum hub (the
+  panorama/strip is aligned to it). IDs are the importer IDs (lowercase
+  `a-z`, `0-9`, `-`); unknown or malformed IDs are ignored.
+- Adding `&view=gallery` opens the artwork in the interactive gallery after
+  Start, once it is ready. A hub choice made meanwhile wins.
+- While visiting, the address bar follows the current artwork with
+  `history.replaceState` (no extra history entries); leaving the gallery
+  drops `view=gallery`. Other parameters such as `?debug=` are kept.
+- Not used by the placement editor or `?hubCalibrate=1`.
+- Test: `npm run test:deep-links`.
 
 ### `?hubDebug=1`
 
