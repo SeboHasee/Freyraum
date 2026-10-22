@@ -30,6 +30,13 @@
   (it still expected the old 0.001), guarded by a static check (lesson 133).
 - **Docs:** stale `validate:museum-hub` failure note in `docs/HANDOFF.md`
   marked superseded; v1.43–v1.45 starting points merged.
+- **Handoff completion audit:** every `docs/HANDOFF.md` item was checked
+  against code and tests. Finished follow-ups were removed and listed under
+  "Done since the previous handoff"; the remaining gates are one "Open items"
+  list. Old validation history and audit matrices moved to
+  `docs/archive/handoff-history-2026-10-22.md`; finished v1.41–v1.44 and
+  2026-10-18…20 plans moved to `docs/archive/plan-history-2026-10-22.md`, with
+  duplicated owner/customer gates consolidated in `plan.md`.
 
 ## Unreleased — v1.44 photo-room zoom-out drift (2026-10-21)
 
