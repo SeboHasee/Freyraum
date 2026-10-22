@@ -159,6 +159,32 @@ export function validateDeploy(root) {
           'embedded copies belong only in the local preview (customer-preview/customer-artworks.js).'
       );
     }
+    // v1.46 (B2): every listed WebP variant must exist; without the map the
+    // site falls back to the originals (warning only).
+    const webImagesMatch = /window\.__FREYRAUM_WEB_IMAGES = (\{.*\});\s*$/m.exec(readFileSync(deployManifestPath, 'utf8'));
+    if (!webImagesMatch) {
+      issues.warnings.push(
+        'public/customer-artworks.js has no web image variants; visitors download the full original images. ' +
+          'Run `npm ci` (installs sharp) and `npm run import:artworks`.'
+      );
+    } else {
+      let webImages = null;
+      try {
+        webImages = JSON.parse(webImagesMatch[1]);
+      } catch {
+        issues.errors.push('public/customer-artworks.js: the web image map is not valid JSON.');
+      }
+      for (const [id, variants] of Object.entries(webImages ?? {})) {
+        for (const variant of Array.isArray(variants) ? variants : []) {
+          const src = typeof variant?.src === 'string' ? variant.src : '';
+          if (!/^\.\/web-images\/[A-Za-z0-9_-]+-\d+-[0-9a-f]+\.webp$/.test(src)) {
+            issues.errors.push(`web images: "${id}" lists an invalid path "${src}".`);
+          } else if (!existsSync(join(root, 'public', src.slice(2)))) {
+            issues.errors.push(`web images: public/${src.slice(2)} for "${id}" is missing. Re-run \`npm run import:artworks\`.`);
+          }
+        }
+      }
+    }
   }
 
   // ── museum-hub.json ─────────────────────────────────────────────────────

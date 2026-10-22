@@ -14,7 +14,7 @@ import { MAX_DEPLOY_MANIFEST_BYTES, isSafeRelativePath, validateDeploy } from '.
 const created = [];
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108020000009077053e', 'hex');
 
-function fixture({ backgrounds = ['Museum_ohne_Bilder.png', 'museum-empty.png'], hub, manifest, previewImages = ['akt-27.png'], inbox = ['Akt 27.png'], deployManifest }) {
+function fixture({ backgrounds = ['Museum_ohne_Bilder.png', 'museum-empty.png'], hub, manifest, previewImages = ['akt-27.png'], inbox = ['Akt 27.png'], deployManifest, webImageFiles = [] }) {
   const root = mkdtempSync(join(dirname(fileURLToPath(import.meta.url)), '.freyraum-validate-'));
   created.push(root);
   const customer = join(root, 'customer-artworks');
@@ -27,6 +27,8 @@ function fixture({ backgrounds = ['Museum_ohne_Bilder.png', 'museum-empty.png'],
   if (deployManifest !== undefined) {
     mkdirSync(join(root, 'public'), { recursive: true });
     writeFileSync(join(root, 'public', 'customer-artworks.js'), deployManifest);
+    mkdirSync(join(root, 'public', 'web-images'), { recursive: true });
+    for (const name of webImageFiles) writeFileSync(join(root, 'public', 'web-images', name), PNG);
   }
   writeFileSync(
     join(customer, 'artworks.json'),
@@ -140,12 +142,30 @@ test('paths outside the project fail', () => {
   assert.equal(isSafeRelativePath('Backgrounds/ok.png'), true);
 });
 
+const WEB_MAP = 'window.__FREYRAUM_WEB_IMAGES = {"akt-27":[{"src":"./web-images/akt-27-640-abc123.webp","width":640,"height":640}]};\n';
+
 test('deployed manifest with metadata only passes', () => {
+  const result = validateDeploy(fixture({
+    deployManifest: 'window.__FREYRAUM_ARTWORKS = [{"id":"akt-27","image":"./images/akt-27.png"}];\n' + WEB_MAP,
+    webImageFiles: ['akt-27-640-abc123.webp'],
+  }));
+  assert.deepEqual(result.errors, []);
+  assert.ok(!result.warnings.some((warning) => warning.includes('public/customer-artworks.js')));
+});
+
+test('deployed manifest without web image variants warns', () => {
   const result = validateDeploy(fixture({
     deployManifest: 'window.__FREYRAUM_ARTWORKS = [{"id":"akt-27","image":"./images/akt-27.png"}];\n',
   }));
   assert.deepEqual(result.errors, []);
-  assert.ok(!result.warnings.some((warning) => warning.includes('public/customer-artworks.js')));
+  assert.ok(result.warnings.some((warning) => warning.includes('no web image variants')), result.warnings.join('\n'));
+});
+
+test('missing web image variant file fails', () => {
+  const result = validateDeploy(fixture({
+    deployManifest: 'window.__FREYRAUM_ARTWORKS = [{"id":"akt-27","image":"./images/akt-27.png"}];\n' + WEB_MAP,
+  }));
+  assert.ok(result.errors.some((error) => error.includes('akt-27-640-abc123.webp')), result.errors.join('\n'));
 });
 
 test('deployed manifest with embedded image bytes fails', () => {

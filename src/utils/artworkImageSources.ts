@@ -86,3 +86,78 @@ export function redactArtworkImageUrlForLog(url: string): string {
   const mime = semicolon <= 5 ? 'unknown' : url.slice(5, semicolon);
   return `[data-uri:${mime}:${url.length}bytes]`;
 }
+
+/** v1.46: one deployed WebP derivative (see `scripts/build-web-images.mjs`). */
+export interface ArtworkWebImage {
+  src: string;
+  width: number;
+  height: number;
+}
+
+const WEB_IMAGE_SRC_PATTERN = /^\.\/web-images\/[A-Za-z0-9_-]+-\d+-[0-9a-f]+\.webp$/;
+
+/** Validates the injected `window.__FREYRAUM_WEB_IMAGES` map; invalid entries are dropped. */
+export function sanitizeWebImageMap(raw: unknown): ReadonlyMap<string, readonly ArtworkWebImage[]> {
+  const map = new Map<string, readonly ArtworkWebImage[]>();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return map;
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(value)) continue;
+    const variants = value
+      .filter((entry): entry is ArtworkWebImage => {
+        if (!entry || typeof entry !== 'object') return false;
+        const v = entry as Record<string, unknown>;
+        return (
+          typeof v['src'] === 'string' &&
+          WEB_IMAGE_SRC_PATTERN.test(v['src']) &&
+          Number.isInteger(v['width']) && (v['width'] as number) > 0 &&
+          Number.isInteger(v['height']) && (v['height'] as number) > 0
+        );
+      })
+      .map((v) => ({ src: v.src, width: v.width, height: v.height }))
+      .sort((a, b) => Math.max(a.width, a.height) - Math.max(b.width, b.height));
+    if (variants.length > 0) map.set(id, variants);
+  }
+  return map;
+}
+
+/** Smallest variant whose long edge reaches `targetLongEdge`, else the largest. */
+export function pickWebImage(
+  variants: readonly ArtworkWebImage[],
+  targetLongEdge: number
+): ArtworkWebImage | null {
+  if (variants.length === 0) return null;
+  for (const variant of variants) {
+    if (Math.max(variant.width, variant.height) >= targetLongEdge) return variant;
+  }
+  return variants[variants.length - 1] ?? null;
+}
+
+/** Display long edge (px) for a device: phones and low-memory devices stop at 2048. */
+export function webImageDisplayLongEdge(device: {
+  layoutTier: string;
+  pointerPrimary: string;
+  deviceMemoryGb?: number | null;
+}): number {
+  const phone = device.layoutTier.startsWith('phone') || device.pointerPrimary === 'coarse';
+  const lowMemory = typeof device.deviceMemoryGb === 'number' && device.deviceMemoryGb <= 4;
+  return phone || lowMemory ? 2048 : 4096;
+}
+
+/**
+ * Points `image` at the device-sized derivative and `thumbnailImage` at the
+ * smallest one. Artworks without variants (local preview, built-ins) are
+ * returned unchanged, so the original source path keeps working.
+ */
+export function applyWebImages<T extends Pick<Artwork, 'id' | 'image' | 'thumbnailImage'>>(
+  artworks: readonly T[],
+  map: ReadonlyMap<string, readonly ArtworkWebImage[]>,
+  displayLongEdge: number
+): T[] {
+  return artworks.map((artwork) => {
+    const variants = map.get(artwork.id);
+    const display = variants ? pickWebImage(variants, displayLongEdge) : null;
+    const thumbnail = variants ? pickWebImage(variants, 1) : null;
+    if (!display || !thumbnail) return artwork;
+    return { ...artwork, image: display.src, thumbnailImage: thumbnail.src };
+  });
+}

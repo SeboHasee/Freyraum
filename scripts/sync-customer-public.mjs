@@ -27,6 +27,7 @@ import { existsSync, mkdirSync, copyFileSync, readdirSync, rmSync, writeFileSync
 import { join, dirname, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { buildWebImages } from './build-web-images.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 // v1.39 — optional `--root <folder>` / `--root=<folder>` (see import-artworks.mjs).
@@ -165,6 +166,16 @@ writeFileSync(
     2,
   ) + '\n',
 );
+
+// v1.46 (B2): WebP size variants for the deployed site; the local preview keeps originals.
+const webImages = await buildWebImages({ root: ROOT });
+if ('skipped' in webImages) {
+  process.stdout.write(`sync-customer-public: web images skipped — ${webImages.skipped}\n`);
+} else {
+  process.stdout.write(
+    `sync-customer-public: web images for ${webImages.artworks} artwork(s) (${webImages.written} encoded, ${webImages.cached} cached)\n`,
+  );
+}
 
 process.stdout.write(
   `sync-customer-public: synced customer-artworks.js, customer-audio.js` +

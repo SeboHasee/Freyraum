@@ -41,7 +41,12 @@ import { installPerformanceTooling } from './utils/performanceTooling';
 import { AdaptiveQualityController } from './utils/AdaptiveQualityController';
 import { maybeProbeWebGPU } from './rendering/RenderBackend';
 import { getDiagnostics } from './utils/Diagnostics';
-import { resolveArtworkImageSources } from './utils/artworkImageSources';
+import {
+  applyWebImages,
+  resolveArtworkImageSources,
+  sanitizeWebImageMap,
+  webImageDisplayLongEdge,
+} from './utils/artworkImageSources';
 import { detectDeviceCapabilities, applyDeviceCaps, type DeviceCapabilities } from './utils/device';
 import { suggestStartupQuality } from './utils/performance';
 import {
@@ -857,7 +862,25 @@ async function main(): Promise<void> {
     injectedLegacyArtworks,
     diagnostics
   );
-  const customerArtworks = injectedArtworkPayload?.artworks ?? null;
+  // v1.46 (B2): the deployed manifest adds WebP size variants. One display
+  // size per device keeps hub, gallery and photo room on a single download.
+  const webImageMap = sanitizeWebImageMap(
+    (window as unknown as { __FREYRAUM_WEB_IMAGES?: unknown }).__FREYRAUM_WEB_IMAGES
+  );
+  const webImageLongEdge = webImageDisplayLongEdge({
+    layoutTier: initialCaps.layoutTier,
+    pointerPrimary: initialCaps.pointerPrimary,
+    deviceMemoryGb: (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null,
+  });
+  const customerArtworks = injectedArtworkPayload
+    ? applyWebImages(injectedArtworkPayload.artworks, webImageMap, webImageLongEdge)
+    : null;
+  if (webImageMap.size > 0) {
+    diagnostics.info('boot', 'artworks-web-images', 'Using deployed web image variants', {
+      artworks: webImageMap.size,
+      displayLongEdge: webImageLongEdge,
+    });
+  }
   const artworks: readonly Artwork[] =
     customerArtworks && customerArtworks.length > 0 ? customerArtworks : builtInArtworks;
   recoveryArtworks = artworks;

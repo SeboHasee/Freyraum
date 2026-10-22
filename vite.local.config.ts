@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -20,6 +20,8 @@ function keepLocalPreviewManifests(): Plugin {
     },
     closeBundle() {
       for (const [path, contents] of kept) writeFileSync(path, contents, 'utf8');
+      // Web-only WebP derivatives (B2) are not referenced by the local manifest.
+      rmSync(resolve('customer-preview', 'web-images'), { recursive: true, force: true });
     },
   };
 }

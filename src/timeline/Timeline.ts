@@ -131,7 +131,7 @@ export class Timeline {
 
     const img = document.createElement('img');
     img.className = 'timeline__img';
-    img.src = artwork.image;
+    img.src = artwork.thumbnailImage ?? artwork.image;
     img.alt = '';
     img.loading = 'lazy';
     img.decoding = 'async';
