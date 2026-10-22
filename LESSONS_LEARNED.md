@@ -3,6 +3,14 @@
 
 ## 2026-10-22 — Download size lessons
 
+### Lesson 138 — Wait for transitions to finish, not for a fixed delay
+
+The first immersive-view check read `visibility: visible` 700 ms after the
+tap: in the headless suite, CSS transitions can run far slower than wall
+time, while `pointer-events` (not animated) had already switched. Browser
+checks of animated chrome must wait with `settleAnimations()` (the
+elements' `getAnimations()`), never with a guessed delay.
+
 ### Lesson 137 — Changing an asset URL breaks tests that check the URL
 
 B4a served the hub photo as a WebP copy, and the deploy smoke test failed:

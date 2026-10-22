@@ -96,10 +96,11 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - Done: B1 web manifest without image bytes, B2 WebP size variants
   (`scripts/build-web-images.mjs`, runtime choice in
   `src/utils/artworkImageSources.ts`), B3 lazy editor chunk + bundle budget,
-  C1 info-sheet stops, C2 photo-room swipe, B4a WebP background copies
+  C1 info-sheet stops, C2 photo-room swipe, C4 tap-to-hide phone chrome,
+  B4a WebP background copies
   (`validate:deploy` checks them; the editor's calibration view keeps the
   original PNG). Numbers: `FINDINGS.md` (v1.46).
-- Next in order: D1 split-layer raster, C3–C6, B4b (lazy hub artworks),
+- Next in order: D1 split-layer raster, C3, C5, C6, B4b (lazy hub artworks),
   D2–D5, E, F; G needs the customer. Checklist: `plan.md` →
   "Next development round".
 - Deploy note: CI's `npm ci` installs sharp, so `import:artworks` builds the
@@ -195,8 +196,9 @@ lists (details in `CHANGELOG.md`):
 
 ### Ready-to-pick follow-ups (small, scoped)
 
-- Timeline auto-hide with the rest of the phone chrome; refit via
-  `galleryManager.handleViewportMetricsChanged()`.
+- Done (v1.46): phone immersive view — single tap hides topbar, timeline,
+  nav and info sheet together and refits the gallery
+  (`setPhoneImmersive` in `src/main.ts`, `CanvasInteraction.onSingleTap`).
 - Short-landscape phone side rail instead of top/bottom bars.
 - Photo room on phones: optional background parallax driven by the tilt
   (the room swipe is done, v1.46).

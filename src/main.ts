@@ -102,6 +102,9 @@ interface LoadingOverlayControls {
  * contain wrappers such as `max(...)`, `calc(...)`, or `env(...)`; invalid
  * values fall back to 0.
  */
+/** v1.46 — phone immersive chrome slide (matches `main.scss`) plus margin. */
+const PHONE_IMMERSIVE_SETTLE_MS = 340;
+
 function parseCssNumeric(value: string): number {
   const parsed = Number.parseFloat(value);
   if (Number.isFinite(parsed)) return parsed;
@@ -1138,8 +1141,11 @@ async function main(): Promise<void> {
     const chromeTop = parseCssNumeric(rootStyle.getPropertyValue('--chrome-top'));
     const chromeBottom = parseCssNumeric(rootStyle.getPropertyValue('--chrome-bottom'));
 
-    const topbarRect = chromeRefs.topbar?.getBoundingClientRect();
-    const timelineRect = chromeRefs.timeline?.getBoundingClientRect();
+    // v1.46 — phone immersive view: the hidden topbar and timeline free the
+    // screen, so only the safe areas are reserved.
+    const immersive = document.documentElement.dataset['phoneImmersive'] === 'true';
+    const topbarRect = immersive ? undefined : chromeRefs.topbar?.getBoundingClientRect();
+    const timelineRect = immersive ? undefined : chromeRefs.timeline?.getBoundingClientRect();
     const navRect = chromeRefs.navControls?.getBoundingClientRect();
 
     // Clamp to the visible viewport so a stale/transitioning fixed header rect
@@ -1157,8 +1163,12 @@ async function main(): Promise<void> {
       .filter((rect): rect is DOMRect => !!rect)
       .reduce((max, rect) => Math.max(max, viewportH - Math.max(0, rect.top)), 0);
 
-    const occlusionTop = Math.max(chromeTop, topbarOcclusion);
-    const occlusionBottom = Math.max(chromeBottom, bottomOcclusion);
+    const occlusionTop = immersive
+      ? parseCssNumeric(rootStyle.getPropertyValue('--safe-top'))
+      : Math.max(chromeTop, topbarOcclusion);
+    const occlusionBottom = immersive
+      ? Math.max(parseCssNumeric(rootStyle.getPropertyValue('--safe-bottom')), bottomOcclusion)
+      : Math.max(chromeBottom, bottomOcclusion);
     const occlusionLeft = safeLeft;
     const occlusionRight = safeRight;
     const usableW = Math.max(1, viewportW - occlusionLeft - occlusionRight);
@@ -1348,6 +1358,38 @@ async function main(): Promise<void> {
       preferencesPanel.setEmbedded(false);
     }
   };
+  // v1.46 — phone immersive view: a single tap on the artwork hides the
+  // topbar, timeline, nav and info sheet together and the artwork refits to
+  // the freed screen (the zoom glides through the normal smoothing); another
+  // tap, focus moving into the chrome, or leaving the gallery restores them.
+  let immersiveRefitTimer: ReturnType<typeof setTimeout> | null = null;
+  const isPhoneImmersive = (): boolean => document.documentElement.dataset['phoneImmersive'] === 'true';
+  const setPhoneImmersive = (requested: boolean): void => {
+    const immersive = requested
+      && !!phoneTouchQuery?.matches
+      && galleryInteractive
+      && !roomUtilitiesVisible
+      && document.documentElement.dataset['chromeMode'] !== 'visible';
+    if (immersive === isPhoneImmersive()) return;
+    if (immersive) {
+      document.documentElement.dataset['phoneImmersive'] = 'true';
+      phoneUtilityMenu.setOpen(false);
+      chromeVisibility.dismiss('info-panel');
+    } else {
+      delete document.documentElement.dataset['phoneImmersive'];
+    }
+    galleryManager.handleViewportMetricsChanged();
+    // The chrome slides back in; measure again once its transition settled.
+    if (immersiveRefitTimer !== null) clearTimeout(immersiveRefitTimer);
+    immersiveRefitTimer = setTimeout(() => {
+      immersiveRefitTimer = null;
+      galleryManager.handleViewportMetricsChanged();
+    }, PHONE_IMMERSIVE_SETTLE_MS);
+    diagnostics.info('interaction', 'phone-immersive', immersive ? 'Phone chrome hidden' : 'Phone chrome shown', {
+      immersive,
+    });
+  };
+
   galleryRoomView = new GalleryRoomView(
     app,
     museumHubResolution.galleryRoomViews,
@@ -1359,12 +1401,14 @@ async function main(): Promise<void> {
       topbar.setRoomViewActive(visible);
       syncDeviceTiltActive();
       roomUtilitiesVisible = visible;
+      if (visible) setPhoneImmersive(false);
       placeUtilityControls();
     }
   );
   galleryRoomView.setTimelineElement(timeline.element);
   placeUtilityControls();
   phoneTouchQuery?.addEventListener?.('change', placeUtilityControls);
+  phoneTouchQuery?.addEventListener?.('change', () => setPhoneImmersive(false));
   galleryRoomView.setArtwork(
     artworks[galleryManager.index] ?? null,
     artworks.length > 1,
@@ -1493,6 +1537,21 @@ async function main(): Promise<void> {
   // Fixed Bug 2 (passive pinch) and Bug 3 (duplicate synthetic mouse
   // events after touch).
   const canvasInteraction = new CanvasInteraction(canvas, galleryManager);
+  // A tap that only closes the phone menu or settings must not hide the chrome.
+  let popoverOpenAtPointerDown = false;
+  window.addEventListener('pointerdown', () => {
+    popoverOpenAtPointerDown = !!document.querySelector('.phone-menu__panel:not([hidden]), .prefs__panel:not([hidden])');
+  }, { capture: true, passive: true });
+  canvasInteraction.onSingleTap = () => {
+    if (!popoverOpenAtPointerDown) setPhoneImmersive(!isPhoneImmersive());
+  };
+  for (const el of [chromeRefs.topbar, chromeRefs.timeline, chromeRefs.navControls, chromeRefs.infoPanel]) {
+    // Keyboard focus only; programmatic focus restores after taps must not
+    // bring the chrome back.
+    el?.addEventListener('focusin', (event) => {
+      if (event.target instanceof Element && event.target.matches(':focus-visible')) setPhoneImmersive(false);
+    });
+  }
   const keyboardNav = new KeyboardNav(galleryManager, keyboardHelp);
   canvasInteraction.setEnabled(false);
   keyboardNav.setEnabled(false);
@@ -1969,6 +2028,7 @@ async function main(): Promise<void> {
   // Apply current preferences to all subsystems.
   const applyPreferences = (manual: boolean): void => {
     const { reducedMotion, quality, audioMuted, audioVolume } = preferences.current;
+    if (document.documentElement.dataset['chromeMode'] === 'visible') setPhoneImmersive(false);
     galleryManager.setReducedMotion(reducedMotion);
     lightingSetup.setAnimated(!reducedMotion);
     backgroundAudio.setVolume(audioVolume, 'preferences-apply');
@@ -2320,6 +2380,7 @@ async function main(): Promise<void> {
       });
     },
     exit: () => {
+      setPhoneImmersive(false);
       canvasInteraction.setEnabled(false);
       keyboardNav.setEnabled(false);
       galleryInteractive = false;

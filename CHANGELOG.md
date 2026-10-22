@@ -16,6 +16,12 @@
   textures no longer use a separate CORS request). Per visit: 166.7 MB →
   19.9 MB (desktop) / 18.6 MB (phone). The customer's "Update Gallery"
   (plain Node) is unchanged.
+- **Phone immersive view:** on phones, a single tap on the artwork hides the
+  top bar, timeline, arrows and info sheet together, and the artwork grows
+  into the freed space (660 → 844 px tall on a 390×844 phone). Another tap,
+  keyboard focus on the controls, opening the photo room or leaving the
+  gallery brings them back. Double tap still zooms; a tap that only closes
+  the phone menu or settings does not hide anything.
 - **Background photos as WebP:** the museum hub photo and the four room
   photos are served as same-size WebP copies (hub 11.2 MB → 176 KB, no
   visible difference; calibration unchanged). Per visit now about 6.0 MB

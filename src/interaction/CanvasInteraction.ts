@@ -1,6 +1,7 @@
 import { GalleryManager } from '../gallery/GalleryManager';
 import { createScopedDiagnostics } from '../utils/Diagnostics';
 import {
+  DOUBLE_TAP_MS,
   DoubleTapDetector,
   exceedsTapSlop,
   hapticTick,
@@ -78,6 +79,9 @@ export class CanvasInteraction {
   private readonly doubleTap = new DoubleTapDetector();
   /** A pinch ended with one finger still down: ignore it until release. */
   private pinchTail = false;
+  /** v1.46 — touch/pen single tap, fired once the double-tap window passed. */
+  onSingleTap: (() => void) | null = null;
+  private singleTapTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(canvas: HTMLCanvasElement, galleryManager: GalleryManager) {
     this.canvas = canvas;
@@ -140,6 +144,7 @@ export class CanvasInteraction {
 
   private onPointerDown = (e: PointerEvent): void => {
     if (!this.enabled) return;
+    this.cancelSingleTap();
     // Mouse-only: reject non-primary buttons.
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
@@ -305,10 +310,24 @@ export class CanvasInteraction {
   private handleTap(e: PointerEvent): void {
     // Mouse double-clicks arrive through `dblclick`; touch/pen use the detector.
     if (e.pointerType === 'mouse') return;
-    if (!this.doubleTap.tap(e.timeStamp, e.clientX, e.clientY)) return;
+    if (!this.doubleTap.tap(e.timeStamp, e.clientX, e.clientY)) {
+      if (this.onSingleTap) {
+        this.singleTapTimer = setTimeout(() => {
+          this.singleTapTimer = null;
+          if (this.enabled) this.onSingleTap?.();
+        }, DOUBLE_TAP_MS);
+      }
+      return;
+    }
     const point = this.localPoint(e.clientX, e.clientY);
     this.galleryManager.toggleZoomAt(point.x, point.y);
     hapticTick();
+  }
+
+  private cancelSingleTap(): void {
+    if (this.singleTapTimer === null) return;
+    clearTimeout(this.singleTapTimer);
+    this.singleTapTimer = null;
   }
 
   private onDoubleClick = (e: MouseEvent): void => {
@@ -495,6 +514,7 @@ export class CanvasInteraction {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
     if (!enabled) {
+      this.cancelSingleTap();
       this.active.clear();
       this.galleryManager.endDirectGesture(0, 0);
       this.galleryManager.setSwipePreview(0);
@@ -517,6 +537,7 @@ export class CanvasInteraction {
     // v0.16 — dispose idempotency. See `disposed` field.
     if (this.disposed) return;
     this.disposed = true;
+    this.cancelSingleTap();
     if (this.usePointerEvents) {
       this.canvas.removeEventListener('pointerdown', this.onPointerDown);
       this.canvas.removeEventListener('pointermove', this.onPointerMove);

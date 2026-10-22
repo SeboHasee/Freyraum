@@ -408,6 +408,48 @@ try {
     );
     console.log(`✓ ${viewport.name}: phone menu opens with ${menuOpen.items.length} controls and closes on an outside tap`);
 
+    // v1.46 (C4): a single tap on the artwork hides topbar and timeline together
+    // and the artwork refits to the freed height; another tap brings them back.
+    const lastUsableHeight = () => evaluate(`(() => {
+      const refits = (window.__FREYRAUM_DIAGNOSTICS__?.getEntries?.() ?? [])
+        .filter((entry) => entry.event === 'viewport-refit');
+      return refits.at(-1)?.data?.viewport?.usableH ?? null;
+    })()`);
+    const chromeHidden = () => evaluate(`(() => ['.topbar', '.timeline'].map((selector) => {
+      const style = getComputedStyle(document.querySelector(selector));
+      return style.visibility === 'hidden' && style.pointerEvents === 'none';
+    }))()`);
+    const usableBefore = await lastUsableHeight();
+    await delay(400);
+    await tap(chrome.viewport.width * 0.5, chrome.viewport.height * 0.45);
+    await waitFor("document.documentElement.dataset.phoneImmersive === 'true'", 5_000);
+    await settleAnimations('.topbar');
+    await settleAnimations('.timeline');
+    await delay(400);
+    assert.deepEqual(await chromeHidden(), [true, true], `${viewport.name}: a tap hides topbar and timeline together`);
+    const usableImmersive = await lastUsableHeight();
+    if (usableBefore !== null && usableImmersive !== null) {
+      assert.ok(
+        usableImmersive > usableBefore + 80,
+        `${viewport.name}: the artwork refits to the freed height (${usableBefore} → ${usableImmersive} px)`
+      );
+    }
+    await capture(`${viewport.name}-immersive.png`);
+    await tap(chrome.viewport.width * 0.5, chrome.viewport.height * 0.45);
+    await waitFor("document.documentElement.dataset.phoneImmersive !== 'true'", 5_000);
+    await settleAnimations('.topbar');
+    await settleAnimations('.timeline');
+    await delay(400);
+    assert.deepEqual(await chromeHidden(), [false, false], `${viewport.name}: a second tap restores the chrome`);
+    const usableRestored = await lastUsableHeight();
+    if (usableBefore !== null && usableRestored !== null) {
+      assert.ok(
+        Math.abs(usableRestored - usableBefore) <= 2,
+        `${viewport.name}: the restored chrome gives the original artwork height back (${usableRestored} px)`
+      );
+    }
+    console.log(`✓ ${viewport.name}: tap toggles immersive view (usable height ${usableBefore} → ${usableImmersive} → ${usableRestored} px)`);
+
     // Info bottom sheet: Info reveals it, pulling the handle up pins it open,
     // pulling down collapses and then dismisses it.
     const infoButton = await evaluate(`(() => {

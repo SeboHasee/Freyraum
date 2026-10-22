@@ -5188,6 +5188,44 @@ button {
   }
 }
 
+// v1.46 — phone immersive view (single tap on the artwork): topbar, timeline,
+// nav and info sheet leave together; `translate` keeps their own transforms.
+// Opacity/translate only, so layout rects stay valid for the artwork refit.
+.topbar,
+.timeline {
+  transition-property: opacity, translate, visibility;
+  transition-duration: 0.28s;
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root[data-phone-immersive='true'] {
+  .topbar,
+  .timeline,
+  .nav-controls,
+  .info-panel,
+  .info-panel-peek,
+  .info-panel-chevron {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .topbar {
+    translate: 0 -12px;
+  }
+
+  .timeline {
+    translate: 0 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar,
+  .timeline {
+    transition-duration: 0.001ms;
+  }
+}
+
 // --- Phase 2: short-height landscape (phone landscape, foldable) ------------
 @media (max-height: 499px) {
   .topbar {
