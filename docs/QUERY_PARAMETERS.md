@@ -124,6 +124,8 @@ Shareable artwork deep link (`src/navigation/deepLink.ts`, v1.46).
 - While visiting, the address bar follows the current artwork with
   `history.replaceState` (no extra history entries); leaving the gallery
   drops `view=gallery`. Other parameters such as `?debug=` are kept.
+- "Link teilen" in the artwork information shares
+  `?artwork=<id>&view=gallery` without other parameters (http/https only).
 - Not used by the placement editor or `?hubCalibrate=1`.
 - Test: `npm run test:deep-links`.
 

@@ -20,6 +20,10 @@ export class InfoPanel {
   private readonly credit: HTMLElement;
   /** v1.42 — phone bottom-sheet grab handle (shown only in compact mode). */
   private readonly handle: HTMLButtonElement;
+  /** v1.46 — "Link teilen"; hidden until a share handler is set. */
+  private readonly shareButton: HTMLButtonElement;
+  private shareHandler: (() => Promise<string | null>) | null = null;
+  private shareFeedbackTimer = 0;
   private compact = false;
   private stop: InfoSheetStop = 'half';
   private dragPointerId: number | null = null;
@@ -64,7 +68,16 @@ export class InfoPanel {
     this.handle.addEventListener('pointercancel', this.onHandlePointerCancel);
     this.handle.addEventListener('click', this.onHandleClick);
 
-    this.el.append(this.handle, this.eyebrow, this.title, this.meta, this.description, this.credit);
+    this.shareButton = document.createElement('button');
+    this.shareButton.type = 'button';
+    this.shareButton.className = 'info-panel__share';
+    this.shareButton.textContent = InfoPanel.SHARE_LABEL;
+    this.shareButton.hidden = true;
+    this.shareButton.addEventListener('click', this.onShareClick);
+
+    this.el.append(
+      this.handle, this.eyebrow, this.title, this.meta, this.description, this.credit, this.shareButton
+    );
     container.appendChild(this.el);
 
     this.update(initialArtwork);
@@ -246,7 +259,33 @@ export class InfoPanel {
     }
   }
 
+  /** Shows "Link teilen"; the handler returns feedback text or null. */
+  setShareHandler(handler: (() => Promise<string | null>) | null): void {
+    this.shareHandler = handler;
+    this.shareButton.hidden = handler === null;
+  }
+
+  private static readonly SHARE_LABEL = 'Link teilen';
+
+  private onShareClick = (): void => {
+    const handler = this.shareHandler;
+    if (!handler || this.shareButton.disabled) return;
+    this.shareButton.disabled = true;
+    void handler()
+      .catch(() => 'Link konnte nicht geteilt werden')
+      .then((feedback) => {
+        this.shareButton.disabled = false;
+        if (!feedback) return;
+        this.shareButton.textContent = feedback;
+        window.clearTimeout(this.shareFeedbackTimer);
+        this.shareFeedbackTimer = window.setTimeout(() => {
+          this.shareButton.textContent = InfoPanel.SHARE_LABEL;
+        }, 2200);
+      });
+  };
+
   dispose(): void {
+    window.clearTimeout(this.shareFeedbackTimer);
     this.cancelDrag();
     this.el.remove();
   }

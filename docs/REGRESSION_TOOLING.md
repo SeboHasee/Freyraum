@@ -395,7 +395,7 @@ Linux run them under `xvfb-run -a`.
 | `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
 | `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, touch flick momentum to the pan limit, zoom readout (room + gallery), keyboard, close/focus | – |
 | `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve, zoom readout, gallery zoom fixed point | – |
-| `npm run test:deep-links` | – | `?artwork=` / `view=gallery` read and build rules | – |
+| `npm run test:deep-links` | – | `?artwork=` / `view=gallery` read and build rules; share sheet / clipboard fallback of "Link teilen" | – |
 | `npm run measure:room-zoom` | yes | zoom work table (raster/paint/decode/style/layout), no assertions | – |
 | `npm run test:mobile-browser` | yes | phone panorama/strip/drag safety, theme-color, chrome coverage, phone menu, tap-to-hide immersive view, info sheet stops, photo-room swipe, landscape gallery rail | – |
 | `npm run test:validate-deploy` | – | deploy content check | – |

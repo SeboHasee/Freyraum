@@ -3,6 +3,13 @@
 
 ## 2026-10-22 — Download size lessons
 
+### Lesson 142 — Probe and build only while no browser suite runs
+
+A photo-room suite run timed out with the camera at scale 1.1997 of 1.25
+while a production build and two Playwright probes ran beside it; the rerun
+alone passed those checks. SwiftShader suites need the machine to themselves:
+start probes and builds before or after, never during.
+
 ### Lesson 141 — A test that CI never runs goes stale silently
 
 Quality CI called `npm run test --if-present`, but there was no `test`

@@ -100,7 +100,8 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   tap-to-hide phone chrome, C6 flick test, D3 zoom readout
   (`src/ui/ZoomIndicator.ts`), D5 gallery zoom fixed point
   (`GalleryManager.coupledZoomPan`), E3 deep links
-  (`src/navigation/deepLink.ts`),
+  (`src/navigation/deepLink.ts`) with "Link teilen" (`src/ui/shareLink.ts`),
+  `npm test` = all no-browser checks (quality CI runs it),
   B4a WebP background copies
   (`validate:deploy` checks them; the editor's calibration view keeps the
   original PNG). Numbers: `FINDINGS.md` (v1.46).

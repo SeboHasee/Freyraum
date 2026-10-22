@@ -41,7 +41,8 @@ Order: A → B1–B3 → C1–C2 → D1 → C3–C6 → B4, D2–D5 → E → F 
       polite announcement); D5 gallery reset drift fixed (`coupledZoomPan`:
       pan shares the zoom λ during zoom moves; pure fixed-point check).
 - [x] E3 Deep links `?artwork=<id>&view=gallery` (`src/navigation/deepLink.ts`,
-      `npm run test:deep-links`).
+      `npm run test:deep-links`) and a "Link teilen" button in the artwork
+      information (`src/ui/shareLink.ts`; share sheet, clipboard fallback).
 - [ ] D2 per-frame repaint; D4 pointer-anchored wheel modifier.
 - [ ] E (200 % text, reduce chrome, device overlay, shadow-light
       harness stop), F (CI split, baselines, Lighthouse, dev-tool upgrades),

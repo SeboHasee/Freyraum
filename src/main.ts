@@ -21,6 +21,7 @@ import { NavigationControls } from './ui/NavigationControls';
 import { HintText } from './ui/HintText';
 import { ZoomControls } from './ui/ZoomControls';
 import { ZoomIndicator } from './ui/ZoomIndicator';
+import { shareLink, shareLinkFeedback } from './ui/shareLink';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { PreferencesPanel } from './ui/PreferencesPanel';
 import { ChromeVisibilityManager } from './ui/ChromeVisibilityManager';
@@ -2327,6 +2328,19 @@ async function main(): Promise<void> {
       // Some file:// contexts refuse URL updates; the link is optional.
     }
   };
+  // Share a clean link (no debug parameters) to the artwork in the gallery.
+  // Local file:// previews have no shareable address, so they get no button.
+  if (deepLinksEnabled && /^https?:$/.test(window.location.protocol)) {
+    infoPanel.setShareHandler(async () => {
+      const artwork = artworks[galleryManager.index];
+      if (!artwork) return null;
+      const search = buildArtworkDeepLinkSearch('', artwork.id, true);
+      const url = `${window.location.origin}${window.location.pathname}${search}`;
+      const result = await shareLink(url, `${artwork.title} – FREYRAUM`);
+      diagnostics.info('interaction', 'artwork-link-shared', 'Artwork link shared', { artworkId: artwork.id, result });
+      return shareLinkFeedback(result);
+    });
+  }
 
   const handleNavigate = (index: number): void => {
     infoPanel.update(artworks[index], true);

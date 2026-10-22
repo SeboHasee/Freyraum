@@ -7,7 +7,10 @@
   museum hub, `&view=gallery` opens it in the gallery after Start. While
   visiting, the address follows the current artwork, so copying the URL shares
   exactly what is on screen. Unknown or malformed IDs are ignored
-  (`docs/QUERY_PARAMETERS.md`, `npm run test:deep-links`).
+  (`docs/QUERY_PARAMETERS.md`, `npm run test:deep-links`). The artwork
+  information has a "Link teilen" button on the website: phones open the
+  system share sheet, other browsers copy the link ("Link kopiert"). The
+  local `file://` preview has no shareable address and shows no button.
 - **CI runs the pure checks:** `npm test` now runs all no-browser checks
   (quality CI already called it, but the script did not exist). This exposed
   and fixed a stale `test:gallery-room-view` source check from the lazy
