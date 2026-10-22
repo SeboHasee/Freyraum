@@ -468,10 +468,38 @@ try {
       `${viewport.name}: pulling an expanded sheet down collapses it first`
     );
     await settleAnimations('.info-panel');
+    const sheetHeight = () => evaluate("document.querySelector('.info-panel').getBoundingClientRect().height");
+    const halfHeight = await sheetHeight();
+    assert.equal(
+      await evaluate("document.querySelector('.info-panel').dataset.sheetStop"),
+      'half',
+      `${viewport.name}: the collapsed sheet rests on the half stop`
+    );
+    // v1.46 (C1): half → peek (title only) → dismissed.
+    handle = await handleAt();
+    await dragY(handle.x, handle.y, handle.y + 90);
+    await waitFor("document.querySelector('.info-panel').dataset.sheetStop === 'peek'", 5_000);
+    await settleAnimations('.info-panel');
+    const peek = await evaluate(`(() => {
+      const panel = document.querySelector('.info-panel');
+      const title = panel.querySelector('.info-panel__title').getBoundingClientRect();
+      const rect = panel.getBoundingClientRect();
+      return {
+        revealed: panel.classList.contains('is-revealed'),
+        height: rect.height,
+        titleInside: title.top >= rect.top - 1 && title.bottom <= rect.bottom + 1,
+        overscroll: getComputedStyle(panel).overscrollBehaviorY,
+      };
+    })()`);
+    assert.ok(
+      peek.revealed && peek.height < halfHeight - 20 && peek.titleInside,
+      `${viewport.name}: the peek stop is smaller than half and still shows the title (${JSON.stringify({ ...peek, halfHeight })})`
+    );
+    assert.equal(peek.overscroll, 'contain', `${viewport.name}: sheet scrolling does not chain to the page`);
     handle = await handleAt();
     await dragY(handle.x, handle.y, handle.y + 90);
     await waitFor("!document.querySelector('.info-panel').classList.contains('is-revealed')", 5_000);
-    console.log(`✓ ${viewport.name}: info sheet expands, stays pinned, collapses and swipes away`);
+    console.log(`✓ ${viewport.name}: info sheet expands, stays pinned, then steps half → peek → away`);
   }
   console.log('PASS: mobile hub panorama, strip, drag safety, theme-color, phone chrome coverage, phone menu and info sheet.');
 } finally {

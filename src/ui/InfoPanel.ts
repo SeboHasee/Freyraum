@@ -1,7 +1,15 @@
 import { type Artwork } from '../config/artworks';
-import { VelocityTracker, resolveSheetRelease, rubberBand } from '../interaction/touchGestures';
+import { VelocityTracker, resolveSheetStop, rubberBand } from '../interaction/touchGestures';
 
-export type InfoSheetState = 'expanded' | 'collapsed' | 'dismissed';
+export type InfoSheetState = 'expanded' | 'collapsed' | 'peek' | 'dismissed';
+
+/** v1.46 (C1) — phone sheet stops, lowest first. `half` is the reveal default. */
+export type InfoSheetStop = 'peek' | 'half' | 'full';
+const SHEET_STOPS: readonly InfoSheetStop[] = ['peek', 'half', 'full'];
+/** Mirrors `.info-panel--compact` max-heights in `main.scss`. */
+const SHEET_HALF_VH = 0.32;
+const SHEET_FULL_VH = 0.68;
+const SHEET_TOP_CLEARANCE_PX = 88;
 
 export class InfoPanel {
   private readonly el: HTMLElement;
@@ -13,10 +21,11 @@ export class InfoPanel {
   /** v1.42 — phone bottom-sheet grab handle (shown only in compact mode). */
   private readonly handle: HTMLButtonElement;
   private compact = false;
-  private expanded = false;
+  private stop: InfoSheetStop = 'half';
   private dragPointerId: number | null = null;
   private dragStartY = 0;
   private dragDy = 0;
+  private dragStops: readonly number[] = [];
   private suppressHandleClick = false;
   private readonly dragVelocity = new VelocityTracker();
   /** Notified when the visitor expands, collapses or swipes the sheet away. */
@@ -27,6 +36,7 @@ export class InfoPanel {
     this.el.className = 'info-panel';
     this.el.setAttribute('aria-live', 'polite');
     this.el.setAttribute('aria-label', 'Informationen zum aktuellen Werk');
+    this.el.dataset['sheetStop'] = 'half';
 
     this.eyebrow = document.createElement('p');
     this.eyebrow.className = 'info-panel__eyebrow';
@@ -103,36 +113,66 @@ export class InfoPanel {
     this.el.classList.toggle('info-panel--compact', compact);
     if (!compact) {
       this.cancelDrag();
-      this.setExpanded(false, false);
+      this.setStop('half', false);
     }
   }
 
   get isExpanded(): boolean {
-    return this.expanded;
+    return this.stop === 'full';
+  }
+
+  get sheetStop(): InfoSheetStop {
+    return this.stop;
   }
 
   /**
-   * v1.42 — phone bottom sheet: expanded shows more of the description and
-   * stays open until the visitor collapses or swipes it away.
+   * v1.42 — phone bottom sheet: expanded (full) shows more of the description
+   * and stays open until the visitor collapses or swipes it away. `false`
+   * returns to the half stop, the reveal default.
    */
   setExpanded(expanded: boolean, notify = true): void {
-    const next = expanded && this.compact;
-    if (next === this.expanded) return;
-    this.expanded = next;
-    this.el.classList.toggle('is-expanded', next);
-    this.handle.setAttribute('aria-expanded', String(next));
-    this.handle.setAttribute('aria-label', next ? 'Werkinformation verkleinern' : 'Werkinformation vergrößern');
-    if (!next) this.el.scrollTop = 0;
-    if (notify) this.onSheetChange?.(next ? 'expanded' : 'collapsed');
+    this.setStop(expanded ? 'full' : 'half', notify);
+  }
+
+  /** v1.46 (C1) — peek shows only the title; half and full scroll inside. */
+  setStop(stop: InfoSheetStop, notify = true): void {
+    const next: InfoSheetStop = this.compact ? stop : 'half';
+    if (next === this.stop) return;
+    if (next === 'peek') this.el.style.setProperty('--sheet-peek-height', `${this.measurePeekHeight().toFixed(1)}px`);
+    this.stop = next;
+    this.el.dataset['sheetStop'] = next;
+    this.el.classList.toggle('is-expanded', next === 'full');
+    this.el.classList.toggle('is-peek', next === 'peek');
+    this.handle.setAttribute('aria-expanded', String(next === 'full'));
+    this.handle.setAttribute('aria-label', next === 'full' ? 'Werkinformation verkleinern' : 'Werkinformation vergrößern');
+    if (next !== 'full') this.el.scrollTop = 0;
+    if (notify) this.onSheetChange?.(next === 'full' ? 'expanded' : next === 'peek' ? 'peek' : 'collapsed');
+  }
+
+  /** Handle, eyebrow and title stay visible in the peek stop. */
+  private measurePeekHeight(): number {
+    const paddingBottom = Number.parseFloat(getComputedStyle(this.el).paddingBottom) || 0;
+    return this.title.offsetTop + this.title.offsetHeight + paddingBottom;
+  }
+
+  /** Current stop heights (px), measured once per drag. */
+  private measureStopHeights(): number[] {
+    const viewport = window.innerHeight;
+    const rect = this.el.getBoundingClientRect();
+    const content = this.el.scrollHeight;
+    const peek = this.measurePeekHeight();
+    const half = Math.max(peek, Math.min(content, viewport * SHEET_HALF_VH));
+    const full = Math.max(half, Math.min(content, viewport * SHEET_FULL_VH, rect.bottom - SHEET_TOP_CLEARANCE_PX));
+    return [peek, half, full];
   }
 
   private onHandleClick = (): void => {
-    // Pointer drags resolve on pointerup; keyboard and plain taps toggle here.
+    // Pointer drags resolve on pointerup; keyboard and plain taps step here.
     if (this.suppressHandleClick) {
       this.suppressHandleClick = false;
       return;
     }
-    this.setExpanded(!this.expanded);
+    this.setStop(this.stop === 'half' ? 'full' : 'half');
   };
 
   private onHandlePointerDown = (event: PointerEvent): void => {
@@ -140,6 +180,7 @@ export class InfoPanel {
     this.dragPointerId = event.pointerId;
     this.dragStartY = event.clientY;
     this.dragDy = 0;
+    this.dragStops = this.measureStopHeights();
     this.suppressHandleClick = false;
     this.dragVelocity.reset();
     this.dragVelocity.add(event.timeStamp, 0, event.clientY);
@@ -150,22 +191,33 @@ export class InfoPanel {
     if (event.pointerId !== this.dragPointerId) return;
     this.dragDy = event.clientY - this.dragStartY;
     this.dragVelocity.add(event.timeStamp, 0, event.clientY);
-    // The sheet follows the finger down; upward pulls meet rubber-band resistance.
-    const shown = this.dragDy < 0 ? rubberBand(this.dragDy, 160) : this.dragDy;
+    // The sheet grows and shrinks with the finger between the peek and full
+    // stops; above full it meets rubber-band resistance, below peek it slides
+    // down to signal the dismiss.
+    const [peek = 0, , full = 0] = this.dragStops;
+    const start = this.dragStops[SHEET_STOPS.indexOf(this.stop)] ?? peek;
+    const height = start - this.dragDy;
+    const shownHeight = height > full ? full + rubberBand(height - full, 160) : Math.max(peek, height);
+    const slide = height < peek ? peek - height : 0;
     this.el.classList.add('is-dragging');
-    this.el.style.setProperty('--sheet-drag', `${shown.toFixed(1)}px`);
+    this.el.style.setProperty('--sheet-drag-height', `${shownHeight.toFixed(1)}px`);
+    this.el.style.setProperty('--sheet-drag', `${slide.toFixed(1)}px`);
   };
 
   private onHandlePointerUp = (event: PointerEvent): void => {
     if (event.pointerId !== this.dragPointerId) return;
     this.dragVelocity.add(event.timeStamp, 0, event.clientY);
-    const decision = resolveSheetRelease(this.dragDy, this.dragVelocity.velocity(event.timeStamp).y, this.expanded);
+    const release = resolveSheetStop(
+      SHEET_STOPS.indexOf(this.stop),
+      this.dragStops,
+      this.dragDy,
+      this.dragVelocity.velocity(event.timeStamp).y
+    );
     this.cancelDrag();
-    if (decision === 'toggle') return; // the following click toggles
+    if (release.kind === 'toggle') return; // the following click steps
     this.suppressHandleClick = true;
-    if (decision === 'expand') this.setExpanded(true);
-    else if (decision === 'collapse') this.setExpanded(false);
-    else if (decision === 'dismiss') this.onSheetChange?.('dismissed');
+    if (release.kind === 'dismiss') this.onSheetChange?.('dismissed');
+    else this.setStop(SHEET_STOPS[release.index] ?? 'half');
   };
 
   private onHandlePointerCancel = (event: PointerEvent): void => {
@@ -180,6 +232,7 @@ export class InfoPanel {
     this.dragDy = 0;
     this.el.classList.remove('is-dragging');
     this.el.style.removeProperty('--sheet-drag');
+    this.el.style.removeProperty('--sheet-drag-height');
   }
 
   private setContent(artwork: Artwork): void {
@@ -188,6 +241,9 @@ export class InfoPanel {
     this.meta.textContent = [artwork.medium, artwork.surface].filter(Boolean).join(' · ');
     this.description.textContent = artwork.description;
     this.credit.textContent = `© ${artwork.credit}`;
+    if (this.stop === 'peek') {
+      this.el.style.setProperty('--sheet-peek-height', `${this.measurePeekHeight().toFixed(1)}px`);
+    }
   }
 
   dispose(): void {

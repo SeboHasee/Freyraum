@@ -3155,6 +3155,8 @@ button {
   max-height: 32vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  // v1.46 (C1): scrolling inside the sheet never chains to the page (iOS).
+  overscroll-behavior: contain;
   pointer-events: auto;
 
   .info-panel__title {
@@ -3177,7 +3179,15 @@ button {
     max-height: min(68vh, calc(100dvh - var(--chrome-bottom) - 80px - var(--safe-top) - 88px));
   }
 
+  // v1.46 (C1): peek stop shows only the handle, eyebrow and title.
+  &.is-peek {
+    max-height: var(--sheet-peek-height, 7.5rem);
+    overflow-y: hidden;
+  }
+
   &.is-dragging {
+    max-height: var(--sheet-drag-height, 32vh) !important; // the sheet follows the finger
+    overflow-y: hidden;
     transform: translateY(var(--sheet-drag, 0px)) !important; // finger wins over reveal transforms
     transition: none !important;
   }
@@ -4772,6 +4782,14 @@ button {
 
   .info-panel.info-panel--compact.is-revealed:not(.is-transitioning) {
     transform: translateY(0);
+  }
+
+  // v1.46 (C1): the sheet glides between its peek, half and full stops.
+  .info-panel.info-panel--compact.is-revealed {
+    transition:
+      opacity var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      transform var(--dur-chrome-reveal) var(--ease-chrome-reveal),
+      max-height var(--dur-content) var(--ease-gallery-out);
   }
 
   // Preserve the navigation content-swap fade (`.is-transitioning`, added by

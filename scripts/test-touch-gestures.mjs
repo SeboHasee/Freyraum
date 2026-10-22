@@ -179,17 +179,24 @@ const close = (actual, expected, epsilon, message) =>
   assert.ok(wrapped.beta > 179, 'drift follows the short way across ±180°');
 }
 
-// Phone info sheet: tap toggles, pull/flick up expands, down collapses then dismisses.
+// v1.46 (C1): phone info sheet with three stops (peek, half, full).
 {
-  assert.equal(gestures.resolveSheetRelease(3, 0, false), 'toggle', 'a tap on the handle toggles');
-  assert.equal(gestures.resolveSheetRelease(-60, 0, false), 'expand', 'pulling up expands');
-  assert.equal(gestures.resolveSheetRelease(-20, -900, false), 'expand', 'a short upward flick expands');
-  assert.equal(gestures.resolveSheetRelease(-60, 0, true), 'stay', 'pulling up an expanded sheet keeps it');
-  assert.equal(gestures.resolveSheetRelease(60, 0, true), 'collapse', 'pulling down collapses an expanded sheet');
-  assert.equal(gestures.resolveSheetRelease(60, 0, false), 'dismiss', 'pulling down a collapsed sheet dismisses it');
-  assert.equal(gestures.resolveSheetRelease(20, 900, false), 'dismiss', 'a short downward flick dismisses');
-  assert.equal(gestures.resolveSheetRelease(20, 100, false), 'stay', 'a short slow drag springs back');
-  assert.equal(gestures.resolveSheetRelease(20, -900, false), 'stay', 'a flick against the drag direction does nothing');
+  const stops = [110, 270, 520];
+  const sheet = (from, dy, v) => gestures.resolveSheetStop(from, stops, dy, v);
+  assert.deepEqual(sheet(1, 3, 0), { kind: 'toggle' }, 'a tap on the handle toggles');
+  assert.deepEqual(sheet(1, -90, 0), { kind: 'stop', index: 2 }, 'pulling up from half opens full');
+  assert.deepEqual(sheet(0, -60, 0), { kind: 'stop', index: 1 }, 'pulling up from peek opens half');
+  assert.deepEqual(sheet(0, -420, 0), { kind: 'stop', index: 2 }, 'a long pull from peek reaches full');
+  assert.deepEqual(sheet(0, -20, -900), { kind: 'stop', index: 1 }, 'a short upward flick moves one stop up');
+  assert.deepEqual(sheet(0, -60, -2400), { kind: 'stop', index: 2 }, 'a strong upward flick skips to full');
+  assert.deepEqual(sheet(2, -60, 0), { kind: 'stop', index: 2 }, 'pulling up a full sheet keeps it');
+  assert.deepEqual(sheet(2, 90, 0), { kind: 'stop', index: 1 }, 'pulling down from full returns to half');
+  assert.deepEqual(sheet(1, 90, 0), { kind: 'stop', index: 0 }, 'pulling down from half shows the peek');
+  assert.deepEqual(sheet(0, 60, 0), { kind: 'dismiss' }, 'pulling down the peek dismisses');
+  assert.deepEqual(sheet(1, 260, 0), { kind: 'dismiss' }, 'pulling far below the peek dismisses');
+  assert.deepEqual(sheet(0, 20, 900), { kind: 'dismiss' }, 'a short downward flick on the peek dismisses');
+  assert.deepEqual(sheet(1, 20, 100), { kind: 'stop', index: 1 }, 'a short slow drag springs back');
+  assert.deepEqual(sheet(1, 20, -900), { kind: 'stop', index: 1 }, 'a flick against the drag direction does nothing');
 }
 
 // v1.43: wheel deltas in line/page mode zoom like pixel mode; huge events are capped.

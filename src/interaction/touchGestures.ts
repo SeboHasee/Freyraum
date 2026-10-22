@@ -224,27 +224,42 @@ export function resolveSwipeDirection(
   return dx < 0 ? 1 : -1;
 }
 
-export type SheetRelease = 'toggle' | 'expand' | 'collapse' | 'dismiss' | 'stay';
+export type SheetStopRelease =
+  | { kind: 'toggle' }
+  | { kind: 'dismiss' }
+  | { kind: 'stop'; index: number };
 
 /**
- * v1.42 — phone bottom sheet (info panel) release decision from the vertical
- * drag `dy` (down positive, px) and release velocity `velocityY` (px/s).
- * A tap toggles; a pull or flick up expands; down collapses an expanded
- * sheet, or dismisses a collapsed one. Short, slow drags spring back.
+ * v1.46 (C1) — phone bottom sheet with ascending stop heights (peek, half,
+ * full). `dy` is the handle drag (down positive, px) from `startIndex`,
+ * `velocityY` the release velocity (px/s). A tap toggles; short slow drags
+ * and flicks against the drag spring back; otherwise the shared momentum
+ * projection (`pickSnapTarget`) picks the stop, moving at least one stop in
+ * the drag direction. Down from the lowest stop dismisses.
  */
-export function resolveSheetRelease(
+export function resolveSheetStop(
+  startIndex: number,
+  stopHeights: readonly number[],
   dy: number,
   velocityY: number,
-  expanded: boolean,
   distanceThreshold = 44,
   flickVelocity = FLICK_VELOCITY
-): SheetRelease {
-  if (!exceedsTapSlop(0, dy)) return 'toggle';
+): SheetStopRelease {
+  if (!exceedsTapSlop(0, dy)) return { kind: 'toggle' };
+  const last = stopHeights.length - 1;
+  const from = Math.max(0, Math.min(last, startIndex));
   const flickUp = velocityY < -flickVelocity && dy < 0;
   const flickDown = velocityY > flickVelocity && dy > 0;
-  if (dy < -distanceThreshold || flickUp) return expanded ? 'stay' : 'expand';
-  if (dy > distanceThreshold || flickDown) return expanded ? 'collapse' : 'dismiss';
-  return 'stay';
+  const moved = Math.abs(dy) > distanceThreshold || flickUp || flickDown;
+  if (!moved || last < 0) return { kind: 'stop', index: from };
+  const height = (stopHeights[from] ?? 0) - dy;
+  const lowest = stopHeights[0] ?? 0;
+  if (dy > 0 && (from === 0 || height < lowest - distanceThreshold)) return { kind: 'dismiss' };
+  const target = pickSnapTarget(height, -velocityY, stopHeights, { min: lowest, max: stopHeights[last] });
+  let index = target === null ? from : stopHeights.indexOf(target);
+  if (dy < 0 && index <= from) index = Math.min(last, from + 1);
+  if (dy > 0 && index >= from) index = Math.max(0, from - 1);
+  return { kind: 'stop', index };
 }
 
 /** Detects two taps close in time and space. */
