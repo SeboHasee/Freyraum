@@ -22,6 +22,8 @@ async function loadTsModule(relativePath) {
 const gestures = await loadTsModule('src/interaction/touchGestures.ts');
 const panorama = await loadTsModule('src/hub/hubPanorama.ts');
 const orientation = await loadTsModule('src/gallery/deviceOrientation.ts');
+const math = await loadTsModule('src/utils/math.ts');
+const zoomIndicator = await loadTsModule('src/ui/ZoomIndicator.ts');
 
 const close = (actual, expected, epsilon, message) =>
   assert.ok(Math.abs(actual - expected) <= epsilon, `${message}: ${actual} ≉ ${expected}`);
@@ -219,4 +221,39 @@ const close = (actual, expected, epsilon, message) =>
   assert.equal(gestures.ZOOM_STEP_FACTOR, 1.25, 'button/key step stays 25 %');
 }
 
-console.log('Touch gesture, hub panorama, device-tilt, info-sheet, wheel and zoom-curve checks passed.');
+// v1.46 D3: zoom readout rounds the target magnification; invalid values read as 100 %.
+{
+  assert.equal(zoomIndicator.formatZoomPercent(1), 100);
+  assert.equal(zoomIndicator.formatZoomPercent(1.25), 125);
+  assert.equal(zoomIndicator.formatZoomPercent(6), 600);
+  assert.equal(zoomIndicator.formatZoomPercent(0.8), 80);
+  assert.equal(zoomIndicator.formatZoomPercent(Number.NaN), 100);
+  assert.equal(zoomIndicator.formatZoomPercent(0), 100);
+}
+
+// v1.46 D5: gallery zoom moves keep one screen point fixed only when the pan
+// cascade shares the zoom's λ (GalleryManager `coupledZoomPan`). With the old
+// pan λ 5 against zoom λ 4 the reset slid sideways before shrinking.
+{
+  const fixedPointDrift = (panLambda) => {
+    const zoomLambda = 4;
+    const z0 = 4; const zT = 10; const x0 = 2.4; const xT = 0;
+    let zoom = z0; let cameraZ = z0; let pan = x0; let cameraX = x0;
+    const fixed = (x0 * zT - xT * z0) / (zT - z0);
+    const screen0 = (fixed - x0) / z0;
+    let drift = 0;
+    for (let frame = 0; frame < 180; frame += 1) {
+      const dt = 1 / 60;
+      zoom = math.smoothDamp(zoom, zT, zoomLambda, dt);
+      cameraZ = math.smoothDamp(cameraZ, zoom, zoomLambda, dt);
+      pan = math.smoothDamp(pan, xT, panLambda, dt);
+      cameraX = math.smoothDamp(cameraX, pan, panLambda, dt);
+      drift = Math.max(drift, Math.abs((fixed - cameraX) / cameraZ - screen0));
+    }
+    return drift;
+  };
+  assert.ok(fixedPointDrift(5) > 0.02, 'mismatched λ drifts (regression reference)');
+  assert.ok(fixedPointDrift(4) < 1e-9, 'shared λ keeps the zoom fixed point on screen');
+}
+
+console.log('Touch gesture, hub panorama, device-tilt, info-sheet, wheel, zoom-curve, zoom-readout and reset fixed-point checks passed.');

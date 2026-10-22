@@ -1235,6 +1235,12 @@ try {
   await waitFor("document.querySelector('.gallery-room-view__scene').style.transform.includes('scale(1.25)')");
   let camera = await evaluate("document.querySelector('.gallery-room-view__scene').style.transform");
   assert.match(camera, /scale\(1\.25\)/, 'zoom control zooms the photo camera');
+  assert.equal(
+    await evaluate("document.querySelector('.gallery-room-view__zoom-indicator .zoom-indicator__badge').textContent"),
+    '125\u202f%',
+    'zoom indicator shows the target magnification inside the room dialog'
+  );
+  await waitFor(`document.querySelector('.gallery-room-view__zoom-indicator [role="status"]').textContent === 'Zoom 125 Prozent'`);
   await waitForArtworkCenter();
   let artworkScreenCenter = await readArtworkScreenCenter();
   assert.ok(
@@ -1953,6 +1959,11 @@ try {
     for (let step = 0; step < 14; step += 1) zoomIn.click();
   })()`);
   await waitFor("document.querySelector('.gallery-canvas').classList.contains('is-pan-available')");
+  await waitFor(`(() => {
+    const live = document.querySelector('.zoom-indicator:not(.gallery-room-view__zoom-indicator) [role="status"]');
+    const match = /^Zoom (\\d+) Prozent$/.exec(live?.textContent ?? '');
+    return Boolean(match) && Number(match[1]) > 100;
+  })()`);
   await waitForFrames(60);
   await command('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 720, y: 450 });
   assert.equal(

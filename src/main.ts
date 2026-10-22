@@ -20,6 +20,7 @@ import { InfoPanel } from './ui/InfoPanel';
 import { NavigationControls } from './ui/NavigationControls';
 import { HintText } from './ui/HintText';
 import { ZoomControls } from './ui/ZoomControls';
+import { ZoomIndicator } from './ui/ZoomIndicator';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { PreferencesPanel } from './ui/PreferencesPanel';
 import { ChromeVisibilityManager } from './ui/ChromeVisibilityManager';
@@ -1270,6 +1271,7 @@ async function main(): Promise<void> {
   applyCompactInfo(initialCaps.layoutTier);
   const navControls = new NavigationControls(app);
   const zoomControls = new ZoomControls(app, galleryManager);
+  const galleryZoomIndicator = new ZoomIndicator(app);
   const fullscreenButton = new FullscreenButton(app, document.documentElement);
   const preferencesPanel = new PreferencesPanel(app, preferences);
   // v1.41 — motion-sensor tilt for the interactive gallery. The unit tilt is
@@ -1389,11 +1391,13 @@ async function main(): Promise<void> {
       delete document.documentElement.dataset['phoneImmersive'];
     }
     galleryManager.handleViewportMetricsChanged();
+    galleryZoomIndicator.rebase();
     // The chrome slides back in; measure again once its transition settled.
     if (immersiveRefitTimer !== null) clearTimeout(immersiveRefitTimer);
     immersiveRefitTimer = setTimeout(() => {
       immersiveRefitTimer = null;
       galleryManager.handleViewportMetricsChanged();
+      galleryZoomIndicator.rebase();
     }, PHONE_IMMERSIVE_SETTLE_MS);
     diagnostics.info('interaction', 'phone-immersive', immersive ? 'Phone chrome hidden' : 'Phone chrome shown', {
       immersive,
@@ -2006,6 +2010,7 @@ async function main(): Promise<void> {
     hintText.updateHint();
     const artworkViewport = measureArtworkViewport();
     galleryManager.handleViewportMetricsChanged();
+    galleryZoomIndicator.rebase();
     diagnostics.info('layout', 'resize', 'Viewport resized', {
       tier: newCaps.layoutTier,
       w: newCaps.viewportW,
@@ -2271,7 +2276,10 @@ async function main(): Promise<void> {
     // Phone nav arrows only reserve artwork space while chrome is pinned
     // visible, so refit once the new chrome mode has been applied.
     if (nextPrefs.alwaysShowChrome !== previousPrefs.alwaysShowChrome && phoneTouchQuery?.matches) {
-      requestAnimationFrame(() => galleryManager.handleViewportMetricsChanged());
+      requestAnimationFrame(() => {
+        galleryManager.handleViewportMetricsChanged();
+        galleryZoomIndicator.rebase();
+      });
     }
     const audioChanged =
       nextPrefs.audioMuted !== previousPrefs.audioMuted ||
@@ -2416,6 +2424,7 @@ async function main(): Promise<void> {
       galleryInteractive = false;
       syncDeviceTiltActive();
       syncDeepLinkUrl();
+      galleryZoomIndicator.rebase();
     },
   });
   museumHub.onActivate(() => {
@@ -2535,6 +2544,9 @@ async function main(): Promise<void> {
     // v0.15 — pass DOMHighResTimeStamp so GalleryManager.update() can
     // compute a frame-rate-independent dt for exponential smoothing.
     const galleryChanged = galleryManager.update(now);
+    if (galleryInteractive && !galleryRoomView?.isVisible) {
+      galleryZoomIndicator.report(galleryManager.getZoomMagnification());
+    }
     if (!lightingChanged && !galleryChanged && !galleryManager.hasReadinessWork()) {
       return;
     }

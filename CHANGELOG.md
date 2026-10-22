@@ -3,6 +3,23 @@
 
 ## Unreleased — v1.46 next development round (2026-10-22)
 
+- **Shareable artwork links:** `?artwork=<id>` preselects an artwork in the
+  museum hub, `&view=gallery` opens it in the gallery after Start. While
+  visiting, the address follows the current artwork, so copying the URL shares
+  exactly what is on screen. Unknown or malformed IDs are ignored
+  (`docs/QUERY_PARAMETERS.md`, `npm run test:deep-links`).
+- **CI runs the pure checks:** `npm test` now runs all no-browser checks
+  (quality CI already called it, but the script did not exist). This exposed
+  and fixed a stale `test:gallery-room-view` source check from the lazy
+  editor change.
+- **Zoom readout:** zooming in the gallery or the photo room briefly shows the
+  zoom level ("125 %", 100 % = fitted view) at the top and announces the
+  settled value once to screen readers.
+- **Gallery zoom no longer slides sideways:** after a double-click zoom near an
+  edge, "reset" (button, `0`, second double-click) used to glide toward the
+  centre before shrinking, because pan eased faster than zoom. Zoom moves now
+  ease pan and zoom together, so the view shrinks about one fixed point — the
+  same fix the photo room got in v1.44.
 - **Smaller deployed download:** `public/customer-artworks.js` no longer
   carries base64 copies of every original (70.8 MB → 19 KB). The local
   `file://` preview keeps its embedded fallback

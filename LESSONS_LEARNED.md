@@ -3,6 +3,20 @@
 
 ## 2026-10-22 — Download size lessons
 
+### Lesson 141 — A test that CI never runs goes stale silently
+
+Quality CI called `npm run test --if-present`, but there was no `test`
+script, so no pure check ran in CI. `test:gallery-room-view` had been failing
+since the B3 lazy-editor change (it looked for `new EditorGalleryRoomViews`).
+`npm test` now aggregates every no-browser check; new pure checks belong in it.
+
+### Lesson 140 — A fix in one view is a search key for its siblings
+
+v1.44 fixed the photo room's sideways reset drift (pan and zoom eased with
+different λ). The WebGL gallery used the same pattern and kept the bug for two
+more releases. After fixing a motion or geometry bug, search the other camera
+and gesture paths for the same structure in the same change.
+
 ### Lesson 139 — A width breakpoint does not describe a phone in landscape
 
 "Phone" rules keyed to `max-width: 599px` never reached an 844×390 phone,

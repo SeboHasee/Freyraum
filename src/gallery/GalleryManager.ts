@@ -348,6 +348,13 @@ export class GalleryManager {
   private inspectionMode = false;
   private pendingResetAfterArtworkLoad = false;
   private lastResetFitZoom = DEFAULT_CAMERA_Z;
+  /**
+   * v1.46 D5 — true while a zoom move (buttons, keys, double-tap, reset) also
+   * moves the pan. Pan then uses the zoom's smoothing so camera x/y stay affine
+   * in camera z: one screen point stays fixed and the view never slides
+   * sideways before it shrinks (same root cause as the v1.44 room drift).
+   */
+  private coupledZoomPan = false;
   /** Optional callback used to mark navigation events for FrameBudgetMonitor. */
   private frameBudgetNavigationMarker: FrameBudgetMarker | null = null;
   /**
@@ -695,6 +702,7 @@ export class GalleryManager {
   /** Starts a finger-driven pan/pinch: the camera follows the gesture directly. */
   beginDirectGesture(): void {
     this.directGesture = true;
+    this.coupledZoomPan = false;
     this.panMomentumActive = false;
     this.panMomentumVelocityX = 0;
     this.panMomentumVelocityY = 0;
@@ -792,6 +800,7 @@ export class GalleryManager {
     this.targetPanY += ndcY * deltaHalfH;
     this.targetZoom = nextZ;
     this.clampPanTargets(metrics, bounds);
+    this.coupledZoomPan = true;
     this.reportPanAvailability();
     this.markRenderDirty(4);
   }
@@ -843,6 +852,7 @@ export class GalleryManager {
     const bounds = this.getZoomBounds(metrics);
     this.targetZoom = this.clampZoom(this.targetZoom / factor, bounds);
     this.clampPanTargets(metrics, bounds);
+    this.coupledZoomPan = true;
     this.reportPanAvailability();
     this.markRenderDirty(4);
   }
@@ -854,6 +864,7 @@ export class GalleryManager {
     const { x, y } = this.getPanLimits(this.targetZoom, metrics, bounds);
     this.targetPanX = clamp(this.targetPanX + deltaX, -x, x);
     this.targetPanY = clamp(this.targetPanY + deltaY, -y, y);
+    this.coupledZoomPan = false;
     this.markRenderDirty(4);
   }
 
@@ -1866,13 +1877,26 @@ export class GalleryManager {
       dt
     );
 
-    // Camera pan — λ=5.0 → ~600 ms settle (connected to input).
-    this.panX = smoothDamp(this.panX, this.targetPanX, LAMBDA_CAMERA_PAN, dt);
-    this.panY = smoothDamp(this.panY, this.targetPanY, LAMBDA_CAMERA_PAN, dt);
-    this.camera.position.x = smoothDamp(this.camera.position.x, this.panX, LAMBDA_CAMERA_PAN, dt);
-    this.camera.position.y = smoothDamp(this.camera.position.y, this.panY, LAMBDA_CAMERA_PAN, dt);
+    // Camera pan — λ=5.0 → ~600 ms settle (connected to input); during a
+    // coupled zoom move it shares the zoom's λ (see `coupledZoomPan`).
+    const panLambda = this.coupledZoomPan ? LAMBDA_CAMERA_ZOOM : LAMBDA_CAMERA_PAN;
+    this.panX = smoothDamp(this.panX, this.targetPanX, panLambda, dt);
+    this.panY = smoothDamp(this.panY, this.targetPanY, panLambda, dt);
+    this.camera.position.x = smoothDamp(this.camera.position.x, this.panX, panLambda, dt);
+    this.camera.position.y = smoothDamp(this.camera.position.y, this.panY, panLambda, dt);
+    if (this.coupledZoomPan
+      && Math.abs(this.camera.position.z - this.targetZoom) < 1e-4
+      && Math.abs(this.camera.position.x - this.targetPanX) < 1e-4
+      && Math.abs(this.camera.position.y - this.targetPanY) < 1e-4) {
+      this.coupledZoomPan = false;
+    }
     this.clampArtworkDepthPose();
     return this.consumeRenderDirty() || this.animationSnapshotChanged(before);
+  }
+
+  /** v1.46 D3 — target magnification relative to the fitted view (1 = fit). */
+  getZoomMagnification(): number {
+    return this.lastResetFitZoom / Math.max(MIN_CAMERA_Z, this.targetZoom);
   }
 
   resetView(): void {
@@ -1883,6 +1907,7 @@ export class GalleryManager {
     this.targetPanY = 0;
     this.targetZoom = bounds.resetFitZoom;
     this.lastResetFitZoom = bounds.resetFitZoom;
+    this.coupledZoomPan = true;
     this.targetX = 0;
     this.targetY = 0;
     this.reportPanAvailability();

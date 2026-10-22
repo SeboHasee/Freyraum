@@ -393,8 +393,9 @@ Linux run them under `xvfb-run -a`.
 | `npm run test:local-project` | – | desktop project store: refusals, all-or-nothing writes, history/restore, rename retry, importer `--root` | quality, desktop |
 | `npm run test:save-service` | – | Cloudflare save service against a fake GitHub | – |
 | `npm run test:gallery-room-view` | – | room-photo import/staging, config, projection, and save/export invariants | – |
-| `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, keyboard, close/focus | – |
-| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve | – |
+| `npm run test:gallery-room-view:browser` | yes | local `file://` room-photo decode, responsive controls, pan/zoom/pinch/reset, touch flick momentum to the pan limit, zoom readout (room + gallery), keyboard, close/focus | – |
+| `npm run test:touch-gestures` | – | shared touch physics, hub panorama math and side-wall reachability, device-tilt normalisation, info-sheet release, wheel and shared zoom curve, zoom readout, gallery zoom fixed point | – |
+| `npm run test:deep-links` | – | `?artwork=` / `view=gallery` read and build rules | – |
 | `npm run measure:room-zoom` | yes | zoom work table (raster/paint/decode/style/layout), no assertions | – |
 | `npm run test:mobile-browser` | yes | phone panorama/strip/drag safety, theme-color, chrome coverage, phone menu, tap-to-hide immersive view, info sheet stops, photo-room swipe, landscape gallery rail | – |
 | `npm run test:validate-deploy` | – | deploy content check | – |
@@ -405,6 +406,11 @@ Linux run them under `xvfb-run -a`.
 | `npm run smoke:desktop-package -- --exe <app>` | Electron | the **packaged** app: bundled importer, editor, save label, layout unchanged | desktop (Windows unpacked + installed) |
 | `npm run test:deploy-smoke -- <url>` | yes | a deployed gallery: rooms, artworks, background, no 404s | deploy (`smoke` job) |
 | `npm run validate:visual` / `validate:museum-hub:visual` | yes | Type A screenshots against a local baseline | – |
+
+`npm test` runs every no-browser check (`test:front-wall-aspect`,
+`test:gallery-room-view`, `test:touch-gestures`, `test:deep-links`,
+`test:save-service`, `test:validate-deploy`); quality CI calls it after the
+build. Add new pure checks to that script so CI runs them.
 
 Workflows: `quality-and-doc-drift.yml` (every pull request and `main`),
 `deploy-pages.yml` (`main` → GitHub Pages, then smoke), `desktop-release.yml`

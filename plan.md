@@ -31,14 +31,19 @@ Order: A → B1–B3 → C1–C2 → D1 → C3–C6 → B4, D2–D5 → E → F 
 - [x] C3 Touch phones in landscape: right-hand timeline rail, utilities in
       the phone menu, immersive tap; artwork area 744×118 → 744×334 px at
       844×390 (the desktop `--chrome-bottom` of 200 px no longer applies).
-- [ ] C5 hub pinch + edge preview; C6 remaining flick test in the photo-room
-      suite.
+- [ ] C5 hub pinch + edge preview.
+- [x] C6 Photo-room flick test: a fast one-finger flick keeps moving after
+      release and stops exactly at the pan limit.
 - [x] B4a Background photos as same-size WebP copies (hub 11.2 MB → 176 KB;
       visit 19.9 → 6.0 MB desktop, 18.6 → 4.8 MB phone).
 - [ ] B4b Lazy hub artwork loading for off-screen phone panorama artworks.
-- [ ] D2 per-frame repaint; D3 zoom indicator; D4 pointer-anchored wheel
-      modifier; D5 gallery reset drift.
-- [ ] E (200 % text, reduce chrome, deep links, device overlay, shadow-light
+- [x] D3 Zoom readout (`src/ui/ZoomIndicator.ts`, gallery + photo room,
+      polite announcement); D5 gallery reset drift fixed (`coupledZoomPan`:
+      pan shares the zoom λ during zoom moves; pure fixed-point check).
+- [x] E3 Deep links `?artwork=<id>&view=gallery` (`src/navigation/deepLink.ts`,
+      `npm run test:deep-links`).
+- [ ] D2 per-frame repaint; D4 pointer-anchored wheel modifier.
+- [ ] E (200 % text, reduce chrome, device overlay, shadow-light
       harness stop), F (CI split, baselines, Lighthouse, dev-tool upgrades),
       G (content; needs the customer).
 

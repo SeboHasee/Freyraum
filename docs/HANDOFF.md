@@ -97,12 +97,17 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   (`scripts/build-web-images.mjs`, runtime choice in
   `src/utils/artworkImageSources.ts`), B3 lazy editor chunk + bundle budget,
   C1 info-sheet stops, C2 photo-room swipe, C3 landscape rail, C4
-  tap-to-hide phone chrome,
+  tap-to-hide phone chrome, C6 flick test, D3 zoom readout
+  (`src/ui/ZoomIndicator.ts`), D5 gallery zoom fixed point
+  (`GalleryManager.coupledZoomPan`), E3 deep links
+  (`src/navigation/deepLink.ts`),
   B4a WebP background copies
   (`validate:deploy` checks them; the editor's calibration view keeps the
   original PNG). Numbers: `FINDINGS.md` (v1.46).
-- Next in order: D1 split-layer raster, C5, C6, B4b (lazy hub artworks),
-  D2–D5, E, F; G needs the customer. Checklist: `plan.md` →
+- Next in order: D1 split-layer raster, C5, D2, D4, E (except E3), F;
+  B4b deliberately skipped (four artworks share URLs with the gallery, so the
+  saving is small and the hub readiness gate would need rework); G needs the
+  customer. Checklist: `plan.md` →
   "Next development round".
 - Deploy note: CI's `npm ci` installs sharp, so `import:artworks` builds the
   WebP variants; without sharp the site falls back to the originals with a

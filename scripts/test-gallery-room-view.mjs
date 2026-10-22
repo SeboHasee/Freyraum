@@ -646,7 +646,7 @@ assert.match(
 );
 assert.match(
   editorSource,
-  /new EditorGalleryRoomViews/,
+  /new \(this\.requireEditorModules\(\)\.EditorGalleryRoomViews\)/,
   'the room tab exposes the photo-room editor'
 );
 assert.match(

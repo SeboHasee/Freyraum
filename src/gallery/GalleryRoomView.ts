@@ -3,6 +3,7 @@ import type { GalleryRoomView as GalleryRoomViewConfig } from '../config/museumH
 import { resolveArtworkImageSources } from '../utils/artworkImageSources';
 import { smoothDamp } from '../utils/math';
 import { webBackgroundUrl } from '../utils/webBackgrounds';
+import { ZoomIndicator } from '../ui/ZoomIndicator';
 import { projectGalleryRoomArtwork } from './galleryRoomViewGeometry';
 import {
   DoubleTapDetector,
@@ -100,6 +101,7 @@ export class GalleryRoomView {
   private readonly closeButton: HTMLButtonElement;
   private readonly utilityControls: HTMLDivElement;
   private readonly timelineHost: HTMLDivElement;
+  private readonly zoomIndicator: ZoomIndicator;
   private readonly resizeObserver: ResizeObserver | null;
   private readonly pointers = new Map<number, PhotoPointer>();
   private readonly motionPreference: MediaQueryList;
@@ -281,6 +283,7 @@ export class GalleryRoomView {
     status.setAttribute('aria-live', 'polite');
     this.status = status;
     root.append(scene, header, utilityControls, timelineHost, zoomControls, status);
+    this.zoomIndicator = new ZoomIndicator(root, 'gallery-room-view__zoom-indicator');
     container.appendChild(root);
 
     this.resizeObserver = typeof ResizeObserver === 'undefined'
@@ -375,6 +378,7 @@ export class GalleryRoomView {
     this.element.hidden = !this.visible;
     this.element.setAttribute('aria-hidden', String(!this.visible));
     if (!this.visible) this.disableDeviceMotionTilt();
+    this.zoomIndicator.rebase();
     this.updateTimelinePlacement();
     this.onVisibilityChange(this.visible);
     if (this.visible) {
@@ -395,6 +399,7 @@ export class GalleryRoomView {
     this.disposed = true;
     if (this.cameraAnimationFrame) window.cancelAnimationFrame(this.cameraAnimationFrame);
     if (this.cameraSettleTimer) window.clearTimeout(this.cameraSettleTimer);
+    this.zoomIndicator.dispose();
     this.disableDeviceMotionTilt();
     this.resizeObserver?.disconnect();
     window.removeEventListener('resize', this.handleResize);
@@ -487,6 +492,7 @@ export class GalleryRoomView {
       this.cameraOffsetY = Math.min(0, Math.max(-maxOffsetY, this.cameraOffsetY));
     }
     this.scene.style.transform = `translate3d(${this.cameraOffsetX}px, ${this.cameraOffsetY}px, 0) scale(${this.cameraScale})`;
+    this.zoomIndicator.report(this.cameraAnimationTargetScale ?? this.cameraScale);
     this.markCameraMoving();
     this.syncPanCursor();
     const atMinimum = this.cameraScale <= MIN_CAMERA_SCALE;

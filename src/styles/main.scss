@@ -3395,6 +3395,52 @@ button {
   box-shadow: var(--shadow-soft);
 }
 
+.zoom-indicator {
+  position: fixed;
+  top: calc(var(--chrome-top) + 8px);
+  left: 50%;
+  z-index: 101;
+  pointer-events: none;
+  opacity: 0;
+  translate: -50% -4px;
+  transition: opacity var(--dur-fast) var(--ease-out), translate var(--dur-fast) var(--ease-out);
+}
+
+.zoom-indicator.is-visible {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+.zoom-indicator__badge {
+  display: inline-block;
+  min-width: 4.5em;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.gallery-room-view .zoom-indicator.gallery-room-view__zoom-indicator {
+  position: absolute;
+  top: calc(var(--safe-top) + 72px);
+  z-index: 1002;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zoom-indicator,
+  .zoom-indicator.is-visible {
+    translate: -50% 0;
+  }
+}
+
 .zoom-controls__btn {
   width: 44px;
   height: 44px;

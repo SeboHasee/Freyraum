@@ -3,6 +3,15 @@
 
 ## 2026-10-22 — v1.46 download size and phone feel
 
+- **Gallery reset drift (D5) had the v1.44 room cause.** `GalleryManager`
+  eased camera z with two λ 4 stages and camera x/y with two λ 5 stages. A
+  zoom move that also changes pan (reset, button/key zoom with clamped pan,
+  double-click) therefore reached the target pan before the target zoom: the
+  view slid toward the centre and then shrank. Simulated reset from 2.5× at an
+  edge: the zoom's fixed point wandered by 0.042 (screen units of z, ≈ 5–8 % of
+  the half width) with λ 5, 0 with a shared λ. Fix: `coupledZoomPan` uses the
+  zoom λ for pan during such moves; pure pans and finger gestures keep λ 5 /
+  direct follow. Guard: `npm run test:touch-gestures`.
 - **The deployed site shipped every original twice.** `customer-artworks.js`
   embedded each original as base64 `webglImage` (+33 %) for the `file://`
   preview, and the same file went to Pages: 70,775,176 bytes before the first
