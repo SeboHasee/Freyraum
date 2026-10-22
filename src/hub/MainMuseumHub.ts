@@ -51,13 +51,14 @@ import {
   panoramaPanLimit,
   stripFractionForPan,
 } from './hubPanorama';
-import { createEditorTabs, type EditorTabs } from './editor/editorTabs';
-import { EditorRoomBar } from './editor/roomBar';
-import { EditorArtworkLibrary, type LibraryArtwork, type LibraryPlace } from './editor/artworkLibrary';
-import { EditorSaveTab } from './editor/saveTab';
-import { EditorGalleryRoomViews } from './editor/galleryRoomViews';
-import { PlacementController, type PlacementArtwork, type PlacementPlace } from './editor/placementController';
-import { EditorToast } from './editor/editorToast';
+import type { EditorTabs } from './editor/editorTabs';
+import type { EditorRoomBar } from './editor/roomBar';
+import type { EditorArtworkLibrary, LibraryArtwork, LibraryPlace } from './editor/artworkLibrary';
+import type { EditorSaveTab } from './editor/saveTab';
+import type { EditorGalleryRoomViews } from './editor/galleryRoomViews';
+import type { PlacementController, PlacementArtwork, PlacementPlace } from './editor/placementController';
+import type { EditorToast } from './editor/editorToast';
+import type { EditorModules } from './editor/editorModules';
 import {
   countLabel,
   placeLabel,
@@ -103,7 +104,7 @@ import {
   shouldRunVisiblePixelProbe,
 } from '../utils/sourceToPixelOutcome';
 import { EditorViewport } from './editorViewport';
-import { OnlineEditor, type BackgroundOption } from './editor/onlineEditor';
+import type { OnlineEditor, BackgroundOption } from './editor/onlineEditor';
 import { usesProjectFolderLayout } from '../online/desktopBridge';
 import type { PendingArtwork } from './editor/pendingUploads';
 import {
@@ -371,6 +372,7 @@ export class MainMuseumHub {
   private editorBackgroundObjectUrl: string | null = null;
   /** v1.38 online editing (login, uploads, publish); null outside the editor. */
   private onlineEditor: OnlineEditor | null = null;
+  private readonly editorModules: EditorModules | null;
   private editorReadOnly = false;
   private editorEditablePanels: HTMLElement[] = [];
   private readonly editorArtworkObjectUrls = new Map<string, string>();
@@ -382,10 +384,12 @@ export class MainMuseumHub {
     app: HTMLElement,
     resolution: MuseumHubResolution,
     _preset: QualityPreset,
-    artworks: readonly Artwork[] = []
+    artworks: readonly Artwork[] = [],
+    editorModules: EditorModules | null = null
   ) {
     this.resolution = resolution;
     this.artworks = artworks;
+    this.editorModules = editorModules;
     this.calibrating = isCalibrationRequested();
     this.debugGeometry = isHubDebugRequested();
     // The editor also shows empty rooms, so its room list can exceed the pages.
@@ -2788,13 +2792,21 @@ export class MainMuseumHub {
     this.renderEditorViewportHandles();
   }
 
+  /** v1.46 (B3): editor classes come from the lazily loaded editor chunk. */
+  private requireEditorModules(): EditorModules {
+    if (!this.editorModules) {
+      throw new Error('MainMuseumHub: the placement editor needs the editor chunk (src/hub/editor/editorModules.ts) before construction.');
+    }
+    return this.editorModules;
+  }
+
   private buildCalibrationPanel(hub: HTMLElement): void {
     const panel = document.createElement('div');
     panel.className = 'museum-hub__calibration';
     panel.setAttribute('role', 'region');
     panel.setAttribute('aria-labelledby', 'calibration-title');
     this.calibrationPanel = panel;
-    this.onlineEditor = new OnlineEditor({
+    this.onlineEditor = new (this.requireEditorModules().OnlineEditor)({
       configJson: () => JSON.stringify(this.buildCurrentCalibrationConfig(), null, 2),
       backgroundSrc: () => this.resolution.background.src,
       backgroundAspect: () => this.resolution.background.aspect,
@@ -2875,7 +2887,7 @@ export class MainMuseumHub {
     makeAction('Verstanden', () => this.hideEditorGuide(), guide, 'museum-hub__calibration-action is-primary');
     this.editorGuide = guide;
 
-    this.roomBar = new EditorRoomBar(
+    this.roomBar = new (this.requireEditorModules().EditorRoomBar)(
       {
         onSelect: (pageIndex) => this.goToRoom(pageIndex),
         onAdd: () => this.addRoom(false),
@@ -3019,7 +3031,7 @@ export class MainMuseumHub {
     const previewArtworkSource = previewArtwork
       ? resolveArtworkImageSources(this.resolution.artworkSourceById.get(previewArtwork.id) ?? null).primary?.resolvedUrl ?? ''
       : '';
-    this.galleryRoomEditor = new EditorGalleryRoomViews({
+    this.galleryRoomEditor = new (this.requireEditorModules().EditorGalleryRoomViews)({
       views: this.resolution.galleryRoomViews,
       artwork: previewArtwork,
       artworkSrc: previewArtworkSource,
@@ -3034,7 +3046,7 @@ export class MainMuseumHub {
 
     // ── Tab "Bilder": places, selected artwork, library ────────────────────
     const artworkTab = document.createElement('div');
-    this.placementController = new PlacementController({
+    this.placementController = new (this.requireEditorModules().PlacementController)({
       currentPlaces: () => this.currentPlacementPlaces(),
       artworks: () => this.placementArtworks(),
       sceneElement: (slotId) => {
@@ -3057,9 +3069,9 @@ export class MainMuseumHub {
       announce: (message) => this.announceCalibrationAction(message),
     });
     this.placementController.onChange(() => this.artworkLibrary?.syncPlacementState());
-    this.editorToast = new EditorToast();
+    this.editorToast = new (this.requireEditorModules().EditorToast)();
     this.element.appendChild(this.editorToast.element);
-    this.artworkLibrary = new EditorArtworkLibrary({
+    this.artworkLibrary = new (this.requireEditorModules().EditorArtworkLibrary)({
       onAutoFill: () => this.autoFillCurrentRoom(),
     }, this.placementController);
 
@@ -3136,7 +3148,7 @@ export class MainMuseumHub {
     artworkTab.append(this.artworkLibrary.places, detail, this.onlineEditor.uploadSection, this.artworkLibrary.library);
 
     // ── Tab "Speichern" ──────────────────────────────────────────────────────
-    this.saveTab = new EditorSaveTab({
+    this.saveTab = new (this.requireEditorModules().EditorSaveTab)({
       onDownload: () => this.downloadCalibrationJson(),
       onCopy: () => void this.copyCalibrationJson(),
       onImport: (file) => void this.importCalibrationFile(file),
@@ -3147,7 +3159,7 @@ export class MainMuseumHub {
     });
     this.saveTab.element.prepend(this.onlineEditor.publishSection);
 
-    this.editorTabs = createEditorTabs('museum-hub-editor', 'Editor-Bereiche', [
+    this.editorTabs = this.requireEditorModules().createEditorTabs('museum-hub-editor', 'Editor-Bereiche', [
       { id: 'room', label: 'Raum', panel: roomTab },
       { id: 'artworks', label: 'Bilder', panel: artworkTab },
       { id: 'save', label: 'Speichern', panel: this.saveTab.element },

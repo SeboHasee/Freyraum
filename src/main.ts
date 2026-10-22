@@ -1368,7 +1368,9 @@ async function main(): Promise<void> {
   );
   topbar.setRoomViewAvailable(museumHubResolution.galleryRoomViews.length > 0);
   topbar.onRoomViewClick = () => galleryRoomView?.toggle();
-  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset, museumArtworks);
+  // v1.46 (B3): the editor UI is a separate chunk that visitors never load.
+  const editorModules = museumHubEditorMode ? await import('./hub/editor/editorModules') : null;
+  museumHub = new MainMuseumHub(app, museumHubResolution, initialPreset, museumArtworks, editorModules);
   museumHub.setSelectedArtworkId(artworks[galleryManager.index]?.id ?? null, {
     alignPage: false,
     source: 'boot-gallery-selection',
