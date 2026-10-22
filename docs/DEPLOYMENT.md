@@ -1,5 +1,5 @@
 # FREYRAUM — GitHub Pages Deployment Guide
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 This document describes the full operator flow for publishing the gallery to
 GitHub Pages at **https://sebohasee.github.io/Freyraum/**.
@@ -83,7 +83,8 @@ git push origin main
 
 Commit both the image/audio files **and** any `.txt` sidecar files.
 The generated files (`artworks.json`, `customer-artworks.js`, `public/images/`,
-etc.) are gitignored and rebuilt by CI every time.
+`public/web-images/` WebP variants, etc.) are gitignored and rebuilt by CI every
+time.
 
 > **Current high-resolution limitation:** this workflow still commits the source
 > artwork files themselves. GitHub browser uploads are limited to **25 MiB** per
@@ -135,6 +136,11 @@ the local project folder; commit and push those files to publish.
 | Audio sources linked → `dist/audio/` non-empty | `dist/audio/ is empty or missing` |
 | Build produces `dist/index.html` | `dist/index.html is missing` |
 | Hub room background reaches `dist/backgrounds/` (and `museum-target.png` stays excluded) | `dist/backgrounds/… is missing` |
+| `npm run validate:deploy` (v1.46): inbox/background sizes, manifest paths, no embedded image bytes in the deployed manifest, every listed WebP variant present | `web images: public/… is missing` and similar |
+
+CI's `npm ci` installs `sharp`, so `import:artworks` builds the WebP size
+variants (`public/web-images/`) and WebP background copies. Without sharp the
+site still works with the original files and `validate:deploy` warns.
 
 Each successful workflow run also writes a **CI diagnostic summary** to the
 job summary page (visible on the Actions run page) with:
@@ -163,6 +169,8 @@ After the workflow completes:
 - [ ] Museum hub loads and its artwork hotspots align with the visible works.
 - [ ] Museum and editor show the same photograph-backed calibrated artwork,
       with no opaque WebGL architectural room hiding the photograph.
+- [ ] A shared link such as `?artwork=<id>&view=gallery` opens that artwork in
+      the gallery (v1.46, `docs/QUERY_PARAMETERS.md`).
 - [ ] Browser console shows no 404 errors for `customer-artworks.js`, artwork
       images, or museum backgrounds.
 

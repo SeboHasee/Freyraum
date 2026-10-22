@@ -1,71 +1,46 @@
 # FREYRAUM Plan
-> Latest markdown audit: 2026-10-22 (v1.46 next development round).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 Active engineering work only. Release history: `CHANGELOG.md`. Finished plans:
 `docs/archive/plan-history-2026-10-22.md` (v1.41–v1.44 and 2026-10-18…20),
 `docs/archive/plan-history-2026-10-17.md` (v0.74–v1.40) and
 `docs/archive/plan-history-2026-06-21.md` (older).
 
-## Next development round (v1.46, 2026-10-22)
+## Next development round (v1.46, 2026-10-22) — ready to merge
 
-Order: A → B1–B3 → C1–C2 → D1 → C3–C6 → B4, D2–D5 → E → F → G.
+Delivered on PR #27 (details: `CHANGELOG.md` v1.46, numbers: `FINDINGS.md`):
+B1 web manifest without image bytes, B2 WebP size variants, B3 lazy editor
+chunk, B4a WebP background copies (phone visit 18.6 → 4.8 MB), C1 info-sheet
+stops, C2 photo-room swipe, C3 landscape rail, C4 tap-to-hide phone chrome,
+C6 flick test, D3 zoom readout, D5 gallery zoom fixed point, E3 deep links +
+"Link teilen", `npm test` in CI. The full round and the v1.45 handoff
+checklist: `docs/archive/plan-history-2026-10-22-v1.46.md`.
 
 - [ ] A Owner gates: approve CI on PR #27 and merge; live `/Freyraum/` check
-      (`docs/DEPLOYMENT.md`); real-phone and real-GPU desktop pass.
-- [x] B1 Deployed manifest without embedded image bytes (70.8 MB → 19 KB);
-      `validate:deploy` budget (2 MiB, no `webglImage`/`data:image/`).
-- [x] B2 WebP size variants (640/1280/2048/≤4096) built by
-      `scripts/build-web-images.mjs` during `import:artworks` sync; one
-      display size per device (phones/≤4 GB: 2048) and the smallest for
-      timeline thumbnails; same-origin textures reuse the image cache.
-- [x] B3 Placement-editor UI is a lazy chunk (`src/hub/editor/editorModules.ts`,
-      74 KB); visitor bundle budget in `test:frame-budget`.
-- [x] C1 Info sheet peek/half/full stops (`resolveSheetStop` →
-      `pickSnapTarget`); `overscroll-behavior: contain`.
-- [x] C2 Photo-room touch swipe between rooms at the fitted zoom (gallery
-      swipe rule; dropdown stays); neighbour photos preloaded.
-- [ ] D1 Split-layer raster (target: fewer double-click redraws than 41/31).
-- [x] C4 Phone immersive view: a single tap on the artwork hides topbar,
-      timeline, nav and info sheet together; the gallery refits through
-      `handleViewportMetricsChanged()` (usable height 660 → 844 px at 390×844).
-- [x] C3 Touch phones in landscape: right-hand timeline rail, utilities in
-      the phone menu, immersive tap; artwork area 744×118 → 744×334 px at
-      844×390 (the desktop `--chrome-bottom` of 200 px no longer applies).
-- [ ] C5 hub pinch + edge preview.
-- [x] C6 Photo-room flick test: a fast one-finger flick keeps moving after
-      release and stops exactly at the pan limit.
-- [x] B4a Background photos as same-size WebP copies (hub 11.2 MB → 176 KB;
-      visit 19.9 → 6.0 MB desktop, 18.6 → 4.8 MB phone).
-- [ ] B4b Lazy hub artwork loading for off-screen phone panorama artworks.
-- [x] D3 Zoom readout (`src/ui/ZoomIndicator.ts`, gallery + photo room,
-      polite announcement); D5 gallery reset drift fixed (`coupledZoomPan`:
-      pan shares the zoom λ during zoom moves; pure fixed-point check).
-- [x] E3 Deep links `?artwork=<id>&view=gallery` (`src/navigation/deepLink.ts`,
-      `npm run test:deep-links`) and a "Link teilen" button in the artwork
-      information (`src/ui/shareLink.ts`; share sheet, clipboard fallback).
-- [ ] D2 per-frame repaint; D4 pointer-anchored wheel modifier.
-- [ ] E (200 % text, reduce chrome, device overlay, shadow-light
-      harness stop), F (CI split, baselines, Lighthouse, dev-tool upgrades),
-      G (content; needs the customer).
+      (`docs/DEPLOYMENT.md`); real-phone and real-GPU desktop pass (see
+      "Open — acceptance" below).
+- [ ] G Content from the customer (see "Open — acceptance").
 
-## Handoff implementation (v1.45, 2026-10-22)
+Deferred to the next round, best decided after real-device feedback:
 
-- [x] 0.1 Phone strip-reach flake diagnosed (rAF starvation) and fixed in the
-      test; pure side-wall reachability sweep in `test:touch-gestures`.
-- [x] 0.2 Stale handoff validation note superseded; starting points merged.
-- [x] 0.3 Validation recorded in `docs/HANDOFF.md` → "v1.45 validation".
-- [x] 1.1 `npm run measure:room-zoom` and baseline (`FINDINGS.md` v1.45).
-- [ ] 1.2 Split-layer raster for the room camera (target: double-click).
-- [x] 1.3 Shared multiplicative zoom curve + trackpad pinch gain.
-- [x] 1.4 Shift+double-click step-out. [ ] Gallery reset drift check.
-- [x] 1.5 Shift+arrow pan. [ ] Pointer-anchored wheel modifier. [ ] Zoom indicator.
-- [x] 2.6 Strip position announcement. [ ] Larger-text checks. [ ] Reduce-chrome toggle.
-- [ ] 2.1 Bottom-sheet snap points; 2.2 room swipe/parallax; 2.3 landscape
-      side rail; 2.4 timeline auto-hide; 2.5 hub pinch/edge preview/deep links;
-      2.7 flick/snap/swipe browser checks.
-- [ ] Phase 3 (responsive images, Fraktal size, lazy hub decode, editor
-      bundle split, PWA), phase 4 (CI split, baselines, Lighthouse, device
-      overlay, old issues), phase 5 (content; needs customer input).
+- [ ] D1 Split-layer raster for the room camera (target: fewer double-click
+      redraws than 41/31, `npm run measure:room-zoom`); judge softness on a
+      real GPU first — headless screenshots cannot show it (`FINDINGS.md` v1.44).
+- [ ] C5 Hub pinch zoom + edge preview of the neighbouring wall on phones.
+- [ ] D2 Per-frame room repaint (`syncPanCursor` toggles, shared paint layer);
+      D4 pointer-anchored wheel modifier.
+- [ ] E1 200 % text checks; E2 "reduce chrome" setting; E4 on-device
+      diagnostics overlay; E5 characterise the shadow-light harness stop.
+- [ ] F CI split for browser suites, visual baselines, Lighthouse budget,
+      dev-tool upgrades (`docs/DEPENDENCY_MAINTENANCE_PLAN.md`); PWA.
+- [ ] Phone polish ideas from the handoff not yet built: timeline auto-hide,
+      room parallax.
+- [ ] Mobile suite: the sheet step half → full timed out in two runs (reruns
+      passed); the check now prints the sheet state — diagnose on the next
+      failure (`docs/HANDOFF.md`).
+- Not planned: B4b lazy hub artwork loading — four artworks already share one
+  URL with the gallery, so the saving is small and the hub readiness gate
+  would need rework. Revisit when a room holds many more works.
 
 ## Product baseline (v1.40; later releases in `CHANGELOG.md`)
 
@@ -84,7 +59,7 @@ Order: A → B1–B3 → C1–C2 → D1 → C3–C6 → B4, D2–D5 → E → F 
 
 Consolidated from the archived plans; one entry per gate.
 
-- [ ] Approve the agent-started Actions runs and merge PR #27 (v1.41–v1.45,
+- [ ] Approve the agent-started Actions runs and merge PR #27 (v1.41–v1.46,
       branch `copilot/mobile-view-optimizations`; `main` holds v1.33–v1.40).
 - [ ] Post-merge Pages deploy plus live `/Freyraum/` smoke
       (`docs/DEPLOYMENT.md`); local or fixture passes are not deployment evidence.
@@ -92,10 +67,12 @@ Consolidated from the archived plans; one entry per gate.
       confirmation from a deployed screenshot (evidence rules: `docs/HANDOFF.md`
       → "Support diagnostics workflow", step 8).
 - [ ] Real phones (iOS Safari, Android Chrome; portrait/landscape): gyro feel
-      and calibration, flick feel, hub strip, info sheet, loading and
-      browser-bar colours, timeline and tilted artwork appearance.
+      and calibration, flick feel, hub strip, info sheet stops, tap to hide
+      the controls, landscape timeline rail, room swipe, "Link teilen" share
+      sheet, loading and browser-bar colours, timeline and tilted artwork.
 - [ ] Real desktop GPU (Chrome/Edge/Firefox, mouse and trackpad): zoom feel in
-      both views, softness during zoom-in, new shared zoom curve.
+      both views, softness during zoom-in, new shared zoom curve, zoom
+      readout, reset without sideways slide.
 - [ ] Customer review of the four cleaned room photos (incl. Büro frame and
       cleanup patches), placements, hub shadows and controls at normal size.
 - [ ] Customer confirms defaults: loading colour wall grey, gyro auto on
@@ -117,11 +94,10 @@ Consolidated from the archived plans; one entry per gate.
       2000×1080 with its exact bundle, room, artwork and camera state; fix the
       calibration only if the current artifact also clips.
 - [ ] Characterize the software-Chrome visual-harness stop at the runtime
-      invariant `shadow-casting light count 1 != expected 2`.
+      invariant `shadow-casting light count 1 != expected 2` (E5 above).
 - [ ] Re-verify editor parity on the generated preview and served artifacts
       (editable walls, warning-only saving, room/assignment import, renderer
       recovery) with `test:editor-rooms` / `test:editor-publish`.
-- [ ] Remaining v1.45 items listed in "Handoff implementation" above.
 
 ## Open — later improvements
 

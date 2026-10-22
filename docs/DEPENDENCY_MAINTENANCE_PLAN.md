@@ -1,5 +1,5 @@
 # Dependency & Tooling Maintenance Plan
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 ## Current dependency risk matrix
 

@@ -1,5 +1,5 @@
 # FREYRAUM — Image Maintenance Guide
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 This guide documents the **current** image workflow, the verified GitHub limits
 that affect it, and the planned direction for reliable high-resolution support.
@@ -16,6 +16,11 @@ that affect it, and the planned direction for reliable high-resolution support.
 - `scripts/sync-customer-public.mjs` copies the generated preview assets into
   `public/` for the Vite/GitHub Pages build.
 - GitHub Pages CI runs `npm run import:artworks` before `npm run build`.
+- v1.46: the deployed `public/customer-artworks.js` no longer embeds
+  `webglImage`; only the local `customer-preview/` copy keeps it. With sharp
+  installed, `scripts/build-web-images.mjs` writes WebP size variants to
+  `public/web-images/` and the runtime picks one display size per device
+  (`src/utils/artworkImageSources.ts`). Originals stay the fallback.
 
 ## Why very large originals are not reliable today
 
@@ -65,8 +70,10 @@ The active plan in `plan.md` moves FREYRAUM to a safer two-tier model:
 - **Masters/originals:** local or separate archive storage, not part of the
   GitHub Pages runtime path
 - **Publish bundle:** GitHub-tracked derivatives plus compact metadata only
-- **Local preview fallback:** if `webglImage` is retained, keep it local-only so
-  the deployed Pages manifest does not carry full-size image bytes
+- **Local preview fallback:** `webglImage` is local-only (done, v1.46); the
+  deployed Pages manifest carries no image bytes
+- **Derivatives:** WebP size variants for display (done, v1.46); masters still
+  committed until the archive split ships
 - **Budget gates:** enforce per-file and total-site size limits before publish
 
 ## Maintainer checklist

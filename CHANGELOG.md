@@ -1,8 +1,16 @@
 # CHANGELOG
-> Latest markdown audit: 2026-10-22 (v1.46 next development round).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 ## Unreleased — v1.46 next development round (2026-10-22)
 
+- **Merge readiness (docs):** every Markdown file re-audited against the
+  v1.46 code; README, ARCHITECTURE_MAP, DEPLOYMENT and IMAGE_MAINTENANCE_GUIDE
+  describe the new modules, WebP delivery and links; `npm test` joined the
+  validation baselines (CONTRIBUTING, DOCUMENTATION_RULES, AI_RULES); the
+  finished v1.45/v1.46 plan and handoff sections moved to `docs/archive/`
+  (`*-2026-10-22-v1.46.md`) with open items carried forward. Full double-check
+  passed: lint, typecheck, build, `npm test`, frame budget, museum-hub,
+  deploy, local-project and WebGL-resilience checks.
 - **Shareable artwork links:** `?artwork=<id>` preselects an artwork in the
   museum hub, `&view=gallery` opens it in the gallery after Start. While
   visiting, the address follows the current artwork, so copying the URL shares

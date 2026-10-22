@@ -1,5 +1,5 @@
 # FREYRAUM
-> Latest markdown audit: 2026-10-22 (v1.46 next development round).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 FREYRAUM is a Three.js-based immersive digital gallery with a local customer workflow for importing artworks, text metadata, and optional background audio into a file://-safe preview.
 
@@ -124,6 +124,17 @@ customer visual acceptance.
   button in the top bar (also in the photo room), and the artwork information
   is a bottom sheet — tap **Info**, pull the handle up to read more (it then
   stays open), pull it down to close.
+- Phones (v1.46): the info sheet stops at peek, half and full; one tap on the
+  artwork hides the top bar, timeline and info together (tap again to bring
+  them back); in landscape the timeline becomes a side rail; in the photo room
+  a sideways swipe at normal zoom changes the room. Gallery and photo room
+  show a short zoom readout ("125 %"), and resetting the gallery zoom no
+  longer slides sideways.
+- Links (v1.46): `?artwork=<id>&view=gallery` opens an artwork directly, and
+  **Link teilen** in the artwork information shares or copies that link
+  (details: `docs/QUERY_PARAMETERS.md`). A phone visit now downloads about
+  4.8 MB instead of 18.6 MB (WebP images and backgrounds, editor loaded only
+  when opened).
 - **Local confirmation (2026-10-18):** the customer reports the intended setup
   works after running `Update Gallery.bat` and supplies a four-painting screenshot.
   Root-index and production-build smoke checks confirm all four images and the

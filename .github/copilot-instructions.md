@@ -1,7 +1,7 @@
 # FREYRAUM Copilot instructions
-> Latest markdown audit: 2026-10-22 (v1.46 next development round).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
-## Current context (v1.42)
+## Current context (v1.46)
 
 - Museum and editor share photograph-backed DOM artwork; `MainMuseumHub` does
   not construct a `HubRoomRenderer`. Inspection-gallery WebGL remains separate.
@@ -26,13 +26,26 @@
   Narrow-portrait hub is a continuous panorama with an artwork strip
   (`src/hub/hubPanorama.ts`); never hide hub artworks by wall group. Phones
   (v1.42): utilities sit in `src/ui/PhoneUtilityMenu.ts` (placed by
-  `placeUtilityControls` in `main.ts`); the compact info panel is a bottom sheet. Pure tests:
+  `placeUtilityControls` in `main.ts`); the compact info panel is a bottom sheet
+  with peek/half/full stops. v1.46: a single tap hides the phone chrome
+  (`data-phone-immersive` in `main.ts`); touch phones in landscape get a right
+  timeline rail (the phone query includes a landscape condition, lesson 139);
+  the photo room swipes between rooms at the fitted zoom. Pure tests:
   `npm run test:touch-gestures`. Real-device acceptance is open (`docs/HANDOFF.md`).
+- Zoom (v1.46): gallery and room show a transient readout
+  (`src/ui/ZoomIndicator.ts`). Zoom moves that also change pan must ease pan
+  with the zoom's filter (`GalleryManager.coupledZoomPan`, room fixed-point
+  anchor) or the view slides sideways (lesson 140).
+- Links (v1.46): `?artwork=<id>&view=gallery` (`src/navigation/deepLink.ts`,
+  documented only in `docs/QUERY_PARAMETERS.md`); the address follows the
+  current artwork; "Link teilen" (`src/ui/shareLink.ts`) on http(s) only.
 - Download size (v1.46): the deployed manifest has no embedded image bytes
   and lists WebP size variants (`scripts/build-web-images.mjs`, budget in
   `validate:deploy`); the editor UI is a lazy chunk (`src/hub/editor/editorModules.ts`,
   entry budget in `test:frame-budget`). Keep editor classes out of static
-  imports in `MainMuseumHub`.
+  imports in `MainMuseumHub`. Hub/room background photos are served as
+  same-size WebP copies (`src/utils/webBackgrounds.ts`); the editor's
+  calibration view keeps the original PNG.
 - Local data is generated/ignored: after project updates run Update Gallery;
   full `npm run build` imports via `prebuild`. Local Vite base must remain `./`,
   production `/Freyraum/`. Root-index and production-base smoke are distinct.
@@ -49,6 +62,10 @@
   writes only through `scripts/local-project/projectStore.ts` and serves only
   allowlisted files at `freyraum://app/`; `file://` download fallback.
 - Tests and CI: `docs/REGRESSION_TOOLING.md`. Active work: `plan.md`.
+  `npm test` runs every no-browser check and quality CI runs it; add new pure
+  checks there (lesson 141). Run SwiftShader browser suites one at a time with
+  no build or probe beside them (lesson 142); wait for transitions with
+  `settleAnimations`, never a fixed delay (lesson 138).
   Photo-room checks: `npm run test:gallery-room-view` and
   `npm run test:gallery-room-view:browser`. The latter checks file-photo display,
   shared selection, focus and control bounds across desktop/tablet/phone/short

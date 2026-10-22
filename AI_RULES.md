@@ -1,5 +1,5 @@
 # FREYRAUM AI rules
-> Latest markdown audit: 2026-10-21 (v1.42 merge readiness).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 ## v1.33–v1.40 editor, saving and desktop rules
 
@@ -110,7 +110,7 @@ Hard constraints for AI-assisted work in this repository.
 ## Validation
 
 - Fresh clones need `npm install` before lint/build.
-- Use existing scripts: `npm run lint`, `npm run build`, and focused checks for touched scripts.
+- Use existing scripts: `npm run lint`, `npm run build`, `npm test` (all no-browser checks), and focused checks for touched scripts.
 - If runtime or SCSS changes affect preview output, rebuild and commit the relevant `customer-preview/` output.
 
 ## Audit and dependency rules

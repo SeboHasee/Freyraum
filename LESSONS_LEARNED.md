@@ -1,5 +1,5 @@
 # FREYRAUM lessons learned
-> Latest markdown audit: 2026-10-22 (v1.46 next development round).
+> Latest markdown audit: 2026-10-22 (v1.46 merge readiness).
 
 ## 2026-10-22 — Download size lessons
 

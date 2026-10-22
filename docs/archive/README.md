@@ -20,7 +20,9 @@ No new snapshot was added during the 2026-10-20 documentation audit: the
 photo-room screenshot follow-up and validation notes remain active in `plan.md`
 and `FINDINGS.md`, not retired history. Dated snapshots remain unchanged.
 
+- `plan-history-2026-10-22-v1.46.md` — v1.45 handoff checklist and the v1.46 round as delivered on PR #27 (open items carried into `plan.md`)
 - `plan-history-2026-10-22.md` — finished plans v1.41–v1.44 and the 2026-10-18…20 photo-room/museum plans (moved out of `plan.md`; open gates carried forward)
+- `handoff-history-2026-10-22-v1.46.md` — v1.45 validation, v1.46 round notes and the pre-merge open/ready-to-pick lists (moved out of `docs/HANDOFF.md`)
 - `handoff-history-2026-10-22.md` — 2026-10-20/21 handoff validation history, starting points and audit matrices (moved out of `docs/HANDOFF.md`)
 - `plan-history-2026-10-17.md` — finished plans v0.74–v1.40 (moved out of `plan.md`)
 - `findings-history-2026-10-17.md` — findings up to v1.18 (moved out of `FINDINGS.md`)
