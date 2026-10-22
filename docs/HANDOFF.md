@@ -96,9 +96,11 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - Done: B1 web manifest without image bytes, B2 WebP size variants
   (`scripts/build-web-images.mjs`, runtime choice in
   `src/utils/artworkImageSources.ts`), B3 lazy editor chunk + bundle budget,
-  C1 info-sheet stops, C2 photo-room swipe. Numbers: `FINDINGS.md` (v1.46).
-- Next in order: D1 split-layer raster, C3–C6, B4 (lazy hub artworks, WebP
-  backgrounds), D2–D5, E, F; G needs the customer. Checklist: `plan.md` →
+  C1 info-sheet stops, C2 photo-room swipe, B4a WebP background copies
+  (`validate:deploy` checks them; the editor's calibration view keeps the
+  original PNG). Numbers: `FINDINGS.md` (v1.46).
+- Next in order: D1 split-layer raster, C3–C6, B4b (lazy hub artworks),
+  D2–D5, E, F; G needs the customer. Checklist: `plan.md` →
   "Next development round".
 - Deploy note: CI's `npm ci` installs sharp, so `import:artworks` builds the
   WebP variants; without sharp the site falls back to the originals with a

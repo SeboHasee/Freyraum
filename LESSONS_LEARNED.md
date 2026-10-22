@@ -3,6 +3,13 @@
 
 ## 2026-10-22 — Download size lessons
 
+### Lesson 137 — Changing an asset URL breaks tests that check the URL
+
+B4a served the hub photo as a WebP copy, and the deploy smoke test failed:
+it expected the original `/backgrounds/<name>.png` path. When an asset can
+be swapped for a derived copy, tests should accept the source path or the
+documented derived name (`web-images/bg-<name>-…`), not one fixed file.
+
 ### Lesson 136 — `npm i <pkg>` removes packages installed with `--no-save`
 
 Adding sharp with `npm i -D` pruned the Playwright copy that had been

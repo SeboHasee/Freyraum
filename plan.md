@@ -27,8 +27,9 @@ Order: A → B1–B3 → C1–C2 → D1 → C3–C6 → B4, D2–D5 → E → F 
 - [ ] D1 Split-layer raster (target: fewer double-click redraws than 41/31).
 - [ ] C3 landscape side rail; C4 timeline auto-hide; C5 hub pinch + edge
       preview; C6 remaining flick test in the photo-room suite.
-- [ ] B4 Lazy hub artwork loading; background photos as WebP (now the largest
-      remaining download, ~15 MB of ~19 MB per visit).
+- [x] B4a Background photos as same-size WebP copies (hub 11.2 MB → 176 KB;
+      visit 19.9 → 6.0 MB desktop, 18.6 → 4.8 MB phone).
+- [ ] B4b Lazy hub artwork loading for off-screen phone panorama artworks.
 - [ ] D2 per-frame repaint; D3 zoom indicator; D4 pointer-anchored wheel
       modifier; D5 gallery reset drift.
 - [ ] E (200 % text, reduce chrome, deep links, device overlay, shadow-light

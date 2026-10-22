@@ -16,6 +16,10 @@
   textures no longer use a separate CORS request). Per visit: 166.7 MB →
   19.9 MB (desktop) / 18.6 MB (phone). The customer's "Update Gallery"
   (plain Node) is unchanged.
+- **Background photos as WebP:** the museum hub photo and the four room
+  photos are served as same-size WebP copies (hub 11.2 MB → 176 KB, no
+  visible difference; calibration unchanged). Per visit now about 6.0 MB
+  (desktop) / 4.8 MB (phone). `validate:deploy` checks these files too.
 - **Editor out of the visitor bundle:** the placement-editor UI classes load
   as a separate chunk only when the editor opens (74 KB less for visitors).
   `test:frame-budget` now also enforces a visitor entry budget and checks

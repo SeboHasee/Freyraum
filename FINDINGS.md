@@ -16,19 +16,24 @@
 - **Before/after** (local production build at `/Freyraum/`, headless Chrome,
   SwiftShader; bytes = response bodies until the gallery shows Fraktal):
 
-  | Measure | Before | B1 | B1+B2 |
-  |---|---|---|---|
-  | `customer-artworks.js` | 70,775,176 B | 19,057 B | 20,254 B |
-  | Bytes per visit, desktop 1280×800 | 237.5 MB | 166.7 MB | 19.9 MB |
-  | Bytes per visit, phone 390×844 @3× | — | — | 18.6 MB |
-  | Artwork image bytes per visit | ~147 MB | ~147 MB | 4.4 MB desktop / 3.2 MB phone |
-  | Fraktal texture (GPU, mip incl.) | ~97 MB | ~97 MB | ~67 MB desktop / ~17 MB phone |
-  | Start button enabled (localhost) | ~31 s | ~31 s | ~33 s desktop / ~20 s phone |
+  | Measure | Before | B1 | B1+B2 | +B4a backgrounds |
+  |---|---|---|---|---|
+  | `customer-artworks.js` | 70,775,176 B | 19,057 B | 20,254 B | ~20 KB |
+  | Bytes per visit, desktop | 237.5 MB | 166.7 MB | 19.9 MB | 6.0 MB¹ |
+  | Bytes per visit, phone 390×844 @3× | — | — | 18.6 MB | 4.8 MB¹ |
+  | Artwork image bytes per visit | ~147 MB | ~147 MB | 4.4 MB desktop / 3.2 MB phone | unchanged |
+  | Fraktal texture (GPU, mip incl.) | ~97 MB | ~97 MB | ~67 MB desktop / ~17 MB phone | unchanged |
+  | Start button enabled (localhost) | ~31 s | ~31 s | ~33 s desktop / ~20 s phone | not remeasured |
+
+  ¹ Unique response bodies until the hub has settled (1440×900 desktop),
+  measured after B4a. The hub photo `Museum_ohne_Bilder.png` (11.2 MB) is
+  now a 4000×2250 WebP of 176 KB (PSNR 42.2 dB against the PNG, same
+  dimensions, so calibration is unchanged); room photos are 41–190 KB.
 
   Start-button time is dominated by SwiftShader GPU work and the minimum
   loading screen, not bytes; on a real network the byte drop is what
-  visitors feel. The remaining ~15 MB are the hub/room background photos
-  (B4 follow-up).
+  visitors feel. B4a then replaced the ~15 MB of hub/room background PNGs
+  with same-size WebP copies (`window.__FREYRAUM_WEB_BACKGROUNDS`).
 - **Editor split:** the visitor entry chunk went from 1,141,602 to
   1,068,800 bytes; the editor UI is a 74 KB chunk. three.js keeps the entry
   above Vite's 500 KB warning, so the warning stays; the budget is 1.15 MB.
