@@ -33,7 +33,9 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
   warning). Adding the signing secrets listed in `docs/DESKTOP_APP.md` signs
   them without workflow changes; automatic updates require signing first.
 
-## Photo-room controls and current validation (2026-10-20)
+## Photo-room controls and validation history (2026-10-20, partly superseded)
+
+Current status lives in "Next-agent starting point (v1.43–v1.45)" below.
 
 - **Reopened screenshot issue:** the user-supplied
   [Wohnbereich capture](https://github.com/user-attachments/assets/a811e3d7-b277-4619-8e17-8815b01046fe)
@@ -94,12 +96,8 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
 - Static deployment validation passed, but the production-base browser smoke and
   post-merge live Pages smoke were not run. The branch is not deployed; static
   content checks and the tested root `file://` preview do not establish live status.
-- `npm run validate:museum-hub` now passes the former stale timeline assertion
-  after its test was corrected to check the active timeline thumbnail. It still
-  fails at `scripts/test-museum-hub-geometry.mjs:411` on the wall-left doorway
-  height expectation. Current normalized spans are about 2.692 m (left) and
-  2.486 m (right), while the test expects 2.30 m. This coordinate-model discrepancy
-  remains unresolved; do not report the complete museum-hub suite as passing.
+- *(Superseded 2026-10-21, v1.42: the doorway-height failure in
+  `validate:museum-hub` was repaired; the suite passes. Kept for history.)*
 - The earlier full Markdown audit covered 36 current documents and left seven dated
   archive snapshots unchanged. This targeted follow-up updates the relevant active
   handoff, tooling, plan, findings, and changelog documents only.
@@ -162,13 +160,16 @@ Historical release-by-release details are in `CHANGELOG.md` and `docs/archive/`.
     bundles before requesting a screenshot. Room/assignment changes are supported;
     green-zone confirmation is optional and hints do not block saving.
 
-## Next-agent starting point (2026-10-21, v1.43 desktop zoom)
+## Next-agent starting point (v1.43–v1.45, 2026-10-22)
 
-v1.43 (on the same branch/PR #27) adds the photo-room double-click toggle,
-motion-only compositing for the room camera (`.is-camera-moving`), shared
-wheel-delta normalisation and gallery ctrl+wheel handling; see `CHANGELOG.md`
-and `FINDINGS.md`. Measure DOM-camera smoothness with raster tasks in a Chrome
-trace, not headless frame counts (lesson 130). The items below still apply.
+- Same branch/PR #27. v1.43 added the photo-room double-click toggle,
+  motion-only compositing (`.is-camera-moving`), wheel-delta normalisation and
+  gallery ctrl+wheel handling. v1.44 fixed the zoom-out drift (fixed-point
+  anchoring, lesson 131). v1.45 works through this handoff (see `CHANGELOG.md`).
+- Measure DOM-camera smoothness with `npm run measure:room-zoom` (raster,
+  paint, decode and style work), not headless frame counts (lesson 130).
+- The validation record for the current head is under "v1.45 validation" below.
+- The v1.42 items below still apply.
 
 ## Next-agent starting point (2026-10-21, v1.42 merge readiness)
 

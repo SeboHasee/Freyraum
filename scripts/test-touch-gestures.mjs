@@ -118,6 +118,25 @@ const close = (actual, expected, epsilon, message) =>
   assert.equal(panorama.panoramaPanForFraction(0.5, 1200, 405), 0);
   assert.equal(panorama.panoramaPanForFraction(0, 1200, 405), 405, 'left wall clamps to the edge');
   assert.equal(panorama.panoramaPanForFraction(0.9, 1200, 405), -405, 'right wall clamps to the edge');
+  // v1.45: every artwork inside the photo and narrower than the screen is fully
+  // framed by its strip target, including edge-clamped side-wall works.
+  for (const [viewportWidth, viewportHeight] of [[360, 780], [375, 812], [390, 844], [414, 896], [430, 932]]) {
+    const visualWidth = viewportHeight * (16 / 9);
+    const limit = panorama.panoramaPanLimit(visualWidth, viewportWidth);
+    for (let left = 0; left <= 1; left += 0.01) {
+      for (const widthPx of [40, 120, viewportWidth * 0.6, viewportWidth - 2]) {
+        const right = left + widthPx / visualWidth;
+        if (right > 1) continue;
+        const pan = panorama.panoramaPanForFraction((left + right) / 2, visualWidth, limit);
+        const screenLeft = viewportWidth / 2 + pan + visualWidth * (left - 0.5);
+        const screenRight = viewportWidth / 2 + pan + visualWidth * (right - 0.5);
+        assert.ok(
+          screenLeft >= -1e-6 && screenRight <= viewportWidth + 1e-6,
+          `artwork ${left.toFixed(2)}+${widthPx.toFixed(0)}px is framed at ${viewportWidth}x${viewportHeight}`
+        );
+      }
+    }
+  }
   const targets = [300, 100, -50, -300];
   assert.equal(panorama.stripFractionForPan(400, targets), 0);
   assert.equal(panorama.stripFractionForPan(-400, targets), 3);

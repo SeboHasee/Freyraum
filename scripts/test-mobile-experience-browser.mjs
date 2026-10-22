@@ -224,7 +224,9 @@ try {
       await tap(itemCenter.x, itemCenter.y);
       await waitFor(`document.querySelectorAll('.museum-hub__strip-item')[${index}]?.classList.contains('is-centered')`, 10_000);
       await waitForPanSettled();
-      const reach = await evaluate(`(() => {
+      // v1.45: headless SwiftShader can starve rAF for over a second mid-glide,
+      // which the stability check reads as "settled"; poll the end state.
+      const readReach = () => evaluate(`(() => {
         const button = document.querySelector('.museum-hub__artwork.is-strip-focus');
         if (!button) return null;
         const rect = button.getBoundingClientRect();
@@ -234,10 +236,19 @@ try {
           id: button.dataset.slotId,
           inside: rect.left >= -1 && rect.right <= innerWidth + 1 && rect.top >= 0 && rect.bottom <= innerHeight,
           hit: document.elementFromPoint(x, y)?.closest('.museum-hub__artwork')?.dataset.slotId ?? null,
+          rect: { left: Math.round(rect.left), right: Math.round(rect.right), top: Math.round(rect.top), bottom: Math.round(rect.bottom) },
+          viewport: { width: innerWidth, height: innerHeight },
+          pan: Number.parseFloat(getComputedStyle(document.querySelector('.museum-hub__visual')).getPropertyValue('--hub-pan-x')) || 0,
+          visualWidth: document.querySelector('.museum-hub__visual').offsetWidth,
         };
       })()`);
+      let reach = await readReach();
+      for (const deadline = Date.now() + 20_000; reach && !reach.inside && Date.now() < deadline;) {
+        await delay(250);
+        reach = await readReach();
+      }
       assert.ok(reach, `${viewport.name}: strip item ${index} focuses an artwork`);
-      assert.ok(reach.inside, `${viewport.name}: ${reach.id} is fully on screen after its strip tap`);
+      assert.ok(reach.inside, `${viewport.name}: ${reach.id} is fully on screen after its strip tap ${JSON.stringify(reach)}`);
       assert.equal(reach.hit, reach.id, `${viewport.name}: ${reach.id} is tappable at its centre`);
     }
     console.log(`✓ ${viewport.name}: ${hub.stripItems} strip entries glide their artwork on screen and stay tappable`);
