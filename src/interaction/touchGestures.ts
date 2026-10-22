@@ -302,6 +302,25 @@ export function normalizeWheelDelta(deltaY: number, deltaMode: number, pageHeigh
   return Math.max(-240, Math.min(240, pixels));
 }
 
+/**
+ * v1.45 — one zoom curve for the gallery and the photo room. Every wheel
+ * notch, button press and key multiplies the magnification by the same
+ * factor, so both views zoom equally per step. (Before, the gallery added a
+ * constant camera distance, which accelerated near the artwork, while the
+ * room multiplied by ~10.5 % per notch.)
+ */
+export const WHEEL_ZOOM_PER_PX = 0.0012;
+/** Trackpad pinch arrives as small ctrl+wheel deltas; amplify to feel direct. */
+export const PINCH_WHEEL_GAIN = 2.5;
+/** Magnification factor of one zoom button press or `+`/`-` key. */
+export const ZOOM_STEP_FACTOR = 1.25;
+
+/** Magnification factor (> 1 zooms in) for a normalised wheel delta in px. */
+export function wheelZoomFactor(pixels: number, pinch = false): number {
+  if (!Number.isFinite(pixels)) return 1;
+  return Math.exp(-pixels * WHEEL_ZOOM_PER_PX * (pinch ? PINCH_WHEEL_GAIN : 1));
+}
+
 export function isMotionReduced(): boolean {
   if (typeof document === 'undefined') return false;
   const preference = document.documentElement.dataset['motion'];

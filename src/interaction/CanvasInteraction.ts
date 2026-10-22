@@ -7,6 +7,7 @@ import {
   normalizeWheelDelta,
   resolveSwipeDirection,
   VelocityTracker,
+  wheelZoomFactor,
 } from './touchGestures';
 
 /**
@@ -448,7 +449,9 @@ export class CanvasInteraction {
   private onWheel = (e: WheelEvent): void => {
     if (!this.enabled) return;
     if (e.ctrlKey) e.preventDefault();
-    this.galleryManager.addZoomDelta(normalizeWheelDelta(e.deltaY, e.deltaMode, window.innerHeight) * 0.0045);
+    this.galleryManager.zoomByFactor(
+      wheelZoomFactor(normalizeWheelDelta(e.deltaY, e.deltaMode, window.innerHeight), e.ctrlKey)
+    );
   };
 
   private onLegacyMouseMove = (e: MouseEvent): void => {

@@ -12,6 +12,8 @@ import {
   rubberBandClamp,
   stepMomentum,
   VelocityTracker,
+  wheelZoomFactor,
+  ZOOM_STEP_FACTOR,
 } from '../interaction/touchGestures';
 import {
   driftDeviceNeutral,
@@ -239,9 +241,9 @@ export class GalleryRoomView {
     zoomControls.setAttribute('role', 'group');
     zoomControls.setAttribute('aria-label', 'Zoom-Steuerung für den Fotoraum');
     this.zoomInButton = this.createControlButton('zoom-controls__btn', 'Vergrößern', '＋');
-    this.zoomInButton.addEventListener('click', () => this.zoomBy(1.25));
+    this.zoomInButton.addEventListener('click', () => this.zoomBy(ZOOM_STEP_FACTOR));
     this.zoomOutButton = this.createControlButton('zoom-controls__btn', 'Verkleinern', '−');
-    this.zoomOutButton.addEventListener('click', () => this.zoomBy(1 / 1.25));
+    this.zoomOutButton.addEventListener('click', () => this.zoomBy(1 / ZOOM_STEP_FACTOR));
     this.resetButton = this.createControlButton(
       'zoom-controls__btn zoom-controls__btn--reset',
       'Fotoansicht zurücksetzen',
@@ -1160,7 +1162,7 @@ export class GalleryRoomView {
 
   private onWheel = (event: WheelEvent): void => {
     event.preventDefault();
-    this.zoomBy(Math.exp(-normalizeWheelDelta(event.deltaY, event.deltaMode, window.innerHeight) * 0.001));
+    this.zoomBy(wheelZoomFactor(normalizeWheelDelta(event.deltaY, event.deltaMode, window.innerHeight), event.ctrlKey));
   };
 
   private onDoubleClick = (event: MouseEvent): void => {
@@ -1182,10 +1184,10 @@ export class GalleryRoomView {
     }
     if (event.key === '+' || event.key === '=') {
       event.preventDefault();
-      this.zoomBy(1.25);
+      this.zoomBy(ZOOM_STEP_FACTOR);
     } else if (event.key === '-') {
       event.preventDefault();
-      this.zoomBy(1 / 1.25);
+      this.zoomBy(1 / ZOOM_STEP_FACTOR);
     } else if (event.key === '0' || event.key === 'Home') {
       event.preventDefault();
       this.resetCamera(true);

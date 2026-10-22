@@ -200,4 +200,16 @@ const close = (actual, expected, epsilon, message) =>
   assert.equal(gestures.normalizeWheelDelta(-5000, 0), -240, 'an extreme pixel delta is capped');
 }
 
-console.log('Touch gesture, hub panorama, device-tilt, info-sheet, and wheel checks passed.');
+// v1.45: one multiplicative zoom curve for gallery and room; pinch is amplified.
+{
+  const notch = gestures.wheelZoomFactor(-100);
+  close(notch, Math.exp(0.12), 1e-9, 'one 100 px notch zooms in by the shared rate');
+  close(gestures.wheelZoomFactor(-100) * gestures.wheelZoomFactor(100), 1, 1e-12, 'in and out notches cancel');
+  close(gestures.wheelZoomFactor(-50) ** 2, notch, 1e-12, 'two half notches equal one notch (no acceleration)');
+  assert.ok(gestures.wheelZoomFactor(-4, true) > gestures.wheelZoomFactor(-4), 'trackpad pinch gets extra gain');
+  close(Math.log(gestures.wheelZoomFactor(-4, true)) / Math.log(gestures.wheelZoomFactor(-4)), gestures.PINCH_WHEEL_GAIN, 1e-9, 'pinch gain');
+  assert.equal(gestures.wheelZoomFactor(Number.NaN), 1, 'invalid deltas do not zoom');
+  assert.equal(gestures.ZOOM_STEP_FACTOR, 1.25, 'button/key step stays 25 %');
+}
+
+console.log('Touch gesture, hub panorama, device-tilt, info-sheet, wheel and zoom-curve checks passed.');

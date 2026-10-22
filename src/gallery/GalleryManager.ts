@@ -832,11 +832,16 @@ export class GalleryManager {
     this.markRenderDirty(2);
   }
 
-  addZoomDelta(delta: number): void {
+  /**
+   * v1.45 — eased multiplicative zoom (`factor` > 1 zooms in), the shared
+   * per-step curve of wheel, buttons and keys in gallery and photo room.
+   */
+  zoomByFactor(factor: number): void {
+    if (!(factor > 0) || !Number.isFinite(factor)) return;
     this.stopPanMomentum();
     const metrics = this.getViewportMetrics();
     const bounds = this.getZoomBounds(metrics);
-    this.targetZoom = this.clampZoom(this.targetZoom + delta, bounds);
+    this.targetZoom = this.clampZoom(this.targetZoom / factor, bounds);
     this.clampPanTargets(metrics, bounds);
     this.reportPanAvailability();
     this.markRenderDirty(4);
